@@ -1493,6 +1493,12 @@ DEF_BOOL(_enable_px_batch_rescan, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_spf_batch_rescan, OB_TENANT_PARAMETER, "False",
          "enable das batch rescan for subplan filter",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_distributed_das_scan, OB_TENANT_PARAMETER, "True",
+         "enable distributed DAS scan",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_enable_das_batch_rescan_flag, OB_TENANT_PARAMETER, "0",
+        "enable das batch rescan for multiple scenarios.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_parallel_max_active_sessions, OB_TENANT_PARAMETER, "0", "[0,]",
         "max active parallel sessions allowed for tenant. Range: [0,+∞)",

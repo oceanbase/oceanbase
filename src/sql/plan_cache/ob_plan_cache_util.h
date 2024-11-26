@@ -1035,6 +1035,8 @@ public:
     min_cluster_version_(0),
     is_enable_px_fast_reclaim_(false),
     enable_spf_batch_rescan_(false),
+    enable_distributed_das_scan_(false),
+    enable_das_batch_rescan_flag_(0),
     enable_var_assign_use_das_(false),
     enable_parallel_das_dml_(false),
     enable_adaptive_join_(true),
@@ -1080,6 +1082,8 @@ public:
   uint64_t min_cluster_version_;
   bool is_enable_px_fast_reclaim_;
   bool enable_spf_batch_rescan_;
+  bool enable_distributed_das_scan_;
+  int64_t enable_das_batch_rescan_flag_;
   bool enable_var_assign_use_das_;
   bool enable_parallel_das_dml_;
   bool enable_adaptive_join_;

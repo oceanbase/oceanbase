@@ -394,13 +394,13 @@ select c1 + (select c2 from t2 where c1 = 2), c2 in (select c3 from t2) from t1;
 +---------------------------------------+---------------------------+
 EXPLAIN select c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) from t1;
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |SUBPLAN FILTER         |    |3       |57          |
-|1 |├─TABLE FULL SCAN      |t1  |3       |4           |
-|2 |└─DISTRIBUTED TABLE GET|t2  |1       |18          |
-=======================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |3       |57          |
+|1 |├─TABLE FULL SCAN|t1  |3       |4           |
+|2 |└─TABLE GET      |t2  |1       |18          |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t1.c1, DECIMAL(11, 0)) + subquery(1)]), filter(nil), rowset=16
@@ -424,13 +424,13 @@ select c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) from t1;
 +-----------------------------------------------------------+
 EXPLAIN select * from t1 where c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) < 10;
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |SUBPLAN FILTER         |    |1       |57          |
-|1 |├─TABLE FULL SCAN      |t1  |3       |5           |
-|2 |└─DISTRIBUTED TABLE GET|t2  |1       |18          |
-=======================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |57          |
+|1 |├─TABLE FULL SCAN|t1  |3       |5           |
+|2 |└─TABLE GET      |t2  |1       |18          |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter([cast(t1.c1, DECIMAL(11, 0)) + subquery(1) < cast(10, DECIMAL(2, 0))]), rowset=16
@@ -675,13 +675,13 @@ select c2 > (select c1 from t2 where c3 is not null) from t1;
 +-----------------------------------------------+
 EXPLAIN select * from t1 where c2 + (select c1 from t2 where c1 = t1.c2) < 10;
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |SUBPLAN FILTER         |    |1       |57          |
-|1 |├─TABLE FULL SCAN      |t1  |3       |5           |
-|2 |└─DISTRIBUTED TABLE GET|t2  |1       |18          |
-=======================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |57          |
+|1 |├─TABLE FULL SCAN|t1  |3       |5           |
+|2 |└─TABLE GET      |t2  |1       |18          |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter([t1.c2 + cast(subquery(1), DECIMAL(11, 0)) < cast(10, DECIMAL(2, 0))]), rowset=16
@@ -899,8 +899,8 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |SORT                           |        |3       |523         |
-|1 |└─SUBPLAN FILTER               |        |3       |523         |
+|0 |SORT                           |        |3       |458         |
+|1 |└─SUBPLAN FILTER               |        |3       |458         |
 |2 |  ├─PX COORDINATOR             |        |5       |12          |
 |3 |  │ └─EXCHANGE OUT DISTR       |:EX10000|5       |11          |
 |4 |  │   └─PX BLOCK ITERATOR      |        |5       |10          |
@@ -909,14 +909,14 @@ Query Plan
 |7 |  │ └─EXCHANGE OUT DISTR       |:EX20000|5       |10          |
 |8 |  │   └─PX BLOCK ITERATOR      |        |5       |10          |
 |9 |  │     └─TABLE FULL SCAN      |t2      |5       |10          |
-|10|  └─DISTRIBUTED TABLE FULL SCAN|t2      |1       |101         |
+|10|  └─DISTRIBUTED TABLE FULL SCAN|t2      |1       |88          |
 ===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=16
       sort_keys([t1.c1, ASC])
   1 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(2))]), rowset=16
-      exec_params_([t1.c1(:0)]), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:1)]), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c1(:0)]), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:1)]), init_plan_idxs_(nil), use_batch=true
   2 - output([t1.c1]), filter(nil), startup_filter([:1]), rowset=16
   3 - output([t1.c1]), filter(nil), rowset=16
       dop=2
@@ -934,7 +934,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
  10 - output([1]), filter([:0 = t2.c1]), rowset=16
-      access([t2.c1]), partitions(p[0-4])
+      access([GROUP_ID], [t2.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2)
@@ -955,13 +955,13 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT  |        |3       |136         |
-|1 |└─EXCHANGE OUT DISTR       |:EX10000|3       |136         |
-|2 |  └─SORT                   |        |3       |136         |
-|3 |    └─PX PARTITION ITERATOR|        |3       |135         |
-|4 |      └─SUBPLAN FILTER     |        |3       |135         |
+|0 |PX COORDINATOR MERGE SORT  |        |3       |120         |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000|3       |120         |
+|2 |  └─SORT                   |        |3       |119         |
+|3 |    └─PX PARTITION ITERATOR|        |3       |119         |
+|4 |      └─SUBPLAN FILTER     |        |3       |119         |
 |5 |        ├─TABLE FULL SCAN  |t1      |5       |10          |
-|6 |        └─TABLE FULL SCAN  |t2      |1       |51          |
+|6 |        └─TABLE FULL SCAN  |t2      |1       |44          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -974,13 +974,13 @@ Outputs & filters:
   3 - output([t1.c1]), filter(nil), rowset=16
       partition wise, force partition granule
   4 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
-      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   5 - output([t1.c1]), filter(nil), rowset=16
       access([t1.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   6 - output([1]), filter([:0 = t2.c1]), rowset=16
-      access([t2.c1]), partitions(p[0-4])
+      access([GROUP_ID], [t2.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1) order by 1;
@@ -1000,14 +1000,14 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT  |        |2       |261         |
-|1 |└─EXCHANGE OUT DISTR       |:EX10000|2       |261         |
-|2 |  └─SORT                   |        |2       |261         |
-|3 |    └─PX PARTITION ITERATOR|        |2       |261         |
-|4 |      └─SUBPLAN FILTER     |        |2       |261         |
+|0 |PX COORDINATOR MERGE SORT  |        |2       |229         |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000|2       |229         |
+|2 |  └─SORT                   |        |2       |228         |
+|3 |    └─PX PARTITION ITERATOR|        |2       |228         |
+|4 |      └─SUBPLAN FILTER     |        |2       |228         |
 |5 |        ├─TABLE FULL SCAN  |t1      |5       |10          |
-|6 |        ├─TABLE FULL SCAN  |t2      |1       |51          |
-|7 |        └─TABLE FULL SCAN  |t2      |1       |51          |
+|6 |        ├─TABLE FULL SCAN  |t2      |1       |44          |
+|7 |        └─TABLE FULL SCAN  |t2      |1       |44          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -1020,17 +1020,17 @@ Outputs & filters:
   3 - output([t1.c1]), filter(nil), rowset=16
       partition wise, force partition granule
   4 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))]), rowset=16
-      exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   5 - output([t1.c1]), filter(nil), rowset=16
       access([t1.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   6 - output([1]), filter([:0 = t2.c1]), rowset=16
-      access([t2.c1]), partitions(p[0-4])
+      access([GROUP_ID], [t2.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   7 - output([1]), filter([:1 = t2.c1]), rowset=16
-      access([t2.c1]), partitions(p[0-4])
+      access([GROUP_ID], [t2.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1)
@@ -1051,14 +1051,14 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |        |2       |462         |
-|1 |└─EXCHANGE OUT DISTR               |:EX10000|2       |462         |
-|2 |  └─SORT                           |        |2       |462         |
-|3 |    └─SUBPLAN FILTER               |        |2       |462         |
+|0 |PX COORDINATOR MERGE SORT          |        |2       |404         |
+|1 |└─EXCHANGE OUT DISTR               |:EX10000|2       |403         |
+|2 |  └─SORT                           |        |2       |403         |
+|3 |    └─SUBPLAN FILTER               |        |2       |403         |
 |4 |      ├─PX BLOCK ITERATOR          |        |5       |10          |
 |5 |      │ └─TABLE FULL SCAN          |t1      |5       |10          |
-|6 |      ├─DISTRIBUTED TABLE FULL SCAN|t2      |1       |101         |
-|7 |      └─DISTRIBUTED TABLE FULL SCAN|t3      |1       |81          |
+|6 |      ├─DISTRIBUTED TABLE FULL SCAN|t2      |1       |88          |
+|7 |      └─DISTRIBUTED TABLE FULL SCAN|t3      |1       |70          |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -1069,18 +1069,18 @@ Outputs & filters:
   2 - output([t1.c1]), filter(nil), rowset=16
       sort_keys([t1.c1, ASC])
   3 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))]), rowset=16
-      exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   4 - output([t1.c1]), filter(nil), rowset=16
   5 - output([t1.c1]), filter(nil), rowset=16
       access([t1.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   6 - output([1]), filter([:0 = t2.c1]), rowset=16
-      access([t2.c1]), partitions(p[0-4])
+      access([GROUP_ID], [t2.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   7 - output([1]), filter([:1 = t3.c1]), rowset=16
-      access([t3.c1]), partitions(p[0-3])
+      access([GROUP_ID], [t3.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1)
@@ -1100,16 +1100,13 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |        |3       |139         |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001|3       |138         |
-|2 |  └─SORT                           |        |3       |138         |
-|3 |    └─SUBPLAN FILTER               |        |3       |138         |
-|4 |      ├─EXCHANGE IN DISTR          |        |5       |13          |
-|5 |      │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|5       |12          |
-|6 |      │   └─PX BLOCK ITERATOR      |        |5       |10          |
-|7 |      │     └─TABLE FULL SCAN      |t1      |5       |10          |
-|8 |      └─PX PARTITION ITERATOR      |        |1       |51          |
-|9 |        └─TABLE FULL SCAN          |t2      |1       |51          |
+|0 |PX COORDINATOR MERGE SORT          |        |3       |229         |
+|1 |└─EXCHANGE OUT DISTR               |:EX10000|3       |229         |
+|2 |  └─SORT                           |        |3       |229         |
+|3 |    └─SUBPLAN FILTER               |        |3       |228         |
+|4 |      ├─PX BLOCK ITERATOR          |        |5       |10          |
+|5 |      │ └─TABLE FULL SCAN          |t1      |5       |10          |
+|6 |      └─DISTRIBUTED TABLE FULL SCAN|t2      |1       |88          |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -1120,19 +1117,14 @@ Outputs & filters:
   2 - output([t1.c1]), filter(nil), rowset=16
       sort_keys([t1.c1, ASC])
   3 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
-      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
   5 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
-      (#keys=1, [t1.c2]), dop=2
-  6 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
-  7 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([1]), filter(nil), rowset=16
-      affinitize, partition wise
-  9 - output(nil), filter([:0 = t2.c1]), rowset=16
-      access([t2.c1]), partitions(p[0-4])
+  6 - output([1]), filter([:0 = t2.c1]), rowset=16
+      access([GROUP_ID], [t2.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c2 = t2.c1) order by 1;
@@ -1279,14 +1271,14 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |        |2       |462         |
-|1 |└─EXCHANGE OUT DISTR               |:EX10000|2       |462         |
-|2 |  └─SORT                           |        |2       |462         |
-|3 |    └─SUBPLAN FILTER               |        |2       |462         |
+|0 |PX COORDINATOR MERGE SORT          |        |2       |404         |
+|1 |└─EXCHANGE OUT DISTR               |:EX10000|2       |404         |
+|2 |  └─SORT                           |        |2       |403         |
+|3 |    └─SUBPLAN FILTER               |        |2       |403         |
 |4 |      ├─PX BLOCK ITERATOR          |        |5       |10          |
 |5 |      │ └─TABLE FULL SCAN          |t1      |5       |10          |
-|6 |      ├─DISTRIBUTED TABLE FULL SCAN|t2      |1       |101         |
-|7 |      └─DISTRIBUTED TABLE FULL SCAN|t3      |1       |81          |
+|6 |      ├─DISTRIBUTED TABLE FULL SCAN|t2      |1       |88          |
+|7 |      └─DISTRIBUTED TABLE FULL SCAN|t3      |1       |70          |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -1297,18 +1289,18 @@ Outputs & filters:
   2 - output([t1.c1]), filter(nil), rowset=16
       sort_keys([t1.c1, ASC])
   3 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))]), rowset=16
-      exec_params_([t1.c1(:0)], [t1.c2(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c1(:0)], [t1.c2(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
   5 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   6 - output([1]), filter([:0 = t2.c1]), rowset=16
-      access([t2.c1]), partitions(p[0-4])
+      access([GROUP_ID], [t2.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   7 - output([1]), filter([:1 = t3.c1]), rowset=16
-      access([t3.c1]), partitions(p[0-3])
+      access([GROUP_ID], [t3.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1)
@@ -1328,18 +1320,14 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |        |2       |214         |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001|2       |214         |
-|2 |  └─SORT                           |        |2       |213         |
-|3 |    └─SUBPLAN FILTER               |        |2       |213         |
-|4 |      ├─EXCHANGE IN DISTR          |        |5       |13          |
-|5 |      │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|5       |12          |
-|6 |      │   └─PX BLOCK ITERATOR      |        |5       |10          |
-|7 |      │     └─TABLE FULL SCAN      |t1      |5       |10          |
-|8 |      ├─PX PARTITION ITERATOR      |        |1       |41          |
-|9 |      │ └─TABLE FULL SCAN          |t4      |1       |41          |
-|10|      └─PX PARTITION ITERATOR      |        |1       |41          |
-|11|        └─TABLE FULL SCAN          |t3      |1       |41          |
+|0 |PX COORDINATOR MERGE SORT          |        |2       |360         |
+|1 |└─EXCHANGE OUT DISTR               |:EX10000|2       |360         |
+|2 |  └─SORT                           |        |2       |360         |
+|3 |    └─SUBPLAN FILTER               |        |2       |360         |
+|4 |      ├─PX BLOCK ITERATOR          |        |5       |10          |
+|5 |      │ └─TABLE FULL SCAN          |t1      |5       |10          |
+|6 |      ├─DISTRIBUTED TABLE FULL SCAN|t4      |1       |70          |
+|7 |      └─DISTRIBUTED TABLE FULL SCAN|t3      |1       |70          |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -1350,25 +1338,18 @@ Outputs & filters:
   2 - output([t1.c1]), filter(nil), rowset=16
       sort_keys([t1.c1, ASC])
   3 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))]), rowset=16
-      exec_params_([t1.c2(:0)], [t1.c2(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c2(:0)], [t1.c2(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
   5 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
-      (#keys=1, [t1.c2]), dop=2
-  6 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
-  7 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([1]), filter(nil), rowset=16
-      affinitize, partition wise
-  9 - output(nil), filter([:0 = t4.c1]), rowset=16
-      access([t4.c1]), partitions(p[0-3])
+  6 - output([1]), filter([:0 = t4.c1]), rowset=16
+      access([GROUP_ID], [t4.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
- 10 - output([1]), filter(nil), rowset=16
-      affinitize, partition wise
- 11 - output(nil), filter([:1 = t3.c1]), rowset=16
-      access([t3.c1]), partitions(p[0-3])
+  7 - output([1]), filter([:1 = t3.c1]), rowset=16
+      access([GROUP_ID], [t3.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t4 where t1.c2 = t4.c1) and exists (select 1 from t3 where t1.c2 = t3.c1) order by 1;
@@ -1388,14 +1369,14 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                             |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT            |        |5       |263         |
-|1 |└─EXCHANGE OUT DISTR                 |:EX10000|5       |262         |
-|2 |  └─SORT                             |        |5       |261         |
-|3 |    └─SUBPLAN FILTER                 |        |5       |261         |
+|0 |PX COORDINATOR MERGE SORT            |        |5       |230         |
+|1 |└─EXCHANGE OUT DISTR                 |:EX10000|5       |230         |
+|2 |  └─SORT                             |        |5       |229         |
+|3 |    └─SUBPLAN FILTER                 |        |5       |229         |
 |4 |      ├─PX BLOCK ITERATOR            |        |5       |10          |
 |5 |      │ └─TABLE FULL SCAN            |t2      |5       |10          |
-|6 |      └─TOP-N SORT                   |        |1       |101         |
-|7 |        └─DISTRIBUTED TABLE FULL SCAN|t1      |1       |101         |
+|6 |      └─TOP-N SORT                   |        |1       |88          |
+|7 |        └─DISTRIBUTED TABLE FULL SCAN|t1      |1       |88          |
 =========================================================================
 Outputs & filters:
 -------------------------------------
@@ -1406,7 +1387,7 @@ Outputs & filters:
   2 - output([subquery(1)]), filter(nil), rowset=16
       sort_keys([subquery(1), ASC])
   3 - output([subquery(1)]), filter(nil), rowset=16
-      exec_params_([t2.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t2.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   4 - output([t2.c1]), filter(nil), rowset=16
   5 - output([t2.c1]), filter(nil), rowset=16
       access([t2.c1]), partitions(p[0-4])
@@ -1415,7 +1396,7 @@ Outputs & filters:
   6 - output([t1.c1]), filter(nil), rowset=16
       sort_keys([t1.c2, ASC]), topn(1)
   7 - output([t1.c1], [t1.c2]), filter([t1.c1 = :0]), rowset=16
-      access([t1.c1], [t1.c2]), partitions(p[0-4])
+      access([GROUP_ID], [t1.c1], [t1.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite parallel(2)*/ (select c1 from t1 where t1.c1 = t2.c1 order by c2 limit 1) as ref0 from t2 order by 1;
@@ -1434,13 +1415,13 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |        |3       |262         |
-|1 |└─EXCHANGE OUT DISTR               |:EX10000|3       |262         |
-|2 |  └─SORT                           |        |3       |261         |
-|3 |    └─SUBPLAN FILTER               |        |3       |261         |
+|0 |PX COORDINATOR MERGE SORT          |        |3       |229         |
+|1 |└─EXCHANGE OUT DISTR               |:EX10000|3       |229         |
+|2 |  └─SORT                           |        |3       |229         |
+|3 |    └─SUBPLAN FILTER               |        |3       |228         |
 |4 |      ├─PX BLOCK ITERATOR          |        |5       |10          |
 |5 |      │ └─TABLE FULL SCAN          |t1      |5       |10          |
-|6 |      └─DISTRIBUTED TABLE FULL SCAN|t2      |1       |101         |
+|6 |      └─DISTRIBUTED TABLE FULL SCAN|t2      |1       |88          |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -1451,14 +1432,14 @@ Outputs & filters:
   2 - output([t1.c1]), filter(nil), rowset=16
       sort_keys([t1.c1, ASC])
   3 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
-      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
   5 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   6 - output([1]), filter([:0 = t2.c2]), rowset=16
-      access([t2.c2]), partitions(p[0-4])
+      access([GROUP_ID], [t2.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c2 = t2.c2) order by 1;
@@ -1596,23 +1577,23 @@ insert into t2 (c1, c2, c3, c4) values (29, 12, null, 'a');
 explain_protocol: 3
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) as x from t1;
 Query Plan
-======================================================================
-|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |336         |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |333         |
-|2 |  └─SUBPLAN FILTER                |        |18      |327         |
-|3 |    ├─PX PARTITION ITERATOR       |        |18      |9           |
-|4 |    │ └─TABLE FULL SCAN           |t1      |18      |9           |
-|5 |    └─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-======================================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |SUBPLAN FILTER             |        |18      |336         |
+|1 |├─PX COORDINATOR           |        |18      |18          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|18      |15          |
+|3 |│   └─PX PARTITION ITERATOR|        |18      |9           |
+|4 |│     └─TABLE FULL SCAN    |t1      |18      |9           |
+|5 |└─TABLE RANGE SCAN         |t2      |8       |18          |
+===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)))]), filter(nil), rowset=256
-      dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1))]), filter(nil), rowset=256
       exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
+      dop=1
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -1638,10 +1619,9 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      PQ_SUBQUERY(@"SEL$1" ("SEL$2") NONE ALL)
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
-      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -1666,7 +1646,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -1808,20 +1788,20 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |PX COORDINATOR             |        |18      |332         |
-|1 |└─EXCHANGE OUT DISTR       |:EX10000|18      |329         |
-|2 |  └─SUBPLAN FILTER         |        |18      |323         |
-|3 |    ├─PX PARTITION ITERATOR|        |18      |9           |
-|4 |    │ └─TABLE FULL SCAN    |t1      |18      |9           |
-|5 |    └─DISTRIBUTED TABLE GET|t2      |1       |18          |
+|0 |SUBPLAN FILTER             |        |18      |332         |
+|1 |├─PX COORDINATOR           |        |18      |18          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|18      |15          |
+|3 |│   └─PX PARTITION ITERATOR|        |18      |9           |
+|4 |│     └─TABLE FULL SCAN    |t1      |18      |9           |
+|5 |└─TABLE GET                |t2      |1       |18          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 + subquery(1))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 + subquery(1))]), filter(nil), rowset=256
-      dop=1
-  2 - output([t1.c1], [subquery(1)]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 + subquery(1)]), filter(nil), rowset=256
       exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
+      dop=1
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -1847,10 +1827,9 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      PQ_SUBQUERY(@"SEL$1" ("SEL$2") NONE ALL)
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
-      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -1875,7 +1854,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -1909,24 +1888,24 @@ select c1,c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
 +----+----+
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) and c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
 Query Plan
-======================================================================
-|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |657         |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |654         |
-|2 |  └─SUBPLAN FILTER                |        |18      |648         |
-|3 |    ├─PX PARTITION ITERATOR       |        |18      |9           |
-|4 |    │ └─TABLE FULL SCAN           |t1      |18      |9           |
-|5 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|6 |    └─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-======================================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |SUBPLAN FILTER             |        |18      |657         |
+|1 |├─PX COORDINATOR           |        |18      |18          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|18      |15          |
+|3 |│   └─PX PARTITION ITERATOR|        |18      |9           |
+|4 |│     └─TABLE FULL SCAN    |t1      |18      |9           |
+|5 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|6 |└─TABLE RANGE SCAN         |t2      |8       |18          |
+===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-      dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
       exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
+      dop=1
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -1958,12 +1937,10 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") NONE ALL)
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
-      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -1988,7 +1965,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2000,7 +1977,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2034,24 +2011,24 @@ select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) and c1 in  (select c2 f
 +----+------+
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) or c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
 Query Plan
-======================================================================
-|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |657         |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |654         |
-|2 |  └─SUBPLAN FILTER                |        |18      |648         |
-|3 |    ├─PX PARTITION ITERATOR       |        |18      |9           |
-|4 |    │ └─TABLE FULL SCAN           |t1      |18      |9           |
-|5 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|6 |    └─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-======================================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |SUBPLAN FILTER             |        |18      |657         |
+|1 |├─PX COORDINATOR           |        |18      |18          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|18      |15          |
+|3 |│   └─PX PARTITION ITERATOR|        |18      |9           |
+|4 |│     └─TABLE FULL SCAN    |t1      |18      |9           |
+|5 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|6 |└─TABLE RANGE SCAN         |t2      |8       |18          |
+===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-      dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
       exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
+      dop=1
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -2083,12 +2060,10 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") NONE ALL)
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
-      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -2113,7 +2088,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2125,7 +2100,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2159,24 +2134,24 @@ select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) or c1 in  (select c2 fr
 +----+------+
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
 Query Plan
-======================================================================
-|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |657         |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |654         |
-|2 |  └─SUBPLAN FILTER                |        |18      |648         |
-|3 |    ├─PX PARTITION ITERATOR       |        |18      |9           |
-|4 |    │ └─TABLE FULL SCAN           |t1      |18      |9           |
-|5 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|6 |    └─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-======================================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |SUBPLAN FILTER             |        |18      |657         |
+|1 |├─PX COORDINATOR           |        |18      |18          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|18      |15          |
+|3 |│   └─PX PARTITION ITERATOR|        |18      |9           |
+|4 |│     └─TABLE FULL SCAN    |t1      |18      |9           |
+|5 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|6 |└─TABLE RANGE SCAN         |t2      |8       |18          |
+===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-      dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
       exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
+      dop=1
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -2208,12 +2183,10 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") NONE ALL)
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
-      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -2238,7 +2211,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2250,7 +2223,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2284,24 +2257,24 @@ select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 f
 +----+------+
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
 Query Plan
-======================================================================
-|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |657         |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |654         |
-|2 |  └─SUBPLAN FILTER                |        |18      |648         |
-|3 |    ├─PX PARTITION ITERATOR       |        |18      |9           |
-|4 |    │ └─TABLE FULL SCAN           |t1      |18      |9           |
-|5 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|6 |    └─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-======================================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |SUBPLAN FILTER             |        |18      |657         |
+|1 |├─PX COORDINATOR           |        |18      |18          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|18      |15          |
+|3 |│   └─PX PARTITION ITERATOR|        |18      |9           |
+|4 |│     └─TABLE FULL SCAN    |t1      |18      |9           |
+|5 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|6 |└─TABLE RANGE SCAN         |t2      |8       |18          |
+===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-      dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
       exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
+      dop=1
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -2333,12 +2306,10 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") NONE ALL)
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
-      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -2363,7 +2334,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2375,7 +2346,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2409,25 +2380,25 @@ select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 in  (select c2 fr
 +----+------+
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
 Query Plan
-======================================================================
-|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |971         |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |968         |
-|2 |  └─SUBPLAN FILTER                |        |18      |962         |
-|3 |    ├─PX PARTITION ITERATOR       |        |18      |9           |
-|4 |    │ └─TABLE FULL SCAN           |t1      |18      |9           |
-|5 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|6 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|7 |    └─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-======================================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |SUBPLAN FILTER             |        |18      |971         |
+|1 |├─PX COORDINATOR           |        |18      |18          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|18      |15          |
+|3 |│   └─PX PARTITION ITERATOR|        |18      |9           |
+|4 |│     └─TABLE FULL SCAN    |t1      |18      |9           |
+|5 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|6 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|7 |└─TABLE GET                |t2      |1       |18          |
+===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)))]), filter(nil), rowset=256
-      dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))], [subquery(3)]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3))]), filter(nil), rowset=256
       exec_params_([t1.c1(:0)], [t1.c1(:1)], [t1.c1(:2)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
+      dop=1
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -2465,14 +2436,11 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4") NONE ALL)
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
-      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       FULL(@"SEL$4" "test"."t2"@"SEL$4")
-      USE_DAS(@"SEL$4" "test"."t2"@"SEL$4")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -2497,7 +2465,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2509,7 +2477,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2521,7 +2489,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2556,33 +2524,31 @@ select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 f
 
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
 Query Plan
-======================================================================
-|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |2232        |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |2229        |
-|2 |  └─SUBPLAN FILTER                |        |18      |2223        |
-|3 |    ├─PX PARTITION ITERATOR       |        |18      |9           |
-|4 |    │ └─TABLE FULL SCAN           |t1      |18      |9           |
-|5 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|6 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|7 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|8 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|9 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|10|    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|11|    └─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-======================================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |SUBPLAN FILTER             |        |18      |2232        |
+|1 |├─PX COORDINATOR           |        |18      |18          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|18      |15          |
+|3 |│   └─PX PARTITION ITERATOR|        |18      |9           |
+|4 |│     └─TABLE FULL SCAN    |t1      |18      |9           |
+|5 |├─TABLE GET                |t2      |1       |18          |
+|6 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|7 |├─TABLE GET                |t2      |1       |18          |
+|8 |├─TABLE GET                |t2      |1       |18          |
+|9 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|10|├─TABLE GET                |t2      |1       |18          |
+|11|└─TABLE RANGE SCAN         |t2      |8       |18          |
+===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), BOOL(t1.c1 + subquery(4)) OR 
-      cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), BOOL(t1.c1 + subquery(4)) OR 
-      cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
-      dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
-       [subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3))], [BOOL(t1.c1 + subquery(4)) OR cast(t1.c1, DECIMAL(11,
+       0)) = ANY(subquery(5))], [cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7))]), filter(nil), rowset=256
       exec_params_([t1.c1(:0)], [t1.c1(:1)], [t1.c1(:2)], [t1.c1(:3)], [t1.c1(:4)], [t1.c1(:5)], [t1.c1(:6)]), onetime_exprs_(nil), init_plan_idxs_(nil),
        use_batch=true
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
+      dop=1
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -2644,22 +2610,15 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") NONE ALL)
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
-      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       FULL(@"SEL$4" "test"."t2"@"SEL$4")
-      USE_DAS(@"SEL$4" "test"."t2"@"SEL$4")
       FULL(@"SEL$5" "test"."t2"@"SEL$5")
-      USE_DAS(@"SEL$5" "test"."t2"@"SEL$5")
       FULL(@"SEL$6" "test"."t2"@"SEL$6")
-      USE_DAS(@"SEL$6" "test"."t2"@"SEL$6")
       FULL(@"SEL$7" "test"."t2"@"SEL$7")
-      USE_DAS(@"SEL$7" "test"."t2"@"SEL$7")
       FULL(@"SEL$8" "test"."t2"@"SEL$8")
-      USE_DAS(@"SEL$8" "test"."t2"@"SEL$8")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -2684,7 +2643,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2696,7 +2655,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2708,7 +2667,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2720,7 +2679,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2732,7 +2691,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2744,7 +2703,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2756,7 +2715,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2793,33 +2752,31 @@ select c1,c1 in (select c1 from t2 where t2.c1=t1.c1) and  c1 in (select c1 from
 
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
 Query Plan
-======================================================================
-|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |2236        |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |2234        |
-|2 |  └─SUBPLAN FILTER                |        |18      |2227        |
-|3 |    ├─PX PARTITION ITERATOR       |        |18      |9           |
-|4 |    │ └─TABLE FULL SCAN           |t1      |18      |9           |
-|5 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|6 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|7 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|8 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|9 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|10|    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|11|    └─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-======================================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |SUBPLAN FILTER             |        |18      |2236        |
+|1 |├─PX COORDINATOR           |        |18      |18          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|18      |15          |
+|3 |│   └─PX PARTITION ITERATOR|        |18      |9           |
+|4 |│     └─TABLE FULL SCAN    |t1      |18      |9           |
+|5 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|6 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|7 |├─TABLE GET                |t2      |1       |18          |
+|8 |├─TABLE GET                |t2      |1       |18          |
+|9 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|10|├─TABLE GET                |t2      |1       |18          |
+|11|└─TABLE RANGE SCAN         |t2      |8       |18          |
+===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
-       DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
-       DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
-      dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
-       [subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3))], [t1.c1 + subquery(4) > 30 OR cast(t1.c1, DECIMAL(11,
+       0)) = ANY(subquery(5))], [cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7))]), filter(nil), rowset=256
       exec_params_([t1.c1(:0)], [t1.c1(:1)], [t1.c1(:2)], [t1.c1(:3)], [t1.c1(:4)], [t1.c1(:5)], [t1.c1(:6)]), onetime_exprs_(nil), init_plan_idxs_(nil),
        use_batch=true
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
+      dop=1
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -2881,22 +2838,15 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") NONE ALL)
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
-      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       FULL(@"SEL$4" "test"."t2"@"SEL$4")
-      USE_DAS(@"SEL$4" "test"."t2"@"SEL$4")
       FULL(@"SEL$5" "test"."t2"@"SEL$5")
-      USE_DAS(@"SEL$5" "test"."t2"@"SEL$5")
       FULL(@"SEL$6" "test"."t2"@"SEL$6")
-      USE_DAS(@"SEL$6" "test"."t2"@"SEL$6")
       FULL(@"SEL$7" "test"."t2"@"SEL$7")
-      USE_DAS(@"SEL$7" "test"."t2"@"SEL$7")
       FULL(@"SEL$8" "test"."t2"@"SEL$8")
-      USE_DAS(@"SEL$8" "test"."t2"@"SEL$8")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -2921,7 +2871,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2933,7 +2883,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2945,7 +2895,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2957,7 +2907,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2969,7 +2919,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2981,7 +2931,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -2993,7 +2943,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -3031,33 +2981,31 @@ select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 fro
 
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
 Query Plan
-======================================================================
-|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |2236        |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |2234        |
-|2 |  └─SUBPLAN FILTER                |        |18      |2227        |
-|3 |    ├─PX PARTITION ITERATOR       |        |18      |9           |
-|4 |    │ └─TABLE FULL SCAN           |t1      |18      |9           |
-|5 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|6 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|7 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|8 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|9 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|10|    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|11|    └─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-======================================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |SUBPLAN FILTER             |        |18      |2236        |
+|1 |├─PX COORDINATOR           |        |18      |18          |
+|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|18      |15          |
+|3 |│   └─PX PARTITION ITERATOR|        |18      |9           |
+|4 |│     └─TABLE FULL SCAN    |t1      |18      |9           |
+|5 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|6 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|7 |├─TABLE GET                |t2      |1       |18          |
+|8 |├─TABLE GET                |t2      |1       |18          |
+|9 |├─TABLE RANGE SCAN         |t2      |8       |18          |
+|10|├─TABLE GET                |t2      |1       |18          |
+|11|└─TABLE RANGE SCAN         |t2      |8       |18          |
+===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
-       DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
-       DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
-      dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
-       [subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3))], [t1.c1 + subquery(4) > 30 OR cast(t1.c1, DECIMAL(11,
+       0)) = ANY(subquery(5))], [cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7))]), filter(nil), rowset=256
       exec_params_([t1.c1(:0)], [t1.c1(:1)], [t1.c1(:2)], [t1.c1(:3)], [t1.c1(:4)], [t1.c1(:5)], [t1.c1(:6)]), onetime_exprs_(nil), init_plan_idxs_(nil),
        use_batch=true
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
+      dop=1
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -3119,22 +3067,15 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") NONE ALL)
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
-      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       FULL(@"SEL$4" "test"."t2"@"SEL$4")
-      USE_DAS(@"SEL$4" "test"."t2"@"SEL$4")
       FULL(@"SEL$5" "test"."t2"@"SEL$5")
-      USE_DAS(@"SEL$5" "test"."t2"@"SEL$5")
       FULL(@"SEL$6" "test"."t2"@"SEL$6")
-      USE_DAS(@"SEL$6" "test"."t2"@"SEL$6")
       FULL(@"SEL$7" "test"."t2"@"SEL$7")
-      USE_DAS(@"SEL$7" "test"."t2"@"SEL$7")
       FULL(@"SEL$8" "test"."t2"@"SEL$8")
-      USE_DAS(@"SEL$8" "test"."t2"@"SEL$8")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -3159,7 +3100,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -3171,7 +3112,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -3183,7 +3124,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -3195,7 +3136,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -3207,7 +3148,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -3219,7 +3160,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
@@ -3231,7 +3172,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
