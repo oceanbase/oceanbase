@@ -103,6 +103,7 @@ int ObAlterLSCommand::check_modify_ls_(
 {
   int ret = OB_SUCCESS;
   int64_t info_index = 0;
+  ObArray<common::ObZone> tenant_primary_zone_arr;
   if (OB_UNLIKELY(!tenant_ls_info.is_valid()
       || !ls_id.is_valid_with_tenant(tenant_ls_info.get_tenant_id())
       || (OB_INVALID_ID == unit_group_id && ls_primary_zone.is_empty()))) {
@@ -126,10 +127,12 @@ int ObAlterLSCommand::check_modify_ls_(
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("the specified LS's status is not normal", KR(ret), K(ls_status_info));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The specified LS's status is not normal, MODIFY LS is");
-  } else if (!ls_primary_zone.is_empty() && !is_ls_primary_zone_ok_(tenant_ls_info.get_primary_zone(), ls_primary_zone)) {
+  } else if (OB_FAIL(tenant_ls_info.get_tenant_schema()->get_zone_list(tenant_primary_zone_arr))) {
+    LOG_WARN("fail to get tenant primary zone", KR(ret), K(tenant_ls_info));
+  } else if (!ls_primary_zone.is_empty() && !is_ls_primary_zone_ok_(tenant_primary_zone_arr, ls_primary_zone)) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("ls_primary_zone is not in the tenant's first priority primary zone", KR(ret), K(tenant_ls_info), K(ls_primary_zone));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The specified primary_zone is not in the tenant's first priority primary zone, MODIFY LS is");
+    LOG_WARN("ls_primary_zone is not in the tenant's zone list", KR(ret), K(tenant_primary_zone_arr), K(ls_primary_zone));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The specified primary_zone is not in the tenant's zone list, MODIFY LS is");
   } else if (OB_INVALID_ID != unit_group_id && !is_unit_group_ok_(tenant_ls_info.get_unit_group_array(), unit_group_id, ls_status_info)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("unit_group does not exists or not active", KR(ret), K(tenant_ls_info), K(unit_group_id), K(ls_status_info));
@@ -253,9 +256,9 @@ int ObAlterLSCommand::update_ls_group_id_in_all_ls_(
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid_with_tenant(tenant_id))
-      || OB_INVALID_ID == new_ls_group_id) {
+      || OB_INVALID_ID == old_ls_group_id || OB_INVALID_ID == new_ls_group_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(new_ls_group_id));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(old_ls_group_id), K(new_ls_group_id));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
