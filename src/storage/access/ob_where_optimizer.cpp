@@ -164,6 +164,8 @@ void ObWhereOptimizer::judge_filter_whether_enable_reorder(sql::ObPushdownFilter
       if (child->is_logic_op_node()) {
         enable_reorder = false;
         judge_filter_whether_enable_reorder(child);
+      } else if (child->is_sample_node()) {
+        enable_reorder = false;
       }
     }
     filter->set_enable_reorder(enable_reorder);
