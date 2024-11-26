@@ -1591,17 +1591,29 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("experimental feature: build multivalue index afterward is experimental feature", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "build multivalue index afterward");
+          } else if (table_schema_->is_materialized_view()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("create fulltext/multivalue/vector index on materialized view not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext/multivalue/vector index on materialized view");
           }
         } else if (index_keyname_ == FTS_KEY) {
-          if (!GCONF._enable_add_fulltext_index_to_existing_table) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("experimental feature: build fulltext index afterward is experimental feature", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "build fulltext index afterward");
+          uint64_t tenant_data_version = 0;
+          if (OB_ISNULL(session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+            LOG_WARN("get tenant data version failed", K(ret));
+          } else if (tenant_data_version < DATA_VERSION_4_3_5_0) {
+            LOG_WARN("there are the observers with version lower than 4.3.5 in cluster, build fulltext index afterward not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "there are the observers with version lower than 4.3.5 in cluster, build fulltext index afterward");
           } else if (OB_FAIL(resolve_fts_index_constraint(*table_schema_,
-                                                   sort_item.column_name_,
-                                                   index_name_value))) {
-            SQL_RESV_LOG(WARN, "check fts index constraint fail",K(ret),
-                K(sort_item.column_name_));
+                                                          sort_item.column_name_,
+                                                          index_name_value))) {
+            SQL_RESV_LOG(WARN, "check fts index constraint fail", K(ret), K(sort_item.column_name_));
+          } else if (table_schema_->is_materialized_view()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("create fulltext/multivalue/vector index on materialized view not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext/multivalue/vector index on materialized view");
           }
         } else if (index_keyname_ == VEC_KEY) {
           // TODO@xiajin
@@ -1733,7 +1745,8 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
     ParseNode *colulmn_group_node = nullptr;
     bool is_index_part_specified = false;
     CHECK_COMPATIBILITY_MODE(session_info_);
-    if (is_unique_key && lib::is_oracle_mode()) {
+    if (OB_FAIL(ret)) {
+    } else if (is_unique_key && lib::is_oracle_mode()) {
       // oracle mode
       if (node.num_child_ != 2) {
         ret = OB_ERR_UNEXPECTED;
@@ -2495,6 +2508,7 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
     index_arg.index_option_.storage_format_version_ = storage_format_version_;
     index_arg.index_option_.comment_ = comment_;
     index_arg.with_rowid_ = with_rowid_;
+    index_arg.index_option_.parser_name_ = parser_name_;
     if (OB_SUCC(ret)) {
       ObIndexType type = INDEX_TYPE_IS_NOT;
       if (OB_NOT_NULL(table_schema_) && table_schema_->is_oracle_tmp_table()) {

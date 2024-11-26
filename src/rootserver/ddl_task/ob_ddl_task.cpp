@@ -906,6 +906,15 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_DROP_INDEX:
       ddl_type_str = "drop index";
       break;
+    case DDL_DROP_FTS_INDEX:
+      ddl_type_str = "drop fts index";
+      break;
+    case DDL_DROP_MULVALUE_INDEX:
+      ddl_type_str = "drop mulvalue index";
+      break;
+    case DDL_DROP_VEC_INDEX:
+      ddl_type_str = "drop vec index";
+      break;
     case DDL_ALTER_COLUMN_GROUP:
       ddl_type_str = "alter column group";
       break;
@@ -1096,7 +1105,9 @@ bool ObDDLTask::is_ddl_task_can_be_cancelled() const
 {
   bool can_be_cancelled = true;
   if (task_type_ == ObDDLType::DDL_DROP_INDEX ||
-      task_type_ == ObDDLType::DDL_DROP_VEC_INDEX) {
+      task_type_ == ObDDLType::DDL_DROP_VEC_INDEX ||
+      task_type_ == ObDDLType::DDL_DROP_FTS_INDEX ||
+      task_type_ == ObDDLType::DDL_DROP_MULVALUE_INDEX) {
     can_be_cancelled = false;
   }
   return can_be_cancelled;

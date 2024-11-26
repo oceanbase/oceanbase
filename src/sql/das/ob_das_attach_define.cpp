@@ -65,6 +65,11 @@ ObDASScanRtDef *ObDASTableLookupRtDef::get_lookup_scan_rtdef()
   return scan_rtdef;
 }
 
+OB_SERIALIZE_MEMBER((ObDASIndexProjLookupCtDef, ObDASTableLookupCtDef),
+                     index_scan_proj_exprs_);
+
+OB_SERIALIZE_MEMBER((ObDASIndexProjLookupRtDef, ObDASTableLookupRtDef));
+
 OB_SERIALIZE_MEMBER((ObDASSortCtDef, ObDASAttachCtDef),
                     sort_exprs_,
                     sort_collations_,

@@ -82,26 +82,26 @@ int ObKvSchemaCacheObj::cons_index_info(ObSchemaGetterGuard *schema_guard,
                                         common::ObTableID table_id)
 {
   int ret = OB_SUCCESS;
-  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
-  uint64_t tids[OB_MAX_INDEX_PER_TABLE];
+  int64_t index_aux_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
+  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
   if (OB_ISNULL(schema_guard) || !schema_guard->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema guard is NULL or not inited", K(ret));
   } else if (OB_FAIL(schema_guard->get_can_write_index_array(tenant_id,
                                                              table_id,
                                                              tids,
-                                                             index_cnt,
+                                                             index_aux_cnt,
                                                              false /*only global*/))) {
     LOG_WARN("fail to get can write index array", K(ret), K(table_id));
-  } else if (OB_FAIL(local_index_tids_.init(index_cnt))) {
+  } else if (OB_FAIL(local_index_tids_.init(index_aux_cnt))) {
     LOG_WARN("fail to init local index tids", K(ret));
-  } else if (OB_FAIL(global_index_tids_.init(index_cnt))) {
+  } else if (OB_FAIL(global_index_tids_.init(index_aux_cnt))) {
     LOG_WARN("fail to init global index tids", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_cnt; i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_aux_cnt; i++) {
       const ObTableSchema *index_schema = nullptr;
       if (OB_FAIL(schema_guard->get_table_schema(tenant_id_, tids[i], index_schema))) {
-        LOG_WARN("fail to get index schema", K(ret), K(tids[i]), K(i), K(index_cnt));
+        LOG_WARN("fail to get index schema", K(ret), K(tids[i]), K(i), K(index_aux_cnt));
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("null index schema", K(ret));

@@ -296,7 +296,7 @@ int ObMajorMergeProgressChecker::prepare_unfinish_table_ids()
   }
   const ObSimpleTableSchemaV2 *index_simple_schema = nullptr;
   ObTableCompactionInfo table_compaction_info;
-  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_INDEX_PER_TABLE> index_schemas;
+  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> index_schemas;
   ObSEArray<uint64_t, 50> not_validate_index_ids;
   int64_t start_idx = 0;
   int64_t end_idx = 0;

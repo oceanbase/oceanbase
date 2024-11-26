@@ -457,8 +457,8 @@ int ObDbmsStats::fast_gather_index_stats(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   is_all_fast_gather = true;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   if (OB_FAIL(get_table_index_infos(schema_guard,
                                     ctx.get_my_session()->get_effective_tenant_id(),
@@ -1129,8 +1129,8 @@ int ObDbmsStats::delete_table_index_stats(sql::ObExecContext &ctx,
                                           const ObTableStatParam data_param)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
                                     data_param.table_id_,
@@ -1614,8 +1614,8 @@ int ObDbmsStats::export_table_index_stats(sql::ObExecContext &ctx,
                                           const ObTableStatParam data_param)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
                                     data_param.table_id_,
@@ -2013,8 +2013,8 @@ int ObDbmsStats::import_table_index_stats(sql::ObExecContext &ctx,
                                           const ObTableStatParam data_param)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
                                     data_param.table_id_,
@@ -2235,8 +2235,8 @@ int ObDbmsStats::lock_or_unlock_index_stats(sql::ObExecContext &ctx,
                                             bool is_lock_stats)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
                                     data_param.table_id_,
@@ -3686,24 +3686,24 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       }
     }
   }
-  uint64_t tids[OB_MAX_INDEX_PER_TABLE];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE;
+  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t index_aux_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   const ObTableSchema *index_schema = NULL;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   if (OB_FAIL(ret)) {//do nothing
   } else if (OB_FAIL(schema_guard.get_can_read_index_array(tenant_id,
                                                            table_schema.get_table_id(),
                                                            tids,
-                                                           index_count,
+                                                           index_aux_count,
                                                            false, /*with_mv*/
                                                            true, /*with_global_index*/
                                                            false /*domain index*/))) {
     LOG_WARN("failed to get can read index", K(table_schema.get_table_id()), K(ret));
-  } else if (index_count > OB_MAX_INDEX_PER_TABLE) {
+  } else if (index_aux_count > OB_MAX_AUX_TABLE_PER_MAIN_TABLE) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Invalid index count", K(table_schema.get_table_id()), K(index_count), K(ret));
+    LOG_WARN("Invalid index count", K(table_schema.get_table_id()), K(index_aux_count), K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_count; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_aux_count; ++i) {
       if (OB_FAIL(schema_guard.get_table_schema(tenant_id, tids[i], index_schema))) {
         LOG_WARN("failed to get index schema", K(ret), K(tenant_id), K(tids[i]));
       } else if (OB_ISNULL(index_schema)) {
@@ -6369,8 +6369,8 @@ int ObDbmsStats::get_index_schema(sql::ObExecContext &ctx,
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   index_schema = NULL;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_aux_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -6378,11 +6378,11 @@ int ObDbmsStats::get_index_schema(sql::ObExecContext &ctx,
                                            ctx.get_my_session()->get_effective_tenant_id(),
                                            data_table_id,
                                            index_tids,
-                                           index_count))) {
+                                           index_aux_count))) {
     LOG_WARN("failed to get table index infos", K(ret));
   } else {
     bool found_it = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !found_it && i < index_count; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && !found_it && i < index_aux_count; ++i) {
       const share::schema::ObTableSchema *cur_index_schema = NULL;
       ObString cur_index_name;
       if (index_tids[i] == data_table_id) {

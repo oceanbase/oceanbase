@@ -1432,7 +1432,7 @@ public:
   const ObConstraint *get_constraint(const common::ObString &constraint_name) const;
   int get_pk_constraint_name(common::ObString &pk_name) const;
   const ObConstraint *get_pk_constraint() const;
-
+  int64_t get_index_count() const;
   int64_t get_column_idx(const uint64_t column_id, const bool ignore_hidden_column = false) const;
   int64_t get_replica_num() const;
   int64_t get_tablet_size() const { return tablet_size_; }

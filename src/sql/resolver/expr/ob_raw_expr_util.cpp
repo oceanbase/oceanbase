@@ -10021,6 +10021,29 @@ int ObRawExprUtils::extract_match_against_filters(const ObIArray<ObRawExpr *> &f
   return ret;
 }
 
+int ObRawExprUtils::extract_match_exprs(ObRawExpr *expr,
+                                        ObIArray<ObMatchFunRawExpr*> &match_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (!expr->is_match_against_expr()) {
+    // do nothing
+  } else if (OB_FAIL(add_var_to_array_no_dup(match_exprs, static_cast<ObMatchFunRawExpr*>(expr)))) {
+    LOG_WARN("failed to push back match expr", K(ret));
+  }
+
+  if (OB_SUCC(ret) && expr->has_flag(CNT_MATCH_EXPR)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(extract_match_exprs(expr->get_param_expr(i), match_exprs)))) {
+        LOG_WARN("failed to extract match exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::build_dummy_count_expr(ObRawExprFactory &expr_factory,
                                            const ObSQLSessionInfo *session_info,
                                            ObAggFunRawExpr *&expr)

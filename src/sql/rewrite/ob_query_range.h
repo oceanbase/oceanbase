@@ -487,6 +487,7 @@ public:
   }
   virtual int is_get(bool &is_get) const;
   int is_get(int64_t column_count, bool &is_get) const;
+  inline void reset_range_exprs() { range_exprs_.reset(); }
   virtual bool is_precise_get() const { return table_graph_.is_precise_get_; }
   static common::ObDomainOpType get_geo_relation(ObItemType type);
   static common::ObDomainOpType get_domain_op_type(ObItemType type);

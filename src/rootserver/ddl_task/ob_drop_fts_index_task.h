@@ -92,6 +92,12 @@ private:
   int succ();
   int fail();
   virtual int cleanup_impl() override;
+  virtual bool is_error_need_retry(const int ret_code) override
+  {
+    UNUSED(ret_code);
+    // we should always retry on drop index task
+    return task_status_ < share::ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH;
+  }
   bool is_fts_task() const { return share::ObDDLType::DDL_DROP_FTS_INDEX == task_type_; }
 
 private:

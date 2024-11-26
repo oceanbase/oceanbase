@@ -277,6 +277,37 @@ struct EstimateCostInfo {
   bool override_;
 };
 
+struct TRIndexAccessInfo
+{
+  TRIndexAccessInfo()
+    : index_scan_exprs_(),
+      index_scan_filters_(),
+      index_scan_index_ids_(),
+      func_lookup_exprs_(),
+      func_lookup_index_ids_() {}
+
+  void reset()
+  {
+    index_scan_exprs_.reset();
+    index_scan_filters_.reset();
+    index_scan_index_ids_.reset();
+    func_lookup_exprs_.reset();
+    func_lookup_index_ids_.reset();
+  }
+
+  bool has_ir_scan() const { return index_scan_exprs_.count() != 0; }
+  bool has_func_lookup() const { return func_lookup_exprs_.count() != 0; }
+
+  TO_STRING_KV(K_(index_scan_exprs), K_(index_scan_filters), K_(index_scan_index_ids),
+      K_(func_lookup_exprs), K_(func_lookup_index_ids));
+
+  common::ObSEArray<ObRawExpr *, 2, common::ModulePageAllocator, true> index_scan_exprs_;
+  common::ObSEArray<ObRawExpr *, 2, common::ModulePageAllocator, true> index_scan_filters_;
+  common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> index_scan_index_ids_;
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> func_lookup_exprs_;
+  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> func_lookup_index_ids_;
+};
+
   class Path
   {
   public:
@@ -549,6 +580,7 @@ struct EstimateCostInfo {
         est_records_(),
         range_prefix_count_(0),
         table_opt_info_(),
+        tr_idx_info_(),
         for_update_(false),
         use_skip_scan_(OptSkipScanState::SS_UNSET),
         use_column_store_(false),
@@ -672,6 +704,7 @@ struct EstimateCostInfo {
                  K_(est_cost_info),
                  K_(sample_info),
                  K_(range_prefix_count),
+                 K_(tr_idx_info),
                  K_(for_update),
                  K_(use_das),
                  K_(use_skip_scan),
@@ -701,6 +734,7 @@ struct EstimateCostInfo {
     SampleInfo sample_info_; // sample scan info
     int64_t range_prefix_count_; // prefix count
     BaseTableOptInfo *table_opt_info_;
+    TRIndexAccessInfo tr_idx_info_;
     bool for_update_;
     OptSkipScanState use_skip_scan_;
     bool use_column_store_;
@@ -1344,6 +1378,30 @@ struct NullAwareAntiJoinInfo {
     static const int64_t TABLE_HEURISTIC_UNIQUE_KEY_RANGE_THRESHOLD = 10000;
     static const int64_t PRUNING_ROW_COUNT_THRESHOLD = 1000;
 
+    struct MatchExprInfo {
+      MatchExprInfo()
+      : match_expr_(NULL),
+        inv_idx_id_(common::OB_INVALID_ID),
+        query_range_(NULL),
+        query_range_row_count_(-1),
+        selectivity_(-1.0)
+      {}
+
+      ObMatchFunRawExpr *match_expr_;
+      uint64_t inv_idx_id_;
+      ObQueryRangeProvider *query_range_;
+      int64_t query_range_row_count_;
+      double selectivity_;
+
+      TO_STRING_KV(
+        K_(match_expr),
+        K_(inv_idx_id),
+        K_(query_range),
+        K_(query_range_row_count),
+        K_(selectivity)
+      );
+    };
+
     struct PathHelper {
       PathHelper()
       : is_inner_path_(false),
@@ -1378,6 +1436,8 @@ struct NullAwareAntiJoinInfo {
       ObBaseTableEstMethod est_method_;
       // include nl params and onetime params
       ObSEArray<ObExecParamRawExpr *, 2> exec_params_;
+      // record basic index and selectivity info for all match exprs
+      ObSEArray<MatchExprInfo, 4> match_expr_infos_;
     };
 
     struct DeducedExprInfo {
@@ -2425,6 +2485,7 @@ struct NullAwareAntiJoinInfo {
 
     int get_valid_index_ids(const uint64_t table_id,
                             const uint64_t ref_table_id,
+                            PathHelper &helper,
                             ObIArray<uint64_t> &valid_index_id);
     int get_valid_index_ids_with_no_index_hint(ObSqlSchemaGuard &schema_guard,
                                                const uint64_t ref_table_id,
@@ -2558,6 +2619,7 @@ struct NullAwareAntiJoinInfo {
     int fill_filters(const common::ObIArray<ObRawExpr *> &all_filters,
                      const ObQueryRangeProvider* query_range,
                      ObCostTableScanInfo &est_scan_cost_info,
+                     const TRIndexAccessInfo &tr_idx_info,
                      bool &is_nl_with_extended_range,
                      bool is_link = false,
                      bool use_skip_scan = false);
@@ -2630,6 +2692,37 @@ struct NullAwareAntiJoinInfo {
     int get_join_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
     int get_excluded_condition_exprs(ObIArray<ObRawExpr *> &excluded_conditions);
     static double calc_single_parallel_rows(double rows, int64_t parallel);
+    int init_basic_text_retrieval_info(uint64_t table_id,
+                                       uint64_t ref_table_id,
+                                       PathHelper &helper);
+    int extract_fts_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
+                                            const ObIArray<ObRawExpr*> &predicates,
+                                            const ObTableSchema *table_schema,
+                                            const ObTableSchema *index_schema,
+                                            PathHelper &helper,
+                                            ObQueryRangeProvider *&query_range);
+    int get_query_tokens(ObMatchFunRawExpr *match_expr,
+                                const ObTableSchema *index_schema,
+                                ObIArray<ObConstRawExpr*> &query_tokens);
+    int get_range_of_query_tokens(ObIArray<ObConstRawExpr*> &query_tokens,
+                                  const ObTableSchema &index_schema,
+                                  ObIArray<ColumnItem> &range_columns,
+                                  ObQueryRangeProvider *&query_range);
+    int estimate_fts_index_scan(uint64_t table_id,
+                                uint64_t ref_table_id,
+                                uint64_t index_id,
+                                const ObTableSchema *index_schema,
+                                ObQueryRangeProvider *query_range,
+                                int64_t &query_range_row_count,
+                                double &selectivity);
+    int add_valid_fts_index_ids(PathHelper &helper, uint64_t *index_tid_array, int64_t &size);
+    int find_match_expr_info(const ObIArray<MatchExprInfo> &match_expr_infos,
+                            ObRawExpr *match_expr,
+                            const MatchExprInfo *&match_expr_info);
+    int find_least_selective_expr_on_index(const ObIArray<ObMatchFunRawExpr*> &match_exprs,
+                                          const ObIArray<MatchExprInfo> &match_expr_infos,
+                                          uint64_t index_id,
+                                          const MatchExprInfo *&match_expr_info);
   private:
     static int check_and_remove_is_null_qual(ObLogPlan *plan,
                                              const ObJoinType join_type,
@@ -2794,6 +2887,20 @@ struct NullAwareAntiJoinInfo {
     int compute_sharding_info_for_index_info_entry(const uint64_t table_id,
                                                    const uint64_t base_table_id,
                                                    IndexInfoEntry *index_info_entry);
+    int process_index_for_match_expr(const uint64_t table_id,
+                                     const uint64_t ref_table_id,
+                                     const uint64_t index_id,
+                                     PathHelper &helper,
+                                     AccessPath &access_path);
+    int extract_scan_match_expr_candidates(const ObIArray<ObRawExpr *> &filters,
+                                           ObIArray<ObMatchFunRawExpr *> &scan_match_exprs,
+                                           ObIArray<ObRawExpr *> &scan_match_filters);
+    int get_valid_hint_index_list(const ObIArray<uint64_t> &hint_index_ids,
+                                  const bool is_link_table,
+                                  ObSqlSchemaGuard *schema_guard,
+                                  PathHelper &helper,
+                                  ObIArray<uint64_t> &valid_hint_index_ids) const;
+    bool has_match_expr_on_index(const uint64_t index_id, const ObIArray<MatchExprInfo> &match_expr_infos) const;
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:

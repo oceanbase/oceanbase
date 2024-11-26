@@ -1267,6 +1267,7 @@ public:
   static int extract_match_against_filters(const ObIArray<ObRawExpr *> &filters,
                                            ObIArray<ObRawExpr *> &other_filters,
                                            ObIArray<ObRawExpr *> &match_filters);
+  static int extract_match_exprs(ObRawExpr *expr, ObIArray<ObMatchFunRawExpr*> &match_exprs);
   static int build_dummy_count_expr(ObRawExprFactory &expr_factory,
                                     const ObSQLSessionInfo *session_info,
                                     ObAggFunRawExpr *&expr);

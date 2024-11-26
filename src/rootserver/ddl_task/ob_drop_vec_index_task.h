@@ -101,7 +101,12 @@ private:
   int send_build_single_replica_request();
   int check_build_single_replica(bool &is_end);
   virtual int cleanup_impl() override;
-
+  virtual bool is_error_need_retry(const int ret_code) override
+  {
+    UNUSED(ret_code);
+    // we should always retry on drop index task
+    return task_status_ < share::ObDDLTaskStatus::DROP_AUX_INDEX_TABLE;
+  }
 private:
   ObRootService *root_service_;
   ObVecIndexDDLChildTaskInfo rowkey_vid_;

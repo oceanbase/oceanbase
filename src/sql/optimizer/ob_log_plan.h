@@ -87,6 +87,7 @@ struct IndexDMLInfo;
 class ValuesTablePath;
 class ObSelectLogPlan;
 class ObThreeStageAggrInfo;
+struct ObTextRetrievalInfo;
 class ObHashRollupInfo;
 
 struct TableDependInfo {
@@ -1461,7 +1462,14 @@ public:
   int construct_startup_filter_for_limit(ObRawExpr *limit_expr, ObLogicalOperator *log_op);
 
   int prepare_vector_index_info(ObLogicalOperator *scan);
-  int prepare_text_retrieval_scan(const ObIArray<ObRawExpr*> &exprs, ObLogicalOperator *scan);
+  int prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &scan_match_exprs,
+                                  const ObIArray<ObRawExpr *> &scan_match_filters,
+                                  const ObIArray<ObRawExpr *> &all_match_filters,
+                                  ObIArray<ObRawExpr *> &scan_filters,
+                                  ObLogicalOperator *scan);
+  int prepare_text_retrieval_lookup(const ObIArray<ObRawExpr *> &lookup_match_exprs,
+                                    const ObIArray<uint64_t> &lookup_index_ids,
+                                    ObLogicalOperator *scan);
   int prepare_multivalue_retrieval_scan(ObLogicalOperator *scan);
   int try_push_topn_into_domain_scan(ObLogicalOperator *&top,
                                     ObRawExpr *topn_expr,
@@ -1781,6 +1789,10 @@ private: // member functions
   int adjust_expr_properties_for_external_table(ObRawExpr *col_expr, ObRawExpr *&expr) const;
 
   int compute_duplicate_table_replicas(ObLogicalOperator *op);
+  int prepare_text_retrieval_info(const uint64_t ref_table_id,
+                                  const uint64_t index_table_id,
+                                  ObMatchFunRawExpr *ma_expr,
+                                  ObTextRetrievalInfo &tr_info);
 public:
   const ObLogPlanHint &get_log_plan_hint() const { return log_plan_hint_; }
   bool has_join_order_hint() { return !log_plan_hint_.join_order_.leading_tables_.is_empty(); }

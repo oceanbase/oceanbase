@@ -1849,23 +1849,23 @@ int ObTableCtx::init_trans(transaction::ObTxDesc *trans_desc,
 int ObTableCtx::init_index_info(const ObString &index_name, const uint64_t arg_table_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t tids[OB_MAX_INDEX_PER_TABLE];
-  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t index_aux_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
 
   if (OB_FAIL(schema_guard_->get_can_read_index_array(tenant_id_,
                                                       ref_table_id_,
                                                       tids,
-                                                      index_cnt,
+                                                      index_aux_cnt,
                                                       false))) {
     LOG_WARN("fail to get can read index", K(ret), K_(tenant_id), K_(ref_table_id));
-  } else if (index_cnt > OB_MAX_INDEX_PER_TABLE) {
+  } else if (index_aux_cnt > OB_MAX_AUX_TABLE_PER_MAIN_TABLE) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("index count is bigger than OB_MAX_INDEX_PER_TABLE", K(ret), K(index_cnt));
+    LOG_WARN("index aux count is bigger than OB_MAX_AUX_TABLE_PER_MAIN_TABLE", K(ret), K(index_aux_cnt));
   } else {
     const share::schema::ObTableSchema *index_schema = nullptr;
     ObString this_index_name;
     bool is_found = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_cnt && !is_found; i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_aux_cnt && !is_found; i++) {
       if (OB_FAIL(schema_guard_->get_table_schema(tenant_id_, tids[i], index_schema))) {
         LOG_WARN("fail to get index schema", K(ret), K_(tenant_id), K(tids[i]));
       } else if (OB_ISNULL(index_schema)) {

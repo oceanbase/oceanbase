@@ -4155,7 +4155,8 @@ int ObDDLService::check_can_add_column_use_instant_(const bool is_oracle_mode,
   return ret;
 }
 
-int ObDDLService::check_is_add_column_online_(const ObTableSchema &table_schema,
+int ObDDLService::check_is_add_column_online_(const AlterTableSchema &alter_table_schema,
+                                              const ObTableSchema &table_schema,
                                               const AlterColumnSchema &alter_column_schema,
                                               const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm,
                                               const bool is_oracle_mode,
@@ -4168,7 +4169,7 @@ int ObDDLService::check_is_add_column_online_(const ObTableSchema &table_schema,
   bool is_change_column_order = false;
   if (OB_DDL_ADD_COLUMN != alter_column_schema.alter_type_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("alter_type is not add column", KR(ret), K(alter_column_schema.alter_type_));
+    LOG_WARN("alter_type is not add column", KR(ret), K(alter_column_schema));
   } else if (algorithm == obrpc::ObAlterTableArg::AlterAlgorithm::INSTANT) {
     if (OB_FAIL(check_can_add_column_use_instant_(is_oracle_mode,
                                                   tenant_data_version,
@@ -4176,11 +4177,34 @@ int ObDDLService::check_is_add_column_online_(const ObTableSchema &table_schema,
       LOG_WARN("fail to check can add column use instant algorithm", KR(ret), K(is_oracle_mode), K(table_schema));
     }
   }
+
   if (OB_SUCC(ret)) {
     if (alter_column_schema.is_autoincrement_ || alter_column_schema.is_primary_key_ || alter_column_schema.has_not_null_constraint()) {
       tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
     } else if (nullptr != table_schema.get_column_schema(alter_column_schema.get_column_name())) {
-      tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+      ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+      ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+      for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
+        const AlterColumnSchema *column_schema = nullptr;
+        if (OB_ISNULL(column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("*it_begin is NULL", K(ret));
+        } else if (ObSchemaOperationType::OB_DDL_DROP_COLUMN == column_schema->alter_type_) {
+          lib::Worker::CompatMode compat_mode = (is_oracle_mode ?
+          lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
+          lib::CompatModeGuard guard(compat_mode);
+          const ObString &drop_column_name = column_schema->get_origin_column_name();
+          const ObString &add_column_name = alter_column_schema.get_column_name();
+          if (ObColumnNameHashWrapper(drop_column_name) == ObColumnNameHashWrapper(add_column_name)) {
+            tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (ObDDLType::DDL_INVALID != tmp_ddl_type) {
     } else if (alter_column_schema.is_stored_generated_column()) {
       tmp_ddl_type = ObDDLType::DDL_ADD_COLUMN_OFFLINE;
     } else if (OB_FAIL(check_is_change_column_order(table_schema, alter_column_schema, is_change_column_order))) {
@@ -4301,7 +4325,7 @@ int ObDDLService::check_can_add_column_instant_(const ObTableSchema &orig_table_
       switch (op_type) {
         case OB_DDL_ADD_COLUMN: {
           ObDDLType tmp_ddl_type = ObDDLType::DDL_INVALID;
-          if (!add_column_instant && OB_FAIL(check_is_add_column_online_(orig_table_schema, *alter_column_schema, algorithm,
+          if (!add_column_instant && OB_FAIL(check_is_add_column_online_(alter_table_schema, orig_table_schema, *alter_column_schema, algorithm,
                                                                          is_oracle_mode, tenant_data_version, tmp_ddl_type))) {
             LOG_WARN("fail to check is add column online", KR(ret));
           } else if (ObDDLType::DDL_ADD_COLUMN_INSTANT == tmp_ddl_type) {
@@ -4368,7 +4392,7 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
       switch (op_type) {
         case OB_DDL_ADD_COLUMN: {
           ObDDLType tmp_ddl_type = ObDDLType::DDL_INVALID;
-          if (OB_FAIL(check_is_add_column_online_(orig_table_schema, *alter_column_schema, algorithm,
+          if (OB_FAIL(check_is_add_column_online_(alter_table_schema, orig_table_schema, *alter_column_schema, algorithm,
                                                   is_oracle_mode, tenant_data_version, tmp_ddl_type))) {
             LOG_WARN("fail to check is add column online", K(ret));
           } else if (tmp_ddl_type == ObDDLType::DDL_ADD_COLUMN_ONLINE) {
@@ -5441,7 +5465,8 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
                                           const uint64_t tenant_data_version)
 {
   int ret = OB_SUCCESS;
-  int64_t index_count = new_table_schema.get_index_tid_count();
+  int64_t index_count = new_table_schema.get_index_count();
+  int64_t index_aux_count = new_table_schema.get_index_tid_count();
   const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
   for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
     ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
@@ -5477,10 +5502,11 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
         case ObIndexArg::ADD_PRIMARY_KEY:
         case ObIndexArg::ALTER_PRIMARY_KEY: {
           if (ObIndexArg::ADD_PRIMARY_KEY == type) {
-            if (OB_MAX_INDEX_PER_TABLE <= index_count) {
+            if (OB_MAX_AUX_TABLE_PER_MAIN_TABLE <= index_aux_count || OB_MAX_INDEX_PER_TABLE <= index_count) {
               ret = OB_ERR_TOO_MANY_KEYS;
               LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
-              LOG_WARN("too many index for table!", K(index_count), K(OB_MAX_INDEX_PER_TABLE));
+              LOG_WARN("too many index or index aux for table!",
+                       K(index_count), K(OB_MAX_INDEX_PER_TABLE), K(index_aux_count), K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE));
             } else if (!new_table_schema.is_heap_table()) {
               ret = OB_ERR_MULTIPLE_PRI_KEY;
               LOG_WARN("multiple primary key defined", K(ret));
@@ -7267,9 +7293,10 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
   HEAP_VAR(RenameIndexNameHashSet, rename_ori_index_name_set) {
   HEAP_VAR(RenameIndexNameHashSet, rename_new_index_name_set) {
   HEAP_VAR(AlterIndexNameHashSet, alter_index_name_set) {
-    int64_t index_count = new_table_schema.get_index_tid_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
       ObIndexArg *index_arg = index_arg_list.at(i);
+      int64_t index_count = new_table_schema.get_index_count();
+      int64_t index_aux_count = new_table_schema.get_index_tid_count();
       if (OB_ISNULL(index_arg)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("index arg should not be null", K(ret));
@@ -7284,10 +7311,11 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
             }
           } else if (OB_FAIL(GET_MIN_DATA_VERSION(create_index_arg->tenant_id_, tenant_data_version))) {
             LOG_WARN("get min data version failed", K(ret), KPC(create_index_arg));
-          } else if (OB_MAX_INDEX_PER_TABLE <= index_count) {
+          } else if (OB_MAX_AUX_TABLE_PER_MAIN_TABLE <= index_aux_count || OB_MAX_INDEX_PER_TABLE <= index_count) {
             ret = OB_ERR_TOO_MANY_KEYS;
             LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
-            LOG_WARN("too many index for table!", K(index_count), K(OB_MAX_INDEX_PER_TABLE));
+            LOG_WARN("too many index or index aux for table!",
+                     K(index_count), K(OB_MAX_INDEX_PER_TABLE), K(index_aux_count), K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE));
           }
           if (!new_table_schema.is_partitioned_table()
               && !new_table_schema.is_auto_partitioned_table()
@@ -7454,8 +7482,6 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                   } else if (OB_FAIL(add_index_name_set.set_refactored(index_key))) {
                     LOG_WARN("set index name to hash set failed",
                           K(create_index_arg->index_name_), K(ret));
-                  } else {
-                    ++index_count;
                   }
                 }
               }
@@ -7519,8 +7545,6 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                   new_table_schema,
                   trans))) {
                 LOG_WARN("failed to alter table drop index", K(*drop_index_arg), K(ret));
-              } else {
-                --index_count;
               }
             }
           }
@@ -8500,7 +8524,7 @@ int ObDDLService::get_dropping_domain_index_invisiable_aux_table_schema(
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *data_table_schema = nullptr;
-  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_INDEX_PER_TABLE> indexs;
+  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> indexs;
   if (OB_UNLIKELY(OB_INVALID_ID == data_table_id
         || OB_INVALID_ID == index_table_id
         || OB_INVALID_TENANT_ID == tenant_id
@@ -8577,7 +8601,7 @@ int ObDDLService::get_dropping_vec_index_invisiable_table_schema_(
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *data_table_schema = nullptr;
-  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_INDEX_PER_TABLE> indexs;
+  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> indexs;
   if (OB_UNLIKELY(OB_INVALID_ID == data_table_id
         || OB_INVALID_ID == index_table_id
         || OB_INVALID_TENANT_ID == tenant_id
@@ -15014,6 +15038,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
     }
     if (OB_SUCC(ret) && is_double_table_long_running_ddl(ddl_type)) {
       bool has_index_operation = false;
+      bool will_be_having_domain_index_operation = false;
       bool has_fts_or_multivalue_or_vec_index = false;
       bool is_adding_constraint = false;
       bool is_column_store = false;
@@ -15042,11 +15067,17 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
                                              table_id,
                                              has_fts_or_multivalue_or_vec_index))) {
         LOG_WARN("check has fts index failed", K(ret));
+      } else if (OB_FAIL(check_will_be_having_domain_index_operation(alter_table_arg,
+                                                                     will_be_having_domain_index_operation))) {
+        LOG_WARN("check will be having domain index operation failed", K(ret));
       } else if (OB_FAIL(check_is_adding_constraint(tenant_id, table_id, is_adding_constraint))) {
         LOG_WARN("failed to call check_is_adding_constraint", K(ret));
       } else if (has_index_operation) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run concurrently with creating index.");
+      } else if (will_be_having_domain_index_operation) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run, as creating/dropping fulltext/multivalue/vector index.");
       } else if (has_fts_or_multivalue_or_vec_index) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Run this DDL operation on table with fulltext/multivalue/vector index.");
@@ -15121,6 +15152,30 @@ int ObDDLService::check_has_domain_index(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLService::check_will_be_having_domain_index_operation(
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    bool &will_be_having_domain_index_operation/*false*/)
+{
+  int ret = OB_SUCCESS;
+  will_be_having_domain_index_operation = false;
+  const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
+      ObIndexArg *index_arg = index_arg_list.at(i);
+      if (OB_ISNULL(index_arg)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("index arg should not be null", K(ret));
+      } else {
+        ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
+        if (share::schema::is_fts_or_multivalue_index(create_index_arg->index_type_) ||
+            share::schema::is_vec_index(create_index_arg->index_type_)) {
+          will_be_having_domain_index_operation = true;
+          break;
+        }
+      }
   }
   return ret;
 }
@@ -20130,18 +20185,20 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
     HEAP_VAR(AddIndexNameHashSet, add_index_name_set) {
     HEAP_VAR(DropIndexNameHashSet, drop_index_name_set) {
       const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
-      int64_t index_count = new_table_schema.get_index_tid_count();
       for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
         ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
+        int64_t index_count = new_table_schema.get_index_count();
+        int64_t index_aux_count = new_table_schema.get_index_tid_count();
         if (OB_ISNULL(index_arg)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("index arg should not be null", K(ret));
         } else {
           if (index_arg->index_action_type_ == ObIndexArg::ADD_INDEX) {
-            if (OB_MAX_INDEX_PER_TABLE <= index_count) {
+            if (OB_MAX_AUX_TABLE_PER_MAIN_TABLE <= index_aux_count || OB_MAX_INDEX_PER_TABLE <= index_count) {
               ret = OB_ERR_TOO_MANY_KEYS;
               LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
-              LOG_WARN("too many index for table!", K(index_count), K(OB_MAX_INDEX_PER_TABLE));
+              LOG_WARN("too many index or index aux for table!",
+                       K(index_count), K(OB_MAX_INDEX_PER_TABLE), K(index_aux_count), K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE));
             }
             ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
             if (!new_table_schema.is_partitioned_table()
@@ -20275,8 +20332,6 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                       LOG_WARN("set index name to hash set failed",
                             K(create_index_arg->index_name_), K(ret));
 
-                    } else {
-                      ++index_count;
                     }
                   }
                 }

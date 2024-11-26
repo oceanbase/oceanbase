@@ -396,8 +396,8 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
   const ObTableSchema *table_schema = NULL;
   ObDeleteStmt *delete_stmt = get_delete_stmt();
   ObDeleteTableInfo *table_info = NULL;
-  uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
-  int64_t gindex_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tid[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t gindex_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.session_info_) ||
       OB_ISNULL(allocator_) || OB_ISNULL(delete_stmt)) {

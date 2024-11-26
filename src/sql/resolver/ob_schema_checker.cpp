@@ -1143,8 +1143,8 @@ int ObSchemaChecker::check_column_has_index(const uint64_t tenant_id, uint64_t t
 {
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *col_schema = NULL;
-  uint64_t index_tid_array[OB_MAX_INDEX_PER_TABLE];
-  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tid_array[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t index_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
 
   has_index = false;
   if (IS_NOT_INIT) {

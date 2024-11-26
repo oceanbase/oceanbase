@@ -1793,8 +1793,8 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
   const ObTableSchema *index_schema = nullptr;
   ObSchemaGetterGuard *schema_guard = nullptr;
   const ObDelUpdStmt *stmt = get_stmt();
-  int64_t index_tid_array_size = OB_MAX_INDEX_PER_TABLE;
-  uint64_t index_tid_array[OB_MAX_INDEX_PER_TABLE];
+  int64_t index_tid_array_size = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
+  uint64_t index_tid_array[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
   ObArray<uint64_t> base_column_ids;
   const uint64_t tenant_id = optimizer_context_.get_session_info()->get_effective_tenant_id();
   ObInsertLogPlan *insert_plan = dynamic_cast<ObInsertLogPlan*>(this);
@@ -1956,8 +1956,8 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
     }
   }
   if (OB_SUCC(ret) && !has_tg) {
-    uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
-    int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
+    uint64_t index_tid[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+    int64_t index_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
     ObInsertLogPlan *insert_plan = dynamic_cast<ObInsertLogPlan*>(this);
     if (NULL != insert_plan && get_optimizer_context().get_direct_load_optimizer_ctx().use_direct_load()) {
       index_cnt = 0; // no need building index

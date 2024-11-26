@@ -82,6 +82,9 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_doc_id_merge_iter.cpp
   das/iter/ob_das_vid_merge_iter.cpp
   das/iter/ob_das_index_merge_iter.cpp
+  das/iter/ob_das_func_data_iter.cpp
+  das/iter/ob_das_functional_lookup_iter.cpp
+  das/iter/ob_das_cache_lookup_iter.cpp
   das/iter/ob_das_mvi_lookup_iter.cpp
   das/iter/ob_das_spatial_scan_iter.cpp
 )

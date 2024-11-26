@@ -1550,10 +1550,10 @@ int ObSchemaGetterGuard::get_can_write_index_array(
       LOG_WARN("cannot get index table schema for table ", KR(ret), K(tenant_id), K(index_id));
     } else if (OB_UNLIKELY(index_schema->is_final_invalid_index())) {
       //invalid index status, need ingore
-    } else if (OB_MAX_INDEX_PER_TABLE <= can_write_count) {
+    } else if (OB_MAX_AUX_TABLE_PER_MAIN_TABLE <= can_write_count) {
       ret = OB_ERR_TOO_MANY_KEYS;
       LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
-      LOG_WARN("too many index or mlog for table!", K(can_write_count), K(OB_MAX_INDEX_PER_TABLE));
+      LOG_WARN("too many index, index aux or mlog for table!", K(can_write_count), K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE));
     } else if (index_schema->is_mlog_table()) {
       index_tid_array[can_write_count] = simple_index_infos.at(i).table_id_;
       ++can_write_count;
@@ -1594,8 +1594,8 @@ int ObSchemaGetterGuard::column_is_key(
   } else if (column_schema->is_rowkey_column() || column_schema->is_tbl_part_key_column()) {
     is_key = true;
   } else {
-    int64_t index_tid_array_size = OB_MAX_INDEX_PER_TABLE;
-    uint64_t index_tid_array[OB_MAX_INDEX_PER_TABLE];
+    int64_t index_tid_array_size = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
+    uint64_t index_tid_array[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
     if (OB_FAIL(get_can_write_index_array(tenant_id, table_id, index_tid_array, index_tid_array_size))) {
       LOG_WARN("get index tid array failed", K(ret), K(tenant_id), K(index_tid_array_size));
     }

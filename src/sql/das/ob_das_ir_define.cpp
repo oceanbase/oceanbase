@@ -35,5 +35,13 @@ OB_SERIALIZE_MEMBER((ObDASIRAuxLookupCtDef, ObDASAttachCtDef),
 
 OB_SERIALIZE_MEMBER((ObDASIRAuxLookupRtDef, ObDASAttachRtDef));
 
+OB_SERIALIZE_MEMBER((ObDASFuncLookupCtDef, ObDASAttachCtDef),
+    main_lookup_cnt_,
+    doc_id_lookup_cnt_,
+    func_lookup_cnt_,
+    lookup_doc_id_expr_);
+
+OB_SERIALIZE_MEMBER((ObDASFuncLookupRtDef, ObDASAttachRtDef));
+
 } // sql
 } // oceanbase

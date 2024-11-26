@@ -337,7 +337,7 @@ public:
   bool is_contain_trans_info() {return NULL != scan_ctdef_->trans_info_expr_; }
   int do_table_scan();
   int do_domain_index_lookup();
-  int get_text_ir_tablet_ids(
+  int get_base_text_ir_tablet_ids(
       common::ObTabletID &inv_idx_tablet_id,
       common::ObTabletID &fwd_idx_tablet_id,
       common::ObTabletID &doc_id_idx_tablet_id);
@@ -348,6 +348,7 @@ public:
       common::ObTabletID &snapshot_tid,
       common::ObTabletID &com_aux_vec_tid);
   int get_index_merge_tablet_ids(common::ObIArray<common::ObTabletID> &index_merge_tablet_ids);
+  int get_func_lookup_tablet_ids(ObDASRelatedTabletID &related_tablet_ids);
   bool enable_rich_format() const { return scan_rtdef_->enable_rich_format(); }
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,
                        KPC_(scan_ctdef),
@@ -362,6 +363,7 @@ protected:
   common::ObNewRowIterator *get_output_result_iter() { return result_; }
   ObDASIterTreeType get_iter_tree_type() const;
   bool is_index_merge(const ObDASBaseCtDef *attach_ctdef) const;
+  bool is_func_lookup(const ObDASBaseCtDef *attach_ctdef) const;
 public:
   ObSEArray<ObDatum *, 4> trans_info_array_;
 protected:

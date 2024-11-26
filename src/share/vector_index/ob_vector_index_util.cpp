@@ -275,7 +275,7 @@ int ObVectorIndexUtil::check_table_has_vector_of_fts_index(
         LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
       } else if (index_table_schema->is_vec_index()) {
         has_vec_index = true;
-      } else if (index_table_schema->is_fts_index()) {
+      } else if (index_table_schema->is_fts_index_aux() || index_table_schema->is_fts_doc_word_aux()) {
         has_fts_index = true;
       }
     }

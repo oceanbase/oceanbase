@@ -18864,16 +18864,12 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
   if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(params_.query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(expr));
-  } else if (match_exprs.count() > 1) {
-    // jinmao TODO: 之后存储层支持返回未匹配行，并且 SQL 层支持计算之后可以删掉这里的一系列限制
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "match expr can only be used in simple filter for now");
-    LOG_WARN("match expr can only be used in simple filter for now", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < match_exprs.count(); i++) {
       uint64_t table_id = OB_INVALID_ID;
       ObMatchFunRawExpr *cur_match_expr = NULL;
       ObMatchFunRawExpr *match_expr_on_table = NULL;
+      ObSEArray<ObRawExpr *, 4> match_exprs_on_table;
       bool table_on_null_side = false;
       bool is_simple_filter = false;
       ObSEArray<ObExprConstraint, 1> constraints;
@@ -18882,38 +18878,31 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
         LOG_WARN("unexpected null", K(ret));
       } else if (OB_FAIL(cur_match_expr->get_table_id(table_id))) {
         LOG_WARN("failed to get table id", K(ret));
-      } else if (OB_FAIL(stmt->get_match_expr_on_table(table_id, match_expr_on_table))) {
+      } else if (OB_FAIL(stmt->get_match_expr_on_table(table_id, match_exprs_on_table))) {
         LOG_WARN("failed to get fulltext search expr on table", K(ret), K(table_id));
       } else if (OB_FAIL(resolve_match_against_expr(*cur_match_expr))) {
         LOG_WARN("failed to resolve match index", K(ret));
-      } else if (OB_ISNULL(match_expr_on_table)) {
-        if (scope != T_WHERE_SCOPE) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search expr defined beyond where clause");
-          LOG_WARN("fulltext search expr not found in condition expr", K(ret));
-        } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt, table_id, table_on_null_side))) {
+      } else {
+        for (int64_t match_idx = 0; match_idx < match_exprs_on_table.count(); ++match_idx) {
+          if (match_exprs_on_table.at(match_idx)->same_as(*cur_match_expr, &check_ctx)) {
+            match_expr_on_table = static_cast<ObMatchFunRawExpr *>(match_exprs_on_table.at(match_idx));
+            break;
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (nullptr == match_expr_on_table) {
+        // same expr not found in stmt
+        if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt, table_id, table_on_null_side))) {
           LOG_WARN("failed to check table on null side", K(ret));
         } else if (table_on_null_side) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search on null side of joined table");
           LOG_WARN("fulltext search on null side of joined table is not supported", K(ret));
-        } else if (OB_FAIL(check_fulltext_search_simple_filter(expr, cur_match_expr, is_simple_filter, constraints))) {
-          LOG_WARN("failed to check fulltext search simple filter", K(ret));
-        } else if (is_simple_filter) {
-          if (OB_FAIL(stmt->get_match_exprs().push_back(cur_match_expr))) {
-            LOG_WARN("failed to push back expr", K(ret));
-          } else if (OB_FAIL(append(params_.query_ctx_->all_expr_constraints_, constraints))) {
-            LOG_WARN("failed to append constraints", K(ret));
-          }
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "filter that can't imply match_score not equal to 0");
-          LOG_WARN("filter that can't imply match_score not equal to 0 is not supported", K(ret), KPC(expr));
+        } else if (OB_FAIL(stmt->get_match_exprs().push_back(cur_match_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
         }
-      } else if (!cur_match_expr->same_as(*match_expr_on_table, &check_ctx)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-shareable match exprs on same base table");
-        LOG_WARN("non-shareable match exprs on same base table are not supported", K(ret), KPC(cur_match_expr), KPC(match_expr_on_table));
       } else if (OB_FAIL(replacer.add_replace_expr(cur_match_expr, match_expr_on_table))) {
         LOG_WARN("failed to add replace expr", K(ret));
       } else if (OB_FAIL(replacer.replace(expr))) {
@@ -19069,74 +19058,6 @@ int ObDMLResolver::resolve_match_index(
     }
     LOG_DEBUG("fulltext retrieval matched fulltex index id", K(ret),
         K(inv_idx_tid), K(fwd_idx_tid), K(doc_rowkey_tid));
-  }
-  return ret;
-}
-
-// check that the fulltext search filter can imply a condition where match_score is not equal to zero.
-int ObDMLResolver::check_fulltext_search_simple_filter(ObRawExpr *expr,
-                                                       ObRawExpr *match_expr,
-                                                       bool &is_simple_filter,
-                                                       ObIArray<ObExprConstraint> &constraints)
-{
-  int ret = OB_SUCCESS;
-  is_simple_filter = false;
-  if (expr->get_expr_type() == T_FUN_MATCH_AGAINST) {
-    // bool expr will be added above in where scope
-    is_simple_filter = true;
-  } else {
-    ObRawExprCopier copier(*params_.expr_factory_);
-    ObSEArray<ObRawExpr*, 1> match_exprs;
-    ObSEArray<ObRawExpr*, 1> zero_exprs;
-    ObConstRawExpr *zero_expr = NULL;
-    ObObj obj_zero;
-    obj_zero.set_double(ObDoubleType, 0);
-    ObRawExpr *false_null_expr = NULL;
-    ObRawExpr *lnnvl_expr = NULL;
-    bool got_result = false;
-    ObObj result;
-    if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_) || OB_ISNULL(allocator_) ||
-        OB_ISNULL(params_.session_info_->get_cur_exec_ctx())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_DOUBLE, zero_expr))) {
-      LOG_WARN("create raw expr fail", K(ret));
-    } else if (OB_ISNULL(zero_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null expr", K(ret));
-    } else if (OB_FALSE_IT(zero_expr->set_value(obj_zero))) {
-    } else if (OB_FAIL(match_exprs.push_back(match_expr))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    } else if (OB_FAIL(zero_exprs.push_back(zero_expr))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    } else if (OB_FAIL(copier.add_replaced_expr(match_exprs, zero_exprs))) {
-      LOG_WARN("failed to add replace pair", K(ret));
-    } else if (OB_FAIL(copier.copy_on_replace(expr, false_null_expr))) {
-      LOG_WARN("failed to do expr copy on replace", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_lnnvl_expr(*params_.expr_factory_, false_null_expr, lnnvl_expr))) {
-      LOG_WARN("failed to build lnnvl expr", K(ret));
-    } else if (OB_ISNULL(lnnvl_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (OB_FAIL(lnnvl_expr->formalize(params_.session_info_))) {
-      LOG_WARN("failed to formalize lnnvl expr", K(ret));
-    } else if (!lnnvl_expr->is_static_const_expr()) {
-      is_simple_filter = false;
-    } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(params_.session_info_->get_cur_exec_ctx(),
-                                                                lnnvl_expr,
-                                                                result,
-                                                                got_result,
-                                                                *allocator_))) {
-      LOG_WARN("failed to calc cosnt or calculable expr", K(ret));
-    } else if (!got_result || result.is_false() || result.is_null()) {
-      is_simple_filter = false;
-    } else {
-      is_simple_filter = true;
-      ObExprConstraint true_constraint(lnnvl_expr, PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE);
-      if (OB_FAIL(constraints.push_back(true_constraint))) {
-        LOG_WARN("failed to push back true constraint", K(ret));
-      }
-    }
   }
   return ret;
 }

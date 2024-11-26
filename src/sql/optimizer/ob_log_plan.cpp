@@ -2923,16 +2923,27 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     }
 
     if (OB_SUCC(ret)) {
-      ObSEArray<ObRawExpr *, 8> non_match_filters;
-      ObSEArray<ObRawExpr *, 2> match_filters;
-      if (OB_FAIL(ObRawExprUtils::extract_match_against_filters(ap->filter_,
-                                                                non_match_filters,
-                                                                match_filters))) {
-        LOG_WARN("failed to extract ir fitler from filters", K(ret), K(ap->filter_));
-      } else if (match_filters.count() > 0) {
-        if (OB_FAIL(prepare_text_retrieval_scan(match_filters, scan))) {
+      if (ap->tr_idx_info_.has_ir_scan()) {
+        // For functional lookup with multiple match filters, use only one filter
+        //   as index scan and other filters eval after functional lookup
+        // TODO: enable multiple fulltext index scan after index merge supported
+        ObSEArray<ObRawExpr *, 8> non_match_filters;
+        ObSEArray<ObRawExpr *, 2> match_filters;
+        ObSEArray<ObRawExpr *, 8> table_scan_filters;
+        if (OB_FAIL(ObRawExprUtils::extract_match_against_filters(ap->filter_,
+                                                                  non_match_filters,
+                                                                  match_filters))) {
+          LOG_WARN("failed to extract ir fitler from filters", K(ret), K(ap->filter_));
+        } else if (OB_FAIL(table_scan_filters.assign(non_match_filters))) {
+          LOG_WARN("failed to assign non match filters to scan filters", K(ret));
+        } else if (OB_FAIL(prepare_text_retrieval_scan(
+            ap->tr_idx_info_.index_scan_exprs_,
+            ap->tr_idx_info_.index_scan_filters_,
+            match_filters,
+            table_scan_filters,
+            scan))) {
           LOG_WARN("failed to allocate text ir scan", K(ret));
-        } else if (OB_FAIL(scan->set_table_scan_filters(non_match_filters))) {
+        } else if (OB_FAIL(scan->set_table_scan_filters(table_scan_filters))) {
           LOG_WARN("failed to set filters", K(ret));
         } else if (OB_FAIL(append(scan->get_pushdown_filter_exprs(), ap->pushdown_filters_))) {
           LOG_WARN("failed to append pushdown filters", K(ret));
@@ -2951,6 +2962,15 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
       } else if (ap->est_cost_info_.index_meta_info_.is_vector_index_ && get_stmt()->has_vec_approx() &&
                  OB_FAIL(prepare_vector_index_info(scan))) {
         LOG_WARN("failed to prepare multivalue doc_rowkey ", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && ap->tr_idx_info_.has_func_lookup()) {
+      // init push-down calc exprs for functional lookup
+      if (OB_FAIL(prepare_text_retrieval_lookup(ap->tr_idx_info_.func_lookup_exprs_,
+                                                ap->tr_idx_info_.func_lookup_index_ids_,
+                                                scan))) {
+        LOG_WARN("failed to prepare text retrieval lookup", K(ret), KPC(ap));
       }
     }
 
@@ -11620,7 +11640,25 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
           LOG_WARN("failed to append main table id", K(ret));
         }
       }
+
       LOG_TRACE("collect location related info", K(rel_info));
+      if (OB_SUCC(ret) && tsc_op.has_func_lookup()) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < tsc_op.get_lookup_tr_infos().count(); ++i) {
+          const ObTextRetrievalInfo &curr_tr_info = tsc_op.get_lookup_tr_infos().at(i);
+          if (tsc_op.is_index_scan()
+            && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_real_ref_table_id()))) {
+            LOG_WARN("failed to append real table id", K(ret));
+          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.inv_idx_tid_))) {
+            LOG_WARN("failed to append inverted index table id", K(ret));
+          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.fwd_idx_tid_))) {
+            LOG_WARN("failed to append foward index table id", K(ret));
+          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.doc_id_idx_tid_))) {
+            LOG_WARN("failed to append doc_id index table id", K(ret));
+          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.rowkey_idx_tid_))) {
+            LOG_WARN("failed to append rowkey index table id", K(ret));
+          }
+        }
+      }
 
       if (OB_SUCC(ret) && OB_FAIL(optimizer_context_.get_loc_rel_infos().push_back(rel_info))) {
         LOG_WARN("store location related info failed", K(ret));
@@ -11883,6 +11921,10 @@ int ObLogPlan::check_das_need_scan_with_domain_id(ObLogicalOperator *op)
     ObLogTableScan *scan = static_cast<ObLogTableScan*>(op);
     if (OB_FAIL(scan->check_das_need_scan_with_domain_id())) {
       LOG_WARN("failed to check das scan with doc id", K(ret));
+    } else if (OB_UNLIKELY(scan->has_func_lookup() && (scan->is_tsc_with_doc_id() || scan->is_tsc_with_vid()))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("functional lookup with dml on fulltext index / vector index not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "filter that can not imply match_score not equal to 0 in dml");
     }
   }
   for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
@@ -14418,38 +14460,30 @@ int ObLogPlan::compute_duplicate_table_replicas(ObLogicalOperator *op)
   return ret;
 }
 
-int ObLogPlan::prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &exprs, ObLogicalOperator *scan)
+int ObLogPlan::prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &scan_match_exprs,
+                                           const ObIArray<ObRawExpr *> &scan_match_filters,
+                                           const ObIArray<ObRawExpr *> &all_match_filters,
+                                           ObIArray<ObRawExpr *> &scan_filters,
+                                           ObLogicalOperator *scan)
 {
-  // TODO: only support one match against expr as filter for now
   int ret = OB_SUCCESS;
   ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(scan);
   ObRawExpr *match_pred = NULL;
   ObMatchFunRawExpr *match_against = NULL;
-  ObSchemaGetterGuard *schema_guard = NULL;
-  ObSQLSessionInfo *session = NULL;
-  const ObTableSchema *table_schema = NULL;
-  const ObTableSchema *inv_idx_schema = NULL;
-  const ObTableSchema *fwd_idx_schema = NULL;
-  uint64_t doc_id_rowkey_tid = OB_INVALID_ID;
-  uint64_t fwd_idx_tid = OB_INVALID_ID;
-  uint64_t inv_idx_tid = OB_INVALID_ID;
-  ObSEArray<ObAuxTableMetaInfo, 4> index_infos;
-  bool need_calc_relevance = true;
-  ObSEArray<ObExprConstraint, 2> constraints;
+  ObMatchFunRawExpr *scan_match_expr = nullptr;
 
-  if (OB_UNLIKELY(1 != exprs.count())) {
+  if (OB_UNLIKELY(1 != scan_match_exprs.count())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("multi match filters not supported yet", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one match filter");
-  } else if (OB_ISNULL(match_pred = exprs.at(0)) || OB_ISNULL(scan) ||
-      OB_ISNULL(get_stmt()) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argumsnts", K(ret), KPC(match_pred), KP(scan));
-  } else if (OB_ISNULL(get_stmt())
-    || OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard())
-    || OB_ISNULL(session = get_optimizer_context().get_session_info())) {
+  } else if (OB_UNLIKELY(scan_match_filters.count() < 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null pointers", K(ret), KP(get_stmt()), KP(schema_guard), KP(session));
+    LOG_WARN("unexpected text retrieval scan without match filters", K(ret));
+  } else if (OB_ISNULL(match_pred = scan_match_filters.at(0))
+      || OB_ISNULL(scan_match_expr = static_cast<ObMatchFunRawExpr *>(scan_match_exprs.at(0)))
+      || OB_ISNULL(scan)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argumsnts", K(ret), KPC(match_pred), KPC(scan_match_expr), KP(scan));
   } else if (OB_UNLIKELY(!match_pred->has_flag(CNT_MATCH_EXPR)
       || LOG_TABLE_SCAN != scan->get_type()
       || 0 == match_pred->get_param_count())) {
@@ -14474,11 +14508,97 @@ int ObLogPlan::prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &exprs, O
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(match_against)) {
+  } else if (OB_UNLIKELY(match_against != static_cast<ObMatchFunRawExpr *>(scan_match_exprs.at(0)))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null match against expr", K(ret), KPC(match_pred), KPC(match_against));
+    LOG_WARN("unexpected match against expr in match filter is not the match expr for scan",
+        K(ret), KPC(match_against), K(scan_match_exprs));
+  } else if (OB_FAIL(prepare_text_retrieval_info(table_scan->get_real_ref_table_id(),
+                                                 table_scan->get_index_table_id(),
+                                                 match_against,
+                                                 table_scan->get_text_retrieval_info()))) {
+    LOG_WARN("failed to prepare text retrieval info", K(ret));
+  } else {
+    ObTextRetrievalInfo &tr_info = table_scan->get_text_retrieval_info();
+    tr_info.match_expr_ = match_against;
+    tr_info.pushdown_match_filter_ = match_pred;
+    table_scan->set_doc_id_index_table_id(tr_info.doc_id_idx_tid_);
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_match_filters.count(); ++i) {
+    ObRawExpr *curr_filter = all_match_filters.at(i);
+    if (curr_filter != match_pred) {
+      if (OB_FAIL(scan_filters.push_back(curr_filter))) {
+        LOG_WARN("failed to append match filter after functional lookup", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::prepare_text_retrieval_lookup(const ObIArray<ObRawExpr *> &lookup_match_exprs,
+                                             const ObIArray<uint64_t> &lookup_index_ids,
+                                             ObLogicalOperator *scan)
+{
+  int ret = OB_SUCCESS;
+  ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(scan);
+  if (OB_ISNULL(table_scan) || OB_UNLIKELY(lookup_match_exprs.count() != lookup_index_ids.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(table_scan), K(lookup_match_exprs), K(lookup_index_ids));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < lookup_match_exprs.count(); ++i) {
+    ObTextRetrievalInfo tr_info;
+    ObMatchFunRawExpr *curr_match_expr = nullptr;
+    if (OB_ISNULL(curr_match_expr = static_cast<ObMatchFunRawExpr *>(lookup_match_exprs.at(i)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr to lookup match exprs", K(ret), K(i), K(lookup_match_exprs));
+    } else if (OB_FAIL(prepare_text_retrieval_info(table_scan->get_real_ref_table_id(),
+                                                   lookup_index_ids.at(i),
+                                                   curr_match_expr,
+                                                   tr_info))) {
+      LOG_WARN("failed to prepare text retrieval info", K(ret));
+    } else if (OB_FAIL(table_scan->get_lookup_tr_infos().push_back(tr_info))) {
+      LOG_WARN("failed to append lookup text retrieval infos", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret) && table_scan->get_lookup_tr_infos().count() > 0) {
+    // has text retrieval lookup, need do rowkey->doc_id lookup
+    const uint64_t rowkey_doc_tid = table_scan->get_lookup_tr_infos().at(0).rowkey_idx_tid_;
+    table_scan->set_rowkey_doc_table_id(rowkey_doc_tid);
+  }
+  return ret;
+}
+
+int ObLogPlan::prepare_text_retrieval_info(const uint64_t ref_table_id,
+                                           const uint64_t index_table_id,
+                                           ObMatchFunRawExpr *match_against,
+                                           ObTextRetrievalInfo &tr_info)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  ObSQLSessionInfo *session = NULL;
+  const ObTableSchema *table_schema = NULL;
+  const ObTableSchema *inv_idx_schema = NULL;
+  const ObTableSchema *fwd_idx_schema = NULL;
+  uint64_t doc_id_rowkey_tid = OB_INVALID_ID;
+  uint64_t rowkey_doc_tid = OB_INVALID_ID;
+  uint64_t fwd_idx_tid = OB_INVALID_ID;
+  uint64_t inv_idx_tid = OB_INVALID_ID;
+  ObSEArray<ObAuxTableMetaInfo, 4> index_infos;
+  bool need_calc_relevance = true;
+  ObSEArray<ObExprConstraint, 2> constraints;
+
+  if (OB_ISNULL(match_against) || OB_ISNULL(get_stmt()) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KPC(match_against));
+  } else if (OB_ISNULL(get_stmt())
+    || OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard())
+    || OB_ISNULL(session = get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointers", K(ret), KP(get_stmt()), KP(schema_guard), KP(session));
   } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
-                                                    table_scan->get_real_ref_table_id(),
+                                                    ref_table_id,
                                                     table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(table_schema)) {
@@ -14488,7 +14608,9 @@ int ObLogPlan::prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &exprs, O
     LOG_WARN("failed to get index infos", K(ret));
   } else if (OB_FAIL(table_schema->get_doc_id_rowkey_tid(doc_id_rowkey_tid))) {
     LOG_WARN("failed to get doc_id_rowkey table id", K(ret));
-  } else if (OB_FALSE_IT(inv_idx_tid = table_scan->get_index_table_id())) {
+  } else if (OB_FAIL(table_schema->get_rowkey_doc_tid(rowkey_doc_tid))) {
+    LOG_WARN("failed to get rowkey doc table id", K(ret), KPC(table_schema));
+  } else if (OB_FALSE_IT(inv_idx_tid = index_table_id)) {
   } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
                                                     inv_idx_tid,
                                                     inv_idx_schema))) {
@@ -14539,14 +14661,13 @@ int ObLogPlan::prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &exprs, O
       LOG_WARN("failed to append array no dup", K(ret));
     }
     */
-    ObTextRetrievalInfo &tr_info = table_scan->get_text_retrieval_info();
     tr_info.match_expr_ = match_against;
     tr_info.inv_idx_tid_ = inv_idx_tid;
     tr_info.fwd_idx_tid_ = fwd_idx_tid;
     tr_info.doc_id_idx_tid_ = doc_id_rowkey_tid;
-    tr_info.pushdown_match_filter_ = match_pred;
+    tr_info.rowkey_idx_tid_ = rowkey_doc_tid;
+    tr_info.pushdown_match_filter_ = nullptr;
     tr_info.need_calc_relevance_ = need_calc_relevance;
-    table_scan->set_doc_id_index_table_id(doc_id_rowkey_tid);
   }
   return ret;
 }

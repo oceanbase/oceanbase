@@ -1275,11 +1275,14 @@ int ObIndexBuilder::do_create_index(
     LOG_WARN("can not add index on table in recyclebin", K(ret), K(arg));
   } else if (OB_FAIL(ddl_service_.check_restore_point_allow(tenant_id, *table_schema))) {
     LOG_WARN("failed to check restore point allow.", K(ret), K(tenant_id), K(table_id));
-  } else if (table_schema->get_index_tid_count() >= OB_MAX_INDEX_PER_TABLE) {
+  } else if (table_schema->get_index_tid_count() >= OB_MAX_AUX_TABLE_PER_MAIN_TABLE
+             || table_schema->get_index_count() >= OB_MAX_INDEX_PER_TABLE) {
     ret = OB_ERR_TOO_MANY_KEYS;
     LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
-    int64_t index_count = table_schema->get_index_tid_count();
-    LOG_WARN("too many index for table", K(OB_MAX_INDEX_PER_TABLE), K(index_count), K(ret));
+    int64_t index_aux_count = table_schema->get_index_tid_count();
+    int64_t index_count = table_schema->get_index_count();
+    LOG_WARN("too many index or index aux for table",
+             K(index_count), K(OB_MAX_INDEX_PER_TABLE), K(index_aux_count), K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE), K(ret));
   } else if (OB_FAIL(ddl_service_.check_fk_related_table_ddl(*table_schema, ObDDLType::DDL_CREATE_INDEX))) {
     LOG_WARN("check whether the foreign key related table is executing ddl failed", K(ret));
   } else if (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
@@ -1355,11 +1358,6 @@ int ObIndexBuilder::generate_schema(
   }
 
   if (OB_SUCC(ret)) {
-    if (arg.index_columns_.count() <= 0) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("index columns can't be empty", "index columns", arg.index_columns_, K(ret));
-    } else {}
-
     //do some check
     if (OB_SUCC(ret)) {
       if (!GCONF.enable_sys_table_ddl) {
@@ -1378,6 +1376,14 @@ int ObIndexBuilder::generate_schema(
                    "%s", "create index with index_table_id/data_table_id");
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
         }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (arg.index_columns_.count() <= 0) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("index columns can't be empty", "index columns", arg.index_columns_, K(ret));
+      } else {
+        // do something
       }
 
       if (OB_FAIL(ret)) {
@@ -1912,7 +1918,7 @@ int ObIndexBuilder::check_has_none_shared_index_tables_for_fts_or_multivalue_ind
     bool &has_fts_or_multivalue_index)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_INDEX_PER_TABLE> indexs;
+  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> indexs;
   has_fts_or_multivalue_index = false;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == data_table_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1949,7 +1955,7 @@ int ObIndexBuilder::check_has_none_shared_index_tables_for_vector_index_(
     bool &has_none_share_vector_index)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_INDEX_PER_TABLE> indexs;
+  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> indexs;
   has_none_share_vector_index = false;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == data_table_id)) {
     ret = OB_INVALID_ARGUMENT;

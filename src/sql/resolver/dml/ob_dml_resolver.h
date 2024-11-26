@@ -1034,10 +1034,6 @@ private:
   int resolve_match_index(const ColumnReferenceSet &match_column_set,
                           const ObTableSchema &table_schema,
                           ObMatchFunRawExpr &match_against);
-  int check_fulltext_search_simple_filter(ObRawExpr *expr,
-                                          ObRawExpr *match_expr,
-                                          bool &is_simple_filter,
-                                          ObIArray<ObExprConstraint> &constraints);
   int build_and_check_true_expr(ObRawExpr *const_expr,
                                 ObItemType compare_op,
                                 bool &is_true,

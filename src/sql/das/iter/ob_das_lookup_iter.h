@@ -120,8 +120,6 @@ protected:
   int build_lookup_range(ObNewRange &range);
   int build_trans_info_datum(const ObExpr *trans_info_expr, ObDatum *&datum_ptr);
   common::ObArenaAllocator &get_arena_allocator() { return lookup_memctx_->get_arena_allocator(); }
-
-private:
   lib::MemoryContext lookup_memctx_;
 };
 

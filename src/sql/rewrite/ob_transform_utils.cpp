@@ -4811,8 +4811,8 @@ int ObTransformUtils::compute_basic_table_property(const ObDMLStmt *stmt,
   ObSEArray<ObRawExpr*, 8> cur_cond_exprs;
   ObSqlBitSet<> table_set;
   ObSqlSchemaGuard *schema_guard = NULL;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   if (OB_ISNULL(stmt) || OB_ISNULL(table) || OB_ISNULL(check_helper.alloc_)
       || OB_ISNULL(check_helper.fd_factory_)
       || OB_ISNULL(check_helper.schema_checker_)

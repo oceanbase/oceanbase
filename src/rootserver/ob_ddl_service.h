@@ -1336,6 +1336,9 @@ private:
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       bool &domain_index_exist);
+int check_will_be_having_domain_index_operation(
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    bool &will_be_having_domain_index_operation);
   int check_has_index_operation(
       ObSchemaGetterGuard &schema_guard,
       const uint64_t teannt_id,
@@ -1730,7 +1733,8 @@ private:
                                     const share::schema::ObColumnSchemaV2 &orig_column_schema,
                                     share::schema::AlterColumnSchema &alter_column_schema,
                                     bool &is_offline) const;
-  int check_is_add_column_online_(const share::schema::ObTableSchema &table_schema,
+  int check_is_add_column_online_(const AlterTableSchema &alter_table_schema,
+                                  const share::schema::ObTableSchema &table_schema,
                                   const share::schema::AlterColumnSchema &alter_column_schema,
                                   const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm,
                                   const bool is_oracle_mode,

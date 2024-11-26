@@ -428,3 +428,13 @@ double ObOptCostModelParameter::get_cmp_err_handle_expr_cost(const OptSystemStat
         return CMP_ERR_HANDLE_EXPR_COST / stat.get_cpu_speed();
     }
 }
+
+double ObOptCostModelParameter::get_functional_lookup_per_row_cost(const OptSystemStat& stat) const
+{
+    // jinmao TODO: 这里需要再考虑一下
+    if (stat.get_cpu_speed() <= 0) {
+        return FUNCTIONAL_LOOKUP_PER_ROW_COST;
+    } else {
+        return FUNCTIONAL_LOOKUP_PER_ROW_COST / stat.get_cpu_speed();
+    }
+}

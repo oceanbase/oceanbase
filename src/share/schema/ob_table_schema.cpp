@@ -8414,6 +8414,57 @@ const ObConstraint *ObTableSchema::get_constraint(const uint64_t constraint_id) 
         });
 }
 
+int64_t ObTableSchema::get_index_count() const
+{
+  int64_t index_count = 0;
+  bool is_rowkey_doc_id_exist = false;
+  bool is_doc_id_rowkey_exist = false;
+  int64_t fts_index_aux_count = 0;
+  int64_t fts_doc_word_aux_count = 0;
+  int64_t multivalue_index_aux_count = 0;
+  bool is_vec_rowkey_vid_exist = false;
+  bool is_vec_vid_rowkey_exist = false;
+  int64_t vec_delta_buffer_count = 0;
+  int64_t vec_index_id_count = 0;
+  int64_t vec_index_snapshot_data_count = 0;
+  for (int64_t i = 0; i < get_index_tid_count(); ++i) {
+    ObIndexType index_type = simple_index_infos_.at(i).index_type_;
+    // Count the number of various index aux tables to determine the number of indexes that can be added.
+    // If there are other indexes with multiple auxiliary tables, you need to add processing branches.
+    if (share::schema::is_rowkey_doc_aux(index_type)) {
+      is_rowkey_doc_id_exist = true;
+    } else if (share::schema::is_doc_rowkey_aux(index_type)) {
+      is_doc_id_rowkey_exist = true;
+    } else if (share::schema::is_fts_index_aux(index_type)) {
+      ++fts_index_aux_count;
+    } else if (share::schema::is_fts_doc_word_aux(index_type)) {
+      ++fts_doc_word_aux_count;
+    } else if (share::schema::is_multivalue_index_aux(index_type)) {
+      ++multivalue_index_aux_count;
+    } else if (share::schema::is_vec_rowkey_vid_type(index_type)) {
+      is_vec_rowkey_vid_exist = true;
+    } else if (share::schema::is_vec_vid_rowkey_type(index_type)) {
+      is_vec_vid_rowkey_exist = true;
+    } else if (share::schema::is_vec_delta_buffer_type(index_type)) {
+      ++vec_delta_buffer_count;
+    } else if (share::schema::is_vec_index_id_type(index_type)) {
+      ++vec_index_id_count;
+    } else if (share::schema::is_vec_index_snapshot_data_type(index_type)) {
+      ++vec_index_snapshot_data_count;
+    } else {
+      ++index_count;
+    }
+  }
+  // Taking OB_MIN can ensure that the final index number is not greater than OB_MAX_INDEX_PER_TABLE.
+  // but cannot ensure aux table numbers does not exceed OB_MAX_AUX_TABLE_PER_MAIN_TABLE.
+  // Therefore, this function often appears with the OB_MAX_AUX_TABLE_PER_MAIN_TABLE limit.
+  index_count += (is_rowkey_doc_id_exist && is_doc_id_rowkey_exist) ?
+                  OB_MIN(fts_index_aux_count, fts_doc_word_aux_count) +  multivalue_index_aux_count : 0;
+  index_count += (is_vec_rowkey_vid_exist && is_vec_vid_rowkey_exist) ?
+                  OB_MIN(vec_delta_buffer_count, OB_MIN(vec_index_id_count, vec_index_snapshot_data_count)) : 0;
+  return index_count;
+}
+
 const ObConstraint *ObTableSchema::get_constraint(const ObString &constraint_name) const
 {
   return get_constraint_internal(
@@ -8801,7 +8852,7 @@ int ObTableSchema::add_simple_index_info(const ObAuxTableMetaInfo &simple_index_
 {
   int ret = OB_SUCCESS;
   bool need_add = true;
-  int64_t N = simple_index_infos_.count();
+  int64_t N = get_index_tid_count();
 
   // we are sure that index_tid are added in sorted order
   if (simple_index_info.table_id_ == OB_INVALID_ID) {
@@ -8819,7 +8870,7 @@ int ObTableSchema::add_simple_index_info(const ObAuxTableMetaInfo &simple_index_
   }
   if (OB_SUCC(ret) && need_add) {
     const int64_t last_pos = N - 1;
-    if (N >= common::OB_MAX_INDEX_PER_TABLE) {
+    if (N >= OB_MAX_AUX_TABLE_PER_MAIN_TABLE || get_index_count() >= common::OB_MAX_INDEX_PER_TABLE) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("index num in table is more than limited num", K(ret));
     } else if ((last_pos >= 0)

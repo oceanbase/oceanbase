@@ -63,9 +63,10 @@ struct ObTextRetrievalInfo
   ObRawExpr *topk_offset_expr_;
   bool with_ties_;
   bool need_calc_relevance_;  // match expr just for retireval (accurate score is not required)
-  uint64_t inv_idx_tid_;  // choosed aux inverted index table id (word-doc)
-  uint64_t fwd_idx_tid_;  // choosed aux forward index table id (doc-word)
-  uint64_t doc_id_idx_tid_; // choosed aux doc_id index table id (doc-rowkey)
+  uint64_t inv_idx_tid_;  // chosen aux inverted index table id (word-doc)
+  uint64_t fwd_idx_tid_;  // chosen aux forward index table id (doc-word)
+  uint64_t doc_id_idx_tid_; // chosen aux doc_id index table id (doc-rowkey)
+  uint64_t rowkey_idx_tid_; // chosen aux rowkey index table id (rowkey-doc)
   // the following exprs are used for intermediate calculation of relevance score
   ObColumnRefRawExpr *token_column_;
   ObColumnRefRawExpr *token_cnt_column_;
@@ -690,13 +691,17 @@ public:
   inline bool is_spatial_index_scan() const { return is_spatial_index_; }
   inline ObTextRetrievalInfo &get_text_retrieval_info() { return text_retrieval_info_; }
   inline const ObTextRetrievalInfo &get_text_retrieval_info() const { return text_retrieval_info_; }
-  int prepare_text_retrieval_dep_exprs();
   int prepare_vector_access_exprs();
+  inline bool has_func_lookup() const { return 0 != lookup_tr_infos_.count(); }
+  inline ObIArray<ObTextRetrievalInfo> &get_lookup_tr_infos() { return lookup_tr_infos_; }
+  inline const ObIArray<ObTextRetrievalInfo> &get_lookup_tr_infos() const { return lookup_tr_infos_; }
   inline bool need_text_retrieval_calc_relevance() const { return text_retrieval_info_.need_calc_relevance_; }
   inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || is_vec_idx_scan(); }
+  inline bool need_rowkey_doc_expr() const { return is_tsc_with_doc_id() || is_tsc_with_vid() || has_func_lookup(); }
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
   inline uint64_t get_rowkey_vid_table_id() const { return rowkey_vid_tid_; }
+  inline void set_rowkey_doc_table_id(const uint64_t tid) { rowkey_doc_tid_ = tid; }
   inline uint64_t get_rowkey_doc_table_id() const { return rowkey_doc_tid_; }
   inline uint64_t get_multivalue_col_idx() const { return multivalue_col_idx_; }
   inline int32_t get_multivalue_type() const { return multivalue_type_; }
@@ -759,11 +764,15 @@ private: // member functions
                                                  const share::schema::ObTableSchema &table_schema,
                                                  bool &need_filter);
   int allocate_group_id_expr();
-  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs, bool is_vec_scan = false);
-  int extract_text_retrieval_access_expr(ObIArray<ObRawExpr *> &exprs);
   int extract_vec_idx_access_expr(ObIArray<ObRawExpr *> &exprs);
-  int get_text_retrieval_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
   int get_vec_idx_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs, bool is_vec_scan = false);
+  int extract_text_retrieval_access_expr(ObTextRetrievalInfo &tr_info, ObIArray<ObRawExpr *> &exprs);
+  int get_text_retrieval_calc_exprs(ObTextRetrievalInfo &tr_info, ObIArray<ObRawExpr *> &all_exprs);
+  int prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_info);
+  int extract_func_lookup_access_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int get_func_lookup_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int prepare_func_lookup_dep_exprs();
   int print_text_retrieval_annotation(char *buf, int64_t buf_len, int64_t &pos, ExplainType type);
   int find_nearest_rcte_op(ObLogSet *&rcte_op);
   int generate_filter_monotonicity();
@@ -908,9 +917,11 @@ protected: // memeber variables
   share::schema::ObTableType table_type_;
   bool use_column_store_;
   uint64_t doc_id_table_id_; // used for rowkey lookup of fulltext, JSON multi-value and vector index
+  // text retrieval as index scan
   ObTextRetrievalInfo text_retrieval_info_;
+  // text retrieval as functional lookup
+  common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> lookup_tr_infos_;
   ObVectorIndexInfo vector_index_info_;
-
   ObPxRFStaticInfo px_rf_info_;
   bool das_keep_ordering_;
   typedef common::ObSEArray<ObRawFilterMonotonicity, 4, common::ModulePageAllocator, true> FilterMonotonicity;

@@ -322,6 +322,7 @@ public:
   }
   virtual inline bool has_range() const { return column_count_ > 0; }
   virtual bool is_contain_geo_filters() const { return contain_geo_filters_; }
+  inline void reset_range_exprs() { range_exprs_.reset(); }
   virtual const common::ObIArray<ObRawExpr*> &get_range_exprs() const { return range_exprs_; }
   virtual const common::ObIArray<ObRawExpr*> &get_ss_range_exprs() const { return ss_range_exprs_; }
   virtual const common::ObIArray<ObRawExpr*> &get_unprecise_range_exprs() const { return unprecise_range_exprs_; }

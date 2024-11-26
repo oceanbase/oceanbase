@@ -711,6 +711,7 @@ private:
   int inner_get_next_fts_index_row();
   int fetch_next_fts_index_rows();
   int fill_generated_fts_cols(ObDatumRow *row);
+  int get_output_fts_col_expr_by_type(const ObExprOperatorType &type, ObExpr *&expr);
   int64_t get_part_dep_col_cnt();
 protected:
   DASOpResultIter scan_result_;

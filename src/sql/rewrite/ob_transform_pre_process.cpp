@@ -10487,7 +10487,7 @@ int ObTransformPreProcess::preserve_order_for_fulltext_search(ObDMLStmt *stmt, b
   int ret = OB_SUCCESS;
   trans_happened = false;
   TableItem *table_item = NULL;
-  ObMatchFunRawExpr *match_expr = NULL;
+  ObRawExpr *match_expr = nullptr;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
@@ -10506,18 +10506,57 @@ int ObTransformPreProcess::preserve_order_for_fulltext_search(ObDMLStmt *stmt, b
     LOG_WARN("unexpected null", K(ret));
   } else if (!table_item->is_basic_table()) {
     // do nothing
-  } else if (OB_FAIL(stmt->get_match_expr_on_table(table_item->table_id_, match_expr))) {
-    LOG_WARN("failed to get fulltext search expr on table", K(table_item->table_id_), K(ret));
-  } else if (OB_ISNULL(match_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
+  } else if (0 == stmt->get_match_exprs().count()) {
+    // do nothing
   } else {
+    const common::ObIArray<ObRawExpr *> &condition_exprs = stmt->get_condition_exprs();
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < condition_exprs.count(); ++i) {
+      ObRawExpr *filter = nullptr;
+      if (OB_ISNULL(filter = condition_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr to where condition filter", K(ret), K(i), KP(filter));
+      } else if (filter->has_flag(IS_MATCH_EXPR)) {
+        match_expr = filter;
+        found = true;
+      } else if (!filter->has_flag(CNT_MATCH_EXPR)
+          || filter->has_flag(CNT_OR)) {
+        // skip
+      } else if (IS_RANGE_CMP_OP(filter->get_expr_type())) {
+        ObRawExpr *param_expr0 = filter->get_param_expr(0);
+        ObRawExpr *param_expr1 = filter->get_param_expr(1);
+        if (OB_ISNULL(param_expr0) || OB_ISNULL(param_expr1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpecter null param expr for range cmp op", K(ret), KP(param_expr0), KP(param_expr1));
+        } else if (param_expr0->is_const_expr() && param_expr1->has_flag(IS_MATCH_EXPR)) {
+          match_expr = param_expr1;
+          found = true;
+        } else if (param_expr1->is_const_expr() && param_expr0->has_flag(IS_MATCH_EXPR)) {
+          match_expr = param_expr0;
+          found = true;
+        }
+      } else if (filter->get_expr_type() == T_OP_BOOL) {
+        ObRawExpr *param_expr = filter->get_param_expr(0);
+        if (OB_ISNULL(param_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null param expr for bool op", K(ret));
+        } else if (param_expr->has_flag(IS_MATCH_EXPR)) {
+          found = true;
+          match_expr = param_expr;
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && nullptr != match_expr) {
     OrderItem item(match_expr, default_desc_direction());
     if (OB_FAIL(stmt->add_order_item(item))) {
       LOG_WARN("failed to add order item", K(ret), K(item));
+    } else {
+      trans_happened = true;
     }
-    trans_happened = true;
   }
+
   return ret;
 }
 

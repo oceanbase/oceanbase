@@ -2439,8 +2439,9 @@ int LogTableHint::assign(const LogTableHint &other)
 int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  uint64_t tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t table_index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t table_index_aux_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
+  const share::schema::ObTableSchema *data_table_schema = nullptr;
   if (OB_ISNULL(table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected log index hint", K(ret), K(this));
@@ -2448,26 +2449,33 @@ int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
     /* do nothing */
   } else if (OB_FAIL(schema_guard.get_can_read_index_array(table_->ref_id_,
                                                            tids,
-                                                           table_index_count,
+                                                           table_index_aux_count,
                                                            false,
                                                            table_->access_all_part(),
-                                                           false /*domain index*/,
+                                                           true /*domain index*/,
                                                            false /*spatial index*/))) {
     LOG_WARN("failed to get can read index", K(ret));
-  } else if (table_index_count > OB_MAX_INDEX_PER_TABLE) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(table_->ref_id_, data_table_schema))) {
+    LOG_WARN("failed to get data table schema", K(ret), K(table_->ref_id_));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("data table schema is null", K(ret), K(table_->ref_id_));
+  } else if (table_index_aux_count > OB_MAX_AUX_TABLE_PER_MAIN_TABLE
+            || data_table_schema->get_index_count() > OB_MAX_INDEX_PER_TABLE) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Table index count is bigger than OB_MAX_INDEX_PER_TABLE", K(ret), K(table_index_count));
+    int64_t table_index_count = data_table_schema->get_index_count();
+    LOG_WARN("Table index or index aux count is invalid", K(ret), K(table_index_count), K(table_index_aux_count));
   } else if (union_merge_hint_ != nullptr &&
     OB_FAIL(merge_index_list_.prepare_allocate(union_merge_hint_->get_index_name_list().count()))) {
     LOG_WARN("failed to prepare allocate merge index list", KPC(union_merge_hint_), K(ret));
   } else {
-    LOG_TRACE("get readable index", K(table_index_count));
+    LOG_TRACE("get readable index", K(table_index_aux_count));
     const share::schema::ObTableSchema *index_schema = NULL;
     ObSEArray<uint64_t, 4> index_list;
     ObSEArray<uint64_t, 4> no_index_list;
     ObSEArray<const ObIndexHint*, 4> index_hints;
     ObSEArray<const ObIndexHint*, 4> no_index_hints;
-    for (int64_t i = -1; OB_SUCC(ret) && i < table_index_count; ++i) {
+    for (int64_t i = -1; OB_SUCC(ret) && i < table_index_aux_count; ++i) {
       uint64_t index_id = -1 == i ? table_->ref_id_ : tids[i];
       ObString index_name;
       bool is_primary_key = false;
@@ -2478,7 +2486,7 @@ int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
                  OB_ISNULL(index_schema)) {
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("fail to get table schema", K(index_id), K(ret));
-      } else if (index_schema->is_fts_index() || index_schema->is_vec_index()) {
+      } else if (index_schema->is_built_in_fts_index() || index_schema->is_vec_index()) {
         // just ignore fts && vector index
       } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
         LOG_WARN("fail to get index name", K(index_name), K(ret));

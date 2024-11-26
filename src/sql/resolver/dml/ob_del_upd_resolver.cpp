@@ -2089,8 +2089,8 @@ int ObDelUpdResolver::add_index_related_columns_to_stmt(const TableItem &table_i
         LOG_DEBUG("add all column to stmt due to the update column is primary key");
       }
     } else {
-      uint64_t index_tids[OB_MAX_INDEX_PER_TABLE];
-      int64_t index_count = OB_MAX_INDEX_PER_TABLE;
+      uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+      int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
       // get all the indexes
       if (OB_FAIL(schema_checker_->get_can_write_index_array(tenant_id,
                                                              base_table_id,
@@ -2123,8 +2123,8 @@ int ObDelUpdResolver::add_all_index_rowkey_to_stmt(const TableItem &table_item,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *index_schema = NULL;
-  uint64_t idx_tids[OB_MAX_INDEX_PER_TABLE];
-  int64_t idx_count = OB_MAX_INDEX_PER_TABLE;
+  uint64_t idx_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t idx_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   if (OB_ISNULL(schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -4025,8 +4025,8 @@ int ObDelUpdResolver::generate_insert_table_info(const TableItem &table_item,
   ObDelUpdStmt *del_upd_stmt = get_del_upd_stmt();
   const TableItem &base_table_item = table_item.get_base_table_item();
   const ObTableSchema *table_schema = NULL;
-  uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
-  int64_t gindex_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tid[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t gindex_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   if (OB_ISNULL(del_upd_stmt) || OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(del_upd_stmt), K(schema_checker_), K(session_info_));
