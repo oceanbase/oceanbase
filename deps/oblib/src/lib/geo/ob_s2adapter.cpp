@@ -292,6 +292,8 @@ int64_t ObS2Adapter::get_mbr(ObSpatialMBR &mbr)
       S2LatLngRect rect;
       if (OB_FAIL(visitor_->get_mbr(rect, need_buffer_, distance_))) {
         LOG_WARN("fail to get cellid from visitor", K(ret));
+      } else if (rect.is_empty()) {
+        LOG_DEBUG("It's might be empty geometry collection", K(geo_->type()), K(geo_->is_empty()));
       } else {
         mbr.y_min_ = rect.lat_lo().degrees();
         mbr.y_max_ = rect.lat_hi().degrees();

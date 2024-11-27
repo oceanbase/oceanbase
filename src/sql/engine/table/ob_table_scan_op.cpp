@@ -2964,6 +2964,7 @@ int ObTableScanOp::inner_get_next_row()
 int ObTableScanOp::inner_get_next_spatial_index_row()
 {
   int ret = OB_SUCCESS;
+  bool need_ignore_null = false;
   if (OB_ISNULL(spat_index_.spat_rows_)) {
     if (OB_FAIL(init_spatial_index_rows())) {
       LOG_WARN("init spatial row store failed", K(ret));
@@ -3012,6 +3013,9 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
           } else if (OB_FAIL(ObGeoTypeUtil::get_cellid_mbr_from_geom(geo_wkb, srs_item, srs_bound,
                                                                      cellids, mbr_val))) {
             LOG_WARN("failed to get cellid", K(ret));
+          } else if (cellids.size() == 0 && mbr_val.empty()) {
+            // empty geometry collection
+            need_ignore_null = true;
           } else if (cellids.size() > SAPTIAL_INDEX_DEFAULT_ROW_COUNT) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("cellid over size", K(ret), K(cellids.size()));
@@ -3040,7 +3044,7 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !need_ignore_null) {
       ObNewRow &row = (*(spat_index_.spat_rows_))[spat_index_.spat_row_index_++];
       ObObj &cellid= row.get_cell(0);
       ObObj &mbr = row.get_cell(1);
