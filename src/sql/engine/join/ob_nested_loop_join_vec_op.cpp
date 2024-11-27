@@ -245,8 +245,6 @@ int ObNestedLoopJoinVecOp::rescan_right_op()
   } else if (OB_FAIL(rescan_right_operator())) {
     LOG_WARN("failed to rescan right operator", K(ret));
   }
-  const ObBitVector *skip = nullptr;
-  PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx_, left_->get_spec().output_, left_->get_brs().size_, skip, K(spec_.id_));
   return ret;
 }
 
@@ -333,8 +331,6 @@ int ObNestedLoopJoinVecOp::process_right_batch()
       }
     }
   }
-  const ObBitVector *skip = nullptr;
-  PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx_, left_->get_spec().output_, left_->get_brs().size_, skip, K(spec_.id_));
   return ret;
 }
 
@@ -357,8 +353,6 @@ int ObNestedLoopJoinVecOp::output()
   } else {
     // do nothing
   }
-  const ObBitVector *skip = nullptr;
-  PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx_, left_->get_spec().output_, left_->get_brs().size_, skip, K(spec_.id_));
   return ret;
 }
 
@@ -439,8 +433,6 @@ int ObNestedLoopJoinVecOp::inner_get_next_batch(const int64_t max_row_cnt)
       }
     }
   }
-  const ObBitVector *skip = nullptr;
-  PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx_, spec_.output_, brs_.size_, skip, K(spec_.id_));
   if (OB_SUCC(ret) && iter_end_) {
     set_param_null();
   }
