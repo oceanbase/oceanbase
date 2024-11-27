@@ -1075,7 +1075,7 @@ protected:
   common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper,
                                    common::OB_MAX_COLUMN_NUMBER> storing_column_set_;
   common::hash::ObPlacementHashSet<share::schema::ObForeignKeyNameHashWrapper,
-                                   common::OB_MAX_AUX_TABLE_PER_MAIN_TABLE> current_foreign_key_name_set_;
+                                   OB_MAX_AUX_TABLE_PER_MAIN_TABLE> current_foreign_key_name_set_;
   common::ObBitSet<> alter_table_bitset_;
   bool has_index_using_type_;
   share::schema::ObIndexUsingType index_using_type_;

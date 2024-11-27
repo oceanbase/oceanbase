@@ -308,21 +308,21 @@ const int64_t OB_AUX_LOB_TABLE_CNT = 2; // aux lob meta + aux lob piece
 // The max count of aux tables that can be created for each index.
 // Some special indexes such as full-text index(FTS), multi-value index, vector index, etc., have multiple aux tables.
 // The current index with max aux tables: vector index
-// They need to be changed at the same time, choosing OB_MAX_AUX_TABLE_PER_TABLE is larger.
+// They need to be changed at the same time, choosing OB_MAX_AUX_TABLE_PER_MAIN_TABLE is larger.
 const int64_t OB_MAX_SHARED_TABLE_CNT_PER_INDEX_TYPE = 2; // number of common aux tables for all vect indexes in a table.
 const int64_t OB_MAX_TABLE_CNT_PER_INDEX = 3; // number of aux tables private per vec index.
 // The max count of aux tables with physical tablets per user data table.
-const int64_t OB_MAX_AUX_TABLE_PER_TABLE = OB_MAX_INDEX_PER_TABLE * OB_MAX_TABLE_CNT_PER_INDEX +
+const int64_t OB_MAX_AUX_TABLE_PER_MAIN_TABLE = OB_MAX_INDEX_PER_TABLE * OB_MAX_TABLE_CNT_PER_INDEX +
                                            OB_MAX_SHARED_TABLE_CNT_PER_INDEX_TYPE + OB_AUX_LOB_TABLE_CNT + OB_MLOG_TABLE_CNT; // 389
 // The max tablet count of a transfer is one data table tablet with max aux tablets bound together.
-const int64_t OB_MAX_TRANSFER_BINDING_TABLET_CNT = OB_MAX_AUX_TABLE_PER_TABLE + 1; // 390
+const int64_t OB_MAX_TRANSFER_BINDING_TABLET_CNT = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1; // 390
 
 // Note: When adding new index type, you should modifiy "tools/obtest/t/quick/partition_balance.test" and
 //       "tools/obtest/t/shared_storage/partition_balance.test" to verify that all aux tables of the new index
 //       can be properly distributed after table creation and partition rebalanceing.
 //
-//       If the new index has multiple aux tables, you need to make sure that OB_MAX_TABLE_CNT_PER_INDEX is correct and
-//       modify "tools/obtest/t/quick/include/transfer_and_balance_configs.inc [1.5.2]" to verify that a partition with
+//       If the new index has multiple aux tables, you need to make sure that OB_MAX_AUX_TABLE_PER_MAIN_TABLE is correct and
+//       modify "tools/obtest/t/quick/include/transfer_max_aux.test" to verify that a partition with
 //       max aux tables can be transferred.
 enum ObIndexType
 {

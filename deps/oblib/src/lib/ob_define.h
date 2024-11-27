@@ -216,13 +216,6 @@ const int32_t NOT_CHECK_FLAG = 0;
 const int64_t MAX_SERVER_COUNT = 4095;
 const uint64_t OB_SERVER_USER_ID = 0;
 const int64_t OB_MAX_INDEX_PER_TABLE = 128;
-
-// indicating the maximum number of aux tables required to build OB_MAX_INDEX_PER_TABLE indexes.
-// Support 128 vector indexes (vec index aux tables are the most numerous).
-// OB_MAX_AUX_TABLE_PER_MAIN_TABLE = 2 + 3 * OB_MAX_INDEX_PER_TABLE + 2 (aux lob meta + aux lob piece) + 1（mlog）.
-// The first 2 presents shared aux table, 3 presents private table of vec index.
-// If there are indexes with more auxiliary tables than vec index, this value needs to be adapted.
-const int64_t OB_MAX_AUX_TABLE_PER_MAIN_TABLE = 389;
 const int64_t OB_MAX_SSTABLE_PER_TABLE = OB_MAX_INDEX_PER_TABLE + 1;
 const int64_t OB_MAX_SQL_LENGTH = 64 * 1024;
 const int64_t OB_TINY_SQL_LENGTH = 128;

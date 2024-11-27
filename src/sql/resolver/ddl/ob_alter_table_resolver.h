@@ -20,7 +20,7 @@ namespace oceanbase
 {
 namespace sql
 {
-typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_AUX_TABLE_PER_MAIN_TABLE> ObReducedVisibleColSet;
+typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> ObReducedVisibleColSet;
 typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> ObColumnNameSet;
 /*
 #define ADD_COLUMN_NOT_NULL       (1UL << 0)
