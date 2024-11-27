@@ -232,7 +232,7 @@ public:
   int eval(const ObIndexBlockRowDesc &row_desc);
   int get_index_agg_result(ObIndexBlockRowDesc &row_desc);
   int get_index_row_agg_info(ObIndexRowAggInfo &index_row_agg_info, ObIAllocator &allocator);
-  inline bool need_data_aggregate() const { return need_data_aggregate_; };
+  inline bool need_data_aggregate() const { return need_data_aggregate_ && !has_reused_null_agg_in_this_micro_block_; };
   inline const ObDatumRow& get_aggregated_row() const { return aggregated_row_; };
   inline int64_t get_max_agg_size() { return skip_index_aggregator_.get_max_agg_size(); }
   inline int64_t get_row_count() const { return aggregate_info_.row_count_; }
@@ -240,12 +240,13 @@ public:
   inline bool is_last_row_last_flag() const { return aggregate_info_.is_last_row_last_flag_; }
   inline int64_t get_max_merged_trans_version() const { return aggregate_info_.max_merged_trans_version_; }
   TO_STRING_KV(K_(skip_index_aggregator), K_(aggregated_row), K_(aggregate_info),
-      K_(need_data_aggregate), K_(is_inited));
+      K_(need_data_aggregate), K_(has_reused_null_agg_in_this_micro_block), K_(is_inited));
 private:
   ObSkipIndexAggregator skip_index_aggregator_;
   ObDatumRow aggregated_row_;
   ObAggregateInfo aggregate_info_;
   bool need_data_aggregate_;
+  bool has_reused_null_agg_in_this_micro_block_;
   bool is_inited_;
 };
 
