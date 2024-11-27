@@ -89,7 +89,7 @@ public:
   int64_t create_commit_version_; // create tx commit trans version
   share::SCN delete_commit_scn_; // delete tx commit log scn
   int64_t delete_commit_version_; // delete tx commit trans version
-  int64_t transfer_out_commit_version_; //transfer out commit trans version
+  int64_t transfer_out_commit_version_; // FARM COMPAT WHITELIST // transfer out commit trans version
 };
 
 inline bool ObTabletCreateDeleteMdsUserData::is_valid() const
