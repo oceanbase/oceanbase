@@ -341,6 +341,8 @@ public:
 
   T_DEF_INT_INFT(progress_limit_sec_for_ddl, OB_CLUSTER_PARAMETER, 60, 1, "ddl progress limit in seconds");
 
+  T_DEF_INT_INFT(progress_limit_sec_for_dict, OB_CLUSTER_PARAMETER, 7200, 1, "progress limit in seconds to fetch data_dict");
+
   // LS fetch progress update timeout in seconds
   // If the logs are not fetched after a certain period of time, the stream will be cut
   T_DEF_INT_INFT(ls_fetch_progress_update_timeout_sec, OB_CLUSTER_PARAMETER, 15, 1, "logstream fetch progress update timeout in seconds");
