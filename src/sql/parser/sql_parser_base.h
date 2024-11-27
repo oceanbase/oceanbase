@@ -447,20 +447,6 @@ do {                                                                            
       } \
     } while (0)
 
-//copy当前sql语句到当前symbol的位置，并跳过该变量
-#define copy_and_skip_symbol(result, start, end) \
-    do { \
-      if (NULL == result) { \
-        yyerror(NULL, result, "invalid var node\n"); \
-        YYABORT_UNEXPECTED; \
-      } else if (NULL == result->pl_parse_info_.pl_ns_) { \
-      } else { \
-        memmove(result->no_param_sql_ + result->no_param_sql_len_, result->input_sql_ + result->pl_parse_info_.last_pl_symbol_pos_, start - result->pl_parse_info_.last_pl_symbol_pos_ - 1); \
-        result->no_param_sql_len_ += start - result->pl_parse_info_.last_pl_symbol_pos_ - 1; \
-        result->pl_parse_info_.last_pl_symbol_pos_ = end; \
-      } \
-    } while (0)
-
 #define check_need_malloc(result, need_len) \
   do {  \
     if (result->no_param_sql_len_ + need_len >= result->no_param_sql_buf_len_) {  \
@@ -475,6 +461,21 @@ do {                                                                            
       } \
     } \
   } while (0)
+
+//copy当前sql语句到当前symbol的位置，并跳过该变量
+#define copy_and_skip_symbol(result, start, end) \
+    do { \
+      if (NULL == result) { \
+        yyerror(NULL, result, "invalid var node\n"); \
+        YYABORT_UNEXPECTED; \
+      } else if (NULL == result->pl_parse_info_.pl_ns_) { \
+      } else { \
+        check_need_malloc(result, start - result->pl_parse_info_.last_pl_symbol_pos_ - 1); \
+        memmove(result->no_param_sql_ + result->no_param_sql_len_, result->input_sql_ + result->pl_parse_info_.last_pl_symbol_pos_, start - result->pl_parse_info_.last_pl_symbol_pos_ - 1); \
+        result->no_param_sql_len_ += start - result->pl_parse_info_.last_pl_symbol_pos_ - 1; \
+        result->pl_parse_info_.last_pl_symbol_pos_ = end; \
+      } \
+    } while (0)
 
 //查找pl变量，并把该变量替换成:int形式
 #define lookup_pl_exec_symbol(node, result, start, end, is_trigger_new, is_add_alas_name, is_report_error) \
