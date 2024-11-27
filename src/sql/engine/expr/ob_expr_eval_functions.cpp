@@ -1320,6 +1320,14 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprCalcPartitionIdx::get_partition_idx,                 /* 789 */
   NULL, // ObExprCalcSubPartitionIdx::get_sub_partition_idx,          /* 790 */
   ObExprCalcOdpsSize::calc_odps_size,                                 /* 791 */
+  NULL, // ObExprVecIVFCenterID::calc_center_id,                      /* 792 */
+  NULL, // ObExprVecIVFCenterVector::generate_center_vector,          /* 793 */
+  NULL, // ObExprVecIVFFlatDataVector::generate_data_vector,          /* 794 */
+  NULL, // ObExprVecIVFSQ8DataVector::generate_data_vector,           /* 795 */
+  NULL, // ObExprVecIVFMetaID::generate_meta_id,                      /* 796 */
+  NULL, // ObExprVecIVFMetaVector::generate_meta_vector,              /* 797 */
+  NULL, // ObExprVecIVFPQCenterId::generate_pq_center_id,             /* 798 */
+  NULL, // ObExprVecIVFPQCenterIds::calc_pq_center_ids,               /* 799 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
