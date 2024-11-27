@@ -1068,7 +1068,10 @@ struct TRIndexAccessInfo
                                                          ObIArray<common::ObAddr> &server_list);
     inline bool is_nlj_with_param_down() const
     { return NULL != right_path_ && right_path_->is_inner_path() && !right_path_->nl_params_.empty(); }
-    int check_right_is_local_scan(bool &is_local_scan) const;
+    int check_right_is_local_scan(int64_t &local_scan_type) const;
+    int check_contain_dist_das(const ObIArray<ObAddr> &exec_server_list,
+                               const Path *cur_path,
+                               bool &contain_dist_das) const;
     int pre_check_nlj_can_px_batch_rescan(bool &can_px_batch_rescan) const;
   private:
     int compute_hash_hash_sharding_info();

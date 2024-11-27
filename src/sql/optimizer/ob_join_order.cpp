@@ -5831,8 +5831,8 @@ int ObJoinOrder::compute_join_path_relationship(const JoinPath &first_path,
 
   if (OB_SUCC(ret) && DominateRelation::OBJ_EQUAL == relation
       && first_path.is_nlj_with_param_down() && second_path.is_nlj_with_param_down()) {
-    bool first_right_local_rescan = false;
-    bool second_right_local_rescan = false;
+    int64_t first_right_local_rescan = 0;
+    int64_t second_right_local_rescan = 0;
     bool first_can_px_batch_rescan = false;
     bool second_can_px_batch_rescan = false;
     if (!first_path.can_use_batch_nlj_ && second_path.can_use_batch_nlj_) {
@@ -5847,20 +5847,20 @@ int ObJoinOrder::compute_join_path_relationship(const JoinPath &first_path,
     } else if (first_path.can_use_batch_nlj_ && second_path.can_use_batch_nlj_) {
       if (first_path.parallel_ != second_path.parallel_) {
         /* do nothing */
-      } else if (!first_right_local_rescan && second_right_local_rescan) {
+      } else if (first_right_local_rescan < second_right_local_rescan) {
         relation = DominateRelation::OBJ_RIGHT_DOMINATE;
         OPT_TRACE("right path dominate left path because of batch nl local rescan");
-      } else if (first_right_local_rescan && !second_right_local_rescan) {
+      } else if (first_right_local_rescan > second_right_local_rescan) {
         relation = DominateRelation::OBJ_LEFT_DOMINATE;
         OPT_TRACE("left path dominate right path because of batch nl local rescan");
       }
-    } else if (!first_right_local_rescan && second_right_local_rescan) {
+    } else if (first_right_local_rescan < second_right_local_rescan) {
       relation = DominateRelation::OBJ_RIGHT_DOMINATE;
       OPT_TRACE("right path dominate left path because of nl local rescan");
-    } else if (first_right_local_rescan && !second_right_local_rescan) {
+    } else if (first_right_local_rescan > second_right_local_rescan) {
       relation = DominateRelation::OBJ_LEFT_DOMINATE;
       OPT_TRACE("left path dominate right path because of nl local rescan");
-    } else if (first_right_local_rescan && second_right_local_rescan) {
+    } else if (0 < first_right_local_rescan && 0 < second_right_local_rescan) {
       /* do nothing */
     } else if (OB_FAIL(first_path.pre_check_nlj_can_px_batch_rescan(first_can_px_batch_rescan))
                || OB_FAIL(second_path.pre_check_nlj_can_px_batch_rescan(second_can_px_batch_rescan))) {
@@ -7902,15 +7902,60 @@ int JoinPath::check_right_has_gi_or_exchange(bool &right_has_gi_or_exchange)
   return ret;
 }
 
-int JoinPath::check_right_is_local_scan(bool &is_local_scan) const
+int JoinPath::check_right_is_local_scan(int64_t &local_scan_type) const
 {
   int ret = OB_SUCCESS;
-  is_local_scan = true;
-  if (OB_ISNULL(right_path_)) {
+  local_scan_type = 0;  // 0: dist scan, 1: local das scan, 2: local scan
+  bool contain_dist_das = false;
+  if (OB_ISNULL(left_path_) || OB_ISNULL(right_path_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(right_path_));
-  } else if (is_right_need_exchange() || right_path_->exchange_allocated_ || right_path_->contain_das_op_) {
-    is_local_scan = false;
+    LOG_WARN("unexpected null", K(ret), K(left_path_), K(right_path_));
+  } else if (is_right_need_exchange() || right_path_->exchange_allocated_) {
+    local_scan_type = 0;
+  } else if (!right_path_->contain_das_op_) {
+    local_scan_type = 2;
+  } else if (1 != left_path_->get_server_list().count()
+             || ObShardingInfo::is_shuffled_server_list(left_path_->get_server_list())) {
+    local_scan_type = 0;
+  } else if (OB_FAIL(check_contain_dist_das(left_path_->get_server_list(), right_path_, contain_dist_das))) {
+    LOG_WARN("failed to check contain dist das", K(ret));
+  } else if (contain_dist_das) {
+    local_scan_type = 0;
+  } else {
+    local_scan_type = 1;
+  }
+  return ret;
+}
+
+int JoinPath::check_contain_dist_das(const ObIArray<ObAddr> &exec_server_list,
+                                     const Path *cur_path,
+                                     bool &contain_dist_das) const
+{
+  int ret = OB_SUCCESS;
+  contain_dist_das = false;
+  if (OB_ISNULL(cur_path)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(cur_path));
+  } else if (!cur_path->contain_das_op()) {
+    /* do nothing */
+  } else if (NULL != log_op_) {
+    ret = log_op_->check_contain_dist_das(exec_server_list, contain_dist_das);
+  } else if (cur_path->is_join_path()) {
+    const JoinPath *join_path = static_cast<const JoinPath*>(cur_path);
+    if (OB_FAIL(SMART_CALL(check_contain_dist_das(exec_server_list, join_path->left_path_, contain_dist_das)))) {
+      LOG_WARN("failed to check contain dist das", K(ret));
+    } else if (!contain_dist_das &&
+               OB_FAIL(SMART_CALL(check_contain_dist_das(exec_server_list, join_path->right_path_, contain_dist_das)))) {
+      LOG_WARN("failed to check contain dist das", K(ret));
+    }
+  } else if (cur_path->is_access_path()) {
+    const AccessPath *access_path = static_cast<const AccessPath*>(cur_path);
+    if (access_path->use_das_
+        && (1 != exec_server_list.count()
+            || 1 != get_server_list().count()
+            || exec_server_list.at(0) != get_server_list().at(0))) {
+      contain_dist_das = true;
+    }
   }
   return ret;
 }
