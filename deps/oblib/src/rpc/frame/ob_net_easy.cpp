@@ -154,7 +154,8 @@ ObNetEasy::ObNetEasy()
       rpc_unix_eio_(NULL),
       is_inited_(false),
       started_(false),
-      rpc_port_(0)
+      rpc_port_(0),
+      sql_io_cnt_(0)
 {
   net_easy_update_s2r_map_cb_ = NULL;
   net_easy_update_s2r_map_cb_args_ = NULL;
@@ -790,7 +791,7 @@ int ObNetEasy::init(const ObNetOptions &opts, uint8_t negotiation_enable)
           }
         }
       }
-
+      sql_io_cnt_ = opts.mysql_io_cnt_;
       is_inited_ = true;
     }
   } else {
@@ -859,7 +860,7 @@ int ObNetEasy::start()
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && sql_io_cnt_ > 0) {
     int eret = easy_eio_start(mysql_eio_);
     if (EASY_OK == eret) {
       LOG_INFO("start mysql easy io");

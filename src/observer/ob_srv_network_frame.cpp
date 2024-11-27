@@ -106,6 +106,9 @@ int ObSrvNetworkFrame::init()
   opts.rpc_io_cnt_ = io_cnt;
   opts.high_prio_rpc_io_cnt_ = hp_io_cnt;
   opts.mysql_io_cnt_ = io_cnt;
+  if (enable_new_sql_nio()) {
+    opts.mysql_io_cnt_ = 0; // if sql_nio enabled, not to create MysqlIO under the old easy framework
+  }
   opts.batch_rpc_io_cnt_ = io_cnt;
   opts.use_ipv6_ = GCONF.use_ipv6;
   //TODO(tony.wzh): fix opts.tcp_keepidle  negative
