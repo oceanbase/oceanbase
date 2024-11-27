@@ -324,7 +324,7 @@ int ObParallelMergeCtx::init_parallel_mini_minor_merge(compaction::ObTabletMerge
     whole_range.set_whole_range();
     if (OB_FAIL(merge_ctx.tables_handle_.get_all_minor_sstables(tables))) {
       STORAGE_LOG(WARN, "Failed to get all sstables from merge ctx", K(ret), K(merge_ctx));
-    } else if (tables.count() != merge_ctx.tables_handle_.get_count() || 1 == tables.count()) {
+    } else if (tables.count() != merge_ctx.tables_handle_.get_count()) {
       if (OB_FAIL(init_serial_merge())) {
         STORAGE_LOG(WARN, "Failed to init serialize merge", K(ret));
       } else if (is_minor_merge(merge_ctx.param_.merge_type_)) {

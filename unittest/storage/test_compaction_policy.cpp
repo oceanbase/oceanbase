@@ -72,32 +72,6 @@ namespace memtable
 
 }
 
-namespace compaction
-{
-  bool TEST_NEED_RECYCLE = false;
-  int64_t TEST_MINOR_TRIGGER = 2;
-  int64_t MOCK_SAFETY_TX_SCN = 66668888;
-
-  bool ObCompactionPolicyUtil::tx_data_need_recycle(const share::SCN &max_decided_scn, const share::SCN &filled_tx_scn)
-  {
-    UNUSED(max_decided_scn);
-    UNUSED(filled_tx_scn);
-    return TEST_NEED_RECYCLE;
-  }
-
-  int ObCompactionPolicyUtil::get_safety_tx_scn(const ObTablet &tablet, share::SCN &safety_tx_scn)
-  {
-    safety_tx_scn.set_min();
-    safety_tx_scn.ts_ns_ = MOCK_SAFETY_TX_SCN;
-    return OB_SUCCESS;
-  }
-
-  int64_t ObCompactionPolicyUtil::get_minor_compact_trigger()
-  {
-    return TEST_MINOR_TRIGGER;
-  }
-}
-
 namespace unittest
 {
 
@@ -322,10 +296,7 @@ int TestCompactionPolicy::mock_sstable(
   } else {
     param.table_key_ = table_key;
     param.max_merged_trans_version_ = max_merged_trans_version;
-    param.filled_tx_scn_.convert_for_tx(filled_scn_scn);
-    if (upper_trans_version == 99999) {
-      param.contain_uncommitted_row_ = true;
-    }
+    param.filled_tx_scn_ = table_key.get_end_scn();
   }
 
   void *buf = nullptr;
@@ -343,9 +314,9 @@ int TestCompactionPolicy::mock_sstable(
     LOG_WARN("failed to set table handle", K(ret), KPC(sstable));
   } else {
     sstable->meta_->basic_meta_.max_merged_trans_version_ = max_merged_trans_version;
-    sstable->meta_->basic_meta_.upper_trans_version_ = (upper_trans_version == 99999) ? INT64_MAX : upper_trans_version;
+    sstable->meta_->basic_meta_.upper_trans_version_ = upper_trans_version;
     sstable->max_merged_trans_version_ = max_merged_trans_version;
-    sstable->upper_trans_version_ = (upper_trans_version == 99999) ? INT64_MAX : upper_trans_version;
+    sstable->upper_trans_version_ = upper_trans_version;
     sstable->nested_size_ = 0;
     sstable->nested_offset_ = 0;
   }
@@ -922,25 +893,6 @@ TEST_F(TestCompactionPolicy, basic_batch_create_sstable)
   ASSERT_EQ(2, minor_tables.count());
 }
 
-TEST_F(TestCompactionPolicy, basic_batch_create_sstable_with_uncommitted_row)
-{
-  int ret = OB_SUCCESS;
-  const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
-      "10            0            1          1          1            0            \n"
-      "10            0            100        100        100          0            \n"
-      "11            1            80         80         120          80           \n"
-      "11            80           150        150        99999        150          \n";
-
-  ObArray<ObTableHandleV2> major_tables;
-  ObArray<ObTableHandleV2> minor_tables;
-  ret = TestCompactionPolicy::batch_mock_sstables(allocator_, key_data, major_tables, minor_tables);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_EQ(2, major_tables.count());
-  EXPECT_EQ(2, minor_tables.count());
-  EXPECT_EQ(true, static_cast<ObSSTable *>(minor_tables.at(1).table_)->contain_uncommitted_row());
-}
-
 TEST_F(TestCompactionPolicy, basic_prepare_tablet)
 {
   int ret = OB_SUCCESS;
@@ -1272,7 +1224,6 @@ TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_large_minor2)
   param.merge_type_ = ObMergeType::MINOR_MERGE;
   ObGetMergeTablesResult result;
   FakeLS ls;
-
   ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
   // reach size_amplification_factor, need minor
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1280,7 +1231,6 @@ TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_large_minor2)
   ASSERT_EQ(1, result.scn_range_.start_scn_.get_val_for_tx());
   ASSERT_EQ(350, result.scn_range_.end_scn_.get_val_for_tx());
 }
-
 
 TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_large_minor3)
 {
@@ -1311,153 +1261,11 @@ TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_large_minor3)
   ObGetMergeTablesResult result;
   FakeLS ls;
   ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-
   // small mini sstable count reach minor_compact_trigger, all small mini sstables should schedule mini minor merge
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(3, result.handle_.get_count());
   ASSERT_EQ(150, result.scn_range_.start_scn_.get_val_for_tx());
   ASSERT_EQ(350, result.scn_range_.end_scn_.get_val_for_tx());
-}
-
-
-TEST_F(TestCompactionPolicy, upt_sst_tx_scn_basic)
-{
-  compaction::TEST_NEED_RECYCLE = true;
-  int ret = OB_SUCCESS;
-  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
-  ASSERT_TRUE(nullptr != mgr);
-
-  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
-  common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-
-  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
-      "10            0            1          1          1            0            \n"
-      "11            1            350        350        99999        350          \n";
-
-  ret = prepare_tablet(key_data, 350, 350);
-  EXPECT_EQ(OB_SUCCESS, ret);
-
-  ObGetMergeTablesParam param;
-  param.merge_type_ = ObMergeType::MINOR_MERGE;
-  ObGetMergeTablesResult result;
-  FakeLS ls;
-  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_EQ(true, result.need_gc_tx_data_);
-  compaction::TEST_NEED_RECYCLE = false;
-}
-
-
-TEST_F(TestCompactionPolicy, upt_sst_tx_scn_no_need_merge)
-{
-  compaction::TEST_NEED_RECYCLE = true;
-  int ret = OB_SUCCESS;
-  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
-  ASSERT_TRUE(nullptr != mgr);
-
-  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
-  common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-
-  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
-      "10            0            1          1          1            0            \n"
-      "11            1            350        350        99999        350          \n"
-      "0             350          500        0          0            500          \n";
-
-  ret = prepare_tablet(key_data, 350, 350);
-  EXPECT_EQ(OB_SUCCESS, ret);
-
-  ObGetMergeTablesParam param;
-  param.merge_type_ = ObMergeType::MINOR_MERGE;
-  ObGetMergeTablesResult result;
-  FakeLS ls;
-
-  ObTablet &tablet = *tablet_handle_.get_obj();
-  ObTabletTableStore &table_store = *tablet.table_store_addr_.get_ptr();
-  table_store.minor_tables_[0]->filled_tx_scn_.convert_for_tx(compaction::MOCK_SAFETY_TX_SCN + 1);
-
-  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-  EXPECT_EQ(OB_NO_NEED_MERGE, ret);
-  compaction::TEST_NEED_RECYCLE = false;
-}
-
-TEST_F(TestCompactionPolicy, upt_sst_tx_scn_multiple_table)
-{
-  compaction::TEST_NEED_RECYCLE = true;
-  int ret = OB_SUCCESS;
-  compaction::TEST_MINOR_TRIGGER = 5;
-
-  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
-  ASSERT_TRUE(nullptr != mgr);
-
-  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
-  common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-
-  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn\n"
-      "10            0            1          1          1            0            \n"
-      "11            1            100        100        100          100          \n"
-      "11            100          200        200        99999        200          \n"
-      "11            200          300        300        300          300          \n";
-
-  ret = prepare_tablet(key_data, 350, 350);
-  EXPECT_EQ(OB_SUCCESS, ret);
-
-  ObGetMergeTablesParam param;
-  param.merge_type_ = ObMergeType::MINOR_MERGE;
-  ObGetMergeTablesResult result;
-  FakeLS ls;
-  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_EQ(true, result.need_gc_tx_data_);
-
-  compaction::TEST_MINOR_TRIGGER = 2;
-  compaction::TEST_NEED_RECYCLE = false;
-}
-
-TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_unexpected_filled_tx_scn)
-{
-  int ret = OB_SUCCESS;
-  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
-  ASSERT_TRUE(nullptr != mgr);
-
-  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
-  common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-
-  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver    filled_tx_scn    row_cnt\n"
-      "10            0            1          1          1            0                1\n"
-      "11            1            150        150        150          150              3000000\n"
-      "11            150          200        200        200          200              100\n"
-      "11            200          350        350        350          550              10000\n"
-      "11            350          400        400        400          550              10000\n";
-
-  ret = prepare_tablet(key_data, 350, 350, true/*have row cnt*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObGetMergeTablesParam param;
-  param.merge_type_ = ObMergeType::MINOR_MERGE;
-  ObGetMergeTablesResult result;
-  FakeLS ls;
-  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
 }
 
 } //unittest
@@ -1467,8 +1275,7 @@ TEST_F(TestCompactionPolicy, check_mini_minor_merge_policy_with_unexpected_fille
 int main(int argc, char **argv)
 {
   system("rm -rf test_compaction_policy.log*");
-  // OB_LOGGER.set_file_name("test_compaction_policy.log", true, false);
-  OB_LOGGER.set_file_name("test_compaction_policy.log");
+  OB_LOGGER.set_file_name("test_compaction_policy.log", true, false);
   OB_LOGGER.set_log_level("DEBUG");
   CLOG_LOG(INFO, "begin unittest: test_compaction_policy");
   ::testing::InitGoogleTest(&argc, argv);

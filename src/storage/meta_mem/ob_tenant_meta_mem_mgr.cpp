@@ -854,16 +854,17 @@ void *ObTenantMetaMemMgr::release_tablet(ObTablet *tablet, const bool return_buf
   return free_obj;
 }
 
-int ObTenantMetaMemMgr::get_min_filled_tx_scn_for_ls(const ObTabletMapKey &key,
-                                                     const SCN &ls_checkpoint,
-                                                     SCN &min_filled_tx_scn_from_latest,
-                                                     SCN &min_filled_tx_scn_from_old)
+int ObTenantMetaMemMgr::get_min_end_scn_for_ls(
+    const ObTabletMapKey &key,
+    const SCN &ls_checkpoint,
+    SCN &min_end_scn_from_latest,
+    SCN &min_end_scn_from_old)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "GetMinScn"));
   ObTabletHandle handle;
-  min_filled_tx_scn_from_latest.set_max();
-  min_filled_tx_scn_from_old.set_max();
+  min_end_scn_from_latest.set_max();
+  min_end_scn_from_old.set_max();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
@@ -875,11 +876,11 @@ int ObTenantMetaMemMgr::get_min_filled_tx_scn_for_ls(const ObTabletMapKey &key,
   } else if (OB_UNLIKELY(!handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected invalid tablet handle", K(ret), K(key), K(handle));
-  } else if (OB_FAIL(get_min_filled_tx_scn_from_single_tablet(
-      handle.get_obj(), false/*is_old*/, ls_checkpoint, min_filled_tx_scn_from_latest))) {
+  } else if (OB_FAIL(get_min_end_scn_from_single_tablet(
+      handle.get_obj(), false/*is_old*/, ls_checkpoint, min_end_scn_from_latest))) {
     LOG_WARN("fail to get min end scn from latest tablet", K(ret), K(key), K(handle));
   } else {
-    // get_ls_min_filled_tx_scn_in_latest_tablets must before get_ls_min_filled_tx_scn_in_old_tablets
+    // get_ls_min_end_scn_in_latest_tablets must before get_ls_min_end_scn_in_old_tablets
     const ObTabletPointerHandle &ptr_handle = handle.get_obj()->get_pointer_handle();
     ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(ptr_handle.get_resource_ptr());
     ObTablet *tablet = nullptr;
@@ -891,7 +892,7 @@ int ObTenantMetaMemMgr::get_min_filled_tx_scn_for_ls(const ObTabletMapKey &key,
     } else {
       // since the last tablet may not be the oldest, we traverse the whole chain
       while (OB_SUCC(ret) && OB_NOT_NULL(tablet)) {
-        if (OB_FAIL(get_min_filled_tx_scn_from_single_tablet(tablet, true/*is_old*/, ls_checkpoint, min_filled_tx_scn_from_old))) {
+        if (OB_FAIL(get_min_end_scn_from_single_tablet(tablet, true/*is_old*/, ls_checkpoint, min_end_scn_from_old))) {
           LOG_WARN("fail to get min end scn from old tablet", K(ret), KP(tablet));
         } else {
           tablet = tablet->get_next_tablet();
@@ -902,19 +903,10 @@ int ObTenantMetaMemMgr::get_min_filled_tx_scn_for_ls(const ObTabletMapKey &key,
   return ret;
 }
 
-/**
- * @brief get filled_tx_scn, which used to recycle tx data, from a single tablet. for more details, see :
- *
- *
- * @param[in] tablet Tablet Pointer
- * @param[in] is_old if this tablet is the latest version
- * @param[in] ls_checkpoint current ls checkpoint
- * @param[out] min_filled_tx_scn all data less than this scn has been committed
- */
-int ObTenantMetaMemMgr::get_min_filled_tx_scn_from_single_tablet(ObTablet *tablet,
-                                                                 const bool is_old,
-                                                                 const SCN &ls_checkpoint,
-                                                                 SCN &min_filled_tx_scn)
+int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(ObTablet *tablet,
+                                                           const bool is_old,
+                                                           const SCN &ls_checkpoint,
+                                                           SCN &min_end_scn)
 {
   int ret = OB_SUCCESS;
   bool is_committed = false;
@@ -936,36 +928,30 @@ int ObTenantMetaMemMgr::get_min_filled_tx_scn_from_single_tablet(ObTablet *table
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("transfer_scn is invalid", K(ret), K(user_data));
     } else {
-      min_filled_tx_scn = SCN::scn_dec(user_data.transfer_scn_);
+      min_end_scn = SCN::scn_dec(user_data.transfer_scn_);
     }
   } else {
-    SCN filled_tx_scn = SCN::max_scn();
-    bool contain_uncommitted_row = false;
-    const storage::ObSSTableArray &minor_sstables = table_store_wrapper.get_member()->get_minor_sstables();
-    for (int64_t i = 0; i < minor_sstables.count(); i++) {
-      if (minor_sstables.at(i)->contain_uncommitted_row()) {
-        // find the first minor sstable which contain uncomitted row.
-        // get filled_tx_scn and quit loop
-        contain_uncommitted_row = true;
-        filled_tx_scn = minor_sstables.at(i)->get_filled_tx_scn();
-        break;
-      }
-    }
+    ObITable *first_minor_mini_sstable =
+        table_store_wrapper.get_member()->get_minor_sstables().get_boundary_table(false /*is_last*/);
 
-    if (contain_uncommitted_row) {
-      // filled_tx_scn has already been set
+    SCN end_scn = SCN::max_scn();
+    if (OB_NOT_NULL(first_minor_mini_sstable)) {
+      // step 1 : get end_scn if minor/mini sstable exist
+      end_scn = first_minor_mini_sstable->get_end_scn();
     } else if (is_old) {
-      // old tablet do not need consider active memtable uncommitted row
+      // step 2 :
+      /* If an old tablet has no minor sstable, it means that all the data inside it has been assigned version numbers,
+         and therefore it does not depend on trx data.
+         Thus, it's only necessary to focus on the recycle scn provided by the latest tablet. */
     } else {
-      // use max{tablet_clog_checkpoint, ls_clog_checkpoint} as end_scn if all minor sstables do not have uncommitted
-      // row. There may be an active memtable who has some uncommited row generated by a fast commit transaction.
-      filled_tx_scn = SCN::max(tablet->get_tablet_meta().clog_checkpoint_scn_, ls_checkpoint);
+      // step 3 : if minor sstable do not exist, us max{tablet_clog_checkpoint, ls_clog_checkpoint} as end_scn
+      end_scn = SCN::max(tablet->get_tablet_meta().clog_checkpoint_scn_, ls_checkpoint);
       // the clog with scn of checkpoint scn may depend on the tx data with a commit scn of checkpoint scn
-      filled_tx_scn = SCN::max(SCN::scn_dec(filled_tx_scn), SCN::min_scn());
+      end_scn = SCN::max(SCN::scn_dec(end_scn), SCN::min_scn());
     }
 
-    if (filled_tx_scn < min_filled_tx_scn) {
-      min_filled_tx_scn = filled_tx_scn;
+    if (end_scn < min_end_scn) {
+      min_end_scn = end_scn;
     }
   }
   return ret;

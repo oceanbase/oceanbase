@@ -69,6 +69,8 @@ private:
                                         const blocksstable::MacroBlockId &bf_macro_id,
                                         ObTabletCreateSSTableParam &param);
   int new_block_write_ctx(blocksstable::ObMacroBlocksWriteCtx *&ctx);
+
+  static int record_start_tx_scn_for_tx_data(const ObTabletMergeCtx &ctx, ObTabletCreateSSTableParam &param);
   void build_sstable_merge_info(const ObTabletMergeCtx &ctx);
 private:
   bool is_inited_;

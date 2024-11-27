@@ -1014,8 +1014,7 @@ int ObSSTable::deserialize(common::ObArenaAllocator &allocator,
       } else if (OB_UNLIKELY(!meta_->is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sstable meta is not valid", K(ret), K_(meta));
-      } else if (OB_FAIL(ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(
-                     key_, meta_->get_basic_meta().filled_tx_scn_, meta_->get_basic_meta().tx_data_recycle_scn_))) {
+      } else if (OB_FAIL(ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(key_, meta_->get_basic_meta().filled_tx_scn_))) {
         LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K_(meta));
       } else if (OB_FAIL(meta_->transform_root_block_data(allocator))) {
         LOG_WARN("fail to transform root block data", K(ret));
@@ -1149,8 +1148,7 @@ int ObSSTable::deserialize_fixed_struct(const char *buf, const int64_t data_len,
           filled_tx_scn_);
       if (OB_SUCC(ret)) {
         valid_for_reading_ = key_.is_valid();
-        SCN unused_scn = SCN::min_scn();
-        if (OB_FAIL(ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(key_, filled_tx_scn_, unused_scn))) {
+        if (OB_FAIL(ObSSTableMetaCompactUtil::fix_filled_tx_scn_value_for_compact(key_, filled_tx_scn_))) {
           LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K_(meta));
         }
       }
@@ -1762,34 +1760,6 @@ int ObSSTable::init_sstable_meta(
   return ret;
 }
 
-int ObSSTable::set_filled_tx_scn(
-    common::ObArenaAllocator &allocator,
-    const share::SCN &filled_tx_scn)
-{
-  int ret = OB_SUCCESS;
-  SCN old_val;
-  // make sure meta_ is loaded, otherwise make meta and shell inconsistency.
-
-  if (!filled_tx_scn.is_valid_and_not_min()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("set filled tx scn get invalid argument", K(ret), K(filled_tx_scn));
-  } else if (!is_loaded() && OB_FAIL(bypass_load_meta(allocator))) {
-    LOG_WARN("failed to load sstable meta", K(ret), K(key_));
-  } else {
-    old_val = meta_->basic_meta_.filled_tx_scn_;
-    if (meta_->basic_meta_.filled_tx_scn_ > filled_tx_scn) {
-      ret = OB_EAGAIN;
-      LOG_WARN("filled tx scn is smaller than meta filled tx scn, need retry", K(ret), KPC(meta_), K(filled_tx_scn));
-    } else {
-      meta_->basic_meta_.filled_tx_scn_ = filled_tx_scn;
-      filled_tx_scn_ = filled_tx_scn;
-    }
-  }
-
-  LOG_INFO("finish set filled tx scn", K(ret), K(key_), K_(meta),
-      K(old_val), K(filled_tx_scn), K(filled_tx_scn_));
-  return ret;
-}
 
 } // namespace blocksstable
 } // namespace oceanbase

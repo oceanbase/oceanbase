@@ -71,7 +71,6 @@ int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
     memtable_mgr_ = static_cast<ObTxDataMemtableMgr *>(memtable_mgr_handle.get_memtable_mgr());
     tx_ctx_table_ = tx_ctx_table;
     tablet_id_ = LS_TX_DATA_TABLET;
-    freeze_freq_controller_.reset();
     calc_upper_trans_is_disabled_ = false;
     latest_transfer_scn_.reset();
 
@@ -211,7 +210,6 @@ int ObTxDataTable::offline()
     is_started_ = false;
     disable_upper_trans_calculation();
     calc_upper_trans_version_cache_.reset();
-    freeze_freq_controller_.reset();
   }
   return ret;
 }
@@ -684,9 +682,9 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
   ObMigrationStatus migration_status;
   share::ObLSRestoreStatus restore_status;
   ObTimeGuard tg("get recycle scn", 10L * 1000L * 1000L /* 10 seconds */);
-  SCN min_filled_tx_scn = SCN::max_scn();
-  SCN min_filled_tx_scn_from_old_tablets = SCN::max_scn();
-  SCN min_filled_tx_scn_from_latest_tablets = SCN::max_scn();
+  SCN min_end_scn = SCN::max_scn();
+  SCN min_end_scn_from_old_tablets = SCN::max_scn();
+  SCN min_end_scn_from_latest_tablets = SCN::max_scn();
 
   // set recycle_scn = SCN::min_scn() as default which means clear nothing
   recycle_scn.set_min();
@@ -705,17 +703,17 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
     recycle_scn.set_min();
     STORAGE_LOG(INFO, "logstream is in restore state. skip recycle tx data", "ls_id", ls_->get_ls_id());
   } else if (FALSE_IT(tg.click("iterate tablets start"))) {
-  } else if (OB_FAIL(ls_tablet_svr_->get_ls_min_filled_tx_scn(min_filled_tx_scn_from_latest_tablets,
-                                                              min_filled_tx_scn_from_old_tablets))) {
+  } else if (OB_FAIL(ls_tablet_svr_->get_ls_min_end_scn(min_end_scn_from_latest_tablets,
+                                                        min_end_scn_from_old_tablets))) {
     STORAGE_LOG(WARN, "fail to get ls min end log ts", KR(ret));
   } else if (FALSE_IT(tg.click("iterate tablets finish"))) {
   } else {
-    min_filled_tx_scn = std::min(min_filled_tx_scn_from_old_tablets, min_filled_tx_scn_from_latest_tablets);
-    if (!min_filled_tx_scn.is_max()) {
-      recycle_scn = min_filled_tx_scn;
-      // Regardless of whether the primary or standby tenant is unified, refer to GTS.
-      // If the tenant role in memory is deferred,
-      // it may cause the standby tenant to commit and recycle when the primary is switched to standby.
+    min_end_scn = std::min(min_end_scn_from_old_tablets, min_end_scn_from_latest_tablets);
+    if (!min_end_scn.is_max()) {
+      recycle_scn = min_end_scn;
+      //Regardless of whether the primary or standby tenant is unified, refer to GTS.
+      //If the tenant role in memory is deferred,
+      //it may cause the standby tenant to commit and recycle when the primary is switched to standby.
       SCN snapshot_version;
       MonotonicTs unused_ts(0);
       int tmp_ret = OB_SUCCESS;
@@ -733,8 +731,8 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
             KR(ret),
             "ls_id", ls_->get_ls_id(),
             K(recycle_scn),
-            K(min_filled_tx_scn_from_old_tablets),
-            K(min_filled_tx_scn_from_latest_tablets));
+            K(min_end_scn_from_old_tablets),
+            K(min_end_scn_from_latest_tablets));
 
   return ret;
 }
@@ -748,23 +746,12 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
 int ObTxDataTable::self_freeze_task()
 {
   int ret = OB_SUCCESS;
-  const ObLSID ls_id = get_ls_id();
 
-  STORAGE_LOG(DEBUG, "start tx data table self freeze task", K(ls_id));
+  STORAGE_LOG(DEBUG, "start tx data table self freeze task", K(get_ls_id()));
 
-  const int64_t current_time = ObClockGenerator::getClock();
-  int64_t last_freeze_ts = 0;
-  if (freeze_freq_controller_.can_freeze(current_time, last_freeze_ts)) {
-    if (OB_FAIL(memtable_mgr_->flush(SCN::max_scn(), true))) {
-      if (OB_NO_NEED_MERGE == ret) {
-        STORAGE_LOG(INFO, "tx data table no need merge", KR(ret), K(ls_id));
-      } else {
-        (void)freeze_freq_controller_.rollback_freeze_ts(current_time, last_freeze_ts);
-        STORAGE_LOG(WARN, "self freeze of tx data memtable failed.", KR(ret), K(ls_id), KPC(memtable_mgr_));
-      }
-    }
-  } else {
-    // skip freeze tx data this time
+  if (OB_FAIL(memtable_mgr_->flush(SCN::max_scn(), checkpoint::INVALID_TRACE_ID, true))) {
+    share::ObLSID ls_id = get_ls_id();
+    STORAGE_LOG(WARN, "self freeze of tx data memtable failed.", KR(ret), K(ls_id), KPC(memtable_mgr_));
   }
 
   STORAGE_LOG(DEBUG, "finish tx data table self freeze task", KR(ret), K(get_ls_id()));

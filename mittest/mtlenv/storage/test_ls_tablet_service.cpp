@@ -614,7 +614,7 @@ TEST_F(TestLSTabletService, test_create_index_tablet)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
-TEST_F(TestLSTabletService, test_get_ls_min_filled_tx_scn)
+TEST_F(TestLSTabletService, test_get_ls_min_end_scn)
 {
   // create_tablet_without_index
   int ret = OB_SUCCESS;
@@ -642,7 +642,7 @@ TEST_F(TestLSTabletService, test_get_ls_min_filled_tx_scn)
 
   share::SCN min_end_scn_from_latest_tablets = SCN::max_scn();
   share::SCN min_end_scn_from_old_tablets = SCN::max_scn();
-  ret = ls_tablet_service_->get_ls_min_filled_tx_scn(min_end_scn_from_latest_tablets, min_end_scn_from_old_tablets);
+  ret = ls_tablet_service_->get_ls_min_end_scn(min_end_scn_from_latest_tablets, min_end_scn_from_old_tablets);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(min_end_scn_from_latest_tablets, expect_scn);
 
@@ -651,7 +651,7 @@ TEST_F(TestLSTabletService, test_get_ls_min_filled_tx_scn)
 
   min_end_scn_from_latest_tablets.set_max();
   min_end_scn_from_old_tablets.set_max();
-  ret = ls_tablet_service_->get_ls_min_filled_tx_scn(min_end_scn_from_latest_tablets, min_end_scn_from_old_tablets);
+  ret = ls_tablet_service_->get_ls_min_end_scn(min_end_scn_from_latest_tablets, min_end_scn_from_old_tablets);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(min_end_scn_from_latest_tablets, expect_scn); // still get from major sstable
 

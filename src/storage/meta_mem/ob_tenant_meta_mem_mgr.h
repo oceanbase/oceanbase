@@ -188,11 +188,12 @@ public:
       const int64_t buf_len,
       char *buf);
   // TIPS:
-  //  - only for tx data table to get a recycle_scn to recycle tx data
-  int get_min_filled_tx_scn_for_ls(const ObTabletMapKey &key,
-                                   const SCN &ls_checkpoint,
-                                   share::SCN &min_filled_tx_scn_from_latest,
-                                   share::SCN &min_filled_tx_scn_from_old);
+  //  - only for tx data table to find min log ts.
+  int get_min_end_scn_for_ls(
+      const ObTabletMapKey &key,
+      const SCN &ls_checkpoint,
+      share::SCN &min_end_scn_from_latest,
+      share::SCN &min_end_scn_from_old);
   int get_min_mds_ckpt_scn(const ObTabletMapKey &key, share::SCN &scn);
 
   // garbage collector for sstable and memtable.
@@ -306,7 +307,7 @@ private:
       ObIArray<ObTabletBufferInfo> &buffer_infos);
   int64_t cal_adaptive_bucket_num();
   int inner_push_tablet_into_gc_queue(ObTablet *tablet);
-  int get_min_filled_tx_scn_from_single_tablet(ObTablet *tablet,
+  int get_min_end_scn_from_single_tablet(ObTablet *tablet,
                                          const bool is_old,
                                          const SCN &ls_checkpoint,
                                          share::SCN &min_end_scn);

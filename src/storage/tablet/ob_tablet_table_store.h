@@ -212,14 +212,9 @@ private:
       const int64_t multi_version_start,
       const bool allow_duplicate_sstable,
       int64_t &inc_base_snapshot_version);
-  int check_need_add_old_minor_sstable(
-      const blocksstable::ObSSTable *old_sstable,
-      const blocksstable::ObSSTable *new_sstable,
-      bool &need_add);
 
   int check_ready_for_read(const ObTablet &tablet);
   int check_continuous() const;
-  int check_minor_tx_scn() const;
   template <class T>
   int check_minor_tables_continue_(T &minor_tables) const;
   int cache_local_sstable_meta(
@@ -310,6 +305,7 @@ private:
       const ObIArray<ObITable *> &replace_sstable_array,
       const ObSSTableArray &old_tables,
       ObSSTableArray &new_tables) const;
+  int get_mini_minor_sstables_(ObTableStoreIterator &iter) const;
   int only_replace_major_(
       common::ObArenaAllocator &allocator,
       const ObTabletTableStore &old_store,

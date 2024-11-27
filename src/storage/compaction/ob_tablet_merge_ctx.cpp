@@ -212,9 +212,63 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObTabletMergeCtx &ctx,
     LOG_WARN("invalid merge ctx", K(ret), K(ctx), K(res));
   } else if (OB_FAIL(param.init_for_merge(ctx, res))) {
     LOG_WARN("fail to init create sstable param for merge", K(ret), K(ctx), K(res));
+  } else if (ctx.param_.tablet_id_.is_ls_tx_data_tablet()) {
+    ret = record_start_tx_scn_for_tx_data(ctx, param);
   }
   return ret;
 }
+
+int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObTabletMergeCtx &ctx, ObTabletCreateSSTableParam &param)
+{
+  int ret = OB_SUCCESS;
+  // set INT64_MAX for invalid check
+  param.filled_tx_scn_.set_max();
+
+  if (is_mini_merge(ctx.param_.merge_type_)) {
+    // when this merge is MINI_MERGE, use the start_scn of the oldest tx data memtable as start_tx_scn
+    ObTxDataMemtable *tx_data_memtable = nullptr;
+    if (ctx.tables_handle_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tables handle is unexpected empty", KR(ret), K(ctx));
+    } else if (OB_ISNULL(tx_data_memtable = (ObTxDataMemtable*)ctx.tables_handle_.get_table(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("table ptr is unexpected nullptr", KR(ret), K(ctx));
+    } else {
+      param.filled_tx_scn_ = tx_data_memtable->get_start_scn();
+    }
+  } else if (is_minor_merge(ctx.param_.merge_type_)) {
+    // when this merge is MINOR_MERGE, use max_filtered_end_scn in filter if filtered some tx data
+    ObTransStatusFilter *compaction_filter_ = (ObTransStatusFilter*)ctx.compaction_filter_;
+    ObSSTableMetaHandle sstable_meta_hdl;
+    ObSSTable *oldest_tx_data_sstable = static_cast<ObSSTable *>(ctx.tables_handle_.get_table(0));
+    if (OB_ISNULL(oldest_tx_data_sstable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tx data sstable is unexpected nullptr", KR(ret));
+    } else if (OB_FAIL(oldest_tx_data_sstable->get_meta(sstable_meta_hdl))) {
+      LOG_WARN("fail to get sstable meta handle", K(ret));
+    } else {
+      param.filled_tx_scn_ = sstable_meta_hdl.get_sstable_meta().get_filled_tx_scn();
+
+      if (OB_NOT_NULL(compaction_filter_)) {
+        // if compaction_filter is valid, update filled_tx_log_ts if recycled some tx data
+        SCN recycled_scn;
+        if (compaction_filter_->get_max_filtered_end_scn() > SCN::min_scn()) {
+          recycled_scn = compaction_filter_->get_max_filtered_end_scn();
+        } else {
+          recycled_scn = compaction_filter_->get_recycle_scn();
+        }
+        if (recycled_scn > param.filled_tx_scn_) {
+          param.filled_tx_scn_ = recycled_scn;
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected merge type when merge tx data table", KR(ret), K(ctx));
+  }
+
+  return ret;
+  }
 
 int ObTabletMergeInfo::create_sstable(ObTabletMergeCtx &ctx)
 {
@@ -744,7 +798,7 @@ int ObTabletMergeCtx::get_schema_and_gene_from_result(const ObGetMergeTablesResu
   }
 
   if (OB_SUCC(ret)) {
-    merge_scn_ = get_merge_table_result.is_backfill_ ? get_merge_table_result.backfill_scn_ : get_merge_table_result.merge_scn_;
+    merge_scn_ = get_merge_table_result.is_backfill_ ? get_merge_table_result.backfill_scn_ : scn_range_.end_scn_;
     if (OB_UNLIKELY(is_minor_merge_type(param_.merge_type_) && scn_range_.is_empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("Unexcepted empty scn range in minor merge", K(ret), K(scn_range_));
@@ -824,11 +878,9 @@ int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_m
 }
 
 int ObTabletMergeCtx::get_basic_info_from_result(
-    const ObGetMergeTablesResult &get_merge_table_result)
+   const ObGetMergeTablesResult &get_merge_table_result)
 {
   int ret = OB_SUCCESS;
-  ObITable *table = nullptr;
-  ObSSTableMetaHandle meta_handle;
 
   if (OB_UNLIKELY(rebuild_seq_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
@@ -838,21 +890,29 @@ int ObTabletMergeCtx::get_basic_info_from_result(
   } else if (OB_UNLIKELY(tables_handle_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected empty table handle", K(ret), K(tables_handle_));
-  } else if (FALSE_IT(param_.report_ = is_major_merge_type(param_.merge_type_) ? GCTX.ob_service_ : nullptr)) {
-  } else if (is_major_merge_type(param_.merge_type_) || is_mini_merge(param_.merge_type_)) {
-    sstable_logic_seq_ = 0;
-  } else if (OB_UNLIKELY(nullptr == (table = tables_handle_.get_table(tables_handle_.get_count() - 1)) || !table->is_sstable())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected table type", K(ret), KPC(table), K(tables_handle_));
-  } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(meta_handle))) {
-    LOG_WARN("get meta handle fail", K(ret), KPC(table));
   } else {
-    sstable_logic_seq_ = MIN(ObMacroDataSeq::MAX_SSTABLE_SEQ, meta_handle.get_sstable_meta().get_sstable_seq()+ 1);
-  }
-
-  if (OB_SUCC(ret)) {
     sstable_version_range_ = get_merge_table_result.version_range_;
     scn_range_ = get_merge_table_result.scn_range_;
+    if (is_major_merge_type(param_.merge_type_)) {
+      param_.report_ = GCTX.ob_service_;
+    }
+    const ObITable *table = nullptr;
+
+    if (is_major_merge_type(param_.merge_type_) || is_mini_merge(param_.merge_type_)) {
+      sstable_logic_seq_ = 0;
+    } else if (OB_ISNULL(table = tables_handle_.get_table(tables_handle_.get_count() - 1)) || !table->is_sstable()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected table type", K(ret), KPC(table), K(tables_handle_));
+    } else {
+      const ObSSTable *sstable = static_cast<const ObSSTable *>(table);
+      ObSSTableMetaHandle meta_handle;
+      if (OB_FAIL(sstable->get_meta(meta_handle))) {
+        LOG_WARN("get meta handle fail", K(ret), KPC(sstable));
+      } else {
+        sstable_logic_seq_ = MIN(ObMacroDataSeq::MAX_SSTABLE_SEQ, meta_handle.get_sstable_meta().get_sstable_seq()+ 1);
+      }
+    }
+
     create_snapshot_version_ = get_merge_table_result.create_snapshot_version_;
     schedule_major_ = get_merge_table_result.schedule_major_;
   }
@@ -1306,7 +1366,6 @@ int ObTabletMergeCtx::inner_prepare_backfill_merge_result_(
     get_merge_table_result.update_tablet_directly_ = false; //only for mini, local sstable version range already contains mini will update tablet directly
     get_merge_table_result.create_snapshot_version_ = 0; //only for medium or meta merge, mini or minor set the value of 0
     get_merge_table_result.read_base_version_ = 0; //only for medium merge, mini or minor set the value of 0
-    get_merge_table_result.merge_scn_ = backfill_table_handle.get_table()->get_key().get_end_scn();
   }
   return ret;
 }

@@ -6314,51 +6314,53 @@ int ObLSTabletService::prepare_dml_running_ctx(
   return ret;
 }
 
-int ObLSTabletService::get_ls_min_filled_tx_scn(
-    share::SCN &min_filled_tx_scn_from_latest_tablets,
-    share::SCN &min_filled_tx_scn_from_old_tablets)
+
+int ObLSTabletService::get_ls_min_end_scn(
+    SCN &min_end_scn_from_latest_tablets, SCN &min_end_scn_from_old_tablets)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_->get_ls_id();
-  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   ObSArray<ObTabletID> tablet_ids;
-  GetAllTabletIDOperator op(tablet_ids, true /*except_ls_inner_tablet*/);
-  min_filled_tx_scn_from_latest_tablets.set_max();
-  min_filled_tx_scn_from_old_tablets.set_max();
+  GetAllTabletIDOperator op(tablet_ids, true/*except_ls_inner_tablet*/);
+  min_end_scn_from_latest_tablets.set_max();
+  min_end_scn_from_old_tablets.set_max();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(tablet_id_set_.foreach (op))) {
+  } else if (OB_FAIL(tablet_id_set_.foreach(op))) {
     STORAGE_LOG(WARN, "fail to get all tablet ids from set", K(ret));
   } else {
     SCN ls_checkpoint = ls_->get_clog_checkpoint_scn();
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
       ObTabletMapKey key(ls_id, tablet_ids.at(i));
-      SCN min_filled_tx_scn_from_latest = SCN::max_scn();
-      SCN min_filled_tx_scn_from_old = SCN::max_scn();
-      if (OB_FAIL(t3m->get_min_filled_tx_scn_for_ls(
-              key, ls_checkpoint, min_filled_tx_scn_from_latest, min_filled_tx_scn_from_old))) {
+      SCN min_end_scn_from_latest = SCN::max_scn();
+      SCN min_end_scn_from_old = SCN::max_scn();
+      if (OB_FAIL(t3m->get_min_end_scn_for_ls(key,
+                                              ls_checkpoint,
+                                              min_end_scn_from_latest,
+                                              min_end_scn_from_old))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("fail to get min end scn", K(ret), K(key));
         } else {
           ret = OB_SUCCESS;
         }
       } else {
-        if (min_filled_tx_scn_from_latest < min_filled_tx_scn_from_latest_tablets) {
-          LOG_DEBUG("update", K(key), K(min_filled_tx_scn_from_latest_tablets), K(min_filled_tx_scn_from_latest));
-          min_filled_tx_scn_from_latest_tablets = min_filled_tx_scn_from_latest;
+        if (min_end_scn_from_latest < min_end_scn_from_latest_tablets) {
+          LOG_DEBUG("update", K(key), K(min_end_scn_from_latest_tablets), K(min_end_scn_from_latest));
+          min_end_scn_from_latest_tablets = min_end_scn_from_latest;
         }
 
-        if (min_filled_tx_scn_from_old < min_filled_tx_scn_from_old_tablets) {
-          LOG_DEBUG("update", K(key), K(min_filled_tx_scn_from_old_tablets), K(min_filled_tx_scn_from_old));
-          min_filled_tx_scn_from_old_tablets = min_filled_tx_scn_from_old;
+        if (min_end_scn_from_old < min_end_scn_from_old_tablets) {
+          LOG_DEBUG("update", K(key), K(min_end_scn_from_old_tablets), K(min_end_scn_from_old));
+          min_end_scn_from_old_tablets = min_end_scn_from_old;
         }
       }
     }
     // now tx_data contains mds tx_op to remove retain_ctx
     // so we need wait ls_checkpoint advance to recycle tx_data
-    if (ls_checkpoint < min_filled_tx_scn_from_latest_tablets) {
-      min_filled_tx_scn_from_latest_tablets = ls_checkpoint;
+    if (ls_checkpoint < min_end_scn_from_latest_tablets) {
+      min_end_scn_from_latest_tablets = ls_checkpoint;
     }
     LOG_INFO("get ls min end scn finish", K(ls_checkpoint));
   }

@@ -993,57 +993,5 @@ int ObTabletMemtableMgr::set_frozen_for_all_memtables()
   return ret;
 }
 
-int ObTabletMemtableMgr::get_safety_fill_tx_scn(share::SCN &safety_fill_tx_scn) const
-{
-  int ret = OB_SUCCESS;
-  SCN max_decided_scn;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(ls_->get_max_decided_scn(max_decided_scn))) {
-    STORAGE_LOG(WARN, "get max decided scn failed", K(ret), K_(is_inited), K(max_decided_scn));
-  } else {
-    safety_fill_tx_scn.set_invalid();
-    MemMgrRLockGuard guard(lock_);
-    if (has_memtable_()) {
-      for (int64_t idx = memtable_head_; OB_SUCC(ret) && idx < memtable_tail_; idx++) {
-        ObMemtable *memtable = static_cast<ObMemtable *>(tables_[get_memtable_idx(idx)]);
-        if (OB_ISNULL(memtable)) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "invalid memtable ptr", K(ret), K(tables_), KPC(memtable));
-        } else if (memtable->is_frozen_memtable() && (memtable->get_rec_scn().is_max())) {
-          // There may be another memtable after this empty memtable
-          FLOG_INFO("find an empty frozen memtable, skip this one", KPC(memtable));
-        } else {
-          // The fill tx scn can not larger than or equal to rec_scn
-          SCN rec_scn = memtable->get_rec_scn();
-          safety_fill_tx_scn = MIN(max_decided_scn, SCN::scn_dec(rec_scn));
-          FLOG_INFO("finish get safety fill tx scn(with memtable)",
-                    KP(this),
-                    K(safety_fill_tx_scn),
-                    K(max_decided_scn),
-                    K(rec_scn),
-                    KP(memtable),
-                    "tablet_id", memtable->get_tablet_id(),
-                    "scn_range", memtable->get_scn_range());
-          break;
-        }
-      }
-    }
-
-    if (!safety_fill_tx_scn.is_valid()) {
-      // Here we can make sure that a new created memtable do not hold the data whose redo_scn is less than
-      // max_decided_scn, so we use max_decided_scn to fill tx state
-      safety_fill_tx_scn = max_decided_scn;
-      FLOG_INFO("finish get safety fill tx scn(without memtable)",
-                KP(this),
-                K(safety_fill_tx_scn),
-                K(max_decided_scn),
-                "tablet_id", this->get_tablet_id());
-    }
-  }
-  return ret;
-}
-
 }  // namespace storage
 }  // namespace oceanbase

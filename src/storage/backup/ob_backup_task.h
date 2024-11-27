@@ -445,12 +445,15 @@ private:
   int may_need_advance_checkpoint_();
   int fetch_cur_ls_rebuild_seq_(int64_t &rebuild_seq);
   int fetch_backup_ls_meta_(share::SCN &clog_checkpoint_scn);
-  int prepare_backup_tx_data_recycle_scn_();
+  int prepare_backup_tx_table_filled_tx_scn_();
   int check_ls_created_after_backup_start_(const ObLSID &ls_id, bool &created_after_backup);
-  int get_backup_tx_data_recycle_scn_(share::SCN &tx_data_recycle_scn);
+  int get_backup_tx_data_table_filled_tx_scn_(share::SCN &filled_tx_scn);
   int prepare_meta_index_store_(ObBackupMetaIndexStore &meta_index_store);
   int get_sys_ls_turn_and_retry_id_(int64_t &turn_id, int64_t &retry_id);
   int prepare_meta_index_store_param_(const int64_t turn_id, const int64_t retry_id, ObBackupIndexStoreParam &param);
+  int get_cur_ls_min_filled_tx_scn_(share::SCN &min_filled_tx_scn);
+  int get_tablet_min_filled_tx_scn_(ObTabletHandle &tablet_handle,
+      share::SCN &min_filled_tx_scn, bool &has_minor_sstable);
 
 private:
   bool is_inited_;

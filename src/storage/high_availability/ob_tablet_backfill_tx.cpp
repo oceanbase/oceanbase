@@ -588,29 +588,22 @@ int ObTabletBackfillTXTask::get_all_backfill_tx_tables_(
     LOG_WARN("tablet backfill tx task do not init", K(ret));
   } else if (OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get all backfill tx tables get invalid argument", K(ret), KP(tablet));
+    LOG_WARN("get all backfll tx tables get invalid argument", K(ret), KP(tablet));
   } else if (OB_FAIL(get_backfill_tx_minor_sstables_(tablet, minor_sstables))) {
     LOG_WARN("failed to get backfill tx minor sstables", K(ret), KPC(tablet));
   } else if (OB_FAIL(get_backfill_tx_memtables_(tablet, memtables))) {
     LOG_WARN("failed to get backfill tx memtables", K(ret), KPC(tablet));
   } else if (0 != memtables.count()) {
-    // The dump of the memtable needs to order by start scn
+    // The dump of the memtable needs to start with a smaller start_scn
     if (OB_FAIL(append(table_array, memtables))) {
       LOG_WARN("failed to append memtables", K(ret), KPC(tablet), K(memtables));
     }
   } else {
-    // The backfill of sstable needs to reverse order by start scn
-    ObArray<storage::ObITable *> current_memtables;
-    const bool need_active = true;
+    // The backfill of sstable needs to start with a larger start_scn
     if (minor_sstables.count() > emergency_sstable_count) {
         ret = OB_TOO_MANY_SSTABLE;
         LOG_WARN("transfer src tablet has too many sstable, cannot backfill, need retry", K(ret),
             "table_count", minor_sstables.count(), "emergency sstable count", emergency_sstable_count);
-    } else if (OB_FAIL(tablet->get_memtables(current_memtables, need_active))) {
-      LOG_WARN("failed to get memtables", K(ret), KPC(tablet));
-    } else if (!current_memtables.empty()) {
-      ret = OB_EAGAIN;
-      LOG_WARN("this version tablet still has memtable, need refresh tablet handle", K(ret), KPC(tablet));
     } else if (OB_FAIL(ObTableStoreUtil::reverse_sort_minor_table_handles(minor_sstables))) {
       LOG_WARN("failed to sort minor tables", K(ret));
     } else if (OB_FAIL(append(table_array, minor_sstables))) {
@@ -806,28 +799,14 @@ int ObTabletBackfillTXTask::generate_table_backfill_tx_task_(
       } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
       } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
         LOG_WARN("failed to get sstable meta handle", K(ret));
-      } else if (sst_meta_hdl.get_sstable_meta().get_filled_tx_scn().is_max()) {
-        if (!sstable->contain_uncommitted_row()) {
-          is_add_task = false;
-          FLOG_INFO("sstbale filled tx is max but do not contain uncommitted row, no need backfill tx", KPC(sstable),
-              "log sync scn", backfill_tx_ctx_->log_sync_scn_);
-        } else {
-          is_add_task = true;
-        }
+      } else if (!sstable->contain_uncommitted_row()
+          || (!sst_meta_hdl.get_sstable_meta().get_filled_tx_scn().is_max()
+          && sst_meta_hdl.get_sstable_meta().get_filled_tx_scn() >= backfill_tx_ctx_->log_sync_scn_)) {
+        FLOG_INFO("sstable do not contain uncommitted row, no need backfill tx", KPC(sstable),
+            "log sync scn", backfill_tx_ctx_->log_sync_scn_);
       } else {
-        if (sst_meta_hdl.get_sstable_meta().get_filled_tx_scn() >= backfill_tx_ctx_->log_sync_scn_) {
-          is_add_task = false;
-          FLOG_INFO("sstable filled tx scn is bigger than log sync scn, no need backfill tx", KPC(sstable),
-               "log sync scn", backfill_tx_ctx_->log_sync_scn_);
-        } else if (sst_meta_hdl.get_sstable_meta().get_filled_tx_scn() == sstable->get_end_scn() && !sstable->contain_uncommitted_row()) {
-          is_add_task = false;
-          FLOG_INFO("sstable filled tx scn is same with end scn and do not contain uncommitted row , no need backfill tx", KPC(sstable),
-                   "log sync scn", backfill_tx_ctx_->log_sync_scn_);
-        } else {
-          is_add_task = true;
-        }
+        is_add_task = true;
       }
-
       if (OB_SUCC(ret) && is_add_task) {
         ObFakeTask *wait_finish_task = nullptr;
         if (OB_FAIL(dag_->alloc_task(wait_finish_task))) {
@@ -1020,49 +999,28 @@ int ObTabletTableBackfillTXTask::generate_merge_task_()
   compaction::ObTabletMergeTask *merge_task = nullptr;
   ObTabletTableFinishBackfillTXTask *finish_backfill_task = nullptr;
   const int64_t index = 0;
-  const ObSSTable *sstable = nullptr;
-  bool is_only_update_filled_tx_scn = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet table backfill tx task do not init", K(ret));
-  } else if (table_handle_.get_table()->is_memtable()) {
-    is_only_update_filled_tx_scn = false;
-  } else {
-    if (OB_FAIL(table_handle_.get_sstable(sstable))) {
-      LOG_WARN("failed to get sstable", K(ret), K(ls_id_), K(tablet_id_));
-    } else {
-      is_only_update_filled_tx_scn = !sstable->contain_uncommitted_row();
-    }
-  }
-
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(dag_->alloc_task(finish_backfill_task))) {
     LOG_WARN("failed to alloc tablet finish backfill tx task", K(ret), KPC(ha_dag_net_ctx_), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(finish_backfill_task->init(ls_id_, tablet_id_, tablet_handle_, table_handle_, child_, is_only_update_filled_tx_scn))) {
+  } else if (OB_FAIL(finish_backfill_task->init(ls_id_, tablet_id_, tablet_handle_, table_handle_, child_))) {
     LOG_WARN("failed to init table finish backfill tx task", K(ret), K(ls_id_), K(tablet_id_), K(table_handle_));
   } else if (OB_FAIL(finish_backfill_task->add_child(*child_))) {
     LOG_WARN("failed to add child task", K(ret), K(ls_id_), K(tablet_id_));
-  } else if (!is_only_update_filled_tx_scn) {
-    if (OB_FAIL(dag_->alloc_task(merge_task))) {
-      LOG_WARN("failed to alloc table merge task", K(ret), KPC(ha_dag_net_ctx_), K(ls_id_), K(tablet_id_), K(table_handle_));
-    } else if (OB_FAIL(merge_task->init(index, finish_backfill_task->get_tablet_merge_ctx()))) {
-      LOG_WARN("failed to init table merge task", K(ret), K(ls_id_), K(tablet_id_), K(table_handle_));
-    } else if (OB_FAIL(merge_task->add_child(*finish_backfill_task))) {
-      LOG_WARN("failed to add child task", K(ret), K(ls_id_), K(tablet_id_));
-    } else if (OB_FAIL(this->add_child(*merge_task))) {
-      LOG_WARN("failed to add child task", K(ret), K(ls_id_), K(tablet_id_), KPC(this));
-    } else if (OB_FAIL(dag_->add_task(*finish_backfill_task))) {
-      LOG_WARN("failed to add table finish backfill tx task", K(ret), K(ls_id_), K(tablet_id_), K(table_handle_));
-    } else if (OB_FAIL(dag_->add_task(*merge_task))) {
-      LOG_WARN("failed to add table merge task", K(ret), K(ls_id_), K(tablet_id_), K(table_handle_));
-    }
-  } else {
-    if (OB_FAIL(this->add_child(*finish_backfill_task))) {
-      LOG_WARN("failed to add child task", K(ret), K(ls_id_), K(tablet_id_), KPC(this));
-    } else if (OB_FAIL(dag_->add_task(*finish_backfill_task))) {
-      LOG_WARN("failed to add table finish backfill tx task", K(ret), K(ls_id_), K(tablet_id_), K(table_handle_));
-    }
+  } else if (OB_FAIL(dag_->alloc_task(merge_task))) {
+    LOG_WARN("failed to alloc table merge task", K(ret), KPC(ha_dag_net_ctx_), K(ls_id_), K(tablet_id_), K(table_handle_));
+  } else if (OB_FAIL(merge_task->init(index, finish_backfill_task->get_tablet_merge_ctx()))) {
+    LOG_WARN("failed to init table merge task", K(ret), K(ls_id_), K(tablet_id_), K(table_handle_));
+  } else if (OB_FAIL(merge_task->add_child(*finish_backfill_task))) {
+    LOG_WARN("failed to add child task", K(ret), K(ls_id_), K(tablet_id_));
+  } else if (OB_FAIL(this->add_child(*merge_task))) {
+    LOG_WARN("failed to add child task", K(ret), K(ls_id_), K(tablet_id_), KPC(this));
+  } else if (OB_FAIL(dag_->add_task(*finish_backfill_task))) {
+    LOG_WARN("failed to add table finish backfill tx task", K(ret), K(ls_id_), K(tablet_id_), K(table_handle_));
+  } else if (OB_FAIL(dag_->add_task(*merge_task))) {
+    LOG_WARN("failed to add table merge task", K(ret), K(ls_id_), K(tablet_id_), K(table_handle_));
   }
   return ret;
 }
@@ -1116,8 +1074,7 @@ ObTabletTableFinishBackfillTXTask::ObTabletTableFinishBackfillTXTask()
     param_(),
     allocator_("TableBackfillTX"),
     tablet_merge_ctx_(param_, allocator_),
-    child_(nullptr),
-    is_only_update_filled_tx_scn_(false)
+    child_(nullptr)
 {
 }
 
@@ -1130,8 +1087,7 @@ int ObTabletTableFinishBackfillTXTask::init(
     const common::ObTabletID &tablet_id,
     ObTabletHandle &tablet_handle,
     ObTableHandleV2 &table_handle,
-    share::ObITask *child,
-    const bool is_only_update_filled_tx_scn)
+    share::ObITask *child)
 {
   int ret = OB_SUCCESS;
   ObTabletBackfillTXDag *tablet_backfill_tx_dag = nullptr;
@@ -1144,17 +1100,6 @@ int ObTabletTableFinishBackfillTXTask::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init tablet table finish backfill task get invalid argument", K(ret), K(ls_id),
         K(tablet_id), K(tablet_handle), K(table_handle), KP(child));
-  } else if (table_handle.get_table()->is_sstable()) {
-    const ObSSTable *sstable = nullptr;
-    if (OB_FAIL(table_handle.get_sstable(sstable))) {
-      LOG_WARN("failed to get sstable", K(ret), K(ls_id), K(tablet_id), K(table_handle));
-    } else if (sstable->contain_uncommitted_row() && is_only_update_filled_tx_scn) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sstable still contain uncommitted row but only update filled tx scn, unexpected", K(ret), KPC(sstable), K(is_only_update_filled_tx_scn));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
   } else {
     tablet_backfill_tx_dag = static_cast<ObTabletBackfillTXDag *>(this->get_dag());
     ha_dag_net_ctx_ = tablet_backfill_tx_dag->get_ha_dag_net_ctx();
@@ -1164,7 +1109,6 @@ int ObTabletTableFinishBackfillTXTask::init(
     tablet_handle_ = tablet_handle;
     table_handle_ = table_handle;
     child_ = child;
-    is_only_update_filled_tx_scn_ = is_only_update_filled_tx_scn;
 
     if (OB_FAIL(prepare_merge_ctx_())) {
       LOG_WARN("failed to prepare merge ctx", K(ret), K(ls_id_), K(tablet_id_), K(table_handle_));
@@ -1203,8 +1147,7 @@ int ObTabletTableFinishBackfillTXTask::prepare_merge_ctx_()
   return ret;
 }
 
-int ObTabletTableFinishBackfillTXTask::update_merge_sstable_(
-    const ObSSTable *sstable)
+int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -1213,9 +1156,6 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet table finish backfill tx task do not init", K(ret));
-  } else if (OB_ISNULL(sstable)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("update merge sstable should not be NULL", K(ret), KP(sstable));
   } else if (OB_ISNULL(ls = tablet_merge_ctx_.ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id_));
@@ -1228,7 +1168,7 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_(
     ObTabletHandle new_tablet_handle;
     const int64_t rebuild_seq = tablet_merge_ctx_.rebuild_seq_;
     const int64_t transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
-    ObUpdateTableStoreParam param(sstable,
+    ObUpdateTableStoreParam param(&(tablet_merge_ctx_.merged_sstable_),
                                   tablet_merge_ctx_.sstable_version_range_.snapshot_version_,
                                   tablet_merge_ctx_.sstable_version_range_.multi_version_start_,
                                   tablet_merge_ctx_.schema_ctx_.storage_schema_,
@@ -1280,16 +1220,13 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_(
 int ObTabletTableFinishBackfillTXTask::process()
 {
   int ret = OB_SUCCESS;
-  const ObSSTable *sstable = nullptr;
   LOG_INFO("start do tablet table finish backfill tx task", K(ls_id_), K(tablet_id_), K(table_handle_));
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet table backfill tx task do not init", K(ret));
   } else if (ha_dag_net_ctx_->is_failed()) {
     LOG_INFO("ctx already failed", KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(get_merged_sstable_(sstable))) {
-    LOG_WARN("failed to get merged sstable", K(ret), KPC(ha_dag_net_ctx_), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(update_merge_sstable_(sstable))) {
+  } else if (OB_FAIL(update_merge_sstable_())) {
     LOG_WARN("failed to update merge sstable", K(ret), KPC(this));
   }
 
@@ -1301,46 +1238,6 @@ int ObTabletTableFinishBackfillTXTask::process()
       LOG_ERROR("tablet backfill tx dag should not be NULL", K(tmp_ret), KP(tablet_backfill_tx_dag));
     } else if (OB_SUCCESS != (tmp_ret = tablet_backfill_tx_dag->set_result(ret))) {
       LOG_WARN("failed to set result", K(ret), KPC(ha_dag_net_ctx_), K(ls_id_), K(tablet_id_));
-    }
-  }
-  return ret;
-}
-
-int ObTabletTableFinishBackfillTXTask::get_merged_sstable_(const ObSSTable *&sstable)
-{
-  int ret = OB_SUCCESS;
-  sstable = nullptr;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet table backfill tx task do not init", K(ret));
-  } else if (!is_only_update_filled_tx_scn_) {
-    sstable = &tablet_merge_ctx_.merged_sstable_;
-  } else {
-    ObSSTable *tmp_sstable = nullptr;
-    ObSSTable *orig_sstable = nullptr;
-    ObSSTable *copied_sstable = nullptr;
-    ObMetaDiskAddr addr;
-    addr.set_mem_addr(0, sizeof(ObSSTable));
-    ObStorageMetaHandle sstable_handle;
-    if (OB_FAIL(table_handle_.get_sstable(tmp_sstable))) {
-      LOG_WARN("failed to get sstable", K(ret), K(table_handle_));
-    } else if (tmp_sstable->is_loaded()) {
-      orig_sstable = tmp_sstable;
-    } else if (OB_FAIL(ObTabletTableStore::load_sstable(tmp_sstable->get_addr(), sstable_handle))) {
-      LOG_WARN("failed to load sstable", K(ret), KPC(tmp_sstable));
-    } else if (OB_FAIL(sstable_handle.get_sstable(orig_sstable))) {
-      LOG_WARN("failed to get sstable from sstable handle", K(ret), K(sstable_handle));
-    }
-
-    if (FAILEDx(orig_sstable->deep_copy(allocator_, copied_sstable))) {
-      LOG_WARN("failed to deep copy sstable", K(ret), KPC(orig_sstable), KP(copied_sstable));
-    } else if (OB_FAIL(copied_sstable->set_addr(addr))) {
-      LOG_WARN("failed to set sstable addr", K(ret), K(addr), KPC(copied_sstable));
-    } else if (OB_FAIL(copied_sstable->set_filled_tx_scn(allocator_, backfill_tx_ctx_->log_sync_scn_))) {
-      LOG_WARN("failed to set filled tx scn", K(ret), KPC(copied_sstable), KPC(backfill_tx_ctx_));
-    } else {
-      sstable = copied_sstable;
-      FLOG_INFO("backfill sstable only update filled tx scn", KPC(orig_sstable), KPC(copied_sstable));
     }
   }
   return ret;

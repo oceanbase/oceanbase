@@ -208,9 +208,6 @@ public:
     }
     return size;
   }
-  int set_filled_tx_scn(
-      common::ObArenaAllocator &allocator,
-      const share::SCN &filled_tx_scn);
 
 public:
   int dump2text(

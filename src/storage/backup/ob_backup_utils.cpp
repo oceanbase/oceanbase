@@ -1836,7 +1836,7 @@ int ObBackupTabletProvider::check_tx_data_can_explain_user_data_(
   can_explain = true;
   // Only backup minor needs to check whether tx data can explain user data.
   // If tablet has no minor sstable, or has no uncommitted row in sstable, it's also no need to check tx_data.
-  // The condition that tx_data can explain user data is that tx_data_table's tx_data_recycle_scn is less than the
+  // The condition that tx_data can explain user data is that tx_data_table's filled_tx_scn is less than the
   // minimum tablet's minor sstable's filled_tx_scn.
   // TODO(zeyong): 4.3 But when transfer supports not killing transaction, minor sstable may have uncommitted rows and it's
   // filled_tx_scn may less than tx_data_table's filled_tx_scn, which is a bad case. Fix this in future by handora.qc.
@@ -1872,13 +1872,13 @@ int ObBackupTabletProvider::check_tx_data_can_explain_user_data_(
       }
     }
     if (OB_SUCC(ret)) {
-      can_explain = min_filled_tx_scn >= ls_backup_ctx_->backup_tx_data_recycle_scn_;
+      can_explain = min_filled_tx_scn >= ls_backup_ctx_->backup_tx_table_filled_tx_scn_;
       if (!can_explain) {
         const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
         LOG_WARN("tx data can't explain user data",
                  K(OB_REPLICA_CANNOT_BACKUP), K(can_explain),
                  K(tablet_id), K(min_filled_tx_scn),
-                 "backup_tx_data_recycle_scn", ls_backup_ctx_->backup_tx_data_recycle_scn_);
+                 "backup_tx_table_filled_tx_scn", ls_backup_ctx_->backup_tx_table_filled_tx_scn_);
       }
     }
   }

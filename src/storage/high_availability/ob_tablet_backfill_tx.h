@@ -129,7 +129,6 @@ private:
       const bool is_report,
       const ObStorageHACostItemName name,
       const int result) const;
-
 private:
   bool is_inited_;
   ObBackfillTXCtx *backfill_tx_ctx_;
@@ -188,16 +187,14 @@ public:
       const common::ObTabletID &tablet_id,
       ObTabletHandle &tablet_handle,
       ObTableHandleV2 &table_handle,
-      share::ObITask *child,
-      const bool is_only_update_filled_tx_scn);
+      share::ObITask *child);
   virtual int process() override;
   compaction::ObTabletMergeCtx &get_tablet_merge_ctx() { return tablet_merge_ctx_; }
 
   VIRTUAL_TO_STRING_KV(K("ObTabletTableFinishBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_));
 private:
   int prepare_merge_ctx_();
-  int update_merge_sstable_(const ObSSTable *sstable);
-  int get_merged_sstable_(const ObSSTable *&sstable);
+  int update_merge_sstable_();
 
 private:
   bool is_inited_;
@@ -211,7 +208,6 @@ private:
   common::ObArenaAllocator allocator_;
   compaction::ObTabletMergeCtx tablet_merge_ctx_;
   share::ObITask *child_;
-  bool is_only_update_filled_tx_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletTableFinishBackfillTXTask);
 };
 

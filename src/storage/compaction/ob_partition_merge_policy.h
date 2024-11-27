@@ -98,7 +98,6 @@ public:
 
   static int get_boundary_snapshot_version(
       const ObTablet &tablet,
-      const ObTabletTableStore *table_store,
       int64_t &min_snapshot,
       int64_t &max_snapshot,
       const bool check_table_cnt = false,
@@ -122,18 +121,13 @@ private:
       const storage::ObTablet &tablet,
       common::ObIArray<ObTableHandleV2> &memtable_handles,
       storage::ObGetMergeTablesResult &result);
-  static int check_need_gc_tx_data(
-      const ObTablet &tablet,
-      const ObTabletTableStore *table_store,
-      storage::ObGetMergeTablesResult &result,
-      ObLS &ls);
+
   static int find_minor_merge_tables(
       const ObGetMergeTablesParam &param,
       const int64_t min_snapshot_version,
       const int64_t max_snapshot_version,
       ObLS &ls,
       const ObTablet &tablet,
-      const ObTabletTableStore *table_store,
       storage::ObGetMergeTablesResult &result);
 
   static int refine_minor_merge_tables(
@@ -148,9 +142,8 @@ private:
       storage::ObGetMergeTablesResult &result,
       bool &need_check_tablet);
   static int refine_minor_merge_result(
-      const storage::ObTablet &tablet,
-      const ObTabletTableStore *table_store,
-      ObLS &ls,
+      const ObMergeType merge_type,
+      const int64_t minor_compact_trigger,
       storage::ObGetMergeTablesResult &result);
 
   static int deal_with_minor_result(
@@ -178,7 +171,6 @@ private:
 
   static int deal_hist_minor_merge(
       const ObTablet &tablet,
-      const storage::ObTabletTableStore *table_store,
       int64_t &max_snapshot_version);
 
   // diagnose part
@@ -306,16 +298,6 @@ public:
   static constexpr float INC_ROW_COUNT_PERCENTAGE_THRESHOLD = 0.5;
   static constexpr int64_t TRANS_STATE_DETERM_ROW_CNT_THRESHOLD = 10000L; // 10k
   static constexpr int64_t MEDIUM_COOLING_TIME_THRESHOLD_NS = 600_s * 1000; // 1000: set precision from us to ns
-};
-
-
-// make unittest easy
-struct ObCompactionPolicyUtil
-{
-public:
-  static int get_safety_tx_scn(const ObTablet &tablet, share::SCN &max_decided_scn);
-  static bool tx_data_need_recycle(const share::SCN &max_decided_scn, const share::SCN &filled_tx_scn);
-  static int64_t get_minor_compact_trigger();
 };
 
 

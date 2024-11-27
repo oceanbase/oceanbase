@@ -317,7 +317,7 @@ public:
   common::ObMySQLProxy *sql_proxy_;
   int64_t rebuild_seq_; // rebuild seq of backup ls meta
   int64_t check_tablet_info_cost_time_;
-  share::SCN backup_tx_data_recycle_scn_;
+  share::SCN backup_tx_table_filled_tx_scn_;
   ObBackupTabletChecker tablet_checker_;
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupCtx);

@@ -17,7 +17,6 @@
 #include "storage/ob_storage_schema.h"
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_sstable_meta_info.h"
-#include "storage/blocksstable/ob_table_flag.h"
 #include "share/scn.h"
 
 namespace oceanbase
@@ -62,7 +61,6 @@ public:
   OB_INLINE share::SCN get_ddl_scn() const { return ddl_scn_; }
   OB_INLINE int64_t get_create_snapshot_version() const { return create_snapshot_version_; }
   OB_INLINE share::SCN get_filled_tx_scn() const { return filled_tx_scn_; }
-  OB_INLINE share::SCN get_tx_data_recycle_scn() const { return tx_data_recycle_scn_; }
   OB_INLINE int16_t get_data_index_tree_height() const { return data_index_tree_height_; }
   OB_INLINE int64_t get_recycle_version() const { return recycle_version_; }
   OB_INLINE int16_t get_sstable_seq() const { return sstable_logic_seq_; }
@@ -89,7 +87,7 @@ public:
       K(create_snapshot_version_), K(progressive_merge_round_),
       K(progressive_merge_step_), K(data_index_tree_height_), K(table_mode_),
       K(upper_trans_version_), K(max_merged_trans_version_), K_(recycle_version),
-      K(ddl_scn_), K(filled_tx_scn_), K(tx_data_recycle_scn_),
+      K(ddl_scn_), K(filled_tx_scn_),
       K(contain_uncommitted_row_), K(status_), K_(root_row_store_type), K_(compressor_type),
       K_(encrypt_id), K_(master_key_id), K_(sstable_logic_seq), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
       K_(latest_row_store_type));
@@ -131,17 +129,7 @@ public:
   int16_t sstable_logic_seq_;
   common::ObRowStoreType latest_row_store_type_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
-  storage::ObTableBackupFlag table_backup_flag_;  //cannot add backup flag to ObSSTableMetaChecker
-                                                  //quick restore with rebuild replace major will has same key sstable
-  storage::ObTableSharedFlag table_shared_flag_;
-  int64_t root_macro_seq_;
-  /**
-   * @brief This varialbe only used for TxData SSTable
-   *
-   */
-  share::SCN tx_data_recycle_scn_;
   //Add new variable need consider ObSSTableMetaChecker
-
 };
 
 class ObSSTableMeta final
@@ -218,7 +206,6 @@ public:
   }
   OB_INLINE share::SCN get_ddl_scn() const { return basic_meta_.get_ddl_scn(); }
   OB_INLINE share::SCN get_filled_tx_scn() const { return basic_meta_.get_filled_tx_scn(); }
-  OB_INLINE share::SCN get_tx_data_recycle_scn() const { return basic_meta_.get_tx_data_recycle_scn(); }
   OB_INLINE int16_t get_data_index_tree_height() const { return basic_meta_.get_data_index_tree_height(); }
   OB_INLINE int64_t get_recycle_version() const { return basic_meta_.get_recycle_version(); }
   OB_INLINE int16_t get_sstable_seq() const { return basic_meta_.get_sstable_seq(); }
@@ -338,8 +325,7 @@ class ObSSTableMetaCompactUtil
 public:
   static int fix_filled_tx_scn_value_for_compact(
       const ObITable::TableKey &table_key,
-      share::SCN &filled_tx_scn,
-      share::SCN &tx_data_recycle_scn);
+      share::SCN &filled_tx_scn);
 };
 
 } // namespace blocksstable

@@ -88,7 +88,6 @@ public:
   int set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle,
                                                const int64_t trace_id = checkpoint::INVALID_TRACE_ID,
                                                bool is_force_freeze = false);
-  int get_safety_fill_tx_scn(share::SCN &safety_fill_tx_scn) const;
 
   ObStorageSchemaRecorder &get_storage_schema_recorder() { return schema_recorder_; }
   compaction::ObTabletMediumCompactionInfoRecorder &get_medium_info_recorder() { return medium_info_recorder_; }
