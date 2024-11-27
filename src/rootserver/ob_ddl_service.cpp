@@ -7224,6 +7224,14 @@ int ObDDLService::resolve_timestamp_column(AlterColumnSchema *alter_column_schem
         }
       }
     }
+    if (OB_SUCC(ret) && !found) {
+      // 1.add new column will add to the end of table schema
+      // 2.new table schema not contain new column now
+      if (OB_DDL_ADD_COLUMN == alter_column_schema->alter_type_
+          && ObTimestampType == new_column_schema.get_data_type()) {
+        is_first_timestamp = true;
+      }
+    }
     if (OB_SUCC(ret)) {
       if (OB_DDL_ALTER_COLUMN == alter_column_schema->alter_type_) {
         //drop default or set default
@@ -8992,24 +9000,24 @@ int ObDDLService::add_new_column_to_table_schema(
   }
   if (OB_SUCC(ret)) {
     const ObColumnSchemaV2 *mem_col = NULL;
-    if (OB_FAIL(new_table_schema.add_column(alter_column_schema))) {
+    if (OB_FAIL(resolve_timestamp_column(&alter_column_schema,
+                                         new_table_schema,
+                                         alter_column_schema,
+                                         tz_info_wrap,
+                                         &nls_formats,
+                                         allocator))) {
+      LOG_WARN("fail to resolve timestamp column", K(ret));
+    } else if (OB_FAIL(deal_default_value_padding(alter_column_schema, allocator))) {
+      LOG_WARN("fail to deal default value padding", K(alter_column_schema), K(ret));
+    } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
+      LOG_WARN("fail to check primary key cover partition column", K(ret));
+    } else if (OB_FAIL(new_table_schema.add_column(alter_column_schema))) {
       if (OB_ERR_COLUMN_DUPLICATE == ret) {
         const ObString &column_name = alter_column_schema.get_column_name_str();
         LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
         LOG_WARN("duplicate column name", K(column_name), K(ret));
       }
       LOG_WARN("failed to add new column", K(ret));
-    } else if (OB_FAIL(resolve_timestamp_column(&alter_column_schema,
-                                                new_table_schema,
-                                                alter_column_schema,
-                                                tz_info_wrap,
-                                                &nls_formats,
-                                                allocator))) {
-      LOG_WARN("fail to resolve timestamp column", K(ret));
-    } else if (OB_FAIL(deal_default_value_padding(alter_column_schema, allocator))) {
-      LOG_WARN("fail to deal default value padding", K(alter_column_schema), K(ret));
-    } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
-      LOG_WARN("fail to check primary key cover partition column", K(ret));
     } else if (OB_ISNULL(mem_col = new_table_schema.get_column_schema(
                                     alter_column_schema.get_column_id()))) {
       ret = OB_ERR_UNEXPECTED;
