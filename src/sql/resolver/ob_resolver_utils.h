@@ -670,7 +670,7 @@ public:
                                        const common::ObString &db_name,
                                        const common::ObString &pkg_name,
                                        ParseNode *&func_udf);
-  static int set_direction_by_mode(const ParseNode &sort_node, OrderItem &order_item);
+  static int set_direction_by_mode(const ParseNode &sort_node, OrderItem &order_item, bool opt_nulls = false);
   static int resolve_string(const ParseNode *node, common::ObString &string);
   static int resolve_xid(const ParseNode *node, common::ObString &gtrid_string, common::ObString &bqual_string, int64_t & format_id);
   static int resolve_text(const ParseNode *node, common::ObString &string);

@@ -5334,7 +5334,7 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
               OrderItem order_item;
               if (OB_FAIL(SMART_CALL(recursive_resolve(sort_node->children_[0], sub_expr)))) {
                 LOG_WARN("fail to recursive_resolve expr list item", K(ret));
-              } else if (OB_FAIL(ObResolverUtils::set_direction_by_mode(*sort_node, order_item))) {
+              } else if (OB_FAIL(ObResolverUtils::set_direction_by_mode(*sort_node, order_item, true))) {
                 LOG_WARN("failed to set direction by mode", K(ret));
               } else {
                 order_item.expr_ = sub_expr;
@@ -5343,15 +5343,6 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
                 }
               }
             }
-          }
-        } else if (i == 3) {
-          // process nulls first / nulls last
-          if (OB_UNLIKELY(node->children_[3]->type_ != T_FIRST) && OB_UNLIKELY(node->children_[3]->type_ != T_LAST)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid parameter", K(node->children_[3]));
-          } else if (OB_FAIL(set_array_aggr_null_direction(agg_expr->get_order_items_for_update(),
-                                                           node->children_[3]->type_ == T_FIRST))) {
-            LOG_WARN("set array agg null direction failed", K(ret));
           }
         }
       }
@@ -5767,30 +5758,6 @@ int ObRawExprResolverImpl::reset_keep_aggr_sort_direction(ObIArray<OrderItem> &a
       break;
     case NULLS_LAST_DESC:
       aggr_sort_item.at(i).order_type_ = NULLS_FIRST_ASC;
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected order type", K(ret), K(aggr_sort_item.at(i).order_type_));
-      break;
-    }
-  }
-  return ret;
-}
-
-int ObRawExprResolverImpl::set_array_aggr_null_direction(ObIArray<OrderItem> &aggr_sort_item, bool is_null_first)
-{
-  int ret = OB_SUCCESS;
-  ObOrderDirection dir;
-  for (int64_t i = 0; OB_SUCC(ret) && i < aggr_sort_item.count(); ++i) {
-    switch (aggr_sort_item.at(i).order_type_)
-    {
-    case NULLS_FIRST_ASC:
-      dir = is_null_first ? NULLS_FIRST_ASC : NULLS_LAST_ASC;
-      aggr_sort_item.at(i).order_type_ = dir;
-      break;
-    case NULLS_LAST_DESC:
-      dir = is_null_first ? NULLS_FIRST_DESC : NULLS_LAST_DESC;
-      aggr_sort_item.at(i).order_type_ = dir;
       break;
     default:
       ret = OB_ERR_UNEXPECTED;

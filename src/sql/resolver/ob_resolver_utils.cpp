@@ -8430,14 +8430,14 @@ int ObResolverUtils::check_select_item_subquery(ObSelectStmt &stmt,
   return ret;
 }
 
-int ObResolverUtils::set_direction_by_mode(const ParseNode &sort_node, OrderItem &order_item)
+int ObResolverUtils::set_direction_by_mode(const ParseNode &sort_node, OrderItem &order_item, bool opt_nulls)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sort_node.children_) || sort_node.num_child_ < 2 || OB_ISNULL(sort_node.children_[1])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else if (T_SORT_ASC == sort_node.children_[1]->type_) {
-    if (lib::is_oracle_mode()) {
+    if (lib::is_oracle_mode() || opt_nulls) {
       if (1 == sort_node.children_[1]->value_) {
         order_item.order_type_ = NULLS_LAST_ASC;
       } else if (2 == sort_node.children_[1]->value_) {
@@ -8450,7 +8450,7 @@ int ObResolverUtils::set_direction_by_mode(const ParseNode &sort_node, OrderItem
       order_item.order_type_ = NULLS_FIRST_ASC;
     }
   } else if (T_SORT_DESC == sort_node.children_[1]->type_) {
-    if (lib::is_oracle_mode()) {
+    if (lib::is_oracle_mode() || opt_nulls) {
       if (1 == sort_node.children_[1]->value_) {
         order_item.order_type_ = NULLS_LAST_DESC;
       } else if (2 == sort_node.children_[1]->value_) {

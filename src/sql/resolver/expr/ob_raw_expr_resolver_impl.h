@@ -233,7 +233,6 @@ private:
   int get_opposite_string(const common::ObString &orig_string, common::ObString &new_string, common::ObIAllocator &allocator);
   int reset_keep_aggr_sort_direction(ObIArray<OrderItem> &aggr_sort_item);
   int reset_aggr_sort_nulls_first(ObIArray<OrderItem> &aggr_sort_item);
-  int set_array_aggr_null_direction(ObIArray<OrderItem> &aggr_sort_item, bool is_null_first);
   inline void set_udf_param_syntax_err(const bool val) { is_udf_param_syntax_err_ = val; }
   inline bool get_udf_param_syntax_err() { return is_udf_param_syntax_err_; }
 

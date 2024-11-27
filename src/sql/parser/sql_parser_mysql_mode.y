@@ -424,9 +424,9 @@ END_P SET_VAR DELIMITER
 %type <node> select_with_parens select_no_parens select_clause select_into no_table_select_with_order_and_limit simple_select_with_order_and_limit select_with_parens_with_order_and_limit select_clause_set_with_order_and_limit
 %type <node> simple_select no_table_select limit_clause select_expr_list opt_approx
 %type <node> with_select with_clause with_list common_table_expr opt_column_alias_name_list alias_name_list column_alias_name
-%type <node> opt_where opt_hint_value opt_groupby opt_rollup opt_order_by order_by opt_having groupby_clause
+%type <node> opt_where opt_hint_value opt_groupby opt_rollup opt_order_by order_by opt_having groupby_clause order_by_opt_null
 %type <node> opt_limit_clause limit_expr opt_lock_type opt_for_update opt_for_update_wait opt_lock_in_share_mode
-%type <node> sort_list sort_key opt_asc_desc sort_list_for_group_by sort_key_for_group_by opt_asc_desc_for_group_by opt_column_id
+%type <node> sort_list sort_key opt_asc_desc sort_list_for_group_by sort_key_for_group_by opt_asc_desc_for_group_by opt_column_id sort_list_opt_null sort_key_opt_null opt_asc_desc_null
 %type <node> opt_query_expression_option_list query_expression_option_list query_expression_option opt_distinct opt_distinct_or_all opt_separator projection
 %type <node> from_list table_references table_reference table_factor normal_relation_factor dot_relation_factor relation_factor
 %type <node> relation_factor_in_hint relation_factor_in_hint_list relation_factor_in_pq_hint opt_relation_factor_in_hint_list relation_factor_in_use_join_hint_list relation_factor_in_mv_hint_list opt_relation_factor_in_mv_hint_list
@@ -566,7 +566,7 @@ END_P SET_VAR DELIMITER
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
 %type <node> vector_distance_expr vector_distance_metric
-%type <node> any_expr opt_nulls_first_or_last lambda_expr lambda_expr_params
+%type <node> any_expr opt_null_pos lambda_expr lambda_expr_params
 %type <node> opt_empty_table_list opt_repair_mode opt_repair_option_list repair_option repair_option_list opt_checksum_option
 %type <node> cache_index_stmt load_index_into_cache_stmt tbl_index_list tbl_index tbl_partition_list opt_tbl_partition_list tbl_index_or_partition_list tbl_index_or_partition opt_ignore_leaves key_cache_name
 %type <node_opt_parens> select_clause_set select_clause_set_body
@@ -2542,13 +2542,13 @@ GEOMETRYCOLLECTION { $$ = NULL; }
 | GEOMCOLLECTION { $$ = NULL; }
 ;
 
-opt_nulls_first_or_last:
-NULLS first_or_last
-{
-  $$ = $2;
-}
-| /*empty*/
-{ $$ = NULL;}
+opt_null_pos:
+/* EMPTY */
+{ $$ = NULL; }
+| NULLS LAST
+{ malloc_terminal_node($$, result->malloc_pool_, T_INT); $$->value_ = 1; }
+| NULLS FIRST
+{ malloc_terminal_node($$, result->malloc_pool_, T_INT); $$->value_ = 2; }
 ;
 
 func_expr:
@@ -3398,9 +3398,9 @@ MOD '(' expr ',' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_AGG, 2, $3, $4);
 }
-| ARRAY_AGG '(' opt_distinct expr order_by opt_nulls_first_or_last ')'
+| ARRAY_AGG '(' opt_distinct expr order_by_opt_null')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_AGG, 4, $3, $4, $5, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_AGG, 3, $3, $4, $5);
 }
 | ARRAY_MAP '(' lambda_expr ',' expr_list ')'
 {
@@ -12525,6 +12525,48 @@ expr opt_asc_desc
 }
 ;
 
+order_by_opt_null:
+ORDER BY sort_list_opt_null
+{
+  ParseNode *sort_list = NULL;
+  ParseNode *opt_siblings = NULL;
+  merge_nodes(sort_list, result, T_SORT_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORDER_BY, 2, sort_list, opt_siblings);
+  setup_token_pos_info($$, @1.first_column - 1, 8);
+}
+;
+
+sort_list_opt_null:
+sort_key_opt_null
+{ $$ = $1; }
+| sort_list_opt_null ',' sort_key_opt_null
+{ malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3); }
+;
+
+sort_key_opt_null:
+expr opt_asc_desc_null
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SORT_KEY, 2, $1, $2);
+  if (NULL == $1->str_value_) {
+    dup_string($1, result, @1.first_column, @1.last_column);
+  }
+}
+;
+
+opt_asc_desc_null:
+opt_asc_desc opt_null_pos
+{
+  $$ = $1;
+  if (NULL == $2) {
+    if (T_SORT_ASC == $$->type_) {
+      $$->value_ = 2; // NULLS LAST
+    } else {
+      $$->value_ = 1; // NULLS FIRST
+    }
+  } else {
+    $$->value_ = $2->value_;
+  }
+}
 
 
 
