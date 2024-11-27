@@ -221,6 +221,50 @@ TEST_F(TestTimer, task_service_stop)
   ASSERT_EQ(0, task2.task_run_count_);
 }
 
+TEST_F(TestTimer, task_run1_wait)
+{
+  TestTimerTask task1;
+  TestTimerTask task2;
+  TestTimerTask task3;
+  task1.exec_time_ = 1000000; // 1s
+  task2.exec_time_ = 10000;   // 10ms
+  task3.exec_time_ = 10000;   // 10ms
+  ObTimer timer1;
+  ObTimer timer2;
+  ASSERT_EQ(OB_SUCCESS, timer1.init());
+  ASSERT_EQ(OB_SUCCESS, timer1.start());
+  ASSERT_EQ(OB_SUCCESS, timer2.init());
+  ASSERT_EQ(OB_SUCCESS, timer2.start());
+  ASSERT_EQ(OB_SUCCESS, timer1.schedule(task1, 0, false, false));
+  ASSERT_EQ(OB_SUCCESS, timer1.schedule(task2, 50000, false, false));
+  ASSERT_EQ(OB_SUCCESS, timer2.schedule(task3, 200000, false, false)); // delay 200ms
+  usleep(400000); // 400ms
+  ASSERT_EQ(1, task3.task_run_count_); // ensure that task2 is not delayed by task1
+  timer1.cancel_all();
+  timer1.stop();
+  timer1.wait();
+  timer1.destroy();
+  timer2.stop();
+  timer2.wait();
+  timer2.destroy();
+}
+
+TEST_F(TestTimer, schedule_after_stop)
+{
+  ObTimer timer;
+  TestTimerTask task;
+  task.exec_time_ = 10000; // 10ms
+  ASSERT_EQ(OB_SUCCESS, timer.init());
+  ASSERT_EQ(OB_SUCCESS, timer.start());
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, false, false));
+  usleep(100000); // 100ms
+  ASSERT_EQ(1, task.task_run_count_);
+  timer.stop();
+  ASSERT_EQ(OB_CANCELED, timer.schedule(task, 0, false, false));
+  timer.wait();
+  timer.destroy();
+}
+
 } // end namespace common
 } // end namespace oceanbase
 

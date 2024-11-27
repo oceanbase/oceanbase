@@ -137,15 +137,15 @@ int ObTimer::schedule(ObTimerTask &task, const int64_t delay, const bool repeate
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "timer is not yet initialized", K(ret));
+    OB_LOG(WARN, "timer is not yet initialized", K(ret), K(task));
   } else if (is_stopped_) {
-    ret = OB_NOT_RUNNING;
-    OB_LOG(WARN, "timer has been stopped", K(ret));
+    ret = OB_CANCELED;
+      OB_LOG(WARN, "schedule task on stopped timer", K(ret), K(task));
   } else if (nullptr == timer_service_) {
     ret = OB_ERR_NULL_VALUE;
-    OB_LOG(WARN, "timer_service is NULL", K(ret));
+    OB_LOG(WARN, "timer_service is NULL", K(ret), K(task));
   } else if (OB_FAIL(timer_service_->schedule_task(this, task, delay, repeate, immediate))) {
-    OB_LOG(WARN, "timer_service_.schedule_task failed", K(ret));
+    OB_LOG(WARN, "timer_service_.schedule_task failed", K(ret), K(task));
   } else {}
   return ret;
 }
@@ -160,12 +160,12 @@ int ObTimer::cancel_task(const ObTimerTask &task)
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "timer is not yet initialized", K(ret));
+    OB_LOG(WARN, "timer is not yet initialized", K(ret), K(task));
   } else if (nullptr == timer_service_) {
     ret = OB_ERR_NULL_VALUE;
-    OB_LOG(WARN, "timer_service is NULL", K(ret));
+    OB_LOG(WARN, "timer_service is NULL", K(ret), K(task));
   } else if (OB_FAIL(timer_service_->cancel_task(this, &task))) {
-    OB_LOG(WARN, "timer_service_.cancel_task failed", K(ret));
+    OB_LOG(WARN, "timer_service_.cancel_task failed", K(ret), K(task));
   } else {}
   return ret;
 }
@@ -177,12 +177,12 @@ int ObTimer::wait_task(const ObTimerTask &task)
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "timer is not yet initialized", K(ret));
+    OB_LOG(WARN, "timer is not yet initialized", K(ret), K(task));
   } else if (nullptr == timer_service_) {
     ret = OB_ERR_NULL_VALUE;
-    OB_LOG(WARN, "timer_service is NULL", K(ret));
+    OB_LOG(WARN, "timer_service is NULL", K(ret), K(task));
   } else if (OB_FAIL(timer_service_->wait_task(this, &task))) {
-    OB_LOG(WARN, "timer_service_.wait_task failed", K(ret));
+    OB_LOG(WARN, "timer_service_.wait_task failed", K(ret), K(task));
   } else {}
   return ret;
 }
@@ -192,12 +192,12 @@ int ObTimer::cancel(const ObTimerTask &task)
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "timer is not yet initialized", K(ret));
+    OB_LOG(WARN, "timer is not yet initialized", K(ret), K(task));
   } else if (nullptr == timer_service_) {
     ret = OB_ERR_NULL_VALUE;
-    OB_LOG(WARN, "timer_service is NULL", K(ret));
+    OB_LOG(WARN, "timer_service is NULL", K(ret), K(task));
   } else if (OB_FAIL(timer_service_->cancel_task(this, &task))) {
-    OB_LOG(WARN, "timer_service_.cancel_task failed", K(ret));
+    OB_LOG(WARN, "timer_service_.cancel_task failed", K(ret), K(task));
   } else {}
   return ret;
 }
