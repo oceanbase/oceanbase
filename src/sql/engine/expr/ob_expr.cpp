@@ -595,7 +595,7 @@ DEF_TO_STRING(ObToStringExpr)
   } else {
     ObDatum *datum = NULL;
     // avoid casting the vec2.0 format.
-    if (e_.enable_rich_format()) {
+    if (c_.is_vectorized() && e_.enable_rich_format()) {
       // mock skip to use eval_vector
       int64_t batch_size = c_.get_batch_size();
       ObArenaAllocator tmp_allocator;
