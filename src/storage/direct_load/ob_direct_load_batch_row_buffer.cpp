@@ -66,6 +66,10 @@ void ObDirectLoadBatchRowBuffer::reuse()
       allocator->reset_remain_one_page();
     }
   }
+  for (int64_t i = 0; i < vectors_.count(); ++i) {
+    ObBitmapNullVectorBase *vector = static_cast<ObBitmapNullVectorBase *>(vectors_.at(i));
+    vector->get_nulls()->reset(max_batch_size_);
+  }
 }
 
 int ObDirectLoadBatchRowBuffer::init(const ObIArray<ObColDesc> &col_descs,

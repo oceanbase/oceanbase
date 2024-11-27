@@ -428,12 +428,14 @@ inline int shallow_copy_vector_impl(ObUniformBase *src_vec,
 {
   int ret = OB_SUCCESS;
   ObDatum *datums = src_vec->get_datums();
+  ObBitVector *nulls = dest_vec->get_nulls();
   char **ptrs = dest_vec->get_ptrs();
   ObLength *lens = dest_vec->get_lens();
+  nulls->reset(batch_size);
   for (int64_t i = 0; i < batch_size; ++i) {
     const ObDatum &datum = datums[IS_CONST ? 0 : i];
     if (datum.is_null()) {
-      dest_vec->set_null(i);
+      nulls->set(i);
     } else {
       ptrs[i] = const_cast<char *>(datum.ptr_);
       lens[i] = datum.len_;
@@ -727,6 +729,7 @@ int ObDirectLoadVectorUtils::set_datum(ObIVector *vector, const int64_t idx, con
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected datum length", KR(ret), K(fixed_vec->get_length()), K(datum));
         } else {
+          fixed_vec->unset_null(idx);
           MEMCPY(fixed_vec->get_data() + datum.len_ * idx, datum.ptr_, datum.len_);
         }
         break;
@@ -736,6 +739,7 @@ int ObDirectLoadVectorUtils::set_datum(ObIVector *vector, const int64_t idx, con
         if (datum.is_null()) {
           discrete_vec->set_null(idx);
         } else {
+          discrete_vec->unset_null(idx);
           discrete_vec->get_ptrs()[idx] = const_cast<char *>(datum.ptr_);
           discrete_vec->get_lens()[idx] = datum.len_;
         }
