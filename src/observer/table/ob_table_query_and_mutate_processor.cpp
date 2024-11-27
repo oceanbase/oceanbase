@@ -167,7 +167,7 @@ int ObTableQueryAndMutateP::try_process()
   table_id_ = arg_.table_id_;
   stat_event_type_ = get_process_type(is_hkv, arg_.query_and_mutate_.get_mutations().at(0).type());
 
-  if (OB_FAIL(init_schema_info(arg_.table_name_))) {
+  if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(get_tablet_id(simple_table_schema_, arg_.tablet_id_, arg_.table_id_, tablet_id_))) {
     LOG_WARN("fail to get tablet id", K(ret), K(arg_.table_id_));

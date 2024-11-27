@@ -226,7 +226,7 @@ int ObTableBatchExecuteP::try_process()
   table_id_ = arg_.table_id_; // init move response need
   const common::ObIArray<ObTableOperation> &ops = arg_.batch_operation_.get_table_operations();
 
-  if (OB_FAIL(init_schema_info(arg_.table_name_))) {
+  if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(init_single_op_tb_ctx(batch_ctx_.tb_ctx_, ops.at(0)))) {
     LOG_WARN("fail to init table ctx", K(ret));
