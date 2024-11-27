@@ -890,7 +890,6 @@ public:
       const uint64_t table_id,
       const uint64_t target_table_id,
       int64_t &snapshot_version,
-      bool &snapshot_held,
       rootserver::ObDDLTask* task,
       const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids = NULL);
   static int release_snapshot(

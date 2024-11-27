@@ -467,16 +467,15 @@ int ObDDLRedefinitionTask::obtain_snapshot(const ObDDLTaskStatus next_task_statu
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
-  } else if (snapshot_version_ > 0 && snapshot_held_) {
+  } else if (snapshot_version_ > 0) {
     // do nothing, already hold snapshot.
   } else if (alter_table_arg_.mview_refresh_info_.is_mview_complete_refresh_ &&
              alter_table_arg_.alter_table_schema_.mv_major_refresh() &&
              OB_FAIL(prepare_tablets_for_major_refresh_mv_(mv_tablet_ids))) {
     LOG_WARN("fail to prepare major refresh mv tablets", K(ret));
   } else if (OB_FAIL(ObDDLUtil::obtain_snapshot(next_task_status, object_id_, target_object_id_,
-                                                snapshot_version_, snapshot_held_, this,
-                                                &mv_tablet_ids))) {
-    LOG_WARN("fail to obtain_snapshot", K(ret), K(snapshot_version_), K(snapshot_held_));
+                                                snapshot_version_, this, &mv_tablet_ids))) {
+    LOG_WARN("fail to obtain_snapshot", K(ret), K(snapshot_version_));
   }
   return ret;
 }

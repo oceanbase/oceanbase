@@ -152,7 +152,6 @@ private:
   int64_t check_job_ret_code_;
   int64_t check_replica_request_time_;
   bool is_table_hidden_;
-  bool snapshot_held_;
 };
 
 }  // end namespace rootserver

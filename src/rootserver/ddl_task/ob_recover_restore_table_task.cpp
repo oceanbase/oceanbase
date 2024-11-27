@@ -92,6 +92,8 @@ int ObRecoverRestoreTableTask::init(const ObDDLTaskRecord &task_record)
 int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
+  int64_t new_fetched_snapshot = 0;
+  int64_t persisted_snapshot = 0;
   ObRootService *root_service = GCTX.root_service_;
   ObDDLTaskStatus new_status = ObDDLTaskStatus::OBTAIN_SNAPSHOT;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -102,23 +104,25 @@ int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_s
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (snapshot_version_ > 0) {
     // do nothing, already hold snapshot.
-  } else if (OB_FAIL(ObDDLWaitTransEndCtx::calc_snapshot_with_gts(dst_tenant_id_, task_id_, 0/*trans_end_snapshot*/, snapshot_version_))) {
+  } else if (OB_FAIL(ObDDLWaitTransEndCtx::calc_snapshot_with_gts(dst_tenant_id_, task_id_, 0/*trans_end_snapshot*/, new_fetched_snapshot))) {
     // fetch snapshot.
     LOG_WARN("calc snapshot with gts failed", K(ret), K(dst_tenant_id_));
-  } else if (snapshot_version_ <= 0) {
+  } else if (new_fetched_snapshot <= 0) {
     // the snapshot version obtained here must be valid.
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("snapshot version is invalid", K(ret), K(snapshot_version_));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(root_service->get_sql_proxy(),
+    LOG_WARN("snapshot version is invalid", K(ret), K(new_fetched_snapshot));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(root_service->get_sql_proxy(),
                                                                       dst_tenant_id_,
                                                                       task_id_,
-                                                                      snapshot_version_))) {
-    LOG_WARN("update snapshot version failed", K(ret), K(dst_tenant_id_), K(task_id_), K(snapshot_version_));
+                                                                      new_fetched_snapshot,
+                                                                      persisted_snapshot))) {
+    LOG_WARN("update snapshot version failed", K(ret), K(dst_tenant_id_), K(task_id_), K(persisted_snapshot));
   }
 
   if (OB_FAIL(ret)) {
     snapshot_version_ = 0; // reset snapshot if failed.
-  } else {
+  } else if (snapshot_version_ <= 0) {
+    snapshot_version_ = persisted_snapshot > 0 ? persisted_snapshot : new_fetched_snapshot;
     new_status = next_task_status;
   }
   if (new_status == next_task_status || OB_FAIL(ret)) {

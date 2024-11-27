@@ -2383,6 +2383,9 @@ int ObDDLWaitTransEndCtx::get_snapshot(int64_t &snapshot_version)
     if (OB_SUCC(ret)) {
       if (OB_FAIL(calc_snapshot_with_gts(tenant_id_, ddl_task_id_, max_snapshot, snapshot_version))) {
         LOG_WARN("calc snapshot with gts failed", K(ret), K(tenant_id_), K(max_snapshot), K(snapshot_version));
+      } else if (OB_UNLIKELY(snapshot_version <= 0)) { // defensive check.
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected snapshot", K(ret), K(ddl_task_id_), K(max_snapshot), K(snapshot_version));
       }
     }
   }
@@ -2908,11 +2911,51 @@ int ObDDLTaskRecordOperator::update_task_status(
   return ret;
 }
 
+int ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const int64_t task_id,
+    const int64_t new_fetched_snapshot,
+    int64_t &persisted_snapshot)
+{
+  int ret = OB_SUCCESS;
+  persisted_snapshot = 0;
+  {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObSqlString sql_string;
+      sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_ISNULL(sql_client.get_pool()) || OB_UNLIKELY(task_id <= 0 || tenant_id <= 0 || new_fetched_snapshot <= 0)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid arg", K(ret), K(tenant_id), K(task_id), K(new_fetched_snapshot));
+      } else if (OB_FAIL(sql_string.assign_fmt("SELECT snapshot_version FROM %s WHERE task_id = %lu FOR UPDATE",
+          OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
+        LOG_WARN("assign sql string failed", K(ret), K(task_id), K(tenant_id));
+      } else if (OB_FAIL(sql_client.read(res, tenant_id, sql_string.ptr()))) {
+        LOG_WARN("update status of ddl task record failed", K(ret), K(sql_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), K(tenant_id), K(task_id));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("no record in inner table", K(ret), K(tenant_id), K(task_id));
+      } else {
+        EXTRACT_UINT_FIELD_MYSQL(*result, "snapshot_version", persisted_snapshot, uint64_t);
+      }
+    }
+  }
+  if (OB_SUCC(ret) && persisted_snapshot <= 0) {
+    if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(sql_client, tenant_id, task_id, new_fetched_snapshot))) {
+      LOG_WARN("update snapshot version failed", K(ret));
+    }
+  }
+  LOG_INFO("update snapshot info", K(ret), K(tenant_id), K(task_id), K(new_fetched_snapshot), K(persisted_snapshot));
+  return ret;
+}
+
 int ObDDLTaskRecordOperator::update_snapshot_version(
     common::ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const int64_t task_id,
-    const int64_t snapshot_version)
+    const int64_t new_fetched_snapshot)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_string;
@@ -2921,8 +2964,8 @@ int ObDDLTaskRecordOperator::update_snapshot_version(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(sql_string.assign_fmt(" UPDATE %s SET snapshot_version=%lu WHERE task_id=%lu ",
-          OB_ALL_DDL_TASK_STATUS_TNAME, snapshot_version < 0 ? 0 : snapshot_version, task_id))) {
-    LOG_WARN("assign sql string failed", K(ret), K(snapshot_version), K(task_id));
+          OB_ALL_DDL_TASK_STATUS_TNAME, new_fetched_snapshot < 0 ? 0 : new_fetched_snapshot, task_id))) {
+    LOG_WARN("assign sql string failed", K(ret), K(new_fetched_snapshot), K(task_id));
   } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, TASK_STATUS_OPERATOR_SLOW))) {
     LOG_WARN("ddl sim failure: slow inner sql", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, UPDATE_TASK_RECORD_ON_SNAPSHOT_VERSION_FAILED))) {
