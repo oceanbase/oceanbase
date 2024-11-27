@@ -77,6 +77,7 @@ void ObStoreCtx::reset()
   mvcc_acc_ctx_.reset();
   tablet_stat_.reset();
   is_read_store_ctx_ = false;
+  update_full_column_ = false;
   check_seq_ = 0;
 }
 

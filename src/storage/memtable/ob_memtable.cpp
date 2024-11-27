@@ -599,7 +599,7 @@ int ObMemtable::set(
     const storage::ObTableIterParam &param,
     storage::ObTableAccessContext &context,
     const ObIArray<ObColDesc> &columns,
-    const ObIArray<int64_t> &update_idx,
+    const ObIArray<int64_t> *update_idx,
     const blocksstable::ObDatumRow &old_row,
     blocksstable::ObDatumRow &new_row,
     const share::ObEncryptMeta *encrypt_meta)
@@ -640,7 +640,7 @@ int ObMemtable::set(
                 columns,
                 new_row,
                 &old_row,
-                &update_idx,
+                update_idx,
                 false/*check_exist*/,
                 context,
                 memtable_key_generator,
