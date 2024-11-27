@@ -178,6 +178,7 @@ protected:
                             ObIArray<ObRawExpr *> &base_columns);
   
   int view_pullup_column_ref_exprs_recursively(ObRawExpr *&expr,
+                                               uint64_t view_table_id,
                                                uint64_t base_table_id,
                                                const ObDMLStmt *stmt);
 
