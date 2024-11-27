@@ -99,7 +99,6 @@ private:
       const ObLSRebuildCtx &rebuild_ctx,
       ObLS *ls,
       bool &can_rebuild);
-  int check_if_in_member_list_or_learner_list_(const ObLSRebuildCtx &rebuild_ctx, bool &is_in_member_or_learner_list) const;
 
 private:
   static const int64_t SCHEDULER_WAIT_TIME_MS = 5 * 60 * 1000L; // 5min
