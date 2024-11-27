@@ -1374,7 +1374,7 @@ int ObOptEstCostModel::calc_das_rpc_cost(const ObCostTableScanInfo &est_cost_inf
   if (OB_ISNULL(est_cost_info.sel_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(est_cost_info.sel_ctx_));
-  } else if (!est_cost_info.sel_ctx_->get_opt_ctx().enable_425_opt_batch_rescan()) {
+  } else if (!est_cost_info.sel_ctx_->get_opt_ctx().enable_425_batch_rescan()) {
     /* do nothing */
   } else if (!est_cost_info.is_das_scan_ || !est_cost_info.is_rescan_) {
     /* do nothing */

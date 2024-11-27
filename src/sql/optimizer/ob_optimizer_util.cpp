@@ -10173,40 +10173,78 @@ int ObOptimizerUtil::check_contains_assignment(const ObDMLStmt* stmt,
   return ret;
 }
 
-// check batch rescan for nlj / subplan filter
+//  check batch rescan for nlj / subplan filter
 int ObOptimizerUtil::check_can_batch_rescan(const ObLogicalOperator *op,
                                             const bool allow_normal_scan,
                                             bool &can_batch_rescan)
 {
   int ret = OB_SUCCESS;
   can_batch_rescan = false;
-  bool has_exec_param = false;
-  const ObLogPlan *plan = nullptr;
-  if (OB_ISNULL(op) || OB_ISNULL(plan = op->get_plan())) {
+  if (OB_ISNULL(op)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(op), K(plan));
-  } else if (OB_FAIL(check_exec_param_filter_exprs(op->get_startup_exprs(), has_exec_param))) {
-    LOG_WARN("failed to check exec param filter exprs", K(ret));
-  } else if (has_exec_param && !plan->get_optimizer_context().enable_startup_filter_batch()) {
-    /* startup filter contains exec param, enabled after 4.2.5 */
-  } else if ((log_op_def::LOG_LIMIT == op->get_type()
-             || (op->is_table_scan() && NULL != static_cast<const ObLogTableScan*>(op)->get_limit_expr()))
-             && !plan->get_optimizer_context().enable_limit_pushdown_batch()) {
-    /* contains limit pushdown, enabled after 4.2.5 */
+    LOG_WARN("get unexpected null", K(ret), K(op));
   } else if (op->is_table_scan()) {
     const ObLogTableScan *table_scan = static_cast<const ObLogTableScan*>(op);
     can_batch_rescan = (allow_normal_scan || table_scan->use_das()) && table_scan->can_batch_rescan();
+  } else if (1 == op->get_num_of_child() || log_op_def::LOG_SET == op->get_type()) {
+    can_batch_rescan = true;
+    for (int64_t i = 0; OB_SUCC(ret) && can_batch_rescan && i < op->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_can_batch_rescan(op->get_child(i), false, can_batch_rescan)))) {
+        LOG_WARN("failed to check batch nlj", K(ret));
+      }
+    }
+  } else {  // other multi child op use batch is disabled, multi level nlj use batch is disabled
+    can_batch_rescan = false;
+  }
+  return ret;
+}
 
+// check batch rescan for nlj / subplan filter
+// check_can_batch_rescan compatible before 425
+int ObOptimizerUtil::check_can_batch_rescan_compat(ObLogicalOperator *op,
+                                                   const ObIArray<ObExecParamRawExpr*> &rescan_params,
+                                                   bool for_nlj,
+                                                   bool &can_batch_rescan)
+{
+  int ret = OB_SUCCESS;
+  can_batch_rescan = false;
+  bool has_exec_param = false;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(op));
+  } else if (OB_FAIL(check_exec_param_filter_exprs(op->get_startup_exprs(), has_exec_param))) {
+    LOG_WARN("failed to check exec param filter exprs", K(ret));
+  } else if (has_exec_param) {
+    /* do nothing */
+  } else if (log_op_def::LOG_LIMIT == op->get_type()
+             || (op->is_table_scan() && NULL != static_cast<const ObLogTableScan*>(op)->get_limit_expr())) {
+    /* do nothing */
+  } else if (op->is_table_scan()) {
+    const ObLogTableScan *table_scan = static_cast<const ObLogTableScan*>(op);
+    if (!table_scan->use_das() || !table_scan->can_batch_rescan()
+        || table_scan->get_range_conditions().empty() || NULL == table_scan->get_est_cost_info()) {
+      can_batch_rescan = false;
+    } else if (OB_FAIL(check_exec_param_filter_exprs(table_scan->get_est_cost_info()->pushdown_prefix_filters_,
+                                                     rescan_params,
+                                                     can_batch_rescan))) {
+      LOG_WARN("failed to check exec param filter exprs", K(ret));
+    }
+  } else if (log_op_def::LOG_SUBPLAN_SCAN == op->get_type()) {
+    if (OB_FAIL(SMART_CALL(check_can_batch_rescan_compat(op->get_child(0), rescan_params, for_nlj, can_batch_rescan)))) {
+      LOG_WARN("failed to smart call check check op can batch", K(ret));
+    }
+  } else if (!for_nlj) {
+    /* do nothing */
   } else if (1 == op->get_num_of_child()) {
-    if (OB_FAIL(SMART_CALL(check_can_batch_rescan(op->get_child(0), false, can_batch_rescan)))) {
-      LOG_WARN("failed to check can batch rescan for op child", K(ret));
+    if (OB_FAIL(SMART_CALL(check_can_batch_rescan_compat(op->get_child(0), rescan_params, for_nlj, can_batch_rescan)))) {
+      LOG_WARN("failed to smart call check check op can batch", K(ret));
     }
   } else if (log_op_def::LOG_SET == op->get_type()) {
     can_batch_rescan = ObSelectStmt::UNION == static_cast<const ObLogSet*>(op)->get_set_op()
                       || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0;
     for (int64_t i = 0; OB_SUCC(ret) && can_batch_rescan && i < op->get_num_of_child(); ++i) {
-      if (OB_FAIL(SMART_CALL(check_can_batch_rescan(op->get_child(i), false, can_batch_rescan)))) {
-        LOG_WARN("failed to check batch rescan", K(ret));
+      if (OB_FAIL(SMART_CALL(check_can_batch_rescan_compat(op->get_child(i), rescan_params, for_nlj, can_batch_rescan)))) {
+        LOG_WARN("failed to check batch nlj", K(ret));
       } else {/* do nothing */}
     }
   } else {

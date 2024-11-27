@@ -528,8 +528,6 @@ int ObConfigInfoInPC::load_influence_plan_config()
     enable_var_assign_use_das_ = tenant_config->_enable_var_assign_use_das;
     enable_parallel_das_dml_ = tenant_config->_enable_parallel_das_dml;
     enable_adaptive_join_ = tenant_config->_adaptive_join_enabled;
-    enable_distributed_das_scan_ = tenant_config->_enable_distributed_das_scan;
-    enable_das_batch_rescan_flag_ = tenant_config->_enable_das_batch_rescan_flag;
   }
 
   return ret;
@@ -588,12 +586,6 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                               "%d,", enable_adaptive_join_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_adaptive_join_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                              "%d,", enable_distributed_das_scan_))) {
-    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_distributed_das_scan_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                              "%ld,", enable_das_batch_rescan_flag_))) {
-    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_das_batch_rescan_flag_));
   } else {
     // do nothing
   }
