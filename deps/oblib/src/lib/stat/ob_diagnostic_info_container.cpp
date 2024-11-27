@@ -56,7 +56,7 @@ __attribute__((constructor)) void init_global_di_container()
 #define DI_DIFAULT_SLICE_COUNT 4
 #define DI_DEFAULT_ALLOCATOR_NWAY 8
 
-ObDiagnosticInfoContainer::ObDiagnosticInfoContainer(int64_t tenant_id)
+ObDiagnosticInfoContainer::ObDiagnosticInfoContainer(int64_t tenant_id, int64_t di_upper_limit)
     : is_inited_(false),
       stop_(false),
       tenant_id_(tenant_id),
@@ -67,7 +67,7 @@ ObDiagnosticInfoContainer::ObDiagnosticInfoContainer(int64_t tenant_id)
       wait_event_pool_(tenant_id, true, lib::is_mini_mode(), DI_DEFAULT_ALLOCATOR_NWAY),
       summarys_(DiagnosticInfoValueAlloc<ObDiagnosticInfoCollector, ObDiagnosticKey>(
           &di_collector_allocator_)),
-      runnings_(tenant_id, DiagnosticInfoValueAlloc<ObDiagnosticInfo, SessionID>(&di_allocator_))
+      runnings_(tenant_id, DiagnosticInfoValueAlloc<ObDiagnosticInfo, SessionID>(&di_allocator_, di_upper_limit))
 {
   wait_event_pool_.init();
 }

@@ -40,7 +40,7 @@ void ObDiagnosticInfoSlot::accumulate_diagnostic_info(ObDiagnosticInfo &di)
     lock_.unlock();
   } else {
     LOG_WARN("lock was holding too long, proceed to accumulate diagnostic info without lock.",
-        K(lock_.get_wid()));
+        K(lock_.get_wid()), K(di));
     inner_accumuate_diagnostic_info(di);
   }
 }

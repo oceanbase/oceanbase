@@ -95,7 +95,7 @@ public:
   friend class ObTenantDiagnosticInfoSummaryGuard;
   friend class ObBackGroundSessionGuard;
   friend class ObLocalDiagnosticInfo;
-  explicit ObDiagnosticInfoContainer(int64_t tenant_id);
+  explicit ObDiagnosticInfoContainer(int64_t tenant_id, int64_t di_upper_limit = MAX_DI_PER_TENANT);
   ~ObDiagnosticInfoContainer()
   {
     stop();
@@ -123,7 +123,7 @@ public:
   // WARN: only use this on observer bootstrap phase.
   static ObDiagnosticInfoContainer *get_global_di_container()
   {
-    static ObDiagnosticInfoContainer dic(OB_SYS_TENANT_ID);
+    static ObDiagnosticInfoContainer dic(OB_SYS_TENANT_ID, MAX_DI_PER_TENANT * 4);
     return &dic;
   }
   // used to reset global di container when observer elegant exit.
