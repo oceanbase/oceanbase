@@ -79,6 +79,7 @@ public:
   static int check_has_non_local_index(share::schema::ObSchemaGetterGuard &schema_guard,
                                        const share::schema::ObTableSchema *table_schema,
                                        bool &bret);
+  static int check_has_geometry_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
   static int get_tablet_ids_by_part_ids(const ObTableSchema *table_schema,
                                         const ObIArray<ObObjectID> &part_ids,

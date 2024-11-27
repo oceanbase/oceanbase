@@ -428,6 +428,27 @@ int ObTableLoadSchema::check_has_non_local_index(share::schema::ObSchemaGetterGu
   return ret;
 }
 
+int ObTableLoadSchema::check_has_geometry_column(const ObTableSchema *table_schema, bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  if (OB_UNLIKELY(nullptr == table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema));
+  } else {
+    ObArray<ObColDesc> column_descs;
+    if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
+      LOG_WARN("fail to get column descs", KR(ret), KPC(table_schema));
+    }
+    for (int64_t i = 0; !bret && i < column_descs.count(); i++) {
+      if (column_descs[i].col_type_.is_geometry()) {
+        bret = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id,
                                                                  bool &value)
 {
