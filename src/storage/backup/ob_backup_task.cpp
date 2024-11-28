@@ -4890,6 +4890,13 @@ int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_scn_(SCN &filled_t
     LOG_INFO("the log stream do not have tx data sstable", K(ret));
   } else {
     filled_tx_scn = meta_array.at(0).sstable_meta_.basic_meta_.filled_tx_scn_;
+    ARRAY_FOREACH_X(meta_array, idx, cnt, OB_SUCC(ret)) {
+      const ObBackupSSTableMeta &sstable_meta = meta_array.at(idx);
+      const storage::ObITable::TableKey &table_key = sstable_meta.sstable_meta_.table_key_;
+      if (ObITable::TableType::MINOR_SSTABLE == table_key.table_type_) {
+        filled_tx_scn = MAX(filled_tx_scn, sstable_meta.sstable_meta_.basic_meta_.filled_tx_scn_);
+      }
+    }
   }
   return ret;
 }
