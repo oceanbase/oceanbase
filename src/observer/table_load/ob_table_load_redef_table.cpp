@@ -104,6 +104,8 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
   } else if (session_info.get_ddl_info().is_mview_complete_refresh()) {
     //pass
   } else {
+    int64_t foreign_key_checks = 0;
+    session_info.get_foreign_key_checks(foreign_key_checks);
     const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
     ObCopyTableDependentsArg copy_table_dependents_arg;
     copy_table_dependents_arg.task_id_ = arg.task_id_;
@@ -111,6 +113,7 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
     copy_table_dependents_arg.copy_indexes_ = true;
     copy_table_dependents_arg.copy_constraints_ = true;
     copy_table_dependents_arg.copy_triggers_ = false;
+    copy_table_dependents_arg.copy_foreign_keys_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks);
     copy_table_dependents_arg.ignore_errors_ = false;
     if (OB_FAIL(ObDDLServerClient::copy_table_dependents(copy_table_dependents_arg, session_info))) {
       LOG_WARN("failed to copy table dependents", KR(ret), K(copy_table_dependents_arg));
