@@ -2514,7 +2514,7 @@ int ObLS::inner_check_allow_read_(
     LOG_WARN("inner check allow read get invalid argument", K(ret), K(migration_status), K(restore_status));
   }  else if ((ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
       || ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == migration_status)
-    && (restore_status.is_restore_none() || is_sys_ls())) { //allow read sys ls, otherwise can not replay upgrade log
+    && restore_status.is_restore_none()) {
     allow_read = true;
   } else {
     allow_read = false;

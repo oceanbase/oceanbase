@@ -856,9 +856,7 @@ int ObLSRestoreTaskMgr::is_tablet_restore_finish_(
     case ObLSRestoreStatus::QUICK_RESTORE:
     case ObLSRestoreStatus::WAIT_QUICK_RESTORE:
     case ObLSRestoreStatus::QUICK_RESTORE_FINISH: {
-      if (ls_id_.is_sys_ls()) {
-        is_finish = ha_status.is_restore_status_full();
-      } else if (ha_status.is_restore_status_undefined()) {
+      if (ha_status.is_restore_status_undefined()) {
         bool is_deleted = true;
         // UNDEFINED should be deleted after log has recovered.
         if (ls_restore_status.is_quick_restore()) {
@@ -932,7 +930,7 @@ int ObLSRestoreTaskMgr::choose_tablets_from_wait_set_(
   ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
   ObArray<ObTabletID> need_remove_tablet;
   ObLSRestoreStatus ls_restore_status = restore_state_handler_->get_restore_status();
-  tablet_group.action_ = get_common_restore_action_(ls_id_, ls_restore_status);
+  tablet_group.action_ = get_common_restore_action_(ls_restore_status);
   tablet_group.from_q_type_ = ToRestoreFromQType::FROM_WAIT_TABLETS_Q;
   tablet_group.task_type_ = TaskType::TABLET_GROUP_RESTORE_TASK;
   FOREACH_X(iter, wait_tablet_set_, OB_SUCC(ret)) {
@@ -993,8 +991,7 @@ int ObLSRestoreTaskMgr::choose_tablets_from_high_pri_tablet_set_(
   bool is_restoring = false;
   ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
   ObArray<ObTabletID> need_remove_tablet;
-  const share::ObLSRestoreStatus ls_restore_status = restore_state_handler_->get_restore_status();
-  tablet_group.action_ = get_common_restore_action_(ls_id_, ls_restore_status);
+  tablet_group.action_ = ObTabletRestoreAction::RESTORE_MINOR;
   tablet_group.from_q_type_ = ToRestoreFromQType::FROM_HIGH_PRI_WAIT_TABLETS_Q;
   tablet_group.task_type_ = TaskType::TABLET_GROUP_RESTORE_TASK;
   FOREACH_X(iter, high_pri_wait_tablet_set_, OB_SUCC(ret)) {
@@ -1071,7 +1068,6 @@ int ObLSRestoreTaskMgr::check_tablet_status_(
 }
 
 ObTabletRestoreAction::ACTION ObLSRestoreTaskMgr::get_common_restore_action_(
-    const ObLSID &ls_id,
     const share::ObLSRestoreStatus &ls_restore_status) const
 {
   ObTabletRestoreAction::ACTION action = ObTabletRestoreAction::RESTORE_NONE;
@@ -1087,18 +1083,12 @@ ObTabletRestoreAction::ACTION ObLSRestoreTaskMgr::get_common_restore_action_(
     }
 
     case ObLSRestoreStatus::QUICK_RESTORE: {
-      if (ls_id.is_sys_ls()){
-        action = ObTabletRestoreAction::RESTORE_ALL;
-      } else {
-        action = ObTabletRestoreAction::RESTORE_MINOR;
-      }
+      action = ObTabletRestoreAction::RESTORE_MINOR;
       break;
     }
 
     case ObLSRestoreStatus::RESTORE_MAJOR_DATA : {
-      if (ls_id.is_user_ls()) {
-        action = ObTabletRestoreAction::RESTORE_MAJOR;
-      }
+      action = ObTabletRestoreAction::RESTORE_MAJOR;
       break;
     }
 
