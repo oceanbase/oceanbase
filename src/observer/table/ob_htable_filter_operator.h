@@ -395,7 +395,11 @@ private:
   virtual int next_cell() override;
   int seek(ObHTableCell &key, int32_t &skipped_count) override;
   virtual int seek_or_skip_to_next_row(const ObHTableCell &cell) override;
+  int seek_or_skip_to_next_row(const ObString &rowkey);
+  int seek_or_skip_to_next_row_inner(const ObString &rowkey);
   virtual int seek_or_skip_to_next_col(const ObHTableCell &cell) override;
+  int seek_or_skip_to_next_col(const ObString &rowkey, const ObString &qualifier);
+  int seek_or_skip_to_next_col_inner(const ObString &rowkey, const ObString &qualifier);
   int init_forward_tb_ctx();
   int init_async_forward_tb_ctx();
   virtual table::ObTableApiScanRowIterator* get_forward_child_op() { return forward_child_op_; }

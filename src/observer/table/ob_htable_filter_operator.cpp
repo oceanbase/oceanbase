@@ -664,6 +664,7 @@ int ObHTableRowIterator::get_next_cell_hint()
           }
           cur_version = 1;
           next_cell = nullptr;
+          allocator_.reuse();
         }
       }
       hint_cell->~ObHTableCell();
@@ -926,7 +927,6 @@ int ObHTableRowIterator::seek(ObHTableCell &key, int32_t &skipped_count)
         break;
       }
     }
-    allocator_.reuse();
     ++skipped_count;
   }
   return ret;
@@ -994,7 +994,6 @@ int ObHTableRowIterator::seek_first_cell_on_hint(const ObNewRow *ob_row)
         LOG_DEBUG("iterator end", K_(has_more_cells));
       }
     } else {
-      allocator_.reuse();
       curr_cell_.set_ob_row(first_cell_on_row);
     }
   }
@@ -1030,6 +1029,7 @@ int ObHTableRowIterator::seek_or_skip_to_next_row(const ObHTableCell &cell)
       }
       cur_version = 1;
       next_cell->~ObHTableCell();
+      allocator_.reuse();
     }
   }
   matcher_->clear_curr_row();
@@ -1221,7 +1221,7 @@ int ObHTableReversedRowIterator::next_cell()
     if (OB_ITER_END == ret) {
       // cover recode when ret = OB_OB_ITER_END
       ret = OB_SUCCESS;
-      if (OB_FAIL(seek_or_skip_to_next_row(curr_cell_))) {
+      if (OB_FAIL(seek_or_skip_to_next_row(cell_clone))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("failed to seek to next row when get next cell", K(ret));
         }
@@ -1255,19 +1255,38 @@ int ObHTableReversedRowIterator::next_cell()
 int ObHTableReversedRowIterator::seek_or_skip_to_next_row(const ObHTableCell &cell)
 {
   int ret = OB_SUCCESS;
-  ObTableCtx &reversed_tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
-  ObNewRange &reverse_range = reversed_tb_ctx.get_key_ranges().at(0);
   ObString rowkey_clone;
   reversed_range_alloc_.reuse();
+  if (OB_FAIL(ob_write_string(reversed_range_alloc_, cell.get_rowkey(), rowkey_clone))) {
+    LOG_WARN("allocate memory for row_key failed", K(ret));
+  } else if (OB_FAIL(seek_or_skip_to_next_row_inner(rowkey_clone))) {
+    LOG_WARN("failed to seek or skip to next row", K(ret));
+  }
+  return ret;
+}
+
+int ObHTableReversedRowIterator::seek_or_skip_to_next_row(const ObString &rowkey)
+{
+  int ret = OB_SUCCESS;
+  reversed_range_alloc_.reuse();
+  if (OB_FAIL(seek_or_skip_to_next_row_inner(rowkey))) {
+    LOG_WARN("failed to seek or skip to next row", K(ret));
+  }
+  return ret;
+}
+
+int ObHTableReversedRowIterator::seek_or_skip_to_next_row_inner(const ObString &rowkey)
+{
+  int ret = OB_SUCCESS;
+  ObTableCtx &reversed_tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
+  ObNewRange &reverse_range = reversed_tb_ctx.get_key_ranges().at(0);
   reverse_range.start_key_ = start_row_key_;
   ObObj *end_key = nullptr;
   if (OB_ISNULL(end_key = static_cast<ObObj *>(reversed_range_alloc_.alloc(sizeof(ObObj) * 3)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for end_key failed", K(ret));
-  } else if (OB_FAIL(ob_write_string(reversed_range_alloc_, cell.get_rowkey(), rowkey_clone))) {
-    LOG_WARN("allocate memory for row_key failed", K(ret));
   } else {
-    end_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    end_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
     end_key[ObHTableConstants::COL_IDX_Q].set_min_value();
     end_key[ObHTableConstants::COL_IDX_T].set_min_value();
     reverse_range.end_key_.assign(end_key, 3);
@@ -1300,29 +1319,48 @@ int ObHTableReversedRowIterator::seek_or_skip_to_next_row(const ObHTableCell &ce
 int ObHTableReversedRowIterator::seek_or_skip_to_next_col(const ObHTableCell &cell)
 {
   int ret = OB_SUCCESS;
+  forward_range_alloc_.reuse();
+  ObString rowkey_clone;
+  ObString qualifier_clone;
+  if (OB_FAIL(ob_write_string(forward_range_alloc_, cell.get_rowkey(), rowkey_clone))) {
+    LOG_WARN("allocate memory for row_key failed", K(ret));
+  } else if (OB_FAIL(ob_write_string(forward_range_alloc_, cell.get_qualifier(), qualifier_clone))) {
+    LOG_WARN("allocate memory for qualifier_key failed", K(ret));
+  } else if (OB_FAIL(seek_or_skip_to_next_col_inner(rowkey_clone, qualifier_clone))) {
+    LOG_WARN("failed to seek_or_skip_to_next_col", K(ret));
+  }
+  return ret;
+}
+
+int ObHTableReversedRowIterator::seek_or_skip_to_next_col(const ObString &rowkey, const ObString &qualifier)
+{
+  int ret = OB_SUCCESS;
+  forward_range_alloc_.reuse();
+  if (OB_FAIL(seek_or_skip_to_next_col_inner(rowkey, qualifier))) {
+    LOG_WARN("failed to seek_or_skip_to_next_col", K(ret));
+  }
+  return ret;
+}
+
+int ObHTableReversedRowIterator::seek_or_skip_to_next_col_inner(const ObString &rowkey, const ObString &qualifier)
+{
+  int ret = OB_SUCCESS;
   forward_tb_ctx_.set_limit(-1);
   ObNewRange &column_range = forward_tb_ctx_.get_key_ranges().at(0);
   ObObj *start_key = nullptr;
   ObObj *end_key = nullptr;
-  forward_range_alloc_.reuse();
-  ObString rowkey_clone;
-  ObString qualifier_clone;
   if (OB_ISNULL(start_key = static_cast<ObObj *>(forward_range_alloc_.alloc(sizeof(ObObj) * 3)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for start_key failed", K(ret));
   } else if (OB_ISNULL(end_key = static_cast<ObObj *>(forward_range_alloc_.alloc(sizeof(ObObj) * 3)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for end_key failed", K(ret));
-  } else if (OB_FAIL(ob_write_string(forward_range_alloc_, cell.get_rowkey(), rowkey_clone))) {
-    LOG_WARN("allocate memory for row_key failed", K(ret));
-  } else if (OB_FAIL(ob_write_string(forward_range_alloc_, cell.get_qualifier(), qualifier_clone))) {
-    LOG_WARN("allocate memory for qualifier_key failed", K(ret));
   } else {
-    end_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    end_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
     end_key[ObHTableConstants::COL_IDX_Q].set_max_value();
     end_key[ObHTableConstants::COL_IDX_T].set_max_value();
-    start_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
-    start_key[ObHTableConstants::COL_IDX_Q].set_varbinary(qualifier_clone);
+    start_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
+    start_key[ObHTableConstants::COL_IDX_Q].set_varbinary(qualifier);
     start_key[ObHTableConstants::COL_IDX_T].set_max_value();
     column_range.start_key_.assign(start_key, 3);
     column_range.end_key_.assign(end_key, 3);
@@ -1331,7 +1369,7 @@ int ObHTableReversedRowIterator::seek_or_skip_to_next_col(const ObHTableCell &ce
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to rescan and get next row", K(ret));
       } else {
-        if (OB_FAIL(seek_or_skip_to_next_row(cell))) {
+        if (OB_FAIL(seek_or_skip_to_next_row(rowkey))) {
           if (OB_ITER_END != ret) {
             LOG_WARN("failed to get next row in seek_next_col", K(ret));
           }
