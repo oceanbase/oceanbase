@@ -100,7 +100,8 @@
 - version: 4.2.1.10
   can_be_upgraded_to:
       - 4.2.5.1
-  require_from_binary: True
+  require_from_binary:
+    value: True
 
 # 4.2.x
 - version: 4.2.2.0
