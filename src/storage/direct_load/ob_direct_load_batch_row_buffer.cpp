@@ -68,6 +68,7 @@ void ObDirectLoadBatchRowBuffer::reuse()
   }
   for (int64_t i = 0; i < vectors_.count(); ++i) {
     ObBitmapNullVectorBase *vector = static_cast<ObBitmapNullVectorBase *>(vectors_.at(i));
+    vector->reset_flag();
     vector->get_nulls()->reset(max_batch_size_);
   }
 }

@@ -136,6 +136,7 @@ int ObDirectLoadVectorUtils::new_vector(VectorFormat format, VecValueTypeClass v
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to new ObEvalInfo", KR(ret));
       } else {
+        MEMSET(eval_info, 0, sizeof(ObEvalInfo));
         switch (value_tc) {
 #define UNIFORM_VECTOR_INIT_SWITCH(value_tc)                            \
   case value_tc: {                                                      \
@@ -194,6 +195,7 @@ int ObDirectLoadVectorUtils::new_vector(VectorFormat format, VecValueTypeClass v
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to new ObEvalInfo", KR(ret));
       } else {
+        MEMSET(eval_info, 0, sizeof(ObEvalInfo));
         switch (value_tc) {
 #define UNIFORM_CONST_VECTOR_INIT_SWITCH(value_tc)                      \
   case value_tc: {                                                      \
@@ -428,14 +430,14 @@ inline int shallow_copy_vector_impl(ObUniformBase *src_vec,
 {
   int ret = OB_SUCCESS;
   ObDatum *datums = src_vec->get_datums();
-  ObBitVector *nulls = dest_vec->get_nulls();
   char **ptrs = dest_vec->get_ptrs();
   ObLength *lens = dest_vec->get_lens();
-  nulls->reset(batch_size);
+  dest_vec->reset_flag();
+  dest_vec->get_nulls()->reset(batch_size);
   for (int64_t i = 0; i < batch_size; ++i) {
     const ObDatum &datum = datums[IS_CONST ? 0 : i];
     if (datum.is_null()) {
-      nulls->set(i);
+      dest_vec->set_null(i);
     } else {
       ptrs[i] = const_cast<char *>(datum.ptr_);
       lens[i] = datum.len_;
@@ -451,6 +453,7 @@ inline int shallow_copy_vector_impl(ObUniformBase *src_vec,
   int ret = OB_SUCCESS;
   ObDatum *src_datums = src_vec->get_datums();
   ObDatum *dest_datums = dest_vec->get_datums();
+  *dest_vec->get_eval_info() = *src_vec->get_eval_info();
   MEMCPY(dest_datums, src_datums, sizeof(ObDatum) * (IS_CONST ? 1 : batch_size));
   return ret;
 }
