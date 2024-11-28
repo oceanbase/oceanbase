@@ -146,34 +146,32 @@ int ObTmpWriteBufferPool::inner_alloc_page_(const int64_t fd,
   uint32_t next_first_free_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
 
   common::TCRWLock::RLockGuard guard(lock_);
+  ObSpinLockGuard list_guard(free_list_lock_);
   if (has_free_page_(page_key.type_)) {
     bool cas_succeed = false;
     bool is_in_shrinking_range = false;
-    // take out 1 free page, if it is in the shrinking not_alloc_range,
-    // then put it into shrink list and try next free page;
-    // otherwise alloc page as normal.
-    {
-      ObSpinLockGuard guard(free_list_lock_);
-      do {
-        curr_first_free_page_id = ATOMIC_LOAD(&first_free_page_id_);
-        if (!is_valid_page_id_(curr_first_free_page_id) || OB_ISNULL(fat_[curr_first_free_page_id].buf_)) {
-          ret = OB_SEARCH_NOT_FOUND;
-          break;
+    // fetch one free page. if it falls within the shrinking not_alloc_range,
+    // add it to the shrink list and proceed to the next free page.
+    // otherwise, allocate the page as usual.
+    do {
+      curr_first_free_page_id = ATOMIC_LOAD(&first_free_page_id_);
+      if (!is_valid_page_id_(curr_first_free_page_id) || OB_ISNULL(fat_[curr_first_free_page_id].buf_)) {
+        ret = OB_SEARCH_NOT_FOUND;
+        break;
+      }
+      next_first_free_page_id = fat_[curr_first_free_page_id].next_page_id_;
+      cas_succeed = ATOMIC_BCAS(&first_free_page_id_, curr_first_free_page_id, next_first_free_page_id);
+      if (cas_succeed) {
+        is_in_shrinking_range = false;
+        if (shrink_ctx_.is_valid() && shrink_ctx_.in_not_alloc_range(curr_first_free_page_id)) {
+          // put page into shrink list, outer loop continue
+          is_in_shrinking_range = true;
+          insert_page_entry_to_free_list_(curr_first_free_page_id, shrink_ctx_.shrink_list_head_);
+          ATOMIC_INC(&shrink_ctx_.shrink_list_size_);
+          LOG_DEBUG("skip alloc page id in shrink range", K(curr_first_free_page_id), K(shrink_ctx_));
         }
-        next_first_free_page_id = fat_[curr_first_free_page_id].next_page_id_;
-        cas_succeed = ATOMIC_BCAS(&first_free_page_id_, curr_first_free_page_id, next_first_free_page_id);
-        if (cas_succeed) {
-          is_in_shrinking_range = false;
-          if (shrink_ctx_.is_valid() && shrink_ctx_.in_not_alloc_range(curr_first_free_page_id)) {
-            // put page into shrink list, outer loop continue
-            is_in_shrinking_range = true;
-            insert_page_entry_to_free_list_(curr_first_free_page_id, shrink_ctx_.shrink_list_head_);
-            ATOMIC_INC(&shrink_ctx_.shrink_list_size_);
-            LOG_DEBUG("skip alloc page id in shrink range", K(curr_first_free_page_id), K(shrink_ctx_));
-          }
-        }
-      } while (OB_SUCC(ret) && (!cas_succeed || is_in_shrinking_range));
-    }
+      }
+    } while (OB_SUCC(ret) && (!cas_succeed || is_in_shrinking_range));
 
     if (OB_SUCC(ret) && is_valid_page_id_(curr_first_free_page_id)) {
       fat_[curr_first_free_page_id].fd_ = fd;
@@ -245,7 +243,7 @@ int ObTmpWriteBufferPool::alloc_page(const int64_t fd,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(fd), K(page_key));
   } else if (OB_FAIL(alloc_page_(fd, page_key, new_page_id, new_page_buf))) {
-    LOG_WARN("wbp fail to alloc page", KR(ret), K(fd), K(page_key));
+    LOG_DEBUG("wbp fail to alloc page", KR(ret), K(fd), K(page_key));
   } else if (page_key.type_ == PageEntryType::META) {
     ATOMIC_INC(&meta_page_cnt_);
     LOG_INFO("alloc meta page", KR(ret), K(new_page_id), K(fd), K(page_key));
@@ -499,7 +497,7 @@ int ObTmpWriteBufferPool::free_page(
 
     {
       ObSpinLockGuard guard(free_list_lock_);
-      if (!shrink_ctx_.is_valid() || !shrink_ctx_.in_shrinking_range(page_id)) {
+      if (!shrink_ctx_.is_valid() || !shrink_ctx_.in_not_alloc_range(page_id)) {
         insert_page_entry_to_free_list_(page_id, first_free_page_id_);
       } else {
         insert_page_entry_to_free_list_(page_id, shrink_ctx_.shrink_list_head_);
@@ -704,6 +702,12 @@ bool WBPShrinkContext::in_shrinking_range(uint32_t page_id)
          page_id <= upper_page_id_;
 }
 
+int64_t WBPShrinkContext::get_not_alloc_page_num()
+{
+  int64_t not_alloc_page_num = is_valid() ? upper_page_id_ - max_allow_alloc_page_id_ : 0;
+  return max(0, not_alloc_page_num);
+}
+
 int ObTmpWriteBufferPool::begin_shrinking()
 {
   int ret = OB_SUCCESS;
@@ -900,7 +904,7 @@ bool ObTmpWriteBufferPool::is_shrink_range_all_free_()
   // we can ensure that no newly allocated pages exist within the range of [lower_page_id_, upper_page_id_]
   if (shrink_ctx_.max_allow_alloc_page_id_ < shrink_ctx_.lower_page_id_) {
     is_all_free = true;
-    for (uint32_t i = shrink_ctx_.lower_page_id_; i < shrink_ctx_.upper_page_id_; ++i) {
+    for (uint32_t i = shrink_ctx_.lower_page_id_; i <= shrink_ctx_.upper_page_id_; ++i) {
       if (!is_valid_page_id_(i)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid page id in shrink range", K(ret), K(i), K(shrink_ctx_), K(fat_.size()));
@@ -934,7 +938,7 @@ int64_t ObTmpWriteBufferPool::get_not_allow_alloc_percent_()
 {
   int64_t cur_wbp_size = fat_.size();
   int64_t target_wbp_size = get_max_page_num();
-  const uint32_t ADDITIONAL_FREE_PAGE_PERCENT = 10; // reserve 10% free pages for alloc meta during shrinking
+  const uint32_t ADDITIONAL_FREE_PAGE_PERCENT = 15; // reserve 10% free pages for meta pages and 5% more for data pages
   int64_t cannot_evict_num = get_cannot_be_evicted_page_num();
   int64_t cannot_evict_percent = cannot_evict_num * 100 / cur_wbp_size;
   int64_t not_allow_alloc_percent = max(0, 100 - cannot_evict_percent - ADDITIONAL_FREE_PAGE_PERCENT);
@@ -956,7 +960,7 @@ uint32_t ObTmpWriteBufferPool::cal_max_allow_alloc_page_id_(int64_t lower_bound,
   int64_t old_fat_size = fat_.size();
   int64_t not_allow_alloc_percent = get_not_allow_alloc_percent_();
   int64_t max_allow_alloc_page_id =
-      max(lower_bound - 1 , upper_bound + 1 - old_fat_size * not_allow_alloc_percent / 100);
+      max(lower_bound - 1 , upper_bound - old_fat_size * not_allow_alloc_percent / 100);
   max_allow_alloc_page_id = max(0, max_allow_alloc_page_id);
   LOG_DEBUG("cal_max_allow_alloc_page_id", K(lower_bound), K(old_fat_size),
       K(max_allow_alloc_page_id), K(upper_bound), K(not_allow_alloc_percent));
@@ -1453,13 +1457,19 @@ int64_t ObTmpWriteBufferPool::get_free_data_page_num()
   return MIN(total_free_page_cnt, data_free_page_cnt);
 }
 
+// ATTENTION! need to be protected by free_list_lock_ and lock_
+// because we may access fat_ and shrink_ctx_ here
 bool ObTmpWriteBufferPool::has_free_page_(PageEntryType type)
 {
   int ret = OB_SUCCESS;
   bool b_ret = true;
   if (PageEntryType::DATA == type) {
     if(!GCTX.is_shared_storage_mode()) {
-      b_ret = get_data_page_num() <  get_max_data_page_num();
+      if (shrink_ctx_.is_valid()) {
+        b_ret = get_data_page_num() < fat_.size() * MAX_DATA_PAGE_USAGE_RATIO - shrink_ctx_.get_not_alloc_page_num();
+      } else {
+        b_ret = get_data_page_num() < get_max_data_page_num();
+      }
     #ifdef OB_BUILD_SHARED_STORAGE
     } else {
       b_ret = true;

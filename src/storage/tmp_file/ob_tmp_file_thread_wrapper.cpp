@@ -1199,7 +1199,7 @@ int ObTmpFileSwapTG::shrink_wbp_if_needed_()
   int ret = OB_SUCCESS;
   int64_t actual_evict_num = 0;
   if (wbp_.need_to_shrink()) {
-    LOG_INFO("current wbp shrinking state", K(wbp_.get_shrink_ctx()));
+    LOG_DEBUG("current wbp shrinking state", K(wbp_.get_shrink_ctx()));
     switch (wbp_.get_wbp_state()) {
       case WBPShrinkContext::INVALID:
         if (OB_FAIL(wbp_.begin_shrinking())) {

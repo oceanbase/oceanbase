@@ -161,6 +161,7 @@ public:
   int init(uint32_t lower_page_id, uint32_t max_allow_alloc_page_id, uint32_t upper_page_id);
   void reset();
   bool is_valid();
+  int64_t get_not_alloc_page_num();
   bool in_not_alloc_range(uint32_t page_id);
   bool in_shrinking_range(uint32_t page_id);
   bool is_higher_than_shrink_end_point(uint32_t page_id)

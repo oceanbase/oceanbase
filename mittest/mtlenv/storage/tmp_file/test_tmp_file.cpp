@@ -30,7 +30,7 @@ using namespace tmp_file;
 using namespace storage;
 using namespace share::schema;
 /* ------------------------------ Mock Parameter ---------------------------- */
-static const int64_t TENANT_MEMORY = 8L * 1024L * 1024L * 1024L /* 8 GB */;
+static const int64_t TENANT_MEMORY = 16L * 1024L * 1024L * 1024L /* 16 GB */;
 static constexpr int64_t IO_WAIT_TIME_MS = 5 * 1000L; // 5s
 /********************************* Mock WBP *************************** */
 static const int64_t WBP_BLOCK_SIZE = ObTmpWriteBufferPool::WBP_BLOCK_SIZE; // each wbp block has 253 pages (253 * 8KB == 2024KB)

@@ -58,16 +58,20 @@ public:
   virtual ~TestTmpFileFlushMgr() = default;
   virtual void SetUp();
   virtual void TearDown();
-  static void SetUpTestCase();
-  static void TearDownTestCase();
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 
   void create_tmp_files(const int64_t file_cnt, ObArray<ObSNTmpFileHandle> &tmp_file_handles);
   void generate_write_data(char *&write_buf, const int64_t write_size);
 };
-
-void TestTmpFileFlushMgr::SetUpTestCase()
-{
-}
 
 void TestTmpFileFlushMgr::SetUp()
 {
@@ -91,6 +95,11 @@ void TestTmpFileFlushMgr::SetUp()
   ASSERT_EQ(OB_SUCCESS, io_service->start());
   tenant_ctx.set(io_service);
 
+  ObTimerService *timer_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_start(timer_service));
+  tenant_ctx.set(timer_service);
+
   MockTenantTmpFileManager *tf_mgr = nullptr;
   ASSERT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
   ASSERT_EQ(OB_SUCCESS, tf_mgr->init());
@@ -109,10 +118,6 @@ void TestTmpFileFlushMgr::SetUp()
   MockIO.reset();
 }
 
-void TestTmpFileFlushMgr::TearDownTestCase()
-{
-}
-
 void TestTmpFileFlushMgr::TearDown()
 {
   MockIO.reset();
@@ -124,6 +129,12 @@ void TestTmpFileFlushMgr::TearDown()
   tmp_file::ObTmpPageCache::get_instance().destroy();
   TestDataFilePrepare::TearDown();
   common::ObClockGenerator::destroy();
+
+  ObTimerService *timer_service = MTL(ObTimerService *);
+  ASSERT_NE(nullptr, timer_service);
+  timer_service->stop();
+  timer_service->wait();
+  timer_service->destroy();
 }
 
 void TestTmpFileFlushMgr::create_tmp_files(const int64_t file_cnt, ObArray<ObSNTmpFileHandle> &tmp_file_handles)

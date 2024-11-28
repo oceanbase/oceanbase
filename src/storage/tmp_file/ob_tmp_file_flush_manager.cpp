@@ -86,6 +86,9 @@ int ObTmpFileFlushManager::free_flush_task(ObTmpFileFlushTask *flush_task)
     STORAGE_LOG(WARN, "flush task ptr is null", KR(ret));
   } else {
     LOG_DEBUG("free flush task", KPC(flush_task));
+    if (ObTimeUtil::current_time() - flush_task->get_create_ts() > FLUSH_TASK_WARN_TIMEOUT_US) {
+      LOG_WARN("flush task execute takes too much time", KPC(flush_task));
+    }
     flush_task->~ObTmpFileFlushTask();
     task_allocator_.free(flush_task);
   }
@@ -263,7 +266,7 @@ int ObTmpFileFlushManager::flush(ObSpLinkQueue &flushing_queue,
     STORAGE_LOG(WARN, "fail to prepare flush iterator", KR(ret), K(flush_ctx_));
   } else {
     if (OB_FAIL(flush_by_watermark_(flushing_queue, is_flush_meta_tree))) {
-      STORAGE_LOG(WARN, "fail to flush by watermark", KR(ret), K(flush_ctx_));
+      STORAGE_LOG(DEBUG, "fail to flush by watermark", KR(ret), K(flush_ctx_));
     }
 
     if (!flushing_queue.is_empty()) {
