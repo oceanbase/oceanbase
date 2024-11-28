@@ -2665,6 +2665,7 @@ typedef enum ObItemType
   //odps external table
   T_TUNNEL_ENDPOINT = 4762,
   T_COLLECT_STATISTICS_ON_CREATE = 4763,
+  T_LOAD_TIME_ZONE_INFO = 4764,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
