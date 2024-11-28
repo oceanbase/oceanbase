@@ -42,6 +42,8 @@ ObAdminExecutor::ObAdminExecutor()
       config_mgr_(ObServerConfig::get_instance(), reload_config_)
 {
   // 设置MTL上下文
+  IGNORE_RETURN ObTimerService::get_instance().start();
+  mock_server_tenant_.set(&ObTimerService::get_instance());
   mock_server_tenant_.set(&blocksstable::ObDecodeResourcePool::get_instance());
   share::ObTenantEnv::set_tenant(&mock_server_tenant_);
   omt::ObTenantConfigMgr::get_instance().add_tenant_config(OB_SYS_TENANT_ID);
@@ -84,6 +86,9 @@ ObAdminExecutor::~ObAdminExecutor()
   OB_STORAGE_OBJECT_MGR.wait();
   OB_STORAGE_OBJECT_MGR.destroy();
   share::ObIODeviceWrapper::get_instance().destroy();
+  ObTimerService::get_instance().stop();
+  ObTimerService::get_instance().wait();
+  ObTimerService::get_instance().destroy();
   LOG_INFO("destruct ObAdminExecutor");
 }
 
