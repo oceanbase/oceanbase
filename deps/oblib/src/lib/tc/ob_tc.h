@@ -44,6 +44,7 @@ public:
 };
 
 enum QD_TYPE { QDISC_ROOT, QDISC_BUFFER_QUEUE, QDISC_WEIGHTED_QUEUE, QDISC_QUEUE_END, TCLIMIT_BYTES, TCLIMIT_COUNT };
+int init_qdtable();
 int tclimit_create(int type, const char* name);
 void tclimit_destroy(int limiter_id);
 int tclimit_set_limit(int limiter_id, int64_t limit);

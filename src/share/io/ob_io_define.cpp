@@ -978,7 +978,7 @@ int ObIOResult::transform_group_config_index_to_usage_index(const ObIOGroupKey &
   if (is_sys_module()) {
     offset = is_object_device_req_ ? 1 : 0;
     offset = offset * 2 + static_cast<uint64_t>(get_mode());
-    tmp_index = get_sys_module_id();
+    tmp_index = get_sys_module_id() - SYS_MODULE_START_ID;
     usage_index = tmp_index * GROUP_MODE_CNT + offset;
   } else {
     if (OB_FAIL(tenant_io_mgr_.get_ptr()->get_group_index(key, tmp_index))) {

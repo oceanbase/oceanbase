@@ -10,9 +10,21 @@
  * See the Mulan PubL v2 for more details.
  */
 
-const int QID_CAPACITY = 1<<13;
+const int QID_CAPACITY = 1<<16;
 const int MAX_QDISC_COUNT = QID_CAPACITY * (MAX_N_CHAN + 1);
-void* qdtable[MAX_QDISC_COUNT];
+void** qdtable = nullptr;
+
+int __attribute__((constructor)) init_qdtable()
+{
+  int ret = 0;
+  qdtable = ALLOCATE_QDTABLE(MAX_QDISC_COUNT * sizeof(void*), "qdtable");
+  if (qdtable == nullptr) {
+    ret = -ENOMEM;
+  } else {
+    std::memset(qdtable, 0, MAX_QDISC_COUNT * sizeof(void*));
+  }
+  return ret;
+}
 
 static void* imap_fetch(int id)
 {
@@ -23,7 +35,6 @@ static int imap_lock()
 {
   for(int i = 0; i < QID_CAPACITY; i++) {
     if (!qdtable[i]) {
-      qdtable[i] = (void*)~0ULL;
       return i;
     }
   }

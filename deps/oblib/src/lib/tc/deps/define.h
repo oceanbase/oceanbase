@@ -13,6 +13,10 @@
 #define TC_INFO(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
 #endif
 
+#ifndef ALLOCATE_QDTABLE
+#define ALLOCATE_QDTABLE(size, name) static_cast<void**>(new (std::nothrow) void*[size])
+#endif
+
 #ifndef CACHE_ALIGNED
 #define CACHE_ALIGNED __attribute__((aligned(64)))
 #endif
