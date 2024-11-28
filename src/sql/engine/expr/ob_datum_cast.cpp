@@ -9834,11 +9834,7 @@ CAST_FUNC_NAME(collection, collection)
         LOG_WARN("alloc array cast failed", K(ret), K(src_coll_info));
       } else if (OB_FAIL(arr_cast->cast(temp_allocator, arr_src, elem_type, arr_dst, dst_elem_type, expr.extra_))) {
         LOG_WARN("array element cast failed", K(ret), K(*src_coll_info), K(*dst_coll_info));
-        if (ret == OB_ERR_ARRAY_TYPE_MISMATCH) {
-          ObString dst_def = dst_coll_info->get_def_string();
-          ObString src_def = src_coll_info->get_def_string();
-          LOG_USER_ERROR(OB_ERR_ARRAY_TYPE_MISMATCH, dst_def.length(), dst_def.ptr(), src_def.length(), src_def.ptr());
-        } else if (ret == OB_ERR_INVALID_VECTOR_DIM) {
+        if (ret == OB_ERR_INVALID_VECTOR_DIM) {
           LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM, static_cast<uint32_t>(dst_arr_type->dim_cnt_), arr_src->size());
         }
       } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {

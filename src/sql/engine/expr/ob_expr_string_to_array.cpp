@@ -49,7 +49,8 @@ int ObExprStringToArray::calc_result_typeN(ObExprResType &type,
   ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
 
   for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
-    if (!ob_is_string_tc(types[i].get_type()) && !ob_is_null(types[i].get_type())) {
+    if (!ob_is_varchar_char_type(types[i].get_type(), types[i].get_collation_type())
+        && !ob_is_null(types[i].get_type())) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "VARCHAR", ob_obj_type_str(types[i].get_type()));
     } else {

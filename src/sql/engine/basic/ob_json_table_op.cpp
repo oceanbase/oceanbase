@@ -393,12 +393,6 @@ OB_DEF_DESERIALIZE(ObJsonTableSpec)
   BASE_DESER((ObJsonTableSpec, ObOpSpec));
   ObExpr* value_expr = NULL;
   OB_UNIS_DECODE(value_expr);
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(value_exprs_.init(1))) {
-    LOG_WARN("fail to init value_exprs_ array.", K(ret));
-  } else if (OB_FAIL(value_exprs_.push_back(value_expr))) {
-    LOG_WARN("fail to store value expr.", K(ret));
-  }
   OB_UNIS_DECODE(column_exprs_);
   OB_UNIS_DECODE(emp_default_exprs_);
   OB_UNIS_DECODE(err_default_exprs_);
@@ -435,22 +429,31 @@ OB_DEF_DESERIALIZE(ObJsonTableSpec)
       }
     }
   }
-  if (table_type_flag == OB_XML_TABLE) {
-    OB_UNIS_DECODE(table_type_);
-    OB_UNIS_DECODE(namespace_def_);
-  } else if (table_type_flag == OB_RB_ITERATE_TABLE) {
+
+  if (OB_FAIL(ret)) {
+  } else if (table_type_flag == OB_RB_ITERATE_TABLE || table_type_flag == OB_UNNEST_TABLE) {
     OB_UNIS_DECODE(table_type_);
     int32_t value_exprs_count = 0;
     OB_UNIS_DECODE(value_exprs_count);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(value_exprs_.init(value_exprs_count + 1))) {
+      LOG_WARN("fail to init value_exprs_ array.", K(ret));
+    } else if (OB_FAIL(value_exprs_.push_back(value_expr))) {
+      LOG_WARN("fail to store value expr.", K(ret));
+    }
     for (size_t i = 0; OB_SUCC(ret) && i < value_exprs_count; ++i) {
-      ObExpr* value_expr = NULL;
       OB_UNIS_DECODE(value_expr);
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(value_exprs_.push_back(value_expr))) {
-          LOG_WARN("fail to store value expr.", K(ret));
-        }
+      if (OB_SUCC(ret) && OB_FAIL(value_exprs_.push_back(value_expr))) {
+        LOG_WARN("fail to store value expr.", K(ret));
       }
     }
+  } else if (OB_FAIL(value_exprs_.init(1))) {
+    LOG_WARN("fail to init value_exprs_ array.", K(ret));
+  } else if (OB_FAIL(value_exprs_.push_back(value_expr))) {
+    LOG_WARN("fail to store value expr.", K(ret));
+  } else if (table_type_flag == OB_XML_TABLE) {
+    OB_UNIS_DECODE(table_type_);
+    OB_UNIS_DECODE(namespace_def_);
   }
   return ret;
 }

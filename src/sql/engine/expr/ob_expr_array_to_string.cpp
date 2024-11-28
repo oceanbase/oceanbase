@@ -66,12 +66,14 @@ int ObExprArrayToString::calc_result_typeN(ObExprResType &type,
     LOG_WARN("invalid subschema type", K(ret), K(arr_meta.type_));
   }
   if (OB_FAIL(ret)) {
-  } else if (!ob_is_string_tc(delimiter_type->get_type()) && !ob_is_null(delimiter_type->get_type())) {
+  } else if (!ob_is_varchar_char_type(delimiter_type->get_type(), delimiter_type->get_collation_type())
+             && !ob_is_null(delimiter_type->get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "VARCHAR", ob_obj_type_str(delimiter_type->get_type()));
   } else if (param_num == 3) {
     ObExprResType *null_str_type = &types[2];
-    if (!ob_is_string_tc(null_str_type->get_type()) && !ob_is_null(null_str_type->get_type())) {
+    if (!ob_is_varchar_char_type(null_str_type->get_type(), delimiter_type->get_collation_type())
+        && !ob_is_null(null_str_type->get_type())) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "VARCHAR", ob_obj_type_str(null_str_type->get_type()));
     }
