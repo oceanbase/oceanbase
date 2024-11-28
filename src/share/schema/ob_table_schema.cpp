@@ -8451,7 +8451,7 @@ int64_t ObTableSchema::get_index_count() const
       ++vec_index_id_count;
     } else if (share::schema::is_vec_index_snapshot_data_type(index_type)) {
       ++vec_index_snapshot_data_count;
-    } else {
+    } else if (ObIndexType::INDEX_TYPE_IS_NOT != index_type) {
       ++index_count;
     }
   }

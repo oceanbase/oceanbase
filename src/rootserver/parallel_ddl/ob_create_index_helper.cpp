@@ -325,10 +325,11 @@ int ObCreateIndexHelper::check_table_legitimacy_()
     ret = OB_OP_NOT_ALLOW;
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "execute ddl while table is executing offline ddl");
     LOG_WARN("offline ddl is being executed, other ddl operations are not allowed", KR(ret), KPC(orig_data_table_schema_));
-  } else if (OB_UNLIKELY(orig_data_table_schema_->get_index_tid_count() >= OB_MAX_INDEX_PER_TABLE)) {
+  } else if (OB_UNLIKELY(orig_data_table_schema_->get_index_tid_count() >= OB_MAX_AUX_TABLE_PER_MAIN_TABLE
+                         || orig_data_table_schema_->get_index_count() >= OB_MAX_INDEX_PER_TABLE)) {
     ret = OB_ERR_TOO_MANY_KEYS;
     LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
-    LOG_WARN("too many index for table", KR(ret), K(OB_MAX_INDEX_PER_TABLE), K(orig_data_table_schema_->get_index_tid_count()));
+    LOG_WARN("too many index for table", KR(ret), K(OB_MAX_INDEX_PER_TABLE), K(orig_data_table_schema_->get_index_count()));
   } else if (OB_FAIL(check_table_udt_exist_(*orig_data_table_schema_))) {
     LOG_WARN("fail to check table udt exist", KR(ret));
   } else if (OB_FAIL(check_fk_related_table_ddl_(*orig_data_table_schema_, ObDDLType::DDL_CREATE_INDEX))) {
