@@ -2202,7 +2202,7 @@ int ObInnerTableSchema::gv_sql_join_filter_ora_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT           SVR_IP,           SVR_PORT,           CAST(NULL AS NUMBER) AS QC_SESSION_ID,           CAST(NULL AS NUMBER) AS QC_INSTANCE_ID,           CAST(NULL AS NUMBER) AS SQL_PLAN_HASH_VALUE,           CAST(OTHERSTAT_5_VALUE AS NUMBER) as FILTER_ID,           CAST(NULL AS NUMBER) as BITS_SET,           CAST(OTHERSTAT_1_VALUE AS NUMBER) as FILTERED,           CAST(OTHERSTAT_3_VALUE AS NUMBER) as PROBED,           CAST(NULL AS NUMBER) as ACTIVE,           CAST(TENANT_ID AS NUMBER) as CON_ID,           CAST(TRACE_ID AS CHAR(64)) as TRACE_ID         FROM SYS.ALL_VIRTUAL_SQL_PLAN_MONITOR         WHERE plan_operation = 'PHY_JOIN_FILTER'  )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT           SVR_IP,           SVR_PORT,           CAST(NULL AS NUMBER) AS QC_SESSION_ID,           CAST(NULL AS NUMBER) AS QC_INSTANCE_ID,           PLAN_HASH_VALUE AS SQL_PLAN_HASH_VALUE,           CAST(OTHERSTAT_5_VALUE AS NUMBER) as FILTER_ID,           CAST(NULL AS NUMBER) as BITS_SET,           CAST(OTHERSTAT_1_VALUE AS NUMBER) as FILTERED,           CAST(OTHERSTAT_3_VALUE AS NUMBER) as PROBED,           CAST(NULL AS NUMBER) as ACTIVE,           CAST(TENANT_ID AS NUMBER) as CON_ID,           CAST(TRACE_ID AS CHAR(64)) as TRACE_ID         FROM SYS.ALL_VIRTUAL_SQL_PLAN_MONITOR         WHERE plan_operation = 'PHY_JOIN_FILTER'  )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

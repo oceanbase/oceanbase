@@ -2137,6 +2137,8 @@ WORKAREA_MEM	bigint(20)	NO		NULL
 WORKAREA_MAX_MEM	bigint(20)	NO		NULL	
 WORKAREA_TEMPSEG	bigint(20)	NO		NULL	
 WORKAREA_MAX_TEMPSEG	bigint(20)	NO		NULL	
+SQL_ID	varchar(32)	NO		NULL	
+PLAN_HASH_VALUE	bigint(20) unsigned	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_plan_monitor;
 IF(count(*) >= 0, 1, 0)
 1

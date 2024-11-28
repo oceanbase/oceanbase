@@ -854,6 +854,16 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
         cells[cell_idx].set_int(int_value);
         break;
       }
+      case SQL_ID: {
+        cells[cell_idx].set_varchar("");
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                    ObCharset::get_default_charset()));
+        break;
+      }
+      case PLAN_HASH_VALUE: {
+        cells[cell_idx].set_uint64(0);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id", K(cell_idx),

@@ -1149,10 +1149,10 @@ LAST_CHANGE_TIME	timestamp(6)	YES		NULL
 REFRESH_COUNT	bigint(0) unsigned	NO			
 SID	bigint(0) unsigned	NO			
 PROCESS_NAME	bigint(20)	NO		NULL	
-SQL_ID	varchar(32)	NO			
+SQL_ID	varchar(32)	NO		NULL	
 SQL_EXEC_START	bigint(0) unsigned	NO			
 SQL_EXEC_ID	bigint(0) unsigned	NO			
-SQL_PLAN_HASH_VALUE	bigint(0) unsigned	NO			
+SQL_PLAN_HASH_VALUE	bigint(20) unsigned	NO		NULL	
 SQL_CHILD_ADDRESS	varbinary(8)	NO			
 PLAN_PARENT_ID	bigint(0) unsigned	NO			
 PLAN_LINE_ID	bigint(20)	NO		NULL	
@@ -1243,7 +1243,7 @@ PROCESS_NAME	bigint(20)	NO
 SQL_ID	varchar(32)	NO			
 SQL_EXEC_START	bigint(0) unsigned	NO			
 SQL_EXEC_ID	bigint(0) unsigned	NO			
-SQL_PLAN_HASH_VALUE	bigint(0) unsigned	NO			
+SQL_PLAN_HASH_VALUE	bigint(20) unsigned	NO			
 SQL_CHILD_ADDRESS	varbinary(8)	NO			
 PLAN_PARENT_ID	bigint(0) unsigned	NO			
 PLAN_LINE_ID	bigint(20)	NO			
@@ -5524,7 +5524,7 @@ SVR_IP	varchar(46)	NO		NULL
 SVR_PORT	bigint(20)	NO		NULL	
 QC_SESSION_ID	bigint(0)	NO			
 QC_INSTANCE_ID	bigint(0)	NO			
-SQL_PLAN_HASH_VALUE	bigint(0)	NO			
+SQL_PLAN_HASH_VALUE	bigint(20) unsigned	NO		NULL	
 FILTER_ID	bigint(20)	NO		NULL	
 BITS_SET	bigint(0)	NO			
 FILTERED	bigint(20)	NO		NULL	
@@ -5541,7 +5541,7 @@ SVR_IP	varchar(46)	NO
 SVR_PORT	bigint(20)	NO			
 QC_SESSION_ID	bigint(0)	NO			
 QC_INSTANCE_ID	bigint(0)	NO			
-SQL_PLAN_HASH_VALUE	bigint(0)	NO			
+SQL_PLAN_HASH_VALUE	bigint(20) unsigned	NO			
 FILTER_ID	bigint(20)	NO			
 BITS_SET	bigint(0)	NO			
 FILTERED	bigint(20)	NO			
