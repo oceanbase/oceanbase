@@ -817,6 +817,7 @@ public :
   uint32_t cardinality() const { return this->length_; }
   ArrayFormat get_format() const { return ArrayFormat::Vector; }
   int push_back(float value);
+  bool is_null(uint32_t idx) const { return false; }
   void set_scale(ObScale scale) { UNUSED(scale); }
   int print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
             uint32_t begin = 0, uint32_t print_size = 0) const;

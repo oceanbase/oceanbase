@@ -1407,7 +1407,7 @@ int ObExprOperator::aggregate_result_type_for_merge(
           LOG_WARN("aggregate_user_defined_sql_type fail", K(ret));
         }
       } else if (ob_is_collection_sql_type(res_type)) {
-        if (OB_FAIL(aggregate_collection_sql_type(type, types, param_num))) {
+        if (OB_FAIL(aggregate_collection_sql_type(type_ctx, type, types, param_num))) {
           LOG_WARN("aggregate_collection_sql_type fail", K(ret));
         }
       }
@@ -1757,6 +1757,7 @@ int ObExprOperator::aggregate_user_defined_sql_type(
 }
 
 int ObExprOperator::aggregate_collection_sql_type(
+    common::ObExprTypeCtx &type_ctx,
     ObExprResType &type,
     const ObExprResType *types,
     int64_t param_num)
@@ -1766,12 +1767,23 @@ int ObExprOperator::aggregate_collection_sql_type(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("types is null or param_num is wrong", K(types), K(param_num), K(ret));
   } else {
-    bool found = false;
-    for (int64_t i = 0; ! found && i < param_num && OB_SUCC(ret); ++i) {
+    ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+    ObExecContext *exec_ctx = session->get_cur_exec_ctx();
+    bool first = true;
+    for (int64_t i = 0; i < param_num && OB_SUCC(ret); ++i) {
       if (ob_is_collection_sql_type(types[i].get_type())) {
-        found = true;
-        // choose the first collection subschema id now
-        type.set_subschema_id(types[i].get_subschema_id());
+        if (first) {
+          // choose the first collection subschema id now
+          type.set_subschema_id(types[i].get_subschema_id());
+          first = false;
+        } else {
+          ObExprResType coll_calc_type;
+          if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type, types[i], coll_calc_type))) {
+            LOG_WARN("failed to check array compatibilty", K(ret));
+          } else {
+            type.set_subschema_id(coll_calc_type.get_subschema_id());
+          }
+        }
       }
     }
   }

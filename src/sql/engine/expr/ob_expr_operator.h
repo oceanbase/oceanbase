@@ -661,6 +661,7 @@ public:
       const ObExprResType *types,
       int64_t param_num);
   static int aggregate_collection_sql_type(
+      common::ObExprTypeCtx &type_ctx,
       ObExprResType &type,
       const ObExprResType *types,
       int64_t param_num);
