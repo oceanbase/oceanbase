@@ -1954,17 +1954,27 @@ int ObMacroBlockWriter::check_micro_block_need_merge(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid micro_block", K(micro_block), K(ret));
   } else {
+    const int64_t data_version = data_store_desc_->get_major_working_cluster_version();
     const ObRowStoreType row_store_type = static_cast<ObRowStoreType>(micro_block.header_.row_store_type_);
-    if (row_store_type != data_store_desc_->get_row_store_type()) {
-      need_merge = true;
-    } else if (micro_writer_->get_row_count() <= 0
-        && micro_block.header_.data_length_ > data_store_desc_->get_micro_block_size() / 2) {
-      need_merge = false;
-    } else if (micro_writer_->get_block_size() > data_store_desc_->get_micro_block_size() / 2
-        && micro_block.header_.data_length_ > data_store_desc_->get_micro_block_size() / 2) {
-      need_merge = false;
-    } else {
-      need_merge = true;
+    if (row_store_type == data_store_desc_->get_row_store_type()) {
+      const int64_t max_block_row_count = data_store_desc_->static_desc_->encoding_granularity_;
+      if (data_version >= DATA_VERSION_4_3_5_0 && max_block_row_count > 0) {
+        // we should consider row count first
+        if (micro_block.header_.row_count_ >= max_block_row_count /  2) {
+          need_merge = false;
+        } else if (micro_block.header_.row_count_ >= max_block_row_count / 3 &&
+            micro_writer_->get_row_count() >= max_block_row_count / 3) {
+          need_merge = false;
+        }
+      }
+      if (!need_merge) {
+      } else if (micro_writer_->get_row_count() <= 0
+          && micro_block.header_.data_length_ > data_store_desc_->get_micro_block_size() / 2) {
+        need_merge = false;
+      } else if (micro_writer_->get_block_size() > data_store_desc_->get_micro_block_size() / 2
+          && micro_block.header_.data_length_ > data_store_desc_->get_micro_block_size() / 2) {
+        need_merge = false;
+      }
     }
     STORAGE_LOG(DEBUG, "check micro block need merge", K(micro_writer_->get_row_count()), K(micro_block.data_.get_buf_size()),
         K(micro_writer_->get_block_size()), K(data_store_desc_->get_micro_block_size()), K(need_merge));
