@@ -5826,14 +5826,20 @@ int ObHashJoinOp::after_by_pass_next_row()
     clear_evaluated_flag();
     const ObIArray<ObExpr *> &adaptive_hj_scan_cols = MY_SPEC.adaptive_hj_scan_cols_;
     const ObIArray<ObExpr *> &adaptive_nlj_scan_cols = MY_SPEC.adaptive_nlj_scan_cols_;
-    for (int64_t i = 0; i < adaptive_hj_scan_cols.count(); i++) {
-      ObDynamicParamSetter::clear_parent_evaluated_flag(eval_ctx_, *(adaptive_hj_scan_cols.at(i)));
-      ObDatum &src = adaptive_nlj_scan_cols.at(i)->locate_expr_datum(eval_ctx_);
-      ObDatum &dst = adaptive_hj_scan_cols.at(i)->locate_expr_datum(eval_ctx_);
-      dst = src;
-      adaptive_hj_scan_cols.at(i)->set_evaluated_projected(eval_ctx_);
-    }
     ObDatum *tmp_datum = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < adaptive_hj_scan_cols.count(); i++) {
+      // Non-vectorized scene operators do not guarantee that all exprs in the output have been evaluated.
+      // Here, evaluation is needed before assigning values.
+      if (OB_FAIL(adaptive_nlj_scan_cols.at(i)->eval(eval_ctx_, tmp_datum))) {
+        LOG_WARN("Fail to eval adaptive_nlj_scan_cols expr", K(i));
+      } else {
+        ObDynamicParamSetter::clear_parent_evaluated_flag(eval_ctx_, *(adaptive_hj_scan_cols.at(i)));
+        ObDatum &src = adaptive_nlj_scan_cols.at(i)->locate_expr_datum(eval_ctx_);
+        ObDatum &dst = adaptive_hj_scan_cols.at(i)->locate_expr_datum(eval_ctx_);
+        dst = src;
+        adaptive_hj_scan_cols.at(i)->set_evaluated_projected(eval_ctx_);
+      }
+    }
     // todo: Only evaluate the expressions in the output that are not in adaptive_hj_scan_cols_.
     for (int64_t i = 0; OB_SUCC(ret) && i < get_spec().output_.count(); i++) {
       if (OB_FAIL(get_spec().output_.at(i)->eval(eval_ctx_, tmp_datum))) {
