@@ -662,7 +662,7 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
   ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
   const ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(expr.extra_info_);
   const uint64_t cast_mode = enumset_info->cast_mode_;
-  bool is_strict = CM_IS_STRICT_MODE(cast_mode);
+  bool is_strict = CM_IS_STRICT_MODE(cast_mode) && !CM_IS_IGNORE_CHARSET_CONVERT_ERR(cast_mode);
   ObEvalInfo &eval_info = expr.args_[4]->get_eval_info(ctx);
   bool param_not_eval = !expr.args_[4]->get_eval_info(ctx).evaluated_
                         && !expr.args_[4]->get_eval_info(ctx).projected_;
