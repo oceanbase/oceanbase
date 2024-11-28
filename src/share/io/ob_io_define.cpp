@@ -1875,7 +1875,7 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
       LOG_WARN("IO error, ", K(ret), K(*result_));
     }
   } else if (OB_TIMEOUT == ret || OB_IO_TIMEOUT == ret) {
-    LOG_WARN("IO wait timeout", K(ret));
+    LOG_WARN("IO wait timeout", K(ret), K(*result_));
   }
   estimate();
 

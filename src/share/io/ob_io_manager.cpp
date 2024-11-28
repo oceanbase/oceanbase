@@ -1515,7 +1515,6 @@ void ObTenantIOManager::destroy()
   callback_mgr_.destroy();
   io_tracer_.destroy();
   io_scheduler_ = nullptr;
-  tenant_id_ = 0;
   io_memory_limit_ = 0;
   request_count_ = 0;
   result_count_ = 0;
@@ -1523,6 +1522,8 @@ void ObTenantIOManager::destroy()
   io_result_pool_.destroy();
   group_id_index_map_.destroy();
   io_allocator_.destroy();
+  LOG_INFO("destroy tenant io manager success", K(tenant_id_));
+  tenant_id_ = 0;
   is_inited_ = false;
 }
 
