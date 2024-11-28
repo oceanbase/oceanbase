@@ -1092,6 +1092,19 @@ public:
                                           const int64_t dist_methods,
                                           ObIArray<CandidatePlan> &subquery_plans);
 
+  int inner_candi_allocate_massive_subplan_filter(ObIArray<ObSEArray<CandidatePlan,4>> &best_list,
+                                                  ObIArray<ObSEArray<CandidatePlan,4>> &dist_best_list,
+                                                  ObIArray<ObQueryRefRawExpr *> &query_refs,
+                                                  ObIArray<ObExecParamRawExpr *> &params,
+                                                  ObIArray<ObExecParamRawExpr *> &onetime_exprs,
+                                                  ObBitSet<> &initplan_idxs,
+                                                  ObBitSet<> &onetime_idxs,
+                                                  const ObIArray<ObRawExpr *> &filters,
+                                                  const bool for_cursor_expr,
+                                                  const bool is_update_set,
+                                                  const int64_t dist_methods,
+                                                  ObIArray<CandidatePlan> &subquery_plans);
+
   int prepare_subplan_candidate_list(ObIArray<ObLogPlan*> &subplans,
                                      ObIArray<ObExecParamRawExpr *> &params,
                                      ObIArray<ObSEArray<CandidatePlan, 4>> &best_list,
@@ -1128,7 +1141,8 @@ public:
                                  const ObBitSet<> &onetime_idxs,
                                  const int64_t dist_methods,
                                  const ObIArray<ObRawExpr*> &filters,
-                                 const bool is_update_set);
+                                 const bool is_update_set,
+                                 const bool for_cursor_expr);
 
   int check_contains_recursive_cte(ObIArray<ObLogicalOperator*> &child_ops,
                                    bool &is_recursive_cte);
