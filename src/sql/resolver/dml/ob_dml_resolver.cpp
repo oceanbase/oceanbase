@@ -11003,30 +11003,26 @@ int ObDMLResolver::resolve_json_table_column_item(const TableItem &table_item,
   int ret = OB_SUCCESS;
   col_item = NULL;
   ObDMLStmt *stmt = get_stmt();
-  ObSEArray<ColumnItem, 4> columns;
+  common::ObCollationType cs_type = lib::is_oracle_mode() ? common::CS_TYPE_UTF8MB4_BIN : common::CS_TYPE_UTF8MB4_GENERAL_CI;
   CK (OB_NOT_NULL(stmt));
   CK (OB_LIKELY(table_item.is_json_table()));
   CK (OB_NOT_NULL(table_item.json_table_def_));
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(stmt->get_column_items(table_item.table_id_, columns))) {
-    LOG_WARN("failed to get column items", K(ret));
-  } else {
-    common::ObCollationType cs_type = lib::is_oracle_mode() ? common::CS_TYPE_UTF8MB4_BIN : common::CS_TYPE_UTF8MB4_GENERAL_CI;
-    for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
-      if (0 == ObCharset::strcmp(cs_type, column_name, columns.at(i).column_name_)) {
-        if (OB_ISNULL(col_item)) {
-          col_item = &columns.at(i);
-        } else {
-          ret = OB_NON_UNIQ_ERROR;
-          LOG_USER_ERROR(OB_NON_UNIQ_ERROR, column_name.length(), column_name.ptr(),
-                         table_item.get_table_name().length(), table_item.get_table_name().ptr());
-        }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_size(); ++i) {
+    ColumnItem &item = stmt->get_column_items().at(i);
+    if (table_item.table_id_ == item.table_id_
+        && (0 == ObCharset::strcmp(cs_type, column_name, item.column_name_))) {
+      if (OB_ISNULL(col_item)) {
+        col_item = &item;
+      } else {
+        ret = OB_NON_UNIQ_ERROR;
+        LOG_USER_ERROR(OB_NON_UNIQ_ERROR, column_name.length(), column_name.ptr(),
+                        table_item.get_table_name().length(), table_item.get_table_name().ptr());
       }
-    } // end for
-    if (OB_SUCC(ret) && OB_ISNULL(col_item)) {
-      ret = OB_ERR_BAD_FIELD_ERROR;
-      LOG_WARN("column not exists", K(column_name), K(ret));
     }
+  } // end for
+  if (OB_SUCC(ret) && OB_ISNULL(col_item)) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_WARN("column not exists", K(column_name), K(ret));
   }
   return ret;
 }
