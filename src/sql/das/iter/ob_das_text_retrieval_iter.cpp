@@ -519,14 +519,24 @@ int ObDASTextRetrievalIter::fill_token_cnt_with_doc_len()
   sql::ObEvalCtx *eval_ctx = ir_rtdef_->eval_ctx_;
   ObDatum *doc_length_datum = nullptr;
   if (OB_ISNULL(agg_expr) || OB_ISNULL(doc_length_expr) || OB_ISNULL(eval_ctx)
-      || OB_UNLIKELY(agg_expr->datum_meta_.get_type() != ObDecimalIntType)) {
+      || OB_UNLIKELY(agg_expr->datum_meta_.get_type() != ObDecimalIntType && agg_expr->datum_meta_.get_type() != ObNumberType)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null expr", K(ret), KPC(agg_expr), KP(doc_length_expr), KP(eval_ctx));
   } else if (OB_FAIL(doc_length_expr->eval(*eval_ctx, doc_length_datum))) {
     LOG_WARN("failed to evaluate document length expr", K(ret));
   } else {
     ObDatum &agg_datum = agg_expr->locate_datum_for_write(*eval_ctx);
-    agg_datum.set_decimal_int(doc_length_datum->get_uint());
+    if (agg_expr->datum_meta_.get_type() == ObDecimalIntType) {
+      agg_datum.set_decimal_int(doc_length_datum->get_uint());
+    } else {
+      const int64_t in_val = doc_length_datum->get_uint64();
+      number::ObNumber nmb;
+      if (OB_FAIL(nmb.from(in_val, mem_context_->get_arena_allocator()))) {
+        LOG_WARN("fail to int_number", K(ret), K(in_val));
+      } else {
+        agg_datum.set_number(nmb);
+      }
+    }
   }
   return ret;
 }
