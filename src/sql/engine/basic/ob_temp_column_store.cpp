@@ -388,6 +388,35 @@ int ObTempColumnStore::Iterator::init(ObTempColumnStore *store)
   return BlockReader::init(store);
 }
 
+int ObTempColumnStore::Iterator::nested_from_vector(ObExpr &expr, ObEvalCtx &ctx, const int64_t start_pos, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  ObIVector *root_vec = expr.get_vector(ctx);
+  if (root_vec->get_format() != VEC_CONTINUOUS) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected format", K(ret), K(root_vec->get_format()));
+  } else if (OB_FAIL(from_vector(static_cast<ObContinuousBase*>(root_vec), &expr, ctx, start_pos, size))) {
+     LOG_WARN("from vector failed", K(ret), K(root_vec->get_format()));
+  } else {
+    for (uint32_t i = 0; i < expr.attrs_cnt_ && OB_SUCC(ret); ++i) {
+      ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
+      const VectorFormat format = vec->get_format();
+      switch (format) {
+        case VEC_FIXED:
+          ret = from_vector(static_cast<ObFixedLengthBase*>(vec), expr.attrs_[i], ctx, start_pos, size);
+          break;
+        case VEC_CONTINUOUS:
+          ret = from_vector(static_cast<ObContinuousBase*>(vec), expr.attrs_[i], ctx, start_pos, size);
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected format", K(ret), K(format));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTempColumnStore::Iterator::get_next_batch(const ObExprPtrIArray &exprs,
                                                 ObEvalCtx &ctx,
                                                 const int64_t max_rows,
@@ -421,6 +450,10 @@ int ObTempColumnStore::Iterator::get_next_batch(const ObExprPtrIArray &exprs,
       ObIVector *vec = NULL;
       if (OB_ISNULL(e) || ((is_uniform_format((vec = e->get_vector(ctx))->get_format())))) {
         // skip null input expr and uniform expr
+      } else if (e->is_nested_expr()) {
+        if (OB_FAIL(nested_from_vector(*e, ctx, begin, batch_rows))) {
+          LOG_WARN("failed to get nested expr", K(ret), K(begin), K(batch_rows));
+        }
       } else {
         const VectorFormat format = vec->get_format();
         switch (format) {

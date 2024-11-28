@@ -143,6 +143,7 @@ public:
     inline bool has_next() const { return cur_blk_id_ < get_row_cnt(); }
     inline int64_t get_row_cnt() const { return column_store_->get_row_cnt(); }
     inline int64_t get_col_cnt() const { return column_store_->get_col_cnt(); }
+    int nested_from_vector(ObExpr &expr, ObEvalCtx &ctx, const int64_t start_pos, const int64_t size);
     int get_next_batch(const ObExprPtrIArray &exprs,
                        ObEvalCtx &ctx,
                        const int64_t max_rows,
