@@ -2389,9 +2389,14 @@ void ObDagPrioScheduler::try_update_adaptive_task_limit_(const int64_t batch_siz
   int tmp_ret = OB_SUCCESS;
   double min_cpu = 0.0;
   double max_cpu = 0.0;
+  const int64_t adaptive_worker_limit = limits_ * 2;
 
-  if (dag_list_[READY_DAG_LIST].get_size() <= batch_size) {
+  if (!is_compaction_dag_prio()) {
+    // do nothing
+  } else if (dag_list_[READY_DAG_LIST].get_size() <= batch_size) {
     adaptive_task_limit_ = limits_; // dag count is OK, reset to the default value
+  } else if (adaptive_task_limit_ >= adaptive_worker_limit) {
+    // adaptive limit reached the limit, cannot inc
   } else if (OB_TMP_FAIL(GCTX.omt_->get_tenant_cpu(MTL_ID(), min_cpu, max_cpu))) {
     COMMON_LOG_RET(WARN, tmp_ret, "failed to get tenant cpu count");
   } else if (std::round(max_cpu) * ADAPTIVE_PERCENT <= adaptive_task_limit_) {
@@ -2402,7 +2407,7 @@ void ObDagPrioScheduler::try_update_adaptive_task_limit_(const int64_t batch_siz
     const int64_t mem_allow_max_thread = lib::get_tenant_memory_remain(MTL_ID()) * ADAPTIVE_PERCENT / estimate_mem_per_thread;
     if (mem_allow_max_thread >= adaptive_task_limit_ * 5) {
       ++adaptive_task_limit_;
-      FLOG_INFO("[ADAPTIVE_SCHED] increment adaptive task limit", K(priority_), K(adaptive_task_limit_));
+      FLOG_INFO("[ADAPTIVE_SCHED] increment adaptive task limit", K(priority_), K(adaptive_task_limit_), K(adaptive_worker_limit), K(max_cpu));
     }
   }
 }
@@ -2759,8 +2764,6 @@ void ObDagPrioScheduler::pause_worker_(ObTenantDagWorker &worker)
 int ObDagPrioScheduler::loop_ready_dag_list(bool &is_found)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-
   {
     ObMutexGuard guard(prio_lock_);
     if (running_task_cnts_ < adaptive_task_limit_) {
@@ -4828,13 +4831,13 @@ int ObTenantDagScheduler::loop_ready_dag_lists()
 {
   int ret = OB_SUCCESS;
   bool is_found = false;
-  if (get_total_running_task_cnt() < get_work_thread_num()) {
-    for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < ObDagPrio::DAG_PRIO_MAX; ++i) {
-      if (OB_FAIL(prio_sche_[i].loop_ready_dag_list(is_found))) {
-        COMMON_LOG(WARN, "fail to loop ready dag list", K(ret), "priority", i);
-      }
+
+  for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < ObDagPrio::DAG_PRIO_MAX; ++i) {
+    if (OB_FAIL(prio_sche_[i].loop_ready_dag_list(is_found))) {
+      COMMON_LOG(WARN, "fail to loop ready dag list", K(ret), "priority", i);
     }
   }
+
   if (!is_found) {
     ret = OB_ENTRY_NOT_EXIST;
   }
