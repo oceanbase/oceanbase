@@ -346,6 +346,26 @@ int ObTransformGroupByPushdown::check_aggr_exprs_valid(ObSelectStmt &stmt,
       }
     }
   }
+  // dima-2024112700105312838
+  // For empty table t1, "select count(*) from t1" is not equal to "select count(*) t1 group by 'a'".
+  // Now the transform rule only pushdown column expr in group expr, so we cant't transform query that
+  // has all expr not containing column in its group scope.
+  if (OB_SUCC(ret) && is_valid && 0 != stmt.get_group_expr_size()) {
+    bool contain_column = false;
+    ObIArray<ObRawExpr *> &group_exprs = stmt.get_group_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && !contain_column && i < group_exprs.count(); ++i) {
+      ObRawExpr *group_expr = group_exprs.at(i);
+      if (OB_ISNULL(group_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null group expr", K(ret));
+      } else if (group_expr->has_flag(CNT_COLUMN)) {
+        contain_column = true;
+      }
+    }
+    if (!contain_column) {
+      is_valid = false;
+    }
+  }
   return ret;
 }
 
