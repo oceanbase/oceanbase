@@ -1175,7 +1175,7 @@ int TriggerHandle::check_trigger_execution(ObSQLSessionInfo &session,
     ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
     ObSqlString sql;
     common::ObISQLClient *sql_proxy = GCTX.sql_proxy_;
-    OZ (sql.assign_fmt("select count(*) from OCEANBASE.__ALL_VIRTUAL_PROCESSLIST where proxy_sessid = %ld and tenant_id = %ld",
+    OZ (sql.assign_fmt("select count(*) from OCEANBASE.__ALL_VIRTUAL_PROCESSLIST where proxy_sessid = %lu and tenant_id = %lu",
                        session.get_proxy_sessid(),
                        tenant_id));
     CK (OB_NOT_NULL(sql_proxy));
