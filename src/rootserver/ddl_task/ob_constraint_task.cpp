@@ -740,7 +740,7 @@ int ObConstraintTask::wait_trans_end()
 
   DEBUG_SYNC(CONSTRAINT_WAIT_TRANS_END);
 
-  if (OB_SUCC(ret) && snapshot_version_ <= 0) {
+  if (OB_SUCC(ret) && snapshot_version_ <= 0 && new_fetched_snapshot > 0) {
     ObMySQLTransaction trans;
     int64_t persisted_snapshot = 0;
     if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {

@@ -1333,7 +1333,7 @@ int ObPartitionSplitTask::wait_trans_end(const share::ObDDLTaskStatus next_task_
     }
   }
 
-  if (OB_SUCC(ret) && snapshot_version_ <= 0) {
+  if (OB_SUCC(ret) && snapshot_version_ <= 0 && new_fetched_snapshot > 0) {
     int64_t persisted_snapshot = 0;
     if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(root_service_->get_sql_proxy(),
                                                                  tenant_id_,

@@ -670,7 +670,7 @@ int ObIndexBuildTask::wait_trans_end()
   DEBUG_SYNC(CREATE_INDEX_WAIT_TRANS_END);
 
   // persistent snapshot_version into inner table and hold snapshot of data_table and index table
-  if (OB_SUCC(ret) && snapshot_version_ <= 0) {
+  if (OB_SUCC(ret) && snapshot_version_ <= 0 && new_fetched_snapshot > 0) {
     ObMySQLTransaction trans;
     if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
       LOG_WARN("fail to start trans", K(ret), K(tenant_id_));

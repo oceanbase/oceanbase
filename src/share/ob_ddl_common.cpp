@@ -1402,9 +1402,9 @@ int ObDDLUtil::obtain_snapshot(
   if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_ISNULL(task)) {
-    ret = OB_BAD_NULL_ERROR;
-    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_UNLIKELY(nullptr == task || snapshot_version != 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(task), K(snapshot_version));
   } else if (OB_ISNULL(wait_trans_ctx = task->get_wait_trans_ctx())) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("wait trans ctx is null", K(ret));
@@ -1422,21 +1422,19 @@ int ObDDLUtil::obtain_snapshot(
       }
     } else {
       // to get snapshot version.
-      if (OB_SUCC(ret) && snapshot_version <= 0) {
-        bool is_trans_end = false;
-        const bool need_wait_trans_end = false;
-        if (OB_FAIL(wait_trans_ctx->try_wait(is_trans_end, new_fetched_snapshot, need_wait_trans_end))) {
-          LOG_WARN("just to get snapshot rather than wait trans end", K(ret));
-        }
+      bool is_trans_end = false;
+      const bool need_wait_trans_end = false;
+      if (OB_FAIL(wait_trans_ctx->try_wait(is_trans_end, new_fetched_snapshot, need_wait_trans_end))) {
+        LOG_WARN("just to get snapshot rather than wait trans end", K(ret));
       }
       DEBUG_SYNC(DDL_REDEFINITION_HOLD_SNAPSHOT);
       // try hold snapshot
       if (OB_FAIL(ret)) {
-      } else if (snapshot_version <= 0 && new_fetched_snapshot <= 0) {
+      } else if (new_fetched_snapshot <= 0) {
         // the snapshot version obtained here must be valid.
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("snapshot version is invalid", K(ret), K(snapshot_version), K(new_fetched_snapshot), KPC(wait_trans_ctx));
-      } else if (snapshot_version <= 0) {
+        LOG_WARN("snapshot version is invalid", K(ret), K(new_fetched_snapshot), KPC(wait_trans_ctx));
+      } else {
         ObMySQLTransaction trans;
         if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id))) {
           LOG_WARN("fail to start trans", K(ret), K(tenant_id));
