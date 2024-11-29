@@ -1875,10 +1875,10 @@ int ObBackupTabletProvider::check_tx_data_can_explain_user_data_(
       can_explain = min_filled_tx_scn >= ls_backup_ctx_->backup_tx_table_filled_tx_scn_;
       if (!can_explain) {
         const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-        LOG_WARN("tx data can't explain user data",
+        FLOG_WARN("tx data can't explain user data",
                  K(OB_REPLICA_CANNOT_BACKUP), K(can_explain),
                  K(tablet_id), K(min_filled_tx_scn),
-                 "backup_tx_table_filled_tx_scn", ls_backup_ctx_->backup_tx_table_filled_tx_scn_);
+                 "backup_tx_table_filled_tx_scn", ls_backup_ctx_->backup_tx_table_filled_tx_scn_, K(sstable_array));
       }
     }
   }
