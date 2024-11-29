@@ -324,7 +324,7 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
       func = NULL;
     }
   } else if ((no_log_type || log_type->is_string() || log_type->is_enum())
-             && ob_is_string_type(datum_type.type_)) {
+             && (ob_is_string_type(datum_type.type_) || ObRawType == datum_type.type_)) {
     //convert parquet enum/string to string vector
     if (parquet::Type::BYTE_ARRAY == phy_type) {
       func = &DataLoader::load_string_col;
@@ -425,9 +425,9 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
   } else if ((no_log_type || log_type->is_timestamp()) && parquet::Type::INT96 == phy_type
              && (ob_is_otimestamp_type(datum_type.type_) || ObTimestampType == datum_type.type_)) {
     func = &DataLoader::load_timestamp_hive;
-  } else if (no_log_type && parquet::Type::FLOAT == phy_type && ObFloatType == datum_type.type_) {
+  } else if (no_log_type && parquet::Type::FLOAT == phy_type && ob_is_float_tc(datum_type.type_)) {
     func = &DataLoader::load_float;
-  } else if (no_log_type && parquet::Type::DOUBLE == phy_type && ObDoubleType == datum_type.type_) {
+  } else if (no_log_type && parquet::Type::DOUBLE == phy_type && ob_is_double_tc(datum_type.type_)) {
     func = &DataLoader::load_double;
   } else if (log_type->is_interval()
              || log_type->is_map()

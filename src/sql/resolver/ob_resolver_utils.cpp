@@ -5134,12 +5134,21 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
           }
           if (ob_is_enum_or_set_type(column_expr->get_data_type())
               || ob_is_text_tc(column_expr->get_data_type())) {
-            file_column_expr->set_data_type(ObVarcharType);
+            if (is_oracle_mode() && CS_TYPE_BINARY == column_expr->get_collation_type()) {
+              file_column_expr->set_data_type(ObRawType);
+            } else if (is_mysql_mode() && ob_is_enum_or_set_type(column_expr->get_data_type())) {
+              file_column_expr->set_data_type(ObCharType);
+            } else {
+              file_column_expr->set_data_type(ObVarcharType);
+            }
             if (is_mysql_mode()) {
               file_column_expr->set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
             } else {
               file_column_expr->set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
             }
+          }
+          if (ob_is_number_tc(column_expr->get_data_type())) {
+            file_column_expr->set_data_type(ObDecimalIntType);
           }
         }
       } else {
@@ -5544,7 +5553,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
     const ObCollationType dst_cs_type = generated_column.get_collation_type();
 
     /* implicit data conversion judgement */
-    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && !tbl_schema.is_external_table()) {
       if (!cast_supported(expr_datatype,
                           expr_cs_type,
                           dst_datatype,
