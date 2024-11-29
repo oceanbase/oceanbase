@@ -552,7 +552,7 @@ int ObArrayBinary::insert_from(const ObIArrayType &src, uint32_t begin, uint32_t
   } else if (OB_ISNULL(data_container_)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "try to modify read-only array", K(ret));
-  } else {
+  } else if (len > 0) {
     // insert data
     const uint32_t src_offset = offset_at(begin, src.get_offsets());
     uint32_t src_len = src.get_offsets()[begin + len - 1] - src_offset;
@@ -1112,7 +1112,7 @@ int ObArrayNested::insert_from(const ObIArrayType &src, uint32_t begin, uint32_t
       }
     }
     // insert data
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && len > 0) {
       uint32_t start = offset_at(begin, src.get_offsets());
       uint32_t child_len = src.get_offsets()[begin + len - 1] - start;
       const ObIArrayType *child_arr = static_cast<const ObArrayNested&>(src).get_child_array();
