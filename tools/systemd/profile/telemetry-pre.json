@@ -1,0 +1,14 @@
+{
+    "component": "ocs",
+    "content": {
+        "reporter": "#reporter#",
+        "type": "#type#",
+        "step": "#step#",
+        "version": "#version#",
+        "release": "#release#",
+        "hostHash": "#hostHash#",
+        "osName": "#osName#",
+        "osRelease": "#osRelease#",
+        "observerConfig": {}
+    }
+}
