@@ -211,10 +211,13 @@ public:
   }
   DECLARE_TO_STRING;
 private:
+  void set_log_cursor_(ObITransCallback *log_cursor);
+private:
   const int16_t id_;
   // callback list sentinel
   ObITransCallback head_;
   ObITransCallback *log_cursor_;
+  int64_t log_epoch_;
   ObITransCallback *parallel_start_pos_;
   int64_t length_;
   // stats
