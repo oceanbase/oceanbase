@@ -180,24 +180,12 @@ int ObExpandVecOp::do_dup_partial()
     // do nothing
   } else if (MY_SPEC.use_rich_format_) {
     ObExpr *null_expr = MY_SPEC.expand_exprs_.at(expr_iter_idx_);
-    VectorFormat fmt = null_expr->get_format(eval_ctx_);
-    if (OB_UNLIKELY(fmt == VEC_UNIFORM)) {
-      ObDatum *uni_datums =
-        static_cast<ObUniformBase *>(null_expr->get_vector(eval_ctx_))->get_datums();
-      for (int i = 0; i < child_input_size_; i++) {
-        if (child_input_skip_->at(i)) {
-        } else {
-          uni_datums[i].set_null();
-        }
-      }
-    } else if (OB_LIKELY(fmt == VEC_DISCRETE || fmt == VEC_FIXED || fmt == VEC_CONTINUOUS)) {
-      ObBitmapNullVectorBase *nulls =
-        static_cast<ObBitmapNullVectorBase *>(null_expr->get_vector(eval_ctx_));
-      nulls->get_nulls()->set_all(child_input_size_);
-      nulls->set_has_null();
+    if (OB_FAIL(null_expr->init_vector_for_write(eval_ctx_, null_expr->get_default_res_format(),
+                                                 child_input_size_))) {
+      LOG_WARN("init vector failed", K(ret));
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected fmt", K(ret), K(fmt));
+      null_expr->get_nulls(eval_ctx_).set_all(child_input_size_);
+      null_expr->get_vector(eval_ctx_)->set_has_null();
     }
   } else {
     ObExpr *null_expr = MY_SPEC.expand_exprs_.at(expr_iter_idx_);
@@ -501,7 +489,7 @@ int ObExpandVecOp::duplicate_rollup_exprs()
         for (int j = 0; j < brs_.size_; j++) {
           if (brs_.skip_->at(j)) {
           } else {
-            to_datums[j] = *src_datums.at(i);
+            to_datums[j] = *src_datums.at(j);
           }
         }
       }

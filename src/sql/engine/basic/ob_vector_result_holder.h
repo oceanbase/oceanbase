@@ -68,7 +68,7 @@ private:
   {
     ObColResultHolder(int64_t max_batch_size, const ObExpr *expr) :
                                                 header_(), max_row_cnt_(max_batch_size), nulls_(nullptr),
-                                                orig_nulls_(nullptr), has_null_(false), datums_(nullptr), len_(-1),
+                                                has_null_(false), datums_(nullptr), len_(-1),
                                                 data_(nullptr), lens_(nullptr), ptrs_(nullptr),
                                                 offsets_(nullptr), continuous_data_(nullptr),
                                                 expr_(expr), frame_nulls_(nullptr), frame_datums_(nullptr),
@@ -136,7 +136,6 @@ private:
     int64_t max_row_cnt_;  //ObVectorBase
 
     sql::ObBitVector *nulls_; //ObBitmapNullVectorBase
-    sql::ObBitVector *orig_nulls_;
     bool has_null_; //ObBitmapNullVectorBase
 
     ObDatum *datums_; //ObUniformBase

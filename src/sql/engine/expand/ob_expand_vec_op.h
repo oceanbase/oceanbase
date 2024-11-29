@@ -170,7 +170,6 @@ private:
     ObBatchResultHolder *datum_holder_;
   };
   common::ObArenaAllocator allocator_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExpandVecOp);
 };

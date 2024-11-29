@@ -69,26 +69,9 @@ copy_bitmap_null_base(const ObBitmapNullVectorBase &vec,
       frame_nulls_ = sql::to_bit_vector(buffer);
     }
   }
-  if (OB_SUCC(ret)
-      && orig_nulls_ == nullptr
-      && OB_NOT_NULL(expr_)
-      && vec.get_nulls() != &expr_->get_nulls(eval_ctx)) {
-    // null bitmap stored in vector may not come from expr frame memory, e.g. column_store
-    // in this case, we copy nulls into orig_nulls_ and restore it later
-    void *buffer = nullptr;
-    if (OB_ISNULL(buffer = alloc.alloc(sql::ObBitVector::memory_size(max_row_cnt_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
-    } else {
-      orig_nulls_ = sql::to_bit_vector(buffer);
-    }
-  }
   if (OB_SUCC(ret)) {
     has_null_ = vec.has_null();
     nulls_ = const_cast<sql::ObBitVector *> (vec.get_nulls());
-    if (orig_nulls_ != nullptr) {
-      orig_nulls_->deep_copy(*nulls_, max_row_cnt_);
-    }
     if (OB_NOT_NULL(expr_)) {
       frame_nulls_->deep_copy(expr_->get_nulls(eval_ctx), max_row_cnt_);
     }
@@ -223,9 +206,6 @@ void ObVectorsResultHolder::ObColResultHolder::
 restore_bitmap_null_base(ObBitmapNullVectorBase &vec, const int64_t batch_size, ObEvalCtx &eval_ctx) const
 {
   restore_vector_base(vec);
-  if (orig_nulls_ != nullptr) {
-    nulls_->deep_copy(*orig_nulls_, max_row_cnt_);
-  }
   vec.set_has_null(has_null_);
   vec.set_nulls(nulls_);
   if (OB_NOT_NULL(expr_)) {
