@@ -99,7 +99,7 @@ int ObDBMSSchedJobClassInfo::deep_copy(common::ObIAllocator &allocator, const Ob
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
   is_oracle_tenant_ = other.is_oracle_tenant_;
-  log_history_ = other.log_history_;
+  OZ (log_history_.from(other.log_history_, allocator));
   OZ (ob_write_string(allocator, other.job_class_name_, job_class_name_));
   OZ (ob_write_string(allocator, other.service_, service_));
   OZ (ob_write_string(allocator, other.resource_consumer_group_, resource_consumer_group_));
