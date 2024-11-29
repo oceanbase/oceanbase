@@ -224,7 +224,7 @@ int ObTableBatchExecuteP::try_process()
 {
   int ret = OB_SUCCESS;
   table_id_ = arg_.table_id_; // init move response need
-  if (OB_FAIL(init_schema_info(arg_.table_name_))) {
+  if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(init_single_op_tb_ctx(batch_ctx_.tb_ctx_, batch_ctx_.ops_->at(0)))) {
     LOG_WARN("fail to init table ctx", K(ret));

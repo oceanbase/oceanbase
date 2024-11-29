@@ -782,6 +782,7 @@ int ObTableLSExecuteP::try_process()
   int ret = OB_SUCCESS;
   ObTableLSOp &ls_op = arg_.ls_op_;
   ObLSID ls_id = ls_op.get_ls_id();
+  const ObString &arg_table_name = ls_op.get_table_name();
   uint64_t table_id = ls_op.get_table_id();
   bool exist_global_index = false;
   bool need_all_prop = arg_.ls_op_.need_all_prop_bitmap();
@@ -798,7 +799,7 @@ int ObTableLSExecuteP::try_process()
       LOG_WARN("fail to execute ls op", K(ret));
     }
   } else {
-    if (OB_FAIL(init_schema_info(table_id))) {
+    if (OB_FAIL(init_schema_info(table_id, arg_table_name))) {
       if (ret == OB_TABLE_NOT_EXIST) {
         ObString db("");
         const ObString &table_name = ls_op.get_table_name();

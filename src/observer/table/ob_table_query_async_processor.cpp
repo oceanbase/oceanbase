@@ -1211,6 +1211,11 @@ int ObTableQueryAsyncP::init_query_ctx(const ObString &arg_table_name) {
   } else if (OB_ISNULL(simple_table_schema_) || simple_table_schema_->get_table_id() == OB_INVALID_ID) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get simple table schema", K(ret), K(arg_table_name), KP(simple_table_schema_));
+  } else if (simple_table_schema_->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
+    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential_.tenant_id_),
+                K(credential_.database_id_), K(arg_table_name));
   } else if (is_tablegroup_req_ && arg_.table_id_ != simple_table_schema_->get_table_id()) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table id not correct in table group", K(ret));

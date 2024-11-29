@@ -1789,6 +1789,7 @@ public:
 public:
   ObTableLSOp()
     : ls_id_(share::ObLSID::INVALID_LS_ID),
+      table_name_(),
       table_id_(OB_INVALID_ID),
       rowkey_names_(),
       properties_names_(),
