@@ -430,18 +430,8 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < column_cnt; j++) {
       const ParseNode *element = column_cnt == 1 ? row_node : row_node->children_[j];
-      ParseNode pseudo_char_node = {.type_ = T_CHAR, .str_value_ = NULL, .str_len_ = 0};
       ObObjParam obj_param;
       ObExprResType res_type;
-      if (is_prepare_stage && T_QUESTIONMARK == element->type_) {
-        // In prepare stage, we resolve question marks as an empty char node.
-        // This is just for result type aggregation in prepare stage only.
-        // In execution time of ps protocol, the question marks will be resolved with real values.
-        pseudo_char_node.type_ = T_CHAR;
-        pseudo_char_node.str_len_ = 0;
-        pseudo_char_node.str_value_ = NULL;
-        element = &pseudo_char_node;
-      }
       if (OB_FAIL(ObResolverUtils::resolve_const(element, stmt_type, *allocator, coll_type,
                                                  nchar_collation, timezone_info, obj_param, is_paramlize,
                                                  literal_prefix, length_semantics,
@@ -459,6 +449,15 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
           if (OB_FAIL(table_def.column_types_.push_back(res_type))) {
             LOG_WARN("failed to push back", K(ret));
           }
+        } else if (is_prepare_stage
+                   && (ObUnknownType == res_type.get_type()
+                       || ObUnknownType == table_def.column_types_.at(j).get_type())) {
+          // in prepare stage, question marks are resolved as unknown type
+          // since unknown type cannot be merged with other normal types
+          // we ignore type aggregation if:
+          // 1. the current node is a question mark
+          // 2. the values table contains a question mark
+          // this is safe because correct column types will be deduced later in execute stage
         } else if (!ObSQLUtils::is_same_type(res_type, table_def.column_types_.at(j))) {
           ObExprResType new_res_type;
           ObExprVersion dummy_op(*allocator);
