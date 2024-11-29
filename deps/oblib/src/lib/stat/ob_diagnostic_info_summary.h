@@ -162,7 +162,7 @@ public:
   friend class ObDiagnosticInfoContainer;
   explicit ObBaseDiagnosticInfoSummary(
       DiagnosticInfoValueAlloc<ObDiagnosticInfoCollector, ObDiagnosticKey> value_alloc)
-      : collectors_(value_alloc), mutex_(ObLatchIds::DI_COLLECTOR_LOCK), cpu_cnt_(1)
+      : collectors_(value_alloc), mutex_(ObLatchIds::DI_COLLECTOR_LOCK), cpu_cnt_(1), is_inited_(false)
   {}
 
   ~ObBaseDiagnosticInfoSummary()
@@ -196,6 +196,7 @@ private:
   SummaryMap collectors_;
   lib::ObMutex mutex_;
   int64_t cpu_cnt_;
+  bool is_inited_;
 };
 
 } /* namespace common */

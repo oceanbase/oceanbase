@@ -67,7 +67,7 @@ ObDiagnosticInfoCollector::~ObDiagnosticInfoCollector()
     }
     ob_free(di_info_bundle_);
     di_info_bundle_ = nullptr;
-    LOG_INFO("destoy current di collector", KPC(this));
+    LOG_INFO("destroy current di collector", KPC(this));
   }
 }
 
@@ -185,8 +185,20 @@ int ObBaseDiagnosticInfoSummary::add_diagnostic_info(ObDiagnosticInfo &di)
 
 int ObBaseDiagnosticInfoSummary::init(int64_t cpu_cnt)
 {
-  cpu_cnt_ = cpu_cnt;
-  return collectors_.init();
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_ERROR("di summary init twice", K(cpu_cnt), KPC(this));
+  } else {
+    if (OB_FAIL(collectors_.init())) {
+      LOG_WARN("failed to init di summary collector", K(ret), K(cpu_cnt));
+    } else {
+      cpu_cnt_ = cpu_cnt;
+      is_inited_ = true;
+      LOG_INFO("init di base summary finished", K(cpu_cnt), KPC(this));
+    }
+  }
+  return ret;
 }
 
 int ObBaseDiagnosticInfoSummary::get_tenant_event(int64_t tenant_id, ObWaitEventStatArray &arr)
@@ -346,8 +358,8 @@ int ObBaseDiagnosticInfoSummary::for_each_group(
         fn(cur->get_group_id(), tmp);
         tmp.get_event_stats().reset();
         tmp.get_add_stat_stats().reset();
-        iter.revert(cur);
       }
+      iter.revert(cur);
     }
   }
   return ret;

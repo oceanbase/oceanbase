@@ -209,7 +209,7 @@ int ObRunningDiagnosticInfoContainer::init(int cpu_cnt)
       }
       if (OB_SUCC(ret)) {
         is_inited_ = true;
-        LOG_INFO("Successfully init diagnostic info collector", K(slot_num));
+        LOG_INFO("Successfully init running diagnostic info container", K(slot_num));
       } else {
         ob_free(buffer_);
         buffer_ = nullptr;
@@ -529,6 +529,7 @@ void ObDiagnosticInfoContainer::purge_tenant_summary(int64_t tenant_id)
       [tenant_id](const ObDiagnosticKey &key, ObDiagnosticInfoCollector *collector) -> bool {
     bool bret = false;
     if (key.get_tenant_id() == tenant_id) {
+      LOG_INFO("target di collector need to be purged", K(tenant_id), K(key), KPC(collector));
       bret = true;
     }
     return bret;
