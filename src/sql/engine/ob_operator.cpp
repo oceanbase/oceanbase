@@ -1221,7 +1221,7 @@ int ObOperator::get_next_row()
   if (OB_FAIL(check_stack_once())) {
     LOG_WARN("too deep recursive", K(ret));
   }
-#ifndef OB_BUILD_PACKAGE
+#ifdef ENABLE_SANITY
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!enable_get_next_row())) {
     ret = OB_ERR_UNEXPECTED;
