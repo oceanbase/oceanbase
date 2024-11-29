@@ -54,7 +54,6 @@ public:
   int prepare_task_ranges();
   int split_task_ranges(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const int64_t tablet_size, const int64_t hint_parallelism);
   int split_task_ranges_remote(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const int64_t tablet_size, const int64_t hint_parallelism);
-
   bool is_valid() const
   {
     return common::OB_INVALID_TENANT_ID != orig_tenant_id_ && common::OB_INVALID_TENANT_ID != dest_tenant_id_
@@ -100,6 +99,14 @@ public:
       K_(tablet_task_id), K_(dest_schema_version), K_(snapshot_version), K_(task_id),
       K_(execution_id), K_(compat_mode), K_(data_format_version), K_(orig_schema_tablet_size), K_(user_parallelism),
       K_(concurrent_cnt), K_(ranges));
+private:
+  int get_complement_parallel_mode(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const int64_t schema_version,
+      const lib::Worker::CompatMode compat_mode,
+      const bool is_recover_table,
+      bool &is_allow_parallel);
 public:
   bool is_inited_;
   uint64_t orig_tenant_id_;
