@@ -95,8 +95,9 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
     ret = OB_ERR_UNKNOWN_TABLE;
     LOG_WARN("fail get table schema by table id", K(ret), K(tenant_id), K(database_id), K(table_id));
   } else if (table_schema_->is_in_recyclebin()) {
-    ret = OB_SCHEMA_ERROR;
-    LOG_WARN("table is dropped and in recyclebin", K(ret), K(table_id));
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
+    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(tenant_id), K(database_id), K(table_id));
   } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, table_schema_->get_table_name(), timeout_ts))) {
     LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id), K(timeout_ts));
   }
@@ -401,6 +402,10 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
     ObString db("");
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db.ptr(), arg_table_name.ptr());
     LOG_WARN("table not exist", K(ret), K(tenant_id), K(database_id), K(arg_table_name));
+  } else if (table_schema_->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
+    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(tenant_id), K(database_id), K(arg_table_name));
   } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, arg_table_name, timeout_ts))) {
     LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id),
       K(arg_table_name), K(timeout_ts));

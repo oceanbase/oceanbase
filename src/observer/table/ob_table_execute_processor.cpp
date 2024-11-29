@@ -125,6 +125,9 @@ int ObTableApiExecuteP::init_tb_ctx()
                                          arg_.table_name_,
                                          get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
+  } else if (arg_.table_id_ != tb_ctx_.get_ref_table_id()) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_.table_id_), K(tb_ctx_.get_ref_table_id()));
   } else {
     switch(op_type) {
       case ObTableOperationType::INSERT: {

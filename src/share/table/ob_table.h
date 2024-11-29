@@ -1461,6 +1461,7 @@ public:
 public:
   ObTableLSOp()
     : ls_id_(share::ObLSID::INVALID_LS_ID),
+      table_name_(),
       table_id_(OB_INVALID_ID),
       rowkey_names_(),
       properties_names_(),
@@ -1477,6 +1478,7 @@ public:
   OB_INLINE void set_deserialize_allocator(common::ObIAllocator *allocator) { deserialize_alloc_ = allocator; }
   OB_INLINE int64_t count() const { return tablet_ops_.count(); }
   OB_INLINE const share::ObLSID &get_ls_id() const { return ls_id_; }
+  OB_INLINE const ObString &get_table_name() const { return table_name_; }
   OB_INLINE const ObTableTabletOp &at(int64_t idx) const { return tablet_ops_.at(idx); }
   OB_INLINE ObTableTabletOp &at(int64_t idx) { return tablet_ops_.at(idx); }
   OB_INLINE uint64_t get_table_id() const { return table_id_; }

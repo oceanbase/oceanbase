@@ -721,7 +721,7 @@ int ObTableBatchExecuteP::batch_execute(bool is_readonly)
     LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
   } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), ls_id))) {
     LOG_WARN("fail to get ls id", K(ret));
-  } else if (OB_FAIL(!is_readonly && check_table_has_global_index(table_id, exist_global_index))) {
+  } else if (!is_readonly && OB_FAIL(check_table_has_global_index(table_id, arg_.table_name_, exist_global_index))) {
     LOG_WARN("fail to check global index", K(ret), K(table_id));
   } else if (FALSE_IT(need_global_snapshot = !is_readonly && exist_global_index)) {
   } else if (OB_FAIL(start_trans(is_readonly, /* is_readonly */
@@ -824,6 +824,9 @@ int ObTableBatchExecuteP::init_single_op_tb_ctx(table::ObTableCtx &ctx,
                                      arg_.table_name_,
                                      get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
+  } else if (arg_.table_id_ != ctx.get_ref_table_id()) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_.table_id_), K(ctx.get_ref_table_id()));
   } else {
     ObTableOperationType::Type op_type = table_operation.type();
     switch (op_type) {
@@ -945,7 +948,7 @@ int ObTableBatchExecuteP::htable_mutate_row()
     LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
   } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), ls_id))) {
     LOG_WARN("fail to get ls id", K(ret));
-  } else if (OB_FAIL(check_table_has_global_index(table_id, exist_global_index))) {
+  } else if (OB_FAIL(check_table_has_global_index(table_id, arg_.table_name_, exist_global_index))) {
     LOG_WARN("fail to check global index", K(ret), K(table_id));
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_DELETE,

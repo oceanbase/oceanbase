@@ -137,6 +137,7 @@ uint64_t ObTableLSExecuteP::get_request_checksum()
 void ObTableLSExecuteP::reset_ctx()
 {
   need_retry_in_queue_ = false;
+  result_.reset();
   ObTableApiProcessorBase::reset_ctx();
 }
 
@@ -304,15 +305,22 @@ int ObTableLSExecuteP::check_has_global_index(bool &exist_global_index)
   } else {
     const ObTableLSOp &ls_op = arg_.ls_op_;
     const uint64_t table_id = ls_op.get_table_id();
-    for (int64_t i = 0; OB_SUCC(ret) && i < ls_op.count() && !exist_global_index; i++) {
-      if (OB_FAIL(schema_guard.get_simple_table_schema(credential_.tenant_id_, table_id, table_schema))) {
-        LOG_WARN("fail to get table schema", K(ret), K(table_id));
-      } else if (OB_ISNULL(table_schema)) {
-        ret = OB_SCHEMA_ERROR;
-        LOG_WARN("get null table schema", K(ret), K(table_id));
-      } else if (OB_FAIL(schema_guard.check_global_index_exist(credential_.tenant_id_, table_id, exist_global_index))) {
-        LOG_WARN("fail to check global index", K(ret), K(table_id));
-      }
+    const ObString& arg_table_name = ls_op.get_table_name();
+    if (OB_FAIL(schema_guard.get_simple_table_schema(credential_.tenant_id_, table_id, table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ObString db("");
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db.ptr(), arg_table_name.ptr());
+      LOG_WARN("table not exist", K(ret), K(credential_.tenant_id_), K(table_id));
+    } else if (table_schema->is_in_recyclebin()) {
+      ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+      LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
+      LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(arg_table_name), K(table_schema->get_table_name()));
+    } else if (arg_table_name.case_compare(table_schema->get_table_name()) != 0) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("arg table name is not match with schema table name", K(ret), K(arg_table_name), K(table_schema->get_table_name()));
+    } else if (OB_FAIL(schema_guard.check_global_index_exist(credential_.tenant_id_, table_id, exist_global_index))) {
+      LOG_WARN("fail to check global index", K(ret), K(table_id));
     }
   }
   return ret;

@@ -380,7 +380,7 @@ int ObTableApiProcessorBase::get_table_id(
     const int64_t database_id = credential_.database_id_;
     if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
       LOG_WARN("failed to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_id(tenant_id, database_id, table_name,
+    } else if (OB_FAIL(schema_guard.get_table_id(tenant_id, database_id, table_name,
         is_index, share::schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, real_table_id))) {
       LOG_WARN("failed to get table id", K(ret), K(tenant_id), K(database_id), K(table_name));
     } else if (OB_INVALID_ID == real_table_id) {
@@ -1060,7 +1060,7 @@ void ObTableRpcProcessor<T>::generate_sql_id()
 }
 
 // only use for batch_execute and htable_mutate_row, to check if need to get the global snapshot
-int ObTableApiProcessorBase::check_table_has_global_index(uint64_t table_id, bool &exists)
+int ObTableApiProcessorBase::check_table_has_global_index(uint64_t table_id, ObString &arg_table_name, bool &exists)
 {
   int ret = OB_SUCCESS;
   exists = false;
@@ -1077,9 +1077,17 @@ int ObTableApiProcessorBase::check_table_has_global_index(uint64_t table_id, boo
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(credential_.tenant_id_, table_id, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_id));
   } else if (OB_ISNULL(table_schema)) {
+    ObString db("");
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db.ptr(), arg_table_name.ptr());
+    LOG_WARN("table not exist", K(ret), K(credential_.tenant_id_), K(table_id));
+  } else if (table_schema->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
+    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(arg_table_name), K(table_schema->get_table_name()));
+  } else if (arg_table_name.case_compare(table_schema->get_table_name()) != 0) {
     ret = OB_SCHEMA_ERROR;
-    LOG_WARN("get null table schema", K(ret), K(table_id));
-  } else if (OB_FAIL(schema_guard.check_global_index_exist(credential_.tenant_id_, table_id, exists))) {
+    LOG_WARN("arg table name is not match with schema table name", K(ret), K(arg_table_name), K(table_schema->get_table_name()));
+  }  else if (OB_FAIL(schema_guard.check_global_index_exist(credential_.tenant_id_, table_id, exists))) {
     LOG_WARN("fail to check global index", K(ret), K(table_id));
   }
   return ret;

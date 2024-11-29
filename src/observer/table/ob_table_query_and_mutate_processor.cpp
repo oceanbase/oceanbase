@@ -183,7 +183,7 @@ int ObTableQueryAndMutateP::try_process()
     LOG_WARN("fail to get htable lock handle", K(ret));
   } else if (is_hkv && OB_FAIL(ObHTableUtils::lock_htable_row(table_id_, query, *lock_handle, ObHTableLockMode::EXCLUSIVE))) {
     LOG_WARN("fail to lock htable row", K(ret), K_(table_id), K(query));
-  } else if (OB_FAIL(check_table_has_global_index(table_id_, exist_global_index))) {
+  } else if (OB_FAIL(check_table_has_global_index(table_id_, arg_.table_name_, exist_global_index))) {
     LOG_WARN("fail to check global index", K(ret), K_(table_id));
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_UPDATE,
