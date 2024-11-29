@@ -525,6 +525,19 @@ int ObArrayExprUtils::deduce_nested_array_subschema_id(ObExecContext *exec_ctx, 
   return ret;
 }
 
+int ObArrayExprUtils::set_null_collection_type(ObExecContext *exec_ctx, ObExprResType& type)
+{
+  int ret = OB_SUCCESS;
+  uint16_t subschema_id = 0;
+  ObString type_def("ARRAY(NULL");
+  if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(type_def, subschema_id))) {
+    LOG_WARN("failed to get subschema id by type string", K(ret), K(DEFAULT_CAST_TYPE_STR));
+  } else {
+    type.set_collection(subschema_id);
+  }
+  return ret;
+}
+
 int ObVectorVectorArithFunc::operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx, ArithType type) const
 {
   int ret = OB_SUCCESS;

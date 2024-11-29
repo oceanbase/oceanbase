@@ -61,7 +61,9 @@ int ObExprArrayDistinct::calc_result_type1(ObExprResType &type,
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid param type", K(ret), K(type1.get_type()));
   } else if (type1.is_null()) {
-    // do nothing
+    if (OB_FAIL(ObArrayExprUtils::set_null_collection_type(exec_ctx, type))) {
+      LOG_WARN("failed to set null collection", K(ret));
+    }
   } else {
     type.set_collection(type1.get_subschema_id());
   }

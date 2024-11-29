@@ -116,7 +116,8 @@ int ObExprArray::eval_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
             if (OB_FAIL(ObArrayUtil::append(*arr_obj, elem_type->basic_meta_.get_obj_type(), datum))) {
               LOG_WARN("failed to append array value", K(ret), K(i));
             }
-          } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+          } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE ||
+                     arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
             ObString raw_bin;
             uint16_t elem_subid;
             ObArrayNested *nest_array = static_cast<ObArrayNested *>(arr_obj);

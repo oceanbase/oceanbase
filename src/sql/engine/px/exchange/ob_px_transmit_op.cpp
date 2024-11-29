@@ -1406,7 +1406,7 @@ int ObPxTransmitOp::prepare_for_nested_expr()
     if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(eval_ctx_))) {
       if (OB_FAIL(expr->nested_cast_to_uniform(brs_.size_, eval_ctx_, brs_.skip_))) {
         LOG_WARN("failed to cast nested expr to uniform", K(ret));
-      } else {
+      } else if (!params_.vectors_.empty()) { // params_.vectors_ might be not used
         params_.vectors_.at(i) = expr->get_vector(eval_ctx_);
       }
     }

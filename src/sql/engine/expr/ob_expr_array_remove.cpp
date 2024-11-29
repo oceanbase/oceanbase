@@ -60,7 +60,9 @@ int ObExprArrayRemove::calc_result_type2(ObExprResType &type,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
   } else if (type1.is_null()) {
-    // do nothing
+    if (OB_FAIL(ObArrayExprUtils::set_null_collection_type(exec_ctx, type))) {
+      LOG_WARN("failed to set null collection", K(ret));
+    }
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1.get_type()), ob_obj_type_str(type2.get_type()));
@@ -556,16 +558,20 @@ int ObExprArrayRemove::cg_expr(ObExprCGCtx &expr_cg_ctx,
     const ObObjType right_type = rt_expr.args_[1]->datum_meta_.type_;
     ObObjTypeClass right_tc = ob_obj_type_class(right_type);
     if (right_tc == ObNullTC) {
-      // use array element type
-      ObExecContext *exec_ctx = expr_cg_ctx.session_->get_cur_exec_ctx();
-      const uint16_t sub_id = rt_expr.args_[0]->obj_meta_.get_subschema_id();
-      ObObjType elem_type;
-      uint32_t unused;
-      bool is_vec = false;
-      if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, sub_id, elem_type, unused, is_vec))) {
-        LOG_WARN("failed to get collection elem type", K(ret), K(sub_id));
+      if (ob_is_null(rt_expr.args_[0]->datum_meta_.type_)) {
+        right_tc = ObNullTC;
       } else {
-        right_tc = ob_obj_type_class(elem_type);
+        // use array element type
+        ObExecContext *exec_ctx = expr_cg_ctx.session_->get_cur_exec_ctx();
+        const uint16_t sub_id = rt_expr.args_[0]->obj_meta_.get_subschema_id();
+        ObObjType elem_type;
+        uint32_t unused;
+        bool is_vec = false;
+        if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, sub_id, elem_type, unused, is_vec))) {
+          LOG_WARN("failed to get collection elem type", K(ret), K(sub_id));
+        } else {
+          right_tc = ob_obj_type_class(elem_type);
+        }
       }
     }
     if OB_SUCC(ret) {
@@ -598,7 +604,7 @@ int ObExprArrayRemove::cg_expr(ObExprCGCtx &expr_cg_ctx,
           break;
         default :
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("invalid type", K(ret), K(right_type));
+          LOG_WARN("invalid type", K(ret), K(right_type), K(right_tc));
       }
     }
   }

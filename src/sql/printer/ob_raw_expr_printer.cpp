@@ -204,9 +204,8 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
     case ObRawExpr::EXPR_VAR: {
       ObVarRawExpr *var_expr = static_cast<ObVarRawExpr *>(expr);
       if (var_expr->get_ref_expr() != NULL) {
-        int8_t idx = var_expr->get_ref_index();
-        char token = static_cast<char>('a' + idx);
-        DATA_PRINTF("%c", token);
+        int64_t idx = var_expr->get_ref_index();
+        DATA_PRINTF("para%ld", idx);
       }
       break;
     }
@@ -5364,12 +5363,11 @@ int ObRawExprPrinter::print_array_map(ObSysFunRawExpr *expr)
     LOG_WARN("doc type value isn't int value");
   } else {
     DATA_PRINTF("array_map((");
-    for (uint8_t i = 0; i <= max_idx; i++) {
+    for (uint32_t i = 0; i <= max_idx; i++) {
       if (i != 0) {
         DATA_PRINTF(",");
       }
-      char token = static_cast<char>('a' + i);
-      DATA_PRINTF("%c", token);
+      DATA_PRINTF("para%d", i);
     }
     DATA_PRINTF(")->(");
     PRINT_EXPR(expr->get_param_expr(0));

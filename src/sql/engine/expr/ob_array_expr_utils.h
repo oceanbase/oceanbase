@@ -103,6 +103,7 @@ public:
                                       const ObDatum &datum, ObArrayNested *nest_array);
   static int assign_array_to_uniform(ObEvalCtx &ctx, const ObExpr &expr, const ObExpr &dst_expr, int64_t row_idx);
   static int get_child_subschema_id(ObExecContext *exec_ctx, uint16_t subid, uint16_t &child_subid);
+  static int set_null_collection_type(ObExecContext *exec_ctx, ObExprResType& type);
 
   // for vector
   static int get_type_vector(const ObExpr &expr,

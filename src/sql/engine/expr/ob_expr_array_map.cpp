@@ -107,7 +107,7 @@ int ObExprArrayMapInfo::deep_copy(common::ObIAllocator &allocator,
 
 
 ObExprArrayMap::ObExprArrayMap(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUNC_SYS_ARRAY_MAP, N_ARRAY_MAP, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUNC_SYS_ARRAY_MAP, N_ARRAY_MAP, MORE_THAN_ONE, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -115,7 +115,7 @@ ObExprArrayMap::ObExprArrayMap(ObIAllocator &alloc,
                          ObExprOperatorType type,
                          const char *name,
                          int32_t param_num,
-                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+                         int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
 {
 }
 
@@ -149,6 +149,9 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
 
   if (OB_FAIL(ret)) {
   } else if (is_null_res) {
+    if (OB_FAIL(ObArrayExprUtils::set_null_collection_type(exec_ctx, type))) {
+      LOG_WARN("failed to set null collection", K(ret));
+    }
   } else {
     if (types_stack[0].get_type() == ObDecimalIntType || types_stack[0].get_type() == ObNumberType) {
       // decimalint isn't supported in array, so cast to supported type
