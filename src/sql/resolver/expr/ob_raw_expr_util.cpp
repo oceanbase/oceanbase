@@ -2467,7 +2467,7 @@ int ObRawExprUtils::try_modify_udt_col_expr_for_gen_col_recursively(const ObSQLS
       ObRawExpr *child_expr = expr->get_param_expr(i);
       ObRawExpr *tmp_expr = child_expr;
       CK (OB_NOT_NULL(child_expr));
-      OZ (try_modify_udt_col_expr_for_gen_col_recursively(session, table_schema, resolved_cols, expr_factory, child_expr));
+      OZ (SMART_CALL(try_modify_udt_col_expr_for_gen_col_recursively(session, table_schema, resolved_cols, expr_factory, child_expr)));
       if (OB_SUCC(ret) && (tmp_expr != child_expr)) {
         ObSysFunRawExpr *sys_func_expr = NULL;
         // replace happened
@@ -2514,8 +2514,8 @@ int ObRawExprUtils::try_modify_expr_for_gen_col_recursively(const ObSQLSessionIn
     for (int i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ObRawExpr *child_expr = expr->get_param_expr(i);
       CK (OB_NOT_NULL(child_expr));
-      OZ (try_modify_expr_for_gen_col_recursively(session, arg, expr_factory,
-                                              child_expr, expr_changed));
+      OZ (SMART_CALL(try_modify_expr_for_gen_col_recursively(session, arg, expr_factory,
+                                              child_expr, expr_changed)));
     }
   }
   return ret;
@@ -3198,7 +3198,7 @@ int ObRawExprUtils::replace_all_ref_column(ObRawExpr *&raw_expr, const common::O
     int64_t N = raw_expr->get_param_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N && offset < exprs.count(); ++i) {
       ObRawExpr *&child_expr = raw_expr->get_param_expr(i);
-      if (OB_FAIL(replace_all_ref_column(child_expr, exprs, offset))) {
+      if (OB_FAIL(SMART_CALL(replace_all_ref_column(child_expr, exprs, offset)))) {
         LOG_WARN("replace reference column failed", K(ret));
       }
     } // end for
@@ -3440,7 +3440,9 @@ int ObRawExprUtils::extract_column_exprs(const ObRawExpr *raw_expr,
     } else {
       int64_t N = raw_expr->get_param_count();
       for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-        ret = extract_column_exprs(raw_expr->get_param_expr(i), column_exprs, need_pseudo_column);
+        if (OB_FAIL(SMART_CALL(extract_column_exprs(raw_expr->get_param_expr(i), column_exprs, need_pseudo_column)))) {
+          LOG_WARN("failed to extract column exprs", K(ret));
+        }
       }
     }
   }
@@ -3830,7 +3832,7 @@ int ObRawExprUtils::extract_table_ids(const ObRawExpr *raw_expr, common::ObIArra
     } else {
       int64_t N = raw_expr->get_param_count();
       for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-        ret = extract_table_ids(raw_expr->get_param_expr(i), table_ids);
+        ret = SMART_CALL(extract_table_ids(raw_expr->get_param_expr(i), table_ids));
       }
     }
   }
@@ -6197,7 +6199,7 @@ int ObRawExprUtils::get_array_param_index(const ObRawExpr *expr, int64_t &param_
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_INDEX == param_index && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(get_array_param_index(expr->get_param_expr(i), param_index))) {
+      if (OB_FAIL(SMART_CALL(get_array_param_index(expr->get_param_expr(i), param_index)))) {
         LOG_WARN("get array param index failed", K(ret), KPC(expr));
       }
     }
@@ -6227,7 +6229,7 @@ int ObRawExprUtils::get_item_count(const ObRawExpr *expr, int64_t &count)
       if (OB_ISNULL(expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalie expr", K(i), K(ret));
-      } else if (OB_FAIL(get_item_count(expr->get_param_expr(i), count))) {
+      } else if (OB_FAIL(SMART_CALL(get_item_count(expr->get_param_expr(i), count)))) {
         LOG_WARN("fail to get item count", K(ret), KPC(expr), KPC(expr->get_param_expr(i)));
       }
     }
@@ -6574,7 +6576,7 @@ int ObRawExprUtils::extract_param_idxs(const ObRawExpr *expr, ObIArray<int64_t> 
     }
   } else if (expr->has_flag(CNT_STATIC_PARAM) || expr->has_flag(CNT_DYNAMIC_PARAM)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(extract_param_idxs(expr->get_param_expr(i), param_idxs))) {
+      if (OB_FAIL(SMART_CALL(extract_param_idxs(expr->get_param_expr(i), param_idxs)))) {
         LOG_WARN("extract param idxs failed", K(ret));
       }
     }
@@ -6725,7 +6727,7 @@ int ObRawExprUtils::replace_level_column(ObRawExpr *&raw_expr, ObRawExpr *to, bo
     int64_t N = raw_expr->get_param_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       ObRawExpr *&child_expr = raw_expr->get_param_expr(i);
-      if (OB_FAIL(replace_level_column(child_expr, to, replaced))) {
+      if (OB_FAIL(SMART_CALL(replace_level_column(child_expr, to, replaced)))) {
         LOG_WARN("replace reference column failed", K(ret));
       }
     } // end for
@@ -7848,11 +7850,11 @@ int ObRawExprUtils::process_window_complex_agg_expr(ObRawExprFactory &expr_facto
       if (OB_ISNULL(sub_expr)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("error argument.", K(ret));
-      } else if (OB_FAIL(process_window_complex_agg_expr(expr_factory,
+      } else if (OB_FAIL(SMART_CALL(process_window_complex_agg_expr(expr_factory,
                                                          sub_expr->get_expr_type(),
                                                          win_func,
                                                          sub_expr,
-                                                         win_exprs))) {
+                                                         win_exprs)))) {
         LOG_WARN("failed to process window complex agg node.", K(ret));
       } else {/*do nothing*/}
     }
@@ -8326,7 +8328,7 @@ int ObRawExprUtils::set_call_in_pl(ObRawExpr *&raw_expr)
     int64_t N = raw_expr->get_param_count();
     raw_expr->set_is_called_in_sql(false);
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-      OZ (set_call_in_pl(raw_expr->get_param_expr(i)));
+      OZ (SMART_CALL(set_call_in_pl(raw_expr->get_param_expr(i))));
     }
   }
 
@@ -8647,7 +8649,7 @@ int ObRawExprUtils::get_col_ref_expr_recursively(ObRawExpr *expr,
       if (OB_ISNULL(sub_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sub_expr should not be null", K(ret));
-      } else if (OB_FAIL(get_col_ref_expr_recursively(sub_expr, column_expr))) {
+      } else if (OB_FAIL(SMART_CALL(get_col_ref_expr_recursively(sub_expr, column_expr)))) {
         LOG_WARN("failed to get col ref expr recursively", K(ret));
       }
     }
