@@ -881,7 +881,7 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
       }
     }
 
-    OX(check_vsag_mem_used());
+    OZ(check_vsag_mem_used());
     if (OB_SUCC(ret)) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
       TCWLockGuard lock_guard(incr_data_->mem_data_rwlock_);
@@ -2169,7 +2169,7 @@ int ObPluginVectorIndexAdaptor::check_vsag_mem_used()
   // because mem_check_cnt_ is used to roughly determine
   // whether to perform memory verification and does not require accurate counting.
   mem_check_cnt_++;
-  if (is_mem_limited_ || mem_check_cnt_ % 10 == 0) {
+  if (is_mem_limited_ || mem_check_cnt_ > 10) {
     mem_check_cnt_ %= 10;
     ObRbMemMgr *mem_mgr = nullptr;
     int64_t bitmap_mem_used = 0;
