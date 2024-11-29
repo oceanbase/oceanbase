@@ -31,49 +31,33 @@
 namespace oceanbase {
 namespace sql {
 
-class ObParquetTableRowIterator : public ObExternalTableRowIterator {
+class ObParquetIteratorState : public ObExternalIteratorState {
 public:
-  struct StateValues {
-    StateValues() :
-      file_idx_(0),
-      part_id_(0),
-      row_group_idx_(0),
-      cur_file_id_(0),
-      cur_row_group_idx_(0),
-      end_row_group_idx_(-1),
-      cur_row_group_read_row_count_(0),
-      cur_row_group_row_count_(0),
-      cur_line_number_(0) {}
+  ObParquetIteratorState() :
+    row_group_idx_(0),
+    cur_row_group_idx_(0),
+    end_row_group_idx_(-1),
+    cur_row_group_read_row_count_(0),
+    cur_row_group_row_count_(0) {}
 
-    void reuse() {
-      file_idx_ = 0;
-      part_id_ = 0;
-      row_group_idx_ = 0;
-      cur_file_id_ = 0;
-      cur_row_group_idx_ = 0;
-      end_row_group_idx_ = -1;
-      cur_row_group_read_row_count_ = 0;
-      cur_row_group_row_count_ = 0;
-      cur_line_number_ = 0;
-      cur_file_url_.reset();
-      part_list_val_.reset();
-    }
+  virtual void reuse() override
+  {
+    ObExternalIteratorState::reuse();
+    row_group_idx_ = 0;
+    cur_row_group_idx_ = 0;
+    end_row_group_idx_ = -1;
+    cur_row_group_read_row_count_ = 0;
+    cur_row_group_row_count_ = 0;
+  }
+  DECLARE_VIRTUAL_TO_STRING;
+  int64_t row_group_idx_;
+  int64_t cur_row_group_idx_;
+  int64_t end_row_group_idx_;
+  int64_t cur_row_group_read_row_count_;
+  int64_t cur_row_group_row_count_;
+};
 
-    int64_t file_idx_;
-    int64_t part_id_;
-    int64_t row_group_idx_;
-    int64_t cur_file_id_;
-    int64_t cur_row_group_idx_;
-    int64_t end_row_group_idx_;
-    int64_t cur_row_group_read_row_count_;
-    int64_t cur_row_group_row_count_;
-    int64_t cur_line_number_;
-    ObString cur_file_url_;
-    ObNewRow part_list_val_;
-    TO_STRING_KV(K(file_idx_), K(part_id_), K(row_group_idx_), K(cur_file_id_), K(cur_row_group_idx_),
-                 K(end_row_group_idx_), K(cur_row_group_read_row_count_), K(cur_row_group_row_count_),
-                 K(cur_line_number_), K(cur_file_url_));
-  };
+class ObParquetTableRowIterator : public ObExternalTableRowIterator {
 public:
   ObParquetTableRowIterator() :
     read_props_(&arrow_alloc_),
@@ -162,10 +146,9 @@ private:
 private:
   int next_file();
   int next_row_group();
-  int calc_exprs_for_rowid(const int64_t read_count);
   int calc_pseudo_exprs(const int64_t read_count);
 private:
-  StateValues state_;
+  ObParquetIteratorState state_;
   lib::ObMemAttr mem_attr_;
   ObArenaAllocator allocator_;
   ObArenaAllocator str_res_mem_;

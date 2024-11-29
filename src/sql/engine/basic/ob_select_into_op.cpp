@@ -1553,7 +1553,7 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
         case apsara::odps::sdk::ODPS_VARCHAR:
         {
           buf_size = datum.get_string().length() * ObCharset::MAX_MB_LEN;
-          if (CHARSET_UTF8MB4 == ObCharset::charset_type_by_coll(datum_meta.cs_type_)) {
+          if (buf_size == 0 || CHARSET_UTF8MB4 == ObCharset::charset_type_by_coll(datum_meta.cs_type_)) {
             res_len = static_cast<uint32_t>(datum.get_string().length());
             buf = const_cast<char *>(datum.get_string().ptr());
           } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_size)))) {
@@ -1826,7 +1826,7 @@ int ObSelectIntoOp::set_odps_column_value_oracle(apsara::odps::sdk::ODPSTableRec
         case apsara::odps::sdk::ODPS_VARCHAR:
         {
           buf_size = datum.get_string().length() * ObCharset::MAX_MB_LEN;
-          if (CHARSET_UTF8MB4 == ObCharset::charset_type_by_coll(datum_meta.cs_type_)) {
+          if (buf_size == 0 || CHARSET_UTF8MB4 == ObCharset::charset_type_by_coll(datum_meta.cs_type_)) {
             res_len = static_cast<uint32_t>(datum.get_string().length());
             buf = const_cast<char *>(datum.get_string().ptr());
           } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_size)))) {

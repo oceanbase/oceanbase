@@ -27,6 +27,7 @@
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
 #include "share/external_table/ob_external_table_file_rpc_proxy.h"
 #include "sql/executor/ob_task_spliter.h"
+#include "sql/engine/table/ob_csv_table_row_iter.h"
 
 namespace oceanbase
 {

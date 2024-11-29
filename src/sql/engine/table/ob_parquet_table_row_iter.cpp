@@ -1426,7 +1426,7 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         column_exprs_.at(i)->set_evaluated_projected(eval_ctx);
       }
     }
-    OZ (calc_exprs_for_rowid(read_count));
+    OZ (calc_exprs_for_rowid(read_count, state_));
   }
   if (OB_SUCC(ret)) {
     state_.cur_row_group_read_row_count_ += read_count;
@@ -1448,28 +1448,21 @@ void ObParquetTableRowIterator::reset() {
   state_.reuse();
 }
 
-int ObParquetTableRowIterator::calc_exprs_for_rowid(const int64_t read_count)
+DEF_TO_STRING(ObParquetIteratorState)
 {
-  int ret = OB_SUCCESS;
-  ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
-  if (OB_NOT_NULL(file_id_expr_)) {
-    OZ (file_id_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
-    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_id_expr_->get_vector(eval_ctx));
-      vec->set_int(i, state_.cur_file_id_);
-    }
-    file_id_expr_->set_evaluated_flag(eval_ctx);
-  }
-  if (OB_NOT_NULL(line_number_expr_)) {
-    OZ (line_number_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
-    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(line_number_expr_->get_vector(eval_ctx));
-      vec->set_int(i, state_.cur_line_number_ + i);
-    }
-    line_number_expr_->set_evaluated_flag(eval_ctx);
-  }
-  state_.cur_line_number_ += read_count;
-  return ret;
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_NAME("ob_external_iterator_state");
+  J_COLON();
+  pos += ObExternalIteratorState::to_string(buf + pos, buf_len - pos);
+  J_COMMA();
+  J_KV(K_(row_group_idx),
+       K_(cur_row_group_idx),
+       K_(end_row_group_idx),
+       K_(cur_row_group_read_row_count),
+       K_(cur_row_group_row_count));
+  J_OBJ_END();
+  return pos;
 }
 
 
