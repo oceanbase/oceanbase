@@ -15696,6 +15696,8 @@ def_table_schema(
     ('cached_meta_page_num', 'int'),
     ('write_back_meta_page_num', 'int'),
     ('page_flush_cnt', 'int'),
+    ('type', 'int'),
+    ('compressible_fd', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

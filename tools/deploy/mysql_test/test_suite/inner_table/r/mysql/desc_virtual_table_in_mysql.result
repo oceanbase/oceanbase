@@ -5618,6 +5618,8 @@ meta_bytes	bigint(20)	NO		NULL
 cached_meta_page_num	bigint(20)	NO		NULL	
 write_back_meta_page_num	bigint(20)	NO		NULL	
 page_flush_cnt	bigint(20)	NO		NULL	
+type	bigint(20)	NO		NULL	
+compressible_fd	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_temp_file;
 IF(count(*) >= 0, 1, 0)
 1

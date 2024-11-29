@@ -78,6 +78,8 @@ private:
     CACHED_META_PAGE_NUM,
     WRITE_BACK_META_PAGE_NUM,
     PAGE_FLUSH_CNT,
+    TYPE,
+    COMPRESSIBLE_FD,
   };
   static const int64_t OB_MAX_FILE_LABEL_SIZE = tmp_file::ObTmpFileGlobal::TMP_FILE_MAX_LABEL_SIZE + 1;
   char ip_buffer_[common::OB_IP_STR_BUFF];

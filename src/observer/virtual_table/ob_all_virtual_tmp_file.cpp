@@ -215,6 +215,10 @@ int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileInfo *tmp_file_inf
             }
           }
           break;
+        case TYPE:
+          break;
+        case COMPRESSIBLE_FD:
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column_id", KR(ret), K(col_id));

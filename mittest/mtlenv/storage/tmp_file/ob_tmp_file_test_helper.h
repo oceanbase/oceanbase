@@ -194,6 +194,7 @@ enum TmpFileOp {
   WRITE,
   READ,
   TRUNCATE,
+  SEAL,
   OP_MAX
 };
 
