@@ -65,14 +65,36 @@ struct ObTableSingleQueryInfo : public ObTableInfoBase {
   table::ObTableQuery query_;
 };
 
-class ObTableHbaseRowKeyDefaultCompare
-{
+class ObTableMergeFilterCompare {
 public:
-  ObTableHbaseRowKeyDefaultCompare(): result_code_(common::OB_SUCCESS) {}
-  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret);
-  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs);
-  OB_INLINE int get_error_code() const { return result_code_; }
-  int result_code_;
+  ObTableMergeFilterCompare() = default;
+  virtual ~ObTableMergeFilterCompare() = default;
+
+  virtual int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const = 0;
+  virtual bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) = 0;
+
+  int get_error_code() const noexcept { return result_code_; }
+
+protected:
+  int result_code_ = OB_SUCCESS;
+};
+
+class ObTableHbaseRowKeyDefaultCompare final : public ObTableMergeFilterCompare {
+public:
+  ObTableHbaseRowKeyDefaultCompare() = default;
+  ~ObTableHbaseRowKeyDefaultCompare() override = default;
+
+  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
+  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
+};
+
+class ObTableHbaseRowKeyReverseCompare final : public ObTableMergeFilterCompare {
+public:
+  ObTableHbaseRowKeyReverseCompare() = default;
+  ~ObTableHbaseRowKeyReverseCompare() override = default;
+
+  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
+  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
 };
 
 /**
@@ -275,7 +297,7 @@ class ObTableQueryAsyncP :
 {
   typedef ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_ASYNC>>
     ParentType;
-  using ResultMergeIterator = table::ObMergeTableQueryResultIterator<common::ObNewRow, ObTableHbaseRowKeyDefaultCompare>;
+  using ResultMergeIterator = table::ObMergeTableQueryResultIterator<common::ObNewRow, ObTableMergeFilterCompare>;
 public:
   explicit ObTableQueryAsyncP(const ObGlobalContext &gctx);
   virtual ~ObTableQueryAsyncP() {}
