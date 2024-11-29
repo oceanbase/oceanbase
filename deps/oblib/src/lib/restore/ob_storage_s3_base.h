@@ -23,6 +23,7 @@
 #include "lib/allocator/ob_vslice_alloc.h"
 #include <algorithm>
 #include <iostream>
+#include "lib/utility/ob_tracepoint.h"
 
 #pragma push_macro("private")
 #undef private
@@ -323,7 +324,10 @@ protected:
       const RetType &outcome, const int64_t attempted_retries) const override
   {
     bool bret = false;
-    if (outcome.IsSuccess()) {
+    if (OB_SUCCESS != EventTable::EN_OBJECT_STORAGE_IO_RETRY) {
+      bret = true;
+      OB_LOG(INFO, "errsim object storage IO retry", K(outcome.IsSuccess()));
+    } else if (outcome.IsSuccess()) {
       bret = false;
     } else if (outcome.GetError().ShouldRetry()) {
       bret = true;

@@ -12,7 +12,6 @@
 
 #include "lib/restore/ob_storage.h"
 #include "ob_storage_s3_base.h"
-#include "lib/utility/ob_tracepoint.h"
 namespace oceanbase
 {
 namespace common
@@ -2511,6 +2510,7 @@ int ObStorageS3MultiPartWriter::write_single_part_()
     data_stream->write(base_buf_, base_buf_pos_);
     data_stream->flush();
     request.SetBody(data_stream);
+    request.SetContentLength(static_cast<long>(request.GetBody()->tellp()));
 
     Aws::S3::Model::UploadPartOutcome outcome;
     if (OB_FAIL(set_request_checkusum_algorithm(request, checksum_type_))) {

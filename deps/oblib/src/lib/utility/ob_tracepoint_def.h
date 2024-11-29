@@ -599,5 +599,6 @@ GLOBAL_ERRSIM_POINT_DEF(2453, EN_ENABLE_NEW_RESULT_META_DATA, "For testing enabl
 
 GLOBAL_ERRSIM_POINT_DEF(2501, EN_CHECK_SORT_CMP, "Used to check the legality of the compare method for std::sort");
 GLOBAL_ERRSIM_POINT_DEF(2502, EN_ENABLE_SHARED_STORAGE_COLUMN_GROUP, "whether to enable column group under shared storage mode");
+GLOBAL_ERRSIM_POINT_DEF(2503, EN_OBJECT_STORAGE_IO_RETRY, "whether to enable probability-based retries for object storage IO");
 
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

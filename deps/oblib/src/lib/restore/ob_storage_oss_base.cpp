@@ -354,7 +354,10 @@ bool ObStorageOSSRetryStrategy::should_retry_impl_(
     const RetType &outcome, const int64_t attempted_retries) const
 {
   bool bret = false;
-  if (OB_ISNULL(outcome)) {
+  if (OB_SUCCESS != EventTable::EN_OBJECT_STORAGE_IO_RETRY) {
+    bret = true;
+    OB_LOG(INFO, "errsim object storage IO retry");
+  } else if (OB_ISNULL(outcome)) {
     bret = false;
   } else if (aos_status_is_ok(outcome)) {
     bret = false;
