@@ -3253,6 +3253,8 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
   bool has_aggr = false; // defend aggr for ann search
   bool is_vec_index_hint = false;
   bool vector_index_match = false;
+  const bool has_match_expr_on_table = helper.match_expr_infos_.count() > 0;
+  bool can_use_global_index = false;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard()) ||
@@ -3266,6 +3268,7 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Table item should not be NULL", K(table_id), K(table_item), K(ret));
   } else if (stmt->is_select_stmt() && FALSE_IT(select_stmt = static_cast<const ObSelectStmt*>(stmt))) {
+  } else if (FALSE_IT(can_use_global_index = (table_item->access_all_part() && !has_match_expr_on_table))) {
   } else if (nullptr != select_stmt && FALSE_IT(has_aggr = select_stmt->get_aggr_item_size() > 0)) {
   } else if (stmt->has_vec_approx()
              && OB_NOT_NULL(vector_expr = stmt->get_first_vector_expr())
@@ -3306,11 +3309,14 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     } else if (OB_FAIL(valid_index_ids.assign(valid_hint_index_list))) {
       LOG_WARN("failed to assign index ids", K(ret));
     }
+  }
+
+  if (OB_FAIL(ret) || valid_index_ids.count() > 0) {
   } else if (OB_FAIL(schema_guard->get_can_read_index_array(ref_table_id,
                                                             tids,
                                                             index_count,
                                                             false,
-                                                            table_item->access_all_part(),
+                                                            can_use_global_index,
                                                             false /*domain index*/,
                                                             false /*spatial index*/,
                                                             false /*vector index*/))) {
@@ -18327,6 +18333,7 @@ int ObJoinOrder::get_valid_hint_index_list(const ObIArray<uint64_t> &hint_index_
                                            ObIArray<uint64_t> &valid_hint_index_ids) const
 {
   int ret = OB_SUCCESS;
+  const bool has_match_expr_on_table = helper.match_expr_infos_.count() > 0;
   if (OB_ISNULL(schema_guard)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(schema_guard));
@@ -18343,6 +18350,8 @@ int ObJoinOrder::get_valid_hint_index_list(const ObIArray<uint64_t> &hint_index_
     } else if (index_hint_table_schema->is_fts_index()
         && !has_match_expr_on_index(tid, helper.match_expr_infos_)) {
       // skip index hint on fulltext index without match expr on fulltext index
+    } else if (index_hint_table_schema->is_global_index_table() && has_match_expr_on_table) {
+      // scan with both global index and fulltext index is not supported yet
     } else if (OB_FAIL(valid_hint_index_ids.push_back(tid))) {
       LOG_WARN("failed to append valid hint index list", K(ret), K(tid));
     }
