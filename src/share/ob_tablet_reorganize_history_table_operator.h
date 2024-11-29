@@ -61,6 +61,15 @@ public:
   }
   TO_STRING_KV(K(tenant_id_), K(ls_id_), K(src_tablet_id_), K(dest_tablet_id_),
       K(type_), K(create_time_), K(finish_time_));
+  void reset() {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    ls_id_.reset();
+    src_tablet_id_.reset();
+    dest_tablet_id_.reset();
+    type_ = INVALID_REORGANIZE_TYPE;
+    create_time_ = 0;
+    finish_time_ = 0;
+  }
 public:
   uint64_t tenant_id_;
   ObLSID ls_id_;
@@ -115,6 +124,10 @@ public:
       const uint64_t tenant_id,
       const common::ObTabletID &tablet_id,
       ReorganizeTabletPair &tablet_pair);
+  static int insert_(
+      ObISQLClient &sql_proxy,
+      const ObTabletReorganizeRecord &incomplete_record,
+      const ObIArray<ObTabletID> &dest_tablet_ids);
   static int insert(
       ObISQLClient &sql_proxy,
       const ObTabletReorganizeRecord &record);

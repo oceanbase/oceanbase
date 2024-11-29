@@ -938,7 +938,7 @@ private:
       const sql::ObOpSpec *spec,
       uint64_t &table_id);
 
-private:
+public:
   const static int64_t MAX_BATCH_COUNT = 128;
 };
 

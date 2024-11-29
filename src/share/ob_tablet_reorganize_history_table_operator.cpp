@@ -216,26 +216,66 @@ int ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_dest(
   return ret;
 }
 
-int ObTabletReorganizeHistoryTableOperator::insert(
+int ObTabletReorganizeHistoryTableOperator::insert_(
     ObISQLClient &sql_proxy,
-    const ObTabletReorganizeRecord &record)
+    const ObTabletReorganizeRecord &incomplete_record,
+    const ObIArray<ObTabletID> &dest_tablet_ids)
 {
   int ret = OB_SUCCESS;
-  common::ObSqlString insert_sql;
-  int64_t affected_rows = 0;
-  if (OB_FAIL(insert_sql.assign_fmt("INSERT INTO %s (tenant_id, ls_id, src_tablet_id, dest_tablet_id, "
-          "type, create_time, finish_time) VALUES (%lu, %ld, %ld, %ld, %ld, usec_to_time(%lu), usec_to_time(%lu))"
-          " ON DUPLICATE KEY UPDATE finish_time = usec_to_time(%lu)",
-          OB_ALL_TABLET_REORGANIZE_HISTORY_TNAME, ObSchemaUtils::get_extract_tenant_id(record.tenant_id_, record.tenant_id_), record.ls_id_.id(), record.src_tablet_id_.id(),
-          record.dest_tablet_id_.id(), int64_t(record.type_), record.create_time_, record.finish_time_, record.finish_time_))) {
-    LOG_WARN("failed to assign fmt", K(ret), K(record.tenant_id_), K(record.ls_id_), K(record.src_tablet_id_),
-        K(record.dest_tablet_id_), K(record.type_), K(record.create_time_), K(record.finish_time_));
-  } else if (OB_FAIL(sql_proxy.write(record.tenant_id_, insert_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to write sql", K(ret), K(insert_sql));
+  if (OB_UNLIKELY(dest_tablet_ids.count() == 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_tablet_ids));
   } else {
-    LOG_INFO("insert tablet reorganize history table success", K(ret), K(record.tenant_id_), K(record.ls_id_),
-        K(record.src_tablet_id_), K(record.dest_tablet_id_), K(record.type_), K(record.create_time_),
-        K(record.finish_time_));
+    common::ObSqlString insert_sql;
+    ObTabletReorganizeRecord complete_record(incomplete_record.tenant_id_,
+                                             incomplete_record.ls_id_,
+                                             incomplete_record.src_tablet_id_,
+                                             incomplete_record.dest_tablet_id_,
+                                             incomplete_record.type_,
+                                             incomplete_record.create_time_,
+                                             incomplete_record.finish_time_);
+    if (OB_FAIL(insert_sql.assign_fmt("INSERT INTO %s (tenant_id, ls_id, src_tablet_id, dest_tablet_id, "
+        "type, create_time, finish_time) VALUES ", OB_ALL_TABLET_REORGANIZE_HISTORY_TNAME))) {
+      LOG_WARN("failed to assign fmt", K(ret));
+    }
+    int64_t affected_rows = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablet_ids.count(); ++i) {
+      complete_record.dest_tablet_id_ = dest_tablet_ids.at(i);
+      if (OB_FAIL(insert_sql.append_fmt("(%lu, %ld, %ld, %ld, %ld, usec_to_time(%lu), usec_to_time(%lu))",
+          ObSchemaUtils::get_extract_tenant_id(complete_record.tenant_id_, complete_record.tenant_id_), complete_record.ls_id_.id(), complete_record.src_tablet_id_.id(),
+          complete_record.dest_tablet_id_.id(), int64_t(complete_record.type_), complete_record.create_time_, complete_record.finish_time_))) {
+        LOG_WARN("failed to append fmt", K(ret), K(complete_record));
+      } else if ((i%ObDDLUtil::MAX_BATCH_COUNT) == ObDDLUtil::MAX_BATCH_COUNT - 1 || i == dest_tablet_ids.count() - 1) {
+        if (OB_FAIL(insert_sql.append_fmt("ON DUPLICATE KEY UPDATE finish_time = usec_to_time(VALUES(finish_time));"))) {
+          LOG_WARN("failed to append insert_sql", K(ret), K(insert_sql));
+        } else if (OB_FAIL(sql_proxy.write(complete_record.tenant_id_, insert_sql.ptr(), affected_rows))) {
+          LOG_WARN("failed to write sql", K(ret), K(insert_sql));
+        } else {
+          LOG_INFO("insert tablet reorganize history table success", K(ret), K(affected_rows), K(complete_record.tenant_id_));
+          insert_sql.reuse();
+          if (OB_FAIL(insert_sql.assign_fmt("INSERT INTO %s (tenant_id, ls_id, src_tablet_id, dest_tablet_id, "
+              "type, create_time, finish_time) VALUES ", OB_ALL_TABLET_REORGANIZE_HISTORY_TNAME))) {
+            LOG_WARN("failed to assign fmt", K(ret));
+          }
+        }
+      } else if (OB_FAIL(insert_sql.append(", "))) {
+        LOG_WARN("failed to append insert_sql", K(ret), K(insert_sql));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletReorganizeHistoryTableOperator::insert(
+      ObISQLClient &sql_proxy,
+      const ObTabletReorganizeRecord &record)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObTabletID, 1> dest_tablet_id;
+  if (OB_FAIL(dest_tablet_id.push_back(record.dest_tablet_id_))) {
+    LOG_WARN("failed to push back into dest tablet id", K(ret));
+  } else if (OB_FAIL(insert_(sql_proxy, record, dest_tablet_id))) {
+    LOG_WARN("failed to do insert insert_", K(ret), K(record));
   }
   return ret;
 }
@@ -299,32 +339,32 @@ int ObTabletReorganizeHistoryTableOperator::inner_batch_insert_(
     const int64 finish_time)
 {
   int ret = OB_SUCCESS;
-  ARRAY_FOREACH_X(dest_tablet_ids, idx, cnt, OB_SUCC(ret)) {
-    const ObTabletID &src_tablet_id = tablet_id;
-    const ObTabletID &dest_tablet_id = dest_tablet_ids.at(idx);
-    ObLocationService *location_service = nullptr;
-    share::ObLSID ls_id;
-    ObAddr leader_addr;
-    const int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
-    if (OB_ISNULL(location_service = GCTX.location_service_)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("location_cache is null", K(ret));
-    } else if (OB_FAIL(ObDDLUtil::get_tablet_leader_addr(location_service,
+  ObArray<ObTabletReorganizeRecord> records;
+  share::ObLSID ls_id;
+  ObAddr leader_addr;
+  ObLocationService *location_service = nullptr;
+  const int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
+  // it's guranteed that all dest_tablets_ids are located at the same server with src
+  // so all the records can share one single record instance
+  if (OB_ISNULL(location_service = GCTX.location_service_)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("location_cache is null", K(ret));
+  } else if (OB_FAIL(ObDDLUtil::get_tablet_leader_addr(location_service,
             tenant_id, tablet_id, rpc_timeout, ls_id, leader_addr))) {
-      LOG_WARN("get tablet leader addr failed", K(ret));
-    } else {
-      ObTabletReorganizeRecord record = ObTabletReorganizeRecord(tenant_id,
-                                                                 ls_id,
-                                                                 src_tablet_id,
-                                                                 dest_tablet_id,
-                                                                 ObTabletReorganizeType::SPLIT,
-                                                                 start_time/*create_time*/,
-                                                                 finish_time/*finish_time*/);
-      // TODO(yanfeng): do real batch later
-      if (OB_FAIL(insert(sql_proxy, record))) {
-        LOG_WARN("failed to insert record", K(ret), K(record));
-      }
-    }
+    LOG_WARN("get tablet leader addr failed", K(ret));
+  }
+  ObTabletID invalid_des_tablet_id;
+  ObTabletReorganizeRecord incomplete_record = ObTabletReorganizeRecord(tenant_id,
+                                                                        ls_id,
+                                                                        tablet_id,
+                                                                        invalid_des_tablet_id,
+                                                                        ObTabletReorganizeType::SPLIT,
+                                                                        start_time/*create_time*/,
+                                                                        finish_time/*finish_time*/);
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(insert_(sql_proxy, incomplete_record, dest_tablet_ids))) {
+    LOG_WARN("failed to insert record", K(ret), K(records));
   }
   return ret;
 }
