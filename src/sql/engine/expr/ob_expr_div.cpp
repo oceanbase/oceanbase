@@ -142,8 +142,12 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
           ObPrecision calc_prec1 = type1_acc.get_precision() + type2_acc.get_precision()
                                    + div_precision_increment + extra_scale_for_decint_div;
           ObScale calc_scale1 = type1_acc.get_scale() + calc_prec1 - type1_acc.get_precision();
-          if (calc_prec1 > OB_MAX_DECIMAL_POSSIBLE_PRECISION) {
+          if (calc_prec1 > OB_MAX_DECIMAL_POSSIBLE_PRECISION || calc_scale1 > number::ObNumber::FLOATING_SCALE) {
             // to large precision, use number as calc type instead
+
+            // if we have a decimal int with (P, S) = (81, 73)
+            // sizeof(floating digits) = 9, sizeof(integer digits) = 1, however ObNumber can only store 9 digits as maximum
+            // thus, fall back to ObNumber instead.
             type1.set_calc_type(ObNumberType);
             type2.set_calc_type(ObNumberType);
           } else {
