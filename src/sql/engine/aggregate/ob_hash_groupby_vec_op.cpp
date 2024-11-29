@@ -1398,7 +1398,9 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(aggr_processor_.add_one_row(start_agg_id, end_agg_id,
                                                          batch_new_rows_[i], i,
-                                                         child_brs->size_, aggr_vectors_))) {
+                                                         child_brs->size_, aggr_vectors_,
+                                                         MY_SPEC.implicit_aggr_in_3stage_indexes_))) {
+
             LOG_WARN("fail to process row", K(ret));
           }
         }
@@ -1433,7 +1435,8 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
             if (OB_SUCC(ret)) {
               if (OB_FAIL(aggr_processor_.add_one_row(start_agg_id, end_agg_id,
                                                       batch_old_rows_[i], i,
-                                                      child_brs->size_, aggr_vectors_))) {
+                                                      child_brs->size_, aggr_vectors_,
+                                                      MY_SPEC.implicit_aggr_in_3stage_indexes_))) {
                 LOG_WARN("fail to process row", K(ret));
               }
             }
@@ -2356,7 +2359,8 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(aggr_processor_.add_one_row(start_agg_id, end_agg_id,
                                                       batch_old_rows_[i], i,
-                                                      brs_.size_, aggr_vectors_))) {
+                                                      brs_.size_, aggr_vectors_,
+                                                      MY_SPEC.implicit_aggr_in_3stage_indexes_))) {
         LOG_WARN("fail to process row", K(ret));
       } else {
         brs_.set_skip(i);
