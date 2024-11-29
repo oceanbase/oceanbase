@@ -1881,7 +1881,11 @@ int ObSysVarOnCheckFuncs::check_and_convert_charset(ObExecContext &ctx,
   UNUSED(ctx);
   int ret = OB_SUCCESS;
   ObString cs_name;
-  if (true == set_var.is_set_default_) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (true == set_var.is_set_default_) {
     // do nothing
   } else if (true == in_val.is_null()) {
     // do nothing
@@ -1899,6 +1903,12 @@ int ObSysVarOnCheckFuncs::check_and_convert_charset(ObExecContext &ctx,
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("charset is valid, but it has no default collation", K(ret),
                   K(cs_name), K(cs_type));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(static_cast<ObCharsetType>(cs_type),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(static_cast<ObCollationType>(coll_type),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check collation data version valid", K(ret));
       } else {
         out_val.set_int(static_cast<int64_t>(coll_type));
       }
@@ -1917,6 +1927,12 @@ int ObSysVarOnCheckFuncs::check_and_convert_charset(ObExecContext &ctx,
           ObString cs_name_str(val_buf);
           LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, cs_name_str.length(), cs_name_str.ptr());
         }
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(static_cast<ObCollationType>(int64_val)),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(static_cast<ObCollationType>(int64_val),
+                                                                          session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check collation data version valid", K(ret));
       } else {
         out_val = in_val;
       }
@@ -1976,7 +1992,11 @@ int ObSysVarOnCheckFuncs::check_and_convert_collation_not_null(ObExecContext &ct
   UNUSED(sys_var);
   UNUSED(ctx);
   int ret = OB_SUCCESS;
-  if (true == set_var.is_set_default_) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (true == set_var.is_set_default_) {
     // do nothing
   } else if (true == in_val.is_null()) {
     ret = OB_ERR_WRONG_VALUE_FOR_VAR;
@@ -2008,6 +2028,12 @@ int ObSysVarOnCheckFuncs::check_and_convert_collation_not_null(ObExecContext &ct
           ObString coll_name_str(val_buf);
           LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, coll_name_str.length(), coll_name_str.ptr());
         }
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(static_cast<ObCollationType>(int64_val)),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(static_cast<ObCollationType>(int64_val),
+                                                                          session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check collation data version valid", K(ret));
       } else {
         out_val = in_val;
       }
