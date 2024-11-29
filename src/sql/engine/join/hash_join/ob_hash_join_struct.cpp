@@ -106,6 +106,41 @@ int ObHJStoredRow::attach_rows(const ObExprPtrIArray &exprs,
   return ret;
 }
 
+int ObHJStoredRow::attach_rows(const ObExprPtrIArray &exprs,
+                               ObEvalCtx &ctx,
+                               const RowMeta &row_meta,
+                               const ObHJStoredRow **srows,
+                               const int64_t size) {
+  int ret = OB_SUCCESS;
+  if (size <= 0) {
+    // do nothing
+  } else {
+    for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < exprs.count(); col_idx++) {
+      ObExpr *expr = exprs.at(col_idx);
+      if (OB_FAIL(expr->init_vector_default(ctx, size))) {
+        LOG_WARN("fail to init vector", K(ret));
+      } else if (expr->is_nested_expr() && !is_uniform_format(expr->get_format(ctx))) {
+        if (OB_FAIL(ObArrayExprUtils::nested_expr_from_rows(*expr, ctx, row_meta,
+              reinterpret_cast<const ObCompactRow **>(srows), size, col_idx))) {
+          LOG_WARN("fail to do nested expr from rows", K(ret));
+        } else {
+          expr->set_evaluated_projected(ctx);
+        }
+    } else {
+        ObIVector *vec = expr->get_vector(ctx);
+        if (VEC_UNIFORM_CONST != vec->get_format()) {
+          ret = vec->from_rows(row_meta,
+                               reinterpret_cast<const ObCompactRow **>(srows),
+                               size, col_idx);
+          expr->set_evaluated_projected(ctx);
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 
 } // end namespace sql
 } // end namespace oceanbase

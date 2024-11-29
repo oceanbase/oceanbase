@@ -2523,6 +2523,8 @@ int ObHashJoinVecOp::skip_rows_in_dumped_part()
     ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
     for (int64_t i = 0; OB_SUCC(ret) && i < probe_batch_rows_.brs_.size_; i++) {
       if (probe_batch_rows_.brs_.skip_->exist(i)) {
+        // Compactrow is set to null to make it to skip when projecting to vec.
+        probe_batch_rows_.stored_rows_[i] = nullptr;
         continue;
       }
       int64_t part_idx = get_part_idx(probe_batch_rows_.hash_vals_[i]);
@@ -2546,6 +2548,7 @@ int ObHashJoinVecOp::skip_rows_in_dumped_part()
                                           probe_batch_rows_.hash_vals_[i]);
           }
         }
+        probe_batch_rows_.stored_rows_[i] = nullptr;
       }
     }  //for end;
   }
@@ -2651,8 +2654,7 @@ int ObHashJoinVecOp::probe()
     if (probe_batch_rows_.from_stored_) {
       const ObExprPtrIArray &exprs = right_->get_spec().output_;
       OZ(ObHJStoredRow::attach_rows(exprs, eval_ctx_, jt_ctx_.probe_row_meta_,
-                                    probe_batch_rows_.stored_rows_,
-                                    output_info_.selector_, output_info_.selector_cnt_));
+                                    probe_batch_rows_.stored_rows_, probe_batch_rows_.brs_.size_));
       if (OB_FAIL(ret)) {
       } else {
         // if probe_batch_rows from stored, need to eval probe key

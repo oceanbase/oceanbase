@@ -118,6 +118,9 @@ OB_INLINE int ObFixedLengthFormat<ValueType>::from_rows(const sql::RowMeta &row_
     const int64_t offset = row_meta.fixed_offsets(col_idx);
     if (!has_null()) {
       for (int64_t i = 0; i < size; i++) {
+        if (nullptr == stored_rows[i]) {
+          continue;
+        }
         if (stored_rows[i]->is_null(col_idx)) {
           set_null(i);
         } else {
@@ -129,6 +132,9 @@ OB_INLINE int ObFixedLengthFormat<ValueType>::from_rows(const sql::RowMeta &row_
       }
     } else {
       for (int64_t i = 0; i < size; i++) {
+        if (nullptr == stored_rows[i]) {
+          continue;
+        }
         if (stored_rows[i]->is_null(col_idx)) {
           set_null(i);
         } else {
@@ -140,6 +146,9 @@ OB_INLINE int ObFixedLengthFormat<ValueType>::from_rows(const sql::RowMeta &row_
   } else {
     const int64_t var_idx = row_meta.var_idx(col_idx);
     for (int64_t i = 0; i < size; i++) {
+      if (nullptr == stored_rows[i]) {
+        continue;
+      }
       if (stored_rows[i]->is_null(col_idx)) {
         set_null(i);
       } else {
@@ -164,6 +173,9 @@ OB_INLINE int ObFixedLengthFormat<ValueType>::from_rows(const sql::RowMeta &row_
     const int64_t offset = row_meta.fixed_offsets(col_idx);
     if (!has_null()) {
       for (int64_t i = 0; i < size; i++) {
+        if (nullptr == stored_rows[i]) {
+          continue;
+        }
         int64_t row_idx = selector[i];
         if (stored_rows[i]->is_null(col_idx)) {
           set_null(row_idx);
@@ -176,6 +188,9 @@ OB_INLINE int ObFixedLengthFormat<ValueType>::from_rows(const sql::RowMeta &row_
       }
     } else {
       for (int64_t i = 0; i < size; i++) {
+        if (nullptr == stored_rows[i]) {
+          continue;
+        }
         int64_t row_idx = selector[i];
         if (stored_rows[i]->is_null(col_idx)) {
           set_null(row_idx);
@@ -188,6 +203,9 @@ OB_INLINE int ObFixedLengthFormat<ValueType>::from_rows(const sql::RowMeta &row_
   } else {
     const int64_t var_idx = row_meta.var_idx(col_idx);
     for (int64_t i = 0; i < size; i++) {
+      if (nullptr == stored_rows[i]) {
+        continue;
+      }
       int64_t row_idx = selector[i];
       if (stored_rows[i]->is_null(col_idx)) {
         set_null(row_idx);

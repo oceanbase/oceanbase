@@ -1020,6 +1020,9 @@ int ObArrayExprUtils::nested_expr_from_rows(const ObExpr &expr, ObEvalCtx &ctx, 
   }
   for (int64_t i = 0; i < size && OB_SUCC(ret); i++) {
     int64_t row_idx = i;
+    if (nullptr == stored_rows[i]) {
+      continue;
+    }
     if (selector != nullptr) {
       row_idx = selector[i];
     }

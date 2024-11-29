@@ -123,6 +123,11 @@ struct ObHJStoredRow : public ObCompactRow
                          const ObHJStoredRow **srows,
                          const uint16_t selector[],
                          const int64_t size);
+  static int attach_rows(const ObExprPtrIArray &exprs,
+                         ObEvalCtx &ctx,
+                         const RowMeta &row_meta,
+                         const ObHJStoredRow **srows,
+                         const int64_t size);
 };
 
 struct OutputInfo {
