@@ -148,6 +148,7 @@ public:
     m_allocator_(allocator_), new_main_tablet_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, m_allocator_),
     new_lob_tablet_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, m_allocator_),
     cmp_ret_(0), comparer_(cmp_ret_), total_map_(nullptr), sub_maps_(),
+    skipped_split_major_keys_(),
     row_inserted_(0), physical_row_count_(0)
   {}
   ~ObLobSplitContext() { destroy(); }
@@ -159,7 +160,8 @@ public:
   TO_STRING_KV(K_(is_inited), K_(data_ret), K_(is_lob_piece),
     K_(ls_handle), K_(main_tablet_id), K_(main_tablet_handle),
     K_(lob_meta_tablet_handle), K_(new_main_tablet_ids),
-    K_(new_lob_tablet_ids), KPC_(total_map), K_(sub_maps), K_(main_table_ranges), K_(row_inserted), K_(physical_row_count));
+    K_(new_lob_tablet_ids), KPC_(total_map), K_(sub_maps), K_(main_table_ranges),
+    K_(skipped_split_major_keys), K_(row_inserted), K_(physical_row_count));
 private:
   common::ObArenaAllocator range_allocator_; // for datum range.
 public:
@@ -181,7 +183,8 @@ public:
   ObLobIdItemCompare comparer_;
   ObLobIdMap* total_map_;
   ObArray<ObLobIdMap*> sub_maps_;
-  ObSEArray<ObDatumRange, 16> main_table_ranges_;
+  ObArray<ObDatumRange> main_table_ranges_;
+  ObArray<ObITable::TableKey> skipped_split_major_keys_;
   int64_t row_inserted_;
   int64_t physical_row_count_;
 };

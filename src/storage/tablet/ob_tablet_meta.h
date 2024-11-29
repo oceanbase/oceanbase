@@ -21,6 +21,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_template_utils.h"
 #include "lib/utility/ob_unify_serialize.h"
+#include "share/ob_ddl_common.h"
 #include "share/ob_tablet_autoincrement_param.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/ob_storage_struct.h"
@@ -72,6 +73,7 @@ public:
       const int64_t create_schema_version,
       const share::SCN &clog_checkpoint_scn,
       const share::SCN &mds_checkpoint_scn,
+      const share::ObSplitTabletInfo &split_info,
       const bool micro_index_clustered,
       const bool has_cs_replica,
       const bool need_generate_cs_replica_cg_array);
@@ -80,6 +82,7 @@ public:
       const int64_t snapshot_version,
       const int64_t multi_version_start,
       const int64_t max_sync_storage_schema_version,
+      const share::ObSplitTabletInfo &split_info,
       const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
       const ObDDLTableStoreParam &ddl_info = ObDDLTableStoreParam());
   int init(
@@ -164,7 +167,8 @@ public:
                K_(create_schema_version),
                K_(space_usage),
                K_(micro_index_clustered),
-               K_(ddl_replay_status));
+               K_(ddl_replay_status),
+               K_(split_info));
 
 public:
   int32_t version_; // alignment: 4B, size: 4B
@@ -228,6 +232,7 @@ public:
   bool has_next_tablet_; // alignment: 1B, size: 2B
   bool is_empty_shell_; // alignment: 1B, size: 2B
   bool micro_index_clustered_; // alignment: 1B, size: 2B
+  share::ObSplitTabletInfo split_info_; // alignment: 8B, size: 4B
 
 private:
   void update_extra_medium_info(
@@ -313,7 +318,8 @@ public:
                K_(micro_index_clustered),
                K_(major_ckm_info),
                K_(ddl_replay_status),
-               K_(is_storage_schema_cs_replica));
+               K_(is_storage_schema_cs_replica),
+               K_(split_info));
 private:
   int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
@@ -368,6 +374,7 @@ public:
   blocksstable::ObMajorChecksumInfo major_ckm_info_; // from table store
   ObCSReplicaDDLReplayStatus ddl_replay_status_;
   bool is_storage_schema_cs_replica_;
+  share::ObSplitTabletInfo split_info_;
 
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema

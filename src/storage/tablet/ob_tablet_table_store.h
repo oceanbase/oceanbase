@@ -436,6 +436,10 @@ private:
   bool is_major_sstable_empty(const share::SCN &ddl_commit_scn) const;
   int get_ddl_major_sstables(ObIArray<ObITable *> &ddl_major_sstables) const;
   // ddl-split
+  int check_skip_split_tables_exist_(
+      const ObBatchUpdateTableStoreParam &param,
+      const ObTabletTableStore &old_store,
+      const ObTablet &tablet);
   int build_split_new_table_store_(
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,

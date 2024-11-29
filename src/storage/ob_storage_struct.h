@@ -481,12 +481,13 @@ public:
   ~ObSplitTableStoreParam();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(snapshot_version), K_(multi_version_start), K_(merge_type));
+  TO_STRING_KV(K_(snapshot_version), K_(multi_version_start), K_(merge_type), K_(skip_split_keys));
 
 public:
   int64_t snapshot_version_;
   int64_t multi_version_start_;
   compaction::ObMergeType merge_type_;
+  ObSEArray<ObITable::TableKey, MAX_SSTABLE_CNT_IN_STORAGE> skip_split_keys_;
 };
 
 struct ObBatchUpdateTableStoreParam final

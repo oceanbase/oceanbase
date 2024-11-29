@@ -1057,6 +1057,26 @@ public:
       ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list);
 };
 
+class ObSplitTabletInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSplitTabletInfo() : split_info_(0) { }
+  ~ObSplitTabletInfo() { reset(); }
+  void reset() { split_info_ = 0; }
+  void set_data_incomplete(const bool is_data_incomplete) { is_data_incomplete_ = is_data_incomplete; }
+  bool is_data_incomplete() const { return is_data_incomplete_; }
+  TO_STRING_KV(K_(split_info));
+private:
+  union {
+    uint32_t split_info_;
+    struct {
+      uint32_t is_data_incomplete_: 1; // whether the data of split dest tablet is complete.
+      uint32_t reserved: 31;
+    };
+  };
+};
+
 typedef common::ObCurTraceId::TraceId DDLTraceId;
 class ObDDLEventInfo final
 {
