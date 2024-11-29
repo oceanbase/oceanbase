@@ -182,6 +182,7 @@ void ObTableLoadCoordinatorCtx::destroy()
   segment_ctx_map_.reset();
   commited_trans_ctx_array_.reset();
   if (nullptr != empty_insert_tablet_ctx_manager_) {
+    empty_insert_tablet_ctx_manager_->~ObTableLoadEmptyInsertTabletCtxManager();
     allocator_.free(empty_insert_tablet_ctx_manager_);
     empty_insert_tablet_ctx_manager_ = nullptr;
   }
