@@ -3537,6 +3537,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
   } else {
     ParamStore current_params(ObWrapperAllocator(ctx->allocator_));
     ObIAllocator *allocator = cursor->get_allocator();
+    bool need_restore_params = false;
     if (OB_ISNULL(allocator)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Argument in pl context is NULL", K(allocator), K(ret));
@@ -3558,6 +3559,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
         OZ (ObPLContext::get_param_store_from_local(*session_info, package_id, routine_id, subprog_params));
         CK (OB_NOT_NULL(subprog_params));
         OZ (ctx->params_->assign(*subprog_params));
+        OX (need_restore_params = true);
       }
       bool is_server_cursor = false;
       bool use_stream = false;
@@ -3873,12 +3875,12 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
           session_info->set_query_start_time(old_query_start_time);
         }
       }
-      if (OB_SUCC(ret)) {
-        if (DECL_SUBPROG == loc) {
-          OZ (ctx->params_->assign(current_params));
-        } else if (DECL_PKG == loc) {
-          OZ (spi_update_package_change_info(ctx, package_id, cursor_index));
-        }
+      if (need_restore_params) {
+        int ret = OB_SUCCESS;
+        OZ (ctx->params_->assign(current_params));
+      }
+      if (OB_SUCC(ret) && DECL_PKG == loc) {
+        OZ (spi_update_package_change_info(ctx, package_id, cursor_index));
       }
     }
   }
