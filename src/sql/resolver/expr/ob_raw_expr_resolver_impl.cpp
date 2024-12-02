@@ -7881,7 +7881,7 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
       } else if (OB_ISNULL(func_param)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("func_param is null", K(func_param), K(ret));
-      } else {
+      } else if (lib::is_oracle_mode()) {
         ObSysFunRawExpr *floor_expr = NULL;
         //we create a floor expr to deal with ntile(1 + 1.1)
         if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_FLOOR, floor_expr))) {
@@ -7895,6 +7895,8 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("push back func_param failed", K(floor_expr), K(ret));
         }
+      } else if (OB_FAIL(func_params.push_back(func_param))) {
+        LOG_WARN("push back element failed", K(ret));
       }
     } else if (T_WIN_FUN_NTH_VALUE == func_type) {
       ParseNode *measure_expr_node = NULL;

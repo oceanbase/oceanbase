@@ -1568,7 +1568,6 @@ bool ObExprEqualCheckContext::compare_ora_numeric_consts(const ObConstRawExpr &l
 bool ObExprEqualCheckContext::compare_ora_numeric_consts(const ObSysFunRawExpr &left, const ObConstRawExpr &right)
 {
   int &ret = err_code_;
-  LOG_INFO("debug test");
   bool result = false;
   if (OB_LIKELY(lib::is_oracle_mode() && left.get_expr_type()== T_FUN_SYS_CAST && left.is_const_expr())) {
     ObCastMode cm = left.get_extra();

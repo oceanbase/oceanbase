@@ -2973,12 +2973,14 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
     } else if (OB_UNLIKELY(lib::is_mysql_mode() &&
                            (!func_params.at(0)->is_const_expr() ||
                             !func_params.at(0)->get_result_type().is_integer_type()))) {
-      if (func_params.at(0)->get_expr_type() == T_FUN_SYS_FLOOR &&
-          func_params.at(0)->get_param_count() >= 1 &&
-          func_params.at(0)->get_param_expr(0) != NULL &&
-          func_params.at(0)->get_param_expr(0)->get_expr_type() == T_REF_QUERY &&
-          func_params.at(0)->get_param_expr(0)->get_result_type().is_integer_type()) {
-        //do nothing
+      // nile(N), N cannot be NULL, and must be an integer in the range 0 to 2^63, inclusive, in any of the following forms:
+      // - an unsigned integer constant literal
+      // - a positional parameter marker (?) (in ps protocol)
+      // - a user-defined variable
+      // - a local variable in a stored routine
+      if (func_params.at(0)->get_expr_type() == T_OP_GET_SYS_VAR
+          && func_params.at(0)->get_result_type().is_integer_type()) {
+        // do nothing
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("Incorrect arguments to ntile", K(ret), KPC(func_params.at(0)));
