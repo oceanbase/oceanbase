@@ -103,6 +103,8 @@ int ObExprWordSegment::cg_expr(
       } else if (OB_ISNULL(datum)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, datum is nullptr", K(ret), KP(datum));
+      } else if (datum->is_null()) {
+        LOG_TRACE("the column value is null", K(i), KPC(datum));
       } else if (FALSE_IT(res = datum->get_string())) {
       } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc_guard.get_allocator(), *datum, raw_ctx.args_[i]->datum_meta_,
               raw_ctx.args_[i]->obj_meta_.has_lob_header(), res))) {
@@ -113,16 +115,16 @@ int ObExprWordSegment::cg_expr(
         res_str_len += ft_parts.at(ft_parts.count() - 1).length();
       }
     }
-    if (OB_SUCC(ret)) {
-      wchar_t wide_char = L' ';
-      if (OB_FAIL(ObCharset::wc_mb(raw_ctx.args_[0]->obj_meta_.get_collation_type(), wide_char, mb_separator,
+    wchar_t wide_char = L' ';
+    if (OB_FAIL(ret)) {
+    } else if (0 == ft_parts.count()) {
+      expr_datum.set_null();
+      LOG_TRACE("generate fulltext column is null", K(raw_ctx), K(eval_ctx), K(expr_datum));
+    } else if (OB_FAIL(ObCharset::wc_mb(raw_ctx.args_[0]->obj_meta_.get_collation_type(), wide_char, mb_separator,
               mb_max_len, length_of_separator))) {
-        LOG_WARN("fail to wc_mb", K(ret), K(mb_max_len), KPHEX(mb_separator, mb_max_len));
-      } else {
-        res_str_len = res_str_len + length_of_separator * (ft_parts.count() - 1);
-      }
-    }
-    if (OB_SUCC(ret)) {
+      LOG_WARN("fail to wc_mb", K(ret), K(mb_max_len), KPHEX(mb_separator, mb_max_len));
+    } else {
+      res_str_len = res_str_len + length_of_separator * (ft_parts.count() - 1);
       ObExprStrResAlloc res_alloc(raw_ctx, eval_ctx);
       char *ptr = static_cast<char*>(res_alloc.alloc(res_str_len));
       if (OB_UNLIKELY(NULL == ptr)) {
