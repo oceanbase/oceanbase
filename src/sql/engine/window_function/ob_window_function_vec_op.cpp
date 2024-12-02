@@ -519,11 +519,11 @@ int ObWindowFunctionVecOp::create_stores(const int64_t tenant_id)
   }
   FOREACH_WINCOL(END_WF) {
     it->res_ = OB_NEWx(winfunc::RowStores, local_allocator_);
-    it->res_->set_operator(this);
     if (OB_ISNULL(it->res_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else {
+      it->res_->set_operator(this);
       it->res_->processed_ = OB_NEWx(winfunc::RowStore, local_allocator_, tenant_id, store_alloc,
                                      local_allocator_, *it->res_);
       it->res_->cur_ = OB_NEWx(winfunc::RowStore, local_allocator_, tenant_id, store_alloc,
