@@ -186,6 +186,7 @@ public:
 #else
         need_aggregate_(true),
 #endif
+        is_inited_(false),
         ash_stat_()
   {}
   ~ObDiagnosticInfo();
@@ -300,6 +301,7 @@ private:
   int64_t session_id_;
   int ref_cnt_;
   bool need_aggregate_;
+  bool is_inited_;
   ObActiveSessionStat ash_stat_;
 };
 
