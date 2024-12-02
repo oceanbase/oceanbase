@@ -48,7 +48,7 @@ ObSigFaststack &ObSigFaststack::get_instance()
   return sig_faststack;
 }
 
-static const int SIG_SET[] = {SIGABRT, SIGBUS, SIGFPE, SIGSEGV, SIGURG};
+static const int SIG_SET[] = {SIGABRT, SIGBUS, SIGFPE, SIGSEGV, SIGURG, SIGILL};
 static constexpr char MINICORE_SHELL_PATH[] = "tools/minicore.sh";
 static constexpr char FASTSTACK_SHELL_PATH[] = "tools/callstack.sh";
 static constexpr char MINICORE_SCRIPT[] = "if [ -e bin/minicore.py ]; then\n"
