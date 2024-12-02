@@ -2336,6 +2336,9 @@ DEF_STR_WITH_CHECKER(ob_storage_s3_url_encode_type, OB_CLUSTER_PARAMETER, "defau
                      "\"default\": Uses the S3 standard URL encoding method."
                      "\"compliantRfc3986Encoding\": Uses URL encoding that adheres to the RFC 3986 standard.",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_drop_and_add_index, OB_TENANT_PARAMETER, "False",
+         "it specifies that whether we can drop and add index in single statement",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_dop_of_collect_external_table_statistics, OB_TENANT_PARAMETER, "0", "[0,)",
         "parallelism of pull statistics of external table",
