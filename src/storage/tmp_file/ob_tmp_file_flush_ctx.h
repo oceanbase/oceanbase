@@ -290,6 +290,8 @@ public:
   OB_INLINE int64_t get_flush_seq() const { return flush_seq_; }
   OB_INLINE void set_create_ts(const int64_t create_ts) { create_ts_ = create_ts; }
   OB_INLINE int64_t get_create_ts() const { return create_ts_; }
+  OB_INLINE void set_last_print_ts(const int64_t print_ts) { last_print_ts_ = print_ts; }
+  OB_INLINE int64_t get_last_print_ts() const { return last_print_ts_; }
   OB_INLINE void atomic_set_io_finished(const bool is_finished) { ATOMIC_SET(&is_io_finished_, is_finished); }
   OB_INLINE bool atomic_get_io_finished() const { return ATOMIC_LOAD(&is_io_finished_); }
   OB_INLINE void set_is_fast_flush_tree(const bool is_fast_flush_tree) { fast_flush_tree_page_ = is_fast_flush_tree; }
@@ -317,7 +319,7 @@ public:
   OB_INLINE ObTmpFileWriteBlockTask& get_flush_write_block_task() { return flush_write_block_task_; }
 
   TO_STRING_KV(KP(this), KP(kvpair_), K(io_result_ret_code_), K(block_handle_), K(data_length_),
-               K(block_index_), K(flush_seq_), K(create_ts_), K(is_io_finished_),
+               K(block_index_), K(flush_seq_), K(create_ts_), K(last_print_ts_), K(is_io_finished_), K(handle_),
                K(fast_flush_tree_page_), K(recorded_as_prepare_finished_), K(type_), K(task_state_), K(tmp_file_block_handle_), K(flush_infos_),
                K(is_write_block_executed_), K(write_block_ret_code_), K(flush_write_block_task_), K(flush_page_id_arr_.count()));
 private:
@@ -333,6 +335,7 @@ private:
   int64_t block_index_;       // tmp file block logical index in ObTmpFileBlockManager
   int64_t flush_seq_;         // flush sequence, for verification purpose
   int64_t create_ts_;
+  int64_t last_print_ts_;     // for debug purpose
   bool is_write_block_executed_; // set to true if task has sent IO
   bool is_io_finished_;       // set to true if task has finished async IO
   bool fast_flush_tree_page_; // indicate the task requires fast flush tree pages

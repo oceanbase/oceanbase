@@ -39,7 +39,7 @@ public:
   static const int32_t FLUSH_LOW_WATERMARK_F4 = 70;
   static const int32_t FLUSH_LOW_WATERMARK_F5 = 80;
   static const int64_t FAST_FLUSH_TREE_PAGE_NUM = 32;
-  static const int64_t FLUSH_TASK_WARN_TIMEOUT_US = 60 * 1000 * 1000; // 60s
+  static const int64_t FLUSH_TASK_FINISH_WARN_TIMEOUT_US = 60 * 1000 * 1000; // 60s
   struct UpdateFlushCtx
   {
   public:

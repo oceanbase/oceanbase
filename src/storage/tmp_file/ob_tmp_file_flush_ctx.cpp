@@ -417,6 +417,11 @@ int ObTmpFileFlushTask::write_one_block()
     }
   }
 
+  static const int64_t SEND_IO_WARN_TIMEOUT_US = 30 * 1000 * 1000; // 30s
+  if (ObTimeUtil::current_time() - get_create_ts() > SEND_IO_WARN_TIMEOUT_US) { // debug log
+    LOG_WARN("flush task send io takes too much time", KPC(this));
+  }
+
   if (OB_SUCC(ret)) {
     blocksstable::ObMacroBlockWriteInfo write_info;
     write_info.io_desc_.set_wait_event(ObWaitEventIds::TMP_FILE_WRITE);

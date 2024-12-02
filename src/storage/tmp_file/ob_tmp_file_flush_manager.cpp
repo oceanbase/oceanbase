@@ -86,7 +86,7 @@ int ObTmpFileFlushManager::free_flush_task(ObTmpFileFlushTask *flush_task)
     STORAGE_LOG(WARN, "flush task ptr is null", KR(ret));
   } else {
     LOG_DEBUG("free flush task", KPC(flush_task));
-    if (ObTimeUtil::current_time() - flush_task->get_create_ts() > FLUSH_TASK_WARN_TIMEOUT_US) {
+    if (ObTimeUtil::current_time() - flush_task->get_create_ts() > FLUSH_TASK_FINISH_WARN_TIMEOUT_US) {
       LOG_WARN("flush task execute takes too much time", KPC(flush_task));
     }
     flush_task->~ObTmpFileFlushTask();
@@ -859,6 +859,7 @@ int ObTmpFileFlushManager::handle_alloc_flush_task_(const bool fast_flush_meta, 
   } else {
     flush_task->set_state(FlushState::TFFT_CREATE_BLOCK_INDEX);
     flush_task->set_create_ts(ObTimeUtil::current_time());
+    flush_task->set_last_print_ts(ObTimeUtil::current_time());
     flush_task->set_flush_seq(flush_ctx_.get_flush_sequence());
     flush_task->set_is_fast_flush_tree(fast_flush_meta);
   }

@@ -575,6 +575,11 @@ int ObTmpFileFlushTG::check_flush_task_io_finished_()
     } else if (OB_FAIL(flush_task->wait_macro_block_handle())) {
       if (OB_EAGAIN == ret) {
         push_wait_list_(flush_task); // IO is not completed, continue waiting
+        static const int64_t FLUSH_TASK_IO_WARN_INTERVAL = 30 * 1000 * 1000; // 30s
+        if (ObTimeUtil::current_time() - flush_task->get_last_print_ts() > FLUSH_TASK_IO_WARN_INTERVAL) {
+          LOG_WARN("flush task execute takes too much time", KPC(flush_task));
+          flush_task->set_last_print_ts(ObTimeUtil::current_time());
+        }
         ret = OB_SUCCESS;
       } else {
         STORAGE_LOG(WARN, "unexpected error in waiting flush task finished", KR(ret), KPC(this));
