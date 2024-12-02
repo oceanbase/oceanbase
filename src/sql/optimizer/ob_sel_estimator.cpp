@@ -404,24 +404,16 @@ int ObInSelEstimator::get_in_sel(const OptTableMetas &table_metas,
   } else if (OB_LIKELY(left_expr->is_column_ref_expr() && !right_expr->has_flag(CNT_COLUMN))) {
     ObOptColumnStatHandle handler;
     ObObj expr_value;
-    bool histogram_valid = false;
     const ObColumnRefRawExpr *col = static_cast<const ObColumnRefRawExpr *>(left_expr);
     hash::ObHashSet<ObObj> obj_set;
-    double hist_scale = 0;
+    ObHistEqualSelHelper helper;
     if (OB_FAIL(obj_set.create(hash::cal_next_prime(right_expr->get_param_count()),
                                "OptSelHashSet", "OptSelHashSet"))) {
       LOG_WARN("failed to create hash set", K(ret), K(right_expr->get_param_count()));
     } else if (OB_FAIL(ObOptSelectivity::get_column_basic_sel(table_metas, ctx, *left_expr, &distinct_sel, &null_sel))) {
       LOG_WARN("failed to get column basic selectivity", K(ret));
-    } else if (OB_FAIL(ObOptSelectivity::get_column_hist_scale(table_metas, ctx, *left_expr, hist_scale))) {
-      LOG_WARN("failed to get columnn hist sample scale", K(ret));
-    } else if (OB_FAIL(ObOptSelectivity::get_histogram_by_column(table_metas, ctx,
-                                                                 col->get_table_id(),
-                                                                 col->get_column_id(),
-                                                                 handler))) {
+    } else if (OB_FAIL(helper.init(table_metas, ctx, *col))) {
       LOG_WARN("failed to get histogram by column", K(ret));
-    } else if (handler.stat_ != NULL && handler.stat_->get_histogram().is_valid()) {
-      histogram_valid = true;
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < right_expr->get_param_count(); ++i) {
       // bool can_use_hist = false;
@@ -436,16 +428,14 @@ int ObInSelEstimator::get_in_sel(const OptTableMetas &table_metas,
         ret = OB_SUCCESS;
       }
       if (OB_SUCC(ret)) {
-        if (histogram_valid && get_value) {
+        if (helper.is_valid() && get_value) {
           double null_sel = 0;
+          helper.set_compare_value(expr_value);
           if (OB_HASH_EXIST == obj_set.exist_refactored(expr_value)) {
             // duplicate value, do nothing
           } else if (OB_FAIL(obj_set.set_refactored(expr_value))) {
             LOG_WARN("failed to set refactorcd", K(ret), K(expr_value));
-          } else if (OB_FAIL(ObOptSelectivity::get_equal_pred_sel(handler.stat_->get_histogram(),
-                                                                  expr_value,
-                                                                  hist_scale,
-                                                                  tmp_selectivity))) {
+          } else if (OB_FAIL(helper.get_sel(ctx, tmp_selectivity))) {
             LOG_WARN("failed to get equal density", K(ret));
           } else {
             selectivity += tmp_selectivity * (1 - null_sel);
@@ -690,20 +680,18 @@ int ObEqualSelEstimator::get_ne_sel(const OptTableMetas &table_metas,
     bool null_const = false;
     double ndv = 1.0;
     double nns = 0;
+    ObHistEqualSelHelper helper;
     bool can_use_hist = false;
-    ObObj expr_value;
-    ObOptColumnStatHandle handler;
     if (OB_FAIL(ObOptSelectivity::remove_ignorable_func_for_est_sel(cnt_col_expr))) {
       LOG_WARN("failed to remove ignorable function", K(ret));
     } else if (cnt_col_expr->is_column_ref_expr()) {
       // column != const
       const ObColumnRefRawExpr *col = static_cast<const ObColumnRefRawExpr*>(cnt_col_expr);
-      if (OB_FAIL(ObOptSelectivity::get_histogram_by_column(table_metas, ctx, col->get_table_id(),
-                                                            col->get_column_id(), handler))) {
+      if (OB_FAIL(helper.init(table_metas, ctx, *col))) {
         LOG_WARN("failed to get histogram by column", K(ret));
-      } else if (handler.stat_ == NULL || !handler.stat_->get_histogram().is_valid()) {
+      } else if (!helper.is_valid()) {
         // do nothing
-      } else if (OB_FAIL(ObOptSelectivity::get_compare_value(ctx, col, const_expr, expr_value, can_use_hist))) {
+      } else if (OB_FAIL(helper.set_compare_value(ctx, const_expr, can_use_hist))) {
         // cast may failed due to invalid type or value out of range.
         // Then use ndv instead of histogram
         can_use_hist = false;
@@ -712,11 +700,7 @@ int ObEqualSelEstimator::get_ne_sel(const OptTableMetas &table_metas,
     }
     if (OB_SUCC(ret)) {
       if (can_use_hist) {
-        double hist_scale = 0;
-        if (OB_FAIL(ObOptSelectivity::get_column_hist_scale(table_metas, ctx, *cnt_col_expr, hist_scale))) {
-          LOG_WARN("failed to get columnn hist sample scale", K(ret));
-        } else if (OB_FAIL(ObOptSelectivity::get_equal_pred_sel(handler.stat_->get_histogram(), expr_value,
-                                                                hist_scale, selectivity))) {
+        if (OB_FAIL(helper.get_sel(ctx, selectivity))) {
           LOG_WARN("Failed to get equal density", K(ret));
         } else if (OB_FAIL(ObOptSelectivity::get_column_ndv_and_nns(table_metas, ctx, *cnt_col_expr, NULL, &nns))) {
           LOG_WARN("failed to get column ndv and nns", K(ret));
@@ -826,16 +810,16 @@ int ObEqualSelEstimator::get_equal_sel(const OptTableMetas &table_metas,
     ObOptColumnStatHandle handler;
     ObObj expr_value;
     bool can_use_hist = false;
+    ObHistEqualSelHelper helper;
     if (OB_FAIL(ObOptSelectivity::remove_ignorable_func_for_est_sel(cnt_col_expr))) {
       LOG_WARN("failed to remove ignorable function", K(ret));
     } else if (cnt_col_expr->is_column_ref_expr()) {
       const ObColumnRefRawExpr* col = static_cast<const ObColumnRefRawExpr*>(cnt_col_expr);
-      if (OB_FAIL(ObOptSelectivity::get_histogram_by_column(table_metas, ctx, col->get_table_id(),
-                                                            col->get_column_id(), handler))) {
+      if (OB_FAIL(helper.init(table_metas, ctx, *col))) {
         LOG_WARN("failed to get histogram by column", K(ret));
-      } else if (handler.stat_ == NULL || !handler.stat_->get_histogram().is_valid()) {
+      } else if (!helper.is_valid()) {
         // do nothing
-      } else if (OB_FAIL(ObOptSelectivity::get_compare_value(ctx, col, &calc_expr, expr_value, can_use_hist))) {
+      } else if (OB_FAIL(helper.set_compare_value(ctx, &calc_expr, can_use_hist))) {
         // cast may failed due to invalid type or value out of range.
         // Then use ndv instead of histogram
         can_use_hist = false;
@@ -846,10 +830,7 @@ int ObEqualSelEstimator::get_equal_sel(const OptTableMetas &table_metas,
       if (can_use_hist) {
         double nns = 0;
         double hist_scale = 0;
-        if (OB_FAIL(ObOptSelectivity::get_column_hist_scale(table_metas, ctx, *cnt_col_expr, hist_scale))) {
-          LOG_WARN("failed to get columnn hist sample scale", K(ret));
-        } else if (OB_FAIL(ObOptSelectivity::get_equal_pred_sel(handler.stat_->get_histogram(), expr_value,
-                                                                hist_scale, selectivity))) {
+        if (OB_FAIL(helper.get_sel(ctx, selectivity))) {
           LOG_WARN("Failed to get equal density", K(ret));
         } else if (OB_FAIL(ObOptSelectivity::get_column_ndv_and_nns(table_metas, ctx, *cnt_col_expr, NULL, &nns))) {
           LOG_WARN("failed to get column ndv and nns", K(ret));

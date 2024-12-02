@@ -14042,7 +14042,8 @@ int ObJoinOrder::fill_path_index_meta_info(const uint64_t table_id,
                                                    index_id,
                                                    index_meta_info,
                                                    ap->table_partition_info_,
-                                                   ap->is_global_index_ ? *index_schema : *table_schema,
+                                                   *table_schema,
+                                                   *index_schema,
                                                    has_opt_stat))) {
           LOG_WARN("failed to init index est info", K(ret));
         } else {
@@ -14223,6 +14224,182 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
   return ret;
 }
 
+int ObJoinOrder::get_used_stat_partitions(const uint64_t ref_table_id,
+                                          const share::schema::ObTableSchema &schema,
+                                          const ObIArray<int64_t> &all_used_part_ids,
+                                          ObIArray<int64_t> &table_stat_part_ids,
+                                          double &table_stat_scale_ratio,
+                                          ObIArray<int64_t> *hist_stat_part_ids/* = NULL*/)
+{
+  int ret = OB_SUCCESS;
+  table_stat_scale_ratio = -1.0;
+  table_stat_part_ids.reuse();
+  if (NULL != hist_stat_part_ids) {
+    hist_stat_part_ids->reuse();
+  }
+  ObSQLSessionInfo *session_info = NULL;
+  bool is_opt_stat_valid = false;
+  ObArray<int64_t> table_id;
+  ObArray<int64_t> part_ids;
+  ObArray<int64_t> subpart_ids;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  common::ObOptStatManager *opt_stat_manager = NULL;
+  int64_t subpart_cnt_in_parts = 0;
+  int64_t partition_limit = 0;
+  bool get_stat = false;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(session_info = OPT_CTX.get_session_info()) ||
+      OB_ISNULL(OPT_CTX.get_exec_ctx()) ||
+      OB_ISNULL(opt_stat_manager = OPT_CTX.get_opt_stat_manager())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OPT_CTX.use_default_stat()) {
+    get_stat = true;
+  } else if (OB_FAIL(get_partition_infos(ref_table_id, schema, all_used_part_ids,
+                                         table_id, part_ids, subpart_ids, subpart_cnt_in_parts))) {
+    LOG_WARN("failed to get partitions ids", K(ret));
+  } else if (NULL != hist_stat_part_ids &&
+             OB_FAIL(OPT_CTX.get_global_hint().opt_params_.get_sys_var(ObOptParamHint::PARTITION_INDEX_DIVE_LIMIT,
+                                                                       session_info,
+                                                                       share::SYS_VAR_PARTITION_INDEX_DIVE_LIMIT,
+                                                                       partition_limit))) {
+    LOG_WARN("failed to get hint system variable", K(ret));
+  } else {
+    /**
+    * The priority for using statistics is as follows：
+    *    0. Single partition table just use statistics of this partition;
+    *    1. Table without any partition pruning use the table statistics;
+    *    2. a. PARTITION_LEVEL_ONE table use level one partition statistics;
+    *       b. PARTITION_LEVEL_TWO table with just some level one partitions after pruning
+    *          use level one partition statistics;
+    *    3. PARTITION_LEVEL_TWO table use level two partition statistics;
+    *    4. PARTITION_LEVEL_TWO table use level one partition statistics with scaling;
+    *    5. Use global table statistics with scaling.
+    */
+    static const int64_t STAT_PRIOR_CNT = 6;
+    bool stat_condition[STAT_PRIOR_CNT] = {
+      /*0*/ all_used_part_ids.count() == 1 && !is_virtual_table(ref_table_id),
+      /*1*/ all_used_part_ids.count() == schema.get_all_part_num(),
+      /*2*/ (PARTITION_LEVEL_ONE == schema.get_part_level() ||
+            (PARTITION_LEVEL_TWO == schema.get_part_level() &&
+             subpart_cnt_in_parts == subpart_ids.count())),
+      /*3*/  PARTITION_LEVEL_TWO == schema.get_part_level(),
+      /*4*/  PARTITION_LEVEL_TWO == schema.get_part_level(),
+      /*5*/  true,
+    };
+    const ObIArray<int64_t> *stat_parts[STAT_PRIOR_CNT] = {
+      /*0*/ &all_used_part_ids,
+      /*1*/ &table_id,
+      /*2*/ &part_ids,
+      /*3*/ &subpart_ids,
+      /*4*/ &part_ids,
+      /*5*/ &table_id,
+    };
+    double scale_ratios[STAT_PRIOR_CNT] = {
+      /*0*/ 1.0,
+      /*1*/ 1.0,
+      /*2*/ 1.0,
+      /*3*/ 1.0,
+      /*4*/ ObOptSelectivity::revise_between_0_1(1.0 * all_used_part_ids.count() / subpart_cnt_in_parts),
+      /*5*/ ObOptSelectivity::revise_between_0_1(1.0 * all_used_part_ids.count() / schema.get_all_part_num()),
+    };
+    partition_limit = partition_limit > 0 ? partition_limit : INT64_MAX;
+    bool get_stat = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < STAT_PRIOR_CNT && !get_stat; i ++) {
+      bool is_opt_stat_valid = false;
+      if (OB_ISNULL(stat_parts[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(stat_parts));
+      } else if (!stat_condition[i] || stat_parts[i]->empty()) {
+        // do nothing
+      } else if (!table_stat_part_ids.empty() && NULL != hist_stat_part_ids &&
+                 partition_limit < stat_parts[i]->count()) {
+        // partitions are too many to use hist, do nothing
+      } else if (OB_FAIL(opt_stat_manager->check_opt_stat_validity(*(OPT_CTX.get_exec_ctx()),
+                                                                  session_info->get_effective_tenant_id(),
+                                                                  ref_table_id,
+                                                                  *stat_parts[i],
+                                                                  is_opt_stat_valid))) {
+        LOG_WARN("failed to check stat version", K(ret));
+      } else if (is_opt_stat_valid) {
+        if (table_stat_part_ids.empty()) {
+          if (OB_FAIL(table_stat_part_ids.assign(*stat_parts[i]))) {
+            LOG_WARN("failed to assign", K(ret));
+          } else {
+            table_stat_scale_ratio = scale_ratios[i];
+          }
+        }
+        if (OB_SUCC(ret) && NULL != hist_stat_part_ids &&
+            hist_stat_part_ids->empty() &&
+            stat_parts[i]->count() <= partition_limit) {
+          if (OB_FAIL(hist_stat_part_ids->assign(*stat_parts[i]))) {
+            LOG_WARN("failed to assign", K(ret));
+          }
+        }
+        get_stat = !table_stat_part_ids.empty() &&
+                   (NULL == hist_stat_part_ids || !hist_stat_part_ids->empty());
+      }
+    }
+  }
+
+  LOG_TRACE("get table statistics partition infos",
+            K(ref_table_id), K(table_stat_part_ids), KPC(hist_stat_part_ids),
+            K(table_id), K(part_ids), K(subpart_ids), K(table_stat_scale_ratio));
+
+  return ret;
+}
+
+int ObJoinOrder::get_partition_infos(const uint64_t ref_table_id,
+                                     const share::schema::ObTableSchema &schema,
+                                     const ObIArray<int64_t> &all_used_part_id,
+                                     ObIArray<int64_t> &table_id,
+                                     ObIArray<int64_t> &part_ids,
+                                     ObIArray<int64_t> &subpart_ids,
+                                     int64_t &subpart_cnt_in_parts)
+{
+  int ret = OB_SUCCESS;
+  table_id.reuse();
+  part_ids.reuse();
+  subpart_ids.reuse();
+  subpart_cnt_in_parts = 0;
+  if (FAILEDx(table_id.push_back(schema.is_partitioned_table() ? -1 : ref_table_id))) {
+    LOG_WARN("failed to push back", K(ret));
+  } else if (!schema.is_partitioned_table()) {
+    // do nothing
+  } else if (PARTITION_LEVEL_ONE == schema.get_part_level()) {
+    if (OB_FAIL(part_ids.assign(all_used_part_id))) {
+      LOG_WARN("failed to assign", K(ret));
+    }
+  } else if (PARTITION_LEVEL_TWO == schema.get_part_level()) {
+    if (OB_FAIL(subpart_ids.assign(all_used_part_id))) {
+      LOG_WARN("failed to assign", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_used_part_id.count(); ++i) {
+      int64_t part_id = OB_INVALID_ID;
+      int64_t subpart_id = OB_INVALID_ID;
+      common::ObTabletID tablet_id;
+      ObArray<int64_t> subpart_ids_in_part;
+      if (OB_FAIL(schema.get_tablet_id_by_object_id(all_used_part_id.at(i), tablet_id))) {
+        LOG_WARN("failed to get tablet id", K(ret));
+      } else if (OB_FAIL(schema.get_part_id_by_tablet(tablet_id, part_id, subpart_id))) {
+        LOG_WARN("failed to get part id by tablet", K(ret), K(tablet_id));
+      } else if (!ObOptimizerUtil::find_item(part_ids, part_id)) {
+        if (OB_FAIL(part_ids.push_back(part_id))) {
+          LOG_WARN("failed to push back part id", K(ret));
+        } else if (OB_FAIL(schema.get_subpart_ids(part_id, subpart_ids_in_part))) {
+          LOG_WARN("failed to get subpart ids", K(ret));
+        } else {
+          subpart_cnt_in_parts += subpart_ids_in_part.count();
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected schema", K(schema));
+  }
+  return ret;
+}
+
 int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
                                                    const uint64_t ref_table_id,
                                                    const ObTableSchema &table_schema)
@@ -14248,6 +14425,8 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
   } else {
     ObSEArray<int64_t, 64> all_used_part_id;
     ObSEArray<ObTabletID, 64> all_used_tablet_id;
+    ObSEArray<int64_t, 10> table_stat_part_ids;
+    ObSEArray<int64_t, 10> hist_stat_part_ids;
     const ObCandiTabletLocIArray &part_loc_info_array =
               table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list();
     for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
@@ -14266,53 +14445,24 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
       int64_t last_analyzed = 0;
       bool is_stat_locked = false;
       const int64_t origin_part_cnt = all_used_part_id.count();
-      bool use_global = false;
-      ObSEArray<int64_t, 1> global_part_ids;
       double scale_ratio = 1.0;
       bool stale_stats = false;
-      if (OPT_CTX.use_default_stat()) {
-        // do nothing
-      } else if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(OPT_CTX.get_opt_stat_manager()));
-      } else if (OB_FAIL(check_use_global_stat(ref_table_id,
-                                               table_schema,
-                                               all_used_part_id,
-                                               all_used_tablet_id,
-                                               use_global))) {
-        LOG_WARN("failed to check use global stat", K(ret));
-      } else if (use_global) {
+      if (OB_FAIL(get_used_stat_partitions(
+            ref_table_id, table_schema, all_used_part_id, table_stat_part_ids, scale_ratio, &hist_stat_part_ids))) {
+        LOG_WARN("failed to get stat partitions", K(ret));
+      } else if (!table_stat_part_ids.empty()) {
         has_opt_stat = true;
-        stat_type = OptTableStatType::OPT_TABLE_STAT;
-      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_opt_stat_validity(*(OPT_CTX.get_exec_ctx()),
-                                                                                 session_info->get_effective_tenant_id(),
-                                                                                 ref_table_id,
-                                                                                 all_used_part_id,
-                                                                                 has_opt_stat))) {
-        LOG_WARN("failed to check has opt stat", K(ret));
-      } else if (has_opt_stat) {
-        stat_type = OptTableStatType::OPT_TABLE_STAT;
-      } else if (OB_FAIL(check_can_use_global_stat_instead(ref_table_id,
-                                                           table_schema,
-                                                           all_used_part_id,
-                                                           all_used_tablet_id,
-                                                           has_opt_stat,
-                                                           global_part_ids,
-                                                           scale_ratio))) {
-        LOG_WARN("failed to check can use global stat instead", K(ret));
-      } else if (has_opt_stat) {
-        stat_type = OptTableStatType::OPT_TABLE_GLOBAL_STAT;
+        stat_type = scale_ratio == 1.0 ?
+                      OptTableStatType::OPT_TABLE_STAT :
+                      OptTableStatType::OPT_TABLE_GLOBAL_STAT;
       }
-      LOG_TRACE("statistics (0: default, 1: user-gathered, 2: user_gathered_global_stat)",
-                K(stat_type), K(ref_table_id), K(all_used_part_id));
 
       // TODO, consider move the following codes into access_path_estimation
       if (OB_SUCC(ret) && has_opt_stat) {
         ObGlobalTableStat stat;
         if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->get_table_stat(session_info->get_effective_tenant_id(),
                                                                    ref_table_id,
-                                                                   all_used_part_id,
-                                                                   global_part_ids,
+                                                                   table_stat_part_ids,
                                                                    scale_ratio,
                                                                    stat))) {
           LOG_WARN("failed to get table stats", K(ret));
@@ -14321,9 +14471,9 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
           is_stat_locked = stat.get_stat_locked();
           stale_stats = stat.get_stale_stats();
           table_meta_info_.table_row_count_ = stat.get_row_count();
-          table_meta_info_.part_size_ = !use_global ? static_cast<double>(stat.get_avg_data_size()) :
-                                                      static_cast<double>(stat.get_avg_data_size() * all_used_part_id.count())
-                                                      / origin_part_cnt;
+          table_meta_info_.part_size_ = table_stat_part_ids.count() == origin_part_cnt ?
+                                        static_cast<double>(stat.get_avg_data_size()) :
+                                        static_cast<double>(stat.get_avg_data_size() * table_stat_part_ids.count()) / origin_part_cnt;
           table_meta_info_.average_row_size_ = static_cast<double>(stat.get_avg_row_size());
           table_meta_info_.micro_block_count_ = stat.get_micro_block_count();
           table_meta_info_.has_opt_stat_ = has_opt_stat;
@@ -14376,7 +14526,8 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
                       all_used_tablet_id,
                       column_ids,
                       stat_type,
-                      global_part_ids,
+                      table_stat_part_ids,
+                      hist_stat_part_ids,
                       scale_ratio,
                       last_analyzed,
                       is_stat_locked,
@@ -14395,6 +14546,7 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t table_id,
                                          const uint64_t index_id,
                                          ObIndexMetaInfo &index_meta_info,
                                          ObTablePartitionInfo *table_partition_info,
+                                         const share::schema::ObTableSchema &table_schema,
                                          const share::schema::ObTableSchema &index_schema,
                                          bool &has_opt_stat)
 {
@@ -14411,72 +14563,60 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t table_id,
     LOG_WARN("invalid index id", K(index_id), K(ret));
   } else {
     ObSEArray<int64_t, 64> all_used_part_id;
-    ObSEArray<ObTabletID, 64> all_used_tablet_id;
+    ObSEArray<int64_t, 64> table_stat_part_ids;
     const ObCandiTabletLocIArray &part_loc_info_array =
               table_partition_info->get_phy_tbl_location_info().get_phy_part_loc_info_list();
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
-      const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
-      if (OB_FAIL(all_used_part_id.push_back(part_loc.get_partition_id()))) {
+
+    if (index_meta_info.is_global_index_ || is_virtual_table(index_meta_info.ref_table_id_)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
+        const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
+        if (OB_FAIL(all_used_part_id.push_back(part_loc.get_partition_id()))) {
+          LOG_WARN("failed to push back partition id", K(ret));
+        }
+      }
+    } else if (!index_schema.is_partitioned_table()) {
+      if (OB_FAIL(all_used_part_id.push_back(index_id))) {
         LOG_WARN("failed to push back partition id", K(ret));
-      } else if (OB_FAIL(all_used_tablet_id.push_back(part_loc.get_tablet_id()))) {
-        LOG_WARN("failed to push back tablet id", K(ret));
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
+        const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
+        int64_t part_idx = -1;
+        int64_t subpart_idx = -1;
+        ObObjectID object_id = -1;
+        ObObjectID dummy1;
+        ObTabletID dummy2;
+        if (OB_FAIL(table_schema.get_part_idx_by_tablet(part_loc.get_tablet_id(), part_idx, subpart_idx))) {
+          LOG_WARN("failed to get part idx", K(ret), K(part_loc.get_tablet_id()));
+        } else if (OB_FAIL(index_schema.get_part_id_and_tablet_id_by_idx(part_idx, subpart_idx, object_id, dummy1, dummy2))) {
+          LOG_WARN("failed to get part id", K(ret));
+        } else if (OB_FAIL(all_used_part_id.push_back(static_cast<int64_t>(object_id)))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
       }
     }
     if (OB_SUCC(ret)) {
-      OptTableStatType stat_type = OptTableStatType::DEFAULT_TABLE_STAT;
       const int64_t origin_part_cnt = all_used_part_id.count();
-      bool use_global = false;
-      ObSEArray<int64_t, 1> global_part_ids;
       double scale_ratio = 1.0;
       double index_rows = 0.;
-      if (OPT_CTX.use_default_stat()) {
-        // do nothing
-      } else if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(OPT_CTX.get_opt_stat_manager()));
-      } else if (OB_FAIL(check_use_global_stat(index_id,
-                                              index_schema,
-                                              all_used_part_id,
-                                              all_used_tablet_id,
-                                              use_global))) {
-        LOG_WARN("failed to check use global stat", K(ret));
-      } else if (use_global) {
+      if (OB_FAIL(get_used_stat_partitions(
+            index_id, index_schema, all_used_part_id, table_stat_part_ids, scale_ratio))) {
+        LOG_WARN("failed to get stat partitions", K(ret));
+      } else if (!table_stat_part_ids.empty()) {
         has_opt_stat = true;
-        stat_type = OptTableStatType::OPT_TABLE_STAT;
-      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_opt_stat_validity(*(OPT_CTX.get_exec_ctx()),
-                                                                                 session_info->get_effective_tenant_id(),
-                                                                                 index_id,
-                                                                                 all_used_part_id,
-                                                                                 has_opt_stat))) {
-        LOG_WARN("failed to check has opt stat", K(ret));
-      } else if (has_opt_stat) {
-        stat_type = OptTableStatType::OPT_TABLE_STAT;
-      } else if (OB_FAIL(check_can_use_global_stat_instead(index_id,
-                                                           index_schema,
-                                                           all_used_part_id,
-                                                           all_used_tablet_id,
-                                                           has_opt_stat,
-                                                           global_part_ids,
-                                                           scale_ratio))) {
-        LOG_WARN("failed to check can use global stat instead", K(ret));
-      } else if (has_opt_stat) {
-        stat_type = OptTableStatType::OPT_TABLE_GLOBAL_STAT;
       }
-      LOG_TRACE("statistics (0: default, 1: user-gathered, 2: user_gathered_global_stat)",
-                K(stat_type), K(index_id), K(all_used_part_id));
       if (OB_SUCC(ret) && has_opt_stat) {
         ObGlobalTableStat stat;
         if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->get_table_stat(session_info->get_effective_tenant_id(),
                                                                   index_id,
-                                                                  all_used_part_id,
-                                                                  global_part_ids,
+                                                                  table_stat_part_ids,
                                                                   scale_ratio,
                                                                   stat))) {
           LOG_WARN("failed to get table stats", K(ret));
         } else {
-          index_meta_info.index_part_size_ = !use_global ? static_cast<double>(stat.get_avg_data_size()) :
-                                                      static_cast<double>(stat.get_avg_data_size() * all_used_part_id.count())
-                                                      / origin_part_cnt;
+          index_meta_info.index_part_size_ = table_stat_part_ids.count() == origin_part_cnt ?
+                                             static_cast<double>(stat.get_avg_data_size()) :
+                                             static_cast<double>(stat.get_avg_data_size() * table_stat_part_ids.count()) / origin_part_cnt;
           index_meta_info.index_micro_block_count_ = stat.get_micro_block_count();
           index_rows = stat.get_row_count();
           LOG_TRACE("index table, use statistics", K(index_meta_info), K(stat));
@@ -14520,9 +14660,8 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t table_id,
             if (col_meta != NULL) {
               if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->get_column_stat(OPT_CTX.get_session_info()->get_effective_tenant_id(),
                                                                           index_id,
-                                                                          all_used_part_id,
+                                                                          table_stat_part_ids,
                                                                           column_ids.at(i),
-                                                                          global_part_ids,
                                                                           index_rows,
                                                                           function_index_scale_ratio,
                                                                           stat,
