@@ -4893,7 +4893,8 @@ int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_scn_(SCN &filled_t
     ARRAY_FOREACH_X(meta_array, idx, cnt, OB_SUCC(ret)) {
       const ObBackupSSTableMeta &sstable_meta = meta_array.at(idx);
       const storage::ObITable::TableKey &table_key = sstable_meta.sstable_meta_.table_key_;
-      if (ObITable::TableType::MINOR_SSTABLE == table_key.table_type_) {
+      if (ObITable::TableType::MINOR_SSTABLE == table_key.table_type_
+          && sstable_meta.sstable_meta_.basic_meta_.filled_tx_scn_ > table_key.get_start_scn()) {
         filled_tx_scn = MAX(filled_tx_scn, sstable_meta.sstable_meta_.basic_meta_.filled_tx_scn_);
       }
     }
