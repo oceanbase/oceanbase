@@ -365,8 +365,10 @@ int ObExpandVecOp::duplicate_expr<VEC_CONTINUOUS>(ObExpr *from, ObExpr *to)
     ObDiscreteFormat *to_data = static_cast<ObDiscreteFormat *>(to_vec);
     ObBitmapNullVectorBase *from_nulls = static_cast<ObBitmapNullVectorBase *>(from_vec);
     for (int i = 0; i < brs_.size_; i++) {
-      if (brs_.skip_->at(i) || from_nulls->is_null(i)) {
+      if (brs_.skip_->at(i)) {
         to_data->set_payload_shallow(i, nullptr, 0);
+      } else if (from_nulls->is_null(i)) {
+        to_data->set_null(i);
       } else {
         to_data->set_payload_shallow(i, from_data->get_payload(i), from_data->get_length(i));
       }
