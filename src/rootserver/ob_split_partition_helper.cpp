@@ -40,7 +40,7 @@ int ObSplitPartitionHelper::execute(ObDDLTaskRecord &task_record)
   if (OB_UNLIKELY(upd_table_schemas_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty upd table schemas", K(ret));
-  } else if (OB_FAIL(check_allow_split(schema_guard_, *upd_table_schemas_.at(0)))) {
+  } else if (OB_FAIL(check_allow_split(src_tablet_ids_, schema_guard_, *upd_table_schemas_.at(0)))) {
     LOG_WARN("failed to check allow split", K(ret));
   } else if (OB_FAIL(prepare_start_args_(tenant_id_,
                                   new_table_schemas_,
@@ -111,6 +111,7 @@ int ObSplitPartitionHelper::execute(ObDDLTaskRecord &task_record)
 }
 
 int ObSplitPartitionHelper::check_allow_split(
+    const ObIArray<ObTabletID> &src_tablet_ids,
     share::schema::ObSchemaGetterGuard &schema_guard,
     const share::schema::ObTableSchema &table_schema)
 {
@@ -156,9 +157,7 @@ int ObSplitPartitionHelper::check_allow_split(
     //do nothing
   } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(tenant_id, tablegroup_id, table_schemas_in_tg))) {
     LOG_WARN("failed to get table schemas in table group", K(ret), K(tablegroup_id));
-  } else if (OB_UNLIKELY(table_schemas_in_tg.count() <= 1)) {
-    //do nothing
-  } else {
+  } else if (OB_LIKELY(table_schemas_in_tg.count() > 1)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support spliting of a table in a group with multiple tables", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "spliting of a table in a group with multiple tables");
@@ -169,6 +168,8 @@ int ObSplitPartitionHelper::check_allow_split(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("split in shared storage mode not supported", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "split in shared storage mode");
+  } else if (OB_FAIL(ObDDLUtil::batch_check_tablet_checksum(MTL_ID(), 0/*start index of tablet_arr*/, src_tablet_ids.count(), src_tablet_ids))) {
+    LOG_WARN("verify tablet checksum error", K(ret), K(src_tablet_ids), K(tenant_id));
   }
 
   return ret;
