@@ -1433,6 +1433,8 @@ void ObTempBlockStore::BlockReader::reset()
      */
     if (read_io_handle_ != NULL) {
       read_io_handle_->reset();
+      ob_free(read_io_handle_);
+      read_io_handle_ = NULL;
     }
   }
 }

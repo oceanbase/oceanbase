@@ -285,10 +285,6 @@ public:
                     is_async_(true), aio_buf_idx_(0), aio_blk_(nullptr) {}
     virtual ~BlockReader() {
       reset();
-      if (read_io_handle_ != NULL) {
-        ob_free(read_io_handle_);
-        read_io_handle_ = NULL;
-      }
     }
 
     int init(ObTempBlockStore *store, const bool async = true);

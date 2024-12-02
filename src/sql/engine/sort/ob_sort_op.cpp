@@ -361,7 +361,7 @@ int ObSortOp::scan_all_then_sort_batch()
 {
   int ret = OB_SUCCESS;
   SMART_VAR(ObCompactStore, cache_store) {
-    if (OB_FAIL(cache_store.init(2 * 1024 * 1024,
+    if (OB_FAIL(cache_store.init(16 * 1024,
         ctx_.get_my_session()->get_effective_tenant_id(),
         ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true/*enable dump*/, 0, true,
         MY_SPEC.compress_type_, &MY_SPEC.all_exprs_))) {
