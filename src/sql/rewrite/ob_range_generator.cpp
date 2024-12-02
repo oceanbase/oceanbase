@@ -2365,6 +2365,8 @@ int ObRangeGenerator::fill_domain_range_node(const ObRangeNode &node,
           range->start_[i].set_max_value();
         } else if (start == OB_RANGE_NULL_VALUE) {
           range->start_[i].set_null();
+        } else if (start == OB_RANGE_EMPTY_VALUE) {
+          range->start_[i].set_nop_value();
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected range node", K(ret), K(node));
@@ -2376,6 +2378,8 @@ int ObRangeGenerator::fill_domain_range_node(const ObRangeNode &node,
           range->end_[i].set_max_value();
         } else if (end == OB_RANGE_NULL_VALUE) {
           range->end_[i].set_null();
+        } else if (end == OB_RANGE_EMPTY_VALUE) {
+          range->end_[i].set_nop_value();
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected range node", K(ret), K(node));
