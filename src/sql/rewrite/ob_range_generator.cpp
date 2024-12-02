@@ -2442,8 +2442,9 @@ int ObRangeGenerator::generate_tmp_json_array_param(const ObRangeNode &node,
       LOG_WARN("allocate memeory failed", K(objs_ptr));
     } else if (OB_FAIL(tmp_in_param->in_param_.init(1))) {
       LOG_WARN("failed to init fixed array size", K(ret));
+    } else if (OB_FAIL(tmp_in_param->in_param_.push_back(objs_ptr))) {
+      LOG_WARN("failed to push back array.", K(ret));
     } else {
-      tmp_in_param->in_param_[0] = objs_ptr;
       *objs_ptr = cast_obj;
     }
   } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {

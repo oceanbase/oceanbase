@@ -183,6 +183,9 @@ int ObExprJsonQuery::check_data_type_allowed(const ObExprResType* types_stack, c
         (data_type.get_length() > OB_MAX_CAST_CHAR_VARCHAR_LENGTH || data_type.get_length() == -1)) {
       ret = OB_NOT_MULTIVALUE_SUPPORT;
       LOG_USER_ERROR(OB_NOT_MULTIVALUE_SUPPORT, "CAST-ing data to array of char/binary BLOBs");
+    } else if (data_type.get_type() == ObYearType) {
+      ret = OB_NOT_MULTIVALUE_SUPPORT;
+      LOG_USER_ERROR(OB_NOT_MULTIVALUE_SUPPORT, "CAST-ing data to array of Year type");
     }
   }
 
