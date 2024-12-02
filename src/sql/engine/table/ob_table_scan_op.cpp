@@ -3905,40 +3905,48 @@ int ObTableScanOp::inner_get_next_fts_index_row()
 int ObTableScanOp::fetch_next_fts_index_rows()
 {
   int ret = OB_SUCCESS;
-  ObExpr *ft_expr = nullptr;
-  ObExpr *doc_id_expr = nullptr;
-  ObDatum *ft_datum = nullptr;
-  ObDatum *doc_id_datum = nullptr;
-  if (OB_FAIL(ObTableScanOp::inner_get_next_row_implement())) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to get next row implement", K(ret));
-    }
-  } else if (OB_FAIL(get_output_fts_col_expr_by_type(T_FUN_SYS_DOC_ID, doc_id_expr))) {
-    LOG_WARN("fail to get doc id column expr from output", K(ret));
-  } else if (OB_FAIL(get_output_fts_col_expr_by_type(T_FUN_SYS_WORD_SEGMENT, ft_expr))) {
-    LOG_WARN("fail to get word segment column expr from output", K(ret));
-  } else if (OB_ISNULL(ft_expr) || OB_ISNULL(doc_id_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpeted error, ft or doc id expr is nullptr", K(ret), KP(ft_expr), KP(doc_id_expr));
-  } else if (OB_FAIL(ft_expr->eval(eval_ctx_, ft_datum))) {
-    LOG_WARN("fail to evaluate fulltext expr", K(ret));
-  } else if (OB_FAIL(doc_id_expr->eval(eval_ctx_, doc_id_datum))) {
-    LOG_WARN("fail to evaluate doc id expr", K(ret));
-  } else if (OB_ISNULL(ft_datum) || OB_ISNULL(doc_id_datum)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpeted error, ft or doc id datum is nullptr", K(ret), KP(ft_datum), KP(doc_id_datum));
-  } else {
-    ObString ft = ft_datum->get_string();
-    const ObString &doc_id = doc_id_datum->get_string();
-    ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *ft_datum, ft_expr->datum_meta_,
-            ft_expr->obj_meta_.has_lob_header(), ft))) {
-      LOG_WARN("fail to read real string data", K(ret));
-    } else if (OB_UNLIKELY(doc_id.length() != sizeof(ObDocId)) || OB_ISNULL(doc_id.ptr())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid binary document id", K(ret), K(doc_id));
-    } else if (OB_FAIL(fts_index_.segment(ft_expr->obj_meta_, doc_id, ft))) {
-      LOG_WARN("fail to segment fulltext", K(ret), K(doc_id), K(ft));
+  bool has_segment_word = false;
+  while (OB_SUCC(ret) && !has_segment_word) {
+    ObExpr *ft_expr = nullptr;
+    ObExpr *doc_id_expr = nullptr;
+    ObDatum *ft_datum = nullptr;
+    ObDatum *doc_id_datum = nullptr;
+    if (OB_FAIL(ObTableScanOp::inner_get_next_row_implement())) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next row implement", K(ret));
+      }
+    } else if (OB_FAIL(get_output_fts_col_expr_by_type(T_FUN_SYS_DOC_ID, doc_id_expr))) {
+      LOG_WARN("fail to get doc id column expr from output", K(ret));
+    } else if (OB_FAIL(get_output_fts_col_expr_by_type(T_FUN_SYS_WORD_SEGMENT, ft_expr))) {
+      LOG_WARN("fail to get word segment column expr from output", K(ret));
+    } else if (OB_ISNULL(ft_expr) || OB_ISNULL(doc_id_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpeted error, ft or doc id expr is nullptr", K(ret), KP(ft_expr), KP(doc_id_expr));
+    } else if (OB_FAIL(ft_expr->eval(eval_ctx_, ft_datum))) {
+      LOG_WARN("fail to evaluate fulltext expr", K(ret));
+    } else if (OB_FAIL(doc_id_expr->eval(eval_ctx_, doc_id_datum))) {
+      LOG_WARN("fail to evaluate doc id expr", K(ret));
+    } else if (OB_ISNULL(ft_datum) || OB_ISNULL(doc_id_datum)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpeted error, ft or doc id datum is nullptr", K(ret), KP(ft_datum), KP(doc_id_datum));
+    } else {
+      ObString ft = ft_datum->get_string();
+      const ObString &doc_id = doc_id_datum->get_string();
+      ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *ft_datum, ft_expr->datum_meta_,
+              ft_expr->obj_meta_.has_lob_header(), ft))) {
+        LOG_WARN("fail to read real string data", K(ret));
+      } else if (OB_UNLIKELY(doc_id.length() != sizeof(ObDocId)) || OB_ISNULL(doc_id.ptr())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid binary document id", K(ret), K(doc_id));
+      } else if (OB_FAIL(fts_index_.segment(ft_expr->obj_meta_, doc_id, ft)) && OB_ITER_END != ret) {
+        LOG_WARN("fail to segment fulltext", K(ret), K(doc_id), K(ft));
+      } else if (OB_ITER_END == ret) {
+        has_segment_word = false;
+        ret = OB_SUCCESS;
+      } else {
+        has_segment_word = true;
+      }
     }
   }
   return ret;
