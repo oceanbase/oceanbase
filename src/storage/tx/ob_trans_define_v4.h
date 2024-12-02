@@ -977,7 +977,7 @@ public:
    ObTxDesc* alloc_value()
    {
      ATOMIC_INC(&alloc_cnt_);
-     ObTxDesc *it = op_alloc(ObTxDesc);
+     ObTxDesc *it = op_alloc_v2(ObTxDesc);
 #ifdef ENABLE_DEBUG_LOG
      ObSpinLockGuard guard(lk_);
      list_.insert(it->alloc_link_);
@@ -992,12 +992,12 @@ public:
         ObSpinLockGuard guard(lk_);
         v->alloc_link_.remove();
 #endif
-        op_free(v);
+        op_free_v2(v);
       }
     }
     static void force_free(ObTxDesc *v)
     {
-      op_free(v);
+      op_free_v2(v);
     }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }
 #ifdef ENABLE_DEBUG_LOG

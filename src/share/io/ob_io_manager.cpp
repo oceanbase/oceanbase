@@ -1560,13 +1560,17 @@ bool ObTenantIOManager::is_working() const
   return ATOMIC_LOAD(&is_working_);
 }
 
-int ObTenantIOManager::calc_io_memory(const int64_t memory)
+int ObTenantIOManager::calc_io_memory(const uint64_t tenant_id, const int64_t memory)
 {
   int ret = OB_SUCCESS;
   int64_t memory_benchmark = memory / (1L * 1024L * 1024L * 1024L); //base ob 1G
   //1w req占用1.52M
   //1w result占用2.44M
-  if (memory_benchmark <= 1) {
+  if (lib::is_mini_mode() && OB_SERVER_TENANT_ID == tenant_id) {
+    request_count_ = 5000;
+    result_count_ = 5000;
+    io_memory_limit_ = 256L * 1024L * 1024L;
+  } else if (memory_benchmark <= 1) {
     //1G租户上限共256MB，预分配5w个request(7.6MB)和result(12.2MB)
     request_count_ = 50000;
     result_count_ = 50000;
@@ -1597,7 +1601,7 @@ int ObTenantIOManager::init_memory_pool(const uint64_t tenant_id, const int64_t 
   if (OB_UNLIKELY(tenant_id <= 0 || memory <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid io argument", K(ret), K(tenant_id), K(memory));
-  } else if (OB_FAIL(calc_io_memory(memory))) {
+  } else if (OB_FAIL(calc_io_memory(tenant_id, memory))) {
     LOG_WARN("calc tenant io memory failed", K(ret), K(memory), K(io_memory_limit_), K(request_count_), K(request_count_));
   } else if (OB_FAIL(io_allocator_.init(tenant_id, io_memory_limit_))) {
     LOG_WARN("init io allocator failed", K(ret), K(tenant_id), K(io_memory_limit_));
@@ -1617,7 +1621,7 @@ int ObTenantIOManager::update_memory_pool(const int64_t memory)
   if (OB_UNLIKELY(memory <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid io argument", K(ret), K(memory));
-  } else if (OB_FAIL(calc_io_memory(memory))) {
+  } else if (OB_FAIL(calc_io_memory(tenant_id_, memory))) {
     LOG_WARN("calc tenant io memory failed", K(ret), K(memory), K(io_memory_limit_), K(request_count_), K(request_count_));
   } else if (OB_FAIL(io_allocator_.update_memory_limit(io_memory_limit_))) {
     LOG_WARN("update io memory limit failed", K(ret), K(io_memory_limit_));
