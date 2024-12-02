@@ -331,11 +331,15 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
     } else if (parquet::Type::FIXED_LEN_BYTE_ARRAY == phy_type) {
       func = &DataLoader::load_fixed_string_col;
     }
-  } else if ((no_log_type || log_type->is_decimal() || log_type->is_int())
+  } else if ((no_log_type || log_type->is_int() || log_type->is_decimal())
              && ob_is_number_or_decimal_int_tc(datum_type.type_)) {
+    // no_log_type || log_type->is_int() for oracle int, phy_type should be int32 or int64
     //convert parquet int storing as int32/int64 to number/decimal vector
     if (log_type->is_decimal() && (col_desc->type_precision() != ((datum_type.precision_ == -1) ? 38 : datum_type.precision_)
                                    || col_desc->type_scale() != datum_type.scale_)) {
+      func = NULL;
+    } else if (!log_type->is_decimal() && parquet::Type::INT32 != phy_type
+               && parquet::Type::INT64 != phy_type) {
       func = NULL;
     } else {
       //there is 4 kinds of physical format in parquet(int32/int64/fixedbytearray/bytearray)
@@ -564,7 +568,6 @@ int ObParquetTableRowIterator::DataLoader::to_numeric_hive(
   int ret = OB_SUCCESS;
   ObDecimalInt *decint = NULL;
   int32_t val_len = 0;
-
   if (OB_UNLIKELY(length > data_len)) {
     ret = OB_DECIMAL_PRECISION_OVERFLOW;
     LOG_WARN("overflow", K(length), K(data_len));
@@ -597,7 +600,8 @@ int ObParquetTableRowIterator::DataLoader::to_numeric_hive(
     if (ObDecimalIntType == file_col_expr_->datum_meta_.type_) {
       ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
       vec->set_decimal_int(idx, decint, val_len);
-    } else if (ObNumberType == file_col_expr_->datum_meta_.type_) {
+    } else if (ObNumberType == file_col_expr_->datum_meta_.type_
+               || ObUNumberType == file_col_expr_->datum_meta_.type_) {
       ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
       ObDiscreteBase *vec = static_cast<ObDiscreteBase *>(file_col_expr_->get_vector(eval_ctx_));
       number::ObNumber res_nmb;

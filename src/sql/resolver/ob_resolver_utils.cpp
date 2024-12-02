@@ -5147,9 +5147,6 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
               file_column_expr->set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
             }
           }
-          if (ob_is_number_tc(column_expr->get_data_type())) {
-            file_column_expr->set_data_type(ObDecimalIntType);
-          }
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
