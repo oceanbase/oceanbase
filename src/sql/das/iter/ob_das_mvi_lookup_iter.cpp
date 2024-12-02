@@ -101,7 +101,7 @@ int ObDASMVILookupIter::save_rowkey()
     LOG_WARN("docid and rowkey can't both be null", K(ret));
   } else {
     ObObj *obj_ptr = nullptr;
-    ObArenaAllocator allocator("MulvalLookup");
+    ObArenaAllocator &allocator = get_arena_allocator();
     if (OB_ISNULL(obj_ptr = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate buffer failed", K(ret));
