@@ -803,7 +803,6 @@ int ObSchemaUtils::alter_rowkey_column_group(share::schema::ObTableSchema &table
       if (OB_ISNULL(rowkey_cg)) {
         ObColumnGroupSchema new_rowkey_cg;
         ObArray<uint64_t> rowkey_ids;
-        uint64_t rowkey_cg_id =  table_schema.get_max_used_column_group_id() + 1;
         ObTableSchema::const_column_iterator iter_begin = table_schema.column_begin();
         ObTableSchema::const_column_iterator iter_end = table_schema.column_end();
         for (; OB_SUCC(ret) && iter_begin != iter_end; ++iter_begin) {
@@ -821,7 +820,7 @@ int ObSchemaUtils::alter_rowkey_column_group(share::schema::ObTableSchema &table
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ObSchemaUtils::build_column_group(
                                table_schema, table_schema.get_tenant_id(),ObColumnGroupType::ROWKEY_COLUMN_GROUP,
-                               OB_ROWKEY_COLUMN_GROUP_NAME, rowkey_ids, rowkey_cg_id, new_rowkey_cg))) {
+                               OB_ROWKEY_COLUMN_GROUP_NAME, rowkey_ids, ROWKEY_COLUMN_GROUP_ID, new_rowkey_cg))) {
           LOG_WARN("fail to build rowkey column group", K(ret));
         } else if (OB_FAIL(table_schema.add_column_group(new_rowkey_cg))) {
           LOG_WARN("fail to add rowkey column group to table_schema", K(ret));
@@ -989,7 +988,7 @@ int ObSchemaUtils::build_add_each_column_group(const share::schema::ObTableSchem
       for (;OB_SUCC(ret) && iter_begin != iter_end; ++iter_begin) {
         column_group_schema.reset();
         ObColumnSchemaV2 *column = (*iter_begin);
-        uint64_t cg_id = dst_table_schema.get_max_used_column_group_id() + 1;
+        uint64_t cg_id = dst_table_schema.get_next_single_column_group_id();
         if (OB_ISNULL(column)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("column schema should not be null", K(ret));

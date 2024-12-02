@@ -1666,6 +1666,8 @@ public:
   void set_column_store(const bool support_column_store) { is_column_store_supported_ = support_column_store; }
   int get_is_column_store(bool &is_column_store) const;
   uint64_t get_max_used_column_group_id() const { return max_used_column_group_id_; }
+  uint64_t get_next_single_column_group_id() const { return max_used_column_group_id_ > ROWKEY_COLUMN_GROUP_ID ? max_used_column_group_id_ + 1 : ROWKEY_COLUMN_GROUP_ID + 1; }
+  int check_is_normal_cgs_at_the_end(bool &is_normal_cgs_at_the_end) const;
   void set_max_used_column_group_id(const uint64_t id) { max_used_column_group_id_ = id; }
   int add_column_group(const ObColumnGroupSchema &other);
   // This function is only used when add default cg for sys_schema in 'hard-code' python script
@@ -1679,6 +1681,7 @@ public:
   int remove_column_group(const uint64_t column_group_id);
   int has_all_column_group(bool &has_all_column_group) const;
   int has_non_default_column_group(bool &has_non_default_column_group) const;
+  int adjust_column_group_array();
   // materialized view log related
   template <typename Allocator>
   static int build_mlog_table_name(Allocator &allocator,

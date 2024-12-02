@@ -9606,6 +9606,49 @@ int ObTableSchema::has_non_default_column_group(bool &has_non_default_column_gro
   return ret;
 }
 
+int ObTableSchema::adjust_column_group_array()
+{
+  // after v435, all cg and rowkey cg should exist in the front of column group array
+  // this interface is only used in create table / create index / offline ddl with new table / delayed column transform
+  int ret = OB_SUCCESS;
+  bool is_rowkey_cg_exist = false;
+  bool is_all_cg_exist = false;
+  ObColumnGroupSchema *cg_schema = nullptr;
+  uint64_t compat_version = 0;
+  if (!is_column_store_supported()) {
+    // do nothing
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(get_tenant_id(), compat_version))) {
+    LOG_WARN("fail to get min data version", K(ret), K(get_tenant_id()));
+  } else if (compat_version >= DATA_VERSION_4_3_5_0) {
+    if (OB_FAIL(is_column_group_exist(OB_ROWKEY_COLUMN_GROUP_NAME, is_rowkey_cg_exist))) {
+      LOG_WARN("fail to check is each column group exist", K(ret));
+    } else if (OB_FAIL(is_column_group_exist(OB_ALL_COLUMN_GROUP_NAME, is_all_cg_exist))) {
+      LOG_WARN("fail to check is all column group exist", K(ret));
+    } else if (is_rowkey_cg_exist && OB_FAIL(get_column_group_by_name(OB_ROWKEY_COLUMN_GROUP_NAME, cg_schema))) {
+      LOG_WARN("fail to get rowkey column group", K(ret), KPC(this));
+    } else if (is_all_cg_exist && OB_FAIL(get_column_group_by_name(OB_ALL_COLUMN_GROUP_NAME, cg_schema))) {
+      LOG_WARN("fail to get all column group", K(ret), KPC(this));
+    } else if (OB_NOT_NULL(cg_schema)) {
+      int64_t new_loc = column_group_cnt_ - 1;
+      for (int64_t i = column_group_cnt_ - 1; OB_SUCC(ret) && i >= 0; --i) {
+        if (OB_ISNULL(column_group_arr_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column_group should not be null", K(ret), K(i), K_(column_group_cnt));
+        } else if (column_group_arr_[i] != cg_schema) {
+          column_group_arr_[new_loc] = column_group_arr_[i];
+          new_loc -= 1;
+        } else {
+          // skip all cg or rowkey cg
+        }
+      }
+      if (OB_SUCC(ret)) {
+        column_group_arr_[0] = cg_schema;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableSchema::get_column_group_by_id(
     const uint64_t column_group_id,
     ObColumnGroupSchema *&column_group) const
@@ -9787,16 +9830,7 @@ int ObTableSchema::add_column_group_to_array(ObColumnGroupSchema *column_group)
     }
 
     if (OB_SUCC(ret)) {
-      if (ROWKEY_COLUMN_GROUP == column_group->get_column_group_type()
-         || ALL_COLUMN_GROUP == column_group->get_column_group_type()) {
-        for (int64_t idx = column_group_cnt_ - 1; idx >= 0; --idx) {
-          column_group_arr_[idx + 1] = column_group_arr_[idx];
-        }
-        column_group_arr_[0] = column_group;
-        ++column_group_cnt_;
-      } else {
-        column_group_arr_[column_group_cnt_++] = column_group;
-      }
+      column_group_arr_[column_group_cnt_++] = column_group;
     }
   }
 
@@ -10009,6 +10043,36 @@ int ObTableSchema::get_base_rowkey_column_group_index(int32_t &cg_idx) const
     if (OB_SUCC(ret) && !found) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected not found base/rowkey column group", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::check_is_normal_cgs_at_the_end(bool &is_normal_cgs_at_the_end) const
+{
+  int ret = OB_SUCCESS;
+  is_normal_cgs_at_the_end = false;
+  if (0 < column_group_cnt_) {
+    bool found_normal_cg = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_group_cnt_; i++) {
+      if (OB_ISNULL(column_group_arr_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column_group should not be null", K(ret), K(i), K_(column_group_cnt));
+      } else if (0 == column_group_arr_[i]->get_column_id_count()) {
+        if (column_group_arr_[i]->get_column_group_type() != DEFAULT_COLUMN_GROUP) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected column group type", K(ret), KPC(column_group_arr_[i]));
+        }
+        // skip default column group
+      } else if (SINGLE_COLUMN_GROUP == column_group_arr_[i]->get_column_group_type() ||
+                 NORMAL_COLUMN_GROUP == column_group_arr_[i]->get_column_group_type()) {
+        found_normal_cg = true;
+      } else {
+        if (!found_normal_cg) {
+          is_normal_cgs_at_the_end = true;
+        }
+        break;
+      }
     }
   }
   return ret;

@@ -13242,7 +13242,7 @@ int ObDDLResolver::parse_column_group(const ParseNode *column_group_node,
   if (OB_SUCC(ret) && sql_exist_all_column_group) {
     column_group_schema.reset();
     if (OB_FAIL(ObSchemaUtils::build_all_column_group(table_schema, session_info_->get_effective_tenant_id(),
-                                                      dst_table_schema.get_max_used_column_group_id() + 1,
+                                                      dst_table_schema.get_max_used_column_group_id() + 1, // add all cg with id max+1 first, adjust later in adjust_cg_for_offline
                                                       column_group_schema))) {
       SQL_RESV_LOG(WARN, "build all column group failed", K(ret));
     } else if (OB_FAIL(dst_table_schema.add_column_group(column_group_schema))) {

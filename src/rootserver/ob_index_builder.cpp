@@ -1637,7 +1637,7 @@ int ObIndexBuilder::create_index_column_group(const obrpc::ObCreateIndexArg &arg
     } else if (!is_all_cg_exist) {
     } else if (OB_FAIL(ObSchemaUtils::build_all_column_group(index_table_schema,
                                                              index_table_schema.get_tenant_id(),
-                                                             index_table_schema.get_max_used_column_group_id() + 1,
+                                                             ALL_COLUMN_GROUP_ID,
                                                              tmp_cg))) {
       LOG_WARN("failed to build all column group", K(ret));
     } else if (OB_FAIL(index_table_schema.add_column_group(tmp_cg))) {
@@ -1664,6 +1664,9 @@ int ObIndexBuilder::create_index_column_group(const obrpc::ObCreateIndexArg &arg
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3, create index with column group");
   }
 
+  if (FAILEDx(index_table_schema.adjust_column_group_array())) {
+    LOG_WARN("fail to adjust column group array", K(ret), K(index_table_schema));
+  }
   return ret;
 }
 

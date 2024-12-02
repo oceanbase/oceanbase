@@ -5129,21 +5129,20 @@ int ObDDLService::adjust_cg_for_offline(ObTableSchema &new_table_schema)
       } else if (col->is_virtual_generated_column()) {
         /* skip virtual column group*/
       } else if (OB_FAIL(ObSchemaUtils::build_single_column_group(new_table_schema, col, new_table_schema.get_tenant_id(),
-                                                                  new_table_schema.get_max_used_column_group_id() +1,
+                                                                  new_table_schema.get_next_single_column_group_id(),
                                                                   new_single_cg))) {
         LOG_WARN("fail to build single column group", K(ret));
       } else if (OB_FAIL(new_table_schema.add_column_group(new_single_cg))) {
         LOG_WARN("fail to add new column group to table schema", K(ret));
       }
     }
-
     /* add all column group*/
-    if (OB_SUCC(ret) &&is_all_cg_exist) {
+    if (OB_SUCC(ret) && is_all_cg_exist) {
       ObColumnGroupSchema new_cg;
       new_cg.reset();
       if (OB_FAIL(ObSchemaUtils::build_all_column_group(
                                    new_table_schema, new_table_schema.get_tenant_id(),
-                                   new_table_schema.get_max_used_column_group_id() +1, new_cg))) {
+                                   ALL_COLUMN_GROUP_ID, new_cg))) {
         LOG_WARN("fail to build new all column group schema", K(ret));
       } else if (OB_FAIL(new_table_schema.add_column_group(new_cg))) {
         LOG_WARN("fail to add new column group to table schema", K(ret));
@@ -5166,6 +5165,10 @@ int ObDDLService::adjust_cg_for_offline(ObTableSchema &new_table_schema)
       } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(new_table_schema))) {
         LOG_WARN("fail to alter default column grouop schema", K(ret));
       }
+    }
+    // adjust column group array order
+    if (FAILEDx(new_table_schema.adjust_column_group_array())) {
+      LOG_WARN("fail to adjust column group array", K(ret), K(new_table_schema));
     }
   }
   return ret;
@@ -10735,7 +10738,7 @@ int ObDDLService::add_column_to_column_group(
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  uint64_t cur_column_group_id = origin_table_schema.get_max_used_column_group_id();
+  uint64_t cur_column_group_id = origin_table_schema.get_next_single_column_group_id();
   ObArray<uint64_t> column_ids;
   ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
   ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
@@ -10790,7 +10793,7 @@ int ObDDLService::add_column_to_column_group(
           if (OB_FAIL(ObSchemaUtils::build_single_column_group(new_table_schema,
                                                    new_table_schema.get_column_schema(column_ids.at(i)),
                                                    new_table_schema.get_tenant_id(),
-                                                   ++cur_column_group_id,
+                                                   cur_column_group_id++,
                                                    cg_schema))) {
             LOG_WARN("fail to build single column group", K(ret), K(new_table_schema), K(column_ids.at(i)));
           } else if (OB_FAIL(new_table_schema.add_column_group(cg_schema))) {
@@ -15702,6 +15705,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           }
         }
       }
+
       // submit async build index task
       if (OB_FAIL(ret)) {
       } else if (is_double_table_long_running_ddl(ddl_type)) {

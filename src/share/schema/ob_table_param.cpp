@@ -1230,12 +1230,8 @@ int ObTableParam::construct_columns_and_projector(
     }
   }
 
-  if (OB_SUCC(ret) && 0 < table_schema.get_column_group_count()) {
-    const ObColumnGroupType column_group_type = (*table_schema.column_group_begin())->get_column_group_type();
-    if (ROWKEY_COLUMN_GROUP == column_group_type || ALL_COLUMN_GROUP == column_group_type) {
-      // delayed column transform already has the column group information that meets the cs replica requirements before the storage schema update
-      is_normal_cgs_at_the_end_ = true;
-    }
+  if (FAILEDx(table_schema.check_is_normal_cgs_at_the_end(is_normal_cgs_at_the_end_))) {
+    LOG_WARN("Fail to check whether normal cgs are at the end of schema array", K(ret), K(table_schema));
   }
   return ret;
 }
