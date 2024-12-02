@@ -246,6 +246,10 @@ private:
   int fill_virtual_info_by_obj_(const T &obj, const mds::NodePosition position, ObIArray<mds::MdsNodeInfoForVirtualTable> &mds_node_info_array) const;
   template <typename T>
   int fill_virtual_info_from_mds_sstable(ObIArray<mds::MdsNodeInfoForVirtualTable> &mds_node_info_array) const;
+  template <class T, ENABLE_IF_IS_SAME_CLASS(T, ObTabletCreateDeleteMdsUserData)>
+  int check_mds_data_complete_(bool &is_complete) const  { is_complete = true; return OB_SUCCESS; } // Only for tablet_Status, which doesn't need data integrity check.
+  template <class T, ENABLE_IF_NOT_SAME_CLASS(T, ObTabletCreateDeleteMdsUserData)>
+  int check_mds_data_complete_(bool &is_complete) const;
 };
 
 struct GetTabletStatusNodeFromMdsTableOp

@@ -549,7 +549,6 @@ public:
   int get_kept_snapshot_info(
       const int64_t min_reserved_snapshot_on_ls,
       ObStorageSnapshotInfo &snapshot_info) const;
-  int get_end_autoinc_seq(uint64_t &end_autoinc_seq);
   int check_schema_version_elapsed(
       const int64_t schema_version,
       const bool need_wait_trans_end,

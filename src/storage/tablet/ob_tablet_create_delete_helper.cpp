@@ -223,7 +223,7 @@ int ObTabletCreateDeleteHelper::check_status_for_new_mds(
   if (OB_UNLIKELY(tablet.is_empty_shell())) {
     ret = OB_TABLET_NOT_EXIST;
     LOG_WARN("tablet is empty shell", K(ret), K(ls_id), K(tablet_id), K(user_data));
-  } else if (OB_FAIL(tablet.get_latest<ObTabletCreateDeleteMdsUserData>(ReadMdsFunctor(user_data), writer, trans_state, trans_version))) {
+  } else if (OB_FAIL(tablet.get_latest(user_data, writer, trans_state, trans_version))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("tablet creation has not been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));

@@ -420,8 +420,14 @@ int ObITabletMdsInterface::get_latest(OP &&read_op,
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   bool is_online = false;
+  bool is_data_complete = false;
   TabletMdsLockGuard<LockMode::SHARE> guard;
-  if (OB_ISNULL(get_tablet_pointer_())) {
+  if (OB_FAIL(check_mds_data_complete_<T>(is_data_complete))) {
+    MDS_LOG(WARN, "failed to check data completion");
+  } else if (!is_data_complete) {
+    ret = OB_EAGAIN;
+    MDS_LOG(INFO, "mds_data is not complete, try again later", K(ret), K(get_tablet_meta_().ha_status_));
+  } else if (OB_ISNULL(get_tablet_pointer_())) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
@@ -494,8 +500,14 @@ int ObITabletMdsInterface::get_latest_committed(OP &&read_op) const
   mds::MdsTableHandle handle;
   ObLSSwitchChecker ls_switch_checker;
   bool is_online = false;
+  bool is_data_complete = false;
   TabletMdsLockGuard<LockMode::SHARE> guard;
-  if (OB_ISNULL(get_tablet_pointer_())) {
+  if (OB_FAIL(check_mds_data_complete_<T>(is_data_complete))) {
+    MDS_LOG(WARN, "failed to check data completion");
+  } else if (!is_data_complete) {
+    ret = OB_EAGAIN;
+    MDS_LOG(INFO, "mds_data is not complete, try again later", K(ret), K(get_tablet_meta_().ha_status_));
+  } else if (OB_ISNULL(get_tablet_pointer_())) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
@@ -573,7 +585,13 @@ int ObITabletMdsInterface::get_snapshot(const Key &key,
   int ret = OB_SUCCESS;
   bool is_online = false;
   TabletMdsLockGuard<LockMode::SHARE> guard;
-  if (OB_ISNULL(get_tablet_pointer_())) {
+  bool is_data_complete = false;
+  if (OB_FAIL(check_mds_data_complete_<Value>(is_data_complete))) {
+    MDS_LOG(WARN, "failed to check data completion");
+  } else if (!is_data_complete) {
+    ret = OB_EAGAIN;
+    MDS_LOG(INFO, "mds_data is not complete, try again later", K(ret), K(get_tablet_meta_().ha_status_));
+  } else if (OB_ISNULL(get_tablet_pointer_())) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
@@ -863,7 +881,7 @@ int ObITabletMdsInterface::cross_ls_get_snapshot(
 
   if (OB_FAIL((get_snapshot<Key, Value>(key, read_op, snapshot, timeout_us)))) {
     if (OB_EMPTY_RESULT != ret) {
-      MDS_LOG(WARN, "fail to get latest", K(ret));
+      MDS_LOG(WARN, "fail to get snapshot", K(ret));
     }
   }
 
@@ -875,6 +893,17 @@ int ObITabletMdsInterface::cross_ls_get_snapshot(
     }
   }
 
+  return ret;
+}
+
+template <class T, typename std::enable_if<!OB_TRAIT_IS_SAME_CLASS(T, ObTabletCreateDeleteMdsUserData), bool>::type>
+int ObITabletMdsInterface::check_mds_data_complete_(bool &is_complete) const
+{
+  int ret = OB_SUCCESS;
+  // For multi-source data (excluding tablet_status), during the migration of LS,
+  // reading is only permitted once the data is complete;
+  // otherwise, the data read will be incomplete.
+  is_complete = get_tablet_meta_().ha_status_.is_data_status_complete();
   return ret;
 }
 

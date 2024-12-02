@@ -336,6 +336,13 @@ typename std::enable_if<OB_TRAIT_MDS_COMMIT_FOR_OLD_MDS(CLASS), bool>::type = tr
 #define ENABLE_IF_NOT_MDS_COMMIT_FOR_OLD_MDS(CLASS) \
 typename std::enable_if<!OB_TRAIT_MDS_COMMIT_FOR_OLD_MDS(CLASS), bool>::type = true
 
+#define OB_TRAIT_IS_SAME_CLASS(CLASS, DEST_CLASS) \
+std::is_same<DECAY(CLASS), DECAY(DEST_CLASS)>::value
+#define ENABLE_IF_IS_SAME_CLASS(CLASS, DEST_CLASS) \
+typename std::enable_if<OB_TRAIT_IS_SAME_CLASS(CLASS, DEST_CLASS), bool>::type = true
+#define ENABLE_IF_NOT_SAME_CLASS(CLASS, DEST_CLASS) \
+typename std::enable_if<!OB_TRAIT_IS_SAME_CLASS(CLASS, DEST_CLASS), bool>::type = true
+
 template <typename T>
 struct MdsCheckCanDoTxEndWrapper {
   template <typename CLASS = T, ENABLE_IF_HAS_CHECK_CAN_DO_TX_END(CLASS)>
