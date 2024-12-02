@@ -500,6 +500,7 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
                                                     redo_info.parallel_cnt_,
                                                     redo_info.cg_cnt_))) {
         LOG_WARN("failed to write tablet gc flag file", K(ret));
+      } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
       } else if (OB_FAIL(write_ss_block(write_info, macro_handle))) {
         LOG_WARN("failed to write shared storage block", K(ret));
       }
