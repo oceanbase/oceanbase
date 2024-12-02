@@ -564,19 +564,6 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
                     min_snapshot_version, max_snapshot_version, table_store_wrapper.get_member()->get_minor_sstables().count()))) {
       LOG_WARN("failed to add suspect info", K(tmp_ret));
     }
-  } else if (FALSE_IT(result.version_range_.snapshot_version_ = tablet.get_snapshot_version())) {
-  } else if (OB_FAIL(deal_with_minor_result(param.merge_type_, ls, tablet, result))) {
-    LOG_WARN("Failed to deal with minor merge result", K(ret), K(param), K(result));
-  } else {
-    LOG_TRACE("succeed to get minor merge tables", K(min_snapshot_version), K(max_snapshot_version), K(result), K(tablet));
-  }
-
-  if (OB_NO_NEED_MERGE == ret && table_store_wrapper.get_member()->get_minor_sstables().count() >= DIAGNOSE_TABLE_CNT_IN_STORAGE) {
-    ADD_SUSPECT_INFO(MINOR_MERGE,
-                     tablet.get_tablet_meta().ls_id_,
-                     tablet.get_tablet_meta().tablet_id_,
-                     ObSuspectInfoType::SUSPECT_CANT_SCHEDULE_MINOR_MERGE,
-                     min_snapshot_version, max_snapshot_version, table_store_wrapper.get_member()->get_minor_sstables().count());
   }
   return ret;
 }
