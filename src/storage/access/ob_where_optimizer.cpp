@@ -77,6 +77,20 @@ void ObWhereOptimizer::reset()
   is_inited_ = false;
 }
 
+void ObWhereOptimizer::reuse()
+{
+  iter_param_ = nullptr;
+  filter_ = nullptr;
+  filter_iters_ = nullptr;
+  iter_filter_node_ = nullptr;
+  filter_conditions_.reuse();
+  batch_num_ = 0;
+  reorder_filter_times_ = 0;
+  reorder_filter_interval_ = 1;
+  disable_bypass_ = false;
+  is_inited_ = false;
+}
+
 int ObWhereOptimizer::analyze(bool &reordered)
 {
   int ret = OB_SUCCESS;
@@ -93,20 +107,20 @@ int ObWhereOptimizer::analyze_impl(sql::ObPushdownFilterExecutor &filter, bool &
 {
   int ret = OB_SUCCESS;
   sql::ObPushdownFilterExecutor **children = filter.get_childs();
-  const int child_cnt = filter.get_child_count();
+  const int64_t child_cnt = filter.get_child_count();
 
   if (filter.is_enable_reorder()) {
     if (OB_FAIL(filter_conditions_.prepare_allocate(child_cnt))) {
       LOG_WARN("Failed to prepare allocate filter conditions", K(ret), K(child_cnt));
     } else {
-      for (int i = 0; i < child_cnt; ++i) {
+      for (int64_t i = 0; i < child_cnt; ++i) {
         filter_conditions_.at(i).idx_ = i;
         collect_filter_info(*children[i], filter_conditions_.at(i));
       }
 
       lib::ob_sort(&filter_conditions_.at(0), &filter_conditions_.at(0) + child_cnt);
       bool need_reorder = false;
-      for (int i=0; i<child_cnt; ++i) {
+      for (int64_t i = 0; i < child_cnt; ++i) {
         if (i != filter_conditions_.at(i).idx_) {
           need_reorder = true;
           break;
@@ -114,10 +128,10 @@ int ObWhereOptimizer::analyze_impl(sql::ObPushdownFilterExecutor &filter, bool &
       }
       if (need_reorder) {
         int cg_iter_idxs[child_cnt];
-        for (int i=0; i<child_cnt; ++i) {
+        for (int64_t i = 0; i < child_cnt; ++i) {
           cg_iter_idxs[i] = children[i]->get_cg_iter_idx();
         }
-        for (int i=0; i<child_cnt; ++i) {
+        for (int64_t i = 0; i < child_cnt; ++i) {
           children[i] = filter_conditions_.at(i).filter_;
           children[i]->set_cg_iter_idx(cg_iter_idxs[i]);
           if (filter_iters_ != nullptr && iter_filter_node_ != nullptr && cg_iter_idxs[i] != -1) {
@@ -129,7 +143,7 @@ int ObWhereOptimizer::analyze_impl(sql::ObPushdownFilterExecutor &filter, bool &
       }
     }
   } else if (filter.is_logic_op_node()) {
-    for (int i = 0; OB_SUCC(ret) && i < child_cnt; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt; ++i) {
       if (OB_FAIL(analyze_impl(*children[i], reordered))) {
         LOG_WARN("Failed to analyze filter tree", K(ret), K(i), KP(children[i]));
       }
@@ -159,7 +173,7 @@ void ObWhereOptimizer::judge_filter_whether_enable_reorder(sql::ObPushdownFilter
     // do nothing
   } else if (filter->is_logic_op_node()) {
     bool enable_reorder = true;
-    for (int i=0; i<filter->get_child_count(); ++i) { // enable reorder of this filter if all childs are not logic op nodes
+    for (int64_t i = 0; i < filter->get_child_count(); ++i) { // enable reorder of this filter if all childs are not logic op nodes
       sql::ObPushdownFilterExecutor *child = filter->get_childs()[i];
       if (child->is_logic_op_node()) {
         enable_reorder = false;
@@ -189,7 +203,10 @@ int ObWhereOptimizer::reorder_co_filter()
   } else {
     ++reorder_filter_times_;
   }
-  LOG_DEBUG("end of reorder co filter", K(this), K(batch_num_), K(filter_), K(filter_->get_ref()), K(filter_->get_type()), K(reorder_filter_times_), K(reorder_filter_interval_), K(reordered), K(filter_->get_filter_realtime_statistics()));
+  if (reordered) {
+    LOG_TRACE("Reorder co filter tree", K(ret), KP(this), K(batch_num_), KP(filter_), K(filter_->get_ref()), K(filter_->get_type()),
+      K(reorder_filter_times_), K(reorder_filter_interval_), K(reordered), K(filter_->get_filter_realtime_statistics()));
+  }
   return ret;
 }
 
@@ -209,7 +226,10 @@ int ObWhereOptimizer::reorder_row_filter() {
   } else {
     ++reorder_filter_times_;
   }
-  LOG_DEBUG("end of reorder row filter", K(this), K(batch_num_), K(filter_), K(filter_->get_type()), K(iter_param_->is_use_column_store()), K(reorder_filter_times_), K(reorder_filter_interval_), K(reordered), K(filter_->get_filter_realtime_statistics()));
+  if (reordered) {
+    LOG_TRACE("Reorder row filter tree", K(ret), KP(this), K(batch_num_), KP(filter_), K(filter_->get_type()), K(iter_param_->is_use_column_store()),
+      K(reorder_filter_times_), K(reorder_filter_interval_), K(reordered), K(filter_->get_filter_realtime_statistics()));
+  }
   return ret;
 }
 

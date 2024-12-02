@@ -218,7 +218,7 @@ void ObCOSSTableRowsFilter::reset()
 void ObCOSSTableRowsFilter::reuse()
 {
   if (where_optimizer_ != nullptr) {
-    where_optimizer_->reset();
+    where_optimizer_->reuse();
   }
   for (int64_t i = 0; i < filter_iters_.count(); ++i) {
     filter_iters_[i]->reuse();

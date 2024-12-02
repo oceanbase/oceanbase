@@ -287,8 +287,8 @@ int ObCGScanner::apply_filter(
                           filter_info.filter_ != prefetcher_.sstable_index_filter_->get_pushdown_filter()) ||
                          (nullptr != parent && nullptr == parent_bitmap))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(row_count), K(result_bitmap.size()), KP(filter_info.filter_),
-             KP(parent), KP(parent_bitmap), K(prefetcher_.sstable_index_filter_));
+    LOG_WARN("Invalid argument", K(ret), K(row_count), K(result_bitmap.size()), KP(filter_info.filter_), KP(parent),
+      KP(parent_bitmap), KP(prefetcher_.sstable_index_filter_), KP(prefetcher_.sstable_index_filter_->get_pushdown_filter()), KP(this));
   } else if (end_of_scan() || row_count_left() < row_count) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected scanner", K(ret), K(row_count), KPC(this));

@@ -1539,7 +1539,6 @@ int ObPushdownFilterExecutor::do_filter(
     } else if (parent->is_logic_or_node()) {  // If parent is logic or, then bitmap is initialized to 0, calculate # of 1 as filtered row count.
       filter_realtime_statistics_.add_filtered_row_cnt(popcnt);
     }
-    LOG_DEBUG("collet filter real-time statistics", K(parent->get_type()), K(result_bitmap.size()), K(popcnt), K(filter_realtime_statistics_.get_filtered_row_cnt()), K(filter_realtime_statistics_.get_filter_cost_time()));
   }
   return ret;
 }

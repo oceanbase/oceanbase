@@ -29,12 +29,16 @@ public:
     ObSEArray<ObICGIterator*, 4> *filter_iters = nullptr,
     ObSEArray<sql::ObPushdownFilterExecutor*, 4> *iter_filter_node = nullptr);
   void reset();
+  void reuse();
   OB_INLINE bool is_disable_bypass()  // Disable bypass in this batch and collect real-time statistics, then reorder filter before next batch.
   { return reorder_filter_times_ == reorder_filter_interval_; }
   OB_INLINE bool is_first_batch()
   { return batch_num_ == 1; }
   int reorder_co_filter();
   int reorder_row_filter();
+  TO_STRING_KV(KP(this), KP_(iter_param), KP_(filter), KP_(filter_iters), KP_(iter_filter_node),
+    K_(batch_num), K_(reorder_filter_times), K_(reorder_filter_interval), K_(disable_bypass), K_(is_inited));
+
 private:
   struct ObFilterCondition
   {
