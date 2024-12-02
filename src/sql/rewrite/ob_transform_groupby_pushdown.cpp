@@ -722,20 +722,9 @@ int ObTransformGroupByPushdown::transform_union_stmt(
       OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
       OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_)) {
     LOG_WARN("invalid argument", K(union_stmt), K(child_stmts));
-  } else if (OB_FAIL(left_childs.push_back(child_stmts.at(0)))) {
-    LOG_WARN("failed to push back", K(ret));
-  }
-  for (int64_t i = 1; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-    if (OB_FAIL(right_childs.push_back(child_stmts.at(i)))) {
-      LOG_WARN("failed to push back", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
   } else if (OB_FAIL(ObOptimizerUtil::gen_set_target_list(ctx_->allocator_,
                                                           ctx_->session_info_,
                                                           ctx_->expr_factory_,
-                                                          left_childs, right_childs,
                                                           union_stmt))) {
     // TODO tuliwei.tlw
     // Here's the issue: If a view is created to represent this UNION statement

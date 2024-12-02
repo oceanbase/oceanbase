@@ -1133,23 +1133,6 @@ public:
   static int get_column_expr_without_nvl(ObRawExpr* ori_expr, ObRawExpr*& expr);
   static int get_expr_without_unprecise_and_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr);
   static int is_lossless_or_unprecise_column_cast(const ObRawExpr *expr, bool &is_lossless);
-  static int gen_set_target_list(ObIAllocator *allocator,
-                                 ObSQLSessionInfo *session_info,
-                                 ObRawExprFactory *expr_factory,
-                                 ObSelectStmt &left_stmt,
-                                 ObSelectStmt &right_stmt,
-                                 ObSelectStmt *select_stmt,
-                                 const bool is_mysql_recursive_union = false,
-                                 ObIArray<ObString> *rcte_col_name = NULL);
-
-  static int gen_set_target_list(ObIAllocator *allocator,
-                                 ObSQLSessionInfo *session_info,
-                                 ObRawExprFactory *expr_factory,
-                                 ObIArray<ObSelectStmt*> &left_stmts,
-                                 ObIArray<ObSelectStmt*> &right_stmts,
-                                 ObSelectStmt *select_stmt,
-                                 const bool is_mysql_recursive_union = false,
-                                 ObIArray<ObString> *rcte_col_name = NULL);
 
   static int gen_set_target_list(ObIAllocator *allocator,
                                  ObSQLSessionInfo *session_info,
