@@ -192,6 +192,8 @@ bool ObJoinFilterOpInput::check_release()
   return res;
 }
 
+
+ERRSIM_POINT_DEF(JF_BS_OPT);
 int ObJoinFilterOpInput::load_runtime_config(const ObJoinFilterSpec &spec, ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
@@ -226,7 +228,7 @@ int ObJoinFilterOpInput::load_runtime_config(const ObJoinFilterSpec &spec, ObExe
 
   config_.build_send_opt_ =
       (spec.get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_3_5_0
-       && spec.use_realistic_runtime_bloom_filter_size());
+       && spec.use_realistic_runtime_bloom_filter_size() && JF_BS_OPT == OB_SUCCESS);
 
   LOG_TRACE("load runtime filter config", K(spec.get_id()), K(config_));
   return ret;

@@ -1248,8 +1248,7 @@ int ObRFInFilterVecMsg::do_insert_by_row_vector(const ObBatchRows *child_brs,
           }
         }
         if (OB_SUCC(ret) && !ignore_null) {
-          if (build_send_opt_
-              && row_store_.get_row_cnt() > ObPxQueryRangeInfo::MAX_IN_FILTER_QUERY_RANGE_COUNT) {
+          if (build_send_opt_ && row_store_.get_row_cnt() > max_in_num_) {
             // do not insert any more
             break;
           } else {
@@ -1490,7 +1489,7 @@ int ObRFInFilterVecMsg::merge(ObP2PDatahubMsgBase &msg)
         ObCompactRow *cur_row = other_msg.row_store_.get_row(i);
         int64_t row_size = other_msg.row_store_.get_row_size(i);
         // when merge, we must compare the node exist or not
-        if (row_store_.get_row_cnt() > ObPxQueryRangeInfo::MAX_IN_FILTER_QUERY_RANGE_COUNT) {
+        if (row_store_.get_row_cnt() > max_in_num_) {
           // do not insert any more
           break;
         } else {
