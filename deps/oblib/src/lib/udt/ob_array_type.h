@@ -924,6 +924,7 @@ public :
   char *get_data() const { return data_;}
   int push_back(const ObString &value, bool is_null = false);
   void set_scale(ObScale scale) { UNUSED(scale); }
+  int static escape_append(ObStringBuffer &format_str, ObString elem_str);
   int print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
             uint32_t begin = 0, uint32_t print_size = 0) const;
   int print_element(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,

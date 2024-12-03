@@ -577,6 +577,7 @@ int ObExprArrayRemove::cg_expr(ObExprCGCtx &expr_cg_ctx,
     if OB_SUCC(ret) {
       switch (right_tc) {
         case ObIntTC:
+        case ObUIntTC:
           rt_expr.eval_func_ = eval_array_remove_int64_t;
           rt_expr.eval_batch_func_ = eval_array_remove_batch_int64_t;
           rt_expr.eval_vector_func_ = eval_array_remove_vector_int64_t;

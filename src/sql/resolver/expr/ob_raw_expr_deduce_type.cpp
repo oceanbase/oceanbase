@@ -3765,9 +3765,35 @@ int ObRawExprDeduceType::set_array_agg_result_type(ObAggFunRawExpr &expr,
         if (OB_FAIL(ObArrayExprUtils::deduce_nested_array_subschema_id(exec_ctx, elem_type, subschema_id))) {
           LOG_WARN("failed to deduce nested array subschema id", K(ret));
         }
-      } else if (OB_FAIL(exec_ctx->get_subschema_id_by_collection_elem_type(ObNestedType::OB_ARRAY_TYPE,
-                                                                            elem_type, subschema_id))) {
-        LOG_WARN("failed to get collection subschema id", K(ret));
+      } else {
+        if (!ob_is_array_supported_type(elem_type.get_obj_type())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("unsupported element type", K(ret), K(elem_type.get_obj_type()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element type");
+        } else if (elem_type.get_obj_type() == ObDecimalIntType) {
+          ObObjMeta meta;
+          if (param_expr->get_scale() != 0) {
+            meta.set_double();
+          } else {
+            meta.set_int();
+          }
+          ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY[meta.get_type()];
+          elem_type.set_meta_type(meta);
+          elem_type.set_accuracy(acc);
+          ObExprResType param_res_type = param_expr->get_result_type();
+          param_res_type.set_calc_meta(meta);
+          param_res_type.set_calc_accuracy(acc);
+          ObCastMode def_cast_mode = CM_NONE;
+          if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, my_session_, def_cast_mode))) {
+            LOG_WARN("get_default_cast_mode failed", K(ret));
+          } else if (OB_FAIL(try_add_cast_expr(expr, 0, param_res_type, def_cast_mode))) {
+            LOG_WARN("try_add_cast_expr failed", K(ret), K(expr), K(param_res_type));
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(exec_ctx->get_subschema_id_by_collection_elem_type(ObNestedType::OB_ARRAY_TYPE,
+                                                                                       elem_type, subschema_id))) {
+          LOG_WARN("failed to get collection subschema id", K(ret));
+        }
       }
       if (OB_SUCC(ret)) {
         result_type.set_collection(subschema_id);

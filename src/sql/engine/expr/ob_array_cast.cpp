@@ -122,7 +122,7 @@ int ObArrayCastUtils::cast_get_element(ObIArrayType *src, const ObCollectionBasi
       break;
     }
     case ObUInt32Type: {
-      ObArrayFixedSize<int32_t> *arr = static_cast<ObArrayFixedSize<int32_t> *>(src);
+      ObArrayFixedSize<uint32_t> *arr = static_cast<ObArrayFixedSize<uint32_t> *>(src);
       src_elem.set_uint32((*arr)[idx]);
       break;
     }

@@ -130,7 +130,7 @@ public :
       } else if (static_cast<ObObjType>(src_array.get_element_type()) == ObUSmallIntType) {
         FIXED_ARRAY_OBJ_CLONE_EXCEPT(uint16_t);
       } else if (static_cast<ObObjType>(src_array.get_element_type()) == ObUInt64Type) {
-        FIXED_ARRAY_OBJ_CLONE_EXCEPT(int64_t);
+        FIXED_ARRAY_OBJ_CLONE_EXCEPT(uint64_t);
       } else if (static_cast<ObObjType>(src_array.get_element_type()) == ObUInt32Type) {
         FIXED_ARRAY_OBJ_CLONE_EXCEPT(uint32_t);
       } else if (static_cast<ObObjType>(src_array.get_element_type()) == ObFloatType) {

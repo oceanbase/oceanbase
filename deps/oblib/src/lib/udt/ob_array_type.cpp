@@ -769,6 +769,26 @@ int ObArrayBinary::push_null()
   return ret;
 }
 
+int ObArrayBinary::escape_append(ObStringBuffer &format_str, ObString elem_str)
+{
+  int ret = OB_SUCCESS;
+  ObString split_str = elem_str.split_on('\"');
+  if (OB_ISNULL(split_str.ptr())) {
+    if (OB_FAIL(format_str.append(elem_str))) {
+      OB_LOG(WARN, "fail to append string to format_str", K(ret));
+    }
+  } else {
+    if (OB_FAIL(format_str.append(split_str))) {
+      OB_LOG(WARN, "fail to append string to format_str", K(ret));
+    } else if (OB_FAIL(format_str.append("\\\""))) {
+      OB_LOG(WARN, "fail to append \\\" to format_str", K(ret));
+    } else if (!elem_str.empty()) {
+      ret = escape_append(format_str, elem_str);
+    }
+  }
+  return ret;
+}
+
 int ObArrayBinary::print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str, uint32_t begin, uint32_t print_size) const
 {
   int ret = OB_SUCCESS;
@@ -790,8 +810,8 @@ int ObArrayBinary::print(const ObCollectionTypeBase *elem_type, ObStringBuffer &
           }
       } else if (OB_FAIL(format_str.append("\""))) {
         OB_LOG(WARN, "fail to append \"\"\" to buffer", K(ret));
-      } else if (OB_FAIL(format_str.append((*this)[i]))) {
-        OB_LOG(WARN, "fail to append string to format_str", K(ret));
+      } else if (OB_FAIL(escape_append(format_str, (*this)[i]))) {
+        OB_LOG(WARN, "fail to escape_append string to format_str", K(ret));
       } else if (OB_FAIL(format_str.append("\""))) {
         OB_LOG(WARN, "fail to append \"\"\" to buffer", K(ret));
       }
