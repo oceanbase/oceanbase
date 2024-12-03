@@ -438,8 +438,8 @@ int ObUnitResource::init_and_check_iops_(const ObUnitResource &user_spec)
         // user specified
         iops_weight_ = user_spec.iops_weight();
       } else {
-        // not specified, init to 0
-        iops_weight_ = DEFAULT_IOPS_WEIGHT;
+        // not specified, init to min_cpu
+        iops_weight_ = get_default_iops_weight(min_cpu_);
       }
     }
   }
@@ -538,7 +538,7 @@ int ObUnitResource::init_and_check_net_bandwidth_(const ObUnitResource &user_spe
         // if net_bandwidth_weight is not specified, set as DEFAULT value
         if (! user_spec.is_net_bandwidth_weight_valid()) {
           // not specified, init to DEFAULT value
-          net_bandwidth_weight_ = DEFAULT_NET_BANDWIDTH_WEIGHT;
+          net_bandwidth_weight_ = get_default_iops_weight(min_cpu_);
         } else {
           // user specified
           net_bandwidth_weight_ = user_spec.net_bandwidth_weight();

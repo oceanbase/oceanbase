@@ -203,14 +203,14 @@ create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_I
 create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS=0;
 
 ###############
---echo ======== 如果只指定了MAX_IOPS，那么: MIN_IOPS = MAX_IOPS, IOPS_WEIGHT=0
+--echo ======== 如果只指定了MAX_IOPS，那么: MIN_IOPS = MAX_IOPS, IOPS_WEIGHT=MIN_CPU
 create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS='1024';   # 整型字符串等价于整型
 --replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
 select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
 drop resource unit box_for_unit_config_test;
 
 ###############
---echo ======== 如果只指定了MIN_IOPS, 那么：MAX_IOPS = MIN_IOPS, IOPS_WEIGHT=0
+--echo ======== 如果只指定了MIN_IOPS, 那么：MAX_IOPS = MIN_IOPS, IOPS_WEIGHT=MIN_CPU
 create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_IOPS=900000;   # 整型字符串等价于整型
 --replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
 select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
