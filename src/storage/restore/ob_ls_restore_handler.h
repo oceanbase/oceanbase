@@ -471,7 +471,7 @@ class ObLSRestoreWaitRestoreSysTabletState final : public ObLSRestoreWaitState
 {
 public:
   ObLSRestoreWaitRestoreSysTabletState()
-    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_SYS_TABLETS, true /* require multi replica sync */) {}
+    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_SYS_TABLETS, false /* require multi replica sync */) {}
   virtual ~ObLSRestoreWaitRestoreSysTabletState() {}
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitRestoreSysTabletState);
@@ -481,7 +481,7 @@ class ObLSRestoreWaitCreateUserTabletState final : public ObLSRestoreWaitState
 {
 public:
   ObLSRestoreWaitCreateUserTabletState()
-    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META, false /* require multi replica sync */) {}
+    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META, true /* require multi replica sync */) {}
   virtual ~ObLSRestoreWaitCreateUserTabletState() {}
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitCreateUserTabletState);
