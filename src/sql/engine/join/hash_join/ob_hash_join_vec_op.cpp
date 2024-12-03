@@ -910,8 +910,12 @@ int ObHashJoinVecOp::get_max_memory_size(int64_t input_size)
     LOG_WARN("failed to init sql mem mgr", K(ret));
   } else if (sql_mem_processor_.is_auto_mgr()) {
     remain_data_memory_size_ = calc_max_data_size(extra_memory_size);
-    part_count_ = calc_partition_count_by_cache_aware(
-      profile_.get_row_count(), MAX_PART_COUNT_PER_LEVEL, memory_size);
+    if (is_top_level_process_with_join_filter()) {
+      part_count_ = join_filter_partition_splitter_->get_part_count();
+    } else {
+      part_count_ = calc_partition_count_by_cache_aware(
+        profile_.get_row_count(), MAX_PART_COUNT_PER_LEVEL, memory_size);
+    }
     if (!top_part_level()) {
       if (OB_ISNULL(left_part_) || OB_ISNULL(right_part_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -926,8 +930,12 @@ int ObHashJoinVecOp::get_max_memory_size(int64_t input_size)
       K(input_size), K(extra_memory_size), K(profile_.get_expect_size()),
       K(profile_.get_cache_size()), K(spec_.id_));
   } else {
-    part_count_ = calc_partition_count_by_cache_aware(
-      profile_.get_row_count(), MAX_PART_COUNT_PER_LEVEL, sql_mem_processor_.get_mem_bound());
+    if (is_top_level_process_with_join_filter()) {
+      part_count_ = join_filter_partition_splitter_->get_part_count();
+    } else {
+      part_count_ = calc_partition_count_by_cache_aware(
+        profile_.get_row_count(), MAX_PART_COUNT_PER_LEVEL, sql_mem_processor_.get_mem_bound());
+    }
     LOG_TRACE("trace auto memory manager", K(hash_area_size), K(part_count_),
       K(input_size), K(spec_.id_));
   }
