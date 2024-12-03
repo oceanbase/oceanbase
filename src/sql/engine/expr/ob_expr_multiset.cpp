@@ -209,7 +209,7 @@ int ObExprMultiSet::calc_ms_impl(common::ObIAllocator *coll_allocator,
 }
 
 int ObExprMultiSet::calc_ms_one_distinct(common::ObIAllocator *coll_allocator,
-                                   ObObj *objs,
+                                   ObObj *input_data,
                                    int64_t count,
                                    ObObj *&data_arr,
                                    int64_t &elem_count)
@@ -217,17 +217,26 @@ int ObExprMultiSet::calc_ms_one_distinct(common::ObIAllocator *coll_allocator,
   int ret = OB_SUCCESS;
   LocalNTSHashMap dmap_c;
   int res_cnt = 0;
-  if (0 == count) {
+  int64_t real_count = 0;
+  ObObj objs[count];
+  for (int64_t i = 0; i < count; ++i) {
+    // skip deleted element
+    if (ObMaxType != input_data[i].get_type()) {
+      objs[real_count] = input_data[i];
+      real_count += 1;
+    }
+  }
+  if (0 == real_count) {
     // do nothing
   } else if (OB_ISNULL(objs)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("objs array is null", K(count));
+    LOG_WARN("objs array is null", K(count), K(real_count));
   } else {
-    if (OB_FAIL(dmap_c.create(count, ObModIds::OB_SQL_HASH_SET))) {
-      LOG_WARN("fail create hash map", K(count), K(ret));
+    if (OB_FAIL(dmap_c.create(real_count, ObModIds::OB_SQL_HASH_SET))) {
+      LOG_WARN("fail create hash map", K(real_count), K(ret));
     } else {
       const ObObj *elem = NULL;
-      for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < real_count; ++i) {
         elem = objs + i;
         ret = dmap_c.set_refactored(*elem, i);
         if (OB_HASH_EXIST == ret) {
