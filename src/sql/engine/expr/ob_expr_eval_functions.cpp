@@ -1314,7 +1314,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArrayPrepend::eval_array_prepend,                    /* 783 */
   NULL, // ObExprArrayConcat::eval_array_concat,                      /* 784 */
   NULL, // ObExprArrayDifference::eval_array_difference,              /* 785 */
-  NULL, // ObExprArrayMap::eval_array_first,                          /* 786 */
+  NULL, // ObExprArrayFirst::eval_array_first,                        /* 786 */
   NULL, // ObExprCalcPartitionName::get_partition_name,               /* 787 */
   NULL, // ObExprCalcSubPartitionName::get_sub_partition_name,        /* 788 */
   NULL, // ObExprCalcPartitionIdx::get_partition_idx,                 /* 789 */
@@ -1328,6 +1328,12 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVecIVFMetaVector::generate_meta_vector,              /* 797 */
   NULL, // ObExprVecIVFPQCenterId::generate_pq_center_id,             /* 798 */
   NULL, // ObExprVecIVFPQCenterIds::calc_pq_center_ids,               /* 799 */
+  NULL, // ObExprArrayMax::eval_array_max,                            /* 800 */
+  NULL, // ObExprArrayMin::eval_array_min,                            /* 801 */
+  NULL, // ObExprArrayAvg::eval_array_avg,                            /* 802 */
+  NULL, // ObExprArraySum::eval_array_sum,                            /* 803 */
+  NULL, // ObExprArrayCompact::eval_array_compact,                    /* 804 */
+  NULL, // ObExprArraySort::eval_array_sort,                          /* 805 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1491,6 +1497,12 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL,// ObExprArrayPrepend::eval_array_prepend_batch,               /* 157 */
   NULL,// ObExprArrayConcat::eval_array_concat_batch,                 /* 158 */
   NULL,// ObExprArrayDifference::eval_array_difference_batch,         /* 159 */
+  NULL,// ObExprArrayMax::eval_array_max_batch,                       /* 160 */
+  NULL,// ObExprArrayMin::eval_array_min_batch,                       /* 161 */
+  NULL,// ObExprArrayAvg::eval_array_avg_batch,                       /* 162 */
+  NULL,// ObExprArraySum::eval_array_sum_batch,                       /* 163 */
+  NULL,// ObExprArrayCompact::eval_array_compact_batch,               /* 164 */
+  NULL,// ObExprArraySort::eval_array_sort_batch,                     /* 165 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1671,6 +1683,12 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprArrayPrepend::eval_array_prepend_vector,                /* 174 */
   NULL, // ObExprArrayConcat::eval_array_concat_vector,                  /* 175 */
   NULL, // ObExprArrayDifference::eval_array_difference_vector,          /* 176 */
+  NULL, // ObExprArrayMax::eval_array_max_vector,                        /* 177 */
+  NULL, // ObExprArrayMin::eval_array_min_vector,                        /* 178 */
+  NULL, // ObExprArrayAvg::eval_array_avg_vector,                        /* 179 */
+  NULL, // ObExprArraySum::eval_array_sum_vector,                        /* 180 */
+  NULL, // ObExprArrayCompact::eval_array_compact_vector,                /* 181 */
+  NULL, // ObExprArraySort::eval_array_sort_vector,                      /* 182 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

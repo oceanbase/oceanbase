@@ -888,6 +888,12 @@ typedef enum ObItemType
   T_FUNC_SYS_ARRAY_CONCAT = 1762,
   T_FUNC_SYS_ARRAY_DIFFERENCE = 1763,
   T_FUNC_SYS_ARRAY_FIRST = 1764,
+  T_FUNC_SYS_ARRAY_MAX = 1765,
+  T_FUNC_SYS_ARRAY_MIN = 1766,
+  T_FUNC_SYS_ARRAY_AVG = 1767,
+  T_FUNC_SYS_ARRAY_SUM = 1768,
+  T_FUNC_SYS_ARRAY_COMPACT = 1769,
+  T_FUNC_SYS_ARRAY_SORT = 1770,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
