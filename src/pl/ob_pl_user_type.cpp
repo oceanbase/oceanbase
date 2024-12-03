@@ -1899,6 +1899,9 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
           }
         }
       }
+      if (OB_FAIL(ret)) {
+        ObUserDefinedType::destruct_objparam(obj_allocator, obj, &(resolve_ctx.session_info_));
+      }
     }
   }
   return ret;
@@ -2699,6 +2702,9 @@ int ObCollectionType::init_session_var(const ObPLResolveCtx &resolve_ctx,
                                             0,
                                             false));
       OX (default_construct ? coll->set_inited() : void(NULL));
+      if (OB_FAIL(ret)) {
+        ObUserDefinedType::destruct_objparam(obj_allocator, obj, &(resolve_ctx.session_info_));
+      }
     }
   }
   return ret;
