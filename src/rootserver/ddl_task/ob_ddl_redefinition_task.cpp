@@ -410,7 +410,7 @@ int ObDDLRedefinitionTask::hold_snapshot_for_major_refresh_mv_(const int64_t sna
     }
     if (OB_SUCC(ret)) {
       ObDDLService &ddl_service = root_service->get_ddl_service();
-      if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
+      if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot_in_trans(
               ddl_service.get_sql_proxy(), SNAPSHOT_FOR_MAJOR_REFRESH_MV, tenant_id_,
               schema_version_, snapshot_scn, nullptr, tablet_ids))) {
         LOG_WARN("batch acquire snapshot failed", K(ret), K(tablet_ids));
@@ -480,12 +480,11 @@ int ObDDLRedefinitionTask::obtain_snapshot(const ObDDLTaskStatus next_task_statu
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
-  } else if (snapshot_version_ > 0 && snapshot_held_) {
+  } else if (snapshot_version_ > 0) {
     // do nothing, already hold snapshot.
   } else if (OB_FAIL(ObDDLUtil::obtain_snapshot(next_task_status, object_id_,
-                                                target_object_id_, snapshot_version_,
-                                                snapshot_held_, this))) {
-    LOG_WARN("fail to obtain_snapshot", K(ret), K(snapshot_version_), K(snapshot_held_));
+                                                target_object_id_, snapshot_version_, this))) {
+    LOG_WARN("fail to obtain_snapshot", K(ret), K(snapshot_version_));
   } else if (alter_table_arg_.mview_refresh_info_.is_mview_complete_refresh_ &&
              alter_table_arg_.alter_table_schema_.mv_major_refresh() &&
              OB_FAIL(hold_snapshot_for_major_refresh_mv_(snapshot_version_))) {

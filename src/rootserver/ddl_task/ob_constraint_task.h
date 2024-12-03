@@ -109,7 +109,7 @@ public:
   virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
 private:
-  int hold_snapshot(const int64_t snapshot_version);
+  int hold_snapshot(common::ObMySQLTransaction &trans, const int64_t snapshot_version);
   int release_snapshot(const int64_t snapshot_version);
   int wait_trans_end();
   int validate_constraint_valid();
@@ -152,7 +152,6 @@ private:
   int64_t check_job_ret_code_;
   int64_t check_replica_request_time_;
   bool is_table_hidden_;
-  bool snapshot_held_;
 };
 
 }  // end namespace rootserver

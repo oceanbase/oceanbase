@@ -286,11 +286,18 @@ public:
       const int64_t task_id,
       const int64_t task_status);
 
+  static int update_snapshot_version_if_not_exist(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const int64_t new_fetched_snapshot,
+      int64_t &persisted_snapshot);
+
   static int update_snapshot_version(
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const int64_t task_id,
-      const int64_t snapshot_version);
+      const int64_t new_fetched_snapshot);
 
   static int update_ret_code(
       common::ObISQLClient &sql_client,

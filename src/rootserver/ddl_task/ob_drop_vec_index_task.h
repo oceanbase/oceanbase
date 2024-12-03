@@ -61,7 +61,7 @@ public:
                                         const ObDDLTaskInfo &addition_info);
 
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K_(rowkey_vid), K_(vid_rowkey), K_(domain_index), K_(vec_index_id),
-                      K_(vec_index_snapshot_data), K(wait_trans_ctx_), K(snapshot_held_));
+                      K_(vec_index_snapshot_data), K(wait_trans_ctx_));
 private:
   static const int64_t OB_DROP_VEC_INDEX_TASK_VERSION = 1;
   int deep_copy_index_arg(common::ObIAllocator &allocator,
@@ -117,7 +117,6 @@ private:
   int64_t delte_lob_meta_job_ret_code_;
   int64_t check_dag_exit_retry_cnt_;
   bool del_lob_meta_row_task_submitted_;
-  bool snapshot_held_;
 };
 
 } // end namespace rootserver

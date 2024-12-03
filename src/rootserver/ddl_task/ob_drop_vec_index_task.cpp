@@ -42,8 +42,7 @@ ObDropVecIndexTask::ObDropVecIndexTask()
     delte_lob_meta_request_time_(0),
     delte_lob_meta_job_ret_code_(INT64_MAX),
     check_dag_exit_retry_cnt_(0),
-    del_lob_meta_row_task_submitted_(false),
-    snapshot_held_(false)
+    del_lob_meta_row_task_submitted_(false)
 {
 }
 
@@ -168,7 +167,7 @@ int ObDropVecIndexTask::obtain_snapshot(const share::ObDDLTaskStatus next_task_s
     if (OB_FAIL(switch_status(ObDDLTaskStatus::DROP_AUX_INDEX_TABLE, true, ret))) {
       LOG_WARN("fail to switch task status to ObDDLTaskStatus::DROP_AUX_INDEX_TABLE", K(ret));
     }
-  } else if (snapshot_version_ > 0 && snapshot_held_) {
+  } else if (snapshot_version_ > 0) {
     // already hold snapshot, switch to next status
     state_finished = true;
     if (OB_FAIL(switch_status(next_task_status, true, ret))) {
@@ -176,8 +175,8 @@ int ObDropVecIndexTask::obtain_snapshot(const share::ObDDLTaskStatus next_task_s
     }
   } else if (OB_FAIL(ObDDLUtil::obtain_snapshot(next_task_status, vec_index_snapshot_data_.table_id_,
                                                 vec_index_snapshot_data_.table_id_, snapshot_version_,
-                                                snapshot_held_, this))) {
-    LOG_WARN("fail to obtain_snapshot", K(ret), K(snapshot_version_), K(snapshot_held_));
+                                                this))) {
+    LOG_WARN("fail to obtain_snapshot", K(ret), K(snapshot_version_));
   } else {
     state_finished = true;
   }
