@@ -7973,6 +7973,8 @@ int ObTransformPreProcess::build_rowid_expr(ObSelectStmt *select_stmt,
     ObSEArray<ObRawExpr*, 4> index_keys;
     uint64_t tid = table_item->ref_id_;
     ObRawExpr *same_rowid_expr = NULL;
+    ObRawExpr *part_expr = select_stmt->get_part_expr(table_item->table_id_, table_item->ref_id_);
+    ObRawExpr *subpart_expr = select_stmt->get_subpart_expr(table_item->table_id_, table_item->ref_id_);
     if (OB_FAIL(ctx_->schema_checker_->get_table_schema(ctx_->session_info_->get_effective_tenant_id(), tid, table_schema, table_item->is_link_table()))) {
       LOG_WARN("fail to get table schema", K(ret), K(tid));
     } else if (OB_ISNULL(table_schema)) {
@@ -7996,13 +7998,13 @@ int ObTransformPreProcess::build_rowid_expr(ObSelectStmt *select_stmt,
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObRawExprUtils::build_rowid_expr(select_stmt,
-                                                          *(ctx_->expr_factory_),
+      } else if (OB_FAIL(ObRawExprUtils::build_rowid_expr(*(ctx_->expr_factory_),
                                                           *(ctx_->allocator_),
                                                           *(ctx_->session_info_),
                                                           *table_schema,
-                                                          table_item->table_id_,
                                                           index_keys,
+                                                          part_expr,
+                                                          subpart_expr,
                                                           rowid_expr))) {
         LOG_WARN("build rowid col_expr failed", K(ret));
       } else if (OB_FAIL(select_stmt->check_and_get_same_rowid_expr(rowid_expr, same_rowid_expr))) {

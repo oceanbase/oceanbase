@@ -880,12 +880,16 @@ int ObLogDelUpd::build_rowid_expr(uint64_t table_id,
   ObSchemaGetterGuard *schema_guard = NULL;
   ObSQLSessionInfo *session_info = NULL;
   const ObTableSchema *tbl_schema = NULL;
-  if (OB_ISNULL(get_plan()) ||
+  ObRawExpr *part_expr = NULL;
+  ObRawExpr *subpart_expr = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt()) ||
       OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_schema_guard()) ||
       OB_ISNULL(get_plan()->get_optimizer_context().get_session_info()) ||
       OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid params", K(ret), KP(schema_guard), KP(get_plan()));
+  } else if (OB_FALSE_IT(part_expr = get_stmt()->get_part_expr(table_id, table_ref_id))) {
+  } else if (OB_FALSE_IT(subpart_expr = get_stmt()->get_subpart_expr(table_id, table_ref_id))) {
   } else if (OB_FAIL(schema_guard->get_table_schema(
              session_info->get_effective_tenant_id(),
              table_ref_id, tbl_schema))) {
@@ -893,13 +897,13 @@ int ObLogDelUpd::build_rowid_expr(uint64_t table_id,
   } else if (OB_ISNULL(tbl_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is NULL", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_rowid_expr(get_stmt(),
-                                                      get_plan()->get_optimizer_context().get_expr_factory(),
+  } else if (OB_FAIL(ObRawExprUtils::build_rowid_expr(get_plan()->get_optimizer_context().get_expr_factory(),
                                                       get_plan()->get_optimizer_context().get_allocator(),
                                                       *(get_plan()->get_optimizer_context().get_session_info()),
                                                       *tbl_schema,
-                                                      table_id,
                                                       rowkeys,
+                                                      part_expr,
+                                                      subpart_expr,
                                                       rowid_sysfun_expr))) {
     LOG_WARN("failed to build rowid col expr", K(ret));
   } else if (OB_ISNULL(rowid_sysfun_expr)) {

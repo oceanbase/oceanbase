@@ -1019,13 +1019,13 @@ public:
 
   static int build_rownum_expr(ObRawExprFactory &expr_factory,
                                ObRawExpr* &rownum_expr);
-  static int build_rowid_expr(const ObDMLStmt *dml_stmt,
-                              ObRawExprFactory &expr_factory,
+  static int build_rowid_expr(ObRawExprFactory &expr_factory,
                               ObIAllocator &alloc,
                               const ObSQLSessionInfo &session_info,
                               const share::schema::ObTableSchema &table_schema,
-                              const uint64_t logical_table_id,
                               const ObIArray<ObRawExpr *> &rowkey_exprs,
+                              ObRawExpr *part_expr,
+                              ObRawExpr *subpart_expr,
                               ObSysFunRawExpr *&rowid_expr);
   static int build_empty_rowid_expr(ObRawExprFactory &expr_factory,
                                     uint64_t table_id,
@@ -1115,19 +1115,6 @@ public:
                             common::ObIArray<ObRawExpr*> &params);
   static int is_contain_params(const common::ObIArray<ObRawExpr*> &exprs, bool &is_contain);
   static int is_contain_params(const ObRawExpr *expr, bool &is_contain);
-
-  static int add_calc_tablet_id_on_calc_rowid_expr(const ObDMLStmt *dml_stmt,
-                                                   ObRawExprFactory &expr_factory,
-                                                   const ObSQLSessionInfo &session_info,
-                                                   const share::schema::ObTableSchema &table_schema,
-                                                   const uint64_t logical_table_id,
-                                                   ObSysFunRawExpr *&calc_rowid_expr);
-  static int add_calc_partition_id_on_calc_rowid_expr(const ObDMLStmt *dml_stmt,
-                                                  ObRawExprFactory &expr_factory,
-                                                  const ObSQLSessionInfo &session_info,
-                                                  const share::schema::ObTableSchema &table_schema,
-                                                  const uint64_t logical_table_id,
-                                                  ObSysFunRawExpr *&calc_rowid_expr);
   static int get_col_ref_expr_recursively(ObRawExpr *expr,
                                           ObColumnRefRawExpr *&column_expr);
 
