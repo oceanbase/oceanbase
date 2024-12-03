@@ -93,6 +93,13 @@ public:
         tenant_id_ = gen_user_tenant_id(tenant_id_);
       }
     }
+    int assign(const ObTrafficControl::ObStorageKey &other)
+    {
+      storage_id_ = other.storage_id_;
+      tenant_id_ = other.tenant_id_;
+      category_ = other.category_;
+      return OB_SUCCESS;
+    }
     uint64_t hash() const
     {
       return (storage_id_ << 48) ^ (tenant_id_ << 32) ^ ((uint64_t)category_ << 16);
@@ -247,17 +254,19 @@ public:
       TO_STRING_KV(K(grp_list_));
     };
     ObSharedDeviceControlV2();
+    ObSharedDeviceControlV2(const ObStorageKey &key);
     ~ObSharedDeviceControlV2();
     int init();
-    int destroy();
+    void destroy();
+    int set_storage_key(const ObTrafficControl::ObStorageKey &key);
     int add_shared_device_limits();
-    int fill_qsched_req_ss_limits(ObIORequest& req);
+    int fill_qsched_req_storage_key(ObIORequest& req);
     int add_group(const ObIOSSGrpKey &grp_key, const int qid);
     int is_group_key_exist(const ObIOSSGrpKey &grp_key);
     int64_t get_limit(const obrpc::ResourceType type) const;
     int update_limit(const obrpc::ObSharedDeviceResource &limit);
     int64_t to_string(char* buf, const int64_t buf_len) const;
-
+    ObStorageKey storage_key_;
     // limit and limit_ids: ops = 0, ips = 1, iops = 2, obw = 3, ibw = 4, iobw = 5, tag = 6
     int64_t limits_[static_cast<int>(obrpc::ResourceType::ResourceTypeCnt)];
     int limit_ids_[static_cast<int>(obrpc::ResourceType::ResourceTypeCnt)];
@@ -293,7 +302,7 @@ private:
 private:
   // for device limitation
   hash::ObHashMap<ObStorageKey, ObSharedDeviceControl> shared_device_map_;
-  hash::ObHashMap<ObStorageKey, ObSharedDeviceControlV2> shared_device_map_v2_;
+  hash::ObHashMap<ObStorageKey, ObSharedDeviceControlV2*> shared_device_map_v2_;
   // for diagnose
   hash::ObHashMap<ObIORecordKey, ObSharedDeviceIORecord> io_record_map_;
   // maybe different key between limitation and diagnose later
@@ -307,6 +316,7 @@ private:
   ObAtomIOClock ibw_clock_;
   ObAtomIOClock obw_clock_;
   int64_t device_bandwidth_;
+  DRWLock rw_lock_;
 };
 
 class ObIOManager final

@@ -47,11 +47,13 @@ class ITCLimiter: public IQD
 {
 public:
   enum { LIMIT_BALANCE_BOUND_MS = 10 };
-  ITCLimiter(int id, int type, const char* name): IQD(id, type, name), limit_per_sec_(INT64_MAX), due_ts_(0) {}
+  ITCLimiter(int id, int type, const char* name): IQD(id, type, name), limit_per_sec_(INT64_MAX), due_ts_(0), storage_key_(0) {}
+  ITCLimiter(int id, int type, const char* name, uint64_t storage_key): IQD(id, type, name), limit_per_sec_(INT64_MAX), due_ts_(0), storage_key_(storage_key) {}
   virtual ~ITCLimiter() {}
   virtual int64_t get_cost(TCRequest* req) = 0;
   void set_limit_per_sec(int64_t limit) { limit_per_sec_ = limit; }
   int64_t get_limit_per_sec() { return limit_per_sec_; }
+  uint64_t get_storage_key() { return storage_key_; }
   int64_t inc_due_ns(TCRequest* req)
   {
     if (INT64_MAX == limit_per_sec_) {
@@ -76,6 +78,7 @@ public:
 protected:
   int64_t limit_per_sec_;
   int64_t due_ts_ CACHE_ALIGNED;
+  uint64_t storage_key_;
 };
 
 #include "ob_tc_limit.cpp"
@@ -121,29 +124,27 @@ public:
         }
       }
     } else {
-      for(int i = 0; i < MAX_LIMITER_COUNT && limiter_[i]; i++) {
-        for (int j = 0; (j < MAX_SHARED_DEVICE_LIMIT_COUNT); j++) {
-          if (req->ss_limiter_ids_[j] > 0 && req->ss_limiter_ids_[j] == limiter_[i]->get_id()) {
-            int64_t due_ns = limiter_[i]->get_due_ns();
-            if (max_ts < due_ns) {
-              max_ts = due_ns;
-            }
+      for (int i = 0; i < MAX_LIMITER_COUNT && limiter_[i]; i++) {
+        if (req->storage_key_ == limiter_[i]->get_storage_key()) {
+          int64_t due_ns = limiter_[i]->get_due_ns();
+          if (max_ts < due_ns) {
+            max_ts = due_ns;
           }
         }
       }
     }
     return max_ts;
   }
-  void inc_due_ns(TCRequest* req) {
+  void inc_due_ns(TCRequest *req)
+  {
     limiter0_.inc_due_ns(req);
-    for(int i = 0; i < MAX_LIMITER_COUNT && limiter_[i]; i++) {
-      for (int j = 0; j < MAX_SHARED_DEVICE_LIMIT_COUNT; j++) {
-        if (req->ss_limiter_ids_[j] > 0 && req->ss_limiter_ids_[j] == limiter_[i]->get_id()) {
-          limiter_[i]->inc_due_ns(req);
-        }
+    for (int i = 0; i < MAX_LIMITER_COUNT && limiter_[i]; i++) {
+      if (req->storage_key_ == limiter_[i]->get_storage_key()) {
+        limiter_[i]->inc_due_ns(req);
       }
     }
   }
+
 private:
   BytesLimiter limiter0_;
   Limiter* limiter_[MAX_LIMITER_COUNT];

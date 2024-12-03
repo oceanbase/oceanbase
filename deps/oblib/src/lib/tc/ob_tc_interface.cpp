@@ -322,30 +322,31 @@ int qsched_submit(int qid, TCRequest* req, uint32_t chan_id)
   return err;
 }
 
-ITCLimiter* tclimit_new(int id, int type, const char* name)
+ITCLimiter* tclimit_new(int id, int type, const char* name, uint64_t storage_key = 0)
 {
   switch(type) {
     case TCLIMIT_BYTES:
-      return new BytesLimiter(id, name);
+      return new BytesLimiter(id, name, storage_key);
     case TCLIMIT_COUNT:
-      return new CountLimiter(id, name);
+      return new CountLimiter(id, name, storage_key);
       break;
     default:
       abort();
   }
 }
 
-int tclimit_create(int type, const char* name)
+int tclimit_create(int type, const char* name, uint64_t storage_key)
 {
   QWGuard("tclimit_create");
   int id = imap_lock();
   if (id >= 0) {
-    ITCLimiter* limiter = tclimit_new(id, type, name);
+    ITCLimiter* limiter = tclimit_new(id, type, name, storage_key);
     imap_set(id, limiter);
     if (NULL == limiter) {
       id = -1;
     }
   }
+  TC_INFO("tclimit create: type: %d, name: %s, storage_key: %lu, id: %d", type, name, storage_key, id);
   return id;
 }
 

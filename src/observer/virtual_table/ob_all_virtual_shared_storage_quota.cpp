@@ -107,9 +107,8 @@ int ObVirtualSharedStorageQuota::add_one_storage_batch_row()
   {
     GetLimitV2(obrpc::ObSharedDeviceResourceArray &limits) : limits_(limits)
     {}
-    int operator()(
-        oceanbase::common::hash::HashMapPair<ObTrafficControl::ObStorageKey, ObTrafficControl::ObSharedDeviceControlV2>
-            &entry)
+    int operator()(oceanbase::common::hash::HashMapPair<ObTrafficControl::ObStorageKey,
+        ObTrafficControl::ObSharedDeviceControlV2 *> &entry)
     {
       int ret = OB_SUCCESS;
       int idx_begin = limits_.array_.count();
@@ -118,11 +117,12 @@ int ObVirtualSharedStorageQuota::add_one_storage_batch_row()
       }
       if (OB_UNLIKELY(idx_begin < 0)
           || OB_UNLIKELY(idx_begin + obrpc::ResourceType::ResourceTypeCnt > limits_.array_.count())) {
+      } else if (OB_UNLIKELY(OB_ISNULL(entry.second))) {
       } else {
         for (int i = 0; i < obrpc::ResourceType::ResourceTypeCnt; ++i) {
           limits_.array_.at(idx_begin + i).key_ = entry.first;
           limits_.array_.at(idx_begin + i).type_ = static_cast<obrpc::ResourceType>(i);
-          limits_.array_.at(idx_begin + i).value_ = entry.second.get_limit(static_cast<obrpc::ResourceType>(i));
+          limits_.array_.at(idx_begin + i).value_ = entry.second->get_limit(static_cast<obrpc::ResourceType>(i));
         }
       }
       return ret;

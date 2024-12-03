@@ -145,18 +145,29 @@ int ObTrafficControl::ObSharedDeviceControlV2::init()
   limits_[obrpc::ResourceType::ibw] = INT64_MAX / (16 * (1<<11));
   limits_[obrpc::ResourceType::iobw] = INT64_MAX / (16 * (1<<10));
   limits_[obrpc::ResourceType::tag] = INT64_MAX;
+  storage_key_  = ObStorageKey();
   return ret;
 }
 
-int ObTrafficControl::ObSharedDeviceControlV2::destroy()
+void ObTrafficControl::ObSharedDeviceControlV2::destroy()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(group_list_.clear())) {
     LOG_WARN("clear map failed", K(ret));
+  } else {
+    for (int i = 0; i < static_cast<int>(obrpc::ResourceType::ResourceTypeCnt); i++) {
+      if (limit_ids_[i] < 0) {
+        LOG_WARN("invalid limit id failed", K(ret), K(limit_ids_[i]), K(i));
+      } else {
+        tclimit_destroy(limit_ids_[i]);
+      }
+    }
   }
-  return ret;
 }
-
+int ObTrafficControl::ObSharedDeviceControlV2::set_storage_key(const ObTrafficControl::ObStorageKey &key)
+{
+  return storage_key_.assign(key);
+}
 int ObTrafficControl::ObSharedDeviceControlV2::add_shared_device_limits()
 {
   int ret = OB_SUCCESS;
@@ -164,19 +175,23 @@ int ObTrafficControl::ObSharedDeviceControlV2::add_shared_device_limits()
   limit_ids_[static_cast<int>(ResourceType::ibw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::ibw));
   limit_ids_[static_cast<int>(ResourceType::ops)] = tclimit_create(TCLIMIT_COUNT, get_resource_type_str(ResourceType::ops));
   limit_ids_[static_cast<int>(ResourceType::obw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::obw));
+  LOG_INFO("add shared device limit success",
+      "ips_limit_id",
+      limit_ids_[static_cast<int>(ResourceType::ips)],
+      "ibw_limit_id",
+      limit_ids_[static_cast<int>(ResourceType::ibw)],
+      "ops_limit_id",
+      limit_ids_[static_cast<int>(ResourceType::ops)],
+      "obw_limit_id",
+      limit_ids_[static_cast<int>(ResourceType::obw)],
+      K(ret));
   return ret;
 }
 
-int ObTrafficControl::ObSharedDeviceControlV2::fill_qsched_req_ss_limits(ObIORequest& req)
+int ObTrafficControl::ObSharedDeviceControlV2::fill_qsched_req_storage_key(ObIORequest& req)
 {
   int ret = OB_SUCCESS;
-  if (ObIOMode::READ == req.get_mode()) {
-    req.qsched_req_.ss_limiter_ids_[0] = limit_ids_[static_cast<int>(ResourceType::ips)];
-    req.qsched_req_.ss_limiter_ids_[1] = limit_ids_[static_cast<int>(ResourceType::ibw)];
-  } else if (ObIOMode::WRITE == req.get_mode()) {
-    req.qsched_req_.ss_limiter_ids_[0] = limit_ids_[static_cast<int>(ResourceType::ops)];
-    req.qsched_req_.ss_limiter_ids_[1] = limit_ids_[static_cast<int>(ResourceType::obw)];
-  }
+  req.qsched_req_.storage_key_ = this->storage_key_.hash();
   return ret;
 }
 
@@ -430,7 +445,7 @@ void ObTrafficControl::print_bucket_status_V2()
       int64_t &tag_;
     };
     PrinterFn(const hash::ObHashMap<ObIORecordKey, ObSharedDeviceIORecord> &map) : map_(map) {}
-    int operator () (oceanbase::common::hash::HashMapPair<ObStorageKey, ObSharedDeviceControlV2> &entry) {
+    int operator () (oceanbase::common::hash::HashMapPair<ObStorageKey, ObSharedDeviceControlV2*> &entry) {
       int64_t bw_in =   0;
       int64_t bw_out =  0;
       int64_t req_in =  0;
@@ -438,19 +453,20 @@ void ObTrafficControl::print_bucket_status_V2()
       int64_t tag =     0;
       CalFn fn(entry.first, bw_in, bw_out, req_in, req_out, tag);
       map_.foreach_refactored(fn);
-      if (bw_in || bw_out || req_in || req_out || tag) {
+      if (OB_UNLIKELY(OB_ISNULL(entry.second))) {
+      } else if (bw_in || bw_out || req_in || req_out || tag) {
         _LOG_INFO("[IO STATUS BUCKET] storage={%u, %ld, %ld}, in=[%ld / %ld]kB/s, out=[%ld / %ld]kB/s, ips=[%ld / %ld], ops=[%ld / %ld]",
                   entry.first.get_category(),
                   entry.first.get_tenant_id(),
                   entry.first.get_storage_id(),
                   bw_in / 1024,
-                  entry.second.limits_[static_cast<int>(ResourceType::ibw)] / 1024,
+                  entry.second->limits_[static_cast<int>(ResourceType::ibw)] / 1024,
                   bw_out / 1024,
-                  entry.second.limits_[static_cast<int>(ResourceType::obw)] / 1024,
+                  entry.second->limits_[static_cast<int>(ResourceType::obw)] / 1024,
                   req_in,
-                  entry.second.limits_[static_cast<int>(ResourceType::ips)],
+                  entry.second->limits_[static_cast<int>(ResourceType::ips)],
                   req_out,
-                  entry.second.limits_[static_cast<int>(ResourceType::ops)]);
+                  entry.second->limits_[static_cast<int>(ResourceType::ops)]);
       }
       return OB_SUCCESS;
     }
@@ -459,6 +475,7 @@ void ObTrafficControl::print_bucket_status_V2()
   PrinterFn fn(io_record_map_);
   shared_device_map_v2_.foreach_refactored(fn);
 }
+
 int ObTrafficControl::set_limit(const obrpc::ObSharedDeviceResourceArray &limit)
 {
   int ret = OB_SUCCESS;
@@ -483,9 +500,10 @@ int ObTrafficControl::set_limit_v2(const obrpc::ObSharedDeviceResourceArray &lim
     ObSharedDeviceControlV2 *tc = nullptr;
     if (ResourceType::tag == limit.array_.at(i).type_) {
       // Tag is currently unavailable
-    } else if (OB_ISNULL(tc = shared_device_map_v2_.get(limit.array_.at(i).key_))) {
-      // ignore ret
+    } else if (OB_FAIL(shared_device_map_v2_.get_refactored(limit.array_.at(i).key_, tc))) {
       LOG_WARN_RET(OB_HASH_NOT_EXIST, "get index from map failed", K(limit.array_.at(i).key_));
+    } else if (OB_UNLIKELY(OB_ISNULL(tc))) {
+      LOG_WARN_RET(OB_HASH_NOT_EXIST, "tc is not exist", K(limit.array_.at(i).key_));
     } else if (OB_SUCCESS != (tc->update_limit(limit.array_.at(i)))) {
       LOG_WARN("update shared device limit failed", K(ret), K(i), K(limit.array_.at(i)));
     }
@@ -523,26 +541,40 @@ int ObTrafficControl::register_bucket(ObIORequest &req, const int qid) {
     ObIOSSGrpKey grp_key(req.tenant_id_, req.get_group_key());
     ObSharedDeviceControlV2 *tc = nullptr;
     // global register bucket
-    if (OB_NOT_NULL(tc = shared_device_map_v2_.get(key))) {
-    } else if (OB_FAIL(shared_device_map_v2_.set_refactored(key, ObSharedDeviceControlV2())) && OB_HASH_EXIST != ret) {
-      LOG_WARN("set map failed", K(ret));
-    } else if (OB_ISNULL(tc = shared_device_map_v2_.get(key))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("hash is not existed", K(ret), K(key));
-    } else if (OB_FAIL(tc->add_shared_device_limits())) {
-      LOG_WARN("add shared device limits failed", K(ret), K(req), K(grp_key), K(qid));
+    if (OB_SUCCESS == shared_device_map_v2_.get_refactored(key, tc)) {
+    } else {
+      DRWLock::WRLockGuard guard(rw_lock_);
+      int tmp_ret = OB_SUCCESS;
+      if (OB_UNLIKELY(OB_SUCCESS == shared_device_map_v2_.get_refactored(key, tc))) {
+      } else if (OB_ISNULL(tc = OB_NEW(ObSharedDeviceControlV2, "SDCtrlV2"))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else if (OB_FAIL(tc->set_storage_key(key))) {
+      } else if (OB_FAIL(tc->add_shared_device_limits())) {
+        LOG_WARN("add shared device limits failed", K(ret), K(req), K(grp_key), K(qid));
+      } else if (OB_FAIL(shared_device_map_v2_.set_refactored(key, tc))) {
+        LOG_WARN("set map failed", K(ret));
+      }
     }
 
     // register bucket for group
     if (REACH_TIME_INTERVAL(100 * 1000)) {
-      if (OB_HASH_NOT_EXIST != tc->is_group_key_exist(grp_key)) {
-      } else if (OB_FAIL(tc->add_group(grp_key, qid))) {
-        LOG_WARN("add shared device limits failed", K(ret), K(grp_key), K(qid));
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(tc)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("tc is not exist", K(ret), K(tc), K(qid), K(req));
+      } else if (OB_SUCCESS == tc->is_group_key_exist(grp_key)) {
+      } else {
+        DRWLock::WRLockGuard guard(rw_lock_);
+        if (OB_SUCCESS == tc->is_group_key_exist(grp_key)) {
+        } else if (OB_FAIL(tc->add_group(grp_key, qid))) {
+          LOG_WARN("add shared device limits failed", K(ret), K(grp_key), K(qid));
+        }
       }
     }
 
-    (void)tc->fill_qsched_req_ss_limits(req);
-
+    if (OB_NOT_NULL(tc)) {
+      (void)tc->fill_qsched_req_storage_key(req);
+    }
   }
   return ret;
 }
@@ -596,6 +628,7 @@ int ObTrafficControl::gc_tenant_infos()
 {
   int ret = OB_SUCCESS;
   if (REACH_TIME_INTERVAL(1 * 60 * 1000L * 1000L)) {  // 60s
+    DRWLock::WRLockGuard guard(rw_lock_);
     struct GCTenantSharedDeviceInfos
     {
       GCTenantSharedDeviceInfos(
@@ -624,7 +657,7 @@ int ObTrafficControl::gc_tenant_infos()
           const ObVector<uint64_t> &tenant_ids, ObSEArray<ObTrafficControl::ObStorageKey, 7> &gc_tenant_infos)
           : tenant_ids_(tenant_ids), gc_tenant_infos_(gc_tenant_infos)
       {}
-      int operator()(hash::HashMapPair<ObTrafficControl::ObStorageKey, ObTrafficControl::ObSharedDeviceControlV2> &pair)
+      int operator()(hash::HashMapPair<ObTrafficControl::ObStorageKey, ObTrafficControl::ObSharedDeviceControlV2 *> &pair)
       {
         bool is_find = false;
         for (int i = 0; !is_find && i < tenant_ids_.size(); ++i) {
@@ -681,18 +714,31 @@ int ObTrafficControl::gc_tenant_infos()
       for (int i = 0; i < gc_tenant_record_infos.count(); ++i) {
         if (OB_SUCCESS != io_record_map_.erase_refactored(gc_tenant_record_infos.at(i))) {
           LOG_WARN("SSNT:failed to erase gc tenant record infos", K(ret), K(gc_tenant_record_infos.at(i)));
+        } else {
+          LOG_INFO("SSNT:erase gc tenant record infos", K(ret), K(gc_tenant_record_infos.at(i)));
         }
       }
       for (int i = 0; i < gc_tenant_shared_device_infos.count(); ++i) {
         if (OB_SUCCESS != shared_device_map_.erase_refactored(gc_tenant_shared_device_infos.at(i))) {
           LOG_WARN(
               "SSNT:failed to erase gc tenant shared device infos", K(ret), K(gc_tenant_shared_device_infos.at(i)));
+        } else {
+          LOG_INFO("SSNT:erase gc tenant shared device infos", K(ret), K(gc_tenant_shared_device_infos.at(i)));
         }
       }
       for (int i = 0; i < gc_tenant_shared_device_infos_v2.count(); ++i) {
-        if (OB_SUCCESS != shared_device_map_v2_.erase_refactored(gc_tenant_shared_device_infos_v2.at(i))) {
-          LOG_WARN(
-              "SSNT:failed to erase gc tenant shared device infos", K(ret), K(gc_tenant_shared_device_infos_v2.at(i)));
+        int tmp_ret = OB_SUCCESS;
+        ObTrafficControl::ObSharedDeviceControlV2 **val_ptr = nullptr;
+        if (OB_TMP_FAIL(shared_device_map_v2_.erase_refactored(gc_tenant_shared_device_infos_v2.at(i), val_ptr))) {
+          LOG_WARN("SSNT:failed to erase gc tenant shared device infos", K(tmp_ret), K(gc_tenant_shared_device_infos_v2.at(i)), K(val_ptr));
+        } else if (OB_ISNULL(val_ptr)) {
+          tmp_ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("SSNT:failed to erase gc tenant shared device infos", K(tmp_ret), K(gc_tenant_shared_device_infos_v2.at(i)), K(val_ptr));
+        } else if (FALSE_IT((*val_ptr)->destroy())) {
+          LOG_WARN("SSNT:failed to destroy shared device control", K(tmp_ret), K(gc_tenant_shared_device_infos_v2.at(i)), K(val_ptr));
+        } else if (FALSE_IT(ob_delete(*val_ptr))) {
+        } else {
+          LOG_INFO("SSNT:erase gc tenant shared device infos succ", K(ret), K(tmp_ret), K(gc_tenant_shared_device_infos_v2.at(i)), K(val_ptr));
         }
       }
     }

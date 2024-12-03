@@ -23,16 +23,15 @@ struct TCLink
 
 struct TCRequest
 {
-  TCRequest(): link_(NULL), qid_(-1), bytes_(0), start_ns_(0) {
-    memset(ss_limiter_ids_, -1, sizeof(ss_limiter_ids_));
+  TCRequest(): link_(NULL), qid_(-1), bytes_(0), start_ns_(0), storage_key_(0) {
   }
-  TCRequest(int qid, int64_t bytes): link_(NULL), qid_(qid), bytes_(bytes), start_ns_(0) {}
+  TCRequest(int qid, int64_t bytes): link_(NULL), qid_(qid), bytes_(bytes), start_ns_(0), storage_key_(0) {}
   ~TCRequest() {}
   TCLink link_;
   int qid_;
   int64_t bytes_;
   int64_t start_ns_;
-  int ss_limiter_ids_[MAX_SHARED_DEVICE_LIMIT_COUNT];
+  uint64_t storage_key_;
 };
 
 class ITCHandler
@@ -45,7 +44,7 @@ public:
 
 enum QD_TYPE { QDISC_ROOT, QDISC_BUFFER_QUEUE, QDISC_WEIGHTED_QUEUE, QDISC_QUEUE_END, TCLIMIT_BYTES, TCLIMIT_COUNT };
 int init_qdtable();
-int tclimit_create(int type, const char* name);
+int tclimit_create(int type, const char* name, uint64_t storage_key = 0);
 void tclimit_destroy(int limiter_id);
 int tclimit_set_limit(int limiter_id, int64_t limit);
 int tclimit_get_limit(int limiter_id, int64_t &limit);
