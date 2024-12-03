@@ -33,7 +33,7 @@ int so_main()
   #endif
   fprintf(stdout, "\n");
 
-  fprintf(stdout, "libobcdc (%s)\n",   PACKAGE_STRING);
+  fprintf(stdout, "libobcdc (%s %s)\n",   PACKAGE_STRING, RELEASEID);
   fprintf(stdout, "\n");
 
   fprintf(stdout, "BUILD_VERSION: %s\n",    build_version());
