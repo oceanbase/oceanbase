@@ -1278,7 +1278,7 @@ int ObResourceManagerProxy::replace_mapping_rule(
         LOG_WARN("fail check if consumer group exist", K(tenant_id), K(consumer_group), K(ret));
       } else if (!consumer_group_exist) {
         ret = OB_ERR_CONSUMER_GROUP_NOT_EXIST;
-        LOG_USER_ERROR(OB_ERR_INVALID_PLAN_DIRECTIVE_NAME,
+        LOG_USER_ERROR(OB_ERR_CONSUMER_GROUP_NOT_EXIST,
                        consumer_group.length(), consumer_group.ptr());
       }
     }
@@ -1321,7 +1321,7 @@ int ObResourceManagerProxy::replace_user_mapping_rule(ObMySQLTransaction &trans,
       LOG_WARN("fail check if user exist", K(tenant_id), K(value), K(ret));
     } else if (!user_exist) {
       ret = OB_ERR_USER_NOT_EXIST;
-      LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST, 0, "");
+      LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST, value.length(), value.ptr());
     }
   }
   if (OB_SUCC(ret) && user_exist && consumer_group.empty()) {

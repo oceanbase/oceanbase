@@ -2575,7 +2575,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_COLUMN_NOT_FOUND__USER_ERROR_MSG "Column not found"
 #define OB_ERR_DELETE_NULL_ROWKEY__USER_ERROR_MSG "Delete null rowkey"
 #define OB_ERR_USER_EMPTY__USER_ERROR_MSG "No user"
-#define OB_ERR_USER_NOT_EXIST__USER_ERROR_MSG "User %.*snot exist"
+#define OB_ERR_USER_NOT_EXIST__USER_ERROR_MSG "User %.*s not exist"
 #define OB_ERR_NO_PRIVILEGE__USER_ERROR_MSG "Access denied; you need (at least one of) the %s privilege(s) for this operation"
 #define OB_ERR_NO_AVAILABLE_PRIVILEGE_ENTRY__USER_ERROR_MSG "No privilege entry"
 #define OB_ERR_WRONG_PASSWORD__USER_ERROR_MSG "Incorrect password"

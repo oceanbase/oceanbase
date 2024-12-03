@@ -1994,7 +1994,8 @@ void ObTenant::periodically_check()
 void ObTenant::check_resource_manager_plan()
 {
   int ret = OB_SUCCESS;
-  ObString plan_name;
+  ObString plan;
+  ObString up_plan;
   ObResourcePlanManager &plan_mgr = G_RES_MGR.get_plan_mgr();
   ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
   ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
@@ -2006,26 +2007,28 @@ void ObTenant::check_resource_manager_plan()
               id_,
               SYS_VAR_RESOURCE_MANAGER_PLAN,
               allocator,
-              plan_name))) {
-    LOG_WARN("fail get tenant variable", K(id_), K(plan_name), K(ret));
+              plan))) {
+    LOG_WARN("fail get tenant variable", K(id_), K(plan), K(ret));
     // skip
-  } else if (OB_FAIL(rule_mgr.refresh_group_mapping_rule(id_, plan_name))) {
+  } else if (OB_FAIL(ob_simple_low_to_up(allocator, plan, up_plan))) {
+    LOG_WARN("plan change to upper string failed", K(ret));
+  } else if (OB_FAIL(rule_mgr.refresh_group_mapping_rule(id_, up_plan))) {
     LOG_WARN("refresh group id name mapping rule fail."
              "Tenant resource isolation may not work",
-             K(id_), K(plan_name), K(ret));
-  } else if (OB_FAIL(plan_mgr.refresh_resource_plan(id_, plan_name))) {
+             K(id_), K(up_plan), K(ret));
+  } else if (OB_FAIL(plan_mgr.refresh_resource_plan(id_, up_plan))) {
     LOG_WARN("refresh resource plan fail."
              "Tenant resource isolation may not work",
-             K(id_), K(plan_name), K(ret));
-  } else if (OB_FAIL(rule_mgr.refresh_resource_mapping_rule(id_, plan_name))) {
+             K(id_), K(up_plan), K(ret));
+  } else if (OB_FAIL(rule_mgr.refresh_resource_mapping_rule(id_, up_plan))) {
     LOG_WARN("refresh resource mapping rule fail."
              "Tenant resource isolation may not work",
-             K(id_), K(plan_name), K(ret));
+             K(id_), K(up_plan), K(ret));
   } else if (OB_FAIL(col_rule_mgr.refresh_resource_column_mapping_rule(id_, get<ObPlanCache*>(),
-                                                                       plan_name))) {
+                                                                       up_plan))) {
     LOG_WARN("refresh resource column mapping rule fail."
              "Tenant resource isolation may not work",
-             K(id_), K(plan_name), K(ret));
+             K(id_), K(up_plan), K(ret));
   }
 }
 
