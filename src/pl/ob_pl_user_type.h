@@ -1225,6 +1225,7 @@ public:
   int search_key(const ObObj &key, int64_t &index, int64_t &search_end, int64_t sort_count);
   int insert_sort(const ObObj &key, int64_t key_position, int64_t &sort_position, int64_t sort_count);
   int reserve_assoc_key();
+  static int rebuild_sort(ObObj &obj);
   int rebuild_sort();
   int get_compatible_sort(ObIAllocator &allocator, int64_t *&compatible_sort);
 

@@ -5106,7 +5106,7 @@ int ObSPIService::spi_delete_collection(pl::ObPLExecCtx *ctx,
                   OB_ERR_UNEXPECTED, K(key[0]), KPC(key1));
             // key 不可能重复，如果有重复是一个bug
             for (int64_t i = 0; OB_SUCC(ret) && i < atable->get_count(); ++i) {
-              if (key!=NULL ? key[i]==*key1 : (result.get_int32() == i)) {
+              if (key!=NULL ? key[i]==*key1 : (result.get_int32() == (i + 1))) {
                 OX (atable->delete_collection_elem(i));
                 if (atable->get_first() - 1 == i) {
                   atable->update_first();
@@ -8432,7 +8432,7 @@ int ObSPIService::fetch_row(void *result_set,
       ++row_count;
     }
   }
-  LOG_DEBUG("spi fetch row", K(cur_row), K(row_count), K(ret));
+  LOG_DEBUG("spi fetch row", K(row_count), K(ret));
   return ret;
 }
 

@@ -917,11 +917,9 @@ int ObPLDataType::deserialize(
     resolve_ctx, allocator, src, src_len, src_pos, dst));
 
 #ifdef OB_BUILD_ORACLE_PL
-  if (OB_SUCC(ret) && is_associative_array_type() && version < CLUSTER_VERSION_4_2_5_1) {
-    ObPLAssocArray *assoc_array = nullptr;
+  if (OB_SUCC(ret) && is_user_type() && version < CLUSTER_VERSION_4_2_5_1) {
     CK (result.is_ext());
-    CK (OB_NOT_NULL(assoc_array = reinterpret_cast<ObPLAssocArray *>(result.get_ext())));
-    OZ (assoc_array->rebuild_sort());
+    OZ (ObPLAssocArray::rebuild_sort(result));
   }
 #endif // OB_BUILD_ORACLE_PL
 

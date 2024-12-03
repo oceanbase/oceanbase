@@ -2710,15 +2710,22 @@ int ObCollectionType::get_serialize_size(
     const ObPLResolveCtx &resolve_ctx, char *&src, int64_t &size) const
 {
   int ret = OB_SUCCESS;
-  ObPLNestedTable *table = reinterpret_cast<ObPLNestedTable *>(src);
+  ObPLCollection *table = reinterpret_cast<ObPLCollection *>(src);
   char *data = NULL;
   CK (OB_NOT_NULL(table));
 
   OX (size += static_cast<ObPLComposite*>(table)->get_serialize_size());
   OX (size += table->get_element_desc().get_serialize_size());
   OX (size += serialization::encoded_length(table->get_count()));
-  OX (size += serialization::encoded_length(table->get_pure_first()));
-  OX (size += serialization::encoded_length(table->get_pure_last()));
+  if (is_associative_array_type() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_1) {
+    ObPLAssocArray *assoc_table = static_cast<ObPLAssocArray *>(table);
+    CK (OB_NOT_NULL(assoc_table));
+    OX (size += serialization::encoded_length(assoc_table->get_first()));
+    OX (size += serialization::encoded_length(assoc_table->get_last()));
+  } else {
+    OX (size += serialization::encoded_length(table->get_pure_first()));
+    OX (size += serialization::encoded_length(table->get_pure_last()));
+  }
 
   OX (data = reinterpret_cast<char*>(table->get_data()));
   for (int64_t i = 0; OB_SUCC(ret) && i < table->get_count(); ++i) {
@@ -2744,7 +2751,7 @@ int ObCollectionType::serialize(
   OZ (serialization::encode(dst, dst_len, dst_pos, v));
 
   int ret = OB_SUCCESS;
-  ObPLNestedTable *table = reinterpret_cast<ObPLNestedTable *>(src);
+  ObPLCollection *table = reinterpret_cast<ObPLCollection *>(src);
 
   CK (OB_NOT_NULL(table));
 
@@ -2754,8 +2761,10 @@ int ObCollectionType::serialize(
   OX (table->get_element_desc().serialize(dst, dst_len, dst_pos));
   ENCODE(table->get_count());
   if (is_associative_array_type() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_1) {
-    ENCODE(table->get_first());
-    ENCODE(table->get_last());
+    ObPLAssocArray *assoc_table = static_cast<ObPLAssocArray *>(table);
+    CK (OB_NOT_NULL(assoc_table));
+    ENCODE(assoc_table->get_first());
+    ENCODE(assoc_table->get_last());
   } else {
     ENCODE(table->get_pure_first());
     ENCODE(table->get_pure_last());
@@ -3551,10 +3560,11 @@ int ObAssocArrayType::get_serialize_size(
   char *key = NULL;
   int64_t *sort = NULL;
   int64_t key_sort_cnt = 0; // 紧密数组, key和sort是null
+  ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   CK (OB_NOT_NULL(assoc_table));
   OZ (ObCollectionType::get_serialize_size(resolve_ctx, src, size));
   OX (key = reinterpret_cast<char *>(assoc_table->get_key()));
-  OX (sort = assoc_table->get_sort());
+  OZ (assoc_table->get_compatible_sort(allocator, sort));
   OX (key_sort_cnt = OB_NOT_NULL(key) ? assoc_table->get_count() : 0);
   OX (size += serialization::encoded_length(key_sort_cnt));
   for (int64_t i = 0; OB_SUCC(ret) && i < key_sort_cnt; ++i) {
@@ -3576,7 +3586,7 @@ int ObAssocArrayType::serialize(
   char *key = NULL;
   int64_t *sort = NULL;
   int64_t key_sort_cnt = 0;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   CK (OB_NOT_NULL(assoc_table));
   OZ (ObCollectionType::serialize(resolve_ctx, src, dst, dst_len, dst_pos));
   OX (key = reinterpret_cast<char *>(assoc_table->get_key()));
@@ -5316,12 +5326,16 @@ int ObPLAssocArray::get_serialize_size(int64_t &size)
 {
   int ret = OB_SUCCESS;
   int64_t key_sort_cnt = 0; // 紧密数组, key和sort是null
+  ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  int64_t* compatible_sort = NULL;
+  OZ (get_compatible_sort(allocator, compatible_sort));
   OZ (ObPLCollection::get_serialize_size(size));
   OX (key_sort_cnt = OB_NOT_NULL(get_key()) ? get_count() : 0);
   OX (size += serialization::encoded_length(key_sort_cnt));
   for (int64_t i = 0; OB_SUCC(ret) && i < key_sort_cnt; ++i) {
+    CK (OB_NOT_NULL(compatible_sort));
     OZ (size += get_key(i)->get_serialize_size());
-    OX (size += serialization::encoded_length(get_sort(i)));
+    OX (size += serialization::encoded_length(compatible_sort[i]));
   }
   return ret;
 }
@@ -5443,12 +5457,51 @@ int ObPLAssocArray::get_compatible_sort(ObIAllocator &allocator, int64_t *&compa
       LOG_WARN("failed to alloc memory for sort array", K(ret), KPC(this));
     }
     OX (MEMSET(compatible_sort, 0, sizeof(int64_t) * get_count()));
-    OX (compatible_sort[get_sort()[0]] = -1);
-    for (int64_t i = 1; OB_SUCC(ret) && i < get_count(); ++i) {
-      OX (compatible_sort[get_sort()[i]] = get_sort()[i - 1]);
+    OX (compatible_sort[get_sort()[get_count() - 1]] = OB_INVALID_INDEX);
+    for (int64_t i = get_count() - 2; OB_SUCC(ret) && i >= 0; --i) {
+      OX (compatible_sort[get_sort()[i]] = get_sort()[i + 1]);
     }
   } else {
     compatible_sort = get_sort();
+  }
+  return ret;
+}
+
+int ObPLAssocArray::rebuild_sort(ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  if (obj.is_pl_extend()) {
+    switch (obj.get_meta().get_extend_type()) {
+      case PL_NESTED_TABLE_TYPE:
+      case PL_ASSOCIATIVE_ARRAY_TYPE:
+      case PL_VARRAY_TYPE: {
+        ObPLCollection *coll = reinterpret_cast<ObPLCollection *>(obj.get_ext());
+        if (OB_NOT_NULL(coll)) {
+          for (int64_t i = 0; i < coll->get_count(); ++i) {
+            CK (OB_NOT_NULL(coll->get_data()));
+            OZ (SMART_CALL(rebuild_sort(coll->get_data()[i])));
+          }
+          if (coll->is_associative_array()) {
+            ObPLAssocArray *assoc_array = static_cast<ObPLAssocArray *>(coll);
+            CK (OB_NOT_NULL(assoc_array));
+            OZ (assoc_array->rebuild_sort());
+          }
+        }
+      } break;
+      case PL_RECORD_TYPE: {
+        ObPLRecord *record = reinterpret_cast<ObPLRecord *>(obj.get_ext());
+        if (OB_NOT_NULL(record)) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
+            ObObj elem;
+            OZ (record->get_element(i, elem));
+            OZ (SMART_CALL(rebuild_sort(elem)));
+          }
+        }
+      } break;
+      default: {
+        // do nothing ...
+      } break;
+    }
   }
   return ret;
 }
