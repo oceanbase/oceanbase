@@ -29,13 +29,8 @@ int HSet::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err
     LOG_WARN("fail to init common", K(ret));
   } else if (args.count() % 2 == 0) {
     // key field1 value1 field2 value2 ...
-    SPRINTF_REDIS_ERROR(
-          allocator_,
-          fmt_err_msg,
-          ObRedisErr::WRONG_ARGS_ERR,
-          attr_.cmd_name_.length(),
-          attr_.cmd_name_.ptr());
     LOG_WARN("invalid argument num", K(ret), K(attr_), K(args.count()));
+    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::WRONG_ARGS_ERR);
   } else if (OB_FAIL(field_val_map_.create(args.count() / 2, ObMemAttr(MTL_ID(), "RedisHSet")))) {
     LOG_WARN("fail to create field value map", K(ret));
   }
