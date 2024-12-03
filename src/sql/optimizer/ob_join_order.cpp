@@ -1651,6 +1651,10 @@ int ObJoinOrder::check_opt_rule_use_das(const uint64_t table_id,
   } else if (OB_ISNULL(index_info_entry)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(index_info_entry));
+  } else if (OB_FAIL(check_use_das_by_false_startup_filter(*index_info_entry, filters, create_das_path))) {
+    LOG_WARN("failed to check use das by false startup filter", K(ret));
+  } else if (create_das_path) {
+    /* do nothing */
   } else if (index_info_entry->is_index_global() && index_info_entry->is_index_back()) {
     int64_t explicit_dop = ObGlobalHint::UNSET_PARALLEL;
     if (OB_FAIL(get_explicit_dop_for_path(index_id, explicit_dop))) {
@@ -1666,6 +1670,35 @@ int ObJoinOrder::check_opt_rule_use_das(const uint64_t table_id,
     }
   } else {
     create_basic_path = true;
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_use_das_by_false_startup_filter(const IndexInfoEntry &index_info_entry,
+                                                       const ObIArray<ObRawExpr*> &filters,
+                                                       bool &use_das)
+{
+  int ret = OB_SUCCESS;
+  use_das = false;
+  if (OB_ISNULL(index_info_entry.get_sharding_info()) || OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(index_info_entry.get_sharding_info()), K(get_plan()), K(ret));
+  } else if (!index_info_entry.get_sharding_info()->is_sharding()) {
+    /* do nothing */
+  } else {
+    ObRawExpr *expr = NULL;
+    for (int64_t i = 0; !use_das && OB_SUCC(ret) && i < filters.count(); ++i) {
+      if (OB_ISNULL(expr = filters.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (T_BOOL != expr->get_expr_type()) {
+        /* do nothing */
+      } else if (OB_FAIL(ObOptimizerUtil::check_is_static_false_expr(get_plan()->get_optimizer_context(),
+                                                                     *expr,
+                                                                     use_das))) {
+        LOG_WARN("failed to check is static false", K(ret));
+      }
+    }
   }
   return ret;
 }

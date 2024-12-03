@@ -665,7 +665,12 @@ public:
                            ObIArray<ObTabletID> &tablet_ids,
                            ObIArray<ObObjectID> &partition_ids,
                            ObIArray<ObObjectID> &first_level_part_ids,
-                           const ObDataTypeCastParams &dtc_params) const;
+                           const ObDataTypeCastParams &dtc_params,
+                           bool *is_default_tablet = NULL) const;
+
+  int set_is_das_empty_part(ObExecContext &exec_ctx,
+                            const ParamStore &params,
+                            const ObDataTypeCastParams &dtc_params);
 
   int init_partition_ids_by_rowkey2(ObExecContext &exec_ctx,
                                     ObSQLSessionInfo &session_info,

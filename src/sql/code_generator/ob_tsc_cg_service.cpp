@@ -1473,7 +1473,9 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
                                             ObDASTableLocMeta &loc_meta)
 {
   int ret = OB_SUCCESS;
+  const bool is_das_empty_part = loc_meta.das_empty_part_;
   loc_meta.reset();
+  loc_meta.das_empty_part_ = is_das_empty_part;
   loc_meta.table_loc_id_ = table_loc_id;
   ObTableID real_table_id =
       share::is_oracle_mapping_real_virtual_table(table_schema.get_table_id()) ?

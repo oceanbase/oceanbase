@@ -1824,6 +1824,9 @@ struct NullAwareAntiJoinInfo {
                                const bool is_rescan,
                                bool &create_das_path,
                                bool &create_basic_path);
+    int check_use_das_by_false_startup_filter(const IndexInfoEntry &index_info_entry,
+                                              const ObIArray<ObRawExpr*> &filters,
+                                              bool &use_das);
     int will_use_skip_scan(const uint64_t table_id,
                            const uint64_t ref_id,
                            const uint64_t index_id,

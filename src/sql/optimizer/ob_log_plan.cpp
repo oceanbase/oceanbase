@@ -11563,6 +11563,7 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(sql_schema_guard), K(stmt), K(opt_ctx),
              K(est_cost_info), K(table_meta_info), K(ret));
+  } else if (OB_FALSE_IT(table_partition_info->get_table_location().set_use_das(table_scan->use_das()))) {
   } else if (!table_scan->use_das() || !table_scan->is_match_all()) {
     // do nothing
   } else if (OB_FAIL(append_array_no_dup(all_filters, table_scan->get_range_conditions()))) {
@@ -11602,6 +11603,21 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
       }
     }
   }
+
+  if (OB_SUCC(ret) && table_scan->use_das()) {
+    const ParamStore *params = NULL;
+    ObExecContext *exec_ctx = NULL;
+    const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(opt_ctx->get_session_info());
+    if (OB_ISNULL(params = opt_ctx->get_params()) ||
+        OB_ISNULL(exec_ctx = opt_ctx->get_exec_ctx())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get unexpected null", K(ret), K(params), K(exec_ctx));
+    } else if (OB_FAIL(table_partition_info->get_table_location().set_is_das_empty_part(*exec_ctx,
+                                                                                        *params,
+                                                                                        dtc_params))) {
+      LOG_WARN("failed to set is das empty part", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -11635,7 +11651,6 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
       } else if (OB_ISNULL(table_partition_info = table_scan->get_table_partition_info())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(table_partition_info), K(ret));
-      } else if (OB_FALSE_IT(table_partition_info->get_table_location().set_use_das(table_scan->use_das()))) {
       } else if (OB_FAIL(gen_das_table_location_info(table_scan,
                                                      table_partition_info))) {
         LOG_WARN("failed to gen das table location info", K(ret));

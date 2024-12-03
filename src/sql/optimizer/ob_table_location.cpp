@@ -1780,10 +1780,14 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
                                           ObIArray<ObTabletID> &tablet_ids,
                                           ObIArray<ObObjectID> &partition_ids,
                                           ObIArray<ObObjectID> &first_level_part_ids,
-                                          const ObDataTypeCastParams &dtc_params) const
+                                          const ObDataTypeCastParams &dtc_params,
+                                          bool *is_default_tablet) const
 {
   int ret = OB_SUCCESS;
   ObDASTabletMapper tablet_mapper;
+  if (NULL != is_default_tablet) {
+    *is_default_tablet = false;
+  }
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLocation not inited", K(ret));
@@ -1847,6 +1851,9 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
       }
     }
     if (OB_SUCC(ret) && partition_ids.empty()) {
+      if (NULL != is_default_tablet) {
+        *is_default_tablet = true;
+      }
       ObObjectID default_partition_id = OB_INVALID_ID;
       ObTabletID default_tablet_id;
       if (loc_meta_.is_external_table_) {
@@ -1880,6 +1887,32 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
 
   LOG_DEBUG("calculate tablet ids end", K(loc_meta_), K(partition_ids), K(tablet_ids));
   NG_TRACE(tl_calc_part_id_end);
+  return ret;
+}
+
+int ObTableLocation::set_is_das_empty_part(ObExecContext &exec_ctx,
+                                           const ParamStore &params,
+                                           const ObDataTypeCastParams &dtc_params)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObTabletID, 8> tablet_ids;
+  ObSEArray<ObObjectID, 8> partition_ids;
+  ObSEArray<ObObjectID, 8> first_level_part_ids;
+  bool is_default_tablet = false;
+  loc_meta_.das_empty_part_ = false;
+  if (!use_das()) {
+    /* do nothing */
+  } else if (OB_FAIL(calculate_tablet_ids(exec_ctx,
+                                          params,
+                                          tablet_ids,
+                                          partition_ids,
+                                          first_level_part_ids,
+                                          dtc_params,
+                                          &is_default_tablet))) {
+    LOG_WARN("failed to calculate tablet ids", K(ret));
+  } else {
+    loc_meta_.das_empty_part_ = is_default_tablet;
+  }
   return ret;
 }
 

@@ -145,7 +145,8 @@ public:
       uint64_t unuse_related_pruning_           : 1; //mark if this table use the related pruning to prune local index tablet_id
       uint64_t is_external_table_               : 1; //mark if this table is an external table
       uint64_t is_external_files_on_disk_       : 1; //mark if files in external table are located at local disk
-      uint64_t reserved_                        : 57;
+      uint64_t das_empty_part_                  : 1; //mark there is false startup filter on DAS access table
+      uint64_t reserved_                        : 56;
     };
   };
   int64_t route_policy_;
