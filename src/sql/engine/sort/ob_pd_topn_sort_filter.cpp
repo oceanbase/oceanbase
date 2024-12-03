@@ -106,6 +106,16 @@ int ObPushDownTopNFilter::init(bool is_fetch_with_ties,
     enabled_ = true;
   }
 
+  if (OB_FAIL(ret)) {
+    if (pd_topn_filter_msg != nullptr) {
+      (void)pd_topn_filter_msg->destroy();
+      mem_context_->get_malloc_allocator().free(pd_topn_filter_msg);
+      pd_topn_filter_msg = nullptr;
+      pd_topn_filter_msg_ = nullptr;
+      enabled_ = false;
+    }
+  }
+
   LOG_TRACE("[TopN Filter] init topn filter msg");
   return ret;
 }
