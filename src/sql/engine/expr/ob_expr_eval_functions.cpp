@@ -1334,6 +1334,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArraySum::eval_array_sum,                            /* 803 */
   NULL, // ObExprArrayCompact::eval_array_compact,                    /* 804 */
   NULL, // ObExprArraySort::eval_array_sort,                          /* 805 */
+  NULL, // ObExprKeyValue::calc_key_value_expr,                       /* 806 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1689,6 +1690,9 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprArraySum::eval_array_sum_vector,                        /* 180 */
   NULL, // ObExprArrayCompact::eval_array_compact_vector,                /* 181 */
   NULL, // ObExprArraySort::eval_array_sort_vector,                      /* 182 */
+  NULL, // ObExprSplitPart::calc_split_part_expr_vec,                    /* 183 */
+  NULL, // ObExprKeyValue::calc_key_value_expr_vector,                   /* 184 */
+  NULL, // ObExprLength::calc_oracle_length_vector,                      /* 185 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
