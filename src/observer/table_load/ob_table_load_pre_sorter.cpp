@@ -51,6 +51,7 @@ ObTableLoadPreSorter::ObTableLoadPreSorter(ObTableLoadTableCtx *ctx,
 
 ObTableLoadPreSorter::~ObTableLoadPreSorter()
 {
+  mem_ctx_.has_error_ = true; //avoid the stuck of sampling thread
   if (OB_NOT_NULL(sample_task_scheduler_)) {
     sample_task_scheduler_->stop();
     sample_task_scheduler_->wait();
