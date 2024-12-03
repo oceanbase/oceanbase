@@ -314,9 +314,6 @@ int ObCreateIndexHelper::check_table_legitimacy_()
   } else if (OB_UNLIKELY(!arg_.is_inner_ && orig_data_table_schema_->is_in_recyclebin())) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("can not add index on table in recyclebin", KR(ret), K_(arg));
-  } else if (OB_UNLIKELY(orig_data_table_schema_->is_in_splitting())) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN( "con not create index during splitting", KR(ret), K_(arg));
   // There used to be check_restore_point_allow() here, but it is currently useless.
   // Meanwhile, the frequent addition and deletion of __all_acquired_snapshot during the index creation
   // will cause it's buffer table to bloat,
