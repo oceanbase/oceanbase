@@ -450,8 +450,10 @@ public :
       data = this->data_container_->raw_data_.get_data();
     }
     hash_val = common::murmurhash(&this->length_, sizeof(this->length_), hash_val);
-    hash_val = common::murmurhash(null_bitmaps, sizeof(uint8_t) * this->length_, hash_val);
-    hash_val = common::murmurhash(data, sizeof(T) * this->length_, hash_val);
+    if (this->length_ > 0) {
+      hash_val = common::murmurhash(null_bitmaps, sizeof(uint8_t) * this->length_, hash_val);
+      hash_val = common::murmurhash(data, sizeof(T) * this->length_, hash_val);
+    }
     return OB_SUCCESS;
   }
 
