@@ -1179,7 +1179,10 @@ int ObOBJLock::get_exist_lock_mode_without_curr_trans(const uint64_t lock_mode_c
       // in the replace situation, 1 is lock_op which is completed, and the
       // other is unlock_op which is still doing. It means this lock_mode has
       // no locks on it now.
-      if (lock_mode_cnt[i] >= 2) {
+      // NOTICE: we can only replace OUT_TRANS_LOCK, so the lock_op which is completed and the
+      // unlock_op which is doing should be both in the map. If there're less than 2 lock_ops
+      // in the map, we don't need to check allow replace, too.
+      if (lock_mode_cnt[i] >= 2 && OB_NOT_NULL(map_[i]) && map_[i]->get_size() >= 2) {
         bool allow_replace = false;
         if (OB_FAIL(check_allow_replace_from_list_(map_[i], trans_id, allow_replace))) {
           LOG_WARN("check allow replace failed", K(i));
