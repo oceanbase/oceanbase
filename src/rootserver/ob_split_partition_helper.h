@@ -48,7 +48,6 @@ public:
       const int64_t new_schema_version,
       ObMySQLTransaction &trans);
   static int check_allow_split(
-      const ObIArray<ObTabletID> &src_tablet_ids,
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &table_schema);
 

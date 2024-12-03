@@ -906,11 +906,6 @@ public:
       bool is_complement_data_dag,
       bool &all_dag_exit);
   static int get_no_logging_param(const int64_t tenant_id, bool &is_no_logging);
-  static int batch_check_tablet_checksum(
-      const uint64_t tenant_id,
-      const int64_t start_idx,
-      const int64_t end_idx,
-      const ObIArray<ObTabletID> &tablet_ids);
 
 private:
   static int hold_snapshot(
@@ -921,6 +916,11 @@ private:
       rootserver::ObRootService *root_service,
       const int64_t snapshot_version,
       const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids);
+  static int batch_check_tablet_checksum(
+      const uint64_t tenant_id,
+      const int64_t start_idx,
+      const int64_t end_idx,
+      const ObArray<ObTabletID> &tablet_ids);
 
   static int check_table_column_checksum_error(
       const uint64_t tenant_id,
