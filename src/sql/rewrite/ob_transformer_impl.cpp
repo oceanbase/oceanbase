@@ -489,7 +489,7 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
     if (OB_SUCC(ret) && need_next_iteration && i == max_iteration_count_) {
       ret = OB_E(EventTable::EN_CHECK_REWRITE_ITER_CONVERGE) OB_SUCCESS;
       if (OB_FAIL(ret)) {
-        LOG_WARN("transformer ends without convergence", K(ret), K(max_iteration_count_));
+        LOG_WARN("transformer ends without convergence", K(ret), K(max_iteration_count_), K(ctx_->outline_trans_hints_));
       } else {
         LOG_INFO("transformer ends without convergence", K(max_iteration_count_));
       }
