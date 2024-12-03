@@ -3490,17 +3490,22 @@ int ObTscCgService::generate_functional_lookup_ctdef(const ObLogTableScan &op,
     root_lookup_ctdef->children_cnt_ = 2;
     root_lookup_ctdef->children_[0] = rowkey_scan_ctdef;
     root_lookup_ctdef->children_[1] = tmp_func_lookup_ctdef;
-    if (!has_main_lookup) {
-      // no main lookup, rowkey scan will project all output columns on base table for table scan
-      if (rowkey_scan_ctdef->op_type_ == ObDASOpType::DAS_OP_TABLE_SCAN) {
-        if (OB_FAIL(root_lookup_ctdef->index_scan_proj_exprs_.assign(
-            static_cast<ObDASScanCtDef *>(rowkey_scan_ctdef)->result_output_))) {
-          LOG_WARN("Failed to assign index scan project column exprs", K(ret));
-        } else if (OB_FAIL(append_array_no_dup(final_result_outputs, root_lookup_ctdef->index_scan_proj_exprs_))) {
-          LOG_WARN("failed to append final result outputs", K(ret));
-        }
+
+    if ((!has_main_lookup && rowkey_scan_ctdef->op_type_ == ObDASOpType::DAS_OP_TABLE_SCAN)
+        || ObDASTaskFactory::is_attached(rowkey_scan_ctdef->op_type_)) {
+      // When rowkey scan is a normal table scan with no main table lookup,
+      // rowkey scan will project all output columns on base table for table scan
+      // When rowkey scan is an attached scan, need to project its output if exist
+      ObIArray<ObExpr *> &rowkey_scan_output = ObDASTaskFactory::is_attached(rowkey_scan_ctdef->op_type_)
+        ? static_cast<ObDASAttachCtDef *>(rowkey_scan_ctdef)->result_output_
+        : static_cast<ObDASScanCtDef *>(rowkey_scan_ctdef)->result_output_;
+      if (OB_FAIL(root_lookup_ctdef->index_scan_proj_exprs_.assign(rowkey_scan_output))) {
+        LOG_WARN("failed to assign index scan project column exprs", K(ret));
+      } else if (OB_FAIL(append_array_no_dup(final_result_outputs, root_lookup_ctdef->index_scan_proj_exprs_))) {
+        LOG_WARN("failed to append final result outputs", K(ret));
       }
     }
+
     if (FAILEDx(root_lookup_ctdef->result_output_.assign(final_result_outputs))) {
       LOG_WARN("failed to append root lookup result outputs", K(ret));
     }
