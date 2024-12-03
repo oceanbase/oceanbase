@@ -115,7 +115,6 @@ int64_t ObDBMSSchedJobMaster::calc_next_date(ObDBMSSchedJobInfo &job_info)
 {
   int64_t ret = 0;
   int64_t next_date = 0;
-  const int64_t now = ObTimeUtility::current_time();
   if (job_info.is_date_expression_job_class()
       && !job_info.get_interval().empty()
       && (0 != job_info.get_interval().case_compare("null"))) {
@@ -124,18 +123,13 @@ int64_t ObDBMSSchedJobMaster::calc_next_date(ObDBMSSchedJobInfo &job_info)
     if (OB_FAIL(ObMViewSchedJobUtils::calc_date_expression(job_info, next_date_ts))) {
       LOG_WARN("failed to calc date expression", KR(ret), K(job_info));
       // error code is ignored
-      next_date = 64060560000000000; // 4000-01-01
+      next_date = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
     } else {
       next_date = next_date_ts;
     }
-  } else if (job_info.get_interval_ts() < 0) {
-    next_date = 64060560000000000;
-    LOG_WARN("job interval is not valid, so regard as once job", K(job_info.get_interval_ts()), K(job_info));
-  } else if (job_info.get_interval_ts() == 0) {
-    next_date = 64060560000000000;
-  } else {
-    int64_t N = (now - job_info.get_start_date()) / job_info.get_interval_ts();
-    next_date = job_info.get_start_date() + (N + 1) * job_info.get_interval_ts();
+  } else if (OB_FAIL(ObDBMSSchedJobUtils::calc_dbms_sched_repeat_expr(job_info, next_date))) {
+    next_date = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+    LOG_WARN("failed to calc next date", KR(ret), K(job_info));
   }
   return next_date;
 }

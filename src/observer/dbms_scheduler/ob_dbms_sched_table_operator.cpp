@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX RS
+#define USING_LOG_PREFIX SERVER
 
 #include "ob_dbms_sched_table_operator.h"
 
@@ -369,7 +369,7 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
       if (now >= job_info.end_date_) {
         job_info.state_ = ObString("COMPLETED");
       }
-    } else if (now >= job_info.end_date_ || job_info.get_interval_ts() == 0) {
+    } else if (now >= job_info.end_date_ || (job_info.get_interval_ts() == 0 && (job_info.get_repeat_interval().empty() || 0 == job_info.get_repeat_interval().case_compare("null")))) {
       // when end_date is reach and auto_drop is set false, disable set completed state.
       // for once job, not wait until end date, set completed state when running end
       job_info.state_ = ObString("COMPLETED");

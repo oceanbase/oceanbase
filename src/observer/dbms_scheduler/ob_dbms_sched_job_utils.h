@@ -189,6 +189,8 @@ public:
                K(database_id_),
                K(job_),
                K(job_name_),
+               K(job_style_),
+               K(job_type_),
                K(lowner_),
                K(powner_),
                K(cowner_),
@@ -312,6 +314,7 @@ public:
 
 public:
   static const int64_t JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS = 1;
+  static const int64_t DEFAULT_MAX_END_DATE = 64060560000000000LL;
 };
 
 class ObDBMSSchedJobClassInfo
@@ -361,17 +364,78 @@ public:
 class ObDBMSSchedJobUtils
 {
 public:
+  /**
+   * @brief  检查是否有效的 sql name
+   * @param [in] name  - sql name
+   * @retval OB_SUCCESS execute success
+   * @retval OB_ERR_ILLEGAL_NAME 不合法的命名
+  */
+  static int check_is_valid_name(const ObString &name);
+  /**
+   * @brief  检查是否有效的 job style
+   * @param [in] str  - job style
+   * @retval OB_SUCCESS execute success
+   * @retval OB_NOT_SUPPORTED 不支持
+  */
+  static int check_is_valid_job_style(const ObString &str);
+  /**
+   * @brief  检查是否有效的 job type
+   * @param [in] str  - job type
+   * @retval OB_SUCCESS execute success
+   * @retval OB_NOT_SUPPORTED 不支持
+  */
+  static int check_is_valid_job_type(const ObString &str);
+  /**
+   * @brief  检查是否有效的 job argument num
+   * @param [in] num
+   * @retval OB_SUCCESS execute success
+   * @retval OB_NOT_SUPPORTED 不支持
+  */
+  static int check_is_valid_argument_num(const int64_t num);
+  /**
+   * @brief  检查是否有效的 sched_type
+   * @param [in] str  - sched_type
+   * @retval OB_SUCCESS execute success
+   * @retval OB_NOT_SUPPORTED 不支持
+  */
+  static int check_is_valid_sched_type(const ObString &str);
+  /**
+   * @brief  检查是否有效的 state
+   * @param [in] str  - state
+   * @retval OB_SUCCESS execute success
+   * @retval OB_NOT_SUPPORTED 不支持
+  */
+  static int check_is_valid_state(const ObString &str);
+  /**
+   * @brief  检查是否有效的 end_date
+   * @param [in] start_date
+   * @param [in] end_date
+   * @retval OB_SUCCESS execute success
+   * @retval OB_NOT_SUPPORTED 不支持的时间
+  */
+  static int check_is_valid_end_date(const int64_t start_date, const int64_t end_date);
+  /**
+   * @brief  检查是否有效的 repeat interval
+   * @param [in] str repeat_interval
+   * @retval OB_SUCCESS execute success
+   * @retval OB_NOT_SUPPORTED 不支持
+  */
+  static int check_is_valid_repeat_interval(const ObString &str);
+  /**
+   * @brief  检查是否有效的 max_run_duration
+   * @param [in] max_run_duration
+   * @retval OB_SUCCESS execute success
+   * @retval OB_NOT_SUPPORTED 不支持
+  */
+  static int check_is_valid_max_run_duration(const int64_t max_run_duration);
+
   //TO DO DELETE 连雨
   static int generate_job_id(int64_t tenant_id, int64_t &max_job_id);
-  static int disable_dbms_sched_job(common::ObISQLClient &sql_client,
-                                    const uint64_t tenant_id,
-                                    const common::ObString &job_name,
-                                    const bool if_exists = false);
   /**
    * @brief  创建一个 job
-   * @param [in] sql_client - 创建 JOB 会执行两次 insert, 应该传入一个 trans
+   * @param [in] sql_client
    * @param [in] tenant_id  - 租户id
-   * @param [in] job_id  - 唯一id
+   * @param [in] job_id  - job_id
    * @retval OB_SUCCESS execute success
    * @retval OB_ERR_UNEXPECTED 未知错误
    * @retval OB_INVALID_ARGUMENT 当前 JOB 不存在
@@ -411,14 +475,18 @@ public:
                                  const bool is_delete_after_stop);
   /**
    * @brief  更新 JOB 信息
-   * @param [in] update_job_info  - 要更新的 job 信息 (必须要填 tenant_id, job_name)
+   * @param [in] job_info
+   * @param [in] job_attribute_name - 要更新的 job 列
+   * @param [in] job_attribute_value - 要更新的列 value
    * @retval OB_SUCCESS execute success
    * @retval OB_ERR_UNEXPECTED 未知错误
    * @retval OB_INVALID_ARGUMENT 无效参数
    * @retval OB_ENTRY_NOT_EXIST JOB 不存在/没做更改
    */
   static int update_dbms_sched_job_info(common::ObISQLClient &sql_client,
-                                   const ObDBMSSchedJobInfo &update_job_info);
+                                        const ObDBMSSchedJobInfo &job_info,
+                                        const ObString &job_attribute_name,
+                                        const ObObj &job_attribute_value);
   /**
    * @brief  获取 JOB 信息
    * @param [in] tenant_id  - 租户id
@@ -439,7 +507,6 @@ public:
   /**
    * @brief  检查用户是否有修改 JOB 的权限（策略, root 用户能修改所有 job, 普通用户只能修改自己的 job)
    * @param [in] user_info  - 用户信息
-   * @param [in] is_oracle_tenant  - 是否 oracle 租户
    * @param [in] job_info  - job 信息
    * @retval OB_SUCCESS execute success
    * @retval OB_ERR_UNEXPECTED 未知错误
@@ -448,12 +515,16 @@ public:
    */
   static int check_dbms_sched_job_priv(const ObUserInfo *user_info,
                                        const ObDBMSSchedJobInfo &job_info);
-  //TO DO DELETE 连雨
-  static int add_dbms_sched_job(common::ObISQLClient &sql_client,
-                                const uint64_t tenant_id,
-                                const int64_t job_id,
-                                const ObDBMSSchedJobInfo &job_info);
-  static int reserve_user_with_minimun_id(ObIArray<const ObUserInfo *> &user_infos);
+  /**
+   * @brief  计算 job 保存的时间表达式得到下一次执行的时间
+   * @param [in] job_info  - job 信息
+   * @param [out] next_run_time
+   * @retval OB_SUCCESS execute success
+   * @retval OB_ERR_UNEXPECTED 未知错误
+   * @retval OB_INVALID_ARGUMENT 无效参数
+   */
+  static int calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &job_info, int64_t &next_run_time);
+  static int reserve_user_with_minimun_id(ObIArray<const ObUserInfo *> &user_infos); //TO DO 连雨 delete
 };
 }
 }
