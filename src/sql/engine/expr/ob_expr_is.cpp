@@ -254,15 +254,18 @@ int ObExprIs::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr 
       rt_expr.eval_func_ = ObExprIs::calc_collection_is_null;
     } else {
       rt_expr.eval_func_ = ObExprIs::calc_is_null;
+      rt_expr.eval_vector_func_ = ObExprIs::calc_vector_is_null;
     }
   } else if (param2->get_value().is_true()) {
     if (OB_FAIL(cg_result_type_class(param1_type, rt_expr.eval_func_, false, true))) {
       LOG_WARN("is expr got unexpected type param", K(ret));
     }
+    rt_expr.eval_vector_func_ = ObExprIs::calc_vector_is_true;
   } else if (param2->get_value().is_false()) {
     if (OB_FAIL(cg_result_type_class(param1_type, rt_expr.eval_func_, false, false))) {
       LOG_WARN("is expr got unexpected type param", K(ret));
     }
+    rt_expr.eval_vector_func_ = ObExprIs::calc_vector_is_false;
   } else if (ObDoubleType == param2->get_value().get_type()) {
     if (isnan(param2->get_value().get_double())) {
       rt_expr.eval_func_ = ObExprIs::calc_is_nan;
@@ -298,16 +301,19 @@ int ObExprIsNot::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObEx
       // observer(version4.0.0) to execute, thus batch func is not null only if min_cluster_version>=4.1.0
       if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
         rt_expr.eval_batch_func_ = ObExprIsNot::calc_batch_is_not_null;
+        rt_expr.eval_vector_func_ = ObExprIsNot::calc_vector_is_not_null; 
       }
     }
   } else if (param2->get_value().is_true()) {
     if (OB_FAIL(cg_result_type_class(param1_type, rt_expr.eval_func_, true, true))) {
       LOG_WARN("is expr got unexpected type param", K(ret));
     }
+    rt_expr.eval_vector_func_ = ObExprIsNot::calc_vector_is_not_true;
   } else if (param2->get_value().is_false()) {
     if (OB_FAIL(cg_result_type_class(param1_type, rt_expr.eval_func_, true, false))) {
       LOG_WARN("is expr got unexpected type param", K(ret));
     }
+    rt_expr.eval_vector_func_ = ObExprIsNot::calc_vector_is_not_false;
   } else if (ObDoubleType == param2->get_value().get_type()) {
     if (isnan(param2->get_value().get_double())) {
       rt_expr.eval_func_ = ObExprIsNot::calc_is_not_nan;
@@ -347,6 +353,179 @@ int ObExprIs::calc_is_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_dat
     expr_datum.set_int32(static_cast<int32_t>(ret_bool));
   }
   return ret;
+}
+
+template <typename ArgVec>
+static int eval_vector_is_null( const ObExpr &expr, 
+                                ObEvalCtx &ctx,
+                                const ObBitVector &skip,
+                                const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ObFixedLengthBase *res_vec = static_cast<ObFixedLengthBase *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  int64_t *data_ptr = reinterpret_cast<int64_t *>(res_vec->get_data());
+
+  if(!arg_vec->has_null()){
+    MEMSET(data_ptr + bound.start(), 0, sizeof(int64_t) * (bound.end()-bound.start()));
+  } else{
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      bool arg_not_null = arg_vec->is_null(idx);
+      data_ptr[idx] = static_cast<int64_t>(arg_not_null);
+    }
+  } 
+  eval_flags.set_all(bound.start(), bound.end());
+  return ret;
+}
+int ObExprIs::calc_vector_is_null( const ObExpr &expr, 
+                                    ObEvalCtx &ctx,
+                                    const ObBitVector &skip,
+                                    const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))){
+    LOG_WARN("fail to eval is not null param", K(ret));
+  } else {
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_FIXED == res_format){
+      VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+      if(VEC_FIXED == arg_format || VEC_DISCRETE == arg_format || VEC_CONTINUOUS == arg_format){
+        ret = eval_vector_is_null<ObBitmapNullVectorBase>(expr, ctx, skip, bound);
+      } else if (VEC_UNIFORM == arg_format){
+        ret = eval_vector_is_null<ObUniformBase>(expr, ctx, skip, bound);
+      } else {
+        ret = eval_vector_is_null<ObVectorBase>(expr, ctx, skip, bound);
+      }
+    } else {
+      ObVectorBase *arg_vec = static_cast<ObVectorBase *>(expr.args_[0]->get_vector(ctx));
+      ObVectorBase *res_vec = static_cast<ObVectorBase *>(expr.get_vector(ctx));
+      ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+      for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+        bool arg_not_null = arg_vec->is_null(idx);
+        res_vec->set_int(idx, static_cast<int64_t>(arg_not_null));
+      }
+      eval_flags.set_all(bound.start(), bound.end());
+    }
+  }
+  return ret;
+}   
+
+template <typename ArgVec, typename ResVec, typename DataType, bool EXPR_IS, bool IS_TRUE>
+static int eval_vector_is_isnot( const ObExpr &expr, 
+                                ObEvalCtx &ctx,
+                                const ObBitVector &skip,
+                                const EvalBound &bound,
+                                DataType (ArgVec::*get_data)(int64_t) const
+                                )
+{
+  int ret = OB_SUCCESS;
+
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    bool arg_is_true = false;
+    if(arg_vec->is_null(idx)){
+      arg_is_true = !EXPR_IS;
+    } else {
+      arg_is_true = !ObExprIsBase::is_zero((arg_vec->*get_data)(idx), arg_vec->get_length(idx));
+      arg_is_true = EXPR_IS ? arg_is_true : !arg_is_true;
+      arg_is_true = IS_TRUE ? arg_is_true : !arg_is_true;
+    }
+    res_vec->set_int(idx, static_cast<int64_t>(arg_is_true));
+  } 
+  eval_flags.set_all(bound.start(), bound.end());
+  return ret;
+}
+
+template <typename ArgVec, typename DataType, bool EXPR_IS, bool IS_TRUE>
+static inline int def_eval_vector_is_isnot(const ObExpr &expr, 
+                                    ObEvalCtx &ctx,
+                                    const ObBitVector &skip,
+                                    const EvalBound &bound,
+                                    DataType (ObVectorBase::*get_data)(int64_t) const
+                                    )
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))){
+    LOG_WARN("fail to eval is not null param", K(ret));
+  } else {
+    VectorFormat res_format = expr.get_format(ctx);
+    if(VEC_FIXED == res_format){
+      VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+      if(VEC_FIXED == arg_format || VEC_DISCRETE == arg_format || VEC_CONTINUOUS == arg_format){
+        ret = eval_vector_is_isnot<ArgVec, IntegerFixedVec, DataType, EXPR_IS, IS_TRUE>(expr, ctx, skip, bound, get_data);
+      } else if(VEC_UNIFORM == arg_format){
+        ret = eval_vector_is_isnot<ObUniformBase, IntegerFixedVec, DataType, EXPR_IS, IS_TRUE>(expr, ctx, skip, bound, get_data);
+      } else {
+        ret = eval_vector_is_isnot<ObVectorBase, IntegerFixedVec, DataType, EXPR_IS, IS_TRUE>(expr, ctx, skip, bound, get_data);
+      }
+    } else {
+      ret = eval_vector_is_isnot<ObVectorBase, ObVectorBase, DataType, EXPR_IS, IS_TRUE>(expr, ctx, skip, bound, get_data);
+    }
+  }
+  return ret;
+}
+
+template <bool EXPR_IS, bool IS_TRUE>
+static int def_calc_vector_is_isnot( const ObExpr &expr, 
+                            ObEvalCtx &ctx,
+                            const ObBitVector &skip,
+                            const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ObObjType data_type = expr.args_[0]->datum_meta_.type_;
+  VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+  switch(data_type){
+    case ObTinyIntType:
+    case ObSmallIntType:
+    case ObMediumIntType:
+    case ObInt32Type:
+    case ObIntType:
+    case ObUTinyIntType:
+    case ObUSmallIntType:
+    case ObUMediumIntType:
+    case ObUInt32Type:
+    case ObUInt64Type:
+    case ObBitType: 
+    case ObFloatType:
+    case ObUFloatType:
+    case ObDoubleType:
+    case ObUDoubleType: {
+      ret = def_eval_vector_is_isnot<DoubleFixedVec, double, EXPR_IS, IS_TRUE>(expr, ctx, skip, bound, &ObVectorBase::get_double);
+      break;
+    }
+    case ObDecimalIntType: {
+      ret = def_eval_vector_is_isnot<ObFixedLengthBase, const ObDecimalInt*, EXPR_IS, IS_TRUE>(expr, ctx, skip, bound, &ObVectorBase::get_decimal_int);
+      break;
+    }
+    case common::ObJsonType: {
+      if(VEC_DISCRETE == arg_format){
+        ret = def_eval_vector_is_isnot<JsonDiscVec, ObString, EXPR_IS, IS_TRUE>(expr, ctx, skip, bound, &ObVectorBase::get_string);
+      } else {
+        ret = def_eval_vector_is_isnot<JsonContVec, ObString, EXPR_IS, IS_TRUE>(expr, ctx, skip, bound, &ObVectorBase::get_string);
+      }
+      break;
+    }
+    default:
+      if(VEC_DISCRETE == arg_format){
+        ret = def_eval_vector_is_isnot<NumberDiscVec, const number::ObCompactNumber &, EXPR_IS, IS_TRUE>(expr, ctx, skip, bound, &ObVectorBase::get_number);
+      } else {
+        ret = def_eval_vector_is_isnot<NumberContVec, const number::ObCompactNumber &, EXPR_IS, IS_TRUE>(expr, ctx, skip, bound, &ObVectorBase::get_number);
+      }
+      break;
+  }
+  return ret;
+}
+int ObExprIs::calc_vector_is_true( const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  return def_calc_vector_is_isnot<true, true>(expr, ctx, skip, bound);
+}
+
+int ObExprIs::calc_vector_is_false( const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  return def_calc_vector_is_isnot<true, false>(expr, ctx, skip, bound);
 }
 
 int ObExprIs::calc_is_infinite(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
@@ -409,7 +588,7 @@ int ObExprIsNot::calc_batch_is_not_null(const ObExpr &expr, ObEvalCtx &ctx,
   LOG_DEBUG("calculate batch is not null", K(batch_size));
   ObDatum *results = expr.locate_batch_datums(ctx);
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
+  if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) { 
     LOG_WARN("failed to eval batch args", K(ret), K(batch_size));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
@@ -423,6 +602,74 @@ int ObExprIsNot::calc_batch_is_not_null(const ObExpr &expr, ObEvalCtx &ctx,
     }
   }
   return ret;
+}
+
+template <typename ArgVec>
+static int eval_vector_is_not_null( const ObExpr &expr, 
+                                          ObEvalCtx &ctx,
+                                          const ObBitVector &skip,
+                                          const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ObFixedLengthBase *res_vec = static_cast<ObFixedLengthBase *>(expr.get_vector(ctx));
+  int64_t *data_ptr = reinterpret_cast<int64_t *>(res_vec->get_data());
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+
+  if(!arg_vec->has_null()){
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      data_ptr[idx] = 1;
+    }
+  } else{
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      bool arg_not_null = ! arg_vec->is_null(idx);
+      data_ptr[idx] = static_cast<int64_t>(arg_not_null);
+    }
+  } 
+  eval_flags.set_all(bound.start(), bound.end());
+  return ret;
+}
+int ObExprIsNot::calc_vector_is_not_null( const ObExpr &expr, 
+                                          ObEvalCtx &ctx,
+                                          const ObBitVector &skip,
+                                          const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))){
+    LOG_WARN("fail to eval is not null param", K(ret));
+  } else {
+    if (VEC_FIXED == expr.get_format(ctx)){
+      VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+      if(VEC_FIXED == arg_format || VEC_DISCRETE == arg_format || VEC_CONTINUOUS == arg_format){
+        ret = eval_vector_is_not_null<ObBitmapNullVectorBase>(expr, ctx, skip, bound);
+      } else if (VEC_UNIFORM == arg_format){
+        ret = eval_vector_is_not_null<ObUniformBase>(expr, ctx, skip, bound);
+      } else {
+        ret = eval_vector_is_not_null<ObVectorBase>(expr, ctx, skip, bound);
+      }
+    } else {
+      ObVectorBase *arg_vec = static_cast<ObVectorBase *>(expr.args_[0]->get_vector(ctx));
+      ObVectorBase *res_vec = static_cast<ObVectorBase *>(expr.get_vector(ctx));
+      ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+
+      for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+        bool arg_not_null = ! arg_vec->is_null(idx);
+        res_vec->set_int(idx, static_cast<int64_t>(arg_not_null));
+      }
+      eval_flags.set_all(bound.start(), bound.end());
+    }
+  }
+  return ret;
+}                            
+
+int ObExprIsNot::calc_vector_is_not_true( const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  return def_calc_vector_is_isnot<false, true>(expr, ctx, skip, bound);
+}
+
+int ObExprIsNot::calc_vector_is_not_false( const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  return def_calc_vector_is_isnot<false, false>(expr, ctx, skip, bound);
 }
 
 int ObExprIsNot::calc_is_not_infinite(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
