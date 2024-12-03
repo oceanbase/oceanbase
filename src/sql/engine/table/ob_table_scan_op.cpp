@@ -3955,16 +3955,11 @@ int ObTableScanOp::fetch_next_fts_index_rows()
 int ObTableScanOp::fill_generated_fts_cols(blocksstable::ObDatumRow *row)
 {
   int ret = OB_SUCCESS;
-  const int64_t part_count = get_part_dep_col_cnt();
   const ObObjDatumMapType *types = MY_SPEC.is_fts_index_aux_ ? ObFTIndexRowCache::FTS_INDEX_TYPES : ObFTIndexRowCache::FTS_DOC_WORD_TYPES;
   const ObExprOperatorType *expr_types = MY_SPEC.is_fts_index_aux_ ? ObFTIndexRowCache::FTS_INDEX_EXPR_TYPE : ObFTIndexRowCache::FTS_DOC_WORD_EXPR_TYPE;
   if (OB_ISNULL(row)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, row is nullptr", K(ret), KP(row));
-  } else if (OB_UNLIKELY((share::ObFtsIndexBuilderUtil::OB_FTS_INDEX_OR_DOC_WORD_TABLE_COL_CNT + part_count != MY_SPEC.output_.count()) ||
-                         (share::ObFtsIndexBuilderUtil::OB_FTS_INDEX_OR_DOC_WORD_TABLE_COL_CNT != row->count_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected output column count", K(ret), K(MY_SPEC.output_), KPC(row), K(part_count));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < share::ObFtsIndexBuilderUtil::OB_FTS_INDEX_OR_DOC_WORD_TABLE_COL_CNT; ++i) {
       ObExpr *expr = nullptr;
@@ -3983,27 +3978,6 @@ int ObTableScanOp::fill_generated_fts_cols(blocksstable::ObDatumRow *row)
     }
   }
   return ret;
-}
-
-int64_t ObTableScanOp::get_part_dep_col_cnt()
-{
-  int64_t part_dep_col_cnt = 0;
-  if (MY_SPEC.part_dep_cols_.count() > 0 && 0 == MY_SPEC.subpart_dep_cols_.count()) {
-    part_dep_col_cnt = MY_SPEC.part_dep_cols_.count();
-  } else if (0 == MY_SPEC.part_dep_cols_.count()) {
-    part_dep_col_cnt = 0;
-  } else {
-    for (int64_t i = 0; i < MY_SPEC.part_dep_cols_.count(); ++i) {
-      for (int64_t j = 0; j < MY_SPEC.subpart_dep_cols_.count(); ++j) {
-        if (MY_SPEC.part_dep_cols_.at(i) != MY_SPEC.subpart_dep_cols_.at(j)) {
-        } else {
-          part_dep_col_cnt++;
-          break;
-        }
-      }
-    }
-  }
-  return part_dep_col_cnt;
 }
 
 int ObTableScanOp::get_output_fts_col_expr_by_type(
