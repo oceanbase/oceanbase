@@ -166,15 +166,13 @@ int ObTableApiCacheGuard::get_or_create_cache_obj()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(lib_cache_->get_cache_obj(cache_ctx_, &cache_key_, cache_guard_))) {
-    if (ret == OB_SQL_PC_NOT_EXIST) {
-      is_use_cache_ = false;
-      if (OB_FAIL(ObCacheObjectFactory::alloc(cache_guard_,
-                                              ObLibCacheNameSpace::NS_TABLEAPI,
-                                              lib_cache_->get_tenant_id()))) {
-        LOG_WARN("fail to alloc new cache obj", K(ret));
-      }
-    } else {
-      LOG_WARN("fail to get cache obj", K(ret), K(cache_key_));
+    LOG_TRACE("fail to get cache obj, try create cache obj", K(ret), K(cache_key_));
+    is_use_cache_ = false;
+    if (OB_FAIL(ObCacheObjectFactory::alloc(cache_guard_,
+                                            ObLibCacheNameSpace::NS_TABLEAPI,
+                                            lib_cache_->get_tenant_id()))) {
+      // overwrite ret
+      LOG_WARN("fail to alloc new cache obj", K(ret));
     }
   } else {
     is_use_cache_ = true;
