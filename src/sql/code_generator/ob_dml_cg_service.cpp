@@ -3647,6 +3647,12 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (need_handle) {
+    /* For non-unique indexes, we do not use das scan, and use inner SQL. */
+    if (fk_info.ref_cst_type_ != CONSTRAINT_TYPE_PRIMARY_KEY 
+      && fk_info.ref_cst_type_ != CONSTRAINT_TYPE_UNIQUE_KEY) {
+      fk_arg.use_das_scan_ = false;
+      cg_.phy_plan_->set_has_nested_sql(true);
+    }
     if (check_parent_table) {
       ObDMLCtDefAllocator<ObForeignKeyCheckerCtdef> fk_allocator(cg_.phy_plan_->get_allocator());
       if (OB_ISNULL(fk_arg.fk_ctdef_ = fk_allocator.alloc())) {

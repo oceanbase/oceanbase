@@ -162,7 +162,7 @@ int ForeignKeyHandle::check_exist(ObTableModifyOp &modify_op, const ObForeignKey
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_FOREIGN_KEY_CONSTRAINT_CHECK);
-  if (!expect_zero) {
+  if (fk_checker) {
     ret = check_exist_scan_task(modify_op, fk_arg, row, fk_checker);
   } else {
     if (OB_FAIL(check_exist_inner_sql(modify_op, fk_arg, row, expect_zero, true))) {

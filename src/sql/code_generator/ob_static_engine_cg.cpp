@@ -3123,6 +3123,13 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
     } else {
       ins_ctdef->has_instead_of_trigger_ = op.has_instead_of_trigger();
       spec.ins_ctdefs_.at(0).at(i) = ins_ctdef;
+      for (int64_t i = 0; i < ins_ctdef->fk_args_.count() && spec.check_fk_batch_; ++i) {
+        const ObForeignKeyArg &fk_arg = ins_ctdef->fk_args_.at(i);
+        if (!fk_arg.use_das_scan_) {
+          spec.check_fk_batch_ = false;
+          break;
+        }
+      }
     }
   } // for index_dml_infos end
   return ret;
@@ -3384,6 +3391,13 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
           spec.check_fk_batch_ = false;
         } else {
           spec.check_fk_batch_ = true;
+        }
+        for (int64_t i = 0; i < ins_ctdef->fk_args_.count() && spec.check_fk_batch_; ++i) {
+          const ObForeignKeyArg &fk_arg = ins_ctdef->fk_args_.at(i);
+          if (!fk_arg.use_das_scan_) {
+            spec.check_fk_batch_ = false;
+            break;
+          }
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -3667,6 +3681,13 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
         spec.check_fk_batch_ = true;
         for (int64_t i = 0; i < upd_ctdef->fk_args_.count() && spec.check_fk_batch_; ++i) {
           const ObForeignKeyArg &fk_arg = upd_ctdef->fk_args_.at(i);
+          if (!fk_arg.use_das_scan_) {
+            spec.check_fk_batch_ = false;
+            break;
+          }
+        }
+        for (int64_t i = 0; i < ins_ctdef->fk_args_.count() && spec.check_fk_batch_; ++i) {
+          const ObForeignKeyArg &fk_arg = ins_ctdef->fk_args_.at(i);
           if (!fk_arg.use_das_scan_) {
             spec.check_fk_batch_ = false;
             break;
