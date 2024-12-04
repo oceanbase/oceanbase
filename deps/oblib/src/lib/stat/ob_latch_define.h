@@ -381,7 +381,9 @@ LATCH_DEF(STORAGE_CLOG_RECORDER_LOCK, 346, "storage clog recorder lock", LATCH_F
 LATCH_DEF(SPM_SET_LOCK, 347, "spm set latch", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SSWRITER_CTX_LOCK, 348, "sswriter ctx lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 349, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(MABLK_BF_LOAD_TASKL_LOCK, 349, "macro block bloom filter load task lock", LATCH_FIFO, 2000, 0, true)
+
+LATCH_DEF(LATCH_END, 350, "latch end", LATCH_FIFO, 2000, 0, true)
 
 
 #endif
