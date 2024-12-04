@@ -1320,7 +1320,8 @@ void ObLogRestoreHandler::deep_copy_source_(ObRemoteSourceGuard &source_guard)
   } else if (FALSE_IT(parent_->deep_copy_to(*source))) {
   } else if (! source->is_valid()) {
     ObResSrcAlloctor::free(source); // free source when it is invalid
-    CLOG_LOG(WARN, "source is invalid", K(*source));
+    source = nullptr;
+    CLOG_LOG(WARN, "source is invalid");
   } else if (FALSE_IT(source_guard.set_source(source))) {
   }
 }
