@@ -708,7 +708,6 @@ private:
   ObWholeDataStoreDesc index_store_desc_;
   ObDataStoreDesc leaf_store_desc_;
   ObDataStoreDesc container_store_desc_; // used to open all index macro writers
-  ObDatumRow index_row_;
   ObBaseIndexBlockBuilder index_builder_;
   ObMetaIndexBlockBuilder meta_tree_builder_;
   ObIndexBlockLoader index_block_loader_;

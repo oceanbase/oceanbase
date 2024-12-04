@@ -454,7 +454,6 @@ ObSSTableIndexBuilder::ObSSTableIndexBuilder(const bool use_double_write_buffer)
     index_store_desc_(),
     leaf_store_desc_(),
     container_store_desc_(),
-    index_row_(),
     index_builder_(),
     meta_tree_builder_(),
     index_block_loader_(),
@@ -484,14 +483,12 @@ void ObSSTableIndexBuilder::reset()
     sstable_allocator_.free(static_cast<void *>(roots_[i]));
     roots_[i] = nullptr;
   }
-  index_row_.reset();
   index_builder_.reset();
   meta_tree_builder_.reset();
   index_block_loader_.reset();
   macro_writer_.reset();
   device_handle_ = nullptr;
   roots_.reset();
-  index_row_.reset();
   res_.reset();
   sstable_allocator_.reset();
   self_allocator_.reset();
@@ -542,9 +539,6 @@ int ObSSTableIndexBuilder::init(const ObDataStoreDesc &data_desc,
                  index_store_desc_.get_desc()))) {
     STORAGE_LOG(WARN, "fail to assign container_store_desc", K(ret),
                 K(index_store_desc_));
-  } else if (OB_FAIL(index_row_.init(
-                 index_store_desc_.get_desc().get_rowkey_column_count() + 1))) {
-    STORAGE_LOG(WARN, "Failed to init index row", K(ret), K(index_store_desc_));
   } else {
     if (GCTX.is_shared_storage_mode()) {
       optimization_mode_ = DISABLE;
