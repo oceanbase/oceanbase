@@ -2215,17 +2215,6 @@ int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_lengt
     orc_type = orc::createPrimitiveType(orc::TypeKind::INT);
   } else if (ObIntType == obj_type) {
     orc_type = orc::createPrimitiveType(orc::TypeKind::LONG);
-  } else if (ObUTinyIntType == obj_type
-            || ObUSmallIntType == obj_type
-            || ObUMediumIntType == obj_type
-            || ObUInt32Type == obj_type
-            || ObUInt64Type == obj_type
-            || ObUFloatType == obj_type
-            || ObUDoubleType == obj_type
-            || ObUNumberType == obj_type) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this type for orc");
-    LOG_WARN("unsupport type for orc", K(obj_type));
   } else if (ObFloatType == obj_type) {
     orc_type = orc::createPrimitiveType(orc::TypeKind::FLOAT);
   } else if (ObDoubleType == obj_type) {
@@ -2261,8 +2250,9 @@ int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_lengt
   } else if (CS_TYPE_BINARY != meta.cs_type_ && ob_is_string_type(obj_type)) { // not binary
     orc_type = orc::createCharType(orc::TypeKind::STRING, max_length);
   } else {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupport type for orc", K(obj_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "unsupported column type for orc file");
   }
   return ret;
 }
