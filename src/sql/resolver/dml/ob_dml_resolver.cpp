@@ -1896,7 +1896,7 @@ int ObDMLResolver::reset_calc_part_id_param_exprs(ObRawExpr *&expr,
     bool find_it = false;
     ObString subpart_str(7, "SUBPART");
     ObString part_str(4, "PART");
-    PartitionIdCalcType calc_type = CALC_INVALID;
+    PartitionIdCalcType calc_type = CALC_NORMAL;
     if (0 == subpart_str.case_compare(opt_str)) {
       calc_type = CALC_NORMAL;
     } else if (0 == part_str.case_compare(opt_str)) {

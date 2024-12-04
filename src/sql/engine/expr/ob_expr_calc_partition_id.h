@@ -96,7 +96,7 @@ public:
       subpart_type_(share::schema::PARTITION_FUNC_TYPE_MAX),
       part_num_(common::OB_INVALID_COUNT),
       subpart_num_(common::OB_INVALID_COUNT),
-      partition_id_calc_type_(CALC_INVALID),
+      partition_id_calc_type_(CALC_NORMAL),
       may_add_interval_part_(MayAddIntervalPart::NO),
       calc_id_type_(CALC_TABLET_ID),
       first_part_id_(OB_INVALID_ID)
@@ -152,7 +152,9 @@ public:
           range_partitions_(),
           part_cmp_(),
           default_list_part_idx_(OB_INVALID_INDEX),
-          list_part_map_()
+          list_part_map_(),
+          inited_(false),
+          first_part_id_(OB_INVALID_ID)
     {}
     virtual ~ObExprCalcPartCtx() {
       range_partitions_.reset();
@@ -166,13 +168,16 @@ public:
                                           const ObExpr &part_expr,
                                           common::ObIAllocator &allocator);
 
-    TO_STRING_KV(K_(range_partitions), K_(default_list_part_idx));
+    TO_STRING_KV(K_(range_partitions), K_(default_list_part_idx), K_(first_part_id));
 
     ObFixedArray<RangePartition, common::ObIAllocator> range_partitions_; // Used to calc range part
     RangePartCmp part_cmp_; // Used to calc range part
     int64_t default_list_part_idx_; // Used to calc list part
     common::hash::ObHashMap<PartValKey, int64_t,
                             common::hash::NoPthreadDefendMode> list_part_map_; // Used to calc list part
+    // whether above info for calculating range/list partition has been inited.
+    bool inited_;
+    int64_t first_part_id_;
   };
 
   explicit ObExprCalcPartitionBase(common::ObIAllocator &alloc, ObExprOperatorType type,
@@ -216,6 +221,8 @@ public:
                                      common::ObObjectID &partition_id,
                                      common::ObTabletID &tablet_id);
   virtual bool need_rt_ctx() const override { return true; }
+  static int get_first_part_id(ObExecContext &ctx, const ObExpr &expr, int64_t &first_part_id);
+  static int set_first_part_id(ObExecContext &ctx, const ObExpr &expr, const int64_t first_part_id);
 private:
  int init_calc_part_info(common::ObIAllocator *allocator,
                          const share::schema::ObTableSchema &table_schema,

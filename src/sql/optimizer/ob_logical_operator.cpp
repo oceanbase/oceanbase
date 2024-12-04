@@ -141,8 +141,15 @@ int ObExchangeInfo::init_calc_part_id_expr(ObOptimizerContext &opt_ctx)
   } else if (OB_ISNULL(calc_part_id_expr_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to init calc part id expr", K(ret));
-  } else if (MayAddIntervalPart::YES == may_add_interval_part_) {
-    calc_part_id_expr_->set_may_add_interval_part(may_add_interval_part_);
+  } else {
+    if (MayAddIntervalPart::YES == may_add_interval_part_) {
+      calc_part_id_expr_->set_may_add_interval_part(may_add_interval_part_);
+    }
+    if (OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST == repartition_type_) {
+      calc_part_id_expr_->set_partition_id_calc_type(CALC_IGNORE_SUB_PART);
+    } else if (OB_REPARTITION_ONE_SIDE_ONE_LEVEL_SUB == repartition_type_) {
+      calc_part_id_expr_->set_partition_id_calc_type(CALC_IGNORE_FIRST_PART);
+    }
   }
   return ret;
 }
@@ -5569,7 +5576,12 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
           LOG_WARN("unexpect child type", K(ret));
         } else {
           ObLogExchange *exch_op = static_cast<ObLogExchange*>(child);
-          join_filter_create->set_tablet_id_expr(exch_op->get_calc_part_id_expr());
+          if (exch_op->get_calc_part_id_expr()->get_partition_id_calc_type() ==
+              info.calc_part_id_expr_->get_partition_id_calc_type()) {
+            join_filter_create->set_tablet_id_expr(exch_op->get_calc_part_id_expr());
+          } else {
+            join_filter_create->set_tablet_id_expr(info.calc_part_id_expr_);
+          }
         }
       } else {
         join_filter_create->set_tablet_id_expr(info.calc_part_id_expr_);

@@ -112,8 +112,6 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     mem_context_(nullptr),
     pwj_map_(nullptr),
     group_pwj_map_(nullptr),
-    calc_type_(CALC_NORMAL),
-    fixed_id_(OB_INVALID_ID),
     check_status_times_(0),
     vt_ift_(nullptr),
     px_batch_id_(0),

@@ -574,19 +574,24 @@ static int inner_fast_calc_partition_level_one_vector(const ObExpr &expr,
       Type == ObExprCalcPartitionBase::PartType::LIST)) {
     uint64_t calc_part_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
     if (OB_ISNULL(calc_part_ctx = static_cast<ObExprCalcPartitionBase::ObExprCalcPartCtx *>(
-          ctx.exec_ctx_.get_expr_op_ctx(calc_part_ctx_id)))) {
-      if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(calc_part_ctx_id, calc_part_ctx))) {
-        LOG_WARN("failed to create operator ctx", K(ret));
-      } else if (Type == ObExprCalcPartitionBase::PartType::RANGE) {
-        if (OB_FAIL(calc_part_ctx->init_calc_range_partition_base_info(*table_schema,
-                    *part_expr, ctx.exec_ctx_.get_allocator()))) {
-          LOG_WARN("Fail to init range partition base info", K(ret));
-        }
-      } else { // LIST
-        if (OB_FAIL(calc_part_ctx->init_calc_list_partition_base_info(*table_schema,
-                    *part_expr, ctx.exec_ctx_.get_allocator()))) {
-          LOG_WARN("Fail to init list partition base info", K(ret));
-        }
+          ctx.exec_ctx_.get_expr_op_ctx(calc_part_ctx_id)))
+        && OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(calc_part_ctx_id, calc_part_ctx))) {
+      LOG_WARN("failed to create operator ctx", K(ret));
+    } else if (calc_part_ctx->inited_) {
+      // base info for calc range/list partition inited already
+    } else if (Type == ObExprCalcPartitionBase::PartType::RANGE) {
+      if (OB_FAIL(calc_part_ctx->init_calc_range_partition_base_info(*table_schema,
+                  *part_expr, ctx.exec_ctx_.get_allocator()))) {
+        LOG_WARN("Fail to init range partition base info", K(ret));
+      } else {
+        calc_part_ctx->inited_ = true;
+      }
+    } else { // LIST
+      if (OB_FAIL(calc_part_ctx->init_calc_list_partition_base_info(*table_schema,
+                  *part_expr, ctx.exec_ctx_.get_allocator()))) {
+        LOG_WARN("Fail to init list partition base info", K(ret));
+      } else {
+        calc_part_ctx->inited_ = true;
       }
     }
   }
@@ -924,19 +929,20 @@ int ObExprCalcPartitionBase::calc_partition_level_two(const ObExpr &expr,
   OB_ASSERT(2 == expr.arg_cnt_);
   OB_ASSERT(nullptr != expr.extra_info_);
   CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
-  PartitionIdCalcType calc_type = CALC_INVALID == calc_part_info->partition_id_calc_type_ ?
-                                    ctx.exec_ctx_.get_partition_id_calc_type() :
-                                    calc_part_info->partition_id_calc_type_;
+  PartitionIdCalcType calc_type = calc_part_info->partition_id_calc_type_;
   ObObjectID first_part_id = OB_INVALID_ID;
   ObTabletID tablet_id(ObTabletID::INVALID_TABLET_ID);
   ObObjectID partition_id = OB_INVALID_ID;
   if (CALC_IGNORE_FIRST_PART == calc_type) {
-    if (OB_FAIL(calc_partition_id(*expr.args_[1],
-                                  ctx,
-                                  *calc_part_info,
-                                  calc_part_info->first_part_id_,
-                                  tablet_id,
-                                  partition_id))) {
+    int64_t first_part_id = OB_INVALID_ID;
+    if (OB_FAIL(get_first_part_id(ctx.exec_ctx_, expr, first_part_id))) {
+      LOG_WARN("get first part id failed", K(ret));
+    } else if (OB_FAIL(calc_partition_id(*expr.args_[1],
+                                        ctx,
+                                        *calc_part_info,
+                                        first_part_id,
+                                        tablet_id,
+                                        partition_id))) {
       LOG_WARN("fail to calc partitoin id", K(ret));
     }
   } else if (CALC_IGNORE_SUB_PART == calc_type) {
@@ -1416,6 +1422,57 @@ int ObExprCalcPartitionBase::ObExprCalcPartCtx::init_calc_list_partition_base_in
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObExprCalcPartitionBase::get_first_part_id(ObExecContext &ctx, const ObExpr &expr, int64_t &first_part_id)
+{
+  int ret = OB_SUCCESS;
+  first_part_id = OB_INVALID_ID;
+  uint64_t expr_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+  if (ObExpr::INVALID_EXP_CTX_ID == expr_ctx_id) {
+    // during upgrade, expr ctx not exist.
+    CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
+    if (OB_ISNULL(calc_part_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("extra info is null", K(ret));
+    } else {
+      first_part_id = calc_part_info->first_part_id_;
+    }
+  } else {
+    ObExprCalcPartCtx *calc_part_ctx = NULL;
+    if (OB_ISNULL(calc_part_ctx = static_cast<ObExprCalcPartCtx *>(ctx.get_expr_op_ctx(expr_ctx_id)))
+        && OB_FAIL(ctx.create_expr_op_ctx(expr_ctx_id, calc_part_ctx))) {
+      LOG_WARN("create expr op ctx failed", K(ret));
+    } else {
+      first_part_id = calc_part_ctx->first_part_id_;
+    }
+  }
+  return ret;
+}
+
+int ObExprCalcPartitionBase::set_first_part_id(ObExecContext &ctx, const ObExpr &expr, const int64_t first_part_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t expr_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+  if (ObExpr::INVALID_EXP_CTX_ID == expr_ctx_id) {
+    // during upgrade, expr ctx not exist.
+    CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
+    if (OB_ISNULL(calc_part_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("extra info is null", K(ret));
+    } else {
+      calc_part_info->first_part_id_ = first_part_id;
+    }
+  } else {
+    ObExprCalcPartCtx *calc_part_ctx = NULL;
+    if (OB_ISNULL(calc_part_ctx = static_cast<ObExprCalcPartCtx *>(ctx.get_expr_op_ctx(expr_ctx_id)))
+        && OB_FAIL(ctx.create_expr_op_ctx(expr_ctx_id, calc_part_ctx))) {
+      LOG_WARN("create expr op ctx failed", K(ret));
+    } else {
+      calc_part_ctx->first_part_id_ = first_part_id;
     }
   }
   return ret;
