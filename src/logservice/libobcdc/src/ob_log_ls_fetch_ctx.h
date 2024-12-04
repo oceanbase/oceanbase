@@ -274,6 +274,7 @@ public:
 
   bool is_in_fetching_log() const { return FETCHING_LOG == ATOMIC_LOAD(&state_); }
   void set_not_in_fetching_log() { ATOMIC_SET(&state_, NOT_FETCHING_LOG); }
+  bool is_loading_data_dict_baseline_data() const { return is_loading_data_dict_baseline_data_; }
 
   void dispatch_out(const char *reason)
   {
