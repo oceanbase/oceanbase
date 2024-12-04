@@ -1697,10 +1697,6 @@ public:
   inline bool is_ordered() const { return USING_BTREE == index_using_type_; }
   virtual int serialize_columns(char *buf, const int64_t data_len, int64_t &pos) const;
   virtual int deserialize_columns(const char *buf, const int64_t data_len, int64_t &pos);
-  int serialize_constraints(char *buf, const int64_t data_len, int64_t &pos) const;
-  int deserialize_constraints(const char *buf, const int64_t data_len, int64_t &pos);
-  int serialize_column_groups(char *buf, const int64_t data_len, int64_t &pos) const;
-  int deserialize_column_groups(const char *buf, const int64_t data_len, int64_t &pos);
 
   /**
    * FIXME: move to ObPartitionSchema
