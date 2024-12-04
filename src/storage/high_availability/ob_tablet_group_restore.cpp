@@ -2272,9 +2272,10 @@ int ObTabletRestoreTask::process()
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret) && tablet_restore_ctx_->is_leader_
-      && ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_)
+      && (ObTabletRestoreAction::is_restore_remote_sstable(tablet_restore_ctx_->action_)
+         || ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_))
       && tablet_restore_ctx_->ls_id_.is_user_ls()) {
-    SERVER_EVENT_SYNC_ADD("storage_ha", "follower_restore_major_errsim", "tablet_id", tablet_restore_ctx_->tablet_id_.id());
+    SERVER_EVENT_SYNC_ADD("storage_ha", "leader_tablet_restore_task", "tablet_id", tablet_restore_ctx_->tablet_id_.id());
     DEBUG_SYNC(AFTER_RESTORE_TABLET_TASK);
     ret = OB_E(EventTable::EN_RESTORE_TABLET_TASK_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
