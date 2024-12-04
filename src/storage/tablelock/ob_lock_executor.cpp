@@ -1262,7 +1262,7 @@ int ObUnLockExecutor::parse_unlock_request_(common::sqlclient::ObMySQLResult &re
           unlock_arg->table_id_ = obj_id;
           unlock_arg->lock_mode_ = lock_mode;
           unlock_arg->op_type_ = ObTableLockOpType::OUT_TRANS_UNLOCK;
-          unlock_arg->timeout_us_ = 1000 * 1000L;  // 1s, which means is_try_lock = false
+          unlock_arg->timeout_us_ = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : 1000 * 1000L;
           unlock_arg->is_from_sql_ = true;
           arg = unlock_arg;
         }
@@ -1294,7 +1294,7 @@ int ObUnLockExecutor::parse_unlock_request_(common::sqlclient::ObMySQLResult &re
         } else {
           unlock_arg->lock_mode_ = is_dbms_lock ? lock_mode : EXCLUSIVE;
           unlock_arg->op_type_ = ObTableLockOpType::OUT_TRANS_UNLOCK;
-          unlock_arg->timeout_us_ = 1000 * 1000L;  // 1s, which means is_try_lock = false
+          unlock_arg->timeout_us_ = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : 1000 * 1000L;
           unlock_arg->is_from_sql_ = true;
           arg = unlock_arg;
         }
