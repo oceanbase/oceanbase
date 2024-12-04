@@ -16,7 +16,6 @@
 #include <typeinfo>
 #include <type_traits>
 #include "lib/allocator/ob_slice_alloc.h"
-#include "lib/allocator/ob_vslice_alloc.h"
 
 namespace oceanbase
 {
@@ -100,47 +99,6 @@ private:
   ObSliceAlloc allocator_;
 };
 
-template<class T>
-class ObFixedClassAllocatorV2
-{
-public:
-  using object_type = T;
-public:
-  ObFixedClassAllocatorV2(const ObMemAttr &attr, int64_t nway)
-    : allocator_(attr, OB_MALLOC_BIG_BLOCK_SIZE)
-  {
-    allocator_.set_nway(static_cast<int32_t>(nway));
-  }
-  virtual ~ObFixedClassAllocatorV2() {}
-
-  static ObFixedClassAllocatorV2<T> *get(const char* label = "ConcurObjPool")
-  {
-    static ObFixedClassAllocatorV2<T> instance(SET_USE_500(ObMemAttr(common::OB_SERVER_TENANT_ID, label)),
-                                             common::get_cpu_count());
-    return &instance;
-  }
-
-  void *alloc()
-  {
-    return allocator_.alloc(sizeof(T) + sizeof(ObClassMeta));
-  }
-
-  void free(void *ptr)
-  {
-    if (OB_LIKELY(NULL != ptr)) {
-      allocator_.free(ptr);
-      ptr = NULL;
-    }
-  }
-  void set_nway(int nway)
-  {
-    allocator_.set_nway(static_cast<int32_t>(nway));
-  }
-
-private:
-  ObVSliceAlloc allocator_;
-};
-
 template<typename instance_type, typename object_type>
 inline void type_checker(instance_type*, object_type*)
 {
@@ -194,29 +152,10 @@ inline void free_helper(T *ptr)
 #define op_reclaim_alloc(type) op_alloc(type)
 #define op_reclaim_free(ptr) op_free(ptr)
 
-template<typename T>
-inline void free_helper_v2(T *ptr)
-{
-  common::ObClassMeta *meta = reinterpret_cast<common::ObClassMeta*>((char*)ptr - sizeof(common::ObClassMeta));
-  abort_unless(meta->check_magic_code());
-  ptr->~T();
-  ((ObFixedClassAllocatorV2<T>*)meta->instance())->free(meta);
-}
 
-#define op_alloc_v2(type) \
-  ({ \
-    OLD_STATIC_ASSERT((std::is_default_constructible<type>::value), "type is not default constructible"); \
-    common::ObFixedClassAllocatorV2<type> *instance = \
-      common::ObFixedClassAllocatorV2<type>::get(#type); \
-    op_instance_alloc_args(instance, type); \
-  })
+#define op_alloc_v2(type) op_alloc(type)
 
-#define op_free_v2(ptr) \
-  ({ \
-    if (OB_LIKELY(NULL != ptr)) { \
-      free_helper_v2(ptr); \
-    } \
-  })
+#define op_free_v2(ptr) op_free(ptr)
 
 } // end of namespace common
 } // end of namespace oceanbase
