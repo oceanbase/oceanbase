@@ -1335,6 +1335,11 @@ private:
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       bool &domain_index_exist);
+  int check_has_vec_domain_index(
+      ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      bool &domain_index_exist);
   int check_has_index_operation(
       ObSchemaGetterGuard &schema_guard,
       const uint64_t teannt_id,
