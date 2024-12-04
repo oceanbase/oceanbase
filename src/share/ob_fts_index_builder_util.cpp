@@ -1006,7 +1006,8 @@ int ObFtsIndexBuilderUtil::generate_word_segment_column(
                                                      data_schema,
                                                      col_name_buf,
                                                      OB_MAX_COLUMN_NAME_LENGTH,
-                                                     name_pos))) {
+                                                     name_pos,
+                                                     col_id))) {
     LOG_WARN("failed to construct word segment col name", K(ret));
   } else if (OB_FAIL(check_fts_gen_col(data_schema,
                                        col_id,
@@ -1130,7 +1131,8 @@ int ObFtsIndexBuilderUtil::generate_word_count_column(
                                                    data_schema,
                                                    col_name_buf,
                                                    OB_MAX_COLUMN_NAME_LENGTH,
-                                                   name_pos))) {
+                                                   name_pos,
+                                                   col_id))) {
     LOG_WARN("failed to construct word count col name", K(ret));
   } else if (OB_FAIL(check_fts_gen_col(data_schema,
                                        col_id,
@@ -1245,7 +1247,8 @@ int ObFtsIndexBuilderUtil::generate_doc_length_column(
                                                    data_schema,
                                                    col_name_buf,
                                                    OB_MAX_COLUMN_NAME_LENGTH,
-                                                   name_pos))) {
+                                                   name_pos,
+                                                   col_id))) {
     LOG_WARN("fail to construct document length column name", K(ret));
   } else if (OB_FAIL(check_fts_gen_col(data_schema, col_id, col_name_buf, name_pos, col_exists))) {
     LOG_WARN("fail to check document count", K(ret), K(col_id));
@@ -1364,7 +1367,8 @@ int ObFtsIndexBuilderUtil::construct_word_segment_col_name(
     const ObTableSchema &data_schema,
     char *col_name_buf,
     const int64_t buf_len,
-    int64_t &name_pos)
+    int64_t &name_pos,
+    const uint64_t col_id)
 {
   int ret = OB_SUCCESS;
   name_pos = 0;
@@ -1383,25 +1387,7 @@ int ObFtsIndexBuilderUtil::construct_word_segment_col_name(
                                 OB_WORD_SEGMENT_COLUMN_NAME_PREFIX))) {
       LOG_WARN("print generate column prefix name failed", K(ret));
     }
-    const ObColumnSchemaV2 *col_schema = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
-      const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
-      if (column_name.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column name is empty", K(ret), K(column_name));
-      } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
-        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
-                       column_name.ptr());
-      } else if (OB_FAIL(databuff_printf(col_name_buf,
-                                         buf_len,
-                                         name_pos,
-                                         "_%ld",
-                                         col_schema->get_column_id()))) {
-        LOG_WARN("print column id to buffer failed", K(ret), K(col_schema->get_column_id()));
-      }
-    }
-    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu", ObTimeUtility::current_time()))){
+    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu_%ld", col_id, ObTimeUtility::current_time()))){
       LOG_WARN("fail to printf current time", K(ret));
     }
   }
@@ -1413,7 +1399,8 @@ int ObFtsIndexBuilderUtil::construct_word_count_col_name(
     const ObTableSchema &data_schema,
     char *col_name_buf,
     const int64_t buf_len,
-    int64_t &name_pos)
+    int64_t &name_pos,
+    const uint64_t col_id)
 {
   int ret = OB_SUCCESS;
   name_pos = 0;
@@ -1432,25 +1419,7 @@ int ObFtsIndexBuilderUtil::construct_word_count_col_name(
                                 OB_WORD_COUNT_COLUMN_NAME_PREFIX))) {
       LOG_WARN("print generate column prefix name failed", K(ret));
     }
-    const ObColumnSchemaV2 *col_schema = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
-      const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
-      if (column_name.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column name is empty", K(ret), K(column_name));
-      } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
-        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
-                       column_name.ptr());
-      } else if (OB_FAIL(databuff_printf(col_name_buf,
-                                         buf_len,
-                                         name_pos,
-                                         "_%ld",
-                                         col_schema->get_column_id()))) {
-        LOG_WARN("print column id to buffer failed", K(ret), K(col_schema->get_column_id()));
-      }
-    }
-    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu", ObTimeUtility::current_time()))){
+    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu_%ld", col_id, ObTimeUtility::current_time()))){
       LOG_WARN("fail to printf current time", K(ret));
     }
   }
@@ -1462,7 +1431,8 @@ int ObFtsIndexBuilderUtil::construct_doc_length_col_name(
     const ObTableSchema &data_schema,
     char *col_name_buf,
     const int64_t buf_len,
-    int64_t &name_pos)
+    int64_t &name_pos,
+    const uint64_t col_id)
 {
   int ret = OB_SUCCESS;
   name_pos = 0;
@@ -1480,24 +1450,7 @@ int ObFtsIndexBuilderUtil::construct_doc_length_col_name(
                                 OB_DOC_LENGTH_COLUMN_NAME_PREFIX))) {
       LOG_WARN("fail to printf document length column", K(ret));
     }
-    const ObColumnSchemaV2 *col_schema = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
-      const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
-      if (column_name.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column name is empty", K(ret), K(column_name));
-      } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
-        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
-      } else if (OB_FAIL(databuff_printf(col_name_buf,
-                                         buf_len,
-                                         name_pos,
-                                         "_%ld",
-                                         col_schema->get_column_id()))) {
-        LOG_WARN("fail to printf document length column", K(ret), K(col_schema->get_column_id()));
-      }
-    }
-    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu", ObTimeUtility::current_time()))){
+    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu_%ld", col_id, ObTimeUtility::current_time()))){
       LOG_WARN("fail to printf current time", K(ret));
     }
   }

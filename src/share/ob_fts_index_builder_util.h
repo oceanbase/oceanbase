@@ -129,19 +129,22 @@ private:
       const ObTableSchema &data_schema,
       char *col_name_buf,
       const int64_t buf_len,
-      int64_t &name_pos);
+      int64_t &name_pos,
+      const uint64_t col_id);
   static int construct_word_count_col_name(
       const obrpc::ObCreateIndexArg *index_arg,
       const ObTableSchema &data_schema,
       char *col_name_buf,
       const int64_t buf_len,
-      int64_t &name_pos);
+      int64_t &name_pos,
+      const uint64_t col_id);
   static int construct_doc_length_col_name(
       const obrpc::ObCreateIndexArg *index_arg,
       const ObTableSchema &data_schema,
       char *col_name_buf,
       const int64_t buf_len,
-      int64_t &name_pos);
+      int64_t &name_pos,
+      const uint64_t col_id);
   static int check_fts_gen_col(
       const ObTableSchema &data_schema,
       const uint64_t col_id,
