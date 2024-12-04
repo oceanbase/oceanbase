@@ -86,6 +86,7 @@ void ObTimerTaskThreadPool::handle(void *task_token)
     }
     token->task_->runTimerTask();
     THIS_WORKER.set_timeout_ts(INT64_MAX); // reset timeout to INT64_MAX
+    ObCurTraceId::reset(); // reset trace_id
     const int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time();
     const int64_t elapsed_time = end_time - start_time;
     if (do_timeout_check) {
