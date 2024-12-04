@@ -523,7 +523,8 @@ ObAsyncTask *ObForeignKeyConstraintValidationTask::deep_copy(char *buf, const in
 
 ObConstraintTask::ObConstraintTask()
   : ObDDLTask(ObDDLType::DDL_INVALID), lock_(),
-    alter_table_arg_(), root_service_(nullptr), check_job_ret_code_(INT64_MAX), check_replica_request_time_(0)
+    alter_table_arg_(), root_service_(nullptr), check_job_ret_code_(INT64_MAX), check_replica_request_time_(0),
+    snapshot_held_(false)
 {
 }
 
@@ -632,9 +633,7 @@ int ObConstraintTask::init(const ObDDLTaskRecord &task_record)
   return ret;
 }
 
-int ObConstraintTask::hold_snapshot(
-    common::ObMySQLTransaction &trans,
-    const int64_t snapshot_version)
+int ObConstraintTask::hold_snapshot(const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObDDLService &ddl_service = root_service_->get_ddl_service();
@@ -669,7 +668,7 @@ int ObConstraintTask::hold_snapshot(
              OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
     LOG_WARN("failed to get data lob piece table snapshot", K(ret));
   } else if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
-          trans, SNAPSHOT_FOR_DDL, tenant_id_, schema_version_, snapshot_scn, nullptr, tablet_ids))) {
+          ddl_service.get_sql_proxy(), SNAPSHOT_FOR_DDL, tenant_id_, schema_version_, snapshot_scn, nullptr, tablet_ids))) {
     LOG_WARN("acquire snapshot failed", K(ret), K(tablet_ids));
   } else {
     snapshot_version_ = snapshot_version;
@@ -719,64 +718,48 @@ int ObConstraintTask::wait_trans_end()
 {
   int ret = OB_SUCCESS;
   ObDDLTaskStatus new_status = WAIT_TRANS_END;
-  int64_t new_fetched_snapshot = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObConstraintTask has not been inited", K(ret));
-  } else if (snapshot_version_ > 0) {
+  } else if (snapshot_version_ > 0 && snapshot_held_) {
     // already acquire snapshot, do nothing
     new_status = CHECK_CONSTRAINT_VALID;
   }
 
-  if (OB_SUCC(ret) && snapshot_version_ <= 0 && !wait_trans_ctx_.is_inited()) {
+  if (OB_SUCC(ret) && new_status != CHECK_CONSTRAINT_VALID && !wait_trans_ctx_.is_inited()) {
     if (OB_FAIL(wait_trans_ctx_.init(tenant_id_, task_id_, object_id_, ObDDLWaitTransEndCtx::WaitTransType::WAIT_SCHEMA_TRANS, schema_version_))) {
       LOG_WARN("init wait trans ctx failed", K(ret));
     }
   }
 
-  if (OB_SUCC(ret) && snapshot_version_ <= 0) {
+  if (OB_SUCC(ret) && new_status != CHECK_CONSTRAINT_VALID && snapshot_version_ <= 0) {
     bool is_trans_end = false;
-    if (OB_FAIL(wait_trans_ctx_.try_wait(is_trans_end, new_fetched_snapshot))) {
+    if (OB_FAIL(wait_trans_ctx_.try_wait(is_trans_end, snapshot_version_))) {
       LOG_WARN("try wait transaction failed", K(ret));
     }
   }
 
   DEBUG_SYNC(CONSTRAINT_WAIT_TRANS_END);
 
-  if (OB_SUCC(ret) && snapshot_version_ <= 0 && new_fetched_snapshot > 0) {
-    ObMySQLTransaction trans;
-    int64_t persisted_snapshot = 0;
-    if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
-      LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
-    } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(trans,
+  if (OB_SUCC(ret) && new_status != CHECK_CONSTRAINT_VALID && snapshot_version_ > 0 && !snapshot_held_) {
+    if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(root_service_->get_sql_proxy(),
                                                                  tenant_id_,
                                                                  task_id_,
-                                                                 new_fetched_snapshot,
-                                                                 persisted_snapshot))) {
+                                                                 snapshot_version_))) {
       LOG_WARN("update snapshot version failed", K(ret), K(task_id_));
-    } else if (persisted_snapshot > 0) {
-      // a persisted snapshot found, do not hold the new one repeatedly.
-      FLOG_INFO("found a persisted snapshot in inner table", K(task_id_), K(persisted_snapshot), K(new_fetched_snapshot));
-    } else if (OB_FAIL(hold_snapshot(trans, new_fetched_snapshot))) {
+    } else if (OB_FAIL(hold_snapshot(snapshot_version_))) {
       if (OB_SNAPSHOT_DISCARDED == ret) {
+        ret = OB_SUCCESS;
+        snapshot_held_ = false;
+        snapshot_version_ = 0;
         wait_trans_ctx_.reset();
       } else {
         LOG_WARN("hold snapshot version failed", K(ret));
       }
+    } else {
+      new_status = CHECK_CONSTRAINT_VALID;
+      snapshot_held_ = true;
     }
-    if (trans.is_started()) {
-      const bool need_commit = (ret == OB_SUCCESS);
-      const int tmp_ret = trans.end(need_commit);
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("fail to end trans", K(ret), K(tmp_ret), K(need_commit));
-      } else if (need_commit) {
-        // update when commit succ.
-        new_status = CHECK_CONSTRAINT_VALID;
-        snapshot_version_ = persisted_snapshot > 0 ? persisted_snapshot : new_fetched_snapshot;
-      }
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-    ret = OB_SNAPSHOT_DISCARDED == ret ? OB_SUCCESS : ret;
   }
 
   if (OB_FAIL(switch_status(new_status, true, ret))) {
