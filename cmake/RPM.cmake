@@ -3,9 +3,14 @@ set(CPACK_GENERATOR "RPM")
 set(CPACK_COMPONENTS_IGNORE_GROUPS 1)
 set(CPACK_RPM_COMPONENT_INSTALL ON)
 # use "server" as main component so its RPM filename won't have "server"
-set(CPACK_RPM_MAIN_COMPONENT "server")
+if (BUILD_CDC_ONLY)
+  set(CPACK_RPM_MAIN_COMPONENT "cdc")
+else()
+  set(CPACK_RPM_MAIN_COMPONENT "server")
+endif()
 # let rpmbuild determine rpm filename
 set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
+set(CMAKE_INSTALL_LIBDIR "lib64")
 ## Stardard debuginfo generating instructions in cmake.  However 6u
 ## server with rpm-4.8.0 which doesn't support dwarf4 won't generate
 ## BUILDID for RPM. And Our debuginfo package doesn't contain source
@@ -101,14 +106,18 @@ install(FILES
   COMPONENT server)
 endif()
 
+if (BUILD_CDC_ONLY)
+  set(CPACK_COMPONENTS_ALL cdc)
+else()
+  add_custom_target(bitcode_to_elf ALL
+    DEPENDS ${BITCODE_TO_ELF_LIST})
+endif()
+message(STATUS "Cpack Components:${CPACK_COMPONENTS_ALL}")
+
 # install cpack to make everything work
 include(CPack)
 
 #add rpm target to create RPMS
 add_custom_target(rpm
   COMMAND +make package
-  DEPENDS
-  observer obcdc_tailf obtable obtable_static
-  ob_admin ob_error ob_sql_proxy_parser_static
-  ${BITCODE_TO_ELF_LIST}
   )

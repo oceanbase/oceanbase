@@ -377,9 +377,15 @@ if( ${ARCHITECTURE} STREQUAL "ppc64le" )
   target_link_libraries(oblib_lib  PUBLIC -lcrc32c_ppc)
 endif()
 
-add_library(malloc_hook STATIC
-  alloc/malloc_hook.cpp
-  alloc/malloc_hook.h)
+if (BUILD_CDC_ONLY)
+  add_library(malloc_hook STATIC EXCLUDE_FROM_ALL
+    alloc/malloc_hook.cpp
+    alloc/malloc_hook.h)
+else()
+  add_library(malloc_hook STATIC
+    alloc/malloc_hook.cpp
+    alloc/malloc_hook.h)
+endif()
 target_link_libraries(malloc_hook oblib_base)
 
 if(OB_BUILD_CLOSE_MODULES)

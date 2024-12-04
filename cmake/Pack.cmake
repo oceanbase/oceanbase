@@ -10,6 +10,12 @@ if (OB_BUILD_OPENSOURCE)
   set(CPACK_PACKAGE_VERSION_MAJOR "${OceanBase_CE_VERSION_MAJOR}")
   set(CPACK_PACKAGE_VERSION_MINOR "${OceanBase_CE_VERSION_MINOR}")
   set(CPACK_PACKAGE_VERSION_PATCH "${OceanBase_CE_VERSION_PATCH}")
+elseif (BUILD_CDC_ONLY)
+  set(CPACK_PACKAGE_NAME "oceanbase-cdc")
+  set(CPACK_PACKAGE_VERSION "${OceanBase_CDC_VERSION}")
+  set(CPACK_PACKAGE_VERSION_MAJOR "${OceanBase_CDC_VERSION_MAJOR}")
+  set(CPACK_PACKAGE_VERSION_MINOR "${OceanBase_CDC_VERSION_MINOR}")
+  set(CPACK_PACKAGE_VERSION_PATCH "${OceanBase_CDC_VERSION_PATCH}")
 else()
   set(CPACK_PACKAGE_NAME "oceanbase")
   set(CPACK_PACKAGE_VERSION "${OceanBase_VERSION}")
@@ -88,7 +94,7 @@ install(FILES
 endif()
 
 ## oceanbase-cdc
-if (NOT OB_SO_CACHE AND OB_BUILD_CDC)
+if (NOT OB_SO_CACHE AND BUILD_CDC_ONLY)
   list(APPEND CPACK_COMPONENTS_ALL cdc)
   include(GNUInstallDirs)
   install(
@@ -341,7 +347,7 @@ if (NOT OB_BUILD_OPENSOURCE)
         COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/bitcode_to_elfobj --ld=${OB_LD_BIN} --input=${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a --output=${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a
         DEPENDS obtable_static
         COMMAND_EXPAND_LISTS)
-        list(APPEND BITCODE_TO_ELF_LIST libobtable_static_to_elf)
+      list(APPEND BITCODE_TO_ELF_LIST libobtable_static_to_elf)
     endif()
 
     install(PROGRAMS

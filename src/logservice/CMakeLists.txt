@@ -250,5 +250,10 @@ ob_set_subtarget(ob_logservice logfetcher
 )
 
 ob_server_add_target(ob_logservice)
-add_subdirectory(libobcdc)
-add_subdirectory(logminer)
+if (BUILD_CDC_ONLY)
+  add_subdirectory(libobcdc)
+  add_subdirectory(logminer EXCLUDE_FROM_ALL)
+else()
+  add_subdirectory(libobcdc EXCLUDE_FROM_ALL)
+  add_subdirectory(logminer)
+endif()
