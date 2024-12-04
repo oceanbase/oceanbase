@@ -442,7 +442,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline bool enable_nlj_batch_rescan() const { return enable_nlj_batch_rescan_; }
   inline bool enable_spf_batch_rescan() const { return enable_spf_batch_rescan_; }
   inline bool enable_425_batch_rescan() const { return enable_425_batch_rescan_; }
-  inline bool enable_experimental_batch_rescan() const { return false; }
+  inline bool enable_experimental_batch_rescan() const { return (OB_E(EventTable::EN_DAS_GROUP_RESCAN_TEST_MODE) OB_SUCCESS) != OB_SUCCESS; }
 
   int get_px_object_sample_rate()
   {
