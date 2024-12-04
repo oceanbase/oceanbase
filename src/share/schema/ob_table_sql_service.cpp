@@ -1347,6 +1347,13 @@ int ObTableSqlService::add_columns_for_not_core(ObISQLClient &sql_client,
     stash_desc2->add_row_cnt(table.get_column_count());
     if (OB_FAIL(trans->do_stash_query_batch())) {
       LOG_WARN("do_stash_query fail", K(ret));
+    } else if (table.is_index_table() && is_virtual_table(table.get_data_table_id())
+        && OB_FAIL(trans->do_stash_query())) {
+      // for virtual table index who need to sync schema version, it will try to get data table schema from inner table
+      // the sql to insert into __all_column may not be executed if stash query is enabled, and get table schema will fail
+      LOG_WARN("failed to do stash query for virtual table index", K(ret),
+          "table_name", table.get_table_name(), "table_id", table.get_table_id(),
+          "data_table_id", table.get_data_table_id());
     }
   } else if (OB_FAIL(sql_client.write(exec_tenant_id, column_sql.ptr(), affected_rows))) {
     LOG_WARN("execute sql failed", K(column_sql), K(ret));
