@@ -337,16 +337,19 @@ int ObDriverRowBuffer::batch_fill_group_buffer(const int64_t max_row_cnt)
 
       if (batch_rows->size_ == 0 && batch_rows->end_) {
         // do nothing
+      } else if (OB_FAIL(last_batch_.save(spec_->max_batch_size_))) {
+        LOG_WARN("failed to save last batch", K(ret));
       } else {
-        last_batch_.save(spec_->max_batch_size_);
         save_last_batch_ = true;
       }
 
-      if (left_store_.get_row_cnt() <= 0) {
-        // this could happen if we have skipped all rows
-        ret = OB_ITER_END;
-      } else if (OB_FAIL(left_store_.begin(left_store_iter_))) {
-        LOG_WARN("begin iterator for chunk row store failed", KR(ret));
+      if (OB_SUCC(ret)) {
+        if (left_store_.get_row_cnt() <= 0) {
+          // this could happen if we have skipped all rows
+          ret = OB_ITER_END;
+        } else if (OB_FAIL(left_store_.begin(left_store_iter_))) {
+          LOG_WARN("begin iterator for chunk row store failed", KR(ret));
+        }
       }
     }
   }
