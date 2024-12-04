@@ -231,10 +231,11 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
           LOG_WARN("failt to get package var", K(ret), K(var_idx));
         } else {
           if (var_type.is_cursor_type()) {
-            OV (ser_value->is_tinyint() || ser_value->is_number(),
+            OV (ser_value->is_tinyint() || ser_value->is_number() || ser_value->is_decimal_int(),
                 OB_ERR_UNEXPECTED, KPC(ser_value), K(lbt()));
-            if (OB_SUCC(ret)
-                && ser_value->is_tinyint() ? ser_value->get_bool() : !ser_value->is_zero_number()) {
+            if (OB_SUCC(ret) && (ser_value->is_tinyint() ? ser_value->get_bool()
+                                  : (ser_value->is_number() ? !ser_value->is_zero_number()
+                                                            : !ser_value->is_zero_decimalint()))) {
               ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(value.get_ext());
               CK (OB_NOT_NULL(cursor));
               OX (cursor->set_sync_cursor());
