@@ -338,6 +338,12 @@ inline bool is_diagnose_dag(ObDagType::ObDagTypeEnum dag_type)
       || is_batch_exec_dag(dag_type);
 }
 
+inline bool is_valid_dag_priority(ObDagPrio::ObDagPrioEnum priority)
+{
+  return priority < ObDagPrio::DAG_PRIO_MAX &&
+         priority >= ObDagPrio::DAG_PRIO_COMPACTION_HIGH;
+}
+
 } // namespace share
 } // namespace oceanbase
 #endif

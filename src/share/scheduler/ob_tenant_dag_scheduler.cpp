@@ -4867,7 +4867,11 @@ int ObTenantDagScheduler::dispatch_task(ObITask &task, ObTenantDagWorker *&ret_w
       if (OB_SUCC(ret)) {
         ret_worker = free_workers_.remove_first();
         ret_worker->set_task(&task);
-        ret_worker->set_function_type(OB_DAG_PRIOS[priority].function_type_);
+        if (is_valid_dag_priority(static_cast<ObDagPrio::ObDagPrioEnum>(priority))) {
+          ret_worker->set_function_type(OB_DAG_PRIOS[priority].function_type_);
+        } else {
+          ret_worker->set_function_type(ObFunctionType::DEFAULT_FUNCTION);
+        }
       }
     }
   }
