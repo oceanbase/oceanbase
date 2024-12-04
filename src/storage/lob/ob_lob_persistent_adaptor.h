@@ -95,16 +95,16 @@ private:
       ObTableSchema& schema,
       int64_t &tenant_schema_version);
 
-  int get_lob_tablets(
-      ObLobAccessParam &param,
-      ObTabletHandle &data_tablet,
-      ObTabletHandle &lob_meta_tablet,
-      ObTabletHandle &lob_piece_tablet);
-
   int inner_get_tablet(
       const ObLobAccessParam &param,
       const common::ObTabletID &tablet_id,
       ObTabletHandle &handle);
+  int inner_get_tablet(
+      const ObLobAccessParam &param,
+      const common::ObTabletID &tablet_id,
+      ObLSHandle &ls_handle,
+      ObTabletHandle &handle);
+
   bool check_lob_tablet_id(
       const common::ObTabletID &data_tablet_id,
       const common::ObTabletID &lob_meta_tablet_id,
