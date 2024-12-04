@@ -176,6 +176,8 @@ int ObTrafficControl::ObSharedDeviceControlV2::add_shared_device_limits()
   limit_ids_[static_cast<int>(ResourceType::ops)] = tclimit_create(TCLIMIT_COUNT, get_resource_type_str(ResourceType::ops));
   limit_ids_[static_cast<int>(ResourceType::obw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::obw));
   LOG_INFO("add shared device limit success",
+      "storage_key",
+      storage_key_,
       "ips_limit_id",
       limit_ids_[static_cast<int>(ResourceType::ips)],
       "ibw_limit_id",
@@ -728,15 +730,15 @@ int ObTrafficControl::gc_tenant_infos()
       }
       for (int i = 0; i < gc_tenant_shared_device_infos_v2.count(); ++i) {
         int tmp_ret = OB_SUCCESS;
-        ObTrafficControl::ObSharedDeviceControlV2 **val_ptr = nullptr;
-        if (OB_TMP_FAIL(shared_device_map_v2_.erase_refactored(gc_tenant_shared_device_infos_v2.at(i), val_ptr))) {
+        ObTrafficControl::ObSharedDeviceControlV2 *val_ptr = nullptr;
+        if (OB_TMP_FAIL(shared_device_map_v2_.erase_refactored(gc_tenant_shared_device_infos_v2.at(i), &val_ptr))) {
           LOG_WARN("SSNT:failed to erase gc tenant shared device infos", K(tmp_ret), K(gc_tenant_shared_device_infos_v2.at(i)), K(val_ptr));
         } else if (OB_ISNULL(val_ptr)) {
           tmp_ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("SSNT:failed to erase gc tenant shared device infos", K(tmp_ret), K(gc_tenant_shared_device_infos_v2.at(i)), K(val_ptr));
-        } else if (FALSE_IT((*val_ptr)->destroy())) {
+        } else if (FALSE_IT(val_ptr->destroy())) {
           LOG_WARN("SSNT:failed to destroy shared device control", K(tmp_ret), K(gc_tenant_shared_device_infos_v2.at(i)), K(val_ptr));
-        } else if (FALSE_IT(ob_delete(*val_ptr))) {
+        } else if (FALSE_IT(ob_delete(val_ptr))) {
         } else {
           LOG_INFO("SSNT:erase gc tenant shared device infos succ", K(ret), K(tmp_ret), K(gc_tenant_shared_device_infos_v2.at(i)), K(val_ptr));
         }
