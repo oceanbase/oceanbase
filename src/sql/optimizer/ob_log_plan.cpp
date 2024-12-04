@@ -11551,9 +11551,13 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
   ObOptimizerContext *opt_ctx = &get_optimizer_context();
   const ObCostTableScanInfo *est_cost_info = NULL;
   const ObTableMetaInfo *table_meta_info = NULL;
+  const ObDataTypeCastParams dtc_params =
+                  ObBasicSessionInfo::create_dtc_params(get_optimizer_context().get_session_info());
   if (OB_ISNULL(table_scan) ||
       OB_ISNULL(table_partition_info) ||
       OB_ISNULL(opt_ctx) ||
+      OB_ISNULL(opt_ctx->get_exec_ctx()) ||
+      OB_ISNULL(opt_ctx->get_params()) ||
       OB_ISNULL(sql_schema_guard = opt_ctx->get_sql_schema_guard()) ||
       OB_ISNULL(stmt = table_scan->get_stmt()) ||
       OB_ISNULL(table_item = stmt->get_table_item_by_id(table_scan->get_table_id())) ||
@@ -11564,6 +11568,10 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
     LOG_WARN("get unexpected null", K(sql_schema_guard), K(stmt), K(opt_ctx),
              K(est_cost_info), K(table_meta_info), K(ret));
   } else if (OB_FALSE_IT(table_partition_info->get_table_location().set_use_das(table_scan->use_das()))) {
+  } else if (OB_FAIL(table_partition_info->get_table_location().set_is_das_empty_part(*opt_ctx->get_exec_ctx(),
+                                                                                      *opt_ctx->get_params(),
+                                                                                      dtc_params))) {
+    LOG_WARN("failed to set is das empty part", K(ret));
   } else if (!table_scan->use_das() || !table_scan->is_match_all()) {
     // do nothing
   } else if (OB_FAIL(append_array_no_dup(all_filters, table_scan->get_range_conditions()))) {
@@ -11577,8 +11585,6 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
       // do nothing
   } else {
     SMART_VAR(ObTableLocation, das_location) {
-      const ObDataTypeCastParams dtc_params =
-            ObBasicSessionInfo::create_dtc_params(opt_ctx->get_session_info());
       int64_t ref_table_id = table_scan->get_is_index_global() ?
                              table_scan->get_index_table_id() :
                              table_scan->get_ref_table_id();
@@ -11593,6 +11599,7 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
                                     false))) {
         LOG_WARN("fail to init table location", K(ret), K(all_filters));
       } else if (OB_FALSE_IT(das_location.set_use_das(true))) {
+      } else if (OB_FALSE_IT(das_location.set_is_das_empty_part(table_partition_info->get_table_location().is_das_empty_part()))) {
       } else if (OB_FALSE_IT(das_location.set_broadcast_table(table_meta_info->is_broadcast_table_))) {
       } else if (das_location.is_all_partition() &&
                  !das_location.is_dynamic_replica_select_table()) {
@@ -11601,21 +11608,6 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
         das_location.set_has_dynamic_exec_param(has_dppr);
         table_partition_info->set_table_location(das_location);
       }
-    }
-  }
-
-  if (OB_SUCC(ret) && table_scan->use_das()) {
-    const ParamStore *params = NULL;
-    ObExecContext *exec_ctx = NULL;
-    const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(opt_ctx->get_session_info());
-    if (OB_ISNULL(params = opt_ctx->get_params()) ||
-        OB_ISNULL(exec_ctx = opt_ctx->get_exec_ctx())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("get unexpected null", K(ret), K(params), K(exec_ctx));
-    } else if (OB_FAIL(table_partition_info->get_table_location().set_is_das_empty_part(*exec_ctx,
-                                                                                        *params,
-                                                                                        dtc_params))) {
-      LOG_WARN("failed to set is das empty part", K(ret));
     }
   }
   return ret;

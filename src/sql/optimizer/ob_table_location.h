@@ -788,6 +788,8 @@ public:
 
   void set_use_das(bool use_das) { loc_meta_.use_dist_das_ = use_das; }
   bool use_das() const { return loc_meta_.use_dist_das_; }
+  void set_is_das_empty_part(bool das_empty_part) { loc_meta_.das_empty_part_ = das_empty_part; }
+  bool is_das_empty_part() const { return loc_meta_.das_empty_part_; }
 
   inline bool is_all_partition() const
   {
