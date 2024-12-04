@@ -116,7 +116,7 @@ public:
     alter_table_arg_.client_session_id_ = client_sessid;
     alter_table_arg_.client_session_create_ts_ = create_ts;
   }
-  int set_lock_priority(const uint64_t tenant_id);
+  int set_lock_priority(sql::ObSQLSessionInfo *session);
 private:
   obrpc::ObAlterTableArg alter_table_arg_;
   bool is_comment_table_;

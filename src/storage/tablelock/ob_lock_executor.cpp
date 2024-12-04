@@ -323,7 +323,11 @@ int ObLockContext::execute_read(const ObSqlString &sql,
 
 bool ObLockExecutor::proxy_is_support(sql::ObExecContext &exec_ctx)
 {
-  ObSQLSessionInfo *session = exec_ctx.get_my_session();
+  return proxy_is_support(exec_ctx.get_my_session());
+}
+
+bool ObLockExecutor::proxy_is_support(sql::ObSQLSessionInfo *session)
+{
   bool is_support = false;
   if (OB_ISNULL(session)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "session is null!");
@@ -993,6 +997,11 @@ int ObUnLockExecutor::execute_(ObExecContext &ctx,
       }
     }
   }
+  // if release_cnt is valid, means we have tried to release,
+  // and have not encountered any failures before
+  if (INVALID_RELEASE_CNT != release_cnt) {
+    ret = OB_SUCCESS;
+  }
   return ret;
 }
 
@@ -1203,6 +1212,12 @@ int ObUnLockExecutor::release_all_locks_(ObLockContext &ctx,
         }
       }
     }
+  }
+
+  // if meet fails during release lock, should reset the release cnt to be INVALID_RELEASE_CNT,
+  // which means release failed. And all release opeartions will be rollbacked later.
+  if (OB_FAIL(ret)) {
+    cnt = INVALID_RELEASE_CNT;
   }
 
   return ret;

@@ -34,7 +34,7 @@ public:
   inline void set_tenant_id(const uint64_t tenant_id);
   inline void set_client_session_info(const uint32_t client_sessid,
                                       const int64_t create_ts);
-  int set_lock_priority(const uint64_t tenant_id);
+  int set_lock_priority(sql::ObSQLSessionInfo *session);
   uint64_t get_tenant_id() const { return rename_table_arg_.tenant_id_; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return rename_table_arg_; }
   TO_STRING_KV(K_(stmt_type), K_(rename_table_arg));

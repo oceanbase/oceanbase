@@ -126,6 +126,7 @@ public:
 
 public:
   static bool proxy_is_support(sql::ObExecContext &exec_ctx);
+  static bool proxy_is_support(sql::ObSQLSessionInfo *session);
   int remove_expired_lock_id();
   int check_client_ssid(ObLockContext &ctx,
                         const uint32_t client_session_id,

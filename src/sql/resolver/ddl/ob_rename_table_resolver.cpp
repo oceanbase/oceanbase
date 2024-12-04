@@ -50,7 +50,7 @@ int ObRenameTableResolver::resolve(const ParseNode &parser_tree)
     if (NULL == (rename_table_stmt = create_stmt<ObRenameTableStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("failed to create rename table stmt", K(ret));
-    } else if (OB_FAIL(rename_table_stmt->set_lock_priority(session_info_->get_effective_tenant_id()))) {
+    } else if (OB_FAIL(rename_table_stmt->set_lock_priority(session_info_))) {
       LOG_WARN("set lock priority failed", K(ret), K(session_info_->get_effective_tenant_id()));
     } else {
       stmt_ = rename_table_stmt;
