@@ -23,6 +23,7 @@
 #include "storage/shared_storage/ob_ss_reader_writer.h"
 #include "lib/hash/ob_hashmap.h"
 #include "share/ob_ss_file_util.h"
+#include "storage/shared_storage/ob_file_helper.h"
 #undef private
 #undef protected
 
@@ -170,7 +171,6 @@ void TestOpenClose::prepare_fd_cache()
   ASSERT_EQ(OB_SUCCESS, fd_cache_.create(100000, ObModIds::OB_HASH_BUCKET));
   ObBaseFileManager *file_manager = MTL(ObTenantFileManager *);
   ASSERT_NE(nullptr, file_manager);
-  char file_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH];
 
   MacroBlockId macro_id;
   macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
@@ -181,11 +181,10 @@ void TestOpenClose::prepare_fd_cache()
     macro_id.set_macro_transfer_seq(0); // transfer_seq
     macro_id.set_tenant_seq(i + 1);  //seq_id
     int fd = INVALID_FD;
-    file_path[0] = '\0';
-    ASSERT_EQ(OB_SUCCESS, file_manager->macro_block_id_to_path(true/*is_local_cache*/,
-              file_path, sizeof(file_path), macro_id, 0/*ls_epoch_id*/, false/*is_tmp*/));
+    ObPathContext ctx;
+    ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(macro_id, 0/*ls_epoch_id*/, true/*is_local_cache*/));
     const int open_flag = ObSSIOCommonOp::SS_DEFAULT_READ_FLAG;
-    RETRY_ON_EINTR(fd, ::open(file_path, open_flag, ObSSIOCommonOp::SS_FILE_OPEN_MODE));
+    RETRY_ON_EINTR(fd, ::open(ctx.get_path(), open_flag, ObSSIOCommonOp::SS_FILE_OPEN_MODE));
     ASSERT_LE(0, fd);
     ASSERT_EQ(OB_SUCCESS, fd_cache_.set_refactored(macro_id, fd));
   }
@@ -200,17 +199,15 @@ void TestOpenClose::get_read_device_and_fd(
   int ret = OB_SUCCESS;
   ASSERT_TRUE(macro_id.is_valid());
   int fd = INVALID_FD;
-  char file_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH];
-  file_path[0] = '\0';
   ObBaseFileManager *file_manager = MTL(ObTenantFileManager *);
   ASSERT_NE(nullptr, file_manager);
-  ASSERT_EQ(OB_SUCCESS, file_manager->macro_block_id_to_path(true/*is_local_cache*/,
-            file_path, sizeof(file_path), macro_id, 0/*ls_epoch_id*/, false/*is_tmp*/));
+  ObPathContext ctx;
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(macro_id, 0/*ls_epoch_id*/, true/*is_local_cache*/));
   const int open_flag = ObSSIOCommonOp::SS_DEFAULT_READ_FLAG;
   if (get_fd_from_cache) {
     ASSERT_EQ(OB_SUCCESS, fd_cache.get_refactored(macro_id, fd));
   } else {
-    RETRY_ON_EINTR(fd, ::open(file_path, open_flag, ObSSIOCommonOp::SS_FILE_OPEN_MODE));
+    RETRY_ON_EINTR(fd, ::open(ctx.get_path(), open_flag, ObSSIOCommonOp::SS_FILE_OPEN_MODE));
   }
   ASSERT_LE(0, fd);
   io_info.fd_.first_id_ = macro_id.first_id(); // first_id is not used in shared storage mode

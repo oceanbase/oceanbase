@@ -28,6 +28,7 @@
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/shared_storage/ob_file_op.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
+#include "storage/shared_storage/ob_file_helper.h"
 
 #undef private
 #undef protected
@@ -128,7 +129,7 @@ TEST_F(TestFileManager, test_path_convert)
   ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
   ASSERT_NE(nullptr, tenant_file_mgr);
   MacroBlockId file_id;
-  char file_path[common::MAX_PATH_SIZE] = {0};
+  ObPathContext ctx;
   char expected_path[common::MAX_PATH_SIZE] = {0};
   bool is_local_cache = true;
   int64_t ls_epoch_id = 4;
@@ -143,582 +144,515 @@ TEST_F(TestFileManager, test_path_convert)
 
   // 1.PRIVATE_DATA_MACRO
   // tenant_id_epoch_id/tablet_data/tablet_id/transfer_seq/data/macro_server_id_seq_id
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3/0/%s/2_5",
                                         OB_DIR_MGR.get_local_cache_root_dir(), TABLET_DATA_DIR_STR, DATA_MACRO_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
   // cluster_id/server_id/tenant_id_epoch_id/tablet_data/tablet_id/transfer_seq/data/macro_server_id_seq_id
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_2/1_0/%s/3/0/%s/2_5",
                                         object_storage_root_dir, CLUSTER_DIR_STR, SERVER_DIR_STR,
                                         TABLET_DATA_DIR_STR, DATA_MACRO_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
 
   // 2.SHARED_MAJOR_DATA_MACRO
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_DATA_MACRO));
   // tenant_id_epoch_id/shared_major_macro_cache/tablet_id_cg_id_macro_seq_id_data
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_0_2_%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), MAJOR_DATA_DIR_STR, DATA_MACRO_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
   // cluster_id/tenant_id/tablet/tablet_id/major/cg_id/data/macro_seq_id
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s/%s/%s_0/%s/2",
                                         object_storage_root_dir, CLUSTER_DIR_STR, TENANT_DIR_STR,
                                         TABLET_DIR_STR, MAJOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR,
                                         COLUMN_GROUP_STR, DATA_MACRO_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 3.TMP_FILE
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
   // tenant_id_epoch_id/tmp_data/tmp_file_id/segment_id
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3/2",
                                         OB_DIR_MGR.get_local_cache_root_dir(), TMP_DATA_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   // tenant_id_epoch_id/tmp_data/tmp_file_id/segment_id.deleted
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id, 0/*ls_epoch_id*/, false/*is_atomic_tmp*/, OB_INVALID_ID/*seq*/, true/*is_deleted_file*/));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_logical_delete_ctx(file_id, ls_epoch_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3/2.deleted",
                                         OB_DIR_MGR.get_local_cache_root_dir(), TMP_DATA_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   // cluster_id/server_id/tenant_id_epoch_id/tmp_data/tmp_file_id/segment_id
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/1_0/%s/3/2",
                                         object_storage_root_dir, CLUSTER_DIR_STR, SERVER_DIR_STR, TMP_DATA_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 4.SERVER_META
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SERVER_META));
   // super_block
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), get_storage_objet_type_str(ObStorageObjectType::SERVER_META)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
 
   // 5.TENANT_SUPER_BLOCK
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TENANT_SUPER_BLOCK));
   // tenant_id_epoch_id/tenant_super_block
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/3_2/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), get_storage_objet_type_str(ObStorageObjectType::TENANT_SUPER_BLOCK)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
 
   // 6.TENANT_UNIT_META
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TENANT_UNIT_META));
   // tenant_id_epoch_id/unit_meta
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/3_2/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), get_storage_objet_type_str(ObStorageObjectType::TENANT_UNIT_META)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
 
   // 7.LS_META
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_META));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/ls_meta
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::LS_META)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
 
   // 8.LS_DUP_TABLE_META
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_DUP_TABLE_META));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/ls_dup_table_meta
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::LS_DUP_TABLE_META)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
 
   // 9.LS_ACTIVE_TABLET_ARRAY
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_ACTIVE_TABLET_ARRAY));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_id_array
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::LS_ACTIVE_TABLET_ARRAY)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
 
   // 10.LS_PENDING_FREE_TABLET_ARRAY
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_PENDING_FREE_TABLET_ARRAY));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/pending_free_tablet_array
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::LS_PENDING_FREE_TABLET_ARRAY)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
 
   // 11.LS_TRANSFER_TABLET_ID_ARRAY
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_TRANSFER_TABLET_ID_ARRAY));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/transfer_tablet_id_array
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::LS_TRANSFER_TABLET_ID_ARRAY)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
 
   // 12.PRIVATE_TABLET_META
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_meta/tablet_id/tablet_meta_version_transfer_seq
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4/%s/2/5_0",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR, TABLET_META_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
 
   // 13.PRIVATE_TABLET_CURRENT_VERSION
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_CURRENT_VERSION));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_meta/tablet_id/current_version
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4/%s/2/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR, TABLET_META_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::PRIVATE_TABLET_CURRENT_VERSION)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
 
   // 14.SHARED_MAJOR_TABLET_META
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_TABLET_META));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/tablet/tablet_id/major/meta/tablet_meta_version
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s/%s/2",
                                         object_storage_root_dir, CLUSTER_DIR_STR, TENANT_DIR_STR,
                                         TABLET_DIR_STR, MAJOR_DIR_STR, SHARED_TABLET_META_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
 
   // 15.COMPACTION_SERVER
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::COMPACTION_SERVER));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/compaction/scheduler/ls_id_compaction_tasks
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/%s/3_%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, COMPACTION_DIR_STR, SCHEDULER_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::COMPACTION_SERVER)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
 
   // 16.LS_SVR_COMPACTION_STATUS
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_SVR_COMPACTION_STATUS));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/compaction/compactor/ls_id_server_id_ls_svr_compaction_status
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/%s/3_2_%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, COMPACTION_DIR_STR, COMPACTOR_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::LS_SVR_COMPACTION_STATUS)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 17.COMPACTION_REPORT
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::COMPACTION_REPORT));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/compaction/compactor/server_id_compaction_report
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/%s/3_%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, COMPACTION_DIR_STR, COMPACTOR_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::COMPACTION_REPORT)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 18.PRIVATE_META_MACRO
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_META_MACRO));
   // tenant_id_epoch_id/tablet_data/tablet_id/transfer_seq/meta/macro_server_id_seq_id
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3/0/%s/2_5",
                                         OB_DIR_MGR.get_local_cache_root_dir(), TABLET_DATA_DIR_STR, META_MACRO_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
   // cluster_id/server_id/tenant_id_epoch_id/tablet_data/tablet_id/transfer_seq/meta/macro_server_id_seq_id
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_2/1_0/%s/3/0/%s/2_5",
                                         object_storage_root_dir, CLUSTER_DIR_STR, SERVER_DIR_STR,
                                         TABLET_DATA_DIR_STR, META_MACRO_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 19.SHARED_MAJOR_META_MACRO
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_META_MACRO));
   // tenant_id_epoch_id/shared_major_macro_cache/tablet_id_cg_id_macro_seq_id_meta
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_0_2_%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), MAJOR_DATA_DIR_STR, META_MACRO_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
   // cluster_id/tenant_id/tablet/tablet_id/major/cg_id/meta/macro_seq_id
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s/%s/%s_0/%s/2",
                                         object_storage_root_dir, CLUSTER_DIR_STR, TENANT_DIR_STR, TABLET_DIR_STR,
                                         MAJOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, COLUMN_GROUP_STR, META_MACRO_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 20.SHARED_MAJOR_GC_INFO
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_GC_INFO));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/tablet/tablet_id/major/meta/gc_info
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s/%s/%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR, TENANT_DIR_STR,
                                         TABLET_DIR_STR, MAJOR_DIR_STR, SHARED_TABLET_META_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::SHARED_MAJOR_GC_INFO)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 21.SHARED_MAJOR_META_LIST
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_META_LIST));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/tablet/tablet_id/major/meta/meta_list
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s/%s/%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR, TENANT_DIR_STR,
                                         TABLET_DIR_STR, MAJOR_DIR_STR, SHARED_TABLET_META_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::SHARED_MAJOR_META_LIST)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 22.LS_COMPACTION_STATUS
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_COMPACTION_STATUS));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/compaction/scheduler/ls_id_ls_compaction_status
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/%s/3_%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, COMPACTION_DIR_STR, SCHEDULER_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::LS_COMPACTION_STATUS)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 23.TABLET_COMPACTION_STATUS
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TABLET_COMPACTION_STATUS));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/tablet/tablet_id/major/scn_id_tablet_compaction_status
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s/2_%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, TABLET_DIR_STR, MAJOR_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::TABLET_COMPACTION_STATUS)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 24.TENANT_DISK_SPACE_META
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TENANT_DISK_SPACE_META));
   // tenant_id_epoch_id/tenant_disk_space_meta
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/3_2/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), get_storage_objet_type_str(ObStorageObjectType::TENANT_DISK_SPACE_META)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   is_local_cache = false;
-  file_path[0] = '\0';
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
 
   // 25.SHARED_TABLET_ID
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_TABLET_ID));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/tablet_ids/tablet_id
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, TABLET_IDS_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 26.LS_COMPACTION_LIST
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_COMPACTION_LIST));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/compaction/scheduler/ls_id_ls_compaction_status
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/%s/3_%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, COMPACTION_DIR_STR, SCHEDULER_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::LS_COMPACTION_LIST)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 27. IS_DELETED
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::IS_SHARED_TABLET_DELETED));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/tablet_ids/tablet_id/is_deleted
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, TABLET_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::IS_SHARED_TABLET_DELETED)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 28. IS_SHARED_TENANT_DELETED
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::IS_SHARED_TENANT_DELETED));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/is_shared_tenant_deleted
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_3/%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, get_storage_objet_type_str(ObStorageObjectType::IS_SHARED_TENANT_DELETED)));
 
   // 29. MAJOR_PREWARM_DATA
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::MAJOR_PREWARM_DATA));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/tablet/tablet_id/major/scn_id_compaction_scn_prewarm_data
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s/2_%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, TABLET_DIR_STR, MAJOR_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::MAJOR_PREWARM_DATA)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 30. MAJOR_PREWARM_DATA_INDEX
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::MAJOR_PREWARM_DATA_INDEX));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/tablet/tablet_id/major/scn_id_compaction_scn_prewarm_data
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s/2_%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, TABLET_DIR_STR, MAJOR_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::MAJOR_PREWARM_DATA_INDEX)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 31. MAJOR_PREWARM_META
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::MAJOR_PREWARM_META));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/tablet/tablet_id/major/scn_id_compaction_scn_prewarm_data
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s/2_%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, TABLET_DIR_STR, MAJOR_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::MAJOR_PREWARM_META)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 32. MAJOR_PREWARM_META_INDEX
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::MAJOR_PREWARM_META_INDEX));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/tablet/tablet_id/major/scn_id_compaction_scn_prewarm_data
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s/2_%s",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, TABLET_DIR_STR, MAJOR_DIR_STR,
                                         get_storage_objet_type_str(ObStorageObjectType::MAJOR_PREWARM_META_INDEX)));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 36. CHECKSUM_ERROR_DUMP_MACRO
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::CHECKSUM_ERROR_DUMP_MACRO));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   // cluster_id/tenant_id/tablet/tablet_id/major/sstable/cg_id/checksum_error_macro/svr_id_compaction_scn_block_id
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_fourth_id(5); // different from trans_seq + macro_seq
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/%s/3/%s/%s/%s_0/%s/%ld_2_5",
                                         object_storage_root_dir, CLUSTER_DIR_STR,
                                         TENANT_DIR_STR, TABLET_DIR_STR, MAJOR_DIR_STR, SHARED_TABLET_SSTABLE_DIR_STR, COLUMN_GROUP_STR,
                                         CKM_ERROR_DIR_STR, GCTX.get_server_id()));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 
   // 37. UNSEALED_REMOTE_SEG_FILE
   is_local_cache = true;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::UNSEALED_REMOTE_SEG_FILE));
-  ASSERT_EQ(OB_NOT_SUPPORTED, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_NOT_SUPPORTED, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   is_local_cache = false;
-  file_path[0] = '\0';
   expected_path[0] = '\0';
   // cluster_id/server_id/tenant_id_epoch_id/tmp_data/tmp_file_id/segment_id_valid_length
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(is_local_cache, file_path, common::MAX_PATH_SIZE, file_id,
-            0/*ls_epoch_id*/, false/*is_atomic_tmp*/, OB_INVALID_ID/*seq*/));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(file_id, ls_epoch_id, is_local_cache));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_path, common::MAX_PATH_SIZE, "%s/%s_1/%s_1/1_0/%s/3/2_5",
                                         object_storage_root_dir, CLUSTER_DIR_STR, SERVER_DIR_STR, TMP_DATA_DIR_STR));
-  ASSERT_EQ(0, STRCMP(file_path, expected_path));
+  ASSERT_EQ(0, STRCMP(ctx.get_path(), expected_path));
 }
 
 TEST_F(TestFileManager, test_get_file_parent_dir)
@@ -739,7 +673,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
 
   // 1.PRIVATE_DATA_MACRO
   // tenant_id_epoch_id/tablet_data/tablet_id/transfer_seq/data/
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3/0/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), TABLET_DATA_DIR_STR, DATA_MACRO_DIR_STR));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -748,7 +682,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_DATA_MACRO));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
 
   // 3.TMP_FILE
@@ -756,7 +690,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
   // tenant_id_epoch_id/tmp_data/tmp_file_id/segment_id
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3",
                                         OB_DIR_MGR.get_local_cache_root_dir(), TMP_DATA_DIR_STR));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -765,7 +699,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SERVER_META));
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s",
                                         OB_DIR_MGR.get_local_cache_root_dir()));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -774,7 +708,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TENANT_SUPER_BLOCK));
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/3_2",
                                         OB_DIR_MGR.get_local_cache_root_dir()));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -783,7 +717,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TENANT_UNIT_META));
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/3_2",
                                         OB_DIR_MGR.get_local_cache_root_dir()));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -793,7 +727,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_META));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/ls_meta
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -803,7 +737,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_DUP_TABLE_META));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/ls_dup_table_meta
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -813,7 +747,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_ACTIVE_TABLET_ARRAY));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_id_array
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -823,7 +757,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_PENDING_FREE_TABLET_ARRAY));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/pending_free_tablet_array
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -833,7 +767,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_TRANSFER_TABLET_ID_ARRAY));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/transfer_tablet_id_array
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -843,7 +777,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_meta/tablet_id/tablet_meta_version_transfer_seq
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4/%s/2",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR, TABLET_META_DIR_STR));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -853,7 +787,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_CURRENT_VERSION));
   // tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_meta/tablet_id/current_version
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id, ls_epoch_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3_4/%s/2",
                                         OB_DIR_MGR.get_local_cache_root_dir(), LS_DIR_STR, TABLET_META_DIR_STR));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -862,32 +796,32 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_TABLET_META));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 15.COMPACTION_SERVER
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::COMPACTION_SERVER));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 16.LS_SVR_COMPACTION_STATUS
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_SVR_COMPACTION_STATUS));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 17.COMPACTION_REPORT
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::COMPACTION_REPORT));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 18.PRIVATE_META_MACRO
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_META_MACRO));
   // tenant_id_epoch_id/tablet_data/tablet_id/transfer_seq/meta/
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/1_0/%s/3/0/%s",
                                         OB_DIR_MGR.get_local_cache_root_dir(), TABLET_DATA_DIR_STR, META_MACRO_DIR_STR));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -896,37 +830,37 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_META_MACRO));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 20.SHARED_MAJOR_GC_INFO
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_GC_INFO));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 21.SHARED_MAJOR_META_LIST
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_META_LIST));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 22.LS_COMPACTION_STATUS
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_COMPACTION_STATUS));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 23.TABLET_COMPACTION_STATUS
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TABLET_COMPACTION_STATUS));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 24.TENANT_DISK_SPACE_META
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TENANT_DISK_SPACE_META));
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_SUCCESS, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(expected_dir_path, common::MAX_PATH_SIZE, "%s/3_2",
                                         OB_DIR_MGR.get_local_cache_root_dir()));
   ASSERT_EQ(0, STRCMP(dir_path, expected_dir_path));
@@ -935,25 +869,25 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_TABLET_ID));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 26.LS_COMPACTION_LIST
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::LS_COMPACTION_LIST));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 27. IS_DELETED
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::IS_SHARED_TABLET_DELETED));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 
   // 28. IS_SHARED_TENANT_DELETED
   dir_path[0] = '\0';
   expected_dir_path[0] = '\0';
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::IS_SHARED_TENANT_DELETED));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, tenant_file_mgr->get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObFileHelper::get_file_parent_dir(dir_path, common::MAX_PATH_SIZE, file_id));
 }
 
 TEST_F(TestFileManager, test_private_macro_file_operator)
@@ -1525,8 +1459,8 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(shared_tablet_ids, 0, is_exist));
   ASSERT_EQ(false, is_exist);
   tenant_ids.reset();
-  // ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.list_shared_tenant_ids(MTL_ID(), tenant_ids));
-  // ASSERT_EQ(0, tenant_ids.count());
+  ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.list_shared_tenant_ids(MTL_ID(), tenant_ids));
+  ASSERT_EQ(0, tenant_ids.count());
 
   // test7: list shared tablet meta macro
   MacroBlockId shared_tablet_meta_macro;
@@ -1703,21 +1637,21 @@ TEST_F(TestFileManager, test_gc_local_major_data)
   shared_data_macro.set_second_id(tablet_id);
   shared_data_macro.set_third_id(seq_id);
 
-  char shared_data_macro_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(true/*is_local_cache*/, shared_data_macro_path, ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH, shared_data_macro));
+  ObPathContext ctx;
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(shared_data_macro, 0/*ls_epoch_id*/, true/*is_local_cache*/));
   ObIOFd fd;
   const int64_t write_io_size = 4096; // 4KB
   char write_buf[write_io_size] = { 0 };
   memset(write_buf, 'a', write_io_size);
   int64_t written_size = 0;
-  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::open(shared_data_macro_path, O_RDWR | O_CREAT | O_TRUNC, S_IWUSR | S_IRUSR, fd));
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::open(ctx.get_path(), O_RDWR | O_CREAT | O_TRUNC, S_IWUSR | S_IRUSR, fd));
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::write(fd, write_buf, write_io_size, written_size));
   ObIODFileStat statbuf;
-  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(shared_data_macro_path, statbuf));
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(ctx.get_path(), statbuf));
   ob_usleep(2 * 1000 * 1000L); // sleep 2s
   int64_t del_time_s = ObTimeUtility::current_time_s();
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_local_major_data_dir(del_time_s));
-  ASSERT_EQ(OB_NO_SUCH_FILE_OR_DIRECTORY, ObIODeviceLocalFileOp::stat(shared_data_macro_path, statbuf));
+  ASSERT_EQ(OB_NO_SUCH_FILE_OR_DIRECTORY, ObIODeviceLocalFileOp::stat(ctx.get_path(), statbuf));
 }
 
 TEST_F(TestFileManager, test_deleted_file_operator)
@@ -1769,10 +1703,10 @@ TEST_F(TestFileManager, test_deleted_file_operator)
   // old path has been rename, old path is not exist
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_local_file(tmp_file, 0/*ls_epoch_id*/, is_exist));
   ASSERT_FALSE(is_exist);
-  char deleted_file_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->macro_block_id_to_path(true/*is_local_cache*/, deleted_file_path, ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH, tmp_file, 0/*ls_epoch_id*/, false/*is_atomic_tmp*/, OB_INVALID_ID/*seq*/, true/*is_deleted_file*/));
+  ObPathContext ctx;
+  ASSERT_EQ(OB_SUCCESS, ctx.set_logical_delete_ctx(tmp_file, 0/*ls_epoch_id*/));
   // old path has been rename, new path is exist
-  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(deleted_file_path, is_exist));
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(ctx.get_path(), is_exist));
   ASSERT_TRUE(is_exist);
   // delete tmp_file when pause_gc, rename file path, so tmp_file_write_cache_alloc_size does not changed
   ASSERT_EQ(tmp_file_write_cache_alloc_size, tenant_disk_space_mgr->get_tmp_file_write_cache_alloc_size());
@@ -1781,7 +1715,7 @@ TEST_F(TestFileManager, test_deleted_file_operator)
   tenant_file_mgr->set_tmp_file_cache_allow_gc();
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calibrate_disk_space_task_.rm_logical_deleted_file());
   // after calibrate, rm_logical_deleted_file, so renamed file path is not exist
-  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(deleted_file_path, is_exist));
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(ctx.get_path(), is_exist));
   ASSERT_FALSE(is_exist);
   // delete .deleted file, so tmp_file_write_cache_alloc_size reduce
   ASSERT_EQ(tmp_file_write_cache_alloc_size - write_io_size - statbuf.size_, tenant_disk_space_mgr->get_tmp_file_write_cache_alloc_size());

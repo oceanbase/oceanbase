@@ -27,6 +27,7 @@
 #include "storage/shared_storage/ob_dir_manager.h"
 #include "storage/shared_storage/prewarm/ob_mc_prewarm_struct.h"
 #include "mittest/shared_storage/clean_residual_data.h"
+#include "storage/shared_storage/ob_file_helper.h"
 #undef private
 #undef protected
 
@@ -323,16 +324,14 @@ TEST_F(TestSSMCPrewarmStruct, empty_hot_macro_infos)
   // expect there is no prewarm data and index file
   ObTenantFileManager *file_manager = nullptr;
   ASSERT_NE(nullptr, file_manager = MTL(ObTenantFileManager *));
-  char data_file_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH];
-  data_file_path[0] = '\0';
   ObStorageObjectHandle data_object_handle;
   ObStorageObjectOpt data_storage_opt;
   data_storage_opt.set_ss_major_prewarm_opt(ObStorageObjectType::MAJOR_PREWARM_DATA, tablet_id, compaction_scn);
   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.alloc_object(data_storage_opt, data_object_handle));
-  ASSERT_EQ(OB_SUCCESS, file_manager->macro_block_id_to_path(false/*is_local_cache*/,
-      data_file_path, ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH, data_object_handle.get_macro_id()));
+  ObPathContext ctx;
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(data_object_handle.get_macro_id(), 0/*ls_epoch_id*/, false/*is_local_cache*/));
   bool is_data_file_exist = false;
-  ASSERT_EQ(OB_SUCCESS, io_adapter.is_exist(data_file_path, &storage_info, is_data_file_exist));
+  ASSERT_EQ(OB_SUCCESS, io_adapter.is_exist(ctx.get_path(), &storage_info, is_data_file_exist));
   ASSERT_FALSE(is_data_file_exist);
 
   char index_file_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH];
@@ -341,10 +340,9 @@ TEST_F(TestSSMCPrewarmStruct, empty_hot_macro_infos)
   ObStorageObjectOpt index_storage_opt;
   index_storage_opt.set_ss_major_prewarm_opt(ObStorageObjectType::MAJOR_PREWARM_DATA, tablet_id, compaction_scn);
   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.alloc_object(index_storage_opt, index_object_handle));
-  ASSERT_EQ(OB_SUCCESS, file_manager->macro_block_id_to_path(false/*is_local_cache*/,
-      data_file_path, ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH, index_object_handle.get_macro_id()));
+  ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(index_object_handle.get_macro_id(), 0/*ls_epoch_id*/, false/*is_local_cache*/));
   bool is_index_file_exist = false;
-  ASSERT_EQ(OB_SUCCESS, io_adapter.is_exist(data_file_path, &storage_info, is_index_file_exist));
+  ASSERT_EQ(OB_SUCCESS, io_adapter.is_exist(ctx.get_path(), &storage_info, is_index_file_exist));
   ASSERT_FALSE(is_index_file_exist);
 
   ObHotTabletInfoReader hot_tablet_info_reader(tablet_id, compaction_scn, 100/*prewarm_percent*/);
