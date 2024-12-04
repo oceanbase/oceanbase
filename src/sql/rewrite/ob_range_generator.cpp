@@ -1241,7 +1241,9 @@ int ObRangeGenerator::try_cast_value(const ObRangeColumnMeta &meta,
   int ret = OB_SUCCESS;
   if (!value.is_min_value() && !value.is_max_value() && !value.is_unknown() &&
       (!ObSQLUtils::is_same_type_for_compare(value.get_meta(), meta.column_type_.get_obj_meta()) ||
-       value.is_decimal_int())) {
+       value.is_decimal_int() ||
+       (meta.column_type_.get_obj_meta().get_type_class() == ObDoubleTC &&
+        meta.column_type_.get_accuracy().get_scale() != value.get_meta().get_scale()))) {
     const ObObj *dest_val = NULL;
     ObCollationType collation_type = meta.column_type_.get_collation_type();
     ObCastCtx cast_ctx(&allocator_, &dtc_params_, cur_datetime_, CM_WARN_ON_FAIL, collation_type);
