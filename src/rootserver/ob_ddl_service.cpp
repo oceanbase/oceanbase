@@ -15060,7 +15060,8 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
     if (OB_SUCC(ret) && is_double_table_long_running_ddl(ddl_type)) {
       bool has_index_operation = false;
       bool will_be_having_domain_index_operation = false;
-      bool has_fts_or_multivalue_or_vec_index = false;
+      bool has_fts_or_multivalue_index = false;
+      bool has_vec_index = false;
       bool is_adding_constraint = false;
       bool is_column_store = false;
       uint64_t table_id = alter_table_arg.alter_table_schema_.get_table_id();
@@ -15086,8 +15087,13 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
       } else if (OB_FAIL(check_has_domain_index(schema_guard,
                                              tenant_id,
                                              table_id,
-                                             has_fts_or_multivalue_or_vec_index))) {
+                                             has_fts_or_multivalue_index))) {
         LOG_WARN("check has fts index failed", K(ret));
+      } else if (OB_FAIL(check_has_vec_domain_index(schema_guard,
+                                             tenant_id,
+                                             table_id,
+                                             has_vec_index))) {
+        LOG_WARN("fail to check has vec domain index", K(ret));
       } else if (OB_FAIL(check_will_be_having_domain_index_operation(alter_table_arg,
                                                                      will_be_having_domain_index_operation))) {
         LOG_WARN("check will be having domain index operation failed", K(ret));
@@ -15099,7 +15105,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
       } else if (will_be_having_domain_index_operation) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run, as creating/dropping fulltext/multivalue/vector index.");
-      } else if (has_fts_or_multivalue_or_vec_index) {
+      } else if (has_fts_or_multivalue_index || has_vec_index) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Run this DDL operation on table with fulltext/multivalue/vector index.");
       } else if (is_adding_constraint) {
@@ -15175,8 +15181,41 @@ int ObDDLService::check_has_domain_index(
     if (index_infos.count() > 0) {
       // if there is indexes in new tables, if so, the indexes is already rebuilt in new table
       for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
-        if (share::schema::is_doc_rowkey_aux(index_infos.at(i).index_type_) ||
-            share::schema::is_vec_vid_rowkey_type(index_infos.at(i).index_type_) ||
+        if (share::schema::is_doc_rowkey_aux(index_infos.at(i).index_type_)) {
+          domain_index_exist = true;
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_has_vec_domain_index(
+    ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    bool &domain_index_exist)
+{
+  int ret = OB_SUCCESS;
+  domain_index_exist = false;
+  ObRootService *root_service = GCTX.root_service_;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(data_table_id));
+  } else {
+    const common::ObIArray<ObAuxTableMetaInfo> &index_infos = table_schema->get_simple_index_infos();
+    if (index_infos.count() > 0) {
+      // if there is indexes in new tables, if so, the indexes is already rebuilt in new table
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
+        if (share::schema::is_vec_vid_rowkey_type(index_infos.at(i).index_type_) ||
             share::schema::is_vec_rowkey_vid_type(index_infos.at(i).index_type_)) {
           domain_index_exist = true;
           break;
@@ -16824,7 +16863,7 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
     LOG_WARN("split partition in 4.0 not allowed", K(ret), K(tablegroup_id));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "split partition in 4.0");
   }
-  bool has_fts_or_multivalue_or_vec_index = false;
+  bool has_fts_or_multivalue_index = false;
   const int64_t table_id = orig_table_schema.get_table_id();
   if (OB_FAIL(ret) ||
     alter_part_type == obrpc::ObAlterTableArg::DROP_PARTITION ||
@@ -16832,12 +16871,12 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
   } else if (OB_FAIL(check_has_domain_index(schema_guard,
                                          tenant_id,
                                          table_id,
-                                         has_fts_or_multivalue_or_vec_index))) {
+                                         has_fts_or_multivalue_index))) {
     LOG_WARN("failed to check if have fts index", K(ret), K(table_id));
-  } else if (has_fts_or_multivalue_or_vec_index) {
+  } else if (has_fts_or_multivalue_index) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("alter partition operation on table with fulltext/multivalue/vector index not supported", K(ret), K(orig_table_schema));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition operation on table with fulltext/multivalue/vector index");
+    LOG_WARN("alter partition operation on table with fulltext/multivalue index not supported", K(ret), K(orig_table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition operation on table with fulltext/multivalue index");
   }
 
   if (OB_FAIL(ret)) {
