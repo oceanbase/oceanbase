@@ -462,7 +462,6 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
   ObTableStoreIterator minor_table_iter;
   int64_t minor_compact_trigger = DEFAULT_MINOR_COMPACT_TRIGGER;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  SCN max_filled_tx_scn(SCN::min_scn());
 
   if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
@@ -482,7 +481,6 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
     }
 
     ObTablesHandleArray minor_merge_candidates;
-
     while (OB_SUCC(ret)) {
       ObTableHandleV2 cur_table_handle;
       if (OB_FAIL(minor_table_iter.get_next(cur_table_handle))) {
@@ -508,8 +506,6 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
         }
         if (OB_FAIL(minor_merge_candidates.add_table(cur_table_handle))) {
           LOG_WARN("failed to add table", K(ret));
-        } else if (!table->get_filled_tx_scn().is_max()) {
-          max_filled_tx_scn = SCN::max(table->get_filled_tx_scn(), max_filled_tx_scn);
         }
       }
     }
@@ -552,12 +548,9 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
     } else {
       if (OB_FAIL(deal_with_minor_result(param.merge_type_, ls, tablet, result))) {
         LOG_WARN("Failed to deal with minor merge result", K(ret), K(param), K(result));
-      } else if (max_filled_tx_scn > result.scn_range_.end_scn_) {
-        ret = OB_NO_NEED_MERGE;
-        LOG_WARN("minor merge max filled tx scn smaller than merge scn, no need merge", K(ret), K(max_filled_tx_scn), K(result));
       } else {
         LOG_TRACE("succeed to get minor merge tables", K(min_snapshot_version), K(max_snapshot_version),
-            K(result), K(tablet), K(max_filled_tx_scn));
+            K(result), K(tablet));
       }
     }
   } else if (OB_NO_NEED_MERGE == ret

@@ -1349,8 +1349,8 @@ int ObTabletTableStore::build_minor_tables(
         ret = OB_ERR_SYS;
         LOG_ERROR("table must be minor sstable", K(ret), KPC(table));
       } else if (OB_NOT_NULL(new_table) && new_table->is_minor_sstable()) {
-        ObSSTable *sstable = static_cast<ObSSTable *>(table);
         if (new_table->get_key() == table->get_key()) {
+          ObSSTable *sstable = static_cast<ObSSTable *>(table);
           if (sstable->get_max_merged_trans_version() <= new_sstable->get_max_merged_trans_version()) {
             need_add = false;
             LOG_INFO("new table's max merge trans version is not less than the old table, "
@@ -1368,9 +1368,6 @@ int ObTabletTableStore::build_minor_tables(
         } else if (ObTableStoreUtil::check_intersect_by_scn_range(*table, *new_table)) {
           ret = OB_MINOR_SSTABLE_RANGE_CROSS;
           LOG_WARN("new table's range is crossed with existing table", K(ret), K(*new_table), K(*table));
-        } else if (!sstable->get_filled_tx_scn().is_max() && sstable->get_filled_tx_scn() > new_sstable->get_filled_tx_scn()) {
-          ret = OB_NO_NEED_MERGE;
-          LOG_WARN("new table's filled tx scn is smaller than old table store tables, no need merge", K(ret), KPC(new_sstable), KPC(sstable));
         }
       }
       if (OB_FAIL(ret)) {
