@@ -2898,56 +2898,6 @@ int ObService::build_split_tablet_data_finish_request(const obrpc::ObTabletSplit
   return ret;
 }
 
-int ObService::freeze_split_src_tablet(const ObFreezeSplitSrcTabletArg &arg,
-                                       ObFreezeSplitSrcTabletRes &res,
-                                       const int64_t abs_timeout_us)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not inited", K(ret));
-  } else if (OB_UNLIKELY(!arg.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(arg));
-  } else {
-    MTL_SWITCH(arg.tenant_id_) {
-      ObLSService *ls_service = MTL(ObLSService *);
-      logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
-      ObLSHandle ls_handle;
-      ObLS *ls = nullptr;
-      ObRole role = INVALID_ROLE;
-      int64_t proposal_id = -1;
-      bool has_active_memtable = false;
-      if (OB_ISNULL(ls_service) || OB_ISNULL(log_service)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected ls_service or log_service", K(ret));
-      } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-        LOG_WARN("get ls failed", K(ret), K(arg));
-      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid ls", K(ret), K(arg.ls_id_));
-      } else if (OB_FAIL(ls->get_ls_role(role))) {
-        LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(arg.ls_id_));
-      } else if (OB_UNLIKELY(ObRole::LEADER != role)) {
-        ret = OB_NOT_MASTER;
-        LOG_WARN("ls not leader", K(ret), K(MTL_ID()), K(arg.ls_id_));
-      } else if (OB_FAIL(ls->tablet_freeze(checkpoint::INVALID_TRACE_ID, arg.tablet_ids_, true/*is_sync*/, abs_timeout_us,
-              false/*need_rewrite_meta*/, ObFreezeSourceFlag::TABLET_SPLIT))) {
-        LOG_WARN("batch tablet freeze failed", K(ret), K(arg));
-      } else if (OB_FAIL(ls->check_tablet_no_active_memtable(arg.tablet_ids_, has_active_memtable))) {
-        // safer with this check, non-mandatory
-        LOG_WARN("check tablet has active memtable failed", K(ret), K(arg));
-      } else if (has_active_memtable) {
-        ret = OB_EAGAIN;
-        LOG_WARN("tablet has active memtable need retry", K(ret), K(arg));
-      } else if (OB_FAIL(ls->get_log_handler()->get_max_scn(res.data_end_scn_))) {
-        LOG_WARN("log_handler get_max_scn failed", K(ret), K(arg));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObService::fetch_split_tablet_info(const ObFetchSplitTabletInfoArg &arg,
                                        ObFetchSplitTabletInfoRes &res,
                                        const int64_t abs_timeout_us)

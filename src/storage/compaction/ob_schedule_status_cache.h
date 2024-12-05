@@ -95,6 +95,7 @@ public:
     EXIST_UNFINISH_MEDIUM,
     SCHEDULE_CONFLICT,
     DIAGNOSE_NORMAL, // for diagnose
+    LOCKED_BY_TRANSFER_OR_SPLIT,
     NEW_ROUND_STATE_MAX,
   };
   static const char *new_round_state_to_str(const TabletScheduleNewRoundState &state);
@@ -152,7 +153,7 @@ protected:
   int check_medium_list(
     const share::ObLSID &ls_id,
     const storage::ObTablet &tablet);
-  int register_map(const ObTabletID &tablet_id);
+  int register_map(const ObTablet &tablet);
   void inner_init_could_schedule_new_round(
     const ObLSID &ls_id,
     const ObTablet &tablet,

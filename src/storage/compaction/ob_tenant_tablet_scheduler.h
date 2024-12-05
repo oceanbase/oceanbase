@@ -97,6 +97,7 @@ public:
   {
     TRANSFER = 0,
     MEDIUM = 1,
+    SPLIT = 2,
     FLAG_MAX
   };
 
@@ -115,6 +116,7 @@ public:
   int batch_add_flags(const ObIArray<ObTabletID> &tablet_ids, const ProhibitFlag &input_flag);
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int64_t get_transfer_flag_cnt() const;
+  int64_t get_split_flag_cnt() const;
 private:
   static const int64_t PRINT_LOG_INTERVAL = 2 * 60 * 1000 * 1000L; // 2m
   static const int64_t TABLET_ID_MAP_BUCKET_NUM = OB_MAX_LS_NUM_PER_TENANT_PER_SERVER * 1024;
@@ -123,6 +125,7 @@ private:
   int inner_batch_add_tablets_prohibit_flags_(const ObIArray<ObTabletID> &tablet_ids, const ProhibitFlag &input_flag); // hold lock outside !!
   int inner_clear_flag_(const ObTabletID &tablet_id, const ProhibitFlag &input_flag); // hold lock outside !!
   int64_t transfer_flag_cnt_;
+  int64_t split_flag_cnt_;
   mutable obsys::ObRWLock lock_;
   common::hash::ObHashMap<ObTabletID, ProhibitFlag> tablet_id_map_; // tablet is used for transfer of medium compaction
 };

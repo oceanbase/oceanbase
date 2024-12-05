@@ -15,6 +15,7 @@
 #include "rootserver/ob_split_partition_helper.h"
 #include "share/tablet/ob_tablet_to_table_history_operator.h"
 #include "src/share/scheduler/ob_partition_auto_split_helper.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
 {
@@ -171,6 +172,68 @@ int ObSplitPartitionHelper::check_allow_split(
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "split in shared storage mode");
   }
 
+  return ret;
+}
+
+int ObSplitPartitionHelper::freeze_split_src_tablet(const ObFreezeSplitSrcTabletArg &arg,
+                                                    ObFreezeSplitSrcTabletRes &res,
+                                                    const int64_t abs_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else {
+    MTL_SWITCH(arg.tenant_id_) {
+      ObLSService *ls_service = MTL(ObLSService *);
+      logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
+      compaction::ObTenantTabletScheduler *tenant_tablet_scheduler = MTL(compaction::ObTenantTabletScheduler*);
+      ObLSHandle ls_handle;
+      ObLS *ls = nullptr;
+      ObRole role = INVALID_ROLE;
+      int64_t proposal_id = -1;
+      bool has_active_memtable = false;
+      const ObIArray<ObTabletID> &tablet_ids = arg.tablet_ids_;
+      if (OB_ISNULL(ls_service) || OB_ISNULL(log_service) || OB_ISNULL(tenant_tablet_scheduler)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected ls_service or log_service", K(ret));
+      } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        LOG_WARN("get ls failed", K(ret), K(arg));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid ls", K(ret), K(arg.ls_id_));
+      } else if (OB_FAIL(ls->get_ls_role(role))) {
+        LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(arg.ls_id_));
+      } else if (OB_UNLIKELY(ObRole::LEADER != role)) {
+        ret = OB_NOT_MASTER;
+        LOG_WARN("ls not leader", K(ret), K(MTL_ID()), K(arg.ls_id_));
+      } else if (OB_FAIL(ls->tablet_freeze(checkpoint::INVALID_TRACE_ID, tablet_ids, true/*is_sync*/, abs_timeout_us,
+              false/*need_rewrite_meta*/, ObFreezeSourceFlag::TABLET_SPLIT))) {
+        LOG_WARN("batch tablet freeze failed", K(ret), K(arg));
+      } else if (OB_FAIL(ls->check_tablet_no_active_memtable(tablet_ids, has_active_memtable))) {
+        // safer with this check, non-mandatory
+        LOG_WARN("check tablet has active memtable failed", K(ret), K(arg));
+      } else if (has_active_memtable) {
+        ret = OB_EAGAIN;
+        LOG_WARN("tablet has active memtable need retry", K(ret), K(arg));
+      }
+
+      // the followings are workarounds, still INCORRECT in some leader switch corner cases
+      // 1. wait write end for medium
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(tenant_tablet_scheduler->stop_tablets_schedule_medium(tablet_ids, compaction::ObProhibitScheduleMediumMap::ProhibitFlag::SPLIT))) {
+        LOG_WARN("failed to stop tablets schedule medium", K(ret), K(arg));
+      } else if (OB_FAIL(tenant_tablet_scheduler->clear_tablets_prohibit_medium_flag(tablet_ids, compaction::ObProhibitScheduleMediumMap::ProhibitFlag::SPLIT))) {
+        LOG_WARN("failed to clear prohibit schedule medium flag", K(ret), K(arg));
+      }
+      // 2. wait write end for table autoinc seq will be done in batch_get_tablet_autoinc_seq
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ls->get_log_handler()->get_max_scn(res.data_end_scn_))) {
+        LOG_WARN("log_handler get_max_scn failed", K(ret), K(arg));
+      }
+    }
+  }
   return ret;
 }
 
@@ -666,25 +729,6 @@ int ObSplitPartitionHelper::start_src_(
     start_time = finish_time;
   }
 
-  // get data end scn
-  if (OB_SUCC(ret)) {
-    const int64_t timeout_us = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : GCONF.rpc_timeout;
-    obrpc::ObFreezeSplitSrcTabletArg arg;
-    obrpc::ObFreezeSplitSrcTabletRes res;
-    arg.tenant_id_ = tenant_id;
-    arg.ls_id_ = ls_id;
-    if (OB_FAIL(arg.tablet_ids_.assign(src_tablet_ids))) {
-      LOG_WARN("failed to assign", KR(ret));
-    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).timeout(timeout_us).freeze_split_src_tablet(arg, res))) {
-      LOG_WARN("failed to freeze src tablet", KR(ret), K(leader_addr));
-    } else {
-      data_end_scn = res.data_end_scn_;
-    }
-    finish_time = ObTimeUtility::current_time();
-    LOG_INFO("finish get data end scn", KR(ret), "cost_ts", finish_time - start_time, K(data_end_scn));
-    start_time = finish_time;
-  }
-
   // get src tablet's non-empty autoinc_seq that are needed to sync to dst tablet
   if (OB_SUCC(ret)) {
     const int64_t timeout_us = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : GCONF.rpc_timeout;
@@ -725,6 +769,25 @@ int ObSplitPartitionHelper::start_src_(
     }
     finish_time = ObTimeUtility::current_time();
     LOG_INFO("finish batch_get_tablet_autoinc_seq", KR(ret), "cost_ts", finish_time - start_time);
+    start_time = finish_time;
+  }
+
+  // get data end scn finally to guarantee both mds_checkpoint_scn and clog_checkpoint_scn are less than data_end_scn
+  if (OB_SUCC(ret)) {
+    const int64_t timeout_us = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : GCONF.rpc_timeout;
+    obrpc::ObFreezeSplitSrcTabletArg arg;
+    obrpc::ObFreezeSplitSrcTabletRes res;
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    if (OB_FAIL(arg.tablet_ids_.assign(src_tablet_ids))) {
+      LOG_WARN("failed to assign", KR(ret));
+    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).timeout(timeout_us).freeze_split_src_tablet(arg, res))) {
+      LOG_WARN("failed to freeze src tablet", KR(ret), K(leader_addr));
+    } else {
+      data_end_scn = res.data_end_scn_;
+    }
+    finish_time = ObTimeUtility::current_time();
+    LOG_INFO("finish get data end scn", KR(ret), "cost_ts", finish_time - start_time, K(data_end_scn));
     start_time = finish_time;
   }
   return ret;

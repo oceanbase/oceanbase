@@ -18,6 +18,12 @@
 
 namespace oceanbase
 {
+namespace obrpc
+{
+struct ObFreezeSplitSrcTabletArg;
+struct ObFreezeSplitSrcTabletRes;
+}
+
 namespace rootserver
 {
 
@@ -50,6 +56,10 @@ public:
   static int check_allow_split(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &table_schema);
+  static int freeze_split_src_tablet(
+      const obrpc::ObFreezeSplitSrcTabletArg &arg,
+      obrpc::ObFreezeSplitSrcTabletRes &res,
+      const int64_t abs_timeout_us);
 
 private:
   static int prepare_start_args_(
