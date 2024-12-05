@@ -125,6 +125,15 @@ public:
     return is_exist;
   }
 
+  int64_t get_max_log_history() const
+  {
+    int64_t log_history = DEFAULT_LOG_HISTORY;
+    for (int i = 0; i < INNER_JOB_CLASS_MAXNUM; i++) {
+      log_history = max(job_class_infos_[i].log_history_, log_history);
+    }
+    return log_history;
+  }
+
   static ObInnerJobClassSet &instance()
   {
     return instance_;
