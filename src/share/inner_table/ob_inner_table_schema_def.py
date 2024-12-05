@@ -15713,6 +15713,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12510: __all_virtual_standby_log_transport_stat
 # 12511: __all_virtual_wr_sql_plan_aux_key2snapshot
 # 12512: __all_virtual_tablet_mds_info
+# 12513: __all_virtual_cs_replica_tablet_stats
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16243,6 +16244,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keyword
 # 15490: __all_object_balance_weight
 # 15491: __all_virtual_standby_log_transport_stat
 # 15492: __all_virtual_wr_sql_plan_aux_key2snapshot
+# 15493: __all_virtual_cs_replica_tablet_stats
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -39919,6 +39921,8 @@ def_table_schema(
 
 # 21631: GV$OB_STANDBY_LOG_TRANSPORT_STAT
 # 21632: V$OB_STANDBY_LOG_TRANSPORT_STAT
+# 21633: DBA_OB_CS_REPLICA_STATS
+# 21634: CDB_OB_CS_REPLICA_STATS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -71791,6 +71795,7 @@ def_table_schema(
 
 # 28269: GV$OB_STANDBY_LOG_TRANSPORT_STAT
 # 28270: V$OB_STANDBY_LOG_TRANSPORT_STAT
+# 28271: DBA_OB_CS_REPLICA_STATS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
