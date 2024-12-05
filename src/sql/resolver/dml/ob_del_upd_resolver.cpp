@@ -2291,6 +2291,7 @@ int ObDelUpdResolver::view_pullup_special_column_exprs()
       if (dml_stmt->has_instead_of_trigger()) {
         sel_stmt = t->ref_query_;
       } else {
+        // find the base table item for updatable view recursively
         while (NULL != t && (t->is_generated_table() || t->is_temp_table())) {
           sel_stmt = t->ref_query_;
           t = t->view_base_item_;
@@ -2328,7 +2329,9 @@ int ObDelUpdResolver::view_pullup_special_column_exprs()
                                            ref_expr))) {
                 LOG_WARN("failed to copy dependant expr", K(ret));
               } else if (OB_FAIL(view_pullup_column_ref_exprs_recursively(ref_expr,
-                                                                          tid, dml_stmt))){
+                                                                          view_column_item->table_id_,
+                                                                          tid,
+                                                                          dml_stmt))){
                 LOG_WARN("view pull up generated column exprs recursively failed", K(ret));
               } else {
                 view_column_item->expr_->set_dependant_expr(ref_expr);
@@ -2550,7 +2553,9 @@ int ObDelUpdResolver::resolve_check_constraints(const TableItem* table_item,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("check constraint expr is null", K(ret));
       } else if (OB_FAIL(view_pullup_column_ref_exprs_recursively(expr,
-                                            table_item->get_base_table_item().ref_id_, dml_stmt))) {
+                                                                  table_item->table_id_,
+                                                                  table_item->get_base_table_item().ref_id_,
+                                                                  dml_stmt))) {
         LOG_WARN("view pullup column_ref_exprs recursively failed", K(ret));
       } else if (expr->get_expr_type() == T_FUN_SYS_IS_JSON &&
                  expr->get_param_count() == 5 &&
@@ -2656,6 +2661,7 @@ int ObDelUpdResolver::get_pullup_column_map(ObDMLStmt &stmt,
 }
 
 int ObDelUpdResolver::view_pullup_column_ref_exprs_recursively(ObRawExpr *&expr,
+                                                               uint64_t view_table_id,
                                                                uint64_t base_table_id,
                                                                const ObDMLStmt *stmt)
 {
@@ -2677,8 +2683,9 @@ int ObDelUpdResolver::view_pullup_column_ref_exprs_recursively(ObRawExpr *&expr,
       if (OB_ISNULL(column_item) || OB_ISNULL(column_item->expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column expr null");
-      } else if (base_table_id == column_item->base_tid_ &&
-        ref_expr->get_column_id() == column_item->base_cid_) {
+      } else if (column_item->table_id_ == view_table_id &&
+                 base_table_id == column_item->base_tid_ &&
+                 ref_expr->get_column_id() == column_item->base_cid_) {
         expr = column_item->expr_;
         found = true;
       }
@@ -2686,7 +2693,9 @@ int ObDelUpdResolver::view_pullup_column_ref_exprs_recursively(ObRawExpr *&expr,
   } else {
     for (int i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
       ObRawExpr *&t_expr = expr->get_param_expr(i);
-      if (OB_FAIL(SMART_CALL(view_pullup_column_ref_exprs_recursively(t_expr, base_table_id,
+      if (OB_FAIL(SMART_CALL(view_pullup_column_ref_exprs_recursively(t_expr,
+                                                                      view_table_id,
+                                                                      base_table_id,
                                                                       stmt)))) {
         LOG_WARN("generated column expr pull up failed", K(ret));
       }
