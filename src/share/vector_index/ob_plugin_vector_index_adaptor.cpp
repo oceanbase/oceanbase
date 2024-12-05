@@ -197,7 +197,7 @@ int ObVectorQueryAdaptorResultContext::set_vector(int64_t index, const char *ptr
   } else if (size / sizeof(float) != get_dim()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid vector str.", K(ret), K(size), K(ptr), K(get_dim()));
-  } else if (OB_ISNULL(copy_str = static_cast<char *>(batch_allocator_->alloc(sizeof(char*) * size)))) {
+  } else if (OB_ISNULL(copy_str = static_cast<char *>(batch_allocator_->alloc(size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator.", K(ret));
   } else {
