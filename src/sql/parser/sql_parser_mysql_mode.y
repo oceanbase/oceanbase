@@ -47,8 +47,7 @@ extern int easy_vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
     malloc_terminal_node(display_node, result->malloc_pool_, display_type); \
   } \
   malloc_non_terminal_node(explain_stmt, result->malloc_pool_, T_EXPLAIN, 5, \
-                           type_node, display_node, stmt, into_table, set_statement_id);
-
+                           type_node, display_node, into_table, set_statement_id, stmt);
 %}
 
 %destructor {destroy_tree($$);}<node>
@@ -14551,7 +14550,7 @@ explain_or_desc relation_factor opt_desc_column_option
 | explain_or_desc FORMAT COMP_EQ format_name explainable_stmt
 {
   (void)($1);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_EXPLAIN, 5, $4, NULL, $5, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXPLAIN, 5, $4, NULL, NULL, NULL, $5);
 }
 ;
 

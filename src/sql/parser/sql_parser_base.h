@@ -1008,8 +1008,8 @@ for (int32_t _i = 0; _i < _yyleng; ++_i) {                                      
                            NULL,                                                  \
                            NULL,                                                  \
                            NULL,                                                  \
-                           NULL,                                                  \
-                           NULL);
+                           NULL,  /* PARSE_SELECT_WITH_CHECK_OPTION */            \
+                           NULL   /* PARSE_SELECT_INTO_EXTRA */);
 
 // only used by setup_token_pos_info_and_dup_string for now
 #define check_ret(stmt, loc, extra)                                          \
@@ -1391,11 +1391,7 @@ do {\
         set_node->children_[0] = left_body; \
         set_node->children_[1] = right_body; \
         set_node->value_ = 2; \
-        select_node = new_non_terminal_node(result->malloc_pool_, T_SELECT, PARSE_SELECT_MAX_IDX, NULL, NULL, NULL, NULL, NULL, \
-                                                                                                  NULL, NULL, NULL, NULL, NULL, \
-                                                                                                  NULL, NULL, NULL, NULL, NULL, \
-                                                                                                  NULL, NULL, NULL, NULL, NULL, \
-                                                                                                  NULL, NULL, NULL); \
+        malloc_select_node(select_node, result->malloc_pool_); \
         if (OB_ISNULL(select_node)) { \
           if (OB_PARSER_SUCCESS == result->extra_errno_) { \
             result->extra_errno_ = OB_PARSER_ERR_NO_MEMORY; \
