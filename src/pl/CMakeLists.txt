@@ -1,5 +1,5 @@
 execute_process(
-  COMMAND bash gen_parser.sh
+  COMMAND env NEED_PARSER_CACHE=${NEED_PARSER_CACHE} bash gen_parser.sh
   RESULT_VARIABLE RET
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/pl/parser
   OUTPUT_FILE _gen_pl_parser.output
