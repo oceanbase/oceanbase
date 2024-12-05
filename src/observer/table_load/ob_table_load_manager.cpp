@@ -219,12 +219,10 @@ DEFINE_OBJ_ALLOC_IMPL1(ObTableLoadClientTaskBrief, client_task_brief);
     } else {                                                                      \
       ObArray<ObTableLoadUniqueKey> keys;                                         \
       while (OB_SUCC(ret) && !name##_map_.empty()) {                              \
-        for (ValueType##Map::const_iterator iter = name##_map_.begin();           \
-             OB_SUCC(ret) && iter != name##_map_.end(); ++iter) {                 \
-          const ObTableLoadUniqueKey &key = iter->first;                          \
-          if (OB_FAIL(keys.push_back(key))) {                                     \
-            LOG_WARN("fail to push back", KR(ret));                               \
-          }                                                                       \
+        keys.reset();                                                             \
+        GetAllKeyFunc<ValueType> func(keys);                                      \
+        if (OB_FAIL(name##_map_.foreach_refactored(func))) {                      \
+          LOG_WARN("fail to foreach hashmap", KR(ret));                           \
         }                                                                         \
         for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {              \
           const ObTableLoadUniqueKey &key = keys.at(i);                           \
@@ -258,20 +256,9 @@ DEFINE_OBJ_ALLOC_IMPL1(ObTableLoadClientTaskBrief, client_task_brief);
       LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));               \
     } else {                                                                    \
       ObArray<ObTableLoadUniqueKey> keys;                                       \
-      for (ValueType##Map::const_iterator iter = name##_map_.begin();           \
-           OB_SUCC(ret) && iter != name##_map_.end(); ++iter) {                 \
-        const ObTableLoadUniqueKey &key = iter->first;                          \
-        const ValueType##Handle &handle = iter->second;                         \
-        if (OB_UNLIKELY(!handle.is_valid())) {                                  \
-          ret = OB_ERR_UNEXPECTED;                                              \
-          LOG_WARN("unexpected handle is invalid", KR(ret), K(key), K(handle)); \
-        } else {                                                                \
-          ValueType *value = handle.get_value();                                \
-          if (value->get_ref_count() > 1) {                                     \
-          } else if (OB_FAIL(keys.push_back(key))) {                            \
-            LOG_WARN("fail to push back", KR(ret));                             \
-          }                                                                     \
-        }                                                                       \
+      GetAllInactiveKeyFunc<ValueType> func(keys);                              \
+      if (OB_FAIL(name##_map_.foreach_refactored(func))) {                      \
+        LOG_WARN("fail to foreach hashmap", KR(ret));                           \
       }                                                                         \
       for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {              \
         const ObTableLoadUniqueKey &key = keys.at(i);                           \
@@ -326,40 +313,28 @@ DEFINE_OBJ_ALLOC_IMPL1(ObTableLoadClientTaskBrief, client_task_brief);
     return ret;                                                                          \
   }
 
-#define DEFINE_OBJ_MAP_GET_ALL_IMPL(ValueType, name)                            \
-  int ObTableLoadManager::get_all_##name(ObIArray<ValueType *> &list)           \
-  {                                                                             \
-    int ret = OB_SUCCESS;                                                       \
-    if (IS_NOT_INIT) {                                                          \
-      ret = OB_NOT_INIT;                                                        \
-      LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));               \
-    } else {                                                                    \
-      list.reset();                                                             \
-      for (ValueType##Map::const_iterator iter = name##_map_.begin();           \
-           OB_SUCC(ret) && iter != name##_map_.end(); ++iter) {                 \
-        const ObTableLoadUniqueKey &key = iter->first;                          \
-        const ValueType##Handle &handle = iter->second;                         \
-        if (OB_UNLIKELY(!handle.is_valid())) {                                  \
-          ret = OB_ERR_UNEXPECTED;                                              \
-          LOG_WARN("unexpected handle is invalid", KR(ret), K(key), K(handle)); \
-        } else {                                                                \
-          ValueType *value = handle.get_value();                                \
-          if (OB_FAIL(list.push_back(value))) {                                 \
-            LOG_WARN("fail to push back", KR(ret), K(key));                     \
-          } else {                                                              \
-            value->inc_ref_count();                                             \
-          }                                                                     \
-        }                                                                       \
-      }                                                                         \
-      if (OB_FAIL(ret)) {                                                       \
-        for (int64_t i = 0; i < list.count(); ++i) {                            \
-          ValueType *value = list.at(i);                                        \
-          revert_##name(value);                                                 \
-        }                                                                       \
-        list.reset();                                                           \
-      }                                                                         \
-    }                                                                           \
-    return ret;                                                                 \
+#define DEFINE_OBJ_MAP_GET_ALL_IMPL(ValueType, name)                  \
+  int ObTableLoadManager::get_all_##name(ObIArray<ValueType *> &list) \
+  {                                                                   \
+    int ret = OB_SUCCESS;                                             \
+    if (IS_NOT_INIT) {                                                \
+      ret = OB_NOT_INIT;                                              \
+      LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));     \
+    } else {                                                          \
+      list.reset();                                                   \
+      GetAllValueFunc<ValueType> func(list);                          \
+      if (OB_FAIL(name##_map_.foreach_refactored(func))) {            \
+        LOG_WARN("fail to foreach hashmap", KR(ret));                 \
+      }                                                               \
+      if (OB_FAIL(ret)) {                                             \
+        for (int64_t i = 0; i < list.count(); ++i) {                  \
+          ValueType *value = list.at(i);                              \
+          revert_##name(value);                                       \
+        }                                                             \
+        list.reset();                                                 \
+      }                                                               \
+    }                                                                 \
+    return ret;                                                       \
   }
 
 #define DEFINE_OBJ_MAP_GET_CNT_IMPL(ValueType, name) \
