@@ -2738,6 +2738,7 @@ struct NullAwareAntiJoinInfo {
     int estimate_fts_index_scan(uint64_t table_id,
                                 uint64_t ref_table_id,
                                 uint64_t index_id,
+                                const ObTablePartitionInfo *partition_info,
                                 const ObTableSchema *index_schema,
                                 ObQueryRangeProvider *query_range,
                                 int64_t &query_range_row_count,

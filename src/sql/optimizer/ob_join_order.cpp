@@ -18138,12 +18138,20 @@ int ObJoinOrder::init_basic_text_retrieval_info(uint64_t table_id,
   ObSEArray<ObRawExpr*, 4> match_exprs;
   ObSqlSchemaGuard *schema_guard = NULL;
   ObSEArray<ObConstRawExpr*, 4> query_tokens;
+  ObTablePartitionInfo *partition_info;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null plan or stmt", K(ret), KP(get_plan()), KP(get_plan()->get_stmt()));
   } else if (OB_FAIL(get_plan()->get_stmt()->get_match_expr_on_table(table_id, match_exprs))) {
     LOG_WARN("failed to get match exprs", K(ret), K(table_id));
+  } else if (match_exprs.empty()) {
+    //do nothing
+  } else if (OB_FAIL(compute_table_location(table_id, ref_table_id, false, partition_info))) {
+    LOG_WARN("failed to compute table location", K(ret));
+  } else if (OB_ISNULL(partition_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null partition info", K(ret));
   } else {
     // generate selectivity info for each match against expr
     for (int64_t i = 0; OB_SUCC(ret) && i < match_exprs.count(); ++i) {
@@ -18178,6 +18186,7 @@ int ObJoinOrder::init_basic_text_retrieval_info(uint64_t table_id,
       } else if (OB_FAIL(estimate_fts_index_scan(table_id,
                                                  ref_table_id,
                                                  index_id,
+                                                 partition_info,
                                                  index_schema,
                                                  match_expr_info.query_range_,
                                                  match_expr_info.query_range_row_count_,
@@ -18396,13 +18405,13 @@ int ObJoinOrder::get_range_of_query_tokens(ObIArray<ObConstRawExpr*> &query_toke
 int ObJoinOrder::estimate_fts_index_scan(uint64_t table_id,
                                          uint64_t ref_table_id,
                                          uint64_t index_id,
+                                         const ObTablePartitionInfo *partition_info,
                                          const ObTableSchema *index_schema,
                                          ObQueryRangeProvider *query_range,
                                          int64_t &query_range_row_count,
                                          double &selectivity)
 {
   int ret = OB_SUCCESS;
-  ObTablePartitionInfo *table_partition_info = NULL;
   ObTableMetaInfo table_meta_range(index_id);
   const ObSQLSessionInfo *session = OPT_CTX.get_session_info();
   const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
@@ -18410,14 +18419,9 @@ int ObJoinOrder::estimate_fts_index_scan(uint64_t table_id,
   ObRangesArray ranges;
   bool dummy_all_single_value_ranges = true;
   if (OB_ISNULL(index_schema) || OB_ISNULL(query_range) || OB_ISNULL(OPT_CTX.get_exec_ctx()) ||
-      OB_UNLIKELY(index_schema->is_global_index_table())) {
+      OB_UNLIKELY(index_schema->is_global_index_table()) || OB_ISNULL(partition_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(index_schema), K(query_range), K(ret));
-  } else if (OB_FAIL(compute_table_location(table_id, index_id, false, table_partition_info))) {
-    LOG_WARN("failed to compute table location", K(ret));
-  } else if (OB_ISNULL(table_partition_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(table_partition_info), K(ret));
   } else if (OB_FAIL(query_range->get_tablet_ranges(OPT_CTX.get_allocator(),
                                                     *OPT_CTX.get_exec_ctx(),
                                                     range_array,
@@ -18433,30 +18437,50 @@ int ObJoinOrder::estimate_fts_index_scan(uint64_t table_id,
         LOG_WARN("failed to add range", K(ret));
       }
     }
-    // init table meta info
-    table_meta_range.ref_table_id_ = index_id;
-    table_meta_range.table_rowkey_count_ = index_schema->get_rowkey_info().get_size();
-    table_meta_range.table_column_count_ = index_schema->get_column_count();
-    table_meta_range.micro_block_size_ = index_schema->get_block_size();
-    table_meta_range.part_count_ =
-        table_partition_info->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
-    table_meta_range.schema_version_ = index_schema->get_schema_version();
-    table_meta_range.is_broadcast_table_ = index_schema->is_broadcast_table();
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObAccessPathEstimation::storage_estimate_range_rowcount(OPT_CTX,
-                    table_partition_info->get_phy_tbl_location_info().get_phy_part_loc_info_list(),
-                    false,
-                    &ranges,
-                    table_meta_range))) {
-    LOG_WARN("failed to estimate table range rowcount", K(ret));
-  } else {
-    query_range_row_count = table_meta_range.table_row_count_;
-    selectivity = get_table_meta().table_row_count_ == 0 ? 0 :
-                  table_meta_range.table_row_count_ * 1.0 / get_table_meta().table_row_count_;
-    // refine selectivity
-    selectivity = std::min(selectivity, 1.0);
+    SMART_VARS_3((ObTablePartitionInfo, index_part_info),
+                 (ObPhysicalPlanCtx, tmp_plan_ctx, OPT_CTX.get_allocator()),
+                 (ObExecContext, tmp_exec_ctx, OPT_CTX.get_allocator())) {
+      ObPhysicalPlanCtx *plan_ctx = OPT_CTX.get_exec_ctx()->get_physical_plan_ctx();
+      const int64_t cur_time = plan_ctx->has_cur_time() ?
+          plan_ctx->get_cur_time().get_timestamp() : ObTimeUtility::current_time();
+      tmp_exec_ctx.set_my_session(OPT_CTX.get_session_info());
+      tmp_exec_ctx.set_physical_plan_ctx(&tmp_plan_ctx);
+      tmp_exec_ctx.set_sql_ctx(OPT_CTX.get_exec_ctx()->get_sql_ctx());
+      tmp_plan_ctx.set_timeout_timestamp(plan_ctx->get_timeout_timestamp());
+      tmp_plan_ctx.set_cur_time(cur_time, *OPT_CTX.get_session_info());
+      tmp_plan_ctx.set_rich_format(OPT_CTX.get_session_info()->use_rich_format());
+      if (FAILEDx(tmp_plan_ctx.get_param_store_for_update().assign(plan_ctx->get_param_store()))) {
+        LOG_WARN("failed to assign phy plan ctx");
+      } else if (OB_FAIL(tmp_plan_ctx.init_datum_param_store())) {
+        LOG_WARN("failed to init datum store", K(ret));
+      } else if (OB_FAIL(index_part_info.assign(*partition_info))) {
+        LOG_WARN("failed to assign table part info", K(ret));
+      } else if (OB_FAIL(index_part_info.replace_final_location_key(tmp_exec_ctx, index_id, true))) {
+        LOG_WARN("failed to replace final location key", K(ret));
+      }
+      // init table meta info
+      table_meta_range.ref_table_id_ = index_id;
+      table_meta_range.table_rowkey_count_ = index_schema->get_rowkey_info().get_size();
+      table_meta_range.table_column_count_ = index_schema->get_column_count();
+      table_meta_range.micro_block_size_ = index_schema->get_block_size();
+      table_meta_range.part_count_ =
+          index_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
+      table_meta_range.schema_version_ = index_schema->get_schema_version();
+      table_meta_range.is_broadcast_table_ = index_schema->is_broadcast_table();
+      if (FAILEDx(ObAccessPathEstimation::storage_estimate_range_rowcount(OPT_CTX,
+                        index_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list(),
+                        false,
+                        &ranges,
+                        table_meta_range))) {
+        LOG_WARN("failed to estimate table range rowcount", K(ret));
+      } else {
+        query_range_row_count = table_meta_range.table_row_count_;
+        selectivity = get_table_meta().table_row_count_ == 0 ? 0 :
+                      table_meta_range.table_row_count_ * 1.0 / get_table_meta().table_row_count_;
+        // refine selectivity
+        selectivity = std::min(selectivity, 1.0);
+      }
+    }
   }
   return ret;
 }
