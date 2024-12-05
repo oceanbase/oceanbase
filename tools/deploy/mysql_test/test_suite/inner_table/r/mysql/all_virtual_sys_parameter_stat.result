@@ -205,6 +205,7 @@ ob_vector_memory_limit_percentage
 open_cursors
 optimizer_index_cost_adj
 opt_tab_stat_cache_priority
+package_state_sync_max_size
 partition_balance_schedule_interval
 plan_cache_evict_interval
 plsql_code_type
