@@ -24,6 +24,10 @@
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/IR/Mangler.h"
+#ifdef CPP_STANDARD_20
+#include "llvm/ExecutionEngine/Orc/Shared/ExecutorAddress.h"
+#include "llvm/ExecutionEngine/Orc/Shared/ExecutorSymbolDef.h"
+#endif
 
 #include <string>
 
@@ -70,16 +74,21 @@ static inline int ob_jit_make_unique(std::unique_ptr<T> &ptr, Args&&... args) {
 
 namespace core {
 using namespace llvm;
+using namespace llvm::orc;
 
 typedef ::llvm::LLVMContext ObLLVMContext;
 typedef ::llvm::orc::ExecutionSession ObExecutionSession;
-typedef ::llvm::orc::SymbolResolver ObSymbolResolver;
 typedef ::llvm::TargetMachine ObTargetMachine;
 typedef ::llvm::DataLayout ObDataLayout;
-typedef ::llvm::orc::VModuleKey ObVModuleKey;
 typedef ::llvm::JITSymbol ObJITSymbol;
-typedef ::llvm::orc::JITDylib::DefinitionGenerator ObJitDefinitionGenerator;
 typedef ::llvm::JITEventListener ObJitEventListener;
+#ifdef CPP_STANDARD_20
+typedef ::llvm::orc::DefinitionGenerator ObJitDefinitionGenerator;
+#else
+typedef ::llvm::orc::SymbolResolver ObSymbolResolver;
+typedef ::llvm::orc::VModuleKey ObVModuleKey;
+typedef ::llvm::orc::JITDylib::DefinitionGenerator ObJitDefinitionGenerator;
+#endif
 
 class ObNotifyLoaded: public ObJitEventListener
 {
@@ -89,9 +98,16 @@ public:
       : Allocator(Allocator), DebugBuf(DebugBuf), DebugLen(DebugLen), SoObject(SoObject) {}
   virtual ~ObNotifyLoaded() {}
 
+#ifdef CPP_STANDARD_20
+  void notifyObjectLoaded(ObJitEventListener::ObjectKey Key,
+                          const object::ObjectFile &Obj,
+                          const RuntimeDyld::LoadedObjectInfo &Info) override;
+#else
   void notifyObjectLoaded(ObVModuleKey Key,
-                  const object::ObjectFile &Obj,
-                  const RuntimeDyld::LoadedObjectInfo &Info) override;
+                          const object::ObjectFile &Obj,
+                          const RuntimeDyld::LoadedObjectInfo &Info) override;
+#endif
+
 private:
   common::ObIAllocator &Allocator;
   char* &DebugBuf;
@@ -101,7 +117,12 @@ private:
 
 class ObJitGlobalSymbolGenerator: public ObJitDefinitionGenerator {
 public:
+#ifdef CPP_STANDARD_20
+  Error tryToGenerate(orc::LookupState &LS,
+                      orc::LookupKind K,
+#else
   Error tryToGenerate(orc::LookupKind K,
+#endif
                       orc::JITDylib &JD,
                       orc::JITDylibLookupFlags JDLookupFlags,
                       const orc::SymbolLookupSet &LookupSet) override
@@ -111,7 +132,11 @@ public:
 
       if (res != symbol_table.end()) {
         Error err = JD.define(orc::absoluteSymbols(
+#ifdef CPP_STANDARD_20
+                      {{sym.first, ExecutorSymbolDef(ExecutorAddr(res->second), {})}}));
+#else
                       {{sym.first, JITEvaluatedSymbol(res->second, {})}}));
+#endif
 
         if (err) {
           StringRef name = *sym.first;

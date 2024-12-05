@@ -436,6 +436,9 @@ if(OB_BUILD_CLOSE_MODULES)
   )
 endif()
 
+if(CPP_STANDARD_20)
+  target_compile_options(oblib_lib PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
+endif()
 target_link_libraries(oblib_lib
   PUBLIC ob_malloc compress restore
   ${DEP_DIR}/lib/libxml2.a
@@ -481,7 +484,6 @@ else()
 endif()
 
 endif()
-
 
 # ATTENTION: add this cpp file as library only if compiled target doesn't need diagnose. like unittest or cdc.
 add_library(mock_di stat/mock_diagnostic_info.cpp)

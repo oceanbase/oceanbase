@@ -613,7 +613,7 @@ _Unwind_Reason_Code ObPLEH::eh_personality(int version, _Unwind_Action actions,
                                    ObUnwindException *exceptionObject,
                                    struct _Unwind_Context *context)
 {
-  const uint8_t *lsda = static_cast<const uint8_t *>(_Unwind_GetLanguageSpecificData(context));
+  const uint8_t *lsda = reinterpret_cast<const uint8_t *>(_Unwind_GetLanguageSpecificData(context));
   LOG_DEBUG(">>>>>>>>>>0", K(version), K(actions), K(exceptionClass), K(lsda));
   return handleLsda(version, lsda, actions, exceptionClass, exceptionObject, context);
 }
