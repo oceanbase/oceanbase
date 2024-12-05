@@ -197,7 +197,7 @@ public:
       const share::schema::ObTableSchema &input_schema,
       const lib::Worker::CompatMode compat_mode,
       const bool skip_column_info = false,
-      const int64_t compat_version = STORAGE_SCHEMA_VERSION_LATEST,
+      const uint64_t tenant_data_version = DATA_CURRENT_VERSION,
       const bool generate_cs_replica_cg_array = false);
   int init(
       common::ObIAllocator &allocator,
@@ -331,6 +331,7 @@ public:
   inline bool is_aux_lob_piece_table() const { return share::schema::is_aux_lob_piece_table(table_type_); }
   OB_INLINE bool is_user_hidden_table() const { return share::schema::TABLE_STATE_IS_HIDDEN_MASK & table_mode_.state_flag_; }
   OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
+  int set_storage_schema_version(const uint64_t tenant_data_version);
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
       K_(is_use_bloomfilter), K_(column_info_simplified), K_(compat_mode), K_(table_type), K_(index_type),
@@ -467,7 +468,7 @@ public:
       const share::schema::ObTableSchema &input_schema,
       const lib::Worker::CompatMode compat_mode,
       const bool skip_column_info,
-      const int64_t compat_version);
+      const uint64_t tenant_data_version);
   int init(common::ObIAllocator &allocator,
       const ObCreateTabletSchema &old_schema);
   INHERIT_TO_STRING_KV("ObStorageSchema", ObStorageSchema, K_(table_id), K_(index_status), K_(truncate_version));

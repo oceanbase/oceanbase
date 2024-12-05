@@ -249,7 +249,7 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   ObCreateTabletSchema create_tablet_schema;
 
   ret = create_tablet_schema.init(schema_allocator, table_schema, lib::Worker::CompatMode::MYSQL,
-        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3);
+        false/*skip_column_info*/, DATA_VERSION_4_3_2_0);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletID empty_tablet_id;
@@ -335,7 +335,7 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
   ObCreateTabletSchema create_tablet_schema;
 
   ret = create_tablet_schema.init(schema_allocator, table_schema, lib::Worker::CompatMode::MYSQL,
-        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3);
+        false/*skip_column_info*/, DATA_VERSION_4_3_2_0);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletID empty_tablet_id;

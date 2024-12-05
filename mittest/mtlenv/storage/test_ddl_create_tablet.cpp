@@ -313,7 +313,7 @@ int TestDDLCreateTablet::build_create_tablet_arg(
   } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn(), false/*need_check_tablet_cnt*/))) {
     STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(data_table_tablet_schema.init(arena_allocator_, data_table_schema, lib::get_compat_mode(),
-         false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V2))) {
+         false/*skip_column_info*/, DATA_VERSION_4_2_0_0))) {
     STORAGE_LOG(WARN, "failed to init storage schema", K(ret), K(data_table_schema));
   } else if (OB_FAIL(arg.create_tablet_schemas_.push_back(&data_table_tablet_schema))) {
     STORAGE_LOG(WARN, "push back tablet schema failed", K(ret), K(data_table_tablet_schema));

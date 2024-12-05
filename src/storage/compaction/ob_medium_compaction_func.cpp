@@ -1112,17 +1112,10 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
   }
 #endif
   bool is_cs_replica = false;
-  int64_t storage_schema_version =  ObStorageSchema::STORAGE_SCHEMA_VERSION_LATEST;
-
-  if (data_version < DATA_VERSION_4_3_4_0) {
-    storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION_V3;
-  } else {
-    storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION_V4;
-  }
   // for old version medium info, need generate old version schema
   if (FAILEDx(ObCSReplicaUtil::check_is_cs_replica(*table_schema, tablet, is_cs_replica))) {
     LOG_WARN("fail to get is row store", K(ret), K(table_id), KPC(table_schema));
-  } else if (OB_FAIL(storage_schema.init(allocator, *table_schema, tablet.get_tablet_meta().compat_mode_, false/*skip_column_info*/, storage_schema_version, is_cs_replica))) {
+  } else if (OB_FAIL(storage_schema.init(allocator, *table_schema, tablet.get_tablet_meta().compat_mode_, false/*skip_column_info*/, data_version, is_cs_replica))) {
     LOG_WARN("failed to init storage schema", K(ret), K(schema_version), K(tablet), KPC(table_schema));
   } else {
     LOG_INFO("get schema to merge", K(tablet_id), K(table_id), K(schema_version), K(save_schema_version),

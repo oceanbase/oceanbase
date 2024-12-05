@@ -575,7 +575,7 @@ int TestCompactionPolicy::mock_tablet(
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (OB_FAIL(create_tablet_schema.init(arena_allocator, table_schema, compat_mode,
-         false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
+         false/*skip_column_info*/, DATA_VERSION_4_3_0_0))) {
     LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
   } else if (FALSE_IT(need_generate_cs_replica_cg_array = ls_handle.get_ls()->is_cs_replica() && create_tablet_schema.is_row_store() && create_tablet_schema.is_user_data_table())) {
   } else if (OB_FAIL(tablet->init_for_first_time_creation(allocator, ls_id, tablet_id, tablet_id,
