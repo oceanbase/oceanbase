@@ -269,7 +269,7 @@ protected:
 private:
   int add_table_tablets_for_snapshot_(const uint64_t table_id, ObSchemaGetterGuard &schema_guard,
                                       common::ObIArray<common::ObTabletID> &tablet_ids);
-  int hold_snapshot_for_major_refresh_mv_(const int64_t snapshot_version);
+  int prepare_tablets_for_major_refresh_mv_(common::ObIArray<common::ObTabletID> &tablet_ids);
 
   virtual int cleanup_impl() override;
 protected:

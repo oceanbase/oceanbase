@@ -68,7 +68,8 @@ public:
       const int64_t schema_version,
       const share::SCN &snapshot_scn,
       const char *comment,
-      const common::ObIArray<ObTabletID> &tablet_ids);
+      const common::ObIArray<ObTabletID> &tablet_ids,
+      const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids = NULL);
   int batch_release_snapshot_in_trans(
       common::ObMySQLTransaction &trans,
       share::ObSnapShotType snapshot_type,

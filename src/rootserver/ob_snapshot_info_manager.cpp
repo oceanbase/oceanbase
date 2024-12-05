@@ -63,7 +63,8 @@ int ObSnapshotInfoManager::batch_acquire_snapshot(
     const int64_t schema_version,
     const SCN &snapshot_scn,
     const char *comment,
-    const common::ObIArray<ObTabletID> &tablet_ids)
+    const common::ObIArray<ObTabletID> &tablet_ids,
+    const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
@@ -94,6 +95,11 @@ int ObSnapshotInfoManager::batch_acquire_snapshot(
     } else if (OB_FAIL(snapshot_proxy.batch_add_snapshot(trans, snapshot_type,
         tenant_id, schema_version, snapshot.snapshot_scn_, comment, tablet_ids))) {
       LOG_WARN("batch add snapshot failed", K(ret));
+    } else if (OB_NOT_NULL(extra_mv_tablet_ids) && !extra_mv_tablet_ids->empty() &&
+               OB_FAIL(snapshot_proxy.batch_add_snapshot(
+                   trans, SNAPSHOT_FOR_MAJOR_REFRESH_MV, tenant_id, schema_version,
+                   snapshot.snapshot_scn_, comment, *extra_mv_tablet_ids))) {
+      LOG_WARN("fail to batch add snapshot for major refresh mv", K(ret), K(snapshot), K(*extra_mv_tablet_ids));
     }
     if (trans.is_started()) {
       bool need_commit = (ret == OB_SUCCESS);

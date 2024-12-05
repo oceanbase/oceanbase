@@ -21656,6 +21656,10 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
               max_dependency_version = MAX(max_dependency_version, based_info.schema_version_);
             }
           }
+          if (OB_SUCC(ret) && !is_based_schema_version_consistent && orig_table_schema->mv_major_refresh()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("change base table during major refresh materialized view creation is not supported", KR(ret));
+          }
           if (OB_SUCC(ret)) {
             HEAP_VAR(ObTableSchema, new_mview_table_schema) {
               if (OB_FAIL(new_mview_table_schema.assign(*mview_table_schema))) {
