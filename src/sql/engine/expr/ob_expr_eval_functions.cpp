@@ -1671,6 +1671,12 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprArrayPrepend::eval_array_prepend_vector,                /* 174 */
   NULL, // ObExprArrayConcat::eval_array_concat_vector,                  /* 175 */
   NULL, // ObExprArrayDifference::eval_array_difference_vector,          /* 176 */
+  ObExprIs::calc_vector_is_null,                                /* 177 */
+  ObExprIs::calc_vector_is_true,                                /* 178 */
+  ObExprIs::calc_vector_is_false,                               /* 179 */
+  ObExprIsNot::calc_vector_is_not_null,                         /* 180 */
+  ObExprIsNot::calc_vector_is_not_true,                         /* 181 */
+  ObExprIsNot::calc_vector_is_not_false,                        /* 182 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
