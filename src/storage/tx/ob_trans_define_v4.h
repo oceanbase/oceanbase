@@ -979,8 +979,10 @@ public:
      ATOMIC_INC(&alloc_cnt_);
      ObTxDesc *it = op_alloc_v2(ObTxDesc);
 #ifdef ENABLE_DEBUG_LOG
-     ObSpinLockGuard guard(lk_);
-     list_.insert(it->alloc_link_);
+     if (OB_NOT_NULL(it)) {
+       ObSpinLockGuard guard(lk_);
+       list_.insert(it->alloc_link_);
+     }
 #endif
       return it;
     }
