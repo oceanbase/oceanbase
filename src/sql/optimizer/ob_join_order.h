@@ -1669,7 +1669,7 @@ struct NullAwareAntiJoinInfo {
 
     int get_used_stat_partitions(const uint64_t ref_table_id,
                                  const share::schema::ObTableSchema &table_schema,
-                                 const ObIArray<int64_t> &all_used_part_ids,
+                                 ObIArray<int64_t> &all_used_part_ids,
                                  ObIArray<int64_t> &table_stat_part_ids,
                                  double &table_stat_scale_ratio,
                                  ObIArray<int64_t> *hist_stat_part_ids = NULL);
@@ -1681,6 +1681,11 @@ struct NullAwareAntiJoinInfo {
                             ObIArray<int64_t> &part_ids,
                             ObIArray<int64_t> &subpart_ids,
                             int64_t &subpart_cnt_in_parts);
+
+    int get_index_partition_ids(const ObCandiTabletLocIArray &part_loc_info_array,
+                                const share::schema::ObTableSchema &table_schema,
+                                const share::schema::ObTableSchema &index_schema,
+                                ObIArray<int64_t> &index_part_ids);
 
     int init_est_info_for_index(const uint64_t table_id,
                                 const uint64_t index_id,
