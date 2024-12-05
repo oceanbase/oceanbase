@@ -393,7 +393,7 @@ DEF_BOOL(_optimizer_sortmerge_join_enabled, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_nested_loop_join_enabled, OB_TENANT_PARAMETER, "True",
          "enable/disable nested loop join",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_adaptive_join_enabled, OB_TENANT_PARAMETER, "True",
+DEF_BOOL(_adaptive_join_enabled, OB_TENANT_PARAMETER, "False",
          "enable/disable adaptive join",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //
