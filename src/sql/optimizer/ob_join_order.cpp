@@ -3515,7 +3515,7 @@ int ObJoinOrder::revise_output_rows_after_creating_path(PathHelper &helper,
     }
   }
   if (OB_FAIL(ret)) {
-    // dp nothing
+    // do nothing
   } else if (!helper.is_inner_path_) {
     LOG_TRACE("OPT:output row count before revising", K(output_rows_));
     // get the minimal output row count

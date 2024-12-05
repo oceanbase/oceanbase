@@ -15734,40 +15734,48 @@ int ObDMLResolver::resolve_pq_subquery_hint(const ParseNode &hint_node,
     LOG_WARN("unexpected pq_subquery hint node", K(ret), K(hint_node.num_child_));
   } else {
     DistAlgo dist_algo = DistAlgo::DIST_INVALID_METHOD;
-    if (OB_ISNULL(dist_methods_node = hint_node.children_[2])) {
+    if (NULL == (dist_methods_node = hint_node.children_[2])) {
       dist_algo = DistAlgo::DIST_BASIC_METHOD;
     } else if (OB_UNLIKELY(T_DISTRIBUTE_METHOD_LIST != dist_methods_node->type_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected pq_subquery hint node", K(ret), K(get_type_name(dist_methods_node->type_)));
-    } else if (OB_UNLIKELY(2 != dist_methods_node->num_child_)
-               || OB_ISNULL(dist_methods_node->children_[0])
-               || OB_ISNULL(dist_methods_node->children_[1])) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected disdist methods node", K(ret));
-    } else {
-      ObItemType outer = dist_methods_node->children_[0]->type_;
-      ObItemType inner = dist_methods_node->children_[1]->type_;
-      //  pq_subquery(@sel$1 (sel$2 sel$3)) basic
-      //  pq_subquery(@sel$1 (sel$2 sel$3) LOCAL LOCAL)
-      //  pq_subquery(@sel$1 (sel$2 sel$3) NONE NONE)
-      //  pq_subquery(@sel$1 (sel$2 sel$3) PARTITION NONE)
-      //  pq_subquery(@sel$1 (sel$2 sel$3) NONE ALL)
-      if (T_DISTRIBUTE_LOCAL == outer && T_DISTRIBUTE_LOCAL == inner) {
-        dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
-      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_NONE == inner) {
-        dist_algo = DistAlgo::DIST_PARTITION_WISE;
-      } else if (T_DISTRIBUTE_PARTITION == outer && T_DISTRIBUTE_NONE == inner) {
-        dist_algo = DistAlgo::DIST_PARTITION_NONE;
-      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_ALL == inner) {
-        dist_algo = DistAlgo::DIST_NONE_ALL;
-      } else if (T_DISTRIBUTE_RANDOM == outer && T_DISTRIBUTE_ALL == inner) {
-        dist_algo = DistAlgo::DIST_RANDOM_ALL;
-      } else if (T_DISTRIBUTE_HASH == outer && T_DISTRIBUTE_ALL == inner) {
-        dist_algo = DistAlgo::DIST_HASH_ALL;
+    } else if (1 == dist_methods_node->num_child_) {
+      if (OB_ISNULL(dist_methods_node->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected pq_subquery hint dist methods node", K(ret), K(dist_methods_node->children_[0]));
+      } else if (T_DISTRIBUTE_BASIC == dist_methods_node->children_[0]->type_) {
+        // pq_subquery(@sel$1 (sel$2 sel$3) BASIC)
+        dist_algo = DistAlgo::DIST_BASIC_METHOD;
+      }
+    } else if (2 == dist_methods_node->num_child_) {
+      if (OB_ISNULL(dist_methods_node->children_[0])
+          || OB_ISNULL(dist_methods_node->children_[1])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected pq_subquery hint dist methods node", K(ret), K(dist_methods_node->children_[0]), K(dist_methods_node->children_[1]));
+      } else {
+        ObItemType outer = dist_methods_node->children_[0]->type_;
+        ObItemType inner = dist_methods_node->children_[1]->type_;
+        // pq_subquery(@sel$1 (sel$2 sel$3) LOCAL LOCAL)
+        // pq_subquery(@sel$1 (sel$2 sel$3) NONE NONE)
+        // pq_subquery(@sel$1 (sel$2 sel$3) PARTITION NONE)
+        // pq_subquery(@sel$1 (sel$2 sel$3) NONE ALL)
+        if (T_DISTRIBUTE_LOCAL == outer && T_DISTRIBUTE_LOCAL == inner) {
+          dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
+        } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_NONE == inner) {
+          dist_algo = DistAlgo::DIST_PARTITION_WISE;
+        } else if (T_DISTRIBUTE_PARTITION == outer && T_DISTRIBUTE_NONE == inner) {
+          dist_algo = DistAlgo::DIST_PARTITION_NONE;
+        } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_ALL == inner) {
+          dist_algo = DistAlgo::DIST_NONE_ALL;
+        } else if (T_DISTRIBUTE_RANDOM == outer && T_DISTRIBUTE_ALL == inner) {
+          dist_algo = DistAlgo::DIST_RANDOM_ALL;
+        } else if (T_DISTRIBUTE_HASH == outer && T_DISTRIBUTE_ALL == inner) {
+          dist_algo = DistAlgo::DIST_HASH_ALL;
+        }
       }
     }
 
-    if (DistAlgo::DIST_INVALID_METHOD != dist_algo) {
+    if (OB_SUCC(ret) && DistAlgo::DIST_INVALID_METHOD != dist_algo) {
       ObPQSubqueryHint *pq_subquery_hint = NULL;
       ObString qb_name;
       if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, pq_subquery_hint))) {
