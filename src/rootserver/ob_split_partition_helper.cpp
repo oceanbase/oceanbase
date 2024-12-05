@@ -222,6 +222,8 @@ int ObSplitPartitionHelper::prepare_start_args_(
                                                              dst_tablet_ids,
                                                              dst_high_bound_vals))) {
     LOG_WARN("failed to get all tablet ids", KR(ret));
+  } else if (OB_FAIL(ObDDLUtil::batch_check_tablet_checksum(MTL_ID(), 0/*start index of tablet_arr*/, src_tablet_ids.count(), src_tablet_ids))) {
+    LOG_WARN("verify tablet checksum error", K(ret), K(src_tablet_ids), K(tenant_id));
   }
 
   // lock and get ls_id
