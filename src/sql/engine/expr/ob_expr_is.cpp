@@ -627,7 +627,7 @@ int ObExprIsNot::calc_batch_is_not_null(const ObExpr &expr, ObEvalCtx &ctx,
   LOG_DEBUG("calculate batch is not null", K(batch_size));
   ObDatum *results = expr.locate_batch_datums(ctx);
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) { 
+  if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
     LOG_WARN("failed to eval batch args", K(ret), K(batch_size));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
