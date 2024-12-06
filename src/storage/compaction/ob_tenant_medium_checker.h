@@ -98,7 +98,7 @@ public:
       ObBatchFinishCheckStat &stat);
   int add_tablet_ls(const ObTabletID &tablet_id, const share::ObLSID &ls_id, const int64_t medium_scn);
   bool locality_cache_empty();
-  TO_STRING_KV(K_(is_inited), K_(ls_locality_cache));
+  TO_STRING_KV(K_(is_inited), K_(ls_locality_cache_empty));
 
 private:
   int reput_check_info(ObIArray<ObTabletCheckInfo> &tablet_ls_infos);
@@ -119,10 +119,10 @@ public:
 private:
   bool is_inited_;
   int64_t last_check_timestamp_;
-  share::ObCompactionLocalityCache ls_locality_cache_;
   TabletLSSet tablet_ls_set_;
   LSInfoMap ls_info_map_; // ls leader
   lib::ObMutex lock_;
+  bool ls_locality_cache_empty_;
 };
 
 }
