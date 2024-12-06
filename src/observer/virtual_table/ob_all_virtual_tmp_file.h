@@ -45,6 +45,9 @@ private:
   int get_next_tmp_file_info_(tmp_file::ObTmpFileInfo *tmp_file_info);
   int fill_columns_(tmp_file::ObTmpFileInfo *tmp_file_info);
   int fill_sn_column_(const uint64_t col_index, tmp_file::ObSNTmpFileInfo *tmp_file_info);
+  #ifdef OB_BUILD_SHARED_STORAGE
+  int fill_ss_column_(const uint64_t col_index, tmp_file::ObSSTmpFileInfo *tmp_file_info);
+  #endif
 
 private:
   enum
@@ -80,6 +83,17 @@ private:
     PAGE_FLUSH_CNT,
     TYPE,
     COMPRESSIBLE_FD,
+    PERSISTED_TAIL_PAGE_WRITES,
+    LACK_PAGE_CNT,
+    TOTAL_TRUNCATED_PAGE_READ_CNT,
+    TRUNCATED_PAGE_HITS,
+    TOTAL_KV_CACHE_PAGE_READ_CNT,
+    KV_CACHE_PAGE_HITS,
+    TOTAL_UNCACHED_PAGE_READ_CNT,
+    UNCACHED_PAGE_HITS,
+    AGGREGATE_READ_IO_CNT,
+    TOTAL_WBP_PAGE_READ_CNT,
+    WBP_PAGE_HITS,
   };
   static const int64_t OB_MAX_FILE_LABEL_SIZE = tmp_file::ObTmpFileGlobal::TMP_FILE_MAX_LABEL_SIZE + 1;
   char ip_buffer_[common::OB_IP_STR_BUFF];
