@@ -123,10 +123,10 @@ public:
     use_sort_data_(false), inner_sort_(op_monitor_info_), rollup_hash_vals_(nullptr),
     ndv_calculator_(nullptr), global_rollup_key_(), partial_rollup_idx_(INT64_MAX),
     cur_grouping_id_(INT64_MAX), sort_batch_rows_(), first_batch_from_sort_(true), dir_id_(-1),
-    group_batch_factor_(8), max_partial_rollup_idx_(INT64_MAX), rollup_context_(),
-    agg_row_meta_(&exec_ctx.get_allocator()), group_rows_(), output_stored_rows_(nullptr),
-    output_rollup_ids_(nullptr), profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
-    sql_mem_processor_(profile_, op_monitor_info_), hp_infras_mgr_(MTL_ID()), group_processor_()
+    group_batch_factor_(8), rollup_context_(), agg_row_meta_(&exec_ctx.get_allocator()),
+    group_rows_(), output_stored_rows_(nullptr), output_rollup_ids_(nullptr),
+    profile_(ObSqlWorkAreaType::HASH_WORK_AREA), sql_mem_processor_(profile_, op_monitor_info_),
+    hp_infras_mgr_(MTL_ID()), group_processor_()
   {}
   void reset();
   virtual int inner_open() override;
@@ -295,7 +295,6 @@ private:
   int64_t dir_id_;
   // default is a magic number 8, may use a sophisticated way
   int64_t group_batch_factor_;
-  int64_t max_partial_rollup_idx_;
   share::aggregate::RollupContext rollup_context_;
   RowMeta agg_row_meta_;
   common::ObSegmentArray<ObCompactRow *, OB_MALLOC_MIDDLE_BLOCK_SIZE, common::ModulePageAllocator>

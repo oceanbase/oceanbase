@@ -262,18 +262,10 @@ int ObMergeGroupByOp::init()
     } else if (OB_FAIL(init_rollup_distributor())) {
       LOG_WARN("failed to init rollup distributor", K(ret));
     } else {
-      const bool is_mysql_mode = lib::is_mysql_mode();
-      max_partial_rollup_idx_ = all_groupby_exprs_.count();
       // prepare initial group
       if (MY_SPEC.has_rollup_) {
-        for (int64_t i = 0; i < MY_SPEC.is_duplicate_rollup_expr_.count(); ++i) {
+        for (int64_t i = 0; !has_dup_group_expr_ && i < MY_SPEC.is_duplicate_rollup_expr_.count(); ++i) {
           has_dup_group_expr_ = MY_SPEC.is_duplicate_rollup_expr_.at(i);
-          if (has_dup_group_expr_) {
-            if (is_mysql_mode) {
-              max_partial_rollup_idx_ = i + MY_SPEC.group_exprs_.count() + 1;
-            }
-            break;
-          }
         }
         aggr_processor_.set_op_eval_infos(&eval_infos_);
       }
@@ -447,7 +439,7 @@ int ObMergeGroupByOp::find_candidate_key(ObRollupNDVInfo &ndv_info)
 {
   int ret = OB_SUCCESS;
   int64_t n_group = MY_SPEC.group_exprs_.count();
-  uint64_t candidate_ndv = 0;
+  uint64_t candicate_ndv = 0;
   ObPxSqcHandler *sqc_handle = ctx_.get_sqc_handler();
   ndv_info.dop_ = 1;
   // ndv_info.max_keys_ = 0;
@@ -463,19 +455,18 @@ int ObMergeGroupByOp::find_candidate_key(ObRollupNDVInfo &ndv_info)
     if (0 == n_group && i == MY_SPEC.rollup_exprs_.count()) {
       break;
     }
-    candidate_ndv = ndv_calculator_[i].estimate();
-    if (candidate_ndv >= ObRollupKeyPieceMsgCtx::FAR_GREATER_THAN_RATIO * ndv_info.dop_) {
-      ndv_info.ndv_ = candidate_ndv;
+    candicate_ndv = ndv_calculator_[i].estimate();
+    if (candicate_ndv >= ObRollupKeyPieceMsgCtx::FAR_GREATER_THAN_RATIO * ndv_info.dop_) {
+      ndv_info.ndv_ = candicate_ndv;
       ndv_info.n_keys_ = 0 == n_group ? i + 1 : i + n_group;
       break;
     }
   }
   if (0 == ndv_info.n_keys_) {
     // can't found, use all groupby keys
-    ndv_info.ndv_ = candidate_ndv;
+    ndv_info.ndv_ = candicate_ndv;
     ndv_info.n_keys_ = all_groupby_exprs_.count();
   }
-  LOG_INFO("find candidate rollup key", K(ndv_info));
   return ret;
 }
 
@@ -546,7 +537,6 @@ int ObMergeGroupByOp::process_parallel_rollup_key(ObRollupNDVInfo &ndv_info)
       } else {
         partial_rollup_idx_ = MY_SPEC.group_exprs_.count();
       }
-      partial_rollup_idx_ = MIN(max_partial_rollup_idx_, partial_rollup_idx_);
       aggr_processor_.set_partial_rollup_idx(MY_SPEC.group_exprs_.count(), partial_rollup_idx_);
     }
     LOG_DEBUG("debug partial rollup keys", K(partial_rollup_idx_));
