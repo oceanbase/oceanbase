@@ -2405,7 +2405,7 @@ int ObDbmsWorkloadRepository::print_ash_top_group(const AshReportParams &ash_rep
               if (OB_ISNULL(GCTX.cgroup_ctrl_)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("GCTX.cgroup_ctrl_ is nullptr", K(ret));
-              } else if(OB_FAIL(GCTX.cgroup_ctrl_->get_group_path(group_path, 128, tenant_id, group_id, false/*is_background*/, ""))) {
+              } else if(OB_FAIL(GCTX.cgroup_ctrl_->get_group_path(group_path, 128, tenant_id, group_id))) {
                 LOG_WARN("get group path failed", K(ret), K(tenant_id), K(group_id));
               } else {
                 group_path[127] = '\0';
