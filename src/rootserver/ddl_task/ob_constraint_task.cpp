@@ -723,6 +723,8 @@ int ObConstraintTask::wait_trans_end()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObConstraintTask has not been inited", K(ret));
+  } else if (snapshot_version_ > 0) {
+    new_status = CHECK_CONSTRAINT_VALID;
   }
 
   if (OB_SUCC(ret) && snapshot_version_ <= 0 && !wait_trans_ctx_.is_inited()) {

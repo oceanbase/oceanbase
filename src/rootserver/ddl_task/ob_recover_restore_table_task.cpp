@@ -103,7 +103,7 @@ int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_s
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (snapshot_version_ > 0) {
-    // do nothing, already hold snapshot.
+    new_status = next_task_status; // to switch to the next status.
   } else if (OB_FAIL(ObDDLWaitTransEndCtx::calc_snapshot_with_gts(dst_tenant_id_, task_id_, 0/*trans_end_snapshot*/, new_fetched_snapshot))) {
     // fetch snapshot.
     LOG_WARN("calc snapshot with gts failed", K(ret), K(dst_tenant_id_));
