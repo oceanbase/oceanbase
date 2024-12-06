@@ -56,3 +56,7 @@ alter system set _enable_spf_batch_rescan = true tenant = all_meta;
 alter system set _enable_var_assign_use_das = true tenant = sys;
 alter system set _enable_var_assign_use_das = true tenant = all_user;
 alter system set _enable_var_assign_use_das = true tenant = all_meta;
+
+alter system set _adaptive_join_enabled = true tenant = sys;
+alter system set _adaptive_join_enabled = true tenant = all_user;
+alter system set _adaptive_join_enabled = true tenant = all_meta;
