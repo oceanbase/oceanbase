@@ -281,9 +281,9 @@ int ObDASFuncDataIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       ret = OB_SUCCESS;
     }
   }
-  if (OB_UNLIKELY(main_lookup_iter_ &&
-                  main_lookup_count != capacity && // case: limit, read once
-                  default_size != main_lookup_count + read_count_)) { // case: limit, read more times
+  if (OB_SUCC(ret) && OB_UNLIKELY(main_lookup_iter_ &&
+                      main_lookup_count != capacity && // case: limit, read once
+                      default_size != main_lookup_count + read_count_)) { // case: limit, read more times
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, main lookup count is not equal to capacity", K(ret), K(default_size), K(main_lookup_count));
   }
