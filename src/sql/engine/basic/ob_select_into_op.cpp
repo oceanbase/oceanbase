@@ -648,7 +648,7 @@ int ObSelectIntoOp::calc_first_file_path(ObString &path)
     if (file_location_ == IntoFileLocation::REMOTE_OSS) {
       OZ(file_name_with_suffix.append_fmt("?%.*s", path.length(), path.ptr()));
     }
-    if (OB_FAIL(ob_write_string(ctx_.get_allocator(), file_name_with_suffix.string(), path))) {
+    if (OB_SUCC(ret) && OB_FAIL(ob_write_string(ctx_.get_allocator(), file_name_with_suffix.string(), path))) {
       LOG_WARN("failed to write string", K(ret));
     }
   }
