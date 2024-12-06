@@ -202,6 +202,53 @@ int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileInfo *tmp_file_inf
           cur_row_.cells_[i].set_varchar(file_label_buffer_);
           cur_row_.cells_[i].set_default_collation_type();
           break;
+        case TYPE:
+          break;
+        case COMPRESSIBLE_FD:
+          break;
+        case PERSISTED_TAIL_PAGE_WRITES:
+          cur_row_.cells_[i].set_int(tmp_file_info->write_persisted_tail_page_cnt_);
+          break;
+        case LACK_PAGE_CNT:
+          cur_row_.cells_[i].set_int(tmp_file_info->lack_page_cnt_);
+          break;
+        case TOTAL_TRUNCATED_PAGE_READ_CNT:
+          cur_row_.cells_[i].set_int(tmp_file_info->total_truncated_page_read_cnt_);
+          break;
+        case TRUNCATED_PAGE_HITS:
+          cur_row_.cells_[i].set_int(tmp_file_info->truncated_page_read_hits_);
+          break;
+        case TOTAL_KV_CACHE_PAGE_READ_CNT:
+          cur_row_.cells_[i].set_int(tmp_file_info->total_kv_cache_page_read_cnt_);
+          break;
+        case KV_CACHE_PAGE_HITS:
+          cur_row_.cells_[i].set_int(tmp_file_info->kv_cache_page_read_hits_);
+          break;
+        case TOTAL_UNCACHED_PAGE_READ_CNT:
+          cur_row_.cells_[i].set_int(tmp_file_info->total_uncached_page_read_cnt_);
+          break;
+        case UNCACHED_PAGE_HITS:
+          cur_row_.cells_[i].set_int(tmp_file_info->uncached_page_read_hits_);
+          break;
+        case TOTAL_WBP_PAGE_READ_CNT:
+          cur_row_.cells_[i].set_int(tmp_file_info->total_wbp_page_read_cnt_);
+          break;
+        case WBP_PAGE_HITS:
+          cur_row_.cells_[i].set_int(tmp_file_info->wbp_page_read_hits_);
+          break;
+      #ifdef OB_BUILD_SHARED_STORAGE
+        /* columns in ss modes begin */
+        case AGGREGATE_READ_IO_CNT:
+          if (GCTX.is_shared_storage_mode()) {
+            tmp_file::ObSSTmpFileInfo *ss_tmp_file_info = static_cast<tmp_file::ObSSTmpFileInfo *>(tmp_file_info);
+            if (OB_FAIL(fill_ss_column_(i, ss_tmp_file_info))) {
+              SERVER_LOG(WARN, "fail to fill ss column", KR(ret), K(i), KPC(ss_tmp_file_info));
+            }
+          }
+          break;
+        /* columns in ss modes end */
+      #endif
+        /* columns in sn modes begin */
         case META_TREE_EPOCH:
         case META_TREE_LEVELS:
         case META_BYTES:
@@ -215,10 +262,7 @@ int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileInfo *tmp_file_inf
             }
           }
           break;
-        case TYPE:
-          break;
-        case COMPRESSIBLE_FD:
-          break;
+        /* columns in sn modes end */
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column_id", KR(ret), K(col_id));
@@ -265,6 +309,29 @@ int ObAllVirtualTmpFileInfo::fill_sn_column_(const uint64_t col_index, tmp_file:
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObAllVirtualTmpFileInfo::fill_ss_column_(const uint64_t col_index, tmp_file::ObSSTmpFileInfo *tmp_file_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(tmp_file_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    SERVER_LOG(WARN, "invalid argument", KR(ret), KP(tmp_file_info));
+  } else {
+    uint64_t col_id = output_column_ids_.at(col_index);
+    switch (col_id) {
+      case AGGREGATE_READ_IO_CNT:
+        cur_row_.cells_[col_index].set_int(tmp_file_info->aggregate_read_io_cnt_);
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "invalid column_id", KR(ret), K(col_id));
+        break;
+    }
+  }
+  return ret;
+}
+#endif
+
 int ObAllVirtualTmpFileInfo::process_curr_tenant(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
@@ -296,7 +363,7 @@ int ObAllVirtualTmpFileInfo::process_curr_tenant(common::ObNewRow *&row)
       tmp_file_info = OB_NEW(tmp_file::ObSNTmpFileInfo, attr);
     #ifdef OB_BUILD_SHARED_STORAGE
     } else {
-      tmp_file_info = OB_NEW(tmp_file::ObTmpFileInfo, attr);
+      tmp_file_info = OB_NEW(tmp_file::ObSSTmpFileInfo, attr);
     #endif
     }
     if (OB_FAIL(get_next_tmp_file_info_(tmp_file_info))) {

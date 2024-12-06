@@ -241,8 +241,7 @@ int ObITenantTmpFileManager::aio_read(const uint64_t tenant_id,
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info), KPC(tmp_file_handle.get()));
   } else {
-    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx().is_unaligned_read(),
-                                               io_info.size_);
+    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx(), io_info.size_);
   }
 
   LOG_DEBUG("aio_read a tmp file over", KR(ret), K(io_info), K(io_handle), KPC(tmp_file_handle.get()));
@@ -277,8 +276,7 @@ int ObITenantTmpFileManager::aio_pread(const uint64_t tenant_id,
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info), KPC(tmp_file_handle.get()));
   } else {
-    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx().is_unaligned_read(),
-                                               io_info.size_);
+    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx(), io_info.size_);
   }
 
   LOG_DEBUG("aio_pread a tmp file over", KR(ret), K(io_info), K(offset), K(io_handle), KPC(tmp_file_handle.get()));
@@ -312,8 +310,7 @@ int ObITenantTmpFileManager::read(const uint64_t tenant_id,
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info), KPC(tmp_file_handle.get()));
   } else {
-    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx().is_unaligned_read(),
-                                               io_info.size_);
+    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx(), io_info.size_);
   }
 
   if (OB_SUCC(ret) || OB_ITER_END == ret) {
@@ -356,8 +353,7 @@ int ObITenantTmpFileManager::pread(const uint64_t tenant_id,
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info), KPC(tmp_file_handle.get()));
   } else {
-    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx().is_unaligned_read(),
-                                               io_info.size_);
+    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx(), io_info.size_);
   }
 
   if (OB_SUCC(ret) || OB_ITER_END == ret) {
@@ -395,6 +391,8 @@ int ObITenantTmpFileManager::aio_write(const uint64_t tenant_id,
     LOG_WARN("fail to init io handle", KR(ret), K(tenant_id), K(io_info));
   } else if (OB_FAIL(tmp_file_handle.get()->aio_write(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio write", KR(ret), K(io_info), KPC(tmp_file_handle.get()));
+  } else {
+    tmp_file_handle.get()->set_write_stats_vars(io_handle.get_io_ctx());
   }
 
   LOG_DEBUG("aio_write a tmp file over", KR(ret), K(io_info), K(io_handle), KPC(tmp_file_handle.get()));

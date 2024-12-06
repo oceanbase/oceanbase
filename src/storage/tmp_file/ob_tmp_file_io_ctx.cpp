@@ -34,12 +34,24 @@ ObTmpFileIOCtx::ObTmpFileIOCtx():
                 read_offset_in_file_(-1),
                 disable_page_cache_(false),
                 disable_block_cache_(false),
-                is_unaligned_read_(false),
                 io_flag_(),
                 io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS),
                 io_handles_(),
                 page_cache_handles_(),
-                block_cache_handles_()
+                block_cache_handles_(),
+                is_unaligned_write_(false),
+                write_persisted_tail_page_cnt_(0),
+                lack_page_cnt_(0),
+                is_unaligned_read_(false),
+                total_truncated_page_read_cnt_(0),
+                total_kv_cache_page_read_cnt_(0),
+                total_uncached_page_read_cnt_(0),
+                total_wbp_page_read_cnt_(0),
+                truncated_page_read_hits_(0),
+                kv_cache_page_read_hits_(0),
+                uncached_page_read_hits_(0),
+                aggregate_read_io_cnt_(0),
+                wbp_page_read_hits_(0)
 {
   io_handles_.set_attr(ObMemAttr(MTL_ID(), "TMP_IO_HDL"));
   page_cache_handles_.set_attr(ObMemAttr(MTL_ID(), "TMP_PCACHE_HDL"));
@@ -115,9 +127,23 @@ void ObTmpFileIOCtx::reset()
   dir_id_ = ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID;
   disable_page_cache_ = false;
   disable_block_cache_ = false;
-  is_unaligned_read_ = false;
   io_flag_.reset();
   io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  /********for virtual table statistics begin********/
+  is_unaligned_write_ = false;
+  write_persisted_tail_page_cnt_ = 0;
+  lack_page_cnt_ = 0;
+  is_unaligned_read_ = false;
+  total_truncated_page_read_cnt_ = 0;
+  total_kv_cache_page_read_cnt_ = 0;
+  total_uncached_page_read_cnt_ = 0;
+  total_wbp_page_read_cnt_ = 0;
+  truncated_page_read_hits_ = 0;
+  kv_cache_page_read_hits_ = 0;
+  uncached_page_read_hits_ = 0;
+  aggregate_read_io_cnt_ = 0;
+  wbp_page_read_hits_ = 0;
+  /********for virtual table statistics end ********/
 }
 
 bool ObTmpFileIOCtx::is_valid() const
