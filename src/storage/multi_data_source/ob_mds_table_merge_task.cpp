@@ -36,6 +36,7 @@ namespace storage
 {
 namespace mds
 {
+ERRSIM_POINT_DEF(EN_SKIP_MDS_MINI_MERGE);
 
 ObMdsTableMergeTask::ObMdsTableMergeTask()
   : ObITask(ObITaskType::TASK_TYPE_MDS_MINI_MERGE),
@@ -78,6 +79,14 @@ int ObMdsTableMergeTask::process()
   ObTabletMergeCtx *ctx_ptr = nullptr;
   DEBUG_SYNC(AFTER_EMPTY_SHELL_TABLET_CREATE);
   bool need_schedule_mds_minor = true;
+
+#ifdef ERRSIM
+  if (OB_SUCCESS != EN_SKIP_MDS_MINI_MERGE) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("[ERRSIM] mds mini merge, skip", KR(ret), KPC_(mds_merge_dag));
+    return ret;
+  }
+#endif
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
