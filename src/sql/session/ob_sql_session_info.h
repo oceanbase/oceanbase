@@ -510,23 +510,6 @@ public:
           const int16_t type, int64_t index);
 };
 
-class ObQueryInfoEncoder : public ObSessInfoEncoder {
-public:
-  ObQueryInfoEncoder() : ObSessInfoEncoder() {}
-  virtual ~ObQueryInfoEncoder() {}
-  virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
-  virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
-  virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
-  virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
-  virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override;
-  virtual int compare_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length,
-                                const char* last_sess_buf, int64_t last_sess_length) override;
-  virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
-                                int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override;
-  virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
-          const int16_t type, int64_t index);
-};
-
 #define DEF_SESSION_TXN_ENCODER(CLS)                                    \
 class CLS final : public ObSessInfoEncoder {                            \
 public:                                                                 \
@@ -1145,8 +1128,6 @@ public:
 
   inline void set_ob20_protocol(bool is_20protocol) { is_ob20_protocol_ = is_20protocol; }
   inline bool is_ob20_protocol() { return is_ob20_protocol_; }
-  inline void set_session_sync_support(bool is_session_sync_support) { is_session_sync_support_ = is_session_sync_support; }
-  inline bool is_session_sync_support() { return is_session_sync_support_; }
 
   inline void set_session_var_sync(bool is_session_var_sync)
               { is_session_var_sync_ = is_session_var_sync; }
@@ -1386,7 +1367,6 @@ public:
   ObControlInfoEncoder &get_control_info_encoder() { return control_info_encoder_;}
   ObErrorSyncSysVarEncoder &get_error_sync_sys_var_encoder() { return error_sync_sys_var_encoder_;}
   ObSequenceCurrvalEncoder &get_sequence_currval_encoder() { return sequence_currval_encoder_; }
-  ObQueryInfoEncoder &get_query_info_encoder() { return query_info_encoder_; }
   ObContextsMap &get_contexts_map() { return contexts_map_; }
   ObSequenceCurrvalMap &get_sequence_currval_map() { return sequence_currval_map_; }
   ObDBlinkSequenceIdMap  &get_dblink_sequence_id_map() { return dblink_sequence_id_map_; }
@@ -1680,7 +1660,6 @@ public:
   }
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
-  void set_affected_rows_is_changed(int64_t affected_rows);
   int close_all_ps_stmt();
   void destory_mem_context();
 private:
@@ -1879,8 +1858,7 @@ private:
                             &txn_participants_info_encoder_,
                             &txn_extra_info_encoder_,
                             &sequence_currval_encoder_,
-                            &error_sync_sys_var_encoder_,
-                            &query_info_encoder_,
+                            &error_sync_sys_var_encoder_
                             };
   ObSysVarEncoder sys_var_encoder_;
   //ObUserVarEncoder usr_var_encoder_;
@@ -1894,7 +1872,7 @@ private:
   ObTxnExtraInfoEncoder txn_extra_info_encoder_;
   ObSequenceCurrvalEncoder sequence_currval_encoder_;
   ObErrorSyncSysVarEncoder error_sync_sys_var_encoder_;
-  ObQueryInfoEncoder query_info_encoder_;
+
   int16_t sess_diag_info_index_[SESSION_SYNC_MAX_TYPE];
 public:
   SessSyncDiagInfo sess_diag_info_[SESSION_SYNC_MAX_TYPE][3];
@@ -1959,7 +1937,6 @@ private:
   ObServiceNameString service_name_;
   common::ObString audit_filter_name_;
   uint64_t unit_gc_min_sup_proxy_version_;
-  bool is_session_sync_support_; // session_sync_support flag.
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const
@@ -1984,13 +1961,6 @@ inline bool ObSQLSessionInfo::is_terminate(int &ret) const
     ret = common::OB_ERR_SESSION_INTERRUPTED;
   }
   return bret;
-}
-
-inline void ObSQLSessionInfo::set_affected_rows_is_changed(int64_t affected_rows)
-{
-  if (affected_rows != get_affected_rows()) {
-    query_info_encoder_.is_changed_ = true;
-  }
 }
 
 } // namespace sql

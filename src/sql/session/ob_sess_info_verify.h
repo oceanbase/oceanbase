@@ -50,7 +50,6 @@ enum SessionSyncInfoType {
   SESSION_SYNC_TXN_EXTRA_INFO = 8,        // 8: txn dynamic info
   SESSION_SYNC_SEQUENCE_CURRVAL = 9, // for sequence currval
   SESSION_SYNC_ERROR_SYS_VAR = 10, // for error scene need sync sysvar info
-  SESSION_SYNC_QUERY_INFO = 11, // for query level session info
   SESSION_SYNC_MAX_TYPE,
 };
 
