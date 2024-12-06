@@ -9773,7 +9773,15 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         break;
       }
       case T_FILE_EXTENSION: {
-        format.csv_format_.file_extension_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        ObString file_extension = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        if (OB_NOT_NULL(file_extension.find('/'))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("file_extension can not contain '/'", K(ret), K(file_extension));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file_extension can not contain '/'");
+        }
+        if (OB_SUCC(ret)) {
+          format.csv_format_.file_extension_ = file_extension;
+        }
         break;
       }
       default: {
