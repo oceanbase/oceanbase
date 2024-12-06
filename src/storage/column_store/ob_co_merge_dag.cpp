@@ -36,6 +36,7 @@ using namespace storage;
 namespace compaction
 {
 ERRSIM_POINT_DEF(EN_COMPACTION_ADD_CO_MREGE_FINISH_DAG_INTO_DAG_NET_FAILED);
+ERRSIM_POINT_DEF(EN_COMPACTION_DELAY_FOLLOWER_ROWKEY_CG_MERGE);
 ObCOMergeDagParam::ObCOMergeDagParam()
   : ObTabletMergeDagParam(),
     start_cg_idx_(0),
@@ -616,6 +617,29 @@ int ObCOMergeBatchExeDag::diagnose_compaction_info(compaction::ObDiagnoseTabletC
   return ret;
 }
 
+bool ObCOMergeBatchExeDag::check_can_schedule()
+{
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  ObCOMergeDagNet *dag_net = static_cast<ObCOMergeDagNet*>(get_dag_net());
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_ISNULL(dag_net->get_merge_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("merge ctx is null", K(ret), KPC(dag_net));
+  } else if (start_cg_idx_ <= dag_net->get_merge_ctx()->base_rowkey_cg_idx_ && dag_net->get_merge_ctx()->base_rowkey_cg_idx_ < end_cg_idx_) {
+    if ((end_cg_idx_ - start_cg_idx_) == dag_net->get_merge_ctx()->get_unfinished_cg_cnt()) {
+      bret = true;
+    } else if (REACH_TENANT_TIME_INTERVAL(20 * 60 * 1000 * 1000L /*20 min*/)) {
+      LOG_INFO("waiting other batch exe dag finished", KPC(this));
+    }
+  } else {
+    bret = true;
+  }
+  return bret;
+}
+
 int ObCOMergeBatchExeDag::inner_reset_status_for_retry()
 {
   int ret = OB_SUCCESS;
@@ -750,9 +774,9 @@ int ObCOMergeBatchExeTask::process()
 
   void *buf = nullptr;
 #ifdef ERRSIM
-  ret = OB_E(EventTable::EN_CO_MREGE_DAG_SCHEDULE_REST) ret;
   if (OB_FAIL(ret)) {
-    LOG_INFO("ERRSIM EN_CO_MREGE_DAG_SCHEDULE_REST PROCESS FAILED", K(ret));
+  } else if (OB_FAIL(errsim_before_merge_partition())) {
+    LOG_WARN("failed to errsim before merge partition", K(ret), KPC(this));
   }
 #endif
   if (OB_FAIL(ret)) {
@@ -834,6 +858,49 @@ int ObCOMergeBatchExeTask::generate_next_task(ObITask *&next_task)
   }
   return ret;
 }
+
+#ifdef ERRSIM
+int ObCOMergeBatchExeTask::errsim_before_merge_partition()
+{
+  int ret = OB_SUCCESS;
+  ObCOMergeBatchExeDag *exe_dag = static_cast<ObCOMergeBatchExeDag*>(dag_);
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_CO_MREGE_DAG_SCHEDULE_REST) ret;
+    if (OB_FAIL(ret)) {
+      LOG_INFO("ERRSIM EN_CO_MREGE_DAG_SCHEDULE_REST PROCESS FAILED", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int tmp_ret = EN_COMPACTION_DELAY_FOLLOWER_ROWKEY_CG_MERGE;
+    if (OB_TMP_FAIL(tmp_ret)) {
+      ObLS *ls = ctx_->get_ls();
+      ObRole role = ObRole::INVALID_ROLE;
+      const bool contain_rowkey_cg = exe_dag->get_start_cg_idx() <= ctx_->base_rowkey_cg_idx_ && ctx_->base_rowkey_cg_idx_ < exe_dag->get_end_cg_idx();
+      if (OB_ISNULL(ls)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "ls is null", K(ret), KPC_(ctx));
+      } else if (OB_FAIL(ls->get_ls_role(role))) {
+        STORAGE_LOG(WARN, "failed to get ls role", K(ret), KPC(ls));
+      } else if (ObRole::FOLLOWER == role) {
+        if (contain_rowkey_cg) {
+          ob_usleep(20 * 1000 * 1000 /*20s*/);
+          LOG_INFO("EN EN_COMPACTION_DELAY_FOLLOWER_ROWKEY_CG_MERGE for rowkey cg", K(tmp_ret));
+        } else {
+          // do nothing, make rowkey cg merge finally in ls follower
+        }
+      } else if (ObRole::LEADER == role) {
+        if (contain_rowkey_cg) {
+          // do nothing, make rowkey cg merge firstly in ls leader
+        } else {
+          ob_usleep(20 * 1000 * 1000 /*20s*/);
+          LOG_INFO("EN EN_COMPACTION_DELAY_FOLLOWER_ROWKEY_CG_MERGE for normal cg", K(tmp_ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 ObCOMergeBatchFinishTask::ObCOMergeBatchFinishTask()
  : ObITask(ObITask::TASK_TYPE_MACROMERGE),
@@ -1200,16 +1267,13 @@ int ObCOMergeDagNet::init_cg_schedule_status_for_row_store()
 {
   int ret = OB_SUCCESS;
   const int64_t max_cg_idx = co_merge_ctx_->get_schema()->get_column_group_count();
-  int32_t start_cg_idx = OB_INVALID_INDEX;
 
   if (!co_merge_ctx_->is_build_row_store()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid co merge type", KPC_(co_merge_ctx));
-  } else if (OB_FAIL(co_merge_ctx_->get_schema()->get_base_rowkey_column_group_index(start_cg_idx))) {
-    LOG_WARN("failed to get all cg or rowkey cg in cg schemas", K(ret), KPC_(co_merge_ctx));
   } else {
     MARK_CG_SCHEDULE_STATUS(0, max_cg_idx, ObCOTabletMergeCtx::CG_SCHE_STATUS_FINISHED);
-    co_merge_ctx_->cg_schedule_status_array_[start_cg_idx] = ObCOTabletMergeCtx::CG_SCHE_STATUS_IDLE;
+    co_merge_ctx_->cg_schedule_status_array_[co_merge_ctx_->base_rowkey_cg_idx_] = ObCOTabletMergeCtx::CG_SCHE_STATUS_IDLE;
     co_merge_ctx_->set_batch_finish_for_row_store(max_cg_idx - 1);
   }
   return ret;
@@ -1351,12 +1415,10 @@ int ObCOMergeDagNet::inner_create_row_store_dag(
     ObCOMajorMergePolicy::co_major_merge_type_to_str(co_merge_ctx_->static_param_.co_major_merge_type_));
 
   dag = nullptr;
-  int32_t start_cg_idx = OB_INVALID_INDEX;
+  const int64_t start_cg_idx = co_merge_ctx_->base_rowkey_cg_idx_;
   int64_t allowed_schedule_dag_count_place_holder = 1;
 
-  if (OB_FAIL(co_merge_ctx_->get_schema()->get_base_rowkey_column_group_index(start_cg_idx))) {
-    LOG_WARN("failed to get all cg or rowkey cg in cg schemas", K(ret));
-  } else if (!ObCOTabletMergeCtx::is_cg_could_schedule(co_merge_ctx_->cg_schedule_status_array_[start_cg_idx])) {
+  if (!ObCOTabletMergeCtx::is_cg_could_schedule(co_merge_ctx_->cg_schedule_status_array_[start_cg_idx])) {
   } else if (OB_FAIL(init_cg_schedule_status_for_row_store())) {
     LOG_WARN("failed to init cg schedule status", K(ret));
   } else if (OB_FAIL(inner_create_exe_dags(start_cg_idx, start_cg_idx + 1, max_cg_idx, allowed_schedule_dag_count_place_holder,
