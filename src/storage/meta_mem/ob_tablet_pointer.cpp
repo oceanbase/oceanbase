@@ -37,6 +37,9 @@ namespace oceanbase
 {
 namespace storage
 {
+//errsim def
+ERRSIM_POINT_DEF(EN_RELEASE_MDS_NODE_FAILED);
+
 ObTabletPointer::ObTabletPointer()
   : phy_addr_(),
     obj_(),
@@ -606,6 +609,14 @@ int ObTabletPointer::release_mds_nodes_redo_scn_below(const ObTabletID &tablet_i
     LOG_WARN("fail to release mds nodes in mds table", K(ret));
   }
 
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = EN_RELEASE_MDS_NODE_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_RELEASE_MDS_NODE_FAILED", K(ret));
+      }
+    }
+#endif
   return ret;
 }
 
