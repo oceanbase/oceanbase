@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 #include "lib/utility/ob_test_util.h"
 #include "observer/mysql/ob_query_response_time.h"
+#include "sql/resolver/ob_stmt_type.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::observer;
@@ -48,30 +49,52 @@ void TestQueryRsponseTime::TearDown()
 }
 
 TEST_F(TestQueryRsponseTime, basic_test){
-    ObRSTTimeCollector time_collector;
-    time_collector.setup(10);
-    ASSERT_EQ(100,time_collector.bound(2));
-    ASSERT_EQ(13,time_collector.bound_count());
-    time_collector.collect(5);
-    time_collector.collect(50);
-    ASSERT_EQ(1,time_collector.count(1));
-    ASSERT_EQ(5,time_collector.total(1));
-    ASSERT_EQ(1,time_collector.count(2));
-    ASSERT_EQ(50,time_collector.total(2));
-    time_collector.flush();
-    ASSERT_EQ(0,time_collector.count(1));
-    ASSERT_EQ(0,time_collector.total(1));
-    ASSERT_EQ(0,time_collector.count(2));
-    ASSERT_EQ(0,time_collector.total(2));
-    time_collector.setup(100);
-    ASSERT_EQ(100,time_collector.bound(1));
-    ASSERT_EQ(7,time_collector.bound_count());
-    time_collector.collect(5);
-    time_collector.collect(50);
-    ASSERT_EQ(2,time_collector.count(1));
-    ASSERT_EQ(55,time_collector.total(1));
-    ASSERT_EQ(0,time_collector.count(2));
-    ASSERT_EQ(0,time_collector.total(2));
+    ObRespTimeInfoCollector time_collector;
+    ASSERT_EQ(OB_SUCCESS, time_collector.setup(10));
+    ASSERT_EQ(100,time_collector.utility().bound(2));
+    ASSERT_EQ(13,time_collector.utility().bound_count());
+    ASSERT_EQ(OB_SUCCESS, time_collector.collect(oceanbase::sql::stmt::StmtType::T_SELECT, false/*is_inner_sql*/, 5));
+    ASSERT_EQ(OB_SUCCESS, time_collector.collect(oceanbase::sql::stmt::StmtType::T_SELECT, false/*is_inner_sql*/, 50));
+
+    int64_t val = -1;
+    ASSERT_EQ(OB_SUCCESS, time_collector.get_count_val(RespTimeSqlType::select_sql, 1, val));
+    ASSERT_EQ(1, val);
+
+    ASSERT_EQ(OB_SUCCESS, time_collector.get_total_time_val(RespTimeSqlType::select_sql, 1, val));
+    ASSERT_EQ(5, val);
+
+    ASSERT_EQ(OB_SUCCESS, time_collector.get_count_val(RespTimeSqlType::select_sql, 2, val));
+    ASSERT_EQ(1, val);
+
+    ASSERT_EQ(OB_SUCCESS, time_collector.get_total_time_val(RespTimeSqlType::select_sql, 2, val));
+    ASSERT_EQ(50, val);
+    ASSERT_EQ(OB_SUCCESS, time_collector.flush());
+
+    ASSERT_EQ(OB_SUCCESS, time_collector.get_count_val(RespTimeSqlType::select_sql, 1, val));
+    ASSERT_EQ(0, val);
+
+    ASSERT_EQ(OB_SUCCESS, time_collector.get_total_time_val(RespTimeSqlType::select_sql, 1, val));
+    ASSERT_EQ(0, val);
+
+    ASSERT_EQ(OB_SUCCESS, time_collector.get_count_val(RespTimeSqlType::select_sql, 2, val));
+    ASSERT_EQ(0, val);
+    ASSERT_EQ(0,time_collector.get_total_time_val(RespTimeSqlType::select_sql, 2, val));
+
+    ASSERT_EQ(OB_SUCCESS, time_collector.setup(100));
+    ASSERT_EQ(100,time_collector.utility().bound(1));
+    ASSERT_EQ(7,time_collector.utility().bound_count());
+    ASSERT_EQ(OB_SUCCESS, time_collector.collect(oceanbase::sql::stmt::StmtType::T_SELECT, false/*is_inner_sql*/, 5));
+    ASSERT_EQ(OB_SUCCESS, time_collector.collect(oceanbase::sql::stmt::StmtType::T_SELECT, false/*is_inner_sql*/, 50));
+
+    ASSERT_EQ(OB_SUCCESS, time_collector.get_count_val(RespTimeSqlType::select_sql, 1, val));
+    ASSERT_EQ(2, val);
+
+    ASSERT_EQ(OB_SUCCESS, time_collector.get_total_time_val(RespTimeSqlType::select_sql, 1, val));
+    ASSERT_EQ(55, val);
+    ASSERT_EQ(OB_SUCCESS, time_collector.get_count_val(RespTimeSqlType::select_sql, 2, val));
+    ASSERT_EQ(0, val);
+    ASSERT_EQ(OB_SUCCESS, time_collector.get_total_time_val(RespTimeSqlType::select_sql, 2, val));
+    ASSERT_EQ(0, val);
 }
 
 int main(int argc, char** argv)

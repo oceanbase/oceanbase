@@ -253,6 +253,7 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      req_timeinfo_guard_(),
      schema_cache_guard_(),
      stat_event_type_(-1),
+     enable_query_response_time_stats_(true),
      stat_row_count_(0),
      need_retry_in_queue_(false),
      is_tablegroup_req_(false),
@@ -393,6 +394,7 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   } else if (OB_FAIL(check_mode(sess_guard_.get_sess_info()))) {
     LOG_WARN("fail to check mode", K(ret));
   } else {
+    enable_query_response_time_stats_ = sess_guard_.get_sess_info().enable_query_response_time_stats();
     LOG_DEBUG("user can access", K_(credential));
   }
   return ret;
@@ -716,7 +718,7 @@ template<class T>
 int ObTableRpcProcessor<T>::before_response(int error_code)
 {
   const int64_t elapsed_us = ObTimeUtility::fast_current_time() - RpcProcessor::get_receive_timestamp();
-  ObTableRpcProcessorUtil::record_stat(stat_event_type_, elapsed_us, stat_row_count_);
+  ObTableRpcProcessorUtil::record_stat(stat_event_type_, elapsed_us, stat_row_count_, enable_query_response_time_stats_);
   return RpcProcessor::before_response(error_code);
 }
 

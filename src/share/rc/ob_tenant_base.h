@@ -27,6 +27,7 @@
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
 #endif
 #include "lib/mysqlclient/ob_tenant_oci_envs.h"
+#include "observer/mysql/ob_query_response_time.h"
 namespace oceanbase
 {
 namespace common {
@@ -212,6 +213,7 @@ namespace observer
   class ObStartupAccelTaskHandler;
   class ObTabletTableUpdater;
   class ObTableQueryASyncMgr;
+  class ObTenantQueryRespTimeCollector;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -433,7 +435,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObTableGroupCommitMgr*,                 \
       observer::ObTableQueryASyncMgr*,               \
       table::ObTableClientInfoMgr*,                  \
-      table::ObHTableRowkeyMgr*                      \
+      table::ObHTableRowkeyMgr*,                     \
+      observer::ObTenantQueryRespTimeCollector*     \
   )
 
 

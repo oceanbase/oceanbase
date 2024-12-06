@@ -317,6 +317,7 @@ struct ObAuditRecordData {
     partition_hit_ = true;
     is_perf_event_closed_ = false;
     pl_trace_id_.reset();
+    stmt_type_ = sql::stmt::T_NONE;
   }
 
   int64_t get_elapsed_time() const
