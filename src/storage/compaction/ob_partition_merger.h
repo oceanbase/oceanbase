@@ -132,17 +132,17 @@ public:
   INHERIT_TO_STRING_KV("ObPartitionMerger", ObMerger, KPC_(merge_progress), K_(data_store_desc),
     K_(minimum_iters), KP_(validator));
 protected:
-  virtual int inner_process(const blocksstable::ObDatumRow &row) = 0;
+  virtual int inner_process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true) = 0;
   virtual int close() override;
   virtual int process(const blocksstable::ObMicroBlock &micro_block);
   virtual int process(
       const blocksstable::ObMacroBlockDesc &macro_meta,
       const ObMicroBlockData *micro_block_data);
-  virtual int process(const blocksstable::ObDatumRow &row);
+  virtual int process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true);
   virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) = 0;
   virtual int merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, int64_t &reuse_row_cnt);
   virtual int check_macro_block_op(const ObMacroBlockDesc &macro_desc, ObMacroBlockOp &block_op);
-  virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters) = 0;
+  virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters, bool is_incremental_row = true) = 0;
   int check_row_columns(const blocksstable::ObDatumRow &row);
   int try_filter_row(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret);
 
@@ -174,12 +174,12 @@ public:
       const int64_t idx) override;
   INHERIT_TO_STRING_KV("ObPartitionMajorMerger", ObPartitionMerger, "curr merger", "major merger");
 protected:
-  virtual int inner_process(const blocksstable::ObDatumRow &row) override;
+  virtual int inner_process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true) override;
 private:
   virtual int inner_init() override;
   int init_progressive_merge_helper();
   virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) override;
-  virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters) override;
+  virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters, bool is_incremental_row = true) override;
   int merge_micro_block_iter(ObPartitionMergeIter &iter, int64_t &reuse_row_cnt);
   int reuse_base_sstable(ObPartitionMergeHelper &merge_helper);
 };
@@ -197,11 +197,11 @@ public:
       const int64_t idx) override;
   INHERIT_TO_STRING_KV("ObPartitionMinorMerger", ObPartitionMerger, K_(minimum_iter_idxs));
 protected:
-  virtual int inner_process(const blocksstable::ObDatumRow &row) override;
+  virtual int inner_process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true) override;
   int find_minimum_iters_with_same_rowkey(MERGE_ITER_ARRAY &merge_iters,
                                           MERGE_ITER_ARRAY &minimum_iters,
                                           common::ObIArray<int64_t> &iter_idxs);
-  virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters) override;
+  virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters, bool is_incremental_row = true) override;
   int try_remove_ghost_iters(MERGE_ITER_ARRAY &merge_iters,
                              const bool shadow_already_output,
                              MERGE_ITER_ARRAY &minimum_iters,

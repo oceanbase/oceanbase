@@ -742,10 +742,10 @@ int ObMediumCompactionScheduleFunc::check_if_schema_changed(
     || (ObRowStoreType::DUMMY_ROW_STORE != tablet.get_last_major_latest_row_store_type()
       && tablet.get_last_major_latest_row_store_type() != schema.row_store_type_)) {
     is_schema_changed = true;
-    LOG_INFO("schema changed", K(schema), K(schema), K(full_stored_col_cnt),
-      "col_cnt_in_sstable", tablet.get_last_major_column_count(),
-      "compressor_type_in_sstable", tablet.get_last_major_compressor_type(),
-      "latest_row_store_type_in_sstable", tablet.get_last_major_latest_row_store_type());
+    LOG_INFO("schema changed", K(schema), K(full_stored_col_cnt),
+             "col_cnt_in_sstable", tablet.get_last_major_column_count(),
+             "compressor_type_in_sstable", tablet.get_last_major_compressor_type(),
+             "latest_row_store_type_in_sstable", tablet.get_last_major_latest_row_store_type());
   } else {
     is_schema_changed = false;
   }

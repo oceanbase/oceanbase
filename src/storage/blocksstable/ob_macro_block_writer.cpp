@@ -609,7 +609,6 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const ObMacroBlockDesc
   } else if (OB_FAIL(try_active_flush_macro_block())) {
     STORAGE_LOG(WARN, "Fail to try_active_flush_macro_block", K(ret));
   } else {
-    ++merge_block_info_.incremental_row_count_;
     STORAGE_LOG(DEBUG, "Success to append row, ", "tablet_id", data_store_desc_->get_tablet_id(), K(row));
   }
   return ret;

@@ -294,6 +294,8 @@ public:
   int swap_tablet_after_minor();
   ObCOTabletMergeCtx *get_merge_ctx() const { return co_merge_ctx_; }
   const ObCOMergeDagParam& get_dag_param() const { return basic_param_; }
+  int64_t get_batch_dag_count() const { return ATOMIC_LOAD(&batch_dag_cnt_); }
+  void inc_batch_dag_count() { ATOMIC_INC(&batch_dag_cnt_); }
   void collect_running_info(const uint32_t start_cg_idx, const uint32_t end_cg_idx, const int64_t hash,
       const share::ObDagId &dag_id, const ObCompactionTimeGuard &time_guard);
   template<class T>
@@ -304,7 +306,7 @@ public:
     share::ObIDag *parent = nullptr,
     const bool add_scheduler_flag = true);
   INHERIT_TO_STRING_KV("ObIDagNet", ObIDagNet, K_(is_inited), K_(merge_status), K_(finish_added),
-      K_(merge_batch_size), K_(basic_param), KP_(finish_dag));
+      K_(merge_batch_size), K_(batch_dag_cnt), K_(basic_param), KP_(finish_dag));
 private:
   static const int64_t DELAY_SCHEDULE_FINISH_DAG_CG_CNT = 150;
   static const int64_t DEFAULT_MAX_RETRY_TIMES = 2;
@@ -347,6 +349,7 @@ private:
   bool batch_reduced_; // only reduce batch_size one time in a round // locked by ctx_lock_
   lib::ObMutex ctx_lock_;
   int64_t merge_batch_size_; // will decrease when meet memory allocate failed
+  int64_t batch_dag_cnt_; // record the batch exec dag cnt
   COMergeStatus merge_status_;
   ObCOMergeDagParam basic_param_;
   common::ObArenaAllocator tmp_allocator_; // TODO(@lixia.yq) temp solution, use allocator on ObIDagNet later

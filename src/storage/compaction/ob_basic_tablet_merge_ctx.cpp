@@ -769,7 +769,8 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
     const ObSSTable *sstable,
     const ObStorageSnapshotInfo *snapshot_info,
     const int64_t start_cg_idx,
-    const int64_t end_cg_idx)
+    const int64_t end_cg_idx,
+    const int64_t batch_exec_dag_cnt)
 {
   int tmp_ret = OB_SUCCESS;
   ObDagWarningInfo warning_info;
@@ -801,6 +802,9 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
     if (io_percentage > 0) {
       running_info.io_percentage_ = io_percentage;
     }
+  }
+  if (batch_exec_dag_cnt > 0) {
+    ADD_COMMENT("CO_DAG_NET batch_cnt", batch_exec_dag_cnt);
   }
   if (running_info.execute_time_ > 30_s && (get_concurrent_cnt() > 1 || end_cg_idx > 0)) {
     ADD_COMMENT("execute_time", running_info.execute_time_);
@@ -1332,6 +1336,7 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
   int64_t schema_version = 0;
   ObStorageSchema *storage_schema = nullptr;
   bool is_building_index = false; // placeholder
+  uint64_t min_data_version = 0;
 
   if (OB_UNLIKELY(!is_meta_major_merge(get_merge_type())
                || nullptr != static_param_.schema_)) {
@@ -1344,10 +1349,12 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
     LOG_WARN("failed to get schema service from MTL", K(ret));
   } else if (OB_FAIL(tablet->get_schema_version_from_storage_schema(schema_version))){
     LOG_WARN("failed to get schema version from tablet", KR(ret), KPC(tablet));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
   } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_table_schema_to_merge(*schema_service,
                                                                                *tablet,
                                                                                schema_version,
-                                                                               DATA_CURRENT_VERSION,
+                                                                               min_data_version,
                                                                                mem_ctx_.get_allocator(),
                                                                                *storage_schema,
                                                                                is_building_index))) {
@@ -1366,7 +1373,7 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
   }
 
   if (OB_SUCC(ret)) {
-    static_param_.data_version_ = DATA_CURRENT_VERSION;
+    static_param_.data_version_ = min_data_version;
     static_param_.is_rebuild_column_store_ = false;
     static_param_.is_schema_changed_ = true; // use MACRO_BLOCK_MERGE_LEVEL
     static_param_.merge_reason_ = ObAdaptiveMergePolicy::TOMBSTONE_SCENE;
