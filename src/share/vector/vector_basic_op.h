@@ -47,9 +47,14 @@ struct VecTCHashCalc {
 template<typename HashMethod, bool hash_v2>
 struct VecTCHashCalc<VEC_TC_FIXED_DOUBLE, HashMethod, hash_v2> {
   inline static int hash(HASH_ARG_LIST) {
-    const double *d_val = reinterpret_cast<const double *>(data);
+    double d_val = *reinterpret_cast<const double *>(data);
+    // zero distinguishes positive and negative zeros, formatted as positive zero to calculate
+    // hash value
+    if (d_val == 0.0) {
+      d_val = 0.0;
+    }
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
-    int64_t length = ob_fcvt(*d_val, static_cast<int>(meta.get_scale()),
+    int64_t length = ob_fcvt(d_val, static_cast<int>(meta.get_scale()),
                              sizeof(buf) - 1, buf, NULL);
     res = HashMethod::hash(buf, static_cast<int32_t>(length), seed);
     return OB_SUCCESS;
