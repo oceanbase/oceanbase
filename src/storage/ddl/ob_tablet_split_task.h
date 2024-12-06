@@ -476,6 +476,10 @@ private:
   static int check_and_determine_mds_end_scn(
       const ObTabletHandle &dest_tablet_handle,
       share::SCN &end_scn);
+  static int check_tablet_ha_status(
+      const ObLSHandle &ls_handle,
+      const ObTabletHandle &source_tablet_handle,
+      const ObIArray<ObTabletID> &dest_tablets_id);
 };
 
 }  // end namespace storage

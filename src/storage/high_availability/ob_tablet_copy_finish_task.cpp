@@ -102,7 +102,27 @@ int ObTabletCopyFinishTask::process()
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
   ObCopyTabletRecordExtraInfo *extra_info = nullptr;
 
-  if (!is_inited_) {
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_BLOCK_SPLIT_BEFORE_SSTABLES_SPLIT) OB_SUCCESS;
+  if (OB_SUCC(ret)) {
+    // do nothing.
+  } else if (OB_DDL_TASK_EXECUTE_TOO_MUCH_TIME == ret ) { // ret=-4192, errsim trigger to test ddl-split orthogonal ls-migration.
+    ret = OB_SUCCESS;
+    if (tablet_id_.is_inner_tablet() || tablet_id_.is_ls_inner_tablet()) {
+    } else if (GCONF.errsim_test_tablet_id.get_value() > 0 && tablet_id_.id() == GCONF.errsim_test_tablet_id.get_value()){
+      LOG_INFO("[ERRSIM] stuck before create table store", K(tablet_id_), KPC(this));
+      DEBUG_SYNC(BEFORE_MIGRATION_CREATE_TABLE_STORE);
+    } else {
+      LOG_INFO("start to process copy finish task", K(tablet_id_), KPC(this));
+    }
+  } else {
+    ret = OB_SUCCESS; // other errsim errors of ddl split, ignored here.
+  }
+#endif
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("error found", K(ret));
+  } else if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
   } else if (ha_dag_->get_ha_dag_net_ctx()->is_failed()) {
