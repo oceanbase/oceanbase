@@ -185,8 +185,7 @@ public:
       int path_bufsize,
       const uint64_t tenant_id,
       uint64_t group_id = OB_INVALID_GROUP_ID,
-      const bool is_background = false,
-      const char *base_path = "");
+      const bool is_background = false);
 
   class DirProcessor
   {

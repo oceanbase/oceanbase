@@ -397,8 +397,7 @@ int ObCgroupCtrl::remove_cgroup(const uint64_t tenant_id, const uint64_t group_i
 
 // return "root_cgroup_path/[base_path]/[user_tenant_path]/[meta_tenant_path]/[group_path]"
 int ObCgroupCtrl::get_group_path(
-    char *group_path, int path_bufsize, const uint64_t tenant_id, uint64_t group_id, const bool is_background /* = false*/,
-    const char *base_path /* = ""*/)
+    char *group_path, int path_bufsize, const uint64_t tenant_id, uint64_t group_id, const bool is_background /* = false*/)
 {
   int ret = OB_SUCCESS;
 
