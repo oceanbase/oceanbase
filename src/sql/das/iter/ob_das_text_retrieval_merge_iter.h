@@ -89,8 +89,8 @@ public:
   enum TokenRelationType
   {
     DISJUNCTIVE = 0,
-    // CONJUNCTIVE = 1,
-    // BOOLEAN = 2,
+    CONJUNCTIVE = 1,
+    BOOLEAN = 2,
     MAX_RELATION_TYPE
   };
   enum RetrievalProcType
