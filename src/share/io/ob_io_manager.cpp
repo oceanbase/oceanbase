@@ -548,13 +548,17 @@ int ObTrafficControl::register_bucket(ObIORequest &req, const int qid) {
       DRWLock::WRLockGuard guard(rw_lock_);
       int tmp_ret = OB_SUCCESS;
       if (OB_UNLIKELY(OB_SUCCESS == shared_device_map_v2_.get_refactored(key, tc))) {
-      } else if (OB_ISNULL(tc = OB_NEW(ObSharedDeviceControlV2, "SDCtrlV2"))) {
+      } else if (OB_ISNULL(tc = OB_NEW(ObSharedDeviceControlV2, SET_IGNORE_MEM_VERSION("SDCtrlV2")))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (OB_FAIL(tc->set_storage_key(key))) {
       } else if (OB_FAIL(tc->add_shared_device_limits())) {
         LOG_WARN("add shared device limits failed", K(ret), K(req), K(grp_key), K(qid));
       } else if (OB_FAIL(shared_device_map_v2_.set_refactored(key, tc))) {
         LOG_WARN("set map failed", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+        LOG_WARN("register bucket failed", K(ret), K(key), K(tc));
+        ob_delete(tc);
       }
     }
 
