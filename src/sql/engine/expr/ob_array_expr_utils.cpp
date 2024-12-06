@@ -812,6 +812,98 @@ int ObArrayExprUtils::assemble_array_attrs(ObEvalCtx &ctx, const ObExpr &expr, i
   return ret;
 }
 
+int ObArrayExprUtils::get_collection_payload(ObIAllocator &allocator, ObEvalCtx &ctx, const ObExpr &expr,
+                                             const int64_t row_idx, const char *&res_data, int32_t &data_len)
+{
+  int ret = OB_SUCCESS;
+  using len_vec_type = ObFixedLengthFormat<uint32_t>;
+  ObIVector *root_vec = expr.get_vector(ctx);
+  uint16_t subid = expr.obj_meta_.get_subschema_id();
+  ObObjType obj_type;
+  uint32_t depth = 0;
+  bool is_vec = false;
+  if (root_vec->is_null(row_idx)) {
+   // do nothing
+  } else if (is_uniform_format(root_vec->get_format())) {
+    const char *payload = NULL;
+    ObLength payload_len = 0;
+    root_vec->get_payload(row_idx, payload, payload_len);
+    ObString src(payload_len, payload);
+    ObString dst;
+    if (OB_FAIL(ob_write_string(allocator, src, dst))) {
+      LOG_WARN("copy data failed", K(ret));
+    } else {
+      res_data = dst.ptr();
+      data_len = dst.length();
+    }
+  } else if (OB_FAIL(get_array_element_type(&ctx.exec_ctx_, subid, obj_type, depth, is_vec))) {
+    LOG_WARN("get element type failed", K(ret));
+  } else if (is_vec && (expr.attrs_cnt_ != 3 || expr.attrs_[2] == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected attrs cnt", K(ret), K(expr.attrs_cnt_), K(expr.attrs_[2]));
+  } else {
+    int32_t total_len = 0;
+    if (is_vec) {
+      ObIVector *vec = expr.attrs_[2]->get_vector(ctx);
+      total_len += vec->get_length(row_idx);
+    } else {
+      for (uint32_t i = 0; i < expr.attrs_cnt_; ++i) {
+        ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
+        if (i == 0) {
+          len_vec_type *ids = static_cast<len_vec_type *>(vec);
+          total_len += ids->get_length(row_idx);
+        } else {
+          total_len += vec->get_length(row_idx);
+        }
+      }
+    }
+    if (total_len > 0) {
+      char *tmp_buf = static_cast<char *>(allocator.alloc(total_len));
+      if (OB_ISNULL(tmp_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_LOG(WARN, "allocate memory failed", K(ret));
+      } else {
+        int32_t pos = 0;
+        if (is_vec) {
+          const char *payload = NULL;
+          ObLength payload_len = 0;
+          ObIVector *vec = expr.attrs_[2]->get_vector(ctx);
+          vec->get_payload(row_idx, payload, payload_len);
+          MEMCPY(tmp_buf + pos, payload, payload_len);
+          pos += payload_len;
+        } else {
+            for (uint32_t i = 0; i < expr.attrs_cnt_; ++i) {
+            ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
+            const char *payload = NULL;
+            ObLength payload_len = 0;
+            if (i == 0) {
+              len_vec_type *ids = static_cast<len_vec_type *>(vec);
+              ids->get_payload(row_idx, payload, payload_len);
+            } else {
+              vec->get_payload(row_idx, payload, payload_len);
+            }
+            MEMCPY(tmp_buf + pos, payload, payload_len);
+            pos += payload_len;
+          }
+        }
+        ObString arr_obj(total_len, tmp_buf);
+        ObTextStringResult text_res(ObCollectionSQLType, true, &allocator);
+        if (OB_FAIL(text_res.init(arr_obj.length()))) {
+          LOG_WARN("Failed to init text res", K(ret), K(arr_obj.length()));
+        } else if (OB_FAIL(text_res.append(arr_obj))) {
+          LOG_WARN("Failed to append str to text res", K(ret), K(text_res), K(arr_obj));
+        } else {
+          ObString lob_str;
+          text_res.get_result_buffer(lob_str);
+          res_data = lob_str.ptr();
+          data_len = lob_str.length();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObArrayExprUtils::transform_array_to_uniform(ObEvalCtx &ctx, const ObExpr &expr, const int64_t batch_size, const ObBitVector *skip)
 {
   int ret = OB_SUCCESS;
