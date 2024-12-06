@@ -59,12 +59,35 @@ int ObMdsTableMergeDag::init_by_param(const share::ObIDagInitParam *param)
       LOG_WARN("flush scn is invalid", K(ret), KPC(mds_param));
     } else if (OB_FAIL(ObTabletMergeDag::inner_init(mds_param))) {
       LOG_WARN("failed to init ObTabletMergeDag", K(ret), KPC(mds_param));
+    } else if (OB_FAIL(fill_compat_mode_())) {
+      LOG_WARN("failed to fill compat mode", K(ret), KPC(mds_param));
     } else {
       flush_scn_ = mds_param->flush_scn_;
       generate_ts_ = mds_param->generate_ts_;
       mds_construct_sequence_ = mds_param->mds_construct_sequence_;
       is_inited_ = true;
     }
+  }
+
+  return ret;
+}
+
+int ObMdsTableMergeDag::fill_compat_mode_()
+{
+  int ret = OB_SUCCESS;
+  // Mds dump should not access mds data to avoid potential dead lock
+  // between mds table lock on ObTabletPointer and other mds component
+  // inner locks. So here use no_lock to get tablet.
+
+  ObLSHandle tmp_ls_handle;
+  ObTabletHandle tmp_tablet_handle;
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, tmp_ls_handle, ObLSGetMod::COMPACT_MODE))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
+  } else if (OB_FAIL(tmp_ls_handle.get_ls()->get_tablet_svr()->get_tablet(
+      tablet_id_, tmp_tablet_handle, 0/*timeout_us*/, storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+    LOG_WARN("failed to get tablet", K(ret), K(ls_id_), K(tablet_id_));
+  } else {
+    compat_mode_ = tmp_tablet_handle.get_obj()->get_tablet_meta().compat_mode_;
   }
 
   return ret;

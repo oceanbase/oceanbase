@@ -1241,7 +1241,7 @@ void MdsTableImpl<MdsTableType>::on_flush_(const share::SCN &flush_scn, const in
     if (rec_scn_ == share::SCN::max_scn()) {
       MDS_LOG_FLUSH(WARN, "maybe meet concurrent reset mds table");
     } else {
-      MDS_LOG_FLUSH(ERROR, "flush version mismatch!");
+      MDS_LOG_FLUSH(WARN, "flush version mismatch!");
     }
   } else {
     flushing_scn_.reset();
@@ -1275,7 +1275,7 @@ int MdsTableImpl<MdsTableType>::scan_all_nodes_to_dump(DUMP_OP &&for_each_op,
   if (OB_SUCC(ret)) {
     if (for_flush) {
       if (!flushing_scn_.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_NO_NEED_MERGE;
         MDS_LOG_FLUSH(WARN, "not in flushing process");
       } else {
         flushing_version = flushing_scn_;
@@ -1403,11 +1403,12 @@ struct ForcelyReleaseNodesRedoScnBelowOp
       [this, &row](const UserMdsNode<K, V> &mds_node) {
         UserMdsNode<K, V> &cast_node = const_cast<UserMdsNode<K, V> &>(mds_node);
         if (mds_node.redo_scn_ <= redo_below_scn_) {
-          // below_scn_ comes from mds sstable mds_ckpt_scn, it must not cross any node's [redo, end) scn range
-          // before support dump uncommitted nodes, all nodes be scanned must satisfy this rule
-          MDS_ASSERT(mds_node.end_scn_ <= redo_below_scn_);
           if (!cast_node.is_committed_()) {
             MDS_LOG_GC(INFO, "release uncommitted node");
+          } else {
+            // below_scn_ comes from mds sstable mds_ckpt_scn, it must not cross any node's [redo, end) scn range
+            // before support dump uncommitted nodes, all nodes be scanned must satisfy this rule
+            MDS_ASSERT(mds_node.end_scn_ <= redo_below_scn_);
           }
           const_cast<MdsRow<K, V> &>(row).sorted_list_.del((ListNodeBase*)(ListNode<UserMdsNode<K, V>>*)(&cast_node));
           MdsFactory::destroy(&cast_node);

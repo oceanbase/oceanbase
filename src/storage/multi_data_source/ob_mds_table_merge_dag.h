@@ -45,6 +45,8 @@ public:
                        KTIME_(generate_ts),
                        K_(mds_construct_sequence));
 private:
+  int fill_compat_mode_();
+private:
   bool is_inited_;
   share::SCN flush_scn_;
   int64_t generate_ts_;
