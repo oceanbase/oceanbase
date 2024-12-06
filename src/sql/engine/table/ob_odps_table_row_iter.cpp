@@ -1603,6 +1603,7 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
       }
     }
   }
+  OZ(calc_exprs_for_rowid(count));
   if (OB_SUCC(ret)) {
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     batch_info_guard.set_batch_idx(0);
@@ -1652,6 +1653,33 @@ int ObODPSTableRowIterator::get_next_row()
       } while (OB_SUCC(ret) && need_retry);
     }
   }
+  OZ(calc_exprs_for_rowid(1));
+  return ret;
+}
+
+
+int ObODPSTableRowIterator::calc_exprs_for_rowid(const int64_t read_count)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+  if (OB_NOT_NULL(file_id_expr_)) {
+    OZ (file_id_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
+    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
+      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_id_expr_->get_vector(eval_ctx));
+      // file_id_ is mapping to state_.part_id_ in odps.
+      vec->set_int(i, state_.part_id_);
+    }
+    file_id_expr_->set_evaluated_flag(eval_ctx);
+  }
+  if (OB_NOT_NULL(line_number_expr_)) {
+    OZ (line_number_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
+    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
+      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(line_number_expr_->get_vector(eval_ctx));
+      vec->set_int(i, state_.cur_line_number_ + i);
+    }
+    line_number_expr_->set_evaluated_flag(eval_ctx);
+  }
+  state_.cur_line_number_ += read_count;
   return ret;
 }
 
