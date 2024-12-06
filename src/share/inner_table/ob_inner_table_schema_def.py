@@ -10638,7 +10638,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-#11121: __all_virtual_ddl_diagnose_info
+# 11121: abandoned # __all_virtual_ddl_diagnose_info, which is moved to 12514
 
 ################################################################
 # INFORMATION SCHEMA
@@ -15714,6 +15714,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12511: __all_virtual_wr_sql_plan_aux_key2snapshot
 # 12512: __all_virtual_tablet_mds_info
 # 12513: __all_virtual_cs_replica_tablet_stats
+# 12514: __all_virtual_ddl_diagnose_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
