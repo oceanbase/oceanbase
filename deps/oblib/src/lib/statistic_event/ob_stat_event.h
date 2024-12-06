@@ -201,6 +201,12 @@ STAT_EVENT_ADD_DEF(SQL_LOCAL_TIME, "sql local execute time", ObStatClassIds::SQL
 STAT_EVENT_ADD_DEF(SQL_REMOTE_TIME, "sql remote execute time", ObStatClassIds::SQL, 40117, false, true, true)
 STAT_EVENT_ADD_DEF(SQL_DISTRIBUTED_TIME, "sql distributed execute time", ObStatClassIds::SQL, 40118, false, true, true)
 STAT_EVENT_ADD_DEF(SQL_FAIL_COUNT, "sql fail count", ObStatClassIds::SQL, 40119, false, true, true)
+STAT_EVENT_ADD_DEF(SQL_INNER_LOCAL_COUNT, "inner sql local count", ObStatClassIds::SQL, 40120, false, true, true)
+STAT_EVENT_ADD_DEF(SQL_INNER_REMOTE_COUNT, "inner sql remote count", ObStatClassIds::SQL, 40121, false, true, true)
+STAT_EVENT_ADD_DEF(SQL_INNER_DISTRIBUTED_COUNT, "inner sql distributed count", ObStatClassIds::SQL, 40122, false, true, true)
+STAT_EVENT_ADD_DEF(SQL_INNER_LOCAL_TIME, "inner sql local execute time", ObStatClassIds::SQL, 40123, false, true, false)
+STAT_EVENT_ADD_DEF(SQL_INNER_REMOTE_TIME, "inner sql remote execute time", ObStatClassIds::SQL, 40124, false, true, false)
+STAT_EVENT_ADD_DEF(SQL_INNER_DISTRIBUTED_TIME, "inner sql distributed execute time", ObStatClassIds::SQL, 40125, false, true, false)
 
 // CACHE
 STAT_EVENT_ADD_DEF(ROW_CACHE_HIT, "row cache hit", ObStatClassIds::CACHE, 50000, true, true, true)
