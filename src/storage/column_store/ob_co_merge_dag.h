@@ -141,6 +141,7 @@ public:
   virtual int report_result() override;
   virtual int gene_compaction_info(compaction::ObTabletCompactionProgress &progress) override;
   virtual int diagnose_compaction_info(compaction::ObDiagnoseTabletCompProgress &progress) override;
+  virtual bool check_can_schedule() override;
   uint32_t get_start_cg_idx() const { return start_cg_idx_; }
   uint32_t get_end_cg_idx() const { return end_cg_idx_; }
   bool get_retry_create_task() const { return retry_create_task_; }
@@ -184,6 +185,9 @@ protected:
   virtual int process() override;
 private:
   void merge_start();
+#ifdef ERRSIM
+  int errsim_before_merge_partition();
+#endif
 private:
   bool is_inited_;
   int64_t idx_;
