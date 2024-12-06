@@ -173,7 +173,7 @@ int ObProgressiveMergeHelper::init(
           && sstable.is_normal_cg_sstable() && rewrite_macro_cnt < CG_TABLE_CHECK_REWRITE_CNT_) {
         check_macro_need_merge_ = true;
       }
-      LOG_INFO("finish macro block need merge check", "tablet_id", static_param.get_tablet_id(), K(check_macro_need_merge_), K(rewrite_macro_cnt), K(reduce_macro_cnt), K(table_idx_));
+      FLOG_INFO("finish macro block need merge check", "tablet_id", static_param.get_tablet_id(), K(check_macro_need_merge_), K(rewrite_macro_cnt), K(reduce_macro_cnt), K(table_idx_));
     }
   }
 

@@ -500,7 +500,6 @@ int ObCOMergeBatchExeDag::init_by_param(const share::ObIDagInitParam *param)
 int ObCOMergeBatchExeDag::create_first_task()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObCOMergeBatchExeTask *execute_task = nullptr;
   ObCOMergeBatchFinishTask *finish_task = nullptr;
   ObCOMergeDagNet *dag_net = static_cast<ObCOMergeDagNet*>(get_dag_net());
@@ -941,6 +940,7 @@ int ObCOMergeBatchFinishTask::process()
   } else if (OB_FAIL(execute_dag->create_sstable_after_merge())) {
     LOG_WARN("failed to create sstable after merge", K(ret), KPC(execute_dag));
   } else {
+    dag_net_->inc_batch_dag_count();
     FLOG_INFO("co batch sstable merge finish", K(ret),
               "start_cg sstable_merge_info", ctx_->cg_merge_info_array_[execute_dag->get_start_cg_idx()]->get_merge_history(),
               "time_guard", execute_dag->get_time_guard(),
@@ -1089,6 +1089,7 @@ ObCOMergeDagNet::ObCOMergeDagNet()
     batch_reduced_(false),
     ctx_lock_(),
     merge_batch_size_(ObCOTabletMergeCtx::DEFAULT_CG_MERGE_BATCH_SIZE),
+    batch_dag_cnt_(0),
     merge_status_(COMergeStatus::NOT_INIT),
     basic_param_(),
     tmp_allocator_("CoDagNet", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::MERGE_NORMAL_CTX_ID),

@@ -376,14 +376,25 @@ int ObCOTabletMergeCtx::cal_merge_param()
 int ObCOTabletMergeCtx::collect_running_info()
 {
   int ret = OB_SUCCESS;
-  dag_net_merge_history_.static_info_.shallow_copy(static_history_);
-  dag_net_merge_history_.static_info_.is_fake_ = true;
-  dag_net_merge_history_.running_info_.merge_start_time_ = dag_net_.get_start_time();
-  // add a fake merge info into history with only dag_net time_guard
-  (void) ObBasicTabletMergeCtx::add_sstable_merge_info(dag_net_merge_history_, dag_net_.get_dag_id(), dag_net_.hash(),
-                            info_collector_.time_guard_, nullptr/*sstable*/,
-                            &static_param_.snapshot_info_,
-                            0/*start_cg_idx*/, array_count_/*end_cg_idx*/);
+  const int64_t batch_exe_dag_cnt = dag_net_.get_batch_dag_count();
+
+  if (is_build_row_store() || 1 >= batch_exe_dag_cnt) {
+    // no need to report dag net merge history
+  } else {
+    dag_net_merge_history_.static_info_.shallow_copy(static_history_);
+    dag_net_merge_history_.static_info_.is_fake_ = true;
+    dag_net_merge_history_.running_info_.merge_start_time_ = dag_net_.get_start_time();
+    // add a fake merge info into history with only dag_net time_guard
+    (void) ObBasicTabletMergeCtx::add_sstable_merge_info(dag_net_merge_history_,
+                                                         dag_net_.get_dag_id(),
+                                                         dag_net_.hash(),
+                                                         info_collector_.time_guard_,
+                                                         nullptr/*sstable*/,
+                                                         &static_param_.snapshot_info_,
+                                                         0/*start_cg_idx*/,
+                                                         array_count_/*end_cg_idx*/,
+                                                         batch_exe_dag_cnt);
+  }
   return ret;
 }
 
@@ -428,7 +439,7 @@ int ObCOTabletMergeCtx::collect_running_info(
     LOG_WARN("failed to collect running info in batch");
   } else {
     const ObSSTable *new_sstable = static_cast<ObSSTable *>(new_table);
-    add_sstable_merge_info(cg_merge_info_array_[start_cg_idx]->get_merge_history(),
+    ObBasicTabletMergeCtx::add_sstable_merge_info(cg_merge_info_array_[start_cg_idx]->get_merge_history(),
           dag_id, hash, time_guard, new_sstable, &static_param_.snapshot_info_, start_cg_idx, end_cg_idx);
   }
   return ret;

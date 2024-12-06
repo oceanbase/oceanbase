@@ -204,7 +204,8 @@ public:
                               const blocksstable::ObSSTable *sstable = nullptr,
                               const ObStorageSnapshotInfo *snapshot_info = nullptr,
                               const int64_t start_cg_idx = 0,
-                              const int64_t end_cg_idx = 0);
+                              const int64_t end_cg_idx = 0,
+                              const int64_t batch_exec_dag_cnt = 0);
   int generate_participant_table_info(PartTableInfo &info) const;
   int generate_macro_id_list(char *buf, const int64_t buf_len, const blocksstable::ObSSTable *&sstable) const;
   /* GET FUNC */
