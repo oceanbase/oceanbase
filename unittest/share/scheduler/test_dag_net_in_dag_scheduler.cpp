@@ -1624,6 +1624,34 @@ TEST_F(TestDagScheduler, test_destroy_when_running) //TODO(renju.rj): fix it
 //  #endif
 }
 
+class ObStartRunningFailedDagNet : public ObFatherDagNet
+{
+public:
+  ObStartRunningFailedDagNet() : ObFatherDagNet() {}
+  virtual int start_running() override
+  {
+    int ret = OB_ERR_UNEXPECTED;
+    return ret;
+  }
+  virtual int clear_dag_net_ctx() override
+  {
+    int ret = OB_SUCCESS;
+    COMMON_LOG(WARN, "clear dag net ctx", KPC(this));
+    return ret;
+  }
+};
+
+TEST_F(TestDagScheduler, stsart_running_dag_failed_func)
+{
+  int ret = OB_SUCCESS;
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net<ObStartRunningFailedDagNet>(nullptr));
+  ob_usleep(5000 * 1000);
+  EXPECT_EQ(true, scheduler->is_empty());
+}
+
+
 
 }
 }

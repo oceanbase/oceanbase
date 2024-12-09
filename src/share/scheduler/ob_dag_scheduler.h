@@ -935,6 +935,7 @@ private:
   OB_INLINE int64_t get_dag_limit(const ObDagPrio::ObDagPrioEnum dag_prio);
   common::ObIAllocator &get_allocator(const bool is_ha);
   int init_allocator(const uint64_t tenant_id, const lib::ObLabel &label, lib::MemoryContext &mem_context);
+  void destroy_failed_dag_(DagNetList &failed_dag_net_list);
 
 private:
   bool is_inited_;

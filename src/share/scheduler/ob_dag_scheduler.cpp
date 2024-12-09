@@ -2877,49 +2877,68 @@ int ObTenantDagScheduler::loop_running_dag_net_map()
 int ObTenantDagScheduler::loop_blocking_dag_net_list()
 {
   int ret = OB_SUCCESS;
-  ObMutexGuard guard(dag_net_map_lock_);
-  ObIDagNet *head = blocking_dag_net_list_.get_header();
-  ObIDagNet *cur = head->get_next();
-  ObIDagNet *tmp = nullptr;
-  int64_t rest_cnt = DEFAULT_MAX_RUNNING_DAG_NET_CNT - (dag_net_map_[RUNNING_DAG_NET_MAP].size() - blocking_dag_net_list_.get_size());
-  while (NULL != cur && head != cur && rest_cnt > 0 && !is_dag_map_full()) {
-    LOG_DEBUG("loop blocking dag net list", K(ret), KPC(cur), K(rest_cnt));
-    if (OB_FAIL(cur->start_running())) { // call start_running function
-      COMMON_LOG(WARN, "failed to start running", K(ret), KPC(cur));
-      int64_t tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(dag_net_map_[RUNNING_DAG_NET_MAP].erase_refactored(cur))) {
-        COMMON_LOG(ERROR, "failed to erase from running_dag_net_map", K(tmp_ret), KPC(cur));
-        ob_abort();
-      } else if (OB_TMP_FAIL(dag_net_id_map_.erase_refactored(cur->dag_id_))) {
-        COMMON_LOG(ERROR, "failed to erase from running_dag_net_id_map", K(tmp_ret), KPC(cur));
-        ob_abort();
+  DagNetList failed_dag_net_list;
+
+  {
+    ObMutexGuard guard(dag_net_map_lock_);
+    ObIDagNet *head = blocking_dag_net_list_.get_header();
+    ObIDagNet *cur = head->get_next();
+    ObIDagNet *tmp = nullptr;
+    int64_t rest_cnt = DEFAULT_MAX_RUNNING_DAG_NET_CNT - (dag_net_map_[RUNNING_DAG_NET_MAP].size() - blocking_dag_net_list_.get_size());
+    while (NULL != cur && head != cur && rest_cnt > 0 && !is_dag_map_full()) {
+      LOG_DEBUG("loop blocking dag net list", K(ret), KPC(cur), K(rest_cnt));
+      if (OB_FAIL(cur->start_running())) { // call start_running function
+        COMMON_LOG(WARN, "failed to start running", K(ret), KPC(cur));
+        int64_t tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(dag_net_map_[RUNNING_DAG_NET_MAP].erase_refactored(cur))) {
+          COMMON_LOG(ERROR, "failed to erase from running_dag_net_map", K(tmp_ret), KPC(cur));
+          ob_abort();
+        } else if (OB_TMP_FAIL(dag_net_id_map_.erase_refactored(cur->dag_id_))) {
+          COMMON_LOG(ERROR, "failed to erase from running_dag_net_id_map", K(tmp_ret), KPC(cur));
+          ob_abort();
+        } else {
+          tmp = cur;
+          cur = cur->get_next();
+          if (!blocking_dag_net_list_.remove(tmp)) {
+            COMMON_LOG(WARN, "failed to remove dag_net from blocking_dag_net_list", K(tmp));
+            ob_abort();
+          }
+          --dag_net_cnts_[tmp->get_type()];
+          if (!failed_dag_net_list.add_last(tmp)) {
+            COMMON_LOG(WARN, "failed to add failed dag into list", KPC(tmp));
+            ob_abort();
+          }
+        }
       } else {
+        cur->start_time_ = ObTimeUtility::fast_current_time();
         tmp = cur;
         cur = cur->get_next();
-        if (OB_TMP_FAIL(tmp->clear_dag_net_ctx())) {
-          COMMON_LOG(ERROR, "failed to clear dag net ctx", K(tmp));
-        }
+        --rest_cnt;
         if (!blocking_dag_net_list_.remove(tmp)) {
           COMMON_LOG(WARN, "failed to remove dag_net from blocking_dag_net_list", K(tmp));
           ob_abort();
         }
-        --dag_net_cnts_[tmp->get_type()];
-        free_dag_net(tmp);
-      }
-    } else {
-      cur->start_time_ = ObTimeUtility::fast_current_time();
-      tmp = cur;
-      cur = cur->get_next();
-      --rest_cnt;
-      if (!blocking_dag_net_list_.remove(tmp)) {
-        COMMON_LOG(WARN, "failed to remove dag_net from blocking_dag_net_list", K(tmp));
-        ob_abort();
       }
     }
   }
+  destroy_failed_dag_(failed_dag_net_list);
   return ret;
 }
 
+void ObTenantDagScheduler::destroy_failed_dag_(DagNetList &failed_dag_net_list)
+{
+  int ret = OB_SUCCESS;
+  ObIDagNet *head = failed_dag_net_list.get_header();
+  ObIDagNet *cur = head->get_next();
+  while (NULL != cur && head != cur) {
+    ObIDagNet *tmp = cur;
+    if (OB_FAIL(cur->clear_dag_net_ctx())) {
+      COMMON_LOG(ERROR, "failed to clear dag net ctx", K(ret), KPC(cur));
+    }
+    cur = cur->get_next();
+    free_dag_net(tmp);
+  }
+}
 
 int ObTenantDagScheduler::erase_dag_(ObIDag &dag)
 {
