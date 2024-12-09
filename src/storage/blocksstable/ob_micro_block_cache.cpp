@@ -385,7 +385,7 @@ ObIMicroBlockIOCallback::ObIMicroBlockIOCallback(const ObIOCallbackType type)
     data_checksum_(0),
     block_des_meta_(),
     use_block_cache_(true),
-    rowkey_col_descs_(nullptr)
+    table_read_info_(nullptr)
 {
   MEMSET(encrypt_key_, 0, sizeof(encrypt_key_));
   block_des_meta_.encrypt_key_ = encrypt_key_;
@@ -399,7 +399,7 @@ ObIMicroBlockIOCallback::~ObIMicroBlockIOCallback()
     data_buffer_ = nullptr;
   }
   allocator_ = nullptr;
-  rowkey_col_descs_ = nullptr;
+  table_read_info_ = nullptr;
 }
 
 void ObIMicroBlockIOCallback::set_micro_des_meta(const ObIndexBlockRowHeader *idx_row_header)
@@ -479,7 +479,7 @@ int ObIMicroBlockIOCallback::process_block(
       } else if (OB_UNLIKELY(OB_SUCCESS == (ret = kvcache->get(key, micro_block, cache_handle)))) {
         // entry exist, no need to put
       } else if (OB_FAIL(cache_->put_cache_block(
-          block_des_meta_, buffer, size, key, *reader, *allocator_, micro_block, cache_handle, rowkey_col_descs_))) {
+          block_des_meta_, buffer, size, key, *reader, *allocator_, micro_block, cache_handle, table_read_info_))) {
         LOG_WARN("Failed to put block to cache", K(ret));
       }
     }
@@ -967,7 +967,7 @@ int ObIMicroBlockCache::prefetch(
     callback.block_id_ = macro_id;
     callback.offset_ = idx_row.get_block_offset();
     callback.set_logic_micro_id_and_checksum(idx_row.get_logic_micro_id(), idx_row.get_data_checksum());
-    callback.set_rowkey_col_descs(idx_row.get_rowkey_col_descs());
+    callback.set_table_read_info(idx_row.get_table_read_info());
     callback.set_micro_des_meta(idx_row_header);
     // fill read info
     ObStorageObjectReadInfo read_info;
@@ -1348,7 +1348,7 @@ int ObDataMicroBlockCache::put_cache_block(
     ObIAllocator &allocator,
     const ObMicroBlockCacheValue *&micro_block,
     common::ObKVCacheHandle &cache_handle,
-    const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
+    const ObITableReadInfo *table_read_info)
 {
   UNUSED(allocator);
   int ret = OB_SUCCESS;
@@ -1611,7 +1611,7 @@ int ObIndexMicroBlockCache::put_cache_block(
     ObIAllocator &allocator,
     const ObMicroBlockCacheValue *&micro_block,
     common::ObKVCacheHandle &cache_handle,
-    const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
+    const ObITableReadInfo *table_read_info)
 {
   int ret = OB_SUCCESS;
   ObMicroBlockHeader header;
@@ -1649,7 +1649,7 @@ int ObIndexMicroBlockCache::put_cache_block(
       ObMicroBlockData &block_data = cache_value.get_block_data();
       block_data.type_ = get_type();
       char *allocated_buf = nullptr;
-      if (OB_FAIL(idx_transformer.transform(block_data, block_data, allocator, allocated_buf, rowkey_col_descs))) {
+      if (OB_FAIL(idx_transformer.transform(block_data, block_data, allocator, allocated_buf, table_read_info))) {
         LOG_WARN("Fail to transform index block to memory format", K(ret));
       } else if (OB_FAIL(put_and_fetch(key, cache_value, micro_block, cache_handle, false /* overwrite */))) {
         if (OB_ENTRY_EXIST != ret) {

@@ -409,7 +409,7 @@ public:
       nested_offset_(0),
       cs_row_range_(),
       skipping_filter_results_(),
-      rowkey_col_descs_(nullptr)
+      table_read_info_(nullptr)
   {
   }
   OB_INLINE void reset()
@@ -427,7 +427,7 @@ public:
     nested_offset_ = 0;
     cs_row_range_.reset();
     skipping_filter_results_.reset();
-    rowkey_col_descs_ = nullptr;
+    table_read_info_ = nullptr;
   }
   OB_INLINE bool is_valid() const
   {
@@ -709,14 +709,14 @@ public:
       }
     }
   }
-  OB_INLINE const ObIArray<share::schema::ObColDesc> *get_rowkey_col_descs() const
+  OB_INLINE const ObITableReadInfo *get_table_read_info() const
   {
-    return rowkey_col_descs_;
+    return table_read_info_;
   }
   TO_STRING_KV(KP_(query_range), KPC_(row_header), KPC_(minor_meta_info), K_(endkey), KP_(ps_node),
       KP_(agg_row_buf), K_(agg_buf_size), K_(flag), K_(range_idx), K_(parent_macro_id),
       K_(nested_offset), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(cs_row_range),
-      K_(skipping_filter_results), KP_(rowkey_col_descs));
+      K_(skipping_filter_results), KP_(table_read_info));
 
 public:
   const ObIndexBlockRowHeader *row_header_;
@@ -756,7 +756,7 @@ public:
   int64_t rowkey_end_idx_;
   ObCSRange cs_row_range_;
   ObSkippingFilterResults skipping_filter_results_;
-  const ObIArray<share::schema::ObColDesc> *rowkey_col_descs_;
+  const ObITableReadInfo *table_read_info_;
 };
 
 

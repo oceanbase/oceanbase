@@ -1006,7 +1006,14 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_deep_copy)
   ObSEArray<ObColDesc, 2> col_descs;
   ASSERT_EQ(col_descs.push_back(col_desc), OB_SUCCESS);
   ASSERT_EQ(col_descs.push_back(col_desc), OB_SUCCESS);
-  ret = ObRowkeyVector::get_occupied_size(row_count, 2, &col_descs, buf_size);
+
+  ObTableReadInfo table_read_info;
+  table_read_info.schema_rowkey_cnt_ = 2;
+  table_read_info.schema_column_count_ = 3;
+  table_read_info.rowkey_cnt_ = 4;
+  ASSERT_EQ(OB_SUCCESS, table_read_info.cols_desc_.init_and_assign(col_descs, allocator_));
+
+  ret = ObRowkeyVector::get_occupied_size(row_count, 2, &table_read_info, buf_size);
   ASSERT_EQ(ret, OB_SUCCESS);
   int64_t expected_size = sizeof(ObRowkeyVector) // 1 rowkey vector
                         + 2 * sizeof(ObColumnVector) // 2 column vector
