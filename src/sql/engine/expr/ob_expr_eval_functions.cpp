@@ -1338,6 +1338,13 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprKeyValue::calc_key_value_expr,                       /* 806 */
   NULL, // ObExprToChar::eval_to_char,                                /* 807 */
   ObExprToPinyin::eval_to_pinyin,                                     /* 808 */
+  NULL, // ObExprArraySlice::eval_array_slice,                        /* 809 */
+  NULL, // ObExprArraySortby::eval_array_sortby,                      /* 810 */
+  NULL, // ObExprArrayFilter::eval_array_filter,                      /* 811 */
+  NULL, // ObExprArrayLength::eval_array_length,                      /* 812 */
+  NULL, // ObExprRange::eval_range,                                   /* 813 */
+  NULL, // ObExprArrayPosition::eval_array_position,                  /* 814 */
+
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1508,6 +1515,10 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL,// ObExprArrayCompact::eval_array_compact_batch,               /* 164 */
   NULL,// ObExprArraySort::eval_array_sort_batch,                     /* 165 */
   ObExprToPinyin::eval_to_pinyin_batch,                               /* 166 */
+  NULL,// ObExprArraySlice::eval_array_slice_batch,                   /* 167 */
+  NULL,// ObExprArrayLength::eval_array_length_batch,                 /* 168 */
+  NULL,// ObExprRange::eval_range_batch,                              /* 169 */
+  NULL,// ObExprArrayPosition::eval_array_position_batch,             /* 170 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1698,6 +1709,10 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprKeyValue::calc_key_value_expr_vector,                   /* 184 */
   NULL, // ObExprLength::calc_oracle_length_vector,                      /* 185 */
   NULL, // ObExprToChar::eval_to_char_vector,                            /* 186 */
+  NULL, // ObExprArrayPosition::eval_array_position_vector,              /* 187 */
+  NULL, // ObExprArraySlice::eval_array_slice_vector,                    /* 188 */
+  NULL, // ObExprArrayLength::eval_array_length_vector,                  /* 189 */
+  NULL, // ObExprRange::eval_range_vector,                               /* 190 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
