@@ -2401,6 +2401,7 @@ int ObSelectIntoOp::into_outfile_batch_parquet(const ObBatchRows &brs, ObExterna
                && OB_FAIL(parquet_data_writer->open_parquet_file_writer(arrow_alloc_,
                                                                         external_properties_.parquet_format_.row_group_size_,
                                                                         external_properties_.parquet_format_.compress_type_index_,
+                                                                        brs.size_,
                                                                         ctx_.get_allocator()))) {
       LOG_WARN("failed to init parquet file writer", K(ret));
     } else if (!parquet_data_writer->is_valid_to_write()) {
@@ -2524,7 +2525,7 @@ int ObSelectIntoOp::into_outfile_batch_orc(const ObBatchRows &brs, ObExternalFil
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null data writer", K(ret));
     } else if (orc_data_writer->is_file_writer_null()
-               && OB_FAIL(orc_data_writer->open_orc_file_writer(*orc_schema_, options_))) {
+               && OB_FAIL(orc_data_writer->open_orc_file_writer(*orc_schema_, options_, brs.size_))) {
       LOG_WARN("failed to init orc file writer", K(ret));
     } else if (!orc_data_writer->is_valid_to_write(root)) {
       ret = OB_ERR_UNEXPECTED;

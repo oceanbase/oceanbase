@@ -265,6 +265,7 @@ int64_t ObCsvFileWriter::get_curr_bytes_exclude_curr_line()
 int ObParquetFileWriter::open_parquet_file_writer(ObArrowMemPool &arrow_alloc,
                                                   const int64_t &row_group_size,
                                                   const int64_t &compress_type_index,
+                                                  const int64_t &row_batch_size,
                                                   ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -284,7 +285,7 @@ int ObParquetFileWriter::open_parquet_file_writer(ObArrowMemPool &arrow_alloc,
     } else {
       parquet_file_writer_ = parquet::ParquetFileWriter::Open(cur_file, parquet_writer_schema_, builder.build());
       parquet_rg_writer_ = parquet_file_writer_->AppendBufferedRowGroup();
-      if (parquet_row_batch_.empty() && OB_FAIL(create_parquet_row_batch(allocator))) {
+      if (parquet_row_batch_.empty() && OB_FAIL(create_parquet_row_batch(row_batch_size, allocator))) {
         LOG_WARN("failed to create parquet row batch", K(ret));
       }
     }
@@ -303,11 +304,12 @@ int ObParquetFileWriter::open_parquet_file_writer(ObArrowMemPool &arrow_alloc,
   return ret;
 }
 
-int ObParquetFileWriter::create_parquet_row_batch(ObIAllocator &allocator)
+int ObParquetFileWriter::create_parquet_row_batch(const int64_t &row_batch_size, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   std::shared_ptr<parquet::schema::PrimitiveNode> p_node;
   row_batch_offset_ = 0;
+  row_batch_size_ = row_batch_size;
   if (!parquet_writer_schema_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -561,11 +563,13 @@ int ObParquetFileWriter::close_file()
 }
 
 int ObOrcFileWriter::open_orc_file_writer(const orc::Type &orc_schema,
-                                          const orc::WriterOptions &options)
+                                          const orc::WriterOptions &options,
+                                          const int64_t &row_batch_size)
 {
   int ret = OB_SUCCESS;
   try {
     ObMallocHookAttrGuard guard(ObMemAttr(MTL_ID(), "IntoOrc"));
+    row_batch_size_ = row_batch_size;
     if (!(orc_output_stream_ = std::unique_ptr<ObOrcOutputStream>(new ObOrcOutputStream(
                                                                &file_appender_,
                                                                &storage_appender_,
