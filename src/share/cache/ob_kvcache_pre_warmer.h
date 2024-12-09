@@ -30,7 +30,7 @@ public:
   virtual ~ObDataBlockCachePreWarmer();
   void reset();
   virtual void reuse() override;
-  virtual int init(const ObIArray<share::schema::ObColDesc> *col_desc_array) override;
+  virtual int init(const ObITableReadInfo *table_read_info) override;
   virtual int reserve(const blocksstable::ObMicroBlockDesc &micro_block_desc,
                       bool &reserve_succ_flag,
                       const int64_t level = 0) override;
@@ -62,7 +62,7 @@ protected:
   ObKVCachePair *kvpair_;
   ObKVCacheInstHandle inst_handle_;
   ObKVCacheHandle cache_handle_;
-  const ObIArray<share::schema::ObColDesc> *col_descs_;
+  const ObITableReadInfo *table_read_info_;
 };
 
 class ObIndexBlockCachePreWarmer : public ObDataBlockCachePreWarmer
@@ -70,7 +70,7 @@ class ObIndexBlockCachePreWarmer : public ObDataBlockCachePreWarmer
 public:
   ObIndexBlockCachePreWarmer();
   virtual ~ObIndexBlockCachePreWarmer();
-  virtual int init(const ObIArray<share::schema::ObColDesc> *col_desc_array) override;
+  virtual int init(const ObITableReadInfo *table_read_info) override;
 protected:
   virtual void calculate_base_percentage(const int64_t free_memory) override;
   virtual int do_reserve_kvpair(
