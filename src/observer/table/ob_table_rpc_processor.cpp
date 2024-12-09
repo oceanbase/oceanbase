@@ -160,12 +160,12 @@ int ObTableLoginP::get_ids()
                                          ObString::make_string("%")/*assume there is no specific host*/,
                                          result_.user_id_))) {
       if (ret == OB_ERR_USER_NOT_EXIST) {
-        LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST, 0, "");
+        LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST, arg_.user_name_.length(), arg_.user_name_.ptr());
       }
       LOG_WARN("failed to get user id", K(ret), "user", arg_.user_name_);
     } else if (OB_INVALID_ID == result_.user_id_) {
       ret = OB_ERR_USER_NOT_EXIST;
-      LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST, 0, "");
+      LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST, arg_.user_name_.length(), arg_.user_name_.ptr());
       LOG_WARN("failed to get user id", K(ret), "user", arg_.user_name_);
     }
   }
