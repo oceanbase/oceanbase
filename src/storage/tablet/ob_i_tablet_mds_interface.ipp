@@ -414,7 +414,9 @@ int ObITabletMdsInterface::get_latest(OP &&read_op,
         return read_op(data);
       };
       if (CLICK_FAIL(get_mds_data_from_tablet<T>(func))) {
-        MDS_LOG_GET(WARN, "failed to get latest data from tablet");
+        if (OB_EMPTY_RESULT != ret) {
+          MDS_LOG_GET(WARN, "failed to get latest data from tablet");
+        }
       }
     }
   }

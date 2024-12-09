@@ -1493,6 +1493,7 @@ int ObLocalDevice::get_block_file_size(
   int64_t total_space = 0;
   int64_t free_space = 0;
   struct statvfs svfs;
+  const bool is_first_bootstrap = (0 == block_file_size);
 
   if (OB_ISNULL(sstable_dir)
       || OB_UNLIKELY(reserved_size < 0)
@@ -1515,8 +1516,13 @@ int ObLocalDevice::get_block_file_size(
     block_file_size = suggest_file_size > 0 ? suggest_file_size : total_space * disk_percentage / 100;
     if (block_file_size > old_block_file_size + free_space) {
       ret = OB_SERVER_OUTOF_DISK_SPACE;
-      LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret), K(block_file_size_), K(total_space),
-          K(free_space), K(reserved_size), K(old_block_file_size), K(block_file_size));
+      if (is_first_bootstrap) {
+        LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret), K(block_file_size_), K(total_space),
+            K(free_space), K(reserved_size), K(old_block_file_size), K(block_file_size));
+      } else {
+        LOG_DBA_WARN(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret), K(block_file_size_), K(total_space),
+            K(free_space), K(reserved_size), K(old_block_file_size), K(block_file_size));
+      }
     } else if (block_file_size <= block_size) {
       ret = OB_INVALID_ARGUMENT;
       SHARE_LOG(ERROR, "data file size is too small, ", K(ret), K(total_space), K(free_space),
