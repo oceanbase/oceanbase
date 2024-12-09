@@ -226,6 +226,7 @@ void ObTableLoadTaskThreadPoolScheduler::run(uint64_t thread_idx)
   share::ObTenantBase *tenant_base = MTL_CTX();
   lib::Worker::CompatMode mode = ((omt::ObTenant *)tenant_base)->get_compat_mode();
   lib::Worker::set_compatibility_mode(mode);
+  common::ob_setup_default_tsi_warning_buffer();
 
   LOG_INFO("table load task thread run", KP(this), "pid", get_tid_cache(), K(thread_idx));
 

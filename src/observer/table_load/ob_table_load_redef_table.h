@@ -136,5 +136,17 @@ public:
   static int abort(const ObTableLoadRedefTableAbortArg &arg, sql::ObSQLSessionInfo &session_info);
 };
 
+class ObTableLoadErrorMessageGuard
+{
+public:
+  ObTableLoadErrorMessageGuard();
+  ~ObTableLoadErrorMessageGuard();
+private:
+  ObArenaAllocator allocator_;
+  int error_code_;
+  char *error_message_;
+  bool need_reset_;
+};
+
 } // namespace observer
 } // namespace oceanbase

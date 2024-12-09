@@ -1820,6 +1820,7 @@ ObLoadDataDirectImpl::BackupLoadExecutor::BackupLoadExecutor()
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
+  task_error_msg_[0] = '\0';
 }
 
 ObLoadDataDirectImpl::BackupLoadExecutor::~BackupLoadExecutor()
@@ -1953,8 +1954,9 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::execute()
     task_controller_.wait_all_task_finish(execute_param_->combined_name_.ptr(), THIS_WORKER.get_timeout_ts());
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ATOMIC_LOAD(&task_error_code_))) {
-        LOG_WARN("task error", KR(ret));
+      if (OB_FAIL(task_error_code_)) {
+        LOG_WARN("task error", KR(ret), K(task_error_msg_));
+        FORWARD_USER_ERROR(task_error_code_, task_error_msg_);
       }
     }
   }
@@ -2096,7 +2098,14 @@ void ObLoadDataDirectImpl::BackupLoadExecutor::task_finished(ObTableLoadTask *ta
     LOG_WARN("invalid args", KR(ret), KP(task), K(worker_count_));
   } else {
     if (OB_UNLIKELY(OB_SUCCESS != ret_code)) {
-      ATOMIC_VCAS(&task_error_code_, common::OB_SUCCESS, ret_code);
+      ObMutexGuard guard(mutex_);
+      if (OB_SUCCESS == task_error_code_) {
+        task_error_code_ = ret_code;
+        ObWarningBuffer *buf = ob_get_tsi_warning_buffer();
+        if (nullptr != buf) {
+          MEMCPY(task_error_msg_, buf->get_err_msg(), ObWarningBuffer::WarningItem::STR_LEN);
+        }
+      }
     }
     task_allocator_.free(task);
     task_controller_.on_task_finished();
