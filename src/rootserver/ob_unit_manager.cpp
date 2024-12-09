@@ -4620,7 +4620,8 @@ int ObUnitManager::get_unit_ids(ObIArray<uint64_t> &unit_ids) const
 }
 
 int ObUnitManager::calc_sum_load(const ObArray<ObUnitLoad> *unit_loads,
-                                 ObUnitConfig &sum_load)
+                                 ObUnitConfig &sum_load,
+                                 const bool include_ungranted_unit)
 {
   int ret = OB_SUCCESS;
   sum_load.reset();
@@ -4631,6 +4632,9 @@ int ObUnitManager::calc_sum_load(const ObArray<ObUnitLoad> *unit_loads,
       if (!unit_loads->at(i).is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid unit_load", "unit_load", unit_loads->at(i), K(ret));
+      } else if (!is_valid_tenant_id(unit_loads->at(i).get_tenant_id())
+                 && !include_ungranted_unit) {
+        // skip this unit_load
       } else {
         sum_load += *unit_loads->at(i).unit_config_;
       }

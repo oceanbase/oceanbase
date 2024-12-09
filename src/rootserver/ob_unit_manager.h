@@ -278,7 +278,8 @@ public:
       const common::ObIArray<share::ObZoneReplicaNumSet> &zone_locality,
       bool &is_legal);
   static int calc_sum_load(const common::ObArray<ObUnitLoad> *unit_loads,
-                           share::ObUnitConfig &sum_load);
+                           share::ObUnitConfig &sum_load,
+                           const bool include_ungranted_unit = true);
   // get hard limit
   int get_hard_limit(double &hard_limit) const;
 
