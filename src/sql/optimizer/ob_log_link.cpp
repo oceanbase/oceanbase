@@ -85,7 +85,7 @@ int ObLogLink::print_link_stmt(char *buf, int64_t buf_len)
     char *ch = buf;
     char *stmt_end = buf + stmt_fmt_len_ - 3;
     while (ch < stmt_end) {
-      if (0 == ch[0] && 0 == ch[1]) {
+      if (0 == ch[0]) {
         uint16_t param_idx = *(uint16_t *)(ch + 2);
         ch[0] = '$';
         if (param_idx > 999) {
@@ -224,8 +224,7 @@ int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
   } else if (FALSE_IT(print_param.cs_type_ = spell_coll)) {
   } else if (OB_FAIL(mark_exec_params(const_cast<ObDMLStmt*>(stmt)))) {
     LOG_WARN("failed to mark exec params", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(plan->get_allocator(), stmt, sql,
-                opt_ctx->get_schema_guard(), print_param, opt_ctx->get_params(), session))) {
+  } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(plan->get_allocator(), stmt, sql, opt_ctx->get_schema_guard(), print_param, NULL, session))) {
     LOG_WARN("failed to reconstruct link sql", KP(stmt), KP(plan), K(get_dblink_id()), K(ret));
   } else {
     stmt_fmt_buf_ = sql.ptr();
