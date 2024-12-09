@@ -128,19 +128,22 @@ private:
                std::unique_ptr<orc::ColumnVectorBatch> &batch,
                const int64_t batch_size,
                const ObIArray<int> &idxs,
-               int64_t &row_count):
+               int64_t &row_count,
+               const orc::Type *col_type):
       eval_ctx_(eval_ctx),
       file_col_expr_(file_col_expr),
       batch_(batch),
       batch_size_(batch_size),
       idxs_(idxs),
-      row_count_(row_count)
+      row_count_(row_count),
+      col_type_(col_type)
     {}
     typedef int (DataLoader::*LOAD_FUNC)();
     static LOAD_FUNC select_load_function(const ObDatumMeta &datum_type,
                                           const orc::Type &type);
     int load_data_for_col(LOAD_FUNC &func);
     int load_string_col();
+    int load_year_vec();
     int load_int32_vec();
     int load_int64_vec();
     int load_timestamp_vec();
@@ -150,7 +153,7 @@ private:
     int load_dec128_vec();
     int load_dec64_vec();
 
-    bool is_orc_read_utc();
+    bool is_orc_read_utc(const orc::Type *type);
     bool is_ob_type_store_utc(const ObDatumMeta &meta);
 
     int64_t calc_tz_adjust_us();
@@ -160,6 +163,7 @@ private:
     const int64_t batch_size_;
     const ObIArray<int> &idxs_;
     int64_t &row_count_;
+    const orc::Type *col_type_;
   };
   private:
     int next_file();
