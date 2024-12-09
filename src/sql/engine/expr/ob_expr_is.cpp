@@ -355,7 +355,7 @@ int ObExprIs::calc_is_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_dat
   return ret;
 }
 
-template <typename ArgVec, typename ResVec, bool IsFixedLenData, bool ExprIs>
+template <typename ArgVec, typename ResVec, bool ExprIs>
 static int eval_vector_is_null(const ObExpr &expr,
                                ObEvalCtx &ctx,
                                const EvalBound &bound)
@@ -364,10 +364,11 @@ static int eval_vector_is_null(const ObExpr &expr,
   ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  int64_t *data_ptr = IsFixedLenData ?
+  const bool isFixedLenRes = std::is_same<ResVec, IntegerFixedVec>::value;
+  int64_t *data_ptr = isFixedLenRes ?
                       const_cast<int64_t*>(reinterpret_cast<const int64_t *>(res_vec->get_payload(0))) :
                       nullptr;
-  if (IsFixedLenData && !arg_vec->has_null()) {
+  if (isFixedLenRes && !arg_vec->has_null()) {
     for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
       data_ptr[idx] = static_cast<int64_t>(!ExprIs);
     }
@@ -375,7 +376,7 @@ static int eval_vector_is_null(const ObExpr &expr,
     for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
       bool arg_not_null = arg_vec->is_null(idx);
       arg_not_null = ExprIs ? arg_not_null : !arg_not_null;
-      if (IsFixedLenData) {
+      if (isFixedLenRes) {
         data_ptr[idx] = static_cast<int64_t>(arg_not_null);
       } else {
         res_vec->set_int(idx, static_cast<int64_t>(arg_not_null));
@@ -402,14 +403,14 @@ static inline int def_calc_vector_is_null(const ObExpr &expr,
     if (VEC_FIXED == res_format) {
       VectorFormat arg_format = expr.args_[0]->get_format(ctx);
       if (VEC_FIXED == arg_format || VEC_DISCRETE == arg_format || VEC_CONTINUOUS == arg_format) {
-        ret = eval_vector_is_null<ObBitmapNullVectorBase, IntegerFixedVec, true, ExprIs>(expr, ctx, bound);
+        ret = eval_vector_is_null<ObBitmapNullVectorBase, IntegerFixedVec, ExprIs>(expr, ctx, bound);
       } else if (VEC_UNIFORM == arg_format) {
-        ret = eval_vector_is_null<ObUniformBase, IntegerFixedVec, true, ExprIs>(expr, ctx, bound);
+        ret = eval_vector_is_null<ObUniformBase, IntegerFixedVec, ExprIs>(expr, ctx, bound);
       } else {
-        ret = eval_vector_is_null<ObVectorBase, IntegerFixedVec, true, ExprIs>(expr, ctx, bound);
+        ret = eval_vector_is_null<ObVectorBase, IntegerFixedVec, ExprIs>(expr, ctx, bound);
       }
     } else {
-      ret = eval_vector_is_null<ObVectorBase, ObVectorBase, false, ExprIs>(expr, ctx, bound);
+      ret = eval_vector_is_null<ObVectorBase, ObVectorBase, ExprIs>(expr, ctx, bound);
     }
   }
   return ret;
@@ -423,7 +424,7 @@ int ObExprIs::calc_vector_is_null(const ObExpr &expr,
   return def_calc_vector_is_null<true>(expr, ctx, skip, bound);
 }   
 
-template <typename ArgVec, typename ResVec, typename DataType, bool IsFixedLenData, bool ExprIs, bool IsTrue>
+template <typename ArgVec, typename ResVec, typename DataType, bool ExprIs, bool IsTrue>
 static int eval_vector_is_true(const ObExpr &expr,
                                ObEvalCtx &ctx,
                                const ObBitVector &skip,
@@ -434,7 +435,8 @@ static int eval_vector_is_true(const ObExpr &expr,
   ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  int64_t *data_ptr = IsFixedLenData ?
+  const bool isFixedLenRes = std::is_same<ResVec, IntegerFixedVec>::value;
+  int64_t *data_ptr = isFixedLenRes ?
                       const_cast<int64_t*>(reinterpret_cast<const int64_t *>(res_vec->get_payload(0))) :
                       nullptr;
   for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
@@ -449,7 +451,7 @@ static int eval_vector_is_true(const ObExpr &expr,
       arg_is_true = ExprIs ? arg_is_true : !arg_is_true;
       arg_is_true = IsTrue ? arg_is_true : !arg_is_true;
     }
-    if (IsFixedLenData) {
+    if (isFixedLenRes) {
       data_ptr[idx] = static_cast<int64_t>(arg_is_true);
     } else {
       res_vec->set_int(idx, static_cast<int64_t>(arg_is_true));
@@ -476,17 +478,17 @@ static inline int def_eval_vector_is_true(const ObExpr &expr,
     if (VEC_FIXED == res_format) {
       VectorFormat arg_format = expr.args_[0]->get_format(ctx);
       if (VEC_FIXED == arg_format || VEC_DISCRETE == arg_format || VEC_CONTINUOUS == arg_format) {
-        ret = eval_vector_is_true<ArgVec, IntegerFixedVec, DataType, true, ExprIs, IsTrue>
+        ret = eval_vector_is_true<ArgVec, IntegerFixedVec, DataType, ExprIs, IsTrue>
                                   (expr, ctx, skip, bound, get_data);
       } else if (VEC_UNIFORM == arg_format) {
-        ret = eval_vector_is_true<ObUniformBase, IntegerFixedVec, DataType, true, ExprIs, IsTrue>
+        ret = eval_vector_is_true<ObUniformBase, IntegerFixedVec, DataType, ExprIs, IsTrue>
                                   (expr, ctx, skip, bound, get_data);
       } else {
-        ret = eval_vector_is_true<ObVectorBase, IntegerFixedVec, DataType, true, ExprIs, IsTrue>
+        ret = eval_vector_is_true<ObVectorBase, IntegerFixedVec, DataType, ExprIs, IsTrue>
                                   (expr, ctx, skip, bound, get_data);
       }
     } else {
-      ret = eval_vector_is_true<ObVectorBase, ObVectorBase, DataType, false, ExprIs, IsTrue>
+      ret = eval_vector_is_true<ObVectorBase, ObVectorBase, DataType, ExprIs, IsTrue>
                                   (expr, ctx, skip, bound, get_data);
     }
   }
