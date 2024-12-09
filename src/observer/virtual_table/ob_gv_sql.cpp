@@ -596,6 +596,10 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       cells[i].set_int(mem_used);
       break;
     }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::PL_CG_MEM_HOLD: {
+      cells[i].set_int(0);
+      break;
+    }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::EXECUTIONS: {
       if (!cache_stat_updated) {
         cells[i].set_null();
