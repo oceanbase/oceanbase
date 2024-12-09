@@ -1787,7 +1787,7 @@ TEST_F(TestTmpFile, test_aio_pread)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   check_final_status();
-  STORAGE_LOG(INFO, "=======================test_aio_pread begin=======================");
+  STORAGE_LOG(INFO, "=======================test_aio_pread end=======================");
 }
 
 void rand_shrink_or_expand_wbp(ObTmpWriteBufferPool &wbp, bool &has_stop)
@@ -1811,6 +1811,7 @@ void rand_shrink_or_expand_wbp(ObTmpWriteBufferPool &wbp, bool &has_stop)
 
 TEST_F(TestTmpFile, test_multi_file_wr_when_wbp_shrink_and_expand)
 {
+  STORAGE_LOG(INFO, "=======================test_multi_file_wr_when_wbp_shrink_and_expand begin=======================");
   int ret = OB_SUCCESS;
   ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_page_cache_controller();
   ObTmpWriteBufferPool &wbp = pc_ctrl.write_buffer_pool_;
@@ -1857,8 +1858,8 @@ TEST_F(TestTmpFile, test_multi_file_wr_when_wbp_shrink_and_expand)
   ASSERT_EQ(wbp.default_wbp_memory_limit_, wbp.capacity_);
   ASSERT_EQ(false, wbp.shrink_ctx_.is_valid());
 
-  LOG_INFO("test_multi_file_wr_when_wbp_shrink_and_expand");
   LOG_INFO("io time", K(io_time));
+  STORAGE_LOG(INFO, "=======================test_multi_file_wr_when_wbp_shrink_and_expand end=======================");
 }
 } // namespace oceanbase
 
