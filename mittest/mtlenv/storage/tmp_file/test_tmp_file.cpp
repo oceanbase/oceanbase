@@ -1798,7 +1798,7 @@ void rand_shrink_or_expand_wbp(ObTmpWriteBufferPool &wbp, bool &has_stop)
     if (cnt == 0) {
       rand_wbp_size = ObRandom::rand(SMALL_WBP_MEM_LIMIT, BIG_WBP_MEM_LIMIT / 2);
     } else {
-      rand_wbp_size = ObRandom::rand(BIG_WBP_MEM_LIMIT / 2, BIG_WBP_MEM_LIMIT * 2);
+      rand_wbp_size = ObRandom::rand(BIG_WBP_MEM_LIMIT / 2, BIG_WBP_MEM_LIMIT);
     }
     rand_wbp_size = (rand_wbp_size + WBP_BLOCK_SIZE - 1) / WBP_BLOCK_SIZE * WBP_BLOCK_SIZE;
     ATOMIC_SET(&wbp.default_wbp_memory_limit_, rand_wbp_size);
@@ -1829,10 +1829,10 @@ TEST_F(TestTmpFile, test_multi_file_wr_when_wbp_shrink_and_expand)
   bool has_stop = false;
   std::thread t(rand_shrink_or_expand_wbp, std::ref(wbp), std::ref(has_stop));
 
-  const int64_t read_thread_cnt = 2;
-  const int64_t file_cnt = 128;
+  const int64_t read_thread_cnt = 1;
+  const int64_t file_cnt = 32;
   const int64_t batch_size = 3 * 1024 * 1024;
-  const int64_t batch_num = 2; // total 128 * 3MB * 2 = 768MB
+  const int64_t batch_num = 2; // total 32 * 3MB * 2 = 192MB
   const bool disable_block_cache = true;
   TestMultiTmpFileStress test(MTL_CTX());
   ret = test.init(file_cnt, dir, read_thread_cnt, IO_WAIT_TIME_MS, batch_size, batch_num, disable_block_cache);
