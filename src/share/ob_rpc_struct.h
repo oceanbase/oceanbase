@@ -4353,6 +4353,7 @@ public:
   {
     INVALID_TYPE = -1,
     RECOVERY_LS_SERVICE,
+    BALANCE_TASK_EXECUTE,
   };
   ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
   ~ObNotifyTenantThreadArg() {}
