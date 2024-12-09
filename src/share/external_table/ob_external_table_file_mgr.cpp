@@ -513,12 +513,19 @@ int ObExternalTableFileManager::lock_for_refresh(
     lock_arg.lock_mode_ = EXCLUSIVE;
     lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     lock_arg.timeout_us_ = 1000L * 1000L * 2; //2s
+    lock_arg.is_from_sql_ = true;
     if (OB_FAIL(lock_arg.owner_id_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                       get_tid_cache()))) {
       LOG_WARN("failed to get owner id", K(ret), K(get_tid_cache()));
     } else {
-      while (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn)) && !THIS_WORKER.is_timeout()) {
-        LOG_WARN("lock failed try again", K(ret));
+      while (OB_SUCC(ret) && OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn))) {
+        LOG_WARN("external table add object lock failed", K(ret));
+        if (OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
+          // overwrite ret
+          if (OB_FAIL(THIS_WORKER.check_status())) {
+            LOG_WARN("worker status error", K(ret));
+          }
+        }
       }
     }
   }
