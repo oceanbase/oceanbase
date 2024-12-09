@@ -393,7 +393,7 @@ int ObKVCacheMap::erase(const int64_t cache_id, const ObIKVCacheKey &key)
           if (iter->inst_->node_allocator_.is_fragment(iter)) {
             internal_map_replace(hazard_guard, prev, iter, bucket_ptr);
           }
-          if (hash_code == iter->hash_code_ && OB_SUCC(key.equal(*iter->key_, is_equal) && is_equal)) {
+          if (hash_code == iter->hash_code_ && OB_SUCC(key.equal(*iter->key_, is_equal)) && is_equal) {
             (void) ATOMIC_SAF(&iter->mb_handle_->kv_cnt_, 1);
             (void) ATOMIC_SAF(&iter->mb_handle_->get_cnt_, iter->get_cnt_);
             (void) ATOMIC_SAF(&iter->inst_->status_.kv_cnt_, 1);
