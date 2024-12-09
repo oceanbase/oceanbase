@@ -153,6 +153,49 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConflictCheckerCtdef);
 };
 
+struct ObConflictRange {
+  ObConflictRange()
+    : rowkey_(),
+      tablet_id_()
+  {
+  }
+  ~ObConflictRange() {};
+
+  void init_conflict_range(const ObRowkey &rowkey, ObTabletID &tablet_id)
+  {
+    rowkey_ = rowkey;
+    tablet_id_ = tablet_id;
+  }
+
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
+
+  inline uint64_t hash() const
+  {
+    uint64_t hash_val = 0;
+    hash_val = rowkey_.hash();
+    hash_val = tablet_id_.hash(hash_val);
+    return hash_val;
+  }
+  bool is_valid() const
+  {
+    return rowkey_.is_valid() && tablet_id_.is_valid();
+  }
+  int assign(const ObConflictRange &conflict_range);
+  bool operator==(const ObConflictRange &that) const
+  {
+    return rowkey_ == that.rowkey_ && tablet_id_ == that.tablet_id_;
+  }
+  TO_STRING_KV(K_(rowkey), K_(tablet_id));
+  ObRowkey rowkey_;
+  ObTabletID tablet_id_;
+};
+
+typedef common::hash::ObHashSet<ObConflictRange, common::hash::NoPthreadDefendMode> ConflictRangeDistCtx;
+
 class ObConflictChecker
 {
 public:
@@ -214,7 +257,9 @@ public:
   // todo @kaizhan.dkz 构建回表的das scan task
   int build_primary_table_lookup_das_task();
 
-  int add_lookup_range_no_dup(storage::ObTableScanParam &scan_param, ObNewRange &lookup_range);
+  int add_lookup_range_no_dup(storage::ObTableScanParam &scan_param,
+                              ObNewRange &lookup_range,
+                              common::ObTabletID &tablet_id);
 
   //会被算子的inner_close函数调用
   int close();
@@ -235,7 +280,7 @@ private:
   int get_das_scan_op(ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_scan_op);
 
   // 构建回表的range信息
-  int build_data_table_range(ObNewRange &lookup_range);
+  int build_data_table_range(ObNewRange &lookup_range, ObRowkey &table_rowkey);
 
   // --------------------------
   int get_next_row_from_data_table(DASOpResultIter &result_iter,
@@ -268,7 +313,7 @@ public:
   ObDASTableLoc *table_loc_;
   lib::MemoryContext tmp_mem_ctx_;
   ObSEArray<ObTabletSnapshotMaping, 16> snapshot_maping_;
-  SeRowkeyDistCtx *se_rowkey_dist_ctx_;
+  ConflictRangeDistCtx *conflict_range_dist_ctx_;
 };
 }  // namespace sql
 }  // namespace oceanbase
