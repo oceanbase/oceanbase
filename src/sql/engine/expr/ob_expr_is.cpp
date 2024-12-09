@@ -358,7 +358,6 @@ int ObExprIs::calc_is_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_dat
 template <typename ArgVec, typename ResVec, bool IsFixedLenData, bool ExprIs>
 static int eval_vector_is_null(const ObExpr &expr,
                                ObEvalCtx &ctx,
-                               const ObBitVector &skip,
                                const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
@@ -398,19 +397,19 @@ static inline int def_calc_vector_is_null(const ObExpr &expr,
     LOG_WARN("fail to eval is/is_not null param", K(ret));
   } else {
     VectorFormat res_format = expr.get_format(ctx);
-    // The 'res_format' is expected to be Type 'IntegerFixedVec' under the normal circumstances. 
+    // The 'res_format' is expected to be Type 'IntegerFixedVec' under the regular circumstances. 
     // So a condition is added to optimize performance accordingly.
     if (VEC_FIXED == res_format) {
       VectorFormat arg_format = expr.args_[0]->get_format(ctx);
       if (VEC_FIXED == arg_format || VEC_DISCRETE == arg_format || VEC_CONTINUOUS == arg_format) {
-        ret = eval_vector_is_null<ObBitmapNullVectorBase, IntegerFixedVec, true, ExprIs>(expr, ctx, skip, bound);
+        ret = eval_vector_is_null<ObBitmapNullVectorBase, IntegerFixedVec, true, ExprIs>(expr, ctx, bound);
       } else if (VEC_UNIFORM == arg_format) {
-        ret = eval_vector_is_null<ObUniformBase, IntegerFixedVec, true, ExprIs>(expr, ctx, skip, bound);
+        ret = eval_vector_is_null<ObUniformBase, IntegerFixedVec, true, ExprIs>(expr, ctx, bound);
       } else {
-        ret = eval_vector_is_null<ObVectorBase, IntegerFixedVec, true, ExprIs>(expr, ctx, skip, bound);
+        ret = eval_vector_is_null<ObVectorBase, IntegerFixedVec, true, ExprIs>(expr, ctx, bound);
       }
     } else {
-      ret = eval_vector_is_null<ObVectorBase, ObVectorBase, false, ExprIs>(expr, ctx, skip, bound);
+      ret = eval_vector_is_null<ObVectorBase, ObVectorBase, false, ExprIs>(expr, ctx, bound);
     }
   }
   return ret;
@@ -472,7 +471,7 @@ static inline int def_eval_vector_is_true(const ObExpr &expr,
     LOG_WARN("fail to eval is not null param", K(ret));
   } else {
     VectorFormat res_format = expr.get_format(ctx);
-    // The 'res_format' is expected to be Type 'IntegerFixedVec' under the normal circumstances. 
+    // The 'res_format' is expected to be Type 'IntegerFixedVec' under the regular circumstances. 
     // So a condition is added to optimize performance accordingly.
     if (VEC_FIXED == res_format) {
       VectorFormat arg_format = expr.args_[0]->get_format(ctx);
@@ -514,9 +513,17 @@ static inline int def_calc_vector_is_true(const ObExpr &expr,
     case ObUMediumIntType:
     case ObUInt32Type:
     case ObUInt64Type:
-    case ObBitType: 
+    case ObBitType: {
+      ret = def_eval_vector_is_true<IntegerFixedVec, int64_t, ExprIs, IsTrue>
+                                    (expr, ctx, skip, bound, &ObVectorBase::get_int);
+      break;
+    }
     case ObFloatType:
-    case ObUFloatType:
+    case ObUFloatType: {
+      ret = def_eval_vector_is_true<FloatFixedVec, float, ExprIs, IsTrue>
+                                    (expr, ctx, skip, bound, &ObVectorBase::get_float);
+      break;
+    }
     case ObDoubleType:
     case ObUDoubleType: {
       ret = def_eval_vector_is_true<DoubleFixedVec, double, ExprIs, IsTrue>
