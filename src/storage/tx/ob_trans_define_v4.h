@@ -706,7 +706,7 @@ public:
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
   void dump_and_print_trace();
-  bool in_tx_or_has_extra_state();
+  bool in_tx_or_has_extra_state() const;
   bool in_tx_for_free_route();
   const ObTransID &get_tx_id() const { return tx_id_; }
   ObITxCallback *get_end_tx_cb() { return commit_cb_; }
