@@ -48,7 +48,7 @@ const uint8_t ObMvccTransNode::F_COMMITTED = 0x4;
 const uint8_t ObMvccTransNode::F_ELR = 0x8;
 const uint8_t ObMvccTransNode::F_ABORTED = 0x10;
 const uint8_t ObMvccTransNode::F_DELAYED_CLEANOUT = 0x40;
-const uint8_t ObMvccTransNode::F_MUTEX = 0x80;
+const uint8_t ObMvccTransNode::F_INCOMPLETE_STATE = 0x80;
 
 void ObMvccTransNode::checksum(ObBatchChecksum &bc) const
 {
@@ -909,9 +909,10 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
                                                                    list_head_->get_seq_no()))) {
         TRANS_LOG(WARN, "check sequence set violation failed", K(ret), KPC(this));
       } else if (nullptr != list_head_ && FALSE_IT(res.is_checked_ = true)) {
-      } else if (OB_SUCC(check_double_insert_(snapshot_version,
-                                              writer_node,
-                                              list_head_))) {
+      } else if (OB_SUCC(mvcc_sanity_check_(snapshot_version,
+                                            write_flag,
+                                            writer_node,
+                                            list_head_))) {
         ATOMIC_STORE(&(writer_node.prev_), list_head_);
         ATOMIC_STORE(&(writer_node.next_), NULL);
         if (NULL != list_head_) {
@@ -926,6 +927,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
         }
 
         res.tx_node_ = &writer_node;
+
         total_trans_node_cnt_++;
       }
       if (NULL != writer_node.prev_
@@ -941,19 +943,38 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
   return ret;
 }
 
-int ObMvccRow::check_double_insert_(const SCN snapshot_version,
-                                    ObMvccTransNode &node,
-                                    ObMvccTransNode *prev)
+__attribute__((noinline))
+int ObMvccRow::mvcc_sanity_check_(const SCN snapshot_version,
+                                  const concurrent_control::ObWriteFlag write_flag,
+                                  ObMvccTransNode &node,
+                                  ObMvccTransNode *prev)
 {
   int ret = OB_SUCCESS;
+
+  const bool compliant_with_sql_semantic = !write_flag.is_table_api();
 
   if (NULL != prev) {
     if (blocksstable::ObDmlFlag::DF_INSERT == node.get_dml_flag()
         && blocksstable::ObDmlFlag::DF_DELETE != prev->get_dml_flag()
         && prev->is_committed()
         && snapshot_version >= prev->trans_version_) {
+      // Case 1: Check double insert case
       ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
       TRANS_LOG(WARN, "find double insert node", K(ret), K(node), KPC(prev), K(snapshot_version), K(*this));
+    } else if (prev->get_tx_id() == node.get_tx_id()
+               && prev->is_incomplete()
+               && compliant_with_sql_semantic) {
+      // TODO(handora.qc): remove after kaizhan.dkz finish the concureent
+      // insert/delete feature
+      //
+      // Case 2: The current implementation allows the same rowkey to perform
+      // insert and delete within the same statement concurrently. So to prevent
+      // disorder between insert and callback registeration, we return an error
+      // in this scenario, hoping that the sql layer will retry later.
+      // Otherwise, it may lead to an out-of-order actions from logs between
+      // leader and follower.
+      ret = OB_SEQ_NO_REORDER_UNDER_PDML;
+      TRANS_LOG(INFO, "mvcc_write meet current write by self", K(ret), KPC(prev), K(node));
     }
   }
 

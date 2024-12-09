@@ -741,11 +741,11 @@ public:
    * @data_seq: the sequence_no of current access
    *            new created data will marked with this seq no
    */
-  int start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_seq);
+  int start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_seq, const concurrent_control::ObWriteFlag &write_flag);
   /*
    * end_access - end of txn protected resources access
    */
-  int end_access();
+  int end_access(const concurrent_control::ObWriteFlag &write_flag);
   int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ to_scn);
   int set_block_frozen_memtable(memtable::ObMemtable *memtable);
   void clear_block_frozen_memtable();

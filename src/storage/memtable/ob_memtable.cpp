@@ -2840,7 +2840,8 @@ int ObMemtable::mvcc_write_(
                                                         arg.old_row_,
                                                         this,
                                                         arg.seq_no_,
-                                                        arg.column_cnt_))) {
+                                                        arg.column_cnt_,
+                                                        ctx.mvcc_acc_ctx_.write_flag_))) {
     (void)mvcc_engine_.mvcc_undo(value);
     res.is_mvcc_undo_ = true;
     TRANS_LOG(WARN, "register row commit failed", K(ret));
@@ -2857,6 +2858,9 @@ int ObMemtable::mvcc_write_(
       }
     }
     /***********************/
+    if (res.has_insert()) {
+      (void)mvcc_engine_.finish_kv(res);
+    }
   }
 
   // cannot be serializable when transaction set violation

@@ -1127,7 +1127,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
     TRANS_LOG(WARN, "use ls snapshot access another ls", K(ret), K(snapshot), K(ls_id));
   } else if (OB_FAIL(acquire_tx_ctx(ls_id, tx, tx_ctx, store_ctx.ls_, special))) {
     TRANS_LOG(WARN, "acquire tx ctx fail", K(ret), K(tx), K(ls_id), KPC(this));
-  } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn))) {
+  } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, write_flag))) {
     TRANS_LOG(WARN, "tx ctx start access fail", K(ret), K(tx_ctx), K(ls_id), KPC(this));
   } else if (FALSE_IT(access_started = true)) {
   } else if (OB_FAIL(get_tx_table_guard_(store_ctx.ls_, ls_id, tx_table_guard))) {
@@ -1139,7 +1139,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
       ret = OB_STANDBY_READ_ONLY;
     }
     if (OB_NOT_NULL(tx_ctx)) {
-      if (access_started) { tx_ctx->end_access(); }
+      if (access_started) { tx_ctx->end_access(write_flag); }
       revert_tx_ctx_(store_ctx.ls_, tx_ctx);
       tx_ctx = NULL;
     }
@@ -1336,7 +1336,7 @@ int ObTransService::revert_store_ctx(storage::ObStoreCtx &store_ctx)
         TRANS_LOG(WARN, "append part fail", K(ret), K(p), KPC(tx_ctx));
       }
       (void) fetch_cflict_tx_ids_from_mem_ctx_to_desc_(acc_ctx);
-      tx_ctx->end_access();
+      tx_ctx->end_access(acc_ctx.write_flag_);
       revert_tx_ctx_(store_ctx.ls_, tx_ctx);
     }
   } else {

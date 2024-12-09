@@ -205,7 +205,7 @@ public:
   ObIMvccCtx &get_ctx() { return host_; }
   void *callback_alloc(const int64_t size);
   void callback_free(ObITransCallback *cb);
-  int append(ObITransCallback *node);
+  int append(ObITransCallback *node, const concurrent_control::ObWriteFlag &write_flag);
   void before_append(ObITransCallback *node);
   void after_append(ObITransCallback *node, const int ret_code);
   void trans_start();
@@ -225,8 +225,8 @@ public:
     const memtable::ObMemtableSet *memtable_set,
     const share::SCN max_applied_scn);
   int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);
-  void acquire_callback_list();
-  void revert_callback_list();
+  void acquire_callback_list(const concurrent_control::ObWriteFlag &write_flag);
+  void revert_callback_list(const concurrent_control::ObWriteFlag &write_flag);
   // TODO by fengshuo.fs: fix this implement
   ObITransCallbackIterator begin() { return ObITransCallbackIterator(get_guard_()); }
   ObITransCallbackIterator end() { return ObITransCallbackIterator(get_guard_()); }

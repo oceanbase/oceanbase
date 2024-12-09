@@ -70,9 +70,10 @@ void ObMemtableCtx::callback_free(ObITransCallback *cb)
   }
 }
 
-int ObMvccRow::check_double_insert_(const share::SCN ,
-                                    ObMvccTransNode &,
-                                    ObMvccTransNode *)
+int ObMvccRow::mvcc_sanity_check_(const share::SCN ,
+                                  const concurrent_control::ObWriteFlag ,
+                                  ObMvccTransNode &,
+                                  ObMvccTransNode *)
 {
   return OB_SUCCESS;
 }

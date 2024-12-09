@@ -91,6 +91,9 @@ public:
   int ensure_kv(const ObMemtableKey *stored_key,
                 ObMvccRow *value);
 
+  // finish_kv is used to make tx_node visible to outer read
+  void finish_kv(ObMvccWriteResult& res);
+
   // Mvcc engine read interface
   int get(ObMvccAccessCtx &ctx,
           const ObQueryFlag &query_flag,

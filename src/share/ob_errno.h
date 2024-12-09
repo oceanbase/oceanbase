@@ -1375,6 +1375,7 @@ constexpr int OB_INVALID_BATCH_SIZE = -6321;
 constexpr int OB_CLOG_SLIDE_TIMEOUT = -6322;
 constexpr int OB_LOG_REPLAY_ERROR = -6323;
 constexpr int OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT = -6324;
+constexpr int OB_SEQ_NO_REORDER_UNDER_PDML = -6329;
 constexpr int OB_ARB_DEGRADE = -6331;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
@@ -3422,6 +3423,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CLOG_SLIDE_TIMEOUT__USER_ERROR_MSG "ob clog slide timeout"
 #define OB_LOG_REPLAY_ERROR__USER_ERROR_MSG "log replay error"
 #define OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT__USER_ERROR_MSG "ob trying to lock config change conflicts"
+#define OB_SEQ_NO_REORDER_UNDER_PDML__USER_ERROR_MSG "pdml sql need retry under sequence number reorder"
 #define OB_ARB_DEGRADE__USER_ERROR_MSG "logstream has been degraded due to error"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
@@ -5589,6 +5591,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CLOG_SLIDE_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6322, ob clog slide timeout"
 #define OB_LOG_REPLAY_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6323, log replay error"
 #define OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6324, ob trying to lock config change conflicts"
+#define OB_SEQ_NO_REORDER_UNDER_PDML__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6329, pdml sql need retry under sequence number reorder"
 #define OB_ARB_DEGRADE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6331, logstream has been degraded due to error"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
@@ -6151,7 +6154,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2163];
+extern int g_all_ob_errnos[2164];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

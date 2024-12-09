@@ -477,7 +477,7 @@ public:
   int check_lock_need_replay(const share::SCN &scn,
                              const transaction::tablelock::ObTableLockOp &lock_op,
                              bool &need_replay);
-  int add_lock_record(const transaction::tablelock::ObTableLockOp &lock_op);
+  int add_lock_record(const transaction::tablelock::ObTableLockOp &lock_op, const concurrent_control::ObWriteFlag &write_flag);
   int replay_add_lock_record(const transaction::tablelock::ObTableLockOp &lock_op,
                              const share::SCN &scn);
   void remove_lock_record(ObMemCtxLockOpLinkNode *lock_op);

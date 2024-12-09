@@ -57,7 +57,8 @@ int ObIMvccCtx::register_row_commit_cb(
     const ObRowData *old_row,
     ObMemtable *memtable,
     const transaction::ObTxSEQ seq_no,
-    const int64_t column_cnt)
+    const int64_t column_cnt,
+    const concurrent_control::ObWriteFlag &write_flag)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = false;
@@ -86,7 +87,7 @@ int ObIMvccCtx::register_row_commit_cb(
             column_cnt);
     cb->set_is_link();
 
-    if (OB_FAIL(append_callback(cb))) {
+    if (OB_FAIL(append_callback(cb, write_flag))) {
       TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
     }
 
@@ -156,7 +157,8 @@ int ObIMvccCtx::register_row_replay_cb(
 int ObIMvccCtx::register_table_lock_cb_(
     ObLockMemtable *memtable,
     ObMemCtxLockOpLinkNode *lock_op,
-    ObOBJLockCallback *&cb)
+    ObOBJLockCallback *&cb,
+    const concurrent_control::ObWriteFlag &write_flag)
 {
   int ret = OB_SUCCESS;
   static ObFakeStoreRowKey tablelock_fake_rowkey("tbl", 3);
@@ -170,7 +172,7 @@ int ObIMvccCtx::register_table_lock_cb_(
     TRANS_LOG(WARN, "encode memtable key failed", K(ret));
   } else {
     cb->set(mt_key, lock_op);
-    if (OB_FAIL(append_callback(cb))) {
+    if (OB_FAIL(append_callback(cb, write_flag))) {
       TRANS_LOG(WARN, "append table lock callback failed", K(ret), K(*cb));
     } else {
       TRANS_LOG(DEBUG, "append table lock callback", K(*cb));
@@ -184,7 +186,8 @@ int ObIMvccCtx::register_table_lock_cb_(
 
 int ObIMvccCtx::register_table_lock_cb(
     ObLockMemtable *memtable,
-    ObMemCtxLockOpLinkNode *lock_op)
+    ObMemCtxLockOpLinkNode *lock_op,
+    const concurrent_control::ObWriteFlag &write_flag)
 {
   int ret = OB_SUCCESS;
   ObOBJLockCallback *cb = nullptr;
@@ -194,7 +197,8 @@ int ObIMvccCtx::register_table_lock_cb(
     TRANS_LOG(WARN, "invalid argument", K(ret), K(memtable), K(lock_op));
   } else if (OB_FAIL(register_table_lock_cb_(memtable,
                                              lock_op,
-                                             cb))) {
+                                             cb,
+                                             write_flag))) {
     TRANS_LOG(WARN, "register tablelock callback failed", K(ret), KPC(lock_op));
   } else {
     // do nothing
@@ -209,13 +213,15 @@ int ObIMvccCtx::register_table_lock_replay_cb(
 {
   int ret = OB_SUCCESS;
   ObOBJLockCallback *cb = nullptr;
+  const concurrent_control::ObWriteFlag write_flag;
   if (OB_ISNULL(memtable) ||
       OB_ISNULL(lock_op)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(memtable), K(lock_op));
   } else if (OB_FAIL(register_table_lock_cb_(memtable,
                                              lock_op,
-                                             cb))) {
+                                             cb,
+                                             write_flag))) {
     TRANS_LOG(WARN, "register tablelock callback failed", K(ret), KPC(lock_op));
   } else {
     cb->set_scn(scn);
@@ -257,7 +263,13 @@ ObMvccRowCallback *ObIMvccCtx::alloc_row_callback(ObMvccRowCallback &cb, ObMemta
 
 int ObIMvccCtx::append_callback(ObITransCallback *cb)
 {
-  return trans_mgr_.append(cb);
+  const concurrent_control::ObWriteFlag write_flag;
+  return trans_mgr_.append(cb, write_flag);
+}
+
+int ObIMvccCtx::append_callback(ObITransCallback *cb, const concurrent_control::ObWriteFlag &write_flag)
+{
+  return trans_mgr_.append(cb, write_flag);
 }
 
 void ObIMvccCtx::check_row_callback_registration_between_stmt_()

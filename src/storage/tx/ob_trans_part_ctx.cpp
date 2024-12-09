@@ -7413,7 +7413,7 @@ int ObPartTransCtx::check_status_()
  * 2) acquire memtable ctx's ref
  * 3) alloc data_scn
  */
-int ObPartTransCtx::start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_scn)
+int ObPartTransCtx::start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_scn, const concurrent_control::ObWriteFlag &write_flag)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
@@ -7435,7 +7435,7 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_scn)
       last_op_sn_ = tx_desc.op_sn_;
     }
     mt_ctx_.inc_ref();
-    mt_ctx_.acquire_callback_list();
+    mt_ctx_.acquire_callback_list(write_flag);
   }
   last_request_ts_ = ObClockGenerator::getClock();
   TRANS_LOG(TRACE, "start_access", K(ret), KPC(this));
@@ -7458,13 +7458,13 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_scn)
  * dec ref of memtable context
  * merge provisional write's callbacks into the total final callback list
  */
-int ObPartTransCtx::end_access()
+int ObPartTransCtx::end_access(const concurrent_control::ObWriteFlag &write_flag)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
   --pending_write_;
   mt_ctx_.dec_ref();
-  mt_ctx_.revert_callback_list();
+  mt_ctx_.revert_callback_list(write_flag);
   TRANS_LOG(TRACE, "end_access", K(ret), KPC(this));
   REC_TRANS_TRACE_EXT(tlog_, end_access,
                       OB_ID(opid), last_op_sn_,

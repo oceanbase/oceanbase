@@ -153,8 +153,8 @@ public:
   share::SCN get_replay_compact_version() const { return replay_compact_version_; }
   void  set_replay_compact_version(const share::SCN v) { replay_compact_version_ = v; }
   inline int64_t get_lock_wait_start_ts() const { return lock_wait_start_ts_; }
-  void acquire_callback_list() { trans_mgr_.acquire_callback_list(); }
-  void revert_callback_list() { trans_mgr_.revert_callback_list(); }
+  void acquire_callback_list(const concurrent_control::ObWriteFlag &write_flag) { trans_mgr_.acquire_callback_list(write_flag); }
+  void revert_callback_list(const concurrent_control::ObWriteFlag &write_flag) { trans_mgr_.revert_callback_list(write_flag); }
 
   int register_row_commit_cb(
       const ObMemtableKey *key,
@@ -164,7 +164,8 @@ public:
       const ObRowData *old_row,
       ObMemtable *memtable,
       const transaction::ObTxSEQ seq_no,
-      const int64_t column_cnt);
+      const int64_t column_cnt,
+      const concurrent_control::ObWriteFlag &write_flag);
   int register_row_replay_cb(
       const ObMemtableKey *key,
       ObMvccRow *value,
@@ -176,7 +177,8 @@ public:
       const int64_t column_cnt);
   int register_table_lock_cb(
       transaction::tablelock::ObLockMemtable *memtable,
-      ObMemCtxLockOpLinkNode *lock_op);
+      ObMemCtxLockOpLinkNode *lock_op,
+      const concurrent_control::ObWriteFlag &write_flag);
   int register_table_lock_replay_cb(
       ObLockMemtable *memtable,
       ObMemCtxLockOpLinkNode *lock_op,
@@ -229,12 +231,14 @@ public:
   ObMvccRowCallback *alloc_row_callback(ObIMvccCtx &ctx, ObMvccRow &value, ObMemtable *memtable);
   ObMvccRowCallback *alloc_row_callback(ObMvccRowCallback &cb, ObMemtable *memtable);
   int append_callback(ObITransCallback *cb);
+  int append_callback(ObITransCallback *cb, const concurrent_control::ObWriteFlag &write_flag);
 private:
   void check_row_callback_registration_between_stmt_();
   int register_table_lock_cb_(
       ObLockMemtable *memtable,
       ObMemCtxLockOpLinkNode *lock_op,
-      ObOBJLockCallback *&cb);
+      ObOBJLockCallback *&cb,
+      const concurrent_control::ObWriteFlag &write_flag);
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObIMvccCtx);
   int alloc_type_;

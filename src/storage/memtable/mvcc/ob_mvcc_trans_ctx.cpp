@@ -317,11 +317,11 @@ void *ObTransCallbackMgr::callback_alloc(const int64_t size)
   return callback;
 }
 
-int ObTransCallbackMgr::append(ObITransCallback *node)
+int ObTransCallbackMgr::append(ObITransCallback *node, const concurrent_control::ObWriteFlag &write_flag)
 {
   int ret = OB_SUCCESS;
   const int64_t tid = get_itid() + 1;
-  const int64_t slot = tid % MAX_CALLBACK_LIST_COUNT;
+  const int64_t slot = write_flag.is_update_uk() ? 0 : (tid % MAX_CALLBACK_LIST_COUNT);
   int64_t stat = ATOMIC_LOAD(&parallel_stat_);
 
   (void)before_append(node);
@@ -584,11 +584,13 @@ int ObTransCallbackMgr::get_memtable_key_arr(ObMemtableKeyArray &memtable_key_ar
   return ret;
 }
 
-void ObTransCallbackMgr::acquire_callback_list()
+void ObTransCallbackMgr::acquire_callback_list(const concurrent_control::ObWriteFlag &write_flag)
 {
   int64_t stat = ATOMIC_LOAD(&parallel_stat_);
   int64_t tid = get_itid() + 1;
-  if (0 == stat) {
+  if (write_flag.is_update_uk()) {
+    ATOMIC_STORE(&parallel_stat_, PARALLEL_STMT);
+  } else if (0 == stat) {
     if (!ATOMIC_BCAS(&parallel_stat_, 0, tid << 32)) {
       ATOMIC_STORE(&parallel_stat_, PARALLEL_STMT);
     }
@@ -602,11 +604,11 @@ void ObTransCallbackMgr::acquire_callback_list()
   }
 }
 
-void ObTransCallbackMgr::revert_callback_list()
+void ObTransCallbackMgr::revert_callback_list(const concurrent_control::ObWriteFlag &write_flag)
 {
   int64_t stat = ATOMIC_LOAD(&parallel_stat_);
   const int64_t tid = get_itid() + 1;
-  const int64_t slot = tid % MAX_CALLBACK_LIST_COUNT;
+  const int64_t slot = write_flag.is_update_uk() ? 0 : (tid % MAX_CALLBACK_LIST_COUNT);
   int64_t cnt = 0;
   if (0 == stat) {
     WRLockGuard guard(rwlock_);

@@ -162,7 +162,7 @@ int ObLockMemtable::lock_(
           LOG_WARN("record lock at lock map mgr failed.", K(ret), K(lock_op));
         }
       } else if (FALSE_IT(succ_step = STEP_IN_LOCK_MGR)) {
-      } else if (OB_FAIL(mem_ctx->add_lock_record(lock_op))) {
+      } else if (OB_FAIL(mem_ctx->add_lock_record(lock_op, ctx.mvcc_acc_ctx_.write_flag_))) {
         if (OB_EAGAIN == ret) {
           need_retry = true;
         }
@@ -312,7 +312,7 @@ int ObLockMemtable::unlock_(
                                               expired_time))) {
         LOG_WARN("record lock at lock map mgr failed.", K(ret), K(unlock_op));
       } else if (FALSE_IT(succ_step = STEP_IN_LOCK_MGR)) {
-      } else if (OB_FAIL(mem_ctx->add_lock_record(unlock_op))) {
+      } else if (OB_FAIL(mem_ctx->add_lock_record(unlock_op, ctx.mvcc_acc_ctx_.write_flag_))) {
         if (OB_EAGAIN == ret) {
           need_retry = true;
         }

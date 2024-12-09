@@ -1098,7 +1098,7 @@ int ObMemtableCtx::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
   return lock_mem_ctx_.iterate_tx_obj_lock_op(iter);
 }
 
-int ObMemtableCtx::add_lock_record(const tablelock::ObTableLockOp &lock_op)
+int ObMemtableCtx::add_lock_record(const tablelock::ObTableLockOp &lock_op, const concurrent_control::ObWriteFlag &write_flag)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = false;
@@ -1119,7 +1119,8 @@ int ObMemtableCtx::add_lock_record(const tablelock::ObTableLockOp &lock_op)
   } else if (OB_FAIL(lock_mem_ctx_.get_lock_memtable(memtable))) {
     TRANS_LOG(WARN, "get lock memtable failed.", K(ret));
   } else if (OB_FAIL(register_table_lock_cb(memtable,
-                                            lock_op_node))) {
+                                            lock_op_node,
+                                            write_flag))) {
     TRANS_LOG(WARN, "register table lock callback failed.", K(ret), K(lock_op));
   }
   if (OB_FAIL(ret) && lock_op_node != NULL) {

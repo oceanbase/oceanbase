@@ -51,6 +51,16 @@ public:
                             const IndexDMLInfo &index_dml_info,
                             ObUpdCtDef &upd_ctdef);
 
+  int check_is_update_local_unique_index(ObLogDelUpd &op,
+                                         uint64_t index_tid,
+                                         ObIArray<uint64_t> &update_cids,
+                                         ObDASUpdCtDef &das_upd_ctdef);
+
+  int check_is_update_uk(ObLogDelUpd &op,
+                         const IndexDMLInfo &index_dml_info,
+                         ObIArray<uint64_t> &update_cids,
+                         ObDASUpdCtDef &das_upd_ctdef);
+
   int generate_lock_ctdef(ObLogForUpdate &op,
                           const IndexDMLInfo &index_dml_info,
                           ObLockCtDef *&lock_ctdef);
