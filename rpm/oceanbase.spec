@@ -1,4 +1,4 @@
 Name: %NAME
-Version:4.2.5.1
+Version:4.2.5.2
 Release: %RELEASE
 BuildRequires: binutils = 2.30

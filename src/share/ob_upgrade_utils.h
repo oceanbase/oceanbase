@@ -279,6 +279,8 @@ private:
   int post_upgrade_for_scheduled_trigger_dump_data_dict();
 };
 
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 2);
+
 /* =========== special upgrade processor end   ============= */
 /* =========== upgrade processor end ============= */
 } // end namespace share
