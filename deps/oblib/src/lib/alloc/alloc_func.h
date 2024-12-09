@@ -36,6 +36,7 @@ void set_tenant_memory_limit(uint64_t tenant_id, int64_t bytes);
 int64_t get_tenant_memory_limit(uint64_t tenant_id);
 int64_t get_tenant_memory_hold(uint64_t tenant_id);
 int64_t get_tenant_memory_hold(const uint64_t tenant_id, const uint64_t ctx_id);
+int64_t get_tenant_cache_hold(uint64_t tenant_id);
 int64_t get_tenant_memory_remain(uint64_t tenant_id);
 void get_tenant_label_memory(
   uint64_t tenant_id, ObLabel &label, common::ObLabelItem &item);
