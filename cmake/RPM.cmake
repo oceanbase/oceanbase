@@ -45,7 +45,7 @@ set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION})
 set(CPACK_RPM_PACKAGE_LICENSE "Mulan PubL v2.")
 set(CPACK_RPM_DEFAULT_USER "admin")
 set(CPACK_RPM_DEFAULT_GROUP "admin")
-if (OB_BUILD_OPENSOURCE)
+if (OB_BUILD_OPENSOURCE AND NOT BUILD_CDC_ONLY)
   set(DEBUG_INSTALL_POST "mv $RPM_BUILD_ROOT/../server/home/admin/oceanbase/bin/obshell %{_builddir}/obshell; %{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir}; mv %{_builddir}/obshell $RPM_BUILD_ROOT/../server/home/admin/oceanbase/bin/obshell; %{nil}")
 else()
   set(DEBUG_INSTALL_POST "%{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir};%{nil}")
@@ -107,10 +107,17 @@ install(FILES
 endif()
 
 if (BUILD_CDC_ONLY)
+  message(STATUS "oceanbase build cdc only")
   set(CPACK_COMPONENTS_ALL cdc)
+  set(CPACK_PACKAGE_NAME "oceanbase-cdc")
+  if (OB_BUILD_OPENSOURCE)
+    set(CPACK_PACKAGE_NAME "oceanbase-ce-cdc")
+  endif()
 else()
   add_custom_target(bitcode_to_elf ALL
     DEPENDS ${BITCODE_TO_ELF_LIST})
+  add_custom_target(ob_table ALL
+    DEPENDS obtable obtable_static)
 endif()
 message(STATUS "Cpack Components:${CPACK_COMPONENTS_ALL}")
 

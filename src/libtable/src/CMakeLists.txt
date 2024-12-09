@@ -12,11 +12,9 @@ ob_add_new_object_target(obtable_base_objects obtable_base_object_list)
 
 target_link_libraries(obtable_base_objects PUBLIC oceanbase)
 
-if (BUILD_CDC_ONLY)
-  add_library(obtable SHARED EXCLUDE_FROM_ALL)
-else()
-  add_library(obtable SHARED)
-endif()
+add_library(obtable
+  SHARED
+  EXCLUDE_FROM_ALL)
 
 target_link_libraries(obtable
   PUBLIC obtable_base_objects
@@ -31,15 +29,10 @@ if(ENABLE_THIN_LTO AND USE_LTO_CACHE)
   add_dependencies(obtable observer_without_bolt)
 endif()
 
-if (BUILD_CDC_ONLY)
-  add_library(obtable_static
-    STATIC EXCLUDE_FROM_ALL
-    ${CMAKE_BINARY_DIR}/src/observer/ob_version.cpp)
-else()
-  add_library(obtable_static
-    STATIC
-    ${CMAKE_BINARY_DIR}/src/observer/ob_version.cpp)
-endif()
+add_library(obtable_static
+  STATIC
+  EXCLUDE_FROM_ALL
+  ${CMAKE_BINARY_DIR}/src/observer/ob_version.cpp)
 
 target_link_libraries(obtable_static PUBLIC ${obtable_base} ${ob_objects} ${oblib_object_libraries})
 

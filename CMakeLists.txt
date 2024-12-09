@@ -10,13 +10,6 @@ if(OB_BUILD_OPENSOURCE)
     HOMEPAGE_URL "https://open.oceanbase.com/"
     LANGUAGES CXX C ASM)
   message(STATUS "open source build enabled")
-elseif (BUILD_CDC_ONLY)
-  project("OceanBase_CDC"
-    VERSION 4.2.5.1
-    DESCRIPTION "OceanBase distributed database system"
-    HOMEPAGE_URL "https://open.oceanbase.com/"
-    LANGUAGES CXX C ASM)
-  message(STATUS "only build oceanbase-cdc")
 else()
   project(OceanBase
     VERSION 4.2.5.1
