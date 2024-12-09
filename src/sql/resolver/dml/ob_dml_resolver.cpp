@@ -7693,6 +7693,7 @@ int ObDMLResolver::resolve_approx_clause(const ParseNode *approx_node)
     bool found = false;
     bool has_const = false;
     bool is_match = false;
+    bool is_vec_index_valid = false;
     ObRawExpr *tmp_expr = stmt->get_order_item(0).expr_;
     if (OB_NOT_NULL(tmp_expr) && tmp_expr->is_vector_sort_expr()) {
       // only order by distance with approx, set it true
@@ -7736,13 +7737,16 @@ int ObDMLResolver::resolve_approx_clause(const ParseNode *approx_node)
           } else if (!is_match) {
             LOG_WARN("distance expr and index distance algorithm is not match, will not set using index",
               K(tmp_expr->get_expr_type()));
+          } else if (OB_FAIL(ObVectorIndexUtil::check_vector_index_by_column_name(
+              *schema_guard, *table_schema, column_name, is_vec_index_valid))) {
+            LOG_WARN("fail to check vector index is valid", K(ret), K(column_name));
           }
         } else {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using vector index without column ref or vector const expr is");
         }
       }
-      if (OB_SUCC(ret) && is_match && tmp_expr->get_expr_type() != T_FUN_SYS_INNER_PRODUCT) {
+      if (OB_SUCC(ret) && is_match && is_vec_index_valid && tmp_expr->get_expr_type() != T_FUN_SYS_INNER_PRODUCT) {
         stmt->set_has_vec_approx(true);
       }
       if (OB_SUCC(ret) && !has_const) {
@@ -18553,7 +18557,21 @@ int ObDMLResolver::fill_vec_id_expr_param(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", KP_(session_info), KP_(params_.expr_factory), KP(stmt));
   } else if (table_schema->is_user_table() && OB_FAIL(table_schema->get_rowkey_vid_tid(rowkey_vid_tid))) {
-    LOG_WARN("fail to get rowkey vid tid", K(ret), KPC(table_schema));
+    ObSchemaGetterGuard &schema_guard = *params_.schema_checker_->get_schema_guard();
+    int tmp_ret = ret;
+    bool is_all_deleted = false;
+    /* 1. 这里不可能是后建未完成，而取不到rowkey_vid的场景，因为rowkey_vid是第一个后建的索引表，如果判断函数外层的column是vid列，那么说明rowkey_vid已经被创建
+       2. 这里只能是删除向量索引的场景，删除时可能rowkey_vid已经被删除，但vid_rowkey没有删除，外层函数判断主表上的vid列还在，会进入到这个函数。因此需要判断345号表
+       是否存在，如果都不存在了，说明当前正在删除1，2号表，获取不到rowkey_vid的场景是有可能的，这个时候要返回success
+     */
+    if (OB_FAIL(ObVectorIndexUtil::check_vec_aux_index_deleted(schema_guard, *table_schema, is_all_deleted))) {
+      LOG_WARN("fail to check vec index exist", K(ret));
+    }
+    if (OB_SUCC(ret) && is_all_deleted) {
+      ret = OB_SUCCESS;
+    } else {
+      ret = tmp_ret;
+    }
   } else {
     CopySchemaExpr copier(*params_.expr_factory_);
     ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(vec_id_expr);

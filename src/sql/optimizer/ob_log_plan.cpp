@@ -2921,7 +2921,6 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
         }
       }
     }
-
     if (OB_SUCC(ret)) {
       if (ap->tr_idx_info_.has_ir_scan()) {
         // For functional lookup with multiple match filters, use only one filter

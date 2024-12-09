@@ -55,6 +55,15 @@ public:
       ObSchemaGetterGuard &schema_guard,
       const int64_t col_id,
       bool &is_column_has_vector_index);
+  static int check_vec_aux_index_deleted(
+      ObSchemaGetterGuard &schema_guard,
+      const schema::ObTableSchema &table_schema,
+      bool &is_all_deleted);
+  static int check_vector_index_by_column_name(
+      ObSchemaGetterGuard &schema_guard,
+      const schema::ObTableSchema &table_schema,
+      const ObString &index_column_name,
+      bool &is_valid);
   static int get_vector_index_column_name(
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema,
@@ -111,6 +120,7 @@ public:
       const obrpc::ObCreateIndexArg &create_index_arg,
       const ObTableSchema &data_table_schema,
       ObTableSchema &new_index_schema);
+
   static int add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
                                   const uint64_t vidx_table_id,
                                   const common::ObString &exec_env);
@@ -134,6 +144,10 @@ public:
 private:
   static bool is_expr_type_and_distance_algorithm_match(
       const ObItemType expr_type, const ObVectorIndexDistAlgorithm algorithm);
+  static bool is_match_index_column_name(
+      const schema::ObTableSchema &table_schema,
+      const schema::ObTableSchema &index_schema,
+      const ObString &index_column_name);
 };
 
 // For vector index snapshot write data
