@@ -46,6 +46,7 @@ protected:
   int init_slogger_mgr();
   int load_config();
   int set_s3_url_encode_type(const char *type_str) const;
+  int set_sts_credential_key(const char *sts_credential);
 
 protected:
   share::ObTenantBase mock_server_tenant_;

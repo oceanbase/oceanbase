@@ -188,7 +188,7 @@ int ObObjectStorageInfo::register_cluster_version_mgr(ObClusterVersionBaseMgr *c
     LOG_WARN("cluster_version_mgr is null", K(ret));
   } else {
     cluster_version_mgr_ = cluster_version_mgr;
-    LOG_INFO("register_cluster_version_mgr", K(ret), KP_(cluster_version_mgr));
+    LOG_INFO("register cluster_version_mgr successfully", K(ret), KP_(cluster_version_mgr));
   }
   return ret;
 }
@@ -966,14 +966,13 @@ int ObDeviceCredentialMgr::init()
 {
   int ret = OB_SUCCESS;
   const int64_t DEFAULT_MAP_BUCKET_CNT = 100;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(credential_map_.create(DEFAULT_MAP_BUCKET_CNT, "CredentialMap", "CredentialMap"))) {
-    LOG_WARN("fail to init credential map", K(ret), K(DEFAULT_MAP_BUCKET_CNT));
-  } else {
-    credential_duration_us_ = MAX_CREDENTIAL_IDLE_DURATION_US;
-    is_inited_ = true;
+  if (IS_NOT_INIT) {
+    if (OB_FAIL(credential_map_.create(DEFAULT_MAP_BUCKET_CNT, "CredentialMap", "CredentialMap"))) {
+      LOG_WARN("fail to init credential map", K(ret), K(DEFAULT_MAP_BUCKET_CNT));
+    } else {
+      credential_duration_us_ = MAX_CREDENTIAL_IDLE_DURATION_US;
+      is_inited_ = true;
+    }
   }
   return ret;
 }
