@@ -280,8 +280,8 @@ int ObTransService::start_tx(ObTxDesc &tx, const ObTxParam &tx_param, const ObTr
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid tx param", K(ret), KR(ret), K(tx_param));
   } else {
-    TX_STAT_START_INC
-      ObSpinLockGuard guard(tx.lock_);
+    TX_STAT_START_INC;
+    ObSpinLockGuard guard(tx.lock_);
     tx.inc_op_sn();
     if (!tx_id.is_valid()) {
       ret = tx_desc_mgr_.add(tx);
