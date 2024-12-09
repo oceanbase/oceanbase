@@ -1802,14 +1802,12 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             if (can_retry) {
               retry_guard.test();
             }
+            int close_ret = spi_result.close_result_set();
+            if (OB_SUCCESS != close_ret) {
+              LOG_WARN("close spi result failed", K(ret), K(close_ret));
+            }
+            ret = OB_SUCCESS == ret ? close_ret : ret;
           }
-
-          int close_ret = spi_result.close_result_set();
-          if (OB_SUCCESS != close_ret) {
-            LOG_WARN("close spi result failed", K(ret), K(close_ret));
-          }
-          ret = OB_SUCCESS == ret ? close_ret : ret;
-
           if (!is_dbms_sql) {
             spi_result.destruct_exec_params(*session);
           }
@@ -3548,11 +3546,11 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
         if (!cursor.is_ps_cursor()) {
           retry_guard.test();
         }
-      }
-      if (OB_FAIL(ret)) {
-        int close_ret = spi_result->close_result_set();
-        if (OB_SUCCESS != close_ret) {
-          LOG_WARN("close mysql result set failed", K(ret), K(close_ret));
+        if (OB_FAIL(ret)) {
+          int close_ret = spi_result->close_result_set();
+          if (OB_SUCCESS != close_ret) {
+            LOG_WARN("close mysql result set failed", K(ret), K(close_ret));
+          }
         }
       }
     } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
@@ -3654,12 +3652,12 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
           if (!cursor.is_ps_cursor()) {
             retry_guard.test();
           }
+          int close_ret = spi_result.close_result_set();
+          if (OB_SUCCESS != close_ret) {
+            LOG_WARN("close mysql result failed", K(ret), K(close_ret));
+          }
+          ret = (OB_SUCCESS == ret ? close_ret : ret);
         }
-        int close_ret = spi_result.close_result_set();
-        if (OB_SUCCESS != close_ret) {
-          LOG_WARN("close mysql result failed", K(ret), K(close_ret));
-        }
-        ret = (OB_SUCCESS == ret ? close_ret : ret);
         if (!is_dbms_cursor) {
           spi_result.destruct_exec_params(session_info);
         }
