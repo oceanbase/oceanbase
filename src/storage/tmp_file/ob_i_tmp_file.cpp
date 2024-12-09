@@ -382,7 +382,7 @@ int ObITmpFile::seal()
   } else {
     ObSpinLockGuard write_guard(multi_write_lock_);
     if (OB_UNLIKELY(is_sealed_)) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_TMP_FILE_ALREADY_SEALED;
       LOG_WARN("tmp file has been sealed", KR(ret), KPC(this));
     } else if (OB_FAIL(inner_seal_())) {
       LOG_WARN("fail to seal", KR(ret), KPC(this));
@@ -598,7 +598,7 @@ int ObITmpFile::aio_write(ObTmpFileIOCtx &io_ctx)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("attempt to write a deleting file", KR(ret), K(fd_));
   } else if (OB_UNLIKELY(is_sealed_)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_TMP_FILE_ALREADY_SEALED;
     LOG_WARN("attempt to write a sealed file", KR(ret), K(fd_));
   } else {
     bool is_unaligned_write = 0 != file_size_ % ObTmpFileGlobal::PAGE_SIZE ||
