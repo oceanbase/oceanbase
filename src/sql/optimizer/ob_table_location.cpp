@@ -764,6 +764,7 @@ int ObTableLocation::assign(const ObTableLocation &other)
     object_id_ = other.object_id_;
     check_no_partition_ = other.check_no_partition_;
     is_broadcast_table_ = other.is_broadcast_table_;
+    is_dynamic_replica_select_table_ = other.is_dynamic_replica_select_table_;
     if (OB_FAIL(loc_meta_.assign(other.loc_meta_))) {
       LOG_WARN("assign loc meta failed", K(ret), K(other.loc_meta_));
     }
@@ -895,6 +896,7 @@ void ObTableLocation::reset()
   object_id_ = OB_INVALID_ID;
   check_no_partition_ = false;
   is_broadcast_table_ = false;
+  is_dynamic_replica_select_table_ = false;
 }
 int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
     const ObDMLStmt &stmt,
@@ -5081,6 +5083,7 @@ OB_DEF_SERIALIZE(ObTableLocation)
   OB_UNIS_ENCODE(table_type_);
   OB_UNIS_ENCODE(check_no_partition_);
   OB_UNIS_ENCODE(is_broadcast_table_);
+  OB_UNIS_ENCODE(is_dynamic_replica_select_table_);
   return ret;
 }
 
@@ -5160,6 +5163,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
   OB_UNIS_ADD_LEN(table_type_);
   OB_UNIS_ADD_LEN(check_no_partition_);
   OB_UNIS_ADD_LEN(is_broadcast_table_);
+  OB_UNIS_ADD_LEN(is_dynamic_replica_select_table_);
   return len;
 }
 
@@ -5317,6 +5321,7 @@ OB_DEF_DESERIALIZE(ObTableLocation)
   OB_UNIS_DECODE(table_type_);
   OB_UNIS_DECODE(check_no_partition_);
   OB_UNIS_DECODE(is_broadcast_table_);
+  OB_UNIS_DECODE(is_dynamic_replica_select_table_);
   return ret;
 }
 

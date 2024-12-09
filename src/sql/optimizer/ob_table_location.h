@@ -518,7 +518,8 @@ public:
     object_id_(OB_INVALID_ID),
     related_list_(allocator_),
     check_no_partition_(false),
-    is_broadcast_table_(false)
+    is_broadcast_table_(false),
+    is_dynamic_replica_select_table_(false)
   {
   }
 
@@ -568,7 +569,8 @@ public:
     object_id_(OB_INVALID_ID),
     related_list_(allocator_),
     check_no_partition_(false),
-    is_broadcast_table_(false)
+    is_broadcast_table_(false),
+    is_dynamic_replica_select_table_(false)
   {
   }
   virtual ~ObTableLocation() { reset(); }
@@ -748,9 +750,10 @@ public:
                                        uint64_t ref_table_id,
                                        ObDASTableLoc *&table_loc);
   bool is_duplicate_table() const { return loc_meta_.is_dup_table_; }
-  bool is_dynamic_replica_select_table() const { return (is_duplicate_table() || get_is_broadcast_table()) &&
-                                                         !is_partitioned() &&
-                                                         loc_meta_.is_weak_read_; }
+  bool is_dynamic_replica_select_table() const { return is_dynamic_replica_select_table_; }
+  void set_dynamic_replica_select_table(const bool is_dynamic_replica_select_table) {
+    is_dynamic_replica_select_table_ = is_dynamic_replica_select_table;
+  }
   void set_broadcast_table(const bool is_broadcast_table) {
     is_broadcast_table_ = is_broadcast_table;
   }
@@ -1248,6 +1251,7 @@ private:
   common::ObList<DASRelatedTabletMap::MapEntry, common::ObIAllocator> related_list_;
   bool check_no_partition_;
   bool is_broadcast_table_;
+  bool is_dynamic_replica_select_table_;
 };
 
 }
