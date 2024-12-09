@@ -962,7 +962,7 @@ int ObParquetTableRowIterator::DataLoader::load_int64_to_int64_vec()
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("repeated data not support");
     } else if (IS_PARQUET_COL_NOT_NULL && values_cnt == row_count_) {
-      MEMCPY(pointer_cast<int64_t*>(int64_vec->get_data()) + row_count_, values.get_data(), sizeof(int64_t) * row_count_);
+      MEMCPY(pointer_cast<int64_t*>(int64_vec->get_data()) + row_offset_, values.get_data(), sizeof(int64_t) * row_count_);
     } else {
       int j = 0;
       for (int i = 0; i < row_count_; i++) {
