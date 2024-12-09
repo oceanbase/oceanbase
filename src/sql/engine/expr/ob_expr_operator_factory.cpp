@@ -491,6 +491,8 @@
 #include "sql/engine/expr/ob_expr_get_mysql_routine_parameter_type_str.h"
 #include "sql/engine/expr/ob_expr_priv_st_geohash.h"
 #include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
+#include "sql/engine/expr/ob_expr_to_pinyin.h"
+
 
 
 using namespace oceanbase::common;
@@ -1207,6 +1209,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprArrayMap);
     REG_OP(ObExprGetMySQLRoutineParameterTypeStr);
     REG_OP(ObExprCalcOdpsSize);
+    REG_OP(ObExprToPinyin);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1394,6 +1397,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprFromTz);
   REG_OP_ORCL(ObExprSpatialCellid);
   REG_OP_ORCL(ObExprSpatialMbr);
+  REG_OP_ORCL(ObExprToPinyin);
   //label security
   REG_OP_ORCL(ObExprOLSPolicyCreate);
   REG_OP_ORCL(ObExprOLSPolicyAlter);

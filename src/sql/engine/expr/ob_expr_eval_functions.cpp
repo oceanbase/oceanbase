@@ -427,6 +427,7 @@
 #include "ob_expr_get_mysql_routine_parameter_type_str.h"
 #include "ob_expr_priv_st_geohash.h"
 #include "ob_expr_priv_st_makepoint.h"
+#include "ob_expr_to_pinyin.h"
 
 namespace oceanbase
 {
@@ -1336,6 +1337,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArraySort::eval_array_sort,                          /* 805 */
   NULL, // ObExprKeyValue::calc_key_value_expr,                       /* 806 */
   NULL, // ObExprToChar::eval_to_char,                                /* 807 */
+  ObExprToPinyin::eval_to_pinyin,                                     /* 808 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1505,6 +1507,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL,// ObExprArraySum::eval_array_sum_batch,                       /* 163 */
   NULL,// ObExprArrayCompact::eval_array_compact_batch,               /* 164 */
   NULL,// ObExprArraySort::eval_array_sort_batch,                     /* 165 */
+  ObExprToPinyin::eval_to_pinyin_batch,                               /* 166 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {

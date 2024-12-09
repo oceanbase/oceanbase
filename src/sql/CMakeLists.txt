@@ -823,6 +823,8 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_eval_functions.cpp
   engine/expr/ob_expr_in.cpp
   engine/expr/ob_expr_calc_odps_size.cpp
+  engine/expr/ob_expr_to_pinyin_tab.cpp
+  engine/expr/ob_expr_to_pinyin.cpp
 )
 
 ob_set_subtarget(ob_sql ALONE
