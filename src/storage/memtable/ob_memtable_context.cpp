@@ -185,13 +185,22 @@ int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
   pos += ObIMvccCtx::to_string(buf + pos, buf_len);
   common::databuff_printf(buf, buf_len, pos,
                           " end_code=%d tx_status=%ld is_readonly=%s "
-                          "ref=%ld trans_id=%s ls_id=%ld "
-                          "row_callback[alloc:%ld, free:%ld, unsubmit:%ld] "
+                          "ref=%ld", end_code_, tx_status_, STR_BOOL(is_read_only_), ref_);
+  common::databuff_printf(buf, buf_len, pos, " trans_id=");
+  if (OB_ISNULL(ctx_)) {
+    common::databuff_printf(buf, buf_len, pos, "");
+  } else {
+    common::databuff_printf(buf, buf_len, pos, ctx_->get_trans_id());
+  }
+  common::databuff_printf(buf, buf_len, pos, " ls_id=");
+  if (OB_ISNULL(ctx_)) {
+    common::databuff_printf(buf, buf_len, pos, "-1");
+  } else {
+    common::databuff_printf(buf, buf_len, pos, ctx_->get_ls_id().id());
+  }
+  common::databuff_printf(buf, buf_len, pos, " row_callback[alloc:%ld, free:%ld, unsubmit:%ld] "
                           "redo[fill:%ld,sync_succ:%ld, sync_fail:%ld] "
                           "main_list_len=%ld pending_log_size=%ld ",
-                          end_code_, tx_status_, STR_BOOL(is_read_only_), ref_,
-                          NULL == ctx_ ? "" : S(ctx_->get_trans_id()),
-                          NULL == ctx_ ? -1 : ctx_->get_ls_id().id(),
                           callback_alloc_count_, callback_free_count_, unsubmitted_cnt_,
                           log_gen_.get_redo_filled_count(),
                           log_gen_.get_redo_sync_succ_count(),

@@ -157,6 +157,7 @@ enum MulModeTableType {
   OB_ORA_JSON_TABLE_TYPE, // 1
   OB_ORA_XML_TABLE_TYPE = 2,
   OB_RB_ITERATE_TABLE_TYPE = 3,
+  OB_UNNEST_TABLE_TYPE = 4,
 };
 
 typedef struct ObJtColBaseInfo
@@ -1029,7 +1030,7 @@ public:
   { return match_exprs_; }
   common::ObIArray<ObMatchFunRawExpr *> &get_match_exprs()
   { return match_exprs_; }
-  int get_match_expr_on_table(uint64_t table_id, ObMatchFunRawExpr *&match_expr) const;
+  int get_match_expr_on_table(uint64_t table_id, ObIArray<ObRawExpr *> &match_exprs) const;
   int get_table_pseudo_column_like_exprs(uint64_t table_id, ObIArray<ObRawExpr *> &pseudo_columns);
   int get_table_pseudo_column_like_exprs(ObIArray<uint64_t> &table_id, ObIArray<ObRawExpr *> &pseudo_columns);
   int rebuild_tables_hash();

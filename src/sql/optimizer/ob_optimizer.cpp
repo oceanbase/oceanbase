@@ -319,6 +319,118 @@ int ObOptimizer::get_session_parallel_info(int64_t &force_parallel_dop,
   return ret;
 }
 
+int ObOptimizer::check_dml_parallel_mode()
+{
+  int ret = OB_SUCCESS;
+  if (ctx_.can_use_pdml() && ctx_.get_can_use_parallel_das_dml()) {
+    if (ctx_.get_global_hint().get_parallel_das_dml_option() == ObParallelDASOption::ENABLE) {
+      ctx_.set_can_use_pdml(false);
+      LOG_TRACE("parallel_das_dml hint cause force use das parallel");
+    } else {
+      ctx_.set_can_use_parallel_das_dml(false);
+      LOG_TRACE("pdml and parallel das dml all supported, choose pdml");
+    }
+  }
+  return ret;
+}
+
+int ObOptimizer::check_parallel_das_dml_supported_feature(const ObDelUpdStmt &pdml_stmt,
+                                                          const ObSQLSessionInfo &session,
+                                                          bool &use_parallel_das_dml)
+{
+  int ret = OB_SUCCESS;
+  if (pdml_stmt.is_ignore()) {
+    use_parallel_das_dml = false;
+  } else if (ctx_.has_dblink()) {
+    use_parallel_das_dml = false;
+    LOG_TRACE("has dblink not use parallel das dml");
+  } else if (!ctx_.has_fk() && ctx_.contain_user_nested_sql()) {
+    use_parallel_das_dml = false;
+    LOG_TRACE("ctx has user nexted sql not use parallel das dml");
+  } else if (ctx_.is_online_ddl()) {
+    use_parallel_das_dml = false;
+    LOG_TRACE("is online ddl not use parallel das dml");
+  }
+  return ret;
+}
+
+int ObOptimizer::check_parallel_das_dml_enabled(const ObDMLStmt &stmt,
+                                                ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  bool can_use_parallel_das_dml = true;
+  ObSqlCtx *sql_ctx = NULL;
+  ObQueryCtx *query_ctx = NULL;
+  bool session_enable_pdml = false;
+  bool session_enable_auto_dop = false;
+  uint64_t session_pdml_dop = ObGlobalHint::UNSET_PARALLEL;
+
+  if (OB_ISNULL(ctx_.get_exec_ctx()) || OB_ISNULL(query_ctx = ctx_.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(ctx_.get_exec_ctx()), K(query_ctx));
+  } else if (OB_ISNULL(sql_ctx = ctx_.get_exec_ctx()->get_sql_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(ctx_.get_exec_ctx()));
+  } else if (!session.enable_parallel_das_dml()) {
+    can_use_parallel_das_dml = false;
+    LOG_TRACE("enable_das_parallel_execution is false, can't submit task parallel");
+  } else if (!stmt.is_px_dml_supported_stmt()) {
+    can_use_parallel_das_dml = false;
+    LOG_TRACE("stmt can't support parallel_das_dml");
+  } else if (ctx_.has_var_assign() && !ctx_.is_var_assign_only_in_root_stmt()) {
+    // It can be supported, but we won’t let it go for now and wait for the follow-up.
+    can_use_parallel_das_dml = false;
+    LOG_TRACE("has var_assign, can't support parallel_das_dml now");
+  } else if (!session.is_user_session()) {
+    // not user request
+    can_use_parallel_das_dml = false;
+    LOG_TRACE("not user request, can't support parallel_das_dml");
+  } else if (OB_FAIL(check_parallel_das_dml_supported_feature(static_cast<const ObDelUpdStmt&>(stmt),
+                                                              session,
+                                                              can_use_parallel_das_dml))) {
+
+  } else if (!can_use_parallel_das_dml) {
+    LOG_TRACE("not support parallel das dml");
+  } else if (ctx_.get_global_hint().get_parallel_das_dml_option() == ObParallelDASOption::DISABLE) {
+    can_use_parallel_das_dml = false;
+    LOG_TRACE("hint force close das parallel, can't support parallel_das_dml");
+  } else if (query_ctx->get_query_hint().has_outline_data() &&
+      ctx_.get_global_hint().get_parallel_das_dml_option() != ObParallelDASOption::ENABLE) {
+    can_use_parallel_das_dml = false;
+    LOG_TRACE("has outline data and hint disable, can't support parallel_das_dml",
+            K(ctx_.get_global_hint().get_parallel_das_dml_option()),
+            K(query_ctx->get_query_hint().has_outline_data()));
+  } else if (ctx_.can_use_pdml()) {
+    // can use pdml must can use parallel_das_dml
+    LOG_TRACE("pdml is enabled, can use parallel das");
+  } else if (ctx_.get_global_hint().get_pdml_option() == ObPDMLOption::ENABLE ||
+      ctx_.get_global_hint().get_parallel_das_dml_option() == ObParallelDASOption::ENABLE) {
+    LOG_TRACE("can use parallel_das_dml by pdml hint",
+        K(ctx_.get_global_hint().get_pdml_option()),
+        K(ctx_.get_global_hint().get_parallel_das_dml_option()));
+  } else if (ctx_.get_global_hint().enable_auto_dop()) {
+    // enable parallel das dml by auto dop hint
+  } else if (OB_FAIL(session.get_parallel_degree_policy_enable_auto_dop(session_enable_auto_dop))) {
+    LOG_WARN("failed to get sys variable for parallel degree policy", K(ret));
+  } else if (session_enable_auto_dop && !ctx_.get_global_hint().has_parallel_hint()) {
+    // session enable parallel dml by auto dop
+  } else if (OB_FAIL(session.get_enable_parallel_dml(session_enable_pdml))
+      || OB_FAIL(session.get_force_parallel_dml_dop(session_pdml_dop))) {
+    LOG_WARN("failed to get sys variable for parallel dml", K(ret));
+  } else if (session_enable_pdml || ObGlobalHint::DEFAULT_PARALLEL < session_pdml_dop) {
+    // enable parallel das dml by session
+  } else {
+    can_use_parallel_das_dml = false;
+    LOG_TRACE("other scense, can't support parallel_das_dml");
+  }
+
+  if (OB_SUCC(ret)) {
+    ctx_.set_can_use_parallel_das_dml(can_use_parallel_das_dml);
+  }
+
+  return ret;
+}
+
 int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
                                     const ObSQLSessionInfo &session)
 {
@@ -360,10 +472,6 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
     if (is_pk_auto_inc) {
       ctx_.add_plan_note(PDML_DISABLED_BY_INSERT_PK_AUTO_INC);
     }
-  } else if ((stmt.is_update_stmt() || stmt.is_delete_stmt())
-             && static_cast<const ObDelUpdStmt &>(stmt).dml_source_from_join()
-             && static_cast<const ObDelUpdStmt &>(stmt).is_dml_table_from_join()) {
-    can_use_pdml = false;
   } else if (OB_FAIL(check_pdml_supported_feature(static_cast<const ObDelUpdStmt&>(stmt),
                                                   session, can_use_pdml))) {
     LOG_WARN("failed to check pdml supported feature", K(ret));
@@ -472,24 +580,6 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
           ctx_.add_plan_note(PDML_DISABLED_BY_UPDATE_NOW);
         }
       }
-    } else if (stmt::T_MERGE == pdml_stmt.get_stmt_type()) {
-      bool update_rowkey = false;
-      ObSEArray<uint64_t, 4> index_ids;
-     if (OB_FAIL(schema_guard->get_all_unique_index(session.get_effective_tenant_id(),
-                                                    main_table_tid,
-                                                    index_ids))) {
-        LOG_WARN("failed to get all local unique index", K(ret));
-      } else if (OB_FAIL(index_ids.push_back(main_table_tid))) {
-        LOG_WARN("failed to push back index ids", K(ret));
-      } else if (OB_FAIL(check_merge_stmt_is_update_index_rowkey(session,
-                                                                 pdml_stmt,
-                                                                 index_ids,
-                                                                 update_rowkey))) {
-        LOG_WARN("failed to check merge stmt update rowkey", K(ret));
-      } else if (update_rowkey) {
-        is_use_pdml = false;
-        ctx_.add_plan_note(PDML_DISABLE_BY_MERGE_UPDATE_PK);
-      }
     }
   }
   return ret;
@@ -541,6 +631,10 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("fail to extract opt ctx basic flags", K(ret));
   } else if (OB_FAIL(check_pdml_enabled(stmt, *session_info))) {
     LOG_WARN("fail to check enable pdml", K(ret));
+  } else if (OB_FAIL(check_parallel_das_dml_enabled(stmt, *session_info))) {
+    LOG_WARN("fail to check enable parallel das dml", K(ret));
+  } else if (OB_FAIL(check_dml_parallel_mode())) {
+    LOG_WARN("fail to check force use parallel das dml", K(ret));
   } else if (OB_FAIL(init_parallel_policy(stmt, *session_info))) { // call after check pdml enabled
     LOG_WARN("fail to check enable pdml", K(ret));
   } else if (OB_FAIL(init_replica_policy(stmt, *session_info))) {
@@ -581,6 +675,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool enable_use_batch_nlj = false;
   bool better_inlist_costing = false;
   bool enable_spf_batch_rescan = session.is_spf_mlj_group_rescan_enabled();
+  bool enable_px_ordered_coord = GCONF._enable_px_ordered_coord;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   if (OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
@@ -637,6 +732,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
                                                    partition_wise_plan_enabled,
                                                    exists_partition_wise_plan_enabled_hint))) {
     LOG_WARN("failed to check partition wise plan enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_PX_ORDERED_COORD, enable_px_ordered_coord))) {
+    LOG_WARN("failed to get opt param enable px ordered coord", K(ret));
   } else {
     ctx_.init_batch_rescan_flags(enable_use_batch_nlj, enable_spf_batch_rescan,
                                  query_ctx->optimizer_features_enable_version_);
@@ -654,6 +751,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_is_skip_scan_enabled(is_skip_scan_enable);
     ctx_.set_enable_better_inlist_costing(better_inlist_costing);
     ctx_.set_push_join_pred_into_view_enabled(push_join_pred_into_view_enabled);
+    ctx_.set_enable_px_ordered_coord(enable_px_ordered_coord);
     if (!hash_join_enabled
         && !optimizer_sortmerge_join_enabled
         && !nested_loop_join_enabled) {
@@ -674,6 +772,11 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     }
     if (!session.is_inner() && stmt.get_query_ctx()->get_injected_random_status()) {
       ctx_.set_generate_random_plan(true);
+    }
+    if (session.is_enable_new_query_range() &&
+        ObSQLUtils::is_min_cluster_version_ge_425_or_435() &&
+        ObSQLUtils::is_opt_feature_version_ge_425_or_435(query_ctx->optimizer_features_enable_version_)) {
+      ctx_.set_enable_new_query_range(true);
     }
   }
   return ret;
@@ -1243,60 +1346,5 @@ int ObOptimizer::init_system_stat()
       meta.set_network_speed(DEFAULT_NETWORK_SPEED);
     }
   }
-  return ret;
-}
-
-int ObOptimizer::check_merge_stmt_is_update_index_rowkey(const ObSQLSessionInfo &session,
-                                                         const ObDMLStmt &stmt,
-                                                         const ObIArray<uint64_t> &index_ids,
-                                                         bool &is_update)
-{
-  int ret = OB_SUCCESS;
-  share::schema::ObSchemaGetterGuard *schema_guard = ctx_.get_schema_guard();
-  const ObTableSchema *table_schema = NULL;
-  const ObMergeStmt &merge_stmt = static_cast<const ObMergeStmt&>(stmt);
-  const ObMergeTableInfo& merge_table_info = merge_stmt.get_merge_table_info();
-  ObSEArray<uint64_t, 4> rowkey_ids;
-  ObSEArray<uint64_t, 4> tmp_rowkey_ids;
-  const ObColumnRefRawExpr* column_expr = nullptr;
-  const ColumnItem* column_item = nullptr;
-  is_update = false;
-  if (OB_ISNULL(schema_guard) ||
-      OB_UNLIKELY(stmt::T_MERGE != stmt.get_stmt_type())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the schema guard is null", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < index_ids.count(); ++i) {
-    tmp_rowkey_ids.reuse();
-    if (OB_FAIL(schema_guard->get_table_schema(session.get_effective_tenant_id(),
-                                               index_ids.at(i),
-                                               table_schema))) {
-      LOG_WARN("failed to get table schema", K(ret));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpect null", K(ret), K(table_schema));
-    } else if (OB_FAIL(table_schema->get_rowkey_info().get_column_ids(tmp_rowkey_ids))) {
-      LOG_WARN("failed to get column ids", K(ret));
-    } else if (OB_FAIL(append_array_no_dup(rowkey_ids, tmp_rowkey_ids))) {
-      LOG_WARN("failed to append array no dup", K(ret));
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && !is_update && i < merge_table_info.assignments_.count(); ++i) {
-    if (OB_ISNULL(column_expr = merge_table_info.assignments_.at(i).column_expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null column expr", K(ret));
-    } else if (merge_table_info.table_id_ != merge_table_info.loc_table_id_) {
-      if (OB_ISNULL(column_item = stmt.get_column_item_by_id(column_expr->get_table_id(),
-                                                              column_expr->get_column_id()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get null column item", K(ret));
-      } else {
-        is_update = ObOptimizerUtil::find_item(rowkey_ids, column_item->base_cid_);
-      }
-    } else {
-      is_update = ObOptimizerUtil::find_item(rowkey_ids, column_expr->get_column_id());
-    }
-  }
-
   return ret;
 }

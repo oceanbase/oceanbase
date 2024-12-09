@@ -127,14 +127,34 @@ OB_INLINE int ObDiscreteFormat::from_rows(const sql::RowMeta &row_meta,
 {
   int ret = OB_SUCCESS;
   const int64_t var_idx = row_meta.var_idx(col_idx);
-  for (int64_t i = 0; i < size; i++) {
-    if (stored_rows[i]->is_null(col_idx)) {
-      set_null(i);
-    } else {
-      const int32_t *var_offset_arr = stored_rows[i]->var_offsets(row_meta);
-      const ObLength len = var_offset_arr[var_idx + 1] - var_offset_arr[var_idx];
-      const char *payload = stored_rows[i]->var_data(row_meta) + var_offset_arr[var_idx];
-      set_payload_shallow(i, payload, len);
+  if (!has_null()) {
+    for (int64_t i = 0; i < size; i++) {
+      if (nullptr == stored_rows[i]) {
+        continue;
+      }
+      if (stored_rows[i]->is_null(col_idx)) {
+        set_null(i);
+      } else {
+        const int32_t *var_offset_arr = stored_rows[i]->var_offsets(row_meta);
+        const ObLength len = var_offset_arr[var_idx + 1] - var_offset_arr[var_idx];
+        const char *payload = stored_rows[i]->var_data(row_meta) + var_offset_arr[var_idx];
+        ptrs_[i] = const_cast<char *>(static_cast<const char *>(payload));
+        lens_[i] = len;
+      }
+    }
+  } else {
+    for (int64_t i = 0; i < size; i++) {
+      if (nullptr == stored_rows[i]) {
+        continue;
+      }
+      if (stored_rows[i]->is_null(col_idx)) {
+        set_null(i);
+      } else {
+        const int32_t *var_offset_arr = stored_rows[i]->var_offsets(row_meta);
+        const ObLength len = var_offset_arr[var_idx + 1] - var_offset_arr[var_idx];
+        const char *payload = stored_rows[i]->var_data(row_meta) + var_offset_arr[var_idx];
+        set_payload_shallow(i, payload, len);
+      }
     }
   }
   return ret;
@@ -147,15 +167,36 @@ OB_INLINE int ObDiscreteFormat::from_rows(const sql::RowMeta &row_meta,
 {
   int ret = OB_SUCCESS;
   const int64_t var_idx = row_meta.var_idx(col_idx);
-  for (int64_t i = 0; i < size; i++) {
-    int64_t row_idx = selector[i];
-    if (stored_rows[i]->is_null(col_idx)) {
-      set_null(row_idx);
-    } else {
-      const int32_t *var_offset_arr = stored_rows[i]->var_offsets(row_meta);
-      const ObLength len = var_offset_arr[var_idx + 1] - var_offset_arr[var_idx];
-      const char *payload = stored_rows[i]->var_data(row_meta) + var_offset_arr[var_idx];
-      set_payload_shallow(row_idx, payload, len);
+  if (!has_null()) {
+    for (int64_t i = 0; i < size; i++) {
+      if (nullptr == stored_rows[i]) {
+        continue;
+      }
+      int64_t row_idx = selector[i];
+      if (stored_rows[i]->is_null(col_idx)) {
+        set_null(row_idx);
+      } else {
+        const int32_t *var_offset_arr = stored_rows[i]->var_offsets(row_meta);
+        const ObLength len = var_offset_arr[var_idx + 1] - var_offset_arr[var_idx];
+        const char *payload = stored_rows[i]->var_data(row_meta) + var_offset_arr[var_idx];
+        ptrs_[row_idx] = const_cast<char *>(static_cast<const char *>(payload));
+        lens_[row_idx] = len;
+      }
+    }
+  } else {
+    for (int64_t i = 0; i < size; i++) {
+      if (nullptr == stored_rows[i]) {
+        continue;
+      }
+      int64_t row_idx = selector[i];
+      if (stored_rows[i]->is_null(col_idx)) {
+        set_null(row_idx);
+      } else {
+        const int32_t *var_offset_arr = stored_rows[i]->var_offsets(row_meta);
+        const ObLength len = var_offset_arr[var_idx + 1] - var_offset_arr[var_idx];
+        const char *payload = stored_rows[i]->var_data(row_meta) + var_offset_arr[var_idx];
+        set_payload_shallow(row_idx, payload, len);
+      }
     }
   }
   return ret;

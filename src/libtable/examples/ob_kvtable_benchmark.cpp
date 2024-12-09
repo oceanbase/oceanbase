@@ -224,7 +224,9 @@ void WorkerThread::get(long thread_idx, ObHKVTable* kv_table, unsigned *seedp)
       //fprintf(stdout, "failed to get row: %d\n", ret);
       COUNTERS[thread_idx].FAIL_COUNT++;
     } else {
-      //fprintf(stdout, "[%ld]get row succ. %s\n", GET_COUNT, S(value));
+      //ObCStringHelper helper;
+      //const char *ptr = helper.convert(value);
+      //fprintf(stdout, "[%ld]get row succ. %s\n", GET_COUNT, nullptr != ptr ? ptr : "NULL");
     }
     COUNTERS[thread_idx].GET_COUNT++;
     if (COUNTERS[thread_idx].GET_COUNT % 100 == 0) {
@@ -256,7 +258,9 @@ void WorkerThread::put(long thread_idx, ObHKVTable* kv_table, unsigned *seedp)
       fprintf(stdout, "failed to put row: %d\n", ret);
       COUNTERS[thread_idx].FAIL_COUNT++;
     } else {
-      //fprintf(stdout, "[%ld]get row succ. %s\n", GET_COUNT, S(value));
+      //ObCStringHelper helper;
+      //const char *ptr = helper.convert(value);
+      //fprintf(stdout, "[%ld]get row succ. %s\n", GET_COUNT, nullptr != ptr ? ptr : "NULL");
     }
     COUNTERS[thread_idx].PUT_COUNT++;
     if (COUNTERS[thread_idx].PUT_COUNT % 100 == 0) {
@@ -296,7 +300,9 @@ void WorkerThread::multi_get(long thread_idx, ObHKVTable* kv_table, unsigned *se
       fprintf(stdout, "failed to multi-get row: %d\n", ret);
       COUNTERS[thread_idx].FAIL_COUNT++;
     } else {
-      //fprintf(stdout, "[%ld]get row succ. %s\n", GET_COUNT, S(value));
+      //ObCStringHelper helper;
+      //const char *ptr = helper.convert(value);
+      //fprintf(stdout, "[%ld]get row succ. %s\n", GET_COUNT, nullptr != ptr ? ptr : "NULL");
     }
     COUNTERS[thread_idx].GET_COUNT ++;
     if (COUNTERS[thread_idx].GET_COUNT % 100 == 0) {
@@ -347,7 +353,9 @@ void WorkerThread::multi_put(long thread_idx, ObHKVTable* kv_table, unsigned *se
       }
       COUNTERS[thread_idx].FAIL_COUNT++;
     } else {
-      //fprintf(stdout, "[%ld]get row succ. %s\n", GET_COUNT, S(value));
+      //ObCStringHelper helper;
+      //const char *ptr = helper.convert(value);
+      //fprintf(stdout, "[%ld]get row succ. %s\n", GET_COUNT, nullptr != ptr ? ptr : "NULL");
       COUNTERS[thread_idx].PUT_COUNT++;
     }
     if (COUNTERS[thread_idx].PUT_COUNT % 100 == 0) {

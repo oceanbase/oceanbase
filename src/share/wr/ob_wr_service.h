@@ -21,6 +21,19 @@ namespace oceanbase
 namespace share
 {
 
+class ObWorkloadRepositoryContext {
+public:
+  ObWorkloadRepositoryContext(): is_inited_(false), mutex_() {}
+  static int mtl_init(ObWorkloadRepositoryContext* &ptr);
+  void destroy();
+  int try_lock();
+  int lock(const int64_t abs_timeout_us = INT64_MAX);
+  void release_lock();
+private:
+  bool is_inited_;
+  lib::ObMutex mutex_;
+};
+
 class ObWorkloadRepositoryService : public logservice::ObIReplaySubHandler,
                                     public logservice::ObIRoleChangeSubHandler,
                                     public logservice::ObICheckpointSubHandler
@@ -45,7 +58,8 @@ public:
   int cancel_current_task();
   int schedule_new_task(const int64_t interval);
   bool is_running_task() const {return wr_timer_task_.is_running_task();};
-  int64_t get_snapshot_interval() const {return wr_timer_task_.get_snapshot_interval();};
+  int64_t get_snapshot_interval(bool is_laze_load = true) {return wr_timer_task_.get_snapshot_interval(is_laze_load);};
+  // when is_lazy_load is false, the func will send inner SQL, avoid frequently calling
   WorkloadRepositoryTask& get_wr_timer_task() {return wr_timer_task_;};
   INHERIT_TO_STRING_KV("ObIRoleChangeSubHandler", ObIRoleChangeSubHandler,
                         K_(is_inited),

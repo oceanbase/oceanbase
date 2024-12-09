@@ -687,7 +687,8 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param,
                                                  GatherHelper &gather_helper)
 {
   int ret = OB_SUCCESS;
-  int64_t column_cnt = param.get_need_gather_column();
+  int64_t origin_column_cnt = param.get_need_gather_column();
+  int64_t column_cnt = origin_column_cnt > MAX_GATHER_COLUMN_COUNT_PER_QUERY ? MAX_GATHER_COLUMN_COUNT_PER_QUERY : origin_column_cnt;
   int64_t partition_cnt = param.subpart_stat_param_.need_modify_ ? param.subpart_infos_.count() :
                             (param.part_stat_param_.need_modify_ ? param.part_infos_.count() + param.approx_part_infos_.count() : 1);
   bool need_histgoram = param.subpart_stat_param_.need_modify_ ? param.subpart_stat_param_.gather_histogram_ :
@@ -715,7 +716,7 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param,
   } else if (max_memory_used <= max_wa_memory_size && (!gather_helper.use_split_part_ || partition_cnt<=1)) {
     gather_helper.maximum_gather_col_cnt_ = column_cnt;
     gather_helper.maximum_gather_part_cnt_ = partition_cnt;
-    gather_helper.is_split_gather_ = false;
+    gather_helper.is_split_gather_ = column_cnt != origin_column_cnt;
     gather_helper.gather_vectorize_ = gather_vectorize;
   } else {
     //firstly, split according the partition
@@ -736,7 +737,8 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param,
     if (max_memory_used <= max_wa_memory_size) {
       gather_helper.maximum_gather_col_cnt_ = column_cnt;
       gather_helper.maximum_gather_part_cnt_ = partition_cnt;
-      gather_helper.is_split_gather_ = origin_partition_cnt != partition_cnt;
+      gather_helper.is_split_gather_ = origin_partition_cnt != partition_cnt ||
+                                       column_cnt != origin_column_cnt;
       gather_helper.gather_vectorize_ = gather_vectorize;
     } else {
       const int64_t MINIMUM_OF_VECTOR_SIZE = 8;
@@ -749,7 +751,8 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param,
       if (max_memory_used <= max_wa_memory_size) {
         gather_helper.maximum_gather_col_cnt_ = column_cnt;
         gather_helper.maximum_gather_part_cnt_ = partition_cnt;
-        gather_helper.is_split_gather_ = origin_partition_cnt != partition_cnt;
+        gather_helper.is_split_gather_ = origin_partition_cnt != partition_cnt ||
+                                         column_cnt != origin_column_cnt;
         gather_helper.gather_vectorize_ = gather_vectorize;
       } else {
         //lastly, split according the column

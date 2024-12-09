@@ -54,6 +54,10 @@ ob_set_subtarget(ob_share SCHEMA_CPPS
   ${SCHEMA_CPPS}
 )
 
+ob_set_subtarget(ob_share aggregates
+  aggregate/grouping.cpp
+)
+
 ob_set_subtarget(ob_share allocator
   allocator/ob_fifo_arena.cpp
   allocator/ob_memstore_allocator.cpp
@@ -235,6 +239,7 @@ ob_set_subtarget(ob_share common
   ob_domain_index_builder_util.cpp
   ob_service_name_proxy.cpp
   ob_compatibility_control.cpp
+  ob_device_credential_task.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed
@@ -342,6 +347,8 @@ ob_set_subtarget(ob_share common_mixed
   longops_mgr/ob_longops_mgr.cpp
   ash/ob_active_sess_hist_list.cpp
   ash/ob_active_sess_hist_task.cpp
+  ash/ob_ash_refresh_task.cpp
+  ash/ob_di_util.cpp
   throttle/ob_share_throttle_define.cpp
   throttle/ob_throttle_common.cpp
   restore/ob_restore_data_mode.cpp
@@ -561,6 +568,7 @@ ob_set_subtarget(ob_share external_table
 ob_set_subtarget(ob_share io
   io/ob_io_define.cpp
   io/io_schedule/ob_io_mclock.cpp
+  io/io_schedule/ob_io_schedule_v2.cpp
   io/ob_io_struct.cpp
   io/ob_io_calibration.cpp
   io/ob_io_manager.cpp

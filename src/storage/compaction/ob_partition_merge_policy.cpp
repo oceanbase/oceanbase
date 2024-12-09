@@ -1863,6 +1863,8 @@ int ObCOMajorMergePolicy::decide_co_major_sstable_status(
   if (storage_schema.has_all_column_group()) {
     if (co_sstable.is_row_store_only_co_table()) {
       major_sstable_status = ObCOMajorSSTableStatus::COL_ONLY_ALL;
+    } else if (co_sstable.is_rowkey_cg_base()) {
+      major_sstable_status = ObCOMajorSSTableStatus::PURE_COL_WITH_ALL;
     } else {
       major_sstable_status = ObCOMajorSSTableStatus::COL_WITH_ALL;
     }

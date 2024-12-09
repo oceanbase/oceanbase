@@ -189,7 +189,7 @@ void ObTenantInfoLoader::run2()
       const int64_t idle_time = max(10 * 1000, refresh_time_interval_us - cost_time_us - cost_time_us_service_name);
       //At least sleep 10ms, allowing the thread to release the lock
       if (!stop_) {
-        get_cond().wait_us(idle_time);
+        idle_wait_us(idle_time);
       }
     }//end while
   }

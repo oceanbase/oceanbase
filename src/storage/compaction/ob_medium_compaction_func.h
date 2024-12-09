@@ -203,6 +203,7 @@ protected:
 #ifdef ERRSIM
   int errsim_choose_medium_snapshot(
     const int64_t max_sync_medium_scn,
+    int64_t &schema_version,
     ObMediumCompactionInfo &medium_info,
     ObGetMergeTablesResult &result);
 #endif

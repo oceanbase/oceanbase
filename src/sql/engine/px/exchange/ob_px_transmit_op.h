@@ -160,6 +160,7 @@ private:
   int next_vector(const int64_t max_row_cnt);
   int next_batch(const int64_t max_row_cnt);
   inline void update_row(const ObExpr *expr, int64_t tablet_id);
+  int update_tabletid_batch(const ObExpr *expr, ObRepartSliceIdxCalc& slice_calc);
   int send_row_normal(int64_t slice_idx,
                int64_t &time_recorder,
                int64_t tablet_id,
@@ -178,9 +179,15 @@ private:
   int fetch_first_row();
   int set_expect_range_count();
   int wait_channel_ready_msg();
-  int hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard);
-  int keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard, const int64_t *indexes);
-  int keep_order_send_batch_fixed(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard, const int64_t *indexes);
+  int try_extend_selector_array(int64_t target_count, bool is_fixed);
+  int keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard,
+                            ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
+                            ObSliceIdxCalc::EndIdxArray &end_idx_array,
+                            bool is_broad_cast_calc_type);
+  int keep_order_send_batch_fixed(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard,
+                            ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
+                            ObSliceIdxCalc::EndIdxArray &end_idx_array,
+                            bool is_broad_cast_calc_type);
   int64_t get_random_seq()
   {
     return nrand48(rand48_buf_) % INT16_MAX;
@@ -193,11 +200,18 @@ private:
                                                                     && !proxy.adjoining_root_dfo()
                                                                     && !proxy.get_transmit_use_interm_result(); }
   int try_wait_channel();
-  void init_data_msg_type(const common::ObIArray<ObExpr *> &output);
+  int init_data_msg_type(const common::ObIArray<ObExpr *> &output);
   void fill_batch_ptrs(const int64_t *indexes);
   int prepare_for_nested_expr();
   void fill_batch_ptrs_fixed(const int64_t *indexes);
+  void fill_batch_ptrs(ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
+                       ObSliceIdxCalc::EndIdxArray &end_idx_array);
+  void fill_batch_ptrs_fixed(ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
+                             ObSliceIdxCalc::EndIdxArray &end_idx_array);
+  void fill_broad_cast_ptrs(int64_t slice_idx);
+  void fill_broad_cast_ptrs_fixed(int64_t slice_idx);
   dtl::ObDtlMsgType get_data_msg_type() const { return data_msg_type_; }
+  void set_wf_hybrid_exprs(ObSliceIdxCalc &slice_calc);
 protected:
   ObArray<ObChunkDatumStore::Block *> ch_blocks_;
   ObArray<ObChunkDatumStore::BlockBufferWrap> blk_bufs_;
@@ -234,12 +248,14 @@ protected:
   unsigned short rand48_buf_[3];
   bool receive_channel_ready_;
   dtl::ObDtlMsgType data_msg_type_;
+  bool has_set_tablet_id_vector_ = false;
   //slice_idx, batch_idx
   struct VectorSendParams {
     VectorSendParams(common::ObIAllocator &alloc) : slice_info_bkts_(nullptr),
                                                     slice_bkt_item_cnts_(nullptr),
                                                     vectors_(&alloc),
                                                     selector_array_(nullptr),
+                                                    selector_slice_idx_array_(nullptr),
                                                     selector_cnt_(0),
                                                     row_size_array_(nullptr),
                                                     return_rows_(nullptr),
@@ -260,17 +276,17 @@ protected:
                                                     offset_inited_(false),
                                                     row_limit_(-1),
                                                     fixed_rows_(nullptr),
-                                                    reorder_fixed_expr_(false) {}
+                                                    reorder_fixed_expr_(false),
+                                                    selector_array_max_size_(0) {}
     int init_basic_params(const int64_t max_batch_size, const int64_t channel_cnt,
                           const int64_t output_cnt, ObIAllocator &alloc, ObExecContext &ctx);
-    int init_hash_params(const int64_t max_batch_size, const int64_t channel_cnt,
-                         const int64_t output_cnt, ObIAllocator &alloc);
     int init_keep_order_params(const int64_t max_batch_size, const int64_t channel_cnt,
                                const int64_t output_cnt, ObIAllocator &alloc);
     uint16_t **slice_info_bkts_;
     uint16_t *slice_bkt_item_cnts_;
     ObFixedArray<ObIVector *, common::ObIAllocator> vectors_;
     uint16_t *selector_array_;
+    uint16_t *selector_slice_idx_array_;
     int64_t selector_cnt_;
     uint32_t *row_size_array_;
     ObCompactRow **return_rows_;
@@ -292,6 +308,7 @@ protected:
     int64_t row_limit_;
     char **fixed_rows_;
     bool reorder_fixed_expr_;
+    int64_t selector_array_max_size_;
   };
   VectorSendParams params_;
 };

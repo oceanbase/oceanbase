@@ -167,17 +167,13 @@ int ObResourcePlanManager::refresh_resource_plan(const uint64_t tenant_id, ObStr
       //   step1: 以 100 为总值做归一化
       //   step2: 将值转化成 cgroup 值 （utilization=>cfs_cpu_quota 的值和 cpu 核数等有关)
       //      - 如果 utilization = 100，那么 cfs_cpu_quota = -1
-    } else if (OB_FAIL(refresh_global_background_cpu())) {
-      LOG_WARN("fail refresh background cpu quota", K(ret));
     } else if (OB_FAIL(flush_directive_to_cgroup_fs(directives))) {  // for CPU
       LOG_WARN("fail flush directive to cgroup fs", K(ret));
     }
     (void) clear_deleted_directives(tenant_id, directives);
   }
   if (OB_SUCC(ret)) {
-    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) { // 10s
-      LOG_INFO("refresh resource plan success", K(tenant_id), K(plan_name), K(directives));
-    }
+    LOG_INFO("refresh resource plan success", K(tenant_id), K(plan_name), K(directives));
   }
   return ret;
 }
@@ -199,6 +195,21 @@ int ObResourcePlanManager::get_cur_plan(const uint64_t tenant_id, ObResMgrVarcha
     }
   }
   return ret;
+}
+
+int64_t ObResourcePlanManager::to_string(char *buf, const int64_t len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_SUCC(databuff_printf(buf, len, pos, "background_quota:%d, tenant_plan_map:", background_quota_))) {
+    if (OB_SUCC(databuff_printf(buf, len, pos, "{"))) {
+      common::hash::ObHashMap<uint64_t, ObResMgrVarcharValue>::PrintFunctor fn(buf, len, pos);
+      if (OB_SUCC(tenant_plan_map_.foreach_refactored(fn))) {
+        ret = databuff_printf(buf, len, pos, "}");
+      }
+    }
+  }
+  return pos;
 }
 
 int ObResourcePlanManager::normalize_iops_directives(const uint64_t tenant_id,
@@ -445,7 +456,6 @@ int ObResourcePlanManager::clear_deleted_directives(const uint64_t tenant_id,
         }
         if (!is_group_id_found) {
           const uint64_t deleted_group_id = group_id_keys.at(i).group_id_;
-          LOG_INFO("directive need to be cleared", K(tenant_id), K(deleted_group_id));
           if (OB_FAIL(tenant_holder.get_ptr()->reset_consumer_group_config(deleted_group_id))) {
             LOG_WARN("reset consumer group config failed", K(ret), K(deleted_group_id));
           } else if (!GCTX.cgroup_ctrl_->is_valid()) {
@@ -454,6 +464,8 @@ int ObResourcePlanManager::clear_deleted_directives(const uint64_t tenant_id,
             LOG_WARN("fail to set cpu share", K(ret), K(tenant_id), K(deleted_group_id));
           } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(tenant_id, -1, deleted_group_id))) {
             LOG_WARN("fail to set cpu quota", K(ret), K(tenant_id), K(deleted_group_id));
+          } else {
+            LOG_INFO("directive cleared", K(tenant_id), K(deleted_group_id));
           }
         }
       }

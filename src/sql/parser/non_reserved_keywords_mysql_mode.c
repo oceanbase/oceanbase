@@ -56,6 +56,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"arbitration", ARBITRATION},
   {"archivelog", ARCHIVELOG},
   {"array", ARRAY},
+  {"array_map", ARRAY_MAP},
   {"as", AS},
   {"asc", ASC},
   {"asensitive", ASENSITIVE},
@@ -75,6 +76,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"avg", AVG},
   {"avg_row_length", AVG_ROW_LENGTH},
   {"array", ARRAY},
+  {"array_agg", ARRAY_AGG},
   {"backup", BACKUP},
   {"backupset", BACKUPSET},
   {"balance", BALANCE},
@@ -613,6 +615,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"accesskey", ACCESSKEY},
   {"accesstype", ACCESSTYPE},
   {"endpoint", ENDPOINT},
+  {"tunnel_endpoint", TUNNEL_ENDPOINT},
+  {"collect_statistics_on_create", COLLECT_STATISTICS_ON_CREATE},
   {"project_name", PROJECT_NAME},
   {"quota_name", QUOTA_NAME},
   {"compression_code", COMPRESSION_CODE},
@@ -878,6 +882,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"sql_tsi_year", SQL_TSI_YEAR},
   {"srid", SRID},
   {"ssl", SSL},
+  {"skip", SKIP},
   {"ss_micro_cache", SS_MICRO_CACHE},
   {"stacked", STACKED},
   {"standby", STANDBY},
@@ -1047,6 +1052,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"wrapper", WRAPPER},
   {"x509", X509},
   {"xa", XA},
+  {"xid", XID},
   {"xml", XML},
   {"xor", XOR},
   {"year", YEAR},
@@ -1094,7 +1100,9 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"rb_and_agg", RB_AND_AGG},
   {"rb_iterate", RB_ITERATE},
   {"optimizer_costs", OPTIMIZER_COSTS},
-  {"micro_index_clustered", MICRO_INDEX_CLUSTERED}
+  {"micro_index_clustered", MICRO_INDEX_CLUSTERED},
+  {"unnest", UNNEST},
+  {"tenant_sts_credential", TENANT_STS_CREDENTIAL}
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

@@ -296,7 +296,7 @@ int ObCreateTableResolverBase::add_primary_key_part(const ObString &column_name,
   } else if (OB_ISNULL(col = table_schema.get_column_schema(column_name))) {
     ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
     LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
-    SQL_RESV_LOG(WARN, "column '%s' does not exists", K(ret), K(to_cstring(column_name)));
+    SQL_RESV_LOG(WARN, "column does not exists", K(ret), K(column_name));
   } else if (OB_FAIL(check_add_column_as_pk_allowed(*col))) {
     LOG_WARN("the column can not be primary key", K(ret));
   } else if (col->get_rowkey_position() > 0) {
@@ -381,7 +381,7 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
       } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
       } else if (ObTableStoreFormat::is_row_with_column_store(table_store_type)) {
         if (OB_FAIL(ObSchemaUtils::build_all_column_group(table_schema, table_schema.get_tenant_id(),
-                                                                  table_schema.get_max_used_column_group_id() + 1, all_cg))) {
+                                                                  ALL_COLUMN_GROUP_ID, all_cg))) {
           LOG_WARN("fail to add all column group", K(ret));
         } else if (OB_FAIL(table_schema.add_column_group(all_cg))) {
           LOG_WARN("fail to build all column group", K(ret));
@@ -404,6 +404,10 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
       } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(table_schema))) {
         LOG_WARN("fail to adjust default column group", K(ret));
       }
+    }
+
+    if (FAILEDx(table_schema.adjust_column_group_array())) {
+      LOG_WARN("fail to adjust column group array", K(ret), K(table_schema));
     }
   }
   return ret;

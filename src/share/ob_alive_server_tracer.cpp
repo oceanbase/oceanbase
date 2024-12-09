@@ -170,7 +170,8 @@ int ObAliveServerMap::refresh_server_list(const ObIArray<ObAddr> &server_list,
         if (OB_FAIL(servers.set_refactored(*s))) {
           LOG_WARN("add server hash set failed", KCSTRING(server_list_type), K(ret), "server", *s);
         } else {
-          _LOG_INFO("add server to %s server map: %s", server_list_type, to_cstring(s));
+          ObCStringHelper helper;
+          _LOG_INFO("add server to %s server map: %s", server_list_type, helper.convert(s));
         }
       } else {
         LOG_WARN("hash set exist failed", KCSTRING(server_list_type), K(ret), "server", *s);
@@ -189,7 +190,8 @@ int ObAliveServerMap::refresh_server_list(const ObIArray<ObAddr> &server_list,
         if (OB_FAIL(servers.erase_refactored(*s))) {
           LOG_WARN("erase from hash set failed", KCSTRING(server_list_type), K(ret), "server", *s);
         } else {
-          _LOG_INFO("remove server from %s server map: %s", server_list_type, to_cstring(*s));
+          ObCStringHelper helper;
+          _LOG_INFO("remove server from %s server map: %s", server_list_type, helper.convert(*s));
         }
       }
     }

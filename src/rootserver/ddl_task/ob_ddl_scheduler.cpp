@@ -1953,7 +1953,7 @@ int ObDDLScheduler::create_drop_fts_index_task(
   } else if (OB_ISNULL(index_schema) || OB_ISNULL(drop_index_arg)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(index_schema), KP(drop_index_arg));
-  } else if (FALSE_IT(is_fts_index = index_schema->is_fts_index_aux())) {
+  } else if (FALSE_IT(is_fts_index = (index_schema->is_fts_index_aux() || drop_index_arg->is_parent_task_dropping_fts_index_))) {
   } else if (OB_UNLIKELY(schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(index_schema), K(schema_version));
@@ -2000,7 +2000,6 @@ int ObDDLScheduler::create_drop_fts_index_task(
     const ObFTSDDLChildTaskInfo rowkey_doc(rowkey_doc_name, rowkey_doc_table_id, 0/*task_id*/);
     const ObFTSDDLChildTaskInfo doc_rowkey(doc_rowkey_name, doc_rowkey_table_id, 0/*task_id*/);
     const ObDDLType ddl_type = is_fts_index ? DDL_DROP_FTS_INDEX : DDL_DROP_MULVALUE_INDEX;
-
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(index_task.init(index_schema->get_tenant_id(),
                                 task_id,
@@ -2846,6 +2845,7 @@ int ObDDLScheduler::create_rebuild_index_task(
                                 sub_task_trace_id,
                                 parallelism,
                                 tenant_data_version,
+                                *index_schema,
                                 *rebuild_index_arg))) {
       LOG_WARN("init drop index task failed", KR(ret), K(data_table_id), K(index_table_id));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {

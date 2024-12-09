@@ -17,6 +17,7 @@
 #include "observer/table_load/ob_table_load_store.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "sql/engine/ob_des_exec_context.h"
+#include "observer/table_load/ob_table_load_empty_insert_tablet_ctx_manager.h"
 
 namespace oceanbase
 {
@@ -683,6 +684,35 @@ int ObDirectLoadControlInsertTransExecutor::process()
       ObTableLoadService::put_ctx(table_ctx);
       table_ctx = nullptr;
     }
+  }
+  return ret;
+}
+
+int ObDirectLoadControlInitEmptyTabletsExecutor::check_args()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == arg_.table_id_
+      || 0 == arg_.ddl_param_.task_id_
+      || arg_.partition_id_array_.empty()
+      || arg_.target_partition_id_array_.empty()
+      || arg_.partition_id_array_.count() != arg_.target_partition_id_array_.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(arg_));
+  }
+  return OB_SUCCESS;
+}
+
+int ObDirectLoadControlInitEmptyTabletsExecutor::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
+  } else if (OB_FAIL(ObTableLoadEmptyInsertTabletCtxManager::execute(
+                                                    arg_.table_id_,
+                                                    arg_.ddl_param_,
+                                                    arg_.partition_id_array_,
+                                                    arg_.target_partition_id_array_))) {
+    LOG_WARN("fail to execute init empty tablet", KR(ret));
   }
   return ret;
 }

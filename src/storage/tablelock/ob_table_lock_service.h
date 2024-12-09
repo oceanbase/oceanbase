@@ -122,6 +122,7 @@ private:
 
     // use to kill the whole lock table stmt.
     transaction::ObTxSEQ stmt_savepoint_;
+    bool is_for_replace_;
 
     TO_STRING_KV(K(task_type_), K(is_in_trans_), K(table_id_), K(partition_id_),
                  K(tablet_list_), K(obj_list_), K(lock_op_type_),
@@ -130,7 +131,8 @@ private:
                  K(current_savepoint_), K(need_rollback_ls_),
                  K(lock_mode_), K(lock_owner_),
                  K(schema_version_), K(tx_is_killed_),
-                 K(is_from_sql_), K(ret_code_before_end_stmt_or_tx_), K(stmt_savepoint_));
+                 K(is_from_sql_), K(ret_code_before_end_stmt_or_tx_),
+                 K(stmt_savepoint_), K_(is_for_replace));
   };
 
   class ObReplaceTableLockCtx : public ObTableLockCtx
@@ -260,7 +262,8 @@ public:
                                      ObLockPartitionRequest &arg);
   int lock(ObTxDesc &tx_desc,
            const ObTxParam &tx_param,
-           const ObLockRequest &arg);
+           const ObLockRequest &arg,
+           const bool is_for_replace = false);
   int unlock(ObTxDesc &tx_desc,
              const ObTxParam &tx_param,
              const ObUnLockRequest &arg);
@@ -268,6 +271,9 @@ public:
   int replace_lock(ObTxDesc &tx_desc,
                    const ObTxParam &tx_param,
                    const ObReplaceLockRequest &replace_req);
+  int replace_lock(ObTxDesc &tx_desc,
+                   const ObTxParam &tx_param,
+                   const ObReplaceAllLocksRequest &replace_req);
   int garbage_collect_right_now();
   int get_obj_lock_garbage_collector(ObOBJLockGarbageCollector *&obj_lock_garbage_collector);
 
@@ -343,11 +349,6 @@ private:
                           const share::ObLSID &ls_id,
                           const ObLockIDArray &lock_ids,
                           ObLockTaskBatchRequest<ObReplaceLockParam> &request);
-  template<class RpcProxy>
-  int parallel_rpc_handle_(RpcProxy &proxy_batch,
-                           ObTableLockCtx &ctx,
-                           const LockMap &lock_map,
-                           const ObLSLockMap &ls_lock_map);
   template<class RpcProxy>
   int batch_rpc_handle_(RpcProxy &proxy_batch,
                         ObTableLockCtx &ctx,
@@ -428,9 +429,6 @@ private:
   int inner_process_obj_lock_(ObTableLockCtx &ctx,
                               const LockMap &lock_map,
                               const ObLSLockMap &ls_lock_map);
-  int inner_process_obj_lock_old_version_(ObTableLockCtx &ctx,
-                                          const LockMap &lock_map,
-                                          const ObLSLockMap &ls_lock_map);
   int inner_process_obj_lock_batch_(ObTableLockCtx &ctx,
                                     const ObLSLockMap &ls_lock_map);
   int process_obj_lock_(ObTableLockCtx &ctx,

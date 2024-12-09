@@ -17,6 +17,22 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
+class TestTG : public testing::Test
+{
+protected:
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
+};
+
 class TestTimerTask : public ObTimerTask
 {
 public:
@@ -34,7 +50,7 @@ public:
   int64_t task_run_count_;
 };
 
-TEST(TG, timer)
+TEST_F(TestTG, timer)
 {
   int tg_id = TGDefIDs::TEST1;
   TestTimerTask task;
@@ -80,7 +96,7 @@ public:
   int64_t handle_count_=0;
 };
 
-TEST(TG, queue_thread)
+TEST_F(TestTG, queue_thread)
 {
   int tg_id = TGDefIDs::TEST2;
   Handler handler;
@@ -133,7 +149,7 @@ public:
 };
 int64_t MyDTask::handle_count_ = 0;
 
-TEST(TG, dedup_queue)
+TEST_F(TestTG, dedup_queue)
 {
   int tg_id = TGDefIDs::TEST3;
   MyDTask task;
@@ -172,7 +188,7 @@ public:
   int64_t run_count_=0;
 };
 
-TEST(TG, thread_pool)
+TEST_F(TestTG, thread_pool)
 {
   int tg_id = TGDefIDs::TEST4;
   MyRunnable runnable;
@@ -197,7 +213,7 @@ TEST(TG, thread_pool)
   ASSERT_FALSE(TG_EXIST(tg_id));
 }
 
-TEST(TG, reentrant_thread_pool)
+TEST_F(TestTG, reentrant_thread_pool)
 {
   int tg_id = TGDefIDs::TEST8;
   MyRunnable runnable;
@@ -250,7 +266,7 @@ public:
 };
 int64_t MyTask::handle_count_ = 0;
 
-TEST(TG, async_task_queue)
+TEST_F(TestTG, async_task_queue)
 {
   int tg_id = TGDefIDs::TEST5;
   MyTask task;
@@ -291,7 +307,7 @@ public:
   int64_t handle_count_ = 0;
 };
 
-TEST(TG, map_queue_thread)
+TEST_F(TestTG, map_queue_thread)
 {
   int tg_id = TGDefIDs::TEST6;
   MapQueueThreadHandler handler;

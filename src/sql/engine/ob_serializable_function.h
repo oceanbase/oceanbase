@@ -133,6 +133,7 @@ typedef void (*ser_eval_vector_function)(ObEvalVectorFuncTag &);
   OB_SFA_DATUM_NULLSAFE_COLLECTION_CMP,          \
   OB_SFA_EXPR_COLLECTION_BASIC_PART1,            \
   OB_SFA_EXPR_COLLECTION_BASIC_PART2,            \
+  OB_SFA_FAST_CALC_PART_VEC,                     \
   OB_SFA_MAX
 
 enum ObSerFuncArrayID {

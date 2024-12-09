@@ -68,9 +68,9 @@ private:
       const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type,
       const obrpc::ObInnerSQLTransmitArg &arg,
       observer::ObInnerSQLConnection *conn);
-  static int process_replace_lock_(const obrpc::ObInnerSQLTransmitArg &arg,
-                                   observer::ObInnerSQLConnection *conn);
-// --------------------- interface for inner connection client -----------------------
+  static int process_replace_lock_(const obrpc::ObInnerSQLTransmitArg &arg, observer::ObInnerSQLConnection *conn);
+  static int process_replace_all_locks_(const obrpc::ObInnerSQLTransmitArg &arg, observer::ObInnerSQLConnection *conn);
+  // --------------------- interface for inner connection client -----------------------
 public:
   static int lock_table(
       const uint64_t tenant_id,
@@ -152,6 +152,10 @@ public:
       const uint64_t tenant_id,
       const ObReplaceLockRequest &req,
       observer::ObInnerSQLConnection *conn);
+  static int replace_lock(
+      const uint64_t tenant_id,
+      const ObReplaceAllLocksRequest &req,
+      observer::ObInnerSQLConnection *conn);
   static int create_inner_conn(sql::ObSQLSessionInfo *session_info,
                                common::ObMySQLProxy *sql_proxy,
                                observer::ObInnerSQLConnection *&inner_conn);
@@ -165,6 +169,11 @@ private:
   static int replace_lock_(
       const uint64_t tenant_id,
       const ObReplaceLockRequest &req,
+      observer::ObInnerSQLConnection *conn,
+      observer::ObInnerSQLResult &res);
+  static int replace_lock_(
+      const uint64_t tenant_id,
+      const ObReplaceAllLocksRequest &req,
       observer::ObInnerSQLConnection *conn,
       observer::ObInnerSQLResult &res);
   static int do_obj_lock_(

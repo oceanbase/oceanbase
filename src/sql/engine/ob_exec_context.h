@@ -462,10 +462,6 @@ public:
   int serialize_group_pwj_map(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_group_pwj_map(const char *buf, const int64_t data_len, int64_t &pos);
 
-  void set_partition_id_calc_type(PartitionIdCalcType calc_type) { calc_type_ = calc_type; }
-  PartitionIdCalcType get_partition_id_calc_type() { return calc_type_; }
-  void set_fixed_id(ObObjectID fixed_id) { fixed_id_ = fixed_id; }
-  ObObjectID get_fixed_id() { return fixed_id_; }
   const Ob2DArray<ObPxTabletRange> &get_partition_ranges() const { return part_ranges_; }
   int set_partition_ranges(const Ob2DArray<ObPxTabletRange> &part_ranges,
                            char *buf = NULL, int64_t max_size = 0);
@@ -558,6 +554,7 @@ public:
   void set_force_gen_local_plan() { force_local_plan_ = true; }
   bool is_force_gen_local_plan() const { return force_local_plan_; }
   void set_retry_info(const ObQueryRetryInfo *retry_info) { das_ctx_.get_location_router().set_retry_info(retry_info); }
+  bool is_use_adaptive_px_dop() const { return auto_dop_map_.size() > 0; }
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
@@ -688,10 +685,6 @@ protected:
   lib::MemoryContext mem_context_;
   PWJTabletIdMap* pwj_map_;
   GroupPWJTabletIdMap *group_pwj_map_;
-  // the following two parameters only used in calc_partition_id expr
-  PartitionIdCalcType calc_type_;
-  ObObjectID fixed_id_;    // fixed part id or fixed subpart ids
-
   // sample result
   Ob2DArray<ObPxTabletRange> part_ranges_;
   int64_t check_status_times_;

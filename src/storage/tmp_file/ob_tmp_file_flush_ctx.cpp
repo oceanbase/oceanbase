@@ -92,16 +92,19 @@ int ObTmpFileBatchFlushContext::prepare_flush_ctx(
     ObTmpFileFlushMonitor *flush_monitor)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(expect_flush_size <= 0)) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTmpFileBatchFlushContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(expect_flush_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(expect_flush_size));
   } else if (OB_ISNULL(prio_mgr) || OB_ISNULL(flush_monitor)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(prio_mgr), KP(flush_monitor));
   } else if (OB_FAIL(flush_failed_array_.reserve(MAX_COPY_FAIL_COUNT))) {
-    LOG_WARN("fail to reserve flush filed array", KR(ret), K(*this));
+    LOG_WARN("fail to reserve flush filed array", KR(ret), KPC(this));
   } else if (OB_FAIL(iter_.init(prio_mgr))) {
-    LOG_WARN("failed to init iterator", KR(ret), K(*this));
+    LOG_WARN("failed to init iterator", KR(ret), KPC(this));
   } else {
     expect_flush_size_ = expect_flush_size;
     flush_monitor_ptr_ = flush_monitor;
@@ -126,15 +129,23 @@ int ObTmpFileBatchFlushContext::clear_flush_ctx(ObTmpFileFlushPriorityManager &p
   // insert the files that failed to copy data back into the flush queue. after this step,
   // call files taken out by the iterator for this round
   // (excluding files with no dirty pages) will appear in the flush priority manager.
-  for (int64_t i = 0; OB_SUCC(ret) && i < flush_failed_array_.count(); i++) {
+  for (int64_t i = 0; i < flush_failed_array_.count(); i++) {
     const ObTmpFileFlushFailRecord &record = flush_failed_array_.at(i);
-    const ObTmpFileHandle &file_handle = record.file_handle_;
+    const ObSNTmpFileHandle &file_handle = record.file_handle_;
     if (OB_ISNULL(file_handle.get())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("file handle is nullptr", KR(ret));
     } else {
       ObSharedNothingTmpFile &file = *file_handle.get();
-      file.reinsert_flush_node(record.is_meta_);
+      if (record.is_meta_) {
+        if (OB_FAIL(file.reinsert_meta_flush_node())) {
+          LOG_ERROR("fail to reinsert meta flush node", KR(ret), KPC(this));
+        }
+      } else {
+        if (OB_FAIL(file.reinsert_data_flush_node())) {
+          LOG_ERROR("fail to reinsert data flush node", KR(ret), KPC(this));
+        }
+      }
     }
   }
 
@@ -172,7 +183,7 @@ int ObTmpFileBatchFlushContext::clear_flush_ctx(ObTmpFileFlushPriorityManager &p
 int ObTmpFileBatchFlushContext::RemoveFileOp::operator () (hash::HashMapPair<int64_t, ObTmpFileSingleFlushContext> &kv)
 {
   int ret = OB_SUCCESS;
-  ObTmpFileHandle &file_handle = kv.second.file_handle_;
+  ObSNTmpFileHandle &file_handle = kv.second.file_handle_;
   if (OB_ISNULL(file_handle.get())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("file handle is nullptr", KR(ret));
@@ -182,9 +193,9 @@ int ObTmpFileBatchFlushContext::RemoveFileOp::operator () (hash::HashMapPair<int
     // being inserted to the flushing meta page, causing the memory meta page to become inconsistent with the page on disk.
     ObSharedNothingTmpFile &file = *file_handle.get();
     if (file.is_flushing()) {
-      if (OB_FAIL(file.remove_flush_node(false/*is_meta*/))) {
+      if (OB_FAIL(file.remove_data_flush_node())) {
         LOG_ERROR("fail to remove file data node from flush priority mgr", KR(ret), K(file));
-      } else if (OB_FAIL(file.remove_flush_node(true/*is_meta*/))) {
+      } else if (OB_FAIL(file.remove_meta_flush_node())) {
         LOG_ERROR("fail to remove file meta node from flush priority mgr", KR(ret), K(file));
       } else {
         LOG_DEBUG("succ to remove flush node from flush priority mgr", K(file));
@@ -406,10 +417,15 @@ int ObTmpFileFlushTask::write_one_block()
     }
   }
 
+  static const int64_t SEND_IO_WARN_TIMEOUT_US = 30 * 1000 * 1000; // 30s
+  if (ObTimeUtil::current_time() - get_create_ts() > SEND_IO_WARN_TIMEOUT_US) { // debug log
+    LOG_WARN("flush task send io takes too much time", KPC(this));
+  }
+
   if (OB_SUCC(ret)) {
     blocksstable::ObMacroBlockWriteInfo write_info;
-    write_info.io_desc_.set_wait_event(2); // TODO: 检查是否需要用临时文件自己的event
-      write_info.io_desc_.set_sys_module_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
+    write_info.io_desc_.set_wait_event(ObWaitEventIds::TMP_FILE_WRITE);
+    write_info.io_desc_.set_sys_module_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
     write_info.buffer_ = get_data_buf();
     write_info.size_ = upper_align(get_data_length(), ObTmpFileGlobal::PAGE_SIZE);
     write_info.offset_ = 0;

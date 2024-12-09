@@ -238,6 +238,19 @@ void ObGlobalHint::merge_parallel_dml_hint(ObPDMLOption pdml_option)
   }
 }
 
+void ObGlobalHint::merge_parallel_das_dml_hint(ObParallelDASOption parallel_das_option)
+{
+  if (ObParallelDASOption::DISABLE != parallel_das_dml_option_ && ObParallelDASOption::ENABLE != parallel_das_dml_option_) {
+    if (ObParallelDASOption::DISABLE == parallel_das_option || ObParallelDASOption::ENABLE == parallel_das_option) {
+      parallel_das_dml_option_ = parallel_das_option;
+    }
+  } else if (ObParallelDASOption::ENABLE == parallel_das_dml_option_ || ObParallelDASOption::ENABLE == parallel_das_option) {
+    parallel_das_dml_option_ = ObParallelDASOption::ENABLE;
+  } else {
+    parallel_das_dml_option_ = ObParallelDASOption::DISABLE;
+  }
+}
+
 void ObGlobalHint::merge_param_option_hint(ObParamOption opt)
 {
   if (ObParamOption::FORCE != param_option_ && ObParamOption::EXACT != param_option_) {
@@ -356,7 +369,8 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || -1 != dynamic_sampling_
          || flashback_read_tx_uncommitted_
          || has_direct_load()
-         || !resource_group_.empty();
+         || !resource_group_.empty()
+         || ObParallelDASOption::NOT_SPECIFIED != parallel_das_dml_option_;
 }
 
 void ObGlobalHint::reset()
@@ -390,6 +404,7 @@ void ObGlobalHint::reset()
   direct_load_hint_.reset();
   dblink_hints_.reset();
   resource_group_.reset();
+  parallel_das_dml_option_ = ObParallelDASOption::NOT_SPECIFIED;
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -416,6 +431,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
   flashback_read_tx_uncommitted_ |= other.flashback_read_tx_uncommitted_;
   dblink_hints_ = other.dblink_hints_;
+  merge_parallel_das_dml_hint(other.parallel_das_dml_option_);
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
   merge_direct_load_hint(other.direct_load_hint_);
   merge_resource_group_hint(other.resource_group_);
@@ -550,6 +566,18 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected pdml hint value", K(ret), K_(pdml_option));
     }
+  }
+  if (OB_SUCC(ret) && ObParallelDASOption::NOT_SPECIFIED != parallel_das_dml_option_) { //PDML
+   if (ObParallelDASOption::ENABLE == parallel_das_dml_option_) {
+     if (!ignore_parallel_for_dblink) {
+       PRINT_GLOBAL_HINT_STR("ENABLE_PARALLEL_DAS_DML");
+     }
+   } else if (ObParallelDASOption::DISABLE == parallel_das_dml_option_) {
+     PRINT_GLOBAL_HINT_STR("DISABLE_PARALLEL_DAS_DML");
+   } else {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_WARN("unexpected pdml hint value", K(ret), K_(pdml_option));
+   }
   }
   if (OB_SUCC(ret) && ObParamOption::NOT_SPECIFIED != param_option_) { // PARAM
     if (OB_UNLIKELY(ObParamOption::EXACT != param_option_)) {
@@ -821,7 +849,8 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case OPTIMIZER_BETTER_INLIST_COSTING:
     case OPTIMIZER_GROUP_BY_PLACEMENT:
     case ENABLE_SPF_BATCH_RESCAN:
-    case NLJ_BATCHING_ENABLED: {
+    case NLJ_BATCHING_ENABLED:
+    case ENABLE_PX_ORDERED_COORD: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
@@ -928,6 +957,17 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case PARTITION_WISE_PLAN_ENABLED: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
+    case USE_HASH_ROLLUP: {
+      is_valid = val.is_varchar()
+                 && (0 == val.get_varchar().case_compare("auto")
+                     || 0 == val.get_varchar().case_compare("forced")
+                     || 0 == val.get_varchar().case_compare("disabled"));
+      break;
+    }
+    case LOB_ROWSETS_MAX_ROWS: {
+      is_valid = val.is_int() && val.get_int() >= 1 && val.get_int() <= 65535;
       break;
     }
     case ENABLE_ENUM_SET_SUBSCHEMA: {
@@ -1042,6 +1082,21 @@ int ObOptParamHint::get_opt_param_runtime_filter_type(int64_t &rf_type) const
     ObString str_val = obj.get_varchar();
     rf_type = ObConfigRuntimeFilterChecker::get_runtime_filter_type(str_val.ptr(),
                                                                     str_val.length());
+  }
+  return ret;
+}
+
+int ObOptParamHint::get_hash_rollup_param(ObObj &val, bool &has_param) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(has_opt_param(USE_HASH_ROLLUP, has_param))) {
+    LOG_WARN("failed to check param", K(ret));
+  } else if (has_param) {
+    if (OB_FAIL(get_opt_param(USE_HASH_ROLLUP, val))) {
+      LOG_WARN("get opt param failed", K(ret));
+    } else {
+      has_param = is_param_val_valid(USE_HASH_ROLLUP, val);
+    }
   }
   return ret;
 }

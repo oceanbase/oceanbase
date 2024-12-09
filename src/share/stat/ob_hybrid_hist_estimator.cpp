@@ -94,7 +94,7 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
   } else if (OB_FAIL(tmp_opt_stats.push_back(opt_stat))) {
     LOG_WARN("failed to push back", K(ret));
   } else if (get_item_size() > 0 &&
-             OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), false,
+             OB_FAIL(do_estimate(param, raw_sql.string(), false,
                                  opt_stat, tmp_opt_stats))) {
     LOG_WARN("failed to do estimate", K(ret));
   } else if (!no_sample_idx.empty() &&
@@ -220,7 +220,7 @@ int ObHybridHistEstimator::estimate_no_sample_col_hydrid_hist(ObIAllocator &allo
     LOG_WARN("failed to pack", K(ret));
   } else if (OB_FAIL(tmp_opt_stats.push_back(opt_stat))) {
     LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), false,
+  } else if (OB_FAIL(do_estimate(param, raw_sql.string(), false,
                                  opt_stat, tmp_opt_stats))) {
     LOG_WARN("failed to do estimate", K(ret));
   } else {/*do nothing*/}

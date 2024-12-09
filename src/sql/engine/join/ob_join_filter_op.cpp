@@ -29,7 +29,6 @@
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_vec_msg.h"
 #include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 #include "sql/engine/join/ob_partition_store.h"
-#include "sql/engine/px/datahub/components/ob_dh_join_filter_count_row.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/join/ob_join_filter_store_row.h"
 
@@ -39,6 +38,8 @@ using namespace common;
 using namespace omt;
 using namespace sql;
 using namespace oceanbase::sql::dtl;
+
+ERRSIM_POINT_DEF(DHSENDOPTLOCAL);
 
 OB_SERIALIZE_MEMBER(ObJoinFilterShareInfo,
     unfinished_count_ptr_,
@@ -104,11 +105,11 @@ int SharedJoinFilterConstructor::reset_for_rescan()
 {
   // Generally speaking, shared join filter is not supported to rescan, this code
   // is only for defense.
-  int ret = OB_SUCCESS;
+  int ret = OB_ERR_UNEXPECTED;
   if (try_release_constructor()) {
     is_bloom_filter_constructed_ = false;
   }
-  LOG_DEBUG("This may be a unexpected way");
+  LOG_ERROR("This may be a unexpected way");
   return ret;
 }
 
@@ -191,6 +192,8 @@ bool ObJoinFilterOpInput::check_release()
   return res;
 }
 
+
+ERRSIM_POINT_DEF(JF_BS_OPT);
 int ObJoinFilterOpInput::load_runtime_config(const ObJoinFilterSpec &spec, ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
@@ -222,6 +225,11 @@ int ObJoinFilterOpInput::load_runtime_config(const ObJoinFilterSpec &spec, ObExe
   config_.runtime_bloom_filter_max_size_ = ctx.get_my_session()->
       get_runtime_bloom_filter_max_size();
   config_.px_message_compression_ = true;
+
+  config_.build_send_opt_ =
+      (spec.get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_3_5_0
+       && spec.use_realistic_runtime_bloom_filter_size() && JF_BS_OPT == OB_SUCCESS);
+
   LOG_TRACE("load runtime filter config", K(spec.get_id()), K(config_));
   return ret;
 }
@@ -235,6 +243,15 @@ int ObJoinFilterOpInput::init_share_info(
   int ret = OB_SUCCESS;
   uint64_t *ptr = NULL;
   void *constructor_buf = nullptr;
+
+  if (spec.is_shuffle_ && spec.jf_material_control_info_.each_sqc_has_full_data_
+      && config_.build_send_opt_) {
+    // for shuffled join filter, we gather K piece bloom filter create by all K sqcs.
+    // opt: if is shared hash join, each sqc has full data of build table, we only
+    // need to gather one piece join filter
+    sqc_count = 1;
+  }
+
   common::ObIAllocator &allocator = ctx.get_allocator();
   if (OB_ISNULL(ptr = (uint64_t *)allocator.alloc(sizeof(uint64_t) * 2))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -491,6 +508,7 @@ int ObJoinFilterOpInput::construct_msg_details(
       } else if (OB_FAIL(in_msg.cur_row_with_hash_.row_.prepare_allocate(col_cnt))) {
         LOG_WARN("failed to prepare_allocate cur_row_with_hash_");
       } else {
+        in_msg.build_send_opt_ = config.build_send_opt_;
         in_msg.set_msg_expect_cnt(sqc_count);
         in_msg.set_msg_cur_cnt(1);
         in_msg.max_in_num_ = config.runtime_filter_max_in_num_;
@@ -539,30 +557,9 @@ ObJoinFilterSpec::ObJoinFilterSpec(common::ObIAllocator &alloc, const ObPhyOpera
 int ObJoinFilterSpec::register_to_datahub(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
-  bool need_register_to_datahub = false;
-  if (!is_material_controller()) {
-    // only the material controller needs to register datahub to sync rows
-  } else {
-    const ObOpSpec *cur_spec = this;
-    int64_t join_filter_count = under_control_join_filter_count();
-    // if at least one join filter is shared join filter, we need to send datahub msg to synchronize
-    // row count
-    for (int64_t i = 0; i < join_filter_count && OB_NOT_NULL(cur_spec) && OB_SUCC(ret); ++i) {
-      if (cur_spec->get_type() != PHY_JOIN_FILTER) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("must be join filter bellow");
-      } else {
-        const ObJoinFilterSpec &spec = static_cast<const ObJoinFilterSpec &>(*cur_spec);
-        if (spec.is_shared_join_filter()) {
-          need_register_to_datahub = true;
-          break;
-        }
-        cur_spec = cur_spec->get_child();
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (!need_register_to_datahub) {
+  // if this is a material controller, and at least one join filter is shared join filter, we need
+  // to send datahub msg to synchronize row count
+  if (!need_sync_row_count()) {
   } else if (OB_ISNULL(ctx.get_sqc_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null unexpected", K(ret));
@@ -578,6 +575,35 @@ int ObJoinFilterSpec::register_to_datahub(ObExecContext &ctx) const
                                                  *provider))) {
         LOG_WARN("fail add whole msg provider", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+/*
+ For upgrade compatibility,
+ if cluster version >= 435, we can directly use flag need_sync_row_count_,
+ if it is during upgrade and cluster version < 435, the flag need_sync_row_count_ will be false,
+ we should visit child to check whether need to synchronize row count
+*/
+int ObJoinFilterSpec::update_sync_row_count_flag()
+{
+  int ret = OB_SUCCESS;
+  const ObOpSpec *cur_spec = this;
+  int64_t join_filter_count = under_control_join_filter_count();
+  // if at least one join filter is shared join filter, we need to send datahub msg to synchronize
+  // row count
+  for (int64_t i = 0; i < join_filter_count && OB_NOT_NULL(cur_spec) && OB_SUCC(ret); ++i) {
+    if (cur_spec->get_type() != PHY_JOIN_FILTER) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("must be join filter bellow");
+    } else {
+      const ObJoinFilterSpec &spec = static_cast<const ObJoinFilterSpec &>(*cur_spec);
+      if (spec.is_shared_join_filter()) {
+        jf_material_control_info_.need_sync_row_count_ = true;
+        break;
+      }
+      cur_spec = cur_spec->get_child();
     }
   }
   return ret;
@@ -676,6 +702,18 @@ int ObJoinFilterOp::do_create_filter_rescan()
 int ObJoinFilterOp::do_use_filter_rescan()
 {
   int ret = OB_SUCCESS;
+  for (int i = 0; i < MY_SPEC.rf_infos_.count() && OB_SUCC(ret); ++i) {
+    if (OB_INVALID_ID != MY_SPEC.rf_infos_.at(i).filter_expr_id_) {
+      ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx = nullptr;
+      if (OB_NOT_NULL(join_filter_ctx = static_cast<ObExprJoinFilter::ObExprJoinFilterContext *>(
+                          ctx_.get_expr_op_ctx(MY_SPEC.rf_infos_.at(i).filter_expr_id_)))) {
+        join_filter_ctx->rescan();
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("join filter ctx is unexpected", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -758,14 +796,10 @@ int ObJoinFilterOp::do_drain_exch()
               |                                                        |
           Transmit   2. wait channel succ, send rows                Transmit   3. wait channel failed
     */
+    int64_t worker_row_count = partition_splitter_->get_total_row_count();
     int64_t total_row_count = 0;
-    bool need_sync_row_count = false;
-    if (OB_FAIL(group_controller_->apply(group_check_need_sync_row_count, need_sync_row_count))) {
-      LOG_WARN("failed to group check_need_sync_row_count");
-    } else if (need_sync_row_count) {
-      if (OB_FAIL(send_datahub_count_row_msg(total_row_count, false /*need_wait*/))) {
-        LOG_WARN("failed to sync row count");
-      }
+    if (OB_FAIL(get_exec_row_count(worker_row_count, total_row_count, true/*is_in_drain*/))) {
+      LOG_WARN("failed to get exec row count");
     }
   }
   return ret;
@@ -873,9 +907,9 @@ int ObJoinFilterOp::join_filter_create_do_material(const int64_t max_row_cnt)
         5. add batch into store
         6. process dump
       */
-      for (int64_t i = 0; i < spec_.output_.count() && OB_SUCC(ret); ++i) {
+      for (int64_t i = 0; i < build_rows_output_->count() && OB_SUCC(ret); ++i) {
         // if join filter's output is not same with child, it is necessary to eval output exprs
-        if (OB_FAIL(spec_.output_.at(i)->eval_vector(eval_ctx_, brs_))) {
+        if (OB_FAIL(build_rows_output_->at(i)->eval_vector(eval_ctx_, brs_))) {
           LOG_WARN("failed to eval vector");
         }
       }
@@ -908,13 +942,12 @@ int ObJoinFilterOp::join_filter_create_do_material(const int64_t max_row_cnt)
   }
   if (OB_SUCC(ret) && brs_.end_ && 0 == brs_.size_) {
     // send piece datahub msg, and wait the whole msg, then the total row is get
-    bool need_fill_bloom_filter = true;
-    int64_t worker_row_count = 0;
+    int64_t worker_row_count = partition_splitter_->get_total_row_count();
     int64_t total_row_count = 0;
-    if (OB_FAIL(get_exec_row_count(worker_row_count, total_row_count))) {
+    if (OB_FAIL(get_exec_row_count(worker_row_count, total_row_count, false /*is_in_drain*/))) {
       LOG_WARN("failed to get exec row count");
-    } else if (OB_FAIL(group_controller_->apply(group_init_bloom_filter, need_fill_bloom_filter,
-                                              worker_row_count, total_row_count))) {
+    } else if (OB_FAIL(group_controller_->apply(group_init_bloom_filter, worker_row_count,
+                                                total_row_count))) {
       LOG_WARN("failed to group_init_bloom_filter");
     } else if (OB_FAIL(fill_bloom_filter())) { // group fill bloom filter inner
       LOG_WARN("failed to fill bloom filter");
@@ -1110,7 +1143,18 @@ int ObJoinFilterOp::try_send_join_filter()
         LOG_WARN("fail to send local p2p msg", K(ret));
       }
     } else if (MY_SPEC.is_shared_join_filter()) {
-      if (OB_FAIL(PX_P2P_DH.send_p2p_msg(*shared_rf_msgs_.at(i), *sqc_proxy))) {
+      bool need_send_shuffle_msg = true;
+      if (build_send_opt()) {
+        int64_t sqc_id = ctx_.get_sqc_handler()->get_sqc_proxy().get_sqc_id();
+        // if each sqc has full data of build table, only the NO.0 sqc needs to send
+        // shuffle runtime filter message
+        need_send_shuffle_msg =
+            (MY_SPEC.jf_material_control_info_.each_sqc_has_full_data_ && sqc_id == 0)
+            || !MY_SPEC.jf_material_control_info_.each_sqc_has_full_data_;
+      }
+
+      if (need_send_shuffle_msg
+          && OB_FAIL(PX_P2P_DH.send_p2p_msg(*shared_rf_msgs_.at(i), *sqc_proxy))) {
         LOG_WARN("fail to send p2p msg", K(ret));
       }
     }
@@ -1336,6 +1380,38 @@ int ObJoinFilterOp::init_material_parameters()
     worker_memory_size = worker_row_count * (MY_SPEC.width_ + sizeof(uint64_t));
   }
 
+  // Consistent with build_row in hash join
+  // eg: join cond is cast(left_table.c1) = right_table.c2, in hash join will material expr
+  // cast(left_table.c1) into build_row, so need to use build_rows_output_.
+  if (OB_FAIL(ret)) {
+  } else {
+    const ObHashJoinVecSpec *hj_spec = static_cast<const ObHashJoinVecSpec *>(&parent_->get_spec());
+    if (OB_ISNULL(ctx_.get_physical_plan_ctx()) || OB_ISNULL(ctx_.get_physical_plan_ctx()->get_phy_plan())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get phy plan", K(ret));
+    } else if (ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_3_5_0) {
+      build_rows_output_ = hj_spec->get_build_rows_output_();
+    } else {
+      // for compat, gen build_rows_output_ in join filter
+      build_rows_output_for_compat_.set_allocator(&eval_ctx_.exec_ctx_.get_allocator());
+      OZ (build_rows_output_for_compat_.init(MY_SPEC.output_.count() + hj_spec->build_keys_.count()));
+      if (OB_SUCC(ret)) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.output_.count(); i++) {
+          OZ (build_rows_output_for_compat_.push_back(MY_SPEC.output_.at(i)));
+        }
+      }
+      int64_t idx = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < hj_spec->build_keys_.count(); i++) {
+        ObExpr *left_expr = hj_spec->build_keys_.at(i);
+        if (!has_exist_in_array(MY_SPEC.output_, left_expr, &idx)) {
+          OZ (build_rows_output_for_compat_.push_back(left_expr));
+        }
+      }
+      build_rows_output_ = &build_rows_output_for_compat_;
+    }
+  }
+
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(sql_mem_processor_.init(&(mem_context_->get_malloc_allocator()), tenant_id,
                                              worker_memory_size, MY_SPEC.type_, MY_SPEC.id_,
@@ -1347,7 +1423,7 @@ int ObJoinFilterOp::init_material_parameters()
     LOG_WARN("failed to allocate memory for ObJoinFilterPartitionSplitter");
   } else if (OB_FAIL(partition_splitter_->init(tenant_id, mem_context_, eval_ctx_,
                                                &sql_mem_processor_, MY_SPEC.full_hash_join_keys_,
-                                               MY_SPEC.output_, extra_hash_count, max_batch_size,
+                                               *build_rows_output_, extra_hash_count, max_batch_size,
                                                compress_type))) {
     LOG_WARN("failed to init partition splitter");
   } else if (OB_FAIL(partition_splitter_->prepare_join_partitions(
@@ -1383,7 +1459,7 @@ int ObJoinFilterOp::init_material_parameters()
 
   if (OB_SUCC(ret)) {
     row_meta_.set_allocator(&ctx_.get_allocator());
-    OZ(row_meta_.init(MY_SPEC.output_, extra_hash_count * sizeof(uint64_t)));
+    OZ(row_meta_.init(*build_rows_output_, extra_hash_count * sizeof(uint64_t)));
   }
 
   if (OB_FAIL(ret)) {
@@ -1525,6 +1601,7 @@ void ObJoinFilterOp::read_join_filter_hash_values_from_store(
 }
 
 int ObJoinFilterOp::send_datahub_count_row_msg(int64_t &total_row_count,
+                                               ObTMArray<ObJoinFilterNdv *> &ndv_info,
                                                bool need_wait_whole_msg)
 {
   int ret = OB_SUCCESS;
@@ -1533,8 +1610,6 @@ int ObJoinFilterOp::send_datahub_count_row_msg(int64_t &total_row_count,
   if (OB_ISNULL(handler)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null arguments", K(ret), K(handler));
-  } else if (has_send_count_row_piece_msg_) {
-    // do nothing, already send
   } else {
     piece_msg.op_id_ = MY_SPEC.get_id();
     piece_msg.thread_id_ = GETTID();
@@ -1544,42 +1619,63 @@ int ObJoinFilterOp::send_datahub_count_row_msg(int64_t &total_row_count,
     piece_msg.total_rows_ = partition_splitter_->get_total_row_count();
     piece_msg.sqc_id_ = handler->get_sqc_proxy().get_sqc_id();
     piece_msg.each_sqc_has_full_data_ = MY_SPEC.jf_material_control_info_.each_sqc_has_full_data_;
-
+    if (OB_FAIL(piece_msg.ndv_info_.prepare_allocate(ndv_info.count()))) {
+      LOG_WARN("failed to prepare_allocate", K(ndv_info.count()));
+    }
+    for (int64_t i = 0; i < ndv_info.count() && OB_SUCC(ret); ++i) {
+      piece_msg.ndv_info_.at(i) = *ndv_info.at(i);
+    }
     const ObJoinFilterCountRowWholeMsg *whole_msg = nullptr;
+
+    int is_local = (DHSENDOPTLOCAL == OB_SUCCESS) && can_sync_row_count_locally();
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(handler->get_sqc_proxy().get_dh_msg_sync(
-                   MY_SPEC.get_id(), dtl::DH_JOIN_FILTER_COUNT_ROW_WHOLE_MSG, piece_msg, whole_msg,
-                   ctx_.get_physical_plan_ctx()->get_timeout_timestamp(), true /*send piece*/,
-                   need_wait_whole_msg))) {
-      LOG_WARN("get join filter count row msg failed", K(ret));
+    } else if (OB_FAIL(handler->get_sqc_proxy().aggregate_sqc_pieces_and_get_dh_msg(
+                   MY_SPEC.get_id(), dtl::DH_JOIN_FILTER_COUNT_ROW_WHOLE_MSG, piece_msg,
+                   ctx_.get_physical_plan_ctx()->get_timeout_timestamp(), true /*need_sync*/,
+                   is_local, need_wait_whole_msg, whole_msg))) {
+      LOG_WARN("failed to aggregate_sqc_pieces_and_get_dh_msg");
     } else if (!need_wait_whole_msg) {
       // only send, not wait
-      has_send_count_row_piece_msg_ = true;
     } else if (OB_ISNULL(whole_msg)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null msg", K(ret));
     } else {
       total_row_count = whole_msg->get_total_rows();
-      has_send_count_row_piece_msg_ = true;
+      for (int64_t i = 0; i < ndv_info.count(); ++i) {
+        *ndv_info.at(i) = whole_msg->ndv_info_.at(i);
+      }
     }
     LOG_TRACE("print row from datahub", K(total_row_count), K(MY_SPEC.is_shuffle_),
-              K(need_wait_whole_msg));
+              K(need_wait_whole_msg), K(ndv_info));
   }
   return ret;
 }
 
-int ObJoinFilterOp::get_exec_row_count(int64_t &worker_row_count, int64_t &total_row_count)
+bool ObJoinFilterOp::can_sync_row_count_locally()
+{
+  // if each sqc has full data of left table(in shared hash join),
+  // or there is only one sqc, we can synchronize row count without datahub
+  return MY_SPEC.jf_material_control_info_.each_sqc_has_full_data_
+         || ctx_.get_sqc_handler()->get_sqc_init_arg().sqc_.get_sqc_count() == 1;
+}
+
+int ObJoinFilterOp::get_exec_row_count(const int64_t worker_row_count, int64_t &total_row_count,
+                                       bool is_in_drain)
 {
   int ret = OB_SUCCESS;
-  worker_row_count = partition_splitter_->get_total_row_count();
-  // if at least one join filter is shared join filter, we need to send datahub msg to synchronize
-  // row count
-  bool need_sync_row_count = false;
-  if (OB_FAIL(group_controller_->apply(group_check_need_sync_row_count, need_sync_row_count))) {
-    LOG_WARN("failed to group check_need_sync_row_count");
-  } else if (need_sync_row_count) {
-    if (OB_FAIL(send_datahub_count_row_msg(total_row_count, true))) {
+  // when drain exchange, not need to wait whole msg
+  bool need_wait_whole = !is_in_drain;
+  bool need_sync_row_count = MY_SPEC.need_sync_row_count();
+  if (has_sync_row_count_ || !need_sync_row_count) {
+    // already done, or not need to sync
+  } else {
+    ObTMArray<ObJoinFilterNdv *> ndv_info;
+    if (OB_FAIL(group_controller_->apply(group_collect_worker_ndv, ndv_info))) {
+      LOG_WARN("failed to group group_collect_worker_ndv");
+    } else if (OB_FAIL(send_datahub_count_row_msg(total_row_count, ndv_info, need_wait_whole))) {
       LOG_WARN("failed to sync row count");
+    } else {
+      has_sync_row_count_ = true;
     }
   }
   return ret;
@@ -1612,17 +1708,65 @@ int ObJoinFilterOp::fill_in_filter(const ObBatchRows &brs, uint64_t *hash_join_h
   return ret;
 }
 
-int ObJoinFilterOp::init_bloom_filter(bool &need_fill, int64_t &worker_row_count,
-                                      int64_t &total_row_count)
+int ObJoinFilterOp::collect_worker_ndv(ObTMArray<ObJoinFilterNdv *> &ndv_info)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == in_vec_msg_ || !in_vec_msg_->is_active()) {
+    dh_ndv_.valid_ = false;
+  } else {
+    dh_ndv_.valid_ = true;
+    dh_ndv_.count_ = in_vec_msg_->sm_hash_set_.size();
+  }
+  if (OB_FAIL(ndv_info.push_back(&dh_ndv_))) {
+    LOG_WARN("failed to push back ndv info");
+  }
+  return ret;
+}
+
+void ObJoinFilterOp::check_in_filter_active(int64_t &ndv)
+{
+  if (nullptr == in_vec_msg_) {
+    in_filter_active_ = false;
+  } else {
+    if (!MY_SPEC.is_shared_join_filter()) {
+      // for non shared join filter, each worker check self
+      if (in_vec_msg_->is_active()) {
+        in_filter_active_ = true;
+      } else {
+        in_filter_active_ = false;
+      }
+    } else {
+      // for shared join filter, if each worker's ndv is less than runtime_filter_max_in_num_,
+      // but total runtime_filter_max_in_num_ is large than runtime_filter_max_in_num_,
+      // the in filter is inactive, but we can use ndv to build a smaller bloom filter
+      if (dh_ndv_.valid_) {
+        ObJoinFilterOpInput *filter_input = static_cast<ObJoinFilterOpInput *>(input_);
+        ndv = dh_ndv_.count_;
+        in_filter_active_ = dh_ndv_.count_ <= filter_input->config_.runtime_filter_max_in_num_;
+      } else {
+        in_filter_active_ = false;
+      }
+    }
+  }
+}
+
+int ObJoinFilterOp::init_bloom_filter(const int64_t worker_row_count, const int64_t total_row_count)
 {
   int ret = OB_SUCCESS;
   int64_t bloom_filter_data_len = 0;
-  bool need_construct = false;
+  bool construct_in_this_worker = false;
   int sqc_count = 1;
   if (MY_SPEC.is_shuffle_) {
     // for shuffled join filter, we gather K piece bloom filter create by all K sqcs.
-    sqc_count = ctx_.get_sqc_handler()->get_sqc_init_arg().sqc_.get_sqc_count();
+    // opt: if is shared hash join, each sqc has full data of build table, we only
+    // need to gather one piece join filter
+    if (build_send_opt() && MY_SPEC.jf_material_control_info_.each_sqc_has_full_data_) {
+      sqc_count = 1;
+    } else {
+      sqc_count = ctx_.get_sqc_handler()->get_sqc_init_arg().sqc_.get_sqc_count();
+    }
   }
+
   ObJoinFilterOpInput *filter_input = static_cast<ObJoinFilterOpInput *>(input_);
   ObPxSQCProxy *sqc_proxy =
       reinterpret_cast<ObPxSQCProxy *>(filter_input->share_info_.ch_provider_ptr_);
@@ -1636,13 +1780,14 @@ int ObJoinFilterOp::init_bloom_filter(bool &need_fill, int64_t &worker_row_count
       // for hash join with pq_distribute in (pkey, none), (none, none)
       // each worker has its own bloom filter, each worker can init its bloom filter
       bloom_filter_data_len = worker_row_count;
-      need_construct = true;
+      construct_in_this_worker = true;
     } else {
       // for shared join filter, only the leader is responsible for init bloom filter
-      need_construct = filter_input->share_info_.shared_jf_constructor_->try_acquire_constructor();
       bloom_filter_data_len = total_row_count;
+      construct_in_this_worker =
+          filter_input->share_info_.shared_jf_constructor_->try_acquire_constructor();
     }
-    if (!need_construct) {
+    if (!construct_in_this_worker) {
       // waiting bloom filter constructed
       if (OB_FAIL(filter_input->share_info_.shared_jf_constructor_->wait_constructed(
               this, bf_vec_msg_))) {
@@ -1670,7 +1815,7 @@ int ObJoinFilterOp::init_bloom_filter(bool &need_fill, int64_t &worker_row_count
   if (OB_SUCC(ret)) {
     // add a join filter len monitor info
     op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::JOIN_FILTER_LENGTH;
-    op_monitor_info_.otherstat_6_value_ = need_construct ? bloom_filter_data_len : 0;
+    op_monitor_info_.otherstat_6_value_ = construct_in_this_worker ? bloom_filter_data_len : 0;
   }
   return ret;
 }
@@ -1723,13 +1868,26 @@ int ObJoinFilterOp::fill_bloom_filter() {
   return ret;
 }
 
-int ObJoinFilterOp::group_init_bloom_filter(ObJoinFilterOp *join_filter_op, bool &need_fill,
-                                            int64_t &worker_row_count,
-                                            int64_t &total_row_count)
+int ObJoinFilterOp::group_init_bloom_filter(ObJoinFilterOp *join_filter_op,
+                                            int64_t worker_row_count, int64_t total_row_count)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(join_filter_op->init_bloom_filter(need_fill, worker_row_count,
-                                                total_row_count))) {
+  int64_t ndv = total_row_count;
+  (void)join_filter_op->check_in_filter_active(ndv);
+  // we can use ndv to build a smaller bloom filter
+  if (join_filter_op->build_send_opt()) {
+    total_row_count = ndv;
+  }
+  if (join_filter_op->skip_fill_bloom_filter()) {
+    // in filter active, disable bloom filter
+    join_filter_op->bf_vec_msg_->set_is_active(false);
+    // in case of wait bloom filter too long, still need to build bloom filter message and send it
+    worker_row_count = 1;
+    total_row_count = 1;
+  }
+  LOG_TRACE("check in filter active", K(join_filter_op->in_filter_active_), K(worker_row_count),
+            K(total_row_count));
+  if (OB_FAIL(join_filter_op->init_bloom_filter(worker_row_count, total_row_count))) {
     LOG_WARN("failed to init bloom filter under control", K(join_filter_op->get_spec().get_id()),
              K(worker_row_count), K(total_row_count));
   }
@@ -1747,6 +1905,8 @@ int ObJoinFilterOp::group_fill_bloom_filter(ObJoinFilterOp *join_filter_op,
   if (OB_ISNULL(bf_vec_msg)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null bloom filter msg", K(join_filter_op->get_spec().get_id()));
+  } else if (join_filter_op->skip_fill_bloom_filter()) {
+    // not need to insert
   } else if (FALSE_IT(join_filter_op->read_join_filter_hash_values_from_store(
                  brs_from_controller, part_stored_rows, row_meta, join_filter_hash_values))) {
   } else if (OB_FAIL(bf_vec_msg->insert_bloom_filter_with_hash_values(&brs_from_controller,

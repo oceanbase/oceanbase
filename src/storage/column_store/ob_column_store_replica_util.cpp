@@ -402,10 +402,13 @@ int ObCSReplicaUtil::get_full_column_array_from_table_schema(
     LOG_WARN("table is deleted", K(ret), K(table_id));
   } else {
     ObStorageSchema *full_storage_schema = nullptr;
+    uint64_t tenant_data_version = 0;
     if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, full_storage_schema))) {
       LOG_WARN("alloc and new failed", K(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+      LOG_WARN("unable to get tenant data version", K(ret));
     } else if (OB_FAIL(full_storage_schema->init(allocator, *table_schema, simplified_schema.get_compat_mode(),
-                  false/*skip_column_info*/, simplified_schema.get_schema_version(), true/*generate_cs_replica_cg_array*/))) {
+                  false/*skip_column_info*/, tenant_data_version, true/*generate_cs_replica_cg_array*/))) {
       LOG_WARN("failed to init storage schema", K(ret), K(table_id));
     } else if (OB_FAIL(get_column_array_from_full_storage_schema(allocator, expected_stored_column_cnt, *full_storage_schema, column_array))) {
       LOG_WARN("failed to get column array from full storage schema", K(ret), K(update_param), K(expected_stored_column_cnt), K(full_storage_schema));

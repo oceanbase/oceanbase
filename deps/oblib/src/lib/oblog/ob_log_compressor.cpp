@@ -232,6 +232,7 @@ void ObLogCompressor::log_compress_loop_()
       {
         common::ObThreadCondGuard guard(log_compress_cond_);
         while (!stopped_ && !is_enable_compress() && max_disk_size_ <= 0 && OB_LOGGER.get_max_file_index() <= 0) {
+          ObBKGDSessInActiveGuard inactive_guard;
           log_compress_cond_.wait_us(loop_interval_);
         }
       }
@@ -500,7 +501,7 @@ int ObLogCompressor::compress_single_file_(const char *file_name, char *src_buf,
             LOG_WARN("failed to write file", K(ret), K(errno), K(compressed_file_name));
           }
         }
-        usleep(sleep_us);
+        ob_usleep(sleep_us);
       }
       fclose(input_file);
       fclose(output_file);

@@ -90,7 +90,7 @@ int ObWindowFunctionOpInput::sync_wait(
   } else if (OB_ISNULL(whole_msg_provider)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status: whole_msg_provider is null", K(ret));
-  } else if (!whole_msg_provider->msg_set()) {
+  } else if (!whole_msg_provider->whole_msg_set()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status: whole_msg_provider has not been set msg", K(ret));
   } else {
@@ -129,7 +129,7 @@ int ObWindowFunctionOpInput::sync_wait(
     } // end while
     if (OB_SUCC(ret)) {
       ObSpinLockGuard guard(shared_info->lock_);
-      if (whole_msg_provider->msg_set()) {
+      if (whole_msg_provider->whole_msg_set()) {
         whole_msg_provider->reset();
         //ATOMIC_SET(&sync_cnt, 0);
       }
@@ -1312,7 +1312,8 @@ int ObWindowFunctionOp::init()
           case T_FUN_SYS_ST_ASMVT:
           case T_FUN_SYS_RB_BUILD_AGG:
           case T_FUN_SYS_RB_OR_AGG:
-          case T_FUN_SYS_RB_AND_AGG: {
+          case T_FUN_SYS_RB_AND_AGG:
+          case T_FUNC_SYS_ARRAY_AGG: {
             void *tmp_ptr = local_allocator_.alloc(sizeof(AggrCell));
             void *tmp_array = local_allocator_.alloc(sizeof(AggrInfoFixedArray));
             ObIArray<ObAggrInfo> *aggr_infos = NULL;

@@ -162,10 +162,12 @@ public:
   int64_t task_id_;
 };
 
-enum ObDDLUpateParentTaskIDType
+enum ObDDLUpdateParentTaskIDType
 {
   UPDATE_CREATE_INDEX_ID = 0,
   UPDATE_DROP_INDEX_TASK_ID,
+  UPDATE_VEC_REBUILD_CREATE_INDEX_TASK_ID,
+  UPDATE_VEC_REBUILD_DROP_INDEX_TASK_ID,
 };
 
 struct ObVecIndexDDLChildTaskInfo final
@@ -291,11 +293,18 @@ public:
       const int64_t task_id,
       const int64_t task_status);
 
+  static int update_snapshot_version_if_not_exist(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const int64_t new_fetched_snapshot,
+      int64_t &persisted_snapshot);
+
   static int update_snapshot_version(
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const int64_t task_id,
-      const int64_t snapshot_version);
+      const int64_t new_fetched_snapshot);
 
   static int update_ret_code(
       common::ObISQLClient &sql_client,
@@ -340,7 +349,7 @@ public:
       const ObTableSchema &index_schema,
       const uint64_t target_table_id,
       const uint64_t target_task_id,
-      ObDDLUpateParentTaskIDType update_type,
+      ObDDLUpdateParentTaskIDType update_type,
       ObIAllocator &allocator,
       common::ObISQLClient &proxy);
 

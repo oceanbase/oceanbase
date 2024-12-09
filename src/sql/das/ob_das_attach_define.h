@@ -55,8 +55,8 @@ struct ObDASTableLookupCtDef : ObDASAttachCtDef
 {
   OB_UNIS_VERSION(1);
 public:
-  ObDASTableLookupCtDef(common::ObIAllocator &alloc)
-    : ObDASAttachCtDef(alloc, DAS_OP_TABLE_LOOKUP),
+  ObDASTableLookupCtDef(common::ObIAllocator &alloc, const ObDASOpType &op_type = DAS_OP_TABLE_LOOKUP)
+    : ObDASAttachCtDef(alloc, op_type),
       is_global_index_(false)
   {
   }
@@ -75,8 +75,8 @@ struct ObDASTableLookupRtDef : ObDASAttachRtDef
 {
   OB_UNIS_VERSION(1);
 public:
-  ObDASTableLookupRtDef()
-    : ObDASAttachRtDef(DAS_OP_TABLE_LOOKUP)
+  ObDASTableLookupRtDef(const ObDASOpType &op_type = DAS_OP_TABLE_LOOKUP)
+    : ObDASAttachRtDef(op_type)
   {}
 
   virtual ~ObDASTableLookupRtDef() {}
@@ -87,6 +87,41 @@ public:
     return children_[0];
   }
   ObDASScanRtDef *get_lookup_scan_rtdef();
+};
+
+struct ObDASIndexProjLookupCtDef : ObDASTableLookupCtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASIndexProjLookupCtDef(common::ObIAllocator &alloc)
+    : ObDASTableLookupCtDef(alloc, DAS_OP_INDEX_PROJ_LOOKUP),
+      index_scan_proj_exprs_(alloc)
+  {}
+  virtual ~ObDASIndexProjLookupCtDef() {}
+
+  const ObDASBaseCtDef *get_lookup_ctdef() const
+  {
+    OB_ASSERT(2 == children_cnt_ && children_ != nullptr);
+    return children_[1];
+  }
+public:
+  ExprFixedArray index_scan_proj_exprs_;
+};
+
+struct ObDASIndexProjLookupRtDef : ObDASTableLookupRtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASIndexProjLookupRtDef()
+    : ObDASTableLookupRtDef(DAS_OP_INDEX_PROJ_LOOKUP)
+  {}
+  virtual ~ObDASIndexProjLookupRtDef() {}
+
+  ObDASBaseRtDef *get_lookup_rtdef()
+  {
+    OB_ASSERT(2 == children_cnt_ && children_ != nullptr);
+    return children_[1];
+  }
 };
 
 struct ObDASSortCtDef : ObDASAttachCtDef

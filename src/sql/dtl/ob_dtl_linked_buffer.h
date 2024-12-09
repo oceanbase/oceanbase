@@ -85,7 +85,7 @@ public:
   ObDtlOpInfo() :
     dop_(-1), plan_id_(-1), exec_id_(-1), session_id_(-1), database_id_(0),
     op_id_(UINT64_MAX), input_rows_(0), input_width_(-1),
-    disable_auto_mem_mgr_(false)
+    disable_auto_mem_mgr_(false), max_batch_size_(0)
   {
     sql_id_[0] = '\0';
   }
@@ -112,7 +112,8 @@ public:
         && op_id_ == other.op_id_
         && input_rows_ == other.input_rows_
         && input_width_ == other.input_width_
-        && disable_auto_mem_mgr_ == other.disable_auto_mem_mgr_;
+        && disable_auto_mem_mgr_ == other.disable_auto_mem_mgr_
+        && max_batch_size_ == other.max_batch_size_;
   }
 
   void set(int64_t dop,
@@ -124,7 +125,8 @@ public:
           uint64_t op_id,
           int64_t input_rows,
           int64_t input_width,
-          bool disable_auto_mem_mgr)
+          bool disable_auto_mem_mgr,
+          int64_t max_batch_size)
   {
     dop_ = dop;
     plan_id_ = plan_id;
@@ -135,6 +137,7 @@ public:
     input_rows_ = input_rows;
     input_width_ = input_width;
     disable_auto_mem_mgr_ = disable_auto_mem_mgr;
+    max_batch_size_ = max_batch_size;
     if (OB_ISNULL(sql_id)) {
       sql_id_[0] = '\0';
     } else {
@@ -153,6 +156,7 @@ public:
   int64_t get_input_rows() { return input_rows_; }
   int64_t get_input_width() { return input_width_; }
   bool get_disable_auto_mem_mgr() { return disable_auto_mem_mgr_; }
+  int64_t get_max_batch_size() { return max_batch_size_; }
 
   TO_STRING_KV(K_(dop), K_(plan_id), K_(exec_id), K_(session_id), K_(sql_id), K_(database_id));
 public:
@@ -166,6 +170,7 @@ public:
   int64_t input_rows_;
   int64_t input_width_;
   bool disable_auto_mem_mgr_;
+  int64_t max_batch_size_;
 };
 
 class ObDtlSqcInfo
@@ -475,6 +480,7 @@ public:
   int64_t get_dfo_id() { return dfo_id_; }
   int64_t get_sqc_id() { return sqc_id_; }
   RowMeta &get_row_meta() { return row_meta_; }
+  void set_row_meta(const RowMeta &row_meta) { row_meta_ = row_meta; }
   uint64_t get_px_sequence_id() { return dfo_key_.px_sequence_id_; }
 
   int64_t get_dop() { return op_info_.dop_; }
@@ -516,6 +522,9 @@ public:
   {
     op_info_.disable_auto_mem_mgr_ = disable_auto_mem_mgr;
   }
+
+  int64_t get_max_batch_size() { return op_info_.max_batch_size_; }
+  void set_max_batch_size(int64_t max_batch_size) { op_info_.max_batch_size_ = max_batch_size; }
 private:
 /*
 

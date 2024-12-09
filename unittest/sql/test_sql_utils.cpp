@@ -902,7 +902,8 @@ void TestSqlUtils::generate_index_schema(ObCreateIndexStmt &stmt)
   }else{
     _OB_LOG_RET(ERROR, OB_ERROR, "no data table found for tid=%lu", data_table_schema->get_table_id());
   }
-  _OB_LOG(DEBUG, "index_schema: %s", to_cstring(index_schema));
+  ObCStringHelper helper;
+  _OB_LOG(DEBUG, "index_schema: %s", helper.convert(index_schema));
 }
 
 int TestSqlUtils::get_hidden_column_value(

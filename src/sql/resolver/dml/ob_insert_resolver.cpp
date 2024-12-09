@@ -532,7 +532,9 @@ int ObInsertResolver::resolve_insert_assign(const ParseNode &assign_list)
           LOG_WARN("invalid assignment variable", K(i), K(j), K(assign));
         } else if (assign.is_duplicated_) {
           ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(assign.column_expr_->get_column_name()));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
+              helper.convert(assign.column_expr_->get_column_name()));
         } else if (OB_FAIL(replace_column_to_default(assign.expr_))) {
           LOG_WARN("replace values column to default failed", K(ret));
         } else if (OB_FAIL(assign.expr_->formalize(session_info_))) {

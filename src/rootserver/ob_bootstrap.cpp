@@ -137,9 +137,10 @@ int ObBaseBootstrap::check_multiple_zone_deployment_rslist(
       if (i != j) {
         if (zone == rs_list[j].zone_) {
           ret = OB_PARTITION_ZONE_DUPLICATED;
+          ObCStringHelper helper;
           LOG_WARN("should not choose two rs in same zone",
-              "server1", to_cstring(rs_list[i].server_),
-              "server2", to_cstring(rs_list[j].server_), K(zone), K(ret));
+              "server1", helper.convert(rs_list[i].server_),
+              "server2", helper.convert(rs_list[j].server_), K(zone), K(ret));
         }
       }
     }

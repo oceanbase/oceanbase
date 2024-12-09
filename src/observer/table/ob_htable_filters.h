@@ -55,7 +55,7 @@ public:
   /// If this returns true, the scan will terminate.
   virtual bool filter_all_remaining() = 0;
   /// Filters a row based on the row key.
-  virtual bool filter_row_key(const ObHTableCell &first_row_cell) = 0;
+  virtual int filter_row_key(const ObHTableCell &first_row_cell, bool &filtered) = 0;
   /// Will filter use hint to seek.
   virtual bool is_hinting_filter() = 0;
   /// A way to filter based on the column family, column qualifier and/or the column value.
@@ -64,7 +64,7 @@ public:
   virtual int transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell) = 0;
   /// Chance to alter the list of Cells to be submitted.
   virtual int filter_row_cells(const RowCells &cells) = 0;
-  virtual int filter_row_cells(const table::ObTableQueryIterableResult &cells) = 0;
+  virtual int filter_row_cells(ObTableQueryDListResult &cells) = 0;
   /// Last chance to veto row based on previous filterCell(Cell) calls.
   virtual bool filter_row() = 0;
   /// for tableApi filter
@@ -76,11 +76,14 @@ public:
   virtual int64_t get_format_filter_string_length() const = 0;
   virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const = 0;
   virtual int get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell) = 0;
-  void set_reversed(bool reversed) { is_reversed_ = reversed; }
+  virtual void set_reversed(bool reversed) { is_reversed_ = reversed; }
   bool is_reversed() const { return is_reversed_; }
+  virtual void set_hbase_version(const ObString &version) { hbase_major_version_ = version[0] - '0'; }
+  int8_t get_hbase_major_version() const { return hbase_major_version_; }
   VIRTUAL_TO_STRING_KV("filter", "Filter");
 protected:
   bool is_reversed_;
+  int8_t hbase_major_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(Filter);
 };
@@ -112,14 +115,14 @@ public:
 
   virtual void reset() override {}
   virtual bool filter_all_remaining() override { return false; }
-  virtual bool filter_row_key(const ObHTableCell &first_row_cell) override
-  { UNUSED(first_row_cell); if (filter_all_remaining()) return true; else return false; }
+  virtual int filter_row_key(const ObHTableCell &first_row_cell, bool &filtered) override
+  { UNUSED(first_row_cell); if (filter_all_remaining()) filtered = true; else filtered = false; return OB_SUCCESS; }
   virtual bool is_hinting_filter() override { return false; }
   virtual int transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell) override
   { UNUSED(cell); return common::OB_SUCCESS; }
   virtual int filter_row_cells(const RowCells &cells) override
   { UNUSED(cells); return common::OB_SUCCESS; }
-  virtual int filter_row_cells(const table::ObTableQueryIterableResult &cells) override
+  virtual int filter_row_cells(ObTableQueryDListResult &cells) override
   {UNUSED(cells); return common::OB_SUCCESS;}
   virtual bool filter_row() override { return false; }
   virtual bool has_filter_row() override { return false; }
@@ -237,6 +240,7 @@ public:
   virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const = 0;
 protected:
   bool compare_row(CompareOperator op, Comparable &comparator, const ObHTableCell &cell);
+  bool compare_family(CompareOperator op, Comparable &comparator, const ObHTableCell &cell);
   bool compare_qualifier(CompareOperator op, Comparable &comparator, const ObHTableCell &cell);
   bool compare_value(CompareOperator op, Comparable &comparator, const ObHTableCell &cell);
 protected:
@@ -257,7 +261,7 @@ public:
   {}
   virtual ~RowFilter();
   virtual void reset() override;
-  virtual bool filter_row_key(const ObHTableCell &first_row_cell) override;
+  virtual int filter_row_key(const ObHTableCell &first_row_cell, bool &filtered) override;
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual bool filter_row() override;
   virtual int64_t get_format_filter_string_length() const override;
@@ -310,6 +314,50 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ValueFilter);
 };
 
+// this filter is used to filter based on the target column value and cells with the same timestamp
+class DependentColumnFilter: public CompareFilter
+{
+public:
+  DependentColumnFilter(const ObString &family, const ObString &qualifier, bool drop_dependent_column)
+      :CompareFilter(CompareOperator::NO_OP, NULL),
+      family_(family),
+      qualifier_(qualifier),
+      drop_dependent_column_(drop_dependent_column),
+      is_inited_(false)
+  {}
+  DependentColumnFilter(const ObString &family, const ObString &qualifier, bool drop_dependent_column, CompareOperator cmp_op, Comparable *comparator)
+      :CompareFilter(cmp_op, comparator),
+      family_(family),
+      qualifier_(qualifier),
+      drop_dependent_column_(drop_dependent_column),
+      is_inited_(false)
+  {}
+  virtual ~DependentColumnFilter();
+
+  virtual bool has_filter_row() override { return true; }
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  TO_STRING_KV("filter", "DependentColumnFilter",
+               K_(family),
+               K_(qualifier),
+               K_(drop_dependent_column),
+               "cmp_op", compare_operator_to_string(cmp_op_),
+               K_(comparator));
+  virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
+  virtual int filter_row_cells(ObTableQueryDListResult &cells) override;
+  virtual void reset() override;
+  int init();
+
+private:
+  ObString family_;
+  ObString qualifier_;
+  bool drop_dependent_column_; // default as false
+  bool is_inited_;
+  common::hash::ObHashSet<int64_t> stamp_set_;
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(DependentColumnFilter);
+};
+
 /// represents an ordered List of Filters which will be evaluated with a specified boolean operator
 /// FilterList.Operator.MUST_PASS_ALL (AND) or FilterList.Operator.MUST_PASS_ONE (OR).
 class FilterListBase: public FilterBase
@@ -330,6 +378,8 @@ public:
   virtual int64_t get_format_filter_string_length() const override;
   virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
   virtual const char *filter_name() const { return "FilterListBase"; }
+  virtual void set_reversed(bool reversed) override;
+  virtual void set_hbase_version(const ObString &version) override;
 
   TO_STRING_KV("filter", "FilterList",
                "op", operator_to_string(op_),
@@ -353,7 +403,7 @@ public:
   virtual ~FilterListAND();
   virtual void reset() override;
   virtual bool filter_all_remaining() override;
-  virtual bool filter_row_key(const ObHTableCell &first_row_cell) override;
+  virtual int filter_row_key(const ObHTableCell &first_row_cell, bool &filtered) override;
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual int transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell) override;
   virtual bool filter_row() override;
@@ -375,7 +425,7 @@ public:
   virtual ~FilterListOR();
   virtual void reset() override;
   virtual bool filter_all_remaining() override;
-  virtual bool filter_row_key(const ObHTableCell &first_row_cell) override;
+  virtual int filter_row_key(const ObHTableCell &first_row_cell, bool &filtered) override;
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual int transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell) override;
   virtual bool filter_row() override;
@@ -397,7 +447,7 @@ public:
   {}
   virtual ~SkipFilter();
   virtual void reset() override;
-  virtual bool filter_row_key(const ObHTableCell &first_row_cell) override;
+  virtual int filter_row_key(const ObHTableCell &first_row_cell, bool &filtered) override;
   virtual bool filter_row() override;
   virtual bool has_filter_row() override { return true; }
   virtual int transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell) override;
@@ -426,11 +476,13 @@ public:
 
   virtual void reset() override;
   virtual bool filter_all_remaining() override;
-  virtual bool filter_row_key(const ObHTableCell &first_row_cell) override;
+  virtual int filter_row_key(const ObHTableCell &first_row_cell, bool &filtered) override;
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual int transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell) override;
   virtual bool filter_row() override;
   virtual bool has_filter_row() override { return true; }
+  virtual void set_reversed(bool reversed) override { if (nullptr != filter_) { filter_->set_reversed(reversed); } }
+  virtual void set_hbase_version(const ObString &version) override { filter_->set_hbase_version(version); }
   virtual int64_t get_format_filter_string_length() const override;
   virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
 
@@ -475,8 +527,9 @@ public:
                K_(latest_version_only));
 private:
   bool filter_column_value(const ObHTableCell &cell);
-  bool match_column(const ObHTableCell &cell);
-private:
+protected:
+  bool match_family_column(const ObHTableCell &cell);
+protected:
   ObString family_;
   ObString qualifier_;
   CompareOperator cmp_op_;
@@ -488,6 +541,31 @@ private:
   bool matched_column_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(SingleColumnValueFilter);
+};
+
+// Simple filter that filters out matched cells filtered by SingleColumnValueFilter
+class SingleColumnValueExcludeFilter: public SingleColumnValueFilter
+{
+public:
+  SingleColumnValueExcludeFilter(const ObString &family, const ObString &qualifier, CompareOperator cmp_op, Comparable *comparator)
+      :SingleColumnValueFilter(family, qualifier, cmp_op, comparator)
+  {}
+  virtual ~SingleColumnValueExcludeFilter();
+
+  virtual int filter_row_cells(ObTableQueryDListResult &cells) override;
+  virtual bool has_filter_row() override { return true; }
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  TO_STRING_KV("filter", "SingleColumnValueExcludeFilter",
+               K_(family),
+               K_(qualifier),
+               "cmp_op", compare_operator_to_string(cmp_op_),
+               K_(comparator),
+               K_(filter_if_missing),
+               K_(latest_version_only));
+private:
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(SingleColumnValueExcludeFilter);
 };
 
 /// Simple filter that limits results to a specific page size
@@ -522,7 +600,7 @@ public:
         filter_out_row_(false)
   {}
   ~RandomRowFilter() {}
-  virtual bool filter_row_key(const ObHTableCell &first_row_cell) override;
+  virtual int filter_row_key(const ObHTableCell &first_row_cell, bool &filtered) override;
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   void reset() override;
   virtual bool has_filter_row() override { return true; }
@@ -626,6 +704,141 @@ private:
   DISALLOW_COPY_AND_ASSIGN(KeyOnlyFilter);
 };
 
+template<typename L, typename R>
+struct ObPair
+{
+  L left_; R right_;
+public:
+  ObPair() : left_(), right_() {}
+  ObPair(const L &l, const R &r): left_(l), right_(r) {}
+  inline bool operator==(const ObPair &b) const
+  {
+    return b.left_ == left_ && b.right_ == right_;
+  }
+  TO_STRING_KV(K_(left), K_(right));
+};
+
+typedef ObPair<ObString, ObPair<ObString, ObString>> NextRowType; // <rowkey candidate, <fuzzy key, fuzzy meta>>
+struct NextRowsComparator
+{
+  bool reversed_;
+
+  NextRowsComparator(bool reversed) : reversed_(reversed) {}
+  bool operator() (const NextRowType *le, const NextRowType *re)
+  {
+    bool b_ret = false;
+    if (nullptr != le && nullptr != re) {
+      if (reversed_) {
+        b_ret = (le->left_ <= re->left_);
+      } else {
+        b_ret = (le->left_ >= re->left_);
+      } // to build a min-root heap
+    }
+    return b_ret;
+  }
+  int get_error_code() { return OB_SUCCESS; }
+};
+
+class Order
+{
+public:
+  virtual bool lt(char lhs, char rhs) = 0;
+  virtual bool gt(char lhs, char rhs) = 0;
+  virtual void inc(char &val) = 0;
+  virtual bool isMax(char val) = 0;
+  virtual int8_t min() const = 0;
+};
+
+class ASC : public Order
+{
+  virtual bool lt(char lhs, char rhs) override { return lhs < rhs; }
+  virtual bool gt(char lhs, char rhs) override { return lhs > rhs; }
+  virtual void inc(char &val) override { val += 1; }
+  virtual bool isMax(char val) override { return val == -1; }
+  virtual int8_t min() const override { return 0; }
+};
+
+class DESC : public Order
+{
+  virtual bool lt(char lhs, char rhs) override { return lhs > rhs; }
+  virtual bool gt(char lhs, char rhs) override { return lhs < rhs; }
+  virtual void inc(char &val) override { val -= 1; }
+  virtual bool isMax(char val) override { return val == 0; }
+  virtual int8_t min() const override { return -1; }
+};
+
+class RowTracker
+{
+public:
+  RowTracker(ObIAllocator &allocator, common::ObIArray<ObPair<ObString, ObString>*> &fuzzy_key_data, bool is_reversed)
+      : allocator_(allocator),
+        is_reversed_(is_reversed),
+        cmp_(is_reversed),
+        next_rows_(cmp_, &allocator),
+        fuzzy_key_data_(fuzzy_key_data) ,
+        order_(nullptr),
+        inited_(false)
+  {}
+  ~RowTracker() {}
+  int init(const ObString &cur_row);
+  int update_tracker(const ObString &cur_row, bool &done); // initialize or update next_rows usuing current_cell
+  int next_row(ObString &row); // get top row from next_rows_
+  TO_STRING_KV("FuzzyRowFilter", "RowTracker", K_(is_reversed), K_(next_rows), K_(fuzzy_key_data));
+private:
+  int update_with(const ObString &cur_row, const ObPair<ObString, ObString> &fuzzy_data);
+  // compare cur_cell rowkey and the given rowkey considering scan order
+  bool less_than(const ObString &cur_row, const ObString &next_row);
+private:
+  ObIAllocator &allocator_;
+  bool is_reversed_;
+  NextRowsComparator cmp_;
+  ObBinaryHeap<NextRowType*, NextRowsComparator> next_rows_;
+  ObIArray<ObPair<ObString, ObString>*> &fuzzy_key_data_;
+  Order *order_;
+  bool inited_;
+  DISALLOW_COPY_AND_ASSIGN(RowTracker);
+};
+
+class FuzzyRowFilter: public FilterBase
+{
+public:
+  FuzzyRowFilter(ObIAllocator &allocator, ObIArray<ObPair<ObString, ObString>*> &fuzzy_key)
+      : allocator_(allocator),
+        row_tracker_(nullptr),
+        done_(false),
+        filter_row_(false),
+        included_(false),
+        is_inited_(false),
+        fuzzy_key_(fuzzy_key)
+  {}
+  virtual ~FuzzyRowFilter() {
+    if (nullptr != row_tracker_) {
+      row_tracker_->~RowTracker();
+    }
+  }
+  int init(const ObHTableCell &cell);
+  virtual bool filter_all_remaining() override { return done_; }
+  virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
+  virtual int get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell) override;
+  virtual bool is_hinting_filter() override { return true; }
+  virtual bool filter_row() override { return filter_row_; }
+  void reset() override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  TO_STRING_KV("filter", "FuzzyRowFilter", K_(row_tracker), K_(fuzzy_key), K_(is_inited));
+private:
+  static bool fuzzy_match(const ObString &rowkey, const ObPair<ObString, ObString> &fuzzy_key);
+private:
+  ObIAllocator &allocator_;
+  RowTracker *row_tracker_;
+  bool done_;
+  bool filter_row_;
+  bool included_;
+  bool is_inited_;
+  ObIArray<ObPair<ObString, ObString>*> &fuzzy_key_;
+  DISALLOW_COPY_AND_ASSIGN(FuzzyRowFilter);
+};
+
 class ObTimestampNode
 {
 public:
@@ -682,6 +895,146 @@ private:
   DISALLOW_COPY_AND_ASSIGN(TimestampsFilter);
 };
 
+/// Simple filter that filter cells by column family and qualifier.
+class ColumnValueFilter: public FilterBase
+{
+public:
+  ColumnValueFilter(ObString &cf, ObString &qualifier, CompareOperator cmp_op, Comparable *comparator)
+      : cf_(cf),
+        qualifier_(qualifier),
+        cmp_op_(cmp_op),
+        comparator_(comparator),
+        column_found_(false)
+  {}
+  ~ColumnValueFilter() {}
+  virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
+  void reset() override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  TO_STRING_KV("filter", "ColumnValueFilter", K_(cf), K_(qualifier), K_(cmp_op), KP_(comparator));
+private:
+  ObString cf_;
+  ObString qualifier_;
+  CompareOperator cmp_op_;
+  Comparable *comparator_;
+  bool column_found_;
+  DISALLOW_COPY_AND_ASSIGN(ColumnValueFilter);
+};
+
+/// Simple filter that returns rows in range.
+class MultiRowRangeFilter: public FilterBase
+{
+public:
+  MultiRowRangeFilter(common::ObSEArray<KeyRange*, 8>* origin_range)
+      : origin_range_(origin_range),
+        inited_(false),
+        nodes_(),
+        ranges_(),
+        range_(nullptr),
+        return_code_(),
+        done_(false)
+  {}
+  virtual ~MultiRowRangeFilter() {}
+  virtual int init();
+  virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override { UNUSED(cell); ret_code = return_code_; return OB_SUCCESS; }
+  virtual int get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell) override;
+  virtual bool is_hinting_filter() override { return true; }
+  virtual int filter_row_key(const ObHTableCell &first_row_cell, bool &filtered) override;
+  virtual bool filter_all_remaining() override { return done_; }
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  TO_STRING_KV("filter", "MultiRowRangeFilter");
+protected:
+  common::ObSEArray<KeyRange*, 8>* origin_range_;
+  bool inited_;
+private:
+  common::ObSEArray<ObKeyRangeNode, 8> nodes_;
+  ObKeyRangeTree ranges_;
+  KeyRange* range_;
+  ReturnCode return_code_;
+  bool done_;
+  DISALLOW_COPY_AND_ASSIGN(MultiRowRangeFilter);
+};
+
+/// Simple filter that returns rows before stop key.
+class InclusiveStopFilter: public MultiRowRangeFilter
+{
+public:
+  InclusiveStopFilter(common::ObSEArray<KeyRange*, 8>* origin_range, ObString stop_key)
+      : MultiRowRangeFilter(origin_range),
+        stop_key_(stop_key)
+  {}
+  ~InclusiveStopFilter() {}
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  TO_STRING_KV("filter", "InclusiveStopFilter");
+private:
+  ObString stop_key_;
+  DISALLOW_COPY_AND_ASSIGN(InclusiveStopFilter);
+};
+
+/// Simple filter that returns columns in range.
+class ColumnRangeFilter: public FilterBase
+{
+public:
+  ColumnRangeFilter(common::ObSEArray<KeyRange*, 8>* origin_range)
+      : origin_range_(origin_range),
+        inited_(false),
+        nodes_(),
+        ranges_(),
+        range_(nullptr)
+  {}
+  virtual ~ColumnRangeFilter() {}
+  virtual int init();
+  virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
+  void reset() override;
+  virtual bool is_hinting_filter() override { return true; }
+  virtual int get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell) override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  TO_STRING_KV("filter", "ColumnRangeFilter");
+protected:
+  common::ObSEArray<KeyRange*, 8>* origin_range_;
+  bool inited_;
+private:
+  common::ObSEArray<ObKeyRangeNode, 8> nodes_;
+  ObKeyRangeTree ranges_;
+  KeyRange* range_;
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ColumnRangeFilter);
+};
+
+/// Simple filter based on the multiple lead portion of Column names
+class MultipleColumnPrefixFilter: public ColumnRangeFilter
+{
+public:
+  MultipleColumnPrefixFilter(common::ObSEArray<KeyRange*, 8>* origin_range)
+      : ColumnRangeFilter(origin_range)
+  {}
+  ~MultipleColumnPrefixFilter() {}
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  TO_STRING_KV("filter", "MultipleColumnPrefixFilter");
+private:
+  DISALLOW_COPY_AND_ASSIGN(MultipleColumnPrefixFilter);
+};
+
+/// Simple filter that filter cells with column family.
+class FamilyFilter : public CompareFilter
+{
+public:
+  FamilyFilter(CompareOperator cmp_op, Comparable *comparator)
+    : CompareFilter(cmp_op, comparator)
+  {}
+  virtual ~FamilyFilter() {}
+  virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  TO_STRING_KV("filter", "FamilyFilter");
+private:
+  DISALLOW_COPY_AND_ASSIGN(FamilyFilter);
+};
+
 /// Simple filter that returns first N columns on row only.
 class ColumnCountGetFilter: public FilterBase
 {
@@ -692,7 +1045,7 @@ public:
   {}
   virtual ~ColumnCountGetFilter() {}
   virtual void reset() override;
-  virtual bool filter_row_key(const ObHTableCell &first_row_cell) override;
+  virtual int filter_row_key(const ObHTableCell &first_row_cell, bool &filtered) override;
   virtual bool filter_all_remaining() override;
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual int64_t get_format_filter_string_length() const override;
@@ -704,6 +1057,26 @@ private:
   int64_t count_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ColumnCountGetFilter);
+};
+
+/// Simple filter that returns cells before matching qualifiers.
+class FirstKeyValueMatchingQualifiersFilter: public FilterBase
+{
+public:
+  FirstKeyValueMatchingQualifiersFilter(common::ObSEArray<ObString, 8> *qualifiers)
+      : found_(false),
+        qualifiers_(qualifiers)
+  {}
+  virtual ~FirstKeyValueMatchingQualifiersFilter() {}
+  virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
+  void reset() override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  TO_STRING_KV("filter", "FirstKeyValueMatchingQualifiersFilter");
+private:
+  bool found_;
+  common::ObSEArray<ObString, 8> *qualifiers_;
+  DISALLOW_COPY_AND_ASSIGN(FirstKeyValueMatchingQualifiersFilter);
 };
 
 /// CheckAndMutateFilter is used to implement the check logic of CheckAndMutate

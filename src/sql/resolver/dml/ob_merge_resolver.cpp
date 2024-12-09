@@ -386,6 +386,10 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
         OZ (resolve_rb_iterate_item(*table_node, table_item));
         break;
       }
+      case T_UNNEST_EXPRESSION: {
+        OZ (resolve_unnest_item(*table_node, table_item));
+        break;
+      }
       default: {
         /* won't be here */
         ret = OB_ERR_PARSER_SYNTAX;
@@ -772,8 +776,9 @@ int ObMergeResolver::add_assignment(ObIArray<ObTableAssignment> &assigns,
         // skip
       } else if (other.column_expr_ == assign.column_expr_) {
         ret = OB_ERR_FIELD_SPECIFIED_TWICE;
+        ObCStringHelper helper;
         LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
-                       to_cstring(assign.column_expr_->get_column_name()));
+                       helper.convert(assign.column_expr_->get_column_name()));
       }
     }
   }

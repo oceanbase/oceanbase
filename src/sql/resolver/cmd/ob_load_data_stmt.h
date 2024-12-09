@@ -88,14 +88,14 @@ struct ObLoadArgument
                K_(file_iter),
                K_(compression_format));
 
-  void assign(const ObLoadArgument &other) {
+  int assign(const ObLoadArgument &other) {
+    int ret = OB_SUCCESS;
     load_file_storage_ = other.load_file_storage_;
     is_default_charset_ = other.is_default_charset_;
     ignore_rows_ = other.ignore_rows_;
     dupl_action_ = other.dupl_action_;
     file_cs_type_ = other.file_cs_type_;
     file_name_ = other.file_name_;
-    access_info_ = other.access_info_;
     database_name_ = other.database_name_;
     table_name_ = other.table_name_;
     combined_name_ = other.combined_name_;
@@ -106,6 +106,10 @@ struct ObLoadArgument
     part_level_ = other.part_level_;
     file_iter_.copy(other.file_iter_);
     compression_format_ = other.compression_format_;
+    if (OB_FAIL(access_info_.assign(other.access_info_))) {
+      OB_LOG(WARN, "fail to assign access info", K(ret), K_(other.access_info));
+    }
+    return ret;
   }
 
   ObLoadFileLocation load_file_storage_;
@@ -264,6 +268,8 @@ public:
   ObLoadDataHint &get_hints() { return hints_; }
   void set_default_table_columns() { is_default_table_columns_ = true; }
   bool get_default_table_columns() { return is_default_table_columns_; }
+  int set_part_ids(common::ObIArray<ObObjectID> &part_ids);
+  const common::ObIArray<ObObjectID> &get_part_ids() const { return part_ids_; }
   void set_optimizer_ctx(ObDirectLoadOptimizerCtx *optimizer_ctx) { optimizer_ctx_ = optimizer_ctx; }
   ObDirectLoadOptimizerCtx *get_optimizer_ctx() { return optimizer_ctx_; }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_),
@@ -273,7 +279,8 @@ public:
                K_(field_or_var_list),
                K_(assignments),
                K_(hints),
-               K_(is_default_table_columns));
+               K_(is_default_table_columns),
+               K_(part_ids));
 
 private:
   ObDirectLoadOptimizerCtx *optimizer_ctx_;
@@ -284,6 +291,7 @@ private:
   ObAssignments assignments_;
   ObLoadDataHint hints_;
   bool is_default_table_columns_;
+  common::ObArray<ObObjectID> part_ids_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataStmt);
 };

@@ -287,3 +287,62 @@ int ObResourceMappingRuleManager::clear_resource_user_mapping_rule(const uint64_
   }
   return ret;
 }
+
+int64_t ObResourceMappingRuleManager::to_string(char* buf, int64_t len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_SUCC(ret)) {
+    ret = databuff_printf(buf, len, pos, "user_rule_map:");
+    if (OB_SUCC(ret)) {
+      if (OB_SUCC(databuff_printf(buf, len, pos, "{"))) {
+        common::hash::ObHashMap<sql::ObTenantUserKey, uint64_t>::PrintFunctor fn1(buf, len, pos);
+        if (OB_SUCC(user_rule_map_.foreach_refactored(fn1))) {
+          ret = databuff_printf(buf, len, pos, "} ");
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ret = databuff_printf(buf, len, pos, "function_rule_map:");
+    if (OB_SUCC(ret)) {
+      if (OB_SUCC(databuff_printf(buf, len, pos, "{"))) {
+        common::hash::ObHashMap<share::ObTenantFunctionKey, uint64_t>::PrintFunctor fn2(buf, len, pos);
+        if (OB_SUCC(function_rule_map_.foreach_refactored(fn2))) {
+          ret = databuff_printf(buf, len, pos, "} ");
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ret = databuff_printf(buf, len, pos, "group_id_name_map:");
+    if (OB_SUCC(ret)) {
+      if (OB_SUCC(databuff_printf(buf, len, pos, "{"))) {
+        common::hash::ObHashMap<ObTenantGroupIdKey, ObGroupName>::PrintFunctor fn3(buf, len, pos);
+        if (OB_SUCC(group_id_name_map_.foreach_refactored(fn3))) {
+          ret = databuff_printf(buf, len, pos, "} ");
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ret = databuff_printf(buf, len, pos, "group_name_id_map:");
+    if (OB_SUCC(ret)) {
+      if (OB_SUCC(databuff_printf(buf, len, pos, "{"))) {
+        common::hash::ObHashMap<share::ObTenantGroupKey, uint64_t>::PrintFunctor fn4(buf, len, pos);
+        if (OB_SUCC(group_name_id_map_.foreach_refactored(fn4))) {
+          ret = databuff_printf(buf, len, pos, "}");
+        }
+      }
+    }
+  }
+  if (OB_SUCCESS != ret) {
+    pos = 0;
+    databuff_printf(buf, len, pos, "{...}");
+  }
+
+  return pos;
+}

@@ -2402,7 +2402,9 @@ TEST_F(TestBatchExecute, htable_scan_basic)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -2441,7 +2443,9 @@ TEST_F(TestBatchExecute, htable_scan_basic)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -2479,7 +2483,9 @@ TEST_F(TestBatchExecute, htable_scan_basic)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -2518,7 +2524,9 @@ TEST_F(TestBatchExecute, htable_scan_basic)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -2560,7 +2568,9 @@ TEST_F(TestBatchExecute, htable_scan_basic)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -2695,7 +2705,9 @@ TEST_F(TestBatchExecute, htable_scan_reverse)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          // fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          // ObCStringHelper helper;
+          // fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -2735,7 +2747,9 @@ fprintf(stderr, "Case 1: reverse scan set max version only\n");
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-        // fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+        // ObCStringHelper helper;
+        // fprintf(stderr, "(%s,%s,%s,%s)\n",
+        //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
         ASSERT_EQ(key1, rk);
         ASSERT_EQ(key2, cq);
         ASSERT_EQ(key3, ts);
@@ -2775,7 +2789,9 @@ fprintf(stderr, "Case 1: reverse scan set max version only\n");
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          // fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          // ObCStringHelper helper;
+          // fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -2818,7 +2834,9 @@ fprintf(stderr, "Case 1: reverse scan set max version only\n");
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          // fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          // ObCStringHelper helper;
+          // fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //  helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -2912,7 +2930,9 @@ TEST_F(TestBatchExecute, htable_ttl)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
       ASSERT_EQ(OB_SUCCESS, val.get_varbinary(str));
-      fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+      ObCStringHelper helper;
+      fprintf(stderr, "(%s,%s,%s,%s)\n",
+          helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
 
       ASSERT_EQ(key1, rk);
       ASSERT_EQ(key2, cq);
@@ -2970,7 +2990,9 @@ TEST_F(TestBatchExecute, htable_ttl)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
       ASSERT_EQ(OB_SUCCESS, val.get_varbinary(str));
-      fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+      ObCStringHelper helper;
+      fprintf(stderr, "(%s,%s,%s,%s)\n",
+          helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
 
       ASSERT_EQ(key1, rk);
       ASSERT_EQ(key2, cq);
@@ -3082,7 +3104,9 @@ TEST_F(TestBatchExecute, secondary_index)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, obj1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, obj2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, obj3));
-      //fprintf(stderr, "%ld: (%s,%s,%s)\n", i, S(obj1), S(obj2), S(obj3));
+      //ObCStringHelper helper;
+      //fprintf(stderr, "%ld: (%s,%s,%s)\n", i,
+      //    helper.convert(obj1), helper.convert(obj2), helper.convert(obj3));
       ASSERT_EQ(OB_SUCCESS, obj3.get_varchar(str));
       if (i < BATCH_SIZE/4) {
         ASSERT_EQ(2+i*8, obj1.get_int());
@@ -3128,7 +3152,9 @@ TEST_F(TestBatchExecute, secondary_index)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, obj1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, obj2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, obj3));
-      //fprintf(stderr, "%ld: (%s,%s,%s)\n", i, S(obj1), S(obj2), S(obj3));
+      //ObCStringHelper helper;
+      //fprintf(stderr, "%ld: (%s,%s,%s)\n", i,
+      //    helper.convert(obj1), helper.convert(obj2), helper.convert(obj3));
       ASSERT_EQ(OB_SUCCESS, obj3.get_varchar(str));
       ASSERT_EQ(2+i*8, obj1.get_int());
       ASSERT_EQ(1 , obj2.get_int());
@@ -3170,7 +3196,9 @@ TEST_F(TestBatchExecute, secondary_index)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, obj1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, obj2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, obj3));
-      //fprintf(stderr, "%ld: (%s,%s,%s)\n", i, S(obj1), S(obj2), S(obj3));
+      //ObCStringHelper helper;
+      //fprintf(stderr, "%ld: (%s,%s,%s)\n", i,
+      //    helper.convert(obj1), helper.convert(obj2), helper.convert(obj3));
       ASSERT_EQ(OB_SUCCESS, obj3.get_varchar(str));
       ASSERT_EQ(2+i*8, obj1.get_int());
       ASSERT_EQ(1 , obj2.get_int());
@@ -3239,7 +3267,9 @@ TEST_F(TestBatchExecute, secondary_index)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, obj1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, obj2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, obj3));
-      //fprintf(stderr, "%ld: (%s,%s,%s)\n", i, S(obj1), S(obj2), S(obj3));
+      //ObCStringHelper helper;
+      //fprintf(stderr, "%ld: (%s,%s,%s)\n", i,
+      //    helper.convert(obj1), helper.convert(obj2), helper.convert(obj3));
       ASSERT_EQ(OB_SUCCESS, obj3.get_varchar(str));
       ASSERT_EQ(2+i*8, obj1.get_int());
       ASSERT_EQ(1 , obj2.get_int());
@@ -3339,7 +3369,9 @@ TEST_F(TestBatchExecute, htable_empty_qualifier)
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-        //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+        //ObCStringHelper helper;
+        //fprintf(stderr, "(%s,%s,%s,%s)\n",
+        //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
         ASSERT_EQ(key1, rk);
         ASSERT_EQ(key2, cq);
         ASSERT_EQ(key3, ts);
@@ -3392,7 +3424,9 @@ TEST_F(TestBatchExecute, htable_empty_qualifier)
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-        // fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+        // ObCStringHelper helper;
+        // fprintf(stderr, "(%s,%s,%s,%s)\n",
+        //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
         ASSERT_EQ(key1, rk);
         ASSERT_EQ(key2, cq);
         ASSERT_EQ(key3, ts);
@@ -5540,7 +5574,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   htable_filter.set_valid(true);
   {
     fprintf(stderr, "case: = binary comparator\n");
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', =, 'binary:xy_string2', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', =, 'binary:xy_string2', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5567,7 +5601,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -5582,7 +5618,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: > binary comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', >, 'binary:w', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', >, 'binary:w', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5612,7 +5648,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -5627,7 +5665,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: < binary comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', <, 'binary:w', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', <, 'binary:w', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5657,7 +5695,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -5672,7 +5712,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: >= binary comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', >=, 'binary:xx_string1', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', >=, 'binary:xx_string1', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5702,7 +5742,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -5717,7 +5759,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: <= binary comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', <=, 'binary:ab_string2', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', <=, 'binary:ab_string2', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5747,7 +5789,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -5762,7 +5806,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: = prefix comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', =, 'binaryprefix:a', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', =, 'binaryprefix:a', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5792,7 +5836,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -5807,7 +5853,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: != prefix comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', !=, 'binaryprefix:x', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', !=, 'binaryprefix:x', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5837,7 +5883,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -5852,7 +5900,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: = substring comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', =, 'substring:string1', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', =, 'substring:string1', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5882,7 +5930,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -5896,7 +5946,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: != substring comparator\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1', 'cq1', !=, 'substring:string1', true, false)"));
+    htable_filter.set_filter(ObString::make_string("SingleColumnValueFilter('cf1_filter', 'cq1', !=, 'substring:string1', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -5926,7 +5976,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -5966,7 +6018,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -6004,7 +6058,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -6042,7 +6098,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -6065,7 +6123,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   fprintf(stderr, "case: WhileMatchFilter\n");
   // check
   {
-    htable_filter.set_filter(ObString::make_string("While SingleColumnValueFilter('cf1', 'cq1', !=, 'substring:string1', true, false)"));
+    htable_filter.set_filter(ObString::make_string("While SingleColumnValueFilter('cf1_filter', 'cq1', !=, 'substring:string1', true, false)"));
     ObTableEntityIterator *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
 
@@ -6095,7 +6153,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -6133,7 +6193,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -6174,7 +6236,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -6213,7 +6277,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -6296,7 +6362,9 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -7400,7 +7468,8 @@ TEST_F(TestBatchExecute, multi_replace)
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-//           //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+//           ObCStringHelper helper;
+//           //fprintf(stderr, "(%s,%s,%s,%s)\n", helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
 //           ASSERT_EQ(key1, rk);
 //           ASSERT_EQ(key2, cq);
 //           ASSERT_EQ(key3, ts);
@@ -7473,7 +7542,8 @@ TEST_F(TestBatchExecute, multi_replace)
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-//           //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+//           ObCStringHelper helper;
+//           //fprintf(stderr, "(%s,%s,%s,%s)\n", helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
 //           ASSERT_EQ(key1, rk);
 //           ASSERT_EQ(key2, cq);
 //           ASSERT_EQ(key3, ts);
@@ -7545,7 +7615,8 @@ TEST_F(TestBatchExecute, multi_replace)
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-//           //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+//           ObCStringHelper helper;
+//           //fprintf(stderr, "(%s,%s,%s,%s)\n", helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
 //           ASSERT_EQ(key1, rk);
 //           ASSERT_EQ(key2, cq);
 //           ASSERT_EQ(key3, ts);
@@ -7618,7 +7689,8 @@ TEST_F(TestBatchExecute, multi_replace)
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
 //           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-//           //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+//           ObCStringHelper helper;
+//           //fprintf(stderr, "(%s,%s,%s,%s)\n", helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
 //           ASSERT_EQ(key1, rk);
 //           ASSERT_EQ(key2, cq);
 //           ASSERT_EQ(key3, ts);
@@ -7981,7 +8053,8 @@ TEST_F(TestBatchExecute, increment_and_append_batch)
       ObObj c2_obj, c3_obj;
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, c2_obj));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, c3_obj));
-      //fprintf(stderr, "%ld (%s,%s)\n", i, S(c2_obj), S(c3_obj));
+      //ObCStringHelper helper;
+      //fprintf(stderr, "%ld (%s,%s)\n", i, helper.convert(c2_obj), helper.convert(c3_obj));
       ObObj val2, val3;
       if (0 == i % 2) {
         val2.set_int(100+2*i);
@@ -8162,7 +8235,9 @@ TEST_F(TestBatchExecute, htable_mutations)
     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-    // fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+    // ObCStringHelper helper;
+    // fprintf(stderr, "(%s,%s,%s,%s)\n",
+    //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
     ASSERT_EQ(key1, rk);
     ASSERT_EQ(key2, cq);
     if (timestamps[i] >= 0) {
@@ -8313,7 +8388,9 @@ TEST_F(TestBatchExecute, htable_query_and_mutate)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -8369,7 +8446,9 @@ TEST_F(TestBatchExecute, htable_query_and_mutate)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -8474,7 +8553,9 @@ TEST_F(TestBatchExecute, htable_query_and_mutate)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -8574,7 +8655,9 @@ TEST_F(TestBatchExecute, htable_query_and_mutate)
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
-          //fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+          //ObCStringHelper helper;
+          //fprintf(stderr, "(%s,%s,%s,%s)\n",
+          //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
           ASSERT_EQ(key1, rk);
           ASSERT_EQ(key2, cq);
           ASSERT_EQ(key3, ts);
@@ -8683,7 +8766,8 @@ TEST_F(TestBatchExecute, htable_increment)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
       ASSERT_EQ(OB_SUCCESS, val.get_varbinary(str));
       ASSERT_EQ(OB_SUCCESS, ObHTableUtils::java_bytes_to_int64(str, new_int));
-      // fprintf(stderr, "%s | %ld\n", S(*result_entity), new_int);
+      // ObCStringHelper helper;
+      // fprintf(stderr, "%s | %ld\n", helper.convert(*result_entity), new_int);
       num++;
       if (num % 2 == 0) {
         ASSERT_EQ(8, new_int);
@@ -8730,7 +8814,9 @@ TEST_F(TestBatchExecute, htable_increment)
     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
     ASSERT_EQ(OB_SUCCESS, val.get_varbinary(str));
     ASSERT_EQ(OB_SUCCESS, ObHTableUtils::java_bytes_to_int64(str, read_int));
-    // fprintf(stderr, "(%s,%s,%s,%s(%ld))\n", S(rk), S(cq), S(ts), S(val), read_int);
+    // ObCStringHelper helper;
+    // fprintf(stderr, "(%s,%s,%s,%s(%ld))\n",
+    //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val), read_int);
     UNUSED(expected_int);
     ASSERT_EQ(key1, rk);
     ASSERT_EQ(key2, cq);
@@ -8819,7 +8905,8 @@ TEST_F(TestBatchExecute, htable_increment_empty)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
       ASSERT_EQ(OB_SUCCESS, val.get_varbinary(str));
       ASSERT_EQ(OB_SUCCESS, ObHTableUtils::java_bytes_to_int64(str, new_int));
-      //fprintf(stderr, "%s | %ld\n", S(*result_entity), new_int);
+      //ObCStringHelper helper;
+      //fprintf(stderr, "%s | %ld\n", helper.convert(*result_entity), new_int);
       num++;
       ASSERT_EQ(8-num, new_int);
     }
@@ -9025,7 +9112,8 @@ TEST_F(TestBatchExecute, htable_append)
     while(OB_SUCC(inc_result.affected_entity_.get_next_entity(result_entity))) {
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
       ASSERT_EQ(OB_SUCCESS, val.get_varbinary(str));
-      // fprintf(stderr, "%s\n", S(*result_entity));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "%s\n", helper.convert(*result_entity));
       num++;
       // if (num % 2 == 0) {
       //   ASSERT_EQ(8, new_int);
@@ -9065,7 +9153,9 @@ TEST_F(TestBatchExecute, htable_append)
     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
     ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
     ASSERT_EQ(OB_SUCCESS, val.get_varbinary(str));
-    // fprintf(stderr, "(%s,%s,%s,%s)\n", S(rk), S(cq), S(ts), S(val));
+    // ObCStringHelper helper;
+    // fprintf(stderr, "(%s,%s,%s,%s)\n",
+    //    helper.convert(rk), helper.convert(cq), helper.convert(ts), helper.convert(val));
 
     ASSERT_EQ(key1, rk);
     ASSERT_EQ(key2, cq);
@@ -9823,7 +9913,9 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_EQ(0, v3.get_varchar().compare("hello c++"));
-      // fprintf(stderr, "(%ld, %ld,%ld,%s)\n", result_cnt, v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld, %ld,%ld,%s)\n",
+      //    result_cnt, v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(result_cnt, batch_size/2);
@@ -9856,7 +9948,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_EQ(50, v2.get_int());
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(1, result_cnt);
@@ -9889,7 +9982,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_GE(v2.get_int(), 50);
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(6, result_cnt);
@@ -9922,7 +10016,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_LE(v2.get_int(), 50);
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(10, result_cnt);
@@ -9954,7 +10049,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_LE(v1.get_int(), 50);
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(10, result_cnt);
     // fprintf(stderr, "query ret=%d\n", ret);
@@ -10031,7 +10127,9 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
-      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n",
+      //    v1.get_int(), v2.get_int(), v4.get_double(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(5, result_cnt);
@@ -10084,7 +10182,9 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
-      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n",
+      //     v1.get_int(), v2.get_int(), v4.get_double(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(10, result_cnt);
@@ -10116,7 +10216,9 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
-      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n",
+      //     v1.get_int(), v2.get_int(), v4.get_double(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(10, result_cnt);
@@ -10147,7 +10249,9 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
-      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n",
+      //     v1.get_int(), v2.get_int(), v4.get_double(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(10, result_cnt);
@@ -10178,7 +10282,9 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
-      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n",
+      //     v1.get_int(), v2.get_int(), v4.get_double(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(10, result_cnt);
@@ -10209,7 +10315,9 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
-      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n", v1.get_int(), v2.get_int(), v4.get_double(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%.2f,%s)\n",
+      //     v1.get_int(), v2.get_int(), v4.get_double(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(10, result_cnt);
@@ -10242,7 +10350,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_EQ(0, v3.get_varchar().compare("hello:java"));
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(5, result_cnt);
@@ -10298,7 +10407,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
       ASSERT_EQ(0, v3.get_varchar().compare(""));
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(5, result_cnt);
@@ -10351,7 +10461,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(3, result_cnt);
@@ -10426,7 +10537,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), helper.convert(v2), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(4, result_cnt);
@@ -10455,7 +10567,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(2, result_cnt);
@@ -10528,7 +10641,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(5, result_cnt);
@@ -10557,7 +10671,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), helper.convert(v2), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(10, result_cnt);
@@ -10586,7 +10701,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), helper.convert(v2), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(('p'-'d'), result_cnt);
@@ -10615,7 +10731,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), helper.convert(v2), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(0, result_cnt);
@@ -10644,7 +10761,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), helper.convert(v2), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(7, result_cnt);
@@ -10673,7 +10791,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), S(v2), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%s,%s)\n", v1.get_int(), helper.convert(v2), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(15, result_cnt);
@@ -10905,7 +11024,8 @@ TEST_F(TestBatchExecute, table_query_and_mutate)
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(res_cnt, result.affected_rows_);
@@ -10974,7 +11094,8 @@ TEST_F(TestBatchExecute, table_query_and_mutate)
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(res_cnt, result.affected_rows_);
@@ -11016,7 +11137,8 @@ TEST_F(TestBatchExecute, table_query_and_mutate)
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(res_cnt, result.affected_rows_);
@@ -11057,7 +11179,8 @@ TEST_F(TestBatchExecute, table_query_and_mutate)
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(res_cnt, result.affected_rows_);
@@ -11125,7 +11248,8 @@ TEST_F(TestBatchExecute, table_query_and_mutate)
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C1, v1));
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C2, v2));
       ASSERT_EQ(OB_SUCCESS, query_entity->get_property(C3, v3));
-      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+      // ObCStringHelper helper;
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), helper.convert(v3));
     }
     ASSERT_EQ(OB_ITER_END, ret);
     ASSERT_EQ(res_cnt, result.affected_rows_);
@@ -12237,8 +12361,12 @@ int main(int argc, char **argv)
     table_name = argv[7];
     rpc_port = atoi(argv[8]);
   }
+  ObTimerService::get_instance().start();
   ObTableServiceLibrary::init();
   int ret = RUN_ALL_TESTS();
   ObTableServiceLibrary::destroy();
+  ObTimerService::get_instance().stop();
+  ObTimerService::get_instance().wait();
+  ObTimerService::get_instance().destroy();
   return ret;
 }

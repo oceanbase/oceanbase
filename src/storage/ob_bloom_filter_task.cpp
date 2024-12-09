@@ -103,7 +103,6 @@ int ObBloomFilterBuildTask::process()
   int ret = OB_SUCCESS;
   ObBloomFilterCacheValue bfcache_value;
 
-  ObTenantStatEstGuard stat_est_guard(MTL_ID());
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_)
       || OB_UNLIKELY(!macro_id_.is_valid())
       || OB_UNLIKELY(prefix_len_ <= 0)) {

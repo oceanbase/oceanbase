@@ -16,6 +16,7 @@
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/dtl/ob_dtl_vectors_buffer.h"
+#include "sql/engine/basic/ob_temp_row_store.h"
 
 using namespace oceanbase::common;
 
@@ -37,7 +38,7 @@ OB_DEF_SERIALIZE(ObDtlOpInfo)
     pos += common::OB_MAX_SQL_ID_LENGTH + 1;
   }
   LST_DO_CODE(OB_UNIS_ENCODE, op_id_, input_rows_, input_width_,
-              disable_auto_mem_mgr_);
+              disable_auto_mem_mgr_, max_batch_size_);
   return ret;
 }
 
@@ -51,7 +52,7 @@ OB_DEF_DESERIALIZE(ObDtlOpInfo)
     pos += common::OB_MAX_SQL_ID_LENGTH + 1;
   }
   LST_DO_CODE(OB_UNIS_DECODE, op_id_, input_rows_, input_width_,
-              disable_auto_mem_mgr_);
+              disable_auto_mem_mgr_, max_batch_size_);
   return ret;
 }
 
@@ -61,7 +62,7 @@ OB_DEF_SERIALIZE_SIZE(ObDtlOpInfo)
   LST_DO_CODE(OB_UNIS_ADD_LEN, dop_, plan_id_, exec_id_, session_id_, database_id_);
   len += common::OB_MAX_SQL_ID_LENGTH + 1;
   LST_DO_CODE(OB_UNIS_ADD_LEN, op_id_, input_rows_, input_width_,
-              disable_auto_mem_mgr_);
+              disable_auto_mem_mgr_, max_batch_size_);
   return len;
 }
 
@@ -92,25 +93,40 @@ int ObDtlLinkedBuffer::deserialize_msg_header(const ObDtlLinkedBuffer &buffer,
 int ObDtlLinkedBuffer::add_batch_info(int64_t batch_id, int64_t rows)
 {
   int ret = common::OB_SUCCESS;
-  if (OB_UNLIKELY(!is_data_msg() || (PX_DATUM_ROW != msg_type_ && PX_CHUNK_ROW != msg_type_))) {
+  if (OB_UNLIKELY(!is_data_msg())) {
     ret = OB_ERR_UNEXPECTED;
-    SQL_DTL_LOG(WARN, "unexpected msg type", K(ret), K(is_data_msg()), K(msg_type_));
+    SQL_DTL_LOG(WARN, "unexpected data msg", K(ret), K(is_data_msg()));
   } else {
-    const int64_t count = batch_info_.count();
-    const int64_t header_size = PX_DATUM_ROW == msg_type_ ? sizeof(ObChunkDatumStore::Block)
-                                : sizeof(ObChunkRowStore::Block);
-    const int64_t start = 0 == count ? header_size : batch_info_.at(count - 1).end_;
-    if (OB_UNLIKELY(pos_ < start || rows < rows_cnt_)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_DTL_LOG(WARN, "unexpected start and pos", K(ret), K(pos_), K(start), K(rows_cnt_),
-                  K(rows), K(batch_info_));
-    } else {
-      ObDtlBatchInfo info(batch_id, start, pos_, rows - rows_cnt_);
-      if (OB_FAIL(batch_info_.push_back(info))) {
-        SQL_DTL_LOG(WARN, "push back failed", K(ret));
+    int64_t header_size = 0;
+    switch (msg_type_) {
+      case PX_DATUM_ROW: {
+        header_size = sizeof(ObChunkDatumStore::Block);
+        break;
+      }
+      case PX_VECTOR_ROW: {
+        header_size = sizeof(ObTempRowStore::RowBlock);
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_DTL_LOG(WARN, "unexpected msg type", K(ret), K(msg_type_));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const int64_t count = batch_info_.count();
+      const int64_t start = 0 == count ? header_size : batch_info_.at(count - 1).end_;
+      if (OB_UNLIKELY(pos_ < start || rows < rows_cnt_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_DTL_LOG(WARN, "unexpected start and pos", K(ret), K(pos_), K(start), K(rows_cnt_),
+                    K(rows), K(batch_info_));
       } else {
-        batch_info_valid_ = true;
-        rows_cnt_ = rows;
+        ObDtlBatchInfo info(batch_id, start, pos_, rows - rows_cnt_);
+        if (OB_FAIL(batch_info_.push_back(info))) {
+          SQL_DTL_LOG(WARN, "push back failed", K(ret));
+        } else {
+          batch_info_valid_ = true;
+          rows_cnt_ = rows;
+        }
       }
     }
   }

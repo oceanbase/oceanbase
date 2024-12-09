@@ -60,7 +60,8 @@ ObTableLockService::ObTableLockCtx::ObTableLockCtx() :
   lock_owner_(),
   schema_version_(-1),
   tx_is_killed_(false),
-  is_from_sql_(false)
+  is_from_sql_(false),
+  is_for_replace_(false)
 {}
 
 void ObTableLockService::ObRetryCtx::reuse()
@@ -798,7 +799,8 @@ int ObTableLockService::lock_partition_or_subpartition(ObTxDesc &tx_desc,
 
 int ObTableLockService::lock(ObTxDesc &tx_desc,
                              const ObTxParam &tx_param,
-                             const ObLockRequest &arg)
+                             const ObLockRequest &arg,
+                             const bool is_for_replace)
 {
   int ret = OB_SUCCESS;
 
@@ -816,6 +818,9 @@ int ObTableLockService::lock(ObTxDesc &tx_desc,
     if (OB_FAIL(ctx.set_by_lock_req(arg))) {
       LOG_WARN("set ObTableLockCtx failed", K(ret), K(arg));
     } else {
+      if (is_for_replace) {
+        ctx.is_for_replace_ = true;
+      }
       ctx.is_in_trans_ = true;
       ctx.tx_desc_ = &tx_desc;
       ctx.tx_param_ = tx_param;
@@ -857,8 +862,7 @@ int ObTableLockService::replace_lock(ObTxDesc &tx_desc,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tx_desc), K(replace_req), K(tx_desc.is_valid()),
              K(tx_param.is_valid()), K(replace_req.is_valid()));
-  // FIXME: change to 431 later
-  } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_3_0_0))) {
+  } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_3_4_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(replace_req));
   } else {
     ObReplaceTableLockCtx ctx;
@@ -874,6 +878,37 @@ int ObTableLockService::replace_lock(ObTxDesc &tx_desc,
         LOG_WARN("process lock task failed", K(ret), K(ctx), K(replace_req));
         ret = rewrite_return_code_(ret, ctx.ret_code_before_end_stmt_or_tx_, ctx.is_from_sql_);
       }
+    }
+  }
+  return ret;
+}
+
+int ObTableLockService::replace_lock(ObTxDesc &tx_desc,
+                                     const ObTxParam &tx_param,
+                                     const ObReplaceAllLocksRequest &replace_req)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("lock service is not inited", K(ret));
+  } else if (OB_UNLIKELY(!tx_desc.is_valid()) ||
+             OB_UNLIKELY(!tx_param.is_valid()) ||
+             OB_UNLIKELY(!replace_req.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tx_desc), K(replace_req), K(tx_desc.is_valid()),
+             K(tx_param.is_valid()), K(replace_req.is_valid()));
+  } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_3_4_0))) {
+    LOG_WARN("cluster version check failed", K(ret), K(replace_req));
+  } else {
+    for (int64_t i = 0; i < replace_req.unlock_req_list_.count() && OB_SUCC(ret); i++) {
+      if (OB_FAIL(unlock(tx_desc, tx_param, *replace_req.unlock_req_list_.at(i)))) {
+        LOG_WARN("unlock in replace failed", K(ret), K(replace_req));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(lock(tx_desc, tx_param, *replace_req.lock_req_, true))){
+      LOG_WARN("lock in replace failed", K(ret), K(replace_req));
     }
   }
   return ret;
@@ -1637,9 +1672,6 @@ int ObTableLockService::pack_batch_request_(ObTableLockCtx &ctx,
   ObLockParam lock_param;
   if (OB_FAIL(request.init(task_type, ls_id, ctx.tx_desc_))) {
     LOG_WARN("request init failed", K(ret), K(ctx), K(ls_id), KP(ctx.tx_desc_), K(lock_ids), K(task_type));
-  } else if (ctx.is_replace_task()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("lock_param is not compatible with request", K(ret), K(ctx), K(task_type));
   } else {
     for (int i = 0; i < lock_ids.count() && OB_SUCC(ret); ++i) {
       lock_param.reset();
@@ -1650,7 +1682,8 @@ int ObTableLockService::pack_batch_request_(ObTableLockCtx &ctx,
                                  ctx.schema_version_,
                                  ctx.is_deadlock_avoid_enabled(),
                                  ctx.is_try_lock(),
-                                 ctx.abs_timeout_ts_))) {
+                                 ctx.abs_timeout_ts_,
+                                 ctx.is_for_replace_))) {
         LOG_WARN("get lock param failed", K(ret));
       } else if (OB_FAIL(request.params_.push_back(lock_param))) {
         LOG_WARN("get lock request failed", K(ret), K(lock_param));
@@ -1809,7 +1842,7 @@ int ObTableLockService::pack_and_call_rpc_(RpcProxy &proxy_batch,
   int ret = OB_SUCCESS;
   ObLockTaskBatchRequest<ObLockParam> request;
   if (OB_FAIL(pack_batch_request_(ctx, ctx.task_type_, ls_id, lock_ids, request))) {
-    LOG_WARN("pack_request_ failed", K(ret), K(ls_id), K(ctx), K(lock_ids));
+    LOG_WARN("pack_batch_request_ failed", K(ret), K(ls_id), K(ctx), K(lock_ids));
   } else if (OB_FAIL(rpc_call_(proxy_batch, addr, ctx.get_rpc_timeoutus(), request))) {
     LOG_WARN("failed to call async rpc", KR(ret), K(addr), K(ctx.abs_timeout_ts_), K(request));
   } else {
@@ -1831,7 +1864,7 @@ int ObTableLockService::pack_and_call_rpc_(obrpc::ObBatchReplaceLockProxy &proxy
   int ret = OB_SUCCESS;
   ObLockTaskBatchRequest<ObReplaceLockParam> request;
   if (OB_FAIL(pack_batch_request_(ctx, ctx.task_type_, ls_id, lock_ids, request))) {
-    LOG_WARN("pack_request_ failed", K(ret), K(ls_id), K(ctx), K(lock_ids));
+    LOG_WARN("pack_batch_request_ failed", K(ret), K(ls_id), K(ctx), K(lock_ids));
   } else if (OB_FAIL(rpc_call_(proxy_batch, addr, ctx.get_rpc_timeoutus(), request))) {
     LOG_WARN("failed to call async rpc", KR(ret), K(addr), K(ctx.abs_timeout_ts_), K(request));
   } else {
@@ -1923,54 +1956,6 @@ int ObTableLockService::batch_rpc_handle_(RpcProxy &proxy_batch,
   return ret;
 }
 
-template <class RpcProxy>
-int ObTableLockService::parallel_rpc_handle_(RpcProxy &proxy_batch,
-                                             ObTableLockCtx &ctx,
-                                             const LockMap &lock_map,
-                                             const ObLSLockMap &ls_lock_map)
-{
-  int ret = OB_SUCCESS;
-  int64_t timeout_us = 0;
-  bool unused = false;
-  ObRetryCtx retry_ctx;
-  ObAddr addr;
-  ObTableLockTaskRequest request;
-  FOREACH_X(lock, lock_map, OB_SUCC(ret)) {
-    proxy_batch.reuse();
-    retry_ctx.reuse();
-    addr.reset();
-    request.reset();
-    const ObLockID &lock_id = lock->first;
-    const share::ObLSID &ls_id = lock->second;
-
-    if (OB_FAIL(retry_ctx.rpc_ls_array_.push_back(ls_id))) {
-      LOG_WARN("push_back lsid failed", K(ret), K(ls_id));
-    } else if (OB_FAIL(pack_request_(ctx, ctx.task_type_, lock_id, ls_id, addr, request))) {
-      LOG_WARN("pack_request_ failed", K(ret), K(ls_id), K(lock_id));
-    } else if (FALSE_IT(timeout_us = ctx.get_rpc_timeoutus())) {
-    } else if (ctx.is_timeout()) {
-      ret = OB_TIMEOUT;
-      LOG_WARN("process obj lock timeout", K(ret), K(ctx));
-    } else if (OB_FAIL(rpc_call_(proxy_batch,
-                                 addr,
-                                 timeout_us,
-                                 request))) {
-      LOG_WARN("failed to all async rpc", KR(ret), K(addr), K(timeout_us), K(request));
-    } else {
-      retry_ctx.send_rpc_count_++;
-      ALLOW_NEXT_LOG();
-      LOG_INFO("send table lock rpc", KR(ret), K(retry_ctx.send_rpc_count_),
-               K(addr), "request", request);
-    }
-    if (OB_FAIL(ret)) {
-      (void)collect_rollback_info_(retry_ctx.rpc_ls_array_, proxy_batch, ctx);
-    } else {
-      ret = handle_parallel_rpc_response_(proxy_batch, ctx, ls_lock_map, unused, retry_ctx);
-    }
-  }
-  return ret;
-}
-
 int ObTableLockService::inner_process_obj_lock_batch_(ObTableLockCtx &ctx,
                                                       const ObLSLockMap &lock_map)
 {
@@ -1991,36 +1976,12 @@ int ObTableLockService::inner_process_obj_lock_batch_(ObTableLockCtx &ctx,
   return ret;
 }
 
-int ObTableLockService::inner_process_obj_lock_old_version_(ObTableLockCtx &ctx,
-                                                            const LockMap &lock_map,
-                                                            const ObLSLockMap &ls_lock_map)
-{
-  int ret = OB_SUCCESS;
-  obrpc::ObSrvRpcProxy rpc_proxy(*GCTX.srv_rpc_proxy_);
-  rpc_proxy.set_detect_session_killed(true);
-  // TODO: yanyuan.cxf we process the rpc one by one and do parallel later.
-  if (ctx.is_unlock_task()) {
-    ObHighPriorityTableLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::unlock_table);
-    ret = parallel_rpc_handle_(proxy_batch, ctx, lock_map, ls_lock_map);
-  } else {
-    ObTableLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::lock_table);
-    ret = parallel_rpc_handle_(proxy_batch, ctx, lock_map, ls_lock_map);
-  }
-
-  return ret;
-}
-
 int ObTableLockService::inner_process_obj_lock_(ObTableLockCtx &ctx,
                                                 const LockMap &lock_map,
                                                 const ObLSLockMap &ls_lock_map)
 {
   int ret = OB_SUCCESS;
-  if (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_0_0_0) {
-    ret = inner_process_obj_lock_batch_(ctx, ls_lock_map);
-  } else {
-    ret = inner_process_obj_lock_old_version_(ctx, lock_map, ls_lock_map);
-  }
-
+  ret = inner_process_obj_lock_batch_(ctx, ls_lock_map);
   return ret;
 }
 

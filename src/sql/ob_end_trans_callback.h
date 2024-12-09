@@ -97,10 +97,14 @@ public:
   {
     ObExclusiveEndTransCallback::reset();
     mysql_end_trans_cb_.reset();
+    reset_diagnostic_info();
   }
+  void set_diagnostic_info(common::ObDiagnosticInfo *diagnostic_info);
+  void reset_diagnostic_info();
 private:
   /* macro */
   observer::ObSqlEndTransCb mysql_end_trans_cb_;
+  common::ObDiagnosticInfo *diagnostic_info_;
   DISALLOW_COPY_AND_ASSIGN(ObEndTransAsyncCallback);
 };
 

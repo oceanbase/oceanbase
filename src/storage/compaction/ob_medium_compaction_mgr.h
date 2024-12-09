@@ -137,7 +137,8 @@ public:
     const int64_t major_frozen_snapshot,
     const bool is_mv_refresh_tablet,
     ObMediumCompactionInfo::ObCompactionType &compaction_type,
-    int64_t &schedule_scn) const;
+    int64_t &schedule_scn,
+    ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type) const;
   OB_INLINE ObMediumCompactionInfo::ObCompactionType get_last_compaction_type() const
   {
     return static_cast<ObMediumCompactionInfo::ObCompactionType>(extra_info_.last_compaction_type_);

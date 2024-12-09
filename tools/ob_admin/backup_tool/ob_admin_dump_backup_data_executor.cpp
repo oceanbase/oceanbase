@@ -2205,7 +2205,8 @@ int ObAdminDumpBackupDataExecutor::dump_macro_block_index_(const backup::ObBacku
 {
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("Backup Macro Block Index");
-  PrintHelper::print_dump_line("logic_id", to_cstring(index.logic_id_));
+  ObCStringHelper helper;
+  PrintHelper::print_dump_line("logic_id", helper.convert(index.logic_id_));
   PrintHelper::print_dump_line("backup_set_id", index.backup_set_id_);
   PrintHelper::print_dump_line("ls_id", index.ls_id_.id());
   PrintHelper::print_dump_line("turn_id", index.turn_id_);
@@ -2234,8 +2235,9 @@ int ObAdminDumpBackupDataExecutor::dump_macro_block_index_list_(
 int ObAdminDumpBackupDataExecutor::dump_macro_block_index_index_(const backup::ObBackupMacroBlockIndexIndex &index)
 {
   int ret = OB_SUCCESS;
+  ObCStringHelper helper;
   PrintHelper::print_dump_title("Backup Macro Block Index Index");
-  PrintHelper::print_dump_line("logic_id", to_cstring(index.end_key_.logic_id_));
+  PrintHelper::print_dump_line("logic_id", helper.convert(index.end_key_.logic_id_));
   PrintHelper::print_dump_line("backup_set_id", index.end_key_.backup_set_id_);
   PrintHelper::print_dump_line("ls_id", index.end_key_.ls_id_.id());
   PrintHelper::print_dump_line("turn_id", index.end_key_.turn_id_);
@@ -2298,8 +2300,9 @@ int ObAdminDumpBackupDataExecutor::dump_macro_range_index_index_(const backup::O
 {
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("Backup Macro Range Index Index");
-  PrintHelper::print_dump_line("end_key:start_key", to_cstring(index.end_key_.start_key_));
-  PrintHelper::print_dump_line("end_key:end_key", to_cstring(index.end_key_.end_key_));
+  ObCStringHelper helper;
+  PrintHelper::print_dump_line("end_key:start_key", helper.convert(index.end_key_.start_key_));
+  PrintHelper::print_dump_line("end_key:end_key", helper.convert(index.end_key_.end_key_));
   PrintHelper::print_dump_line("end_key:backup_set_id", index.end_key_.backup_set_id_);
   PrintHelper::print_dump_line("end_key:ls_id", index.end_key_.ls_id_.id());
   PrintHelper::print_dump_line("end_key:turn_id", index.end_key_.turn_id_);
@@ -2330,7 +2333,8 @@ int ObAdminDumpBackupDataExecutor::dump_meta_index_(const backup::ObBackupMetaIn
 {
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("Backup Meta Index");
-  PrintHelper::print_dump_line("meta_key", to_cstring(index.meta_key_));
+  ObCStringHelper helper;
+  PrintHelper::print_dump_line("meta_key", helper.convert(index.meta_key_));
   PrintHelper::print_dump_line("backup_set_id", index.backup_set_id_);
   PrintHelper::print_dump_line("ls_id", index.ls_id_.id());
   PrintHelper::print_dump_line("turn_id", index.turn_id_);
@@ -2408,7 +2412,8 @@ int ObAdminDumpBackupDataExecutor::dump_backup_sstable_meta_(const backup::ObBac
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("Backup SSTable Meta");
   PrintHelper::print_dump_line("tablet_id", sstable_meta.tablet_id_.id());
-  PrintHelper::print_dump_line("table_key", to_cstring(sstable_meta.sstable_meta_.table_key_));
+  ObCStringHelper helper;
+  PrintHelper::print_dump_line("table_key", helper.convert(sstable_meta.sstable_meta_.table_key_));
   PrintHelper::print_dump_line("sstable_meta:row_count", sstable_meta.sstable_meta_.basic_meta_.row_count_);
   PrintHelper::print_dump_line("sstable_meta:occupy_size", sstable_meta.sstable_meta_.basic_meta_.occupy_size_);
   PrintHelper::print_dump_line("sstable_meta:original_size", sstable_meta.sstable_meta_.basic_meta_.original_size_);
@@ -2420,7 +2425,12 @@ int ObAdminDumpBackupDataExecutor::dump_backup_sstable_meta_(const backup::ObBac
   PrintHelper::print_dump_list_start("logic_id_array");
   for (int64_t i = 0; OB_SUCC(ret) && i < sstable_meta.logic_id_list_.count(); ++i) {
     const blocksstable::ObLogicMacroBlockId &macro_id = sstable_meta.logic_id_list_.at(i);
-    PrintHelper::print_dump_list_value(to_cstring(macro_id), i == sstable_meta.logic_id_list_.count() - 1);
+    ObCStringHelper helper;
+    const char *macro_id_str = helper.convert(macro_id);
+    if (nullptr == macro_id_str) {
+      macro_id_str = "NULL";
+    }
+    PrintHelper::print_dump_list_value(macro_id_str, i == sstable_meta.logic_id_list_.count() - 1);
   }
   PrintHelper::print_dump_list_end();
   PrintHelper::print_end_line();
@@ -2434,6 +2444,7 @@ int ObAdminDumpBackupDataExecutor::dump_backup_macro_block_id_mapping_meta_(
   PrintHelper::print_dump_title("Backup SSTable Macro Block ID Mapping Meta");
   PrintHelper::print_dump_line("version", mapping_meta.version_);
   PrintHelper::print_dump_line("sstable_count", mapping_meta.sstable_count_);
+  ObCStringHelper helper;
   if (OB_UNLIKELY(mapping_meta.sstable_count_ != mapping_meta.id_map_list_.count())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "sstable count must be equal with id mapping", K(ret), K(mapping_meta), K(mapping_meta.id_map_list_.count()));
@@ -2447,14 +2458,14 @@ int ObAdminDumpBackupDataExecutor::dump_backup_macro_block_id_mapping_meta_(
       const ObBackupMacroBlockIDMapping &item = *mapping_meta.id_map_list_[i];
       const ObITable::TableKey &table_key = item.table_key_;
       int64_t num_of_entries = item.id_pair_list_.count();
-      PrintHelper::print_dump_line("table_key", to_cstring(table_key));
+      PrintHelper::print_dump_line("table_key", helper.convert(table_key));
       PrintHelper::print_dump_line("num_of_entries", num_of_entries);
       for (int64_t j = 0; OB_SUCC(ret) && j < num_of_entries; ++j) {
         const ObCompatBackupMacroBlockIDPair &pair = item.id_pair_list_.at(j);
         const blocksstable::ObLogicMacroBlockId &logic_id = pair.logic_id_;
         const ObBackupPhysicalID &physical_id = pair.physical_id_;
-        PrintHelper::print_dump_line("logic_id", to_cstring(logic_id));
-        PrintHelper::print_dump_line("physical_id", to_cstring(physical_id));
+        PrintHelper::print_dump_line("logic_id", helper.convert(logic_id));
+        PrintHelper::print_dump_line("physical_id", helper.convert(physical_id));
       }
     }
   }
@@ -2482,7 +2493,12 @@ int ObAdminDumpBackupDataExecutor::dump_tablet_to_ls_info_(const storage::ObBack
   PrintHelper::print_dump_list_start("tablet_id");
   ARRAY_FOREACH_X(tablet_to_ls_info.tablet_id_list_, i , cnt, OB_SUCC(ret)) {
     const common::ObTabletID &tablet_id = tablet_to_ls_info.tablet_id_list_.at(i);
-    PrintHelper::print_dump_list_value(to_cstring(tablet_id.id()), i == cnt - 1);
+    ObCStringHelper helper;
+    const char *tablet_id_str = helper.convert(tablet_id);
+    if (nullptr == tablet_id_str) {
+      tablet_id_str = "NULL";
+    }
+    PrintHelper::print_dump_list_value(tablet_id_str, i == cnt - 1);
   }
   PrintHelper::print_dump_list_end();
   return ret;

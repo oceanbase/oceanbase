@@ -244,6 +244,8 @@ int ObDirectLoadDataBlockWriter<Header, T, align>::close()
       STORAGE_LOG(WARN, "fail to flush buffer", KR(ret));
     } else if (OB_FAIL(file_io_handle_.wait())) {
       STORAGE_LOG(WARN, "fail to wait io finish", KR(ret));
+    } else if (OB_FAIL(file_io_handle_.seal())) {
+      STORAGE_LOG(WARN, "failed to seal tmp file", KR(ret));
     } else {
       max_block_size_ = ALIGN_UP(max_block_size_, DIO_ALIGN_SIZE); // 这个值目前没什么用了, 这里是为了过参数检查
       is_opened_ = false;

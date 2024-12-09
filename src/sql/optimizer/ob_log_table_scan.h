@@ -63,9 +63,10 @@ struct ObTextRetrievalInfo
   ObRawExpr *topk_offset_expr_;
   bool with_ties_;
   bool need_calc_relevance_;  // match expr just for retireval (accurate score is not required)
-  uint64_t inv_idx_tid_;  // choosed aux inverted index table id (word-doc)
-  uint64_t fwd_idx_tid_;  // choosed aux forward index table id (doc-word)
-  uint64_t doc_id_idx_tid_; // choosed aux doc_id index table id (doc-rowkey)
+  uint64_t inv_idx_tid_;  // chosen aux inverted index table id (word-doc)
+  uint64_t fwd_idx_tid_;  // chosen aux forward index table id (doc-word)
+  uint64_t doc_id_idx_tid_; // chosen aux doc_id index table id (doc-rowkey)
+  uint64_t rowkey_idx_tid_; // chosen aux rowkey index table id (rowkey-doc)
   // the following exprs are used for intermediate calculation of relevance score
   ObColumnRefRawExpr *token_column_;
   ObColumnRefRawExpr *token_cnt_column_;
@@ -177,6 +178,7 @@ public:
         for_update_(false),
         for_update_wait_us_(-1), /* default infinite */
         pre_query_range_(NULL),
+        pre_range_graph_(NULL),
         part_ids_(NULL),
         filter_before_index_back_(),
         table_partition_info_(NULL),
@@ -225,6 +227,7 @@ public:
         multivalue_type_(-1),
         is_tsc_with_vid_(false),
         rowkey_vid_tid_(common::OB_INVALID_ID),
+        index_prefix_(-1),
         mr_mv_scan_(common::ObQueryFlag::NormalMode)
   {
   }
@@ -309,6 +312,18 @@ public:
   inline const ObQueryRange *get_pre_query_range() const
   { return pre_query_range_; }
 
+  inline const ObPreRangeGraph *get_pre_range_graph() const
+  { return pre_range_graph_; }
+
+  inline const ObQueryRangeProvider *get_pre_graph() const
+  {
+    return pre_range_graph_ != nullptr ? static_cast<const ObQueryRangeProvider *>(pre_range_graph_)
+                                       : static_cast<const ObQueryRangeProvider *>(pre_query_range_);
+  }
+
+  inline bool is_new_query_range() const
+  { return pre_range_graph_ != nullptr; }
+
   /**
    *  Get range columns
    */
@@ -373,6 +388,9 @@ public:
    */
   inline void set_pre_query_range(const ObQueryRange *query_range)
   { pre_query_range_ = query_range; }
+
+  inline void set_pre_range_graph(const ObPreRangeGraph *range_graph)
+  { pre_range_graph_ = range_graph; }
 
   /**
    *  Set range columns
@@ -494,18 +512,28 @@ public:
   inline void set_index_name(common::ObString &index_name)
   { index_name_= index_name; }
 
+  inline void set_index_prefix(int64_t index_prefix)
+  { index_prefix_ = index_prefix; }
+
   inline ObTablePartitionInfo *get_table_partition_info() { return table_partition_info_; }
   inline const ObTablePartitionInfo *get_table_partition_info() const { return table_partition_info_; }
   inline void set_table_partition_info(ObTablePartitionInfo *table_partition_info) { table_partition_info_ = table_partition_info; }
 
   bool is_index_scan() const { return ref_table_id_ != index_table_id_; }
-  bool is_table_whole_range_scan() const { return !is_index_scan() && (NULL == pre_query_range_ ||
-                                                  (1 == ranges_.count() && ranges_.at(0).is_whole_range())); }
+  bool is_table_whole_range_scan() const
+  {
+    return !is_index_scan() &&
+           ((NULL == pre_query_range_ && NULL == pre_range_graph_) ||
+            (1 == ranges_.count() && ranges_.at(0).is_whole_range()));
+  }
   void set_skip_scan(bool is_skip_scan) { is_skip_scan_ = is_skip_scan; }
   bool is_skip_scan() const { return is_skip_scan_; }
   virtual bool is_table_scan() const override { return true; }
-  bool is_whole_range_scan() const {return NULL == pre_query_range_
-                                            || (1 == ranges_.count() && ranges_.at(0).is_whole_range()); }
+  bool is_whole_range_scan() const
+  {
+    return (NULL == pre_query_range_ && NULL == pre_range_graph_) ||
+           (1 == ranges_.count() && ranges_.at(0).is_whole_range());
+  }
   ObOrderDirection get_scan_direction() const { return scan_direction_; }
   void set_index_back(bool index_back) { index_back_ = index_back; }
   bool get_index_back() const { return index_back_; }
@@ -660,15 +688,20 @@ public:
   inline bool is_tsc_with_vid() const { return is_tsc_with_vid_; }
   inline bool is_text_retrieval_scan() const { return is_index_scan() && NULL != text_retrieval_info_.match_expr_; }
   inline bool is_multivalue_index_scan() const { return is_multivalue_index_; }
+  inline bool is_spatial_index_scan() const { return is_spatial_index_; }
   inline ObTextRetrievalInfo &get_text_retrieval_info() { return text_retrieval_info_; }
   inline const ObTextRetrievalInfo &get_text_retrieval_info() const { return text_retrieval_info_; }
-  int prepare_text_retrieval_dep_exprs();
   int prepare_vector_access_exprs();
+  inline bool has_func_lookup() const { return 0 != lookup_tr_infos_.count(); }
+  inline ObIArray<ObTextRetrievalInfo> &get_lookup_tr_infos() { return lookup_tr_infos_; }
+  inline const ObIArray<ObTextRetrievalInfo> &get_lookup_tr_infos() const { return lookup_tr_infos_; }
   inline bool need_text_retrieval_calc_relevance() const { return text_retrieval_info_.need_calc_relevance_; }
   inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || is_vec_idx_scan(); }
+  inline bool need_rowkey_doc_expr() const { return is_tsc_with_doc_id() || is_tsc_with_vid() || has_func_lookup(); }
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
   inline uint64_t get_rowkey_vid_table_id() const { return rowkey_vid_tid_; }
+  inline void set_rowkey_doc_table_id(const uint64_t tid) { rowkey_doc_tid_ = tid; }
   inline uint64_t get_rowkey_doc_table_id() const { return rowkey_doc_tid_; }
   inline uint64_t get_multivalue_col_idx() const { return multivalue_col_idx_; }
   inline int32_t get_multivalue_type() const { return multivalue_type_; }
@@ -731,11 +764,15 @@ private: // member functions
                                                  const share::schema::ObTableSchema &table_schema,
                                                  bool &need_filter);
   int allocate_group_id_expr();
-  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs, bool is_vec_scan = false);
-  int extract_text_retrieval_access_expr(ObIArray<ObRawExpr *> &exprs);
   int extract_vec_idx_access_expr(ObIArray<ObRawExpr *> &exprs);
-  int get_text_retrieval_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
   int get_vec_idx_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs, bool is_vec_scan = false);
+  int extract_text_retrieval_access_expr(ObTextRetrievalInfo &tr_info, ObIArray<ObRawExpr *> &exprs);
+  int get_text_retrieval_calc_exprs(ObTextRetrievalInfo &tr_info, ObIArray<ObRawExpr *> &all_exprs);
+  int prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_info);
+  int extract_func_lookup_access_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int get_func_lookup_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int prepare_func_lookup_dep_exprs();
   int print_text_retrieval_annotation(char *buf, int64_t buf_len, int64_t &pos, ExplainType type);
   int find_nearest_rcte_op(ObLogSet *&rcte_op);
   int generate_filter_monotonicity();
@@ -765,6 +802,7 @@ protected: // memeber variables
   // query range after preliminary extract, which will be stored in physical plan
   // for future use
   const ObQueryRange *pre_query_range_;
+  const ObPreRangeGraph *pre_range_graph_;
   const common::ObIArray<int64_t> *part_ids_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> range_conds_;
 
@@ -879,9 +917,11 @@ protected: // memeber variables
   share::schema::ObTableType table_type_;
   bool use_column_store_;
   uint64_t doc_id_table_id_; // used for rowkey lookup of fulltext, JSON multi-value and vector index
+  // text retrieval as index scan
   ObTextRetrievalInfo text_retrieval_info_;
+  // text retrieval as functional lookup
+  common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> lookup_tr_infos_;
   ObVectorIndexInfo vector_index_info_;
-
   ObPxRFStaticInfo px_rf_info_;
   bool das_keep_ordering_;
   typedef common::ObSEArray<ObRawFilterMonotonicity, 4, common::ModulePageAllocator, true> FilterMonotonicity;
@@ -902,6 +942,7 @@ protected: // memeber variables
   uint64_t rowkey_vid_tid_;
   // end for table scan with vid
 
+  int64_t index_prefix_;
   common::ObQueryFlag::MRMVScanMode mr_mv_scan_; // used for major refresh mview fast refresh and real-time mview
 
   // disallow copy and assign

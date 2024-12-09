@@ -61,7 +61,7 @@ public:
                                         const ObDDLTaskInfo &addition_info);
 
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K_(rowkey_vid), K_(vid_rowkey), K_(domain_index), K_(vec_index_id),
-                      K_(vec_index_snapshot_data), K(wait_trans_ctx_), K(snapshot_held_));
+                      K_(vec_index_snapshot_data), K(wait_trans_ctx_));
 private:
   static const int64_t OB_DROP_VEC_INDEX_TASK_VERSION = 1;
   int deep_copy_index_arg(common::ObIAllocator &allocator,
@@ -101,7 +101,12 @@ private:
   int send_build_single_replica_request();
   int check_build_single_replica(bool &is_end);
   virtual int cleanup_impl() override;
-
+  virtual bool is_error_need_retry(const int ret_code) override
+  {
+    UNUSED(ret_code);
+    // we should always retry on drop index task
+    return task_status_ < share::ObDDLTaskStatus::DROP_AUX_INDEX_TABLE;
+  }
 private:
   ObRootService *root_service_;
   ObVecIndexDDLChildTaskInfo rowkey_vid_;
@@ -117,7 +122,6 @@ private:
   int64_t delte_lob_meta_job_ret_code_;
   int64_t check_dag_exit_retry_cnt_;
   bool del_lob_meta_row_task_submitted_;
-  bool snapshot_held_;
 };
 
 } // end namespace rootserver

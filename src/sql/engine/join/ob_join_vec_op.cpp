@@ -78,21 +78,25 @@ void ObJoinVecOp::blank_row_batch_one(const ExprFixedArray &exprs)
   }
 }
 
-int ObJoinVecOp::calc_other_conds(bool &is_match)
+int ObJoinVecOp::calc_other_conds(const ObBitVector &skip, bool &is_match)
 {
   int ret = OB_SUCCESS;
   is_match = true;
   const ObIArray<ObExpr *> &conds = get_spec().other_join_conds_;
-  ObDatum *cmp_res = NULL;
+  const int64_t batch_idx = eval_ctx_.get_batch_idx();
+  EvalBound eval_bound(eval_ctx_.get_batch_size(), batch_idx, batch_idx + 1, false);
+  ObIVector *res_vec = nullptr;
   ARRAY_FOREACH(conds, i) {
-    if (OB_FAIL(conds.at(i)->eval(eval_ctx_, cmp_res))) {
+    if (OB_FAIL(conds.at(i)->eval_vector(eval_ctx_, skip, eval_bound))) {
       LOG_WARN("fail to calc other join condition", K(ret), K(*conds.at(i)));
-    } else if (cmp_res->is_null() || 0 == cmp_res->get_int()) {
+    } else if (OB_ISNULL(res_vec = conds.at(i)->get_vector(eval_ctx_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get source vector", K(ret), K(res_vec));
+    } else if (res_vec->is_null(batch_idx) || 0 == res_vec->get_int(batch_idx)) {
       is_match = false;
       break;
     }
   }
-
   return ret;
 }
 

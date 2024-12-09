@@ -56,6 +56,8 @@ int64_t ObODPSGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len)
   J_COMMA();
   databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(endpoint_)));
   J_COMMA();
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(tunnel_endpoint_)));
+  J_COMMA();
   databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(project_)));
   J_COMMA();
   databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(schema_)));
@@ -65,6 +67,8 @@ int64_t ObODPSGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len)
   databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(quota_)));
   J_COMMA();
   databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(compression_code_)));
+  J_COMMA();
+  databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[idx++], STR_BOOL(collect_statistics_on_create_));
   return pos;
 }
 
@@ -221,6 +225,8 @@ int ObODPSGeneralFormat::deep_copy(const ObODPSGeneralFormat &src) {
     LOG_WARN("failed to deep copy", K(ret));
   } else if (OB_FAIL(deep_copy_str(src.endpoint_, endpoint_))) {
     LOG_WARN("failed to deep copy", K(ret));
+  } else if (OB_FAIL(deep_copy_str(src.tunnel_endpoint_, tunnel_endpoint_))) {
+    LOG_WARN("failed to deep copy", K(ret));
   } else if (OB_FAIL(deep_copy_str(src.project_, project_))) {
     LOG_WARN("failed to deep copy", K(ret));
   } else if (OB_FAIL(deep_copy_str(src.schema_, schema_))) {
@@ -231,6 +237,8 @@ int ObODPSGeneralFormat::deep_copy(const ObODPSGeneralFormat &src) {
     LOG_WARN("failed to deep copy", K(ret));
   } else if (OB_FAIL(deep_copy_str(src.compression_code_, compression_code_))) {
     LOG_WARN("failed to deep copy", K(ret));
+  } else {
+    collect_statistics_on_create_ = src.collect_statistics_on_create_;
   }
   return ret;
 }
@@ -289,6 +297,15 @@ int ObODPSGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &al
     ObObj obj;
     OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
     if (OB_SUCC(ret) && !obj.is_null()) {
+      tunnel_endpoint_ = obj.get_string();
+    }
+    node = node->get_next();
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+      && json::JT_STRING == node->value_->get_type()) {
+    ObObj obj;
+    OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+    if (OB_SUCC(ret) && !obj.is_null()) {
       project_ = obj.get_string();
     }
     node = node->get_next();
@@ -326,6 +343,14 @@ int ObODPSGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &al
     OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
     if (OB_SUCC(ret) && !obj.is_null()) {
       compression_code_ = obj.get_string();
+    }
+    node = node->get_next();
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])) {
+    if (json::JT_TRUE == node->value_->get_type()) {
+      collect_statistics_on_create_ = true;
+    } else {
+      collect_statistics_on_create_ = false;
     }
     node = node->get_next();
   }

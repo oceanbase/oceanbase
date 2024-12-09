@@ -110,6 +110,11 @@ public:
                                           uint64_t table_id,
                                           uint64_t ref_table_id,
                                           bool &can_use);
+  static int storage_estimate_range_rowcount(ObOptimizerContext &ctx,
+                                             const ObCandiTabletLocIArray &part_loc_infos,
+                                             bool estimate_whole_range,
+                                             const ObRangesArray *ranges,
+                                             ObTableMetaInfo &meta);
 private:
   static const int STORAGE_EST_SAMPLE_SEED = 1;
   static int inner_estimate_rowcount(ObOptimizerContext &ctx,
@@ -230,7 +235,8 @@ private:
                                                   const ObCandiTabletLocIArray &partitions,
                                                   ObCandiTabletLocIArray &chosen_partitions);
   static int choose_storage_estimation_ranges(const int64_t range_limit,
-                                              AccessPath &ap,
+                                              const ObRangesArray &ranges,
+                                              bool is_geo_index,
                                               ObIArray<common::ObNewRange> &scan_ranges);
 
   static int process_dynamic_sampling_estimation(ObOptimizerContext &ctx,
@@ -286,6 +292,7 @@ private:
   static int estimate_prefix_range_rowcount(
       const double res_logical_row_count,
       const double res_physical_row_count,
+      bool new_range_with_exec_param,
       ObCostTableScanInfo &est_cost_info);
 
   static int fill_cost_table_scan_info(ObCostTableScanInfo &est_cost_info);
@@ -315,9 +322,6 @@ private:
                                            ObIArray<common::ObNewRange> &new_ranges);
   static int storage_estimate_full_table_rowcount(ObOptimizerContext &ctx,
                                                   const ObCandiTabletLoc &part_loc_info,
-                                                  ObTableMetaInfo &meta);
-  static int storage_estimate_full_table_rowcount(ObOptimizerContext &ctx,
-                                                  const ObCandiTabletLocIArray &part_loc_infos,
                                                   ObTableMetaInfo &meta);
 
   static int estimate_full_table_rowcount_by_meta_table(ObOptimizerContext &ctx,

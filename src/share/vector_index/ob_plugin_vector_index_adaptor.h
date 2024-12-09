@@ -583,7 +583,7 @@ private:
   constexpr const static char* const VEC_INDEX_ALGTH[ObVectorIndexDistAlgorithm::VIDA_MAX] = {
     "l2",
     "ip",
-    "cos",
+    "cosine",
   };
 };
 

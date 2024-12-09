@@ -331,6 +331,8 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
       LOG_WARN("failed to assign path list", KR(ret), K(other));
     } else if (OB_FAIL(white_list_.assign(other.white_list_))) {
       LOG_WARN("failed to assign white list", KR(ret), K(other));
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.sts_credential_, sts_credential_))) {
+      LOG_WARN("failed to copy string", KR(ret), K(other));
     }
 
   }
@@ -374,6 +376,7 @@ void ObPhysicalRestoreJob::reset()
   recover_table_ = false;
   using_complement_log_ = false;
 
+  sts_credential_.reset();
 
   passwd_array_.reset();
   multi_restore_path_list_.reset();

@@ -639,6 +639,7 @@ int ObDtlBasicChannel::process1(
               key, result_info_guard_))) {
           if (is_px_channel()) {
             ret = OB_DTL_WAIT_EAGAIN;
+          // This will result in ret = OB_SUCCESS and result_info being null.
           } else if (ignore_error()) {
             ret = OB_SUCCESS;
           } else {
@@ -654,9 +655,13 @@ int ObDtlBasicChannel::process1(
           LOG_WARN("there is no row store in internal result", K(ret));
         } else if (OB_FAIL(DTL_IR_STORE_DO(*result_info, finish_add_row, true))) {
           LOG_WARN("failed to finish add row", K(ret));
-        } else {
+        } else if (!result_info->is_rich_format()) {
           if (OB_FAIL(result_info->datum_store_->begin(datum_iter_))) {
             LOG_WARN("begin iterator failed", K(ret));
+          }
+        } else {
+          if (OB_FAIL(result_info->get_row_store()->begin(row_iter_))) {
+            LOG_WARN("failed to begin chunk row store.", K(ret));
           }
         }
       }
@@ -664,10 +669,16 @@ int ObDtlBasicChannel::process1(
         ObDtlLinkedBuffer mock_buffer;
         mock_buffer.set_data_msg(true);
         ObDtlMsgType type = ObDtlMsgType::PX_DATUM_ROW;
+        if (OB_ISNULL(result_info) || !result_info->is_rich_format()) {
+          mock_buffer.set_buf(reinterpret_cast<char *>(&datum_iter_));
+        } else {
+          mock_buffer.set_buf(reinterpret_cast<char *>(&row_iter_));
+          mock_buffer.set_row_meta(result_info->get_row_store()->get_row_meta());
+          type = ObDtlMsgType::PX_VECTOR_ROW;
+        }
         type = static_cast<ObDtlMsgType>(-type);
         // set type to negative value for interm result mock buffer.
         mock_buffer.set_msg_type(type);
-        mock_buffer.set_buf(reinterpret_cast<char *>(&datum_iter_));
         bool transferred = false;
         ret = proc->process(mock_buffer, transferred);
         // EOF after send iterator to processor.
@@ -1135,6 +1146,7 @@ int ObDtlBasicChannel::switch_buffer(const int64_t min_size, const bool is_eof,
         if (OB_NOT_NULL(kit) && OB_NOT_NULL(kit->op_)) {
           write_buffer_->set_input_rows(kit->op_->get_spec().rows_);
           write_buffer_->set_input_width(kit->op_->get_spec().width_);
+          write_buffer_->set_max_batch_size(kit->op_->get_spec().max_batch_size_);
         }
       }
       write_buffer_->timeout_ts() = timeout_ts;

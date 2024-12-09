@@ -318,13 +318,14 @@ int ObMViewRefreshStatsCollector::init(ObExecContext &ctx, const ObMViewRefreshA
     run_stats_.set_elapsed_time(0);
     run_stats_.set_log_purge_time(0);
     run_stats_.set_complete_stats_avaliable(true);
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     if (OB_FAIL(run_stats_.set_mviews(refresh_arg.list_))) {
       LOG_WARN("fail to set mviews", KR(ret), K(refresh_arg.list_));
     } else if (OB_FAIL(run_stats_.set_method(refresh_arg.method_))) {
       LOG_WARN("fail to set method", KR(ret), K(refresh_arg.method_));
     } else if (OB_FAIL(run_stats_.set_rollback_seg(refresh_arg.rollback_seg_))) {
       LOG_WARN("fail to set rollback seg", KR(ret), K(refresh_arg.rollback_seg_));
-    } else if (OB_FAIL(run_stats_.set_trace_id(ObCurTraceId::get_trace_id_str()))) {
+    } else if (OB_FAIL(run_stats_.set_trace_id(ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
       LOG_WARN("fail to set trace id", KR(ret));
     } else if (OB_FAIL(
                  mv_ref_stats_map_.create(1024, "MVRefStatsMap", "MVRefStatsMap", tenant_id))) {

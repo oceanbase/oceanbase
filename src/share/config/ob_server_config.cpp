@@ -480,7 +480,8 @@ int ObServerMemoryConfig::set_500_tenant_limit(const int64_t limit_mode)
     LOG_WARN("invalid limit mode", K(ret), K(limit_mode));
   }
   if (OB_SUCC(ret)) {
-    set_tenant_memory_limit(OB_SERVER_TENANT_ID, tenant_limit);
+    ma->set_tenant_limit(OB_SERVER_TENANT_ID, tenant_limit);
+    ma->set_tenant_max_min(OB_SERVER_TENANT_ID, tenant_limit, 0);
   }
   for (int ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
     if (ObCtxIds::SCHEMA_SERVICE == ctx_id ||

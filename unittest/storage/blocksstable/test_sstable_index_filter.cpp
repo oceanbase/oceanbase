@@ -355,7 +355,7 @@ void TestSSTableIndexFilter::init_micro_index_info(
 
   ObAggRowWriter row_writer;
   row_writer.init(agg_cols, agg_row, allocator_);
-  int64_t buf_size = row_writer.get_data_size();
+  int64_t buf_size = row_writer.get_serialize_data_size();
   char *buf = reinterpret_cast<char *>(allocator_.alloc(buf_size));
   EXPECT_TRUE(buf != nullptr);
   MEMSET(buf, 0, buf_size);

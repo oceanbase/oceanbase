@@ -23,7 +23,8 @@ namespace tmp_file
 {
 
 ObTmpFileIOInfo::ObTmpFileIOInfo()
-    : fd_(0), dir_id_(0), buf_(nullptr), size_(0),
+    : fd_(ObTmpFileGlobal::INVALID_TMP_FILE_FD),
+      dir_id_(0), buf_(nullptr), size_(0),
       disable_page_cache_(false), disable_block_cache_(false),
       io_desc_(), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS)
 {}
@@ -36,7 +37,7 @@ ObTmpFileIOInfo::~ObTmpFileIOInfo()
 void ObTmpFileIOInfo::reset()
 {
   fd_ = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
-  dir_id_ = ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID;
+  dir_id_ = 0;
   size_ = 0;
   io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   buf_ = nullptr;

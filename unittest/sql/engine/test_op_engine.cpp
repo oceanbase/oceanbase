@@ -99,7 +99,8 @@ common::ObIODevice *TestOpEngine::get_device_inner()
   int ret = OB_SUCCESS;
   common::ObIODevice *device = NULL;
   common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
-  if (OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, device))) {
+  const ObStorageIdMod storage_id_mode(0, ObStorageUsedMod::STORAGE_USED_DATA);
+  if (OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, storage_id_mode, device))) {
     LOG_WARN("fail to get local device", K(ret));
   }
   return device;

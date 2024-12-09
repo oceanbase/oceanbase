@@ -1309,6 +1309,7 @@ int ObPartitionSplitTask::wait_trans_end(const share::ObDDLTaskStatus next_task_
 {
   int ret = OB_SUCCESS;
   ObDDLTaskStatus new_status = task_status_;
+  int64_t new_fetched_snapshot = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObConstraintTask has not been inited", K(ret));
@@ -1319,26 +1320,29 @@ int ObPartitionSplitTask::wait_trans_end(const share::ObDDLTaskStatus next_task_
     new_status = next_task_status;
   }
 
-  if (OB_SUCC(ret) && new_status != next_task_status && !wait_trans_ctx_.is_inited()) {
+  if (OB_SUCC(ret) && snapshot_version_ <= 0 && !wait_trans_ctx_.is_inited()) {
     if (OB_FAIL(wait_trans_ctx_.init(tenant_id_, task_id_, object_id_, all_src_tablet_ids_, ObDDLWaitTransEndCtx::WaitTransType::WAIT_SCHEMA_TRANS, schema_version_))) {
       LOG_WARN("init wait trans ctx failed", K(ret));
     }
   }
 
-  if (OB_SUCC(ret) && new_status != next_task_status && snapshot_version_ <= 0) {
+  if (OB_SUCC(ret) && snapshot_version_ <= 0) {
     bool is_trans_end = false;
-    if (OB_FAIL(wait_trans_ctx_.try_wait(is_trans_end, snapshot_version_))) {
+    if (OB_FAIL(wait_trans_ctx_.try_wait(is_trans_end, new_fetched_snapshot))) {
       LOG_WARN("try wait transaction failed", K(ret));
     }
   }
 
-  if (OB_SUCC(ret) && new_status != next_task_status && snapshot_version_ > 0) {
-    if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(root_service_->get_sql_proxy(),
+  if (OB_SUCC(ret) && snapshot_version_ <= 0 && new_fetched_snapshot > 0) {
+    int64_t persisted_snapshot = 0;
+    if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(root_service_->get_sql_proxy(),
                                                                  tenant_id_,
                                                                  task_id_,
-                                                                 snapshot_version_))) {
+                                                                 new_fetched_snapshot,
+                                                                 persisted_snapshot))) {
       LOG_WARN("update snapshot version failed", K(ret), K(task_id_));
     } else {
+      snapshot_version_ = persisted_snapshot > 0 ? persisted_snapshot : new_fetched_snapshot;
       new_status = next_task_status;
     }
   }
@@ -2482,6 +2486,7 @@ int ObPartitionSplitTask::prepare_tablet_split_ranges(
       arg.tablet_id_          = src_tablet_id;
       arg.user_parallelism_   = parallelism_; // parallelism_;
       arg.schema_tablet_size_ = std::max(tablet_size_, 128 * 1024 * 1024L/*128MB*/);
+      arg.ddl_type_ = task_type_;
       if (OB_FAIL(root_service_->get_rpc_proxy().to(leader_addr)
         .by(tenant_id_).timeout(rpc_timeout).prepare_tablet_split_task_ranges(arg, result))) {
         LOG_WARN("prepare tablet split task ranges failed", K(ret), K(arg));

@@ -77,6 +77,55 @@ public:
   {
   };
 public:
+  class PrintFunctor
+  {
+  public:
+    PrintFunctor(char *buf, int64_t len, int64_t &pos) : buf_(buf), len_(len), pos_(pos), loop_cnt_(0) {}
+    template<typename ObjType>
+    int obj_to_string(const ObjType &obj, char *buf, int64_t len, int64_t &pos)
+    {
+      int ret = common::OB_SUCCESS;
+      int64_t tmp_pos = 0;
+      tmp_pos = obj.to_string(buf + pos, len - pos);
+      if (tmp_pos > 0) {
+        pos += tmp_pos;
+      } else {
+        ret = common::OB_SIZE_OVERFLOW;
+      }
+      return ret;
+    }
+    template<>
+    int obj_to_string<uint64_t>(const uint64_t &obj, char *buf, int64_t len, int64_t &pos)
+    {
+      return databuff_printf(buf, len, pos, "%lu", obj);
+    }
+    int operator()(pair_type &entry)
+    {
+      int ret = common::OB_SUCCESS;
+      int64_t tmp_pos = pos_;
+      if (loop_cnt_ > 0) {
+        ret = databuff_printf(buf_, len_, pos_, ", ");
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_SUCC(obj_to_string(entry.first, buf_, len_, pos_))) {
+          if (OB_SUCC(databuff_printf(buf_, len_, pos_, "->"))) {
+            ret = obj_to_string(entry.second, buf_, len_, pos_);
+          }
+        }
+      }
+      if (common::OB_SUCCESS != ret) {
+        pos_ = tmp_pos;
+      }
+      loop_cnt_++;
+      return ret;
+    }
+  private:
+    char *buf_;
+    int64_t len_;
+    int64_t &pos_;
+  private:
+    int64_t loop_cnt_;
+  };
   bucket_iterator bucket_begin()
   {
     return ht_.bucket_begin();

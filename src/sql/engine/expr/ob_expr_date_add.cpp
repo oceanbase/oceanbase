@@ -341,6 +341,13 @@ int ObExprDateAdd::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, Ob
                                               K(rt_expr.args_[1]), K(rt_expr.args_[2]));
   } else {
     rt_expr.eval_func_ = ObExprDateAdd::calc_date_add;
+    const ObObjTypeClass arg_tc = ob_obj_type_class(rt_expr.args_[0]->datum_meta_.type_);
+    const ObObjTypeClass res_tc = ob_obj_type_class(rt_expr.datum_meta_.type_);
+    // The vectorization of other types for the expression not completed yet.
+    if ((ObDateTC == arg_tc || ObDateTimeTC == arg_tc)
+        && (ObDateTC == res_tc || ObDateTimeTC == res_tc)) {  // if arg_tc is dt/dtt, res_tc is dt/dtt, so it's no need actually
+      rt_expr.eval_vector_func_ = ObExprDateAdd::calc_date_add_vector;
+    }
   }
   return ret;
 }
@@ -373,6 +380,13 @@ int ObExprDateSub::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, Ob
               K(rt_expr.args_[1]), K(rt_expr.args_[2]));
   } else {
     rt_expr.eval_func_ = ObExprDateSub::calc_date_sub;
+    const ObObjTypeClass arg_tc = ob_obj_type_class(rt_expr.args_[0]->datum_meta_.type_);
+    const ObObjTypeClass res_tc = ob_obj_type_class(rt_expr.datum_meta_.type_);
+    // The vectorization of other types for the expression not completed yet.
+    if ((ObDateTC == arg_tc || ObDateTimeTC == arg_tc)
+        && (ObDateTC == res_tc || ObDateTimeTC == res_tc)) {  // if arg_tc is dt/dtt, res_tc is dt/dtt, so it's no need actually
+      rt_expr.eval_vector_func_ = ObExprDateSub::calc_date_sub_vector;
+    }
   }
   return ret;
 }
@@ -668,3 +682,193 @@ int ObExprNextDay::calc_next_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
   }
   return ret;
 }
+
+
+template <typename IN_TYPE, typename ArgVec, typename UnitVec, typename IntervalVec, typename ResVec>
+int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound,
+                    const bool is_add, ObDateSqlMode date_sql_mode)
+{
+  int ret = OB_SUCCESS;
+  UnitVec *unit_type_vec = static_cast<UnitVec *>(expr.args_[2]->get_vector(ctx));
+  IntervalVec *interval_vec = static_cast<IntervalVec *>(expr.args_[1]->get_vector(ctx));
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  const ObObjType res_type = expr.datum_meta_.type_;
+  int64_t tz_offset = 0;
+
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (skip.at(idx) || eval_flags.at(idx)) {
+      continue;
+    } else if (arg_vec->is_null(idx) ||
+               unit_type_vec->is_null(idx) ||
+               interval_vec->is_null(idx)) {
+      res_vec->set_null(idx);
+      eval_flags.set(idx);
+      continue;
+    }
+    DateType date = 0;
+    UsecType usec = 0;
+    IN_TYPE in_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
+    if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(in_val, tz_offset, oceanbase::lib::is_oracle_mode(), date, usec))) {
+      LOG_WARN("get date usec from vec failed", K(ret), K(date), K(usec), K(tz_offset));
+    } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
+      res_vec->set_null(idx);
+      eval_flags.set(idx);
+    } else {
+      int64_t res_dt_val = 0;
+      int64_t dt_val = date * USECS_PER_DAY + usec;
+      if (OB_FAIL(ObTimeConverter::date_adjust(dt_val, interval_vec->get_string(idx),
+                                               static_cast<ObDateUnitType>(unit_type_vec->get_int(idx)),
+                                               res_dt_val, is_add, date_sql_mode))) {
+        if (OB_UNLIKELY(OB_INVALID_DATE_VALUE == ret || OB_TOO_MANY_DATETIME_PARTS == ret)) {
+          res_vec->set_null(idx);
+          eval_flags.set(idx);
+          if (OB_TOO_MANY_DATETIME_PARTS == ret) {
+            // LOG_USER_WARN(OB_TOO_MANY_DATETIME_PARTS);
+            LOG_WARN("OB_TOO_MANY_DATETIME_PARTS", K(ret));
+          }
+          ret = OB_SUCCESS;
+        }
+      } else if (ObDateType == res_type) {
+        int32_t d_val = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_date(res_dt_val, NULL, d_val))) {
+          LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
+        } else {
+          res_vec->set_date(idx, d_val);
+          eval_flags.set(idx);
+        }
+      } else if (ObDateTimeType == res_type) {
+        res_vec->set_datetime(idx, res_dt_val);
+        eval_flags.set(idx);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid type of result", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+template<bool IS_ADD>
+int vector_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound) {
+  int ret = OB_SUCCESS;
+  const ObSQLSessionInfo *session = NULL;
+  const ObObjType res_type = expr.datum_meta_.type_;
+  const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSQLMode sql_mode = 0;
+  const oceanbase::common::ObTimeZoneInfo *tz_info = NULL;
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))
+          || OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))
+          || OB_FAIL(expr.args_[2]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("eval arg failed", K(ret));
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get tz info failed", K(ret));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat interval_format = expr.args_[1]->get_format(ctx);
+    VectorFormat unit_format = expr.args_[2]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    ObObjTypeClass arg_tc = ob_obj_type_class(expr.args_[0]->datum_meta_.type_);
+    ObObjTypeClass res_tc = ob_obj_type_class(expr.datum_meta_.type_);
+    ObDateSqlMode date_sql_mode;
+    date_sql_mode.init(sql_mode);
+
+#define DEF_DATE_ADD_VECTOR(IN_TYPE, arg_type, res_type)\
+  if (VEC_FIXED == unit_format && VEC_FIXED == interval_format) {\
+    ret = vector_date_add<IN_TYPE, arg_type, IntegerFixedVec, IntegerFixedVec, res_type>\
+              (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
+  } else if (VEC_FIXED == unit_format && VEC_UNIFORM == interval_format) {\
+    ret = vector_date_add<IN_TYPE, arg_type, IntegerFixedVec, IntegerUniVec, res_type>\
+              (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
+  } else if (VEC_FIXED == unit_format && VEC_UNIFORM_CONST == interval_format) {\
+    ret = vector_date_add<IN_TYPE, arg_type, IntegerFixedVec, IntegerUniCVec, res_type>\
+              (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
+  } else if (VEC_UNIFORM == unit_format && VEC_FIXED == interval_format) {\
+    ret = vector_date_add<IN_TYPE, arg_type, IntegerUniVec, IntegerFixedVec, res_type>\
+              (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
+  } else if (VEC_UNIFORM == unit_format && VEC_UNIFORM == interval_format) {\
+    ret = vector_date_add<IN_TYPE, arg_type, IntegerUniVec, IntegerUniVec, res_type>\
+              (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
+  } else if (VEC_UNIFORM == unit_format && VEC_UNIFORM_CONST == interval_format) {\
+    ret = vector_date_add<IN_TYPE, arg_type, IntegerUniVec, IntegerUniCVec, res_type>\
+              (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
+  } else if (VEC_UNIFORM_CONST == unit_format && VEC_UNIFORM_CONST == interval_format) {\
+    ret = vector_date_add<IN_TYPE, arg_type, IntegerUniCVec, IntegerUniCVec, res_type>\
+              (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
+  } else if (VEC_UNIFORM_CONST == unit_format && VEC_UNIFORM == interval_format) {\
+    ret = vector_date_add<IN_TYPE, arg_type, IntegerUniCVec, IntegerUniVec, res_type>\
+              (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
+  } else if (VEC_UNIFORM_CONST == unit_format && VEC_FIXED == interval_format) {\
+    ret = vector_date_add<IN_TYPE, arg_type, IntegerUniCVec, IntegerFixedVec, res_type>\
+              (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
+  } else {\
+    ret = vector_date_add<IN_TYPE, ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase>\
+              (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
+  }
+#define DEF_DATE_ADD_WRAP(IN_TYPE, arg_tc, res_tc)\
+  if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {\
+    DEF_DATE_ADD_VECTOR(IN_TYPE, CONCAT(arg_tc, UniVec), CONCAT(res_tc, FixedVec));\
+  } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {\
+    DEF_DATE_ADD_VECTOR(IN_TYPE, CONCAT(arg_tc, UniVec), CONCAT(res_tc, UniVec));\
+  } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM_CONST == res_format) {\
+    DEF_DATE_ADD_VECTOR(IN_TYPE, CONCAT(arg_tc, UniVec), CONCAT(res_tc, UniCVec));\
+  } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {\
+    DEF_DATE_ADD_VECTOR(IN_TYPE, CONCAT(arg_tc, UniCVec), CONCAT(res_tc, UniVec));\
+  } else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {\
+    DEF_DATE_ADD_VECTOR(IN_TYPE, CONCAT(arg_tc, UniCVec), CONCAT(res_tc, FixedVec));\
+  } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM_CONST == res_format) {\
+    DEF_DATE_ADD_VECTOR(IN_TYPE, CONCAT(arg_tc, UniCVec), CONCAT(res_tc, UniCVec));\
+  } else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {\
+    DEF_DATE_ADD_VECTOR(IN_TYPE, CONCAT(arg_tc, FixedVec), CONCAT(res_tc, UniVec));\
+  } else if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {\
+    DEF_DATE_ADD_VECTOR(IN_TYPE, CONCAT(arg_tc, FixedVec), CONCAT(res_tc, FixedVec));\
+  } else if (VEC_FIXED == arg_format && VEC_UNIFORM_CONST == res_format) {\
+    DEF_DATE_ADD_VECTOR(IN_TYPE, CONCAT(arg_tc, FixedVec), CONCAT(res_tc, UniCVec));\
+  } else {\
+    ret = vector_date_add<IN_TYPE, ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase>\
+              (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
+  }
+
+    if (ObDateTimeTC == arg_tc && ObDateTimeTC == res_tc) {
+      DEF_DATE_ADD_WRAP(DateTimeType, DateTime, DateTime)
+    } else if (ObDateTC == arg_tc && ObDateTC == res_tc) {
+      DEF_DATE_ADD_WRAP(DateType, Date, Date)
+    } else if (ObDateTC == arg_tc && ObDateTimeTC == res_tc) {
+      DEF_DATE_ADD_WRAP(DateType, Date, DateTime)
+    } else {
+      ret = vector_date_add<DateType, ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase>\
+                (expr, ctx, skip, bound, IS_ADD, date_sql_mode);
+      LOG_WARN("DATA TYPE NOT SUPPORTED", K(ret));
+    }
+#undef DEF_DATE_ADD_WRAP
+#undef DEF_DATE_ADD_VECTOR
+
+    if (OB_FAIL(ret)) {
+      LOG_WARN("expr calculation failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprDateAdd::calc_date_add_vector(const ObExpr &expr,
+                                        ObEvalCtx &ctx,
+                                        const ObBitVector &skip,
+                                        const EvalBound &bound) {
+  return vector_date_adjust<true>(expr, ctx, skip, bound);
+}
+int ObExprDateSub::calc_date_sub_vector(const ObExpr &expr,
+                                        ObEvalCtx &ctx,
+                                        const ObBitVector &skip,
+                                        const EvalBound &bound) {
+  return vector_date_adjust<false>(expr, ctx, skip, bound);
+}
+
+#undef CHECK_SKIP_NULL
+#undef BATCH_CALC

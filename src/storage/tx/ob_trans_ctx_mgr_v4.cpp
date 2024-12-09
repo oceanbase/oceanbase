@@ -2725,6 +2725,7 @@ int ObLSTxCtxMgr::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "move_tx_op replay unexpected", K(ret), K(ls_id_), K(move_tx_param), K(checkpoint_scn));
         } else {
+          need_check_wrs = false;
           TRANS_LOG(WARN, "move_tx_op replay incomplete", K(ls_id_), K(move_tx_param), K(checkpoint_scn));
         }
       }

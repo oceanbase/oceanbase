@@ -28,21 +28,24 @@ namespace observer
 class ObTableLoadBucket
 {
 public:
-  ObTableLoadBucket() : is_inited_(false), sequence_no_(0) {}
+  ObTableLoadBucket() : is_inited_(false), row_size_(0), sequence_no_(0) {}
 
   int add_row(const common::ObTabletID &tablet_id,
               const table::ObTableLoadObjRow &obj_row,
               int64_t batch_size,
+              int64_t row_size,
               bool &flag);
 
   void reset() {
     is_inited_ = false;
     leader_addr_.reset();
     row_array_.reset();
+    row_size_ = 0;
   }
 
   void clear_data() {
     row_array_.reset();
+    row_size_ = 0;
   }
 
   bool is_inited() const {
@@ -57,6 +60,7 @@ public:
   bool is_inited_;
   common::ObAddr leader_addr_;
   table::ObTableLoadTabletObjRowArray row_array_;
+  int64_t row_size_;
   uint64_t sequence_no_;
 };
 

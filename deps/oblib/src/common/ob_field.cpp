@@ -192,18 +192,19 @@ int64_t ObField::to_string(char *buffer, int64_t len) const
   int64_t pos = 0;
   databuff_printf(buffer, len, pos,
                   "dname:%.*s, tname: %.*s, org_tname: %.*s, "
-                  "cname: %.*s, org_cname: %.*s, type: %s, "
-                  "type_owner: %.*s, type_name: %.*s,"
-                  "charset: %hu, "
-                  "decimal_scale: %hu, flags: %x, inout_mode_: %x"
-                  "is_paramed_select_item: %d,"
-                  "is_hidden_rowid: %d",
+                  "cname: %.*s, org_cname: %.*s, type: ",
                   dname_.length(), dname_.ptr(),
                   tname_.length(), tname_.ptr(),
                   org_tname_.length(), org_tname_.ptr(),
                   cname_.length(), cname_.ptr(),
-                  org_cname_.length(), org_cname_.ptr(),
-                  to_cstring(type_),
+                  org_cname_.length(), org_cname_.ptr());
+  databuff_printf(buffer, len, pos, type_);
+  databuff_printf(buffer, len, pos,
+                  ", type_owner: %.*s, type_name: %.*s,"
+                  "charset: %hu, "
+                  "decimal_scale: %hu, flags: %x, inout_mode_: %x"
+                  "is_paramed_select_item: %d,"
+                  "is_hidden_rowid: %d",
                   type_owner_.length(), type_owner_.ptr(),
                   type_name_.length(), type_name_.ptr(),
                   charsetnr_, accuracy_.get_scale(), flags_,

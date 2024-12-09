@@ -103,19 +103,25 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
                                             int64_t &batch_size,
                                             int64_t config_maxrows,
                                             int64_t config_target_maxsize,
-                                            const double scan_cardinality)
+                                            const double scan_cardinality,
+                                            const int64_t lob_rowsets_max_rows)
 {
   int ret = OB_SUCCESS;
   int64_t MAX_ROWSIZE = 65535;
   int64_t MIN_ROWSIZE = 2;
   const common::ObIArray<ObRawExpr *> &raw_exprs = exprs.get_expr_array();
-  auto size = get_expr_execute_size(raw_exprs);
+  auto size = get_expr_execute_size(raw_exprs, lob_rowsets_max_rows);
   if (size == ObExprBatchSize::full) {
     if (config_maxrows) {
       batch_size = config_maxrows;
       for (int64_t i = 0; OB_SUCC(ret) && i < raw_exprs.count(); i++) {
         if (is_vectorized_expr(raw_exprs.at(i))) {
-          int64_t max_batch_size = compute_max_batch_size(raw_exprs.at(i));
+          int64_t max_batch_size = 0;
+          if (is_large_data(raw_exprs.at(i)->get_data_type())) {
+            max_batch_size = lob_rowsets_max_rows;
+          } else {
+            max_batch_size = compute_max_batch_size(raw_exprs.at(i));
+          }
           batch_size = std::min(batch_size, max_batch_size);
         }
       }
@@ -130,19 +136,24 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
         LOG_WARN("failed to flatten raw exprs", K(ret));
       } else {
         auto expr_cnt = vectorized_exprs.count();
+        bool has_large_data = false;
         for (int i = 0; i < expr_cnt; i++) {
           ObRawExpr *raw_expr = vectorized_exprs.at(i);
           const ObExprResType &result_type = raw_expr->get_result_type();
           row_size += reserve_data_consume(result_type.get_type(), result_type.get_precision()) +
                       get_expr_datum_fixed_header_size();
+          has_large_data = is_large_data(vectorized_exprs.at(i)->get_data_type());
         }
         batch_size = config_target_maxsize / row_size;
-        LOG_TRACE("detect_batch_size", K(row_size), K(batch_size), K(expr_cnt));
+        LOG_TRACE("detect_batch_size", K(row_size), K(batch_size), K(expr_cnt), K(has_large_data), K(lob_rowsets_max_rows));
         // recalculate batch_size: count 2 additional bitmaps: skip + eval_flags
         batch_size = (config_target_maxsize -
                       expr_cnt * 2 * ObBitVector::memory_size(batch_size)) /
                      row_size;
         batch_size = next_pow2(batch_size);
+        if (has_large_data) {
+          batch_size = std::min(lob_rowsets_max_rows, batch_size);
+        }
         // range limit check
         if (batch_size < MIN_ROWSIZE) {
           batch_size = MIN_ROWSIZE;
@@ -506,7 +517,8 @@ int ObStaticEngineExprCG::cg_expr_by_operator(const ObIArray<ObRawExpr *> &raw_e
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("arg is null", K(raw_expr), K(rt_expr), K(ret));
     } else if (T_QUESTIONMARK == rt_expr->type_ &&
-              (raw_expr->has_flag(IS_TABLE_ASSIGN) || rt_question_mark_eval_)) {
+              (raw_expr->has_flag(IS_TABLE_ASSIGN) ||
+               (rt_question_mark_eval_ && (!is_dynamic_eval_qm(*raw_expr) || !contain_dynamic_eval_rt_qm_)))) {
       // generate question mark expr for get param from param store directly
       // if the questionmark is from TABLE_ASSIGN, use eval_assign_question_mark_func
       ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(raw_expr);
@@ -1719,7 +1731,7 @@ int ObStaticEngineExprCG::get_vectorized_exprs(
 }
 
 ObStaticEngineExprCG::ObExprBatchSize ObStaticEngineExprCG::get_expr_execute_size(
-    const common::ObIArray<ObRawExpr *> &raw_exprs)
+    const common::ObIArray<ObRawExpr *> &raw_exprs, int64_t lob_rowsets_max_rows)
 {
   ObExprBatchSize size = ObExprBatchSize::full;
   bool has_udf_expr = false;
@@ -1770,14 +1782,9 @@ ObStaticEngineExprCG::ObExprBatchSize ObStaticEngineExprCG::get_expr_execute_siz
       size = ObExprBatchSize::one;
       break;
     }
-    if (is_large_data(raw_exprs.at(i)->get_data_type()) &&
-        raw_exprs.at(i)->get_expr_type() != T_FUN_TOP_FRE_HIST &&
-        raw_exprs.at(i)->get_expr_type() != T_FUN_HYBRID_HIST) {
-      // 1. batchsize should be scale down when longtext/mediumtext/lob shows up
-      // 2. keep searching
-      size = ObExprBatchSize::small;
+    if (is_large_data(raw_exprs.at(i)->get_data_type())) {
+      size = ObExprBatchSize::full;
     }
-
   }
   LOG_TRACE("can_execute_vectorizely", K(size));
   return size;
@@ -1812,7 +1819,8 @@ int ObStaticEngineExprCG::gen_expr_with_row_desc(const ObRawExpr *expr,
                                                  ObIAllocator &allocator,
                                                  ObSQLSessionInfo *session,
                                                  ObSchemaGetterGuard *schema_guard,
-                                                 ObTempExpr *&temp_expr)
+                                                 ObTempExpr *&temp_expr,
+                                                 bool contain_dynamic_eval_rt_qm_/* = false */)
 {
   int ret = OB_SUCCESS;
   temp_expr = NULL;
@@ -1843,6 +1851,7 @@ int ObStaticEngineExprCG::gen_expr_with_row_desc(const ObRawExpr *expr,
                                  GET_MIN_CLUSTER_VERSION()); // ?
     expr_cg.set_rt_question_mark_eval(true);
     expr_cg.set_need_flatten_gen_col(false);
+    expr_cg.set_contain_dynamic_eval_rt_qm(contain_dynamic_eval_rt_qm_);
     OZ(expr_cg.generate(const_cast<ObRawExpr *>(expr), flattened_raw_exprs, *temp_expr));
   }
   // generate row_idx to column expr pair;

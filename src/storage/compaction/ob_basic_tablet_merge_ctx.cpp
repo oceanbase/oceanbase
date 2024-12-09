@@ -314,6 +314,11 @@ bool ObStaticMergeParam::is_build_row_store() const
   return ObCOMajorMergePolicy::is_build_row_store_merge(co_major_merge_type_);
 }
 
+bool ObStaticMergeParam::is_build_redundent_row_store_from_rowkey_cg() const
+{
+  return is_build_redundent_row_store(major_sstable_status_);
+}
+
 ObMergeLevel ObStaticMergeParam::get_merge_level_for_sstable(
   const ObSSTable &sstable) const
 {

@@ -184,12 +184,18 @@ void ObAllVirtualMemstoreInfo::get_freeze_time_dist(const ObMtStat& mt_stat)
   int64_t ready_for_flush_cost_time = (mt_stat.ready_for_flush_time_ - mt_stat.frozen_time_) / 1000;
   int64_t flush_cost_time = (mt_stat.release_time_ - mt_stat.ready_for_flush_time_) / 1000;
 
+  char rffct_str[32] = {'\0'};
+  char fct_str[32] = {'\0'};
+  int64_t pos = 0;
+  (void)databuff_printf(rffct_str, sizeof(rffct_str), pos, "%ld", ready_for_flush_cost_time);
+  pos = 0;
+  (void)databuff_printf(fct_str, sizeof(fct_str), pos, "%ld", flush_cost_time);
   if (ready_for_flush_cost_time >= 0) {
-    strcat(freeze_time_dist_, to_cstring(ready_for_flush_cost_time));
+    strcat(freeze_time_dist_, rffct_str);
 
     if (flush_cost_time >=0) {
       strcat(freeze_time_dist_, ",");
-      strcat(freeze_time_dist_, to_cstring(flush_cost_time));
+      strcat(freeze_time_dist_, fct_str);
     }
   }
 }

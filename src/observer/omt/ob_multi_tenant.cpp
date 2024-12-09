@@ -186,6 +186,8 @@
 #include "sql/audit/ob_audit_logger.h"
 #include "sql/audit/ob_audit_log_mgr.h"
 #endif
+#include "observer/mysql/ob_query_response_time.h" //ObTenantQueryRespTimeCollector
+#include "lib/stat/ob_diagnostic_info_container.h"
 #include "observer/table/group/ob_table_tenant_group.h"
 #include "observer/table/ob_table_client_info_mgr.h"
 #include "observer/table/ob_table_query_async_processor.h"
@@ -271,7 +273,6 @@ int __attribute__ ((weak)) get_tenant_base_with_lock(
 }
 } // end of namespace share
 } // end of namespace oceanbase
-
 bool compare_tenant(const ObTenant *lhs,
                     const ObTenant *rhs)
 {
@@ -320,7 +321,10 @@ ObMultiTenant::ObMultiTenant()
       balancer_(nullptr),
       myaddr_(),
       cpu_dump_(false),
-      has_synced_(false)
+      has_synced_(false),
+      tenant_limiter_head_(NULL),
+      limiter_mutex_()
+
 {
 }
 
@@ -470,6 +474,7 @@ int ObMultiTenant::init(ObAddr myaddr,
   }
 
   if (OB_SUCC(ret) && mtl_bind_flag) {
+    MTL_BIND2(ObDiagnosticInfoContainer::mtl_new, ObDiagnosticInfoContainer::mtl_init, nullptr, nullptr, ObDiagnosticInfoContainer::mtl_wait, ObDiagnosticInfoContainer::mtl_destroy);
     MTL_BIND2(ObTenantIOManager::mtl_new, ObTenantIOManager::mtl_init, mtl_start_default, mtl_stop_default, nullptr, ObTenantIOManager::mtl_destroy);
     MTL_BIND2(mtl_new_default, tmp_file::ObTenantTmpFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 
@@ -602,7 +607,6 @@ int ObMultiTenant::init(ObAddr myaddr,
       //           mtl_wait_default, mtl_destroy_default);
     }
     MTL_BIND2(mtl_new_default, rootserver::ObHeartbeatService::mtl_init, nullptr, rootserver::ObHeartbeatService::mtl_stop, rootserver::ObHeartbeatService::mtl_wait, mtl_destroy_default);
-    MTL_BIND2(mtl_new_default, ObSharedTimer::mtl_init, ObSharedTimer::mtl_start, ObSharedTimer::mtl_stop, ObSharedTimer::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, table::ObTTLService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObEmptyReadBucket::mtl_init, nullptr, nullptr, nullptr, ObEmptyReadBucket::mtl_destroy);
     MTL_BIND2(mtl_new_default, storage::ObStorageHADiagMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
@@ -613,6 +617,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, rootserver::ObDBMSSchedService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, table::ObHTableLockMgr::mtl_init, nullptr, nullptr, nullptr, table::ObHTableLockMgr::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObSharedTimer::mtl_init, ObSharedTimer::mtl_start, ObSharedTimer::mtl_stop, ObSharedTimer::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(ObTimerService::mtl_new, nullptr, ObTimerService::mtl_start, ObTimerService::mtl_stop, ObTimerService::mtl_wait, ObTimerService::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObOptStatMonitorManager::mtl_init, ObOptStatMonitorManager::mtl_start, ObOptStatMonitorManager::mtl_stop, ObOptStatMonitorManager::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantSrs::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, table::ObTableApiSessPoolMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -637,6 +642,8 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObAuditLogger::mtl_init, ObAuditLogger::mtl_start, ObAuditLogger::mtl_stop, ObAuditLogger::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObAuditLogUpdater::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 #endif
+    MTL_BIND2(mtl_new_default, ObWorkloadRepositoryContext::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, observer::ObTenantQueryRespTimeCollector::mtl_init, nullptr, nullptr, nullptr, observer::ObTenantQueryRespTimeCollector::mtl_destroy);
     MTL_BIND2(mtl_new_default, table::ObTableGroupCommitMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, table::ObHTableRowkeyMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, table::ObTableClientInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -880,6 +887,7 @@ int ObMultiTenant::create_virtual_tenants()
     ObMallocAllocator *allocator = ObMallocAllocator::get_instance();
     if (!OB_ISNULL(allocator)) {
       allocator->set_tenant_limit(OB_SERVER_TENANT_ID, INT64_MAX);
+      allocator->set_tenant_max_min(OB_SERVER_TENANT_ID, INT64_MAX, 0);
     }
 
     // set tenant mem limits
@@ -982,6 +990,10 @@ int ObMultiTenant::convert_hidden_to_real_sys_tenant(const ObUnitInfoGetter::ObT
   return ret;
 }
 
+#ifdef ENABLE_DEBUG_LOG
+ERRSIM_POINT_DEF(ERRSIM_CREATE_TENANT_FAILURE)
+#endif
+
 int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
@@ -1028,6 +1040,23 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
       LOG_ERROR("create and add tenant allocator failed", K(ret), K(tenant_id));
     } else {
       tenant_allocator_created = true;
+    }
+    if (OB_SUCC(ret)) {
+      ObMutexGuard guard(limiter_mutex_);
+      ObShareTenantLimiter *share_limiter = get_share_tenant_limiter_unsafe(tenant_id);
+      if (NULL == share_limiter && OB_FAIL(create_share_tenant_limiter_unsafe(tenant_id, share_limiter))) {
+        LOG_ERROR("create share tenant limiter failed", K(ret), K(tenant_id));
+      } else if (NULL != share_limiter) {
+        ObResourceLimiter *parent = malloc_allocator->get_tenant_parent_limiter(tenant_id);
+        if (OB_LIKELY(NULL == parent)) {
+          malloc_allocator->set_tenant_parent_limiter(tenant_id, share_limiter->limiter_);
+        } else if (&share_limiter->limiter_ == parent) {
+          //do-nothing
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("tenant parent limiter is unexpected", K(ret), K(tenant_id), KP(parent), KP(&share_limiter->limiter_));
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       int64_t memory_size = meta.unit_.config_.memory_size();
@@ -1162,6 +1191,10 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     LOG_WARN("update tenant config fail", K(tenant_id), K(tmp_ret));
   }
 
+#ifdef ENABLE_DEBUG_LOG
+  ret = ERRSIM_CREATE_TENANT_FAILURE ? ERRSIM_CREATE_TENANT_FAILURE : ret;
+#endif
+
   if (OB_FAIL(ret)) {
     do {
       tmp_ret = OB_SUCCESS;
@@ -1234,6 +1267,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     if (OB_TMP_FAIL(cache_washer.sync_flush_tenant(tenant_id))) {
       LOG_WARN("Fail to sync flush tenant cache", K(tmp_ret));
     }
+    common::ObDiagnosticInfoContainer::get_global_di_container()->purge_tenant_summary(tenant_id);
     malloc_allocator->recycle_tenant_allocator(tenant_id);
   }
   if (lock_succ) {
@@ -1388,7 +1422,6 @@ int ObMultiTenant::update_tenant_unit(const ObUnitInfoGetter::ObTenantConfig &un
 int ObMultiTenant::update_tenant_memory(const uint64_t tenant_id, const int64_t mem_limit, int64_t &allowed_mem_limit)
 {
   int ret = OB_SUCCESS;
-
   ObMallocAllocator *malloc_allocator = ObMallocAllocator::get_instance();
 
   allowed_mem_limit = mem_limit;
@@ -1414,7 +1447,22 @@ int ObMultiTenant::update_tenant_memory(const uint64_t tenant_id, const int64_t 
     }
 
     if (allowed_mem_limit != pre_mem_limit) {
+      int64_t max_memory = INT64_MAX;
+      int64_t min_memory = 0;
+      if (is_meta_tenant(tenant_id)) {
+        const int64_t min_memory_upper = 4LL<<30;
+        const int64_t min_memory_lower = 512LL<<20;
+        min_memory = 0.5 * mem_limit;
+        min_memory = MIN(min_memory_upper, min_memory);
+        min_memory = MAX(min_memory_lower, min_memory);
+      } else if (is_user_tenant(tenant_id)) {
+        // do-nothing
+      } else {
+        max_memory = allowed_mem_limit;
+      }
       malloc_allocator->set_tenant_limit(tenant_id, allowed_mem_limit);
+      malloc_allocator->set_tenant_max_min(tenant_id, max_memory, min_memory);
+      update_share_tenant_limiter(tenant_id);
     }
   }
 
@@ -1528,6 +1576,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_tenant_audit_log_config())) {
         LOG_WARN("failed to update tenant audit log config", K(tmp_ret), K(tenant_id));
       }
+      if (OB_TMP_FAIL(update_tenant_query_response_time_flush_config())) {
+        LOG_WARN("failed to update tenant query response time flush config", K(tmp_ret), K(tenant_id));
+      }
       if (tenant_config->kv_group_commit_batch_size > 1 && OB_TMP_FAIL(start_kv_group_commit_timer())) {
         LOG_WARN("failed to start kv group commit timer", K(tmp_ret), K(tenant_id));
       }
@@ -1622,6 +1673,61 @@ int ObMultiTenant::update_throttle_config_(const uint64_t tenant_id)
       LOG_ERROR("share mem alloc mgr should not be null", K(ret));
     } else {
       (void)share_mem_alloc_mgr->update_throttle_config();
+    }
+  }
+  return ret;
+}
+
+int ObMultiTenant::update_tenant_query_response_time_flush_config()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else {
+    int64_t flush_version = 0;
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      uint64_t tenant_id = MTL_ID();
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt("select max(config_version) from %s where tenant_id = '%lu' and name = 'query_response_time_flush' ",
+                                  OB_ALL_VIRTUAL_TENANT_PARAMETER_TNAME, tenant_id))) {
+        LOG_WARN("fail to generate sql", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(result, OB_SYS_TENANT_ID, sql.ptr()))) {
+        LOG_WARN("read config from all_virtual_tenant_parameter_tname failed",
+                KR(ret), K(tenant_id), K(OB_SYS_TENANT_ID), K(sql));
+      } else if (NULL == result.get_result()) {
+        LOG_DEBUG("config result is null", K(tenant_id), K(ret));
+      } else if (OB_FAIL(result.get_result()->next())) {
+        LOG_WARN("get result next failed", K(tenant_id), K(ret));
+      } else if (OB_FAIL(result.get_result()->get_int(0L, flush_version))) {
+        if (OB_ERR_NULL_VALUE != ret) {
+          LOG_WARN("get config_version failed", K(tenant_id), K(ret));
+        } else {
+          LOG_INFO("tenant has no config", K(tenant_id));
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      observer::ObTenantQueryRespTimeCollector *t_query_resp_time_collector = MTL(observer::ObTenantQueryRespTimeCollector *);
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_ISNULL(t_query_resp_time_collector)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("t_query_resp_time_collector should not be null", K(ret));
+      } else if (flush_version > t_query_resp_time_collector->get_flush_config_version()) {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+        if (!tenant_config.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tenant config is invalid",K(ret), K(MTL_ID()));
+        } else if (tenant_config->query_response_time_flush) {
+          if (OB_FAIL(t_query_resp_time_collector->flush())) {
+            LOG_WARN("failed to refresh tenant query response time", K(ret));
+          } else {
+            t_query_resp_time_collector->set_flush_config_version(flush_version);
+          }
+        }
+      }
     }
   }
   return ret;
@@ -1927,6 +2033,7 @@ int ObMultiTenant::mark_del_tenant(const uint64_t tenant_id)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_REMOVE_TENANT_LOCK_ERROR);
 // 确保remove_tenant函数可以重复调用, 因为在删除租户时失败会不断重试,
 // 这里只是删除内存结构，持久化的数据还在。
 int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_succ)
@@ -1973,6 +2080,8 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
     ObLDHandle handle;
     if (OB_FAIL(removed_tenant->try_wait())) {
       LOG_WARN("remove tenant try_wait failed", K(ret), K(tenant_id));
+    } else if (OB_FAIL(ERRSIM_REMOVE_TENANT_LOCK_ERROR)) {
+      LOG_WARN("errsim lock tenant error", KR(ret), K(tenant_id));
     } else if (OB_FAIL(removed_tenant->try_wrlock(handle))) {
       LOG_WARN("can't get tenant wlock to remove tenant", K(ret), K(tenant_id),
           KP(removed_tenant), K(removed_tenant->lock_));
@@ -2141,6 +2250,7 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
       } while (OB_FAIL(ret));
 
       if (OB_SUCC(ret)) {
+        common::ObDiagnosticInfoContainer::get_global_di_container()->purge_tenant_summary(tenant_id);
         lib::ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
         // add a event when finish gc unit
         SERVER_EVENT_ADD("unit", "finish unit gc", "tenant_id", tenant_id,
@@ -2541,17 +2651,25 @@ void ObMultiTenant::run1()
   while (!has_set_stop()) {
     {
       SpinRLockGuard guard(lock_);
+      bool need_regist_cgroup = false;
+      if (OB_NOT_NULL(GCTX.cgroup_ctrl_)) {
+        need_regist_cgroup = GCTX.cgroup_ctrl_->check_cgroup_status();
+      }
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (OB_ISNULL(*it)) {
           LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
         } else if ((*it)->has_stopped()) {
           // skip stopped tenant
         } else {
+          if (need_regist_cgroup) {
+            (*it)->regist_threads_to_cgroup();
+          }
           (*it)->timeup();
         }
       }
     }
-    ob_usleep(TIME_SLICE_PERIOD);
+    ob_usleep(TIME_SLICE_PERIOD, true/*is_idle_sleep*/);
+
 
     if (REACH_TIME_INTERVAL(10000000L)) {  // every 10s
       SpinRLockGuard guard(lock_);
@@ -2592,6 +2710,78 @@ int ObMultiTenant::check_if_unit_id_exist(const uint64_t unit_id, bool &exist)
     }
   }
   return ret;
+}
+ObShareTenantLimiter* ObMultiTenant::get_share_tenant_limiter_unsafe(int64_t tenant_id)
+{
+  int64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  ObShareTenantLimiter *limiter = tenant_limiter_head_;
+  while (NULL != limiter && limiter->tenant_id_ != meta_tenant_id) {
+    limiter = limiter->next_;
+  }
+  return limiter;
+}
+ObShareTenantLimiter* ObMultiTenant::get_share_tenant_limiter(int64_t tenant_id)
+{
+  ObMutexGuard guard(limiter_mutex_);
+  return get_share_tenant_limiter_unsafe(tenant_id);
+}
+
+int ObMultiTenant::create_share_tenant_limiter_unsafe(int64_t tenant_id, ObShareTenantLimiter*& limiter)
+{
+  int ret = OB_SUCCESS;
+  limiter = NULL;
+  int64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (is_meta_tenant(meta_tenant_id)) {
+    limiter = OB_NEW(ObShareTenantLimiter, "Tenantlimiter", meta_tenant_id);
+    if (NULL == limiter) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      limiter->next_ = tenant_limiter_head_;
+      tenant_limiter_head_ = limiter;
+    }
+  }
+  return ret;
+}
+
+void ObMultiTenant::del_share_tenant_limiter(ObShareTenantLimiter* limiter)
+{
+  ObMutexGuard guard(limiter_mutex_);
+  ObShareTenantLimiter **cur = &tenant_limiter_head_;
+  while (*cur != limiter && *cur != NULL) {
+    cur = &(*cur)->next_;
+  }
+  if (*cur != NULL) {
+    *cur = (*cur)->next_;
+  }
+  OB_DELETE(ObShareTenantLimiter, "Tenantlimiter", limiter);
+}
+
+void ObMultiTenant::update_share_tenant_limiter(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObShareTenantLimiter *limiter = get_share_tenant_limiter(tenant_id);
+  if (NULL != limiter) {
+    int64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+    int64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+    ObMallocAllocator *ma = ObMallocAllocator::get_instance();
+    int64_t max = 0;
+    if (ma->is_tenant_allocator_exist(meta_tenant_id)) {
+      max += ma->get_tenant_limit(meta_tenant_id);
+    }
+    if (ma->is_tenant_allocator_exist(user_tenant_id)) {
+      max += ma->get_tenant_limit(user_tenant_id);
+    }
+    limiter->set_max(max);
+  }
+}
+
+void ObMultiTenant::recycle_tenant_allocator(int64_t tenant_id)
+{
+  ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
+  ObShareTenantLimiter *share_limiter = get_share_tenant_limiter(tenant_id);
+  if (NULL != share_limiter && !share_limiter->has_child()) {
+    del_share_tenant_limiter(share_limiter);
+  }
 }
 
 int ObSrvNetworkFrame::reload_tenant_sql_thread_config(const uint64_t tenant_id)

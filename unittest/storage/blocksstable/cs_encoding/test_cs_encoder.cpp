@@ -580,7 +580,7 @@ TEST_F(TestCSEncoder, test_dict_const_ref_encoder)
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INT_DICT);
   ObIntDictColumnEncoder *dict_encoder = reinterpret_cast<ObIntDictColumnEncoder *>(e);
   ASSERT_EQ(true, dict_encoder->dict_encoding_meta_.is_const_encoding_ref());
-  ASSERT_EQ(execption_cnt, dict_encoder->const_list_header_->dict_ref_); // const value is the last one in the sorted dict
+  ASSERT_EQ(execption_cnt, dict_encoder->const_node_.dict_ref_); // const value is the last one in the sorted dict
   ASSERT_EQ(execption_cnt, dict_encoder->ref_exception_cnt_);
   ASSERT_EQ(2 + 2 * execption_cnt, dict_encoder->dict_encoding_meta_.ref_row_cnt_);
 
@@ -589,7 +589,7 @@ TEST_F(TestCSEncoder, test_dict_const_ref_encoder)
   ObStrDictColumnEncoder *str_dict_encoder = reinterpret_cast<ObStrDictColumnEncoder *>(e);
   ASSERT_EQ(1, str_dict_encoder->max_ref_);
   ASSERT_EQ(true, str_dict_encoder->dict_encoding_meta_.is_const_encoding_ref());
-  ASSERT_EQ(0, str_dict_encoder->const_list_header_->dict_ref_);
+  ASSERT_EQ(0, str_dict_encoder->const_node_.dict_ref_);
   ASSERT_EQ(execption_cnt, str_dict_encoder->ref_exception_cnt_);
   ASSERT_EQ(2 + 2 * execption_cnt, str_dict_encoder->dict_encoding_meta_.ref_row_cnt_);
 
@@ -604,7 +604,7 @@ TEST_F(TestCSEncoder, test_dict_const_ref_encoder)
   str_dict_encoder = reinterpret_cast<ObStrDictColumnEncoder *>(e);
   ASSERT_EQ(true, str_dict_encoder->dict_encoding_meta_.is_const_encoding_ref());
   ASSERT_EQ(2, str_dict_encoder->max_ref_);
-  ASSERT_EQ(2, str_dict_encoder->const_list_header_->dict_ref_);
+  ASSERT_EQ(2, str_dict_encoder->const_node_.dict_ref_);
   ASSERT_EQ(execption_cnt, str_dict_encoder->ref_exception_cnt_);
   ASSERT_EQ(2 + 2 * execption_cnt, str_dict_encoder->dict_encoding_meta_.ref_row_cnt_);
 
@@ -613,7 +613,7 @@ TEST_F(TestCSEncoder, test_dict_const_ref_encoder)
   dict_encoder = reinterpret_cast<ObIntDictColumnEncoder *>(e);
   ASSERT_EQ(true, dict_encoder->dict_encoding_meta_.is_const_encoding_ref());
   ASSERT_EQ(1, dict_encoder->max_ref_);
-  ASSERT_EQ(0, dict_encoder->const_list_header_->dict_ref_);
+  ASSERT_EQ(0, dict_encoder->const_node_.dict_ref_);
   ASSERT_EQ(execption_cnt, dict_encoder->ref_exception_cnt_);
   ASSERT_EQ(2 + 2 * execption_cnt, dict_encoder->dict_encoding_meta_.ref_row_cnt_);
 

@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/engine/expr/ob_array_cast.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -355,35 +356,15 @@ int ObArrayExprUtils::set_array_res(ObIArrayType *arr_obj, const int32_t res_siz
   return ret;
 }
 
-template <typename ResVec>
-int ObArrayExprUtils::set_array_res(ObIArrayType *arr_obj, const ObExpr &expr, ObEvalCtx &ctx,
-                                    ResVec *res_vec, int64_t batch_idx)
-{
-  int ret = OB_SUCCESS;
-  int32_t res_size = arr_obj->get_raw_binary_len();
-  char *res_buf = nullptr;
-  int64_t res_buf_len = 0;
-  ObTextStringVectorResult<ResVec> str_result(expr.datum_meta_.type_, &expr, &ctx, res_vec, batch_idx);
-  if (OB_FAIL(str_result.init_with_batch_idx(res_size, batch_idx))) {
-    LOG_WARN("fail to init result", K(ret), K(res_size));
-  } else if (OB_FAIL(str_result.get_reserved_buffer(res_buf, res_buf_len))) {
-    LOG_WARN("fail to get reserver buffer", K(ret));
-  } else if (res_buf_len < res_size) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid res buf len", K(ret), K(res_buf_len), K(res_size));
-  } else if (OB_FAIL(arr_obj->get_raw_binary(res_buf, res_buf_len))) {
-    LOG_WARN("get array raw binary failed", K(ret), K(res_buf_len), K(res_size));
-  } else if (OB_FAIL(str_result.lseek(res_size, 0))) {
-    LOG_WARN("failed to lseek res.", K(ret), K(str_result), K(res_size));
-  } else {
-    str_result.set_result();
-  }
-  return ret;
-}
-
 template int ObArrayExprUtils::set_array_res<ObUniformFormat<true>>(
     ObIArrayType* arr_obj, const ObExpr& expr, ObEvalCtx& ctx,
     ObUniformFormat<true>* res_vec, int64_t batch_idx);
+template int ObArrayExprUtils::set_array_res<ObDiscreteFormat>(
+    ObIArrayType* arr_obj, const ObExpr& expr, ObEvalCtx& ctx,
+    ObDiscreteFormat* res_vec, int64_t batch_idx);
+template int ObArrayExprUtils::set_array_res<ObVectorBase>(
+    ObIArrayType* arr_obj, const ObExpr& expr, ObEvalCtx& ctx,
+    ObVectorBase* res_vec, int64_t batch_idx);
 
 int ObArrayExprUtils::set_array_obj_res(ObIArrayType *arr_obj, ObObjCastParams *params, ObObj *obj)
 {
@@ -472,34 +453,11 @@ int ObArrayExprUtils::deduce_array_element_type(ObExecContext *exec_ctx, ObExprR
   int ret = OB_SUCCESS;
   uint16_t last_subschema_id = ObInvalidSqlType;
   ObExprResType coll_calc_type;
-  ObLength str_len = 0;
-  bool is_decimal_exist = false;
-  bool is_bigint_signed_exsit = false;
-  bool is_all_num_tc = true;
-  bool is_all_same_type = true;
-  // scale is zero
-  bool is_all_int_type = true;
-  ObObjType last_type = ObNullType;
-  int64_t elem_idx = 0;
+  elem_type.meta_.set_utinyint(); // default type
+  // calculate array element type
   for (int64_t i = 0; i < param_num && OB_SUCC(ret); i++) {
-    if (!types_stack[i].is_null()) {
-      elem_idx = i;
-    }
-    if (types_stack[i].get_type() == ObDecimalIntType
-        || types_stack[i].get_type() == ObNumberType
-        || types_stack[i].get_type() == ObUNumberType) {
-      is_decimal_exist = true;
-      if (types_stack[i].get_scale() != 0) {
-        is_all_int_type = false;
-      }
-    }
-    if (!ob_is_numeric_tc(types_stack[i].get_type_class()) && !types_stack[i].is_null()) {
-      is_all_num_tc = false;
-    }
-    if (types_stack[i].get_type() == ObIntType) {
-      is_bigint_signed_exsit = true;
-    }
-    if (ob_is_collection_sql_type(types_stack[i].get_type())) {
+    if (types_stack[i].is_null()) {
+    } else if (ob_is_collection_sql_type(types_stack[i].get_type())) {
       // check subschmea id
       if (last_subschema_id == ObInvalidSqlType) {
         coll_calc_type = types_stack[i];
@@ -515,73 +473,25 @@ int ObArrayExprUtils::deduce_array_element_type(ObExecContext *exec_ctx, ObExprR
           elem_type.meta_.set_collection(last_subschema_id);
         }
       }
-    } else if (i == 0) {
-      // do nothing
-    } else if (types_stack[i - 1].get_type() != types_stack[i].get_type()
-               && !types_stack[i].is_null()) { // null is legal input type
-      for (int64_t j = i - 1; j >= 0 && is_all_same_type; j--) {
-        if (!types_stack[j].is_null() && types_stack[j].get_type() != types_stack[i].get_type()) {
-          is_all_same_type = false;
-        }
-      }
-      if (!is_all_same_type && !is_all_num_tc) {
-        ret = OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION;
-        LOG_USER_ERROR(OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (ob_is_string_tc(types_stack[i].get_type())) {
-        str_len = MAX(str_len, types_stack[i].get_length());
-      }
-    }
-  }
-  if (OB_SUCC(ret) && last_subschema_id == ObInvalidSqlType) {
-    if (is_all_same_type && !is_decimal_exist) {
-      if (param_num == 0) {
-        // default type
-        elem_type.meta_.set_tinyint();
-      } else {
-        elem_type.set_meta_type(types_stack[elem_idx].get_obj_meta());
-        elem_type.set_accuracy(types_stack[elem_idx].get_accuracy());
-        if (ob_is_string_tc(types_stack[elem_idx].get_type())) {
-          elem_type.set_length(str_len);
-          for (int64_t i = 0; i < param_num; i++) {
-            if (!types_stack[i].is_null()) {
-              if (types_stack[i].get_length() != str_len) {
-                types_stack[i].set_calc_length(str_len);
-              }
-            }
-          }
-        }
-      }
-    } else if (is_decimal_exist) {
-      is_all_int_type ? elem_type.meta_.set_int() : elem_type.meta_.set_double();
-      ObObjType target_type = is_all_int_type ? ObIntType : ObDoubleType;
-      for (int64_t i = 0; i < param_num; i++) {
-        if (!types_stack[i].is_null()) {
-          if (types_stack[i].get_type() != target_type) {
-            types_stack[i].set_calc_type(target_type);
-          }
-        }
-      }
-    } else if (is_all_num_tc) {
-      ObObjType calc_type = ObUInt64Type;
-      if (is_bigint_signed_exsit) {
-        elem_type.meta_.set_int();
-        calc_type = ObIntType;
-      } else {
-        elem_type.meta_.set_uint64();
-      }
-      for (int64_t i = 0; i < param_num; i++) {
-        if (!types_stack[i].is_null()) {
-          if (types_stack[i].get_type() != calc_type) {
-            types_stack[i].set_calc_type(calc_type);
-          }
-        }
-      }
+    } else if (!ob_is_array_supported_type(types_stack[i].get_type())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported element type", K(ret), K(types_stack[i].get_type()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element type");
+    } else if (OB_FAIL(ObExprResultTypeUtil::get_deduce_element_type(types_stack[i], elem_type))) {
+      LOG_WARN("get deduce type failed", K(ret), K(types_stack[i].get_type()), K(elem_type.get_obj_type()), K(i));
     }
   }
 
+  // set params calculate type
+  if (last_subschema_id == ObInvalidSqlType) {
+    for (int64_t i = 0; i < param_num && OB_SUCC(ret); i++) {
+      if (types_stack[i].is_null()) {
+      } else if (types_stack[i].get_type() != elem_type.get_obj_type()) {
+        types_stack[i].set_calc_type(elem_type.get_obj_type());
+        types_stack[i].set_calc_accuracy(elem_type.get_accuracy());
+      }
+    }
+  }
   return ret;
 }
 
@@ -611,6 +521,19 @@ int ObArrayExprUtils::deduce_nested_array_subschema_id(ObExecContext *exec_ctx, 
     } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(type_info, subschema_id))) {
       LOG_WARN("failed get subschema id", K(ret), K(type_info));
     }
+  }
+  return ret;
+}
+
+int ObArrayExprUtils::set_null_collection_type(ObExecContext *exec_ctx, ObExprResType& type)
+{
+  int ret = OB_SUCCESS;
+  uint16_t subschema_id = 0;
+  ObString type_def("ARRAY(NULL");
+  if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(type_def, subschema_id))) {
+    LOG_WARN("failed to get subschema id by type string", K(ret), K(DEFAULT_CAST_TYPE_STR));
+  } else {
+    type.set_collection(subschema_id);
   }
   return ret;
 }
@@ -1006,18 +929,33 @@ int ObArrayExprUtils::calc_nested_expr_data_size(const ObExpr &expr, ObEvalCtx &
   return ret;
 }
 
-int ObArrayExprUtils::construct_array_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t subschema_id, ObIArrayType *&res, bool read_only)
+int ObArrayExprUtils::get_array_type_by_subschema_id(ObEvalCtx &ctx, const uint16_t subschema_id, ObCollectionArrayType *&arr_type)
 {
   int ret = OB_SUCCESS;
   ObSubSchemaValue meta;
-  if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, meta))) {
-    LOG_WARN("failed to get subschema meta", K(ret), K(subschema_id));
-  } else {
-    const ObSqlCollectionInfo *src_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(meta.value_);
-    ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(src_coll_info->collection_meta_);
-    if (OB_FAIL(ObArrayTypeObjFactory::construct(alloc, *arr_type, res, read_only))) {
-      LOG_WARN("construct array obj failed", K(ret), K(src_coll_info));
-    }
+  const ObSqlCollectionInfo *coll_info = NULL;
+  if (OB_NOT_NULL(arr_type)) {
+    // do nothing
+  } else if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, meta))) {
+    LOG_WARN("failed to get subschema value", K(ret), K(subschema_id));
+  } else if (OB_ISNULL(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(meta.value_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("source array collection info is null", K(ret));
+  } else if (OB_ISNULL(arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("source array collection array type is null", K(ret), K(*coll_info));
+  }
+  return ret;
+}
+
+int ObArrayExprUtils::construct_array_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t subschema_id, ObIArrayType *&res, bool read_only)
+{
+  int ret = OB_SUCCESS;
+  ObCollectionArrayType *arr_type = NULL;
+  if (OB_FAIL(get_array_type_by_subschema_id(ctx, subschema_id, arr_type))) {
+    LOG_WARN("failed to get array type by subschema id", K(ret), K(subschema_id));
+  } else if (OB_FAIL(ObArrayTypeObjFactory::construct(alloc, *arr_type, res, read_only))) {
+    LOG_WARN("construct array obj failed", K(ret));
   }
   return ret;
 }
@@ -1082,6 +1020,9 @@ int ObArrayExprUtils::nested_expr_from_rows(const ObExpr &expr, ObEvalCtx &ctx, 
   }
   for (int64_t i = 0; i < size && OB_SUCC(ret); i++) {
     int64_t row_idx = i;
+    if (nullptr == stored_rows[i]) {
+      continue;
+    }
     if (selector != nullptr) {
       row_idx = selector[i];
     }
@@ -1227,6 +1168,163 @@ void ObArrayExprUtils::set_expr_attrs_null(const ObExpr &expr, ObEvalCtx &ctx, c
   }
 }
 
+int ObArrayExprUtils::add_elem_to_nested_array(ObIAllocator &tmp_allocator, ObEvalCtx &ctx, uint16_t subschema_id,
+                                               const ObDatum &datum, ObArrayNested *nest_array)
+{
+  int ret = OB_SUCCESS;
+  ObSubSchemaValue value;
+  if (datum.is_null()) {
+    if (OB_FAIL(nest_array->push_null())) {
+      LOG_WARN("failed to push back null value", K(ret));
+    }
+  } else if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+    LOG_WARN("failed to get subschema ctx", K(ret));
+  } else if (value.type_ >= OB_SUBSCHEMA_MAX_TYPE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid subschema type", K(ret), K(value));
+  } else {
+    ObIArrayType *arr_obj = NULL;
+    ObString raw_bin;
+    const ObSqlCollectionInfo *coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_);
+    ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_);
+    if (OB_ISNULL(coll_info)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("collect info is null", K(ret), K(subschema_id));
+    } else if (OB_FAIL(ObArrayTypeObjFactory::construct(tmp_allocator, *arr_type, arr_obj))) {
+      LOG_WARN("construct array obj failed", K(ret), K(subschema_id), K(coll_info));
+    } else if (FALSE_IT(raw_bin = datum.get_string())) {
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
+                                                          ObCollectionSQLType,
+                                                          CS_TYPE_BINARY,
+                                                          true,
+                                                          raw_bin))) {
+      LOG_WARN("fail to get real data.", K(ret), K(raw_bin));
+    } else if (OB_FAIL(arr_obj->init(raw_bin))) {
+      LOG_WARN("failed to init array", K(ret));
+    } else if (OB_FAIL(nest_array->push_back(*arr_obj))) {
+      LOG_WARN("failed to push back array", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObArrayExprUtils::deduce_array_type(ObExecContext *exec_ctx, ObExprResType &type1,
+                                        ObExprResType &type2,uint16_t &subschema_id)
+{
+  int ret = OB_SUCCESS;
+  ObSubSchemaValue arr_meta;
+  const ObSqlCollectionInfo *coll_info = NULL;
+  if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(type1.get_subschema_id(), arr_meta))) {
+    LOG_WARN("failed to get elem meta.", K(ret), K(type1.get_subschema_id()));
+  } else if (arr_meta.type_ != ObSubSchemaType::OB_SUBSCHEMA_COLLECTION_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid subschema type", K(ret), K(arr_meta.type_));
+  } else if (OB_ISNULL(coll_info = static_cast<const ObSqlCollectionInfo *>(arr_meta.value_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("coll info is null", K(ret));
+  } else if (!ob_is_collection_sql_type(type2.get_type())) {
+    ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_);
+    ObCollectionTypeBase *elem_type = arr_type->element_type_;
+    if (!ob_is_array_supported_type(type2.get_type())) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("unexpected type for operation", K(ret), K(type2.get_type()));
+    } else if (elem_type->type_id_ == ObNestedType::OB_BASIC_TYPE) {
+      if (type2.get_type() != static_cast<ObCollectionBasicType *>(elem_type)->basic_meta_.get_obj_type()) {
+        ObObjType calc_type = type2.get_type();
+        if (type2.get_type() == ObDecimalIntType || type2.get_type() == ObNumberType || type2.get_type() == ObUNumberType) {
+          calc_type = ObDoubleType;
+          if (get_decimalint_type(type2.get_precision()) == DECIMAL_INT_32) {
+            calc_type = ObFloatType;
+          }
+        }
+        if (calc_type == static_cast<ObCollectionBasicType *>(elem_type)->basic_meta_.get_obj_type()) {
+          type2.set_calc_type(calc_type);
+        } else {
+          uint32_t depth = 0;
+          ObDataType coll_elem1_type;
+          ObDataType coll_calc_type;
+          ObExprResType deduce_type;
+          coll_calc_type.set_obj_type(calc_type);
+          coll_calc_type.set_accuracy(type2.get_accuracy());
+          bool is_vec = false;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, type1.get_subschema_id(), coll_elem1_type, depth, is_vec))) {
+            LOG_WARN("failed to get array element type", K(ret));
+          } else if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, coll_elem1_type, coll_calc_type,
+                                                                       depth, deduce_type, calc_type))) {
+            LOG_WARN("failed to get array calc type", K(ret));
+          } else {
+            type1.set_calc_meta(deduce_type);
+            type2.set_calc_type(calc_type);
+            subschema_id = deduce_type.get_subschema_id();
+          }
+        }
+      }
+    } else {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("invalid obj type", K(ret), K(*coll_info), K(type2.get_type()));
+    }
+  } else {
+    // type2.is array
+    ObString child_def;
+    uint16_t child_subschema_id;
+    ObExprResType child_type;
+    ObExprResType coll_calc_type;
+    if (OB_FAIL(coll_info->get_child_def_string(child_def))) {
+      LOG_WARN("failed to get type1 child define", K(ret), K(*coll_info));
+    } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(child_def, child_subschema_id))) {
+      LOG_WARN("failed to get type1 child subschema id", K(ret), K(*coll_info), K(child_def));
+    } else if (child_subschema_id == type2.get_subschema_id()) {
+      // do nothing
+    } else if (FALSE_IT(child_type.set_collection(child_subschema_id))) {
+    } else if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, child_type, type2, coll_calc_type))) {
+      LOG_WARN("failed to check array compatibilty", K(ret));
+    } else {
+      if (type2.get_subschema_id() != coll_calc_type.get_subschema_id()) {
+        type2.set_calc_meta(coll_calc_type);
+      }
+      if (child_type.get_subschema_id() != coll_calc_type.get_subschema_id()) {
+        ObDataType child_calc_type;
+        uint16_t type1_calc_id;
+        child_calc_type.meta_.set_collection(coll_calc_type.get_subschema_id());
+        if (OB_FAIL(ObArrayExprUtils::deduce_nested_array_subschema_id(exec_ctx, child_calc_type, type1_calc_id))) {
+          LOG_WARN("failed to deduce nested array subschema id", K(ret));
+        } else {
+          coll_calc_type.set_collection(type1_calc_id);
+          type1.set_calc_meta(coll_calc_type);
+          subschema_id = coll_calc_type.get_subschema_id();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObArrayExprUtils::get_child_subschema_id(ObExecContext *exec_ctx, uint16_t subid, uint16_t &child_subid)
+{
+  int ret = OB_SUCCESS;
+  ObSubSchemaValue arr_meta;
+  ObString child_def;
+  const ObSqlCollectionInfo *coll_info = NULL;
+  if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subid, arr_meta))) {
+    LOG_WARN("failed to get elem meta.", K(ret), K(subid));
+  } else if (arr_meta.type_ != ObSubSchemaType::OB_SUBSCHEMA_COLLECTION_TYPE) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("invalid subschema type", K(ret), K(arr_meta.type_));
+  } else if (OB_ISNULL(coll_info = static_cast<const ObSqlCollectionInfo *>(arr_meta.value_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("coll info is null", K(ret),  K(*coll_info));
+  } else if (coll_info->collection_meta_->type_id_ != ObNestedType::OB_ARRAY_TYPE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("It's not nested array", K(ret));
+  } else if (OB_FAIL(coll_info->get_child_def_string(child_def))) {
+    LOG_WARN("failed to get type1 child define", K(ret), K(*coll_info));
+  } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(child_def, child_subid))) {
+    LOG_WARN("failed to get type1 child subschema id", K(ret), K(*coll_info), K(child_def));
+  }
+  return ret;
+}
+
 int ObNestedVectorFunc::construct_attr_param(ObIAllocator &alloc, ObEvalCtx &ctx, ObExpr &param_expr,
     const uint16_t meta_id, int64_t row_idx, ObIArrayType *&param_obj)
 {
@@ -1262,6 +1360,31 @@ int ObNestedVectorFunc::construct_params(ObIAllocator &alloc, ObEvalCtx &ctx, co
     SQL_ENG_LOG(WARN, "get array failed", K(ret));
   } else if (OB_FAIL(ObArrayExprUtils::construct_array_obj(alloc, ctx, res_meta_id, res_obj, false))) {
     SQL_ENG_LOG(WARN, "construct res array failed", K(ret));
+  }
+  return ret;
+}
+
+int ObArrayExprUtils::get_basic_elem_obj(ObIArrayType *src, ObCollectionTypeBase *elem_type, uint32_t idx, ObObj &elem_obj, bool &is_null)
+{
+  int ret = OB_SUCCESS;
+  if (elem_type->type_id_ == ObNestedType::OB_BASIC_TYPE) {
+    const ObCollectionBasicType *basic_type = static_cast<const ObCollectionBasicType *>(elem_type);
+    if (src->get_format() != ArrayFormat::Vector && src->is_null(idx)) {
+      is_null = true;
+    } else if (OB_FAIL(ObArrayCastUtils::cast_get_element(src, basic_type, idx, elem_obj))) {
+      LOG_WARN("failed to cast get element", K(ret));
+    } else {
+      is_null = false;
+    }
+  } else if (elem_type->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+    ObArrayNested *arr_nested = static_cast<ObArrayNested *>(src);
+    const ObCollectionArrayType *array_type = static_cast<const ObCollectionArrayType *>(elem_type);
+    if (OB_FAIL(get_basic_elem_obj(arr_nested->get_child_array(), array_type->element_type_, idx, elem_obj, is_null))) {
+      LOG_WARN("failed to cast get element", K(ret));
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported elem type", K(ret), K(elem_type->type_id_));
   }
   return ret;
 }

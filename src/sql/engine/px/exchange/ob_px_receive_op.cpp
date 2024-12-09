@@ -230,6 +230,7 @@ int ObPxReceiveOp::init_channel(
   } else if (OB_FAIL(link_ch_sets(task_ch_set, task_channels, &dfc_))) {
     LOG_WARN("Fail to link data channel", K(ret));
   } else {
+    uint64_t min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version();
     bool enable_audit = GCONF.enable_sql_audit
                       && ctx_.get_my_session()->get_local_ob_enable_sql_audit();
     metric_.init(enable_audit);
@@ -253,6 +254,7 @@ int ObPxReceiveOp::init_channel(
         ch->set_audit(enable_audit);
         ch->set_interm_result(use_interm_result);
         ch->set_enable_channel_sync(true);
+        ch->set_send_by_tenant(min_cluster_version >= CLUSTER_VERSION_4_3_5_0);
         ch->set_ignore_error(recv_input.is_ignore_vtable_error());
         ch->set_batch_id(batch_id);
         ch->set_operator_owner();
@@ -884,6 +886,7 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
         } else {
           got_row = true;
           brs_.size_ = read_rows;
+          brs_.all_rows_active_ = true;
         }
       }
       break;

@@ -21,11 +21,14 @@
 #include "storage/direct_load/ob_direct_load_mem_context.h"
 #include "storage/direct_load/ob_direct_load_i_table.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
+#include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
 
 namespace oceanbase
 {
 namespace observer
 {
+using namespace table;
+
 ObTableLoadStoreTableCtx::ObTableLoadStoreTableCtx()
   : allocator_("TLD_STCtx"),
     table_id_(OB_INVALID_ID),
@@ -281,7 +284,7 @@ int ObTableLoadStoreTableCtx::init_insert_table_ctx()
   insert_table_param.reserved_parallel_ = is_fast_heap_table_ ? store_ctx_->ctx_->param_.session_count_ : 0;
   insert_table_param.rowkey_column_count_ = schema_->rowkey_column_count_;
   insert_table_param.column_count_ = schema_->store_column_count_;
-  insert_table_param.lob_column_count_ = schema_->lob_column_idxs_.count();
+  insert_table_param.lob_inrow_threshold_ = schema_->lob_inrow_threshold_;
   insert_table_param.is_partitioned_table_ = schema_->is_partitioned_table_;
   insert_table_param.is_heap_table_ = schema_->is_heap_table_;
   insert_table_param.is_column_store_ = schema_->is_column_store_;
@@ -291,8 +294,10 @@ int ObTableLoadStoreTableCtx::init_insert_table_ctx()
   insert_table_param.datum_utils_ = &(schema_->datum_utils_);
   insert_table_param.col_descs_ = &(schema_->column_descs_);
   insert_table_param.cmp_funcs_ = &(schema_->cmp_funcs_);
+  insert_table_param.lob_column_idxs_ = &(schema_->lob_column_idxs_);
   insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
   insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
+  insert_table_param.max_batch_size_ = store_ctx_->ctx_->param_.batch_size_;
   if (OB_ISNULL(insert_table_ctx_ =
                       OB_NEWx(ObDirectLoadInsertTableContext, (&allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

@@ -243,7 +243,7 @@ void ObCdcService::run1()
         last_snapshot_traffic_info_ts = current_ts;
       }
 
-      ob_usleep(static_cast<uint32_t>(BASE_INTERVAL));
+      ob_usleep(static_cast<uint32_t>(BASE_INTERVAL), true/*is_idle_sleep*/);
     }
 
     EXTLOG_LOG(INFO, "CdcSrv Thread Exit due to has_set_stop", "stop_flag", has_set_stop());

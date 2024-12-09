@@ -23,6 +23,8 @@
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
 
+void __attribute__((weak)) request_finish_callback();
+
 ObMPDisconnect::ObMPDisconnect(const sql::ObFreeSessionCtx &ctx)
     : ctx_(ctx)
 {
@@ -77,7 +79,6 @@ int ObMPDisconnect::run()
       if (OB_FAIL(GCTX.session_mgr_->free_session(ctx_))) {
         LOG_WARN("free session fail", K(ctx_));
       } else {
-        common::ObTenantStatEstGuard guard(ctx_.tenant_id_);
         EVENT_INC(SQL_USER_LOGOUTS_CUMULATIVE);
         LOG_INFO("free session successfully", "sessid", ctx_.sessid_);
         if (OB_UNLIKELY(OB_FAIL(sql::ObSQLSessionMgr::is_need_clear_sessid(&conn, is_need_clear)))) {
@@ -92,5 +93,6 @@ int ObMPDisconnect::run()
       }
     }
   }
+  request_finish_callback();
   return ret;
 }

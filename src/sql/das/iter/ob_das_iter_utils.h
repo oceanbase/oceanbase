@@ -15,6 +15,7 @@
 
 #include "sql/das/iter/ob_das_iter_define.h"
 #include "sql/das/iter/ob_das_scan_iter.h"
+#include "sql/das/iter/ob_das_spatial_scan_iter.h"
 #include "sql/das/iter/ob_das_merge_iter.h"
 #include "sql/das/iter/ob_das_local_lookup_iter.h"
 #include "sql/das/iter/ob_das_global_lookup_iter.h"
@@ -25,7 +26,11 @@
 #include "sql/das/iter/ob_das_doc_id_merge_iter.h"
 #include "sql/das/iter/ob_das_vid_merge_iter.h"
 #include "sql/das/iter/ob_das_index_merge_iter.h"
+#include "sql/das/iter/ob_das_func_data_iter.h"
+#include "sql/das/iter/ob_das_functional_lookup_iter.h"
+#include "sql/das/iter/ob_das_cache_lookup_iter.h"
 #include "sql/engine/table/ob_table_scan_op.h"
+#include "sql/das/iter/ob_das_mvi_lookup_iter.h"
 
 namespace oceanbase
 {
@@ -74,6 +79,11 @@ public:
                                             const ObDASRelatedTabletID &related_tablet_ids,
                                             const ObLSID &ls_id,
                                             ObDASIter *root_iter);
+  static int set_func_lookup_iter_related_ids(const ObDASBaseCtDef *attach_ctdef,
+                                              const ObDASRelatedTabletID &related_tablet_ids,
+                                              const ObLSID &ls_id,
+                                              int64_t flag,
+                                              ObDASIter *root_iter);
 
   static int set_index_merge_related_ids(const ObDASBaseCtDef *attach_ctdef,
                                          const ObDASRelatedTabletID &related_tablet_ids,
@@ -120,6 +130,15 @@ private:
                                         transaction::ObTxReadSnapshot *snapshot,
                                         ObDASIter *&iter_tree);
 
+  static int create_function_lookup_tree(ObTableScanParam &scan_param,
+                                         common::ObIAllocator &alloc,
+                                         const ObDASBaseCtDef *attach_ctdef,
+                                         ObDASBaseRtDef *attach_rtdef,
+                                         const ObDASRelatedTabletID &related_tablet_ids,
+                                         transaction::ObTxDesc *trans_desc,
+                                         transaction::ObTxReadSnapshot *snapshot,
+                                         ObDASIter *&iter_tree);
+
   static int create_doc_id_scan_sub_tree(ObTableScanParam &scan_param,
                                          common::ObIAllocator &alloc,
                                          const ObDASDocIdMergeCtDef *merge_ctdef,
@@ -151,11 +170,38 @@ private:
                                            ObDASIter *doc_id_iter,
                                            ObDASIter *&domain_lookup_result);
 
+  static int create_mvi_lookup_tree(ObTableScanParam &scan_param,
+                                    common::ObIAllocator &alloc,
+                                    const ObDASBaseCtDef *attach_ctdef,
+                                    ObDASBaseRtDef *attach_rtdef,
+                                    const ObDASRelatedTabletID &related_tablet_ids,
+                                    transaction::ObTxDesc *trans_desc,
+                                    transaction::ObTxReadSnapshot *snapshot,
+                                    ObDASIter *&iter_tree);
+
+  static int create_gis_lookup_tree(ObTableScanParam &scan_param,
+                                    common::ObIAllocator &alloc,
+                                    const ObDASBaseCtDef *attach_ctdef,
+                                    ObDASBaseRtDef *attach_rtdef,
+                                    const ObDASRelatedTabletID &related_tablet_ids,
+                                    transaction::ObTxDesc *trans_desc,
+                                    transaction::ObTxReadSnapshot *snapshot,
+                                    ObDASIter *&iter_tree);
+
   static int create_text_retrieval_sub_tree(const ObLSID &ls_id,
                                             common::ObIAllocator &alloc,
                                             const ObDASIRScanCtDef *ir_scan_ctdef,
                                             ObDASIRScanRtDef *ir_scan_rtdef,
-                                            const ObDASRelatedTabletID &related_tablet_ids,
+                                            const ObDASFTSTabletID &related_tablet_ids,
+                                            transaction::ObTxDesc *trans_desc,
+                                            transaction::ObTxReadSnapshot *snapshot,
+                                            ObDASIter *&retrieval_result);
+
+  static int create_functional_text_retrieval_sub_tree(const ObLSID &ls_id,
+                                            common::ObIAllocator &alloc,
+                                            const ObDASIRScanCtDef *ir_scan_ctdef,
+                                            ObDASIRScanRtDef *ir_scan_rtdef,
+                                            const ObDASFTSTabletID &related_tablet_ids,
                                             transaction::ObTxDesc *trans_desc,
                                             transaction::ObTxReadSnapshot *snapshot,
                                             ObDASIter *&retrieval_result);
@@ -164,6 +210,7 @@ private:
                                   const ObDASSortCtDef *sort_ctdef,
                                   ObDASSortRtDef *sort_rtdef,
                                   const bool need_rewind,
+                                  const bool need_distinct,
                                   ObDASIter *sort_input,
                                   ObDASIter *&sort_result);
 
@@ -202,6 +249,16 @@ private:
                                          transaction::ObTxDesc *tx_desc,
                                          transaction::ObTxReadSnapshot *snapshot,
                                          ObDASIter *&iter);
+  static int create_functional_lookup_sub_tree(ObTableScanParam &scan_param,
+                                               const ObLSID &ls_id,
+                                               common::ObIAllocator &alloc,
+                                               const ObDASFuncLookupCtDef *table_lookup_ctdef,
+                                               ObDASFuncLookupRtDef *table_lookup_rtdef,
+                                               const ObDASRelatedTabletID &related_tablet_ids,
+                                               const bool &lookup_keep_order,
+                                               transaction::ObTxDesc *trans_desc,
+                                               transaction::ObTxReadSnapshot *snapshot,
+                                               ObDASIter *&fun_lookup_result);
 
   static int create_iter_children_array(const int64_t children_cnt,
                                         common::ObIAllocator &alloc,
@@ -229,6 +286,15 @@ private:
     }
     return ret;
   }
+
+  static void init_scan_iter_param(ObDASScanIterParam &param,
+                                   const ObDASScanCtDef *scan_ctdef,
+                                   ObDASBaseRtDef *scan_rtdef);
+  static void init_spatial_scan_iter_param(ObDASSpatialScanIterParam &param,
+                                           const ObDASScanCtDef *scan_ctdef,
+                                           ObDASScanRtDef *scan_rtdef);
+
+  static int create_das_spatial_scan_iter(ObIAllocator &alloc, ObDASSpatialScanIterParam &param, ObDASSpatialScanIter *&result);
 
   ObDASIterUtils() = delete;
   ~ObDASIterUtils() = delete;

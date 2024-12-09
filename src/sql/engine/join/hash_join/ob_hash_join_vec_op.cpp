@@ -181,7 +181,9 @@ ObHashJoinVecOp::ObHashJoinVecOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOp
   data_ratio_(1.0),
   output_info_(),
   stores_mgr_(),
-  part_idxes_(nullptr)
+  part_idxes_(nullptr),
+  build_key_proj_(),
+  build_rows_output_()
 {
 }
 
@@ -237,7 +239,8 @@ int ObHashJoinVecOp::inner_open()
   }
   if (OB_SUCC(ret)) {
     const int64_t batch_size = MY_SPEC.max_batch_size_;
-    OZ (ObVecAllocUtil::vec_alloc_ptrs(&mem_context_->get_arena_allocator(),
+    const int64_t key_count = MY_SPEC.join_conds_.count();
+    if (OB_FAIL(ObVecAllocUtil::vec_alloc_ptrs(&mem_context_->get_arena_allocator(),
                        part_stored_rows_, sizeof(* part_stored_rows_) * batch_size,
                        hash_vals_, sizeof(*hash_vals_) * batch_size,
                        child_brs_.skip_, ObBitVector::memory_size(batch_size),
@@ -250,12 +253,34 @@ int ObHashJoinVecOp::inner_open()
                        probe_batch_rows_.brs_.skip_, ObBitVector::memory_size(batch_size),
                        probe_batch_rows_.key_data_, join_table_.get_normalized_key_size() * batch_size,
                        jt_ctx_.stored_rows_, sizeof(*jt_ctx_.stored_rows_) * batch_size,
-                       jt_ctx_.cur_items_, sizeof(*jt_ctx_.cur_items_) * batch_size));
-    const ObExprPtrIArray &left_output = left_->get_spec().output_;
-    left_vectors_.set_allocator(&mem_context_->get_arena_allocator());
-    OZ (left_vectors_.init(left_output.count()));
-    for (int64_t i = 0; OB_SUCC(ret) && i < left_output.count(); ++i) {
-      OZ (left_vectors_.push_back(left_output.at(i)->get_vector(eval_ctx_)));
+                       jt_ctx_.scan_chain_rows_, sizeof(*jt_ctx_.scan_chain_rows_) * batch_size,
+                       jt_ctx_.cmp_ret_map_, sizeof(int) * batch_size,
+                       jt_ctx_.cmp_ret_for_one_col_, sizeof(int) * batch_size,
+                       jt_ctx_.join_cond_matched_, sizeof(bool) * batch_size,
+                       jt_ctx_.eval_skip_, ObBitVector::memory_size(batch_size),
+                       jt_ctx_.unmatched_sel_, sizeof(*jt_ctx_.unmatched_sel_) * batch_size,
+                       jt_ctx_.unmatched_rows_, sizeof(*jt_ctx_.unmatched_rows_) * batch_size,
+                       jt_ctx_.unmatched_pos_, sizeof(*jt_ctx_.unmatched_pos_) * batch_size,
+                       jt_ctx_.unmatched_bkts_, sizeof(*jt_ctx_.unmatched_bkts_) * batch_size,
+                       jt_ctx_.del_sel_, sizeof(*jt_ctx_.del_sel_) * batch_size,
+                       jt_ctx_.del_bkts_, sizeof(*jt_ctx_.del_bkts_) * batch_size,
+                       jt_ctx_.del_rows_, sizeof(*jt_ctx_.del_rows_) * batch_size,
+                       jt_ctx_.del_pre_rows_, sizeof(*jt_ctx_.del_pre_rows_) * batch_size,
+                       jt_ctx_.del_matched_pre_rows_, sizeof(*jt_ctx_.del_matched_pre_rows_) * batch_size,
+                       jt_ctx_.del_matched_bkts_, sizeof(*jt_ctx_.del_matched_bkts_) * batch_size,
+                       jt_ctx_.build_cols_have_null_, ObBitVector::memory_size(key_count),
+                       jt_ctx_.probe_cols_have_null_, ObBitVector::memory_size(key_count)))) {
+      LOG_WARN("vec alloc ptrs failed", K(ret));
+    } else {
+      const ObExprPtrIArray *left_output = jt_ctx_.build_output_;
+      jt_ctx_.build_cols_have_null_->reset(key_count);
+      jt_ctx_.probe_cols_have_null_->reset(key_count);
+      left_vectors_.set_allocator(&mem_context_->get_arena_allocator());
+      // add expr is not in left_output to left_vectors_
+      OZ (left_vectors_.init(left_output->count()));
+      for (int64_t i = 0; OB_SUCC(ret) && i < left_output->count(); ++i) {
+        OZ (left_vectors_.push_back(left_output->at(i)->get_vector(eval_ctx_)));
+      }
     }
   }
   cur_join_table_ = &join_table_;
@@ -268,40 +293,104 @@ int ObHashJoinVecOp::init_join_table_ctx()
   jt_ctx_.eval_ctx_ = &eval_ctx_;
   jt_ctx_.join_type_ = MY_SPEC.join_type_;
   jt_ctx_.join_conds_ = &MY_SPEC.join_conds_;
+  jt_ctx_.other_conds_ = &MY_SPEC.other_join_conds_;
   jt_ctx_.build_keys_ = &MY_SPEC.build_keys_;
   jt_ctx_.probe_keys_ = &MY_SPEC.probe_keys_;
   jt_ctx_.build_key_proj_ = &MY_SPEC.build_key_proj_;
   jt_ctx_.probe_key_proj_ = &MY_SPEC.probe_key_proj_;
-  jt_ctx_.build_output_ = &left_->get_spec().output_;
-  jt_ctx_.probe_output_ = &right_->get_spec().output_;
-  jt_ctx_.calc_exprs_ = &MY_SPEC.calc_exprs_;
-
-  jt_ctx_.build_row_meta_.set_allocator(&eval_ctx_.exec_ctx_.get_allocator());
-  jt_ctx_.probe_row_meta_.set_allocator(&eval_ctx_.exec_ctx_.get_allocator());
-
-  uint32_t build_extra_size = sizeof(ObHJStoredRow::ExtraInfo);
-  if (MY_SPEC.use_realistic_runtime_bloom_filter_size()) {
-    build_extra_size =
-        MY_SPEC.jf_material_control_info_.extra_hash_count_ * sizeof(ObHJStoredRow::ExtraInfo);
+  if (OB_ISNULL(ctx_.get_physical_plan_ctx()) || OB_ISNULL(ctx_.get_physical_plan_ctx()->get_phy_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get phy plan", K(ret));
+  } else if (ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_3_5_0) {
+    jt_ctx_.build_output_ = &MY_SPEC.build_rows_output_;
+  } else {
+    // for compat, gen build_key_proj_ and build_rows_output_ again
+    build_key_proj_.set_allocator(&eval_ctx_.exec_ctx_.get_allocator());
+    build_rows_output_.set_allocator(&eval_ctx_.exec_ctx_.get_allocator());
+    OZ (build_key_proj_.init(jt_ctx_.build_keys_->count()));
+    OZ (build_rows_output_.init(left_->get_spec().output_.count() + jt_ctx_.build_keys_->count()));
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < left_->get_spec().output_.count(); i++) {
+        OZ (build_rows_output_.push_back(left_->get_spec().output_.at(i)));
+      }
+    }
+    int64_t idx = 0;
+    int64_t build_key_not_in_output_idx = left_->get_spec().output_.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < jt_ctx_.build_keys_->count(); i++) {
+      ObExpr *left_expr = jt_ctx_.build_keys_->at(i);
+      if (has_exist_in_array(left_->get_spec().output_, left_expr, &idx)) {
+        OZ (build_key_proj_.push_back(idx));
+      } else {
+        OZ (build_rows_output_.push_back(left_expr));
+        OZ (build_key_proj_.push_back(build_key_not_in_output_idx++));
+      }
+    }
+    jt_ctx_.build_output_ = &build_rows_output_;
+    jt_ctx_.build_key_proj_ = &build_key_proj_;
   }
+  if (OB_FAIL(ret)) {
+  } else {
+    jt_ctx_.probe_output_ = &right_->get_spec().output_;
+    jt_ctx_.calc_exprs_ = &MY_SPEC.calc_exprs_;
 
-  OZ(jt_ctx_.build_row_meta_.init(left_->get_spec().output_, build_extra_size));
-  OZ(jt_ctx_.probe_row_meta_.init(right_->get_spec().output_, sizeof(ObHJStoredRow::ExtraInfo)));
-  if (OB_SUCC(ret)) {
-    jt_ctx_.is_shared_ = MY_SPEC.is_shared_ht_;
-    jt_ctx_.max_output_cnt_ = &max_output_cnt_;
-    jt_ctx_.max_batch_size_ = MY_SPEC.max_batch_size_;
-    jt_ctx_.output_info_ = &output_info_;
-    jt_ctx_.probe_batch_rows_ = &probe_batch_rows_;
-    jt_ctx_.probe_opt_ = MY_SPEC.can_prob_opt_;
-  }
-  jt_ctx_.contain_ns_equal_ = false;
-  for (int64_t i = 0; !jt_ctx_.contain_ns_equal_ && i < MY_SPEC.is_ns_equal_cond_.count(); i++) {
-    if (MY_SPEC.is_ns_equal_cond_.at(i)) {
-      jt_ctx_.contain_ns_equal_ = true;
+    jt_ctx_.build_row_meta_.set_allocator(&eval_ctx_.exec_ctx_.get_allocator());
+    jt_ctx_.probe_row_meta_.set_allocator(&eval_ctx_.exec_ctx_.get_allocator());
+
+    uint32_t build_extra_size = sizeof(ObHJStoredRow::ExtraInfo);
+    if (MY_SPEC.use_realistic_runtime_bloom_filter_size()) {
+      build_extra_size =
+          MY_SPEC.jf_material_control_info_.extra_hash_count_ * sizeof(ObHJStoredRow::ExtraInfo);
+    }
+
+    OZ(jt_ctx_.build_row_meta_.init(*jt_ctx_.build_output_, build_extra_size));
+    OZ(jt_ctx_.probe_row_meta_.init(right_->get_spec().output_, sizeof(ObHJStoredRow::ExtraInfo)));
+    if (OB_SUCC(ret)) {
+      jt_ctx_.is_shared_ = MY_SPEC.is_shared_ht_;
+      jt_ctx_.max_output_cnt_ = &max_output_cnt_;
+      jt_ctx_.max_batch_size_ = MY_SPEC.max_batch_size_;
+      jt_ctx_.output_info_ = &output_info_;
+      jt_ctx_.probe_batch_rows_ = &probe_batch_rows_;
+      jt_ctx_.probe_opt_ = MY_SPEC.can_prob_opt_;
+    }
+    jt_ctx_.contain_ns_equal_ = false;
+    jt_ctx_.is_ns_equal_cond_ = &MY_SPEC.is_ns_equal_cond_;
+    for (int64_t i = 0; !jt_ctx_.contain_ns_equal_ && i < MY_SPEC.is_ns_equal_cond_.count(); i++) {
+      if (MY_SPEC.is_ns_equal_cond_.at(i)) {
+        jt_ctx_.contain_ns_equal_ = true;
+      }
+    }
+
+    // build cmp func in open(), avoid to SERIALIZE that building in cg
+    jt_ctx_.build_cmp_funcs_.set_allocator(&eval_ctx_.exec_ctx_.get_allocator());
+    jt_ctx_.probe_cmp_funcs_.set_allocator(&eval_ctx_.exec_ctx_.get_allocator());
+    OZ (jt_ctx_.build_cmp_funcs_.init(jt_ctx_.build_keys_->count()));
+    OZ (jt_ctx_.probe_cmp_funcs_.init(jt_ctx_.probe_keys_->count()));
+    int64_t join_key_count = jt_ctx_.build_keys_->count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < join_key_count; i++) {
+      NullSafeRowCmpFunc null_first_cmp = nullptr, null_last_cmp = nullptr;
+      const ObDatumMeta &build_meta = jt_ctx_.build_keys_->at(i)->datum_meta_;
+      const ObDatumMeta &probe_meta = jt_ctx_.probe_keys_->at(i)->datum_meta_;
+      VectorCmpExprFuncsHelper::get_cmp_set(build_meta, build_meta, null_first_cmp, null_last_cmp);
+      if (OB_ISNULL(null_first_cmp)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("cmp_func is null", K(ret), K(build_meta));
+      } else {
+        OZ (jt_ctx_.build_cmp_funcs_.push_back(null_first_cmp));
+      }
+      if (build_meta.get_type() == probe_meta.get_type()) {
+        OZ (jt_ctx_.probe_cmp_funcs_.push_back(nullptr));
+      } else {
+        null_first_cmp = nullptr, null_last_cmp = nullptr;
+        VectorCmpExprFuncsHelper::get_cmp_set(build_meta, probe_meta, null_first_cmp, null_last_cmp);
+        if (OB_ISNULL(null_first_cmp)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("cmp_func is null", K(ret), K(build_meta), K(probe_meta));
+        } else {
+          OZ (jt_ctx_.probe_cmp_funcs_.push_back(null_first_cmp));
+        }
+      }
     }
   }
-
   return ret;
 }
 
@@ -758,7 +847,8 @@ int ObHashJoinVecOp::get_next_left_row_batch(bool is_from_row_store, const ObBat
     if (OB_FAIL(try_check_status())) {
       LOG_WARN("failed to check status", K(ret));
     } else if (OB_FAIL(left_part_->get_next_batch(
-                       left_->get_spec().output_, eval_ctx_, MY_SPEC.max_batch_size_,
+                       // left_->get_spec().output_, eval_ctx_, MY_SPEC.max_batch_size_,
+                       *jt_ctx_.build_output_, eval_ctx_, MY_SPEC.max_batch_size_,
                        read_size, part_stored_rows_))) {
       if (OB_ITER_END == ret) {
         const_cast<ObBatchRows *>(child_brs)->size_ = 0;
@@ -912,8 +1002,12 @@ int ObHashJoinVecOp::get_max_memory_size(int64_t input_size)
     LOG_WARN("failed to init sql mem mgr", K(ret));
   } else if (sql_mem_processor_.is_auto_mgr()) {
     remain_data_memory_size_ = calc_max_data_size(extra_memory_size);
-    part_count_ = calc_partition_count_by_cache_aware(
-      profile_.get_row_count(), MAX_PART_COUNT_PER_LEVEL, memory_size);
+    if (is_top_level_process_with_join_filter()) {
+      part_count_ = join_filter_partition_splitter_->get_part_count();
+    } else {
+      part_count_ = calc_partition_count_by_cache_aware(
+        profile_.get_row_count(), MAX_PART_COUNT_PER_LEVEL, memory_size);
+    }
     if (!top_part_level()) {
       if (OB_ISNULL(left_part_) || OB_ISNULL(right_part_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -928,8 +1022,12 @@ int ObHashJoinVecOp::get_max_memory_size(int64_t input_size)
       K(input_size), K(extra_memory_size), K(profile_.get_expect_size()),
       K(profile_.get_cache_size()), K(spec_.id_));
   } else {
-    part_count_ = calc_partition_count_by_cache_aware(
-      profile_.get_row_count(), MAX_PART_COUNT_PER_LEVEL, sql_mem_processor_.get_mem_bound());
+    if (is_top_level_process_with_join_filter()) {
+      part_count_ = join_filter_partition_splitter_->get_part_count();
+    } else {
+      part_count_ = calc_partition_count_by_cache_aware(
+        profile_.get_row_count(), MAX_PART_COUNT_PER_LEVEL, sql_mem_processor_.get_mem_bound());
+    }
     LOG_TRACE("trace auto memory manager", K(hash_area_size), K(part_count_),
       K(input_size), K(spec_.id_));
   }
@@ -1238,7 +1336,8 @@ int ObHashJoinVecOp::build_hash_table_in_memory(int64_t &num_left_rows)
 int ObHashJoinVecOp::init_left_vectors()
 {
   int ret = OB_SUCCESS;
-  const ExprFixedArray &exprs = left_->get_spec().output_;
+  // const ExprFixedArray &exprs = left_->get_spec().output_;
+  const ExprFixedArray &exprs = *jt_ctx_.build_output_;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
     const ObExpr *expr = exprs.at(i);
     ret = expr->init_vector_default(eval_ctx_, MY_SPEC.max_batch_size_);
@@ -1274,7 +1373,8 @@ int ObHashJoinVecOp::create_partition(bool is_left, int64_t part_id, ObHJPartiti
     // set_partition_store is doing in fill_partition_from_join_filter
     // this top level data is from join filter
     // the row store in part is already inited
-  } else if (OB_FAIL(part->init(is_left ? left_->get_spec().output_ : right_->get_spec().output_,
+  // } else if (OB_FAIL(part->init(is_left ? left_->get_spec().output_ : right_->get_spec().output_,
+  } else if (OB_FAIL(part->init(is_left ? *jt_ctx_.build_output_ : right_->get_spec().output_,
                                 MY_SPEC.max_batch_size_, MY_SPEC.compress_type_))) {
     LOG_WARN("fail to init batch", K(ret), K(part_level_), K(part_id), K(is_left));
   } else {
@@ -1853,6 +1953,8 @@ int ObHashJoinVecOp::fill_partition_batch(int64_t &num_left_rows)
   bool is_left = true;
   if (is_top_level_process_with_join_filter()) {
     ret = fill_partition_from_join_filter(num_left_rows);
+    // use join filter, default have null.
+    jt_ctx_.build_cols_have_null_->set_all(MY_SPEC.join_conds_.count());
   } else {
     if (!stores_mgr_.inited()) {
       if (OB_FAIL(stores_mgr_.init(MY_SPEC.max_batch_size_,
@@ -2041,12 +2143,25 @@ int ObHashJoinVecOp::prepare_hash_table()
               K(build_ht_thread_ptr), K(reinterpret_cast<uint64_t>(this)));
   }
   if (OB_SUCC(ret) && need_build_hash_table) {
-    if (OB_FAIL(cur_join_table_->build_prepare(jt_ctx_, profile_.get_row_count(), profile_.get_bucket_size()))) {
-      LOG_WARN("trace failed to  prepare hash table",
-               K(profile_.get_expect_size()), K(profile_.get_bucket_size()), K(profile_.get_row_count()),
-               K(get_mem_used()), K(sql_mem_processor_.get_mem_bound()), K(cur_dumped_partition_));
-    } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_mem_used()))) {
-      LOG_WARN("failed to update used mem size", K(ret));
+    if (!is_shared_ && profile_.get_bucket_size() >= UINT32_MAX) {
+      // Current robin hash table can't support the number of buckets exceeding uint32, and needs to be rolled back to a generic hash table
+      if (NULL != alloc_) {
+        join_table_.free(alloc_);
+      }
+      if (OB_FAIL(join_table_.init_generic_ht(jt_ctx_, *alloc_))) {
+        LOG_WARN("failed to init hash table", K(ret));
+      }
+      cur_join_table_ = &join_table_;
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      if (OB_FAIL(cur_join_table_->build_prepare(jt_ctx_, profile_.get_row_count(), profile_.get_bucket_size()))) {
+        LOG_WARN("trace failed to  prepare hash table",
+                K(profile_.get_expect_size()), K(profile_.get_bucket_size()), K(profile_.get_row_count()),
+                K(get_mem_used()), K(sql_mem_processor_.get_mem_bound()), K(cur_dumped_partition_));
+      } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_mem_used()))) {
+        LOG_WARN("failed to update used mem size", K(ret));
+      }
     }
     LOG_TRACE("trace prepare hash table", K(ret), K(profile_.get_bucket_size()), K(profile_.get_row_count()),
               K(part_count_), K(profile_.get_expect_size()), K(spec_.id_), K(part_level_), K(part_round_));
@@ -2378,6 +2493,12 @@ int ObHashJoinVecOp::calc_hash_value_and_skip_null(const ObIArray<ObExpr*> &join
           const_cast<ObBatchRows *>(brs)->all_rows_active_ = null_skip_bitmap_
                                                              ->is_all_false(brs->size_);
         }
+        if (is_left && (!enable_skip_null && vector->has_null())) {
+          jt_ctx_.build_cols_have_null_->set(idx);
+        }
+        if (!is_left && (!enable_skip_null && vector->has_null())) {
+          jt_ctx_.probe_cols_have_null_->set(idx);
+        }
         ret = vector->murmur_hash_v3(*expr, hash_vals, *brs->skip_,
                                      EvalBound(brs->size_, brs->all_rows_active_),
                                      is_batch_seed ? hash_vals : &seed,
@@ -2410,6 +2531,8 @@ int ObHashJoinVecOp::skip_rows_in_dumped_part()
     ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
     for (int64_t i = 0; OB_SUCC(ret) && i < probe_batch_rows_.brs_.size_; i++) {
       if (probe_batch_rows_.brs_.skip_->exist(i)) {
+        // Compactrow is set to null to make it to skip when projecting to vec.
+        probe_batch_rows_.stored_rows_[i] = nullptr;
         continue;
       }
       int64_t part_idx = get_part_idx(probe_batch_rows_.hash_vals_[i]);
@@ -2433,6 +2556,7 @@ int ObHashJoinVecOp::skip_rows_in_dumped_part()
                                           probe_batch_rows_.hash_vals_[i]);
           }
         }
+        probe_batch_rows_.stored_rows_[i] = nullptr;
       }
     }  //for end;
   }
@@ -2538,8 +2662,30 @@ int ObHashJoinVecOp::probe()
     if (probe_batch_rows_.from_stored_) {
       const ObExprPtrIArray &exprs = right_->get_spec().output_;
       OZ(ObHJStoredRow::attach_rows(exprs, eval_ctx_, jt_ctx_.probe_row_meta_,
-                                    probe_batch_rows_.stored_rows_,
-                                    output_info_.selector_, output_info_.selector_cnt_));
+                                    probe_batch_rows_.stored_rows_, probe_batch_rows_.brs_.size_));
+      if (OB_FAIL(ret)) {
+      } else {
+        // if probe_batch_rows from stored, need to eval probe key
+        // eg:
+        // join key: a1 = cast(b1)
+        // after get probe batch rows from stored
+        // attach rows only fill expr(b1)
+        // expr(cast(b1)) need to calc
+        bool all_rows_active = (output_info_.selector_cnt_ == jt_ctx_.probe_batch_rows_->brs_.size_);
+        for (int64_t i = 0; i < output_info_.selector_cnt_; i++) {
+          int64_t batch_idx = output_info_.selector_[i];
+          jt_ctx_.clear_one_row_eval_flag(batch_idx);
+        }
+        ARRAY_FOREACH(*jt_ctx_.probe_keys_, i) {
+          ObExpr *expr = jt_ctx_.probe_keys_->at(i);
+          if (OB_FAIL(expr->eval_vector(eval_ctx_,
+                  *probe_batch_rows_.brs_.skip_,
+                  probe_batch_rows_.brs_.size_,
+                  all_rows_active))) {
+            LOG_WARN("fail to eval vector", K(ret));
+          }
+        }
+      }
     }
     OZ (cur_join_table_->probe_prepare(jt_ctx_, output_info_));
   }
@@ -2685,7 +2831,8 @@ int ObHashJoinVecOp::outer_join_output()
       guard.set_batch_idx(i);
       if (brs_.skip_->exist(i)) {// right not match
         need_mark_return = true;
-        blank_row_batch_one(left_->get_spec().output_); // right outer join, null-left row
+         // blank_row_batch_one(left_->get_spec().output_); // right outer join, null-left row
+        blank_row_batch_one(*jt_ctx_.build_output_); // right outer join, null-left row
         brs_.skip_->unset(i);
       }
     }
@@ -2708,8 +2855,13 @@ int ObHashJoinVecOp::outer_join_output()
 
 void ObHashJoinVecOp::set_output_eval_info()
 {
-  for (int64_t i = 0; i < left_->get_spec().output_.count(); i++) {
-    ObEvalInfo &info = left_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
+  // for (int64_t i = 0; i < left_->get_spec().output_.count(); i++) {
+  //  ObEvalInfo &info = left_->get_spec().output_.at(i)->get_eval_info(eval_ctx_);
+  //  info.evaluated_ = true;
+  //  info.projected_ = true;
+  // }
+  for (int64_t i = 0; i < jt_ctx_.build_output_->count(); i++) {
+    ObEvalInfo &info = jt_ctx_.build_output_->at(i)->get_eval_info(eval_ctx_);
     info.evaluated_ = true;
     info.projected_ = true;
   }

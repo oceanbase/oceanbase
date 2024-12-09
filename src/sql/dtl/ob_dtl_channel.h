@@ -228,6 +228,8 @@ public:
 
   void set_enable_channel_sync(bool enable_channel_sync) { enable_channel_sync_ = enable_channel_sync; }
   uint64_t enable_channel_sync() const { return enable_channel_sync_; }
+  void set_send_by_tenant(bool send_by_tenant) { send_by_tenant_ = send_by_tenant; }
+  uint64_t send_by_tenant() const { return send_by_tenant_; }
 
   OB_INLINE void set_loop_index(int64_t loop_idx) { loop_idx_ = loop_idx; }
   OB_INLINE int64_t get_loop_index() { return loop_idx_; }
@@ -294,6 +296,7 @@ protected:
   // choose new dtl channel sync or first buffer cache
   bool enable_channel_sync_;
   DtlChannelType channel_type_;
+  bool send_by_tenant_;
 
 public:
   // ObDtlChannel is link base, so it add extra link

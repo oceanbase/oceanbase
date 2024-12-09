@@ -37,7 +37,8 @@ public:
       by_pass_enabled_(false),
       support_fast_single_row_agg_(false),
       skew_detection_enabled_(false),
-      llc_ndv_est_enabled_(false)
+      llc_ndv_est_enabled_(false),
+      implicit_aggr_in_3stage_indexes_(alloc)
   {
   }
   DECLARE_VIRTUAL_TO_STRING;
@@ -62,6 +63,7 @@ public:
   bool support_fast_single_row_agg_;
   bool skew_detection_enabled_;
   bool llc_ndv_est_enabled_;
+  ObFixedArray<int64_t, common::ObIAllocator> implicit_aggr_in_3stage_indexes_;
 };
 
 //modifiable

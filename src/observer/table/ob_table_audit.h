@@ -50,7 +50,8 @@ public:
   {
     int ret = OB_SUCCESS;
     if (need_audit_) {
-      const char *request_str = to_cstring(request);
+      ObCStringHelper helper;
+      const char *request_str = helper.convert(request);
       if (OB_ISNULL(request_str)) {
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "fail to alloc request to string", K(ret), K(request));
@@ -409,7 +410,6 @@ The following macro definition is used to record sql audit, how to use:
   table::ObTableAudit<decltype(op)> audit(op, table_name, sess_guard, audit_ctx);         \
   common::ObMaxWaitGuard max_wait_guard(&audit.record_.exec_record_.max_wait_event_);     \
   common::ObTotalWaitGuard total_wait_guard(&audit.total_wait_desc_);                     \
-  common::ObTenantStatEstGuard stat_guard((credential).tenant_id_);                       \
   observer::ObProcessMallocCallback pmcb(0, audit.record_.request_memory_used_);          \
   lib::ObMallocCallbackGuard malloc_guard_(pmcb);                                         \
   if (audit.need_audit_ && OB_NOT_NULL(audit_ctx)) {                                      \

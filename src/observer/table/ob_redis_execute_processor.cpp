@@ -132,12 +132,8 @@ int ObRedisExecuteP::try_process()
   stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_GET;
   if (OB_FAIL(check_arg())) {
     LOG_WARN("check arg failed", K(ret));
-  } else if (OB_FAIL(init_schema_info(arg_.table_name_))) {
-    LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
-  } else if (simple_table_schema_->get_table_id() != table_id_) {
-    ret = OB_SCHEMA_ERROR;
-    LOG_WARN("info from request is not up to date, need to refresh schema info",
-              K(ret), K(table_id_), K(tablet_id_));
+  } else if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
+    LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_), K(table_id_));
   } else if (OB_FAIL(init_redis_ctx())) {
     LOG_WARN("faild init redis ctx", K(ret));
   } else if (OB_FALSE_IT(init_tb_ctx_common(redis_ctx_.tb_ctx_))) {

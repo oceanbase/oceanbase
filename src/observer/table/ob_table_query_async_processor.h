@@ -65,14 +65,36 @@ struct ObTableSingleQueryInfo : public ObTableInfoBase {
   table::ObTableQuery query_;
 };
 
-class ObTableHbaseRowKeyDefaultCompare
-{
+class ObTableMergeFilterCompare {
 public:
-  ObTableHbaseRowKeyDefaultCompare(): result_code_(common::OB_SUCCESS) {}
-  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret);
-  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs);
-  OB_INLINE int get_error_code() const { return result_code_; }
-  int result_code_;
+  ObTableMergeFilterCompare() = default;
+  virtual ~ObTableMergeFilterCompare() = default;
+
+  virtual int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const = 0;
+  virtual bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) = 0;
+
+  int get_error_code() const noexcept { return result_code_; }
+
+protected:
+  int result_code_ = OB_SUCCESS;
+};
+
+class ObTableHbaseRowKeyDefaultCompare final : public ObTableMergeFilterCompare {
+public:
+  ObTableHbaseRowKeyDefaultCompare() = default;
+  ~ObTableHbaseRowKeyDefaultCompare() override = default;
+
+  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
+  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
+};
+
+class ObTableHbaseRowKeyReverseCompare final : public ObTableMergeFilterCompare {
+public:
+  ObTableHbaseRowKeyReverseCompare() = default;
+  ~ObTableHbaseRowKeyReverseCompare() override = default;
+
+  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
+  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
 };
 
 /**
@@ -156,7 +178,8 @@ public:
       select_columns_(),
       result_iterator_(nullptr),
       query_ctx_(allocator_),
-      lease_timeout_period_(60 * 1000 * 1000)
+      lease_timeout_period_(60 * 1000 * 1000),
+      row_count_(0)
   {}
   ~ObTableQueryAsyncSession() {}
 
@@ -183,6 +206,7 @@ public:
 public:
   sql::TransState* get_trans_state() {return &trans_state_;}
   transaction::ObTxDesc* get_trans_desc() {return trans_desc_;}
+  int64_t &get_row_count() { return row_count_; }
   void set_trans_desc(transaction::ObTxDesc *trans_desc) { trans_desc_ = trans_desc; }
 private:
   bool in_use_;
@@ -202,6 +226,7 @@ private:
   sql::TransState trans_state_;
   uint64_t lease_timeout_period_;
   transaction::ObTxDesc *trans_desc_;
+  int64_t row_count_;
 };
 
 /**
@@ -272,7 +297,7 @@ class ObTableQueryAsyncP :
 {
   typedef ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_ASYNC>>
     ParentType;
-  using ResultMergeIterator = table::ObMergeTableQueryResultIterator<common::ObNewRow, ObTableHbaseRowKeyDefaultCompare>;
+  using ResultMergeIterator = table::ObMergeTableQueryResultIterator<common::ObNewRow, ObTableMergeFilterCompare>;
 public:
   explicit ObTableQueryAsyncP(const ObGlobalContext &gctx);
   virtual ~ObTableQueryAsyncP() {}
@@ -333,7 +358,10 @@ private:
                       ObArray<std::pair<ObString, bool>>& familys,
                       ObArray<ObString>& real_columns);
 
-  int update_table_info_columns(ObTableSingleQueryInfo* table_info, const ObArray<ObString>& real_columns);
+  int update_table_info_columns(ObTableSingleQueryInfo* table_info,
+                            const ObArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
+                            const ObArray<ObString>& real_columns,
+                            const std::pair<ObString, bool>& family_addfamily_flag);
 
   bool found_family(const ObString& table_name, const ObArray<std::pair<ObString, bool>>& family_clear_flags, std::pair<ObString, bool>& flag);
 

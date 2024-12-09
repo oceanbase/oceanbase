@@ -22,6 +22,7 @@
 #include "rpc/obmysql/ob_2_0_protocol_struct.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/obsm_struct.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::common;
 
@@ -97,7 +98,6 @@ int ObProto20Utils::do_packet_encode(ObProtoEncodeParam &param) {
     } else {
       ObEasyBuffer easy_buffer(*param.ez_buf_);
 
-      //SET_OB_LOG_TRACE_MODE();    // prevent printing log
       int32_t old_len = param.seri_size_;
       ret = param.pkt_->encode(easy_buffer.last(), easy_buffer.write_avail_size(), param.seri_size_);
       if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
@@ -107,7 +107,6 @@ int ObProto20Utils::do_packet_encode(ObProtoEncodeParam &param) {
       //     || ((IS_LOG_ENABLED(INFO) && (OB_LOG_NEED_TO_PRINT(DEBUG))))) {
       //  PRINT_OB_LOG_TRACE_BUF(INFO);
       //}
-      //CANCLE_OB_LOG_TRACE_MODE();
 
       if (OB_SUCC(ret)) {
         easy_buffer.write(param.seri_size_);

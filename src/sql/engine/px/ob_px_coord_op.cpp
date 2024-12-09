@@ -926,6 +926,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
   } else if (OB_FAIL(ObPxReceiveOp::link_ch_sets(task_ch_set_, task_channels_, &dfc_))) {
     LOG_WARN("fail link px coord data channels with its only child dfo", K(ret));
   } else {
+    uint16_t min_cluster_version = ctx.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version();
     if (OB_FAIL(get_listenner().on_root_data_channel_setup())) {
       LOG_WARN("fail notify listener", K(ret));
     }
@@ -951,6 +952,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
         ch->set_operator_owner();
         ch->set_thread_id(thread_id);
         ch->set_enable_channel_sync(true);
+        ch->set_send_by_tenant(min_cluster_version >= CLUSTER_VERSION_4_3_5_0);
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());
@@ -997,6 +999,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
   } else if (OB_FAIL(ObPxReceiveOp::link_ch_sets(task_ch_set_, task_channels_, &dfc_))) {
     LOG_WARN("fail link px coord data channels with its only child dfo", K(ret));
   } else {
+    uint64_t min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version();
     if (OB_FAIL(get_listenner().on_root_data_channel_setup())) {
       LOG_WARN("fail notify listener", K(ret));
     }
@@ -1022,6 +1025,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
         ch->set_audit(enable_audit);
         ch->set_is_px_channel(true);
         ch->set_enable_channel_sync(true);
+        ch->set_send_by_tenant(min_cluster_version >= CLUSTER_VERSION_4_3_5_0);
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());

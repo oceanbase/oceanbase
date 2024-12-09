@@ -1,3 +1,6 @@
+// owner: gengli.wzy
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -101,10 +104,11 @@ void ObTestKeepAliveMinStartSCN::loop_check_start_scn(SCN &prev_min_start_scn, S
 
       // 判断min_start_scn的大小关系，若出错，打印到stdout
       if (prev_min_start_scn > tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_) {
+        ObCStringHelper helper;
         fprintf(stdout,
                 "Incorrect min_start_scn in tx data table, prev_min_start_scn = %s, current_min_start_scn = %s\n",
-                to_cstring(prev_min_start_scn),
-                to_cstring(tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_));
+                helper.convert(prev_min_start_scn),
+                helper.convert(tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_));
       }
       ASSERT_LE(prev_min_start_scn, tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_);
       prev_min_start_scn = tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_;

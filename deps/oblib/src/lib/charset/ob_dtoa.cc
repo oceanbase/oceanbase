@@ -14,6 +14,8 @@
 #include "lib/charset/ob_dtoa.h"
 #include "lib/charset/ob_mysql_global.h"
 
+#include <fast_float/fast_float.h>
+
 #define DTOA_OVERFLOW 9999
 #define MAX_DECPT_FOR_F_FORMAT DBL_DIG
 #define NOT_FIXED_DEC 31
@@ -381,6 +383,11 @@ size_t ob_gcvt_strict(double x, ob_gcvt_arg_type type, int width, char *to,
   return dst - to;
 }
 
+
+inline bool is_whitespace(const char& c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
+}
+
 double ob_strtod(const char *str, char **end, int *error)
 {
   char buf[DTOA_BUF_MAX_SIZE];
@@ -390,8 +397,44 @@ double ob_strtod(const char *str, char **end, int *error)
               error != NULL)) {
     return 0.0;
   }
-  res= ob_strtod_int(str, end, error, buf, sizeof(buf));
-  return (*error == 0) ? res : (res < 0 ? -DBL_MAX : DBL_MAX);
+  int len = *end - str;
+  // skip leading and back spaces
+  int i = 0;
+  for (; i < len; ++i) {
+      if (!is_whitespace(str[i])) {
+          break;
+      }
+  }
+  if (i >= len || (i == len-1 && ('+' == str[i] || '-' == str[i]))) {
+    *end = (char *)str;
+  } else {
+    int j = len - 1;
+    for (; j >= i; j--) {
+        if (!is_whitespace(str[j])) {
+            break;
+        }
+    }
+    // The fast_float::from_chars function cannot handle leading '+' signs.
+    // For example, ObXmlUtil::to_number() might include a '+' for extract_xml expression.
+    if (i < len && '+' == str[i]) {
+        i ++;
+    }
+    fast_float::from_chars_result ret = fast_float::from_chars(str + i, str + j + 1, res);
+    *end = const_cast<char *>(ret.ptr);
+    if (ret.ec == std::errc::result_out_of_range) {
+      res= ob_strtod_int(str, end, error, buf, sizeof(buf));
+      if (*error != 0) {
+        res = (res < 0 ? -DBL_MAX : DBL_MAX);
+      }
+      // *error = EOVERFLOW;
+      // res = (res < 0 ? -DBL_MAX : DBL_MAX);
+    }
+    if (__builtin_isnan(res) || __builtin_isinf(res) || __builtin_isinf(-res)) {
+      *end = (char *)str;
+      res = 0.0;
+    }
+  }
+  return res;
 }
 
 

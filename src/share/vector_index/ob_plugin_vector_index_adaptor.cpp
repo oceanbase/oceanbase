@@ -197,7 +197,7 @@ int ObVectorQueryAdaptorResultContext::set_vector(int64_t index, const char *ptr
   } else if (size / sizeof(float) != get_dim()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid vector str.", K(ret), K(size), K(ptr), K(get_dim()));
-  } else if (OB_ISNULL(copy_str = static_cast<char *>(batch_allocator_->alloc(sizeof(char*) * size)))) {
+  } else if (OB_ISNULL(copy_str = static_cast<char *>(batch_allocator_->alloc(size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator.", K(ret));
   } else {
@@ -452,7 +452,8 @@ int ObPluginVectorIndexAdaptor::param_deserialize(char *ptr, int32_t length,
   } else {
     type = header.type_;
     switch(type) {
-      case VIAT_HNSW: {
+      case VIAT_HNSW:
+      case VIAT_HNSW_SQ:{
         int64_t param_pos = 0;
         ObVectorIndexHNSWParam *hnsw_param = nullptr;
         if (OB_ISNULL(hnsw_param = static_cast<ObVectorIndexHNSWParam *>
@@ -489,7 +490,8 @@ int ObPluginVectorIndexAdaptor::get_dim(int64_t &dim)
 {
   INIT_SUCC(ret);
   // TODO [WORKDOC] work document NO.1
-  if (type_ == VIAT_HNSW) {
+  if (type_ == VIAT_HNSW ||
+      type_ == VIAT_HNSW_SQ) {
     ObVectorIndexHNSWParam *param = nullptr;
     if (OB_ISNULL(param = static_cast<ObVectorIndexHNSWParam*>(algo_data_))) {
       ret = OB_ERR_UNEXPECTED;
@@ -507,7 +509,8 @@ int ObPluginVectorIndexAdaptor::get_dim(int64_t &dim)
 int ObPluginVectorIndexAdaptor::get_hnsw_param(ObVectorIndexHNSWParam *&param)
 {
   INIT_SUCC(ret);
-  if (type_ == VIAT_HNSW) {
+  if (type_ == VIAT_HNSW ||
+      type_ == VIAT_HNSW_SQ) {
     if (OB_ISNULL(param = static_cast<ObVectorIndexHNSWParam*>(algo_data_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get param.", K(ret));
@@ -629,7 +632,7 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type)
       } else {
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
         if (OB_FAIL(obvectorutil::create_index(incr_data_->index_,
-                                                      obvectorlib::HNSW_TYPE,
+                                                      param->type_,
                                                       DATATYPE_FLOAT32,
                                                       VEC_INDEX_ALGTH[param->dist_algorithm_],
                                                       param->dim_,
@@ -638,7 +641,7 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type)
                                                       param->ef_search_,
                                                       incr_data_->mem_ctx_))) {
           ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
-          LOG_WARN("failed to create vsag index.", K(ret));
+          LOG_WARN("failed to create vsag index.", K(ret), KPC(param));
         }
       }
       if (OB_FAIL(ret)) {
@@ -705,7 +708,7 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type)
       } else {
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
         if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
-                                               obvectorlib::HNSW_TYPE,
+                                               param->type_,
                                                DATATYPE_FLOAT32,
                                                VEC_INDEX_ALGTH[param->dist_algorithm_],
                                                param->dim_,

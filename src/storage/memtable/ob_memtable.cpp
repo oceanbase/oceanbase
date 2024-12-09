@@ -599,7 +599,7 @@ int ObMemtable::set(
     const storage::ObTableIterParam &param,
     storage::ObTableAccessContext &context,
     const ObIArray<ObColDesc> &columns,
-    const ObIArray<int64_t> &update_idx,
+    const ObIArray<int64_t> *update_idx,
     const blocksstable::ObDatumRow &old_row,
     blocksstable::ObDatumRow &new_row,
     const share::ObEncryptMeta *encrypt_meta)
@@ -640,7 +640,7 @@ int ObMemtable::set(
                 columns,
                 new_row,
                 &old_row,
-                &update_idx,
+                update_idx,
                 false/*check_exist*/,
                 context,
                 memtable_key_generator,
@@ -2377,12 +2377,18 @@ int ObMemtable::dump2text(const char *fname)
     ret = OB_IO_ERROR;
     TRANS_LOG(WARN, "open file fail:", K(fname));
   } else {
-    fprintf(fd, "memtable: key=%s\n", S(key_));
-    fprintf(fd, "hash_item_count=%ld, hash_alloc_size=%ld\n",
-            get_hash_item_count(), get_hash_alloc_memory());
-    fprintf(fd, "btree_item_count=%ld, btree_alloc_size=%ld\n",
-            get_btree_item_count(), get_btree_alloc_memory());
-    query_engine_.dump2text(fd);
+    ObCStringHelper helper;
+    const char *key_ptr = NULL;
+    if (OB_FAIL(helper.convert(key_, key_ptr))) {
+      TRANS_LOG(WARN, "convert key fail", K_(key), K(ret));
+    } else {
+      fprintf(fd, "memtable: key=%s\n", key_ptr);
+      fprintf(fd, "hash_item_count=%ld, hash_alloc_size=%ld\n",
+              get_hash_item_count(), get_hash_alloc_memory());
+      fprintf(fd, "btree_item_count=%ld, btree_alloc_size=%ld\n",
+              get_btree_item_count(), get_btree_alloc_memory());
+      query_engine_.dump2text(fd);
+    }
   }
   if (NULL != fd) {
     fprintf(fd, "end of memtable\n");
@@ -2690,15 +2696,16 @@ int ObMemtable::set_(
           TRANS_LOG(WARN, "mvcc write fail", K(memtable_key_generator.get_memtable_key()), K(ret));
         }
       } else {
+        ObCStringHelper helper;
         TRANS_LOG(DEBUG, "set end, success",
                   "ret", ret,
                   "tablet_id_", key_.tablet_id_,
                   "dml_flag", new_row.row_flag_.get_dml_flag(),
                   "columns", strarray<ObColDesc>(columns),
-                  "old_row", to_cstring(old_row),
-                  "new_row", to_cstring(new_row),
-                  "update_idx", (update_idx == NULL ? "" : to_cstring(update_idx)),
-                  "mtd", to_cstring(mtd),
+                  "old_row", helper.convert(old_row),
+                  "new_row", helper.convert(new_row),
+                  "update_idx", (update_idx == NULL ? "" : helper.convert(update_idx)),
+                  "mtd", helper.convert(mtd),
                   K(arg),
                   KPC(mvcc_row));
       }
@@ -2722,8 +2729,8 @@ int ObMemtable::set_(
         "ret", ret,
         "tablet_id_", key_.tablet_id_,
         "columns", strarray<ObColDesc>(columns),
-        "new_row", to_cstring(new_row),
-        "mem_ctx", STR_PTR(mem_ctx),
+        K(new_row),
+        K(mem_ctx),
         "store_ctx", ctx);
   }
 

@@ -1924,11 +1924,12 @@ int ObMultiVersionSchemaService::check_database_exist(
                                                          database_name,
                                                          exist,
                                                          &database_id))) {
+      ObCStringHelper helper;
       LOG_WARN(
           "failed to check database exist, ",
           K(tenant_id),
           "tablegroup_name",
-          to_cstring(database_name),
+          helper.convert(database_name),
           K(ret));
     }
   }
@@ -1959,11 +1960,12 @@ int ObMultiVersionSchemaService::check_tablegroup_exist(
                                                            tablegroup_name,
                                                            exist,
                                                            &tablegroup_id))) {
+      ObCStringHelper helper;
       LOG_WARN(
           "failed to check tablegroup exist, ",
           K(tenant_id),
           "tablegroup_name",
-          to_cstring(tablegroup_name),
+          helper.convert(tablegroup_name),
           K(ret));
     }
   }
@@ -2291,6 +2293,7 @@ int ObMultiVersionSchemaService::async_refresh_schema(
     const uint64_t tenant_id,
     const int64_t schema_version)
 {
+  ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::WAIT_REFRESH_SCHEMA);
   int ret = OB_SUCCESS;
   int64_t local_schema_version = OB_INVALID_VERSION;
   bool check_formal = ObSchemaService::is_formal_version(schema_version);
@@ -2362,7 +2365,7 @@ int ObMultiVersionSchemaService::async_refresh_schema(
             sleep_time = timeout_remain > 0 ? timeout_remain : 0;
           }
           retry_cnt++;
-          ob_usleep(static_cast<useconds_t>(sleep_time));
+          ob_usleep<common::ObWaitEventIds::WAIT_REFRESH_SCHEMA>(RETRY_IDLE_TIME, RETRY_IDLE_TIME, schema_version, 0);
         }
       }
     }

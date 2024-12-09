@@ -89,7 +89,9 @@ int main(int argc, char *argv[])
   if (OB_SUCCESS != ret) {
     fprintf(stderr, "failed to insert row: %d\n", ret);
   } else {
-    fprintf(stderr, "insert row succ. %s\n", S(result));
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(result);
+    fprintf(stderr, "insert row succ. %s\n", nullptr != ptr ? ptr : "NULL");
   }
   // get the row
   get_row_and_print(table, rk);
@@ -105,7 +107,9 @@ int main(int argc, char *argv[])
   if (OB_SUCCESS != ret) {
     fprintf(stderr, "failed to update row: %d\n", ret);
   } else {
-    fprintf(stderr, "update row succ. %s\n", S(result));
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(result);
+    fprintf(stderr, "update row succ. %s\n", nullptr != ptr ? ptr : "NULL");
   }
   // get the row
   get_row_and_print(table, rk);
@@ -116,7 +120,9 @@ int main(int argc, char *argv[])
   if (OB_SUCCESS != ret) {
     fprintf(stderr, "failed to replace row: %d\n", ret);
   } else {
-    fprintf(stderr, "replace row succ. %s\n", S(result));
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(result);
+    fprintf(stderr, "replace row succ. %s\n", nullptr != ptr ? ptr : "NULL");
   }
   // get the row
   get_row_and_print(table, rk);
@@ -133,7 +139,9 @@ int main(int argc, char *argv[])
   if (OB_SUCCESS != ret) {
     fprintf(stderr, "failed to insert_or_update row: %d\n", ret);
   } else {
-    fprintf(stderr, "insert_or_update row succ. %s\n", S(result));
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(result);
+    fprintf(stderr, "insert_or_update row succ. %s\n", nullptr != ptr ? ptr : "NULL");
   }
   // get the row
   get_row_and_print(table, rk);
@@ -144,7 +152,9 @@ int main(int argc, char *argv[])
   if (OB_SUCCESS != ret) {
     fprintf(stderr, "failed to del row: %d\n", ret);
   } else {
-    fprintf(stderr, "delete row succ. %s\n", S(result));
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(result);
+    fprintf(stderr, "delete row succ. %s\n", nullptr != ptr ? ptr : "NULL");
   }
   // get the row
   get_row_and_print(table, rk);
@@ -161,7 +171,9 @@ int main(int argc, char *argv[])
   if (OB_SUCCESS != ret) {
     fprintf(stderr, "failed to insert_or_update row: %d\n", ret);
   } else {
-    fprintf(stderr, "insert_or_update row succ. %s\n", S(result));
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(result);
+    fprintf(stderr, "insert_or_update row succ. %s\n", nullptr != ptr ? ptr : "NULL");
   }
   // get the row
   get_row_and_print(table, rk);
@@ -170,7 +182,9 @@ int main(int argc, char *argv[])
   if (OB_SUCCESS != ret) {
     fprintf(stderr, "failed to del row: %d\n", ret);
   } else {
-    fprintf(stderr, "delete row succ. %s\n", S(result));
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(result);
+    fprintf(stderr, "delete row succ. %s\n", nullptr != ptr ? ptr : "NULL");
   }
 
   ////////////////
@@ -201,6 +215,8 @@ void get_row_and_print(ObTable *table, ObRowkey &rk)
   if (OB_SUCCESS != ret) {
     fprintf(stderr, "failed to get row: %d\n", ret);
   } else {
-    fprintf(stderr, "get row succ. %s\n", S(result_get));
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(result_get);
+    fprintf(stderr, "get row succ. %s\n", nullptr != ptr ? ptr : "NULL");
   }
 }

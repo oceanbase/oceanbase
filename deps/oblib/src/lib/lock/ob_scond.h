@@ -33,7 +33,7 @@ public:
   uint32_t get_key() { return ATOMIC_LOAD(&futex_.uval()); }
   void wait(uint32_t key, int64_t timeout) {
     if (timeout > 0 && get_key() == key) {
-      ObWaitEventGuard guard(event_no_, timeout / 1000, reinterpret_cast<int64_t>(this));
+      ObWaitEventGuard guard(event_no_, timeout / 1000, reinterpret_cast<int64_t>(this), 0, 0, true);
       ATOMIC_FAA(&n_waiters_, 1);
       futex_.wait(key, timeout);
       ATOMIC_FAA(&n_waiters_, -1);

@@ -396,7 +396,6 @@ private:
       const share::ObTransferTaskInfo &task_info);
   void finish_parallel_tablet_info_dag_(
       const share::ObTransferTaskInfo &task_info);
-
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;

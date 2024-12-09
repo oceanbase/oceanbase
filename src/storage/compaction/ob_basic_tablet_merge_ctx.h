@@ -46,6 +46,7 @@ struct ObStaticMergeParam final
   int cal_major_merge_param(const bool force_full_merge, ObProgressiveMergeMgr &progressive_mgr);
   bool is_build_row_store_from_rowkey_cg() const;
   bool is_build_row_store() const;
+  bool is_build_redundent_row_store_from_rowkey_cg() const;
 
   OB_INLINE void set_full_merge_and_level(bool is_full_merge)
   {

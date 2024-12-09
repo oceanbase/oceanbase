@@ -1762,6 +1762,7 @@ int DdlStmtTask::parse_ddl_info(
   }
 
   if (OB_SUCCESS == ret) {
+    ObCStringHelper helper;
     _LOG_INFO("[STAT] [DDL] [PARSE] OP_TYPE=%s(%ld) SCHEMA_VERSION=%ld "
         "VERSION_DELAY=%s EXEC_TENANT_ID=%ld TABLE_ID=%ld TENANT_ID=%ld DB_ID=%ld "
         "TG_ID=%ld DDL_STMT=[%s] CONTAIN_DDL=%d IS_VALID=%d",
@@ -1769,7 +1770,7 @@ int DdlStmtTask::parse_ddl_info(
         ddl_operation_type_, ddl_op_schema_version_, TS_TO_DELAY(ddl_op_schema_version_),
         ddl_exec_tenant_id_, ddl_op_table_id_, ddl_op_tenant_id_,
         ddl_op_database_id_, ddl_op_tablegroup_id_,
-        to_cstring(ddl_stmt_str_), contain_ddl_stmt, is_valid_ddl);
+        helper.convert(ddl_stmt_str_), contain_ddl_stmt, is_valid_ddl);
   }
 
   return ret;
@@ -1975,8 +1976,7 @@ int DdlStmtTask::init_ddl_unique_id_(common::ObString &ddl_unique_id)
     if (OB_ISNULL(buf)) {
       LOG_ERROR("allocate memory for trans id buffer fail", K(buf));
       ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-            "%s", to_cstring(ddl_stmt_unique_id)))) {
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ddl_stmt_unique_id))) {
       LOG_ERROR("init_ddl_unique_id_ fail", KR(ret), K(buf), K(buf_len), K(pos),
           K(ddl_stmt_unique_id));
     } else {

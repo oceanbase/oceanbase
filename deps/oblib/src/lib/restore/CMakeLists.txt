@@ -1,3 +1,4 @@
+add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 oblib_add_library(restore OBJECT
   ob_i_storage.h
   ob_i_storage.cpp
@@ -17,6 +18,7 @@ oblib_add_library(restore OBJECT
   cos/ob_cos_wrapper_handle.h
   cos/ob_singleton.h
   ob_object_device.cpp
+  hmac_signature.cpp
   ob_object_device.h
   ob_object_storage_base.cpp)
 

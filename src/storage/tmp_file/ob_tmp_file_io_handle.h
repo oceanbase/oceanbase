@@ -10,45 +10,57 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_IO_HANDLE_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_IO_HANDLE_H_
-#include "storage/tmp_file/ob_sn_tmp_file_io_handle.h"
-#include "storage/blocksstable/ob_i_tmp_file.h"
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_IO_DEFINE_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_IO_DEFINE_H_
+
+#include "storage/tmp_file/ob_shared_nothing_tmp_file.h"
+#include "storage/tmp_file/ob_tmp_file_io_ctx.h"
 
 namespace oceanbase
 {
 namespace tmp_file
 {
+class ObTmpFileIOInfo;
 
 class ObTmpFileIOHandle final
 {
 public:
   ObTmpFileIOHandle();
   ~ObTmpFileIOHandle();
+  int init_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
+  int init_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
+  int init_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t read_offset);
   int wait();
   void reset();
-  bool is_valid();
-  int64_t get_done_size();
-  char *get_buffer();
-  ObSNTmpFileIOHandle &get_sn_handle();
-  blocksstable::ObSSTmpFileIOHandle &get_ss_handle();
+  bool is_valid() const;
 
-  TO_STRING_KV(K(is_shared_storage_mode_), K(type_decided_), KP(sn_handle_), KP(ss_handle_));
+  TO_STRING_KV(K(is_inited_), K(tenant_id_), K(fd_), K(ctx_),
+               KP(buf_), K(update_offset_in_file_),
+               K(buf_size_), K(done_size_),
+               K(read_offset_in_file_));
+public:
+  OB_INLINE char *get_buffer() { return buf_; }
+  OB_INLINE int64_t get_done_size() const { return done_size_; }
+  OB_INLINE int64_t get_buf_size() const { return buf_size_; }
+  OB_INLINE ObTmpFileIOCtx &get_io_ctx() { return ctx_; }
+  OB_INLINE bool is_finished() const { return done_size_ == buf_size_; }
 private:
-  void check_or_set_handle_type_();
+  int handle_finished_ctx_(ObTmpFileIOCtx &ctx);
 
 private:
-  bool is_shared_storage_mode_;
-  bool type_decided_;
-  static constexpr int64_t BUF_SIZE
-    = MAX(sizeof(ObSNTmpFileIOHandle), sizeof(blocksstable::ObSSTmpFileIOHandle));
-  char buf_[BUF_SIZE];
+  bool is_inited_;
+  uint64_t tenant_id_;
+  int64_t fd_;
+  ObTmpFileIOCtx ctx_;
+  char *buf_;
+  bool update_offset_in_file_;
+  int64_t buf_size_; // excepted total read or write size
+  int64_t done_size_;   // has finished read or write size
+  int64_t read_offset_in_file_; // records the beginning read offset for current read ctx
 
-  ObSNTmpFileIOHandle* sn_handle_;
-  blocksstable::ObSSTmpFileIOHandle* ss_handle_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileIOHandle);
 };
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_IO_HANDLE_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_IO_DEFINE_H_

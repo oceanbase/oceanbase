@@ -1,3 +1,6 @@
+// owner: cxf262476
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -16,6 +19,7 @@
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
+#include "multi_replica/env/ob_multi_replica_util.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "share/schema/ob_part_mgr_util.h"
@@ -1893,6 +1897,334 @@ TEST_F(ObTableLockServiceTest, replace_lock_and_unlock_concurrency)
                                                owner_one);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
+
+TEST_F(ObTableLockServiceTest, replace_all_locks)
+{
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks");
+  int ret = OB_SUCCESS;
+  ObTxParam tx_param;
+  share::ObTenantSwitchGuard tenant_guard;
+  ObTxDesc *tx_desc1 = nullptr;
+  ObTxDesc *tx_desc2= nullptr;
+  ObTxDesc *tx_desc3= nullptr;
+  ObTxDesc *tx_desc4= nullptr;
+  ObTransService *txs = nullptr;
+  uint64_t table_id = 0;
+  ObTableLockMode check_lock_mode = EXCLUSIVE;
+  ObTableLockMode new_lock_mode = SHARE;
+  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner_by_value(1));
+  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID owner_three(ObTableLockOwnerID::get_owner_by_value(3));
+  ObTableLockMode lock_mode_one = ROW_SHARE;
+  ObTableLockMode lock_mode_two = ROW_EXCLUSIVE;
+  ObLockTableRequest lock_arg;
+  ObLockTableRequest new_lock_arg;
+  ObUnLockTableRequest unlock_arg1;
+  ObUnLockTableRequest unlock_arg2;
+  int64_t stmt_timeout_ts = -1;
+
+  tx_param.access_mode_ = ObTxAccessMode::RW;
+  tx_param.isolation_ = ObTxIsolationLevel::RC;
+  tx_param.timeout_us_ = 6000 * 1000L;
+  tx_param.lock_timeout_us_ = -1;
+  tx_param.cluster_id_ = GCONF.cluster_id;
+
+  ret = tenant_guard.switch_to(OB_SYS_TENANT_ID);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_NE(nullptr, MTL(ObTableLockService*));
+
+  txs = MTL(ObTransService*);
+  ASSERT_NE(nullptr, txs);
+  ASSERT_EQ(OB_SUCCESS, txs->acquire_tx(tx_desc1));
+
+  // 1. lock out_trans
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 1");
+  get_table_id("t_one_part", table_id);
+  lock_arg.table_id_ = table_id;
+  lock_arg.owner_id_ = owner_one;
+  lock_arg.lock_mode_ = lock_mode_one;
+  lock_arg.op_type_ = OUT_TRANS_LOCK;
+  lock_arg.timeout_us_ = 0;
+
+  unlock_arg1.table_id_ = table_id;
+  unlock_arg1.owner_id_ = owner_one;
+  unlock_arg1.lock_mode_ = lock_mode_one;
+  unlock_arg1.op_type_ = OUT_TRANS_UNLOCK;
+  unlock_arg1.timeout_us_ = 0;
+
+  ret = MTL(ObTableLockService*)->lock(*tx_desc1,
+                                       tx_param,
+                                       lock_arg);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  // 2. check lock
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 2");
+  ret = MTL(ObTableLockService*)->lock_table(table_id,
+                                             check_lock_mode,
+                                             owner_two);
+  ASSERT_EQ(OB_EAGAIN, ret);
+
+  // 3. commit lock
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 3");
+  stmt_timeout_ts = ObTimeUtility::current_time() + 1000 * 1000;
+  ret = txs->commit_tx(*tx_desc1, stmt_timeout_ts);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = txs->release_tx(*tx_desc1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 4. lock table and commit with another owenr and mode
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 4");
+  ASSERT_EQ(OB_SUCCESS, txs->acquire_tx(tx_desc2));
+  lock_arg.owner_id_ = owner_two;
+  lock_arg.lock_mode_ = lock_mode_two;
+
+  unlock_arg2.table_id_ = table_id;
+  unlock_arg2.owner_id_ = owner_two;
+  unlock_arg2.lock_mode_ = lock_mode_two;
+  unlock_arg2.op_type_ = OUT_TRANS_UNLOCK;
+  unlock_arg2.timeout_us_ = 0;
+
+  ret = MTL(ObTableLockService*)->lock(*tx_desc2,
+                                       tx_param,
+                                       lock_arg);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = txs->commit_tx(*tx_desc2, stmt_timeout_ts);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = txs->release_tx(*tx_desc2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 5. replace lock
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 5");
+  ObArenaAllocator allocator;
+  ObReplaceAllLocksRequest replace_lock_arg(allocator);
+  new_lock_arg.table_id_ = table_id;
+  new_lock_arg.owner_id_ = owner_three;
+  new_lock_arg.lock_mode_ = EXCLUSIVE;
+  new_lock_arg.op_type_ = OUT_TRANS_LOCK;
+  new_lock_arg.timeout_us_ = 0;
+
+  replace_lock_arg.lock_req_ = &new_lock_arg;
+  replace_lock_arg.unlock_req_list_.push_back(&unlock_arg1);
+  replace_lock_arg.unlock_req_list_.push_back(&unlock_arg2);
+  ASSERT_EQ(OB_SUCCESS, txs->acquire_tx(tx_desc3));
+
+  ret = MTL(ObTableLockService*)->replace_lock(*tx_desc3,
+                                               tx_param,
+                                               replace_lock_arg);
+  ASSERT_EQ(OB_SUCCESS, ret);
+   // 6. commit rplace lock
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 6");
+  stmt_timeout_ts = ObTimeUtility::current_time() + 1000 * 1000;
+  ret = txs->commit_tx(*tx_desc3, stmt_timeout_ts);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = txs->release_tx(*tx_desc3);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 7. try to lock by origin owner
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 7");
+  ret = MTL(ObTableLockService*)->lock_table(table_id,
+                                             ROW_SHARE,
+                                             owner_one);
+  ASSERT_EQ(OB_EAGAIN, ret);
+
+  // 8. check new owner
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 8");
+  ret = MTL(ObTableLockService*)->lock_table(table_id,
+                                             EXCLUSIVE,
+                                             owner_three);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 9. unlock
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 9");
+  ASSERT_EQ(OB_SUCCESS, txs->acquire_tx(tx_desc4));
+  unlock_arg2.owner_id_ = owner_three;
+  unlock_arg2.lock_mode_ = EXCLUSIVE;
+  ret = MTL(ObTableLockService *)->unlock(*tx_desc4, tx_param, unlock_arg2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  stmt_timeout_ts = ObTimeUtility::current_time() + 1000 * 1000;
+  ret = txs->commit_tx(*tx_desc4, stmt_timeout_ts);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = txs->release_tx(*tx_desc4);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 10. try to lock by origin owner
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 10");
+  ret = MTL(ObTableLockService*)->lock_table(table_id,
+                                             check_lock_mode,
+                                             owner_one);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 11. check new owner
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 11");
+  ret = MTL(ObTableLockService*)->lock_table(table_id,
+                                             check_lock_mode,
+                                             owner_three);
+  ASSERT_EQ(OB_EAGAIN, ret);
+
+  // 12. unlock by origin owner
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks 12");
+  ret = MTL(ObTableLockService*)->unlock_table(table_id,
+                                               check_lock_mode,
+                                               owner_one);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+TEST_F(ObTableLockServiceTest, replace_all_locks_with_dml_locks)
+{
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks_with_dml_locks");
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
+  ACQUIRE_CONN_FROM_SQL_PROXY(conn1, sql_proxy);
+  ACQUIRE_CONN_FROM_SQL_PROXY(conn2, sql_proxy);
+
+  ObTxParam tx_param;
+  share::ObTenantSwitchGuard tenant_guard;
+  ObTxDesc *tx_desc1 = nullptr;
+  ObTxDesc *tx_desc2= nullptr;
+  ObTxDesc *tx_desc3= nullptr;
+  ObTxDesc *tx_desc4= nullptr;
+  ObTransService *txs = nullptr;
+  uint64_t table_id = 0;
+  ObTableLockMode check_lock_mode = EXCLUSIVE;
+  ObTableLockMode new_lock_mode = SHARE;
+  ObTableLockOwnerID owner_one(ObTableLockOwnerID::get_owner_by_value(1));
+  ObTableLockOwnerID owner_two(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockMode lock_mode_one = ROW_SHARE;
+  ObTableLockMode lock_mode_two = ROW_EXCLUSIVE;
+  ObLockTableRequest lock_arg;
+  ObLockTableRequest new_lock_arg;
+  ObUnLockTableRequest unlock_arg;
+  ObUnLockTableRequest unlock_arg2;
+  ObArenaAllocator allocator;
+  ObReplaceAllLocksRequest replace_lock_arg(allocator);
+  int64_t stmt_timeout_ts = -1;
+
+  tx_param.access_mode_ = ObTxAccessMode::RW;
+  tx_param.isolation_ = ObTxIsolationLevel::RC;
+  tx_param.timeout_us_ = 6000 * 1000L;
+  tx_param.lock_timeout_us_ = -1;
+  tx_param.cluster_id_ = GCONF.cluster_id;
+
+  ret = tenant_guard.switch_to(OB_SYS_TENANT_ID);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_NE(nullptr, MTL(ObTableLockService*));
+
+  txs = MTL(ObTransService*);
+  ASSERT_NE(nullptr, txs);
+
+  // 1. insert rows (get 2 RX IN_TRANS locks)
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks_with_dml_locks 1");
+
+  OB_LOG(INFO, "insert 2 rows without commit");
+  {
+    WRITE_SQL_BY_CONN(conn1, "begin;");
+    WRITE_SQL_BY_CONN(conn1, "INSERT INTO t_one_part VALUES (2, 2);");
+    WRITE_SQL_BY_CONN(conn2, "begin;");
+    WRITE_SQL_BY_CONN(conn2, "INSERT INTO t_one_part VALUES (3, 3);");
+  }
+
+  // 2. lock table with RX lock
+  get_table_id("t_one_part", table_id);
+  lock_arg.table_id_ = table_id;
+  lock_arg.owner_id_ = owner_one;
+  lock_arg.lock_mode_ = lock_mode_one;
+  lock_arg.op_type_ = OUT_TRANS_LOCK;
+  lock_arg.timeout_us_ = 0;
+
+  unlock_arg.table_id_ = table_id;
+  unlock_arg.owner_id_ = owner_one;
+  unlock_arg.lock_mode_ = lock_mode_one;
+  unlock_arg.op_type_ = OUT_TRANS_UNLOCK;
+  unlock_arg.timeout_us_ = 0;
+
+  ASSERT_EQ(OB_SUCCESS, txs->acquire_tx(tx_desc1));
+  ret = MTL(ObTableLockService*)->lock(*tx_desc1,
+                                       tx_param,
+                                       lock_arg);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  stmt_timeout_ts = ObTimeUtility::current_time() + 1000 * 1000;
+  ret = txs->commit_tx(*tx_desc1, stmt_timeout_ts);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = txs->release_tx(*tx_desc1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 3. check lock
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks_with_dml_locks 3");
+  ret = MTL(ObTableLockService*)->lock_table(table_id,
+                                             check_lock_mode,
+                                             owner_two);
+  ASSERT_EQ(OB_EAGAIN, ret);
+
+  // 4. replace lock
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks_with_dml_locks 4");
+  new_lock_arg.table_id_ = table_id;
+  new_lock_arg.owner_id_ = owner_two;
+  new_lock_arg.lock_mode_ = EXCLUSIVE;
+  new_lock_arg.op_type_ = OUT_TRANS_LOCK;
+  new_lock_arg.timeout_us_ = 0;
+
+  replace_lock_arg.lock_req_ = &new_lock_arg;
+  replace_lock_arg.unlock_req_list_.push_back(&unlock_arg);
+
+  ASSERT_EQ(OB_SUCCESS, txs->acquire_tx(tx_desc2));
+  ret = MTL(ObTableLockService*)->replace_lock(*tx_desc2,
+                                               tx_param,
+                                               replace_lock_arg);
+  ASSERT_EQ(OB_EAGAIN, ret);
+
+  stmt_timeout_ts = ObTimeUtility::current_time() + 1000 * 1000;
+  ret = txs->rollback_tx(*tx_desc2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = txs->release_tx(*tx_desc2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 5. commit insert (release 2 RX IN_TRANS locks)
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks_with_dml_locks 5");
+  {
+    WRITE_SQL_BY_CONN(conn1, "commit;");
+    WRITE_SQL_BY_CONN(conn2, "commit;");
+  }
+
+  // 6. replace again
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks_with_dml_locks 6");
+  ASSERT_EQ(OB_SUCCESS, txs->acquire_tx(tx_desc3));
+  ret = MTL(ObTableLockService*)->replace_lock(*tx_desc3,
+                                               tx_param,
+                                               replace_lock_arg);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  stmt_timeout_ts = ObTimeUtility::current_time() + 1000 * 1000;
+  ret = txs->commit_tx(*tx_desc3, stmt_timeout_ts);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = txs->release_tx(*tx_desc3);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 7. check replace successfully
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks_with_dml_locks 7");
+  ret = MTL(ObTableLockService*)->lock_table(table_id,
+                                             EXCLUSIVE,
+                                             owner_two);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 8. unlock
+  LOG_INFO("ObTableLockServiceTest::replace_all_locks_with_dml_locks 8");
+  ASSERT_EQ(OB_SUCCESS, txs->acquire_tx(tx_desc4));
+  unlock_arg2.table_id_ = table_id;
+  unlock_arg2.owner_id_ = owner_two;
+  unlock_arg2.lock_mode_ = EXCLUSIVE;
+  unlock_arg2.op_type_ = OUT_TRANS_UNLOCK;
+  unlock_arg2.timeout_us_ = 0;
+  ret = MTL(ObTableLockService *)->unlock(*tx_desc4, tx_param, unlock_arg2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  stmt_timeout_ts = ObTimeUtility::current_time() + 1000 * 1000;
+  ret = txs->commit_tx(*tx_desc4, stmt_timeout_ts);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = txs->release_tx(*tx_desc4);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
 }// end unittest
 } // end oceanbase
 
@@ -1900,7 +2232,7 @@ TEST_F(ObTableLockServiceTest, replace_lock_and_unlock_concurrency)
 int main(int argc, char **argv)
 {
   oceanbase::unittest::init_log_and_gtest(argc, argv);
-  OB_LOGGER.set_log_level(OB_LOG_LEVEL_ERROR);
+  OB_LOGGER.set_log_level(OB_LOG_LEVEL_INFO);
   OB_LOGGER.set_mod_log_levels("STORAGE.TABLELOCK:DEBUG");
   OB_LOGGER.set_enable_async_log(false);
   ::testing::InitGoogleTest(&argc, argv);

@@ -14,6 +14,7 @@
 #define _OCEANBASE_SQL_OB_SQL_UTILS_H
 
 #include "common/ob_range.h"
+#include "sql/rewrite/ob_query_range_provider.h"
 #include "common/object/ob_object.h"
 #include "lib/container/ob_vector.h"
 #include "lib/container/ob_2d_array.h"
@@ -32,6 +33,8 @@
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "share/ob_compatibility_control.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
+
 namespace oceanbase
 {
 namespace share {
@@ -454,7 +457,7 @@ public:
                            common::ObExprCtx &expr_ctx);
 
   // use get_tablet_ranges instead.
-  static int extract_pre_query_range(const ObQueryRange &pre_query_range,
+  static int extract_pre_query_range(const ObQueryRangeProvider &query_range_provider,
                                      common::ObIAllocator &allocator,
                                      ObExecContext &exec_ctx,
                                      ObQueryRangeArray &key_ranges,
@@ -464,7 +467,7 @@ public:
                                            void *range_buffer,
                                            const ParamStore &param_store,
                                            ObQueryRangeArray &key_ranges);
-  static int extract_geo_query_range(const ObQueryRange &pre_query_range,
+  static int extract_geo_query_range(const ObQueryRangeProvider &query_range_provider,
                                        ObIAllocator &allocator,
                                        ObExecContext &exec_ctx,
                                        ObQueryRangeArray &key_ranges,
@@ -751,8 +754,21 @@ public:
   static int64_t combine_server_id(int64_t ts, uint64_t server_id) {
     return (ts & ((1LL << 43) - 1LL)) | ((server_id & 0xFFFF) << 48);
   }
+  static int get_external_table_type(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     ObExternalFileFormat::FormatType &type);
+  static int get_external_table_type(const ObTableSchema *table_schema,
+                                     ObExternalFileFormat::FormatType &type);
+  static int get_external_table_type(const ObString &table_format_or_properties,
+                                     ObExternalFileFormat::FormatType &type);
+  static int is_odps_external_table(const uint64_t tenant_id,
+                                    const uint64_t table_id,
+                                    bool &is_odps_external_table);
+  static int is_odps_external_table(const ObTableSchema *table_schema,
+                                    bool &is_odps_external_table);
+  static int is_odps_external_table(const ObString &table_format_or_properties,
+                                    bool &is_odps_external_table);
   static int extract_odps_part_spec(const ObString &all_part_spec, ObIArray<ObString> &part_spec_list);
-  static int is_external_odps_table(const ObString &properties, ObIAllocator &allocator, bool &is_odps);
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
 
@@ -761,6 +777,8 @@ public:
   static bool is_data_version_ge_423_or_431(uint64_t data_version);
   static bool is_data_version_ge_423_or_432(uint64_t data_version);
   static bool is_data_version_ge_424_or_433(uint64_t data_version);
+  static bool is_min_cluster_version_ge_425_or_435();
+  static bool is_opt_feature_version_ge_425_or_435(uint64_t opt_feature_version);
 
   static int get_proxy_can_activate_role(const ObIArray<uint64_t> &role_id_array,
                                             const ObIArray<uint64_t> &role_id_option_array,
@@ -1060,6 +1078,7 @@ public:
     last_insert_id_(0) {}
 
   int merge_cursor(const ObImplicitCursorInfo &other);
+  int replace_cursor(const ObImplicitCursorInfo &other);
   TO_STRING_KV(K_(stmt_id),
                K_(affected_rows),
                K_(found_rows),

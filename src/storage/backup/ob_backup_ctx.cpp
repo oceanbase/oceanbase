@@ -1149,7 +1149,7 @@ int ObBackupRetryCtx::inner_recover_need_reuse_macro_block_(
                          "turn_id", retry_desc.turn_id_,
                          "retry_id", retry_desc.retry_id_,
                          "file_id", file_id,
-                         to_cstring(this));
+                         *this);
         break;
       } else if (OB_FAIL(iter.fetch_macro_index_list_(file_id, index_list))) {
         LOG_WARN("failed to fetch macro index list", K(ret), K(file_id));
@@ -1205,7 +1205,7 @@ int ObBackupRetryCtx::add_recover_retry_ctx_event_(
       "turn_id", param_.turn_id_,
       "retry_id", param_.retry_id_,
       "retry_list_count", retry_list.count(),
-      to_cstring(*this));
+      *this);
   return ret;
 }
 
@@ -1236,7 +1236,8 @@ ObLSBackupCtx::ObLSBackupCtx()
       index_builder_mgr_(),
       bandwidth_throttle_(NULL),
       mview_dep_tablet_set_(),
-      wait_reuse_across_sstable_time_(0)
+      wait_reuse_across_sstable_time_(0),
+      mv_mutex_()
 {}
 
 ObLSBackupCtx::~ObLSBackupCtx()

@@ -18,7 +18,6 @@
 #include "lib/string/ob_sql_string.h"         // ObSqlString
 #include "lib/utility/ob_unify_serialize.h"   // serialize
 #include "common/ob_member.h"
-#include <algorithm>
 
 namespace oceanbase
 {

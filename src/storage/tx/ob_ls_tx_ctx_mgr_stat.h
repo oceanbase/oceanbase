@@ -28,7 +28,7 @@ public:
   void reset();
   int init(const common::ObAddr &addr, const share::ObLSID &ls_id,
       const bool is_master, const bool is_stopped,
-      const int64_t state, const char* state_str,
+      const int64_t state,
       const int64_t total_tx_ctx_count, const int64_t mgr_addr);
 
   const common::ObAddr &get_addr() const { return addr_; }
@@ -36,7 +36,6 @@ public:
   bool is_master() const { return is_master_; }
   bool is_stopped() const { return is_stopped_; }
   int64_t get_state() const { return state_; }
-  const char* get_state_str() const { return state_str_; }
   int64_t get_total_tx_ctx_count() const { return total_tx_ctx_count_; }
   int64_t get_mgr_addr() const { return mgr_addr_; }
 
@@ -49,7 +48,6 @@ private:
   bool is_master_;
   bool is_stopped_;
   int64_t state_;
-  const char* state_str_;
   int64_t total_tx_ctx_count_;
   int64_t mgr_addr_;
 };

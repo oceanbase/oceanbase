@@ -213,7 +213,6 @@ public:
                   stopped_(true),
                   loaded_(false),
                   config_(nullptr),
-                  cond_(),
                   queues_(),
                   high_task_queue_(queues_[0]),
                   low_task_queue_(queues_[1]),
@@ -384,7 +383,7 @@ private:
   // try to log inmemory task infos according to balancer_log_interval
   // @param [in] last_dump_ts, last time do logging
   int try_dump_statistic_(
-      int64_t &last_dump_ts) const;
+      int64_t &last_dump_ts);
   int inner_dump_statistic_() const;
   // try to deal with those tasks not in scheduling
   int try_clean_and_cancel_task_in_schedule_list_(
@@ -428,7 +427,6 @@ private:
   /* has waiting task but cannot be scheduled,
    * since mgr reaches server_data_copy_[in/out]_concurrency
    */
-  mutable common::ObThreadCond cond_;
   ObDRTaskQueue queues_[static_cast<int64_t>(ObDRTaskPriority::MAX_PRI)];
   ObDRTaskQueue &high_task_queue_; // queues_[0]
   ObDRTaskQueue &low_task_queue_;  // queues_[1]

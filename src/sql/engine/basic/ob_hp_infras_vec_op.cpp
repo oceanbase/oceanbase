@@ -1766,6 +1766,17 @@ int64_t ObHashPartInfrastructureVecImpl::get_hash_store_mem_used() const
   return ht_mem_used;
 }
 
+int64_t ObHashPartInfrastructureVecImpl::get_actual_mem_used() const
+{
+  int64_t actual_mem_used = 0;
+  HP_INFRAS_STATUS_CHECK
+  {
+    actual_mem_used = hp_infras_->get_hash_store_mem_used()
+      + hp_infras_->get_hash_table_mem_used();
+  }
+  return actual_mem_used;
+}
+
 void ObHashPartInfrastructureVecImpl::destroy_my_skip()
 {
   if (nullptr != hp_infras_) {

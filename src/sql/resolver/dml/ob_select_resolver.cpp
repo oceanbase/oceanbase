@@ -1581,10 +1581,11 @@ int ObSelectResolver::resolve_for_update_clause_mysql(const ParseNode &node)
   int ret = OB_SUCCESS;
   ObSelectStmt *select_stmt = NULL;
   int64_t wait_us = -1;
+  bool skip_locked = false;
   if (OB_ISNULL(select_stmt = get_select_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get select stmt", K(ret));
-  } else if (T_SFU_INT != node.type_ && T_SFU_DECIMAL != node.type_) {
+  } else if (T_SFU_INT != node.type_ && T_SFU_DECIMAL != node.type_ && T_SKIP_LOCKED != node.type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("for update wait info is wrong", K(ret));
   } else if (T_SFU_INT == node.type_) {
@@ -1595,14 +1596,18 @@ int ObSelectResolver::resolve_for_update_clause_mysql(const ParseNode &node)
                   time_str, wait_us, ObTimeUtility2::DIGTS_SENSITIVE))) {
       LOG_WARN("str to time failed", K(ret));
     }
+  } else if (T_SKIP_LOCKED == node.type_) {
+    // skip locked
+    skip_locked = true;
+    wait_us = 0;
   }
-  if (OB_SUCC(ret) && OB_FAIL(set_for_update_mysql(*select_stmt, wait_us))) {
+  if (OB_SUCC(ret) && OB_FAIL(set_for_update_mysql(*select_stmt, wait_us, skip_locked))) {
     LOG_WARN("failed to set for update", K(ret));
   }
   return ret;
 }
 
-int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us)
+int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us, bool skip_locked)
 {
   int ret = OB_SUCCESS;
   TableItem *table_item = NULL;
@@ -1613,6 +1618,7 @@ int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wai
     } else if (table_item->is_basic_table()) {
       table_item->for_update_ = true;
       table_item->for_update_wait_us_ = wait_us;
+      table_item->skip_locked_ = skip_locked;
     } else if (table_item->is_link_table()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("mysql dblink not support select for update", K(ret));
@@ -4107,6 +4113,16 @@ int ObSelectResolver::resolve_group_clause(const ParseNode *node)
         LOG_WARN("failed to push back to order items.", K(ret));
       } else {/* do nothing. */}
     }
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+    bool enable_hash_rollup = tenant_config.is_valid()
+                              && (tenant_config->_use_hash_rollup.case_compare("auto") == 0
+                                  || tenant_config->_use_hash_rollup.case_compare("forced") == 0)
+                              && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
+    if (OB_SUCC(ret) && enable_hash_rollup) {
+      if (OB_FAIL(append(select_stmt->get_order_items(), order_items))) {
+        LOG_WARN("append order items failed", K(ret));
+      }
+    }
   } else if (OB_FAIL(append(select_stmt->get_order_items(), order_items))) {
       LOG_WARN("failed to append order itmes by groupby into select stmt.", K(ret));
   } else { /* do nothing. */}
@@ -5245,6 +5261,20 @@ int ObSelectResolver::resolve_into_outfile_with_format(const ParseNode *node, Ob
                                      : ObCharset::get_system_collation();
       if (OB_FAIL(external_format.csv_format_.init_format(ObDataInFileStruct(), 0, file_cs_type))) {
         LOG_WARN("failed to init csv format", K(ret));
+      }
+    }
+    // delete later
+    if (OB_SUCC(ret) && is_oracle_mode()
+        && (ObExternalFileFormat::PARQUET_FORMAT == external_format.format_type_
+            || ObExternalFileFormat::ORC_FORMAT == external_format.format_type_)) {
+      ret = OB_E(EventTable::EN_EXTERNAL_TABLE_ORACLE) OB_SUCCESS;
+      bool enable_oracle_orc = OB_SUCCESS != ret;
+      if (enable_oracle_orc) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support orc or parquet in oracle mode", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "orc or parquet in oracle mode");
       }
     }
     for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {

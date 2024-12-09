@@ -100,7 +100,8 @@ public:
   static int assign_worker(ObDfoMgr &dfo_mgr,
                            int64_t expected_worker_count,
                            int64_t minimal_worker_count,
-                           int64_t admited_worker_count);
+                           int64_t admited_worker_count,
+                           bool use_adaptive_px_dop);
   static int get_dfos_worker_count(const ObIArray<ObDfo*> &dfos,
                                    const bool get_minimal,
                                    int64_t &total_assigned);

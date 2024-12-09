@@ -134,6 +134,7 @@ int ObTableDirectLoadBeginExecutor::init_param(ObTableLoadClientTaskParam &param
   OX(param.set_heartbeat_timeout_us(arg_.heartbeat_timeout_));
   OZ(param.set_load_method(arg_.load_method_));
   OZ(param.set_column_names(arg_.column_names_));
+  OZ(param.set_part_names(arg_.part_names_));
   return ret;
 }
 

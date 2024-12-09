@@ -20,6 +20,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/ob_autoincrement_service.h"
 #include "share/sequence/ob_sequence_cache.h"
+#include "observer/table_load/ob_table_load_empty_insert_tablet_ctx_manager.h"
 
 namespace oceanbase
 {
@@ -39,6 +40,7 @@ ObTableLoadCoordinatorCtx::ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx)
     task_scheduler_(nullptr),
     exec_ctx_(nullptr),
     error_row_handler_(nullptr),
+    empty_insert_tablet_ctx_manager_(nullptr),
     sequence_schema_(&allocator_),
     last_trans_gid_(1024),
     next_session_id_(0),
@@ -57,43 +59,8 @@ ObTableLoadCoordinatorCtx::~ObTableLoadCoordinatorCtx()
   destroy();
 }
 
-int ObTableLoadCoordinatorCtx::init_partition_location()
-{
-  int ret = OB_SUCCESS;
-  int retry = 0;
-  bool flag = false;
-  while (retry < 3 && OB_SUCC(ret)) {
-    partition_location_.reset();
-    target_partition_location_.reset();
-    // init partition_location_
-    if (OB_FAIL(partition_location_.init(ctx_->param_.tenant_id_, ctx_->schema_.partition_ids_))) {
-      LOG_WARN("fail to init partition location", KR(ret));
-    } else if (OB_FAIL(target_partition_location_.init(ctx_->param_.tenant_id_, target_schema_.partition_ids_))) {
-      LOG_WARN("fail to init origin partition location", KR(ret));
-    } else if (OB_FAIL(partition_location_.check_tablet_has_same_leader(target_partition_location_, flag))) {
-      LOG_WARN("fail to check_tablet_has_same_leader", KR(ret));
-    }
-    if (OB_SUCC(ret)) {
-      if (flag) {
-        break;
-      } else {
-        LOG_WARN("invalid leader info, maybe change master");
-      }
-    }
-    retry ++;
-  }
-
-  if (OB_SUCC(ret)) {
-    if (!flag) {
-      ret = OB_EAGAIN;
-      LOG_WARN("invalid leader info", KR(ret));
-    }
-  }
-
-  return ret;
-}
-
 int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
+                                    const ObIArray<ObTabletID> &tablet_ids,
                                     ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
@@ -116,7 +83,7 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
     }
     // init partition_calc_
     else if (OB_FAIL(
-               partition_calc_.init(ctx_->param_, ctx_->session_info_))) {
+               partition_calc_.init(ctx_->param_, ctx_->session_info_, tablet_ids))) {
       LOG_WARN("fail to init partition calc", KR(ret));
     }
     // init trans_allocator_
@@ -148,6 +115,16 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
     // init sequence_cache_ and sequence_schema_
     else if (ctx_->schema_.has_identity_column_ && OB_FAIL(init_sequence())) {
       LOG_WARN("fail to init sequence", KR(ret));
+    }
+    // init partition ids
+    else if (OB_FAIL(init_partition_ids(tablet_ids))) {
+      LOG_WARN("fail to init partition ids", KR(ret));
+    }
+    // init empty_insert_tablet_ctx_manager_
+    else if (ObDirectLoadMethod::is_full(ctx_->param_.method_)
+             && !empty_partition_ids_.empty()
+             && OB_FAIL(init_empty_insert_tablet_ctx_manager())) {
+      LOG_WARN("fail to init empty insert tablet ctx manager", KR(ret));
     }
     if (OB_SUCC(ret)) {
       exec_ctx_ = exec_ctx;
@@ -204,6 +181,11 @@ void ObTableLoadCoordinatorCtx::destroy()
   trans_ctx_map_.reuse();
   segment_ctx_map_.reset();
   commited_trans_ctx_array_.reset();
+  if (nullptr != empty_insert_tablet_ctx_manager_) {
+    empty_insert_tablet_ctx_manager_->~ObTableLoadEmptyInsertTabletCtxManager();
+    allocator_.free(empty_insert_tablet_ctx_manager_);
+    empty_insert_tablet_ctx_manager_ = nullptr;
+  }
 }
 
 int ObTableLoadCoordinatorCtx::advance_status(ObTableLoadStatusType status)
@@ -522,6 +504,110 @@ int ObTableLoadCoordinatorCtx::init_session_ctx_array()
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->autoinc_param_ = autoinc_param;
     }
+  }
+  return ret;
+}
+
+int ObTableLoadCoordinatorCtx::init_partition_ids(const ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *origin_table_schema = nullptr;
+  const ObTableSchema *target_table_schema = nullptr;
+  ObArray<ObTabletID> all_origin_tablet_ids, all_target_tablet_ids;
+  ObArray<ObObjectID> all_origin_part_ids, all_target_part_ids;
+  ObTableLoadPartitionId origin_id, target_id;
+  ObHashSet<ObTabletID> tablet_ids_set;
+  if (OB_FAIL(ObTableLoadSchema::get_schema_guard(ctx_->param_.tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret));
+  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(schema_guard,
+                                                         ctx_->param_.tenant_id_,
+                                                         ctx_->param_.table_id_,
+                                                         origin_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(ctx_->param_.tenant_id_), K(ctx_->param_.table_id_));
+  } else if (OB_ISNULL(origin_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is nullptr", KR(ret));
+  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(schema_guard,
+                                                         ctx_->param_.tenant_id_,
+                                                         ctx_->ddl_param_.dest_table_id_,
+                                                         target_table_schema))) {
+    LOG_WARN("fail to get target schema", KR(ret),
+                                          K(ctx_->param_.tenant_id_),
+                                          K(ctx_->ddl_param_.dest_table_id_));
+  } else if (OB_ISNULL(target_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("target schema is nullptr", KR(ret));
+  } else if (OB_FAIL(origin_table_schema->get_all_tablet_and_object_ids(all_origin_tablet_ids,
+                                                                        all_origin_part_ids))) {
+    LOG_WARN("fail to get all origin tablet ids and part ids", KR(ret));
+  } else if (OB_FAIL(target_table_schema->get_all_tablet_and_object_ids(all_target_tablet_ids,
+                                                                        all_target_part_ids))) {
+    LOG_WARN("fail to get all target tablet ids and part ids", KR(ret));
+  } else if (tablet_ids.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_origin_tablet_ids.count(); ++i) {
+      origin_id.partition_id_ = all_origin_part_ids.at(i);
+      origin_id.tablet_id_ = all_origin_tablet_ids.at(i);
+      target_id.partition_id_ = all_target_part_ids.at(i);
+      target_id.tablet_id_ = all_target_tablet_ids.at(i);
+      if (OB_FAIL(partition_ids_.push_back(origin_id))) {
+        LOG_WARN("fail to push back origin id", KR(ret));
+      } else if (OB_FAIL(target_partition_ids_.push_back(target_id))) {
+        LOG_WARN("fail to push back target id", KR(ret));
+      }
+    }
+  } else if (OB_FAIL(tablet_ids_set.create(tablet_ids.count(),
+                                           ObMemAttr(MTL_ID(), "TLD_TABLETID")))) {
+    LOG_WARN("fail to create tablet ids set", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+      if (OB_FAIL(tablet_ids_set.set_refactored(tablet_ids.at(i)))) {
+        LOG_WARN("fail to set refactored", KR(ret), K(tablet_ids.at(i)));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_origin_tablet_ids.count(); ++i) {
+      origin_id.partition_id_ = all_origin_part_ids.at(i);
+      origin_id.tablet_id_ = all_origin_tablet_ids.at(i);
+      target_id.partition_id_ = all_target_part_ids.at(i);
+      target_id.tablet_id_ = all_target_tablet_ids.at(i);
+      ret = tablet_ids_set.exist_refactored(all_origin_tablet_ids.at(i));
+      // non_empty partition
+      if (OB_HASH_EXIST == ret) {
+        if (OB_FAIL(partition_ids_.push_back(origin_id))) {
+          LOG_WARN("fail to push origin id", KR(ret));
+        } else if (OB_FAIL(target_partition_ids_.push_back(target_id))) {
+          LOG_WARN("fail to push target id", KR(ret));
+        }
+      }
+      // empty partition
+      else if (OB_HASH_NOT_EXIST == ret) {
+        if (OB_FAIL(empty_partition_ids_.push_back(origin_id))) {
+          LOG_WARN("fail to push empty origin id", KR(ret));
+        } else if (OB_FAIL(empty_target_partition_ids_.push_back(target_id))) {
+          LOG_WARN("fail to push empty target id", KR(ret));
+        }
+      } else {
+        LOG_WARN("fail to search tablet ids set", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadCoordinatorCtx::init_empty_insert_tablet_ctx_manager()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(empty_insert_tablet_ctx_manager_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty_insert_tablet_ctx_manager is not nullptr", KR(ret));
+  } else if (OB_ISNULL(empty_insert_tablet_ctx_manager_
+                        = OB_NEWx(ObTableLoadEmptyInsertTabletCtxManager,
+                                  (&allocator_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new empty_insert_tablet_ctx_manager", KR(ret));
+  } else if (OB_FAIL(empty_insert_tablet_ctx_manager_->init(empty_partition_ids_,
+                                                            empty_target_partition_ids_))) {
+    LOG_WARN("fail to init empty_insert_tablet_ctx_manager", KR(ret));
   }
   return ret;
 }

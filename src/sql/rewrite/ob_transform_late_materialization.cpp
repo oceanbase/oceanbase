@@ -1146,8 +1146,6 @@ int ObTransformLateMaterialization::check_transform_plan_expected(ObLogicalOpera
         if (OB_ISNULL(join_left_branch = join_op->get_child(ObLogicalOperator::first_child))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), KP(join_left_branch));
-        } else if (static_cast<ObLogTableScan *>(full_table_scan)->use_column_store()) {
-          is_expected = false;
         } else {
           is_expected = true;
         }

@@ -27,6 +27,7 @@ public:
   explicit ObExprDayOfMonth(common::ObIAllocator &alloc);
   virtual ~ObExprDayOfMonth();
   static int calc_dayofmonth(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_dayofmonth_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDayOfMonth);
 };
@@ -48,6 +49,7 @@ public:
   explicit ObExprDayOfWeek(common::ObIAllocator &alloc);
   virtual ~ObExprDayOfWeek();
   static int calc_dayofweek(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_dayofweek_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDayOfWeek);
 };
@@ -59,6 +61,7 @@ public:
   explicit ObExprDayOfYear(common::ObIAllocator &alloc);
   virtual ~ObExprDayOfYear();
   static int calc_dayofyear(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_dayofyear_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDayOfYear);
 };
@@ -216,6 +219,7 @@ public:
                                ObExprResType &type1,
                                common::ObExprTypeCtx &type_ctx) const;
   static int calc_dayname(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_dayname_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDayName);
 };

@@ -40,7 +40,8 @@ ObBlockRowStore::ObBlockRowStore(ObTableAccessContext &context)
       can_blockscan_(false),
       filter_applied_(false),
       disabled_(false),
-      is_aggregated_in_prefetch_(false)
+      is_aggregated_in_prefetch_(false),
+      where_optimizer_(nullptr)
 {}
 
 ObBlockRowStore::~ObBlockRowStore()
@@ -56,6 +57,11 @@ void ObBlockRowStore::reset()
   disabled_ = false;
   is_aggregated_in_prefetch_ = false;
   iter_param_ = nullptr;
+  if (where_optimizer_ != nullptr) {
+    where_optimizer_->~ObWhereOptimizer();
+    context_.stmt_allocator_->free(where_optimizer_);
+    where_optimizer_ = nullptr;
+  }
 }
 
 void ObBlockRowStore::reuse()
@@ -81,11 +87,21 @@ int ObBlockRowStore::init(const ObTableAccessParam &param, common::hash::ObHashS
   } else if (nullptr != context_.sample_filter_
               && OB_FAIL(context_.sample_filter_->combine_to_filter_tree(pd_filter_info_.filter_))) {
       LOG_WARN("Failed to combine sample filter to filter tree", K(ret), K_(pd_filter_info), KP_(context_.sample_filter));
-  } else {
+  } else if (nullptr != pd_filter_info_.filter_ && !param.iter_param_.is_use_column_store() && param.iter_param_.enable_pd_filter_reorder()) {
+    if (OB_UNLIKELY(nullptr != where_optimizer_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected where optimizer", K(ret), KP_(where_optimizer));
+    } else if (OB_ISNULL(where_optimizer_ = OB_NEWx(ObWhereOptimizer, context_.stmt_allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Failed to alloc memory for ObWhereOptimizer", K(ret));
+    } else if (OB_FAIL(where_optimizer_->init(&param.iter_param_, pd_filter_info_.filter_))) {
+      LOG_WARN("Failed to init where optimizer", K(ret), K(param.iter_param_), K(pd_filter_info_.filter_));
+    }
+  }
+  if (OB_SUCC(ret)) {
     is_inited_ = true;
     iter_param_ = &param.iter_param_;
-  }
-  if (IS_NOT_INIT) {
+  } else {
     reset();
   }
   return ret;
@@ -96,6 +112,7 @@ int ObBlockRowStore::apply_blockscan(
     const bool can_pushdown,
     ObTableScanStoreStat &table_store_stat)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   int64_t access_count = micro_scanner.get_access_cnt();
   if (iter_param_->has_lob_column_out()) {
@@ -109,6 +126,8 @@ int ObBlockRowStore::apply_blockscan(
   } else if (nullptr == pd_filter_info_.filter_) {
     // nothing to do
     filter_applied_ = true;
+  } else if (nullptr != where_optimizer_ && OB_FAIL(where_optimizer_->reorder_row_filter())){
+    LOG_WARN("Fail to reorder filter", K(ret), KPC(pd_filter_info_.filter_));
   } else if (OB_FAIL(micro_scanner.filter_micro_block_in_blockscan(pd_filter_info_))) {
     LOG_WARN("Failed to apply pushdown filter in block reader", K(ret), K(*this));
   } else {

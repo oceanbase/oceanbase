@@ -866,7 +866,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_SYS_ST_ASMVT:
       case T_FUN_SYS_RB_BUILD_AGG:
       case T_FUN_SYS_RB_OR_AGG:
-      case T_FUN_SYS_RB_AND_AGG: {
+      case T_FUN_SYS_RB_AND_AGG:
+      case T_FUNC_SYS_ARRAY_AGG: {
         if (OB_FAIL(process_agg_node(node, expr))) {
           LOG_WARN("fail to process agg node", K(ret), K(node));
         }
@@ -1305,6 +1306,18 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       }
       case T_FUN_SYS_VECTOR_DISTANCE: {
         OZ (process_vector_func_node(node, expr));
+        break;
+      }
+      case T_FUNC_SYS_ARRAY_MAP: {
+        OZ (process_array_map_func_node(node, expr));
+        break;
+      }
+      case T_FUNC_SYS_LAMBDA: {
+        OZ (process_lambda_func_node(node, expr));
+        break;
+      }
+      case T_EXEC_VAR: {
+        OZ (process_lambda_var_node(node, expr));
         break;
       }
       case T_FUN_SYS_XML_ELEMENT: {
@@ -3078,8 +3091,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
 
   if (OB_FAIL(ret)) { // do nothing
   } else if (OB_FAIL(ObResolverUtils::resolve_const(&node,
-                        // stmt_type is only used in oracle mode
-                        lib::is_oracle_mode() ? session_info->get_stmt_type() : stmt::T_NONE,
+                                             session_info->get_stmt_type(),
                                              ctx_.expr_factory_.get_allocator(),
                                              ctx_.dest_collation_, nation_collation, ctx_.tz_info_,
                                              val, is_paramlize,
@@ -3524,6 +3536,226 @@ int ObRawExprResolverImpl::process_geo_func_node(const ParseNode *node, ObRawExp
     expr = func_expr;
   }
 
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_lambda_var_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObVarRawExpr *para_expr = NULL;
+  if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_EXEC_VAR, para_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else if (OB_ISNULL(para_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column ref expr is null");
+  } else {
+    para_expr->set_ref_index(node->reserved_);
+    expr = para_expr;
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::extract_var_exprs(ObRawExpr *expr, ObIArray<ObVarRawExpr *> &var_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(expr));
+  } else if (expr->is_aggr_expr()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "aggr expr in lambda function");
+    LOG_WARN("aggr expr is not supported in lambda function", K(ret));
+  } else if (expr->get_expr_type() == T_EXEC_VAR) {
+    ObVarRawExpr *var_expr = static_cast<ObVarRawExpr *>(expr);
+    if (OB_FAIL(add_var_to_array_no_dup(var_exprs, var_expr))) {
+      LOG_WARN("failed to add var to array no dup", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (expr->get_expr_type() == T_FUNC_SYS_ARRAY_MAP) {
+      } else if (OB_FAIL(SMART_CALL(extract_var_exprs(expr->get_param_expr(i), var_exprs)))) {
+        LOG_WARN("Failed to extract var exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::check_replace_lambda_params_node(const ParseNode *params_node, ParseNode *func_node)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *curr_node = func_node;
+  if (OB_ISNULL(curr_node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    if (curr_node->type_ == T_COLUMN_REF) {
+      bool found = false;
+      if (OB_ISNULL(curr_node->str_value_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to recursive resolve expr list item", K(ret));
+      }
+      for (uint32_t i = 0; OB_SUCC(ret) && i < params_node->num_child_ && !found; ++i) {
+        ParseNode *para_node = params_node->children_[i];
+        if (OB_ISNULL(para_node)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid expr list node children", K(ret), K(i), K(params_node->children_[i]));
+        } else if (OB_ISNULL(para_node->str_value_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to recursive resolve expr list item", K(ret));
+        } else if (strncmp(curr_node->str_value_, para_node->str_value_, curr_node->str_len_) == 0) {
+          if (curr_node->str_len_ == para_node->str_len_) {
+            found = true;
+            curr_node->reserved_ = i;
+            curr_node->type_ = T_EXEC_VAR;
+          }
+        }
+      }
+    } else {
+      for (uint32_t i = 0; OB_SUCC(ret) && i < curr_node->num_child_; ++i) {
+        if (curr_node->children_[i] == NULL) {
+        } else if (curr_node->children_[i]->type_ == T_FUNC_SYS_ARRAY_MAP) {
+        } else if (OB_FAIL(check_replace_lambda_params_node(params_node, const_cast<ParseNode *>(curr_node->children_[i])))) {
+          LOG_WARN("fail to replace lambda params", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::check_lambda_params_duplicated(const ParseNode *params_node)
+{
+  int ret = OB_SUCCESS;
+  for (uint32_t i = 0; OB_SUCC(ret) && i < params_node->num_child_; ++i) {
+    ParseNode *para_node = params_node->children_[i];
+    if (OB_ISNULL(para_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid expr list node children", K(ret), K(i), K(params_node->children_[i]));
+    } else if (OB_ISNULL(para_node->str_value_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to recursive resolve expr list item", K(ret));
+    } else {
+      for (uint32_t j = 0; OB_SUCC(ret) && j < i; ++j) {
+        if (strncmp(params_node->children_[j]->str_value_, para_node->str_value_, para_node->str_len_) == 0) {
+          // duplicated param name
+          ret = OB_ERR_PARAM_DUPLICATE;
+          LOG_WARN("duplicated param name", K(ret), KCSTRING(para_node->str_value_));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_lambda_func_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *func_expr = NULL;
+
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(node));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  }else {
+    func_expr->set_func_name("lambda");
+    ObRawExpr *sub_expr1 = NULL;
+    ObRawExpr *sub_expr2 = NULL;
+    if (OB_UNLIKELY(2 != node->num_child_) || OB_ISNULL(node->children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node children", K(ret), K_(node->num_child),
+          K_(node->children), K_(node->type));
+    } else if (OB_FAIL(check_lambda_params_duplicated(node->children_[0]))) {
+      LOG_WARN("check params duplicated failed", K(ret));
+    }else if (OB_FAIL(check_replace_lambda_params_node(node->children_[0], const_cast<ParseNode *>(node->children_[1])))) {
+      LOG_WARN("fail to replace lambda params", K(ret));
+    } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], sub_expr1)))) {
+      LOG_WARN("resolve function child failed", K(ret));
+    } else if (sub_expr1->is_query_ref_expr()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("query expr isn't supported in lambda function", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "query expr in lambda function");
+    } else if (OB_FAIL(func_expr->add_param_expr(sub_expr1))) {
+      LOG_WARN("fail to add param expr to expr", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    expr = func_expr;
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_array_map_func_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *func_expr = NULL;
+
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(node));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else {
+    func_expr->set_func_name("array_map");
+    ObRawExpr *sub_expr1 = NULL;
+    ObRawExpr *sub_expr2 = NULL;
+    if (OB_UNLIKELY(2 != node->num_child_) || OB_ISNULL(node->children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node children", K(ret), K_(node->num_child),
+          K_(node->children), K_(node->type));
+    } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[0], sub_expr1)))) {
+      LOG_WARN("resolve x child failed", K(ret));
+    } else if (sub_expr1->get_expr_type() != T_FUNC_SYS_LAMBDA) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected expr type", K(ret), K(sub_expr1->get_expr_type()));
+    } else {
+      ObSEArray<ObVarRawExpr*, 4> var_exprs;
+      for (int64_t i = 0; OB_SUCC(ret) && i < sub_expr1->get_param_count(); ++i) {
+        if (OB_FAIL(func_expr->add_param_expr(sub_expr1->get_param_expr(i)))) {
+          LOG_WARN("fail to add param expr to expr", K(ret));
+        } else if (OB_FAIL(extract_var_exprs(sub_expr1->get_param_expr(i), var_exprs))) {
+          LOG_WARN("fail to extract var exprs", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ParseNode *expr_list_node = node->children_[1];
+        if (OB_ISNULL(expr_list_node) || OB_UNLIKELY(T_EXPR_LIST != expr_list_node->type_)
+            || OB_ISNULL(expr_list_node->children_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid children for geometry type function", K(node), K(expr_list_node));
+        } else if (expr_list_node->num_child_ != node->children_[0]->children_[0]->num_child_) {
+          ret = OB_ERR_PARAM_SIZE;
+          ObString func_name_("lambda function");
+          LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name_.length(), func_name_.ptr());
+          LOG_WARN("wrong param number from lambda function", K(ret),
+                   K(expr_list_node->num_child_), K(node->children_[0]->children_[0]->num_child_));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < expr_list_node->num_child_; ++i) {
+          ObRawExpr *para_expr = NULL;
+          if (OB_ISNULL(expr_list_node->children_[i])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid expr list node children", K(ret), K(i), K(expr_list_node->children_[i]));
+          } else if (OB_FAIL(SMART_CALL(recursive_resolve(expr_list_node->children_[i], para_expr)))) {
+            LOG_WARN("fail to recursive resolve expr list item", K(ret));
+          } else if (OB_FAIL(func_expr->add_param_expr(para_expr))) {
+            LOG_WARN("fail to add param expr to expr", K(ret));
+          } else {
+            for (int64_t j = 0; OB_SUCC(ret) && j < var_exprs.count(); j++) {
+              ObVarRawExpr* var = var_exprs.at(j);
+              if (var->get_ref_index() == i) {
+                var->set_ref_expr(para_expr);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    expr = func_expr;
+  }
   return ret;
 }
 
@@ -5072,6 +5304,50 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
           }
         }
       }
+    } else if (T_FUNC_SYS_ARRAY_AGG == node->type_) {
+      sub_expr = NULL;
+      if (NULL != node->children_[0] && T_DISTINCT == node->children_[0]->type_) {
+        agg_expr->set_param_distinct(true);
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+        if (OB_ISNULL(node->children_[i])) {
+          // do nothing
+        } else if (i == 1) {
+          if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[i], sub_expr)))) {
+            LOG_WARN("fail to resursive resolve expr list item", K(ret));
+          } else if (OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
+            LOG_WARN("fail to add param expr to agg expr", K(ret));
+          }
+        } else if (i == 2) {
+          // process order by desc/asc
+          const ParseNode *sort_list = NULL;
+          if (OB_UNLIKELY(node->children_[2]->type_ != T_ORDER_BY)
+              || OB_UNLIKELY(node->children_[2]->num_child_ != 2)
+              || OB_ISNULL(node->children_[2]->children_)
+              || OB_ISNULL(sort_list = node->children_[2]->children_[0])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid parameter", K(node->children_[1]));
+          } else if (NULL != node->children_[2]->children_[1]) {
+            ret = OB_ERR_CBY_OREDER_SIBLINGS_BY_NOT_ALLOWED;
+            LOG_WARN("should not be here, invalid agg node");
+          } else {
+            for (int32_t i = 0; OB_SUCC(ret) && i < sort_list->num_child_; i++) {
+              ParseNode *sort_node = sort_list->children_[i];
+              OrderItem order_item;
+              if (OB_FAIL(SMART_CALL(recursive_resolve(sort_node->children_[0], sub_expr)))) {
+                LOG_WARN("fail to recursive_resolve expr list item", K(ret));
+              } else if (OB_FAIL(ObResolverUtils::set_direction_by_mode(*sort_node, order_item, true))) {
+                LOG_WARN("failed to set direction by mode", K(ret));
+              } else {
+                order_item.expr_ = sub_expr;
+                if (OB_FAIL(agg_expr->add_order_item(order_item))) {
+                  LOG_WARN("Add order expression error", K(ret));
+                }
+              }
+            }
+          }
+        }
+      }
     } else if (T_FUN_COUNT != node->type_
         || (T_FUN_COUNT == node->type_ && 2 == node->num_child_ && T_ALL == node->children_[0]->type_)
         || T_FUN_GROUPING == node->type_) {
@@ -5095,7 +5371,7 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
           LOG_WARN("fail to add median order item", K(ret));
         } else { /* do nothong */ }
       }
-    }  else {
+    } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("should not be here, invalid agg node", K(ret), K(node));
     }
@@ -7607,7 +7883,7 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
       } else if (OB_ISNULL(func_param)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("func_param is null", K(func_param), K(ret));
-      } else {
+      } else if (lib::is_oracle_mode()) {
         ObSysFunRawExpr *floor_expr = NULL;
         //we create a floor expr to deal with ntile(1 + 1.1)
         if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_FLOOR, floor_expr))) {
@@ -7621,6 +7897,8 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("push back func_param failed", K(floor_expr), K(ret));
         }
+      } else if (OB_FAIL(func_params.push_back(func_param))) {
+        LOG_WARN("push back element failed", K(ret));
       }
     } else if (T_WIN_FUN_NTH_VALUE == func_type) {
       ParseNode *measure_expr_node = NULL;

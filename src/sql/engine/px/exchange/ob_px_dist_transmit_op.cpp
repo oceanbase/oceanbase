@@ -188,7 +188,11 @@ int ObPxDistTransmitOp::do_transmit()
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   int64_t use_shared_bcast_msg = ObBcastOptimization::BC_TO_WORKER;
-  if (ObPQDistributeMethod::LOCAL == MY_SPEC.dist_method_) {
+  if (OB_ISNULL(ctx_.get_physical_plan_ctx())
+      || OB_ISNULL(ctx_.get_physical_plan_ctx()->get_phy_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("phy plan is not inited", K(ret), KP(ctx_.get_physical_plan_ctx()));
+  } else if (ObPQDistributeMethod::LOCAL == MY_SPEC.dist_method_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid PX distribution method",  K(ret), K(MY_SPEC.dist_method_));
   } else if (OB_FAIL(ctx_.get_my_session()->get_sys_variable(share::SYS_VAR__OB_PX_BCAST_OPTIMIZATION, use_shared_bcast_msg))) {
@@ -281,7 +285,9 @@ int ObPxDistTransmitOp::do_hash_dist()
     ObNullAwareHashSliceIdCalc slice_id_calc(ctx_.get_allocator(),
                                              task_channels_.count(),
                                              &MY_SPEC.dist_exprs_,
-                                             &MY_SPEC.dist_hash_funcs_);
+                                             &MY_SPEC.dist_hash_funcs_,
+                                             ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                                              >= CLUSTER_VERSION_4_3_5_0);
     if (MY_SPEC.is_rollup_hybrid_ || MY_SPEC.is_wf_hybrid_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected status: is_rollup_hybrid or MY_SPEC.is_wf_hybrid_ is true",
@@ -293,7 +299,9 @@ int ObPxDistTransmitOp::do_hash_dist()
     ObWfHybridDistSliceIdCalc wf_hybrid_slice_id_calc(
         ctx_.get_allocator(), task_channels_.count(),
         MY_SPEC.null_row_dist_method_,
-        &MY_SPEC.dist_exprs_, &MY_SPEC.dist_hash_funcs_);
+        &MY_SPEC.dist_exprs_, &MY_SPEC.dist_hash_funcs_,
+        ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                                              >= CLUSTER_VERSION_4_3_5_0);
     if (OB_FAIL(send_rows<ObSliceIdxCalc::WF_HYBRID>(wf_hybrid_slice_id_calc))) {
       LOG_WARN("row wf hybrid distribution failed", K(ret));
     }
@@ -301,7 +309,9 @@ int ObPxDistTransmitOp::do_hash_dist()
     ObHashSliceIdCalc slice_id_calc(
                     ctx_.get_allocator(), task_channels_.count(),
                     MY_SPEC.null_row_dist_method_,
-                    &MY_SPEC.dist_exprs_, &MY_SPEC.dist_hash_funcs_);
+                    &MY_SPEC.dist_exprs_, &MY_SPEC.dist_hash_funcs_,
+                    ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                     >= CLUSTER_VERSION_4_3_5_0);
     if (OB_FAIL(send_rows<ObSliceIdxCalc::HASH>(slice_id_calc))) {
       LOG_WARN("row distribution failed", K(ret));
     }
@@ -391,7 +401,9 @@ int ObPxDistTransmitOp::do_hybrid_hash_random_dist()
       ctx_.get_allocator(), task_channels_.count(),
       MY_SPEC.null_row_dist_method_,
       &MY_SPEC.dist_exprs_, &MY_SPEC.dist_hash_funcs_,
-      &MY_SPEC.popular_values_hash_);
+      &MY_SPEC.popular_values_hash_,
+      ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                     >= CLUSTER_VERSION_4_3_5_0);
   if (OB_FAIL(send_rows<ObSliceIdxCalc::HYBRID_HASH_RANDOM>(slice_id_calc))) {
     LOG_WARN("row distribution failed", K(ret));
   }
@@ -405,7 +417,9 @@ int ObPxDistTransmitOp::do_hybrid_hash_broadcast_dist()
       ctx_.get_allocator(), task_channels_.count(),
       MY_SPEC.null_row_dist_method_,
       &MY_SPEC.dist_exprs_, &MY_SPEC.dist_hash_funcs_,
-      &MY_SPEC.popular_values_hash_);
+      &MY_SPEC.popular_values_hash_,
+      ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                                              >= CLUSTER_VERSION_4_3_5_0);
   if (OB_FAIL(send_rows<ObSliceIdxCalc::HYBRID_HASH_BROADCAST>(slice_id_calc))) {
     LOG_WARN("row distribution failed", K(ret));
   }
@@ -521,7 +535,9 @@ int ObPxDistTransmitOp::do_sm_pkey_hash_dist()
                                              task_channels_.count(),
                                              MY_SPEC.dist_exprs_,
                                              MY_SPEC.dist_hash_funcs_,
-                                             MY_SPEC.repartition_type_);
+                                             MY_SPEC.repartition_type_,
+                                             ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                                              >= CLUSTER_VERSION_4_3_5_0);
     if (OB_FAIL(slice_idx_calc.init())) {
       LOG_WARN("failed to init slice idx calc", K(ret));
     } else if (OB_FAIL(send_rows<ObSliceIdxCalc::SM_REPART_HASH>(slice_idx_calc))) {

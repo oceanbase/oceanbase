@@ -1123,25 +1123,40 @@ int ObTxDataMemtable::dump2text(const char *fname)
     int64_t ls_id = freezer_->get_ls_id().id();
     int64_t tenant_id = MTL_ID();
     fprintf(fd, "tenant_id=%ld ls_id=%ld\n", tenant_id, ls_id);
-    fprintf(fd,
-        "memtable: key=%s is_inited=%d construct_list_done=%d pre_process_done=%d do_recycle_=%d min_tx_log_ts=%s max_tx_log_ts=%s "
-        "min_start_log_ts=%s inserted_cnt=%ld deleted_cnt=%ld write_ref=%ld occupied_size=%ld total_undo_node_cnt=%ld last_insert_ts=%ld "
-        "state=%d\n",
-        S(key_),
-        is_inited_,
-        construct_list_done_,
-        pre_process_done_,
-        do_recycle_,
-        to_cstring(get_min_tx_scn()),
-        to_cstring(max_tx_scn_),
-        to_cstring(get_min_start_scn()),
-        inserted_cnt_,
-        deleted_cnt_,
-        write_ref_,
-        get_occupied_size(),
-        get_total_undo_node_cnt(),
-        last_insert_ts_,
-        state_);
+    ObCStringHelper helper;
+    const char *key_ptr = NULL;
+    const char *min_tx_scn_ptr = NULL;
+    const char *max_tx_scn_ptr = NULL;
+    const char *min_start_scn_ptr = NULL;
+    if (OB_FAIL(helper.convert(key_, key_ptr))) {
+      STORAGE_LOG(WARN, "convert key fail", K_(key), K(ret));
+    } else if (OB_FAIL(helper.convert(get_min_tx_scn(), min_tx_scn_ptr))) {
+      STORAGE_LOG(WARN, "convert min_tx_scn fail", "min_tx_scn", get_min_tx_scn(), K(ret));
+    } else if (OB_FAIL(helper.convert(max_tx_scn_, max_tx_scn_ptr))) {
+      STORAGE_LOG(WARN, "convert max_tx_scn fail", K_(max_tx_scn), K(ret));
+    } else if (OB_FAIL(helper.convert(get_min_start_scn(), min_start_scn_ptr))) {
+      STORAGE_LOG(WARN, "convert min_start_scn fail", "min_start_scn", get_min_start_scn(), K(ret));
+    } else {
+      fprintf(fd,
+          "memtable: key=%s is_inited=%d construct_list_done=%d pre_process_done=%d do_recycle_=%d min_tx_log_ts=%s max_tx_log_ts=%s "
+          "min_start_log_ts=%s inserted_cnt=%ld deleted_cnt=%ld write_ref=%ld occupied_size=%ld total_undo_node_cnt=%ld last_insert_ts=%ld "
+          "state=%d\n",
+          key_ptr,
+          is_inited_,
+          construct_list_done_,
+          pre_process_done_,
+          do_recycle_,
+          min_tx_scn_ptr,
+          max_tx_scn_ptr,
+          min_start_scn_ptr,
+          inserted_cnt_,
+          deleted_cnt_,
+          write_ref_,
+          get_occupied_size(),
+          get_total_undo_node_cnt(),
+          last_insert_ts_,
+          state_);
+    }
     fprintf(fd, "tx_data_count=%ld \n", tx_data_map_->count());
     DumpTxDataMemtableFunctor fn(fd);
     // tx_data_map_->for_each(fn);
@@ -1255,15 +1270,16 @@ void ObTxDataMemtable::DEBUG_print_start_scn_list_(const char* fname)
       ObTxData *tx_data = cur_node;
       cur_node = cur_node->sort_list_node_.next_;
 
+      ObCStringHelper helper;
       fprintf(fd,
               "ObTxData : tx_id=%-19ld state=%-8s start_scn=%-19s "
               "end_scn=%-19s "
               "commit_version=%-19s\n",
               tx_data->tx_id_.get_id(),
               ObTxData::get_state_string(tx_data->state_),
-              to_cstring(tx_data->start_scn_),
-              to_cstring(tx_data->end_scn_),
-              to_cstring(tx_data->commit_version_));
+              helper.convert(tx_data->start_scn_),
+              helper.convert(tx_data->end_scn_),
+              helper.convert(tx_data->commit_version_));
     }
   }
 
@@ -1291,11 +1307,12 @@ void ObTxDataMemtable::DEBUG_print_merged_commit_versions_(ObCommitVersionsArray
     int64_t tenant_id = MTL_ID();
     fprintf(fd, "tenant_id=%ld \n", tenant_id);
     for (int i = 0; i < array.count(); i++) {
+      ObCStringHelper helper;
       fprintf(fd,
               "start_scn=%-19s "
               "commit_version=%-19s\n",
-              to_cstring(array.at(i).start_scn_),
-              to_cstring(array.at(i).commit_version_));
+              helper.convert(array.at(i).start_scn_),
+              helper.convert(array.at(i).commit_version_));
     }
   }
 

@@ -327,9 +327,13 @@ int ObAgentTableBase::cast_as_default_value(
       if (column->get_meta_type().is_varchar()
           || column->get_meta_type().is_varbinary()) {
         // 1. varchar, varbinary
-        if (OB_FAIL(sql.append_fmt("%s '%s' AS %.*s",
+        ObCStringHelper helper;
+        const char *default_value_str = nullptr;
+        if (OB_FAIL(helper.convert(ObHexEscapeSqlStr(default_value.get_string()), default_value_str))) {
+          LOG_WARN("fail to convert default_value", KR(ret));
+        } else if (OB_FAIL(sql.append_fmt("%s '%s' AS %.*s",
             first_column ? "" : ", ",
-            to_cstring(ObHexEscapeSqlStr(default_value.get_string())),
+            default_value_str,
             name.length(), name.ptr()))) {
           LOG_WARN("append sql failed", KR(ret));
         }

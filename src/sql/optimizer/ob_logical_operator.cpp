@@ -141,8 +141,15 @@ int ObExchangeInfo::init_calc_part_id_expr(ObOptimizerContext &opt_ctx)
   } else if (OB_ISNULL(calc_part_id_expr_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to init calc part id expr", K(ret));
-  } else if (MayAddIntervalPart::YES == may_add_interval_part_) {
-    calc_part_id_expr_->set_may_add_interval_part(may_add_interval_part_);
+  } else {
+    if (MayAddIntervalPart::YES == may_add_interval_part_) {
+      calc_part_id_expr_->set_may_add_interval_part(may_add_interval_part_);
+    }
+    if (OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST == repartition_type_) {
+      calc_part_id_expr_->set_partition_id_calc_type(CALC_IGNORE_SUB_PART);
+    } else if (OB_REPARTITION_ONE_SIDE_ONE_LEVEL_SUB == repartition_type_) {
+      calc_part_id_expr_->set_partition_id_calc_type(CALC_IGNORE_FIRST_PART);
+    }
   }
   return ret;
 }
@@ -1283,6 +1290,7 @@ int ObLogicalOperator::compute_property()
     LOG_TRACE("compute property finished",
               K(get_op_name(type_)),
               K(get_cost()),
+              K(get_card()),
               K(is_local_order_),
               K(is_range_order_),
               K(op_ordering_),
@@ -2201,9 +2209,13 @@ int ObLogicalOperator::find_consumer_id_for_shared_expr(const ObIArray<ExprProdu
     LOG_WARN("get unexpected null", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx->count(); i++) {
+      bool need_check_status = (i + 1) % 1000 == 0;
       if (OB_ISNULL(ctx->at(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
+      } else if (need_check_status &&
+                 OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status fail", K(ret));
       } else if (ObOptimizerUtil::is_point_based_sub_expr(expr, ctx->at(i).expr_)) {
         if (OB_INVALID_ID == consumer_id) {
           consumer_id = ctx->at(i).consumer_id_;
@@ -5046,11 +5058,11 @@ int ObLogicalOperator::check_can_extract_query_range_by_rf(
     // maybe temp table access op, can not extract query range
     can_extract_query_range = false;
   } else if (FALSE_IT(scan_op = static_cast<ObLogTableScan*>(scan_node))) {
-  } else if (OB_ISNULL(scan_op->get_pre_query_range()) ) {
+  } else if (OB_ISNULL(scan_op->get_pre_graph()) ) {
     // for virtual table, the pre_query_range may be null,
     // can not extract query range by runtime filter
     can_extract_query_range = false;
-  } else if (!scan_op->get_pre_query_range()->is_precise_whole_range()) {
+  } else if (!scan_op->get_pre_graph()->is_precise_whole_range()) {
     // already has query range which is not whole range,
     // do not extract query range by runtime filter
     can_extract_query_range = false;
@@ -5564,7 +5576,12 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
           LOG_WARN("unexpect child type", K(ret));
         } else {
           ObLogExchange *exch_op = static_cast<ObLogExchange*>(child);
-          join_filter_create->set_tablet_id_expr(exch_op->get_calc_part_id_expr());
+          if (exch_op->get_calc_part_id_expr()->get_partition_id_calc_type() ==
+              info.calc_part_id_expr_->get_partition_id_calc_type()) {
+            join_filter_create->set_tablet_id_expr(exch_op->get_calc_part_id_expr());
+          } else {
+            join_filter_create->set_tablet_id_expr(info.calc_part_id_expr_);
+          }
         }
       } else {
         join_filter_create->set_tablet_id_expr(info.calc_part_id_expr_);
@@ -5604,6 +5621,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
   bool can_join_filter_material = false;
   int64_t valied_join_filter_count = 0;
   int64_t extra_hash_count = 1; // at least one for hash join
+  bool has_shared_join_filter = false;
   bool realistic_runtime_bloom_filter_size = !GCONF._preset_runtime_bloom_filter_size;
   if (realistic_runtime_bloom_filter_size && enable_bloom_filter
       && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
@@ -5671,6 +5689,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           if ((DistAlgo::DIST_BC2HOST_NONE == join_dist_algo) || right_has_exchange) {
             join_filter_create->set_is_shared_join_filter();
             join_filter_use->set_is_shared_join_filter();
+            has_shared_join_filter = true;
             int64_t max_wait_time_ms = 0;
             if (OB_FAIL(calc_rf_max_wait_time(node, info.filter_table_id_, max_wait_time_ms))) {
               LOG_WARN("failed to calc_rf_max_wait_time");
@@ -5763,6 +5782,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
     join_filter_create->get_jf_material_control_info().join_filter_count_ = valied_join_filter_count;
     join_filter_create->get_jf_material_control_info().each_sqc_has_full_data_ =
         DIST_BC2HOST_NONE == join_dist_algo;
+    join_filter_create->get_jf_material_control_info().need_sync_row_count_ = has_shared_join_filter;
 
     ObLogJoin *hash_join = static_cast<ObLogJoin *>(this);
     hash_join->get_jf_material_control_info() = join_filter_create->get_jf_material_control_info();
@@ -6690,6 +6710,33 @@ int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
       } else {
         child = parent;
         parent = parent->get_parent();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::check_contain_dist_das(const ObIArray<ObAddr> &exec_server_list,
+                                              bool &contain_dist_das) const
+{
+  int ret = OB_SUCCESS;
+  contain_dist_das = false;
+  if (!get_contains_das_op()) {
+    contain_dist_das = false;
+  } else if (LOG_TABLE_SCAN == get_type() && static_cast<const ObLogTableScan*>(this)->use_das()) {
+    if (1 != exec_server_list.count()
+        || 1 != get_server_list().count()
+        || exec_server_list.at(0) != get_server_list().at(0)) {
+      contain_dist_das = true;
+    }
+  } else {
+    ObLogicalOperator *child = NULL;
+    for (int64_t i = 0; !contain_dist_das && OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+      if (OB_ISNULL(child = get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child is null", K(ret), K(i));
+      } else if (OB_FAIL(SMART_CALL(child->check_contain_dist_das(exec_server_list, contain_dist_das)))) {
+        LOG_WARN("failed to smart call check contain dist das", K(ret));
       }
     }
   }

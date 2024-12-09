@@ -19,6 +19,7 @@
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/rewrite/ob_query_range.h"
+#include "sql/rewrite/ob_query_range_define.h"
 #include "sql/optimizer/ob_opt_est_utils.h"
 #include "sql/optimizer/ob_optimizer.h"
 #include "sql/optimizer/ob_optimizer_util.h"
@@ -192,6 +193,10 @@ int OptTableMeta::assign(const OptTableMeta &other)
     LOG_WARN("failed to assign all csata", K(ret));
   } else if (OB_FAIL(pk_ids_.assign(other.pk_ids_))) {
     LOG_WARN("failed to assign pk ids", K(ret));
+  } else if (OB_FAIL(stat_parts_.assign(other.stat_parts_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(hist_parts_.assign(other.hist_parts_))) {
+    LOG_WARN("failed to assign", K(ret));
   }
 
   return ret;
@@ -207,7 +212,8 @@ int OptTableMeta::init(const uint64_t table_id,
                        ObIArray<int64_t> &all_used_part_id,
                        common::ObIArray<ObTabletID> &all_used_tablets,
                        ObIArray<uint64_t> &column_ids,
-                       ObIArray<int64_t> &all_used_global_parts,
+                       common::ObIArray<int64_t> &stat_part_id,
+                       common::ObIArray<int64_t> &hist_part_id,
                        const double scale_ratio,
                        const OptSelectivityCtx &ctx,
                        const ObTablePartitionInfo *table_partition_info,
@@ -232,8 +238,10 @@ int OptTableMeta::init(const uint64_t table_id,
     LOG_WARN("failed to assign all used partition ids", K(ret));
   } else if (OB_FAIL(all_used_tablets_.assign(all_used_tablets))) {
     LOG_WARN("failed to assign all used partition ids", K(ret));
-  } else if (OB_FAIL(all_used_global_parts_.assign(all_used_global_parts))) {
-    LOG_WARN("failed to assign all used partition ids", K(ret));
+  } else if (OB_FAIL(stat_parts_.assign(stat_part_id))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(hist_parts_.assign(hist_part_id))) {
+    LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(table_id_, ref_table_id_, ctx.get_stmt(), table_schema))) {
     LOG_WARN("failed to get table schmea", K(ret), K(ref_table_id_));
   } else if (OB_ISNULL(table_schema)) {
@@ -277,10 +285,7 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
                          column_id == OB_HIDDEN_PK_INCREMENT_COLUMN_ID;
   int64_t global_ndv = 0;
   int64_t num_null = 0;
-  if (is_single_pkey) {
-    col_meta.set_ndv(rows_);
-    col_meta.set_num_null(0);
-  } else if (use_default_stat()) {
+  if (use_default_stat()) {
     col_meta.set_default_meta(rows_);
   } else if (OB_ISNULL(ctx.get_opt_stat_manager()) || OB_ISNULL(ctx.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
@@ -288,9 +293,8 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
                                     K(ctx.get_session_info()));
   } else if (OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
                                                                  ref_table_id_,
-                                                                 all_used_parts_,
+                                                                 stat_parts_,
                                                                  column_id,
-                                                                 all_used_global_parts_,
                                                                  rows_,
                                                                  scale_ratio_,
                                                                  stat))) {
@@ -298,7 +302,10 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
   } else if (OB_FAIL(refine_column_stat(stat, rows_, col_meta))) {
     LOG_WARN("failed to refine column stat", K(ret));
   }
-
+  if (OB_SUCC(ret) && is_single_pkey) {
+    col_meta.set_ndv(rows_);
+    col_meta.set_num_null(0);
+  }
   if (OB_SUCC(ret)) {
     if (rows_ < col_meta.get_ndv()) {
       col_meta.set_ndv(rows_);
@@ -312,6 +319,17 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
     col_meta.set_cg_micro_blk_cnt(stat.cg_micro_blk_cnt_);
     col_meta.set_cg_skip_rate(stat.cg_skip_rate_);
     col_meta.set_base_ndv(col_meta.get_ndv());
+  }
+  if (OB_SUCC(ret) && col_meta.get_avg_len() == 0) {
+    const ObColumnRefRawExpr *column_expr = NULL;
+    if (OB_ISNULL(ctx.get_plan()) ||
+        OB_ISNULL(column_expr = ctx.get_plan()->get_column_expr_by_id(
+                      table_id_, column_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ctx.get_plan()), K(table_id_), K(column_id));
+    } else {
+      col_meta.set_avg_len(ObOptEstCost::get_estimate_width_from_type(column_expr->get_result_type()));
+    }
   }
   return ret;
 }
@@ -434,7 +452,8 @@ int OptTableMetas::add_base_table_meta_info(OptSelectivityCtx &ctx,
                                             ObIArray<ObTabletID> &all_used_tablets,
                                             ObIArray<uint64_t> &column_ids,
                                             const OptTableStatType stat_type,
-                                            ObIArray<int64_t> &all_used_global_parts,
+                                            common::ObIArray<int64_t> &stat_part_id,
+                                            common::ObIArray<int64_t> &hist_part_id,
                                             const double scale_ratio,
                                             int64_t last_analyzed,
                                             bool is_stat_locked,
@@ -453,7 +472,7 @@ int OptTableMetas::add_base_table_meta_info(OptSelectivityCtx &ctx,
     LOG_WARN("failed to allocate place holder for table meta", K(ret));
   } else if (OB_FAIL(table_meta->init(table_id, ref_table_id, table_type, rows, stat_type, micro_block_count,
                                       *schema_guard, all_used_part_id, all_used_tablets,
-                                      column_ids, all_used_global_parts, scale_ratio, ctx,
+                                      column_ids, stat_part_id, hist_part_id, scale_ratio, ctx,
                                       table_partition_info, base_meta_info))) {
     LOG_WARN("failed to init new tstat", K(ret));
   } else {
@@ -1183,6 +1202,7 @@ int ObOptSelectivity::add_ds_result_into_selectivity(const ObIArray<ObDSResultIt
     //do nothing
   } else {
     int64_t rowcount = basic_item->stat_handle_.stat_->get_rowcount();
+    rowcount = rowcount < 1 ? 1 : rowcount;
     for (int64_t i = 0; OB_SUCC(ret) && i < ds_result_items.count(); ++i) {
       if (ds_result_items.at(i).type_ == ObDSResultItemType::OB_DS_OUTPUT_STAT) {
         if (OB_ISNULL(ds_result_items.at(i).stat_handle_.stat_) ||
@@ -1609,38 +1629,31 @@ int ObOptSelectivity::get_column_range_sel(const OptTableMetas &table_metas,
   const ObDMLStmt *stmt = ctx.get_stmt();
   uint64_t tid = col_expr.get_table_id();
   uint64_t cid = col_expr.get_column_id();
-  ObQueryRange query_range;
+  ObArenaAllocator allocator("ObSelRange", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx.get_session_info()->get_effective_tenant_id());
   ObQueryRangeArray ranges;
   ObSEArray<ColumnItem, 1> column_items;
   bool use_hist = false;
-  ObOptColumnStatHandle handler;
+  ObHistRangeSelHelper helper;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null stmt", K(ret), K(stmt));
   } else if (OB_FAIL(check_column_in_current_level_stmt(stmt, col_expr))) {
     LOG_WARN("failed to check if column is in current level stmt", K(col_expr), K(ret));
   } else if (OB_FAIL(get_column_query_range(ctx, tid, cid, quals,
-                                            column_items, query_range, ranges))) {
+                                            column_items, allocator, ranges))) {
     LOG_WARN("failed to get column query range", K(ret));
   } else {
     selectivity = 0.0;
     double not_null_sel = 0;
     if (OB_FAIL(get_column_ndv_and_nns(table_metas, ctx, col_expr, NULL, &not_null_sel))) {
       LOG_WARN("failed to get column ndv and nns", K(ret));
-    } else if (OB_FAIL(get_histogram_by_column(table_metas, ctx, tid, cid, handler))) {
+    } else if (OB_FAIL(helper.init(table_metas, ctx, col_expr))) {
       LOG_WARN("failed to get histogram by column", K(ret));
-    } else if  (NULL != handler.stat_ &&
-                handler.stat_->get_last_analyzed() > 0 &&
-                handler.stat_->get_histogram().is_valid()) {
+    } else if  (helper.is_valid()) {
       double hist_scale = 0.0;
-      if (OB_FAIL(get_column_hist_scale(table_metas, ctx, col_expr, hist_scale))) {
-        LOG_WARN("failed to get columnn hist sample scale", K(ret));
-      } else if (OB_FAIL(get_range_sel_by_histogram(ctx,
-                                                    handler.stat_->get_histogram(),
-                                                    ranges,
-                                                    true,
-                                                    hist_scale,
-                                                    selectivity))) {
+      if (OB_FAIL(helper.set_ranges(ranges))) {
+        LOG_WARN("failed to set ranges", K(ret));
+      } else if (OB_FAIL(helper.get_sel(ctx, selectivity))) {
         LOG_WARN("failed to get range sel by histogram", K(ret));
       } else {
         selectivity *= not_null_sel;
@@ -1677,12 +1690,9 @@ int ObOptSelectivity::get_column_range_sel(const OptTableMetas &table_metas,
                                    COMPAT_VERSION_4_3_2)) {
     ObObj min_value;
     ObObj max_value;
-    min_value.set_min_value();
-    max_value.set_max_value();
     if (use_hist) {
-      int64_t cnt = handler.stat_->get_histogram().get_bucket_size();
-      min_value = handler.stat_->get_histogram().get(0).endpoint_value_;
-      max_value = handler.stat_->get_histogram().get(cnt - 1).endpoint_value_;
+      min_value = helper.get_min_value();
+      max_value = helper.get_max_value();
     } else {
       if (OB_FAIL(get_column_min_max(table_metas, ctx, col_expr, min_value, max_value))) {
         LOG_WARN("failed to get column min max", K(ret));
@@ -1706,7 +1716,7 @@ int ObOptSelectivity::get_column_range_min_max(const OptSelectivityCtx &ctx,
   const ObDMLStmt *stmt = ctx.get_stmt();
   uint64_t tid = 0;
   uint64_t cid = 0;
-  ObQueryRange query_range;
+  ObArenaAllocator allocator("ObSelRange", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx.get_session_info()->get_effective_tenant_id());
   ObQueryRangeArray ranges;
   ObSEArray<ColumnItem, 1> column_items;
   if (OB_ISNULL(stmt) || OB_ISNULL(col_expr) ||
@@ -1717,7 +1727,7 @@ int ObOptSelectivity::get_column_range_min_max(const OptSelectivityCtx &ctx,
   } else if (OB_FAIL(check_column_in_current_level_stmt(stmt, *col_expr))) {
     LOG_WARN("failed to check if column is in current level stmt", KPC(col_expr), K(ret));
   } else if (OB_FAIL(get_column_query_range(ctx, tid, cid, quals,
-                                            column_items, query_range, ranges))) {
+                                            column_items, allocator, ranges))) {
     LOG_WARN("failed to get column query range", K(ret));
   } else if (OB_ISNULL(column_items.at(0).expr_) ||
              OB_UNLIKELY(ranges.empty())) {
@@ -2236,9 +2246,8 @@ int ObOptSelectivity::get_column_min_max(const OptTableMetas &table_metas,
       } else if (table_meta->use_opt_stat() &&
                  OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
                                                                      table_meta->get_ref_table_id(),
-                                                                     table_meta->get_all_used_parts(),
+                                                                     table_meta->get_stat_parts(),
                                                                      column_id,
-                                                                     table_meta->get_all_used_global_parts(),
                                                                      table_meta->get_rows(),
                                                                      table_meta->get_scale_ratio(),
                                                                      stat,
@@ -2425,10 +2434,9 @@ int ObOptSelectivity::get_histogram_by_column(const OptTableMetas &table_metas,
   if (OB_ISNULL(table_meta) || OB_INVALID_ID == table_meta->get_ref_table_id()) {
     // do nothing
   } else if (NULL == ctx.get_opt_stat_manager() ||
-             !table_meta->use_opt_stat() ||
-             table_meta->use_opt_global_stat()) {
+             !table_meta->use_opt_stat()) {
     // do nothing
-  } else if (table_meta->get_all_used_parts().count() != 1) {
+  } else if (table_meta->get_hist_parts().count() != 1) {
     // consider to use the global histogram here
   } else if (OB_ISNULL(ctx.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2436,7 +2444,7 @@ int ObOptSelectivity::get_histogram_by_column(const OptTableMetas &table_metas,
   } else if (OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(
             ctx.get_session_info()->get_effective_tenant_id(),
             table_meta->get_ref_table_id(),
-            table_meta->get_all_used_parts().at(0),
+            table_meta->get_hist_parts().at(0),
             column_id,
             column_stat))) {
     LOG_WARN("failed to get column stat", K(ret));
@@ -2756,50 +2764,63 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
                                              const uint64_t column_id,
                                              const ObIArray<ObRawExpr *> &quals,
                                              ObIArray<ColumnItem> &column_items,
-                                             ObQueryRange &query_range,
+                                             ObIAllocator &alloc,
                                              ObQueryRangeArray &ranges)
 {
   int ret = OB_SUCCESS;
   const ObLogPlan *log_plan = ctx.get_plan();
   const ParamStore *params = ctx.get_params();
   ObExecContext *exec_ctx = ctx.get_opt_ctx().get_exec_ctx();
-  ObIAllocator &allocator = ctx.get_allocator();
+  ObSQLSessionInfo *session_info = ctx.get_session_info();
   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx.get_session_info());
   const ColumnItem* column_item = NULL;
   bool dummy_all_single_value_ranges = true;
-  bool is_in_range_optimization_enabled = false;
-  if (OB_ISNULL(log_plan) || OB_ISNULL(exec_ctx) ||
+  if (OB_ISNULL(log_plan) || OB_ISNULL(exec_ctx) || OB_ISNULL(session_info) ||
       OB_ISNULL(column_item = log_plan->get_column_item_by_id(table_id, column_id)) ||
       OB_ISNULL(ctx.get_stmt()) || OB_ISNULL(ctx.get_stmt()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(log_plan), K(exec_ctx), K(column_item));
+    LOG_WARN("get unexpected null", K(ret), K(log_plan), K(exec_ctx), K(session_info), K(column_item));
   } else if (OB_FAIL(column_items.push_back(*column_item))) {
     LOG_WARN("failed to push back column item", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(ctx.get_stmt()->get_query_ctx()->get_global_hint(),
-                                                                       ctx.get_session_info(),
-                                                                       is_in_range_optimization_enabled))) {
-    LOG_WARN("failed to check in range optimization enabled", K(ret));
-  } else if (OB_FAIL(query_range.preliminary_extract_query_range(column_items,
-                                                                 quals,
-                                                                 dtc_params,
-                                                                 ctx.get_opt_ctx().get_exec_ctx(),
-                                                                 ctx.get_opt_ctx().get_query_ctx(),
-                                                                 NULL,
-                                                                 params,
-                                                                 false,
-                                                                 true,
-                                                                 is_in_range_optimization_enabled))) {
-    LOG_WARN("failed to preliminary extract query range", K(ret));
-  } else if (!query_range.need_deep_copy()) {
-    if (OB_FAIL(query_range.direct_get_tablet_ranges(allocator, *exec_ctx, ranges,
-                                                     dummy_all_single_value_ranges, dtc_params))) {
-      LOG_WARN("failed to get tablet ranges", K(ret));
+  } else if (ctx.get_opt_ctx().enable_new_query_range()) {
+    ObPreRangeGraph pre_range_graph(alloc);
+    if (OB_FAIL(pre_range_graph.preliminary_extract_query_range(column_items, quals, exec_ctx,
+                                                                NULL, params, false, true))) {
+      LOG_WARN("failed to preliminary extract query range", K(column_items), K(quals));
+    } else if (OB_FAIL(pre_range_graph.get_tablet_ranges(alloc, *exec_ctx, ranges,
+                                                         dummy_all_single_value_ranges,
+                                                         dtc_params))) {
+      LOG_WARN("failed to get tablet ranges");
     }
-  } else if (OB_FAIL(query_range.final_extract_query_range(*exec_ctx, dtc_params))) {
-    LOG_WARN("failed to final extract query range", K(ret));
-  } else if (OB_FAIL(query_range.get_tablet_ranges(ranges, dummy_all_single_value_ranges, dtc_params))) {
-    LOG_WARN("failed to get tablet ranges", K(ret));
-  } else { /*do nothing*/ }
+  } else {
+    ObQueryRange query_range(alloc);
+    bool is_in_range_optimization_enabled = false;
+    if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(ctx.get_stmt()->get_query_ctx()->get_global_hint(),
+                                                                  ctx.get_session_info(),
+                                                                  is_in_range_optimization_enabled))) {
+      LOG_WARN("failed to check in range optimization enabled", K(ret));
+    } else if (OB_FAIL(query_range.preliminary_extract_query_range(column_items,
+                                                                  quals,
+                                                                  dtc_params,
+                                                                  ctx.get_opt_ctx().get_exec_ctx(),
+                                                                  ctx.get_opt_ctx().get_query_ctx(),
+                                                                  NULL,
+                                                                  params,
+                                                                  false,
+                                                                  true,
+                                                                  is_in_range_optimization_enabled))) {
+      LOG_WARN("failed to preliminary extract query range", K(ret));
+    } else if (!query_range.need_deep_copy()) {
+      if (OB_FAIL(query_range.direct_get_tablet_ranges(alloc, *exec_ctx, ranges,
+                                                      dummy_all_single_value_ranges, dtc_params))) {
+        LOG_WARN("failed to get tablet ranges", K(ret));
+      }
+    } else if (OB_FAIL(query_range.final_extract_query_range(*exec_ctx, dtc_params))) {
+      LOG_WARN("failed to final extract query range", K(ret));
+    } else if (OB_FAIL(query_range.get_tablet_ranges(ranges, dummy_all_single_value_ranges, dtc_params))) {
+      LOG_WARN("failed to get tablet ranges", K(ret));
+    } else { /*do nothing*/ }
+  }
   return ret;
 }
 
@@ -4928,6 +4949,199 @@ int ObOptSelectivity::calc_expr_basic_info(const OptTableMetas &table_metas,
     }
   }
   return ret;
+}
+
+int ObHistSelHelper::init(const OptTableMetas &table_metas,
+                          const OptSelectivityCtx &ctx,
+                          const ObColumnRefRawExpr &col)
+{
+  int ret = OB_SUCCESS;
+  uint64_t table_id = col.get_table_id();
+  uint64_t column_id = col.get_column_id();
+  column_expr_ = &col;
+  const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(table_id);
+  is_valid_ = false;
+  handlers_.reuse();
+  part_rows_.reuse();
+  if (OB_ISNULL(table_meta) || OB_INVALID_ID == table_meta->get_ref_table_id()) {
+    // do nothing
+  } else if (NULL == ctx.get_opt_stat_manager() ||
+             !table_meta->use_opt_stat() ||
+             table_meta->get_hist_parts().empty()) {
+    // do nothing
+  } else if (OB_ISNULL(ctx.get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx.get_session_info()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_meta->get_hist_parts().count(); i ++) {
+      ObOptColumnStatHandle column_stat;
+      ObGlobalTableStat stat;
+      if (OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(
+                    ctx.get_session_info()->get_effective_tenant_id(),
+                    table_meta->get_ref_table_id(),
+                    table_meta->get_hist_parts().at(i),
+                    column_id,
+                    column_stat))) {
+        LOG_WARN("failed to get column stat", K(ret));
+      } else if (column_stat.stat_ == NULL ||
+                column_stat.stat_->get_last_analyzed() <= 0 ||
+                !column_stat.stat_->get_histogram().is_valid()) {
+        // do nothing
+      } else if (OB_FAIL(ctx.get_opt_stat_manager()->get_table_stat(
+                    ctx.get_session_info()->get_effective_tenant_id(),
+                    table_meta->get_ref_table_id(),
+                    table_meta->get_hist_parts().at(i),
+                    1.0,
+                    stat))) {
+        LOG_WARN("failed to get table stats", K(ret));
+      } else if (OB_FAIL(handlers_.push_back(column_stat))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(part_rows_.push_back(stat.get_row_count()))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {
+        is_valid_ = true;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && is_valid_) {
+    const OptColumnMeta *column_meta = table_meta->get_column_meta(column_id);
+    if (OB_ISNULL(column_meta)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column meta not find", K(ret), KPC(table_meta), K(column_id));
+    } else {
+      hist_scale_ = column_meta->get_hist_scale();
+      double distinct_sel = 1.0 / std::max(1.0, column_meta->get_base_ndv());
+      if (handlers_.count() == 1) {
+        density_ = std::min(handlers_.at(0).stat_->get_histogram().get_density(),
+                            distinct_sel);
+      } else {
+        density_ = distinct_sel;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    is_valid_ = false;
+  }
+  return ret;
+}
+
+int ObHistSelHelper::get_sel(const OptSelectivityCtx &ctx,
+                             double &sel)
+{
+  int ret = OB_SUCCESS;
+  ObObj expr_value;
+  double total_part_rows = 0;
+  double rows = 0;
+  bool is_rare = true;
+  sel = 1.0;
+  if (OB_UNLIKELY(handlers_.empty()) || OB_UNLIKELY(!is_valid_) ||
+      OB_UNLIKELY(handlers_.count() != part_rows_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected handlers", K(ret), K(is_valid_), K(handlers_), K(part_rows_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < handlers_.count(); i ++) {
+    double tmp_selectivity = 1.0;
+    ObOptColumnStatHandle &column_stat = handlers_.at(i);
+    bool tmp_is_rare = false;
+    if (OB_FAIL(inner_get_sel(ctx,
+                              column_stat.stat_->get_histogram(),
+                              tmp_selectivity,
+                              tmp_is_rare))) {
+      LOG_WARN("failed to inner calc sel", K(ret));
+    } else {
+      tmp_selectivity = ObOptSelectivity::revise_between_0_1(tmp_selectivity);
+      rows += tmp_selectivity * part_rows_.at(i);
+      total_part_rows += part_rows_.at(i);
+      is_rare &= tmp_is_rare;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (is_rare || total_part_rows <= OB_DOUBLE_EPSINON) {
+      sel = density_;
+    } else {
+      sel = rows / total_part_rows;
+    }
+  }
+  return ret;
+}
+
+int ObHistEqualSelHelper::inner_get_sel(const OptSelectivityCtx &ctx,
+                                        const ObHistogram &histogram,
+                                        double &sel,
+                                        bool &is_rare_value)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = -1;
+  bool is_equal = false;
+  ObObj *new_value = NULL;
+  ObArenaAllocator tmp_alloc("ObOptSel");
+  if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(&compare_value_, tmp_alloc, new_value))) {
+    LOG_WARN("failed to convert valid obj for opt stats", K(ret), K(compare_value_), KPC(new_value));
+  } else if (OB_ISNULL(new_value)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(new_value), K(compare_value_));
+  } else if (OB_FAIL(ObOptSelectivity::get_bucket_bound_idx(histogram, *new_value, idx, is_equal))) {
+    LOG_WARN("failed to get bucket bound idx", K(ret));
+  } else if (idx < 0 || idx >= histogram.get_bucket_size() || !is_equal) {
+    sel = 0.0;
+    is_rare_value = true;
+  } else {
+    sel = static_cast<double>(histogram.get(idx).endpoint_repeat_count_)
+        / histogram.get_sample_size();
+  }
+  if (OB_SUCC(ret) && hist_scale_ > 0) {
+    sel /= hist_scale_;
+  }
+  return ret;
+}
+
+int ObHistRangeSelHelper::init(const OptTableMetas &table_metas,
+                               const OptSelectivityCtx &ctx,
+                               const ObColumnRefRawExpr &col)
+{
+  int ret = OB_SUCCESS;
+  hist_min_value_.set_max_value();
+  hist_max_value_.set_min_value();
+  if (OB_FAIL(ObHistSelHelper::init(table_metas, ctx, col))) {
+    LOG_WARN("failed to init", K(ret));
+  } else if (!is_valid_) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < handlers_.count(); i ++) {
+      double tmp_selectivity = 1.0;
+      ObOptColumnStatHandle &column_stat = handlers_.at(i);
+      const ObHistogram &histogram = column_stat.stat_->get_histogram();
+      int64_t cnt = histogram.get_bucket_size();
+      const ObObj &cur_min_value = histogram.get(0).endpoint_value_;
+      const ObObj &cur_max_value = histogram.get(cnt - 1).endpoint_value_;
+      int cmp_res = 0;
+      if (OB_UNLIKELY(cnt < 0)) {
+        LOG_WARN("unexpected count", K(ret), K(histogram));
+      } else if (OB_FAIL(hist_min_value_.compare(cur_min_value, cmp_res))) {
+        LOG_WARN("failed to compare", K(ret));
+      } else if (cmp_res > 0) {
+        hist_min_value_ = cur_min_value;
+      }
+      if (FAILEDx(hist_max_value_.compare(cur_max_value, cmp_res))) {
+        LOG_WARN("failed to compare", K(ret));
+      } else if (cmp_res < 0) {
+        hist_max_value_ = cur_max_value;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    is_valid_ = false;
+  }
+  return ret;
+}
+
+int ObHistRangeSelHelper::inner_get_sel(const OptSelectivityCtx &ctx,
+                                        const ObHistogram &histogram,
+                                        double &sel,
+                                        bool &is_rare_value)
+{
+  is_rare_value = false;
+  return ObOptSelectivity::get_range_sel_by_histogram(ctx, histogram, ranges_, true, hist_scale_, sel);
 }
 
 }//end of namespace sql

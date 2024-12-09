@@ -17,6 +17,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/allocator/page_arena.h"
 #include "src/share/schema/ob_column_schema.h"
+#include "sql/engine/px/ob_dfo.h"
 
 namespace oceanbase
 {
@@ -33,7 +34,6 @@ namespace sql
 class ObDASTabletLoc;
 class ObExecContext;
 class ObExternalTableAccessService;
-class ObQueryRange;
 class ObExprRegexContext;
 class ObExprRegexpSessionVariables;
 }
@@ -96,6 +96,7 @@ class ObExternalTableUtils {
 
   static int prepare_single_scan_range(const uint64_t tenant_id,
                                        const uint64_t table_id,
+                                       const ObString &table_format_or_properties,
                                        ObIArray<int64_t> &partition_ids,
                                        common::ObIArray<common::ObNewRange *> &ranges,
                                        common::ObIAllocator &range_allocator,
@@ -106,6 +107,11 @@ class ObExternalTableUtils {
     const common::ObIArray<ObExternalFileInfo> &files,
     common::ObIArray<int64_t> &assigned_idx,
     int64_t sqc_count);
+
+  static int assign_odps_file_to_sqcs(
+    ObDfo &dfo,
+    ObIArray<ObPxSqcMeta *> &sqcs,
+    int64_t parallel);
 
   static int filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
                                        common::ObIArray<common::ObAddr> &locations);

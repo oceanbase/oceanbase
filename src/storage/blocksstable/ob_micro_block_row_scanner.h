@@ -156,7 +156,6 @@ public:
   VIRTUAL_TO_STRING_KV(K_(can_ignore_multi_version));
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row);
-  int inner_get_row_header(const ObRowHeader *&row_header);
   int set_reader(const ObRowStoreType store_type);
   int set_base_scan_param(const bool is_left_bound_block,
                           const bool is_right_bound_block);

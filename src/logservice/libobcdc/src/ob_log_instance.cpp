@@ -585,6 +585,10 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
       LOG_ERROR("dump_config_ fail", KR(ret));
     } else if (OB_FAIL(lib::ThreadPool::set_thread_count(DAEMON_THREAD_COUNT))) {
       LOG_ERROR("set ObLogInstance daemon thread count failed", KR(ret), K(DAEMON_THREAD_COUNT));
+    } else if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
+      LOG_ERROR("init simple thread pool dynamic mgr failed", KR(ret));
+    } else if (OB_FAIL(ObTimerService::get_instance().start())) {
+      LOG_ERROR("start timer service failed", KR(ret));
     } else if (OB_FAIL(trans_task_pool_alloc_.init(
         TASK_POOL_ALLOCATOR_TOTAL_LIMIT,
         TASK_POOL_ALLOCATOR_HOLD_LIMIT,
@@ -1463,6 +1467,8 @@ void ObLogInstance::do_destroy_(const bool force_destroy)
     ObKVGlobalCache::get_instance().destroy();
     ObMemoryDump::get_instance().destroy();
     ObClockGenerator::destroy();
+    ObTimerService::get_instance().destroy();
+    ObSimpleThreadPoolDynamicMgr::get_instance().destroy();
 
     is_assign_log_dir_valid_ = false;
     MEMSET(assign_log_dir_, 0, sizeof(assign_log_dir_));
@@ -1567,6 +1573,10 @@ void ObLogInstance::do_stop_(const char *stop_reason)
     resource_collector_->stop();
     mysql_proxy_.stop();
     tenant_sql_proxy_.stop();
+    ObTimerService::get_instance().stop();
+    ObSimpleThreadPoolDynamicMgr::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObSimpleThreadPoolDynamicMgr::get_instance().wait();
 
     // set global error code
     global_errno_ = (global_errno_ == OB_SUCCESS ? OB_IN_STOP_STATE : global_errno_);

@@ -197,7 +197,7 @@ public:
   OB_INLINE void set_enable_prefetch_limiting(const bool enable_limit) { enable_prefetch_limiting_ = enable_limit; }
   OB_INLINE void set_use_global_iter_pool(const bool use_iter_mgr) { use_global_iter_pool_ = use_iter_mgr; }
   OB_INLINE void set_flags(const bool block_scan, const bool filter, const bool skip_index,
-                           const bool use_cs, const bool enable_limit, const bool filter_reorder = true)
+                           const bool use_cs, const bool enable_limit, const bool filter_reorder = false)
   {
     set_blockscan_pushdown(block_scan);
     set_filter_pushdown(filter);
@@ -580,6 +580,32 @@ enum ObCommonFilterTreeStatus : uint8_t
 // 即一个是编译器的接口，一个是运行时接口
 class ObPushdownFilterExecutor
 {
+private:
+  struct FilterRealTimeStatistics {
+    FilterRealTimeStatistics()
+    : filter_cost_time_(0)
+    , filtered_row_cnt_(0)
+    , skip_index_skip_mb_cnt_(0)
+    {};
+
+    void reset() {
+      filter_cost_time_ = 0;
+      filtered_row_cnt_ = 0;
+      skip_index_skip_mb_cnt_ = 0;
+    }
+
+    OB_INLINE uint64_t get_filter_cost_time() const {return filter_cost_time_;}
+    OB_INLINE void add_filter_cost_time(uint64_t filter_cost_time) { filter_cost_time_ += filter_cost_time; };
+    OB_INLINE uint64_t get_filtered_row_cnt() {return filtered_row_cnt_; }
+    OB_INLINE void add_filtered_row_cnt(uint64_t filtered_row_cnt) { filtered_row_cnt_ += filtered_row_cnt; };
+    OB_INLINE uint64_t get_skip_index_skip_mb_cnt() { return skip_index_skip_mb_cnt_; };
+    OB_INLINE void add_skip_index_skip_mb_cnt(uint64_t skip_index_skip_mb_cnt) { skip_index_skip_mb_cnt_ += skip_index_skip_mb_cnt; }
+    TO_STRING_KV(K_(filter_cost_time), K_(filtered_row_cnt), K_(skip_index_skip_mb_cnt));
+
+    uint64_t filter_cost_time_;
+    uint64_t filtered_row_cnt_;
+    uint64_t skip_index_skip_mb_cnt_; // # of micro block skipped by skip index.
+  };
 public:
   static const int64_t INVALID_CG_ITER_IDX = -1;
 public:
@@ -601,7 +627,7 @@ public:
   virtual OB_INLINE bool is_logic_op_node() const { return is_logic_and_node() || is_logic_or_node(); }
   OB_INLINE bool is_filter_dynamic_node() const { return type_ == DYNAMIC_FILTER_EXECUTOR; }
   virtual OB_INLINE bool filter_can_continuous_filter() const { return true; }
-  int prepare_skip_filter();
+  int prepare_skip_filter(bool disable_bypass);
   OB_INLINE bool can_skip_filter(int64_t row) const
   {
     bool fast_skip = false;
@@ -677,6 +703,9 @@ public:
   }
   OB_INLINE void clear_skipped_rows() { skipped_rows_ = 0; }
   OB_INLINE common::ObIAllocator &get_allocator() { return allocator_; }
+  OB_INLINE bool is_enable_reorder() { return enable_reorder_; }
+  OB_INLINE void set_enable_reorder(bool enable_reorder) { enable_reorder_ = enable_reorder; }
+  OB_INLINE FilterRealTimeStatistics &get_filter_realtime_statistics() { return filter_realtime_statistics_; }
   inline int get_child(uint32_t nth_child, ObPushdownFilterExecutor *&filter_executor)
   {
     int ret = common::OB_SUCCESS;
@@ -717,6 +746,9 @@ public:
       const bool use_vectorize);
   int execute_skipping_filter(ObBoolMask &bm);
   virtual void clear(); // release array and set memory used by WHITE_OP_IN filter.
+  void inc_ref() { ++ref_cnt_; }
+  void dec_ref() { --ref_cnt_; }
+  int64_t get_ref() { return ref_cnt_; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   int find_evaluated_datums(
@@ -759,6 +791,9 @@ protected:
 private:
   bool is_rewrited_;
   ObBoolMask filter_bool_mask_;
+  bool enable_reorder_;
+  int64_t ref_cnt_;
+  FilterRealTimeStatistics filter_realtime_statistics_;
 };
 
 class ObPhysicalFilterExecutor : public ObPushdownFilterExecutor
@@ -988,7 +1023,7 @@ public:
     return ret;
   }
 private:
-  ObSmallHashSet<false> set_;
+  ObSmallHashSet<true> set_; // Filter more data if template _Accurate is true;
   ObExprHashFuncType hash_func_;
   // TODO: add batch hash and batch insert
 };
@@ -1339,7 +1374,9 @@ struct PushdownFilterInfo
       col_datum_buf_(),
       allocator_(nullptr),
       param_(nullptr),
-      context_(nullptr)
+      context_(nullptr),
+      disable_bypass_(false),
+      first_batch_(false)
   {}
   ~PushdownFilterInfo();
   void reset();
@@ -1396,6 +1433,8 @@ struct PushdownFilterInfo
   common::ObIAllocator *allocator_;
   const storage::ObTableIterParam *param_;
   storage::ObTableAccessContext *context_;
+  bool disable_bypass_;
+  bool first_batch_;
 };
 
 }

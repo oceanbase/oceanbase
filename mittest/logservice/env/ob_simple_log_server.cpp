@@ -33,6 +33,7 @@
 #include "logservice/arbserver/arb_tg_helper.h"
 #include "mittest/logservice/env/ob_simple_log_cluster_testbase.h"
 #include "share/rpc/ob_batch_processor.h"
+#include "share/ob_device_manager.h"                                // ObDeviceManager
 #undef protected
 #undef private
 
@@ -160,21 +161,28 @@ int ObSimpleLogServer::simple_init(
     ls_service_ = OB_NEW(ObLSService, "mittest");
     // use tenant_id_ to init ObTenantBase
     tenant_base_ = OB_NEW(ObLogMittestTenantBase, "TestBase", cluster_id_, tenant_id_, node_id);
+    timer_service_ = OB_NEW(ObTimerService, "TimerService", node_id);
     tenant_base_->init();
     tenant_base_->set(&log_service_);
     tenant_base_->set(ls_service_);
     tenant_base_->set(&detector_);
     tenant_base_->set(&shared_timer_);
     tenant_base_->set(tio_manager);
+    tenant_base_->set(timer_service_);
     tenant_base_->unit_max_cpu_ = 100;
     tenant_base_->unit_min_cpu_ = 100;
   }
   ObTenantEnv::set_tenant(tenant_base_);
   assert(&log_service_ == MTL(logservice::ObLogService*));
+  if (is_bootstrap) {
+    assert(nullptr != timer_service_ && timer_service_ == MTL(ObTimerService*));
+  }
   guard.click("init tenant_base");
   node_id_ = node_id;
 
-  if (is_bootstrap && OB_FAIL(init_memory_dump_timer_())) {
+  if (is_bootstrap && OB_FAIL(timer_service_->start())) {
+    SERVER_LOG(ERROR, "start timer service failed", K(ret), K_(node_id));
+  } else if (is_bootstrap && OB_FAIL(init_memory_dump_timer_())) {
     SERVER_LOG(ERROR, "init_memory_dump_timer_ failed", K(ret), K_(node_id));
   } else if (is_bootstrap && OB_FAIL(mock_locality_manager_.init(region_map))) {
     SERVER_LOG(ERROR, "mock_locality_manager_ init fail", K(ret));
@@ -415,6 +423,7 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
     iod_opt_array_[3].set("datafile_disk_percentage", storage_env.data_disk_percentage_);
     iod_opt_array_[4].set("datafile_size", storage_env.data_disk_size_);
     iod_opts_.opt_cnt_ = MAX_IOD_OPT_CNT;
+
     if (OB_FAIL(io_device_->init(iod_opts_))) {
       SERVER_LOG(ERROR, "init io device fail", K(ret));
     } else if (OB_FAIL(log_block_pool_.init(storage_env.clog_dir_))) {
@@ -478,6 +487,8 @@ int ObSimpleLogServer::init_log_service_(const bool is_bootstrap)
     SERVER_LOG(ERROR, "mock_election_map_ init fail", K(ret));
   } else if (is_bootstrap && OB_FAIL(ckpt_map_.init("CKPTMap", OB_SERVER_TENANT_ID))) {
     SERVER_LOG(ERROR, "ckpt_map_ init fail", K(ret));
+  } else if (OB_FAIL(log_service_.get_palf_env()->start())) {
+    SERVER_LOG(ERROR, "palf_env start fail", K(ret));
   } else {
     palf_env_ = log_service_.get_palf_env();
     palf_env_->palf_env_impl_.log_rpc_.tenant_id_ = tenant_id_;
@@ -521,7 +532,12 @@ int ObSimpleLogServer::simple_start(const bool is_bootstrap = false)
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(tenant_base_);
   omt::ObSharedTimer *shared_timer = &shared_timer_;
-  if (is_bootstrap && OB_FAIL(net_.start())) {
+  if (is_bootstrap && nullptr == timer_service_) {
+    ret = OB_ERR_NULL_VALUE;
+    SERVER_LOG(ERROR, "timer_service_ is NULL", K(ret));
+  } else if (is_bootstrap && OB_FAIL(timer_service_->start())) {
+    SERVER_LOG(ERROR, "ObTimerService start failed", K(ret));
+  } else if (is_bootstrap && OB_FAIL(net_.start())) {
     SERVER_LOG(ERROR, "net start fail", K(ret));
   } else if (OB_FAIL(deliver_.start())) {
     SERVER_LOG(ERROR, "deliver_ start failed", K(ret));
@@ -601,6 +617,10 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
     timer_handle_.stop_and_wait();
     timer_.destroy();
     mock_locality_manager_.destroy();
+
+    timer_service_->stop();
+    timer_service_->wait();
+    timer_service_->destroy();
   }
   SERVER_LOG(INFO, "stop LogService success", K(ret), K(is_shutdown), K(guard));
   return ret;

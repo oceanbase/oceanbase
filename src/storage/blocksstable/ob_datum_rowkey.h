@@ -151,7 +151,6 @@ public:
   const ObDatumRowkey *get_rowkey() const { return rowkey_; }
   int compare(const ObDatumRowkeyWrapper &other, int &cmp) const { return rowkey_->compare(*(other.get_rowkey()), *datum_utils_, cmp); }
   const ObStorageDatum *get_ptr() const { return rowkey_->get_datum_ptr(); }
-  const char *repr() const { return to_cstring(rowkey_); }
   TO_STRING_KV(KPC_(rowkey), KPC_(datum_utils));
   const ObDatumRowkey *rowkey_;
   const ObStorageDatumUtils *datum_utils_;

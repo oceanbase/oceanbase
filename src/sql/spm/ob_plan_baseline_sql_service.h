@@ -80,6 +80,8 @@ public:
                            const uint64_t tenant_id,
                            const ObBaselineKey& key);
 
+  int batch_delete_plan_baselines(const uint64_t tenant_id, const uint64_t parallel, int64_t &baseline_affected);
+  int do_batch_delete(const uint64_t tenant_id, ObSqlString &sql, int64_t &affected_rows);
   int delete_all_plan_baselines(const uint64_t tenant_id, const ObBaselineKey& key, int64_t &baseline_affected);
 
   int delete_plan_baseline(const uint64_t tenant_id,

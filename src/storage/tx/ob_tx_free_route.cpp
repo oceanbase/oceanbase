@@ -13,6 +13,7 @@
 
 #include "ob_trans_service.h"
 #include "lib/utility/serialization.h"
+#include "storage/tx/ob_xa_ctx.h"
 
 /*
  * The exception handle of txn state update with synchronization via proxy
@@ -439,9 +440,9 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
         } else { need_add_tx = true; }
       }
     } else if (!tx->tx_id_.is_valid()) {
-      if (tx->op_sn_ > 0) {
+      if (tx->op_sn_ > 1) {
         ObSpinLockGuard guard(tx->lock_);
-        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx op_sn > 0", K(ret), KPC(tx));
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx op_sn > 1", K(ret), KPC(tx));
         tx->print_trace_();
       }
       // reuse, overwrite
@@ -529,9 +530,9 @@ int ObTransService::update_logic_clock_(const int64_t logic_clock, const ObTxDes
   // if logic clock drift too much, disconnect required
   int ret = OB_SUCCESS;
   const int64_t cur_clock = ObClockGenerator::getClock();
-  if (logic_clock - cur_clock > 1_day ) {
+  if (logic_clock > cur_clock + 1_day ) {
     TRANS_LOG(WARN, "logic clock is fast more than 1 day", K(logic_clock), K(cur_clock), KPC(tx));
-  } else if (check_fallback && (cur_clock - logic_clock > 1_day)) {
+  } else if (check_fallback && (cur_clock > logic_clock + 1_day)) {
     TRANS_LOG(WARN, "logic clock is slow more than 1 day", K(logic_clock), K(cur_clock), KPC(tx));
     if (OB_NOT_NULL(tx)) { tx->print_trace_(); }
   }
@@ -1130,6 +1131,15 @@ bool ObTransService::need_fallback_(ObTxDesc &tx, int64_t &total_size)
     fallback = true;
   } else if (tx.is_xa_trans() && tx.is_xa_tightly_couple()) {
     TRANS_LOG(TRACE, "need fallback for tightly coupled xa trans");
+    fallback = true;
+  } else if (tx.is_xa_trans()
+             && NULL != tx.get_xa_ctx()
+             && tx.get_xa_ctx()->is_mysql_mode()
+             && ObXATransState::ACTIVE != tx.get_xa_ctx()->get_state()) {
+    // To be compatible with mysql, trans can not be disassociated with session after xa end.
+    // However, any dml can not be executed after xa end. Therefore, we need stop tx free route.
+    // NOTE that the xa trans state is switched to IDLE from ACTIVE in xa end.
+    TRANS_LOG(TRACE, "need fallback for mysql xa trans");
     fallback = true;
   } else {
     total_size = OB_E(EventTable::EN_TX_FREE_ROUTE_STATE_SIZE, tx.tx_id_) tx.estimate_state_size();

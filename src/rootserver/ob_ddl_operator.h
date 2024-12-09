@@ -310,6 +310,9 @@ public:
                                           const ObTableSchema &new_table_schema,
                                           const ObIArray<uint64_t> &column_ids,
                                           const ObColumnGroupSchema &column_group);
+  int update_origin_column_group_with_new_schema(ObMySQLTransaction &trans,
+                                                const ObTableSchema &origin_table_schema,
+                                                const ObTableSchema &new_table_schema);
   int insert_single_column(common::ObMySQLTransaction &trans,
                            const share::schema::ObTableSchema &new_table_schema,
                            share::schema::ObColumnSchemaV2 &new_column);

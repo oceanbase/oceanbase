@@ -130,7 +130,7 @@ public:
   explicit ObDDLRedefinitionTask(const share::ObDDLType task_type):
     ObDDLTask(task_type), sync_tablet_autoinc_seq_ctx_(),
     build_replica_request_time_(0), complete_sstable_job_ret_code_(INT64_MAX), alter_table_arg_(),
-    dependent_task_result_map_(), snapshot_held_(false), has_synced_autoincrement_(false),
+    dependent_task_result_map_(), has_synced_autoincrement_(false),
     has_synced_stats_info_(false), update_autoinc_job_ret_code_(INT64_MAX), update_autoinc_job_time_(0),
     check_table_empty_job_ret_code_(INT64_MAX), check_table_empty_job_time_(0),
     is_sstable_complete_task_submitted_(false), sstable_complete_request_time_(0), replica_builder_(),
@@ -152,7 +152,7 @@ public:
   int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask,
       K(wait_trans_ctx_), K(sync_tablet_autoinc_seq_ctx_), K(build_replica_request_time_),
-      K(complete_sstable_job_ret_code_), K(snapshot_held_), K(has_synced_autoincrement_),
+      K(complete_sstable_job_ret_code_), K(has_synced_autoincrement_),
       K(has_synced_stats_info_), K(update_autoinc_job_ret_code_), K(update_autoinc_job_time_),
       K(check_table_empty_job_ret_code_), K(check_table_empty_job_time_));
 protected:
@@ -269,7 +269,7 @@ protected:
 private:
   int add_table_tablets_for_snapshot_(const uint64_t table_id, ObSchemaGetterGuard &schema_guard,
                                       common::ObIArray<common::ObTabletID> &tablet_ids);
-  int hold_snapshot_for_major_refresh_mv_(const int64_t snapshot_version);
+  int prepare_tablets_for_major_refresh_mv_(common::ObIArray<common::ObTabletID> &tablet_ids);
 
   virtual int cleanup_impl() override;
 protected:
@@ -295,7 +295,6 @@ protected:
   int64_t complete_sstable_job_ret_code_;
   obrpc::ObAlterTableArg alter_table_arg_;
   common::hash::ObHashMap<uint64_t, DependTaskStatus> dependent_task_result_map_;
-  bool snapshot_held_;
   bool has_synced_autoincrement_;
   bool has_synced_stats_info_;
   int64_t update_autoinc_job_ret_code_;

@@ -201,16 +201,17 @@ int ObIndexBlockScanEstimator::cal_total_estimate_result(
       if (datum_range.is_whole_range()) {
       } else {
         const bool is_multi_version_minor = sstable.is_multi_version_minor_sstable();
+        const bool is_major = sstable.is_major_sstable();
         if (!datum_range.get_start_key().is_min_rowkey()) {
           if (OB_FAIL(estimate_excluded_border_result(
-                  is_multi_version_minor, datum_range, true, result))) {
+                  is_multi_version_minor, is_major, datum_range, true, result))) {
             STORAGE_LOG(WARN, "Failed to estimate left excluded row count", K(ret));
           }
         }
         if (OB_SUCC(ret) && !datum_range.get_end_key().is_max_rowkey()) {
           level_ = 0;
           if (OB_FAIL(estimate_excluded_border_result(
-                  is_multi_version_minor, datum_range, false, result))) {
+                  is_multi_version_minor, is_major, datum_range, false, result))) {
             STORAGE_LOG(WARN, "Failed to estimate right excluded row count", K(ret));
           }
         }
@@ -256,7 +257,8 @@ int ObIndexBlockScanEstimator::cal_total_estimate_result_for_ddl(ObSSTable &ssta
 }
 
 int ObIndexBlockScanEstimator::estimate_excluded_border_result(const bool is_multi_version_minor,
-                                                              const blocksstable::ObDatumRange &datum_range,
+                                                               const bool is_major,
+                                                               const blocksstable::ObDatumRange &datum_range,
                                                                bool is_left,
                                                                ObEstimatedResult &result)
 {
@@ -322,10 +324,19 @@ int ObIndexBlockScanEstimator::estimate_excluded_border_result(const bool is_mul
           }
 
           if (OB_ITER_END == ret && idx > 0) {
-            if (OB_FAIL(goto_next_level(excluded_range, border_micro_index_info, is_multi_version_minor, result))) {
-              if (OB_ITER_END != ret) {
-                STORAGE_LOG(WARN, "Failed to go to next level", K(ret),
-                    K(border_micro_index_info), K(index_block_row_scanner_));
+            int64_t ratio = 0;
+            if (0 == border_micro_index_info.get_row_count()) {
+              ret = common::OB_INVALID_ARGUMENT;
+              STORAGE_LOG(WARN, "Border micro index row count should not be 0", K(ret));
+            } else if (is_major) {
+              ratio = (result.total_row_count_ - result.excluded_row_count_) / border_micro_index_info.get_row_count();
+            }
+            if (OB_ITER_END == ret && ratio < RANGE_ROWS_IN_AND_BORDER_RATIO_THRESHOLD) {
+              if (OB_FAIL(goto_next_level(excluded_range, border_micro_index_info, is_multi_version_minor, result))) {
+                if (OB_ITER_END != ret) {
+                  STORAGE_LOG(WARN, "Failed to go to next level", K(ret),
+                      K(border_micro_index_info), K(index_block_row_scanner_));
+                }
               }
             }
           }

@@ -204,8 +204,9 @@ void FetchLogSRpc::RpcCB::on_timeout()
   const common::ObAddr &svr = RpcCBBase::dst_;
 
   rcode.rcode_ = OB_TIMEOUT;
+  ObCStringHelper helper;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_), "fetch log rpc timeout, svr=%s",
-      to_cstring(svr));
+      helper.convert(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
     LOG_ERROR("process fetch log callback on timeout fail", KR(ret), K(rcode), K(svr));
@@ -220,9 +221,10 @@ void FetchLogSRpc::RpcCB::on_invalid()
 
   // 遇到无效的包，decode失败
   rcode.rcode_ = OB_RPC_PACKET_INVALID;
+  ObCStringHelper helper;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_),
       "fetch log rpc response packet is invalid, svr=%s",
-      to_cstring(svr));
+      helper.convert(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
     LOG_ERROR("process fetch log callback on invalid fail", KR(ret), K(rcode), K(svr));
@@ -1088,8 +1090,9 @@ int FetchLogARpc::launch_async_raw_file_rpc_(RawLogFileRpcRequest &request,
     ObLogTraceIdGuard guard(request.get_trace_id());
     ObSEArray<RawLogDataRpcRequest* , RawLogFileRpcRequest::MAX_SEND_REQ_CNT> failed_list;
     obrpc::ObRpcResultCode first_fail_rcode;
+    ObCStringHelper helper;
     _LOG_TRACE("launch async fetch log rpc by %s, request=%s",
-        launch_by_cb ? "callback" : "fetch stream", to_cstring(request));
+        launch_by_cb ? "callback" : "fetch stream", helper.convert(request));
 
     request.mark_flying_state(true);
     rpc_send_succeed = true;
@@ -1160,8 +1163,9 @@ int FetchLogARpc::launch_async_rpc_(LogGroupEntryRpcRequest &rpc_req,
     // Use the trace id of the request
     ObLogTraceIdGuard guard(rpc_req.get_trace_id());
 
+    ObCStringHelper helper;
     _LOG_TRACE("launch async fetch log rpc by %s, request=%s",
-        launch_by_cb ? "callback" : "fetch stream", to_cstring(rpc_req));
+        launch_by_cb ? "callback" : "fetch stream", helper.convert(rpc_req));
 
     // The default setting is flyin before sending an asynchronous request
     // The reason for not setting it up after sending is that there is a concurrency problem after successful sending,

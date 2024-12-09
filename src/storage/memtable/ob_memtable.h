@@ -252,7 +252,7 @@ public: // derived from ObITable
       const storage::ObTableIterParam &param,
 	    storage::ObTableAccessContext &context,
       const common::ObIArray<share::schema::ObColDesc> &columns,
-      const ObIArray<int64_t> &update_idx,
+      const ObIArray<int64_t> *update_idx,
       const blocksstable::ObDatumRow &old_row,
       blocksstable::ObDatumRow &new_row,
       const share::ObEncryptMeta *encrypt_meta);

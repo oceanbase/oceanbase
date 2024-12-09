@@ -72,7 +72,6 @@ public:
   int start();
   int stop();
   int wait();
-  int32_t get_tasks_num() const { return timer_.get_tasks_num(); }
 private:
   bool inited_;
   common::ObTimer timer_;

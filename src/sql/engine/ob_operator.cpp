@@ -44,6 +44,69 @@ int ObDynamicParamSetter::set_dynamic_param(ObEvalCtx &eval_ctx) const
   return ret;
 }
 
+int ObDynamicParamSetter::set_dynamic_param_vec2(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit) const
+{
+  int ret = OB_SUCCESS;
+  ObIVector *src_vec = nullptr;
+  const int64_t batch_idx = eval_ctx.get_batch_idx();
+  EvalBound eval_bound(eval_ctx.get_batch_size(), batch_idx, batch_idx + 1, false);
+  ObPhysicalPlanCtx *phy_ctx = eval_ctx.exec_ctx_.get_physical_plan_ctx();
+  //dst_->batch_result_ = true;
+  if (OB_ISNULL(src_) || OB_ISNULL(dst_) || OB_ISNULL(phy_ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr not init", K(ret), KP(src_), K(dst_), K(phy_ctx));
+  } else if (OB_FAIL(src_->eval_vector(eval_ctx, skip_bit, eval_bound))) {
+    LOG_WARN("fail to calc rescan params", K(ret), K(*this));
+  } else if (OB_ISNULL(src_vec = src_->get_vector(eval_ctx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get source vector", K(ret), K(src_vec));
+  } else {
+    const char *payload = NULL;
+    ObLength len = 0;
+    src_vec->get_payload(batch_idx, payload, len);
+    ObDatum res;
+    if (src_vec->is_null(batch_idx)) {
+      res.set_null();
+    } else {
+      res.ptr_ = payload;
+      res.len_ = len;
+      res.null_ = 0;
+    }
+    ParamStore &param_store = phy_ctx->get_param_store_for_update();
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(param_idx_ < 0 || param_idx_ >= param_store.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid index", K(ret), K(param_idx_), K(param_store.count()));
+    } else if (OB_FAIL(res.to_obj(param_store.at(param_idx_),
+                                   dst_->obj_meta_,
+                                   dst_->obj_datum_map_))) {
+      LOG_WARN("convert datum to obj failed", K(ret), "datum",
+               DATUM2STR(*dst_, res));
+    } else {
+      param_store.at(param_idx_).set_param_meta();
+    }
+
+    if (OB_SUCC(ret)) {
+      ObDatum &param_datum = dst_->locate_expr_datum(eval_ctx);
+      OZ(dst_->init_vector(eval_ctx, VEC_UNIFORM_CONST, 1));
+      clear_parent_evaluated_flag(eval_ctx, *dst_);
+      dst_->get_eval_info(eval_ctx).evaluated_ = true;
+      if (0 == dst_->res_buf_off_) {
+        // for compat, old server don't have ref buf for dynamic expr,
+        // so keep shallow copy
+        param_datum.set_datum(res);
+      } else {
+        if (OB_FAIL(dst_->deep_copy_datum(eval_ctx, res))) {
+          LOG_WARN("fail to deep copy datum", K(ret), K(eval_ctx), K(*dst_));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
+
 int ObDynamicParamSetter::set_dynamic_param(ObEvalCtx &eval_ctx, ObObjParam *&param) const
 {
   int ret = OB_SUCCESS;
@@ -398,10 +461,11 @@ int ObOpSpec::create_exec_feedback_node_recursive(ObExecContext &exec_ctx) const
 {
   int ret = OB_SUCCESS;
   ObOperatorKit *kit = exec_ctx.get_operator_kit(id_);
-  if (OB_ISNULL(plan_)) {
+  ObPhysicalPlanCtx *physical_ctx = exec_ctx.get_physical_plan_ctx();
+  if (OB_ISNULL(plan_) || OB_ISNULL(physical_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("phy plan is null", K(ret));
-  } else if (!plan_->need_record_plan_info()) {
+    LOG_WARN("phy plan or ctx is null", K(ret), K(plan_), K(physical_ctx));
+  } else if (!physical_ctx->get_check_pdml_affected_rows() && !plan_->need_record_plan_info()) {
   } else if (OB_ISNULL(kit)) {
     LOG_TRACE("operator kit is NULL", K(ret));
   } else {
@@ -1092,10 +1156,11 @@ int ObOperator::close()
 int ObOperator::setup_op_feedback_info()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(spec_.plan_)) {
+  ObPhysicalPlanCtx *phy_ctx = ctx_.get_physical_plan_ctx();
+  if (OB_ISNULL(spec_.plan_) || OB_ISNULL(phy_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("phy plan is null", K(ret));
-  } else if (!spec_.plan_->need_record_plan_info() ||
+  } else if ((!spec_.plan_->need_record_plan_info() && !phy_ctx->get_check_pdml_affected_rows()) ||
              OB_INVALID_INDEX == fb_node_idx_) {
   } else {
     ObExecFeedbackInfo &fb_info = ctx_.get_feedback_info();
@@ -1115,6 +1180,9 @@ int ObOperator::setup_op_feedback_info()
       node.op_open_time_ = op_monitor_info_.open_time_;
       node.output_row_count_ = op_monitor_info_.output_row_count_;
       node.worker_count_ = 1;
+      if (spec_.is_pdml_operator()) {
+        node.pdml_op_write_rows_ = op_monitor_info_.otherstat_6_value_;
+      }
     }
   }
   return ret;
@@ -1152,6 +1220,15 @@ int ObOperator::get_next_row()
   begin_ash_line_id_reg();
   if (OB_FAIL(check_stack_once())) {
     LOG_WARN("too deep recursive", K(ret));
+  }
+#ifdef ENABLE_SANITY
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!enable_get_next_row())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get next row is disabled", K(ret), K(spec_));
+  }
+#endif
+  if (OB_FAIL(ret)) {
   } else {
     if (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_) {
       IGNORE_RETURN try_register_rt_monitor_node(1);
@@ -1247,7 +1324,7 @@ int ObOperator::get_next_row()
       }
     }
   }
-  end_ash_line_id_reg();
+  end_ash_line_id_reg(ret);
   end_cpu_time_counting();
   return ret;
 }
@@ -1410,7 +1487,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
     brs_.set_all_rows_active(false);
   }
 
-  end_ash_line_id_reg();
+  end_ash_line_id_reg(ret);
   end_cpu_time_counting();
   return ret;
 }
@@ -1442,7 +1519,6 @@ int ObOperator::convert_vector_format()
       }
     }
   }
-
   return ret;
 }
 
@@ -1684,6 +1760,23 @@ void ObOperator::set_pushdown_param_null(const ObIArray<ObDynamicParamSetter> &r
   }
 }
 
+void ObOperator::set_pushdown_param_null_vec2(const ObIArray<ObDynamicParamSetter> &rescan_params)
+{
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  ParamStore &param_store = plan_ctx->get_param_store_for_update();
+  FOREACH_CNT(param, rescan_params) {
+    param_store.at(param->param_idx_).set_null();
+    ObIVector *vec = param->dst_->get_vector(eval_ctx_);
+    VectorFormat format = param->dst_->get_format(eval_ctx_);
+    if (common::VEC_INVALID == format) {
+      // dst_vector is not inited, do nothing
+    } else if (OB_UNLIKELY(is_uniform_format(format))) {
+      reinterpret_cast<ObUniformBase *>(vec)->set_null(eval_ctx_.get_batch_idx());
+    } else {
+      reinterpret_cast<ObBitmapNullVectorBase *>(vec)->set_null(eval_ctx_.get_batch_idx());
+    }
+  }
+}
 inline int ObOperator::get_next_row_vectorizely()
 {
   int ret = OB_SUCCESS;
@@ -1734,6 +1827,55 @@ inline int ObOperator::init_dummy_mem_context(uint64_t tenant_id)
   return ret;
 }
 #endif
+
+bool ObOperator::enable_get_next_row() const
+{
+  int ret = false;
+  if (OB_ISNULL(spec_.plan_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null plan", K(ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0
+             || !spec_.plan_->is_vectorized()
+             || !ObOperatorFactory::is_vectorized(spec_.type_)
+             || (spec_.get_parent() != NULL && !ObOperatorFactory::is_vectorized(spec_.get_parent()->type_))) { // parent is not vectorized, get_next_row is used
+    ret = true;
+  } else if (spec_.get_parent() != NULL && spec_.get_parent()->type_ == PHY_SUBPLAN_FILTER) {
+    // subquery uses get_next_row for iteration
+    ret = true;
+  } else if ((spec_.type_ == PHY_VEC_SORT
+              || spec_.type_ == PHY_SORT
+              || spec_.type_ == PHY_PX_MERGE_SORT_COORD
+              || spec_.type_ == PHY_VEC_PX_MERGE_SORT_COORD
+              || spec_.type_ == PHY_VEC_PX_MERGE_SORT_RECEIVE
+              || spec_.type_ == PHY_PX_MERGE_SORT_RECEIVE)
+             && spec_.get_parent() != NULL
+             && (spec_.get_parent()->type_ == PHY_MERGE_GROUP_BY
+                 || spec_.get_parent()->type_ == PHY_VEC_MERGE_GROUP_BY)
+             && !spec_.get_parent()->is_vectorized()) { // if merge group by with listagg/group_concat, sort is called with `get_next_row`
+    ret = true;
+  } else {
+    // if new operator is registered, please update this check and phy operator lists below
+    static_assert(PHY_END == PHY_TABLE_DIRECT_INSERT + 1, "");
+    switch (spec_.type_) {
+    case PHY_TABLE_SCAN: // table scan with multi value index/geometry type
+    case PHY_BLOCK_SAMPLE_SCAN: // sample scan with geometry type
+    case PHY_ROW_SAMPLE_SCAN:
+    case PHY_SUBPLAN_FILTER: // subplan filter with update set
+    case PHY_COUNT: // count with rownum expr
+    case PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX:
+    case PHY_MERGE_GROUP_BY: // groupby with listagg/group_concat & rollup
+    case PHY_VEC_MERGE_GROUP_BY:
+    {
+      ret = true;
+      break;
+    };
+    default: {
+      break;
+    }
+    }
+  }
+  return ret;
+}
 
 int ObBatchRowIter::get_next_row()
 {

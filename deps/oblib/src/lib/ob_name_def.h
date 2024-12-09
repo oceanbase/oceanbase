@@ -1118,6 +1118,16 @@
 #define N_ALIGN_DATE4CMP                    "align_date4cmp"
 #define N_ARRAY                             "array"
 #define N_ARRAY_CONTAINS                    "array_contains"
+#define N_ARRAY_OVERLAPS                    "array_overlaps"
+#define N_ARRAY_CONTAINS_ALL                "array_contains_all"
+#define N_ARRAY_DISTINCT                    "array_distinct"
+#define N_ARRAY_REMOVE                      "array_remove"
+#define N_ARRAY_MAP                         "array_map"
+#define N_ARRAY_TO_STRING                   "array_to_string"
+#define N_STRING_TO_ARRAY                   "string_to_array"
+#define N_ARRAY_APPEND                      "array_append"
+#define N_ELEMENT_AT                        "element_at"
+#define N_ARRAY_CARDINALITY                 "cardinality"
 
 // for lock function
 #define N_GET_LOCK                          "get_lock"
@@ -1128,6 +1138,8 @@
 
 #define N_INEER_IS_TRUE                     "inner_is_true"
 #define N_INNER_DECODE_LIKE                 "inner_decode_like"
+#define N_INNER_DOUBLE_TO_INT               "inner_double_to_int"
+#define N_INNER_DECIMAL_TO_YEAR             "inner_decimal_to_year"
 #define N_BM25                              "bm25"
 #define N_EXTRACT_CERT_EXPIRED_TIME         "extract_cert_expired_time"
 #define N_INNER_ROW_CMP_VALUE               "inner_row_cmp_value"
@@ -1190,8 +1202,10 @@
 #define N_SPLIT_PART                        "split_part"
 #define N_RB_ITERATE                        "rb_iterate"
 #define N_RB_SELECT                         "rb_select"
+#define N_RB_BUILD                          "rb_build"
 #define N_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR   "get_mysql_routine_parameter_type_str"
 #define N_ORA_LOGIN_USER                    "ora_login_user"
+#define N_CALC_ODPS_SIZE                  "calc_odps_size"
 #define N_PRIV_ST_GEOHASH                   "_st_geohash"
 #define N_PRIV_ST_MAKEPOINT                 "_st_makepoint"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

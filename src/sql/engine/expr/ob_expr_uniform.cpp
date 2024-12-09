@@ -105,6 +105,8 @@ int ObExprUniform::calc_result_type3(ObExprResType &result_type,
     min_type.set_calc_type(ObIntType);
     max_type.set_calc_type(ObIntType);
     result_type.set_int();
+    ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY[result_type.get_type()];
+    result_type.set_accuracy(acc);
   } else {
     min_type.set_calc_type(ObDoubleType);
     max_type.set_calc_type(ObDoubleType);

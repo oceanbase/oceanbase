@@ -26,6 +26,7 @@
 #include <orc/Reader.hh>
 #include <orc/Int128.hh>
 #include <orc/Common.hh>
+#include "sql/engine/basic/ob_arrow_basic.h"
 
 namespace oceanbase {
 namespace sql {
@@ -52,7 +53,7 @@ namespace sql {
         if (ret != OB_SUCCESS) {
           throw std::bad_exception();
         }
-        LOG_TRACE("read file access", K(file_name_), K(bytesRead));
+        SERVER_LOG(TRACE, "read file access", K(file_name_), K(bytesRead));
       }
 
       const std::string& getName() const override {
@@ -79,42 +80,30 @@ namespace sql {
     TO_STRING_KV(K(offset), K(length), K(num_rows), K(first_row_id));
   };
 
-  class ObOrcTableRowIterator : public ObExternalTableRowIterator {
+  class ObOrcIteratorState : public ObExternalIteratorState {
   public:
-    struct StateValues {
-      StateValues() :
-        file_idx_(0),
-        part_id_(0),
-        cur_file_id_(0),
-        cur_file_url_(),
-        cur_stripe_idx_(0),
-        end_stripe_idx_(-1),
-        cur_stripe_read_row_count_(0),
-        cur_stripe_row_count_(0),
-        batch_size_(128),
-        part_list_val_() {}
-      void reuse() {
-        file_idx_ = 0;
-        part_id_ = 0;
-        cur_file_id_ = 0;
-        cur_stripe_idx_ = 0;
-        end_stripe_idx_ = -1;
-        cur_stripe_read_row_count_ = 0;
-        cur_stripe_row_count_ = 0;
-        cur_file_url_.reset();
-        part_list_val_.reset();
-      }
-      int64_t file_idx_;
-      int64_t part_id_;
-      int64_t cur_file_id_;
-      ObString cur_file_url_;
-      int64_t cur_stripe_idx_;
-      int64_t end_stripe_idx_;
-      int64_t cur_stripe_read_row_count_;
-      int64_t cur_stripe_row_count_;
-      int64_t batch_size_;
-      ObNewRow part_list_val_;
-    };
+    ObOrcIteratorState() :
+      cur_stripe_idx_(0),
+      end_stripe_idx_(-1),
+      cur_stripe_read_row_count_(0),
+      cur_stripe_row_count_(0) {}
+
+    virtual void reuse() override
+    {
+      ObExternalIteratorState::reuse();
+      cur_stripe_idx_ = 0;
+      end_stripe_idx_ = -1;
+      cur_stripe_read_row_count_ = 0;
+      cur_stripe_row_count_ = 0;
+    }
+    DECLARE_VIRTUAL_TO_STRING;
+    int64_t cur_stripe_idx_;
+    int64_t end_stripe_idx_;
+    int64_t cur_stripe_read_row_count_;
+    int64_t cur_stripe_row_count_;
+  };
+
+  class ObOrcTableRowIterator : public ObExternalTableRowIterator {
   public:
   ObOrcTableRowIterator() : file_column_exprs_(allocator_), file_meta_column_exprs_(allocator_), bit_vector_cache_(NULL) {}
   virtual ~ObOrcTableRowIterator() {
@@ -180,7 +169,7 @@ private:
     int get_data_column_batch_idxs(const orc::Type *type, const int col_id, ObIArray<int> &idxs);
   private:
 
-    StateValues state_;
+    ObOrcIteratorState state_;
     lib::ObMemAttr mem_attr_;
     ObArenaAllocator allocator_;
     ObOrcMemPool orc_alloc_;

@@ -921,7 +921,14 @@ void ObIndexRowAggInfo::reset()
 /* ------------------------------------ObIndexBlockAggregator-------------------------------------*/
 
 ObIndexBlockAggregator::ObIndexBlockAggregator()
-  : skip_index_aggregator_(), aggregated_row_(), aggregate_info_(), need_data_aggregate_(false), is_inited_(false) {}
+    : skip_index_aggregator_(),
+      aggregated_row_(),
+      aggregate_info_(),
+      need_data_aggregate_(false),
+      has_reused_null_agg_in_this_micro_block_(false),
+      is_inited_(false)
+{
+}
 
 void ObIndexBlockAggregator::reset()
 {
@@ -929,6 +936,7 @@ void ObIndexBlockAggregator::reset()
   aggregated_row_.reset();
   aggregate_info_.reset();
   need_data_aggregate_ = false;
+  has_reused_null_agg_in_this_micro_block_ = false;
   is_inited_ = false;
 }
 
@@ -936,6 +944,7 @@ void ObIndexBlockAggregator::reuse()
 {
   skip_index_aggregator_.reuse();
   aggregate_info_.reset();
+  has_reused_null_agg_in_this_micro_block_ = false;
 }
 
 int ObIndexBlockAggregator::init(const ObDataStoreDesc &store_desc, ObIAllocator &allocator)
@@ -974,10 +983,10 @@ int ObIndexBlockAggregator::eval(const ObIndexBlockRowDesc &row_desc)
   } else if (OB_UNLIKELY(!row_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid index block row descriptor", K(ret));
-  } else if (need_data_aggregate_) {
+  } else if (need_data_aggregate()) {
     if (OB_ISNULL(row_desc.aggregated_row_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected null pointer for aggregated row", K(ret), K(row_desc));
+      // There is data that does not contain aggregate row, so we disable skip index aggregate, do nothing here.
+      has_reused_null_agg_in_this_micro_block_ = true;
     } else if (row_desc.is_serialized_agg_row_) {
       const ObAggRowHeader *agg_row_header = reinterpret_cast<const ObAggRowHeader *>(
           row_desc.serialized_agg_row_buf_);
@@ -1005,8 +1014,8 @@ int ObIndexBlockAggregator::get_index_agg_result(ObIndexBlockRowDesc &row_desc)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not inited", K(ret));
-  } else if (need_data_aggregate_
-      && OB_FAIL(skip_index_aggregator_.get_aggregated_row(row_desc.aggregated_row_))) {
+  } else if (need_data_aggregate()
+             && OB_FAIL(skip_index_aggregator_.get_aggregated_row(row_desc.aggregated_row_))) {
     LOG_WARN("Fail to get aggregated row", K(ret));
   } else {
     aggregate_info_.get_agg_result(row_desc);
@@ -1023,7 +1032,7 @@ int ObIndexBlockAggregator::get_index_row_agg_info(ObIndexRowAggInfo &index_row_
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not inited", K(ret));
-  } else if (need_data_aggregate_) {
+  } else if (need_data_aggregate()) {
     if (OB_FAIL(skip_index_aggregator_.get_aggregated_row(agg_row))) {
       LOG_WARN("Fail to get aggregated row", K(ret));
     } else if (OB_FAIL(index_row_agg_info.aggregated_row_.init(allocator, aggregated_row_.get_column_count()))) {

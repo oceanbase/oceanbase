@@ -81,7 +81,7 @@ int PCVPlSchemaObj::deep_copy_column_infos(const ObTableSchema *schema)
     int64_t real_column_cnt = 0;
     for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
       const ObColumnSchemaV2 &column_schema = **cs_iter;
-      if (!(column_schema.is_hidden() || column_schema.is_invisible_column())) {
+      if (!column_schema.is_hidden()) {
         real_column_cnt++;
       }
     }
@@ -97,7 +97,7 @@ int PCVPlSchemaObj::deep_copy_column_infos(const ObTableSchema *schema)
         cs_iter_end = schema->column_end();
         for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
           const ObColumnSchemaV2 &column_schema = **cs_iter;
-          if (column_schema.is_hidden() || column_schema.is_invisible_column()) {
+          if (column_schema.is_hidden()) {
             // do nothing
           } else {
             if (nullptr == (obj_buf = inner_alloc_->alloc(sizeof(ObPLTableColumnInfo)))) {
@@ -110,6 +110,7 @@ int PCVPlSchemaObj::deep_copy_column_infos(const ObTableSchema *schema)
               column_info->meta_type_ = column_schema.get_meta_type();
               column_info->charset_type_ = column_schema.get_charset_type();
               column_info->accuracy_ = column_schema.get_accuracy();
+              column_info->is_invisible_col_ = column_schema.is_invisible_column();
               OZ (column_info->deep_copy_type_info(column_schema.get_extended_type_info()));
 
               if (OB_SUCC(ret)) {
@@ -415,13 +416,14 @@ int ObPLObjectValue::obtain_new_column_infos(share::schema::ObSchemaGetterGuard 
     ObTableSchema::const_column_iterator cs_iter_end = table_schema->column_end();
     for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
       const ObColumnSchemaV2 &column_schema = **cs_iter;
-      if (column_schema.is_hidden() || column_schema.is_invisible_column()) {
+      if (column_schema.is_hidden()) {
         // do nothing
       } else {
         column_info.column_id_ = column_schema.get_column_id();
         column_info.meta_type_ = column_schema.get_meta_type();
         column_info.charset_type_ = column_schema.get_charset_type();
         column_info.accuracy_ = column_schema.get_accuracy();
+        column_info.is_invisible_col_ = column_schema.is_invisible_column();
         OZ (column_info.type_info_.assign(column_schema.get_extended_type_info()));
         OX (column_info.column_name_ = column_schema.get_column_name_str());
         OZ (column_infos.push_back(column_info));

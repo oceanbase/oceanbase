@@ -10,15 +10,20 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX STORAGE
+
 #include "observer/table_load/ob_table_load_index_table_projector.h"
 #include "lib/oblog/ob_log_module.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/ob_i_store.h"
+#include "storage/direct_load/ob_direct_load_vector_utils.h"
 
 namespace oceanbase
 {
 namespace observer
 {
+using namespace blocksstable;
+using namespace storage;
+
 ObTableLoadIndexTableProjector::~ObTableLoadIndexTableProjector()
 {
   row_projector_.reset();
@@ -57,6 +62,18 @@ int ObTableLoadIndexTableProjector::get_index_tablet_id_and_part_id_by_data_tabl
     LOG_WARN("fail to get index tablet id", KR(ret), K(data_tablet_id));
   } else if (OB_FAIL(index_tablet_id_to_part_id_map_.get_refactored(index_tablet_id, part_id))) {
     LOG_WARN("fail to get index tablet id", KR(ret), K(index_tablet_id));
+  }
+  return ret;
+}
+
+int ObTableLoadIndexTableProjector::get_index_tablet_id(const ObTabletID &data_tablet_id, ObTabletID &index_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadIndexTableProjector not init", KR(ret));
+  } else if (OB_FAIL(tablet_projector_.get_refactored(data_tablet_id, index_tablet_id))) {
+    LOG_WARN("fail to get index tablet id", KR(ret), K(data_tablet_id));
   }
   return ret;
 }
@@ -185,6 +202,51 @@ int ObTableLoadIndexTableProjector::projector(const ObTabletID &data_tablet_id,
           LOG_WARN("fail to get datum", KR(ret), K(row_projector_.at(i)), K(origin_datum_row));
         } else {
           out_datum_row.storage_datums_[i] = origin_datum_row.storage_datums_[row_projector_.at(i)];
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadIndexTableProjector::init_datum_row(ObDatumRow &datum_row)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadIndexTableProjector not init", KR(ret));
+  } else if (OB_FAIL(datum_row.init(column_num_))) {
+    LOG_WARN("fail to init index datum row", KR(ret));
+  }
+  return ret;
+}
+
+int ObTableLoadIndexTableProjector::projector(const ObBatchDatumRows &data_datum_rows,
+                                              const int64_t row_idx,
+                                              const bool has_multi_version_cols,
+                                              ObDatumRow &index_datum_row)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadIndexTableProjector not init", KR(ret));
+  } else if (OB_UNLIKELY(index_datum_row.count_ != column_num_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(index_datum_row.count_), K(column_num_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_projector_.size(); i++) {
+      int64_t col_idx = row_projector_.at(i);
+      if (has_multi_version_cols && col_idx >= main_table_rowkey_column_num_) {
+        col_idx += ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+      }
+      if (OB_UNLIKELY(col_idx >= data_datum_rows.get_column_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected col idx", KR(ret), K(i), K(row_projector_), K(col_idx),
+                 K(data_datum_rows.get_column_count()));
+      } else {
+        ObIVector *vector = data_datum_rows.vectors_.at(col_idx);
+        if (OB_FAIL(ObDirectLoadVectorUtils::to_datum(vector, row_idx, index_datum_row.storage_datums_[i]))) {
+          LOG_WARN("fail to datum", KR(ret));
         }
       }
     }

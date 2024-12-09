@@ -39,6 +39,7 @@
 #endif
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "lib/ash/ob_active_session_guard.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -134,8 +135,10 @@ void ObTenantNodeBalancer::run1()
 
     FLOG_INFO("refresh tenant config", K(tenants), K(ret));
 
-
-    USLEEP(refresh_interval_);  // sleep 10s
+    {
+      common::ObBKGDSessInActiveGuard inactive_guard;
+      USLEEP(refresh_interval_);  // sleep 10s
+    }
   }
 }
 
@@ -335,7 +338,8 @@ int ObTenantNodeBalancer::check_del_tenants(const TenantUnits &local_units, Tena
         break;
       }
     }
-    if (!tenant_exists) {
+    if (!tenant_exists ||
+        ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER == local_unit.unit_status_) {
       LOG_INFO("[DELETE_TENANT] begin to delete tenant", K(local_unit));
       if (OB_SYS_TENANT_ID == local_unit.tenant_id_) {
         LOG_INFO("[DELETE_TENANT] need convert_real_to_hidden_sys_tenant");
@@ -402,13 +406,21 @@ int ObTenantNodeBalancer::check_new_tenant(
           LOG_WARN("fail to create new tenant", K(ret), K(tenant_id));
         }
       }
+      if (FAILEDx(omt_->get_tenant(tenant_id, tenant))) {
+        LOG_WARN("fail to get tenant after create tenant", KR(ret), K(tenant_id));
+      }
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(tenant)) {
-      ret = omt_->get_tenant(tenant_id, tenant);
-    }
+  if (OB_FAIL(ret)) {
+    // failed
+  } else if (OB_ISNULL(tenant)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant should not be null here", KR(ret), K(tenant_id));
+  } else if (tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER
+             || tenant->has_stopped()) {
+    LOG_INFO("tenant has been stopped, no need to update", KR(ret), K(tenant_id));
+  } else {
     int64_t extra_memory = 0;
     if (is_sys_tenant(tenant_id)) {
       if (OB_SUCC(ret) && tenant->is_hidden() && OB_FAIL(omt_->convert_hidden_to_real_sys_tenant(unit, abs_timeout_us))) {
@@ -436,13 +448,13 @@ int ObTenantNodeBalancer::check_new_tenant(
       }
     }
 #endif
-  }
-
-  if (OB_SUCC(ret) && !is_virtual_tenant_id(tenant_id)) {
-    if (OB_FAIL(omt_->modify_tenant_io(tenant_id, unit.config_))) {
-      LOG_WARN("modify tenant io config failed", K(ret), K(tenant_id), K(unit.config_));
+    if (OB_SUCC(ret) && !is_virtual_tenant_id(tenant_id)) {
+      if (OB_FAIL(omt_->modify_tenant_io(tenant_id, unit.config_))) {
+        LOG_WARN("modify tenant io config failed", K(ret), K(tenant_id), K(unit.config_));
+      }
     }
   }
+
   return ret;
 }
 
@@ -503,6 +515,7 @@ void ObTenantNodeBalancer::periodically_check_tenant()
   }
   omt_->unlock_tenant_list();
 
+  G_RES_MGR.get_plan_mgr().refresh_global_background_cpu();
   int i = 0;
   for (auto it = pairs.begin();
        it != pairs.end();
@@ -510,6 +523,10 @@ void ObTenantNodeBalancer::periodically_check_tenant()
     (*it).tenant_->periodically_check();
     IGNORE_RETURN (*it).tenant_->unlock(*(*it).handle_);
   }
+  ObResourcePlanManager &plan_mgr = G_RES_MGR.get_plan_mgr();
+  ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+  ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
+  LOG_INFO("refresh resource manager plan", K(plan_mgr), K(rule_mgr), K(col_rule_mgr));
 }
 
 // Although unit has been deleted, the local cached unit cannot be deleted if the tenant still holds resource

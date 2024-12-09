@@ -57,7 +57,7 @@ public:
 
   int create_index(const obrpc::ObCreateIndexArg &arg,
                    obrpc::ObAlterTableRes &res);
-  int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
+  int drop_index(const obrpc::ObDropIndexArg &const_arg, obrpc::ObDropIndexRes &res);
   // Check and update local index status.
   // if not all index table updated return OB_EAGAIN.
   int do_create_index(

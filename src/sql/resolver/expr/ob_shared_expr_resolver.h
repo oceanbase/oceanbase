@@ -96,7 +96,8 @@ private:
            expr.is_exec_param_expr() ||
            expr.is_pseudo_column_expr() ||
            expr.get_expr_type() == T_OP_ROW ||
-           expr.get_expr_type() == T_QUESTIONMARK;
+           expr.get_expr_type() == T_QUESTIONMARK ||
+           expr.is_var_expr();
   }
   inline bool is_blacklist_share_child(const ObRawExpr &expr)
   {

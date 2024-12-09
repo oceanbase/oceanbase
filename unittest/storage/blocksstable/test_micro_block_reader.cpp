@@ -49,6 +49,16 @@ public:
   TestMicroBlockReader() : allocator_(ObModIds::TEST), read_info_() { }
   void SetUp();
   virtual void TearDown() {}
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 
 protected:
   ObRowGenerate row_generate_;
@@ -178,10 +188,11 @@ TEST_F(TestMicroBlockReader, test_success)
     // check obj equal: every obj should be same except not exist row
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
     for (int64_t j = 0; j < column_num; ++j){
+      ObCStringHelper helper;
       ASSERT_TRUE(block_row.storage_datums_[j] == row.storage_datums_[j])
         << "\n i: " << i << " j: " << j
-        << "\n reader:  "<< to_cstring(block_row.storage_datums_[j])
-        << "\n writer:  " << to_cstring(row.storage_datums_[j]);
+        << "\n reader:  "<< helper.convert(block_row.storage_datums_[j])
+        << "\n writer:  " << helper.convert(row.storage_datums_[j]);
     }
   }
 
@@ -207,10 +218,11 @@ TEST_F(TestMicroBlockReader, test_success)
   //   //every obj should equal
   //   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
   //   for (int64_t j = 0; j < column_num ; ++ j){
+  //     ObCStringHelper helper;
   //     ASSERT_TRUE(row.row_val_.cells_[j] == cur_row.row_val_.cells_[j])
   //       << "\n i: " << i << " j: " << j
-  //       << "\n writer:  "<< to_cstring(row.row_val_.cells_[j])
-  //       << "\n reader:  " << to_cstring(cur_row.row_val_.cells_[j]);
+  //       << "\n writer:  "<< helper.convert(row.row_val_.cells_[j])
+  //       << "\n reader:  " << helper.convert(cur_row.row_val_.cells_[j]);
   //   }
   // }
   ObKVGlobalCache::get_instance().destroy();
@@ -272,9 +284,10 @@ TEST_F(TestMicroBlockReader, test_success)
   //init twice
   ASSERT_EQ(OB_INIT_TWICE, reader.init(block, column_map_));
 
-  //BlockData to_cstring
+  //BlockData convert to cstring
   ObMicroBlockData  block_data;
-  const char *out = to_cstring(block_data);
+  ObCStringHelper helper;
+  const char *out = helper.convert(block_data);
   ASSERT_TRUE(NULL != out);
   //index is NULL
   ObStoreRowkey rowkey;

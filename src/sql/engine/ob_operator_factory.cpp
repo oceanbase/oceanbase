@@ -92,6 +92,7 @@
 #include "sql/optimizer/ob_log_err_log.h"
 #include "sql/optimizer/ob_log_stat_collector.h"
 #include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
+#include "sql/optimizer/ob_log_expand.h"
 #include "sql/engine/aggregate/ob_merge_distinct_op.h"
 #include "sql/engine/aggregate/ob_merge_distinct_vec_op.h"
 #include "sql/engine/aggregate/ob_hash_distinct_op.h"
@@ -183,6 +184,13 @@
 #include "sql/engine/basic/ob_values_table_access_op.h"
 #include "sql/engine/aggregate/ob_merge_groupby_vec_op.h"
 #include "sql/engine/join/ob_merge_join_vec_op.h"
+#include "sql/engine/set/ob_merge_union_vec_op.h"
+#include "sql/engine/set/ob_merge_intersect_vec_op.h"
+#include "sql/engine/set/ob_merge_except_vec_op.h"
+#include "sql/engine/expand/ob_expand_vec_op.h"
+#include "sql/engine/join/ob_nested_loop_join_vec_op.h"
+#include "sql/engine/subquery/ob_subplan_filter_vec_op.h"
+#include "sql/engine/direct_load/ob_table_direct_insert_op.h"
 
 namespace oceanbase
 {

@@ -806,9 +806,10 @@ int ObCreateTableHelper::check_and_set_parent_table_id_()
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("parent table not exist", KR(ret), K_(tenant_id),
                      K(session_id), K(parent_database_id), K(parent_table_name));
+            ObCStringHelper helper;
             LOG_USER_ERROR(OB_TABLE_NOT_EXIST,
-                           to_cstring(parent_database_name),
-                           to_cstring(parent_table_name));
+                           helper.convert(parent_database_name),
+                           helper.convert(parent_table_name));
           } else {
             //TODO(yanmu.ztl): this interface has poor performance.
             if (OB_FAIL(latest_schema_guard_.get_mock_fk_parent_table_id(
@@ -1264,7 +1265,9 @@ int ObCreateTableHelper::generate_foreign_keys_()
               && 0 != parent_table->get_session_id()
               && OB_INVALID_ID != arg_.schema_.get_session_id()) {
             ret = OB_TABLE_NOT_EXIST;
-            LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(parent_database_name), to_cstring(parent_table_name));
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(parent_database_name),
+                helper.convert(parent_table_name));
           } else if (!arg_.is_inner_ && parent_table->is_in_recyclebin()) {
             ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
             LOG_WARN("parent table is in recyclebin", KR(ret), K(foreign_key_arg));

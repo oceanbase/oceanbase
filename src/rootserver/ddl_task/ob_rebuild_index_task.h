@@ -37,6 +37,7 @@ public:
       const int32_t sub_task_trace_id,
       const int64_t parallelism,
       const uint64_t tenant_data_version,
+      const ObTableSchema &index_schema,
       const obrpc::ObRebuildIndexArg &rebuild_index_arg);
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;
@@ -44,6 +45,12 @@ public:
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
   virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
+
+  void set_index_build_task_id(const int64_t id) { index_build_task_id_ = id; }
+  void set_index_drop_task_id(const int64_t id) { index_drop_task_id_ = id; }
+  void set_new_index_id(const int64_t id) { new_index_id_ = id; }
+  int update_task_message(common::ObISQLClient &proxy);
+
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, KP_(root_service));
   virtual int on_child_task_finish(const uint64_t child_task_key,
                                    const int ret_code) override
@@ -56,13 +63,12 @@ private:
   int check_switch_succ();
   int prepare(const share::ObDDLTaskStatus new_status);
   int rebuild_index_impl();
-  int drop_index_impl(const bool is_old_index);
+  int drop_index_impl();
   int switch_index_name(const ObDDLTaskStatus next_task_status);
   int create_and_wait_rebuild_task_finish(const share::ObDDLTaskStatus new_status);
   int create_and_wait_drop_task_finish(const share::ObDDLTaskStatus new_status);
   int succ();
   int fail();
-  int update_task_message();
   int check_ddl_task_finish(
       const int64_t tenant_id,
       int64_t &task_id,
@@ -91,6 +97,7 @@ private:
   int64_t index_build_task_id_;
   int64_t index_drop_task_id_;
   uint64_t new_index_id_;
+  ObString target_object_name_;
 };
 
 }  // end namespace rootserver

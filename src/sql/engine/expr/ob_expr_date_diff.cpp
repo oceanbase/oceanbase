@@ -63,6 +63,7 @@ int ObExprDateDiff::cg_expr(ObExprCGCtx &op_cg_ctx,
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = ObExprDateDiff::eval_date_diff;
+  rt_expr.eval_vector_func_ = eval_date_diff_vector;
 
   return ret;
 }
@@ -154,6 +155,120 @@ int ObExprMonthsBetween::eval_months_between(const ObExpr &expr,
 
   return ret;
 }
+
+
+#define CHECK_SKIP_NULL(idx) {                                              \
+  if (skip.at(idx) || eval_flags.at(idx)) {                                 \
+    continue;                                                               \
+  } else if (left_arg_vec->is_null(idx) || right_arg_vec->is_null(idx)) {   \
+    res_vec->set_null(idx);                                                 \
+    eval_flags.set(idx);                                                    \
+    continue;                                                               \
+  }                                                                         \
+}
+#define BATCH_CALC(BODY) {                                                        \
+  if (OB_LIKELY(no_skip_no_null)) {                                               \
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) { \
+      BODY;                                                                       \
+    }                                                                             \
+  } else {                                                                        \
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) { \
+      CHECK_SKIP_NULL(idx);                                                       \
+      BODY;                                                                       \
+    }                                                                             \
+  }                                                                               \
+}
+
+template <typename LeftArgVec, typename RightArgVec, typename ResVec, typename IN_TYPE>
+int vector_date_diff(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  LeftArgVec *left_arg_vec = static_cast<LeftArgVec *>(expr.args_[0]->get_vector(ctx));
+  RightArgVec *right_arg_vec = static_cast<RightArgVec *>(expr.args_[1]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  int64_t tz_offset = 0;
+  DateType left_date = 0;
+  DateType right_date = 0;
+  UsecType left_usec = 0;
+  UsecType right_usec = 0;
+  bool no_skip_no_null = bound.get_all_rows_active() && !left_arg_vec->has_null() && !right_arg_vec->has_null()
+                         && eval_flags.accumulate_bit_cnt(bound) == 0;
+
+  BATCH_CALC({
+    IN_TYPE left_val = *reinterpret_cast<const IN_TYPE*>(left_arg_vec->get_payload(idx));
+    IN_TYPE right_val = *reinterpret_cast<const IN_TYPE*>(right_arg_vec->get_payload(idx));
+    if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(left_val, tz_offset, lib::is_oracle_mode(), left_date, left_usec))) {
+      LOG_WARN("get date and usec from vec failed", K(ret));
+    } else if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(right_val, tz_offset, lib::is_oracle_mode(), right_date, right_usec))) {
+      LOG_WARN("get date and usec from vec failed", K(ret));
+    } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == left_date
+                          || ObTimeConverter::ZERO_DATE == right_date)) {
+      res_vec->set_null(idx);
+    } else {
+      int64_t datediff = left_date - right_date;
+      res_vec->set_int(idx, datediff);
+    }
+    eval_flags.set(idx);
+  });
+  return ret;
+}
+int ObExprDateDiff::eval_date_diff_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval date_diff param_1", K(ret));
+  } else if (OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval date_diff param_2", K(ret));
+  } else {
+    VectorFormat left_arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat right_arg_format = expr.args_[1]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+
+#define DEF_DATE_DIFF_VECTOR(res_type)\
+    if (VEC_FIXED == left_arg_format && VEC_FIXED == right_arg_format) {\
+      ret = vector_date_diff<DateFixedVec, DateFixedVec, res_type, DateType>(expr, ctx, skip, bound);\
+    } else if (VEC_FIXED == left_arg_format && VEC_UNIFORM == right_arg_format) {\
+      ret = vector_date_diff<DateFixedVec, DateUniVec, res_type, DateType>(expr, ctx, skip, bound);\
+    } else if (VEC_FIXED == left_arg_format && VEC_UNIFORM_CONST == right_arg_format) {\
+      ret = vector_date_diff<DateFixedVec, DateUniCVec, res_type, DateType>(expr, ctx, skip, bound);\
+    } else if (VEC_UNIFORM == left_arg_format && VEC_FIXED == right_arg_format) {\
+      ret = vector_date_diff<DateUniVec, DateFixedVec, res_type, DateType>(expr, ctx, skip, bound);\
+    } else if (VEC_UNIFORM == left_arg_format && VEC_UNIFORM == right_arg_format) {\
+      ret = vector_date_diff<DateUniVec, DateUniVec, res_type, DateType>(expr, ctx, skip, bound);\
+    } else if (VEC_UNIFORM == left_arg_format && VEC_UNIFORM_CONST == right_arg_format) {\
+      ret = vector_date_diff<DateUniVec, DateUniCVec, res_type, DateType>(expr, ctx, skip, bound);\
+    } else if (VEC_UNIFORM_CONST == left_arg_format && VEC_FIXED == right_arg_format) {\
+      ret = vector_date_diff<DateUniCVec, DateFixedVec, res_type, DateType>(expr, ctx, skip, bound);\
+    } else if (VEC_UNIFORM_CONST == left_arg_format && VEC_UNIFORM == right_arg_format) {\
+      ret = vector_date_diff<DateUniCVec, DateUniVec, res_type, DateType>(expr, ctx, skip, bound);\
+    } else if (VEC_UNIFORM_CONST == left_arg_format && VEC_UNIFORM_CONST == right_arg_format) {\
+      ret = vector_date_diff<DateUniCVec, DateUniCVec, res_type, DateType>(expr, ctx, skip, bound);\
+    } else {\
+      ret = vector_date_diff<ObVectorBase, ObVectorBase, ObVectorBase, DateType>(expr, ctx, skip, bound);\
+    }
+
+    if (VEC_FIXED == res_format) {
+      DEF_DATE_DIFF_VECTOR(DecInt64FixedVec)
+    } else if (VEC_UNIFORM == res_format) {
+      DEF_DATE_DIFF_VECTOR(DecInt64UniVec)
+    } else if (VEC_UNIFORM_CONST == res_format) {
+      DEF_DATE_DIFF_VECTOR(DecInt64UniCVec)
+    } else {
+      ret = vector_date_diff<ObVectorBase, ObVectorBase, ObVectorBase, DateType>(expr, ctx, skip, bound);
+    }
+#undef DEF_DATE_DIFF_VECTOR
+
+    if (OB_FAIL(ret)) {
+      LOG_WARN("expr calculation failed", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+#undef CHECK_SKIP_NULL
+#undef BATCH_CALC
 
 } //namespace sql
 } //namespace oceanbase

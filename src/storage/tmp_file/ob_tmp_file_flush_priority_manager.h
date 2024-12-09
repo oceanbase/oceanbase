@@ -10,11 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_FLUSH_PRIORITY_MANAGER_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_FLUSH_PRIORITY_MANAGER_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_FLUSH_PRIORITY_MANAGER_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_FLUSH_PRIORITY_MANAGER_H_
 
 #include "storage/tmp_file/ob_tmp_file_global.h"
-#include "storage/tmp_file/ob_shared_nothing_tmp_file.h"
+#include "storage/tmp_file/ob_i_tmp_file.h"
+#include "lib/container/ob_array.h"
 
 namespace oceanbase
 {
@@ -35,38 +36,33 @@ public:
   void destroy();
 
 private:
-  enum FileList {
-    INVALID = -1,
-    L1 = 0, // [2MB, INFINITE)
-    L2,     // [1MB, 2MB)
-    L3,     // [128KB, 1MB)
-    L4,     // data_list: [8KB, 128KB); meta_list: (0KB, 128KB)
-    L5,     // data_list: (0, 8KB); meta_list: 0KB
-    MAX
-  };
-  typedef common::ObDList<ObSharedNothingTmpFile::ObTmpFileNode> ObTmpFileFlushList;
+  typedef common::ObDList<ObITmpFile::ObTmpFileNode> ObTmpFileFlushList;
   friend class ObTmpFileFlushListIterator;
 
 public:
-  int insert_data_flush_list(ObSharedNothingTmpFile &file, const int64_t dirty_page_size);
-  int insert_meta_flush_list(ObSharedNothingTmpFile &file, const int64_t non_rightmost_dirty_page_num,
+  int insert_data_flush_list(ObITmpFile &file, const int64_t dirty_page_size);
+  int insert_meta_flush_list(ObITmpFile &file, const int64_t non_rightmost_dirty_page_num,
                              const int64_t rightmost_dirty_page_num);
-  int update_data_flush_list(ObSharedNothingTmpFile &file, const int64_t dirty_page_size);
-  int update_meta_flush_list(ObSharedNothingTmpFile &file, const int64_t non_rightmost_dirty_page_num,
+  int update_data_flush_list(ObITmpFile &file, const int64_t dirty_page_size);
+  int update_meta_flush_list(ObITmpFile &file, const int64_t non_rightmost_dirty_page_num,
                              const int64_t rightmost_dirty_page_num);
-  int remove_file(ObSharedNothingTmpFile &file);
-  int remove_file(const bool is_meta, ObSharedNothingTmpFile &file);
+  int remove_file(ObITmpFile &file);
+  int remove_file(const bool is_meta, ObITmpFile &file);
   int popN_from_file_list(const bool is_meta, const int64_t list_idx,
                           const int64_t expected_count, int64_t &actual_count,
-                          ObArray<ObTmpFileHandle> &file_handles);
+                          ObArray<ObITmpFileHandle> &file_handles);
   int64_t get_file_size();
 private:
+  typedef ObTmpFileGlobal::FileList FileList;
+  int get_file_flush_node_(const bool is_meta, ObITmpFile &file, ObITmpFile::ObTmpFileNode *&flush_node);
+  int get_file_flush_level_(const bool is_meta, ObITmpFile &file, FileList &flush_level);
   int get_meta_list_idx_(const int64_t non_rightmost_dirty_page_num,
                          const int64_t rightmost_dirty_page_num, FileList &idx);
   int get_data_list_idx_(const int64_t dirty_page_size, FileList &idx);
-  int insert_flush_list_(const bool is_meta, ObSharedNothingTmpFile &file,
+  int set_flush_page_level_(const bool is_meta, const FileList flush_idx, ObITmpFile &file);
+  int insert_flush_list_(const bool is_meta, ObITmpFile &file,
                          const FileList flush_idx);
-  int update_flush_list_(const bool is_meta, ObSharedNothingTmpFile &file,
+  int update_flush_list_(const bool is_meta, ObITmpFile &file,
                          const FileList new_flush_idx);
 
 private:
@@ -79,4 +75,4 @@ private:
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_FLUSH_PRIORITY_MANAGER_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_FLUSH_PRIORITY_MANAGER_H_

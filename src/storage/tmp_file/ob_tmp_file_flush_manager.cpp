@@ -30,7 +30,8 @@ ObTmpFileFlushManager::ObTmpFileFlushManager(ObTmpFilePageCacheController &pc_ct
     task_allocator_(pc_ctrl.get_task_allocator()),
     write_buffer_pool_(pc_ctrl.get_write_buffer_pool()),
     evict_mgr_(pc_ctrl.get_eviction_manager()),
-    flush_priority_mgr_(pc_ctrl.get_flush_priority_mgr())
+    flush_priority_mgr_(pc_ctrl.get_flush_priority_mgr()),
+    cur_flush_timer_idx_(0)
 {
 }
 
@@ -67,7 +68,6 @@ int ObTmpFileFlushManager::alloc_flush_task(ObTmpFileFlushTask *&flush_task)
   int ret = OB_SUCCESS;
   flush_task = nullptr;
 
-  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
   void *task_buf = nullptr;
   if (OB_ISNULL(task_buf = task_allocator_.alloc(sizeof(ObTmpFileFlushTask)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -86,6 +86,9 @@ int ObTmpFileFlushManager::free_flush_task(ObTmpFileFlushTask *flush_task)
     STORAGE_LOG(WARN, "flush task ptr is null", KR(ret));
   } else {
     LOG_DEBUG("free flush task", KPC(flush_task));
+    if (ObTimeUtil::current_time() - flush_task->get_create_ts() > FLUSH_TASK_FINISH_WARN_TIMEOUT_US) {
+      LOG_WARN("flush task execute takes too much time", KPC(flush_task));
+    }
     flush_task->~ObTmpFileFlushTask();
     task_allocator_.free(flush_task);
   }
@@ -122,7 +125,7 @@ int ObTmpFileFlushManager::free_tmp_file_block(ObTmpFileFlushTask &flush_task)
 void ObTmpFileFlushManager::init_flush_level_()
 {
   int64_t dirty_page_percentage = write_buffer_pool_.get_dirty_page_percentage();
-  if (pc_ctrl_.is_flush_all_data()) { // only for unittest
+  if (pc_ctrl_.is_flush_all_data()) {
     flush_ctx_.set_state(FlushCtxState::FSM_F1);
   } else {
     if (FLUSH_WATERMARK_F1 <= dirty_page_percentage) {
@@ -145,7 +148,7 @@ void ObTmpFileFlushManager::advance_flush_level_(const int ret_code)
 {
   int64_t dirty_page_percentage = write_buffer_pool_.get_dirty_page_percentage();
 
-  if (pc_ctrl_.is_flush_all_data()) {  // only for unittest
+  if (pc_ctrl_.is_flush_all_data()) {
     if (OB_SUCCESS == ret_code) {
       // continue to flush to OB_ITER_END, do nothing
     } else if (OB_ITER_END == ret_code) {
@@ -219,7 +222,6 @@ void ObTmpFileFlushManager::inner_advance_flush_level_()
   }
 }
 
-// only for unittest
 void ObTmpFileFlushManager::inner_advance_flush_level_without_checking_watermark_()
 {
   switch(flush_ctx_.get_state()) {
@@ -263,57 +265,8 @@ int ObTmpFileFlushManager::flush(ObSpLinkQueue &flushing_queue,
   } else if (OB_FAIL(flush_ctx_.prepare_flush_ctx(expect_flush_size, &flush_priority_mgr_, &flush_monitor))) {
     STORAGE_LOG(WARN, "fail to prepare flush iterator", KR(ret), K(flush_ctx_));
   } else {
-    while (OB_SUCC(ret) && !flush_ctx_.is_fail_too_many()
-                        && (FlushCtxState::FSM_FINISHED != flush_ctx_.get_state() || fast_flush_meta)) {
-      ObTmpFileFlushTask *flush_task = nullptr;
-      if (OB_FAIL(handle_alloc_flush_task_(fast_flush_meta, flush_task))) {
-        STORAGE_LOG(WARN, "fail to alloc flush task", KR(ret), K(flush_ctx_));
-      } else {
-        flush_ctx_.inc_create_flush_task_cnt();
-        flushing_queue.push(flush_task);
-        STORAGE_LOG(DEBUG, "create new flush task", K(fast_flush_meta), KPC(flush_task), K(flush_ctx_));
-
-        FlushState state = ObTmpFileFlushTask::TFFT_INITED;
-        FlushState next_state = state;
-        do {
-          next_state = state = flush_task->get_state();
-          if (OB_FAIL(drive_flush_task_prepare_(*flush_task, state, next_state))) {
-            STORAGE_LOG(WARN, "fail to drive flush task prepare", KR(ret), K(flush_ctx_));
-          } else if (flush_task->get_state() >= next_state) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "unexpected flush state after drive task succ", KR(ret), K(flush_ctx_), K(state));
-          } else if (OB_FAIL(advance_status_(*flush_task, next_state))) {
-            STORAGE_LOG(WARN, "fail to advance status",
-                        KR(ret), K(flush_ctx_), K(flush_task->get_state()), K(state), K(next_state));
-          }
-        } while (OB_SUCC(ret) && FlushState::TFFT_WAIT != next_state);
-
-        STORAGE_LOG(DEBUG, "drive flush task finished", KR(ret), K(fast_flush_meta), KPC(flush_task), K(flush_ctx_));
-        bool recorded_as_prepare_finished = false;
-        flush_ctx_.update_actual_flush_size(*flush_task);
-        flush_ctx_.try_update_prepare_finished_cnt(*flush_task, recorded_as_prepare_finished);
-        if (recorded_as_prepare_finished) {
-          flush_task->mark_recorded_as_prepare_finished();
-        }
-        if (ObTmpFileFlushTask::TFFT_FILL_BLOCK_BUF < flush_task->get_state()) {
-          flush_ctx_.record_flush_task(flush_task->get_data_length()); // maintain statistics
-        }
-        if (flush_task->get_is_fast_flush_tree()) {
-          if (OB_FAIL(ret) && flush_task->get_data_length() > 0) {
-            STORAGE_LOG(ERROR, "fail to execute fast_flush_tree_page flush task to TFFT_WAIT", KR(ret), KPC(flush_task));
-          }
-          break;  // generate only one fast_flush_tree_page_ task to avoid excessive flushing of the meta
-        }
-        if (OB_ALLOCATE_TMP_FILE_PAGE_FAILED == ret){
-          if (flush_task->get_state() == FlushState::TFFT_INSERT_META_TREE) {
-            STORAGE_LOG(WARN, "fail to insert meta tree, generating fast_flush_meta task", KR(ret));
-            fast_flush_meta = true;   // set this flag generate fast_flush_tree_page_ task in the next loop
-            ret = OB_SUCCESS;
-          } else {
-            STORAGE_LOG(ERROR, "flush task is not in TFFT_INSERT_META_TREE state", KPC(flush_task));
-          }
-        }
-      }
+    if (OB_FAIL(flush_by_watermark_(flushing_queue, is_flush_meta_tree))) {
+      STORAGE_LOG(DEBUG, "fail to flush by watermark", KR(ret), K(flush_ctx_));
     }
 
     if (!flushing_queue.is_empty()) {
@@ -323,6 +276,67 @@ int ObTmpFileFlushManager::flush(ObSpLinkQueue &flushing_queue,
       ret = OB_SUCCESS; // ignore error if generate at least 1 task
     }
     flush_ctx_.clear_flush_ctx(flush_priority_mgr_);
+  }
+  return ret;
+}
+
+int ObTmpFileFlushManager::flush_by_watermark_(ObSpLinkQueue &flushing_queue, const bool is_flush_meta_tree)
+{
+  int ret = OB_SUCCESS;
+  bool fast_flush_meta = is_flush_meta_tree;
+  while (OB_SUCC(ret) && !flush_ctx_.is_fail_too_many()
+                      && (FlushCtxState::FSM_FINISHED != flush_ctx_.get_state() || fast_flush_meta)) {
+    ObTmpFileFlushTask *flush_task = nullptr;
+    if (OB_FAIL(handle_alloc_flush_task_(fast_flush_meta, flush_task))) {
+      STORAGE_LOG(WARN, "fail to alloc flush task", KR(ret), K(flush_ctx_));
+    } else {
+      flush_ctx_.inc_create_flush_task_cnt();
+      flushing_queue.push(flush_task);
+      STORAGE_LOG(DEBUG, "create new flush task", K(fast_flush_meta), KPC(flush_task), K(flush_ctx_));
+
+      FlushState state = ObTmpFileFlushTask::TFFT_INITED;
+      FlushState next_state = state;
+      do {
+        next_state = state = flush_task->get_state();
+        if (OB_FAIL(drive_flush_task_prepare_(*flush_task, state, next_state))) {
+          if (OB_ITER_END != ret) {
+            STORAGE_LOG(WARN, "fail to drive flush task prepare", KR(ret), K(flush_ctx_));
+          }
+        } else if (flush_task->get_state() >= next_state) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "unexpected flush state after drive task succ", KR(ret), K(flush_ctx_), K(state));
+        } else if (OB_FAIL(advance_status_(*flush_task, next_state))) {
+          STORAGE_LOG(WARN, "fail to advance status",
+                      KR(ret), K(flush_ctx_), K(flush_task->get_state()), K(state), K(next_state));
+        }
+      } while (OB_SUCC(ret) && FlushState::TFFT_WAIT != next_state);
+
+      STORAGE_LOG(DEBUG, "drive flush task finished", KR(ret), K(fast_flush_meta), KPC(flush_task), K(flush_ctx_));
+      bool recorded_as_prepare_finished = false;
+      flush_ctx_.update_actual_flush_size(*flush_task);
+      flush_ctx_.try_update_prepare_finished_cnt(*flush_task, recorded_as_prepare_finished);
+      if (recorded_as_prepare_finished) {
+        flush_task->mark_recorded_as_prepare_finished();
+      }
+      if (ObTmpFileFlushTask::TFFT_FILL_BLOCK_BUF < flush_task->get_state()) {
+        flush_ctx_.record_flush_task(flush_task->get_data_length()); // maintain statistics
+      }
+      if (flush_task->get_is_fast_flush_tree()) {
+        if (OB_FAIL(ret) && flush_task->get_data_length() > 0) {
+          STORAGE_LOG(ERROR, "fail to execute fast_flush_tree_page flush task to TFFT_WAIT", KR(ret), KPC(flush_task));
+        }
+        break;  // generate only one fast_flush_tree_page_ task to avoid excessive flushing of the meta
+      }
+      if (OB_ALLOCATE_TMP_FILE_PAGE_FAILED == ret){
+        if (flush_task->get_state() == FlushState::TFFT_INSERT_META_TREE) {
+          STORAGE_LOG(WARN, "fail to insert meta tree, generating fast_flush_meta task", KR(ret));
+          fast_flush_meta = true;   // set this flag generate fast_flush_tree_page_ task in the next loop
+          ret = OB_SUCCESS;
+        } else {
+          STORAGE_LOG(ERROR, "flush task is not in TFFT_INSERT_META_TREE state", KPC(flush_task));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -440,15 +454,14 @@ int ObTmpFileFlushManager::inner_fill_block_buf_(
     const bool flush_tail)
 {
   int ret = OB_SUCCESS;
-  const int64_t BLOCK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
+  const int64_t BLOCK_SIZE = ObTmpFileGlobal::SN_BLOCK_SIZE;
   bool fail_too_many = false;
 
   ObArray<ObTmpFileBatchFlushContext::ObTmpFileFlushFailRecord> &flush_failed_array = flush_ctx_.get_flush_failed_array();
   ObTmpFileFlushListIterator &iter = flush_ctx_.get_flush_list_iterator();
-  bool tmp_is_meta = false;
-  ObTmpFileHandle file_handle;
+  ObSNTmpFileHandle file_handle;
   while (OB_SUCC(ret) && !fail_too_many && !flush_task.is_full()) {
-    if (OB_FAIL(iter.next(flush_stage, tmp_is_meta, file_handle))) {
+    if (OB_FAIL(iter.next(flush_stage, file_handle))) {
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "fail to get file from iterator",
             KR(ret), K(flush_stage), K(is_meta), K(flush_tail), K(flush_ctx_));
@@ -489,10 +502,18 @@ int ObTmpFileFlushManager::inner_fill_block_buf_(
           copy_flush_info_fail = true;
         } else {
           if (!(flush_tail || (is_meta && file_flush_ctx.meta_ctx_.is_meta_reach_end_))) {
-            file.reinsert_flush_node(is_meta);
+            if (is_meta) {
+              if (OB_FAIL(file.reinsert_meta_flush_node())) {
+                STORAGE_LOG(WARN, "fail to reinsert meta flush node", KR(ret), K(file));
+              }
+            } else {
+              if (OB_FAIL(file.reinsert_data_flush_node())) {
+                STORAGE_LOG(WARN, "fail to reinsert data flush node", KR(ret), K(file));
+              }
+            }
           }
           UpdateFlushCtx update_op(file_flush_ctx);
-          if (OB_FAIL(flush_ctx_.get_file_ctx_hash().set_or_update(file.get_fd(), file_flush_ctx, update_op))) {
+          if (FAILEDx(flush_ctx_.get_file_ctx_hash().set_or_update(file.get_fd(), file_flush_ctx, update_op))) {
             // if update fails, the copy offset will be incorrect when the file is flushed a second time in the same round
             STORAGE_LOG(ERROR, "fail to set flush ctx after copying data", KR(ret), K(file));
             copy_flush_info_fail = true;
@@ -502,7 +523,7 @@ int ObTmpFileFlushManager::inner_fill_block_buf_(
 
         if (OB_FAIL(ret)) {
           int tmp_ret = OB_SUCCESS;
-          ObTmpFileBatchFlushContext::ObTmpFileFlushFailRecord record(is_meta, ObTmpFileHandle(&file));
+          ObTmpFileBatchFlushContext::ObTmpFileFlushFailRecord record(is_meta, ObSNTmpFileHandle(&file));
           if (OB_TMP_FAIL(flush_failed_array.push_back(record))) {
             // array is pre-allocated to MAX_COPY_FAIL_COUNT,
             // file could not be flush afterwards if push_back failed
@@ -644,7 +665,9 @@ int ObTmpFileFlushManager::drive_flush_task_prepare_(ObTmpFileFlushTask &flush_t
       break;
     case FlushState::TFFT_FILL_BLOCK_BUF:
       if (OB_FAIL(handle_fill_block_buf_(flush_task, next_state))) {
-        STORAGE_LOG(WARN, "fail to handle flush task fill block", KR(ret), K(flush_task));
+        if (OB_ITER_END != ret) {
+          STORAGE_LOG(WARN, "fail to handle flush task fill block", KR(ret), K(flush_task));
+        }
       }
       break;
     case FlushState::TFFT_INSERT_META_TREE:
@@ -836,6 +859,7 @@ int ObTmpFileFlushManager::handle_alloc_flush_task_(const bool fast_flush_meta, 
   } else {
     flush_task->set_state(FlushState::TFFT_CREATE_BLOCK_INDEX);
     flush_task->set_create_ts(ObTimeUtil::current_time());
+    flush_task->set_last_print_ts(ObTimeUtil::current_time());
     flush_task->set_flush_seq(flush_ctx_.get_flush_sequence());
     flush_task->set_is_fast_flush_tree(fast_flush_meta);
   }
@@ -886,13 +910,27 @@ int ObTmpFileFlushManager::handle_fill_block_buf_(ObTmpFileFlushTask &flush_task
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "fail to fill block buf", KR(ret), K(flush_task));
       }
-    } else if (0 == flush_task.get_data_length()) {
+    }
+
+    // override error code
+    if (OB_ITER_END == ret && pc_ctrl_.is_flush_all_data() && 0 == flush_task.get_data_length()) {
+      // try to fill with meta pages if could not get any data pages
+      if (OB_FAIL(fill_block_buf_(flush_task))) {
+        if (OB_ITER_END != ret) {
+          STORAGE_LOG(WARN, "fail to fill block buf", KR(ret), K(flush_task));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && 0 == flush_task.get_data_length()) {
       ret = OB_ITER_END;
     }
   }
 
   if (OB_FAIL(ret)){
-    STORAGE_LOG(WARN, "fail to fill block buf, skip release page", KR(ret));
+    if (OB_ITER_END != ret) {
+      STORAGE_LOG(WARN, "fail to fill block buf, skip release page", KR(ret));
+    }
   } else if (OB_UNLIKELY(flush_task.get_flush_infos().empty())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "flush infos is empty", KR(ret), K(flush_task));
@@ -950,7 +988,10 @@ int ObTmpFileFlushManager::handle_async_write_(ObTmpFileFlushTask &flush_task, F
 {
   int ret = OB_SUCCESS;
   cur_flush_timer_idx_ = (cur_flush_timer_idx_ + 1) % ObTmpFileGlobal::FLUSH_TIMER_CNT;
-  if (OB_FAIL(TG_SCHEDULE(flush_timer_tg_id_[cur_flush_timer_idx_], flush_task.get_flush_write_block_task(), 0/*delay*/, false/*repeat*/))) {
+  if (OB_UNLIKELY(cur_flush_timer_idx_ < 0 || cur_flush_timer_idx_ >= ObTmpFileGlobal::FLUSH_TIMER_CNT)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected cur_flush_timer_idx_", KR(ret), K(cur_flush_timer_idx_));
+  } else if (OB_FAIL(TG_SCHEDULE(flush_timer_tg_id_[cur_flush_timer_idx_], flush_task.get_flush_write_block_task(), 0/*delay*/, false/*repeat*/))) {
     LOG_WARN("TG_SCHEDULE tmp file write block task failed", KR(ret), K(flush_timer_tg_id_[cur_flush_timer_idx_]), K(cur_flush_timer_idx_), K(flush_task));
   } else {
     next_state = FlushState::TFFT_WAIT;

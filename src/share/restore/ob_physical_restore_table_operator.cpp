@@ -268,6 +268,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, recover_table);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, using_complement_log);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, backup_compatible);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, sts_credential);
 
      // source_cluster_version
      if (OB_SUCC(ret)) {
@@ -525,6 +526,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_STR_VALUE(kms_encrypt_key, job);
     RETRIEVE_INT_VALUE(concurrency, job);
     RETRIEVE_INT_VALUE(backup_compatible, job);
+    RETRIEVE_STR_VALUE(sts_credential, job);
 
     if (OB_SUCC(ret)) {
       if (name == "backup_dest") {
@@ -869,12 +871,21 @@ int ObPhysicalRestoreTableOperator::update_job_error_info(
   } else {
     ObSqlString sql;
     int64_t affected_rows = 0;
+    char addr_str[OB_IP_PORT_STR_BUFF] = {'\0'};
+    char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+    int64_t addr_pos = 0;
+    int64_t trace_id_pos = 0;
     // update __all_restore_info
-    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET value = '%s : %s(%d) on %s with traceid %s' "
+    if (OB_FAIL(databuff_printf(addr_str, sizeof(addr_str), addr_pos, addr))) {
+      LOG_WARN("call databuff_printf failed", K(ret), K(addr), K(addr_pos));
+    } else if (OB_FAIL(databuff_printf(
+        trace_id_str, sizeof(trace_id_str), trace_id_pos, trace_id))) {
+      LOG_WARN("call databuff_printf failed", K(ret), K(trace_id), K(trace_id_pos));
+    } else if (OB_FAIL(sql.assign_fmt("UPDATE %s SET value = '%s : %s(%d) on %s with traceid %s' "
                                "WHERE job_id = %ld AND name = 'comment'",
                                OB_ALL_RESTORE_JOB_TNAME, mod_str,
                                ob_error_name(return_ret), return_ret,
-                               to_cstring(addr), to_cstring(trace_id),
+                               addr_str, trace_id_str,
                                job_id))) {
       LOG_WARN("failed to set sql", K(ret), K(mod_str), K(return_ret), K(trace_id), K(addr));
     } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {

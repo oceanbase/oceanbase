@@ -37,8 +37,10 @@ void FakeZoneManager::init_zone_manager(const int64_t version, int64_t zone_cnt)
 
   for (int64_t i = 0; i < zone_count_; ++i) {
     zone_infos_[i] = info;
-    zone_infos_[i].zone_ = to_cstring(i + 1);
-    zone_infos_[i].region_.info_ = to_cstring(i/2 + 10);
+    ObCStringHelper helper;
+    // it is safe, zone_ and info_ is ObFixedLengthString, operator= will check NULL and call MEMCPY
+    zone_infos_[i].zone_ = helper.convert(i + 1);
+    zone_infos_[i].region_.info_ = helper.convert(i/2 + 10);
   }
 
   inited_ = true;

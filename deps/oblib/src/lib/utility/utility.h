@@ -86,7 +86,8 @@ char *rtrim(char *str);
 const char *inet_ntoa_s(char *buffer, size_t n, const uint64_t ipport);
 const char *inet_ntoa_s(char *buffer, size_t n, const uint32_t ip);
 
-const char *time2str(const int64_t time_s, const char *format = DEFAULT_TIME_FORMAT);
+const char *time2str(const int64_t time_s, char *buf, const int64_t buf_len,
+                     const char *format = DEFAULT_TIME_FORMAT);
 int escape_range_string(char *buffer, const int64_t length, int64_t &pos, const ObString &in);
 int escape_enter_symbol(char *buffer, const int64_t length, int64_t &pos, const char *src);
 
@@ -176,13 +177,46 @@ inline double max(const double x, const double y)
 template <class T>
 void max(T, T) = delete;
 
-template<oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id = oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
 inline void ob_usleep(const useconds_t v)
 {
-  oceanbase::common::ObSleepEventGuard wait_guard(event_id, 0, (int64_t)v);
+  oceanbase::common::ObSleepEventGuard<event_id> wait_guard((int64_t)v);
   ::usleep(v);
 }
 
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+inline void ob_usleep(const useconds_t v, const bool is_idle_sleep)
+{
+  if (is_idle_sleep) {
+    ObBKGDSessInActiveGuard inactive_guard;
+    ob_usleep(v);
+  } else {
+    ob_usleep(v);
+  }
+
+}
+
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+inline void ob_usleep(const useconds_t v, const int64_t p1, const int64_t p2, const int64_t p3)
+{
+  oceanbase::common::ObSleepEventGuard<event_id> wait_guard((int64_t)v, p1, p2, p3);
+  ::usleep(v);
+}
+
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+inline void ob_usleep(const useconds_t v, const int64_t p1, const int64_t p2, const int64_t p3, const bool is_idle_sleep)
+{
+  if (is_idle_sleep) {
+    ObBKGDSessInActiveGuard inactive_guard;
+    ob_usleep(v, p1, p2, p3);
+  } else {
+    ob_usleep(v, p1, p2, p3);
+  }
+}
 int get_double_expand_size(int64_t &new_size, const int64_t limit_size);
 /**
  * allocate new memory that twice larger to store %oldp

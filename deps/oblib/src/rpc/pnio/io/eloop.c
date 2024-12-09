@@ -60,7 +60,9 @@ void eloop_fire(eloop_t* ep, sock_t* s) {
 static void eloop_refire(eloop_t* ep, int64_t timeout) {
   const int maxevents = 512;
   struct epoll_event events[maxevents];
-  int cnt = ob_epoll_wait(ep->fd, events, maxevents, timeout);
+  int cnt = 0;
+  cnt = ob_epoll_wait(ep->fd, events, maxevents, timeout);
+
   for(int i = 0; i < cnt; i++) {
     sock_t* s = (sock_t*)events[i].data.ptr;
     s->mask |= events[i].events;
@@ -91,8 +93,10 @@ static void sock_destroy(sock_t* s) {
 
 static void eloop_handle_sock_event(sock_t* s) {
   int err = 0;
+  char sock_fd_buf[PNIO_NIO_FD_ADDR_LEN] = {'\0'};
   if (skt(s, ERR) || skt(s, HUP)) {
-    rk_info("sock destroy: sock=%p, connection=%s, s->mask=0x%x", s, T2S(sock_fd, s->fd), s->mask);
+    rk_info("sock destroy: sock=%p, connection=%s, s->mask=0x%x",
+        s, sock_fd_str(s->fd, sock_fd_buf, sizeof(sock_fd_buf)), s->mask);
     sock_destroy(s);
   } else if (0 == (err = s->handle_event(s))) {
     // yield
@@ -104,7 +108,8 @@ static void eloop_handle_sock_event(sock_t* s) {
       dlink_delete(&s->ready_link);
     }
   } else {
-    rk_info("sock destroy: sock=%p, connection=%s, err=%d", s, T2S(sock_fd, s->fd), err);
+    rk_info("sock destroy: sock=%p, connection=%s, err=%d",
+        s, sock_fd_str(s->fd, sock_fd_buf, sizeof(sock_fd_buf)), err);
     sock_destroy(s);
   }
 }

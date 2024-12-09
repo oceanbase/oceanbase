@@ -128,6 +128,9 @@ public:
   static int check_table_exist(
       const ObTableSchema &data_table_schema,
       const ObString &domain_index_name);
+  static int get_rebuild_drop_index_id_and_name(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      obrpc::ObDropIndexArg &arg);
 private:
   static bool is_expr_type_and_distance_algorithm_match(
       const ObItemType expr_type, const ObVectorIndexDistAlgorithm algorithm);

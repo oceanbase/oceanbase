@@ -191,8 +191,8 @@ struct DiagnoseFunctor
         }
         if (OB_SUCC(ret) && v.extra_->type_ >= ObReadExInfo::WITH_TRACE) {
           ObReadExInfoTrace *info = static_cast<ObReadExInfoTrace *>(v.extra_);
-          if (OB_FAIL(databuff_printf(buf_, len_, pos_, ", trace:%s",
-                                      to_cstring(info->trace_id_)))){
+          if (OB_FAIL(databuff_print_multi_objs(buf_, len_, pos_, ", trace:",
+                                      info->trace_id_))){
             // break the print
             bool_ret = false;
           }
@@ -250,12 +250,15 @@ typedef share::ObBaseLeakChecker<ObReadOnlyTxCheckerKey, ObReadOnlyTxCheckerValu
       value.ls_id_ = ctx.ls_id_;                                                         \
       value.tablet_id_ = ctx.tablet_id_;                                                 \
       ctx.check_seq_ = key.seq_;                                                         \
+      ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();                               \
       if (OB_UNLIKELY(tx_debug_level >= 4)) {                                            \
         void* buf = ob_malloc(sizeof(ObReadExInfoBT), ObMemAttr(MTL_ID(), "readleakchecker")); \
         if (OB_NOT_NULL(buf)) {                                                                \
           ObReadExInfoBT *extra_info = new(buf) ObReadExInfoBT();                              \
           extra_info->trace_id_ = *(ObCurTraceId::get_trace_id());                             \
-          extra_info->plan_id_ = ObActiveSessionGuard::get_stat().plan_id_;                    \
+          if (OB_NOT_NULL(di)) {                                                               \
+            extra_info->plan_id_ = di->get_ash_stat().plan_id_;                                \
+          }                                                                                    \
           lbt(extra_info->bt_, sizeof(extra_info->bt_));                                       \
           value.extra_ = extra_info;                                                           \
         }                                                                                      \
@@ -264,14 +267,18 @@ typedef share::ObBaseLeakChecker<ObReadOnlyTxCheckerKey, ObReadOnlyTxCheckerValu
         if (OB_NOT_NULL(buf)) {                                                                   \
           ObReadExInfoTrace *extra_info = new(buf) ObReadExInfoTrace();                           \
           extra_info->trace_id_ = *(ObCurTraceId::get_trace_id());                                \
-          extra_info->plan_id_ = ObActiveSessionGuard::get_stat().plan_id_;                       \
+          if (OB_NOT_NULL(di)) {                                                                  \
+            extra_info->plan_id_ = di->get_ash_stat().plan_id_;                                   \
+          }                                                                                       \
           value.extra_ = extra_info;                                                              \
         }                                                                                         \
       } else if (OB_UNLIKELY(tx_debug_level >= 2)) {                                              \
         void* buf = ob_malloc(sizeof(ObReadExInfoPlan), ObMemAttr(MTL_ID(), "readleakchecker"));  \
         if (OB_NOT_NULL(buf)) {                                                                   \
           ObReadExInfoPlan *extra_info = new(buf) ObReadExInfoPlan();                             \
-          extra_info->plan_id_ = ObActiveSessionGuard::get_stat().plan_id_;                       \
+          if (OB_NOT_NULL(di)) {                                                                  \
+            extra_info->plan_id_ = di->get_ash_stat().plan_id_;                                   \
+          }                                                                                       \
           value.extra_ = extra_info;                                                              \
         }                                                                                         \
       } else if (OB_LIKELY(tx_debug_level >= 1)) {                                                \

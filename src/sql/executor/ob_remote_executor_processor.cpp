@@ -59,7 +59,7 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
                                                  int64_t sys_schema_version,
                                                  const DependenyTableStore &dependency_tables)
 {
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = true;
   bool table_version_equal = false;
   int ret = OB_SUCCESS;
   process_timestamp_ = ObTimeUtility::current_time();
@@ -638,6 +638,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
   int ret = OB_SUCCESS;
   NG_TRACE(exec_remote_plan_begin);
   ObExecRecord exec_record;
+  ObExecutingSqlStatRecord sqlstat_record;
   ObExecTimestamp exec_timestamp;
   exec_timestamp.exec_type_ = RpcProcessor;
   int64_t local_tenant_schema_version = -1;
@@ -668,7 +669,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
 
   // 设置诊断功能环境
   if (OB_SUCC(ret)) {
-    ObSessionStatEstGuard stat_est_guard(session->get_effective_tenant_id(), session->get_sessid());
+    const bool enable_sqlstat =  session->is_sqlstat_enabled();
     SQL_INFO_GUARD(task.get_remote_sql_info()->remote_sql_, session->get_cur_sql_id());
     // 初始化ObTask的执行环节
     //
@@ -676,12 +677,15 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
     // 执行ObTask, 处理结果通过Result返回
     ObWaitEventDesc max_wait_desc;
     ObWaitEventStat total_wait_desc;
-    ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
     {
-      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL, di);
-      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : nullptr);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
       if (enable_perf_event) {
         exec_record.record_start();
+      }
+      if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+        sqlstat_record.record_sqlstat_start_value();
+        sqlstat_record.set_is_in_retry(session->get_is_in_retry());
       }
       if (OB_FAIL(gctx_.sql_engine_->handle_remote_query(plan_ctx->get_remote_sql_info(),
                                                          *exec_ctx_.get_sql_ctx(),
@@ -758,6 +762,11 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
         audit_record.update_event_stage_state();
       }
 
+      if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+        sqlstat_record.record_sqlstat_end_value();
+        sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
+        sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_ ,plan);
+      }
       //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS
       record_sql_audit_and_plan_stat(plan, session);
     }
@@ -837,14 +846,13 @@ int ObRemoteBaseExecuteP<T>::base_after_process()
     //slow mini task, print trace info
     FORCE_PRINT_TRACE(THE_TRACE, "[slow remote task]");
   }
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = false;
   return ret;
 }
 
 template<typename T>
 void ObRemoteBaseExecuteP<T>::base_cleanup()
 {
-  ObActiveSessionGuard::setup_default_ash();
   exec_ctx_.cleanup_session();
   exec_errcode_ = OB_SUCCESS;
   obrpc::ObRpcProcessor<T>::cleanup();
@@ -939,6 +947,7 @@ int ObRpcRemoteExecuteP::process()
   ret = OB_SUCCESS;
   NG_TRACE(exec_remote_plan_begin);
   ObExecRecord exec_record;
+  ObExecutingSqlStatRecord sqlstat_record;
   ObExecTimestamp exec_timestamp;
   exec_timestamp.exec_type_ = RpcProcessor;
   // arg_是一个ObTask对象
@@ -965,9 +974,7 @@ int ObRpcRemoteExecuteP::process()
 
   // 设置诊断功能环境
   if (OB_SUCC(ret)) {
-    ObSessionStatEstGuard stat_est_guard(
-        session->get_effective_tenant_id(),
-        session->get_sessid());
+    const bool enable_sqlstat =  session->is_sqlstat_enabled();
     SQL_INFO_GUARD(task.get_sql_string(), session->get_cur_sql_id());
     // 初始化ObTask的执行环节
     //
@@ -977,12 +984,15 @@ int ObRpcRemoteExecuteP::process()
     ObPhysicalPlanCtx *plan_ctx = NULL;
     ObWaitEventDesc max_wait_desc;
     ObWaitEventStat total_wait_desc;
-    ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
     {
-      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL, di);
-      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : nullptr);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
       if (enable_perf_event) {
-        exec_record.record_start(di);
+        exec_record.record_start();
+      }
+      if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+        sqlstat_record.record_sqlstat_start_value();
+        sqlstat_record.set_is_in_retry(session->get_is_in_retry());
       }
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(exec_ctx_))) {
@@ -1048,6 +1058,11 @@ int ObRpcRemoteExecuteP::process()
         exec_record.wait_count_end_ = total_wait_desc.total_waits_;
         audit_record.exec_record_ = exec_record;
         audit_record.update_event_stage_state();
+      }
+      if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+        sqlstat_record.record_sqlstat_end_value();
+        sqlstat_record.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
+        sqlstat_record.move_to_sqlstat_cache(*session, exec_ctx_.get_sql_ctx()->cur_sql_, &phy_plan_);
       }
 
       //此处代码要放在scanner.set_err_code(ret)代码前,避免ret被都写成了OB_SUCCESS

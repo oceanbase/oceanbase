@@ -348,6 +348,7 @@ public:
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   common::hash::ObHashSet<common::ObTabletID> mview_dep_tablet_set_;
   int64_t wait_reuse_across_sstable_time_;
+  mutable lib::ObMutex mv_mutex_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupCtx);
 };
 

@@ -1055,10 +1055,11 @@ DEF_COMMAND(SERVER, get_ss_phy_block_info, 1, "tenant_id:phy_block_idx")
   } else if (OB_FAIL(client_->get_ss_phy_block_info(arg, result))) {
     COMMON_LOG(ERROR, "send req fail", K(ret));
   } else {
+    ObCStringHelper helper;
     ObSSPhysicalBlock &ss_phy_block_info = result.ss_phy_block_info_;
     fprintf(stdout, "ret=%s\n", ob_error_name(result.ret_));
     fprintf(stdout, "phy_block_id=%ld\n", arg.phy_block_idx_);
-    fprintf(stdout, "%s\n", to_cstring(ss_phy_block_info));
+    fprintf(stdout, "%s\n", helper.convert(ss_phy_block_info));
   }
 
   if (OB_FAIL(ret)) {
@@ -1161,9 +1162,10 @@ DEF_COMMAND(SERVER, get_ss_micro_block_meta, 1, "tenant_id:micro_key_mode:micro_
     } else if (OB_FAIL(client_->get_ss_micro_block_meta(arg, result))) {
       COMMON_LOG(ERROR, "send req fail", K(ret));
     } else {
+      ObCStringHelper helper;
       fprintf(stdout, "ret=%s\n", ob_error_name(result.ret_));
-      fprintf(stdout, "micro_key=%s\n", to_cstring(arg.micro_key_));
-      fprintf(stdout, "micro_meta=%s\n", to_cstring(result.micro_meta_info_));
+      fprintf(stdout, "micro_key=%s\n", helper.convert(arg.micro_key_));
+      fprintf(stdout, "micro_meta=%s\n", helper.convert(result.micro_meta_info_));
     }
   }
 
@@ -1639,9 +1641,10 @@ DEF_COMMAND(SERVER, get_ss_micro_cache_info, 1, "tenant_id")
   } else if (OB_FAIL(client_->get_ss_micro_cache_info(arg, result))) {
     COMMON_LOG(ERROR, "send req fail", K(ret));
   } else {
-    fprintf(stdout, "micro_cache_stat=%s\n", to_cstring(result.micro_cache_stat_));
-    fprintf(stdout, "super_block=%s\n", to_cstring(result.super_block_));
-    fprintf(stdout, "arc_info=%s\n", to_cstring(result.arc_info_));
+    ObCStringHelper helper;
+    fprintf(stdout, "micro_cache_stat=%s\n", helper.convert(result.micro_cache_stat_));
+    fprintf(stdout, "super_block=%s\n", helper.convert(result.super_block_));
+    fprintf(stdout, "arc_info=%s\n", helper.convert(result.arc_info_));
   }
 
   if (OB_FAIL(ret)) {

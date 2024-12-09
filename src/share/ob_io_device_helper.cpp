@@ -153,7 +153,8 @@ int ObSNIODeviceWrapper::get_local_device_from_mgr(share::ObLocalDevice *&local_
 
   common::ObIODevice* device = nullptr;
   common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
-  if(OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, device))) {
+  const ObStorageIdMod storage_id_mod(0, ObStorageUsedMod::STORAGE_USED_DATA);
+  if(OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, storage_id_mod, device))) {
     LOG_WARN("fail to get local device", K(ret));
   } else if (OB_ISNULL(local_device = static_cast<share::ObLocalDevice*>(device))) {
     ret = OB_ERR_UNEXPECTED;
@@ -788,7 +789,7 @@ int ObIODeviceLocalFileOp::pwrite_impl(
         SHARE_LOG(INFO, "pwrite is interrupted before any data is written, just retry", K(errno), KERRMSG);
       } else {
         ret = ObIODeviceLocalFileOp::convert_sys_errno();
-        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), K(write_sz), K(write_offset), K(errno), KERRMSG);
+        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), KP(buffer), K(write_sz), K(write_offset), K(errno), KERRMSG);
       }
     } else {
       buffer += sz;
@@ -872,7 +873,7 @@ int ObIODeviceLocalFileOp::get_block_file_size(
     LOG_WARN("fail to compute block file size", KR(ret), K(sstable_dir), K(reserved_size),
              K(block_size), K(suggest_file_size), K(disk_percentage), K(block_file_size));
   } else if (OB_FAIL(ObIODeviceLocalFileOp::check_disk_space_available(sstable_dir,
-                     block_file_size, reserved_size, old_block_file_size))) {
+                     block_file_size, reserved_size, old_block_file_size, (0 == block_file_size)))) {
     LOG_WARN("fail to check disk space available", KR(ret), K(sstable_dir),
              K(block_file_size), K(reserved_size), K(old_block_file_size));
   }
@@ -922,7 +923,8 @@ int ObIODeviceLocalFileOp::check_disk_space_available(
     const char *sstable_dir,
     const int64_t data_disk_size,
     const int64_t reserved_size,
-    const int64_t used_disk_size)
+    const int64_t used_disk_size,
+    const bool need_report_user_error)
 {
   int ret = OB_SUCCESS;
   struct statvfs svfs;
@@ -938,11 +940,16 @@ int ObIODeviceLocalFileOp::check_disk_space_available(
     SHARE_LOG(WARN, "Failed to get disk space ", K(ret), K(sstable_dir));
   } else {
     // check disk space availability for datafile_size, must satisfy datafile_size < used_disk_size + disk_free_space
-    int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
+    const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
     if (data_disk_size > used_disk_size + free_space) {
       ret = OB_SERVER_OUTOF_DISK_SPACE;
-      LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret),
-          K(free_space), K(used_disk_size), K(data_disk_size));
+      if (need_report_user_error) {
+        LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret),
+            K(free_space), K(reserved_size), K(used_disk_size), K(data_disk_size));
+      } else {
+        LOG_DBA_WARN(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret),
+            K(free_space), K(reserved_size), K(used_disk_size), K(data_disk_size));
+      }
     }
   }
   return ret;

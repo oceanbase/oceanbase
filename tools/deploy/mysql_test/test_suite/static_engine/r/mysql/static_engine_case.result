@@ -55,8 +55,8 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN cast(1, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 1 = 2 THEN 'b' ELSE 'c' END]), filter(nil)
-      values({CASE WHEN cast(1, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 1 = 2 THEN 'b' ELSE 'c' END})
+  0 - output([CASE WHEN cast(1, DECIMAL(4, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 1 = 2 THEN 'b' ELSE 'c' END]), filter(nil)
+      values({CASE WHEN cast(1, DECIMAL(4, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 1 = 2 THEN 'b' ELSE 'c' END})
 select case 1 when '1' then 'a' when 2 then 'b' else 'c' end from dual;
 +-------------------------------------------------------+
 | case 1 when '1' then 'a' when 2 then 'b' else 'c' end |
@@ -131,8 +131,8 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN cast(1, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END]), filter(nil)
-      values({CASE WHEN cast(1, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END})
+  0 - output([CASE WHEN cast(1, DECIMAL(4, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END]), filter(nil)
+      values({CASE WHEN cast(1, DECIMAL(4, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END})
 select case when 1='1' then 'a' when 2 then 'b' else 'c' end from dual;
 +-------------------------------------------------------+
 | case when 1='1' then 'a' when 2 then 'b' else 'c' end |
@@ -149,8 +149,8 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN cast(0, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 0.0 THEN 'b' ELSE 'c' END]), filter(nil)
-      values({CASE WHEN cast(0, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 0.0 THEN 'b' ELSE 'c' END})
+  0 - output([CASE WHEN cast(0, DECIMAL(4, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 0.0 THEN 'b' ELSE 'c' END]), filter(nil)
+      values({CASE WHEN cast(0, DECIMAL(4, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 0.0 THEN 'b' ELSE 'c' END})
 select case when 0='1' then 'a' when 0.0 then 'b' else 'c' end from dual;
 +---------------------------------------------------------+
 | case when 0='1' then 'a' when 0.0 then 'b' else 'c' end |

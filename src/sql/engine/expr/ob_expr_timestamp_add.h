@@ -42,6 +42,7 @@ public:
   static int calc(const int64_t unit_value, common::ObTime &ot, const int64_t ts,
                   const common::ObTimeConvertCtx &cvrt_ctx, int64_t interval,
                   int64_t &delta);
+  static int calc_timestamp_add_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:

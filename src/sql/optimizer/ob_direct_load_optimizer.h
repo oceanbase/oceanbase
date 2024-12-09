@@ -47,13 +47,14 @@ public:
   bool is_insert_overwrite() const { return ObDirectLoadMode::is_insert_overwrite(load_mode_); }
   bool is_insert_into() const { return load_mode_ == ObDirectLoadMode::INSERT_INTO; }
   void reset();
-  TO_STRING_KV(K_(table_id), K_(load_method), K_(insert_mode), K_(load_mode), K_(dup_action),
+  TO_STRING_KV(K_(table_id), K_(load_method), K_(insert_mode), K_(load_mode), K_(load_level), K_(dup_action),
                K_(max_error_row_count), K_(need_sort), K_(can_use_direct_load), K_(use_direct_load), K_(is_optimized));
 public:
   uint64_t table_id_;
   storage::ObDirectLoadMethod::Type load_method_;
   storage::ObDirectLoadInsertMode::Type insert_mode_;
   storage::ObDirectLoadMode::Type load_mode_;
+  storage::ObDirectLoadLevel::Type load_level_;
   sql::ObLoadDupActionType dup_action_;
   int64_t max_error_row_count_;
   bool need_sort_;
@@ -78,7 +79,7 @@ private:
   void enable_by_overwrite();
   int check_semantics();
   int check_support_insert_overwrite(const ObGlobalHint &global_hint);
-  int check_support_direct_load(ObExecContext *exec_ctx, storage::ObDirectLoadLevel::Type load_level);
+  int check_support_direct_load(ObExecContext *exec_ctx);
   int check_direct_load_allow_fallback(ObExecContext *exec_ctx, bool &allow_fallback);
 private:
   ObDirectLoadOptimizerCtx &direct_load_optimizer_ctx_;

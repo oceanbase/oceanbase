@@ -170,10 +170,11 @@ TEST_F(TestDeviceManager, test_device_manager)
   int32_t device_map_cnt = 0;
   ObIODevice* tmp_dev_handle = NULL;
   MEMSET(device_handle, 0 , sizeof(ObIODevice*)*2*max_dev_num);
+  const ObStorageIdMod storage_id_mode(0, ObStorageUsedMod::STORAGE_USED_DATA);
 
   //all the device is same
   for (int i = 0; i < max_dev_num; i++ ) {
-    ASSERT_EQ(OB_SUCCESS, ObDeviceManager::get_local_device(storage_prefix_local, device_handle[i]));
+    ASSERT_EQ(OB_SUCCESS, ObDeviceManager::get_local_device(storage_prefix_local, storage_id_mode, device_handle[i]));
     if (0 != i) {
       ASSERT_EQ(tmp_dev_handle, device_handle[i]);
     } else {
@@ -193,7 +194,7 @@ TEST_F(TestDeviceManager, test_device_manager)
   device_num = manager.get_device_cnt();
   ASSERT_EQ(1, device_num); //since we do not release automatic
 
-  //MAX_DEVICE_INSTANCE different deivce
+ //MAX_DEVICE_INSTANCE different deivce
   for (int i = 0; i < max_dev_num; i++ ) {
     ObObjectStorageInfo tmp_storage_info;
     tmp_storage_info.device_type_ = ObStorageType::OB_STORAGE_OSS;

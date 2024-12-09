@@ -703,6 +703,10 @@ int ObInsertLogPlan::allocate_insert_as_top(ObLogicalOperator *&top,
     insert_op->set_table_partition_info(table_partition_info);
     insert_op->set_lock_row_flag_expr(lock_row_flag_expr);
     insert_op->set_has_instead_of_trigger(insert_stmt->has_instead_of_trigger());
+    if (get_can_use_parallel_das_dml()) {
+      insert_op->set_das_dop(max_dml_parallel_);
+      LOG_TRACE("insert das dop", K(max_dml_parallel_));
+    }
     insert_op->set_is_partition_wise(is_partition_wise);
     if (OB_NOT_NULL(insert_stmt->get_table_item(0))) {
       insert_op->set_append_table_id(insert_stmt->get_table_item(0)->ref_id_);
@@ -853,6 +857,9 @@ int ObInsertLogPlan::check_insert_plan_need_multi_partition_dml(ObTablePartition
   } else if (0 == insert_table_part->get_phy_tbl_location_info().get_partition_cnt()) {
     is_multi_part_dml = true;
     OPT_TRACE("insert table has no partition, force use multi part dml");
+  } else if (use_parallel_das_dml_) {
+    is_multi_part_dml = true;
+    OPT_TRACE("insert table use parallel das dml, force use multi part dml");
   } else if (insert_stmt->has_instead_of_trigger() ||
              index_dml_infos_.count() > 1 ||
              get_optimizer_context().is_batched_multi_stmt() ||
@@ -1814,18 +1821,18 @@ int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&
     LOG_WARN("allocate memory for ObLogSelectInto failed", K(ret));
   } else {
     ObString external_properties;
-    const ObString &format_or_properties = table_schema->get_external_file_format().empty()
+    const ObString &table_format_or_properties = table_schema->get_external_file_format().empty()
                                             ? table_schema->get_external_properties()
                                             : table_schema->get_external_file_format();
     const ObInsertTableInfo& table_info = stmt->get_insert_table_info();
-    if (format_or_properties.empty()) {
+    if (table_format_or_properties.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("external properties is empty", K(ret));
     } else if (table_schema->get_external_properties().empty()) { //目前只支持写odps外表 其他类型暂不支持
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support to insert into external table which is not in odps", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table which is not in odps");
-    } else if (OB_FAIL(ob_write_string(get_allocator(), format_or_properties, external_properties))) {
+    } else if (OB_FAIL(ob_write_string(get_allocator(), table_format_or_properties, external_properties))) {
       LOG_WARN("failed to append string", K(ret));
     } else if (OB_FAIL(select_into->get_select_exprs().assign(table_info.column_conv_exprs_))) {
       LOG_WARN("failed to get select exprs", K(ret));

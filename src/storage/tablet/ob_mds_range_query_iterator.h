@@ -40,12 +40,6 @@ namespace mds
 class MdsDumpKV;
 }
 
-class ObMdsRangeQueryIteratorHelper
-{
-public:
-  static int get_mds_table(const ObTabletHandle &tablet_handle, mds::MdsTableHandle &mds_table);
-};
-
 template <typename K, typename T>
 class ObMdsRangeQueryIterator
 {
@@ -75,6 +69,8 @@ private:
       const mds::UserMdsNode<K, T> &user_node,
       mds::MdsDumpKV &kv);
   static int get_key_from_dump_kv(const mds::MdsDumpKV &kv, K &k);
+  int get_mds_table(const ObTabletHandle &tablet_handle, mds::MdsTableHandle &mds_table);
+  int check_mds_data_complete(const ObTabletHandle &tablet_handle, bool &is_data_complete);
 private:
   bool is_inited_;
   common::ObArenaAllocator allocator_;
@@ -129,11 +125,17 @@ int ObMdsRangeQueryIterator<K, T>::init(
 {
   int ret = common::OB_SUCCESS;
   mds::MdsTableHandle mds_table;
+  bool is_mds_data_complete = false;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
     MDS_LOG(WARN, "init twice", K(ret), K_(is_inited));
-  } else if (OB_FAIL(ObMdsRangeQueryIteratorHelper::get_mds_table(tablet_handle, mds_table))) {
+  } else if (OB_FAIL(check_mds_data_complete(tablet_handle, is_mds_data_complete))) {
+    MDS_LOG(WARN, "failed to check mds data is complete or not.");
+  } else if (!is_mds_data_complete) {
+    ret = OB_EAGAIN;
+    MDS_LOG(INFO, "MDS data is incomplete. Please try again later to retrieve the full dataset.", K(ret));
+  } else if (OB_FAIL(get_mds_table(tablet_handle, mds_table))) {
     if (common::OB_ENTRY_NOT_EXIST == ret) {
       mds_table_end_ = true; // no mds table, directly mds table end
       ret = common::OB_SUCCESS;

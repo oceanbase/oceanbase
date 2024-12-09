@@ -34,6 +34,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_date_diff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  static int eval_date_diff_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDateDiff);

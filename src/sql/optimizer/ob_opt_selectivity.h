@@ -410,7 +410,6 @@ public:
     pk_ids_(),
     column_metas_(),
     ds_level_(ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING),
-    all_used_global_parts_(),
     scale_ratio_(1.0),
     distinct_rows_(0.0),
     table_partition_info_(NULL),
@@ -430,7 +429,8 @@ public:
            common::ObIArray<int64_t> &all_used_part_id,
            common::ObIArray<ObTabletID> &all_used_tablets,
            common::ObIArray<uint64_t> &column_ids,
-           ObIArray<int64_t> &all_used_global_parts,
+           common::ObIArray<int64_t> &stat_part_id,
+           common::ObIArray<int64_t> &hist_part_id,
            const double scale_ratio,
            const OptSelectivityCtx &ctx,
            const ObTablePartitionInfo *table_partition_info,
@@ -463,8 +463,8 @@ public:
   common::ObIArray<ObTabletID> &get_all_used_tablets() { return all_used_tablets_; }
   const common::ObIArray<uint64_t>& get_pkey_ids() const { return pk_ids_; }
   common::ObIArray<OptColumnMeta>& get_column_metas() { return column_metas_; }
-  const common::ObIArray<int64_t>& get_all_used_global_parts() const { return all_used_global_parts_; }
-  common::ObIArray<int64_t> &get_all_used_global_parts() { return all_used_global_parts_; }
+  const common::ObIArray<int64_t>& get_stat_parts() const { return stat_parts_; }
+  const common::ObIArray<int64_t>& get_hist_parts() const { return hist_parts_; }
   double get_scale_ratio() const { return scale_ratio_; }
   void set_scale_ratio(const double scale_ratio) { scale_ratio_ = scale_ratio; }
 
@@ -499,7 +499,7 @@ public:
 
   TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(table_type), K_(rows), K_(stat_type), K_(ds_level),
                K_(all_used_parts), K_(all_used_tablets), K_(pk_ids), K_(column_metas),
-               K_(all_used_global_parts), K_(scale_ratio), K_(stat_locked), K_(distinct_rows), K_(real_rows));
+               K_(scale_ratio), K_(stat_locked), K_(distinct_rows), K_(real_rows));
 private:
   uint64_t table_id_;
   uint64_t ref_table_id_;
@@ -516,7 +516,8 @@ private:
   ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> pk_ids_;
   ObSEArray<OptColumnMeta, 32, common::ModulePageAllocator, true> column_metas_;
   int64_t ds_level_;//dynamic sampling level
-  ObSEArray<int64_t, 64, common::ModulePageAllocator, true> all_used_global_parts_;
+  ObSEArray<int64_t, 1, common::ModulePageAllocator, true> stat_parts_;
+  ObSEArray<int64_t, 1, common::ModulePageAllocator, true> hist_parts_;
   double scale_ratio_;
 
   // only valid for child stmt meta of set distinct stmt
@@ -565,7 +566,8 @@ public:
                                common::ObIArray<ObTabletID> &all_used_tablets,
                                common::ObIArray<uint64_t> &column_ids,
                                const OptTableStatType stat_type,
-                               ObIArray<int64_t> &all_used_global_parts,
+                               common::ObIArray<int64_t> &stat_part_id,
+                               common::ObIArray<int64_t> &hist_part_id,
                                const double scale_ratio,
                                int64_t last_analyzed,
                                bool is_stat_locked,
@@ -944,7 +946,7 @@ public:
                                     const uint64_t column_id,
                                     const ObIArray<ObRawExpr *> &quals,
                                     ObIArray<ColumnItem> &column_items,
-                                    ObQueryRange &query_range,
+                                    ObIAllocator &alloc,
                                     ObQueryRangeArray &ranges);
 
   // @brief 检测OR中 expr 对于第 index 个子表达式的互斥性, 只检测 c1 = v 的情况,
@@ -1182,6 +1184,96 @@ public:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptSelectivity);
+};
+
+class ObHistSelHelper
+{
+public:
+  ObHistSelHelper():
+    hist_scale_(-1),
+    density_(0.0),
+    column_expr_(NULL),
+    is_valid_(false) {}
+
+  virtual ~ObHistSelHelper() = default;
+
+  int init(const OptTableMetas &table_metas,
+           const OptSelectivityCtx &ctx,
+           const ObColumnRefRawExpr &col);
+  int get_sel(const OptSelectivityCtx &ctx,
+              double &sel);
+
+  bool is_valid() const { return is_valid_; }
+  ObIArray<ObOptColumnStatHandle> &get_handlers() { return handlers_; }
+  ObIArray<double> &get_part_rows() { return part_rows_; }
+  double get_hist_scale() { return hist_scale_; }
+  const ObColumnRefRawExpr *get_column_expr() { return column_expr_; }
+
+protected:
+  virtual int inner_get_sel(const OptSelectivityCtx &ctx,
+                            const ObHistogram &histogram,
+                            double &sel,
+                            bool &is_rare_value)
+  {
+    return OB_ERR_UNEXPECTED;
+  }
+
+protected:
+  ObSEArray<ObOptColumnStatHandle, 4> handlers_;
+  ObSEArray<double, 4> part_rows_;
+  double hist_scale_;
+  double density_;
+  const ObColumnRefRawExpr *column_expr_;
+  bool is_valid_;
+};
+
+class ObHistEqualSelHelper: public ObHistSelHelper
+{
+public:
+  virtual ~ObHistEqualSelHelper() = default;
+
+  int set_compare_value(const OptSelectivityCtx &ctx,
+                        const ObRawExpr *const_expr,
+                        bool &is_valid) {
+    return ObOptSelectivity::get_compare_value(
+              ctx, column_expr_, const_expr, compare_value_, is_valid);
+  }
+  void set_compare_value(const ObObj &value) {
+    compare_value_ = value;
+  }
+protected:
+  virtual int inner_get_sel(const OptSelectivityCtx &ctx,
+                            const ObHistogram &histogram,
+                            double &sel,
+                            bool &is_rare_value) override;
+private:
+  ObObj compare_value_;
+};
+
+class ObHistRangeSelHelper: public ObHistSelHelper
+{
+public:
+  virtual ~ObHistRangeSelHelper() = default;
+
+  int init(const OptTableMetas &table_metas,
+           const OptSelectivityCtx &ctx,
+           const ObColumnRefRawExpr &col);
+
+  int set_ranges(const ObQueryRangeArray &ranges) {
+    return ranges_.assign(ranges);
+  }
+
+  ObObj &get_min_value() { return hist_min_value_; }
+  ObObj &get_max_value() { return hist_max_value_; }
+protected:
+  virtual int inner_get_sel(const OptSelectivityCtx &ctx,
+                            const ObHistogram &histogram,
+                            double &sel,
+                            bool &is_rare_value) override;
+private:
+  ObQueryRangeArray ranges_;
+  ObObj hist_min_value_;
+  ObObj hist_max_value_;
 };
 
 }

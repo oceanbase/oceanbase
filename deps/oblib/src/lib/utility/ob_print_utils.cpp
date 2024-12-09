@@ -14,6 +14,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/string/ob_string.h"
 #include "lib/thread_local/ob_tsi_factory.h"
+#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 namespace oceanbase
 {
 namespace common
@@ -231,6 +232,24 @@ int64_t ObHexStringWrap::to_string(char *buf, const int64_t len) const
 
 ////////////////////////////////////////////////////////////////
 template <>
+int64_t to_string<int32_t>(const int32_t &v, char *buffer, const int64_t buffer_size)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_FAIL(databuff_printf(buffer, buffer_size, pos, "%d", v))) {
+  } else {}
+  return pos;
+}
+template <>
+int64_t to_string<uint32_t>(const uint32_t &v, char *buffer, const int64_t buffer_size)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_FAIL(databuff_printf(buffer, buffer_size, pos, "%u", v))) {
+  } else {}
+  return pos;
+}
+template <>
 int64_t to_string<int64_t>(const int64_t &v, char *buffer, const int64_t buffer_size)
 {
   int ret = OB_SUCCESS;
@@ -291,8 +310,26 @@ const char *to_cstring<int64_t>(const int64_t &v)
 {
   return to_cstring<int64_t>(v, BoolType<false>());
 }
-
 ////////////////////////////////////////////////////////////////
+
+const int64_t ObCStringHelperV2::EXPAND_BUF_LEN;
+const int64_t ObCStringHelperV2::HELPER_MEMORY_LIMIT;
+
+ERRSIM_POINT_DEF(EN_CSTRING_HELPER_FORCE_MALLOC);
+bool ObCStringHelperV2::is_force_alloc()
+{
+  return EN_CSTRING_HELPER_FORCE_MALLOC;
+}
+
+void ObCStringHelperV2::force_alloc()
+{
+  buf_ = reinterpret_cast<char *>(allocator_.alloc(buf_len_));
+  if (nullptr == buf_) {
+    LIB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED,
+        "failed to allocate memory, will use reserve_buf");
+    buf_ = reserve_buf_;
+  }
+}
 
 int databuff_printf(char *buf, const int64_t buf_len, const char *fmt, ...)
 {
@@ -345,6 +382,11 @@ int databuff_printf(char *&buf, int64_t &buf_len, int64_t &pos,
   }
 
   return ret;
+}
+
+int databuff_print_one_obj(char* buf, const int64_t buf_len, int64_t &pos, const char *p_obj)
+{
+  return databuff_printf(buf, buf_len, pos, "%s", nullptr == p_obj ? "NULL" : p_obj);
 }
 
 int multiple_extend_buf(char *&buf, int64_t &buf_len, ObIAllocator &alloc)
@@ -461,42 +503,6 @@ int databuff_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const
         key, std::min(static_cast<int32_t>(buf_len - pos), obj.length()), obj.ptr());
   }
   return ret;
-}
-
-int64_t CStringBufMgr::acquire(char *&buffer)
-{
-  int64_t buf_len = 0;
-  if (0 == level_) {
-    buffer = local_buf_ + pos_;
-    buf_len = BUF_SIZE - pos_;
-  } else {
-    BufNode *node = NULL;
-    node = list_.head_;
-    if (NULL != node) {
-      list_.head_ = node->pre_;
-    }
-    if ((NULL != node)
-      || (NULL != (node = OB_NEW(BufNode, ObModIds::OB_THREAD_BUFFER)))) {
-      buffer = node->buf_ + node->pos_;
-      node->pre_ = curr_;
-      curr_ = node;
-      buf_len = BUF_SIZE - node->pos_;
-    } else {
-      buffer = NULL;
-    }
-  }
-  return buf_len;
-}
-
-void CStringBufMgr::try_clear_list()
-{
-  if (0 == level_) {
-    while (NULL != list_.head_) {
-      BufNode *node = list_.head_;
-      list_.head_ = node->pre_;
-      OB_DELETE(BufNode, ObModIds::OB_THREAD_BUFFER, node);
-    }
-  }
 }
 
 } // end namespace common

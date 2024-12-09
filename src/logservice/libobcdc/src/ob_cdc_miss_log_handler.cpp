@@ -65,8 +65,9 @@ int MissLogTask::try_change_server(const int64_t timeout, volatile bool &stop_fl
         ret = OB_NEED_RETRY;
         LOG_WARN("next_server is not valid, need_retry", KR(ret), K(req_svr), K_(ls_fetch_ctx));
       } else {
+        ObCStringHelper helper;
         _LOG_INFO("[MISS_LOG][CHANGE_SVR][FROM=%s][TO=%s][PART_TRANS_ID=%s]",
-            to_cstring(svr_), to_cstring(req_svr), to_cstring(get_part_trans_id()));
+            helper.convert(svr_), helper.convert(req_svr), helper.convert(get_part_trans_id()));
         svr_ = req_svr;
         need_change_server_ = false;
       }
@@ -397,9 +398,9 @@ int ObCDCMissLogHandler::build_batch_misslog_lsn_arr_(
       }
     }
   }
-
+  ObCStringHelper helper;
   _LOG_INFO("[MISS_LOG][BATCH_MISSLOG][PART_TRANS_ID=%s][PROGRESS=%ld/%ld][BATCH_SIZE=%ld]",
-        to_cstring(missing_log_info.get_part_trans_id()),
+        helper.convert(missing_log_info.get_part_trans_id()),
         fetched_log_idx,
         miss_log_cnt,
         batched_misslog_lsn_arr.count());
@@ -475,8 +476,9 @@ int ObCDCMissLogHandler::read_batch_misslog_(
 
   int64_t read_batch_missing_cost = get_timestamp() - start_ts;
   const int64_t handle_miss_progress = missing_info.get_last_misslog_progress();
+  ObCStringHelper helper;
   _LOG_INFO("[MISS_LOG][READ_MISSLOG][PART_TRANS_ID=%s][COST=%ld][PROGRESS_CNT=%ld/%ld][PROGRESS_SCN=%ld(%s)]",
-      to_cstring(missing_info.get_part_trans_id()),
+      helper.convert(missing_info.get_part_trans_id()),
       read_batch_missing_cost,
       fetched_missing_log_cnt,
       org_misslog_arr.count(),
@@ -579,11 +581,12 @@ int ObCDCMissLogHandler::fetch_miss_log_with_retry_(
       }
 
       if (OB_TIMEOUT == ret) {
+        ObCStringHelper helper;
         // allow adjust max_rpc_timeout by change config in libobcdc.conf while fetch_log_timeout * 2 is larger than MAX_RPC_TIMEOUT
         const int64_t max_rpc_timeout = std::max(MAX_RPC_TIMEOUT, g_rpc_timeout);
         const int64_t new_fetch_log_timeout = std::min(max_rpc_timeout, fetch_log_timeout * 2);
         _LOG_INFO("[MISS_LOG][FETCH_TIMEOUT][ADJUST_FETCH_MISSLOG_TIMEOUT][FROM=%s][TO=%s][rpc_rcode=%s][rpc_response=%s]",
-            TVAL_TO_STR(fetch_log_timeout), TVAL_TO_STR(new_fetch_log_timeout), to_cstring(rcode), to_cstring(resp));
+            TVAL_TO_STR(fetch_log_timeout), TVAL_TO_STR(new_fetch_log_timeout), helper.convert(rcode), helper.convert(resp));
         fetch_log_timeout = new_fetch_log_timeout;
       }
     }
@@ -608,11 +611,12 @@ int ObCDCMissLogHandler::fetch_miss_log_with_retry_(
     ret = OB_IN_STOP_STATE;
   }
 
+  ObCStringHelper helper;
   _LOG_INFO("[MISS_LOG][FETCH_MISSLOG][ret=%d][PART_TRANS_ID=%s][COST=%ld][LOG_CNT=%ld][FETCH_STATUS=%s][FETCH_ROUND=%ld]", ret,
-      to_cstring(misslog_task.get_part_trans_id()),
+      helper.convert(misslog_task.get_part_trans_id()),
       cur_ts - start_ts,
       miss_log_array.count(),
-      to_cstring(fetch_srpc.get_resp().get_fetch_status()),
+      helper.convert(fetch_srpc.get_resp().get_fetch_status()),
       try_cnt);
 
   return ret;
@@ -717,7 +721,7 @@ int ObCDCMissLogHandler::fetch_miss_log_direct_(
         if (get_timestamp() > time_upper_limit) {
           is_timeout = true;
         } else if (OB_FAIL(entry_iter.init(tenant_id, ls_id, cur_scn, missing_lsn,
-            LSN(palf::LOG_MAX_LSN_VAL), buffer_pool, log_ext_handler))) {
+            LSN(palf::LOG_MAX_LSN_VAL), buffer_pool, log_ext_handler, archive::ARCHIVE_FILE_DATA_BUF_SIZE))) {
           LOG_WARN("remote entry iter init failed", KR(ret));
         } else if (OB_FAIL(entry_iter.next(log_entry, lsn, buf, buf_size))) {
           retry_on_err =true;

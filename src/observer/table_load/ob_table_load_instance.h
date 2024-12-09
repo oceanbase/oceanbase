@@ -70,7 +70,9 @@ private:
   int abort_redef_table();
 private:
   // direct load
-  int start_direct_load(const ObTableLoadParam &param, const common::ObIArray<uint64_t> &column_ids);
+  int start_direct_load(const ObTableLoadParam &param,
+                        const common::ObIArray<uint64_t> &column_ids,
+                        const common::ObIArray<ObTabletID> &tablet_ids);
   int wait_begin_finish();
   int end_direct_load(const bool commit);
   int add_tx_result_to_user_session();

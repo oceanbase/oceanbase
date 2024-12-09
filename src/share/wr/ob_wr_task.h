@@ -21,6 +21,9 @@ namespace oceanbase
 namespace share
 {
 
+#define LAST_SNAPSHOT_RECORD_SNAP_ID -1L
+#define LAST_SNAPSHOT_RECORD_CLUSTER_ID -1L
+#define LAST_SNAPSHOT_RECORD_SVR_PORT -1L
 
 enum class ObWrSnapshotStatus : int64_t
 {
@@ -35,6 +38,8 @@ enum class ObWrSnapshotFlag : int64_t
   SCHEDULE = 0,
   MANUAL,
   IMPORT,
+  LAST_SCHEDULED_SNAPSHOT,
+  LAST_AHEAD_SNAPSHOT,
 };
 
 class WorkloadRepositoryTask : public common::ObTimerTask
@@ -43,7 +48,7 @@ public:
   WorkloadRepositoryTask();
   virtual ~WorkloadRepositoryTask() {};
   DISABLE_COPY_ASSIGN(WorkloadRepositoryTask);
-  int schedule_one_task(int64_t interval = 0);
+  int schedule_one_task(int64_t interval_us = 0);
   int modify_snapshot_interval(int64_t minutes);
   void cancel_current_task();
   int init();
@@ -160,10 +165,11 @@ public:
   static int get_init_wr_control_sql_string(const int64_t tenant_id,
                                             ObSqlString &sql);
   bool is_running_task() const { return is_running_task_; };
-  int64_t get_snapshot_interval() const { return snapshot_interval_;};
+  int64_t get_snapshot_interval(bool is_lazy_load = true);
+  // when is_lazy_load is false, the func will send inner SQL, avoid frequently calling
   static bool check_tenant_can_do_wr_task(uint64_t tenant_id);
   INHERIT_TO_STRING_KV("ObTimerTask", ObTimerTask,
-                        K_(snapshot_interval), K_(tg_id), K_(timeout_ts), K_(is_running_task));
+                        K_(tg_id), K_(timeout_ts), K_(is_running_task));
   static const int64_t DEFAULT_SNAPSHOT_RETENTION = 7L * 24 * 60 ; // 7 days
   static const int64_t ESTIMATE_PS_RESERVE_TIME = 100 * 1000;  // different server's clock skew.
   static const int64_t DEFAULT_SNAPSHOT_INTERVAL = 60;
@@ -187,11 +193,14 @@ private:
                                         ObWrSnapshotFlag snap_flag);
   static int get_last_snapshot_task_begin_ts(int64_t snap_id, int64_t &task_begin_ts);
   obrpc::ObWrRpcProxy wr_proxy_;
-  int64_t snapshot_interval_;  // in minutes
   int tg_id_;
   int64_t timeout_ts_;
   bool is_running_task_;
   bool is_inited_;
+  int64_t lazy_snapshot_interval_min_;
+  // Since accessing the snapshot_interval requires sending inner SQL,
+  // after adding the feature of ASH early dump into disk, ASH thread will frequently send requests, blocking ASH execution.
+  // Therefore, lazy_snapshot_interval_min_ is added to utilize a lazy loading mode to avoid the issue.
 };
 
 }//end namespace share

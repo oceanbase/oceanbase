@@ -618,6 +618,7 @@ int ObCosWrapper::create_cos_handle(
     OB_COS_customMem &custom_mem,
     const struct ObCosAccount &account,
     const bool check_md5,
+    const char *cos_sts_token,
     ObCosWrapper::Handle **h)
 {
   int ret = OB_SUCCESS;
@@ -666,6 +667,9 @@ int ObCosWrapper::create_cos_handle(
       cos_str_set(&ctx->options->config->access_key_id, account.access_id_);
       cos_str_set(&ctx->options->config->access_key_secret, account.access_key_);
       cos_str_set(&ctx->options->config->appid, account.appid_);
+      if (nullptr != cos_sts_token) {
+        cos_str_set(&ctx->options->config->sts_token, cos_sts_token);
+      }
       ctx->options->config->is_cname = 0;
       // connection timeout, default 60s
       ctx->options->ctl->options->connect_timeout = 60;

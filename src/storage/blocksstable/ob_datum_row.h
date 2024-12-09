@@ -471,6 +471,21 @@ public:
   const sql::ObExpr *expr_;
 };
 
+OB_INLINE int64_t ObStorageDatumWrapper::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (nullptr != buf && buf_len > 0) {
+    pos = datum_.storage_to_string(buf, buf_len - 1, for_dump_);
+    if (pos >= 0 && pos < buf_len) {
+      buf[pos] = '\0';
+    }
+  } else {
+    pos = 0;
+    buf[0] = '\0';
+  }
+  return pos;
+}
+
 } // namespace blocksstable
 } // namespace oceanbase
 #endif

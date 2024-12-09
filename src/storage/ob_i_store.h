@@ -485,7 +485,8 @@ struct ObStoreCtx
                K_(table_version),
                K_(mvcc_acc_ctx),
                K_(tablet_stat),
-               K_(is_read_store_ctx));
+               K_(is_read_store_ctx),
+               K_(update_full_column));
   share::ObLSID ls_id_;
   storage::ObLS *ls_;                              // for performance opt
   int16_t branch_;                                 // parallel write id
@@ -496,6 +497,7 @@ struct ObStoreCtx
   memtable::ObMvccAccessCtx mvcc_acc_ctx_;         // all txn relative context
   storage::ObTabletStat tablet_stat_;              // used for collecting query statistics
   bool is_read_store_ctx_;
+  bool update_full_column_;
   int64_t check_seq_;
 };
 

@@ -1812,6 +1812,7 @@ void ObTenantDagWorker::run1()
     } else {
       ObThreadCondGuard guard(cond_);
       while (NULL == task_ && DWS_FREE == status_ && !has_set_stop()) {
+        ObBKGDSessInActiveGuard inactive_guard;
         cond_.wait(SLEEP_TIME_MS);
       }
     }
@@ -1839,6 +1840,7 @@ int ObTenantDagWorker::yield()
       } else if (DWS_RUNNING == status_ && MTL(ObTenantDagScheduler*)->try_switch(*this)) {
         status_ = DWS_WAITING;
         while (DWS_WAITING == status_) {
+          ObBKGDSessInActiveGuard guard;
           cond_.wait(SLEEP_TIME_MS);
         }
         ObCurTraceId::set(task_->get_dag()->get_dag_id());
@@ -2387,9 +2389,14 @@ void ObDagPrioScheduler::try_update_adaptive_task_limit_(const int64_t batch_siz
   int tmp_ret = OB_SUCCESS;
   double min_cpu = 0.0;
   double max_cpu = 0.0;
+  const int64_t adaptive_worker_limit = limits_ * 2;
 
-  if (dag_list_[READY_DAG_LIST].get_size() <= batch_size) {
+  if (!is_compaction_dag_prio()) {
+    // do nothing
+  } else if (dag_list_[READY_DAG_LIST].get_size() <= batch_size) {
     adaptive_task_limit_ = limits_; // dag count is OK, reset to the default value
+  } else if (adaptive_task_limit_ >= adaptive_worker_limit) {
+    // adaptive limit reached the limit, cannot inc
   } else if (OB_TMP_FAIL(GCTX.omt_->get_tenant_cpu(MTL_ID(), min_cpu, max_cpu))) {
     COMMON_LOG_RET(WARN, tmp_ret, "failed to get tenant cpu count");
   } else if (std::round(max_cpu) * ADAPTIVE_PERCENT <= adaptive_task_limit_) {
@@ -2400,7 +2407,7 @@ void ObDagPrioScheduler::try_update_adaptive_task_limit_(const int64_t batch_siz
     const int64_t mem_allow_max_thread = lib::get_tenant_memory_remain(MTL_ID()) * ADAPTIVE_PERCENT / estimate_mem_per_thread;
     if (mem_allow_max_thread >= adaptive_task_limit_ * 5) {
       ++adaptive_task_limit_;
-      FLOG_INFO("[ADAPTIVE_SCHED] increment adaptive task limit", K(priority_), K(adaptive_task_limit_));
+      FLOG_INFO("[ADAPTIVE_SCHED] increment adaptive task limit", K(priority_), K(adaptive_task_limit_), K(adaptive_worker_limit), K(max_cpu));
     }
   }
 }
@@ -2757,8 +2764,6 @@ void ObDagPrioScheduler::pause_worker_(ObTenantDagWorker &worker)
 int ObDagPrioScheduler::loop_ready_dag_list(bool &is_found)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-
   {
     ObMutexGuard guard(prio_lock_);
     if (running_task_cnts_ < adaptive_task_limit_) {
@@ -3802,6 +3807,7 @@ int ObDagNetScheduler::loop_finished_dag_net_list()
 int ObDagNetScheduler::loop_blocking_dag_net_list()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_ISNULL(scheduler_)) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "scheduler is null", KP(scheduler_));
@@ -3815,13 +3821,16 @@ int ObDagNetScheduler::loop_blocking_dag_net_list()
       LOG_DEBUG("loop blocking dag net list", K(ret), KPC(cur), K(rest_cnt));
       tmp = cur;
       cur = cur->get_next();
-      if (tmp->is_cancel() || OB_FAIL(tmp->start_running())) { // call start_running function
-        if (OB_FAIL(ret)) {
-          COMMON_LOG(WARN, "failed to start running or be canceled", K(ret), KPC(cur));
-        }
+      if (tmp->is_cancel()) {
         (void) finish_dag_net_without_lock(*tmp);
         (void) erase_dag_net_list_or_abort(BLOCKING_DAG_NET_LIST, tmp);
         (void) scheduler_->free_dag_net(tmp); // set tmp nullptr
+      } else if (OB_TMP_FAIL(tmp->start_running())) {
+        // If start running failed, need call clear_dag_net_ctx() to release some resources.
+        // Move this dag net from blocking to finished list to avoid dead lock.
+        (void) erase_dag_net_list_or_abort(BLOCKING_DAG_NET_LIST, tmp);
+        (void) add_dag_net_list_or_abort(FINISHED_DAG_NET_LIST, tmp);
+        COMMON_LOG(WARN, "failed to start running, move to finished list", K(tmp_ret), KPC(tmp));
       } else {
         tmp->set_start_time();
         --rest_cnt;
@@ -3872,7 +3881,7 @@ int ObDagNetScheduler::cancel_dag_net(const ObDagId &dag_id)
       } else {
         LOG_WARN("failed to get dag id from dag net", K(ret), K(dag_id));
       }
-    } else if (OB_ISNULL(dag_net_key)) {
+    } else if(OB_ISNULL(dag_net_key)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dag net key should not be NULL", K(ret), K(dag_id), KP(dag_net));
     } else if (OB_FAIL(dag_net_map_.get_refactored(dag_net_key, dag_net))) {
@@ -4616,6 +4625,7 @@ void ObTenantDagScheduler::run1()
             ObThreadCondGuard guard(scheduler_sync_);
             if (OB_SUCC(guard.get_ret())) {
               try_reclaim_threads();
+              ObBKGDSessInActiveGuard inactive_guard;
               scheduler_sync_.wait(SCHEDULER_WAIT_TIME_MS);
             }
           } else {
@@ -4825,13 +4835,13 @@ int ObTenantDagScheduler::loop_ready_dag_lists()
 {
   int ret = OB_SUCCESS;
   bool is_found = false;
-  if (get_total_running_task_cnt() < get_work_thread_num()) {
-    for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < ObDagPrio::DAG_PRIO_MAX; ++i) {
-      if (OB_FAIL(prio_sche_[i].loop_ready_dag_list(is_found))) {
-        COMMON_LOG(WARN, "fail to loop ready dag list", K(ret), "priority", i);
-      }
+
+  for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < ObDagPrio::DAG_PRIO_MAX; ++i) {
+    if (OB_FAIL(prio_sche_[i].loop_ready_dag_list(is_found))) {
+      COMMON_LOG(WARN, "fail to loop ready dag list", K(ret), "priority", i);
     }
   }
+
   if (!is_found) {
     ret = OB_ENTRY_NOT_EXIST;
   }
@@ -4857,7 +4867,11 @@ int ObTenantDagScheduler::dispatch_task(ObITask &task, ObTenantDagWorker *&ret_w
       if (OB_SUCC(ret)) {
         ret_worker = free_workers_.remove_first();
         ret_worker->set_task(&task);
-        ret_worker->set_function_type(OB_DAG_PRIOS[priority].function_type_);
+        if (is_valid_dag_priority(static_cast<ObDagPrio::ObDagPrioEnum>(priority))) {
+          ret_worker->set_function_type(OB_DAG_PRIOS[priority].function_type_);
+        } else {
+          ret_worker->set_function_type(ObFunctionType::DEFAULT_FUNCTION);
+        }
       }
     }
   }

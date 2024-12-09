@@ -296,7 +296,7 @@ int ObMajorMergeProgressChecker::prepare_unfinish_table_ids()
   }
   const ObSimpleTableSchemaV2 *index_simple_schema = nullptr;
   ObTableCompactionInfo table_compaction_info;
-  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_INDEX_PER_TABLE> index_schemas;
+  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> index_schemas;
   ObSEArray<uint64_t, 50> not_validate_index_ids;
   int64_t start_idx = 0;
   int64_t end_idx = 0;
@@ -515,6 +515,7 @@ int ObMajorMergeProgressChecker::check_progress()
   const int64_t start_time = ObTimeUtility::fast_current_time();
   ObRSCompactionTimeGuard tmp_time_guard;
   bool exist_uncompacted_table = true;
+  DEBUG_SYNC(RS_CHECK_MERGE_PROGRESS);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
@@ -1049,7 +1050,7 @@ int ObMajorMergeProgressChecker::prepare_fts_group(
         LOG_WARN("failed to push doc word index", KR(ret), K(idx), KPC(index_schema), KPC(doc_word_schema));
       }
     }
-  }
+  } // for
   if (OB_FAIL(ret) || !fts_group.is_valid()) {
   } else if (OB_FAIL(fts_group_array_.push_back(fts_group))) {
     LOG_WARN("failed to prepare push fts group", KR(ret), K(fts_group));

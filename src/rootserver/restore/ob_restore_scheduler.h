@@ -122,6 +122,8 @@ private:
   int wait_restore_safe_mview_merge_info_();
   int try_collect_ls_mv_merge_scn_(const share::SCN &tenant_mv_merge_scn);
   int update_restore_progress_by_bytes_(const ObPhysicalRestoreJob &job, const int64_t total_bytes, const int64_t finish_bytes);
+  int set_tenant_sts_crendential_config_(common::ObISQLClient &proxy,
+      const uint64_t tenant_id, const share::ObPhysicalRestoreJob &job_info);
 private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

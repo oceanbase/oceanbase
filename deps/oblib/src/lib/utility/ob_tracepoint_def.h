@@ -349,6 +349,8 @@ GLOBAL_ERRSIM_POINT_DEF(517, EN_DDL_DIRECT_LOAD_WAIT_TABLE_LOCK_FAIL, "");
 GLOBAL_ERRSIM_POINT_DEF(518, EN_DDL_LOBID_CACHE_SIZE_INJECTED, "");
 GLOBAL_ERRSIM_POINT_DEF(519, EN_DDL_EXECUTE_FAILED, "");
 GLOBAL_ERRSIM_POINT_DEF(520, EN_DDL_RETRY_WRITE_SLICE_AFTER_SUCC, "");
+GLOBAL_ERRSIM_POINT_DEF(521, EN_BLOCK_SPLIT_BEFORE_SSTABLES_SPLIT, "");
+GLOBAL_ERRSIM_POINT_DEF(522, EN_BLOCK_LOB_SPLIT_BEFORE_SSTABLES_SPLIT, "");
 
 // vec index
 GLOBAL_ERRSIM_POINT_DEF(530, EN_VEC_INDEX_DROP_SHARE_TABLE_ERR, "");
@@ -378,7 +380,7 @@ GLOBAL_ERRSIM_POINT_DEF(558, EN_CHECK_REWRITE_ITER_CONVERGE, "Reporting error wh
 GLOBAL_ERRSIM_POINT_DEF(559, EN_PRINT_CONSTRAINTS_INFO, "show constraints info when explain query plan");
 GLOBAL_ERRSIM_POINT_DEF(560, EN_CBQT_IGNORE_COST, "Whether ignore the cost when do cost based transformation");
 GLOBAL_ERRSIM_POINT_DEF(561, EN_PX_RANDOM_SHUFFLE_WITHOUT_STATISTIC_INFORMATION, "Use px random shuffle even statistical information do not exist.");
-
+GLOBAL_ERRSIM_POINT_DEF(562, EN_EXTERNAL_TABLE_ORACLE, "Whether enable external table read and write in oracle mode");
 // 600-700 For PX use
 GLOBAL_ERRSIM_POINT_DEF(600, EN_PX_SQC_EXECUTE_FAILED, "");
 GLOBAL_ERRSIM_POINT_DEF(601, EN_PX_SQC_INIT_FAILED, "Used to simulate the scenario of failure to init sub query coordinator");
@@ -458,6 +460,7 @@ GLOBAL_ERRSIM_POINT_DEF(749, EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM, ""
 // please add new trace point after 750
 GLOBAL_ERRSIM_POINT_DEF(751, EN_SESSION_LEAK_COUNT_THRESHOLD, "used to control the threshold of report session leak ERROR");
 GLOBAL_ERRSIM_POINT_DEF(752, EN_PL_MEMORY_ALLOCA_SWITCH, "used to control the strage of obplallocator memory alloc");
+GLOBAL_ERRSIM_POINT_DEF(753, EN_PL_PACKAGE_ENCODE_SWITCH, "used to control the strage of package state encode");
 GLOBAL_ERRSIM_POINT_DEF(760, EN_DISABLE_TABLET_MINOR_MERGE, "used to stop scheduling minor merge");
 GLOBAL_ERRSIM_POINT_DEF(761, EN_FAST_RECLAIM_THREAD, "used to speed up reclaiming thread");
 GLOBAL_ERRSIM_POINT_DEF(800, EN_END_PARTICIPANT, "");
@@ -599,5 +602,6 @@ GLOBAL_ERRSIM_POINT_DEF(2453, EN_ENABLE_NEW_RESULT_META_DATA, "For testing enabl
 
 GLOBAL_ERRSIM_POINT_DEF(2501, EN_CHECK_SORT_CMP, "Used to check the legality of the compare method for std::sort");
 GLOBAL_ERRSIM_POINT_DEF(2502, EN_ENABLE_SHARED_STORAGE_COLUMN_GROUP, "whether to enable column group under shared storage mode");
+GLOBAL_ERRSIM_POINT_DEF(2503, EN_OBJECT_STORAGE_IO_RETRY, "whether to enable probability-based retries for object storage IO");
 
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

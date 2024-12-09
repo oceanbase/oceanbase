@@ -164,6 +164,7 @@ src/sql/parser/sql_parser_oracle_single_byte_mode_tab.h
 src/sql/parser/non_reserved_keywords_oracle_single_byte_mode.c
 src/sql/parser/_gen_parser.output
 src/sql/parser/_gen_parser.error
+src/sql/parser/_MD5
 src/pl/parser/pl_parser_mysql_mode_lex.c
 src/pl/parser/pl_parser_mysql_mode_lex.h
 src/pl/parser/pl_parser_mysql_mode_tab.c
@@ -174,6 +175,7 @@ src/pl/parser/pl_parser_oracle_mode_tab.c
 src/pl/parser/pl_parser_oracle_mode_tab.h
 src/pl/parser/_gen_parser.error
 src/pl/parser/_gen_pl_parser.output
+src/pl/parser/_MD5
 src/pl/parser/pl_parser_mysql_mode.output
 src/pl/parser/pl_parser_oracle_mode.output
 src/share/inner_table/sys_package/system_package.cpp

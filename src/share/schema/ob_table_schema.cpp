@@ -1302,6 +1302,162 @@ int ObSimpleTableSchemaV2::get_part_id_by_tablet(const ObTabletID &tablet_id, in
   return ret;
 }
 
+int ObSimpleTableSchemaV2::get_all_first_level_part_ids(ObIArray<int64_t> &first_level_part_ids) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(PARTITION_LEVEL_TWO != get_part_level()) ||
+      OB_ISNULL(partition_array_) || partition_num_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part_array is null or is empty",
+        K(ret), KP_(partition_array), K_(partition_num), K(get_part_level()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_num_; i++) {
+    if (OB_ISNULL(partition_array_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition is null", K(ret));
+    } else if (OB_FAIL(first_level_part_ids.push_back(partition_array_[i]->get_part_id()))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSimpleTableSchemaV2::get_part_ids_by_subpart_ids(const ObIArray<int64_t> &subpart_ids,
+                                                       ObIArray<int64_t> &part_ids,
+                                                       int64_t &subpart_cnt_in_parts) const
+{
+  int ret = OB_SUCCESS;
+  subpart_cnt_in_parts = 0;
+  ObHashSet<int64_t> subpart_hashset;
+  ObPartition **part_array = NULL;
+  int64_t part_num = get_partition_num();
+  part_ids.reuse();
+  if (OB_UNLIKELY(PARTITION_LEVEL_TWO != part_level_) ||
+      OB_ISNULL(part_array = get_part_array())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid part", KR(ret), KPC(this));
+  } else if (OB_FAIL(subpart_hashset.create(get_all_part_num()))) {
+    LOG_WARN("create hashset failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < subpart_ids.count(); i ++) {
+    if (OB_FAIL(subpart_hashset.set_refactored(subpart_ids.at(i)))) {
+      LOG_WARN("failed to set refactored", K(ret));
+    }
+  }
+  for (int64_t i = 0; i < part_num && OB_SUCC(ret); ++i) {
+    if (OB_ISNULL(part_array[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL ptr", K(i), KPC(this), KR(ret));
+    } else {
+      ObSubPartition **subpart_array = part_array[i]->get_subpart_array();
+      int64_t subpart_num = part_array[i]->get_subpartition_num();
+      if (OB_ISNULL(subpart_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("subpart array is null", KPC(this), KR(ret));
+      } else {
+        bool found = false;
+        for (int64_t j = 0; j < subpart_num && !found && OB_SUCC(ret); ++j) {
+          if (OB_ISNULL(subpart_array[j])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL ptr", KPC(this), KR(ret));
+          } else {
+            int tmp_ret = subpart_hashset.exist_refactored((subpart_array[j]->get_sub_part_id()));
+            if (OB_HASH_EXIST == tmp_ret) {
+              if (OB_FAIL(part_ids.push_back(part_array[i]->get_part_id()))) {
+                LOG_WARN("failed to push back", K(ret));
+              } else {
+                found = true;
+                subpart_cnt_in_parts += subpart_num;
+              }
+            } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST != tmp_ret)) {
+              ret = tmp_ret;
+              LOG_WARN("fail to check subpartids exist", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  if (subpart_hashset.created()) {
+    int tmp_ret = subpart_hashset.destroy();
+    if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
+      LOG_WARN("failed to destory hashset", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSimpleTableSchemaV2::get_part_idx_by_part_id(const ObIArray<int64_t> &part_ids,
+                                                   ObIArray<int64_t> &part_idx,
+                                                   ObIArray<int64_t> &subpart_idx) const
+{
+  int ret = OB_SUCCESS;
+  ObHashSet<int64_t> id_hashset;
+  ObPartition **part_array = NULL;
+  int64_t part_num = get_partition_num();
+  part_idx.reuse();
+  subpart_idx.reuse();
+  if (OB_ISNULL(part_array = get_part_array()) ||
+      OB_UNLIKELY(PARTITION_LEVEL_ZERO == part_level_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid part", KR(ret), KPC(this));
+  } else if (OB_FAIL(id_hashset.create(get_all_part_num()))) {
+    LOG_WARN("create hashset failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); i ++) {
+    if (OB_FAIL(id_hashset.set_refactored(part_ids.at(i)))) {
+      LOG_WARN("failed to set refactored", K(ret));
+    }
+  }
+  for (int64_t i = 0; i < part_num && OB_SUCC(ret); ++i) {
+    if (OB_ISNULL(part_array[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL ptr", K(i), KPC(this), KR(ret));
+    } else if (PARTITION_LEVEL_ONE == part_level_) {
+      int tmp_ret = id_hashset.exist_refactored(part_array[i]->get_part_id());
+      if (OB_HASH_EXIST == tmp_ret) {
+        OZ(part_idx.push_back(i));
+        OZ(subpart_idx.push_back(OB_INVALID_ID));
+      } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST != tmp_ret)) {
+        ret = tmp_ret;
+        LOG_WARN("fail to check part id exist", K(ret));
+      }
+    } else if (PARTITION_LEVEL_TWO == part_level_) {
+      ObSubPartition **subpart_array = part_array[i]->get_subpart_array();
+      int64_t subpart_num = part_array[i]->get_subpartition_num();
+      if (OB_ISNULL(subpart_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("subpart array is null", KPC(this), KR(ret));
+      }
+      for (int64_t j = 0; j < subpart_num && OB_SUCC(ret); ++j) {
+        if (OB_ISNULL(subpart_array[j])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL ptr", KPC(this), KR(ret));
+        } else {
+          int tmp_ret = id_hashset.exist_refactored(subpart_array[j]->get_sub_part_id());
+          if (OB_HASH_EXIST == tmp_ret) {
+            OZ(part_idx.push_back(i));
+            OZ(subpart_idx.push_back(j));
+          } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST != tmp_ret)) {
+            ret = tmp_ret;
+            LOG_WARN("fail to check part id exist", K(ret));
+          }
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("4.0 not support part type", KR(ret), KPC(this));
+    }
+  }
+  if (id_hashset.created()) {
+    int tmp_ret = id_hashset.destroy();
+    if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
+      LOG_WARN("failed to destory hashset", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSimpleTableSchemaV2::get_part_id_and_tablet_id_by_idx(const int64_t part_idx,
                                                             const int64_t subpart_idx,
                                                             ObObjectID &object_id,
@@ -5752,6 +5908,40 @@ int ObTableSchema::has_lob_column(bool &has_lob, const bool check_large /*= fals
   return ret;
 }
 
+int ObTableSchema::has_add_column_instant(bool &add_column_instant) const
+{
+  int ret = OB_SUCCESS;
+  add_column_instant = false;
+  int64_t max_column_id = 0;
+  const ObColumnSchemaV2 *col = NULL;
+  bool is_oracle_mode = false;
+  ObColumnIterByPrevNextID iter(*this);
+  if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to if oracle mode", KR(ret));
+  }
+  while (!is_oracle_mode && OB_SUCC(ret)) {
+    if (OB_FAIL(iter.next(col))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        break;
+      } else {
+        LOG_WARN("iterate failed", KR(ret));
+      }
+    } else if (OB_ISNULL(col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("col is NULL, ", KR(ret));
+    } else if (col->get_column_id() < OB_APP_MIN_COLUMN_ID) {
+      // ignore hidden column
+    } else if (col->get_column_id() < max_column_id) {
+      add_column_instant = true;
+      break;
+    } else {
+      max_column_id = col->get_column_id();
+    }
+  }
+  return ret;
+}
+
 // For the main VP table, it returns the primary key column and the VP column, get_column_ids() is different,
 // it will return all columns including other VP columns
 // For the secondary VP table, it returns the same as get_column_ids(), that is, the primary key column and the VP column
@@ -6788,219 +6978,144 @@ OB_DEF_SERIALIZE(ObTableSchema)
     ret = OB_NOT_IMPLEMENT;
     LOG_WARN("serialize link table schema is not implemented", K(ret));
   }
+  ObSArray<int64_t> mv_table_ids;
+  int64_t aux_vp_tid_array_count = aux_vp_tid_array_.count();
 
-  LST_DO_CODE(OB_UNIS_ENCODE,
-              tenant_id_,
-              database_id_,
-              tablegroup_id_,
-              table_id_,
-              max_used_column_id_,
-              rowkey_column_num_,
-              index_column_num_,
-              rowkey_split_pos_,
-              part_key_column_num_,
-              block_size_,
-              is_use_bloomfilter_,
-              progressive_merge_num_,
-              autoinc_column_id_,
-              auto_increment_,
-              read_only_,
-              load_type_,
-              table_type_,
-              index_type_,
-              def_type_,
-              charset_type_,
-              collation_type_,
-              data_table_id_,
-              index_status_,
-              name_case_mode_,
-              code_version_,
-              schema_version_,
-              part_level_,
-              part_option_,
-              sub_part_option_,
-              tablegroup_name_,
-              comment_,
-              table_name_,
-              compressor_type_,
-              expire_info_,
-              view_schema_,
-              index_using_type_,
-              progressive_merge_round_,
-              storage_format_version_);
-
-  // split function, make stack checker happy
-  [&]() {
-  if (!OB_SUCC(ret)) {
-    LOG_WARN("Fail to serialize fixed length data", K(ret));
-  } else {
-    //serialize columns and partitions
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(serialize_columns(buf, buf_len, pos))){
-        SHARE_SCHEMA_LOG(WARN, "failed to serialize columns, ", K_(column_cnt));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (PARTITION_LEVEL_ONE <= part_level_) {
-        if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, subpart_key_column_num_))) {
-          LOG_WARN("Fail to encode partition count", K(ret));
-        } else if (OB_FAIL(ObSchemaUtils::serialize_partition_array(
-                           partition_array_, partition_num_,
-                           buf, buf_len, pos))) {
-          LOG_WARN("failed to serialize partitions", K(ret));
-        } else { }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (PARTITION_LEVEL_TWO == part_level_) {
-        if (OB_FAIL(ObSchemaUtils::serialize_partition_array(
-                    def_subpartition_array_, def_subpartition_num_,
-                    buf, buf_len, pos))) {
-          LOG_WARN("failed to serialize def subpartitions", K(ret));
-        }
-      }
-    }
-    OB_UNIS_ENCODE(index_attributes_set_);
-    OB_UNIS_ENCODE(parser_name_);
+  // !!! begin static check
+  OB_UNIS_ENCODE(tenant_id_);
+  OB_UNIS_ENCODE(database_id_);
+  OB_UNIS_ENCODE(tablegroup_id_);
+  OB_UNIS_ENCODE(table_id_);
+  OB_UNIS_ENCODE(max_used_column_id_);
+  OB_UNIS_ENCODE(rowkey_column_num_);
+  OB_UNIS_ENCODE(index_column_num_);
+  OB_UNIS_ENCODE(rowkey_split_pos_);
+  OB_UNIS_ENCODE(part_key_column_num_);
+  OB_UNIS_ENCODE(block_size_);
+  OB_UNIS_ENCODE(is_use_bloomfilter_);
+  OB_UNIS_ENCODE(progressive_merge_num_);
+  OB_UNIS_ENCODE(autoinc_column_id_);
+  OB_UNIS_ENCODE(auto_increment_);
+  OB_UNIS_ENCODE(read_only_);
+  OB_UNIS_ENCODE(load_type_);
+  OB_UNIS_ENCODE(table_type_);
+  OB_UNIS_ENCODE(index_type_);
+  OB_UNIS_ENCODE(def_type_);
+  OB_UNIS_ENCODE(charset_type_);
+  OB_UNIS_ENCODE(collation_type_);
+  OB_UNIS_ENCODE(data_table_id_);
+  OB_UNIS_ENCODE(index_status_);
+  OB_UNIS_ENCODE(name_case_mode_);
+  OB_UNIS_ENCODE(code_version_);
+  OB_UNIS_ENCODE(schema_version_);
+  OB_UNIS_ENCODE(part_level_);
+  OB_UNIS_ENCODE(part_option_);
+  OB_UNIS_ENCODE(sub_part_option_);
+  OB_UNIS_ENCODE(tablegroup_name_);
+  OB_UNIS_ENCODE(comment_);
+  OB_UNIS_ENCODE(table_name_);
+  OB_UNIS_ENCODE(compressor_type_);
+  OB_UNIS_ENCODE(expire_info_);
+  OB_UNIS_ENCODE(view_schema_);
+  OB_UNIS_ENCODE(index_using_type_);
+  OB_UNIS_ENCODE(progressive_merge_round_);
+  OB_UNIS_ENCODE(storage_format_version_);
+  // !!! FOR STATIC CHECKER BEGIN
+  // THE FOLLOWING CODE CANNOT BE DESCRIBED USING SERIALIZE MACROS. THEY ARE EQUIVALENT TO THESE CODES:
+  // OB_UNIS_ENCODE_ARRAY_POINTER(column_array_, column_cnt_);
+  if (FAILEDx(serialize_columns(buf, buf_len, pos))) {
+    SHARE_SCHEMA_LOG(WARN, "failed to serialize columns, ", K_(column_cnt));
   }
-
-  LST_DO_CODE(OB_UNIS_ENCODE,
-              depend_table_ids_);
-
-  if (OB_SUCC(ret)) {
-    // mv_cnt_ is removed, encode 0 for compatibility
-    if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, 0))) {
-      LOG_WARN("Fail to encode mv table count", K(ret));
-    }
-  }
-
-  LST_DO_CODE(OB_UNIS_ENCODE,
-              tablet_size_,
-              pctfree_,
-              foreign_key_infos_,
-              partition_status_,
-              partition_schema_version_,
-              session_id_,
-              sess_active_time_);
-
-  //serialize constraints and partitions
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(serialize_constraints(buf, buf_len, pos))){
-      SHARE_SCHEMA_LOG(WARN, "failed to serialize constraints, ", K_(cst_cnt));
-    }
-  }
-
-  LST_DO_CODE(OB_UNIS_ENCODE,
-              pk_comment_,
-              create_host_);
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE, row_store_type_, store_format_);
-    LST_DO_CODE(OB_UNIS_ENCODE, duplicate_scope_);
-  }
-
-  //serialize aux_vp table id
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, aux_vp_tid_array_.count()))) {
-      LOG_WARN("Fail to encode aux_vp table count", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < aux_vp_tid_array_.count(); ++i) {
-      if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, aux_vp_tid_array_.at(i)))) {
-        LOG_WARN("Fail to encode aux_vp tid, ", K(i), K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_mode_.serialize(buf, buf_len, pos))) {
-      LOG_WARN("failed to serialize dropped table_mode", K(ret));
-    } else {
-      LST_DO_CODE(OB_UNIS_ENCODE, encryption_);
-      LST_DO_CODE(OB_UNIS_ENCODE, tablespace_id_);
-      LST_DO_CODE(OB_UNIS_ENCODE, trigger_list_);
-      LST_DO_CODE(OB_UNIS_ENCODE, encrypt_key_);
-      LST_DO_CODE(OB_UNIS_ENCODE, master_key_id_);
-    }
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE,
-                simple_index_infos_,
-                sub_part_template_flags_,
-                table_dop_,
-                max_dependency_version_,
-                association_table_id_);
-  }
-  if (OB_SUCC(ret)) {
-    if (PARTITION_LEVEL_ONE <= part_level_) {
-      if (OB_FAIL(ObSchemaUtils::serialize_partition_array(
-                  hidden_partition_array_, hidden_partition_num_,
-                  buf, buf_len, pos))) {
-        LOG_WARN("failed to serialize hidden partitions", K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    const ObTabletID &tablet_id = get_tablet_id();
-    LST_DO_CODE(OB_UNIS_ENCODE,
-                define_user_id_,
-                transition_point_,
-                interval_range_,
-                tablet_id,
-                aux_lob_meta_tid_,
-                aux_lob_piece_tid_,
-                depend_mock_fk_parent_table_ids_,
-                table_flags_,
-                rls_policy_ids_,
-                rls_group_ids_,
-                rls_context_ids_);
-  }
-  LST_DO_CODE(OB_UNIS_ENCODE, object_status_, is_force_view_, truncate_version_);
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE,
-                external_file_location_,
-                external_file_location_access_info_,
-                external_file_format_,
-                external_file_pattern_);
-  }
-
-  if (OB_SUCC(ret)) {
-    OB_UNIS_ENCODE(ttl_definition_);
-  }
-
-  if (OB_SUCC(ret)) {
-    OB_UNIS_ENCODE(kv_attributes_);
-  }
-
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE,
-                name_generated_type_);
-  }
-
+  // !!! FOR STATIC CHECKER END
+  OB_UNIS_ENCODE_IF(subpart_key_column_num_, (PARTITION_LEVEL_ONE <= part_level_));
+  OB_UNIS_ENCODE_ARRAY_POINTER_IF(partition_array_, partition_num_, (PARTITION_LEVEL_ONE <= part_level_));
+  OB_UNIS_ENCODE_ARRAY_POINTER_IF(def_subpartition_array_, def_subpartition_num_, (PARTITION_LEVEL_TWO == part_level_));
+  OB_UNIS_ENCODE(index_attributes_set_);
+  OB_UNIS_ENCODE(parser_name_);
+  OB_UNIS_ENCODE(depend_table_ids_);
+  OB_UNIS_ENCODE(mv_table_ids); // mv_cnt_ is removed, encode 0 for compatibility
+  OB_UNIS_ENCODE(tablet_size_);
+  OB_UNIS_ENCODE(pctfree_);
+  OB_UNIS_ENCODE(foreign_key_infos_);
+  OB_UNIS_ENCODE(partition_status_);
+  OB_UNIS_ENCODE(partition_schema_version_);
+  OB_UNIS_ENCODE(session_id_);
+  OB_UNIS_ENCODE(sess_active_time_);
+  OB_UNIS_ENCODE_ARRAY_POINTER(cst_array_, cst_cnt_);
+  OB_UNIS_ENCODE(pk_comment_);
+  OB_UNIS_ENCODE(create_host_);
+  OB_UNIS_ENCODE(row_store_type_);
+  OB_UNIS_ENCODE(store_format_);
+  OB_UNIS_ENCODE(duplicate_scope_);
+  OB_UNIS_ENCODE_ARRAY(aux_vp_tid_array_, aux_vp_tid_array_count);
+  OB_UNIS_ENCODE(table_mode_);
+  OB_UNIS_ENCODE(encryption_);
+  OB_UNIS_ENCODE(tablespace_id_);
+  OB_UNIS_ENCODE(trigger_list_);
+  OB_UNIS_ENCODE(encrypt_key_);
+  OB_UNIS_ENCODE(master_key_id_);
+  OB_UNIS_ENCODE(simple_index_infos_);
+  OB_UNIS_ENCODE(sub_part_template_flags_);
+  OB_UNIS_ENCODE(table_dop_);
+  OB_UNIS_ENCODE(max_dependency_version_);
+  OB_UNIS_ENCODE(association_table_id_);
+  OB_UNIS_ENCODE_ARRAY_POINTER_IF(hidden_partition_array_, hidden_partition_num_, (PARTITION_LEVEL_ONE <= part_level_));
+  OB_UNIS_ENCODE(define_user_id_);
+  OB_UNIS_ENCODE(transition_point_);
+  OB_UNIS_ENCODE(interval_range_);
+  OB_UNIS_ENCODE(tablet_id_);
+  OB_UNIS_ENCODE(aux_lob_meta_tid_);
+  OB_UNIS_ENCODE(aux_lob_piece_tid_);
+  OB_UNIS_ENCODE(depend_mock_fk_parent_table_ids_);
+  OB_UNIS_ENCODE(table_flags_);
+  OB_UNIS_ENCODE(rls_policy_ids_);
+  OB_UNIS_ENCODE(rls_group_ids_);
+  OB_UNIS_ENCODE(rls_context_ids_);
+  OB_UNIS_ENCODE(object_status_);
+  OB_UNIS_ENCODE(is_force_view_);
+  OB_UNIS_ENCODE(truncate_version_);
+  OB_UNIS_ENCODE(external_file_location_);
+  OB_UNIS_ENCODE(external_file_location_access_info_);
+  OB_UNIS_ENCODE(external_file_format_);
+  OB_UNIS_ENCODE(external_file_pattern_);
+  OB_UNIS_ENCODE(ttl_definition_);
+  OB_UNIS_ENCODE(kv_attributes_);
+  OB_UNIS_ENCODE(name_generated_type_);
   OB_UNIS_ENCODE(lob_inrow_threshold_);
-
-  // serialize column group
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(serialize_column_groups(buf, buf_len, pos))) {
-      LOG_WARN("fail to serialize column groups", K_(column_group_cnt));
-    } else {
-      LST_DO_CODE(OB_UNIS_ENCODE,
-                  is_column_store_supported_,
-                  max_used_column_group_id_);
-    }
-  }
-  }();
-
+  OB_UNIS_ENCODE_ARRAY_POINTER(column_group_arr_, column_group_cnt_);
+  OB_UNIS_ENCODE(is_column_store_supported_);
+  OB_UNIS_ENCODE(max_used_column_group_id_);
   OB_UNIS_ENCODE(mlog_tid_);
   OB_UNIS_ENCODE(auto_increment_cache_size_);
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE,
-                external_properties_);
-  }
+  OB_UNIS_ENCODE(external_properties_);
   OB_UNIS_ENCODE(local_session_vars_);
   OB_UNIS_ENCODE(duplicate_read_consistency_);
-  if (OB_SUCC(ret)) {
-    OB_UNIS_ENCODE(index_params_);
-  }
+  OB_UNIS_ENCODE(index_params_);
   OB_UNIS_ENCODE(micro_index_clustered_);
   OB_UNIS_ENCODE(mv_mode_);
+  // !!! end static check
+  /*
+   * 在此end static check注释前新增反序列化的成员
+   * 遵循以下规则：
+   * 1. 使用OB_UNIS_ENCODE等标准序列化宏进行序列化，目前已有序列化宏如下：
+   *  a. OB_UNIS_ENCODE
+   *  b. OB_UNIS_ENCODE_IF
+   *  c. OB_UNIS_ENCODE_ARRAY_POINTER_IF
+   *  d. OB_UNIS_ENCODE_ARRAY_POINTER
+   *  e. OB_UNIS_ENCODE_ARRAY
+   * 2. 不用添加if (OB_SUCC(ret))
+   * 3. 序列化宏与反序列化宏需要一一对应
+   * 4. 如果有无法使用标准序列化宏处理的成员，需要使用
+   * ```cpp
+   * // !!! FOR STATIC CHECKER BEGIN
+   * // THE FOLLOWING CODE CANNOT BE DESCRIBED USING SERIALIZE MACROS. THEY ARE EQUIVALENT TO THESE CODES:
+   * // 这里写对应的标准序列化宏
+   * 这里写代码
+   * // !!! FOR STATIC CHECKER END
+   * ```
+   * 格式的注释和代码提醒序列化检测脚本忽略该段代码
+   * 详细文档:
+   */
   return ret;
 }
 
@@ -7046,95 +7161,6 @@ int ObTableSchema::deserialize_columns(const char *buf, const int64_t data_len, 
   return ret;
 }
 
-int ObTableSchema::serialize_constraints(char *buf, const int64_t data_len,
-                                         int64_t &pos) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(serialization::encode_vi64(buf, data_len, pos, cst_cnt_))) {
-    SHARE_SCHEMA_LOG(WARN, "Fail to encode cst count", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < cst_cnt_; ++i) {
-    if (OB_FAIL(cst_array_[i]->serialize(buf, data_len, pos))) {
-      SHARE_SCHEMA_LOG(WARN, "Fail to serialize cst", K(ret));
-    }
-  }
-  return ret;
-}
-
-
-int ObTableSchema::deserialize_constraints(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  ObConstraint cst;
-  //the cst_cnt_ will be increased in the add_cst
-  int64_t count = 0;
-  if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0) || OB_UNLIKELY(pos > data_len)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("buf should not be null", K(buf), K(data_len), K(pos), K(ret));
-  } else if (pos == data_len) {
-    //do nothing
-  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &count))) {
-    SHARE_SCHEMA_LOG(WARN, "Fail to decode cst count", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-      cst.reset();
-      if (OB_FAIL(cst.deserialize(buf, data_len, pos))) {
-        SHARE_SCHEMA_LOG(WARN,"Fail to deserialize cst", K(ret));
-      } else if (OB_FAIL(add_constraint(cst))) {
-        SHARE_SCHEMA_LOG(WARN, "Fail to add cst", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableSchema::serialize_column_groups(
-    char *buf,
-    const int64_t data_len,
-    int64_t &pos) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(serialization::encode_vi64(buf, data_len, pos, column_group_cnt_))) {
-    LOG_WARN("fail to encode column group cnt", KR(ret), K_(column_group_cnt));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && (i < column_group_cnt_); ++i) {
-    if (OB_NOT_NULL(column_group_arr_[i])) {
-      if (OB_FAIL(column_group_arr_[i]->serialize(buf, data_len, pos))) {
-        LOG_WARN("fail to serialize column group", KR(ret), KPC(column_group_arr_[i]));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableSchema::deserialize_column_groups(
-    const char *buf,
-    const int64_t data_len,
-    int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  ObColumnGroupSchema column_group;
-  int64_t tmp_column_group_cnt = 0;
-  if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0) || OB_UNLIKELY(pos > data_len)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("buf should not be null", KR(ret), K(buf), K(data_len), K(pos));
-  } else if (pos == data_len) {
-    //do nothing
-  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &tmp_column_group_cnt))) {
-    LOG_WARN("fail to decode column group count", KR(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && (i < tmp_column_group_cnt); ++i) {
-      column_group.reset();
-      if (OB_FAIL(column_group.deserialize(buf, data_len, pos))) {
-        LOG_WARN("fail to deserialize column group", KR(ret));
-      } else if (OB_FAIL(do_add_column_group(column_group))) {
-        LOG_WARN("fail to do add column group", KR(ret), K(column_group));
-      }
-    }
-  }
-  return ret;
-}
-
 bool ObTableSchema::has_lob_column() const
 {
   bool bool_ret = false;
@@ -7165,204 +7191,94 @@ OB_DEF_DESERIALIZE(ObTableSchema)
 {
   int ret = OB_SUCCESS;
   reset();
-  ObString tablegroup_name;
-  ObString comment;
-  ObString pk_comment;
-  ObString create_host;
-  ObString table_name;
-  ObString expire_info;
-  ObString ttl_definition;
-  ObString kv_attributes;
-  ObString index_params;
 
-  LST_DO_CODE(OB_UNIS_DECODE,
-              tenant_id_,
-              database_id_,
-              tablegroup_id_,
-              table_id_,
-              max_used_column_id_,
-              rowkey_column_num_,
-              index_column_num_,
-              rowkey_split_pos_,
-              part_key_column_num_,
-              block_size_,
-              is_use_bloomfilter_,
-              progressive_merge_num_,
-              autoinc_column_id_,
-              auto_increment_,
-              read_only_,
-              load_type_,
-              table_type_,
-              index_type_,
-              def_type_,
-              charset_type_,
-              collation_type_,
-              data_table_id_,
-              index_status_,
-              name_case_mode_,
-              code_version_,
-              schema_version_,
-              part_level_,
-              part_option_,
-              sub_part_option_,
-              tablegroup_name,
-              comment,
-              table_name,
-              compressor_type_,
-              expire_info,
-              view_schema_,
-              index_using_type_,
-              progressive_merge_round_,
-              storage_format_version_);
+  ObSArray<int64_t> mv_table_ids;
+  int64_t aux_vp_tid_array_count = 0;
+  // !!! begin static check
+  OB_UNIS_DECODE(tenant_id_);
+  OB_UNIS_DECODE(database_id_);
+  OB_UNIS_DECODE(tablegroup_id_);
+  OB_UNIS_DECODE(table_id_);
+  OB_UNIS_DECODE(max_used_column_id_);
+  OB_UNIS_DECODE(rowkey_column_num_);
+  OB_UNIS_DECODE(index_column_num_);
+  OB_UNIS_DECODE(rowkey_split_pos_);
+  OB_UNIS_DECODE(part_key_column_num_);
+  OB_UNIS_DECODE(block_size_);
+  OB_UNIS_DECODE(is_use_bloomfilter_);
+  OB_UNIS_DECODE(progressive_merge_num_);
+  OB_UNIS_DECODE(autoinc_column_id_);
+  OB_UNIS_DECODE(auto_increment_);
+  OB_UNIS_DECODE(read_only_);
+  OB_UNIS_DECODE(load_type_);
+  OB_UNIS_DECODE(table_type_);
+  OB_UNIS_DECODE(index_type_);
+  OB_UNIS_DECODE(def_type_);
+  OB_UNIS_DECODE(charset_type_);
+  OB_UNIS_DECODE(collation_type_);
+  OB_UNIS_DECODE(data_table_id_);
+  OB_UNIS_DECODE(index_status_);
+  OB_UNIS_DECODE(name_case_mode_);
+  OB_UNIS_DECODE(code_version_);
+  OB_UNIS_DECODE(schema_version_);
+  OB_UNIS_DECODE(part_level_);
+  OB_UNIS_DECODE(part_option_);
+  OB_UNIS_DECODE(sub_part_option_);
+  OB_UNIS_DECODE_AND_FUNC(tablegroup_name_, deep_copy_str);
+  OB_UNIS_DECODE_AND_FUNC(comment_, deep_copy_str);
+  OB_UNIS_DECODE_AND_FUNC(table_name_, deep_copy_str);
+  OB_UNIS_DECODE(compressor_type_);
+  OB_UNIS_DECODE_AND_FUNC(expire_info_, deep_copy_str);
+  OB_UNIS_DECODE(view_schema_);
+  OB_UNIS_DECODE(index_using_type_);
+  OB_UNIS_DECODE(progressive_merge_round_);
+  OB_UNIS_DECODE(storage_format_version_);
+  // !!! FOR STATIC CHECKER BEGIN
+  // THE FOLLOWING CODE CANNOT BE DESCRIBED USING SERIALIZE MACROS. THEY ARE EQUIVALENT TO THESE CODES:
+  // OB_UNIS_DECODE_ARRAY_POINTER(column_array_, column_cnt_, add_column);
+  if (FAILEDx(deserialize_columns(buf, data_len, pos))) {
+    SHARE_SCHEMA_LOG(WARN, "failed to deserialize columns, ", K_(column_cnt));
+  }
+  // !!! FOR STATIC CHECKER END
+  OB_UNIS_DECODE_IF(subpart_key_column_num_, (PARTITION_LEVEL_ONE <= part_level_));
+  OB_UNIS_DECODE_ARRAY_POINTER_IF(partition_array_, partition_num_, add_partition, (PARTITION_LEVEL_ONE <= part_level_));
+  OB_UNIS_DECODE_ARRAY_POINTER_IF(def_subpartition_array_, def_subpartition_num_, add_def_subpartition, (PARTITION_LEVEL_TWO == part_level_));
+  OB_UNIS_DECODE(index_attributes_set_);
+  OB_UNIS_DECODE_AND_FUNC(parser_name_, deep_copy_str);
+  OB_UNIS_DECODE(depend_table_ids_);
+  OB_UNIS_DECODE(mv_table_ids);
+  OB_UNIS_DECODE(tablet_size_);
+  OB_UNIS_DECODE(pctfree_);
+  OB_UNIS_DECODE(foreign_key_infos_);
+  OB_UNIS_DECODE(partition_status_);
+  OB_UNIS_DECODE(partition_schema_version_);
+  OB_UNIS_DECODE(session_id_);
+  OB_UNIS_DECODE(sess_active_time_);
+  OB_UNIS_DECODE_ARRAY_POINTER(cst_array_, cst_cnt_, add_constraint);
+  OB_UNIS_DECODE_AND_FUNC(pk_comment_, deep_copy_str);
+  OB_UNIS_DECODE_AND_FUNC(create_host_, deep_copy_str);
+  OB_UNIS_DECODE(row_store_type_);
+  OB_UNIS_DECODE(store_format_);
+  OB_UNIS_DECODE(duplicate_scope_);
+  OB_UNIS_DECODE_ARRAY_AND_FUNC(aux_vp_tid_array_, aux_vp_tid_array_count, add_aux_vp_tid);
+  OB_UNIS_DECODE(table_mode_);
+  OB_UNIS_DECODE_AND_FUNC(encryption_, deep_copy_str);
+  OB_UNIS_DECODE(tablespace_id_);
+  OB_UNIS_DECODE(trigger_list_);
+  OB_UNIS_DECODE_AND_FUNC(encrypt_key_, deep_copy_str);
+  OB_UNIS_DECODE(master_key_id_);
+  OB_UNIS_DECODE(simple_index_infos_);
+  OB_UNIS_DECODE(sub_part_template_flags_);
+  OB_UNIS_DECODE(table_dop_);
+  OB_UNIS_DECODE(max_dependency_version_);
+  OB_UNIS_DECODE(association_table_id_);
+  OB_UNIS_DECODE_ARRAY_POINTER_IF(hidden_partition_array_, hidden_partition_num_, add_partition, (PARTITION_LEVEL_ONE <= part_level_));
+  OB_UNIS_DECODE(define_user_id_);
 
-  if (OB_FAIL(ret)) {
-    LOG_WARN("Fail to deserialize fixed length data", K(ret));
-  } else if (OB_FAIL(deep_copy_str(tablegroup_name, tablegroup_name_))) {
-    LOG_WARN("deep_copy_str failed", K(ret));
-  } else if (OB_FAIL(deep_copy_str(comment, comment_))) {
-    LOG_WARN("deep_copy_str failed", K(ret));
-  } else if (OB_FAIL(deep_copy_str(table_name, table_name_))) {
-    LOG_WARN("deep_copy_str failed", K(ret));
-  } else if (OB_FAIL(deep_copy_str(expire_info, expire_info_))) {
-    LOG_WARN("deep_copy_str failed", K(ret));
-  }
-
-  // split function, make stack checker happy
-  [&]() {
-  if (OB_SUCC(ret) && pos < data_len) {
-    //deserialize columns and partitions
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(deserialize_columns(buf, data_len, pos))) {
-        SHARE_SCHEMA_LOG(WARN, "failed to deserialize columns, ", K_(column_cnt));
-      }
-    }
-    if (OB_SUCC(ret) && pos < data_len) {
-      if (PARTITION_LEVEL_ONE <= part_level_) {
-        if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &subpart_key_column_num_))) {
-          LOG_WARN("Fail to encode partition count", K(ret));
-        } else if (OB_FAIL(deserialize_partitions(buf, data_len, pos))) {
-          LOG_WARN("failed to deserialize partitions", K(ret));
-        } else { }//do nothing
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (PARTITION_LEVEL_TWO == part_level_) {
-        if (OB_FAIL(deserialize_def_subpartitions(buf, data_len, pos))) {
-          LOG_WARN("failed to deserialize def subpartitions", K(ret));
-        }
-      }
-    }
-    OB_UNIS_DECODE(index_attributes_set_);
-    OB_UNIS_DECODE(parser_name_);
-  }
-
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE,
-        depend_table_ids_);
-
-    //deserialize mv table ids
-    int64_t count = 0;
-    OB_UNIS_DECODE(count);
-    if (count > 0) {
-      int64_t mv_tid = 0;
-      for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-        mv_tid = 0;
-        if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &mv_tid))) {
-          LOG_WARN("Fail to deserialize mv tid", K(ret));
-        }
-      }
-    }
-  }
-  LST_DO_CODE(OB_UNIS_DECODE,
-              tablet_size_,
-              pctfree_);
-
-  if(OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_DECODE,
-                  foreign_key_infos_);
-  }
-
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, partition_status_,
-                partition_schema_version_, session_id_, sess_active_time_);
-  }
-
-  //deserialize constraints and partitions
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(deserialize_constraints(buf, data_len, pos))) {
-      SHARE_SCHEMA_LOG(WARN, "failed to deserialize constraints, ", K_(cst_cnt));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE,
-                pk_comment, create_host);
-    if (OB_FAIL(deep_copy_str(pk_comment, pk_comment_))) {
-      LOG_WARN("deep_copy_str failed", K(ret));
-    } else if (OB_FAIL(deep_copy_str(create_host, create_host_))) {
-      LOG_WARN("deep_copy_str failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, row_store_type_, store_format_);
-    LST_DO_CODE(OB_UNIS_DECODE, duplicate_scope_);
-  }
-  //deserialize aux_vp table ids
-  if (OB_SUCC(ret)) {
-    int64_t count = 0;
-    OB_UNIS_DECODE(count);
-    if (count > 0) {
-      int64_t aux_vp_tid = 0;
-      for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-        aux_vp_tid = 0;
-        if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &aux_vp_tid))) {
-          LOG_WARN("Fail to deserialize aux_vp tid", K(ret));
-        } else if (OB_FAIL(add_aux_vp_tid(aux_vp_tid))) {
-          LOG_WARN("Fail to add aux_vp tid", K(ret));
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_mode_.deserialize(buf, data_len, pos))) {
-      LOG_WARN("fail to decode table mode", K(ret));
-    } else {
-      LST_DO_CODE(OB_UNIS_DECODE, encryption_);
-      if (OB_FAIL(set_encryption_str(encryption_))) {
-        LOG_WARN("fail to set encryption str", K(ret));
-      } else {
-        LST_DO_CODE(OB_UNIS_DECODE, tablespace_id_);
-        LST_DO_CODE(OB_UNIS_DECODE, trigger_list_);
-        LST_DO_CODE(OB_UNIS_DECODE, encrypt_key_);
-        if (OB_FAIL(set_encrypt_key(encrypt_key_))) {
-          LOG_WARN("fail to set encrypt key", K(ret));
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, master_key_id_);
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE,
-                simple_index_infos_,
-                sub_part_template_flags_,
-                table_dop_,
-                max_dependency_version_,
-                association_table_id_);
-  }
-
-  // hidden partitions
-  if (OB_SUCC(ret)) {
-    if (PARTITION_LEVEL_ONE <= part_level_) {
-      if (OB_FAIL(deserialize_partitions(buf, data_len, pos))) {
-        LOG_WARN("failed to deserialize hidden partitions", K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, define_user_id_);
-  }
-
+  // !!! FOR STATIC CHECKER BEGIN
+  // THE FOLLOWING CODE CANNOT BE DESCRIBED USING SERIALIZE MACROS. THEY ARE EQUIVALENT TO THESE CODES:
+  // OB_UNIS_DECODE(transition_point_);
+  // OB_UNIS_DECODE(interval_range_);
   if (OB_SUCC(ret)) {
     static int64_t ROW_KEY_CNT = 1;
     ObObj obj_array[ROW_KEY_CNT];
@@ -7372,10 +7288,6 @@ OB_DEF_DESERIALIZE(ObTableSchema)
     rowkey.assign(obj_array, ROW_KEY_CNT);
     if (FAILEDx(rowkey.deserialize(buf, data_len, pos, true))) {
       LOG_WARN("fail to deserialize transintion point rowkey", KR(ret));
-    }
-
-    if (OB_FAIL(ret)) {
-      LOG_WARN("Fail to deserialize data, ", K(ret));
     } else if (OB_FAIL(set_transition_point(rowkey))) {
       LOG_WARN("Fail to deep copy high_bound_val", K(ret), K(rowkey));
     }
@@ -7384,210 +7296,162 @@ OB_DEF_DESERIALIZE(ObTableSchema)
     rowkey.assign(obj_array, ROW_KEY_CNT);
     if (FAILEDx(rowkey.deserialize(buf, data_len, pos, true))) {
       LOG_WARN("fail to deserialize interval range rowkey", KR(ret));
-    }
-    if (OB_FAIL(ret)) {
-      LOG_WARN("Fail to deserialize data, ", K(ret));
     } else if (OB_FAIL(set_interval_range(rowkey))) {
       LOG_WARN("Fail to deep copy high_bound_val", K(ret), K(rowkey));
     }
-
-    LST_DO_CODE(OB_UNIS_DECODE,
-                tablet_id_,
-                aux_lob_meta_tid_,
-                aux_lob_piece_tid_,
-                depend_mock_fk_parent_table_ids_,
-                table_flags_,
-                rls_policy_ids_,
-                rls_group_ids_,
-                rls_context_ids_);
-    LST_DO_CODE(OB_UNIS_DECODE, object_status_, is_force_view_, truncate_version_);
-    if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_DECODE,
-                  external_file_location_,
-                  external_file_location_access_info_,
-                  external_file_format_,
-                  external_file_pattern_);
-    }
   }
+  // !!! FOR STATIC CHECKER END
 
-  if (OB_SUCC(ret)) {
-    OB_UNIS_DECODE(ttl_definition);
-    if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(ttl_definition, ttl_definition_))) {
-      LOG_WARN("deep_copy_str failed", K(ret), K(ttl_definition));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    OB_UNIS_DECODE(kv_attributes);
-    if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(kv_attributes, kv_attributes_))) {
-      LOG_WARN("deep_copy_str failed", K(ret), K(kv_attributes));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE,
-                name_generated_type_);
-  }
-
+  OB_UNIS_DECODE(tablet_id_);
+  OB_UNIS_DECODE(aux_lob_meta_tid_);
+  OB_UNIS_DECODE(aux_lob_piece_tid_);
+  OB_UNIS_DECODE(depend_mock_fk_parent_table_ids_);
+  OB_UNIS_DECODE(table_flags_);
+  OB_UNIS_DECODE(rls_policy_ids_);
+  OB_UNIS_DECODE(rls_group_ids_);
+  OB_UNIS_DECODE(rls_context_ids_);
+  OB_UNIS_DECODE(object_status_);
+  OB_UNIS_DECODE(is_force_view_);
+  OB_UNIS_DECODE(truncate_version_);
+  OB_UNIS_DECODE_AND_FUNC(external_file_location_, deep_copy_str);
+  OB_UNIS_DECODE_AND_FUNC(external_file_location_access_info_, deep_copy_str);
+  OB_UNIS_DECODE_AND_FUNC(external_file_format_, deep_copy_str);
+  OB_UNIS_DECODE_AND_FUNC(external_file_pattern_, deep_copy_str);
+  OB_UNIS_DECODE_AND_FUNC(ttl_definition_, deep_copy_str);
+  OB_UNIS_DECODE_AND_FUNC(kv_attributes_, deep_copy_str);
+  OB_UNIS_DECODE(name_generated_type_);
   OB_UNIS_DECODE(lob_inrow_threshold_);
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(deserialize_column_groups(buf, data_len, pos))) {
-      LOG_WARN("fail to deserialize column_groups", KR(ret), K(data_len), K(pos));
-    } else {
-      LST_DO_CODE(OB_UNIS_DECODE,
-                  is_column_store_supported_,
-                  max_used_column_group_id_);
-    }
-  }
-  }();
-
+  OB_UNIS_DECODE_ARRAY_POINTER(column_group_arr_, column_group_cnt_, do_add_column_group);
+  OB_UNIS_DECODE(is_column_store_supported_);
+  OB_UNIS_DECODE(max_used_column_group_id_);
   OB_UNIS_DECODE(mlog_tid_);
   OB_UNIS_DECODE(auto_increment_cache_size_);
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE,
-                external_properties_);
-  }
+  OB_UNIS_DECODE_AND_FUNC(external_properties_, deep_copy_str);
   OB_UNIS_DECODE(local_session_vars_);
   OB_UNIS_DECODE(duplicate_read_consistency_);
-
-  if (OB_SUCC(ret)) {
-    OB_UNIS_DECODE(index_params);
-    if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(index_params, index_params_))) {
-      LOG_WARN("deep_copy_str failed", K(ret), K(index_params));
-    }
-  }
+  OB_UNIS_DECODE_AND_FUNC(index_params_, deep_copy_str);
   OB_UNIS_DECODE(micro_index_clustered_);
   OB_UNIS_DECODE(mv_mode_);
+  // !!! end static check
+  /*
+   * 在此end static check注释前新增反序列化的成员
+   * 遵循以下规则：
+   * 1. 使用OB_UNIS_DECODE等标准序列化宏进行序列化，目前已有序列化宏如下，其中提供FUNC的宏可用于拷贝数据，例如将复制ObString：
+   *  a. OB_UNIS_DECODE_ARRAY
+   *  b. OB_UNIS_DECODE_ARRAY_AND_FUNC
+   *  c. OB_UNIS_DECODE_ARRAY_POINTER_IF
+   *  d. OB_UNIS_DECODE_AND_FUNC
+   *  e. OB_UNIS_DECODE_IF
+   *  f. OB_UNIS_DECODE
+   * 2. 不用添加if (OB_SUCC(ret))
+   * 3. 序列化宏与反序列化宏需要一一对应
+   * 4. 如果有无法使用标准序列化宏处理的成员，需要使用
+   * ```cpp
+   * // !!! FOR STATIC CHECKER BEGIN
+   * // THE FOLLOWING CODE CANNOT BE DESCRIBED USING SERIALIZE MACROS. THEY ARE EQUIVALENT TO THESE CODES:
+   * // 这里写对应的标准序列化宏
+   * 这里写代码
+   * // !!! FOR STATIC CHECKER END
+   * ```
+   * 格式的注释和代码提醒序列化检测脚本忽略该段代码
+   * 详细文档:
+   */
   return ret;
 }
 
 OB_DEF_SERIALIZE_SIZE(ObTableSchema)
 {
   int64_t len = 0;
+  ObSArray<int64_t> mv_table_ids;
+  int64_t aux_vp_tid_array_count = aux_vp_tid_array_.count();
 
-  LST_DO_CODE(OB_UNIS_ADD_LEN,
-              tenant_id_,
-              database_id_,
-              tablegroup_id_,
-              table_id_,
-              max_used_column_id_,
-              session_id_,
-              sess_active_time_,
-              rowkey_column_num_,
-              index_column_num_,
-              rowkey_split_pos_,
-              part_key_column_num_,
-              block_size_,
-              is_use_bloomfilter_,
-              progressive_merge_num_,
-              tablet_size_,
-              pctfree_,
-              autoinc_column_id_,
-              auto_increment_,
-              read_only_,
-              load_type_,
-              table_type_,
-              index_type_,
-              def_type_,
-              charset_type_,
-              collation_type_,
-              data_table_id_,
-              index_status_,
-              name_case_mode_,
-              code_version_,
-              schema_version_,
-              part_level_,
-              part_option_,
-              sub_part_option_,
-              tablegroup_name_,
-              comment_,
-              table_name_,
-              compressor_type_,
-              expire_info_,
-              view_schema_,
-              index_using_type_,
-              partition_status_,
-              partition_schema_version_,
-              pk_comment_,
-              create_host_,
-              progressive_merge_round_,
-              storage_format_version_,
-              tablespace_id_,
-              trigger_list_,
-              encrypt_key_,
-              master_key_id_);
-
-  len += table_mode_.get_serialize_size();
-
-  //get columms size
-  len += serialization::encoded_length_vi64(column_cnt_);
-  for (int64_t i = 0; i < column_cnt_; ++i) {
-    if (NULL != column_array_[i]) {
-      len += column_array_[i]->get_serialize_size();
-    }
-  }
-  //get constraints size
-  len += serialization::encoded_length_vi64(cst_cnt_);
-  for (int64_t i = 0; i < cst_cnt_; ++i) {
-    if (NULL != cst_array_[i]) {
-      len += cst_array_[i]->get_serialize_size();
-    }
-  }
-  if (PARTITION_LEVEL_ONE <= part_level_) {
-    len += serialization::encoded_length_vi64(subpart_key_column_num_);
-    //get partitions size
-    len += ObSchemaUtils::get_partition_array_serialize_size(
-           partition_array_, partition_num_);
-  }
-  if (PARTITION_LEVEL_TWO == part_level_) {
-    //get def subpartitions size
-    len += ObSchemaUtils::get_partition_array_serialize_size(
-           def_subpartition_array_, def_subpartition_num_);
-  }
+  // !!! begin static check
+  OB_UNIS_ADD_LEN(tenant_id_);
+  OB_UNIS_ADD_LEN(database_id_);
+  OB_UNIS_ADD_LEN(tablegroup_id_);
+  OB_UNIS_ADD_LEN(table_id_);
+  OB_UNIS_ADD_LEN(max_used_column_id_);
+  OB_UNIS_ADD_LEN(rowkey_column_num_);
+  OB_UNIS_ADD_LEN(index_column_num_);
+  OB_UNIS_ADD_LEN(rowkey_split_pos_);
+  OB_UNIS_ADD_LEN(part_key_column_num_);
+  OB_UNIS_ADD_LEN(block_size_);
+  OB_UNIS_ADD_LEN(is_use_bloomfilter_);
+  OB_UNIS_ADD_LEN(progressive_merge_num_);
+  OB_UNIS_ADD_LEN(autoinc_column_id_);
+  OB_UNIS_ADD_LEN(auto_increment_);
+  OB_UNIS_ADD_LEN(read_only_);
+  OB_UNIS_ADD_LEN(load_type_);
+  OB_UNIS_ADD_LEN(table_type_);
+  OB_UNIS_ADD_LEN(index_type_);
+  OB_UNIS_ADD_LEN(def_type_);
+  OB_UNIS_ADD_LEN(charset_type_);
+  OB_UNIS_ADD_LEN(collation_type_);
+  OB_UNIS_ADD_LEN(data_table_id_);
+  OB_UNIS_ADD_LEN(index_status_);
+  OB_UNIS_ADD_LEN(name_case_mode_);
+  OB_UNIS_ADD_LEN(code_version_);
+  OB_UNIS_ADD_LEN(schema_version_);
+  OB_UNIS_ADD_LEN(part_level_);
+  OB_UNIS_ADD_LEN(part_option_);
+  OB_UNIS_ADD_LEN(sub_part_option_);
+  OB_UNIS_ADD_LEN(tablegroup_name_);
+  OB_UNIS_ADD_LEN(comment_);
+  OB_UNIS_ADD_LEN(table_name_);
+  OB_UNIS_ADD_LEN(compressor_type_);
+  OB_UNIS_ADD_LEN(expire_info_);
+  OB_UNIS_ADD_LEN(view_schema_);
+  OB_UNIS_ADD_LEN(index_using_type_);
+  OB_UNIS_ADD_LEN(progressive_merge_round_);
+  OB_UNIS_ADD_LEN(storage_format_version_);
+  OB_UNIS_ADD_LEN_ARRAY_POINTER(column_array_, column_cnt_);
+  OB_UNIS_ADD_LEN_IF(subpart_key_column_num_, (PARTITION_LEVEL_ONE <= part_level_));
+  OB_UNIS_ADD_LEN_ARRAY_POINTER_IF(partition_array_, partition_num_, (PARTITION_LEVEL_ONE <= part_level_));
+  OB_UNIS_ADD_LEN_ARRAY_POINTER_IF(def_subpartition_array_, def_subpartition_num_, (PARTITION_LEVEL_TWO == part_level_));
   OB_UNIS_ADD_LEN(index_attributes_set_);
   OB_UNIS_ADD_LEN(parser_name_);
-
-  len += serialization::encoded_length_vi64(0); //mv_tid compatiable
-
-  len += depend_table_ids_.get_serialize_size();
-  len += depend_mock_fk_parent_table_ids_.get_serialize_size();
-  len += foreign_key_infos_.get_serialize_size();
+  OB_UNIS_ADD_LEN(depend_table_ids_);
+  OB_UNIS_ADD_LEN(mv_table_ids); //mv_tid compatiable
+  OB_UNIS_ADD_LEN(tablet_size_);
+  OB_UNIS_ADD_LEN(pctfree_);
+  OB_UNIS_ADD_LEN(foreign_key_infos_);
+  OB_UNIS_ADD_LEN(partition_status_);
+  OB_UNIS_ADD_LEN(partition_schema_version_);
+  OB_UNIS_ADD_LEN(session_id_);
+  OB_UNIS_ADD_LEN(sess_active_time_);
+  OB_UNIS_ADD_LEN_ARRAY_POINTER(cst_array_, cst_cnt_);
+  OB_UNIS_ADD_LEN(pk_comment_);
+  OB_UNIS_ADD_LEN(create_host_);
   OB_UNIS_ADD_LEN(row_store_type_);
   OB_UNIS_ADD_LEN(store_format_);
   OB_UNIS_ADD_LEN(duplicate_scope_);
-
-  //get aux_vp tid size
-  len += serialization::encoded_length_vi64(aux_vp_tid_array_.count());
-  for (int64_t i = 0; i < aux_vp_tid_array_.count(); ++i) {
-    len += serialization::encoded_length_vi64(aux_vp_tid_array_.at(i));
-  }
-
+  OB_UNIS_ADD_LEN_ARRAY(aux_vp_tid_array_, aux_vp_tid_array_count);
+  OB_UNIS_ADD_LEN(table_mode_);
   OB_UNIS_ADD_LEN(encryption_);
-  len += simple_index_infos_.get_serialize_size();
+  OB_UNIS_ADD_LEN(tablespace_id_);
+  OB_UNIS_ADD_LEN(trigger_list_);
+  OB_UNIS_ADD_LEN(encrypt_key_);
+  OB_UNIS_ADD_LEN(master_key_id_);
+  OB_UNIS_ADD_LEN(simple_index_infos_);
   OB_UNIS_ADD_LEN(sub_part_template_flags_);
   OB_UNIS_ADD_LEN(table_dop_);
   OB_UNIS_ADD_LEN(max_dependency_version_);
   OB_UNIS_ADD_LEN(association_table_id_);
-  if (PARTITION_LEVEL_ONE <= part_level_) {
-    //get hidden partitions size
-    len += ObSchemaUtils::get_partition_array_serialize_size(
-           hidden_partition_array_, hidden_partition_num_);
-  }
+  OB_UNIS_ADD_LEN_ARRAY_POINTER_IF(hidden_partition_array_, hidden_partition_num_, (PARTITION_LEVEL_ONE <= part_level_));
   OB_UNIS_ADD_LEN(define_user_id_);
   OB_UNIS_ADD_LEN(transition_point_);
   OB_UNIS_ADD_LEN(interval_range_);
   OB_UNIS_ADD_LEN(tablet_id_);
   OB_UNIS_ADD_LEN(aux_lob_meta_tid_);
   OB_UNIS_ADD_LEN(aux_lob_piece_tid_);
-  LST_DO_CODE(OB_UNIS_ADD_LEN,
-              table_flags_,
-              rls_policy_ids_,
-              rls_group_ids_,
-              rls_context_ids_);
+  OB_UNIS_ADD_LEN(depend_mock_fk_parent_table_ids_);
+  OB_UNIS_ADD_LEN(table_flags_);
+  OB_UNIS_ADD_LEN(rls_policy_ids_);
+  OB_UNIS_ADD_LEN(rls_group_ids_);
+  OB_UNIS_ADD_LEN(rls_context_ids_);
   OB_UNIS_ADD_LEN(object_status_);
   OB_UNIS_ADD_LEN(is_force_view_);
   OB_UNIS_ADD_LEN(truncate_version_);
-
   OB_UNIS_ADD_LEN(external_file_location_);
   OB_UNIS_ADD_LEN(external_file_location_access_info_);
   OB_UNIS_ADD_LEN(external_file_format_);
@@ -7596,14 +7460,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(kv_attributes_);
   OB_UNIS_ADD_LEN(name_generated_type_);
   OB_UNIS_ADD_LEN(lob_inrow_threshold_);
-
-  // get column group size
-  len += serialization::encoded_length_vi64(column_group_cnt_);
-  for (int64_t i = 0; i < column_group_cnt_; ++i) {
-    if (NULL != column_group_arr_[i]) {
-      len += column_group_arr_[i]->get_serialize_size();
-    }
-  }
+  OB_UNIS_ADD_LEN_ARRAY_POINTER(column_group_arr_, column_group_cnt_);
   OB_UNIS_ADD_LEN(is_column_store_supported_);
   OB_UNIS_ADD_LEN(max_used_column_group_id_);
   OB_UNIS_ADD_LEN(mlog_tid_);
@@ -7614,6 +7471,28 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(index_params_);
   OB_UNIS_ADD_LEN(micro_index_clustered_);
   OB_UNIS_ADD_LEN(mv_mode_);
+  // !!! end static check
+  /*
+   * 在此end static check注释前新增反序列化的成员
+   * 遵循以下规则：
+   * 1. 使用OB_UNIS_DECODE等标准序列化宏进行序列化，目前已有序列化宏如下：
+   *  a. OB_UNIS_ADD_LEN_ARRAY
+   *  b. OB_UNIS_ADD_LEN_ARRAY_POINTER_IF
+   *  c. OB_UNIS_ADD_LEN_IF
+   *  d. OB_UNIS_ADD_LEN
+   * 2. 不用添加if (OB_SUCC(ret))
+   * 3. 序列化宏与反序列化宏需要一一对应
+   * 4. 如果有无法使用标准序列化宏处理的成员，需要使用
+   * ```cpp
+   * // !!! FOR STATIC CHECKER BEGIN
+   * // THE FOLLOWING CODE CANNOT BE DESCRIBED USING SERIALIZE MACROS. THEY ARE EQUIVALENT TO THESE CODES:
+   * // 这里写对应的标准序列化宏
+   * 这里写代码
+   * // !!! FOR STATIC CHECKER END
+   * ```
+   * 格式的注释和代码提醒序列化检测脚本忽略该段代码
+   * 详细文档:
+   */
   return len;
 }
 
@@ -8380,6 +8259,57 @@ const ObConstraint *ObTableSchema::get_constraint(const uint64_t constraint_id) 
         });
 }
 
+int64_t ObTableSchema::get_index_count() const
+{
+  int64_t index_count = 0;
+  bool is_rowkey_doc_id_exist = false;
+  bool is_doc_id_rowkey_exist = false;
+  int64_t fts_index_aux_count = 0;
+  int64_t fts_doc_word_aux_count = 0;
+  int64_t multivalue_index_aux_count = 0;
+  bool is_vec_rowkey_vid_exist = false;
+  bool is_vec_vid_rowkey_exist = false;
+  int64_t vec_delta_buffer_count = 0;
+  int64_t vec_index_id_count = 0;
+  int64_t vec_index_snapshot_data_count = 0;
+  for (int64_t i = 0; i < get_index_tid_count(); ++i) {
+    ObIndexType index_type = simple_index_infos_.at(i).index_type_;
+    // Count the number of various index aux tables to determine the number of indexes that can be added.
+    // If there are other indexes with multiple auxiliary tables, you need to add processing branches.
+    if (share::schema::is_rowkey_doc_aux(index_type)) {
+      is_rowkey_doc_id_exist = true;
+    } else if (share::schema::is_doc_rowkey_aux(index_type)) {
+      is_doc_id_rowkey_exist = true;
+    } else if (share::schema::is_fts_index_aux(index_type)) {
+      ++fts_index_aux_count;
+    } else if (share::schema::is_fts_doc_word_aux(index_type)) {
+      ++fts_doc_word_aux_count;
+    } else if (share::schema::is_multivalue_index_aux(index_type)) {
+      ++multivalue_index_aux_count;
+    } else if (share::schema::is_vec_rowkey_vid_type(index_type)) {
+      is_vec_rowkey_vid_exist = true;
+    } else if (share::schema::is_vec_vid_rowkey_type(index_type)) {
+      is_vec_vid_rowkey_exist = true;
+    } else if (share::schema::is_vec_delta_buffer_type(index_type)) {
+      ++vec_delta_buffer_count;
+    } else if (share::schema::is_vec_index_id_type(index_type)) {
+      ++vec_index_id_count;
+    } else if (share::schema::is_vec_index_snapshot_data_type(index_type)) {
+      ++vec_index_snapshot_data_count;
+    } else if (ObIndexType::INDEX_TYPE_IS_NOT != index_type) {
+      ++index_count;
+    }
+  }
+  // Taking OB_MIN can ensure that the final index number is not greater than OB_MAX_INDEX_PER_TABLE.
+  // but cannot ensure aux table numbers does not exceed OB_MAX_AUX_TABLE_PER_MAIN_TABLE.
+  // Therefore, this function often appears with the OB_MAX_AUX_TABLE_PER_MAIN_TABLE limit.
+  index_count += (is_rowkey_doc_id_exist && is_doc_id_rowkey_exist) ?
+                  OB_MIN(fts_index_aux_count, fts_doc_word_aux_count) +  multivalue_index_aux_count : 0;
+  index_count += (is_vec_rowkey_vid_exist && is_vec_vid_rowkey_exist) ?
+                  OB_MIN(vec_delta_buffer_count, OB_MIN(vec_index_id_count, vec_index_snapshot_data_count)) : 0;
+  return index_count;
+}
+
 const ObConstraint *ObTableSchema::get_constraint(const ObString &constraint_name) const
 {
   return get_constraint_internal(
@@ -8767,7 +8697,7 @@ int ObTableSchema::add_simple_index_info(const ObAuxTableMetaInfo &simple_index_
 {
   int ret = OB_SUCCESS;
   bool need_add = true;
-  int64_t N = simple_index_infos_.count();
+  int64_t N = get_index_tid_count();
 
   // we are sure that index_tid are added in sorted order
   if (simple_index_info.table_id_ == OB_INVALID_ID) {
@@ -8785,7 +8715,7 @@ int ObTableSchema::add_simple_index_info(const ObAuxTableMetaInfo &simple_index_
   }
   if (OB_SUCC(ret) && need_add) {
     const int64_t last_pos = N - 1;
-    if (N >= common::OB_MAX_INDEX_PER_TABLE) {
+    if (N >= OB_MAX_AUX_TABLE_PER_MAIN_TABLE || get_index_count() >= common::OB_MAX_INDEX_PER_TABLE) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("index num in table is more than limited num", K(ret));
     } else if ((last_pos >= 0)
@@ -9499,6 +9429,71 @@ int ObTableSchema::has_all_column_group(bool &has_all_column_group) const
   return ret;
 }
 
+int ObTableSchema::has_non_default_column_group(bool &has_non_default_column_group) const
+{
+  int ret = OB_SUCCESS;
+  has_non_default_column_group = false;
+  ObSEArray<const ObColumnGroupSchema *, 8> column_group_metas;
+  if (OB_FAIL(get_store_column_groups(column_group_metas, false/*filter_empty_cg*/))) {
+    LOG_WARN("Failed to get column group metas", K(ret), KPC(this));
+  } else {
+    const ObColumnGroupSchema *cg_schema = nullptr;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < column_group_metas.count(); ++idx) {
+      if (OB_ISNULL(cg_schema = column_group_metas.at(idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null cg_schema", K(ret));
+      } else if (DEFAULT_COLUMN_GROUP != cg_schema->get_column_group_type()) {
+        has_non_default_column_group = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::adjust_column_group_array()
+{
+  // after v435, all cg and rowkey cg should exist in the front of column group array
+  // this interface is only used in create table / create index / offline ddl with new table / delayed column transform
+  int ret = OB_SUCCESS;
+  bool is_rowkey_cg_exist = false;
+  bool is_all_cg_exist = false;
+  ObColumnGroupSchema *cg_schema = nullptr;
+  uint64_t compat_version = 0;
+  if (!is_column_store_supported()) {
+    // do nothing
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(get_tenant_id(), compat_version))) {
+    LOG_WARN("fail to get min data version", K(ret), K(get_tenant_id()));
+  } else if (compat_version >= DATA_VERSION_4_3_5_0) {
+    if (OB_FAIL(is_column_group_exist(OB_ROWKEY_COLUMN_GROUP_NAME, is_rowkey_cg_exist))) {
+      LOG_WARN("fail to check is each column group exist", K(ret));
+    } else if (OB_FAIL(is_column_group_exist(OB_ALL_COLUMN_GROUP_NAME, is_all_cg_exist))) {
+      LOG_WARN("fail to check is all column group exist", K(ret));
+    } else if (is_rowkey_cg_exist && OB_FAIL(get_column_group_by_name(OB_ROWKEY_COLUMN_GROUP_NAME, cg_schema))) {
+      LOG_WARN("fail to get rowkey column group", K(ret), KPC(this));
+    } else if (is_all_cg_exist && OB_FAIL(get_column_group_by_name(OB_ALL_COLUMN_GROUP_NAME, cg_schema))) {
+      LOG_WARN("fail to get all column group", K(ret), KPC(this));
+    } else if (OB_NOT_NULL(cg_schema)) {
+      int64_t new_loc = column_group_cnt_ - 1;
+      for (int64_t i = column_group_cnt_ - 1; OB_SUCC(ret) && i >= 0; --i) {
+        if (OB_ISNULL(column_group_arr_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column_group should not be null", K(ret), K(i), K_(column_group_cnt));
+        } else if (column_group_arr_[i] != cg_schema) {
+          column_group_arr_[new_loc] = column_group_arr_[i];
+          new_loc -= 1;
+        } else {
+          // skip all cg or rowkey cg
+        }
+      }
+      if (OB_SUCC(ret)) {
+        column_group_arr_[0] = cg_schema;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableSchema::get_column_group_by_id(
     const uint64_t column_group_id,
     ObColumnGroupSchema *&column_group) const
@@ -9893,6 +9888,36 @@ int ObTableSchema::get_base_rowkey_column_group_index(int32_t &cg_idx) const
     if (OB_SUCC(ret) && !found) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected not found base/rowkey column group", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::check_is_normal_cgs_at_the_end(bool &is_normal_cgs_at_the_end) const
+{
+  int ret = OB_SUCCESS;
+  is_normal_cgs_at_the_end = false;
+  if (0 < column_group_cnt_) {
+    bool found_normal_cg = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_group_cnt_; i++) {
+      if (OB_ISNULL(column_group_arr_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column_group should not be null", K(ret), K(i), K_(column_group_cnt));
+      } else if (0 == column_group_arr_[i]->get_column_id_count()) {
+        if (column_group_arr_[i]->get_column_group_type() != DEFAULT_COLUMN_GROUP) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected column group type", K(ret), KPC(column_group_arr_[i]));
+        }
+        // skip default column group
+      } else if (SINGLE_COLUMN_GROUP == column_group_arr_[i]->get_column_group_type() ||
+                 NORMAL_COLUMN_GROUP == column_group_arr_[i]->get_column_group_type()) {
+        found_normal_cg = true;
+      } else {
+        if (!found_normal_cg) {
+          is_normal_cgs_at_the_end = true;
+        }
+        break;
+      }
     }
   }
   return ret;

@@ -561,7 +561,11 @@ int ObDropFTSIndexTask::succ()
 
 int ObDropFTSIndexTask::fail()
 {
-  return cleanup();
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(cleanup())) {
+    LOG_WARN("cleanup task failed", K(ret));
+  }
+  return ret;
 }
 
 int ObDropFTSIndexTask::cleanup_impl()

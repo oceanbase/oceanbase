@@ -1034,7 +1034,8 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_IS_FREE_LOCK == type_
       || T_FUN_SYS_IS_USED_LOCK == type_
       || T_FUN_SYS_RELEASE_LOCK == type_
-      || T_FUN_SYS_RELEASE_ALL_LOCKS == type_) {
+      || T_FUN_SYS_RELEASE_ALL_LOCKS == type_
+      || T_EXEC_VAR == type_) {
      is_const_inherit = false;
   }
   if (is_const_inherit && T_OP_GET_USER_VAR == type_) {
@@ -1567,7 +1568,6 @@ bool ObExprEqualCheckContext::compare_ora_numeric_consts(const ObConstRawExpr &l
 bool ObExprEqualCheckContext::compare_ora_numeric_consts(const ObSysFunRawExpr &left, const ObConstRawExpr &right)
 {
   int &ret = err_code_;
-  LOG_INFO("debug test");
   bool result = false;
   if (OB_LIKELY(lib::is_oracle_mode() && left.get_expr_type()== T_FUN_SYS_CAST && left.is_const_expr())) {
     ObCastMode cm = left.get_extra();
@@ -1645,6 +1645,7 @@ int64_t ObConstRawExpr::to_string(char* buf, const int64_t buf_len) const
       N_EXPR_INFO, info_,
       N_REL_ID, rel_ids_,
       N_VALUE, value_,
+      "is_dynamic_questionmark", is_dynamic_eval_questionmark_,
       K_(expr_hash));
   if (!literal_prefix_.empty()) {
     J_COMMA();
@@ -1668,6 +1669,8 @@ int ObVarRawExpr::assign(const ObRawExpr &other)
     } else {
       const ObVarRawExpr &var_expr = static_cast<const ObVarRawExpr &>(other);
       result_type_assigned_ = var_expr.result_type_assigned_;
+      ref_expr_ = var_expr.get_ref_expr();
+      ref_index_ = var_expr.get_ref_index();
     }
   }
   return ret;
@@ -1687,9 +1690,18 @@ bool ObVarRawExpr::inner_same_as(const ObRawExpr &expr,
                                  ObExprEqualCheckContext *check_context) const
 {
   UNUSED(check_context);
-  return expr.is_var_expr()
+  bool res = expr.is_var_expr()
          && get_expr_type() == expr.get_expr_type()
          && get_result_type() == expr.get_result_type();
+  if (res && ref_expr_ != NULL) {
+    const ObVarRawExpr &var_expr = static_cast<const ObVarRawExpr &>(expr);
+    if (var_expr.get_ref_expr() == NULL) {
+      res = false;
+    } else {
+      res = ref_expr_->same_as(*var_expr.get_ref_expr(), check_context);
+    }
+  }
+  return res;
 }
 
 void ObVarRawExpr::inner_calc_hash()

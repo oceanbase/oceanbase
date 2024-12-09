@@ -319,6 +319,7 @@ int ObRFBloomFilterMsg::reuse()
   is_empty_ = true;
   bloom_filter_.reset_filter();
   need_send_msg_ = true;
+  is_active_ = true;
   return ret;
 }
 
@@ -557,7 +558,9 @@ int ObRFBloomFilterMsg::might_contain(const ObExpr &expr,
   }
   ObDatum *datum = nullptr;
   ObHashFunc hash_func;
-  if (OB_UNLIKELY(is_empty_)) {
+  if (!is_active_) {
+    res.set_int(1);
+  } else if (OB_UNLIKELY(is_empty_)) {
     res.set_int(0);
     filter_ctx.filter_count_++;
     filter_ctx.check_count_++;
@@ -887,7 +890,20 @@ int ObRFBloomFilterMsg::might_contain_vector(
     ObExprJoinFilter::ObExprJoinFilterContext &filter_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_empty_)) {
+  if (!is_active_) {
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_UNIFORM == res_format) {
+      IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
+      ret = proc_filter_not_active(res_vec, skip, bound);
+    } else if (VEC_FIXED == res_format) {
+      IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
+      ret = proc_filter_not_active(res_vec, skip, bound);
+    }
+    if (OB_SUCC(ret)) {
+      eval_flags.set_all(true);
+    }
+  } else if (OB_UNLIKELY(is_empty_)) {
     int64_t total_count = 0;
     int64_t filter_count = 0;
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
@@ -2036,6 +2052,7 @@ int ObRFInFilterMsg::reuse()
   serial_rows_.reset();
   rows_set_.reuse();
   (void)reuse_query_range();
+  is_active_ = true;
   return ret;
 }
 

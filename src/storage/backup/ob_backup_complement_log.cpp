@@ -438,7 +438,8 @@ int ObBackupLSLogGroupDag::fill_info_param(compaction::ObIBasicInfoParam *&out_p
 int ObBackupLSLogGroupDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", to_cstring(ctx_->ls_id_)))) {
+  int64_t pos = 0;
+  if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos, "ls_id=", ctx_->ls_id_))) {
     LOG_WARN("failed to fill dag_key", K(ret), K_(ls_id));
   }
   return ret;
@@ -795,7 +796,8 @@ int ObBackupLSLogDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param,
 int ObBackupLSLogDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", to_cstring(ls_id_)))) {
+  int64_t pos = 0;
+  if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos, "ls_id=", ls_id_))) {
     LOG_WARN("failed to fill dag_key", K(ret), K_(ls_id));
   }
   return ret;

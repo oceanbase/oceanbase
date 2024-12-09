@@ -45,6 +45,16 @@ public:
   virtual ~TestBackupLinkedReaderWriter();
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 
 private:
   void clean_env_();
@@ -311,12 +321,6 @@ void TestBackupLinkedReaderWriter::SetUp()
   }
   // set observer memory limit
   CHUNK_MGR.set_limit(8L * 1024L * 1024L * 1024L);
-  ret = ObTmpFileManager::get_instance().init();
-  if (OB_INIT_TWICE == ret) {
-    ret = OB_SUCCESS;
-  } else {
-    ASSERT_EQ(OB_SUCCESS, ret);
-  }
   static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
   ObTenantIOManager *io_service = nullptr;
@@ -329,7 +333,6 @@ void TestBackupLinkedReaderWriter::SetUp()
 
 void TestBackupLinkedReaderWriter::TearDown()
 {
-  ObTmpFileManager::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
 }
 

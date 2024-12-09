@@ -273,10 +273,11 @@ int ObCOMerger:: alloc_row_writers(
     ObSSTable *cg_sstable = nullptr;
     ObITableReadInfo *read_info = nullptr;
     bool add_column = false;
-
+    const bool is_iter_co_build_row_store = ctx->is_build_row_store_from_rowkey_cg()
+                                            || (ctx->is_build_redundant_row_store_from_rowkey_cg() && 0 == idx);
     if (OB_FAIL(ctx->get_cg_schema_for_merge(idx, cg_schema_ptr))) {
       LOG_WARN("fail to get cg schema for merge", K(ret), K(idx));
-    } else if (OB_ISNULL(writer = OB_NEWx(ObCOMergeRowWriter, &merger_arena_, ctx->is_build_row_store_from_rowkey_cg()))) {
+    } else if (OB_ISNULL(writer = OB_NEWx(ObCOMergeRowWriter, &merger_arena_, is_iter_co_build_row_store))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to allocate memory for ObCOMergeWriter", K(ret));
     } else if (OB_ISNULL(merge_infos[idx])) {

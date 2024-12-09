@@ -95,6 +95,8 @@ enum class ObTableLoadExeMode {
 struct ObTableLoadParam
 {
 public:
+  static const int64_t MAX_BATCH_SIZE = 65536;
+  static const int64_t DEFAULT_BATCH_SIZE = 256;
   ObTableLoadParam()
     : tenant_id_(common::OB_INVALID_ID),
       table_id_(common::OB_INVALID_ID),
@@ -138,7 +140,7 @@ public:
            common::OB_INVALID_ID != table_id_ &&
            parallel_ > 0 &&
            session_count_ > 0 &&
-           batch_size_ > 0 &&
+           batch_size_ > 0 && batch_size_ <= MAX_BATCH_SIZE &&
            column_count_ > 0 &&
            sql::ObLoadDupActionType::LOAD_INVALID_MODE != dup_action_ &&
            storage::ObDirectLoadMethod::is_type_valid(method_) &&

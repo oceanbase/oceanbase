@@ -90,6 +90,10 @@ public:
       ptr = NULL;
     }
   }
+  void set_nway(int nway)
+  {
+    allocator_.set_nway(static_cast<int32_t>(nway));
+  }
 
 private:
   ObSliceAlloc allocator_;
@@ -147,6 +151,11 @@ inline void free_helper(T *ptr)
 
 #define op_reclaim_alloc(type) op_alloc(type)
 #define op_reclaim_free(ptr) op_free(ptr)
+
+
+#define op_alloc_v2(type) op_alloc(type)
+
+#define op_free_v2(ptr) op_free(ptr)
 
 } // end of namespace common
 } // end of namespace oceanbase

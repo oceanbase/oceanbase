@@ -222,6 +222,7 @@ public:
                                          ObIArray<uint64_t> &ignore_cols,
                                          ObIArray<PrefixColumnPair> &pairs);
   static int get_all_prefix_index_text_pairs(const share::schema::ObTableSchema &table_schema,
+                                             ObIArray<uint64_t> &filter_cols,
                                              ObIArray<PrefixColumnPair> &filter_pairs);
 
   static int copy_local_index_prefix_stats_to_text(ObIAllocator &allocator,

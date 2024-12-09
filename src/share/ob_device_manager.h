@@ -17,6 +17,8 @@
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/lock/ob_qsync_lock.h"
+#include "lib/restore/ob_storage_info.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -24,6 +26,33 @@ namespace common
 {
 
 class ObObjectStorageInfo;
+class ObTenantStsCredentialMgr : public ObTenantStsCredentialBaseMgr
+{
+public:
+  ObTenantStsCredentialMgr() {}
+  virtual ~ObTenantStsCredentialMgr() {}
+  virtual int get_sts_credential(char *sts_credential, const int64_t sts_credential_buf_len) override;
+  virtual int check_sts_credential(omt::ObTenantConfigGuard &tenant_config) const;
+  static ObTenantStsCredentialBaseMgr &get_instance()
+  {
+    static ObTenantStsCredentialMgr mgr;
+    return mgr;
+  }
+  const static int64_t LOG_INTERVAL_US = 5 * 1000 * 1000; // 5s
+};
+
+class ObClusterVersionMgr: public ObClusterVersionBaseMgr
+{
+public:
+  ObClusterVersionMgr() {}
+  virtual ~ObClusterVersionMgr() {}
+  virtual int is_supported_assume_version() const override;
+  static ObClusterVersionMgr &get_instance()
+  {
+    static ObClusterVersionMgr mgr;
+    return mgr;
+  }
+};
 
 class ObDeviceManager
 {
@@ -33,6 +62,10 @@ public:
   void destroy();
   static ObDeviceManager &get_instance();
 
+  int get_device_key(const common::ObString &storage_info,
+                     const common::ObString &storage_type_prefix,
+                     char *device_key,
+                     const int64_t device_key_len) const;
   /*for object device, will return a new object to caller*/
   /*ofs/local will share in upper logical*/
   // 1. ObObjectStorageInfo is a member of ObObjectDevice, which is used for accessing object storage.
@@ -46,7 +79,9 @@ public:
                  ObIODevice *&device_handle);
   // get ObLocalDevice or ObLocalCacheDevice.
   // @storage_type_prefix only allows OB_LOCAL_PREFIX and OB_LOCAL_CACHE_PREFIX.
-  static int get_local_device(const ObString &storage_type_prefix, ObIODevice *&device_handle);
+  static int get_local_device(const ObString &storage_type_prefix,
+                              const ObStorageIdMod &storage_id_mod,
+                              ObIODevice *&device_handle);
   int release_device(common::ObIODevice*& device_handle);
   //for test
   int64_t get_device_cnt() {return device_count_;}

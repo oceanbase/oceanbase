@@ -512,6 +512,7 @@ typedef enum ObItemType
   T_FUN_SYS_ENHANCED_AES_DECRYPT = 780,
   T_FUNC_SYS_MYSQL_PROC_INFO = 781,
   T_FUN_SYS_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR = 782,
+  T_FUN_SYS_MYSQL_TO_CHAR = 783,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
@@ -888,6 +889,12 @@ typedef enum ObItemType
   T_FUNC_SYS_ARRAY_CONCAT = 1762,
   T_FUNC_SYS_ARRAY_DIFFERENCE = 1763,
   T_FUNC_SYS_ARRAY_FIRST = 1764,
+  T_FUNC_SYS_ARRAY_MAX = 1765,
+  T_FUNC_SYS_ARRAY_MIN = 1766,
+  T_FUNC_SYS_ARRAY_AVG = 1767,
+  T_FUNC_SYS_ARRAY_SUM = 1768,
+  T_FUNC_SYS_ARRAY_COMPACT = 1769,
+  T_FUNC_SYS_ARRAY_SORT = 1770,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -911,12 +918,21 @@ typedef enum ObItemType
   T_FUN_SYS_INNER_DOUBLE_TO_INT = 1819,
   T_FUN_SYS_INNER_DECIMAL_TO_YEAR = 1820,
   T_FUN_SYS_SPLIT_PART = 1821,
+  T_FUN_SYS_KEYVALUE = 1822,
   T_FUN_SYS_VEC_VID = 1900,   // vector index
   T_FUN_SYS_VEC_TYPE = 1901,
   T_FUN_SYS_VEC_VECTOR = 1902,
   T_FUN_SYS_VEC_SCN = 1903,
   T_FUN_SYS_VEC_KEY = 1904,
   T_FUN_SYS_VEC_DATA = 1905,
+  T_FUN_SYS_VEC_IVF_CENTER_ID = 1906,   // ivf vector index
+  T_FUN_SYS_VEC_IVF_CENTER_VECTOR = 1907,
+  T_FUN_SYS_VEC_IVF_FLAT_DATA_VECTOR = 1908,
+  T_FUN_SYS_VEC_IVF_SQ8_DATA_VECTOR = 1909,
+  T_FUN_SYS_VEC_IVF_META_ID = 1910,
+  T_FUN_SYS_VEC_IVF_META_VECTOR = 1911,
+  T_FUN_SYS_VEC_IVF_PQ_CENTER_ID = 1912,
+  T_FUN_SYS_VEC_IVF_PQ_CENTER_IDS = 1913,
   T_FUN_SYS_END = 2000,
   T_FUN_SYS_ALIGN_DATE4CMP = 2010,
   T_FUN_SYS_INNER_ROW_CMP_VALUE = 2011,
@@ -964,6 +980,7 @@ typedef enum ObItemType
   T_FUN_SYS_CALC_SUB_PARTITION_NAME = 2053,
   T_FUN_SYS_CALC_PARTITION_IDX = 2054,
   T_FUN_SYS_CALC_SUB_PARTITION_IDX = 2055,
+  T_FUN_SYS_CALC_ODPS_SIZE = 2056,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -2628,7 +2645,6 @@ typedef enum ObItemType
 
   T_UNION_MERGE_HINT = 4740,
   T_UNION_MERGE_LIST = 4741,
-
   T_PSEUDO_OLD_NEW_COL = 4742,
 
   T_TRANSFORM_DISTINCT_AGG = 4743,
@@ -2651,6 +2667,22 @@ typedef enum ObItemType
   T_LS_ATTR_LIST = 4757,
   T_ALTER_LS = 4758,
   T_UNIT_GROUP = 4759,
+  T_TRANSPOSE_TABLE = 4760,
+  T_FUN_UNPIVOT = 4761,
+
+  //odps external table
+  T_TUNNEL_ENDPOINT = 4762,
+  T_COLLECT_STATISTICS_ON_CREATE = 4763,
+  T_LOAD_TIME_ZONE_INFO = 4764,
+
+  // create wrapped ddl
+  T_CREATE_WRAPPED_PACKAGE = 4765,
+  T_CREATE_WRAPPED_PACKAGE_BODY = 4766,
+  T_CREATE_WRAPPED_TYPE = 4767,
+  T_CREATE_WRAPPED_TYPE_BODY = 4768,
+  T_CREATE_WRAPPED_FUNCTION = 4769,
+  T_CREATE_WRAPPED_PROCEDURE = 4770,
+  T_BASE64_CIPHER = 4771,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2734,7 +2766,8 @@ typedef enum ObOutlineType
     || ((op) == T_OP_OUTPUT_PACK) \
     || ((op) == T_FUN_SYS_JSON_OBJECT) \
     || ((op) == T_FUN_SYS_JSON_ARRAY) \
-    || ((op) == T_OP_TO_OUTFILE_ROW)) \
+    || ((op) == T_OP_TO_OUTFILE_ROW) \
+    || ((op) == T_FUNC_SYS_INNER_IS_TRUE)) \
 
 
 
@@ -2805,6 +2838,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_SYS_RB_BUILD_AGG ||\
                          (op) == T_FUN_SYS_RB_OR_AGG ||\
                          (op) == T_FUN_SYS_RB_AND_AGG ||\
+                         (op) == T_FUNC_SYS_ARRAY_AGG ||\
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \

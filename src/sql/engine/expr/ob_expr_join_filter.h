@@ -49,6 +49,7 @@ public:
           need_check_ready_ = true;
           is_first_ = true;
           is_partition_wise_jf_ = false;
+          is_active_ = true;
         }
       virtual ~ObExprJoinFilterContext();
     public:
@@ -64,6 +65,14 @@ public:
         // pushdown filter parameters
         return is_partition_wise_jf_;
       }
+
+      inline void rescan()
+      {
+        n_times_ = 0;
+        is_ready_ = false;
+        slide_window_.reset_for_rescan();
+      }
+
       inline void collect_monitor_info(const int64_t filtered_rows_count,
                                        const int64_t check_rows_count,
                                        const int64_t total_rows_count) override final
@@ -121,7 +130,8 @@ public:
           // for runtime filter pushdown, if is partition wise join, we need to reset
           // pushdown filter parameters
           bool is_partition_wise_jf_ : 1;
-          uint64_t reserved_:59;
+          bool is_active_ : 1;
+          uint64_t reserved_:58;
         };
       };
       int64_t max_wait_time_ms_;

@@ -198,6 +198,7 @@ public:
       const bool need_create_empty_major_sstable,
       const share::SCN &clog_checkpoint_scn,
       const share::SCN &mds_checkpoint_scn,
+      const bool is_split_dest_tablet,
       const bool micro_index_clustered,
       const bool need_generate_cs_replica_cg_array,
       const bool has_cs_replica,
@@ -548,7 +549,6 @@ public:
   int get_kept_snapshot_info(
       const int64_t min_reserved_snapshot_on_ls,
       ObStorageSnapshotInfo &snapshot_info) const;
-  int get_end_autoinc_seq(uint64_t &end_autoinc_seq);
   int check_schema_version_elapsed(
       const int64_t schema_version,
       const bool need_wait_trans_end,

@@ -19,7 +19,6 @@
 #include "storage/direct_load/ob_direct_load_struct.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_trans_param.h"
-#include "storage/direct_load/ob_direct_load_fast_heap_table.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 
 namespace oceanbase

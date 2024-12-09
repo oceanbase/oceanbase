@@ -265,7 +265,9 @@ int ObUpdateResolver::check_update_assign_duplicated(const ObUpdateStmt *update_
         const ObAssignment &assign_item = table_info->assignments_.at(j);
         if (assign_item.is_duplicated_) {
           ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(assign_item.column_expr_->get_column_name()));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
+              helper.convert(assign_item.column_expr_->get_column_name()));
         }
       }
     }
@@ -487,8 +489,8 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
   const ObTableSchema *table_schema = NULL;
   const TableItem *table_item = NULL;
   ObUpdateTableInfo *table_info = NULL;
-  uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
-  int64_t gindex_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tid[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t gindex_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.session_info_) ||
       OB_ISNULL(allocator_) || OB_ISNULL(update_stmt)) {

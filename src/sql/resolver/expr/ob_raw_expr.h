@@ -1758,7 +1758,7 @@ public:
        is_called_in_sql_(true),
        is_calculated_(false),
        is_deterministic_(true),
-       partition_id_calc_type_(CALC_INVALID),
+       partition_id_calc_type_(CALC_NORMAL),
        local_session_var_(),
        local_session_var_id_(OB_INVALID_INDEX_INT64),
        attr_exprs_(),
@@ -1781,7 +1781,7 @@ public:
        is_called_in_sql_(true),
        is_calculated_(false),
        is_deterministic_(true),
-       partition_id_calc_type_(CALC_INVALID),
+       partition_id_calc_type_(CALC_NORMAL),
        may_add_interval_part_(MayAddIntervalPart::NO),
        runtime_filter_type_(NOT_INIT_RUNTIME_FILTER_TYPE),
        with_null_equal_cond_(false),
@@ -2007,7 +2007,8 @@ public:
   bool is_vector_sort_expr() const {
     return get_expr_type() == T_FUN_SYS_L2_DISTANCE ||
            get_expr_type() == T_FUN_SYS_INNER_PRODUCT ||
-           get_expr_type() == T_FUN_SYS_NEGATIVE_INNER_PRODUCT; }
+           get_expr_type() == T_FUN_SYS_NEGATIVE_INNER_PRODUCT ||
+           get_expr_type() == T_FUN_SYS_COSINE_DISTANCE; }
   PartitionIdCalcType get_partition_id_calc_type() const { return partition_id_calc_type_; }
   void set_may_add_interval_part(MayAddIntervalPart flag) {
     may_add_interval_part_ = flag;
@@ -2371,13 +2372,17 @@ public:
     : ObIRawExpr(alloc),
       ObTerminalRawExpr(alloc),
       ObVarExpr(),
-      result_type_assigned_(false)
+      result_type_assigned_(false),
+      ref_expr_(nullptr),
+      ref_index_(common::OB_INVALID_ID)
   { ObIRawExpr::set_expr_class(ObIRawExpr::EXPR_VAR); }
   ObVarRawExpr(ObItemType expr_type = T_INVALID)
     : ObIRawExpr(expr_type),
       ObTerminalRawExpr(expr_type),
       ObVarExpr(),
-      result_type_assigned_(false)
+      result_type_assigned_(false),
+      ref_expr_(nullptr),
+      ref_index_(common::OB_INVALID_ID)
   { set_expr_class(ObIRawExpr::EXPR_VAR); }
   virtual ~ObVarRawExpr() {}
 
@@ -2394,9 +2399,15 @@ public:
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
   void set_result_type_assigned(bool v) { result_type_assigned_ = v; }
   bool get_result_type_assigned() { return result_type_assigned_; }
+  ObRawExpr *get_ref_expr() const { return ref_expr_; }
+  int64_t get_ref_index() const { return ref_index_; }
+  void set_ref_index(int64_t ref_index) { ref_index_ = ref_index; }
+  void set_ref_expr(ObRawExpr *ref_expr) { ref_expr_ = ref_expr; }
 
 private:
   bool result_type_assigned_;
+  ObRawExpr *ref_expr_;
+  int64_t ref_index_;
   DISALLOW_COPY_AND_ASSIGN(ObVarRawExpr);
 };
 

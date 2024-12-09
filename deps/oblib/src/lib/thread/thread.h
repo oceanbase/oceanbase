@@ -21,6 +21,12 @@
 #include "rpc/obrpc/ob_rpc_packet.h"
 
 namespace oceanbase {
+
+namespace common
+{
+class ObTimerService;
+}
+
 namespace lib {
 class ObPThread;
 
@@ -41,6 +47,7 @@ public:
     return ret;
   }
   virtual uint64_t id() const = 0;
+  virtual common::ObTimerService *get_timer_service() = 0;
 };
 
 /// \class

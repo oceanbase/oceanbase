@@ -81,6 +81,7 @@ install(FILES
   tools/systemd/profile/oceanbase-pre.json
   tools/systemd/profile/oceanbase.service
   tools/systemd/profile/oceanbase-service.sh
+  tools/systemd/profile/telemetry-pre.json
   tools/systemd/profile/telemetry.sh
   DESTINATION profile
   COMPONENT server)
@@ -359,8 +360,6 @@ if(OB_BUILD_OPENSOURCE)
     deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1
     deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1.0.1
     deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so
-    deps/3rd/usr/local/oceanbase/deps/devel/lib/mariadb/libmariadb.so
-    deps/3rd/usr/local/oceanbase/deps/devel/lib/mariadb/libmariadb.so.3
     DESTINATION lib
     COMPONENT libs
   )

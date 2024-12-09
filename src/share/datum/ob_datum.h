@@ -462,6 +462,7 @@ struct ObDatumVector {
   ObDatum  *at(const int64_t i) const { return datums_ + (mask_ & i); }
 
   void set_batch(const bool is) { mask_ = is ? UINT64_MAX : 0; }
+  bool is_batch() const { return UINT64_MAX == mask_;  }
 
   TO_STRING_KV(KP(datums_), K(mask_));
   ObDatum  *datums_   = nullptr;

@@ -27,6 +27,49 @@ namespace sql
 class ObDASExtraData;
 class ObLocalIndexLookupOp;
 
+struct ObDASTCBMemProfileKey {
+  ObDASTCBMemProfileKey()
+    : fake_unique_id_(0), timestamp_(0) {}
+
+  explicit ObDASTCBMemProfileKey(const ObDASTCBMemProfileKey &key)
+    : fake_unique_id_(key.fake_unique_id_), timestamp_(key.timestamp_) {}
+
+  void init(uint64_t timestamp, int64_t thread_id, int64_t op_id) {
+    timestamp_ = timestamp;
+    // [op_id (32bit), thread_id (32bit)]
+    fake_unique_id_ = (((uint64_t)op_id) << 32) | ((uint64_t)0xffffffff & thread_id);
+  }
+
+  void reset() {
+    fake_unique_id_ = 0;
+    timestamp_ = 0;
+  }
+
+  inline uint64_t hash() const
+  {
+    uint64_t hash_val = 0;
+    hash_val = common::murmurhash(&fake_unique_id_, sizeof(uint64_t), 0);
+    hash_val = common::murmurhash(&timestamp_, sizeof(uint64_t), hash_val);
+    return hash_val;
+  }
+  int hash(int64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+
+  inline bool operator==(const ObDASTCBMemProfileKey& key) const
+  {
+    return fake_unique_id_ == key.fake_unique_id_ && timestamp_ == key.timestamp_;
+  }
+
+  inline bool is_valid() {
+    return (fake_unique_id_ > 0) && (timestamp_ > 0);
+  }
+
+  uint64_t fake_unique_id_;
+  uint64_t timestamp_;
+
+  TO_STRING_KV(K(fake_unique_id_), K(timestamp_));
+  OB_UNIS_VERSION(1);
+};
+
 struct ObDASScanCtDef : ObDASBaseCtDef
 {
   OB_UNIS_VERSION(1);
@@ -167,9 +210,10 @@ public:
       ss_key_ranges_(),
       mbr_filters_(),
       task_count_(1),
-      scan_op_id_(OB_INVALID_ID),
-      scan_rows_(OB_INVALID_ID),
-      row_width_(OB_INVALID_ID)
+      scan_op_id_(common::OB_INVALID_ID),
+      scan_rows_size_(common::OB_INVALID_ID),
+      row_width_(common::OB_INVALID_ID),
+      das_tasks_key_()
   { }
 
   virtual ~ObDASScanRtDef();
@@ -191,10 +235,9 @@ public:
                        K_(key_ranges),
                        K_(ss_key_ranges),
                        K_(mbr_filters),
-                       K_(task_count),
                        K_(scan_op_id),
-                       K_(scan_rows),
-                       K_(row_width));
+                       K_(scan_rows_size),
+                       K_(das_tasks_key));
   int init_pd_op(ObExecContext &exec_ctx, const ObDASScanCtDef &scan_ctdef);
 
   storage::ObRow2ExprsProjector *p_row2exprs_projector_;
@@ -220,10 +263,12 @@ public:
   common::ObSEArray<common::ObNewRange, 1> key_ranges_;
   common::ObSEArray<common::ObNewRange, 1> ss_key_ranges_;
   common::ObSEArray<common::ObSpatialMBR, 1> mbr_filters_;
-  int64_t task_count_;
+  int64_t task_count_;  // no use
   uint64_t scan_op_id_;
-  int64_t scan_rows_;
-  int64_t row_width_;
+  int64_t scan_rows_size_;
+  int64_t row_width_;   // no use
+  ObDASTCBMemProfileKey das_tasks_key_;
+
 private:
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;
@@ -253,6 +298,8 @@ public:
 
   virtual int open_op() override;
   virtual int release_op() override;
+  virtual int record_task_result_to_rtdef() override { return OB_SUCCESS; }
+  virtual int assign_task_result(ObIDASTaskOp *other) override { return OB_SUCCESS; }
   storage::ObTableScanParam &get_scan_param() { return scan_param_; }
   const storage::ObTableScanParam &get_scan_param() const { return scan_param_; }
 
@@ -290,7 +337,7 @@ public:
   bool is_contain_trans_info() {return NULL != scan_ctdef_->trans_info_expr_; }
   int do_table_scan();
   int do_domain_index_lookup();
-  int get_text_ir_tablet_ids(
+  int get_base_text_ir_tablet_ids(
       common::ObTabletID &inv_idx_tablet_id,
       common::ObTabletID &fwd_idx_tablet_id,
       common::ObTabletID &doc_id_idx_tablet_id);
@@ -301,6 +348,7 @@ public:
       common::ObTabletID &snapshot_tid,
       common::ObTabletID &com_aux_vec_tid);
   int get_index_merge_tablet_ids(common::ObIArray<common::ObTabletID> &index_merge_tablet_ids);
+  int get_func_lookup_tablet_ids(ObDASRelatedTabletID &related_tablet_ids);
   bool enable_rich_format() const { return scan_rtdef_->enable_rich_format(); }
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,
                        KPC_(scan_ctdef),
@@ -315,6 +363,7 @@ protected:
   common::ObNewRowIterator *get_output_result_iter() { return result_; }
   ObDASIterTreeType get_iter_tree_type() const;
   bool is_index_merge(const ObDASBaseCtDef *attach_ctdef) const;
+  bool is_func_lookup(const ObDASBaseCtDef *attach_ctdef) const;
 public:
   ObSEArray<ObDatum *, 4> trans_info_array_;
 protected:

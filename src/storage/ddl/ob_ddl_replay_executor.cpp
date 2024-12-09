@@ -500,6 +500,7 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
                                                     redo_info.parallel_cnt_,
                                                     redo_info.cg_cnt_))) {
         LOG_WARN("failed to write tablet gc flag file", K(ret));
+      } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
       } else if (OB_FAIL(write_ss_block(write_info, macro_handle))) {
         LOG_WARN("failed to write shared storage block", K(ret));
       }
@@ -970,7 +971,7 @@ int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
   const ObIArray<ObTabletID> *dest_tablet_ids = nullptr;
   const int64_t wait_start_ts = ObTimeUtility::fast_current_time();
   bool is_lob_tablet = false;
-  bool is_all_majors_existed = false;
+  bool is_data_split_finished = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
@@ -1007,22 +1008,22 @@ int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObTabletSplitUtil::check_major_sstables_exist(ls_id, *dest_tablet_ids, is_all_majors_existed))) {
+      if (OB_FAIL(ObTabletSplitUtil::check_data_split_finished(ls_id, *dest_tablet_ids, is_data_split_finished))) {
         LOG_WARN("check all tablets major exist failed", K(ret), K(ls_id), KPC(dest_tablet_ids));
-      } else if (!is_all_majors_existed) {
+      } else if (!is_data_split_finished) {
         ret = OB_EAGAIN;
       }
     }
   }
   if (OB_TABLET_STATUS_NO_NEED_TO_SPLIT == ret) {
-    LOG_INFO("skip replaying the tablet split finish log", K(ret), K(is_all_majors_existed), KPC(log_));
+    LOG_INFO("skip replaying the tablet split finish log", K(ret), K(is_data_split_finished), KPC(log_));
     //overwrite ret
     ret = OB_SUCCESS;
     if (OB_FAIL(modify_tablet_restore_status_if_need(*dest_tablet_ids, handle, ls_))) {
       LOG_WARN("failed to modify tablet restore status", K(ret), K(dest_tablet_ids), "src_tablet_handle", handle, KPC(log_));
     }
   } else {
-    LOG_INFO("finish replay tablet split finish log", K(ret), K(is_all_majors_existed), K(scn_), KPC(log_),
+    LOG_INFO("finish replay tablet split finish log", K(ret), K(is_data_split_finished), K(scn_), KPC(log_),
         "wait_elpased_s", (ObTimeUtility::fast_current_time() - wait_start_ts) / 1000000L);
   }
   return ret;

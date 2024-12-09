@@ -487,10 +487,21 @@ private:
 private:
   int build_backup_file_header_(ObBackupFileHeader &file_header);
   int do_write_file_header_();
-  int do_backup_ddl_other_blocks_();
-  int do_backup_other_blocks_addr_block_();
-  int do_backup_macro_block_data_(common::ObIArray<ObIODevice *> &device_handle);
-  int do_backup_meta_data_(ObIODevice *device_handle);
+  int prepare_macro_block_readers_(ObMultiMacroBlockBackupReader *&macro_reader,
+                                   ObMultiMacroBlockBackupReader *&ddl_macro_reader,
+                                   common::ObIArray<ObIODevice *> &device_handle_array);
+  int do_iterate_backup_items_(common::ObIArray<ObIODevice *> &device_handle);
+  int do_prepare_sstable_builders_(const ObBackupProviderItem &item);
+  int do_backup_single_ddl_other_block_(ObMultiMacroBlockBackupReader *reader, const ObBackupProviderItem &item);
+  int do_wait_index_builder_ready_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key);
+  int do_backup_single_macro_block_data_(ObMultiMacroBlockBackupReader *macro_reader,
+      const ObBackupProviderItem &item, common::ObIArray<ObIODevice *> &device_handle);
+  int do_backup_single_meta_data_(const ObBackupProviderItem &item, ObIODevice *device_handle);
+  int do_wait_sstable_index_builder_ready_(ObTabletHandle &tablet_handle);
+  int prepare_tablet_sstable_index_builders_(const common::ObTabletID &tablet_id,
+      const bool is_major_compaction_mview_dep_tablet, common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
+  int open_tablet_sstable_index_builder_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
+      const storage::ObITable::TableKey &table_key, blocksstable::ObSSTable *sstable);
   int do_backup_tablet_meta_(const ObTabletMetaReaderType reader_type, const ObBackupMetaType meta_type,
       const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id,
       ObTabletHandle &tablet_handle, ObIODevice *device_handle);
@@ -567,6 +578,8 @@ private:
       const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
   int inner_check_reuse_block_ready_(const common::ObTabletID &tablet_id,
       const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index, bool &is_ready);
+  int check_need_reuse_sstable_macro_block_for_mv_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
+      const blocksstable::ObLogicMacroBlockId &logic_id, bool &need_reuse_for_mv);
 
 private:
   static const int64_t CHECK_DISK_SPACE_INTERVAL = 5 * 1000 * 1000;  // 5s;

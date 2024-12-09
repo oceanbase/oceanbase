@@ -29,7 +29,7 @@ int ObTmpFileSwapJob::init(int64_t expect_swap_size, uint32_t timeout_ms)
     STORAGE_LOG(WARN, "ObTmpFileSwapJob init twice", KR(ret));
   } else if (timeout_ms <= 0) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(swap_cond_.init(ObWaitEventIds::NULL_EVENT))) {
+  } else if (OB_FAIL(swap_cond_.init(ObWaitEventIds::THREAD_IDLING_COND_WAIT))) {
     STORAGE_LOG(WARN, "ObTmpFileSwapJob init cond failed", KR(ret));
   } else {
     is_inited_ = true;
@@ -100,7 +100,7 @@ int ObTmpFileSwapJob::signal_swap_complete(int ret_code)
 void ObTmpFileFlushMonitor::reset()
 {
   flush_task_cnt_ = 0;
-  total_flush_data_length_ = 0;
+  total_flushing_data_length_ = 0;
   max_flush_data_length_ = -1;
   min_flush_data_length_ = INT64_MAX;
   f1_cnt_ = 0;
@@ -113,7 +113,7 @@ void ObTmpFileFlushMonitor::reset()
 void ObTmpFileFlushMonitor::print_statistics()
 {
   int64_t flush_task_cnt = flush_task_cnt_;
-  int64_t avg_flush_data_len = total_flush_data_length_ / max(flush_task_cnt, 1);
+  int64_t avg_flush_data_len = total_flushing_data_length_ / max(flush_task_cnt, 1);
   int64_t max_flush_data_len = max_flush_data_length_;
   int64_t min_flush_data_len = min_flush_data_length_ == INT64_MAX ? -1 : min_flush_data_length_;
   int64_t f1_cnt = f1_cnt_;
@@ -152,7 +152,7 @@ void ObTmpFileFlushMonitor::record_flush_stage(const ObTmpFileGlobal::FlushCtxSt
 void ObTmpFileFlushMonitor::record_flush_task(const int64_t data_length)
 {
   flush_task_cnt_ += 1;
-  total_flush_data_length_ += data_length;
+  total_flushing_data_length_ += data_length;
   if (data_length > 0 && data_length > max_flush_data_length_) {
     max_flush_data_length_ = data_length;
   }

@@ -115,7 +115,6 @@ int64_t ObDBMSSchedJobMaster::calc_next_date(ObDBMSSchedJobInfo &job_info)
 {
   int64_t ret = 0;
   int64_t next_date = 0;
-  const int64_t now = ObTimeUtility::current_time();
   if (job_info.is_date_expression_job_class()
       && !job_info.get_interval().empty()
       && (0 != job_info.get_interval().case_compare("null"))) {
@@ -124,18 +123,13 @@ int64_t ObDBMSSchedJobMaster::calc_next_date(ObDBMSSchedJobInfo &job_info)
     if (OB_FAIL(ObMViewSchedJobUtils::calc_date_expression(job_info, next_date_ts))) {
       LOG_WARN("failed to calc date expression", KR(ret), K(job_info));
       // error code is ignored
-      next_date = 64060560000000000; // 4000-01-01
+      next_date = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
     } else {
       next_date = next_date_ts;
     }
-  } else if (job_info.get_interval_ts() < 0) {
-    next_date = 64060560000000000;
-    LOG_WARN("job interval is not valid, so regard as once job", K(job_info.get_interval_ts()), K(job_info));
-  } else if (job_info.get_interval_ts() == 0) {
-    next_date = 64060560000000000;
-  } else {
-    int64_t N = (now - job_info.get_start_date()) / job_info.get_interval_ts();
-    next_date = job_info.get_start_date() + (N + 1) * job_info.get_interval_ts();
+  } else if (OB_FAIL(ObDBMSSchedJobUtils::calc_dbms_sched_repeat_expr(job_info, next_date))) {
+    next_date = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+    LOG_WARN("failed to calc next date", KR(ret), K(job_info));
   }
   return next_date;
 }
@@ -181,7 +175,7 @@ int ObDBMSSchedJobMaster::scheduler()
       ObDBMSSchedJobKey *job_key = NULL;
       int tmp_ret = OB_SUCCESS;
       if (!IS_SPLIT_TENANT_DATA_VERSION) {
-        ob_usleep(MIN_SCHEDULER_INTERVAL);
+        ob_usleep(MIN_SCHEDULER_INTERVAL, true);
       } else {
         if (is_leader && TC_REACH_TIME_INTERVAL(CHECK_NEW_INTERVAL)) {
           if (OB_SUCCESS != (tmp_ret = check_tenant())) {
@@ -204,16 +198,16 @@ int ObDBMSSchedJobMaster::scheduler()
         }
 
         if (wait_vector_.count() == 0) {
-          ob_usleep(MIN_SCHEDULER_INTERVAL);
+          ob_usleep(MIN_SCHEDULER_INTERVAL, true);
         } else if (OB_ISNULL(job_key = wait_vector_[0]) || !job_key->is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("unexpected error, invalid job key found in ready queue!", K(ret), KPC(job_key));
         } else {
           int64_t delay = job_key->get_execute_at() - ObTimeUtility::current_time();
           if (delay > MIN_SCHEDULER_INTERVAL) {
-            ob_usleep(MIN_SCHEDULER_INTERVAL);
+            ob_usleep(MIN_SCHEDULER_INTERVAL, true);
           } else {
-            ob_usleep(max(0, delay));
+            ob_usleep(max(0, delay), true);
             common::ObCurTraceId::TraceId job_trace_id;
             job_trace_id.init(GCONF.self_addr_);
             ObTraceIdGuard trace_id_guard(job_trace_id);

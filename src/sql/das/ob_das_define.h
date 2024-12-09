@@ -58,6 +58,8 @@ const int64_t OB_DAS_MAX_PACKET_SIZE = 2 * 1024 * 1024l - 8 * 1024;
  */
 const int64_t OB_DAS_MAX_TOTAL_PACKET_SIZE = 1 * OB_DAS_MAX_PACKET_SIZE;
 const int64_t OB_DAS_MAX_META_TENANT_PACKET_SIZE = 1 * 1024 * 1024l - 8 * 1024;
+// offset of das parallel thread_pool group_id
+static const int32_t OB_DAS_PARALLEL_POOL_MARK = 1 << 30;
 }  // namespace das
 
 enum class ObDasTaskStatus: uint8_t
@@ -143,7 +145,8 @@ public:
       uint64_t unuse_related_pruning_           : 1; //mark if this table use the related pruning to prune local index tablet_id
       uint64_t is_external_table_               : 1; //mark if this table is an external table
       uint64_t is_external_files_on_disk_       : 1; //mark if files in external table are located at local disk
-      uint64_t reserved_                        : 57;
+      uint64_t das_empty_part_                  : 1; //mark there is false startup filter on DAS access table
+      uint64_t reserved_                        : 56;
     };
   };
   int64_t route_policy_;

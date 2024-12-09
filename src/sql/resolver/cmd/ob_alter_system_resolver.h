@@ -208,6 +208,7 @@ class ObPhysicalRestoreTenantResolver : public ObSystemCmdResolver
 #endif
     int resolve_decryption_passwd(obrpc::ObPhysicalRestoreTenantArg &arg);
     int resolve_restore_source_array(obrpc::ObPhysicalRestoreTenantArg &arg);
+    int resolve_restore_with_config_item(const ParseNode *node, obrpc::ObPhysicalRestoreTenantArg &arg);
 };
 
 class ObRecoverTenantResolver : public ObSystemCmdResolver
@@ -341,6 +342,7 @@ private:
 #endif
   int resolve_backup_set_pwd_(common::ObString &pwd);
   int resolve_restore_source_(common::ObString &restore_source);
+  int resolve_restore_with_config_item_(const ParseNode *node, obrpc::ObRecoverTableArg &arg);
 };
 
 DEF_SIMPLE_CMD_RESOLVER(ObTableTTLResolver);

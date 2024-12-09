@@ -12,6 +12,7 @@
 
 #include "ob_all_virtual_sys_event.h"
 #include "share/ob_tenant_mgr.h"
+#include "share/ash/ob_di_util.h"
 
 using namespace oceanbase::common;
 
@@ -74,7 +75,7 @@ int ObAllVirtualSysEvent::get_the_diag_info(
 {
   int ret = OB_SUCCESS;
   diag_info_.reset();
-  if (OB_FAIL(common::ObDIGlobalTenantCache::get_instance().get_the_diag_info(tenant_id, diag_info))) {
+  if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(tenant_id, diag_info))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
@@ -120,12 +121,18 @@ int ObAllVirtualSysEvent::process_curr_tenant(ObNewRow *&row)
       if (OB_FAIL(set_ip(addr_))){
         SERVER_LOG(WARN, "can't get ip", K(ret));
       } else if (OB_FAIL(get_the_diag_info(tenant_id_, diag_info_))) {
-        SERVER_LOG(WARN, "get diag info fail", K(ret), K(tenant_id_));
+        if (OB_ITER_END != ret) {
+          SERVER_LOG(WARN, "get diag info fail", K(ret), K(tenant_id_));
+        }
       } else {
         event_iter_ = 0;
       }
     }
-
+    for (; event_iter_ < WAIT_EVENTS_TOTAL; event_iter_++) {
+      if (diag_info_.get_event_stats().get(event_iter_)->total_waits_ > 0) {
+        break;
+      }
+    }
     if (event_iter_ >= WAIT_EVENTS_TOTAL) {
       ret = OB_ITER_END;
     }
@@ -232,7 +239,7 @@ int ObAllVirtualSysEventI1::get_the_diag_info(
   diag_info.reset();
   if (!is_contain(get_index_ids(), (int64_t)tenant_id)) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(common::ObDIGlobalTenantCache::get_instance().get_the_diag_info(tenant_id, diag_info))) {
+  } else if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(tenant_id, diag_info))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {

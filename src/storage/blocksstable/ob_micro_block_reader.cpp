@@ -612,6 +612,33 @@ int ObMicroBlockReader::get_row_header(
   return ret;
 }
 
+int ObMicroBlockReader::get_logical_row_cnt(
+    const int64_t last,
+    int64_t &row_idx,
+    int64_t &row_cnt) const
+{
+  int ret = OB_SUCCESS;
+  const ObRowHeader *row_header = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("reader not init", K(ret));
+  } else if (OB_UNLIKELY(nullptr == header_ || last >= header_->row_count_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(row_idx), K(last), KPC_(header));
+  } else {
+    while (OB_SUCC(ret) && row_idx <= last) {
+      if (OB_ISNULL(row_header = reinterpret_cast<const ObRowHeader*>(data_begin_ + index_data_[row_idx]))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("row_header is NULL", K(ret), K(row_idx), KP(data_begin_), KP(index_data_));
+      } else if (row_header->get_row_multi_version_flag().is_first_multi_version_row()) {
+        row_cnt += row_header->get_row_flag().get_delta();
+      }
+      row_idx++;
+    }
+  }
+  return ret;
+}
+
 int ObMicroBlockReader::get_row_count(int64_t &row_count)
 {
   int ret = OB_SUCCESS;

@@ -577,29 +577,39 @@ int ObDASDocIdMergeIter::get_rowkey(
     LOG_WARN("invalid arguments", K(ret), KP(ctdef), KP(rtdef));
   } else {
     const int64_t rowkey_cnt = ctdef->table_param_.get_read_info().get_schema_rowkey_count();
+    const int64_t output_cnt = ctdef->pd_expr_spec_.access_exprs_.count();
     void *buf = nullptr;
     if (OB_ISNULL(buf = allocator.alloc(sizeof(ObObj) * rowkey_cnt))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate rowkey obj buffer", K(ret), K(rowkey_cnt));
     } else {
       ObObj *obj_ptr = new (buf) ObObj[rowkey_cnt];
-      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
-        ObExpr *expr = ctdef->result_output_.at(i);
+      int64_t j = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && j < rowkey_cnt && i < output_cnt; ++i) {
+        ObExpr *expr = ctdef->pd_expr_spec_.access_exprs_.at(i);
         if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error, expr is nullptr", K(ret), K(i), KPC(ctdef));
-        } else if (T_PSEUDO_GROUP_ID == expr->type_) {
+          LOG_WARN("unexpected error, expr is nullptr", K(ret), K(i), K(j), KPC(ctdef));
+        } else if (T_PSEUDO_GROUP_ID == expr->type_ || T_PSEUDO_ROW_TRANS_INFO_COLUMN == expr->type_) {
           // nothing to do.
+          LOG_TRACE("skip expr", K(i), K(j), KPC(expr));
         } else {
           ObDatum &datum = expr->locate_expr_datum(*rtdef->eval_ctx_);
-          if (OB_FAIL(datum.to_obj(obj_ptr[i], expr->obj_meta_, expr->obj_datum_map_))) {
+          if (OB_FAIL(datum.to_obj(obj_ptr[j], expr->obj_meta_, expr->obj_datum_map_))) {
             LOG_WARN("fail to convert datum to obj", K(ret));
+          } else {
+            ++j;
           }
         }
       }
-      if (OB_SUCC(ret)) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(j < rowkey_cnt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, outputs is less than rowkey count", K(ret), K(output_cnt), K(j),
+            K(rowkey_cnt), KPC(ctdef));
+      } else {
         rowkey.assign(obj_ptr, rowkey_cnt);
-        LOG_TRACE("get one rowkey", K(rowkey));
+        LOG_TRACE("get one rowkey", K(rowkey), K(output_cnt), K(j), K(rowkey_cnt));
       }
     }
   }

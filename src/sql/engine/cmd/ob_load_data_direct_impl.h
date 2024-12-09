@@ -94,10 +94,12 @@ private:
                  K_(dup_action),
                  "method", storage::ObDirectLoadMethod::get_type_string(method_),
                  "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
+                 K_(load_level),
                  K_(data_access_param),
                  K_(column_ids),
                  K_(compressor_type),
-                 K_(online_sample_percent));
+                 K_(online_sample_percent),
+                 K_(tablet_ids));
   public:
     uint64_t tenant_id_;
     uint64_t database_id_;
@@ -116,10 +118,12 @@ private:
     sql::ObLoadDupActionType dup_action_;
     storage::ObDirectLoadMethod::Type method_;
     storage::ObDirectLoadInsertMode::Type insert_mode_;
+    storage::ObDirectLoadLevel::Type load_level_;
     DataAccessParam data_access_param_;
     ObArray<uint64_t> column_ids_;
     ObCompressorType compressor_type_;
     double online_sample_percent_;
+    ObArray<ObTabletID> tablet_ids_;
   };
 
   struct LoadExecuteContext

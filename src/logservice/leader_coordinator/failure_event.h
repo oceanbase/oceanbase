@@ -161,7 +161,9 @@ public:
     int64_t pos = 0;
     common::databuff_printf(buf, buf_len, pos, "{type:%s, ", obj_to_cstring(type_));
     common::databuff_printf(buf, buf_len, pos, "module:%s, ", obj_to_cstring(module_));
-    common::databuff_printf(buf, buf_len, pos, "info:%s, ", to_cstring(info_));
+    common::databuff_printf(buf, buf_len, pos, "info:");
+    common::databuff_printf(buf, buf_len, pos, info_);
+    common::databuff_printf(buf, buf_len, pos, ", ");
     common::databuff_printf(buf, buf_len, pos, "level:%s}", obj_to_cstring(level_));
     return pos;
   }

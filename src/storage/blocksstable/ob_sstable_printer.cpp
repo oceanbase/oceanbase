@@ -224,7 +224,8 @@ void ObSSTablePrinter::print_row_title(const ObDatumRow *row, const int64_t row_
     P_VALUE_BINT_B(row_index);
     P_COLON();
     P_NAME("trans_id=");
-    P_VALUE_STR_B(to_cstring(row->trans_id_));
+    ObCStringHelper helper;
+    P_VALUE_STR_B(helper.convert(row->trans_id_));
     P_COMMA();
     P_NAME("dml_flag=");
     P_VALUE_STR_B(dml_flag);
@@ -239,7 +240,8 @@ void ObSSTablePrinter::print_row_title(const ObDatumRow *row, const int64_t row_
     P_VALUE_BINT_B(row_index);
     P_COLON();
     P_NAME("trans_id=");
-    P_VALUE_STR_B(to_cstring(row->trans_id_));
+    ObCStringHelper helper;
+    P_VALUE_STR_B(helper.convert(row->trans_id_));
     P_COMMA();
     P_NAME("dml_flag=");
     P_VALUE_STR_B(dml_flag);
@@ -252,12 +254,15 @@ void ObSSTablePrinter::print_row_title(const ObDatumRow *row, const int64_t row_
 
 void ObSSTablePrinter::print_cell(const ObObj &cell)
 {
-  P_VALUE_STR_B(to_cstring(cell));
+  ObCStringHelper helper;
+  P_VALUE_STR_B(helper.convert(cell));
 }
 
 void ObSSTablePrinter::print_cell(const ObStorageDatum &datum)
 {
-  P_VALUE_STR_B(datum.to_cstring(true /* for dump */));
+  ObCStringHelper helper;
+  ObStorageDatumWrapper wrapper(datum, true);
+  P_VALUE_STR_B(helper.convert(wrapper));
 }
 
 void ObSSTablePrinter::print_common_header(const ObMacroBlockCommonHeader *common_header)
@@ -336,13 +341,15 @@ void ObSSTablePrinter::print_index_row_header(const ObIndexBlockRowHeader *idx_r
     P_NAME("Index Block Row Header");
     P_BAR();
     P_COLOR(NONE_COLOR);
-    P_VALUE_STR_B(to_cstring(*idx_row_header));
+    ObCStringHelper helper;
+    P_VALUE_STR_B(helper.convert(*idx_row_header));
     P_END();
   } else {
     P_BAR();
     P_NAME("Index Block Row Header");
     P_BAR();
-    P_VALUE_STR_B(to_cstring(*idx_row_header));
+    ObCStringHelper helper;
+    P_VALUE_STR_B(helper.convert(*idx_row_header));
     P_END();
   }
 }
@@ -356,13 +363,15 @@ void ObSSTablePrinter::print_index_minor_meta(const ObIndexBlockRowMinorMetaInfo
     P_NAME("Index Block Minor Meta Info");
     P_BAR();
     P_COLOR(NONE_COLOR);
-    P_VALUE_STR_B(to_cstring(*minor_meta));
+    ObCStringHelper helper;
+    P_VALUE_STR_B(helper.convert(*minor_meta));
     P_END();
   } else {
     P_BAR();
     P_NAME("Index Block Minor Meta Info");
     P_BAR();
-    P_VALUE_STR_B(to_cstring(*minor_meta));
+    ObCStringHelper helper;
+    P_VALUE_STR_B(helper.convert(*minor_meta));
     P_END();
   }
 }

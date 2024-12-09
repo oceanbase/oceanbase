@@ -16,6 +16,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_ash_internal AS
               '       a.session_id, '   ||
               '       a.session_type, ' ||
               '       a.session_state, ' ||
+              '       a.top_level_sql_id, ' ||
               '       a.sql_id, ' ||
               '       plan_id, ' ||
               '       a.trace_id, ' ||
@@ -39,6 +40,14 @@ CREATE OR REPLACE PACKAGE BODY dbms_ash_internal AS
               '       a.in_storage_read, ' ||
               '       a.in_storage_write, ' ||
               '       a.in_remote_das_execution, ' ||
+              '       a.in_plsql_execution, ' ||
+              '       a.in_plsql_compilation, ' ||
+              '       a.plsql_entry_object_id, ' ||
+              '       a.plsql_entry_subprogram_id, ' ||
+              '       a.plsql_entry_subprogram_name, ' ||
+              '       a.plsql_object_id, ' ||
+              '       a.plsql_subprogram_id, ' ||
+              '       a.plsql_subprogram_name, ' ||
               '       a.module, a.action, a.client_id ' ||
               'FROM GV$ACTIVE_SESSION_HISTORY a ' ||
               'WHERE  1=1 ';

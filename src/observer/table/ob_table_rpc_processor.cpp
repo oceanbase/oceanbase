@@ -107,7 +107,6 @@ int ObTableLoginP::process()
     ObRpcProcessor::require_rerouting_ = true;
     LOG_WARN("[TABLE] login require rerouting", K(ret), "require_rerouting", ObRpcProcessor::require_rerouting_);
   }
-  ObTenantStatEstGuard stat_guard(result_.tenant_id_);
 #ifndef NDEBUG
     LOG_INFO("[TABLE] login", K(ret), K_(arg), K_(result), "timeout", rpc_pkt_->get_timeout());
 #else
@@ -253,12 +252,12 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      req_timeinfo_guard_(),
      schema_cache_guard_(),
      stat_event_type_(-1),
+     enable_query_response_time_stats_(true),
      stat_row_count_(0),
      need_retry_in_queue_(false),
      is_tablegroup_req_(false),
      retry_count_(0),
      user_client_addr_(),
-     sess_stat_guard_(MTL_ID(), ObActiveSessionGuard::get_stat().session_id_),
      audit_ctx_(retry_count_, user_client_addr_)
 {
 }
@@ -296,6 +295,19 @@ int ObTableApiProcessorBase::init_tablegroup_schema(const ObString &arg_tablegro
   return ret;
 }
 
+int ObTableApiProcessorBase::init_schema_info(const ObString &arg_table_name, uint64_t arg_table_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_schema_info(arg_table_name))) {
+    LOG_WARN("fail to init schema info", K(ret));
+  } else if (simple_table_schema_->get_table_id() != arg_table_id) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_table_id),
+           K(simple_table_schema_->get_table_id()));
+  }
+  return ret;
+}
+
 int ObTableApiProcessorBase::init_schema_info(const ObString &arg_table_name)
 {
   int ret = OB_SUCCESS;
@@ -324,6 +336,11 @@ int ObTableApiProcessorBase::init_schema_info(const ObString &arg_table_name)
     ObString db("");
     LOG_USER_ERROR(OB_ERR_UNKNOWN_TABLE, arg_table_name.length(), arg_table_name.ptr(), db.length(), db.ptr());
     LOG_WARN("table not exist", K(ret), K(credential_.tenant_id_), K(credential_.database_id_), K(arg_table_name));
+  } else if (simple_table_schema_->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
+    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential_.tenant_id_),
+                K(credential_.database_id_), K(arg_table_name));
   } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_,
                                               simple_table_schema_->get_table_id(),
                                               simple_table_schema_->get_schema_version(),
@@ -333,7 +350,7 @@ int ObTableApiProcessorBase::init_schema_info(const ObString &arg_table_name)
   return ret;
 }
 
-int ObTableApiProcessorBase::init_schema_info(uint64_t table_id)
+int ObTableApiProcessorBase::init_schema_info(uint64_t table_id, const ObString &arg_table_name)
 {
   int ret = OB_SUCCESS;
   if (schema_cache_guard_.is_inited()) {
@@ -348,6 +365,15 @@ int ObTableApiProcessorBase::init_schema_info(uint64_t table_id)
   } else if (OB_ISNULL(simple_table_schema_)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(ret), K(credential_), K(table_id));
+  } else if (simple_table_schema_->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
+    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential_.tenant_id_),
+                K(credential_.database_id_), K(table_id));
+  } else if (arg_table_name.case_compare(simple_table_schema_->get_table_name()) != 0) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("arg table name is not match with schema table name", K(ret), K(arg_table_name),
+            K(simple_table_schema_->get_table_name()));
   } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_,
                                               simple_table_schema_->get_table_id(),
                                               simple_table_schema_->get_schema_version(),
@@ -393,6 +419,7 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   } else if (OB_FAIL(check_mode(sess_guard_.get_sess_info()))) {
     LOG_WARN("fail to check mode", K(ret));
   } else {
+    enable_query_response_time_stats_ = sess_guard_.get_sess_info().enable_query_response_time_stats();
     LOG_DEBUG("user can access", K_(credential));
   }
   return ret;
@@ -716,7 +743,7 @@ template<class T>
 int ObTableRpcProcessor<T>::before_response(int error_code)
 {
   const int64_t elapsed_us = ObTimeUtility::fast_current_time() - RpcProcessor::get_receive_timestamp();
-  ObTableRpcProcessorUtil::record_stat(stat_event_type_, elapsed_us, stat_row_count_);
+  ObTableRpcProcessorUtil::record_stat(stat_event_type_, elapsed_us, stat_row_count_, enable_query_response_time_stats_);
   return RpcProcessor::before_response(error_code);
 }
 

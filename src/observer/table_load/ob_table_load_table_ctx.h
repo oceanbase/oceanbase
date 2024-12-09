@@ -38,7 +38,11 @@ class ObTableLoadTableCtx : public common::ObDLinkBase<ObTableLoadTableCtx>
 public:
   ObTableLoadTableCtx();
   ~ObTableLoadTableCtx();
-  int init(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param, sql::ObSQLSessionInfo *session_info, const common::ObString &exec_ctx_serialized_str);
+  int init(const ObTableLoadParam &param,
+           const ObTableLoadDDLParam &ddl_param,
+           sql::ObSQLSessionInfo *session_info,
+           const common::ObString &exec_ctx_serialized_str,
+           sql::ObExecContext *exec_ctx = nullptr);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }
@@ -67,6 +71,7 @@ public:
                K_(is_inited));
 public:
   int init_coordinator_ctx(const common::ObIArray<uint64_t> &column_ids,
+                           const common::ObIArray<ObTabletID> &tablet_ids,
                            ObTableLoadExecCtx *exec_ctx);
   int init_store_ctx(
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
@@ -89,7 +94,7 @@ public:
   sql::ObLoadDataGID gid_;
   sql::ObLoadDataStat *job_stat_;
   sql::ObSQLSessionInfo *session_info_;
-  sql::ObDesExecContext *exec_ctx_;
+  sql::ObExecContext *exec_ctx_;
   sql::ObFreeSessionCtx free_session_ctx_;
 private:
   // 只在初始化的时候使用, 线程不安全
@@ -102,6 +107,7 @@ private:
   bool is_assigned_memory_;
   bool mark_delete_;
   bool is_inited_;
+  sql::ObDesExecContext *des_exec_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadTableCtx);
 };
 

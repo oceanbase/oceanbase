@@ -60,6 +60,8 @@ int ObVectorIndexUtil::parser_params_from_string(
             param.dist_algorithm_ = ObVectorIndexDistAlgorithm::VIDA_IP;
           } else if (new_param_value == "L2") {
             param.dist_algorithm_ = ObVectorIndexDistAlgorithm::VIDA_L2;
+          } else if (new_param_value == "COSINE") {
+            param.dist_algorithm_ = ObVectorIndexDistAlgorithm::VIDA_COS;
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support vector index dist algorithm", K(ret), K(new_param_value));
@@ -74,6 +76,8 @@ int ObVectorIndexUtil::parser_params_from_string(
         } else if (new_param_name == "TYPE") {
           if (new_param_value == "HNSW") {
             param.type_ = ObVectorIndexAlgorithmType::VIAT_HNSW;
+          } else if (new_param_value == "HNSW_SQ") {
+            param.type_ = ObVectorIndexAlgorithmType::VIAT_HNSW_SQ;
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support vector index type", K(ret), K(new_param_value));
@@ -133,6 +137,12 @@ bool ObVectorIndexUtil::is_expr_type_and_distance_algorithm_match(
   switch (expr_type) {
     case T_FUN_SYS_L2_DISTANCE: {
       if (ObVectorIndexDistAlgorithm::VIDA_L2 == algorithm) {
+        is_match = true;
+      }
+      break;
+    }
+    case T_FUN_SYS_COSINE_DISTANCE: {
+      if (ObVectorIndexDistAlgorithm::VIDA_COS == algorithm) {
         is_match = true;
       }
       break;
@@ -265,7 +275,7 @@ int ObVectorIndexUtil::check_table_has_vector_of_fts_index(
         LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
       } else if (index_table_schema->is_vec_index()) {
         has_vec_index = true;
-      } else if (index_table_schema->is_fts_index()) {
+      } else if (index_table_schema->is_fts_index_aux() || index_table_schema->is_fts_doc_word_aux()) {
         has_fts_index = true;
       }
     }
@@ -1027,6 +1037,66 @@ int ObVectorIndexUtil::check_table_exist(
     ret = OB_ERR_TABLE_EXIST;
     LOG_WARN("table is exist, cannot create it twice", K(ret),
       K(tenant_id),  K(database_id), K(domain_index_name));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::get_rebuild_drop_index_id_and_name(share::schema::ObSchemaGetterGuard &schema_guard, obrpc::ObDropIndexArg &arg)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.tenant_id_;
+  const uint64_t old_index_id = arg.table_id_;
+  const uint64_t new_index_id = arg.index_table_id_;
+  const ObString old_index_name = arg.index_name_;
+  const ObTableSchema *old_index_schema = nullptr;
+  const ObTableSchema *new_index_schema = nullptr;
+  if (!arg.is_add_to_scheduler_ || !arg.is_vec_inner_drop_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected arg", K(ret), K(arg));
+  } else if (tenant_id == OB_INVALID_TENANT_ID ||
+             old_index_id == OB_INVALID_ID || new_index_id == OB_INVALID_ID || old_index_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(old_index_id), K(new_index_id), K(old_index_name));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, old_index_id, old_index_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(old_index_id));
+  } else if (OB_ISNULL(old_index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, new_index_id, new_index_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(new_index_id));
+  } else if (OB_ISNULL(new_index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret));
+  } else {
+    // If the name of the old table has been changed, it means the rebuild was successful, otherwise, the rebuild failed. So:
+    //    1. When the rebuild is successful, the old table needs to be deleted because the name of the old table has been replaced.
+    //    2. Conversely, the new table needs to be deleted if the rebuild is unsuccessful.
+    bool rebuild_succ = false;
+    if (0 == old_index_schema->get_table_name_str().case_compare(old_index_name)) {
+      rebuild_succ = false;
+    } else if (0 == new_index_schema->get_table_name_str().case_compare(old_index_name)) {
+      rebuild_succ = true;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected rebuild old and new index table name", K(ret), K(old_index_name),
+        K(old_index_schema->get_table_name()),
+        K(new_index_schema->get_table_name()));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (rebuild_succ) { // drop old index
+      arg.index_table_id_ = old_index_id;
+      if (OB_FAIL(old_index_schema->get_index_name(arg.index_name_))) { // index name, like: idx1, not full index name
+        LOG_WARN("fail to get index name", K(ret));
+      }
+    } else { // drop new index
+      arg.index_table_id_ = new_index_id;
+      if (OB_FAIL(new_index_schema->get_index_name(arg.index_name_))) { // index name, like: idx1, not full index name
+        LOG_WARN("fail to get index name", K(ret));
+      }
+    }
+    LOG_INFO("succ to get rebuild drop index id and name", K(ret),
+      K(arg.index_table_id_), K(arg.index_name_),
+      K(old_index_schema->get_table_name()), K(new_index_schema->get_table_name()));
   }
   return ret;
 }

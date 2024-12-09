@@ -116,6 +116,78 @@ int ObContinuousVector<BasicOp>::null_last_mul_cmp(VECTOR_MUL_COMPARE_ARGS) cons
   return ret;
 }
 
+template<typename BasicOp>
+int ObContinuousVector<BasicOp>::null_first_cmp_batch_rows(VECTOR_COMPARE_BATCH_ROWS_ARGS) const
+{
+  int ret = OB_SUCCESS;
+  ObLength r_len = 0;
+  const char *r_v = NULL;
+  int32_t fixed_offset = 0;
+  const bool is_fixed_length = row_meta.is_reordered_fixed_expr(row_col_idx);
+  if (is_fixed_length) {
+    fixed_offset = row_meta.get_fixed_cell_offset(row_col_idx);
+    r_len = row_meta.fixed_length(row_col_idx);
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; i++) {
+      uint16_t batch_idx = sel[i];
+      r_v = rows[i]->payload() + fixed_offset;
+      if (OB_FAIL(null_first_cmp(
+              expr, batch_idx, rows[i]->is_null(row_col_idx), r_v, r_len, cmp_ret[i]))) {
+        LOG_WARN("failed to compare", K(ret));
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; i++) {
+      uint16_t batch_idx = sel[i];
+      rows[i]->get_cell_payload(row_meta, row_col_idx, r_v, r_len);
+      if (OB_FAIL(null_first_cmp(
+              expr, batch_idx, rows[i]->is_null(row_col_idx), r_v, r_len, cmp_ret[i]))) {
+        LOG_WARN("failed to compare", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename BasicOp>
+int ObContinuousVector<BasicOp>::no_null_cmp_batch_rows(VECTOR_COMPARE_BATCH_ROWS_ARGS) const
+{
+  int ret = OB_SUCCESS;
+  ObLength r_len = 0;
+  const char *r_v = NULL;
+  int32_t fixed_offset = 0;
+  const bool is_fixed_length = row_meta.is_reordered_fixed_expr(row_col_idx);
+  if (is_fixed_length) {
+    fixed_offset = row_meta.get_fixed_cell_offset(row_col_idx);
+    r_len = row_meta.fixed_length(row_col_idx);
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; i++) {
+      uint16_t batch_idx = sel[i];
+      r_v = rows[i]->payload() + fixed_offset;
+      if (OB_FAIL(VecOpUtil::Op::cmp(expr.obj_meta_,
+              get_payload(batch_idx),
+              get_length(batch_idx),
+              r_v,
+              r_len,
+              cmp_ret[i]))) {
+        LOG_WARN("failed to compare", K(ret));
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; i++) {
+      uint16_t batch_idx = sel[i];
+      rows[i]->get_cell_payload(row_meta, row_col_idx, r_v, r_len);
+      if (OB_FAIL(VecOpUtil::Op::cmp(expr.obj_meta_,
+              get_payload(batch_idx),
+              get_length(batch_idx),
+              r_v,
+              r_len,
+              cmp_ret[i]))) {
+        LOG_WARN("failed to compare", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 template class ObContinuousVector<VectorBasicOp<VEC_TC_NUMBER>>;
 template class ObContinuousVector<VectorBasicOp<VEC_TC_EXTEND>>;
 template class ObContinuousVector<VectorBasicOp<VEC_TC_STRING>>;

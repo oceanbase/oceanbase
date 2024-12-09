@@ -14,8 +14,8 @@
 #define OCEANBASE_ENCODING_OB_COLUMN_DATUM_ITER_H_
 
 #include "ob_column_encoding_struct.h"
+#include "ob_dict_encoding_hash_table.h"
 #include "storage/blocksstable/encoding/ob_encoding_util.h"
-#include "storage/blocksstable/encoding/ob_encoding_hash_util.h"
 
 namespace oceanbase
 {
@@ -52,19 +52,19 @@ private:
 class ObDictDatumIter : public ObIDatumIter
 {
 public:
-  explicit ObDictDatumIter(const ObEncodingHashTable &ht)
+  explicit ObDictDatumIter(const ObDictEncodingHashTable &ht)
     : ht_(ht), iter_(ht_.begin()) { }
   ~ObDictDatumIter() {}
   ObDictDatumIter(const ObDictDatumIter&) = delete;
   ObDictDatumIter &operator=(const ObDictDatumIter&) = delete;
 
   int get_next(const ObDatum *&datum) override;
-  int64_t size() const override { return ht_.size(); }
+  int64_t size() const override { return ht_.distinct_node_cnt(); }
   virtual void reset() override {  iter_ = ht_.begin(); }
 
 private:
-  const ObEncodingHashTable &ht_;
-  ObEncodingHashTable::ConstIterator iter_;
+  const ObDictEncodingHashTable &ht_;
+  ObDictEncodingHashTable::ConstIterator iter_;
 };
 
 

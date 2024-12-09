@@ -1288,11 +1288,21 @@ class SimpleAllocer
   typedef typename DefendMode::lock_initer lock_initer;
 public:
   SimpleAllocer() : leak_check_(true), block_remainder_(NULL), block_free_list_(NULL)
+                  , blocks_(NULL), nblocks_(0), nblocks_limit_(0)
   {
     lock_initer initer(lock_);
   }
   ~SimpleAllocer()
   {
+    Block *cur = blocks_;
+    while (cur) {
+      Block *next = cur->next;
+      allocer_.free(cur);
+      cur = next;
+    }
+    blocks_ = NULL;
+    nblocks_ = 0;
+    nblocks_limit_ = 0;
     if (leak_check_) {
       if (NULL != block_remainder_ ||
           NULL != block_free_list_) {
@@ -1303,6 +1313,31 @@ public:
   void set_leak_check(const bool check) { leak_check_ = check; }
   void set_attr(const ObMemAttr &attr) { allocer_.set_attr(attr); }
   void set_label(const lib::ObLabel &label) { allocer_.set_label(label); }
+  int reserve(int64_t node_num)
+  {
+    int ret = OB_SUCCESS;
+    mutexlocker locker(lock_);
+    int needed = node_num / NODE_NUM;
+    while (nblocks_ > needed) {
+      Block *next  = blocks_->next;
+      allocer_.free(blocks_);
+      blocks_ = next;
+      nblocks_--;
+    }
+    while (OB_SUCC(ret) && nblocks_ < needed) {
+      Block *block = NULL;
+      if (NULL == (block = (Block *)allocer_.alloc(sizeof(Block)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_UNEXPECTED, "new block fail");
+      } else {
+        block->next = blocks_;
+        blocks_ = block;
+        nblocks_++;
+      }
+    }
+    if (OB_SUCC(ret)) nblocks_limit_ = needed;
+    return ret;
+  }
   template <class ... TYPES>
   T *alloc(TYPES&... args)
   {
@@ -1324,7 +1359,7 @@ public:
     } else {
       Block *block = block_remainder_;
       if (NULL == block || block->cur_pos >= (int32_t)NODE_NUM) {
-        if (NULL == (block = (Block *)allocer_.alloc(sizeof(Block)))) {
+        if (NULL == (block = alloc_block())) {
           HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_UNEXPECTED, "new block fail");
         } else {
           block->ref_cnt = 0;
@@ -1371,7 +1406,7 @@ public:
           if (block->next != NULL) {
             take_off_from_fl(block);
           }
-          allocer_.free(block);
+          free_block(block);
         } else {
           node->next = block->node_free_list;
           block->node_free_list = node;
@@ -1409,10 +1444,37 @@ public:
       block->prev = block->next = NULL;
     }
   }
+  int get_nblocks() const { return nblocks_; }
+private:
+  Block *alloc_block()
+  {
+    Block *block = NULL;
+    if (nblocks_ > 0) {
+      block = blocks_;
+      blocks_ = blocks_->next;
+      nblocks_--;
+    } else {
+      block = (Block *)allocer_.alloc(sizeof(Block));
+    }
+    return block;
+  }
+  void free_block(Block *block)
+  {
+    if (nblocks_ < nblocks_limit_) {
+      block->next = blocks_;
+      blocks_ = block;
+      nblocks_++;
+    } else {
+      allocer_.free(block);
+    }
+  }
 private:
   bool leak_check_;
   Block *block_remainder_;
   Block *block_free_list_;
+  Block *blocks_;
+  int64_t nblocks_;
+  int64_t nblocks_limit_;
   lock_type lock_;
   Allocer allocer_;
 };

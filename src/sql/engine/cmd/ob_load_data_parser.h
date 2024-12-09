@@ -37,11 +37,13 @@ struct ObODPSGeneralFormat {
     access_key_(),
     sts_token_(),
     endpoint_(),
+    tunnel_endpoint_(),
     project_(),
     schema_(),
     table_(),
     quota_(),
-    compression_code_()
+    compression_code_(),
+    collect_statistics_on_create_(false)
   {}
   int deep_copy_str(const ObString &src,
                     ObString &dest);
@@ -56,26 +58,30 @@ struct ObODPSGeneralFormat {
     "ACCESSKEY",
     "STSTOKEN",
     "ENDPOINT",
+    "TUNNEL_ENDPOINT",
     "PROJECT_NAME",
     "SCHEMA_NAME",
     "TABLE_NAME",
     "QUOTA_NAME",
     "COMPRESSION_CODE",
+    "COLLECT_STATISTICS_ON_CREATE",
   };
   common::ObString access_type_;
   common::ObString access_id_;
   common::ObString access_key_;
   common::ObString sts_token_;
   common::ObString endpoint_;
+  common::ObString tunnel_endpoint_;
   common::ObString project_;
   common::ObString schema_;
   common::ObString table_;
   common::ObString quota_;
   common::ObString compression_code_;
+  bool collect_statistics_on_create_;
   common::ObArenaAllocator arena_alloc_;
   int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
-  TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token), K_(endpoint), K_(project), K_(schema), K_(table), K_(quota), K_(compression_code));
+  TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token), K_(endpoint), K_(tunnel_endpoint), K_(project), K_(schema), K_(table), K_(quota), K_(compression_code), K_(collect_statistics_on_create));
   OB_UNIS_VERSION(1);
 };
 

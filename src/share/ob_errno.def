@@ -196,7 +196,7 @@ DEFINE_ORACLE_ERROR_DEP(OB_DEAD_LOCK, -4101, ER_LOCK_DEADLOCK, "HY000", "Deadloc
 DEFINE_ERROR(OB_PARTIAL_LOG, -4102, -1, "HY000", "Incomplete log entry");
 DEFINE_ERROR_DEP(OB_CHECKSUM_ERROR, -4103, -1, "42000", "Data checksum error");
 DEFINE_ERROR_DEP(OB_INIT_FAIL, -4104, -1, "HY000", "Initialize error");
-DEFINE_ERROR_DEP(OB_ROWKEY_ORDER_ERROR, -4105, -1, "HY000", "Rowkey order error");
+DEFINE_ERROR_EXT_DEP(OB_ROWKEY_ORDER_ERROR, -4105, -1, "HY000", "Rowkey order error", "%s");
 DEFINE_ERROR(OB_NOT_ENOUGH_STORE, -4106, -1, "HY000", "not enough commitlog store");
 DEFINE_ERROR(OB_BLOCK_SWITCHED, -4107, -1, "HY000", "block switched when fill commitlog");
 DEFINE_ERROR_DEP(OB_PHYSIC_CHECKSUM_ERROR, -4108, -1, "42000", "Physic data checksum error");
@@ -286,7 +286,7 @@ DEFINE_ERROR(OB_ABORT_MAJOR_FREEZE_FAILED, -4212, -1, "HY000", "abort major free
 DEFINE_ERROR_EXT_DEP(OB_MAJOR_FREEZE_NOT_FINISHED, -4213, -1, "HY000", "last major freeze not finish", "%s");
 DEFINE_ERROR(OB_PARTITION_NOT_LEADER, -4214, -1, "HY000", "partition is not leader partition");
 DEFINE_ERROR(OB_WAIT_MAJOR_FREEZE_RESPONSE_TIMEOUT, -4215, -1, "HY000", "wait major freeze response timeout");
-DEFINE_ERROR(OB_CURL_ERROR, -4216, -1, "HY000", "curl error");
+DEFINE_ERROR_DEP(OB_CURL_ERROR, -4216, -1, "HY000", "curl error");
 DEFINE_ERROR_EXT(OB_MAJOR_FREEZE_NOT_ALLOW, -4217, -1, "HY000", "Major freeze not allowed now", "%s");
 DEFINE_ERROR(OB_PREPARE_FREEZE_FAILED, -4218, -1, "HY000", "prepare freeze failed");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_INVALID_DATE_VALUE, -4219, ER_TRUNCATED_WRONG_VALUE, "22007", "Incorrect value", "Incorrect datetime value: '%.*s' for column '%s'", 1861, "literal does not match format string", "literal does not match format string: '%.*s' for column '%s'");
@@ -761,7 +761,7 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_INSERT_NULL_ROWKEY, -5030, ER_PRIMARY_CANT_HAVE_N
 DEFINE_ERROR_DEP(OB_ERR_COLUMN_NOT_FOUND, -5031, -1, "HY000", "Column not found");
 DEFINE_ERROR(OB_ERR_DELETE_NULL_ROWKEY, -5032, -1, "23000", "Delete null rowkey");
 DEFINE_ERROR(OB_ERR_USER_EMPTY, -5034, -1, "01007", "No user");
-DEFINE_ORACLE_ERROR_EXT(OB_ERR_USER_NOT_EXIST, -5035, ER_NO_SUCH_USER, "HY000", "User not exist", "User %.*snot exist", 1918, "user does not exist", "user '%.*s' does not exist");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_USER_NOT_EXIST, -5035, ER_NO_SUCH_USER, "HY000", "User not exist", "User %.*s not exist", 1918, "user does not exist", "user '%.*s' does not exist");
 DEFINE_ERROR_EXT(OB_ERR_NO_PRIVILEGE, -5036, ER_SPECIFIC_ACCESS_DENIED_ERROR, "42501", "Access denied", "Access denied; you need (at least one of) the %s privilege(s) for this operation");
 DEFINE_ERROR(OB_ERR_NO_AVAILABLE_PRIVILEGE_ENTRY, -5037, -1, "HY000", "No privilege entry");
 DEFINE_ERROR(OB_ERR_WRONG_PASSWORD, -5038, ER_PASSWORD_NO_MATCH, "42000", "Incorrect password");
@@ -1831,6 +1831,10 @@ DEFINE_ERROR(OB_LOG_ALREADY_SPLIT, -6283, -1, "HY000", "The big log entry has be
 // for json schema
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA, -6284, ER_NOT_SUPPORTED_YET, "42000", "This version doesn't yet support 'references in JSON Schema.", "This version doesn't yet support 'references in JSON Schema.", 40441, "This version doesn't yet support 'references in JSON Schema.", "This version doesn't yet support 'references in JSON Schema.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_TYPE_OF_JSON_SCHEMA, -6285, ER_INVALID_JSON_TYPE, "22032", "Invalid JSON type in argument, should be object.", "Invalid JSON type in argument, should be object.", 40876, "invalid JSON schema document", "invalid JSON schema document");
+
+// for tx pending log
+DEFINE_ERROR(OB_TX_PENDING_LOG_OVERFLOW, -6288, -1, "HY000", "too many pending log in the trx");
+
 // for clog
 DEFINE_ERROR(OB_LOG_ID_NOT_FOUND, -6301, -1, "HY000", "log id not found");
 DEFINE_ERROR(OB_LSR_THREAD_STOPPED, -6302, -1, "HY000", "log scan runnable thread stop");
@@ -2342,6 +2346,7 @@ DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_IO_ERROR, -9129, -1, "HY000", "object storage
 DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH, -9130, -1, "HY000", "the pwrite offset of the object storage is inconsistent");
 DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH, -9131, -1, "HY000", "the contents of pwrite are inconsistent");
 DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_CHECKSUM_ERROR, -9132, -1, "HY000", "object storage data checksum error");
+DEFINE_ERROR_DEP(OB_BACKUP_ZONE_IDC_REGION_INVALID, -9133, -1, "HY000", "backup zone or backup idc or backup region invalid");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////
@@ -2683,6 +2688,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_CANNOT_DEFINE_TRIGGER, -9802, -1, "HY000", "system tr
 DEFINE_ORACLE_ERROR(OB_ERR_CANNOT_RENAME_TRIGGER, -9803, -1, "HY000", "renaming system triggers is not allowed", 25020, "renaming system triggers is not allowed");
 DEFINE_ORACLE_ERROR(OB_ERR_LOGON_TRIGGER, -9804, -1, "HY000", "client logon triggers cannot have BEFORE type", 30508, "client logon triggers cannot have BEFORE type");
 DEFINE_ORACLE_ERROR(OB_ERR_LOGOFF_TRIGGER, -9805, -1, "HY000", "client logoff triggers cannot have AFTER type", 30509, "client logoff triggers cannot have AFTER type");
+DEFINE_PLS_ERROR(OB_ERR_MALFORMED_WRAPPED_UNIT, -9806, -1, "HY000", "malformed or corrupted wrapped unit", 753, "malformed or corrupted wrapped unit");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)
@@ -2715,10 +2721,11 @@ DEFINE_ERROR_EXT(OB_KV_ROWKEY_COUNT_NOT_MATCH, -10510, -1, "HY000", "OBKV rowkey
 DEFINE_ERROR_EXT(OB_KV_COLUMN_TYPE_NOT_MATCH, -10511, -1, "HY000", "OBKV column type not match", "Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_COLLATION_MISMATCH, -10512, -1, "HY000", "OBKV collation type not match", "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_SCAN_RANGE_MISSING, -10513, -1, "HY000", "OBKV scan range missing", "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'");
-DEFINE_ERROR_EXT(OB_KV_FILTER_PARSE_ERROR, -10514, -1, "HY000", "OBKV filter parse error", "Filter parse errror, the input filter string is: '%.*s'");
-DEFINE_ERROR_EXT(OB_KV_REDIS_PARSE_ERROR, -10515, -1, "HY000", "OBKV redis protocol parse error", "Redis protocol parse errror, the input redis string is: '%.*s'");
+DEFINE_ERROR_EXT(OB_KV_FILTER_PARSE_ERROR, -10514, -1, "HY000", "OBKV filter parse error", "Filter parse error, the input filter string is: '%.*s'");
+DEFINE_ERROR_EXT(OB_KV_REDIS_PARSE_ERROR, -10515, -1, "HY000", "OBKV redis protocol parse error", "Redis protocol parse error, the input redis string is: '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG, -10516, -1, "HY000", "When invoking the Increment interface only HBase cells with a length of 8 can be converted to int64_t", "When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'.");
 DEFINE_ERROR_EXT(OB_KV_REDIS_ERROR, -10517, -1, "HY000", "OBKV redis error", "Redis err need return to client");
+DEFINE_ERROR_EXT(OB_KV_CHECK_FAILED, -10518, -1, "HY000", "OBKV check failed", "Check failed in %.*s");
 DEFINE_ERROR(OB_KV_ODP_TIMEOUT, -10650, -1, "HY000", "ODP process timeout");
 
 // 余留位置

@@ -430,7 +430,7 @@ int ObTableApiExecuteP::try_process()
       LOG_WARN("fail to process group commit trigger", K(ret));
     }
     result_.set_err(ret);
-  } else if (OB_FAIL(init_schema_info(arg_.table_name_))) {
+  } else if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema guard", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));

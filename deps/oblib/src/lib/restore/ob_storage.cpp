@@ -14,12 +14,14 @@
 #include "lib/restore/ob_i_storage.h"
 #include "lib/restore/ob_object_device.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "lib/utility/ob_sort.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/container/ob_array_iterator.h"
 #include "common/ob_smart_var.h"
 #include "common/storage/ob_device_common.h"
 #include "common/storage/ob_io_device.h"
 #include "lib/atomic/ob_atomic.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -669,42 +671,52 @@ int ObStorageUtil::read_seal_meta_if_needed(
                                                   seal_meta_uri, OB_MAX_URI_LENGTH))) {
     OB_LOG(WARN, "fail to construct s3 seal_meta name", K(ret), K(uri));
   } else {
-    ObStorageReader reader;
-    int64_t seal_meta_len = 0;
-    if (OB_FAIL(reader.open(seal_meta_uri, storage_info_))) {
-      if (OB_OBJECT_NOT_EXIST == ret) {
-        obj_meta.is_exist_ = false;
-        ret = OB_SUCCESS;
-      }
+    ObStorageReader *reader = nullptr;
+    if (OB_ISNULL(reader = static_cast<ObStorageReader *>(allocator.alloc(sizeof(ObStorageReader))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "fail to alloc buf for reader", K(ret));
+    } else if (FALSE_IT(new (reader) ObStorageReader())) {
     } else {
-      // If exist seal meta, directly read it content.
-      seal_meta_len = reader.get_length();
-      if (seal_meta_len > 0) {
-        int64_t read_size = 0;
-        char *buf = NULL;
-        pos = 0;
-        if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(seal_meta_len + 1)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          OB_LOG(WARN, "fail to alloc buf for reading seal meta file", K(ret), K(seal_meta_uri), K(seal_meta_len));
-        } else if (OB_FAIL(reader.pread(buf, seal_meta_len, 0/*offset*/, read_size))) {
-          OB_LOG(WARN, "failed to read seal meta file content", K(ret), K(seal_meta_uri), K(seal_meta_len));
-        } else if (OB_UNLIKELY(seal_meta_len != read_size)) {
-          ret = OB_ERR_UNEXPECTED;
-          OB_LOG(WARN, "fail to read seal meta file entire content",
-              K(ret), K(seal_meta_uri), K(seal_meta_len), K(read_size));
-        } else if (OB_FAIL(obj_meta.deserialize(buf, read_size, pos))) {
-          OB_LOG(WARN, "fail to deserialize storage object meta", K(ret), K(seal_meta_uri), K(read_size), KP(buf));
-        } else {
-          obj_meta.is_exist_ = true;
+      int64_t seal_meta_len = 0;
+      if (OB_FAIL(reader->open(seal_meta_uri, storage_info_))) {
+        if (OB_OBJECT_NOT_EXIST == ret) {
+          obj_meta.is_exist_ = false;
+          ret = OB_SUCCESS;
         }
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        OB_LOG(WARN, "the seal meta file is empty", K(ret), K(seal_meta_uri));
-      }
+        // If exist seal meta, directly read it content.
+        seal_meta_len = reader->get_length();
+        if (seal_meta_len > 0) {
+          int64_t read_size = 0;
+          char *buf = NULL;
+          pos = 0;
+          if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(seal_meta_len + 1)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            OB_LOG(WARN, "fail to alloc buf for reading seal meta file", K(ret), K(seal_meta_uri), K(seal_meta_len));
+          } else if (OB_FAIL(reader->pread(buf, seal_meta_len, 0/*offset*/, read_size))) {
+            OB_LOG(WARN, "failed to read seal meta file content", K(ret), K(seal_meta_uri), K(seal_meta_len));
+          } else if (OB_UNLIKELY(seal_meta_len != read_size)) {
+            ret = OB_ERR_UNEXPECTED;
+            OB_LOG(WARN, "fail to read seal meta file entire content",
+                K(ret), K(seal_meta_uri), K(seal_meta_len), K(read_size));
+          } else if (OB_FAIL(obj_meta.deserialize(buf, read_size, pos))) {
+            OB_LOG(WARN, "fail to deserialize storage object meta", K(ret), K(seal_meta_uri), K(read_size), KP(buf));
+          } else {
+            obj_meta.is_exist_ = true;
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          OB_LOG(WARN, "the seal meta file is empty", K(ret), K(seal_meta_uri));
+        }
 
-      if (OB_TMP_FAIL(reader.close())) {
-        OB_LOG(WARN, "fail to close reader", K(ret), K(tmp_ret), K(seal_meta_uri));
+        if (OB_TMP_FAIL(reader->close())) {
+          OB_LOG(WARN, "fail to close reader", K(ret), K(tmp_ret), K(seal_meta_uri));
+        }
       }
+    }
+    if (OB_NOT_NULL(reader)) {
+      reader->~ObStorageReader();
+      reader = nullptr;
     }
   }
   return ret;
@@ -2361,6 +2373,8 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
       STORAGE_LOG(WARN, "writer_ is null", K(ret), K(uri));
     } else if (OB_FAIL(writer_->open(uri, storage_info))) {
       STORAGE_LOG(WARN, "failed to open writer", K(ret), K(uri));
+    } else {
+      storage_info_ = storage_info;
     }
   }
 
@@ -2534,31 +2548,35 @@ int ObStorageAppender::repeatable_pwrite_(const char *buf, const int64_t size, c
   int64_t read_buf_size = 0;
   int64_t actual_write_offset = 0;
   char *read_buffer = nullptr;
-  ObStorageReader reader;
+  ObStorageReader *reader = nullptr;
   ObArenaAllocator allocator;
 
   if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
-  } else if (OB_FAIL(reader.open(uri_, storage_info_))) {
+  } else if (OB_ISNULL(reader = static_cast<ObStorageReader *>(allocator.alloc(sizeof(ObStorageReader))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    OB_LOG(WARN, "fail to alloc buf for reader", K(ret));
+  } else if(FALSE_IT(new (reader) ObStorageReader())) {
+  } else if (OB_FAIL(reader->open(uri_, storage_info_))) {
     STORAGE_LOG(WARN, "failed to open reader", K(ret));
-  } else if (reader.get_length() <= offset) {
+  } else if (reader->get_length() <= offset) {
     // This situation also has concurrency issues.
     // The length read by the reader may be old, so offset not match needs to be returned for retry.
     ret = OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH;
-    STORAGE_LOG(WARN, "offset is invalid", K(offset), "length", reader.get_length(), K(ret));
-  } else if (OB_FALSE_IT(actual_write_offset = reader.get_length() - offset)) {
+    STORAGE_LOG(WARN, "offset is invalid", K(offset), "length", reader->get_length(), K(ret));
+  } else if (OB_FALSE_IT(actual_write_offset = reader->get_length() - offset)) {
   } else if (OB_FALSE_IT(read_buf_size = std::min(actual_write_offset, size))) {
   } else if (OB_ISNULL(read_buffer = static_cast<char *>(allocator.alloc(read_buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "failed to allocate memory", K(ret), K(size));
-  } else if (OB_FAIL(reader.pread(read_buffer, read_buf_size, offset, read_size))) {
+  } else if (OB_FAIL(reader->pread(read_buffer, read_buf_size, offset, read_size))) {
     STORAGE_LOG(WARN, "failed to pread", K(ret));
   } else if (0 != MEMCMP(buf, read_buffer, read_buf_size)) {
     ret = OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH;
     STORAGE_LOG(WARN, "data inconsistent", K(ret));
-  } else if (offset + size > reader.get_length()) {
-    if (OB_FAIL(appender_->pwrite(buf + actual_write_offset, size - actual_write_offset, reader.get_length()))) {
+  } else if (offset + size > reader->get_length()) {
+    if (OB_FAIL(appender_->pwrite(buf + actual_write_offset, size - actual_write_offset, reader->get_length()))) {
       if (OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH == ret) {
         ret = OB_IO_ERROR;
         STORAGE_LOG(WARN, "There may be concurrency problems that require the caller to retry", K(ret));
@@ -2566,10 +2584,13 @@ int ObStorageAppender::repeatable_pwrite_(const char *buf, const int64_t size, c
     }
   }
 
-  if (OB_SUCCESS != (tmp_ret = reader.close())) {
+  if (OB_SUCCESS != (tmp_ret = reader->close())) {
     STORAGE_LOG(WARN, "failed to close reader", K(tmp_ret));
   }
-
+  if (OB_NOT_NULL(reader)) {
+    reader->~ObStorageReader();
+    reader = nullptr;
+  }
   return ret;
 }
 

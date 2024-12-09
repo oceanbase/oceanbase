@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_FLUSH_CTX_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_FLUSH_CTX_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_FLUSH_CTX_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_FLUSH_CTX_H_
 
 #include "lib/queue/ob_link_queue.h"
 #include "lib/utility/ob_print_utils.h"
@@ -98,10 +98,10 @@ struct ObTmpFileSingleFlushContext
 {
 public:
   ObTmpFileSingleFlushContext() : file_handle_(), data_ctx_(), meta_ctx_() {}
-  ObTmpFileSingleFlushContext(ObTmpFileHandle file_handle) : file_handle_(file_handle), data_ctx_(), meta_ctx_() {}
+  ObTmpFileSingleFlushContext(ObSNTmpFileHandle file_handle) : file_handle_(file_handle), data_ctx_(), meta_ctx_() {}
   TO_STRING_KV(K(file_handle_), K(data_ctx_), K(meta_ctx_));
 public:
-  ObTmpFileHandle file_handle_;
+  ObSNTmpFileHandle file_handle_;
   ObTmpFileDataFlushContext data_ctx_;
   ObTmpFileTreeFlushContext meta_ctx_;
 };
@@ -143,11 +143,11 @@ public:
   {
   public:
     ObTmpFileFlushFailRecord() : is_meta_(false), file_handle_() {}
-    ObTmpFileFlushFailRecord(bool is_meta, ObTmpFileHandle file_handle) : is_meta_(is_meta), file_handle_(file_handle) {}
+    ObTmpFileFlushFailRecord(bool is_meta, ObSNTmpFileHandle file_handle) : is_meta_(is_meta), file_handle_(file_handle) {}
     TO_STRING_KV(K(is_meta_), K(file_handle_));
   public:
     bool is_meta_;
-    ObTmpFileHandle file_handle_;
+    ObSNTmpFileHandle file_handle_;
   };
   struct FlushSequenceContext
   {
@@ -185,7 +185,8 @@ public:
   OB_INLINE ObTmpFileFlushMonitor *get_flush_monitor() { return flush_monitor_ptr_; }
   OB_INLINE void inc_create_flush_task_cnt() { ++flush_seq_ctx_.create_flush_task_cnt_; }
   OB_INLINE int64_t get_flush_sequence() { return flush_seq_ctx_.flush_sequence_; }
-  TO_STRING_KV(K(is_inited_), K(fail_too_many_), K(expect_flush_size_), K(actual_flush_size_), K(flush_seq_ctx_), K(state_), K(iter_));
+  TO_STRING_KV(K(is_inited_), K(fail_too_many_), K(expect_flush_size_), K(actual_flush_size_),
+               K(flush_seq_ctx_), K(state_), K(iter_), K(file_ctx_hash_.size()), K(flush_failed_array_.size()));
 private:
   bool is_inited_;
   bool fail_too_many_;          // indicate wether the number of file copy failures exceeds MAX_COPY_FAIL_COUNT in one round.
@@ -220,7 +221,7 @@ public:
   bool has_last_page_lock_;                // indicate the last page is in flushing and holds last_page_lock_ in file
   bool insert_meta_tree_done_;             // indicate the insertion of the corresponding data item into the meta tree is completed
   bool update_meta_data_done_;             // indicate the file metadata or metadata tree update is completed
-  ObTmpFileHandle file_handle_;
+  ObSNTmpFileHandle file_handle_;
 
   // information for updating data
   int64_t flush_data_page_disk_begin_id_;  // record begin page id in the macro block, for updating meta tree item
@@ -239,7 +240,7 @@ struct ObTmpFileFlushTask : public common::ObSpLinkQueue::Link
 {
 public:
   ObTmpFileFlushTask();
-  ~ObTmpFileFlushTask() { destroy(); }
+  virtual ~ObTmpFileFlushTask() { destroy(); }
   enum ObTmpFileFlushTaskState
   {
     TFFT_INITED = 0,
@@ -261,8 +262,8 @@ public:
 public:
   void destroy();
   int prealloc_block_buf();
-  int write_one_block();
-  int wait_macro_block_handle();
+  virtual int write_one_block();
+  virtual int wait_macro_block_handle();
   int64_t get_total_page_num() const;
   OB_INLINE ObKVCacheInstHandle& get_inst_handle() { return inst_handle_; }
   OB_INLINE ObKVCachePair*& get_kvpair() { return kvpair_; }
@@ -289,6 +290,8 @@ public:
   OB_INLINE int64_t get_flush_seq() const { return flush_seq_; }
   OB_INLINE void set_create_ts(const int64_t create_ts) { create_ts_ = create_ts; }
   OB_INLINE int64_t get_create_ts() const { return create_ts_; }
+  OB_INLINE void set_last_print_ts(const int64_t print_ts) { last_print_ts_ = print_ts; }
+  OB_INLINE int64_t get_last_print_ts() const { return last_print_ts_; }
   OB_INLINE void atomic_set_io_finished(const bool is_finished) { ATOMIC_SET(&is_io_finished_, is_finished); }
   OB_INLINE bool atomic_get_io_finished() const { return ATOMIC_LOAD(&is_io_finished_); }
   OB_INLINE void set_is_fast_flush_tree(const bool is_fast_flush_tree) { fast_flush_tree_page_ = is_fast_flush_tree; }
@@ -315,8 +318,8 @@ public:
   OB_INLINE bool atomic_get_write_block_executed() const { return ATOMIC_LOAD(&is_write_block_executed_); }
   OB_INLINE ObTmpFileWriteBlockTask& get_flush_write_block_task() { return flush_write_block_task_; }
 
-  TO_STRING_KV(KP(this), KP(kvpair_), K(io_result_ret_code_), K(data_length_),
-               K(block_index_), K(flush_seq_), K(create_ts_), K(is_io_finished_),
+  TO_STRING_KV(KP(this), KP(kvpair_), K(io_result_ret_code_), K(block_handle_), K(data_length_),
+               K(block_index_), K(flush_seq_), K(create_ts_), K(last_print_ts_), K(is_io_finished_), K(handle_),
                K(fast_flush_tree_page_), K(recorded_as_prepare_finished_), K(type_), K(task_state_), K(tmp_file_block_handle_), K(flush_infos_),
                K(is_write_block_executed_), K(write_block_ret_code_), K(flush_write_block_task_), K(flush_page_id_arr_.count()));
 private:
@@ -332,6 +335,7 @@ private:
   int64_t block_index_;       // tmp file block logical index in ObTmpFileBlockManager
   int64_t flush_seq_;         // flush sequence, for verification purpose
   int64_t create_ts_;
+  int64_t last_print_ts_;     // for debug purpose
   bool is_write_block_executed_; // set to true if task has sent IO
   bool is_io_finished_;       // set to true if task has finished async IO
   bool fast_flush_tree_page_; // indicate the task requires fast flush tree pages
@@ -347,4 +351,4 @@ private:
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_FLUSH_CTX_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_FLUSH_CTX_H_

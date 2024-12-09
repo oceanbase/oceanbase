@@ -193,7 +193,10 @@ OB_INLINE bool is_resource_manager_group(const uint64_t group_id)
 {
   return group_id >= USER_RESOURCE_GROUP_START_ID && group_id != OB_INVALID_GROUP_ID;
 }
-
+OB_INLINE bool is_sys_group(const uint64_t group_id)
+{
+  return group_id >= 0 && group_id < USER_RESOURCE_GROUP_START_ID;
+}
 OB_INLINE bool is_valid_resource_group(const uint64_t group_id)
 {
   //other group or user group
@@ -316,6 +319,7 @@ const int64_t OB_MAX_CONSTRAINT_NAME_LENGTH_MYSQL = 64; // Compatible with mysql
 const int64_t OB_MAX_CONSTRAINT_EXPR_LENGTH = 2048;
 const int64_t OB_MAX_TABLESPACE_NAME_LENGTH = 128;
 const int64_t OB_MAX_UDF_NAME_LENGTH = 64;
+const int64_t OB_MAX_ASH_PL_NAME_LENGTH = 32;
 const int64_t OB_MAX_DL_NAME_LENGTH = 128;
 const int64_t OB_MAX_USER_NAME_LENGTH = 64; // Not compatible with Oracle (Oracle is 128), the logic is greater than when an error is reported
 const int64_t OB_MAX_USER_NAME_BUF_LENGTH = OB_MAX_USER_NAME_LENGTH + 1;
@@ -871,6 +875,8 @@ const int64_t MAX_COLUMN_CHAR_LENGTH = 255;
 const uint64_t INVALID_COLUMN_GROUP_ID = 0;
 const uint64_t DEFAULT_TYPE_COLUMN_GROUP_ID = 1; // reserve 2~999
 const uint64_t COLUMN_GROUP_START_ID = 1000;
+const uint64_t ALL_COLUMN_GROUP_ID = 1001;
+const uint64_t ROWKEY_COLUMN_GROUP_ID = 1002;
 const uint64_t DEFAULT_CUSTOMIZED_CG_NUM = 2;
 const int64_t OB_CG_NAME_PREFIX_LENGTH = 5; // length of cg prefix like "__cg_"
 const int64_t OB_MAX_COLUMN_GROUP_NAME_LENGTH = OB_MAX_COLUMN_NAME_LENGTH * OB_MAX_CHAR_LEN + OB_CG_NAME_PREFIX_LENGTH; //(max_column_name_length(128) * ob_max_char_len(3)) + prefix
@@ -2544,7 +2550,8 @@ struct ObNumberDesc
   if (OB_SUCCESS == ret  \
       && OB_SUCCESS != (ret = row.set_cell(table_id, ++column_id, obj))) \
   {\
-    _OB_LOG(WARN, "failed to set cell=%s, ret=%d", to_cstring(obj), ret); \
+    ObCStringHelper helper; \
+    _OB_LOG(WARN, "failed to set cell=%s, ret=%d", helper.convert(obj), ret); \
   }
 
 OB_INLINE int64_t &get_tid_cache()

@@ -669,16 +669,33 @@ int ObSQLUtils::is_collation_data_version_valid(ObCollationType collation_type, 
     ret = OB_NOT_SUPPORTED;
     SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_4_0 or between [430,433)", K(collation_type), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Unicode collation not supported when data_version < 4_2_4_0 or between [430,433), unicode collation is");
-  } else if ((data_version < MOCK_DATA_VERSION_4_2_5_0
-              || (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_4_0))
-              && (CS_TYPE_UTF8MB4_ZH_0900_AS_CS != collation_type &&
+  } else if ((
+                data_version < MOCK_DATA_VERSION_4_2_5_0 ||
+                (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_4_0)
+              )
+              &&
+              (
+                 CS_TYPE_UTF8MB4_ZH_0900_AS_CS != collation_type &&
                  CS_TYPE_UTF8MB4_CROATIAN_UCA_CI != collation_type &&
                  CS_TYPE_UTF8MB4_UNICODE_520_CI != collation_type &&
                  CS_TYPE_UTF8MB4_CZECH_UCA_CI != collation_type &&
                  CS_TYPE_UTF8MB4_0900_AI_CI != collation_type &&
-                 ((CS_TYPE_UTF8MB4_0900_AI_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_MN_CYRL_0900_AS_CS)
-                  || (CS_TYPE_UTF16_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF16_VIETNAMESE_CI)
-                  || (CS_TYPE_UTF8MB4_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_VIETNAMESE_CI)))) {
+                  ((CS_TYPE_UTF8MB4_0900_AI_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_MN_CYRL_0900_AS_CS)
+                   || (CS_TYPE_UTF16_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF16_VIETNAMESE_CI)
+                   || (CS_TYPE_UTF8MB4_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_VIETNAMESE_CI)
+                   || CS_TYPE_BIG5_BIN == collation_type
+                   || CS_TYPE_BIG5_CHINESE_CI == collation_type
+                   || CS_TYPE_LATIN1_GERMAN2_CI == collation_type
+                   || CS_TYPE_LATIN1_GERMAN1_CI == collation_type
+                   || CS_TYPE_LATIN1_SWEDISH_CI == collation_type
+                   || CS_TYPE_LATIN1_DANISH_CI == collation_type
+                   || CS_TYPE_LATIN1_SPANISH_CI == collation_type
+                   || CS_TYPE_HKSCS31_BIN == collation_type
+                   || CS_TYPE_HKSCS_BIN == collation_type
+                   || CS_TYPE_DEC8_BIN == collation_type
+                   || CS_TYPE_DEC8_SWEDISH_CI == collation_type
+                  )
+              )) {
     ret = OB_NOT_SUPPORTED;
     SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_5_0 or between [430,434)", K(collation_type), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Unicode collation not supported when data_version < 4_2_5_0 or between [430,434), unicode collation is");
@@ -1464,17 +1481,97 @@ int ObSQLUtils::extract_odps_part_spec(const ObString &all_part_spec, ObIArray<O
   return ret;
 }
 
-int ObSQLUtils::is_external_odps_table(const ObString &properties, ObIAllocator &allocator, bool &is_odps)
+int ObSQLUtils::get_external_table_type(const uint64_t tenant_id,
+                                        const uint64_t table_id,
+                                        ObExternalFileFormat::FormatType &type)
 {
   int ret = OB_SUCCESS;
-  is_odps = false;
-  ObExternalFileFormat format;
-  if (properties.empty()) {
-    // do nothing
-  } else if (OB_FAIL(format.load_from_string(properties, allocator))) {
-    LOG_WARN("fail to load from properties string", K(ret), K(properties));
+  const ObTableSchema *table_schema = NULL;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+  OZ (schema_guard.get_table_schema(tenant_id, table_id, table_schema));
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_external_table_type(table_schema, type))) {
+    LOG_WARN("failed to get external table type", K(tenant_id), K(table_id), KP(table_schema), K(ret));
+  }
+  return ret;
+}
+
+int ObSQLUtils::get_external_table_type(const ObTableSchema *table_schema, ObExternalFileFormat::FormatType &type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
   } else {
-    is_odps = ObExternalFileFormat::FormatType::ODPS_FORMAT == format.format_type_;
+    ObExternalFileFormat format;
+    ObArenaAllocator allocator;
+    ObString table_format_or_properties = table_schema->get_external_file_format().empty() ?
+                                  table_schema->get_external_properties(): table_schema->get_external_file_format();
+    if (OB_FAIL(get_external_table_type(table_format_or_properties, type))) {
+      LOG_WARN("failed to get external table type", K(ret), K(table_format_or_properties));
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::get_external_table_type(const ObString &table_format_or_properties,
+                                        ObExternalFileFormat::FormatType &type) {
+  int ret = OB_SUCCESS;
+  ObExternalFileFormat format;
+  ObArenaAllocator allocator;
+  if (table_format_or_properties.empty()) {
+  } else if (OB_FAIL(format.load_from_string(table_format_or_properties, allocator))) {
+    LOG_WARN("fail to load from properties string", K(ret), K(table_format_or_properties));
+  } else {
+    type = format.format_type_;
+  }
+  return ret;
+}
+
+
+int ObSQLUtils::is_odps_external_table(const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       bool &is_odps_external_table)
+{
+  int ret = OB_SUCCESS;
+  is_odps_external_table = false;
+  ObExternalFileFormat::FormatType external_table_type;
+  if (OB_FAIL(ObSQLUtils::get_external_table_type(tenant_id, table_id, external_table_type))) {
+    LOG_WARN("failed to get external table type", K(ret));
+  } else {
+    is_odps_external_table = (ObExternalFileFormat::FormatType:: ODPS_FORMAT == external_table_type);
+  }
+  return ret;
+}
+
+int ObSQLUtils::is_odps_external_table(const ObTableSchema *table_schema,
+                                       bool &is_odps_external_table)
+{
+  int ret = OB_SUCCESS;
+  is_odps_external_table = false;
+  ObExternalFileFormat::FormatType external_table_type;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::get_external_table_type(table_schema, external_table_type))) {
+    LOG_WARN("failed to get external table type", K(ret));
+  } else {
+    is_odps_external_table = (ObExternalFileFormat::FormatType:: ODPS_FORMAT == external_table_type);
+  }
+  return ret;
+}
+
+int ObSQLUtils::is_odps_external_table(const ObString &table_format_or_properties,
+                                       bool &is_odps_external_table)
+{
+  int ret = OB_SUCCESS;
+  is_odps_external_table = false;
+  ObExternalFileFormat::FormatType external_table_type;
+  if (OB_FAIL(ObSQLUtils::get_external_table_type(table_format_or_properties, external_table_type))) {
+    LOG_WARN("failed to get external table type", K(ret));
+  } else {
+    is_odps_external_table = (ObExternalFileFormat::FormatType:: ODPS_FORMAT == external_table_type);
   }
   return ret;
 }
@@ -1754,6 +1851,12 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_SHOW_SEQUENCES == type
                || T_SHOW_ENGINE == type
                || T_SHOW_OPEN_TABLES == type
+               || T_XA_START == type
+               || T_XA_END == type
+               || T_XA_PREPARE == type
+               || T_XA_COMMIT == type
+               || T_XA_ROLLBACK == type
+               || T_XA_RECOVER == type
                || (T_SET_ROLE == type && lib::is_mysql_mode())
                || T_SHOW_CREATE_USER == type) {
       ret = true;
@@ -2789,7 +2892,7 @@ bool check_stack_overflow_c()
   return is_overflow;
 }
 
-int ObSQLUtils::extract_pre_query_range(const ObQueryRange &pre_query_range,
+int ObSQLUtils::extract_pre_query_range(const ObQueryRangeProvider &query_range_provider,
                                         ObIAllocator &allocator,
                                         ObExecContext &exec_ctx,
                                         ObQueryRangeArray &key_ranges,
@@ -2797,55 +2900,65 @@ int ObSQLUtils::extract_pre_query_range(const ObQueryRange &pre_query_range,
 {
   int ret = OB_SUCCESS;
   bool dummy_all_single_value_ranges = false;
-  if (OB_FAIL(pre_query_range.get_tablet_ranges(allocator, exec_ctx, key_ranges,
-                                                dummy_all_single_value_ranges,
-                                                dtc_params))) {
+  if (OB_FAIL(query_range_provider.get_tablet_ranges(allocator, exec_ctx, key_ranges,
+                                                     dummy_all_single_value_ranges,
+                                                     dtc_params))) {
     LOG_WARN("failed to get tablet ranges", K(ret));
   }
   return ret;
 }
 
-int ObSQLUtils::extract_geo_query_range(const ObQueryRange &pre_query_range,
-                                          ObIAllocator &allocator,
-                                          ObExecContext &exec_ctx,
-                                          ObQueryRangeArray &key_ranges,
-                                          ObMbrFilterArray &mbr_filters,
-                                          const ObDataTypeCastParams &dtc_params)
+int ObSQLUtils::extract_geo_query_range(const ObQueryRangeProvider &query_range_provider,
+                                        ObIAllocator &allocator,
+                                        ObExecContext &exec_ctx,
+                                        ObQueryRangeArray &key_ranges,
+                                        ObMbrFilterArray &mbr_filters,
+                                        const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
   bool dummy_all_single_value_ranges = false;
-  if (OB_LIKELY(!pre_query_range.need_deep_copy())) {
-    //对于大多数查询来说，query条件是非常规范和工整的，这种条件我们不需要拷贝进行graph的变化，可以直接提取
-    if (OB_FAIL(pre_query_range.direct_get_tablet_ranges(allocator,
-                                                        exec_ctx,
-                                                        key_ranges,
-                                                        dummy_all_single_value_ranges,
-                                                        dtc_params))) {
-      LOG_WARN("fail to get tablet ranges", K(ret));
-    } else {
-      const MbrFilterArray &pre_filters = pre_query_range.get_mbr_filter();
-      FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
-        if (OB_FAIL(mbr_filters.push_back(*it))) {
-          LOG_WARN("store mbr_filters_ failed", K(ret));
-        }
-      }
+  if (query_range_provider.is_new_query_range()) {
+    if (OB_FAIL(query_range_provider.get_tablet_ranges(allocator, exec_ctx, key_ranges,
+                                                      dummy_all_single_value_ranges,
+                                                      dtc_params,
+                                                      mbr_filters))) {
+      LOG_WARN("failed to get tablet ranges", K(ret));
     }
   } else {
-    ObQueryRange final_query_range(allocator);
-    if (OB_FAIL(final_query_range.deep_copy(pre_query_range))) {
-      // MUST deep copy to make it thread safe
-      LOG_WARN("fail to create final query range", K(ret), K(pre_query_range));
-    } else if (OB_FAIL(final_query_range.final_extract_query_range(exec_ctx, dtc_params))) {
-      LOG_WARN("fail to final extract query range", K(ret), K(final_query_range));
-    } else if (OB_FAIL(final_query_range.get_tablet_ranges(key_ranges,
-                                                           dummy_all_single_value_ranges,
-                                                           dtc_params))) {
-      LOG_WARN("fail to get tablet ranges from query range", K(ret), K(final_query_range));
+    const ObQueryRange &pre_query_range = static_cast<const ObQueryRange&>(query_range_provider);
+    if (OB_LIKELY(!pre_query_range.need_deep_copy())) {
+      //对于大多数查询来说，query条件是非常规范和工整的，这种条件我们不需要拷贝进行graph的变化，可以直接提取
+      if (OB_FAIL(pre_query_range.direct_get_tablet_ranges(allocator,
+                                                          exec_ctx,
+                                                          key_ranges,
+                                                          dummy_all_single_value_ranges,
+                                                          dtc_params))) {
+        LOG_WARN("fail to get tablet ranges", K(ret));
+      } else {
+        const MbrFilterArray &pre_filters = pre_query_range.get_mbr_filter();
+        FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
+          if (OB_FAIL(mbr_filters.push_back(*it))) {
+            LOG_WARN("store mbr_filters_ failed", K(ret));
+          }
+        }
+      }
     } else {
-      const MbrFilterArray &pre_filters = final_query_range.get_mbr_filter();
-      FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
-        if (OB_FAIL(mbr_filters.push_back(*it))) {
-          LOG_WARN("store mbr_filters_ failed", K(ret));
+      ObQueryRange final_query_range(allocator);
+      if (OB_FAIL(final_query_range.deep_copy(pre_query_range))) {
+        // MUST deep copy to make it thread safe
+        LOG_WARN("fail to create final query range", K(ret), K(pre_query_range));
+      } else if (OB_FAIL(final_query_range.final_extract_query_range(exec_ctx, dtc_params))) {
+        LOG_WARN("fail to final extract query range", K(ret), K(final_query_range));
+      } else if (OB_FAIL(final_query_range.get_tablet_ranges(key_ranges,
+                                                            dummy_all_single_value_ranges,
+                                                            dtc_params))) {
+        LOG_WARN("fail to get tablet ranges from query range", K(ret), K(final_query_range));
+      } else {
+        const MbrFilterArray &pre_filters = final_query_range.get_mbr_filter();
+        FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
+          if (OB_FAIL(mbr_filters.push_back(*it))) {
+            LOG_WARN("store mbr_filters_ failed", K(ret));
+          }
         }
       }
     }
@@ -3849,6 +3962,25 @@ int ObImplicitCursorInfo::merge_cursor(const ObImplicitCursorInfo &other)
     duplicated_rows_ += other.duplicated_rows_;
     deleted_rows_ += other.deleted_rows_;
     last_insert_id_ = other.last_insert_id_;
+  }
+  return ret;
+}
+
+int ObImplicitCursorInfo::replace_cursor(const ObImplicitCursorInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_INDEX == stmt_id_) {
+    //not init, init it with first cursor info
+    *this = other;
+  } else if (stmt_id_ != other.stmt_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_id is different", K(stmt_id_), K(other.stmt_id_));
+  } else {
+    affected_rows_ = other.affected_rows_;
+    found_rows_ = other.found_rows_;
+    matched_rows_ = other.matched_rows_;
+    duplicated_rows_ = other.duplicated_rows_;
+    deleted_rows_ = other.deleted_rows_;
   }
   return ret;
 }
@@ -5611,7 +5743,14 @@ int ObSQLUtils::check_location_access_priv(const ObString &location, ObSQLSessio
       ObArrayWrap<char> buffer;
       OZ (buffer.allocate_array(allocator, PATH_MAX));
       if (OB_SUCC(ret)) {
-        real_location = ObString(realpath(to_cstring(real_location), buffer.get_data()));
+        ObCStringHelper helper;
+        const char *real_location_str = helper.convert(real_location);
+        if (OB_ISNULL(real_location_str)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("convert real_location failed", K(ret), K(real_location));
+        } else {
+          real_location = ObString(realpath(real_location_str, buffer.get_data()));
+        }
       }
     }
 
@@ -6331,6 +6470,17 @@ bool ObSQLUtils::is_data_version_ge_423_or_432(uint64_t data_version)
 bool ObSQLUtils::is_data_version_ge_424_or_433(uint64_t data_version)
 {
   return ((MOCK_DATA_VERSION_4_2_4_0 <= data_version && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_3_0);
+}
+
+bool ObSQLUtils::is_min_cluster_version_ge_425_or_435()
+{
+  uint64_t version = GET_MIN_CLUSTER_VERSION();
+  return ((MOCK_CLUSTER_VERSION_4_2_5_0 <= version && version < CLUSTER_VERSION_4_3_0_0) || version >= CLUSTER_VERSION_4_3_5_0);
+}
+
+bool ObSQLUtils::is_opt_feature_version_ge_425_or_435(uint64_t opt_feature_version)
+{
+  return ((COMPAT_VERSION_4_2_5 <= opt_feature_version && opt_feature_version < COMPAT_VERSION_4_3_0) || opt_feature_version >= COMPAT_VERSION_4_3_5);
 }
 
 int ObSQLUtils::get_strong_partition_replica_addr(const ObCandiTabletLoc &phy_part_loc_info,

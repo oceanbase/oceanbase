@@ -89,6 +89,12 @@ public:
   virtual int inner_get_next_row();
   virtual int inner_open();
   virtual int inner_close();
+  virtual void destroy()
+  {
+    // destroy
+    upd_rtdef_.~ObUpdRtDef();
+    ObTableModifyOp::destroy();
+  }
 private:
   int update_row_to_das(const ObDASTabletLoc *tablet_loc);
 private:

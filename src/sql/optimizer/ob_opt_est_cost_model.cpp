@@ -1617,14 +1617,12 @@ int ObOptEstCostModel::cost_row_store_index_scan(const ObCostTableScanInfo &est_
     // 1. 以 [token, token] 为 range 扫描 inv_index 两次，计算一个聚合函数；
     // 2. 全表扫描 doc_id_rowkey_index, 计算一个聚合函数；
     // 3. 用过滤后的 doc_id 对 doc_id_rowkey_index 做回表
-    int token_count = 1;  // 此处先假设 search query 只有一个 token，后续要调整
-    double token_sel = DEFAULT_SEL;
     double inv_index_range_scan_cost = 0;
     double doc_id_full_scan_cost = 0;
     double doc_id_index_back_cost = 0;
     if (OB_FAIL(cost_range_scan(est_cost_info,
                                 true,
-                                row_count * token_sel,
+                                row_count,
                                 inv_index_range_scan_cost))) {
       LOG_WARN("Failed to estimate scan cost", K(ret));
     } else if (OB_FAIL(cost_range_scan(est_cost_info,
@@ -1634,14 +1632,14 @@ int ObOptEstCostModel::cost_row_store_index_scan(const ObCostTableScanInfo &est_
       LOG_WARN("Failed to estimate scan cost", K(ret));
     } else if (OB_FAIL(cost_range_get(est_cost_info,
                                       true,
-                                      row_count * token_sel,
+                                      row_count,
                                       doc_id_index_back_cost))) {
       LOG_WARN("Failed to estimate get cost", K(ret));
     }
-    double aggregation_cost = (row_count * token_sel + row_count) * cost_params_.get_per_aggr_func_cost(sys_stat_);
+    double aggregation_cost = (row_count + row_count) * cost_params_.get_per_aggr_func_cost(sys_stat_);
     double fulltext_scan_cost = 2 * inv_index_range_scan_cost + doc_id_full_scan_cost +
                                 aggregation_cost + doc_id_index_back_cost;
-    index_scan_cost = token_count * fulltext_scan_cost;
+    index_scan_cost = fulltext_scan_cost;
     LOG_TRACE("OPT::[COST FULLTEXT INDEX SCAN]", K(fulltext_scan_cost), K(ret));
   }
   //add index skip scan cost
@@ -2381,6 +2379,11 @@ double ObOptEstCostModel::cost_quals(double rows, const ObIArray<ObRawExpr *> &q
       if (need_scale) {
         factor /= 25.0;
       }
+    } else if (qual->has_flag(CNT_MATCH_EXPR)) {
+      cost_per_row += cost_params_.get_functional_lookup_per_row_cost(sys_stat_) * factor;
+      if (need_scale) {
+        factor /= 10.0;
+      }
     } else {
       ObObjTypeClass calc_type = qual->get_result_type().get_calc_type_class();
       cost_per_row += cost_params_.get_comparison_cost(sys_stat_, calc_type) * factor;
@@ -2495,6 +2498,9 @@ int ObOptEstCostModel::calc_pred_cost_per_row(const ObRawExpr *expr,
       } else {
         cost += (expr->get_param_expr(1)->get_param_count() + 1) * cost_params_.get_comparison_cost(sys_stat_,ObIntTC) / rows;
       }
+      need_calc_child_cost = false;
+    } else if (T_FUN_MATCH_AGAINST == expr->get_expr_type()) {
+      cost += cost_params_.get_functional_lookup_per_row_cost(sys_stat_) / rows;
       need_calc_child_cost = false;
     } else {
       cost += cost_params_.get_comparison_cost(sys_stat_,ObIntTC) / rows;

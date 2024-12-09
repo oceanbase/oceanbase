@@ -6375,7 +6375,7 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
   return is_lossless;
 }
 
-int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless)
+int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless, bool is_query_range)
 {
   int ret = OB_SUCCESS;
   is_lossless = false;
@@ -6427,6 +6427,18 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
           ObAccuracy lossless_acc = child_type.get_accuracy();
           if (lossless_acc.get_scale() == dst_acc.get_scale()) {
             is_lossless = true;
+          } else if (!is_query_range) {
+          } else if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+            is_lossless = true;
+          } else if (dst_acc.get_precision() >= lossless_acc.get_precision() &&
+                     dst_acc.get_scale() >= lossless_acc.get_scale()) {
+            is_lossless = true;
+          }
+        } else if (ObDoubleTC == dst_tc && is_query_range) {
+          ObAccuracy lossless_acc = child_type.get_accuracy();
+          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale() &&
+              -1 == lossless_acc.get_precision() && -1 == lossless_acc.get_scale()) {
+            is_lossless = true;
           }
         }
       } else if (ObDateTimeType == child_type.get_type()) {
@@ -6445,16 +6457,6 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
           }
         }
       } else if (ObYearTC == child_tc) {
-        if (ObNumberTC == dst_tc || ObDecimalIntTC == dst_tc) {
-          ObAccuracy lossless_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[ObCompatibilityMode::MYSQL_MODE][child_type.get_type()];
-          if (dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision() - lossless_acc.get_scale()) {
-            is_lossless = true;
-          }
-        } else if (ObDoubleTC == dst_tc) {
-          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
-            is_lossless = true;
-          }
-        }
       } else if (ObVarcharType == child_type.get_type()) {
         // varchar, varbinnary
       } else if (ObCharType == child_type.get_type()) {
@@ -6535,6 +6537,13 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
             is_lossless = true;
           }
         }
+      } else if (ObDateTimeTC == child_tc) {
+        if (is_query_range && ObTimestampNanoType == dst_type.get_type()) {
+          if (dst_type.get_accuracy().get_precision() >=
+              child_type.get_accuracy().get_precision()) {
+            is_lossless = true;
+          }
+        }
       }
     }
     LOG_DEBUG("lossless column cast", K(child_type), K(child_tc), K(dst_type), K(dst_tc),
@@ -6544,7 +6553,8 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
 }
 
 int ObOptimizerUtil::get_expr_without_lossless_cast(const ObRawExpr* ori_expr,
-                                                    const ObRawExpr*& expr)
+                                                    const ObRawExpr*& expr,
+                                                    bool is_query_range)
 {
   int ret = OB_SUCCESS;
   bool is_lossless = false;
@@ -6556,7 +6566,7 @@ int ObOptimizerUtil::get_expr_without_lossless_cast(const ObRawExpr* ori_expr,
     if (OB_FAIL(get_expr_without_lossless_cast(ori_expr->get_param_expr(2), expr))) {
       LOG_WARN("failed to check is lossless column cast", K(ret));
     }
-  } else if (OB_FAIL(is_lossless_column_cast(ori_expr, is_lossless))) {
+  } else if (OB_FAIL(is_lossless_column_cast(ori_expr, is_lossless, is_query_range))) {
     LOG_WARN("failed to check is lossless column cast", K(ret));
   } else if (is_lossless) {
     expr = ori_expr->get_param_expr(0);
@@ -6565,7 +6575,8 @@ int ObOptimizerUtil::get_expr_without_lossless_cast(const ObRawExpr* ori_expr,
 }
 
 int ObOptimizerUtil::get_expr_without_lossless_cast(ObRawExpr* ori_expr,
-                                                    ObRawExpr*& expr)
+                                                    ObRawExpr*& expr,
+                                                    bool is_query_range)
 {
   int ret = OB_SUCCESS;
   bool is_lossless = false;
@@ -6573,7 +6584,7 @@ int ObOptimizerUtil::get_expr_without_lossless_cast(ObRawExpr* ori_expr,
   if (OB_ISNULL(ori_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(is_lossless_column_cast(ori_expr, is_lossless))) {
+  } else if (OB_FAIL(is_lossless_column_cast(ori_expr, is_lossless, is_query_range))) {
     LOG_WARN("failed to check is lossless column cast", K(ret));
   } else if (is_lossless) {
     expr = ori_expr->get_param_expr(0);
@@ -6581,88 +6592,94 @@ int ObOptimizerUtil::get_expr_without_lossless_cast(ObRawExpr* ori_expr,
   return ret;
 }
 
-int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
-                                         ObSQLSessionInfo *session_info,
-                                         ObRawExprFactory *expr_factory,
-                                         ObSelectStmt &left_stmt,
-                                         ObSelectStmt &right_stmt,
-                                         ObSelectStmt *select_stmt,
-                                         const bool is_mysql_recursive_union /* false */,
-                                         ObIArray<ObString> *rcte_col_name /* null */)
+int ObOptimizerUtil::get_column_expr_without_nvl(ObRawExpr* ori_expr, ObRawExpr*& expr)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObSelectStmt*, 1> left_stmts;
-  ObSEArray<ObSelectStmt*, 1> right_stmts;
-  if (OB_FAIL(left_stmts.push_back(&left_stmt)) || OB_FAIL(right_stmts.push_back(&right_stmt))) {
-    LOG_WARN("failed to pushback stmt", K(ret));
-  } else if (OB_FAIL(gen_set_target_list(allocator, session_info, expr_factory,
-                                         left_stmts, right_stmts, select_stmt, is_mysql_recursive_union,
-                                         rcte_col_name))) {
-    LOG_WARN("failed to get set target list", K(ret));
+  ObOpRawExpr *op_expr = NULL;
+  ObRawExpr *l_expr = NULL;
+  ObRawExpr *r_expr = NULL;
+  expr = ori_expr;
+  if (OB_ISNULL(ori_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (T_FUN_SYS_NVL != ori_expr->get_expr_type()) {
+    // do nothing
+  } else if (OB_FALSE_IT(op_expr = static_cast<ObOpRawExpr*>(expr))) {
+  } else if (OB_ISNULL(l_expr = op_expr->get_param_expr(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(get_expr_without_lossless_cast(l_expr, l_expr, true))) {
+    LOG_WARN("get expr without lossless cast", K(ret));
+  } else if (l_expr->is_column_ref_expr()) {
+    expr = l_expr;
   }
   return ret;
 }
 
-int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
-                                         ObSQLSessionInfo *session_info,
-                                         ObRawExprFactory *expr_factory,
-                                         ObIArray<ObSelectStmt*> &left_stmts,
-                                         ObIArray<ObSelectStmt*> &right_stmts,
-                                         ObSelectStmt *select_stmt,
-                                         const bool is_mysql_recursive_union /* false */,
-                                         ObIArray<ObString> *rcte_col_name /* null */)
+int ObOptimizerUtil::is_lossless_or_unprecise_column_cast(const ObRawExpr *expr, bool &is_lossless)
 {
   int ret = OB_SUCCESS;
-  UNUSED(allocator);
-  ObSelectStmt *child_stmt = NULL;
-  ObSEArray<ObExprResType, 8> res_types;
-  if (OB_ISNULL(session_info) || OB_ISNULL(expr_factory) || OB_ISNULL(select_stmt)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("params is invalid", K(ret));
-  } else if (OB_FAIL(try_add_cast_to_set_child_list(allocator, session_info, expr_factory,
-                                                    select_stmt->is_set_distinct(),
-                                                    left_stmts, right_stmts, &res_types,
-                                                    is_mysql_recursive_union, rcte_col_name))) {
-    LOG_WARN("failed to try add cast to set child list", K(ret));
-  } else if (OB_ISNULL(child_stmt = select_stmt->get_set_query(0))
-             || OB_UNLIKELY(res_types.count() != child_stmt->get_select_item_size())) {
+  const ObRawExpr *child_expr = NULL;
+  is_lossless = false;
+  if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected set stmt", K(ret), K(child_stmt));
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (T_FUN_SYS_CAST != expr->get_expr_type()) {
+    // do nothing
+  } else if (OB_FAIL(is_lossless_column_cast(expr, is_lossless, true))) {
+    LOG_WARN("failed to check is lossless column cast", K(ret));
+  } else if (is_lossless ||
+             expr->is_const_expr()) {
+    // do nothing
+  } else if (OB_ISNULL(child_expr = expr->get_param_expr(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
   } else {
-    select_stmt->get_select_items().reset();
-    ObItemType set_op_type = static_cast<ObItemType>(T_OP_SET + select_stmt->get_set_op());
-    const int64_t num = child_stmt->get_select_item_size();
-    SelectItem new_select_item;
-    for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
-      SelectItem &select_item = child_stmt->get_select_item(i);
-      new_select_item.alias_name_ = select_item.alias_name_;
-      new_select_item.expr_name_ = select_item.expr_name_;
-      new_select_item.is_real_alias_ = select_item.is_real_alias_ ||
-                  ObRawExprUtils::is_column_ref_skip_implicit_cast(select_item.expr_);
-      new_select_item.questions_pos_ = select_item.questions_pos_;
-      new_select_item.params_idx_ = select_item.params_idx_;
-      new_select_item.neg_param_idx_ = select_item.neg_param_idx_;
-      new_select_item.esc_str_flag_ = select_item.esc_str_flag_;
-      new_select_item.is_unpivot_mocked_column_ = select_item.is_unpivot_mocked_column_;
-      new_select_item.paramed_alias_name_ = select_item.paramed_alias_name_;
-      new_select_item.need_check_dup_name_ = select_item.need_check_dup_name_;
-      if (OB_FAIL(ObRawExprUtils::make_set_op_expr(*expr_factory, i, set_op_type,
-                                                   res_types.at(i), session_info,
-                                                   new_select_item.expr_))) {
-        LOG_WARN("create set op expr failed", K(ret));
-      } else if (OB_FAIL(select_stmt->add_select_item(new_select_item))) {
-        LOG_WARN("push back set select item failed", K(ret));
-      } else if (OB_ISNULL(new_select_item.expr_) ||
-                 OB_UNLIKELY(!new_select_item.expr_->is_set_op_expr())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null or is not set op expr", "set op", PC(new_select_item.expr_));
+    ObExprResType child_type = child_expr->get_result_type();
+    ObObjTypeClass child_tc = child_type.get_type_class();
+    ObExprResType dst_type = expr->get_result_type();
+    ObObjTypeClass dst_tc = dst_type.get_type_class();
+    ObAccuracy dst_acc = dst_type.get_accuracy();
+    if (!is_oracle_mode()) {
+      if (ObIntTC == child_tc ) {
+        if (dst_tc == ObDoubleTC && dst_acc.get_precision() == -1 &&
+            dst_acc.get_scale() == -1) {
+          is_lossless = true;
+        }
+      } else if (ObYearTC == child_tc) {
+        if (ObNumberTC == dst_tc) {
+          is_lossless = true;
+        } else if (ObDoubleTC == dst_tc) {
+          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+            is_lossless = true;
+          }
+        }
+      } else if (ObNumberTC == child_tc) {
+        if (ObDoubleTC == dst_tc || ObFloatTC == dst_tc) {
+          is_lossless = true;
+        }
       }
     }
   }
   return ret;
 }
 
-// link.zt why this function has two very similar versions
+int ObOptimizerUtil::get_expr_without_unprecise_and_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr)
+{
+  int ret = OB_SUCCESS;
+  bool is_lossless = false;
+  expr = ori_expr;
+  if (OB_ISNULL(ori_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(is_lossless_or_unprecise_column_cast(ori_expr, is_lossless))) {
+    LOG_WARN("failed to check is lossless column cast", K(ret));
+  } else if (is_lossless) {
+    expr = ori_expr->get_param_expr(0);
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
                                          ObSQLSessionInfo *session_info,
                                          ObRawExprFactory *expr_factory,

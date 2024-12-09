@@ -23,7 +23,7 @@ typedef struct addr_t {
   uint16_t port;
   uint16_t tid;
 } addr_t;
-extern const char* addr_str(format_t* f, addr_t addr);
+extern const char* addr_str(addr_t addr, char *buf, int buf_len);
 extern addr_t* addr_init(addr_t* addr, const char* ip, int port);
 
 extern struct sockaddr_storage* make_sockaddr(struct sockaddr_storage *sock_addr, addr_t addr);

@@ -28,7 +28,7 @@ void ObTmpFileEvictionManager::destroy()
   {
     ObSpinLockGuard guard(meta_list_lock_);
     // while (!file_meta_eviction_list_.is_empty()) {
-    //   ObTmpFileHandle file_handle;
+    //   ObSNTmpFileHandle file_handle;
     //   if (OB_ISNULL(file = &file_meta_eviction_list_.remove_first()->file_)) {
     //     ret = OB_ERR_UNEXPECTED;
     //     LOG_WARN("file is null", KR(ret));
@@ -44,7 +44,7 @@ void ObTmpFileEvictionManager::destroy()
   {
     ObSpinLockGuard guard(data_list_lock_);
     // while (!file_data_eviction_list_.is_empty()) {
-    //   ObTmpFileHandle file_handle;
+    //   ObSNTmpFileHandle file_handle;
     //   if (OB_ISNULL(file = &file_data_eviction_list_.remove_first()->file_)) {
     //     ret = OB_ERR_UNEXPECTED;
     //     LOG_WARN("file is null", KR(ret));
@@ -169,7 +169,7 @@ int ObTmpFileEvictionManager::evict_file_from_list_(const bool &is_meta,
     is_meta ? file_meta_eviction_list_.get_size() : file_data_eviction_list_.get_size();
 
   while(OB_SUCC(ret) && remain_evict_page_num > 0 && !is_empty_list && list_cnt-- > 0) {
-    ObTmpFileHandle file_handle;
+    ObSNTmpFileHandle file_handle;
     int64_t actual_evict_file_page_num = 0;
     int64_t remain_flushed_file_page_num = 0;
     if (OB_FAIL(pop_file_from_list_(is_meta, file_handle))) {
@@ -215,11 +215,11 @@ int ObTmpFileEvictionManager::evict_file_from_list_(const bool &is_meta,
   return ret;
 }
 
-int ObTmpFileEvictionManager::pop_file_from_list_(const bool &is_meta, ObTmpFileHandle &file_handle)
+int ObTmpFileEvictionManager::pop_file_from_list_(const bool &is_meta, ObSNTmpFileHandle &file_handle)
 {
   int ret = OB_SUCCESS;
   file_handle.reset();
-  ObSharedNothingTmpFile *file = nullptr;
+  ObITmpFile *file = nullptr;
   ObSpinLock &lock = is_meta ? meta_list_lock_ : data_list_lock_;
   TmpFileEvictionList &eviction_list = is_meta ? file_meta_eviction_list_ : file_data_eviction_list_;
 

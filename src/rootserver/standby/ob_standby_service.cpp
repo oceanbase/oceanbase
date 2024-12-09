@@ -96,7 +96,7 @@ int ObStandbyService::check_inner_stat_()
         int64_t pos = 0; \
         size_t tenant_buf_size = sizeof(tenant_info_buf) / sizeof(tenant_info_buf[0]); \
         if ((tenant_info).is_valid()) { \
-            (void)databuff_printf(tenant_info_buf, tenant_buf_size, pos, "%s", to_cstring((tenant_info))); \
+            (void)databuff_print_multi_objs(tenant_info_buf, tenant_buf_size, pos, tenant_info); \
         } else { \
             (void)databuff_printf(tenant_info_buf, tenant_buf_size, pos, "NULL"); \
         } \

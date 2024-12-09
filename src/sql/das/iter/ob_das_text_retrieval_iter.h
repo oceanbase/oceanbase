@@ -34,7 +34,8 @@ public:
       inv_idx_agg_iter_(nullptr),
       fwd_idx_iter_(nullptr),
       tx_desc_(nullptr),
-      snapshot_(nullptr)
+      snapshot_(nullptr),
+      need_inv_idx_agg_reset_(true)
   {}
 
   virtual bool is_valid() const override
@@ -49,6 +50,7 @@ public:
   ObDASIter *fwd_idx_iter_;
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
+  bool need_inv_idx_agg_reset_;
 };
 
 // single token
@@ -61,6 +63,7 @@ public:
   virtual int rescan() override;
 
   int set_query_token(const ObString &query_token);
+  int set_query_token_and_rangekey(const ObString &query_token, const common::ObIArray<ObDocId> &doc_id, const int64_t &batch_size);
   void set_ls_tablet_ids(
       const share::ObLSID &ls_id,
       const ObTabletID &inv_tablet_id,
@@ -100,7 +103,9 @@ protected:
   int project_relevance_expr();
   int batch_project_relevance_expr(const int64_t &count);
   int reuse_fwd_idx_iter();
-  int gen_inv_idx_scan_range(const ObString &query_token, ObNewRange &scan_range);
+  int gen_default_inv_idx_scan_range(const ObString &query_token, ObNewRange &scan_range);
+  int gen_inv_idx_scan_range(const ObString &query_token, const ObDocId &doc_id, ObNewRange &scan_range);
+
   int gen_fwd_idx_scan_range(const ObDocId &doc_id, ObNewRange &scan_range);
   inline bool need_calc_relevance() { return true; } // TODO: reduce tsc ops if no need to calc relevance
   int init_calc_exprs();
@@ -118,6 +123,10 @@ protected:
     }
     return ret;
   }
+
+  int add_rowkey_range_key(const ObNewRange &range);
+  int add_agg_rang_key(const ObNewRange &range);
+  int check_inv_idx_scan_and_agg_param();
 protected:
   static const int64_t FWD_IDX_ROWKEY_COL_CNT = 2;
   static const int64_t INV_IDX_ROWKEY_COL_CNT = 2;
@@ -146,6 +155,7 @@ protected:
   bool need_fwd_idx_agg_;
   bool need_inv_idx_agg_;
   bool inv_idx_agg_evaluated_;
+  bool need_inv_idx_agg_reset_;
   bool not_first_fwd_agg_;
   bool is_inited_;
 };

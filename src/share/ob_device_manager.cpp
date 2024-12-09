@@ -26,6 +26,84 @@ namespace oceanbase
 {
 namespace common
 {
+int ObTenantStsCredentialMgr::get_sts_credential(
+    char *sts_credential, const int64_t sts_credential_buf_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_id = ObObjectStorageTenantGuard::get_tenant_id();
+  if (OB_ISNULL(sts_credential) || OB_UNLIKELY(sts_credential_buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret),
+        K(tenant_id), KP(sts_credential), K(sts_credential_buf_len));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    // If the tenant is invalid or illegal, the sts_credential of the system tenant will be used as
+    // a backup. Please refer to the following document for specific reasons.
+    //
+    tenant_id = OB_SYS_TENANT_ID;
+    OB_LOG(WARN, "invalid tenant ctx, use sys tenant", K(ret), K(tenant_id));
+  }
+  if (OB_SUCC(ret)) {
+    if (is_meta_tenant(tenant_id)) {
+      tenant_id = gen_user_tenant_id(tenant_id);
+    }
+    const char *tmp_credential = nullptr;
+
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    int tmp_ret = OB_SUCCESS;
+    // If the tenant does not have sts_credential, return OB_EAGAIN to wait for the next try.
+    if (OB_TMP_FAIL(check_sts_credential(tenant_config))) {
+      ret = OB_EAGAIN;
+      OB_LOG(WARN, "fail to check sts credential, should try again", K(ret), K(tmp_ret), K(tenant_id));
+    } else {
+      tmp_credential = tenant_config->sts_credential;
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(databuff_printf(sts_credential, sts_credential_buf_len,
+                                       "%s", tmp_credential))) {
+        OB_LOG(WARN, "fail to deep copy sts_credential", K(ret), K(tenant_id), KP(tmp_credential));
+      } else if (OB_UNLIKELY(sts_credential[0] == '\0')) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "sts_credential is null", K(ret), K(tenant_id), KP(tmp_credential));
+      }
+      OB_LOG(INFO, "get sts credential successfully", K(tenant_id));
+    }
+    if (OB_FAIL(ret) && REACH_TIME_INTERVAL(LOG_INTERVAL_US)) {
+      OB_LOG(WARN, "try to get sts credential", K(ret), K(tenant_id), KP(tmp_credential));
+    }
+  }
+  return ret;
+}
+
+int ObTenantStsCredentialMgr::check_sts_credential(omt::ObTenantConfigGuard &tenant_config) const
+{
+  int ret = OB_SUCCESS;
+  const char *sts_credential = nullptr;
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "tenant config is invalid", K(ret));
+  } else if (OB_ISNULL(sts_credential = tenant_config->sts_credential)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "tenant config is invalid", K(ret), KP(sts_credential));
+  } else if (OB_UNLIKELY(sts_credential[0] == '\0')) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "sts_credential is null", K(ret), KP(sts_credential));
+  }
+  return ret;
+}
+
+int ObClusterVersionMgr::is_supported_assume_version() const
+{
+  int ret = OB_SUCCESS;
+  uint64 min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (min_cluster_version < MOCK_CLUSTER_VERSION_4_2_5_0
+      || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0
+      && min_cluster_version < CLUSTER_VERSION_4_3_5_0)) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "cluster version is too low for assume role", K(ret), K(GET_MIN_CLUSTER_VERSION()));
+  }
+  return ret;
+}
 
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
 ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), is_init_(false)
@@ -59,6 +137,14 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
+    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
+        &ObClusterVersionMgr::get_instance()))) {
+      OB_LOG(WARN, "fail to register cluster version mgr", K(ret));
+    } else if (OB_FAIL(ObStsCredential::register_sts_credential_mgr(
+        &ObTenantStsCredentialMgr::get_instance()))) {
+      OB_LOG(WARN, "fail to register sts crendential", K(ret));
+    } else if (OB_FAIL(ObDeviceCredentialMgr::get_instance().init())) {
+      OB_LOG(WARN, "fail to init device credential mgr", K(ret));
     } else {
       // When compliantRfc3986Encoding is set to true:
       // - Adhere to RFC 3986 by supporting the encoding of reserved characters
@@ -117,6 +203,7 @@ void ObDeviceManager::destroy()
     fin_cos_env();
     fin_s3_env();
     lock_.destroy();
+    ObDeviceCredentialMgr::get_instance().destroy();
     is_init_ = false;
     device_count_ = 0;
     OB_LOG_RET(WARN, ret_dev, "release the init resource", K(ret_dev), K(ret_handle));
@@ -413,6 +500,7 @@ int ObDeviceManager::get_device(
 
 int ObDeviceManager::get_local_device(
     const ObString &storage_type_prefix,
+    const ObStorageIdMod &storage_id_mod,
     ObIODevice *&device_handle)
 {
   int ret = OB_SUCCESS;
@@ -425,9 +513,8 @@ int ObDeviceManager::get_local_device(
   } else {
      // local device does not need storage_info and storage_id_mod
     ObObjectStorageInfo default_storage_info;
-    ObStorageIdMod default_storage_id_mod;
     if (OB_FAIL(ObDeviceManager::get_instance().get_device(storage_type_prefix, default_storage_info,
-                                                           default_storage_id_mod, device_handle))) {
+                                                           storage_id_mod, device_handle))) {
       OB_LOG(WARN, "fail to get local device", K(ret));
     }
   }
@@ -490,19 +577,31 @@ int ObDeviceManager::get_device_key_(
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "device key is already not null", K(ret));
   } else if (storage_type_prefix.prefix_match(OB_LOCAL_PREFIX)) {
-    const int64_t alloc_size = STRLEN(OB_LOCAL_PREFIX) + 1;
+    // uint64_t occupies up to 20 characters.
+    // 20(storage_used_mod_) + 20(storage_id_) + 2(two '&') + 1(one '\0') = 43.
+    // reserve some free space, increase 43 to 50.
+    const int64_t alloc_size = STRLEN(OB_LOCAL_PREFIX) + 50;
     if (OB_ISNULL(device_key = static_cast<char *>(allcator.alloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "fail to alloc mem for device key", K(ret), K(alloc_size));
-    } else if (OB_FAIL(databuff_printf(device_key, alloc_size, "%s", OB_LOCAL_PREFIX))) {
+    } else if (OB_FAIL(databuff_printf(device_key, alloc_size, "%s&%lu&%lu",
+                                       OB_LOCAL_PREFIX,
+                                       (uint64_t)storage_id_mod.storage_used_mod_,
+                                       storage_id_mod.storage_id_))) {
       OB_LOG(WARN, "fail to construct device key", K(ret));
     }
   } else if (storage_type_prefix.prefix_match(OB_LOCAL_CACHE_PREFIX)) {
-    const int64_t alloc_size = STRLEN(OB_LOCAL_CACHE_PREFIX) + 1;
+    // uint64_t occupies up to 20 characters.
+    // 20(storage_used_mod_) + 20(storage_id_) + 2(two '&') + 1(one '\0') = 43.
+    // reserve some free space, increase 43 to 50.
+    const int64_t alloc_size = STRLEN(OB_LOCAL_CACHE_PREFIX) + 50;
     if (OB_ISNULL(device_key = static_cast<char *>(allcator.alloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "fail to alloc mem for device key", K(ret), K(alloc_size));
-    } else if (OB_FAIL(databuff_printf(device_key, alloc_size, "%s", OB_LOCAL_CACHE_PREFIX))) {
+    } else if (OB_FAIL(databuff_printf(device_key, alloc_size, "%s&%lu&%lu",
+                                       OB_LOCAL_CACHE_PREFIX,
+                                       (uint64_t)storage_id_mod.storage_used_mod_,
+                                       storage_id_mod.storage_id_))) {
       OB_LOG(WARN, "fail to construct device key", K(ret));
     }
   } else if (storage_type_prefix.prefix_match(OB_FILE_PREFIX)) {

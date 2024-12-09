@@ -473,6 +473,32 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
             }
             DATA_PRINTF(")");
             DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+            DATA_PRINTF("(");
+            DATA_PRINTF("%.*s", LEN_AND_PTR(table_item->json_table_def_->all_cols_.at(1)->col_name_));
+            DATA_PRINTF(")");
+          }
+          break;
+        }
+        case MulModeTableType::OB_UNNEST_TABLE_TYPE : {
+          DATA_PRINTF("UNNEST(");
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_item->json_table_def_->doc_exprs_.count(); ++i) {
+            if (OB_FAIL(expr_printer_.do_print(table_item->json_table_def_->doc_exprs_.at(i), T_FROM_SCOPE))) {
+              LOG_WARN("failed to print expr", K(ret));
+            } else if (i != table_item->json_table_def_->doc_exprs_.count() - 1) {
+              DATA_PRINTF(",");
+            } else {
+              DATA_PRINTF(")");
+            }
+          }
+          DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+          DATA_PRINTF("(");
+          for (int64_t i = 1; OB_SUCC(ret) && i < table_item->json_table_def_->all_cols_.count(); ++i) {
+            DATA_PRINTF("%.*s", LEN_AND_PTR(table_item->json_table_def_->all_cols_.at(i)->col_name_));
+            if (i != table_item->json_table_def_->all_cols_.count() - 1) {
+              DATA_PRINTF(",");
+            } else {
+              DATA_PRINTF(")");
+            }
           }
           break;
         }

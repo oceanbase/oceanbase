@@ -50,7 +50,7 @@ ceil(null)
 NULL
 select floor(-123);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(-123)	8	20	4	N	32897	0	63
+def					floor(-123)	8	4	4	N	32897	0	63
 floor(-123)
 -123
 select floor(-123.123);
@@ -60,7 +60,7 @@ floor(-123.123)
 -124
 select floor(123);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(123)	8	20	3	N	32897	0	63
+def					floor(123)	8	4	3	N	32897	0	63
 floor(123)
 123
 select ceil(-1234.1223);
@@ -70,12 +70,12 @@ ceil(-1234.1223)
 -1234
 select ceil(-123);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ceil(-123)	8	20	4	N	32897	0	63
+def					ceil(-123)	8	4	4	N	32897	0	63
 ceil(-123)
 -123
 select ceil(123);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ceil(123)	8	20	3	N	32897	0	63
+def					ceil(123)	8	4	3	N	32897	0	63
 ceil(123)
 123
 select floor(3.1415926);
@@ -370,8 +370,8 @@ i1	v2	i3	i4	d4	i5
 7	now3	haha4	0.6256	2014-05-04 12:00:00.000000	1.677
 select floor(i1/10*8),i1/10*8 from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(i1/10*8)	246	36	1	Y	32896	0	63
-def					i1/10*8	246	18	6	Y	32896	4	63
+def					floor(i1/10*8)	8	19	1	Y	32896	0	63
+def					i1/10*8	246	21	6	Y	32896	4	63
 floor(i1/10*8)	i1/10*8
 0	0.8000
 1	1.6000
@@ -382,8 +382,8 @@ floor(i1/10*8)	i1/10*8
 5	5.6000
 select ceil(i1/10*8),i1/10*8 from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ceil(i1/10*8)	246	36	1	Y	32896	0	63
-def					i1/10*8	246	18	6	Y	32896	4	63
+def					ceil(i1/10*8)	8	19	1	Y	32896	0	63
+def					i1/10*8	246	21	6	Y	32896	4	63
 ceil(i1/10*8)	i1/10*8
 1	0.8000
 2	1.6000

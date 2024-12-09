@@ -1388,7 +1388,7 @@ int ObPushdownFilterExecutor::execute(
   } else if (OB_ISNULL(result)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null filter bitmap", K(ret));
-  } else if (nullptr != parent && OB_FAIL(parent->prepare_skip_filter())) {
+  } else if (nullptr != parent && OB_FAIL(parent->prepare_skip_filter(filter_info.disable_bypass_))) {
     LOG_WARN("Failed to check parent blockscan", K(ret));
   } else if (is_filter_node()) {
     if (OB_FAIL(do_filter(parent, filter_info, micro_scanner, use_vectorize, *result))) {
@@ -1501,6 +1501,10 @@ int ObPushdownFilterExecutor::do_filter(
 {
   int ret = OB_SUCCESS;
   bool is_needed_to_do_filter = check_sstable_index_filter();
+  uint64_t start_time = 0;
+  if (parent && parent->is_enable_reorder() && filter_info.disable_bypass_) {
+    start_time = rdtsc();
+  }
   if (!is_needed_to_do_filter) {
   } else if (is_filter_dynamic_node()
              && OB_FAIL(static_cast<ObDynamicFilterExecutor *>(this)->check_runtime_filter(
@@ -1526,6 +1530,15 @@ int ObPushdownFilterExecutor::do_filter(
   } else if ((OB_FAIL((static_cast<ObBlackFilterExecutor*>(this))->filter_batch(parent,
       0, filter_info.count_, result_bitmap)))) {
     LOG_WARN("failed to filter batch", K(ret));
+  }
+  if (OB_SUCC(ret) && parent && parent->is_enable_reorder() && filter_info.disable_bypass_) {
+    uint64_t popcnt = result_bitmap.popcnt();
+    filter_realtime_statistics_.add_filter_cost_time(rdtsc() - start_time + 1);
+    if (parent->is_logic_and_node()) {  // If parent is logic and, then bitmap is initialized to 1, calculate # of 0 as filtered row count.
+      filter_realtime_statistics_.add_filtered_row_cnt(result_bitmap.size() - popcnt);
+    } else if (parent->is_logic_or_node()) {  // If parent is logic or, then bitmap is initialized to 0, calculate # of 1 as filtered row count.
+      filter_realtime_statistics_.add_filtered_row_cnt(popcnt);
+    }
   }
   return ret;
 }
@@ -1651,7 +1664,8 @@ ObPushdownFilterExecutor::ObPushdownFilterExecutor(common::ObIAllocator &alloc,
   : type_(type), need_check_row_filter_(false), filter_tree_status_(ObCommonFilterTreeStatus::NONE_FILTER),
     n_cols_(0), n_child_(0), cg_iter_idx_(INVALID_CG_ITER_IDX), skipped_rows_(0), childs_(nullptr),
     filter_bitmap_(nullptr), col_params_(alloc), col_offsets_(alloc), cg_col_offsets_(alloc), default_datums_(alloc),
-    cg_idxs_(alloc), cg_col_exprs_(alloc), allocator_(alloc), op_(op), is_rewrited_(false), filter_bool_mask_()
+    cg_idxs_(alloc), cg_col_exprs_(alloc), allocator_(alloc), op_(op), is_rewrited_(false), filter_bool_mask_(),
+    enable_reorder_(false), ref_cnt_(0), filter_realtime_statistics_()
 {}
 
 ObPushdownFilterExecutor::~ObPushdownFilterExecutor()
@@ -1677,6 +1691,9 @@ ObPushdownFilterExecutor::~ObPushdownFilterExecutor()
   cg_iter_idx_ = INVALID_CG_ITER_IDX;
   need_check_row_filter_ = false;
   is_rewrited_ = false;
+  enable_reorder_ = false;
+  ref_cnt_ = 0;
+  filter_realtime_statistics_.reset();
 }
 
 DEF_TO_STRING(ObPushdownFilterExecutor)
@@ -1692,13 +1709,15 @@ DEF_TO_STRING(ObPushdownFilterExecutor)
   return pos;
 }
 
-int ObPushdownFilterExecutor::prepare_skip_filter()
+int ObPushdownFilterExecutor::prepare_skip_filter(bool disable_bypass)
 {
   int ret = OB_SUCCESS;
   need_check_row_filter_ = false;
   if (OB_ISNULL(filter_bitmap_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null filter bitmap", K(ret));
+  } else if (enable_reorder_ && disable_bypass) {
+    need_check_row_filter_ = false;
   } else if (PushdownExecutorType::AND_FILTER_EXECUTOR == type_) {
     need_check_row_filter_ = !filter_bitmap_->is_all_true();
   } else if (PushdownExecutorType::OR_FILTER_EXECUTOR == type_) {
@@ -2251,6 +2270,29 @@ MarkFilterdDatumsFunc get_mark_filterd_datums_func()
 
 MarkFilterdDatumsFunc mark_filtered_datums_func = get_mark_filterd_datums_func();
 
+/*
+For black runtime filters, they are in the same BlackFilterExecutor,
+after this optimization, in filter and bloom filter will be mutually exclusive, i.e. if in filter
+is active, then bloom filter must be inactive, vice versa. We can skip the inactive one here.
+*/
+static inline bool can_skip_eval_runtime_filter_expr(ObExpr *expr, ObPushdownOperator &op)
+{
+  bool skip = false;
+  bool is_join_runtime_filter =
+      (expr->eval_vector_func_ == ObExprJoinFilter::eval_bloom_filter_vector
+       || expr->eval_vector_func_ == ObExprJoinFilter::eval_in_filter_vector);
+  if (is_join_runtime_filter) {
+    ObEvalCtx &eval_ctx = op.get_eval_ctx();
+    ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
+        static_cast<ObExprJoinFilter::ObExprJoinFilterContext *>(
+            eval_ctx.exec_ctx_.get_expr_op_ctx(expr->expr_ctx_id_));
+    if (!join_filter_ctx || !join_filter_ctx->is_active_) {
+      skip = true;
+    }
+  }
+  return skip;
+}
+
 int ObBlackFilterExecutor::eval_exprs_batch(ObBitVector &skip, const int64_t bsize)
 {
   int ret = OB_SUCCESS;
@@ -2262,7 +2304,10 @@ int ObBlackFilterExecutor::eval_exprs_batch(ObBitVector &skip, const int64_t bsi
   }
   FOREACH_CNT_X(e, filter_.filter_exprs_, OB_SUCC(ret) && !skip.is_all_true(bsize)) {
     if (enable_rich_format) {
-      if (OB_FAIL((*e)->eval_vector(eval_ctx, skip, bsize, skip.is_all_false(bsize)))) {
+      if (can_skip_eval_runtime_filter_expr(*e, op_)) {
+        // For black runtime filter, they are in the same BlackFilterExecutor, in filter and bloom
+        // filter is mutually exclusive, so we can skip the inactive one here.
+      } else if (OB_FAIL((*e)->eval_vector(eval_ctx, skip, bsize, skip.is_all_false(bsize)))) {
         LOG_WARN("evaluate batch failed", K(ret));
       } else {
         ObIVector *res = (*e)->get_vector(eval_ctx);
@@ -2950,6 +2995,8 @@ void PushdownFilterInfo::reset()
   col_capacity_ = 0;
   batch_size_ = 0;
   col_datum_buf_.reset();
+  disable_bypass_ = false;
+  first_batch_ = false;
 }
 
 void PushdownFilterInfo::reuse()
@@ -2960,6 +3007,8 @@ void PushdownFilterInfo::reuse()
   context_ = nullptr;
   start_ = -1;
   count_ = 0;
+  disable_bypass_ = false;
+  first_batch_ = false;
 }
 
 int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param, common::ObIAllocator &alloc)

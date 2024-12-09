@@ -96,8 +96,8 @@ private:
 class ObDtlBcastService
 {
 public:
-  ObDtlBcastService() : server_addr_(), bcast_buf_(nullptr), send_count_(0), bcast_ch_count_(0),
- ch_infos_(), resps_(), peer_ids_(), active_chs_count_(0) {}
+  ObDtlBcastService(int64_t tenant_id, bool send_by_tenant) : server_addr_(), bcast_buf_(nullptr), send_count_(0), bcast_ch_count_(0),
+              ch_infos_(), resps_(), peer_ids_(), active_chs_count_(0), tenant_id_(tenant_id), send_by_tenant_(send_by_tenant) {}
   virtual ~ObDtlBcastService() {}
   int send_message(ObDtlLinkedBuffer *&bcast_buf, bool drain);
   void set_bcast_ch_count(int64_t ch_count) { bcast_ch_count_ = ch_count; }
@@ -119,6 +119,8 @@ public:
   common::ObArray<int64_t> peer_ids_;
   // active channel count, some of channel in this group may by drained.
   int64_t active_chs_count_;
+  uint64_t tenant_id_;
+  bool send_by_tenant_;
 };
 
 class ObDtlChanAgent

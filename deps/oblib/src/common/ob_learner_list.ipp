@@ -11,6 +11,7 @@
  */
 
 #include "ob_learner_list.h"
+#include "lib/utility/ob_sort.h"
 
 namespace oceanbase
 {
@@ -145,7 +146,8 @@ int BaseLearnerList<MAX_SIZE, T>::add_learner(const T &learner)
   } else if (OB_FAIL(learner_array_.push_back(learner))) {
     COMMON_LOG(ERROR, "learner_array_ push back failed", K(ret), K(learner));
   } else {
-    lib::ob_sort(learner_array_.begin(), learner_array_.end(), [](const T &a, const T &b){ return a < b;});
+    // For replication and migration of columnar replicas,
+    // learner_list should keep the order of learners as they had been added into.
   }
   return ret;
 }

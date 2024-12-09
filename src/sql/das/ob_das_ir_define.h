@@ -33,9 +33,7 @@ public:
       relevance_expr_(nullptr),
       relevance_proj_col_(nullptr),
       estimated_total_doc_cnt_(0),
-      flags_(0)
-  {
-  }
+      flags_(0) {}
   bool need_calc_relevance() const { return nullptr != relevance_expr_; }
   bool need_proj_relevance_score() const { return nullptr != relevance_proj_col_; }
   bool need_fwd_idx_agg() const { return has_fwd_agg_ && need_calc_relevance(); }
@@ -177,8 +175,7 @@ struct ObDASIRAuxLookupCtDef : ObDASAttachCtDef
 public:
   ObDASIRAuxLookupCtDef(common::ObIAllocator &alloc)
     : ObDASAttachCtDef(alloc, DAS_OP_IR_AUX_LOOKUP),
-      relevance_proj_col_(nullptr)
-  { }
+      relevance_proj_col_(nullptr) {}
 
   const ObDASBaseCtDef *get_doc_id_scan_ctdef() const
   {
@@ -199,8 +196,7 @@ struct ObDASIRAuxLookupRtDef : ObDASAttachRtDef
   OB_UNIS_VERSION(1);
 public:
   ObDASIRAuxLookupRtDef()
-    : ObDASAttachRtDef(DAS_OP_IR_AUX_LOOKUP)
-  {}
+    : ObDASAttachRtDef(DAS_OP_IR_AUX_LOOKUP) {}
 
   virtual ~ObDASIRAuxLookupRtDef() {}
 
@@ -213,6 +209,125 @@ public:
   {
     OB_ASSERT(children_cnt_ == 2 && children_ != nullptr);
     return static_cast<ObDASScanRtDef*>(children_[1]);
+  }
+};
+
+struct ObDASFuncLookupCtDef : ObDASAttachCtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASFuncLookupCtDef(common::ObIAllocator &alloc)
+    : ObDASAttachCtDef(alloc, DAS_OP_FUNC_LOOKUP),
+      main_lookup_cnt_(0),
+      doc_id_lookup_cnt_(0),
+      func_lookup_cnt_(0),
+      lookup_doc_id_expr_(nullptr) {}
+
+  virtual ~ObDASFuncLookupCtDef() {}
+
+  bool has_main_table_lookup() const { return main_lookup_cnt_ > 0; }
+  bool has_doc_id_lookup() const { return doc_id_lookup_cnt_ > 0; }
+  int64_t get_func_lookup_scan_idx(const int64_t idx) const
+  {
+    OB_ASSERT(children_cnt_ == (main_lookup_cnt_ + doc_id_lookup_cnt_ + func_lookup_cnt_));
+    return (idx < func_lookup_cnt_) ? (idx + doc_id_lookup_cnt_ + main_lookup_cnt_) : -1;
+  }
+
+  int64_t get_doc_id_lookup_scan_idx() const
+  {
+    OB_ASSERT(children_cnt_ == (main_lookup_cnt_ + doc_id_lookup_cnt_ + func_lookup_cnt_));
+    const int64_t ret_idx = has_doc_id_lookup() ? (main_lookup_cnt_) : -1;
+    return ret_idx;
+  }
+
+  int64_t get_main_lookup_scan_idx() const
+  {
+    OB_ASSERT(children_cnt_ == (main_lookup_cnt_ + doc_id_lookup_cnt_ + func_lookup_cnt_));
+    const int64_t ret_idx = has_main_table_lookup() ? 0 : -1;
+    return ret_idx;
+  }
+
+  const ObDASBaseCtDef *get_func_lookup_scan_ctdef(const int64_t idx) const
+  {
+    const ObDASBaseCtDef *ctdef = nullptr;
+    const int64_t children_idx = get_func_lookup_scan_idx(idx);
+    if (children_idx >= 0 && children_idx < children_cnt_ && nullptr != children_) {
+      ctdef = children_[children_idx];
+    }
+    return ctdef;
+  }
+
+  const ObDASBaseCtDef *get_doc_id_lookup_scan_ctdef() const
+  {
+    ObDASBaseCtDef *doc_id_lookup_scan_ctdef = nullptr;
+    const int64_t children_idx = get_doc_id_lookup_scan_idx();
+    if (children_idx >= 0 && children_idx < children_cnt_ && nullptr != children_) {
+      doc_id_lookup_scan_ctdef = children_[children_idx];
+    }
+    return doc_id_lookup_scan_ctdef;
+  }
+
+  const ObDASBaseCtDef *get_main_lookup_scan_ctdef() const
+  {
+    ObDASBaseCtDef *main_lookup_ctdef = nullptr;
+    const int64_t children_idx = get_main_lookup_scan_idx();
+    if (children_idx >= 0 && children_idx < children_cnt_ && nullptr != children_) {
+      main_lookup_ctdef = children_[children_idx];
+    }
+    return main_lookup_ctdef;
+  }
+
+  int64_t main_lookup_cnt_;
+  int64_t doc_id_lookup_cnt_;
+  int64_t func_lookup_cnt_;
+  ObExpr *lookup_doc_id_expr_;
+};
+
+struct ObDASFuncLookupRtDef : ObDASAttachRtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASFuncLookupRtDef()
+    : ObDASAttachRtDef(DAS_OP_FUNC_LOOKUP) {}
+
+  virtual ~ObDASFuncLookupRtDef() {}
+
+  int64_t get_func_lookup_count() const
+  {
+    return static_cast<const ObDASFuncLookupCtDef *>(ctdef_)->func_lookup_cnt_;
+  }
+
+  ObDASBaseRtDef *get_func_lookup_scan_rtdef(const int64_t idx) const
+  {
+    const ObDASFuncLookupCtDef *ctdef = static_cast<const ObDASFuncLookupCtDef *>(ctdef_);
+    ObDASBaseRtDef *rtdef = nullptr;
+    const int64_t children_idx = ctdef->get_func_lookup_scan_idx(idx);
+    if (children_idx >= 0 && children_idx < children_cnt_ && nullptr != children_) {
+      rtdef = children_[children_idx];
+    }
+    return rtdef;
+  }
+
+  ObDASBaseRtDef *get_doc_id_lookup_scan_rtdef() const
+  {
+    const ObDASFuncLookupCtDef *ctdef = static_cast<const ObDASFuncLookupCtDef *>(ctdef_);
+    ObDASBaseRtDef *rtdef = nullptr;
+    const int64_t children_idx = ctdef->get_doc_id_lookup_scan_idx();
+    if (children_idx >= 0 && children_idx < children_cnt_ && nullptr != children_) {
+      rtdef = children_[children_idx];
+    }
+    return rtdef;
+  }
+
+  ObDASBaseRtDef *get_main_lookup_scan_rtdef() const
+  {
+    const ObDASFuncLookupCtDef *ctdef = static_cast<const ObDASFuncLookupCtDef *>(ctdef_);
+    ObDASBaseRtDef *rtdef = nullptr;
+    const int64_t children_idx = ctdef->get_main_lookup_scan_idx();
+    if (children_idx >= 0 && children_idx < children_cnt_ && nullptr != children_) {
+      rtdef = children_[children_idx];
+    }
+    return rtdef;
   }
 };
 

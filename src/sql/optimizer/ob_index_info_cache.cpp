@@ -121,10 +121,10 @@ int ObIndexInfoCache::add_index_info_entry(IndexInfoEntry *entry)
     // update index info entry
     old_entry->~IndexInfoEntry();
     index_entrys_[idx] = entry;
-  } else if (entry_count_ >= common::OB_MAX_INDEX_PER_TABLE + 1) {
+  } else if (entry_count_ >= OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid entry count", K(ret), K_(entry_count),
-             K(common::OB_MAX_INDEX_PER_TABLE));
+             K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE));
   } else {
     index_entrys_[entry_count_] = entry;
     ++entry_count_;

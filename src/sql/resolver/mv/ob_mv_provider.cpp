@@ -294,12 +294,14 @@ int ObMVProvider::check_column_type_and_accuracy(const ObColumnSchemaV2 &org_col
   } else if (!ob_is_numeric_type(org_column.get_meta_type().get_type())) {
     is_match = org_column.get_accuracy() == cur_column.get_accuracy();
   } else {
+    // only check scale for number
+    // check scale and length for decimal int
+    // not need to check precision here
     is_match = true;
     const ObAccuracy &org = org_column.get_accuracy();
     const ObAccuracy &cur = cur_column.get_accuracy();
-    is_match &= (-1 == org.get_length() || org.get_length() >= cur.get_length());
-    is_match &= (-1 == org.get_precision() || org.get_precision() >= cur.get_precision());
     is_match &= (-1 == org.get_scale() || org.get_scale() >= cur.get_scale());
+    is_match &= (cur_column.get_meta_type().is_number() || -1 == org.get_length() || org.get_length() >= cur.get_length());
   }
   return ret;
 }

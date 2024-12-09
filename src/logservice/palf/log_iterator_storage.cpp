@@ -29,6 +29,7 @@ IteratorStorage::IteratorStorage() :
   read_buf_(),
   block_size_(0),
   log_storage_(NULL),
+  io_ctx_(),
   is_inited_(false) {}
 
 IteratorStorage::~IteratorStorage()
@@ -72,6 +73,7 @@ void IteratorStorage::destroy()
     free_read_buf(read_buf_);
   }
   log_storage_ = NULL;
+  io_ctx_.destroy();
 }
 
 void IteratorStorage::reuse(const LSN &start_lsn)

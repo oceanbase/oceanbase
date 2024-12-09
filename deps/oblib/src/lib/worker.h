@@ -89,6 +89,9 @@ public:
   OB_INLINE void set_group(void *group) { group_ = group; };
   OB_INLINE void *get_group() { return group_;};
   OB_INLINE bool is_group_worker() const { return OB_NOT_NULL(group_); }
+
+  //OB_INLINE void set_group_id(int32_t group_id) { group_id_ = group_id; }
+
   OB_INLINE void set_func_type_(uint8_t func_type) { func_type_ = func_type; }
   OB_INLINE uint8_t get_func_type() const { return func_type_; }
   OB_INLINE void set_rpc_stat_srv(void *rpc_stat_srv) { rpc_stat_srv_ = rpc_stat_srv; }
@@ -200,6 +203,8 @@ inline Worker &this_worker()
 #define THIS_WORKER oceanbase::lib::Worker::self()
 
 #define GET_FUNC_TYPE() (THIS_WORKER.get_func_type())
+#define SET_FUNCTION_TYPE(func_type) (THIS_WORKER.set_func_type_(func_type))
+
 #define GET_GROUP_ID() (THIS_WORKER.get_group_id())
 
 int SET_GROUP_ID(uint64_t group_id, bool is_background = false);

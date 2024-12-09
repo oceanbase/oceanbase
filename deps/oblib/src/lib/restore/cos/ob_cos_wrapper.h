@@ -230,6 +230,7 @@ public:
     OB_COS_customMem &custom_mem,
     const struct ObCosAccount &account,
     const bool check_md5,
+    const char *cos_sts_token,
     Handle **h);
 
   // You can not use handle any more after destroy_cos_handle is called.

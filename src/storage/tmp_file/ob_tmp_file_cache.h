@@ -10,19 +10,23 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_CACHE_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_CACHE_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_CACHE_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_CACHE_H_
 
-#include "lib/hash/ob_hashmap.h"
-#include "lib/queue/ob_link_queue.h"
-#include "share/io/ob_io_manager.h"
+#include "storage/blocksstable/ob_macro_block_id.h"
 #include "share/cache/ob_kv_storecache.h"
-#include "storage/ob_i_store.h"
 
 namespace oceanbase
 {
+namespace blocksstable
+{
+  class ObStorageObjectHandle;
+  class MacroBlockId;
+}
 namespace tmp_file
 {
+class ObTmpPageCacheReadInfo;
+
 class ObTmpBlockCacheKey final : public common::ObIKVCacheKey
 {
 public:
@@ -104,7 +108,13 @@ class ObTmpPageCacheKey final : public common::ObIKVCacheKey
 {
 public:
   ObTmpPageCacheKey();
+  // For Shared nothing mode
   ObTmpPageCacheKey(const int64_t block_id, const int64_t page_id, const uint64_t tenant_id);
+  // For Shared Storage mode
+  ObTmpPageCacheKey(const int64_t tmp_file_id,
+                    const uint64_t unfilled_page_length,
+                    const uint64_t virtual_page_id,
+                    const uint64_t tenant_id);
   ~ObTmpPageCacheKey();
   bool operator ==(const ObIKVCacheKey &other) const override;
   uint64_t get_tenant_id() const override;
@@ -114,12 +124,25 @@ public:
   bool is_valid() const;
   int64_t get_page_id() const { return page_id_; }
   int64_t get_block_id() const { return block_id_; }
-  TO_STRING_KV(K(block_id_), K(page_id_), K(tenant_id_));
-
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
-  int64_t block_id_;
-  int64_t page_id_;
+  static const int64_t PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS = 48;
+  static const int64_t PAGE_CACHE_KEY_PAGE_LENGTH_BITS = 16;
+  static const int64_t PAGE_CACHE_KEY_PAGE_LENGTH_MAX = (1 << 13);
+  static const int64_t PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_MAX = (1 << PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS);
+  union {
+    int64_t block_id_;      // for sn mode
+    int64_t tmp_file_id_;   // for ss mode
+  };
+  union {
+    int64_t page_id_;       // for sn mode
+    struct {                // for ss mode
+      uint64_t unfilled_page_length_ : PAGE_CACHE_KEY_PAGE_LENGTH_BITS;
+      uint64_t virtual_page_id_      : PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS;
+    };
+  };
   uint64_t tenant_id_;
+
 };
 
 class ObTmpPageCacheValue final : public common::ObIKVCacheValue
@@ -161,21 +184,17 @@ public:
   typedef common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCacheValue> BasePageCache;
   static ObTmpPageCache &get_instance();
   int init(const char *cache_name, const int64_t priority);
-  int direct_read(const blocksstable::MacroBlockId macro_block_id,
-                  const int64_t read_size,
-                  const int64_t begin_offset_in_block,
-                  const common::ObIOFlag io_desc,
-                  const int64_t io_timeout_ms,
-                  common::ObIAllocator &callback_allocator,
-                  blocksstable::ObMacroBlockHandle &mb_handle);
-  // multi page cached_read
+  // only read disk pages
+  int direct_read(ObTmpPageCacheReadInfo &read_info,
+                  common::ObIAllocator &callback_allocator);
+  // read disk pages and put all of them into cache
   int cached_read(const common::ObIArray<ObTmpPageCacheKey> &page_keys,
-                  const blocksstable::MacroBlockId macro_block_id,
-                  const int64_t begin_offset_in_block,
-                  const common::ObIOFlag io_desc,
-                  const int64_t io_timeout_ms,
-                  common::ObIAllocator &callback_allocator,
-                  blocksstable::ObMacroBlockHandle &mb_handle);
+                  ObTmpPageCacheReadInfo &read_info,
+                  common::ObIAllocator &callback_allocator);
+  // read disk pages and put some of them into cache
+  int aggregate_read(const common::ObIArray<std::pair<ObTmpPageCacheKey, int64_t>> &page_infos,
+                     ObTmpPageCacheReadInfo &read_info,
+                     common::ObIAllocator &callback_allocator);
   int get_page(const ObTmpPageCacheKey &key, ObTmpPageValueHandle &handle);
   int load_page(const ObTmpPageCacheKey &key,
                 ObIAllocator *callback_allocator,
@@ -214,6 +233,22 @@ public:
     friend class ObTmpPageCache;
     common::ObArray<ObTmpPageCacheKey> page_keys_;
   };
+
+  class ObTmpAggregatePageIOCallback final : public ObITmpPageIOCallback
+  {
+  public:
+    ObTmpAggregatePageIOCallback();
+    ~ObTmpAggregatePageIOCallback();
+    int64_t size() const override { return sizeof(*this); }
+    int inner_process(const char *data_buffer, const int64_t size) override;
+    TO_STRING_KV("callback_type:", "ObTmpAggregatePageIOCallback", KP(data_buf_));
+    DISALLOW_COPY_AND_ASSIGN(ObTmpAggregatePageIOCallback);
+  private:
+    friend class ObTmpPageCache;
+    // each pair is (page key, page offset in io buffer)
+    common::ObArray<std::pair<ObTmpPageCacheKey, int64_t>> page_infos_;
+  };
+
   class ObTmpDirectReadPageIOCallback final : public ObITmpPageIOCallback
   {
   public:
@@ -227,25 +262,43 @@ public:
 private:
   ObTmpPageCache() {}
   ~ObTmpPageCache() {}
-  int inner_read_io_(const blocksstable::MacroBlockId macro_block_id,
-                     const int64_t read_size,
-                     const int64_t offset_in_block,
-                     const common::ObIOFlag io_desc,
-                     const int64_t io_timeout_ms,
-                     ObITmpPageIOCallback *callback,
-                     blocksstable::ObMacroBlockHandle &handle);
-  int async_read_(const blocksstable::MacroBlockId macro_block_id,
-                  const int64_t read_size,
-                  const int64_t offset_in_block,
-                  const common::ObIOFlag io_desc,
-                  const int64_t io_timeout_ms,
-                  ObITmpPageIOCallback *callback,
-                  blocksstable::ObMacroBlockHandle &handle);
+  int inner_read_io_(ObTmpPageCacheReadInfo &read_info,
+                     ObITmpPageIOCallback *callback);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTmpPageCache);
 };
 
+struct ObTmpPageCacheReadInfo final
+{
+public:
+  ObTmpPageCacheReadInfo()
+    : is_inited_(false),
+      macro_block_id_(),
+      read_size_(0),
+      begin_offset_(-1),
+      io_desc_(),
+      io_timeout_ms_(-1),
+      object_handle_(nullptr) {}
+  ~ObTmpPageCacheReadInfo() { reset(); }
+  void reset();
+  int init_read(const blocksstable::MacroBlockId &macro_block_id, const int64_t read_size, const int64_t begin_offset,
+                common::ObIOFlag io_flag, const int64_t io_timeout_ms, blocksstable::ObStorageObjectHandle *handle);
+  bool is_valid();
+  int async_read(ObTmpPageCache::ObITmpPageIOCallback *callback);
+  OB_INLINE int64_t get_begin_offset() const { return begin_offset_; }
+  TO_STRING_KV(K(is_inited_), K(macro_block_id_), K(read_size_), K(begin_offset_),
+               K(io_desc_), K(io_timeout_ms_), KP(object_handle_));
+private:
+  bool is_inited_;
+  blocksstable::MacroBlockId macro_block_id_;
+  int64_t read_size_;
+  // the begin_offset is in the block
+  int64_t begin_offset_;
+  common::ObIOFlag io_desc_;
+  int64_t io_timeout_ms_;
+  blocksstable::ObStorageObjectHandle *object_handle_;
+};
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_CACHE_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_CACHE_H_

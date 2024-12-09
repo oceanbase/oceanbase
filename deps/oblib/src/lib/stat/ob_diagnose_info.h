@@ -20,6 +20,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/ob_lib_config.h"
 #include "lib/thread/thread.h"
+// #include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -30,15 +31,17 @@ typedef ObStatArray<ObWaitEventStat, WAIT_EVENTS_TOTAL> ObWaitEventStatArray;
 typedef ObStatArray<ObStatEventAddStat, ObStatEventIds::STAT_EVENT_ADD_END> ObStatEventAddStatArray;
 typedef ObStatArray<ObStatEventSetStat, ObStatEventIds::STAT_EVENT_SET_END - ObStatEventIds::STAT_EVENT_ADD_END -1> ObStatEventSetStatArray;
 
+class ObDiagnosticInfo;
+
 struct ObLatchStat
 {
   ObLatchStat();
   int add(const ObLatchStat &other);
   void reset();
-  uint64_t addr_;
-  uint64_t id_;
-  uint64_t level_;
-  uint64_t hash_;
+  // uint64_t addr_;
+  // uint64_t id_;
+  // uint64_t level_;
+  // uint64_t hash_;
   uint64_t gets_;
   uint64_t misses_;
   uint64_t sleeps_;
@@ -48,12 +51,32 @@ struct ObLatchStat
   uint64_t wait_time_;
 };
 
+typedef ObStatArray<ObLatchStat, ObLatchIds::LATCH_END> ObStatLatchArray;
+
 struct ObLatchStatArray
 {
 public:
   ObLatchStatArray(ObIAllocator *allocator = NULL);
   ~ObLatchStatArray();
   int add(const ObLatchStatArray &other);
+  int add(ObStatLatchArray &other)
+  {
+    int ret = OB_SUCCESS;
+    ObLatchStat *cur = nullptr;
+    for (int i = 0; i < ObLatchIds::LATCH_END; i++) {
+      cur = other.get(i);
+      if (cur->gets_ || cur->spin_gets_) {
+        ObLatchStat *target = get_or_create_item(i);
+        if (OB_NOT_NULL(target)) {
+          ret = target->add(*cur);
+        } else {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          break;
+        }
+      }
+    }
+    return ret;
+  }
   void reset();
   ObLatchStat *get_item(int32_t idx) const
   {
@@ -66,6 +89,16 @@ public:
     }
     return items_[idx];
   }
+  void accumulate_to(ObStatLatchArray &array)
+  {
+    for (int64_t i = 0; i < ObLatchIds::LATCH_END; ++i) {
+      if (OB_ISNULL(items_[i])) {
+      } else {
+        array.get(i)->add(*items_[i]);
+      }
+    }
+  }
+
 private:
   ObLatchStat *create_item();
   void free_item(ObLatchStat *stat);
@@ -102,7 +135,6 @@ public:
   int get_accord_event(ObWaitEventDesc *&event_desc);
   int calc_wait_time(ObWaitEventDesc *&event_desc);
   void reset();
-private:
   int get_next_and_compare(int64_t &iter_1, int64_t &iter_2, int64_t &cnt, const ObWaitEventHistory &other, ObWaitEventDesc *tmp);
   int64_t curr_pos_;
   int64_t item_cnt_;
@@ -119,20 +151,20 @@ public:
   virtual ~ObDiagnoseSessionInfo();
   int add(ObDiagnoseSessionInfo &other);
   void reset();
-  int notify_wait_begin(
-      const int64_t event_no,
-      const uint64_t timeout_ms = 0,
-      const uint64_t p1 = 0,
-      const uint64_t p2 = 0,
-      const uint64_t p3 = 0,
-      const bool is_atomic = false);
-  int notify_wait_end(ObDiagnoseTenantInfo *tenant_info, const bool is_atomic = false);
-  int set_max_wait(ObWaitEventDesc *max_wait);
-  int set_total_wait(ObWaitEventStat *total_wait);
+  int set_max_wait(ObWaitEventDesc *max_wait)
+  {
+    max_wait_ = max_wait;
+    return OB_SUCCESS;
+  }
+
+  int set_total_wait(ObWaitEventStat *total_wait)
+  {
+    total_wait_ = total_wait;
+    return OB_SUCCESS;
+  }
   ObWaitEventDesc &get_curr_wait();
   int inc_stat(const int16_t stat_no);
   int update_stat(const int16_t stat_no, const int64_t delta);
-  static ObDiagnoseSessionInfo *get_local_diagnose_info();
   inline ObWaitEventHistory &get_event_history()  { return event_history_; }
   inline ObWaitEventStatArray &get_event_stats()  { return event_stats_; }
   inline ObStatEventAddStatArray &get_add_stat_stats()  { return stat_add_stats_; }
@@ -141,6 +173,14 @@ public:
   inline ObWaitEventDesc *get_max_wait() { return max_wait_; }
   inline ObWaitEventStat *get_total_wait() { return total_wait_; }
   inline bool is_valid() const { return tenant_id_ < UINT32_MAX; }
+  const ObWaitEventDesc &get_curr_wait() const
+  {
+    return curr_wait_;
+  };
+  void set_curr_wait(ObWaitEventDesc &wait)
+  {
+    curr_wait_ = wait;
+  };
   int set_tenant_id(uint64_t tenant_id);
   inline uint64_t get_tenant_id() { return tenant_id_; }
   TO_STRING_EMPTY();
@@ -169,7 +209,6 @@ public:
   int update_stat(const int16_t stat_no, const int64_t delta);
   int set_stat(const int16_t stat_no, const int64_t value);
   int get_stat(const int16_t stat_no, int64_t &value);
-  static ObDiagnoseTenantInfo *get_local_diagnose_info();
   inline ObWaitEventStatArray &get_event_stats()  { return event_stats_; }
   inline ObStatEventAddStatArray &get_add_stat_stats()  { return stat_add_stats_; }
   inline ObStatEventSetStatArray &get_set_stat_stats()  { return stat_set_stats_; }
@@ -195,28 +234,30 @@ public:
   ~ObWaitEventGuard();
 private:
   int64_t event_no_;
-  uint64_t wait_begin_time_;
-  uint64_t timeout_ms_;
-  ObDiagnoseSessionInfo *di_;
+  ObDiagnosticInfo *di_;
   bool is_atomic_;
   //Do you need statistics
   bool need_record_;
 };
 
+template<ObWaitEventIds::ObWaitEventIdEnum EVENT_ID>
 class ObSleepEventGuard : public ObWaitEventGuard
 {
 public:
-  explicit ObSleepEventGuard(
-      const int64_t event_no,
-      const uint64_t timeout_ms,
-      const int64_t sleep_us
-  ) : ObWaitEventGuard(event_no, timeout_ms, sleep_us, 0, 0, false)
+  ObSleepEventGuard(
+      const int64_t sleep_us,
+      const uint64_t timeout_ms = 0
+  ) : ObWaitEventGuard(EVENT_ID, timeout_ms, sleep_us, 0, 0)
   {
     lib::Thread::sleep_us_ = sleep_us;
   }
-  explicit ObSleepEventGuard(
-    const int64_t sleep_us = 0
-  ) : ObWaitEventGuard(ObWaitEventIds::DEFAULT_SLEEP, 0, sleep_us, 0, 0, false)
+  ObSleepEventGuard(
+      const int64_t sleep_us,
+      const int64_t p1,
+      const int64_t p2,
+      const int64_t p3,
+      const uint64_t timeout_ms = 0
+  ) : ObWaitEventGuard(EVENT_ID, timeout_ms, p1, p2, p3)
   {
     lib::Thread::sleep_us_ = sleep_us;
   }
@@ -229,145 +270,43 @@ public:
 class ObMaxWaitGuard
 {
 public:
-  explicit ObMaxWaitGuard(ObWaitEventDesc *max_wait, ObDiagnoseSessionInfo *di = NULL);
+  explicit ObMaxWaitGuard(ObWaitEventDesc *max_wait);
   ~ObMaxWaitGuard();
+  TO_STRING_KV(K_(prev_wait), K_(di), K_(need_record), K_(max_wait));
 private:
   ObWaitEventDesc *prev_wait_;
   ObDiagnoseSessionInfo *di_;
   //Do you need statistics
   bool need_record_;
+  ObWaitEventDesc *max_wait_;
 };
 
 class ObTotalWaitGuard
 {
 public:
-  explicit ObTotalWaitGuard(ObWaitEventStat *total_wait, ObDiagnoseSessionInfo *di = NULL);
+  explicit ObTotalWaitGuard(ObWaitEventStat *total_wait);
   ~ObTotalWaitGuard();
 private:
-  ObWaitEventStat *prev_wait_;
-  ObDiagnoseSessionInfo *di_;
-  //Do you need statistics
-  bool need_record_;
+  ObWaitEventStat *total_wait_;
+  ObDiagnosticInfo *di_;
 };
 
 } /* namespace common */
 } /* namespace oceanbase */
 
-
-#define EVENT_ADD(stat_no, value)                               \
-  do {                                                          \
-    if (oceanbase::lib::is_diagnose_info_enabled()) {              \
-      if (oceanbase::common::OB_STAT_EVENTS[::oceanbase::common::ObStatEventIds::stat_no].summary_in_session_) {  \
-        oceanbase::common::ObDiagnoseSessionInfo *session_info            \
-        = oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();   \
-        if (NULL != session_info) {                                \
-          session_info->update_stat(::oceanbase::common::ObStatEventIds::stat_no, value); \
-        }                                                           \
-      }                                      \
-      oceanbase::common::ObDiagnoseTenantInfo *tenant_info            \
-      = oceanbase::common::ObDiagnoseTenantInfo::get_local_diagnose_info();   \
-      if (NULL != tenant_info) {                                \
-        tenant_info->update_stat(::oceanbase::common::ObStatEventIds::stat_no, value);  \
-      }                              \
-    }                              \
-  } while(0)
-
-#define EVENT_TENANT_ADD(stat_no, value, tenant_id)    \
-  oceanbase::common::ObTenantStatEstGuard tenant_guard(tenant_id); \
-  EVENT_ADD(stat_no, value);
-
-#define EVENT_INC(stat_no) EVENT_ADD(stat_no, 1)
-
-#define EVENT_TENANT_INC(stat_no, tenant_id) EVENT_TENANT_ADD(stat_no, 1, tenant_id)
-
-#define EVENT_DEC(stat_no) EVENT_ADD(stat_no, -1)
-
-#define EVENT_SET(stat_no, value)                               \
-  do {                                                          \
-    if (oceanbase::lib::is_diagnose_info_enabled()) {              \
-      oceanbase::common::ObDiagnoseTenantInfo *diagnose_info            \
-      = oceanbase::common::ObDiagnoseTenantInfo::get_local_diagnose_info();   \
-      if (NULL != diagnose_info) {                                \
-        diagnose_info->set_stat(::oceanbase::common::ObStatEventIds::stat_no, value);  \
-      }                                                           \
-    }                                                           \
-  } while(0)
-
-#define EVENT_TENANT_SET(stat_no, value, tenant_id)    \
-  oceanbase::common::ObTenantStatEstGuard tenant_guard(tenant_id); \
-  EVENT_SET(stat_no, value);
-
-#define WAIT_EVENT_GET(stat_no)                                      \
-  ({                                                            \
-    uint64_t ret = 0;                                        \
-    if (oceanbase::lib::is_diagnose_info_enabled()) {              \
-      oceanbase::common::ObDiagnoseSessionInfo *session_info            \
-        = oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();   \
-      if (NULL != session_info) {                                \
-        oceanbase::common::ObWaitEventStat *stat                  \
-            = session_info->get_event_stats().get(                \
-                ::oceanbase::common::ObWaitEventIds::stat_no);    \
-        if (NULL != stat) {                                       \
-          ret = stat->time_waited_;                           \
-        }                       \
-      }                                                           \
-    }                                                           \
-    ret;                                                        \
-  })
-
-#define EVENT_GET(stat_no, session_info)                                      \
-  ({                                                            \
-    int64_t ret = 0;                                            \
-    if (oceanbase::lib::is_diagnose_info_enabled()) {              \
-      if (OB_LIKELY(oceanbase::common::stat_no < oceanbase::common::ObStatEventIds::STAT_EVENT_ADD_END)) {    \
-        oceanbase::common::ObStatEventAddStat *stat                  \
-            = session_info->get_add_stat_stats().get(::oceanbase::common::stat_no);    \
-        if (OB_LIKELY(NULL != stat)) {                                       \
-          ret = stat->get_stat_value();                           \
-        }                                                         \
-      }                                                         \
-    }                                                         \
-    ret;                                                        \
-  })
-
-#define WAIT_BEGIN(stat_no, ...)                                \
-  do {                                                          \
-    if (oceanbase::lib::is_diagnose_info_enabled()) {              \
-      oceanbase::common::ObDiagnoseSessionInfo *di                       \
-      = oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();   \
-      if (di) {                                                   \
-        di->notify_wait_begin(                                    \
-            oceanbase::common::ObWaitEventIds::stat_no, ## __VA_ARGS__);             \
-      }                                                           \
-    }                                                           \
+#define SLEEP(time)                                                                        \
+  do {                                                                                     \
+    oceanbase::common::ObSleepEventGuard<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP> \
+        wait_guard(((int64_t)time) * 1000 * 1000);                                         \
+    ::sleep(time);                                                                         \
   } while (0)
 
-
-#define WAIT_END(stat_no)                           \
-  do {                                                          \
-    if (oceanbase::lib::is_diagnose_info_enabled()) {              \
-      oceanbase::common::ObDiagnoseSessionInfo *di                       \
-      = oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();   \
-      oceanbase::common::ObDiagnoseTenantInfo *tenant_di                       \
-      = oceanbase::common::ObDiagnoseTenantInfo::get_local_diagnose_info();   \
-      if (NULL != di && NULL != tenant_di) {                                                   \
-        di->notify_wait_end(tenant_di);                          \
-      }                                                           \
-    }                                                           \
+#define USLEEP(time)                                                                       \
+  do {                                                                                     \
+    oceanbase::common::ObSleepEventGuard<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP> \
+        wait_guard((int64_t)time);                                                         \
+    ::usleep(time);                                                                        \
   } while (0)
-
-#define SLEEP(time)                           \
-  do {                                                          \
-    oceanbase::common::ObSleepEventGuard wait_guard(((int64_t)time) * 1000 * 1000);    \
-    ::sleep(time);                                                      \
-  } while (0)
-
-#define USLEEP(time)                           \
-  do {                                                          \
-    oceanbase::common::ObSleepEventGuard wait_guard((int64_t)time);    \
-    ::usleep(time);                                         \
-  } while (0)
-
 
 #define GLOBAL_EVENT_GET(stat_no)             \
   ({                                                \

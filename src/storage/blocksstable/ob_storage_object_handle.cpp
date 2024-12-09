@@ -381,21 +381,6 @@ int ObStorageObjectHandle::wait()
       LOG_WARN("fail to report bad block", K(tmp_ret), K(ret));
     }
     io_handle_.reset();
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (macro_id_.is_id_mode_share()
-             && (ObStorageObjectType::TMP_FILE == macro_id_.storage_object_type())) {
-    ObIOFlag flag;
-    if (OB_FAIL(io_handle_.get_io_flag(flag))) {
-      LOG_WARN("fail to get io flag", KR(ret));
-    }
-    // the io that flush sealed tmp file from local cache to object storage is sync io,
-    // no need to seal in this case
-     else if (flag.is_write() && !flag.is_sync() && flag.is_sealed()) {
-      if (OB_FAIL(OB_STORAGE_OBJECT_MGR.seal_object(macro_id_, 0/*ls_epoch_id*/))) {
-        LOG_WARN("fail to seal object", KR(ret), K_(macro_id));
-      }
-    }
-#endif
   }
   return ret;
 }

@@ -423,6 +423,7 @@ inline bool ObResolverUtils::is_collection_support_type(const ObObjType type)
           type == ObUTinyIntType || type == ObUSmallIntType ||
           type == ObUInt32Type || type == ObUInt64Type ||
           type == ObFloatType || type == ObDoubleType ||
+          type == ObUFloatType || type == ObUDoubleType ||
           type == ObVarcharType || type == ObCollectionSQLType);
 }
 
@@ -468,7 +469,11 @@ int ObResolverUtils::resolve_collection_type_info(const ParseNode &type_node, Ob
     int32_t length = is_bit ? type_node.int16_values_[0]
                               : (is_char ? type_node.int32_values_[0] : type_node.int16_values_[1]);
     int64_t pos = 0;
-    if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "(%d)",length))) {
+    if (is_char && (length <= -1 || length > OB_MAX_ORACLE_VARCHAR_LENGTH)) {
+      ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+      LOG_WARN("data length is invalid", K(ret), K(length));
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, "varchar", static_cast<int>(OB_MAX_ORACLE_VARCHAR_LENGTH));
+    } else if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "(%d)",length))) {
       LOG_WARN("failed to convert len to string", K(ret), K(length));
     } else if (OB_FAIL(buf.append(tmp, pos))) {
       LOG_WARN("failed to append string length", K(ret), K(type_node.type_));
@@ -2918,13 +2923,31 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           val.set_uint64(static_cast<uint64_t>(node->value_));
         }
         val.set_scale(0);
-        val.set_precision(static_cast<int16_t>(node->str_len_));
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+        int16_t min_int_precision = tenant_config.is_valid() ? tenant_config->_min_const_integer_precision : 1;
+        int16_t formalized_prec = static_cast<int16_t>(node->str_len_);
+        // for constant integers, reset precision to 4/8/16/20
+        if (!is_from_pl && lib::is_mysql_mode() && enable_decimal_int_type
+            && !(ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type))) {
+          int16_t node_prec = static_cast<int16_t>(node->str_len_);
+          if (node_prec <= 4) {
+            formalized_prec = 4;
+          } else if (node_prec <= 8) {
+            formalized_prec = 8;
+          } else if (node_prec <= 16) {
+            formalized_prec = 16;
+          } else {
+            formalized_prec = 20;
+          }
+          formalized_prec = MAX(min_int_precision, formalized_prec);
+        }
+        val.set_precision(formalized_prec);
         val.set_length(static_cast<int16_t>(node->str_len_));
         val.set_param_meta(val.get_meta());
         if (true == node->is_date_unit_) {
           literal_prefix.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
         }
-
+        LOG_DEBUG("resolve integer constant", K(val), K(val.get_meta()), K(formalized_prec), K(stmt_type), K(lbt()));
         break;
       }
     }
@@ -5111,7 +5134,13 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
           }
           if (ob_is_enum_or_set_type(column_expr->get_data_type())
               || ob_is_text_tc(column_expr->get_data_type())) {
-            file_column_expr->set_data_type(ObVarcharType);
+            if (is_oracle_mode() && CS_TYPE_BINARY == column_expr->get_collation_type()) {
+              file_column_expr->set_data_type(ObRawType);
+            } else if (is_mysql_mode() && ob_is_enum_or_set_type(column_expr->get_data_type())) {
+              file_column_expr->set_data_type(ObCharType);
+            } else {
+              file_column_expr->set_data_type(ObVarcharType);
+            }
             if (is_mysql_mode()) {
               file_column_expr->set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
             } else {
@@ -5521,7 +5550,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
     const ObCollationType dst_cs_type = generated_column.get_collation_type();
 
     /* implicit data conversion judgement */
-    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && !tbl_schema.is_external_table()) {
       if (!cast_supported(expr_datatype,
                           expr_cs_type,
                           dst_datatype,
@@ -7888,15 +7917,133 @@ int ObResolverUtils::resolve_string(const ParseNode *node, ObString &string)
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == node)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node should not be null");
+    LOG_WARN("node should not be null", K(ret));
   } else if (OB_UNLIKELY(T_VARCHAR != node->type_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node type is not T_VARCHAR", "type", get_type_name(node->type_));
+    LOG_WARN("node type is not T_VARCHAR", "type", get_type_name(node->type_), K(ret));
   } else if (OB_UNLIKELY(node->str_len_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("empty string");
+    LOG_WARN("empty string", K(ret));
   } else {
     string = ObString(node->str_len_, node->str_value_);
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_xid(const ParseNode *node, common::ObString &gtrid_string, common::ObString &bqual_string, int64_t & format_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node should not be null", K(ret));
+  } else if (OB_UNLIKELY(T_LINK_NODE != node->type_ || 1 > node->num_child_ || 3 < node->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected type or unexpected child num when reslve xid", K(node->type_), K(node->num_child_), K(ret));
+  } else if(1 <= node->num_child_ && OB_FAIL(ObResolverUtils::resolve_text(node->children_[0], gtrid_string))) {
+    LOG_WARN("resolve gtrid string fail", K(node->children_[0]), K(gtrid_string), K(ret));
+  } else if(2 <= node->num_child_ && OB_FAIL(ObResolverUtils::resolve_text(node->children_[1], bqual_string))) {
+    LOG_WARN("resolve bqual string fail", K(node->children_[1]), K(bqual_string), K(ret));
+  } else if(3 == node->num_child_ && OB_FAIL(ObResolverUtils::resolve_ulong(node->children_[2], format_id))) {
+    LOG_WARN("resolve format id fail", K(node->children_[2]), K(format_id), K(ret));
+  } else {
+    // for mysql mode
+    // if format id is not specified, set format id to 1 by default
+    if (lib::is_mysql_mode() && 3 > node->num_child_) {
+      format_id = 1;
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_text(const ParseNode *node, ObString &string)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node should not be null", K(ret));
+  } else if (OB_UNLIKELY(T_VARCHAR != node->type_ && T_HEX_STRING != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node type is not T_VARCHAR/T_HEX_STRING", "type", get_type_name(node->type_), K(ret));
+  } else if (OB_UNLIKELY(node->str_len_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty string", K(ret));
+  } else {
+    string = ObString(node->str_len_, node->str_value_);
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_ulong(const ParseNode *node, int64_t & format_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node should not be null", K(ret));
+  } else if (OB_UNLIKELY(T_INT != node->type_ && T_HEX_STRING != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node type is not T_INT/T_HEX_STRING", "type", get_type_name(node->type_), K(ret));
+  } else {
+    format_id = node->value_;
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_opt_join_or_resume(const ParseNode *node, int64_t & flag)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    // do nothing
+  } else if (OB_UNLIKELY(T_INT != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected node type", K(node->type_), K(ret));
+  } else {
+    if(node->value_ != 0  && node->value_ != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected val", K(node->value_), K(ret));
+    } else {
+      ret = OB_TRANS_XA_INVAL;
+      LOG_WARN("not support start arguments", K(node->value_), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_opt_suspend(const ParseNode *node, int64_t & flag)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    // do nothing
+  } else if (OB_UNLIKELY(T_INT != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected node type", K(node->type_), K(ret));
+  } else {
+    if(node->value_ != 0  && node->value_ != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected val", K(node->value_), K(ret));
+    } else {
+      // 目前这里进行里检查，可以不管直接赋值然后给执行时报错
+      ret = OB_TRANS_XA_INVAL;
+      LOG_WARN("not support start arguments", K(node->value_), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_opt_one_phase(const ParseNode *node, int64_t & flag)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == node)) {
+    // do nothing
+  } else if (OB_UNLIKELY(T_INT != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected node type", K(node->type_), K(ret));
+  } else {
+    if(node->value_ != 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected val", K(node->value_), K(ret));
+    } else {
+      flag = transaction::ObXAFlag::OBTMONEPHASE;
+    }
   }
   return ret;
 }
@@ -8289,14 +8436,14 @@ int ObResolverUtils::check_select_item_subquery(ObSelectStmt &stmt,
   return ret;
 }
 
-int ObResolverUtils::set_direction_by_mode(const ParseNode &sort_node, OrderItem &order_item)
+int ObResolverUtils::set_direction_by_mode(const ParseNode &sort_node, OrderItem &order_item, bool opt_nulls)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sort_node.children_) || sort_node.num_child_ < 2 || OB_ISNULL(sort_node.children_[1])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else if (T_SORT_ASC == sort_node.children_[1]->type_) {
-    if (lib::is_oracle_mode()) {
+    if (lib::is_oracle_mode() || opt_nulls) {
       if (1 == sort_node.children_[1]->value_) {
         order_item.order_type_ = NULLS_LAST_ASC;
       } else if (2 == sort_node.children_[1]->value_) {
@@ -8309,7 +8456,7 @@ int ObResolverUtils::set_direction_by_mode(const ParseNode &sort_node, OrderItem
       order_item.order_type_ = NULLS_FIRST_ASC;
     }
   } else if (T_SORT_DESC == sort_node.children_[1]->type_) {
-    if (lib::is_oracle_mode()) {
+    if (lib::is_oracle_mode() || opt_nulls) {
       if (1 == sort_node.children_[1]->value_) {
         order_item.order_type_ = NULLS_LAST_DESC;
       } else if (2 == sort_node.children_[1]->value_) {
@@ -9560,6 +9707,14 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
       }
       case T_ENDPOINT: {
         format.odps_format_.endpoint_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_TUNNEL_ENDPOINT: {
+        format.odps_format_.tunnel_endpoint_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_COLLECT_STATISTICS_ON_CREATE: {
+        format.odps_format_.collect_statistics_on_create_ = node->children_[0]->value_;
         break;
       }
       case T_PROJECT: {

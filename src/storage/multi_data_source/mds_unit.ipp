@@ -625,7 +625,7 @@ void MdsUnit<K, V>::report_event_(const char (&event_str)[N],
   constexpr int64_t buffer_size = 1_KB;
   char stack_buffer[buffer_size] = { 0 };
   int64_t pos = 0;
-  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", to_cstring(key)))) {
+  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, key))) {
   } else {
     event.key_str_.assign(stack_buffer, pos);
     event.event_ = event_str;

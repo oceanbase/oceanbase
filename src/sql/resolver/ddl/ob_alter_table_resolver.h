@@ -20,8 +20,8 @@ namespace oceanbase
 {
 namespace sql
 {
-
-typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_INDEX_PER_TABLE> ObReducedVisibleColSet;
+typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> ObReducedVisibleColSet;
+typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> ObColumnNameSet;
 /*
 #define ADD_COLUMN_NOT_NULL       (1UL << 0)
 #define MODIFY_COLUMN_NOT_NULL    (1UL << 1)
@@ -50,7 +50,9 @@ public:
   int resolve_column_options(const ParseNode &node,
                              bool &is_modify_column_visibility,
                              bool &is_drop_column,
-                             ObReducedVisibleColSet &reduced_visible_col_set);
+                             ObColumnNameSet &add_column_names_set,
+                             ObReducedVisibleColSet &reduced_visible_col_set,
+                             bool &has_drop_column);
   int resolve_index_options_oracle(const ParseNode &node);
   int resolve_index_options(const ParseNode &action_node_list, const ParseNode &node,
                             bool &is_add_index);
@@ -62,7 +64,7 @@ public:
   int resolve_tablegroup_options(const ParseNode &node);
   int resolve_convert_to_character(const ParseNode &node);
   int resolve_foreign_key_options(const ParseNode &node);
-  int resolve_add_column(const ParseNode &node);
+  int resolve_add_column(const ParseNode &node, ObColumnNameSet &resolve_add_column);
   int resolve_alter_column(const ParseNode &node);
   int resolve_change_column(const ParseNode &node);
   int check_modify_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,

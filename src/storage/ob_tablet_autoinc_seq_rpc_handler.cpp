@@ -171,6 +171,11 @@ int ObTabletAutoincSeqRpcHandler::fetch_tablet_autoinc_seq_cache(
       ObTabletAutoincInterval autoinc_interval;
       const ObTabletID &tablet_id = arg.tablet_id_;
       int64_t proposal_id = -1;
+      ObTabletCreateDeleteMdsUserData user_data;
+      mds::MdsWriter writer;
+      mds::TwoPhaseCommitState trans_stat;
+      share::SCN trans_version;
+      bool is_committed = false;
       ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
       if (OB_FAIL(MTL(logservice::ObLogService*)->get_palf_role(ls_id, role, proposal_id))) {
         LOG_WARN("get palf role failed", K(ret));
@@ -181,6 +186,11 @@ int ObTabletAutoincSeqRpcHandler::fetch_tablet_autoinc_seq_cache(
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle, THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT))) {
         LOG_WARN("failed to get tablet", KR(ret), K(arg));
+      } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
+        LOG_WARN("fail to get latest tablet status", K(ret), K(arg));
+      } else if (OB_UNLIKELY(trans_stat != mds::TwoPhaseCommitState::ON_COMMIT)) {
+        ret = OB_EAGAIN;
+        LOG_WARN("tablet status not committed, maybe transfer or split start trans", K(ret), K(user_data), K(trans_stat), K(writer));
       // TODO(lihongqin.lhq): fetch from split dst to avoid retry
       } else if (OB_FAIL(tablet_handle.get_obj()->fetch_tablet_autoinc_seq_cache(
           arg.cache_size_, autoinc_interval))) {

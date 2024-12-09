@@ -275,6 +275,62 @@ int ObDirectLoadMgrAgent::fill_sstable_slice_for_ss(
   return ret;
 }
 
+int ObDirectLoadMgrAgent::fill_sstable_slice(
+    const ObDirectLoadSliceInfo &slice_info,
+    const ObBatchDatumRows &datum_rows,
+    ObInsertMonitor *insert_monitor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!slice_info.is_valid() || 0 == datum_rows.row_count_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(slice_info), K(datum_rows.row_count_));
+  } else if (!is_shared_storage_dempotent_mode(direct_load_type_)) {
+    if (OB_FAIL(fill_sstable_slice_for_sn(slice_info, datum_rows, insert_monitor))) {
+      LOG_WARN("fill slice for sn failed", K(ret), K(slice_info));
+    }
+  } else if (OB_FAIL(fill_sstable_slice_for_ss(slice_info, datum_rows, insert_monitor))) {
+    LOG_WARN("fill slice for ss failed", K(ret), K(slice_info));
+  }
+  return ret;
+}
+
+int ObDirectLoadMgrAgent::fill_sstable_slice_for_sn(
+    const ObDirectLoadSliceInfo &slice_info,
+    const ObBatchDatumRows &datum_rows,
+    ObInsertMonitor *insert_monitor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!mgr_handle_.is_valid())) {
+    // already committed, do nothing
+  } else if (OB_FAIL(mgr_handle_.get_obj()->fill_sstable_slice(slice_info, start_scn_, datum_rows, insert_monitor))) {
+    if (OB_TRANS_COMMITED == ret && slice_info.is_full_direct_load_) {
+      ret = OB_SUCCESS;
+      LOG_INFO("trans commited", K(slice_info));
+    } else {
+      LOG_WARN("fill slice failed", K(ret), K(slice_info));
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadMgrAgent::fill_sstable_slice_for_ss(
+    const ObDirectLoadSliceInfo &slice_info,
+    const ObBatchDatumRows &datum_rows,
+    ObInsertMonitor *insert_monitor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!mgr_handle_.is_valid())) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys", K(ret));
+  } else if (OB_FAIL(mgr_handle_.get_obj()->fill_sstable_slice(slice_info, start_scn_, datum_rows, insert_monitor))) {
+    LOG_WARN("fill slice failed ss", K(ret), K(slice_info));
+  }
+  return ret;
+}
+
 int ObDirectLoadMgrAgent::fill_lob_sstable_slice(
     ObIAllocator &allocator,
     const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
@@ -325,6 +381,60 @@ int ObDirectLoadMgrAgent::fill_lob_sstable_slice_for_ss(
     LOG_WARN("error sys", K(ret));
   } else if (OB_FAIL(mgr_handle_.get_obj()->fill_lob_sstable_slice(allocator, slice_info, start_scn_, pk_interval, datum_row))) {
     LOG_WARN("fail to fill batch sstable slice", K(ret), K(slice_info), K(datum_row));
+  }
+  return ret;
+}
+
+int ObDirectLoadMgrAgent::fill_lob_sstable_slice(
+    ObIAllocator &allocator,
+    const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
+    share::ObTabletCacheInterval &pk_interval,
+    blocksstable::ObBatchDatumRows &datum_rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!slice_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(slice_info));
+  } else if (!is_shared_storage_dempotent_mode(direct_load_type_)) {
+    if (OB_FAIL(fill_lob_sstable_slice_for_sn(allocator, slice_info, pk_interval, datum_rows))) {
+      LOG_WARN("fill slice for sn failed", K(ret), K(slice_info));
+    }
+  } else if (OB_FAIL(fill_lob_sstable_slice_for_ss(allocator, slice_info, pk_interval, datum_rows))) {
+    LOG_WARN("fill slice for ss failed", K(ret), K(slice_info));
+  }
+  return ret;
+}
+
+int ObDirectLoadMgrAgent::fill_lob_sstable_slice_for_sn(
+    ObIAllocator &allocator,
+    const ObDirectLoadSliceInfo &slice_info,
+    share::ObTabletCacheInterval &pk_interval,
+    blocksstable::ObBatchDatumRows &datum_rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!mgr_handle_.is_valid())) {
+    // already committed, do nothing.
+  } else if (OB_FAIL(mgr_handle_.get_obj()->fill_lob_sstable_slice(allocator, slice_info, start_scn_, pk_interval, datum_rows))) {
+    LOG_WARN("fail to fill batch sstable slice", K(ret), K(slice_info));
+  }
+  return ret;
+}
+
+int ObDirectLoadMgrAgent::fill_lob_sstable_slice_for_ss(
+    ObIAllocator &allocator,
+    const ObDirectLoadSliceInfo &slice_info,
+    share::ObTabletCacheInterval &pk_interval,
+    blocksstable::ObBatchDatumRows &datum_rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!mgr_handle_.is_valid())) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys", K(ret));
+  } else if (OB_FAIL(mgr_handle_.get_obj()->fill_lob_sstable_slice(allocator, slice_info, start_scn_, pk_interval, datum_rows))) {
+    LOG_WARN("fail to fill batch sstable slice", K(ret), K(slice_info));
   }
   return ret;
 }

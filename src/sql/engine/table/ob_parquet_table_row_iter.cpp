@@ -324,18 +324,22 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
       func = NULL;
     }
   } else if ((no_log_type || log_type->is_string() || log_type->is_enum())
-             && ob_is_string_type(datum_type.type_)) {
+             && (ob_is_string_type(datum_type.type_) || ObRawType == datum_type.type_)) {
     //convert parquet enum/string to string vector
     if (parquet::Type::BYTE_ARRAY == phy_type) {
       func = &DataLoader::load_string_col;
     } else if (parquet::Type::FIXED_LEN_BYTE_ARRAY == phy_type) {
       func = &DataLoader::load_fixed_string_col;
     }
-  } else if ((no_log_type || log_type->is_decimal() || log_type->is_int())
+  } else if ((no_log_type || log_type->is_int() || log_type->is_decimal())
              && ob_is_number_or_decimal_int_tc(datum_type.type_)) {
+    // no_log_type || log_type->is_int() for oracle int, phy_type should be int32 or int64
     //convert parquet int storing as int32/int64 to number/decimal vector
     if (log_type->is_decimal() && (col_desc->type_precision() != ((datum_type.precision_ == -1) ? 38 : datum_type.precision_)
                                    || col_desc->type_scale() != datum_type.scale_)) {
+      func = NULL;
+    } else if (!log_type->is_decimal() && parquet::Type::INT32 != phy_type
+               && parquet::Type::INT64 != phy_type) {
       func = NULL;
     } else {
       //there is 4 kinds of physical format in parquet(int32/int64/fixedbytearray/bytearray)
@@ -425,9 +429,9 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
   } else if ((no_log_type || log_type->is_timestamp()) && parquet::Type::INT96 == phy_type
              && (ob_is_otimestamp_type(datum_type.type_) || ObTimestampType == datum_type.type_)) {
     func = &DataLoader::load_timestamp_hive;
-  } else if (no_log_type && parquet::Type::FLOAT == phy_type && ObFloatType == datum_type.type_) {
+  } else if (no_log_type && parquet::Type::FLOAT == phy_type && ob_is_float_tc(datum_type.type_)) {
     func = &DataLoader::load_float;
-  } else if (no_log_type && parquet::Type::DOUBLE == phy_type && ObDoubleType == datum_type.type_) {
+  } else if (no_log_type && parquet::Type::DOUBLE == phy_type && ob_is_double_tc(datum_type.type_)) {
     func = &DataLoader::load_double;
   } else if (log_type->is_interval()
              || log_type->is_map()
@@ -564,7 +568,6 @@ int ObParquetTableRowIterator::DataLoader::to_numeric_hive(
   int ret = OB_SUCCESS;
   ObDecimalInt *decint = NULL;
   int32_t val_len = 0;
-
   if (OB_UNLIKELY(length > data_len)) {
     ret = OB_DECIMAL_PRECISION_OVERFLOW;
     LOG_WARN("overflow", K(length), K(data_len));
@@ -597,7 +600,8 @@ int ObParquetTableRowIterator::DataLoader::to_numeric_hive(
     if (ObDecimalIntType == file_col_expr_->datum_meta_.type_) {
       ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
       vec->set_decimal_int(idx, decint, val_len);
-    } else if (ObNumberType == file_col_expr_->datum_meta_.type_) {
+    } else if (ObNumberType == file_col_expr_->datum_meta_.type_
+               || ObUNumberType == file_col_expr_->datum_meta_.type_) {
       ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
       ObDiscreteBase *vec = static_cast<ObDiscreteBase *>(file_col_expr_->get_vector(eval_ctx_));
       number::ObNumber res_nmb;
@@ -1426,7 +1430,7 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         column_exprs_.at(i)->set_evaluated_projected(eval_ctx);
       }
     }
-    OZ (calc_exprs_for_rowid(read_count));
+    OZ (calc_exprs_for_rowid(read_count, state_));
   }
   if (OB_SUCC(ret)) {
     state_.cur_row_group_read_row_count_ += read_count;
@@ -1448,28 +1452,21 @@ void ObParquetTableRowIterator::reset() {
   state_.reuse();
 }
 
-int ObParquetTableRowIterator::calc_exprs_for_rowid(const int64_t read_count)
+DEF_TO_STRING(ObParquetIteratorState)
 {
-  int ret = OB_SUCCESS;
-  ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
-  if (OB_NOT_NULL(file_id_expr_)) {
-    OZ (file_id_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
-    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_id_expr_->get_vector(eval_ctx));
-      vec->set_int(i, state_.cur_file_id_);
-    }
-    file_id_expr_->set_evaluated_flag(eval_ctx);
-  }
-  if (OB_NOT_NULL(line_number_expr_)) {
-    OZ (line_number_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
-    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(line_number_expr_->get_vector(eval_ctx));
-      vec->set_int(i, state_.cur_line_number_ + i);
-    }
-    line_number_expr_->set_evaluated_flag(eval_ctx);
-  }
-  state_.cur_line_number_ += read_count;
-  return ret;
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_NAME("ob_external_iterator_state");
+  J_COLON();
+  pos += ObExternalIteratorState::to_string(buf + pos, buf_len - pos);
+  J_COMMA();
+  J_KV(K_(row_group_idx),
+       K_(cur_row_group_idx),
+       K_(end_row_group_idx),
+       K_(cur_row_group_read_row_count),
+       K_(cur_row_group_row_count));
+  J_OBJ_END();
+  return pos;
 }
 
 

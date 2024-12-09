@@ -5426,6 +5426,25 @@ int ObDMLStmt::do_formalize_lateral_derived_table_post()
   return ret;
 }
 
+int ObDMLStmt::get_match_expr_on_table(uint64_t table_id, ObIArray<ObRawExpr *> &match_exprs) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_match_exprs().count(); i++) {
+    uint64_t cur_tid = OB_INVALID_ID;
+    if (OB_ISNULL(get_match_exprs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(get_match_exprs().at(i)->get_table_id(cur_tid))) {
+      LOG_WARN("failed to get fulltext search exprs", K(ret));
+    } else if (cur_tid != table_id) {
+      // skip
+    } else if (OB_FAIL(add_var_to_array_no_dup(match_exprs, static_cast<ObRawExpr *>(get_match_exprs().at(i))))) {
+      LOG_WARN("failed to append match expr to array", K(ret), K(table_id));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
 ObJtColBaseInfo::ObJtColBaseInfo()
   : col_type_(0),
     truncate_(0),
@@ -5656,27 +5675,6 @@ int ObValuesTableDef::deep_copy(const ObValuesTableDef &other,
         LOG_WARN("failed to push back obj", K(ret));
       }
     }
-  }
-  return ret;
-}
-
-int ObDMLStmt::get_match_expr_on_table(uint64_t table_id, ObMatchFunRawExpr *&match_expr) const
-{
-  int ret = OB_SUCCESS;
-  match_expr = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && i < get_match_exprs().count(); i++) {
-    uint64_t cur_tid = OB_INVALID_ID;
-    if (OB_ISNULL(get_match_exprs().at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (OB_FAIL(get_match_exprs().at(i)->get_table_id(cur_tid))) {
-      LOG_WARN("failed to get fulltext search exprs", K(ret));
-    } else if (OB_NOT_NULL(match_expr) && cur_tid == table_id) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument, find more than one match expr on current table", K(ret), K(table_id));
-    } else if (cur_tid == table_id) {
-      match_expr = get_match_exprs().at(i);
-    } else { /*do nothing*/ }
   }
   return ret;
 }

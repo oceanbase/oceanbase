@@ -229,10 +229,10 @@ public:
     max_filter_constant_id_ = is_reverse_scan_ ? start_row_id_ : start_row_id_ + bitmap_.size() - 1;
   }
 
-  OB_INLINE int set_bitmap_batch(ObCSRowId start, ObCSRowId end, const bool value)
+  OB_INLINE int set_bitmap_batch(ObCSRowId start, ObCSRowId end, const bool value, int64_t &count)
   {
     int64_t offset = MAX(start - start_row_id_,  0);
-    int64_t count = MIN(end - start + 1, bitmap_.size() - offset);
+    count = MIN(end - start + 1, bitmap_.size() - offset);
     filter_constant_type_.set_uncertain();
     return bitmap_.set_bitmap_batch(offset, count, value);
   }

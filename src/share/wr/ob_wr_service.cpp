@@ -25,6 +25,32 @@ namespace oceanbase
 namespace share
 {
 
+int ObWorkloadRepositoryContext::mtl_init(ObWorkloadRepositoryContext* &ptr)
+{
+  ptr->is_inited_ = true;
+  return OB_SUCCESS;
+}
+
+void ObWorkloadRepositoryContext::destroy()
+{
+  is_inited_ = false;
+}
+
+int ObWorkloadRepositoryContext::try_lock()
+{
+  return mutex_.trylock();
+}
+
+int ObWorkloadRepositoryContext::lock(const int64_t abs_timeout_us)
+{
+  return mutex_.lock(abs_timeout_us);
+}
+
+void ObWorkloadRepositoryContext::release_lock()
+{
+  mutex_.unlock();
+}
+
 ObWorkloadRepositoryService::ObWorkloadRepositoryService() : is_inited_(false), wr_timer_task_()
 {}
 
@@ -157,14 +183,14 @@ int ObWorkloadRepositoryService::cancel_current_task()
   return ret;
 }
 
-int ObWorkloadRepositoryService::schedule_new_task(const int64_t interval)
+int ObWorkloadRepositoryService::schedule_new_task(const int64_t interval_us)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("wr service not init", K(ret));
-  } else if (OB_FAIL(wr_timer_task_.schedule_one_task(interval))) {
-    LOG_WARN("failed to schedule a new task of wr timer thread", K(ret), K(interval));
+  } else if (OB_FAIL(wr_timer_task_.schedule_one_task(interval_us))) {
+    LOG_WARN("failed to schedule a new task of wr timer thread", K(ret), K(interval_us));
   }
   return ret;
 }

@@ -204,19 +204,18 @@ public:
         "alloc_type=%d "
         "ctx_descriptor=%u "
         "min_table_version=%ld "
-        "max_table_version=%ld "
-        "trans_version=%s "
-        "commit_version=%s "
-        "lock_wait_start_ts=%ld "
-        "replay_compact_version=%s}",
+        "max_table_version=%ld trans_version=",
         alloc_type_,
         ctx_descriptor_,
         min_table_version_,
-        max_table_version_,
-        to_cstring(trans_version_),
-        to_cstring(commit_version_),
-        lock_wait_start_ts_,
-        to_cstring(replay_compact_version_));
+        max_table_version_);
+    common::databuff_printf(buf, buf_len, pos, trans_version_);
+    common::databuff_printf(buf, buf_len, pos, " commit_version=");
+    common::databuff_printf(buf, buf_len, pos, commit_version_);
+    common::databuff_printf(buf, buf_len, pos, " lock_wait_start_ts=%ld replay_compact_version=",
+        lock_wait_start_ts_);
+    common::databuff_printf(buf, buf_len, pos, replay_compact_version_);
+    common::databuff_printf(buf, buf_len, pos, "}");
     return pos;
   }
 public:

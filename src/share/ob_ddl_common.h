@@ -890,8 +890,8 @@ public:
       const uint64_t table_id,
       const uint64_t target_table_id,
       int64_t &snapshot_version,
-      bool &snapshot_held,
-      rootserver::ObDDLTask* task);
+      rootserver::ObDDLTask* task,
+      const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids = NULL);
   static int release_snapshot(
       rootserver::ObDDLTask* task,
       const uint64_t table_id,
@@ -906,6 +906,11 @@ public:
       bool is_complement_data_dag,
       bool &all_dag_exit);
   static int get_no_logging_param(const int64_t tenant_id, bool &is_no_logging);
+  static int batch_check_tablet_checksum(
+      const uint64_t tenant_id,
+      const int64_t start_idx,
+      const int64_t end_idx,
+      const ObIArray<ObTabletID> &tablet_ids);
 
 private:
   static int hold_snapshot(
@@ -914,12 +919,8 @@ private:
       const uint64_t table_id,
       const uint64_t target_table_id,
       rootserver::ObRootService *root_service,
-      const int64_t snapshot_version);
-  static int batch_check_tablet_checksum(
-      const uint64_t tenant_id,
-      const int64_t start_idx,
-      const int64_t end_idx,
-      const ObArray<ObTabletID> &tablet_ids);
+      const int64_t snapshot_version,
+      const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids);
 
   static int check_table_column_checksum_error(
       const uint64_t tenant_id,
@@ -937,7 +938,7 @@ private:
       const sql::ObOpSpec *spec,
       uint64_t &table_id);
 
-private:
+public:
   const static int64_t MAX_BATCH_COUNT = 128;
 };
 
@@ -1054,6 +1055,26 @@ public:
       common::ObIAllocator &rowkey_allocator,
       const char *buf, const int64_t data_len, int64_t &pos,
       ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list);
+};
+
+class ObSplitTabletInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSplitTabletInfo() : split_info_(0) { }
+  ~ObSplitTabletInfo() { reset(); }
+  void reset() { split_info_ = 0; }
+  void set_data_incomplete(const bool is_data_incomplete) { is_data_incomplete_ = is_data_incomplete; }
+  bool is_data_incomplete() const { return is_data_incomplete_; }
+  TO_STRING_KV(K_(split_info));
+private:
+  union {
+    uint32_t split_info_;
+    struct {
+      uint32_t is_data_incomplete_: 1; // whether the data of split dest tablet is complete.
+      uint32_t reserved: 31;
+    };
+  };
 };
 
 typedef common::ObCurTraceId::TraceId DDLTraceId;

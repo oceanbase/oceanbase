@@ -649,9 +649,10 @@ int ObDupTableLSHandler::ls_loop_handle()
 
     if (fast_cur_time - last_diag_info_print_us_[DupTableDiagStd::TypeIndex::LEASE_INDEX]
         >= DupTableDiagStd::DUP_DIAG_PRINT_INTERVAL[DupTableDiagStd::TypeIndex::LEASE_INDEX]) {
+      ObCStringHelper helper;
       _DUP_TABLE_LOG(INFO, "[%sDup Interface Stat] tenant: %lu, ls: %lu, is_master: %s, %s",
                      DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, MTL_ID(), ls_id_.id(),
-                     to_cstring(is_leader), to_cstring(interface_stat_));
+                     helper.convert(is_leader), helper.convert(interface_stat_));
     }
 
     if (fast_cur_time - last_diag_info_print_us_[DupTableDiagStd::TypeIndex::LEASE_INDEX]
@@ -1853,6 +1854,7 @@ void ObDupTableLoopWorker::run1()
 
       time_used = ObTimeUtility::current_time() - start_time;
       if (time_used < LOOP_INTERVAL) {
+        ObBKGDSessInActiveGuard inactive_guard;
         usleep(LOOP_INTERVAL - time_used);
       }
     }

@@ -81,12 +81,13 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:q:e:";
+  const char *opt_str = "h:d:s:q:e:f:";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"backup_path", 1, NULL, 'd'},
       {"storage_info", 1, NULL, 's'},
       {"quiet", 0, NULL, 'q' },
       {"s3_url_encode_type", 0, NULL, 'e'},
+      {"trigger_freq", 0, NULL, 'f'}, // used for internal testing only
       {NULL, 0, NULL, 0}};
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
@@ -117,6 +118,20 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
       case 'e': {
         if (OB_FAIL(set_s3_url_encode_type(optarg))) {
           STORAGE_LOG_FILTER(ERROR, "failed to set s3 url encode type", KR(ret));
+        }
+        break;
+      }
+      case 'f': {
+        int tmp_ret = OB_SUCCESS;
+        int64_t trigger_freq = 0;
+        if (OB_TMP_FAIL(c_str_to_int(optarg, trigger_freq))) {
+          OB_LOG(WARN, "fail to parse trigger freq", KR(tmp_ret), K((char *)optarg));
+        } else if (OB_UNLIKELY(trigger_freq < 0)) {
+          tmp_ret = OB_INVALID_ARGUMENT;
+          OB_LOG(WARN, "invalid trigger freq", KR(tmp_ret), K((char *)optarg));
+        } else {
+          TP_SET_EVENT(EventTable::EN_OBJECT_STORAGE_IO_RETRY,
+              OB_OBJECT_STORAGE_IO_ERROR, 0, trigger_freq);
         }
         break;
       }

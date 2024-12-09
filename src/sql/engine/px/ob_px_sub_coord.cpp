@@ -358,7 +358,6 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
     ObPxSqcMeta &sqc = sqc_arg_.sqc_;
     ObJoinFilterSpec *filter_spec = reinterpret_cast<ObJoinFilterSpec *>(&root);
     ObJoinFilterOpInput *filter_input = NULL;
-    ObPxBloomFilter *filter_create = NULL;
     int64_t tenant_id = ctx.get_my_session()->get_effective_tenant_id();
     ObOperatorKit *kit = ctx.get_operator_kit(root.id_);
     if (OB_ISNULL(kit) || OB_ISNULL(kit->input_)) {
@@ -380,6 +379,10 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
           ctx, sqc.get_task_count(),
           filter_spec->is_shuffle_? sqc.get_sqc_count() : 1))) {
         LOG_WARN("fail to init share info", K(ret));
+      } else if (ctx.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                     < CLUSTER_VERSION_4_3_5_0
+                 && OB_FAIL(filter_spec->update_sync_row_count_flag())) {
+        LOG_WARN("failed to update_sync_row_count_flag");
       } else {
         if (OB_FAIL(all_shared_rf_msgs_.push_back(filter_input->share_info_.shared_msgs_))) {
           LOG_WARN("fail to push back rf msgs", K(ret));

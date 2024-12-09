@@ -77,6 +77,17 @@ struct ObRollupAdaptiveInfo
   int assign(const ObRollupAdaptiveInfo &info);
 };
 
+struct ObHashRollupInfo
+{
+  ObIArray<ObRawExpr *> *expand_exprs_;
+  ObIArray<ObRawExpr *> *gby_exprs_;
+  ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> *dup_expr_pairs_;
+  ObRawExpr *rollup_grouping_id_;
+
+  int assign(const ObHashRollupInfo &info);
+  bool valid() const { return rollup_grouping_id_ != nullptr; }
+};
+
 class ObLogGroupBy : public ObLogicalOperator
 {
 public:
@@ -98,7 +109,8 @@ public:
         has_push_down_(false),
         use_part_sort_(false),
         dist_method_(T_INVALID),
-        is_pushdown_scalar_aggr_(false)
+        is_pushdown_scalar_aggr_(false),
+        hash_rollup_info_()
   {}
   virtual ~ObLogGroupBy()
   {}
@@ -239,6 +251,13 @@ public:
   VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo),
       K_(is_push_down));
   virtual int get_card_without_filter(double &card) override;
+
+  int set_hash_rollup_info(const ObHashRollupInfo &info) { return hash_rollup_info_.assign(info); }
+  const ObHashRollupInfo *get_hash_rollup_info() const
+  {
+    return hash_rollup_info_.valid() ? &hash_rollup_info_ : nullptr;
+  }
+
 private:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
@@ -269,6 +288,7 @@ private:
   bool use_part_sort_;
   ObItemType dist_method_;
   bool is_pushdown_scalar_aggr_;
+  ObHashRollupInfo hash_rollup_info_;
 };
 } // end of namespace sql
 } // end of namespace oceanbase

@@ -116,6 +116,7 @@ ob_set_subtarget(ob_server net
   net/ob_shared_storage_net_throt_rpc_proccessor.cpp
   net/ob_shared_storage_net_throt_rpc_struct.cpp
   net/ob_rpc_reverse_keepalive.cpp
+  net/ob_net_queue_traver.cpp
 )
 
 ob_set_subtarget(ob_server omt
@@ -282,6 +283,7 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_pre_sorter.cpp
   table_load/ob_table_load_mem_chunk_manager.cpp
   table_load/ob_table_load_pre_sort_writer.cpp
+  table_load/ob_table_load_empty_insert_tablet_ctx_manager.cpp
 )
 
 ob_set_subtarget(ob_server virtual_table
@@ -374,6 +376,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_sys_event.cpp
   virtual_table/ob_all_virtual_sys_parameter_stat.cpp
   virtual_table/ob_all_virtual_sys_stat.cpp
+  virtual_table/ob_all_virtual_res_mgr_sys_stat.cpp
   virtual_table/ob_all_virtual_sys_task_status.cpp
   virtual_table/ob_all_virtual_table_mgr.cpp
   virtual_table/ob_all_virtual_unit.cpp
@@ -493,6 +496,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ss_local_cache_info.cpp
   virtual_table/ob_all_virtual_vector_index_info.cpp
   virtual_table/ob_all_virtual_session_ps_info.cpp
+  virtual_table/ob_all_virtual_sql_stat.cpp
   virtual_table/ob_all_virtual_tmp_file.cpp
   virtual_table/ob_all_virtual_log_transport_dest_stat.cpp
   virtual_table/ob_all_virtual_kv_client_info.cpp

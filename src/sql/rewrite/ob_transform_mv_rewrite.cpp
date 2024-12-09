@@ -2799,6 +2799,9 @@ int ObTransformMVRewrite::adjust_rewrite_stmt(MvRewriteHelper &helper)
   } else if (OB_ISNULL(from_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("from table is null", K(ret));
+  } else if (from_table->is_joined_table() &&
+             OB_FAIL(rewrite_stmt->add_joined_table(static_cast<JoinedTable*>(from_table)))) {
+    LOG_WARN("failed to add joined table", K(ret));
   } else if (OB_FAIL(rewrite_stmt->add_from_item(from_table->table_id_,
                                                  from_table->is_joined_table()))) {
     LOG_WARN("failed to add from item", K(ret));
@@ -2867,8 +2870,6 @@ int ObTransformMVRewrite::recursive_build_from_table(MvRewriteHelper &helper,
   } else if (OB_ISNULL(new_joined_table = ObDMLStmt::create_joined_table(*ctx_->allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create joined table", K(ret));
-  } else if (OB_FAIL(rewrite_stmt->add_joined_table(new_joined_table))) {
-    LOG_WARN("failed to add joined table", K(ret));
   } else if (OB_FALSE_IT(new_joined_table->table_id_ = rewrite_stmt->get_query_ctx()->available_tb_id_--)) {
   } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*new_joined_table, *left_table))) {
     LOG_WARN("failed to add joined table left single table ids", K(ret));

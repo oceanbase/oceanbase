@@ -194,7 +194,6 @@ TEST(ObLatch, normal)
   }
 
   //just print longer than 1s log
-  ObSessionStatEstGuard est_guard(1, 1);
   ret = latch.wrlock(ObLatchIds::DEFAULT_MUTEX);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = latch.wrlock(ObLatchIds::DEFAULT_MUTEX, ObTimeUtility::current_time() + 2000 * 1000);

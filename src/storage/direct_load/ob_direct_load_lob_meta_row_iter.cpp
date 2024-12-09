@@ -52,7 +52,7 @@ ObDirectLoadLobMetaRowIter::ObDirectLoadLobMetaRowIter()
 ObDirectLoadLobMetaRowIter::~ObDirectLoadLobMetaRowIter()
 {
   if (nullptr != origin_iter_) {
-    origin_iter_->~ObIStoreRowIterator();
+    origin_iter_->~ObDirectLoadIStoreRowIterator();
     allocator_.free(origin_iter_);
     origin_iter_ = nullptr;
   }

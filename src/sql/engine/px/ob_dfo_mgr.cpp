@@ -207,6 +207,9 @@ int ObDfoWorkerAssignment::calc_admited_worker_count(const ObIArray<ObDfo*> &dfo
     const int64_t query_admited = task_exec_ctx->get_admited_worker_cnt();
     if (query_expected > 0 && 0 >= query_admited) {
       ret = OB_ERR_INSUFFICIENT_PX_WORKER;
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, px_expected);
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(required_px_workers_number_, query_expected);
+      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(admitted_px_workers_number_, query_admited);
       LOG_WARN("not enough thread resource", K(ret), K(px_expected), K(query_admited), K(query_expected));
     } else if (0 == query_expected) {
       // note: 对于单表、dop=1的查询，会走 fast dfo，此时 query_expected = 0
@@ -233,7 +236,8 @@ int ObDfoWorkerAssignment::calc_admited_worker_count(const ObIArray<ObDfo*> &dfo
 int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
                                          int64_t expected_worker_count,
                                          int64_t minimal_worker_count,
-                                         int64_t admited_worker_count)
+                                         int64_t admited_worker_count,
+                                         bool use_adaptive_px_dop)
 {
   int ret = OB_SUCCESS;
   /*  算法： */
@@ -337,7 +341,8 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_dfos_worker_count(dfos, false, total_assigned))) {
     LOG_WARN("failed to get dfos worker count", K(ret));
-  } else if (total_assigned > admited_worker_count && admited_worker_count != 0) {
+  } else if (!use_adaptive_px_dop && total_assigned > admited_worker_count
+             && admited_worker_count != 0) {
     // 意味着某些 dfo 理论上一个线程都分不到
     ret = OB_ERR_PARALLEL_SERVERS_TARGET_NOT_ENOUGH;
     LOG_USER_ERROR(OB_ERR_PARALLEL_SERVERS_TARGET_NOT_ENOUGH, total_assigned);
@@ -451,8 +456,9 @@ int ObDfoMgr::init(ObExecContext &exec_ctx,
                                                                       px_minimal,
                                                                       px_admited))) {
     LOG_WARN("fail to calc admited worler count", K(ret));
-  } else if (OB_FAIL(ObDfoWorkerAssignment::assign_worker(*this, px_expected, px_minimal, px_admited))) {
-    LOG_WARN("fail assign worker to dfos", K(ret),  K(px_expected), K(px_minimal), K(px_admited));
+  } else if (OB_FAIL(ObDfoWorkerAssignment::assign_worker(
+               *this, px_expected, px_minimal, px_admited, exec_ctx.is_use_adaptive_px_dop()))) {
+    LOG_WARN("fail assign worker to dfos", K(ret), K(px_expected), K(px_minimal), K(px_admited));
   } else {
     inited_ = true;
   }
@@ -671,7 +677,8 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       // 修改成 is_local = true, dop = 1
       dfo->set_coord_info_ptr(&px_coord_info);
       dfo->set_single(transmit->is_px_single());
-      dfo->set_dop(get_adaptive_px_dop(*transmit, exec_ctx));
+      dfo->set_dop(transmit->is_px_single() ? transmit->get_px_dop() :
+                                              get_adaptive_px_dop(*transmit, exec_ctx));
       dfo->set_qc_id(transmit->get_px_id());
       dfo->set_dfo_id(transmit->get_dfo_id());
       dfo->set_execution_id(exec_ctx.get_my_session()->get_current_execution_id());

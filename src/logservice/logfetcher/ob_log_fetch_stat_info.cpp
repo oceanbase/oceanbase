@@ -595,7 +595,7 @@ int64_t FetchStatInfoPrinter::to_string(char* buf, const int64_t buf_len) const
         "rpc_cnt=%ld(%ld/sec) single_rpc=%ld(%ld/sec)"
         "(upper_limit=%ld(%ld/sec),max_log=%ld(%ld/sec),no_log=%ld(%ld/sec),max_result=%ld(%ld/sec)) "
         "rpc_time=%ld svr_time=(queue=%ld,process=%ld) net_time=(l2s=%ld,s2l=%ld) cb_time=%ld "
-        "handle_rpc_time=%ld flush_time=%ld read_log_time=%ld(log_entry=%ld,trans=%ld) %s",
+        "handle_rpc_time=%ld flush_time=%ld read_log_time=%ld(log_entry=%ld,trans=%ld) ",
         SIZE_TO_STR(traffic), log_size, SIZE_TO_STR(log_size_per_rpc), log_cnt_per_rpc,
         rpc_cnt, rpc_cnt_per_sec, single_rpc_cnt, single_rpc_cnt_per_sec,
         reach_upper_limit_rpc_cnt, reach_upper_limit_rpc_cnt_per_sec,
@@ -605,7 +605,8 @@ int64_t FetchStatInfoPrinter::to_string(char* buf, const int64_t buf_len) const
         rpc_time_per_rpc, svr_queue_time_per_rpc, svr_process_time_per_rpc,
         l2s_net_time_per_rpc, s2l_net_time_per_rpc, callback_time_per_rpc,
         handle_rpc_time_per_rpc, flush_time_per_rpc, read_log_time_per_rpc,
-        decode_log_entry_time_per_rpc, tsi.get_total_time(), to_cstring(tsi));
+        decode_log_entry_time_per_rpc, tsi.get_total_time());
+    (void)databuff_printf(buf, buf_len, pos, tsi);
   }
 
   return pos;
@@ -760,7 +761,7 @@ int64_t RawLogFetchStatInfoPrinter::to_string(char *buf, const int64_t buf_len) 
     int64_t read_log_time_per_rpc = rpc_cnt <= 0 ? 0 : read_log_time / rpc_cnt;
     int64_t decode_log_entry_time_per_rpc = (rpc_cnt <= 0 ? 0 : decode_log_entry_time / rpc_cnt);
     int64_t flush_time_per_rpc = (rpc_cnt <= 0 ? 0 : flush_time / rpc_cnt);
-
+    ObCStringHelper helper;
     (void)databuff_printf(buf, buf_len, pos,
         "traffic=%s/sec log_size=%ld size/rpc=%s "
         "rpc_cnt=%ld(%ld/sec) sub_rpc_cnt=%ld(%ld/sec) sub_rpc_cnt/rpc=%ld single_rpc=%ld(%ld/sec)"
@@ -789,7 +790,7 @@ int64_t RawLogFetchStatInfoPrinter::to_string(char *buf, const int64_t buf_len) 
         mean_sub_rpc_cb_time_per_rpc, max_sub_rpc_cb_time_per_rpc, min_sub_rpc_cb_time_rpc,
         callback_time_per_rpc,
         handle_rpc_time_per_rpc, flush_time_per_rpc, read_log_time_per_rpc,
-        decode_log_entry_time_per_rpc, tsi.get_total_time(), to_cstring(tsi));
+        decode_log_entry_time_per_rpc, tsi.get_total_time(), helper.convert(tsi));
 
   }
 

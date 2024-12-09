@@ -111,10 +111,20 @@ int ObTabletGroupRestoreCtx::fill_comment(char *buf, const int64_t buf_len) cons
   } else if (arg_.tablet_id_array_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet id array should not be empty", K(ret), K(arg_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "tablet group restore : task_id = %s, ls_id = %s, "
-      "first_tablet_id = %s, src = %s, dest = %s", to_cstring(task_id_), to_cstring(arg_.ls_id_),
-      to_cstring(arg_.tablet_id_array_.at(0)), to_cstring(arg_.src_.get_server()), to_cstring(arg_.dst_.get_server())))) {
-    LOG_WARN("failed to set comment", K(ret), K(buf), K(pos), K(buf_len));
+  } else {
+    ret = databuff_printf(buf, buf_len, pos, "tablet group restore : task_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, task_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", first_tablet_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.tablet_id_array_.at(0));
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", src = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.src_.get_server());
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", dest = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, arg_.dst_.get_server());
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to set comment", K(ret), K(buf), K(pos), K(buf_len));
+    }
   }
   return ret;
 }
@@ -479,10 +489,17 @@ int ObTabletGroupRestoreDagNet::fill_comment(char *buf, const int64_t buf_len) c
   } else if (OB_UNLIKELY(0 > ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("failed to get trace id string", K(ret), "arg", ctx_->arg_);
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-          "ObTabletGroupRestoreDagNet: ls_id=%s,first_tablet_id=%s, trace_id=%s",
-          to_cstring(ctx_->arg_.ls_id_), to_cstring(ctx_->arg_.tablet_id_array_.at(0)), task_id_str))) {
-    LOG_WARN("failed to fill comment", K(ret), "arg", ctx_->arg_);
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObTabletGroupRestoreDagNet: ls_id=");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ",first_tablet_id=");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ctx_->arg_.tablet_id_array_.at(0));
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", trace_id=%s", task_id_str);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), "arg", ctx_->arg_);
+    }
   }
   return ret;
 }
@@ -496,10 +513,16 @@ int ObTabletGroupRestoreDagNet::fill_dag_net_key(char *buf, const int64_t buf_le
   } else if (ctx_->arg_.tablet_id_array_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet group restore tablet id array should not be empty", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "ObTabletGroupRestoreDagNet: ls_id = %s, first_tablet_id = %s",
-      to_cstring(ctx_->arg_.ls_id_), to_cstring(ctx_->arg_.tablet_id_array_.at(0))))) {
-    LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObTabletGroupRestoreDagNet: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx_->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", first_tablet_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ctx_->arg_.tablet_id_array_.at(0));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), K(*ctx_));
+    }
   }
   return ret;
 }
@@ -626,13 +649,16 @@ int ObTabletGroupRestoreDag::fill_info_param(compaction::ObIBasicInfoParam *&out
   if (OB_ISNULL(ctx = get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet group restore ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                 ctx->arg_.ls_id_.id(),
                                 static_cast<int64_t>(ctx->arg_.tablet_id_array_.at(0).id()),
                                 static_cast<int64_t>(ctx->arg_.is_leader_),
-                                "dag_net_task_id", to_cstring(ctx->task_id_),
-                                "src", to_cstring(ctx->arg_.src_.get_server())))){
-    LOG_WARN("failed to fill info param", K(ret));
+                                "dag_net_task_id", helper.convert(ctx->task_id_),
+                                "src", helper.convert(ctx->arg_.src_.get_server())))){
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -659,10 +685,16 @@ int ObInitialTabletGroupRestoreDag::fill_dag_key(char *buf, const int64_t buf_le
   } else if (OB_ISNULL(ctx = get_ctx()) || ctx->arg_.tablet_id_array_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet group restore ctx should not be NULL or tablet id array should not empty", K(ret), KPC(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObInitialTabletGroupRestoreDag: ls_id = %s, first_tablet_id = %s",
-       to_cstring(ctx->arg_.ls_id_), to_cstring(ctx->arg_.tablet_id_array_.at(0))))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObInitialTabletGroupRestoreDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", first_tablet_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ctx->arg_.tablet_id_array_.at(0));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -1196,10 +1228,16 @@ int ObStartTabletGroupRestoreDag::fill_dag_key(char *buf, const int64_t buf_len)
   } else if (OB_ISNULL(ctx = get_ctx()) || ctx->arg_.tablet_id_array_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet group restore ctx should not be NULL or tablet id array should not empty", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObStartTabletGroupRestoreDag: ls_id = %s, first_tablet_id = %s",
-       to_cstring(ctx->arg_.ls_id_), to_cstring(ctx->arg_.tablet_id_array_.at(0))))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObStartTabletGroupRestoreDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", first_tablet_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ctx->arg_.tablet_id_array_.at(0));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -1525,10 +1563,16 @@ int ObFinishTabletGroupRestoreDag::fill_dag_key(char *buf, const int64_t buf_len
   } else if (OB_ISNULL(ctx = get_ctx()) || ctx->arg_.tablet_id_array_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet group restore ctx should not be NULL or tablet restore id array should not be empty", K(ret), KPC(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObFinishTabletGroupRestoreDag: ls_id = %s, first_tablet_id = %s",
-       to_cstring(ctx->arg_.ls_id_), to_cstring(ctx->arg_.tablet_id_array_.at(0))))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObFinishTabletGroupRestoreDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ctx->arg_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", first_tablet_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos,
+        ctx->arg_.tablet_id_array_.at(0));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
+    }
   }
   return ret;
 }
@@ -1851,11 +1895,16 @@ int ObTabletRestoreDag::fill_dag_key(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet restore dag do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObTabletRestoreDag: ls_id = %s, tablet_id = %s, restore_action = %d",
-       to_cstring(tablet_restore_ctx_.ls_id_), to_cstring(tablet_restore_ctx_.tablet_id_),
-       tablet_restore_ctx_.action_))) {
-    LOG_WARN("failed to fill comment", K(ret), K(tablet_restore_ctx_));
+  } else {
+    int64_t pos = 0;
+    ret = databuff_printf(buf, buf_len, pos, "ObTabletRestoreDag: ls_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, tablet_restore_ctx_.ls_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", tablet_id = ");
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, tablet_restore_ctx_.tablet_id_);
+    OB_SUCCESS != ret ? : ret = databuff_printf(buf, buf_len, pos, ", restore_action = %d", tablet_restore_ctx_.action_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to fill comment", K(ret), K(tablet_restore_ctx_));
+    }
   }
   return ret;
 }
@@ -1889,12 +1938,15 @@ int ObTabletRestoreDag::fill_info_param(compaction::ObIBasicInfoParam *&out_para
     LOG_WARN("tablet restore dag do not init", K(ret));
   } else if (OB_FAIL(get_dag_net_task_id_(task_id))) {
     LOG_WARN("failed to get dag net task id", K(ret));
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  } else {
+    ObCStringHelper helper;
+    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                 tablet_restore_ctx_.ls_id_.id(),
                                 static_cast<int64_t>(tablet_restore_ctx_.tablet_id_.id()),
                                 static_cast<int64_t>(tablet_restore_ctx_.is_leader_),
-                                "dag_net_task_id", to_cstring(task_id)))) {
-    LOG_WARN("failed to fill info param", K(ret));
+                                "dag_net_task_id", helper.convert(task_id)))) {
+      LOG_WARN("failed to fill info param", K(ret));
+    }
   }
   return ret;
 }
@@ -2220,9 +2272,10 @@ int ObTabletRestoreTask::process()
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret) && tablet_restore_ctx_->is_leader_
-      && ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_)
+      && (ObTabletRestoreAction::is_restore_remote_sstable(tablet_restore_ctx_->action_)
+         || ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_))
       && tablet_restore_ctx_->ls_id_.is_user_ls()) {
-    SERVER_EVENT_SYNC_ADD("storage_ha", "follower_restore_major_errsim", "tablet_id", tablet_restore_ctx_->tablet_id_.id());
+    SERVER_EVENT_SYNC_ADD("storage_ha", "leader_tablet_restore_task", "tablet_id", tablet_restore_ctx_->tablet_id_.id());
     DEBUG_SYNC(AFTER_RESTORE_TABLET_TASK);
     ret = OB_E(EventTable::EN_RESTORE_TABLET_TASK_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {

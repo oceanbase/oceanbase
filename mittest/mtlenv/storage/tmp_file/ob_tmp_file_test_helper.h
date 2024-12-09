@@ -13,6 +13,7 @@
 #ifndef OB_TMP_FILE_TEST_HELPER_
 #define OB_TMP_FILE_TEST_HELPER_
 #include <vector>
+#include <cstdio>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -73,7 +74,7 @@ bool compare_and_print_hex_data(const char *lhs, const char *rhs,
                                 int64_t buf_length, int64_t print_length,
                                 std::string &filename)
 {
-  bool is_equal = true;
+  bool is_equal = false;
   static SpinRWLock lock_;
   SpinWLockGuard guard(lock_);
   static int64_t idx = 0;
@@ -81,6 +82,7 @@ bool compare_and_print_hex_data(const char *lhs, const char *rhs,
   filename = std::to_string(ATOMIC_FAA(&idx, 1)) + "_cmp_and_dump_hex_data.txt";
   std::ofstream file(filename, std::ios::out | std::ios::binary);
   if (file.is_open()) {
+    is_equal = true;
     for (int i = 0; i < buf_length; ++i) {
       if (lhs[i] != rhs[i]) {
         is_equal = false;
@@ -111,6 +113,9 @@ bool compare_and_print_hex_data(const char *lhs, const char *rhs,
       }
     }
     file.close();
+    if (is_equal) {
+      remove(filename.c_str());
+    }
   } else {
     std::cerr << "Error opening file " << filename << " for writing." << std::endl;
   }
@@ -143,11 +148,53 @@ std::vector<int64_t> generate_random_sequence(const int64_t lower_bound,
   return random_sequence;
 }
 
+int set_ss_tmp_file_flushing(ObSharedStorageTmpFile &file)
+{
+  int ret = OB_SUCCESS;
+  ObTmpFileFlushListIterator iter;
+  bool find = false;
+  if (OB_FAIL(iter.init(file.flush_prio_mgr_))) {
+    LOG_WARN("fail to init flush list iterator", KR(ret));
+  } else {
+    FlushCtxState cur_stage = FlushCtxState::FSM_F1;
+    const FlushCtxState end_stage = FlushCtxState::FSM_F3;
+    ObArray<ObSharedStorageTmpFile*> unmatched_files;
+    while(OB_SUCC(ret) && cur_stage <= end_stage && !find) {
+      ObSSTmpFileHandle file_handle;
+      if (OB_FAIL(iter.next(cur_stage, file_handle))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to get next file in flush list", KR(ret), K(cur_stage));
+        } else if (OB_FAIL(ObTmpFileGlobal::advance_flush_ctx_state(cur_stage, cur_stage))) {
+          LOG_WARN("fail to advance flush ctx state", KR(ret), K(cur_stage));
+        }
+      } else if (OB_ISNULL(file_handle.get())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get temporary file", KR(ret), KP(file_handle.get()));
+      } else if (file_handle.get()->fd_ == file.fd_) {
+        find = true;
+      } else if (OB_FAIL(unmatched_files.push_back(file_handle.get()))) {
+        LOG_WARN("fail to push back file handle", KR(ret), K(file_handle));
+      }
+    } // end while
+    for (int i = 0; OB_SUCC(ret) && i < unmatched_files.count(); ++i) {
+      if (OB_FAIL(unmatched_files.at(i)->reinsert_data_flush_node())) {
+        LOG_ERROR("fail to reinsert data flush node", KR(ret), KPC(unmatched_files.at(i)));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_UNLIKELY(!find)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to find file in flush list", KR(ret), K(file));
+  }
+  return ret;
+}
 /* -------------------------- TestTmpFileStress --------------------------- */
 enum TmpFileOp {
   WRITE,
   READ,
   TRUNCATE,
+  SEAL,
   OP_MAX
 };
 
@@ -156,11 +203,11 @@ class TestTmpFileStress : public share::ObThreadPool
 public:
   TestTmpFileStress(ObTenantBase *tenant_ctx);
   virtual ~TestTmpFileStress();
-  int init(const int fd, const TmpFileOp op, const int64_t thread_cnt,
+  int init(const int fd, const TmpFileOp op, const int64_t thread_cnt, const int64_t timeout_ms,
            char *buf, const int64_t offset, const int64_t size, const bool disable_block_cache);
   void reset();
   virtual void run1();
-  TO_STRING_KV(K_(thread_cnt), K_(fd), K_(op), KP_(buf), K_(offset), K_(size));
+  TO_STRING_KV(K(thread_cnt_), K(fd_), K(timeout_ms_), K(op_), KP(buf_), K(offset_), K(size_));
 private:
   void write_data_(const int64_t write_size);
   void truncate_data_();
@@ -168,6 +215,7 @@ private:
 private:
   int64_t thread_cnt_;
   int fd_;
+  int64_t timeout_ms_;
   TmpFileOp op_;
   char *buf_;
   int64_t offset_;
@@ -178,7 +226,7 @@ private:
 
 TestTmpFileStress::TestTmpFileStress(ObTenantBase *tenant_ctx)
   : thread_cnt_(0), fd_(0),
-    op_(OP_MAX),
+    timeout_ms_(0), op_(OP_MAX),
     buf_(nullptr), offset_(0),
     size_(0),
     disable_block_cache_(false),
@@ -192,14 +240,15 @@ TestTmpFileStress::~TestTmpFileStress()
 
 int TestTmpFileStress::init(const int fd, const TmpFileOp op,
                             const int64_t thread_cnt,
+                            const int64_t timeout_ms,
                             char *buf, int64_t offset,
                             const int64_t size,
                             const bool disable_block_cache)
 {
   int ret = OB_SUCCESS;
-  if (thread_cnt < 0 || OB_ISNULL(buf) || offset < 0 || size <= 0) {
+  if (thread_cnt < 0 || OB_ISNULL(buf) || offset < 0 || size <= 0 || timeout_ms <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(thread_cnt), KP(buf), K(offset), K(size));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(thread_cnt), KP(buf), K(offset), K(size), K(timeout_ms));
   } else if (TmpFileOp::OP_MAX == op) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(op));
@@ -209,6 +258,7 @@ int TestTmpFileStress::init(const int fd, const TmpFileOp op,
   } else {
     buf_ = buf;
     thread_cnt_ = thread_cnt;
+    timeout_ms_ = timeout_ms;
     fd_ = fd;
     op_ = op;
     offset_ = offset;
@@ -239,7 +289,7 @@ void TestTmpFileStress::write_data_(const int64_t write_size)
   ASSERT_EQ(OB_SUCCESS, ret);
   io_info.fd_ = fd_;
   io_info.io_desc_.set_wait_event(2);
-  io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  io_info.io_timeout_ms_ = timeout_ms_;
   int64_t already_write = 0;
   std::vector<int64_t> turn_write_size = generate_random_sequence(1, write_size / 3, write_size, 3);
   for (int i = 0; i < turn_write_size.size(); ++i) {
@@ -249,14 +299,29 @@ void TestTmpFileStress::write_data_(const int64_t write_size)
     io_info.buf_ = buf_ + already_write;
     if (this_turn_write_size % ObTmpFileGlobal::PAGE_SIZE == 0 && i == 0) {
       io_info.size_ = this_turn_write_size - 2 * 1024;
-      ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
+      ret = MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info);
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "TestTmpFileStress write thread failed", KR(ret), K(fd_), K(thread_idx_),
+                    K(this_turn_write_size), K(already_write), K(write_size), K(io_info));
+        ob_abort();
+      }
 
       io_info.size_ = 2 * 1024;
       io_info.buf_ = buf_ + already_write + this_turn_write_size - 2 * 1024;
-      ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
+      ret = MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info);
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "TestTmpFileStress write thread failed", KR(ret), K(fd_), K(thread_idx_),
+                    K(this_turn_write_size), K(already_write), K(write_size), K(io_info));
+        ob_abort();
+      }
     } else {
       io_info.size_ = this_turn_write_size;
-      ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
+      ret = MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info);
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "TestTmpFileStress write thread failed", KR(ret), K(fd_), K(thread_idx_),
+                    K(this_turn_write_size), K(already_write), K(write_size), K(io_info));
+        ob_abort();
+      }
     }
     already_write += this_turn_write_size;
   }
@@ -275,13 +340,13 @@ void TestTmpFileStress::read_data_(const int64_t read_offset, const int64_t read
   io_info.fd_ = fd_;
   io_info.size_ = read_size;
   io_info.io_desc_.set_wait_event(2);
-  io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  io_info.io_timeout_ms_ = timeout_ms_;
   io_info.buf_ = read_buf;
   io_info.disable_block_cache_ = disable_block_cache_;
   ret = MTL(ObTenantTmpFileManager *)->pread(MTL_ID(), io_info, read_offset, handle);
   int cmp = memcmp(handle.get_buffer(), buf_ + read_offset, io_info.size_);
   if (cmp != 0 || OB_FAIL(ret)) {
-    STORAGE_LOG(WARN, "TestTmpFileStress read thread failed", KR(ret), K(fd_), K(cmp), K(thread_idx_), KP(buf_), K(read_offset), K(read_size));
+    STORAGE_LOG(ERROR, "TestTmpFileStress read thread failed", KR(ret), K(fd_), K(cmp), K(thread_idx_), KP(buf_), K(read_offset), K(read_size));
     ob_abort();
   }
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -297,11 +362,15 @@ void TestTmpFileStress::truncate_data_()
   STORAGE_LOG(INFO, "TestTmpFileStress truncate thread start", K(fd_), K(thread_idx_), KP(buf_),
               K(truncate_offset), K(offset_), K(size_));
   int ret = MTL(ObTenantTmpFileManager *)->truncate(fd_, truncate_offset);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(ERROR, "TestTmpFileStress truncate thread failed", KR(ret), K(fd_), K(thread_idx_),
+                K(truncate_offset));
+    ob_abort();
+  }
   ObTmpFileIOInfo io_info;
   io_info.fd_ = fd_;
   io_info.io_desc_.set_wait_event(2);
-  io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  io_info.io_timeout_ms_ = timeout_ms_;
   io_info.disable_block_cache_ = disable_block_cache_;
   const int64_t invalid_size = truncate_offset - offset_;
   const int64_t valid_size = size_ - invalid_size;
@@ -315,18 +384,17 @@ void TestTmpFileStress::truncate_data_()
   ret = MTL(ObTenantTmpFileManager *)->pread(MTL_ID(), io_info, offset_, handle);
   int cmp = memcmp(handle.get_buffer()+invalid_size, buf_ + truncate_offset, valid_size);
   if (cmp != 0 || OB_FAIL(ret)) {
-    STORAGE_LOG(INFO, "TestTmpFileStress truncate thread failed. "
+    STORAGE_LOG(ERROR, "TestTmpFileStress truncate thread failed. "
                 "fail to compare valid part.", KR(ret), K(cmp), K(fd_), K(thread_idx_), KP(buf_),
                 K(truncate_offset), K(valid_size), K(invalid_size), K(offset_), K(size_));
     ob_abort();
   }
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(0, cmp);
   cmp = memcmp(handle.get_buffer(), zero_buf, invalid_size);
   if (cmp != 0) {
-    STORAGE_LOG(INFO, "TestTmpFileStress truncate thread failed. "
+    STORAGE_LOG(ERROR, "TestTmpFileStress truncate thread failed. "
                 "fail to compare zero part.", KR(ret), K(cmp), K(fd_), K(thread_idx_), KP(buf_),
                 K(truncate_offset), K(valid_size), K(invalid_size), K(offset_), K(size_));
+    ob_abort();
   }
   ASSERT_EQ(0, cmp);
   handle.reset();
@@ -335,7 +403,11 @@ void TestTmpFileStress::truncate_data_()
 
   truncate_offset = offset_ + size_;
   ret = MTL(ObTenantTmpFileManager *)->truncate(fd_, truncate_offset);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(ERROR, "TestTmpFileStress truncate thread failed", KR(ret), K(fd_), K(thread_idx_),
+                K(truncate_offset));
+    ob_abort();
+  }
 
   zero_buf = new char[size_];
   MEMSET(zero_buf, 0, size_);
@@ -387,13 +459,14 @@ class TestMultiTmpFileStress : public share::ObThreadPool
 public:
   TestMultiTmpFileStress(ObTenantBase *tenant_ctx);
   virtual ~TestMultiTmpFileStress();
-  int init(const int64_t file_cnt, const int64_t dir_id, const int64_t thread_cnt,
+  int init(const int64_t file_cnt, const int64_t dir_id, const int64_t thread_cnt, const int64_t timeout_ms,
            const int64_t batch_size, const int64_t batch_num, const bool disable_block_cache);
   virtual void run1();
 private:
   int64_t file_cnt_;
   int64_t dir_id_;
   int64_t read_thread_cnt_perf_file_;
+  int64_t timeout_ms_;
   int64_t batch_size_;
   int64_t batch_num_;
   bool disable_block_cache_;
@@ -404,6 +477,7 @@ TestMultiTmpFileStress::TestMultiTmpFileStress(ObTenantBase *tenant_ctx)
   : file_cnt_(0),
     dir_id_(-1),
     read_thread_cnt_perf_file_(0),
+    timeout_ms_(0),
     batch_size_(0),
     batch_num_(0),
     disable_block_cache_(true),
@@ -418,6 +492,7 @@ TestMultiTmpFileStress::~TestMultiTmpFileStress()
 int TestMultiTmpFileStress::init(const int64_t file_cnt,
                                  const int64_t dir_id,
                                  const int64_t thread_cnt,
+                                 const int64_t timeout_ms,
                                  const int64_t batch_size,
                                  const int64_t batch_num,
                                  const bool disable_block_cache)
@@ -430,6 +505,7 @@ int TestMultiTmpFileStress::init(const int64_t file_cnt,
     file_cnt_ = file_cnt;
     dir_id_ = dir_id;
     read_thread_cnt_perf_file_ = thread_cnt;
+    timeout_ms_ = timeout_ms;
     batch_size_ = batch_size;
     batch_num_ = batch_num;
     disable_block_cache_ = disable_block_cache;
@@ -449,8 +525,8 @@ void TestMultiTmpFileStress::run1()
   std::cout << "normal case, fd: " << fd << std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   STORAGE_LOG(INFO, "open file success", K(fd));
-  tmp_file::ObTmpFileHandle file_handle;
-  ret = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_tmp_file(fd, file_handle);
+  tmp_file::ObITmpFileHandle file_handle;
+  ret = MTL(ObTenantTmpFileManager *)->get_tmp_file(fd, file_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   file_handle.get()->page_idx_cache_.max_bucket_array_capacity_ = ObTmpFileWBPIndexCache::INIT_BUCKET_ARRAY_CAPACITY * 2;
   file_handle.reset();
@@ -466,18 +542,17 @@ void TestMultiTmpFileStress::run1()
     i += random_length;
   }
 
-
   TestTmpFileStress test_truncate(tenant_ctx_);
   for (int64_t i = 0; i < batch_num_; ++i) {
     if (i > 0) {
       // truncate read data in previous round
-      test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, data_buffer, (i-1) * batch_size_, batch_size_, disable_block_cache_);
+      test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, timeout_ms_, data_buffer, (i-1) * batch_size_, batch_size_, disable_block_cache_);
       ASSERT_EQ(OB_SUCCESS, ret);
       STORAGE_LOG(INFO, "test_truncate run start", K(i), K(batch_size_));
       test_truncate.start();
     }
     TestTmpFileStress test_write(tenant_ctx_);
-    ret = test_write.init(fd, TmpFileOp::WRITE, 1, data_buffer + i * batch_size_, 0, batch_size_, disable_block_cache_);
+    ret = test_write.init(fd, TmpFileOp::WRITE, 1, timeout_ms_, data_buffer + i * batch_size_, 0, batch_size_, disable_block_cache_);
     ASSERT_EQ(OB_SUCCESS, ret);
     STORAGE_LOG(INFO, "test_write run start");
     test_write.start();
@@ -485,7 +560,7 @@ void TestMultiTmpFileStress::run1()
     STORAGE_LOG(INFO, "test_write run end");
 
     TestTmpFileStress test_read(tenant_ctx_);
-    ret = test_read.init(fd, TmpFileOp::READ, read_thread_cnt_perf_file_, data_buffer, i * batch_size_, batch_size_, disable_block_cache_);
+    ret = test_read.init(fd, TmpFileOp::READ, read_thread_cnt_perf_file_, timeout_ms_, data_buffer, i * batch_size_, batch_size_, disable_block_cache_);
     ASSERT_EQ(OB_SUCCESS, ret);
 
     STORAGE_LOG(INFO, "test_read run start", K(i), K(batch_size_));
@@ -503,7 +578,7 @@ void TestMultiTmpFileStress::run1()
     STORAGE_LOG(INFO, "TestMultiTmpFileStress thread run a batch end", K(i));
   }
 
-  test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, data_buffer, file_size - batch_size_, batch_size_, disable_block_cache_);
+  test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, timeout_ms_, data_buffer, file_size - batch_size_, batch_size_, disable_block_cache_);
   ASSERT_EQ(OB_SUCCESS, ret);
   STORAGE_LOG(INFO, "test_truncate run start");
   test_truncate.start();

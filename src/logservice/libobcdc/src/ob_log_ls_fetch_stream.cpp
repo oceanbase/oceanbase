@@ -37,6 +37,7 @@ namespace libobcdc
 int64_t FetchStream::g_rpc_timeout = ObLogConfig::default_fetch_log_rpc_timeout_sec * _SEC_;
 int64_t FetchStream::g_dml_progress_limit = ObLogConfig::default_progress_limit_sec_for_dml * _SEC_;
 int64_t FetchStream::g_ddl_progress_limit = ObLogConfig::default_progress_limit_sec_for_ddl * _SEC_;
+int64_t FetchStream::g_dict_progress_limit = ObLogConfig::default_progress_limit_sec_for_dict * _SEC_;
 int64_t FetchStream::g_blacklist_survival_time = ObLogConfig::default_blacklist_survival_time_sec * _SEC_;
 int64_t FetchStream::g_check_switch_server_interval = ObLogConfig::default_check_switch_server_interval_sec * _SEC_;
 bool FetchStream::g_print_rpc_handle_info = ObLogConfig::default_print_rpc_handle_info;
@@ -256,6 +257,7 @@ void FetchStream::configure(const ObLogConfig &config)
   int64_t fetch_log_rpc_timeout_sec = config.fetch_log_rpc_timeout_sec;
   int64_t dml_progress_limit_sec = config.progress_limit_sec_for_dml;
   int64_t ddl_progress_limit_sec = config.progress_limit_sec_for_ddl;
+  int64_t dict_progress_limit_sec = config.progress_limit_sec_for_dict;
   int64_t blacklist_survival_time_sec = config.blacklist_survival_time_sec;
   int64_t check_switch_server_interval_sec = config.check_switch_server_interval_sec;
   bool print_rpc_handle_info = config.print_rpc_handle_info;
@@ -267,6 +269,8 @@ void FetchStream::configure(const ObLogConfig &config)
   LOG_INFO("[CONFIG]", K(dml_progress_limit_sec));
   ATOMIC_STORE(&g_ddl_progress_limit, ddl_progress_limit_sec * _SEC_);
   LOG_INFO("[CONFIG]", K(ddl_progress_limit_sec));
+  ATOMIC_STORE(&g_dict_progress_limit, dict_progress_limit_sec * _SEC_);
+  LOG_INFO("[CONFIG]", K(dict_progress_limit_sec));
   ATOMIC_STORE(&g_blacklist_survival_time, blacklist_survival_time_sec * _SEC_);
   LOG_INFO("[CONFIG]", K(blacklist_survival_time_sec));
   ATOMIC_STORE(&g_check_switch_server_interval, check_switch_server_interval_sec * _SEC_);
@@ -299,11 +303,14 @@ void FetchStream::do_stat(int64_t &traffic)
     logfetcher::FetchStatInfoPrinter fsi_printer(cur_stat_info_, last_stat_info_, delta_second);
 
     if (nullptr != ls_fetch_ctx_) {
-      _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(FETCHED_LOG:%s) %s", to_cstring(svr_), this,
+      ObCStringHelper helper;
+      _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(FETCHED_LOG:%s) %s",
+          helper.convert(svr_),
+          this,
           print_fetch_stream_type(stype_),
-          to_cstring(ls_fetch_ctx_->get_tls_id()),
+          helper.convert(ls_fetch_ctx_->get_tls_id()),
           SIZE_TO_STR(ls_fetch_ctx_->get_fetched_log_size()),
-          to_cstring(fsi_printer));
+          helper.convert(fsi_printer));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("ls_fetch_ctx_ is NULL", KR(ret), "fs", *this);
@@ -460,11 +467,15 @@ int FetchStream::get_upper_limit(int64_t &upper_limit_ns)
     ret = OB_INVALID_ERROR;
     LOG_ERROR("current min progress is invalid", KR(ret), K(min_progress), KPC(progress_controller_));
   } else {
-    // DDL partition is not limited by progress limit, here upper limit is set to a future value
-    if (FETCH_STREAM_TYPE_SYS_LS == stype_) {
+    if (OB_NOT_NULL(ls_fetch_ctx_) && ls_fetch_ctx_->is_loading_data_dict_baseline_data()) {
+      // progress limit of sys_ls while loading data_dict should controlled by progress_limit_sec_for_dict,
+      // which usally larger than progress_limit_sec_for_ddl
+      upper_limit_ns = min_progress + ATOMIC_LOAD(&g_dict_progress_limit) * NS_CONVERSION;
+    } else if (FETCH_STREAM_TYPE_SYS_LS == stype_) {
+      // DDL partition is not limited by progress limit, here upper limit is set to a future value
       upper_limit_ns = min_progress + ATOMIC_LOAD(&g_ddl_progress_limit) * NS_CONVERSION;
     } else {
-      // Other partition are limited by progress limit
+      // Other partition are limited by progress limit of dml
       upper_limit_ns = min_progress + ATOMIC_LOAD(&g_dml_progress_limit) * NS_CONVERSION;
     }
   }

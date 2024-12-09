@@ -273,7 +273,7 @@ public:
                                 bool range_independent);
 
 
-  static int split_granule_for_external_table(common::ObIAllocator &allocator,
+  static int split_granule_for_external_table(ObIAllocator &allocator,
                                               const ObTableScanSpec *tsc,
                                               const common::ObIArray<common::ObNewRange> &input_ranges,
                                               const common::ObIArray<ObDASTabletLoc*> &tablet_array,

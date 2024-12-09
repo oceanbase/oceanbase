@@ -12,6 +12,7 @@
 
 #include "ob_all_virtual_ss_local_cache_info.h"
 #include "share/ob_server_struct.h"
+#include "share/ash/ob_di_util.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/common/ob_ss_common_info.h"
@@ -74,7 +75,7 @@ int ObAllVirtualSSLocalCacheInfo::get_the_diag_info(
 {
   int ret = OB_SUCCESS;
   diag_info.reset();
-  if (OB_FAIL(common::ObDIGlobalTenantCache::get_instance().get_the_diag_info(tenant_id, diag_info))) {
+  if (OB_FAIL(oceanbase::share::ObDiagnosticInfoUtil::get_the_diag_info(tenant_id, diag_info))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {

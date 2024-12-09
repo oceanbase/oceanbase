@@ -1068,7 +1068,12 @@ int ObCreateTableResolver::check_external_table_generated_partition_column_sanit
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr *> col_exprs;
-  if (OB_ISNULL(dependant_expr)) {
+  bool is_odps_external_table = false;
+  if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps external table or not", K(ret));
+  } else if (is_odps_external_table) {
+    // do nothing
+  } else if (OB_ISNULL(dependant_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dependant expr is null", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(dependant_expr, col_exprs, true/*extract pseudo column*/))) {
@@ -1090,7 +1095,8 @@ int ObCreateTableResolver::check_external_table_generated_partition_column_sanit
           OZ (tmp.append(col_exprs.at(i)->get_expr_name()));
           OZ (tmp.append(" redefinition"));
           ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, to_cstring(tmp.string()));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, helper.convert(tmp.string()));
           LOG_WARN("redefine the metadata$external_partition[i] column", K(ret));
         } else {
           OZ (external_part_idx.push_back(col_exprs.at(i)->get_extra()));
@@ -1105,8 +1111,6 @@ int ObCreateTableResolver::check_external_table_generated_partition_column_sanit
         LOG_WARN("user specified partition col expr contains no external partition pseudo column is not supported", K(ret));
       }
     }
-  } else if (table_schema.is_odps_external_table()) {
-    // lcqlog to do check
   } else {
     bool found = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_exprs.count(); i++) {
@@ -1240,7 +1244,8 @@ int ObCreateTableResolver::check_generated_partition_column(ObTableSchema &table
               OZ (tmp.append(col_exprs.at(j)->get_expr_name()));
               OZ (tmp.append(" defined in not partition column"));
               ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, to_cstring(tmp.string()));
+              ObCStringHelper helper;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, helper.convert(tmp.string()));
               LOG_WARN("metadata$external_partition[i] column defined in normal column", K(ret));
             }
           }
@@ -1359,19 +1364,6 @@ int ObCreateTableResolver::resolve_primary_key_node(const ParseNode &pk_node,
             key_name.assign_ptr(key_node->str_value_,static_cast<int32_t>(key_node->str_len_));
             if (OB_FAIL(add_primary_key_part(key_name, stats, pk_data_length))) {
               SQL_RESV_LOG(WARN, "add primary key part failed", K(ret), K(key_name));
-            }
-          }
-          if (OB_SUCC(ret)) {
-            ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
-            ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-            const ObColumnSchemaV2 *column_schema = NULL;
-            if (is_oracle_mode()) { // oracle mode is not support vector column yet
-            } else if (OB_NOT_NULL(column_schema = table_schema.get_column_schema(key_name))) {
-              if (ob_is_collection_sql_type(column_schema->get_data_type())) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("not support primary key is vector column yet", K(ret));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "create primary key on vector column is");
-              }
             }
           }
         }
@@ -2170,8 +2162,20 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             }
             column.set_meta_type(column_meta);
             if (column.is_collection()) { // array column
-              if (OB_FAIL(column.set_extended_type_info(expr->get_enum_set_values()))) {
-                LOG_WARN("set enum or set info failed", K(ret), K(*expr));
+              if (T_REF_COLUMN == expr->get_expr_type()) {
+                if(OB_FAIL(column.set_extended_type_info(expr->get_enum_set_values()))) {
+                  LOG_WARN("set enum or set info failed", K(ret), K(*expr));
+                }
+              } else {
+                const ObSqlCollectionInfo *coll_info = NULL;
+                uint16_t subschema_id = expr->get_result_type().get_subschema_id();
+                ObSubSchemaValue value;
+                if (OB_FAIL(session_info_->get_cur_exec_ctx()->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+                  LOG_WARN("failed to get subschema ctx", K(ret));
+                } else if (FALSE_IT(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
+                } else if (OB_FAIL(column.add_type_info(coll_info->get_def_string()))) {
+                  LOG_WARN("set type info failed", K(ret));
+                }
               }
             }
             ObCharsetType char_type = table_schema.get_charset_type();

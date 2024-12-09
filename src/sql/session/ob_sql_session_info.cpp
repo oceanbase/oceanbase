@@ -213,7 +213,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       is_session_sync_support_(false),
       job_info_(nullptr),
       failover_mode_(false),
-      service_name_()
+      service_name_(),
+      executing_sql_stat_record_()
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -413,6 +414,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   job_info_ = nullptr;
   failover_mode_ = false;
   service_name_.reset();
+  executing_sql_stat_record_.reset();
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -608,6 +610,17 @@ bool ObSQLSessionInfo::is_var_assign_use_das_enabled() const
   return bret;
 }
 
+bool ObSQLSessionInfo::is_nlj_spf_use_rich_format_enabled() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_nlj_spf_use_rich_format;
+  }
+  return bret;
+}
+
 int ObSQLSessionInfo::is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const
 {
   int ret = OB_SUCCESS;
@@ -648,6 +661,43 @@ int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode)
   return ret;
 }
 
+bool ObSQLSessionInfo::enable_parallel_das_dml() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_parallel_das_dml;
+  }
+  return bret;
+}
+
+bool ObSQLSessionInfo::is_enable_new_query_range() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_new_query_range_extraction;
+  }
+  return bret;
+}
+
+
+bool ObSQLSessionInfo::is_sqlstat_enabled() const
+{
+  bool bret = false;
+  if (lib::is_diagnose_info_enabled()) {
+    int64_t tenant_id = get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      bret = tenant_config->_ob_sqlstat_enable;
+      // sqlstat has a dependency on the statistics mechanism, so turning off perf event will turn off sqlstat at the same time.
+    }
+  }
+  return bret;
+}
+
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
 {
   if (is_inited_) {
@@ -667,7 +717,9 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
         // 这里调用end_trans无需上锁，因为调用reclaim_value时意味着已经没有query并发使用session
         // 调用这个函数之前会调session.set_session_state(SESSION_KILLED)，
         bool need_disconnect = false;
-        if (is_in_transaction() && !is_txn_free_route_temp()) {
+        // NOTE: only rollback trans if it is started on this node
+        // otherwise the transaction maybe rollbacked by idle session disconnect
+        if (is_in_transaction() && (tx_desc_->get_session_id() == get_sessid())) {
           transaction::ObTransID tx_id = get_tx_id();
           MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
           // inner session skip check switch tenant, because the inner connection was shared between tenant
@@ -2992,6 +3044,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&hash_area_size_, tenant_config->_hash_area_size);
       ATOMIC_STORE(&enable_query_response_time_stats_, tenant_config->query_response_time_stats);
       ATOMIC_STORE(&enable_user_defined_rewrite_rules_, tenant_config->enable_user_defined_rewrite_rules);
+      ATOMIC_STORE(&enable_insertup_replace_gts_opt_, tenant_config->_enable_insertup_replace_gts_opt);
       ATOMIC_STORE(&range_optimizer_max_mem_size_, tenant_config->range_optimizer_max_mem_size);
       ATOMIC_STORE(&_query_record_size_limit_, tenant_config->_query_record_size_limit);
       // 5.allow security audit
@@ -3252,25 +3305,43 @@ bool ObSQLSessionInfo::has_sess_info_modified() const {
 
 int ObSQLSessionInfo::set_module_name(const common::ObString &mod) {
   int ret = OB_SUCCESS;
+  int64_t size = min(common::OB_MAX_MOD_NAME_LENGTH, mod.length());
   MEMSET(module_buf_, 0x00, common::OB_MAX_MOD_NAME_LENGTH);
-  MEMCPY(module_buf_, mod.ptr(), min(common::OB_MAX_MOD_NAME_LENGTH, mod.length()));
-  client_app_info_.module_name_.assign(&module_buf_[0], min(common::OB_MAX_MOD_NAME_LENGTH, mod.length()));
+  MEMCPY(module_buf_, mod.ptr(), size);
+  client_app_info_.module_name_.assign(&module_buf_[0], size);
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    MEMCPY(di->get_ash_stat().module_, mod.ptr(),
+        min(static_cast<int64_t>(sizeof(di->get_ash_stat().module_)), size));
+  }
   return ret;
 }
 
 int ObSQLSessionInfo::set_action_name(const common::ObString &act) {
   int ret = OB_SUCCESS;
+  int64_t size = min(common::OB_MAX_ACT_NAME_LENGTH, act.length());
   MEMSET(action_buf_, 0x00, common::OB_MAX_ACT_NAME_LENGTH);
-  MEMCPY(action_buf_, act.ptr(), min(common::OB_MAX_ACT_NAME_LENGTH, act.length()));
-  client_app_info_.action_name_.assign(&action_buf_[0], min(common::OB_MAX_ACT_NAME_LENGTH, act.length()));
+  MEMCPY(action_buf_, act.ptr(), size);
+  client_app_info_.action_name_.assign(&action_buf_[0], size);
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    MEMCPY(di->get_ash_stat().action_, act.ptr(),
+        min(static_cast<int64_t>(sizeof(di->get_ash_stat().action_)), size));
+  }
   return ret;
 }
 
 int ObSQLSessionInfo::set_client_info(const common::ObString &client_info) {
   int ret = OB_SUCCESS;
+  int64_t size = min(common::OB_MAX_CLIENT_INFO_LENGTH, client_info.length());
   MEMSET(client_info_buf_, 0x00, common::OB_MAX_CLIENT_INFO_LENGTH);
-  MEMCPY(client_info_buf_, client_info.ptr(), min(common::OB_MAX_CLIENT_INFO_LENGTH, client_info.length()));
-  client_app_info_.client_info_.assign(&client_info_buf_[0], min(common::OB_MAX_CLIENT_INFO_LENGTH, client_info.length()));
+  MEMCPY(client_info_buf_, client_info.ptr(), size);
+  client_app_info_.client_info_.assign(&client_info_buf_[0], size);
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    MEMCPY(di->get_ash_stat().client_id_, client_info.ptr(),
+        min(static_cast<int64_t>(sizeof(di->get_ash_stat().client_id_)), size));
+  }
   return ret;
 }
 
@@ -4764,4 +4835,48 @@ int ObSQLSessionInfo::set_audit_filter_name(const common::ObString &filter_name)
     LOG_WARN("failed to write filter_name to string_buf_", K(ret));
   }
   return ret;
+}
+
+int ObSQLSessionInfo::sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(executing_sql_stat_record_.assign(executing_sqlstat))) {
+    LOG_WARN("failed to assign executing sql stat record");
+  } else {
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      di->get_ash_stat().record_cur_query_start_ts(get_is_in_retry());
+    }
+  }
+  return ret;
+}
+
+void ObSQLSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
+{
+  ObBasicSessionInfo::set_ash_stat_value(ash_stat);
+  if (!get_module_name().empty()) {
+    int64_t size = get_module_name().length() > ASH_MODULE_STR_LEN
+                      ? ASH_MODULE_STR_LEN
+                      : get_module_name().length();
+    MEMCPY(ash_stat.module_, get_module_name().ptr(), size);
+    ash_stat.module_[size] = '\0';
+  }
+
+  // fill action for user session
+  if (!get_action_name().empty()) {
+    int64_t size = get_action_name().length() > ASH_ACTION_STR_LEN
+                      ? ASH_ACTION_STR_LEN
+                      : get_action_name().length();
+    MEMCPY(ash_stat.action_, get_action_name().ptr(), size);
+    ash_stat.action_[size] = '\0';
+  }
+
+  // fill client id for user session
+  if (!get_client_identifier().empty()) {
+    int64_t size = get_client_identifier().length() > ASH_CLIENT_ID_STR_LEN
+                      ? ASH_CLIENT_ID_STR_LEN
+                      : get_client_identifier().length();
+    MEMCPY(ash_stat.client_id_, get_client_identifier().ptr(), size);
+    ash_stat.client_id_[size] = '\0';
+  }
 }

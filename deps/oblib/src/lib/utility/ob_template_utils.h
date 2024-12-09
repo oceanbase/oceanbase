@@ -86,10 +86,10 @@ struct Conditional<false, T, F>
   HAS_MEMBER(type, hash, int(uint64_t&, uint64_t) const)
 
 DEFINE_HAS_MEMBER(MAX_PRINTABLE_SIZE)
-DEFINE_HAS_MEMBER(to_cstring)
 DEFINE_HAS_MEMBER(reset)
 DEFINE_HAS_MEMBER(get_serialize_size)
 DEFINE_HAS_MEMBER(to_string)
+DEFINE_HAS_MEMBER(to_cstring)
 DEFINE_HAS_MEMBER(hash)
 DEFINE_HAS_MEMBER(Response)
 DEFINE_HAS_MEMBER(serialize)

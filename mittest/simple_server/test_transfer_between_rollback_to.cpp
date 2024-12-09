@@ -1,3 +1,6 @@
+// owner: handora.qc
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -64,8 +67,9 @@ int ObTransService::batch_post_rollback_savepoint_msg_(ObTxDesc &tx,
       msg.set_for_transfer();
     }
 
+    ObCStringHelper helper;
     if (global_ls_id.is_valid() && global_ls_id == msg.receiver_) {
-      fprintf(stdout, "qcc encounter failure %ld, %s\n", global_ls_id.id(), to_cstring(tx));
+      fprintf(stdout, "qcc encounter failure %ld, %s\n", global_ls_id.id(), helper.convert(tx));
     }
 
     if ((!global_ls_id.is_valid() || global_ls_id != msg.receiver_)

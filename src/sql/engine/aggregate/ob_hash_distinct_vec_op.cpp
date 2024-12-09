@@ -529,16 +529,14 @@ int ObHashDistinctVecOp::process_state(int64_t probe_cnt, bool &can_insert)
   int ret = OB_SUCCESS;
   if (ObAdaptiveByPassCtrl::STATE_L2_INSERT == bypass_ctrl_.state_) {
     can_insert = true;
-    if (hp_infras_.hash_table_full()
-        || hp_infras_.get_hash_store_mem_used() > INIT_L3_CACHE_SIZE) {
+    if (hp_infras_.get_actual_mem_used() > INIT_L2_CACHE_SIZE) {
       bypass_ctrl_.period_cnt_ = std::max(hp_infras_.get_hash_table_size(), min_period_cnt);
       bypass_ctrl_.probe_cnt_ += probe_cnt;
       bypass_ctrl_.state_ = ObAdaptiveByPassCtrl::STATE_ANALYZE;
     }
   } else if (ObAdaptiveByPassCtrl::STATE_L3_INSERT == bypass_ctrl_.state_) {
     can_insert = true;
-    if (hp_infras_.hash_table_full()
-        || hp_infras_.get_hash_store_mem_used() > MAX_L3_CACHE_SIZE) {
+    if (hp_infras_.get_actual_mem_used() > INIT_L3_CACHE_SIZE) {
       bypass_ctrl_.period_cnt_ = std::max(hp_infras_.get_hash_table_size(), min_period_cnt);
       bypass_ctrl_.probe_cnt_ += probe_cnt;
       bypass_ctrl_.state_ = ObAdaptiveByPassCtrl::STATE_ANALYZE;

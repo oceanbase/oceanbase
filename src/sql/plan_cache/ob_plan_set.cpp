@@ -1931,8 +1931,8 @@ int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
       LOG_DEBUG("not local plan", K(real_type));
       plan = NULL;
       get_next = true;
-    } else if (GCONF._enable_adaptive_auto_dop && is_single_table_ && !is_contain_inner_table_
-               && !plan->stat_.is_inner_) {
+    } else if (GCONF._enable_adaptive_auto_dop && plan->get_is_use_auto_dop() && is_single_table_
+               && !is_contain_inner_table_ && !plan->stat_.is_inner_) {
       int64_t dop = -1;
       bool is_single_part = false;
       ObAdaptiveAutoDop adaptive_auto_dop(exec_ctx);
@@ -1999,8 +1999,8 @@ int ObSqlPlanSet::try_get_dist_plan(ObPlanCacheCtx &pc_ctx,
     LOG_TRACE("failed to get dist plan", K(ret));
   } else if (plan != NULL) {
     LOG_TRACE("succeed to get dist plan", K(*plan));
-    if (GCONF._enable_adaptive_auto_dop && is_single_table_ && !is_contain_inner_table_
-        && !plan->stat_.is_inner_) {
+    if (GCONF._enable_adaptive_auto_dop && plan->get_is_use_auto_dop() && is_single_table_
+        && !is_contain_inner_table_ && !plan->stat_.is_inner_) {
       int64_t dop = -1;
       bool is_single_part = false;
       ObAdaptiveAutoDop adaptive_auto_dop(exec_ctx);
@@ -2009,7 +2009,7 @@ int ObSqlPlanSet::try_get_dist_plan(ObPlanCacheCtx &pc_ctx,
         LOG_WARN("failed to calculate table auto dop", K(ret));
       } else if (OB_FAIL(auto_dop_map.get_refactored(0, dop))) {
         LOG_WARN("failed to get refactored", K(ret));
-      } else if (is_single_part && plan->get_is_use_auto_dop() && !pc_ctx.exist_local_plan_ && dop <= 1) {
+      } else if (is_single_part && !pc_ctx.exist_local_plan_ && dop <= 1) {
         plan = NULL;
         exec_ctx.set_force_gen_local_plan();
       }
@@ -2471,7 +2471,7 @@ int ObSqlPlanSet::get_evolving_evolution_task(EvolutionPlanList &evo_task_list)
 bool ObPlanSet::match_decint_precision(const ObParamInfo &param_info, ObPrecision other_prec) const
 {
   bool ret = false;
-  if (ob_is_decimal_int(param_info.type_)) {
+  if (ob_is_decimal_int(param_info.type_) || ob_is_integer_type(param_info.type_)) {
     ret = (param_info.precision_ == other_prec);
   } else if (ob_is_extend(param_info.type_) && ob_is_decimal_int(param_info.ext_real_type_)) {
     ret = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(param_info.precision_)

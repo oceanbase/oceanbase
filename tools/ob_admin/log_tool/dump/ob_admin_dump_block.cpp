@@ -352,8 +352,9 @@ int ObAdminDumpBlock::do_dump_(ObAdminDumpIterator &iter,
       const int64_t total_size = entry.get_serialize_size();
       if (str_arg_.flag_ == LogFormatFlag::NO_FORMAT
           && str_arg_.flag_ != LogFormatFlag::STAT_FORMAT ) {
-        fprintf(stdout, "BlockID:%s, LSN:%s, SIZE:%ld, GROUP_ENTRY:%s\n", block_name, to_cstring(lsn), total_size,
-                to_cstring(entry));
+        ObCStringHelper helper;
+        fprintf(stdout, "BlockID:%s, LSN:%s, SIZE:%ld, GROUP_ENTRY:%s\n",
+                block_name, helper.convert(lsn), total_size, helper.convert(entry));
       }
       if (OB_FAIL(parse_single_group_entry_(entry, block_name, lsn, has_encount_error))) {
         LOG_ERROR("parser_single_group_entry_ failed", K(ret), K(entry));
@@ -402,7 +403,9 @@ int ObAdminDumpBlock::parse_single_group_entry_(const LogGroupEntry &group_entry
         if (OB_FAIL(header.deserialize(entry.get_data_buf(), entry.get_header().get_data_len(), pos))) {
           LOG_WARN("deserialize BaseHeader failed", K(entry));
         } else {
-          fprintf(stdout, "LSN:%s, LOG_ENTRY:%s BaseHeader:%s", to_cstring(curr_lsn), to_cstring(entry), to_cstring(header));
+          ObCStringHelper helper;
+          fprintf(stdout, "LSN:%s, LOG_ENTRY:%s BaseHeader:%s",
+                  helper.convert(curr_lsn), helper.convert(entry), helper.convert(header));
         }
       }
       str_arg_.log_stat_->log_entry_header_size_ += entry.get_header_size();
@@ -506,8 +509,9 @@ int ObAdminDumpMetaBlock::do_dump_(ObAdminDumpIterator &iter,
       if (OB_FAIL(log_meta.deserialize(entry.get_buf(), entry.get_data_len(), pos))) {
         LOG_WARN("deserialize log_meta failed", K(ret), K(iter));
       } else {
-        fprintf(stdout, "BlockID:%s, LSN:%s, SIZE:%ld, META_ENTRY:%s\n", block_name, to_cstring(lsn), total_size,
-                to_cstring(log_meta));
+        ObCStringHelper helper;
+        fprintf(stdout, "BlockID:%s, LSN:%s, SIZE:%ld, META_ENTRY:%s\n",
+                block_name, helper.convert(lsn), total_size, helper.convert(log_meta));
       }
     }
   }

@@ -106,7 +106,6 @@ constexpr int OB_COMMIT_MAJOR_FREEZE_FAILED = -4211;
 constexpr int OB_ABORT_MAJOR_FREEZE_FAILED = -4212;
 constexpr int OB_PARTITION_NOT_LEADER = -4214;
 constexpr int OB_WAIT_MAJOR_FREEZE_RESPONSE_TIMEOUT = -4215;
-constexpr int OB_CURL_ERROR = -4216;
 constexpr int OB_MAJOR_FREEZE_NOT_ALLOW = -4217;
 constexpr int OB_PREPARE_FREEZE_FAILED = -4218;
 constexpr int OB_PARTITION_NOT_EXIST = -4225;
@@ -1378,6 +1377,7 @@ constexpr int OB_TRANS_LIVE_TOO_MUCH_TIME = -6280;
 constexpr int OB_TRANS_COMMIT_TOO_MUCH_TIME = -6281;
 constexpr int OB_TRANS_TOO_MANY_PARTICIPANTS = -6282;
 constexpr int OB_LOG_ALREADY_SPLIT = -6283;
+constexpr int OB_TX_PENDING_LOG_OVERFLOW = -6288;
 constexpr int OB_LOG_ID_NOT_FOUND = -6301;
 constexpr int OB_LSR_THREAD_STOPPED = -6302;
 constexpr int OB_NO_LOG = -6303;
@@ -1896,6 +1896,7 @@ constexpr int OB_ERR_CANNOT_DEFINE_TRIGGER = -9802;
 constexpr int OB_ERR_CANNOT_RENAME_TRIGGER = -9803;
 constexpr int OB_ERR_LOGON_TRIGGER = -9804;
 constexpr int OB_ERR_LOGOFF_TRIGGER = -9805;
+constexpr int OB_ERR_MALFORMED_WRAPPED_UNIT = -9806;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -1914,6 +1915,7 @@ constexpr int OB_KV_FILTER_PARSE_ERROR = -10514;
 constexpr int OB_KV_REDIS_PARSE_ERROR = -10515;
 constexpr int OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG = -10516;
 constexpr int OB_KV_REDIS_ERROR = -10517;
+constexpr int OB_KV_CHECK_FAILED = -10518;
 constexpr int OB_KV_ODP_TIMEOUT = -10650;
 constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
@@ -2052,7 +2054,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_PARTIAL_LOG__USER_ERROR_MSG "Incomplete log entry"
 #define OB_CHECKSUM_ERROR__USER_ERROR_MSG "Data checksum error"
 #define OB_INIT_FAIL__USER_ERROR_MSG "Initialize error"
-#define OB_ROWKEY_ORDER_ERROR__USER_ERROR_MSG "Rowkey order error"
+#define OB_ROWKEY_ORDER_ERROR__USER_ERROR_MSG "%s"
 #define OB_NOT_ENOUGH_STORE__USER_ERROR_MSG "not enough commitlog store"
 #define OB_BLOCK_SWITCHED__USER_ERROR_MSG "block switched when fill commitlog"
 #define OB_PHYSIC_CHECKSUM_ERROR__USER_ERROR_MSG "Physic data checksum error"
@@ -2574,7 +2576,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_COLUMN_NOT_FOUND__USER_ERROR_MSG "Column not found"
 #define OB_ERR_DELETE_NULL_ROWKEY__USER_ERROR_MSG "Delete null rowkey"
 #define OB_ERR_USER_EMPTY__USER_ERROR_MSG "No user"
-#define OB_ERR_USER_NOT_EXIST__USER_ERROR_MSG "User %.*snot exist"
+#define OB_ERR_USER_NOT_EXIST__USER_ERROR_MSG "User %.*s not exist"
 #define OB_ERR_NO_PRIVILEGE__USER_ERROR_MSG "Access denied; you need (at least one of) the %s privilege(s) for this operation"
 #define OB_ERR_NO_AVAILABLE_PRIVILEGE_ENTRY__USER_ERROR_MSG "No privilege entry"
 #define OB_ERR_WRONG_PASSWORD__USER_ERROR_MSG "Incorrect password"
@@ -3573,6 +3575,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LOG_ALREADY_SPLIT__USER_ERROR_MSG "The big log entry has been split into multiple part"
 #define OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA__USER_ERROR_MSG "This version doesn't yet support 'references in JSON Schema."
 #define OB_ERR_TYPE_OF_JSON_SCHEMA__USER_ERROR_MSG "Invalid JSON type in argument, should be object."
+#define OB_TX_PENDING_LOG_OVERFLOW__USER_ERROR_MSG "too many pending log in the trx"
 #define OB_LOG_ID_NOT_FOUND__USER_ERROR_MSG "log id not found"
 #define OB_LSR_THREAD_STOPPED__USER_ERROR_MSG "log scan runnable thread stop"
 #define OB_NO_LOG__USER_ERROR_MSG "no log ever scanned"
@@ -3936,6 +3939,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH__USER_ERROR_MSG "the pwrite offset of the object storage is inconsistent"
 #define OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH__USER_ERROR_MSG "the contents of pwrite are inconsistent"
 #define OB_OBJECT_STORAGE_CHECKSUM_ERROR__USER_ERROR_MSG "object storage data checksum error"
+#define OB_BACKUP_ZONE_IDC_REGION_INVALID__USER_ERROR_MSG "backup zone or backup idc or backup region invalid"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4243,6 +4247,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CANNOT_RENAME_TRIGGER__USER_ERROR_MSG "renaming system triggers is not allowed"
 #define OB_ERR_LOGON_TRIGGER__USER_ERROR_MSG "client logon triggers cannot have BEFORE type"
 #define OB_ERR_LOGOFF_TRIGGER__USER_ERROR_MSG "client logoff triggers cannot have AFTER type"
+#define OB_ERR_MALFORMED_WRAPPED_UNIT__USER_ERROR_MSG "malformed or corrupted wrapped unit"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -4257,10 +4262,11 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_COLUMN_TYPE_NOT_MATCH__USER_ERROR_MSG "Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'"
 #define OB_KV_COLLATION_MISMATCH__USER_ERROR_MSG "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'"
 #define OB_KV_SCAN_RANGE_MISSING__USER_ERROR_MSG "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
-#define OB_KV_FILTER_PARSE_ERROR__USER_ERROR_MSG "Filter parse errror, the input filter string is: '%.*s'"
-#define OB_KV_REDIS_PARSE_ERROR__USER_ERROR_MSG "Redis protocol parse errror, the input redis string is: '%.*s'"
+#define OB_KV_FILTER_PARSE_ERROR__USER_ERROR_MSG "Filter parse error, the input filter string is: '%.*s'"
+#define OB_KV_REDIS_PARSE_ERROR__USER_ERROR_MSG "Redis protocol parse error, the input redis string is: '%.*s'"
 #define OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG__USER_ERROR_MSG "When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'."
 #define OB_KV_REDIS_ERROR__USER_ERROR_MSG "Redis err need return to client"
+#define OB_KV_CHECK_FAILED__USER_ERROR_MSG "Check failed in %.*s"
 #define OB_KV_ODP_TIMEOUT__USER_ERROR_MSG "ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__USER_ERROR_MSG "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
@@ -4527,8 +4533,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CHECKSUM_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4103, Data checksum error"
 #define OB_INIT_FAIL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4104, Initialize error"
 #define OB_INIT_FAIL__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4104, Initialize error"
-#define OB_ROWKEY_ORDER_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4105, Rowkey order error"
-#define OB_ROWKEY_ORDER_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4105, Rowkey order error"
+#define OB_ROWKEY_ORDER_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4105, %s"
+#define OB_ROWKEY_ORDER_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4105, %s"
 #define OB_NOT_ENOUGH_STORE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4106, not enough commitlog store"
 #define OB_NOT_ENOUGH_STORE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4106, not enough commitlog store"
 #define OB_BLOCK_SWITCHED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4107, block switched when fill commitlog"
@@ -7569,6 +7575,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA__OBE_USER_ERROR_MSG "OBE-40441: This version doesn't yet support 'references in JSON Schema."
 #define OB_ERR_TYPE_OF_JSON_SCHEMA__ORA_USER_ERROR_MSG "ORA-40876: invalid JSON schema document"
 #define OB_ERR_TYPE_OF_JSON_SCHEMA__OBE_USER_ERROR_MSG "OBE-40876: invalid JSON schema document"
+#define OB_TX_PENDING_LOG_OVERFLOW__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6288, too many pending log in the trx"
+#define OB_TX_PENDING_LOG_OVERFLOW__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6288, too many pending log in the trx"
 #define OB_LOG_ID_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6301, log id not found"
 #define OB_LOG_ID_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6301, log id not found"
 #define OB_LSR_THREAD_STOPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6302, log scan runnable thread stop"
@@ -8295,6 +8303,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9131, the contents of pwrite are inconsistent"
 #define OB_OBJECT_STORAGE_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9132, object storage data checksum error"
 #define OB_OBJECT_STORAGE_CHECKSUM_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9132, object storage data checksum error"
+#define OB_BACKUP_ZONE_IDC_REGION_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9133, backup zone or backup idc or backup region invalid"
+#define OB_BACKUP_ZONE_IDC_REGION_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9133, backup zone or backup idc or backup region invalid"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -8909,6 +8919,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_LOGON_TRIGGER__OBE_USER_ERROR_MSG "OBE-30508: client logon triggers cannot have BEFORE type"
 #define OB_ERR_LOGOFF_TRIGGER__ORA_USER_ERROR_MSG "ORA-30509: client logoff triggers cannot have AFTER type"
 #define OB_ERR_LOGOFF_TRIGGER__OBE_USER_ERROR_MSG "OBE-30509: client logoff triggers cannot have AFTER type"
+#define OB_ERR_MALFORMED_WRAPPED_UNIT__ORA_USER_ERROR_MSG "PLS-00753: malformed or corrupted wrapped unit"
+#define OB_ERR_MALFORMED_WRAPPED_UNIT__OBE_USER_ERROR_MSG "PLS-00753: malformed or corrupted wrapped unit"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -8937,14 +8949,16 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_COLLATION_MISMATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10512, Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'"
 #define OB_KV_SCAN_RANGE_MISSING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10513, Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
 #define OB_KV_SCAN_RANGE_MISSING__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10513, Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
-#define OB_KV_FILTER_PARSE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10514, Filter parse errror, the input filter string is: '%.*s'"
-#define OB_KV_FILTER_PARSE_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10514, Filter parse errror, the input filter string is: '%.*s'"
-#define OB_KV_REDIS_PARSE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10515, Redis protocol parse errror, the input redis string is: '%.*s'"
-#define OB_KV_REDIS_PARSE_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10515, Redis protocol parse errror, the input redis string is: '%.*s'"
+#define OB_KV_FILTER_PARSE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10514, Filter parse error, the input filter string is: '%.*s'"
+#define OB_KV_FILTER_PARSE_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10514, Filter parse error, the input filter string is: '%.*s'"
+#define OB_KV_REDIS_PARSE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10515, Redis protocol parse error, the input redis string is: '%.*s'"
+#define OB_KV_REDIS_PARSE_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10515, Redis protocol parse error, the input redis string is: '%.*s'"
 #define OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10516, When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'."
 #define OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10516, When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'."
 #define OB_KV_REDIS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10517, Redis err need return to client"
 #define OB_KV_REDIS_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10517, Redis err need return to client"
+#define OB_KV_CHECK_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10518, Check failed in %.*s"
+#define OB_KV_CHECK_FAILED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10518, Check failed in %.*s"
 #define OB_KV_ODP_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10650, ODP process timeout"
 #define OB_KV_ODP_TIMEOUT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10650, ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
@@ -9118,7 +9132,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2382];
+extern int g_all_ob_errnos[2386];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

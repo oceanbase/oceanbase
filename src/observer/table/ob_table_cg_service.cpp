@@ -1422,7 +1422,8 @@ int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
             obj = &col_info->default_value_;
             if (!col_info->is_nullable_ && !col_info->is_auto_increment_ && obj->is_null()) {
               ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
-              LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, to_cstring(col_info->column_name_));
+              ObCStringHelper helper;
+              LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, helper.convert(col_info->column_name_));
               LOG_WARN("column can not be null", K(ret), KPC(col_info));
             }
           } else {

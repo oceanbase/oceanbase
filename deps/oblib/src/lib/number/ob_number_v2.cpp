@@ -851,7 +851,8 @@ int ObNumber::from_(const uint32_t desc, const ObCalcVector &vector, IAllocator 
     d_.sign_ = d.sign_;
     d_.exp_ = d.exp_;
     if (OB_FAIL(normalize_(digits_, d.len_))) {
-      _OB_LOG(WARN, "normalize [%s] fail, ret=%d", to_cstring(*this), ret);
+      ObCStringHelper helper;
+      _OB_LOG(WARN, "normalize [%s] fail, ret=%d", helper.convert(*this), ret);
     } else if (OB_FAIL(round_scale_(is_oracle_mode() ? MAX_SCALE : FLOATING_SCALE, true))) {
       LOG_WARN("round scale fail", K(ret), K(*this));
     } else if (OB_FAIL(exp_check_(d_, lib::is_oracle_mode()))) {
@@ -892,7 +893,8 @@ int ObNumber::from_v2_(const uint32_t desc, const ObCalcVector &vector, IAllocat
     d_.sign_ = d.sign_;
     d_.exp_ = d.exp_;
     if (OB_FAIL(normalize_(digits_, d.len_))) {
-      _OB_LOG(WARN, "normalize [%s] fail, ret=%d", to_cstring(*this), ret);
+      ObCStringHelper helper;
+      _OB_LOG(WARN, "normalize [%s] fail, ret=%d", helper.convert(*this), ret);
     } else if (OB_FAIL(round_scale_v3_(is_oracle_mode() ? MAX_SCALE : FLOATING_SCALE, true, false))) {
       LOG_WARN("round scale fail", K(ret), K(*this));
     } else if (OB_FAIL(exp_check_(d_, lib::is_oracle_mode()))) {
@@ -1243,7 +1245,8 @@ int ObNumber::round_v1(const int64_t scale)
     ret = OB_NOT_INIT;
   } else if (is_oracle_mode()) {
     if (OB_FAIL(round_scale_oracle_(scale, false))) {
-      //_OB_LOG(WARN, "Buffer overflow, %s", to_cstring(*this));
+      // ObCStringHelper helper;
+      //_OB_LOG(WARN, "Buffer overflow, %s", helper.convert(*this));
     }
   } else {
     if (OB_UNLIKELY(MIN_SCALE > scale
@@ -1251,7 +1254,8 @@ int ObNumber::round_v1(const int64_t scale)
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid param", K(scale), K(ret));
     } else if (OB_FAIL(round_scale_(scale, false))) {
-    //_OB_LOG(WARN, "Buffer overflow, %s", to_cstring(*this));
+    // ObCStringHelper helper;
+    //_OB_LOG(WARN, "Buffer overflow, %s", helper.convert(*this));
     } else {
       // do nothing
     }
@@ -1271,11 +1275,13 @@ int ObNumber::check_and_round(const int64_t precision, const int64_t scale)
     ret = OB_NOT_INIT;
   } else if (INT64_MAX != precision
              && OB_FAIL(round_scale_v3_(scale, false, false))) {
-    //_OB_LOG(WARN, "Buffer overflow, %s", to_cstring(*this));
+    // ObCStringHelper helper;
+    //_OB_LOG(WARN, "Buffer overflow, %s", helper.convert(*this));
   } else if (INT64_MAX != precision
              && INT64_MAX != scale
              && OB_FAIL(check_precision_(precision, scale))) {
-//    _OB_LOG(WARN, "Precision overflow, %s", to_cstring(*this));
+//    ObCStringHelper helper;
+//    _OB_LOG(WARN, "Precision overflow, %s", helper.convert(*this));
   } else {
     // do nothing
   }
@@ -1624,8 +1630,9 @@ int ObNumber::check_precision_(const int64_t precision, const int64_t scale)
         integer_counter += DIGIT_LEN;
       }
       if (OB_UNLIKELY(integer_counter > limit)) {
+        ObCStringHelper helper;
         _OB_LOG(WARN, "Precision=%ld scale=%ld integer_number=%ld precision overflow %s",
-                  precision, scale, integer_counter, to_cstring(*this));
+                  precision, scale, integer_counter, helper.convert(*this));
         ret = OB_INTEGER_PRECISION_OVERFLOW;
         break;
       }
@@ -4387,7 +4394,8 @@ int ObNumber::add_(const ObNumber &other, ObNumber &value, IAllocator &allocator
       if (OB_FAIL(sum.ensure(sum_size))) {
         LOG_WARN("Fail to ensure sum_size", K(ret));
       } else if (OB_FAIL(poly_poly_add(augend, addend, sum))) {
-        _OB_LOG(WARN, "[%s] add [%s] fail ret=%d", to_cstring(*this), to_cstring(other), ret);
+        ObCStringHelper helper;
+        _OB_LOG(WARN, "[%s] add [%s] fail ret=%d", helper.convert(*this), helper.convert(other), ret);
       } else {
         Desc res_desc = exp_max_(augend_desc, addend_desc);
         bool carried = (0 != sum.at(0));
@@ -4399,7 +4407,8 @@ int ObNumber::add_(const ObNumber &other, ObNumber &value, IAllocator &allocator
     ObNumber subtrahend;
     StackAllocator stack_allocator;
     if (OB_FAIL(other.negate(subtrahend, stack_allocator))) {
-      _OB_LOG(WARN, "nagate [%s] fail, ret=%d", to_cstring(other), ret);
+      ObCStringHelper helper;
+      _OB_LOG(WARN, "nagate [%s] fail, ret=%d", helper.convert(other), ret);
     } else {
       ret = sub_(subtrahend, res, allocator);
     }
@@ -4442,7 +4451,8 @@ int ObNumber::sub_(const ObNumber &other, ObNumber &value, IAllocator &allocator
       if (OB_FAIL(remainder.ensure(remainder_size))) {
         LOG_WARN("remainder.ensure(remainder_size) fails", K(ret));
       } else if (OB_FAIL(poly_poly_sub(minuend, subtrahend, remainder, sub_negative))) {
-        _OB_LOG(WARN, "[%s] sub [%s] fail ret=%d", to_cstring(*this), to_cstring(other), ret);
+        ObCStringHelper helper;
+        _OB_LOG(WARN, "[%s] sub [%s] fail ret=%d", helper.convert(*this), helper.convert(other), ret);
       } else {
         Desc res_desc = exp_max_(minuend_desc, subtrahend_desc);
         for (int64_t i = 0; i < remainder.size() - 1; ++i) {
@@ -4473,7 +4483,8 @@ int ObNumber::sub_(const ObNumber &other, ObNumber &value, IAllocator &allocator
     ObNumber addend;
     StackAllocator stack_allocator;
     if (OB_FAIL(other.negate(addend, stack_allocator))) {
-      _OB_LOG(WARN, "nagate [%s] fail, ret=%d", to_cstring(other), ret);
+      ObCStringHelper helper;
+      _OB_LOG(WARN, "nagate [%s] fail, ret=%d", helper.convert(other), ret);
     } else {
       ret = add_(addend, res, allocator);
     }
@@ -5059,7 +5070,8 @@ int ObNumber::negate_(ObNumber &value, IAllocator &allocator) const
         _OB_LOG(WARN, "alloc digits fail, length=%ld", size2alloc);
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (OB_FAIL(res.normalize_(cv.get_digits(), cv.size()))) {
-        _OB_LOG(WARN, "normalize [%s] fail ret=%d", to_cstring(res), ret);
+        ObCStringHelper helper;
+        _OB_LOG(WARN, "normalize [%s] fail ret=%d", helper.convert(res), ret);
       } else {
         // do nothing
       }
@@ -5141,7 +5153,8 @@ int ObNumber::mul_(const ObNumber &other, ObNumber &value, IAllocator &allocator
       if (OB_FAIL(product.ensure(product_size))) {
         LOG_WARN("product.ensure(product_size) fails", K(ret));
       } else if (OB_FAIL(poly_poly_mul(multiplicand, multiplier, product))) {
-        _OB_LOG(WARN, "[%s] mul [%s] fail, ret=%d", to_cstring(*this), to_cstring(other), ret);
+        ObCStringHelper helper;
+        _OB_LOG(WARN, "[%s] mul [%s] fail, ret=%d", helper.convert(*this), helper.convert(other), ret);
       } else {
         Desc res_desc = exp_mul_(multiplicand_desc, multiplier_desc);
         bool carried = (0 != product.at(0));
@@ -5392,7 +5405,8 @@ int ObNumber::mul_v3(const ObNumber &other, ObNumber &value, ObIAllocator &alloc
 //  dividend_desc.desc_ = d_.desc_;
 //  divisor_desc.desc_ = other.d_.desc_;
 //  if (OB_UNLIKELY(other.is_zero())) {
-//    _OB_LOG(ERROR, "[%s] div zero [%s]", to_cstring(*this), to_cstring(other));
+//    ObCStringHelper helper;
+//    _OB_LOG(ERROR, "[%s] div zero [%s]", helper.convert(*this), helper.convert(other));
 //    ret = OB_DIVISION_BY_ZERO;
 //  } else if (is_zero()) {
 //    res.set_zero();
@@ -5417,7 +5431,8 @@ int ObNumber::mul_v3(const ObNumber &other, ObNumber &value, ObIAllocator &alloc
 //      } else if (OB_FAIL(remainder.ensure(remainder_size))) {
 //        LOG_WARN("remainder.ensure(remainder_size) fails", K(ret));
 //      } else if (OB_FAIL(poly_poly_div(dividend, divisor, quotient, remainder))) {
-//        _OB_LOG(WARN, "[%s] div [%s] fail ret=%d", to_cstring(*this), to_cstring(other), ret);
+//        ObCStringHelper helper;
+//        _OB_LOG(WARN, "[%s] div [%s] fail ret=%d", helper.convert(*this), helper.convert(other), ret);
 //      } else {
 //        Desc res_desc = exp_div_(dividend_desc, divisor_desc);
 //        for (int64_t i = 0; i < quotient.size(); ++i) {
@@ -5449,7 +5464,8 @@ int ObNumber::div_v2_(const ObNumber &other, ObNumber &value, IAllocator &alloca
   divisor_desc.desc_ = other.d_.desc_;
   LOG_DEBUG("div_v2_", K(ret), KPC(this), K(other));
   if (OB_UNLIKELY(other.is_zero())) {
-    _OB_LOG(ERROR, "[%s] div zero [%s]", to_cstring(*this), to_cstring(other));
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "[%s] div zero [%s]", helper.convert(*this), helper.convert(other));
     ret = OB_DIVISION_BY_ZERO;
   } else if (is_zero()) {
     res.set_zero();
@@ -5528,7 +5544,8 @@ int ObNumber::div_v3(const ObNumber &other, ObNumber &value, ObIAllocator &alloc
   const bool use_oracle_mode = is_oracle_mode();
   LOG_DEBUG("div_v3_", K(ret), KPC(this), K(other));
   if (OB_UNLIKELY(other.is_zero())) {
-    _OB_LOG(ERROR, "[%s] div zero [%s]", to_cstring(*this), to_cstring(other));
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "[%s] div zero [%s]", helper.convert(*this), helper.convert(other));
     ret = OB_DIVISION_BY_ZERO;
   } else if (is_zero()) {
     res.set_zero();
@@ -5751,7 +5768,8 @@ int ObNumber::tanh(ObNumber &value, ObIAllocator &allocator, const bool do_round
 //  divisor_desc.desc_ = other.d_.desc_;
 //  int cmp_ret = 0;
 //  if (OB_UNLIKELY(other.is_zero())) {
-//    _OB_LOG(ERROR, "[%s] div zero [%s]", to_cstring(*this), to_cstring(other));
+//    ObCStringHelper helper;
+//    _OB_LOG(ERROR, "[%s] div zero [%s]", helper.convert(*this), helper.convert(other));
 //    ret = OB_DIVISION_BY_ZERO;
 //  } else if (is_zero()) {
 //    res.set_zero();
@@ -5787,14 +5805,16 @@ int ObNumber::tanh(ObNumber &value, ObIAllocator &allocator, const bool do_round
 //        if (OB_FAIL(divisor_amplify.ensure(divisor.size() + 1))) {
 //          LOG_WARN("divisor_amplify.ensure() fails", K(ret));
 //        } else if (OB_FAIL(poly_mono_mul(divisor, BASE - 1, divisor_amplify))) {
-//          _OB_LOG(WARN, "[%s] mul [%lu] fail, ret=%d", to_cstring(divisor), BASE - 1, ret);
+//          ObCStringHelper helper;
+//          _OB_LOG(WARN, "[%s] mul [%lu] fail, ret=%d", helper.convert(divisor), BASE - 1, ret);
 //        } else {
 //          int64_t sum_size = std::max(dividend.size(), divisor_amplify.size()) + 1;
 //          if (OB_FAIL(dividend_amplify.ensure(sum_size))) {
 //            LOG_WARN("ensure() fails", K(ret));
 //          } else if (OB_FAIL(poly_poly_add(dividend, divisor_amplify, dividend_amplify))) {
+//            ObCStringHelper helper;
 //            _OB_LOG(WARN, "[%s] add [%s] fail, ret=%d",
-//                    to_cstring(dividend), to_cstring(divisor_amplify), ret);
+//                    helper.convert(dividend), helper.convert(divisor_amplify), ret);
 //          } else {
 //            dividend_ptr = &dividend_amplify;
 //          }
@@ -5810,8 +5830,9 @@ int ObNumber::tanh(ObNumber &value, ObIAllocator &allocator, const bool do_round
 //        } else if (OB_FAIL(remainder.ensure(remainder_size))) {
 //          LOG_WARN("ensure() fails", K(ret));
 //        } else if (OB_FAIL(poly_poly_div(*dividend_ptr, divisor, quotient, remainder))) {
+//          ObCStringHelper helper;
 //          _OB_LOG(WARN, "[%s] div [%s] fail ret=%d",
-//                  to_cstring(*dividend_ptr), to_cstring(divisor), ret);
+//                  helper.convert(*dividend_ptr), helper.convert(divisor), ret);
 //        } else {
 //          Desc res_desc = exp_rem_(dividend_desc, divisor_desc);
 //          for (int64_t i = 0; i < remainder.size() - 1; ++i) {
@@ -5842,7 +5863,8 @@ int ObNumber::rem_v2_(const ObNumber &other, ObNumber &value, IAllocator &alloca
   LOG_DEBUG("rem_v2_", K(ret), KPC(this), K(other));
   int cmp_ret = 0;
   if (OB_UNLIKELY(other.is_zero())) {
-    _OB_LOG(ERROR, "[%s] div zero [%s]", to_cstring(*this), to_cstring(other));
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "[%s] div zero [%s]", helper.convert(*this), helper.convert(other));
     ret = OB_DIVISION_BY_ZERO;
   } else if (is_zero()) {
     res.set_zero();
@@ -5925,7 +5947,8 @@ int ObNumber::rem_v3(const ObNumber &other, ObNumber &value, ObIAllocator &alloc
   LOG_DEBUG("rem_v3_", K(ret), KPC(this), K(other));
   int cmp_ret = 0;
   if (OB_UNLIKELY(other.is_zero())) {
-    _OB_LOG(ERROR, "[%s] div zero [%s]", to_cstring(*this), to_cstring(other));
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "[%s] div zero [%s]", helper.convert(*this), helper.convert(other));
     ret = OB_DIVISION_BY_ZERO;
   } else if (is_zero()) {
     res.set_zero();
@@ -6474,7 +6497,8 @@ int ObNumber::round_remainder(const ObNumber &other, ObNumber &value, ObIAllocat
   char buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN * 2];
   ObDataBuffer allocator2(buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN * 2);
   if (OB_UNLIKELY(other.is_zero())) {
-    _OB_LOG(ERROR, "[%s] div zero [%s]", to_cstring(*this), to_cstring(other));
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "[%s] div zero [%s]", helper.convert(*this), helper.convert(other));
     ret = OB_DIVISION_BY_ZERO;
   } else if (is_zero()) {
     res.set_zero();

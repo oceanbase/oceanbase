@@ -74,7 +74,7 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:t:r:l:o:n:f:p:b:c:j:e:";
+  const char *opt_str = "h:d:s:t:r:l:o:n:f:p:b:c:j:e:i:";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"file-path-prefix", 1, NULL, 'd'},
       {"storage-info", 1, NULL, 's'},
@@ -89,6 +89,7 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
       {"clean-before-execution", 0, NULL, 'b'},
       {"clean-after-execution", 0, NULL, 'c'},
       {"s3_url_encode_type", 0, NULL, 'e'},
+      {"sts_credential", 0, NULL, 'i'},
       {NULL, 0, NULL, 0}};
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
@@ -185,6 +186,12 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
       case 'e': {
         if (OB_FAIL(set_s3_url_encode_type(optarg))) {
           STORAGE_LOG(WARN, "failed to set s3 url encode type", KR(ret));
+        }
+        break;
+      }
+      case 'i': {
+        if (OB_FAIL(set_sts_credential_key(optarg))) {
+          STORAGE_LOG(WARN, "failed to set sts credential", KR(ret));
         }
         break;
       }
@@ -333,6 +340,9 @@ int ObAdminIOAdapterBenchmarkExecutor::print_usage_()
   printf("\tob_admin bench_io_adapter -d's3://home/admin/backup_info' "
          "-s'host=xxx.com&access_id=111&access_key=222&region=333'\t"
          "-e'compliantRfc3986Encoding'");
+  printf("\tob_admin bench_io_adapter -d's3://home/admin/backup_info' "
+         "-s'host=xxx.com&role_arn=111&region=333'\t"
+         "-i'sts_url=xxx&sts_ak=xxx&sts_sk=xxx'");
   return ret;
 }
 

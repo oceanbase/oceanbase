@@ -83,7 +83,7 @@ int ObTransferParallelBuildTabletDag::fill_dag_key(char *buf, const int64_t buf_
     LOG_WARN("tablet rebuild major dag do not init", K(ret));
   } else {
     int64_t pos = 0;
-    ret = databuff_printf(buf, buf_len, pos, "ObTransferParallelBuildTabletDag: ls_id = %s", to_cstring(ls_id_));;
+    ret = databuff_print_multi_objs(buf, buf_len, pos, "ObTransferParallelBuildTabletDag: ls_id = ", ls_id_);;
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to fill comment", K(ret), KPC(this));
     }
@@ -141,12 +141,13 @@ int ObTransferParallelBuildTabletDag::fill_info_param(compaction::ObIBasicInfoPa
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
 
+  char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer parallele build tablet dag do not init", K(ret));
   } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
       static_cast<int64_t>(tenant_id), ls_id_.id(),
-      "dag_id", to_cstring(ObCurTraceId::get_trace_id())))) {
+      "dag_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
     LOG_WARN("failed to fill info param", K(ret));
   }
   return ret;

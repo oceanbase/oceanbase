@@ -22,6 +22,7 @@
 #include "share/schema/ob_table_schema.h"         // ObTableSchema, ObSimpleTableSchemaV2
 #include "share/schema/ob_column_schema.h"        // ObColumnSchemaV2
 #include "logservice/data_dictionary/ob_data_dict_struct.h"
+#include "lib/udt/ob_array_utils.h"               // ObArrayUtil
 
 #include "ob_log_schema_getter.h"                 // ObLogSchemaGuard, DBSchemaInfo, TenantSchemaInfo
 #include "ob_log_utils.h"                         // print_mysql_type, ob_cdc_malloc

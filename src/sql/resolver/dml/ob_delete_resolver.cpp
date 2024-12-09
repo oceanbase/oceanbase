@@ -78,6 +78,12 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("failed to check feature enable", K(ret));
   } else {
     stmt_ = delete_stmt;
+    // Only support the syntax of delete ignore, and there is no semantic support.
+//   delete_stmt->set_ignore(false);
+//    if (NULL != parse_tree.children_[IGNORE]) {
+//      delete_stmt->set_ignore(true);
+//      session_info_->set_ignore_stmt(true);
+//    }
     if (OB_FAIL(resolve_outline_data_hints())) {
       LOG_WARN("resolve outline data hints failed", K(ret));
     } else if (is_mysql_mode() && OB_FAIL(resolve_with_clause(parse_tree.children_[WITH_MYSQL]))) {
@@ -390,8 +396,8 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
   const ObTableSchema *table_schema = NULL;
   ObDeleteStmt *delete_stmt = get_delete_stmt();
   ObDeleteTableInfo *table_info = NULL;
-  uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
-  int64_t gindex_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tid[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t gindex_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.session_info_) ||
       OB_ISNULL(allocator_) || OB_ISNULL(delete_stmt)) {

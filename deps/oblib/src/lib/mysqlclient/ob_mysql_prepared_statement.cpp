@@ -2789,7 +2789,8 @@ int ObMySQLProcStatement::init(ObMySQLConnection &conn,
   com_datas_.reset();
   out_param_start_pos_ = 0;
   out_param_cur_pos_ = 0;
-  if (OB_ISNULL(proc_ = sql.ptr())) {
+  proc_ = sql;
+  if (OB_ISNULL(proc_.ptr())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sql", K(sql), K(ret));
   } else if (OB_ISNULL(conn_) || OB_ISNULL(conn_->get_handler())) {
@@ -2857,8 +2858,8 @@ int ObMySQLProcStatement::execute_proc()
 #else
   void* execute_extend_arg = NULL;
   MYSQL_RES *res = NULL;
-  uint64_t ps_stmt_checksum = ob_crc64(proc_, STRLEN(proc_));
-  LOG_INFO("execute v2 info", K(ret), K(ps_stmt_checksum), K(STRLEN(proc_)), K(proc_));
+  uint64_t ps_stmt_checksum = ob_crc64(proc_.ptr(), proc_.length());
+  LOG_INFO("execute v2 info", K(ret), K(ps_stmt_checksum), K(proc_));
   if (OB_FAIL(execute_stmt_v2_interface())) {
     LOG_WARN("failed to execute PL", K(ret));
   } else if (OB_ISNULL(res = mysql_stmt_result_metadata(stmt_))) {
@@ -3041,10 +3042,10 @@ int ObMySQLProcStatement::execute_stmt_v2_interface()
   if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL", K(ret));
-  } else if (OB_ISNULL(proc_)) {
+  } else if (OB_ISNULL(proc_.ptr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proc_ is NULL", K(ret));
-  } else if (0 != mysql_stmt_execute_v2(stmt_, proc_, STRLEN(proc_), 1, 0, execute_extend_arg)) {
+  } else if (0 != mysql_stmt_execute_v2(stmt_, proc_.ptr(), proc_.length(), 1, 0, execute_extend_arg)) {
     ret = -mysql_stmt_errno(stmt_);
     char errmsg[256] = {0};
     const char *srcmsg = mysql_stmt_error(stmt_);

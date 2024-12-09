@@ -32,10 +32,14 @@ OB_SERIALIZE_MEMBER(ObCurTraceId::TraceId, uval_[0], uval_[1], uval_[2], uval_[3
 } // end namespace oceanbase
 
 extern "C" {
-  const char* trace_id_to_str_c(const uint64_t *uval)
+  const char* trace_id_to_str_c(const uint64_t *uval, char *buf, int64_t buf_len)
   {
-    ObCurTraceId::TraceId trace_id;
-    trace_id.set(uval);
-    return to_cstring(trace_id);
+    if (nullptr != buf && buf_len > 0) {
+      ObCurTraceId::TraceId trace_id;
+      trace_id.set(uval);
+      int64_t pos = 0;
+      (void)databuff_printf(buf, buf_len, pos, trace_id);
+    }
+    return buf;
   }
 } /* extern "C" */

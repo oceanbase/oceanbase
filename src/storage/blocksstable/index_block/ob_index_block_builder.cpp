@@ -454,7 +454,6 @@ ObSSTableIndexBuilder::ObSSTableIndexBuilder(const bool use_double_write_buffer)
     index_store_desc_(),
     leaf_store_desc_(),
     container_store_desc_(),
-    index_row_(),
     index_builder_(),
     meta_tree_builder_(),
     index_block_loader_(),
@@ -484,14 +483,12 @@ void ObSSTableIndexBuilder::reset()
     sstable_allocator_.free(static_cast<void *>(roots_[i]));
     roots_[i] = nullptr;
   }
-  index_row_.reset();
   index_builder_.reset();
   meta_tree_builder_.reset();
   index_block_loader_.reset();
   macro_writer_.reset();
   device_handle_ = nullptr;
   roots_.reset();
-  index_row_.reset();
   res_.reset();
   sstable_allocator_.reset();
   self_allocator_.reset();
@@ -542,9 +539,6 @@ int ObSSTableIndexBuilder::init(const ObDataStoreDesc &data_desc,
                  index_store_desc_.get_desc()))) {
     STORAGE_LOG(WARN, "fail to assign container_store_desc", K(ret),
                 K(index_store_desc_));
-  } else if (OB_FAIL(index_row_.init(
-                 index_store_desc_.get_desc().get_rowkey_column_count() + 1))) {
-    STORAGE_LOG(WARN, "Failed to init index row", K(ret), K(index_store_desc_));
   } else {
     if (GCTX.is_shared_storage_mode()) {
       optimization_mode_ = DISABLE;
@@ -994,6 +988,7 @@ int ObSSTableIndexBuilder::merge_index_tree_from_meta_block(ObSSTableMergeRes &r
         while (OB_SUCC(ret)) {
           int64_t absolute_row_offset = -1;
           meta_row.reuse();
+          macro_meta.reset();
           if (OB_FAIL(index_block_loader_.get_next_row(meta_row))) {
             if (OB_UNLIKELY(ret != OB_ITER_END)) {
               STORAGE_LOG(WARN, "fail to get row", K(ret),
@@ -2417,8 +2412,14 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
     row_desc.macro_block_count_ = 1;
     row_desc.has_string_out_row_ = macro_meta.val_.has_string_out_row_;
     row_desc.has_lob_out_row_ = !macro_meta.val_.all_lob_in_row_;
-    row_desc.serialized_agg_row_buf_ = macro_meta.val_.agg_row_buf_;
-    row_desc.is_serialized_agg_row_ = true;
+    // We have validate macro meta in caller, so we do not validate agg_row_buf and agg_row_len here.
+    if (nullptr != macro_meta.val_.agg_row_buf_) {
+      row_desc.serialized_agg_row_buf_ = macro_meta.val_.agg_row_buf_;
+      row_desc.is_serialized_agg_row_ = true;
+    } else {
+      row_desc.serialized_agg_row_buf_ = nullptr;
+      row_desc.is_serialized_agg_row_ = false;
+    }
     // is_last_row_last_flag_ only used in data macro block
   }
   return ret;
@@ -2458,7 +2459,7 @@ int ObBaseIndexBlockBuilder::row_desc_to_meta(
                    data_store_desc_->get_agg_meta_array(),
                    *macro_row_desc.aggregated_row_, allocator))) {
       STORAGE_LOG(WARN, "Fail to init aggregate row writer", K(ret));
-    } else if (FALSE_IT(agg_row_upper_size = agg_row_writer_.get_data_size())) {
+    } else if (FALSE_IT(agg_row_upper_size = agg_row_writer_.get_serialize_data_size())) {
     } else if (OB_ISNULL(agg_row_buf = static_cast<char *>(
                              allocator.alloc(agg_row_upper_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

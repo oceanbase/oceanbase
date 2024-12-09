@@ -19,6 +19,8 @@
 #include "share/config/ob_server_config.h"
 #include "share/ob_resource_limit.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/slog/ob_storage_logger_manager.h"
+#include "lib/ash/ob_active_session_guard.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 
 using namespace oceanbase::common;
@@ -170,6 +172,7 @@ int ObLocalDevice::init(const common::ObIODOpts &opts)
       }
     }
   }
+  SHARE_LOG(INFO, "init local device", K(ret), KP(this), K(lbt()));
 
   if (OB_SUCC(ret)) {
     is_inited_ = true;
@@ -803,11 +806,11 @@ int ObLocalDevice::pwrite(
     if (fd.is_block_file()) {
       const int64_t block_file_offset = get_block_file_offset(fd, offset);
       if (OB_FAIL(ObIODeviceLocalFileOp::pwrite_impl(block_fd_, buf, size, block_file_offset, write_size))) {
-        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(block_fd_), K(size), K(block_file_offset));
+        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(block_fd_), KP(buf), K(size), K(block_file_offset));
       }
     } else if (fd.is_normal_file()) {
       if (OB_FAIL(ObIODeviceLocalFileOp::pwrite_impl(fd.second_id_, buf, size, offset, write_size))) {
-        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), K(size), K(offset));
+        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), KP(buf), K(size), K(offset));
       }
     }
 
@@ -1146,6 +1149,7 @@ int ObLocalDevice::io_getevents(
     int sys_ret = 0;
     {
       oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_IO_EVENT);
+      common::ObBKGDSessInActiveGuard inactive_guard;
       while ((sys_ret = ::io_getevents(
           local_io_context->io_context_,
           min_nr,

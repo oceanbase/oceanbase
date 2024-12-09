@@ -238,7 +238,9 @@ int ObIBackupMultiLevelIndexBuilder::build_and_flush_index_tree_()
   while (OB_SUCC(ret) && OB_NOT_NULL(cur_node)) {
     next_node = NULL;
     bool need_build_next_level = false;
-    if (OB_FAIL(alloc_new_buffer_node_(
+    if (OB_FAIL(cur_node->seal_node())) {
+      LOG_WARN("failed to seal node", K(ret));
+    } else if (OB_FAIL(alloc_new_buffer_node_(
                    cur_node->get_tenant_id(), cur_node->get_block_type(), cur_node->get_node_level() + 1, next_node))) {
       LOG_WARN("failed to alloc new buffer node", K(ret), K(*cur_node));
     } else if (OB_FAIL(build_next_level_index_(*cur_node, *next_node))) {

@@ -205,6 +205,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     parallel_(ObGlobalHint::UNSET_PARALLEL),
     px_parallel_rule_(PXParallelRule::USE_PX_DEFAULT),
     can_use_pdml_(false),
+    can_use_parallel_das_dml_(false),
     max_parallel_(ObGlobalHint::UNSET_PARALLEL),
     auto_dop_params_(),
     is_online_ddl_(false),
@@ -260,7 +261,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     use_column_store_replica_(false),
     push_join_pred_into_view_enabled_(true),
     table_access_policy_(ObTableAccessPolicy::AUTO),
-    partition_wise_plan_enabled_(true)
+    enable_new_query_range_(false),
+    partition_wise_plan_enabled_(true),
+    enable_px_ordered_coord_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -364,6 +367,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   void set_auto_dop_params(const AutoDOPParams &auto_dop_params) {  auto_dop_params_ = auto_dop_params; }
   const AutoDOPParams &get_auto_dop_params() {  return auto_dop_params_; }
   void set_can_use_pdml(bool u) { can_use_pdml_ = u; }
+  void set_can_use_parallel_das_dml(bool v) { can_use_parallel_das_dml_ = v; }
+  bool get_can_use_parallel_das_dml() const { return can_use_parallel_das_dml_; }
   inline ObFdItemFactory &get_fd_item_factory() { return fd_item_factory_; }
   void set_is_online_ddl(bool flag) { is_online_ddl_ = flag; }
   void set_ddl_sample_column_count(const int64_t count) { ddl_sample_column_count_ = count; }
@@ -437,7 +442,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline bool enable_nlj_batch_rescan() const { return enable_nlj_batch_rescan_; }
   inline bool enable_spf_batch_rescan() const { return enable_spf_batch_rescan_; }
   inline bool enable_425_batch_rescan() const { return enable_425_batch_rescan_; }
-  inline bool enable_experimental_batch_rescan() const { return false; }
+  inline bool enable_experimental_batch_rescan() const { return (OB_E(EventTable::EN_DAS_GROUP_RESCAN_TEST_MODE) OB_SUCCESS) != OB_SUCCESS; }
 
   int get_px_object_sample_rate()
   {
@@ -658,6 +663,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_hash_join_enabled(bool enabled) { hash_join_enabled_ = enabled; }
   inline bool is_partition_wise_plan_enabled() const { return partition_wise_plan_enabled_; }
   inline void set_partition_wise_plan_enabled(bool enabled) { partition_wise_plan_enabled_ = enabled; }
+  inline bool is_enable_px_ordered_coord() const { return enable_px_ordered_coord_; }
+  inline void set_enable_px_ordered_coord(bool enabled) { enable_px_ordered_coord_ = enabled; }
   inline bool is_merge_join_enabled() const { return optimizer_sortmerge_join_enabled_; }
   inline void set_merge_join_enabled(bool enabled) { optimizer_sortmerge_join_enabled_ = enabled; }
   inline bool is_nested_join_enabled() const { return nested_loop_join_enabled_; }
@@ -681,6 +688,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_push_join_pred_into_view_enabled(bool enabled) { push_join_pred_into_view_enabled_ = enabled; }
   inline void set_table_access_policy(ObTableAccessPolicy policy) { table_access_policy_ = policy; }
   inline ObTableAccessPolicy get_table_acces_policy() const { return table_access_policy_; }
+  inline void set_enable_new_query_range(bool v) { enable_new_query_range_ = v; }
+  inline bool enable_new_query_range() const { return enable_new_query_range_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -701,6 +710,7 @@ private:
   // 决定计划并行度的规则
   PXParallelRule px_parallel_rule_;
   bool can_use_pdml_; // can use pdml after check parallel
+  bool can_use_parallel_das_dml_; // can use parallel das dml after check parallel
   int64_t max_parallel_;
   AutoDOPParams auto_dop_params_; // parameters to calc dop for Auto DOP
   bool is_online_ddl_;
@@ -783,7 +793,9 @@ private:
   bool use_column_store_replica_;
   bool push_join_pred_into_view_enabled_;
   ObTableAccessPolicy table_access_policy_;
+  bool enable_new_query_range_;
   bool partition_wise_plan_enabled_;
+  bool enable_px_ordered_coord_;
 };
 }
 }

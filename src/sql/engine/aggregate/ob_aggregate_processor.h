@@ -31,6 +31,7 @@
 #include "lib/geo/ob_geo_mvt.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
 #include "sql/engine/basic/ob_hp_infrastructure_manager.h"
+#include "sql/engine/expand/ob_expand_vec_op.h"
 
 namespace oceanbase
 {
@@ -75,6 +76,31 @@ struct RemovalInfo
   bool is_out_of_range_;  // whether out of range when calculateing
 };
 
+struct HashRollupRTInfo
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObExpr *rollup_grouping_id_;
+  ExprFixedArray expand_exprs_;
+  ExprFixedArray gby_exprs_;
+  ObFixedArray<ObExpandVecSpec::DupExprPair, common::ObIAllocator> dup_expr_pairs_;
+
+  HashRollupRTInfo() : rollup_grouping_id_(nullptr), expand_exprs_(), gby_exprs_(), dup_expr_pairs_()
+  {}
+
+  HashRollupRTInfo(ObIAllocator &alloc) :
+    rollup_grouping_id_(nullptr), expand_exprs_(alloc), gby_exprs_(alloc), dup_expr_pairs_(alloc)
+  {}
+
+  int assign(const HashRollupRTInfo &other);
+
+  bool valid() const
+  {
+    return rollup_grouping_id_ != nullptr;
+  }
+  TO_STRING_KV(KP_(rollup_grouping_id), K_(expand_exprs), K_(gby_exprs), K_(dup_expr_pairs));
+};
+
 struct ObAggrInfo
 {
 public:
@@ -111,7 +137,8 @@ public:
     returning_type_(INT64_MAX),
     with_unique_keys_(false),
     distinct_hash_funcs_(),
-    max_disuse_param_expr_(NULL)
+    max_disuse_param_expr_(NULL),
+    hash_rollup_info_(nullptr)
   {}
   ObAggrInfo(common::ObIAllocator &alloc)
   : alloc_(&alloc),
@@ -142,7 +169,8 @@ public:
     returning_type_(INT64_MAX),
     with_unique_keys_(false),
     distinct_hash_funcs_(alloc),
-    max_disuse_param_expr_(NULL)
+    max_disuse_param_expr_(NULL),
+    hash_rollup_info_(nullptr)
   {}
   virtual ~ObAggrInfo();
 
@@ -228,6 +256,7 @@ public:
   ObHashFuncs distinct_hash_funcs_;
   //used for top_k_fre_hist
   ObExpr *max_disuse_param_expr_;
+  HashRollupRTInfo *hash_rollup_info_;
 };
 
 typedef common::ObFixedArray<ObAggrInfo, common::ObIAllocator> AggrInfoFixedArray;
@@ -947,6 +976,14 @@ private:
     AggrCell &aggr_cell,
     const ObItemType &aggr_func,
     const T &param);
+
+  template <typename T>
+  int grouping_calc_batch(const ObAggrInfo &aggr_info, AggrCell &aggr_cell,
+                          const T &selector);
+
+  template <typename T>
+  int grouping_id_calc_batch(const ObAggrInfo &aggr_info, AggrCell &aggr_cell,
+                             const T &selector);
   int precompute_distinct_aggr_result(
     AggrCell &aggr_cell,
     const ObAggrInfo &aggr_info,
@@ -1093,6 +1130,9 @@ private:
                              GroupConcatExtraResult *&extra,
                              ObDatum &concat_result,
                              ObRbOperation calc_op);
+  int get_array_agg_result(const ObAggrInfo &aggr_info,
+                           GroupConcatExtraResult *&extra,
+                           ObDatum &concat_result);
   int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString& key);
 
   int shadow_truncate_string_for_hist(const ObObjMeta obj_meta,
@@ -1218,6 +1258,7 @@ public:
       case T_FUN_SYS_RB_BUILD_AGG:
       case T_FUN_SYS_RB_OR_AGG:
       case T_FUN_SYS_RB_AND_AGG:
+      case T_FUNC_SYS_ARRAY_AGG:
       {
         need_id = true;
         break;
@@ -1374,6 +1415,7 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_SYS_RB_BUILD_AGG:
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
+    case T_FUNC_SYS_ARRAY_AGG:
     {
       need_extra = true;
       break;

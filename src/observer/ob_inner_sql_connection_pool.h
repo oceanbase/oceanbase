@@ -63,7 +63,8 @@ public:
            sql::ObSql *ob_sql,
            ObVTIterCreator *vt_iter_creator_,
            common::ObServerConfig *config = NULL,
-           const bool is_ddl = false);
+           const bool is_ddl = false,
+           const bool is_resource_conn_pool = false);
 
   virtual void stop() { stop_ = true; }
   // wait all connection been released
@@ -133,6 +134,7 @@ private:
   ObVTIterCreator *vt_iter_creator_;
   common::ObServerConfig *config_;
   bool is_ddl_;
+  bool is_resource_conn_pool_;
 
   DISALLOW_COPY_AND_ASSIGN(ObInnerSQLConnectionPool);
 };

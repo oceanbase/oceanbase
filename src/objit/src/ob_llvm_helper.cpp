@@ -1018,7 +1018,11 @@ int ObLLVMHelper::create_load(const ObString &name, ObLLVMValue &ptr, ObLLVMValu
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("value is NULL", K(name), K(ptr), K(ret));
   } else {
+#ifdef CPP_STANDARD_20
+    llvm::Value *value = jc_->get_builder().CreateLoad(ObIRType::getInt64Ty(jc_->get_context()), ptr.get_v(), make_string_ref(name));
+#else
     llvm::Value *value = jc_->get_builder().CreateLoad(ptr.get_v(), make_string_ref(name));
+#endif
     if (OB_ISNULL(value)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to create load", K(ret));
@@ -1055,6 +1059,18 @@ int ObLLVMHelper::create_istore(int64_t i, ObLLVMValue &dest)
   } else if (OB_ISNULL(dest.get_v())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("value is NULL", K(i), K(dest), K(ret));
+#ifdef CPP_STANDARD_20
+  } else if (llvm::Type::PointerTyID != dest.get_type_id()
+      || 0 == dest.get_type().get_num_child()
+      || 1 != dest.get_type().get_num_child()
+      || llvm::Type::IntegerTyID != dest.get_type().get_child(0).get_id()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("dest type is not integer pointer ",
+             K(i),
+             K(dest.get_type_id()),
+             K(dest.get_type().get_num_child()),
+             K(ret));
+#else
   } else if (llvm::Type::PointerTyID != dest.get_type_id()
       || 1 != dest.get_type().get_num_child()
       || llvm::Type::IntegerTyID != dest.get_type().get_child(0).get_id()) {
@@ -1065,6 +1081,7 @@ int ObLLVMHelper::create_istore(int64_t i, ObLLVMValue &dest)
              K(dest.get_type().get_num_child()),
              K(dest.get_type().get_child(0).get_id()),
              K(ret));
+#endif
   } else {
     ObLLVMValue value;
     if (OB_FAIL(get_int_value(dest.get_type().get_child(0), i, value))) {
@@ -1402,7 +1419,11 @@ int ObLLVMHelper::create_gep(const ObString &name, ObLLVMValue &value, ObIArray<
       } else { /*do nothing*/ }
     }
     if (OB_SUCC(ret)) {
+#ifdef CPP_STANDARD_20
+      llvm::Value *elem = jc_->get_builder().CreateGEP(ObIRType::getInt64Ty(jc_->get_context()), value.get_v(), make_array_ref(array), make_string_ref(name));
+#else
       llvm::Value *elem = jc_->get_builder().CreateGEP(value.get_v(), make_array_ref(array), make_string_ref(name));
+#endif
       if (OB_ISNULL(elem)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to create gep", K(ret));
@@ -1445,7 +1466,11 @@ int ObLLVMHelper::create_gep(const ObString &name, ObLLVMValue &value, ObLLVMVal
     } else if (OB_FAIL(array.push_back(idx.get_v()))) {
       LOG_WARN("push_back error", K(ret));
     } else {
+#ifdef CPP_STANDARD_20
+      llvm::Value *elem = jc_->get_builder().CreateGEP(ObIRType::getInt64Ty(jc_->get_context()), value.get_v(), make_array_ref(array), make_string_ref(name));
+#else
       llvm::Value *elem = jc_->get_builder().CreateGEP(value.get_v(), make_array_ref(array), make_string_ref(name));
+#endif
       if (OB_ISNULL(elem)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to create gep", K(ret));
@@ -1467,7 +1492,11 @@ int ObLLVMHelper::create_const_gep1_64(const ObString &name, ObLLVMValue &value,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("value is NULL", K(name), K(value), K(idx), K(ret));
   } else {
+#ifdef CPP_STANDARD_20
+    llvm::Value *elem = jc_->get_builder().CreateConstGEP1_64(ObIRType::getInt64Ty(jc_->get_context()), value.get_v(), idx, make_string_ref(name));
+#else
     llvm::Value *elem = jc_->get_builder().CreateConstGEP1_64(value.get_v(), idx, make_string_ref(name));
+#endif
     if (OB_ISNULL(elem)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to create const gep164", K(ret));
@@ -1680,7 +1709,11 @@ int ObLLVMHelper::set_debug_location(uint32_t line, uint32_t col, ObLLVMDIScope 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scope is NULL", K(ret));
   } else {
+#ifdef CPP_STANDARD_20
+    jc_->get_builder().SetCurrentDebugLocation(ObDILocation::get(scope->get_v()->getContext(), line, col, scope->get_v()));
+#else
     jc_->get_builder().SetCurrentDebugLocation(ObDebugLoc::get(line, col, scope->get_v()));
+#endif
   }
   return ret;
 }
@@ -2276,6 +2309,23 @@ const ObString& ObLLVMHelper::get_compiled_object()
 {
   return jit_->get_compiled_object();
 }
+
+#ifdef CPP_STANDARD_20
+int64 ObLLVMHelper::get_integer_type_id()
+{
+  return ::llvm::Type::IntegerTyID;
+}
+
+int64 ObLLVMHelper::get_pointer_type_id()
+{
+  return ::llvm::Type::PointerTyID;
+}
+
+int64 ObLLVMHelper::get_struct_type_id()
+{
+  return ::llvm::Type::StructTyID;
+}
+#endif
 
 } // namespace jit
 } // namespace oceanbase

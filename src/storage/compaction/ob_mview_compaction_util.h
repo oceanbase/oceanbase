@@ -137,7 +137,7 @@ public:
   static void release_inner_session(sql::ObFreeSessionCtx &free_session_ctx, sql::ObSQLSessionInfo *&session);
   static int create_inner_connection(sql::ObSQLSessionInfo *session, common::sqlclient::ObISQLConnection *&connection);
   static void release_inner_connection(common::sqlclient::ObISQLConnection *&connection);
-  static int set_params_to_session(sql::ObSQLSessionInfo *session);
+  static int set_params_to_session(bool is_oracle_mode, sql::ObSQLSessionInfo *session);
   static int validate_row_count(const ObMergeParameter &merge_param, const int64_t major_row_count);
 private:
   static int convert_datum_range(

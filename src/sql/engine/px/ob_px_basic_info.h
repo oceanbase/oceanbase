@@ -51,7 +51,8 @@ namespace sql
 #define IS_PX_MODIFY(type) \
   ((type) == PHY_PX_MULTI_PART_UPDATE || \
    (type) == PHY_PX_MULTI_PART_DELETE || \
-   (type) == PHY_PX_MULTI_PART_INSERT)
+   (type) == PHY_PX_MULTI_PART_INSERT || \
+   (type) == PHY_TABLE_DIRECT_INSERT)
 
 
 
@@ -92,7 +93,8 @@ namespace sql
    (type) == PHY_PX_MULTI_PART_UPDATE || \
    (type) == PHY_MERGE || \
    (type) == PHY_PX_MULTI_PART_SSTABLE_INSERT || \
-   (type) == PHY_LOCK)
+   (type) == PHY_LOCK || \
+   (type) == PHY_TABLE_DIRECT_INSERT)
 
 enum JoinFilterMode
 {

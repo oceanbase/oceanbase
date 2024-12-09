@@ -168,6 +168,10 @@ struct JtScanCtx {
     return spec_ptr_->table_type_ == OB_RB_ITERATE_TABLE_TYPE;
   }
 
+  bool is_unnest_table_func() {
+    return spec_ptr_->table_type_ == OB_UNNEST_TABLE_TYPE;
+  }
+
   ObJsonTableSpec* spec_ptr_;
   ObEvalCtx* eval_ctx_;
   ObExecContext* exec_ctx_;
@@ -327,6 +331,19 @@ public:
   RbIterateTableFunc()
   : MulModeTableFunc() {}
   ~RbIterateTableFunc() {}
+
+  int init_ctx(ObRegCol &scan_node, JtScanCtx*& ctx);
+  int eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval_ctx);
+  int reset_path_iter(ObRegCol &scan_node, void* in, JtScanCtx*& ctx, ScanType init_flag, bool &is_null_value);
+  int get_iter_value(ObRegCol &col_node, JtScanCtx* ctx, bool &is_null_value);
+  int reset_ctx(ObRegCol &scan_node, JtScanCtx*& ctx);
+};
+
+class UnnestTableFunc : public MulModeTableFunc {
+public:
+  UnnestTableFunc()
+  : MulModeTableFunc() {}
+  ~UnnestTableFunc() {}
 
   int init_ctx(ObRegCol &scan_node, JtScanCtx*& ctx);
   int eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval_ctx);
@@ -519,7 +536,7 @@ public:
   static int eval_exist_col(ObRegCol &col_node, JtScanCtx* ctx, ObExpr* col_expr, bool& is_null);
   static int eval_xml_scalar_col(ObRegCol &col_node, JtScanCtx* ctx, ObExpr* col_expr);
   static int eval_xml_type_col(ObRegCol &col_node, JtScanCtx* ctx, ObExpr* col_expr);
-  static int eval_rb_iterate_col(ObRegCol &col_node, JtScanCtx* ctx, ObExpr* col_expr, bool& is_null);
+  static int eval_unnest_col(ObRegCol &col_node, void* in, JtScanCtx* ctx, ObExpr* col_expr);
   static void proc_query_on_error(JtScanCtx* ctx, ObRegCol &col_node, int& ret, bool& is_null);
   static int check_default_val_cast_allowed(JtScanCtx* ctx, ObMultiModeTableNode &col_node, ObExpr* expr)  { return 0; }  // check type of default value
   static int set_val_on_empty(JtScanCtx* ctx, ObRegCol &col_node, bool& need_cast_res, bool& is_null);

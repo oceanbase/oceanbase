@@ -2804,13 +2804,15 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     file_read_param.file_location_      = load_file_storage;
     // file_read_param.filename_           = load_args.file_name_;
     file_read_param.compression_format_ = load_args.compression_format_;
-    file_read_param.access_info_        = load_args.access_info_;
     file_read_param.packet_handle_      = nullptr;
     if (OB_NOT_NULL(ctx.get_my_session()) && OB_NOT_NULL(ctx.get_my_session()->get_pl_query_sender())) {
       file_read_param.packet_handle_ = &ctx.get_my_session()->get_pl_query_sender()->get_packet_sender();
     }
     file_read_param.session_            = ctx.get_my_session();
     file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
+    if (OB_FAIL(file_read_param.access_info_.assign(load_args.access_info_))) {
+      LOG_WARN("fail to assign access info", K(ret), K(load_args.access_info_));
+    }
   }
 
   OZ (init_file_size(ctx));
@@ -2919,7 +2921,8 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
         bool is_valid = false;
         hint_batch_buffer_size_str = hint_batch_buffer_size_str.trim();
         if (!hint_batch_buffer_size_str.empty()) {
-          hint_max_batch_buffer_size = ObConfigCapacityParser::get(to_cstring(hint_batch_buffer_size_str), is_valid);
+          ObCStringHelper helper;
+          hint_max_batch_buffer_size = ObConfigCapacityParser::get(helper.convert(hint_batch_buffer_size_str), is_valid);
         }
         if (!is_valid) {
           hint_max_batch_buffer_size = 1L << 30; // 1G
@@ -3126,6 +3129,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       LOG_WARN("no memory", K(ret), K(buf_len));
     } else {
       const ObString &cur_query_str = ctx.get_my_session()->get_current_query_string();
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
       OZ (databuff_printf(buf, buf_len, pos,
                           "Tenant name:\t%.*s\n"
                           "File name:\t%.*s\n"
@@ -3138,7 +3142,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
                           load_args.combined_name_.length(), load_args.combined_name_.ptr(),
                           parallel,
                           batch_row_count,
-                          ObCurTraceId::get_trace_id_str()
+                          ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))
                           ));
       OZ (databuff_printf(buf, buf_len, pos, "Start time:\t"));
       OZ (ObTimeConverter::datetime_to_str(cur_ts,

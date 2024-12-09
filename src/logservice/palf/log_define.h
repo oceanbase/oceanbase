@@ -124,6 +124,7 @@ constexpr int64_t PALF_MAX_PROPOSAL_ID = INT64_MAX - 1;
 constexpr int64_t PALF_INITIAL_PROPOSAL_ID = 0;
 constexpr char PADDING_LOG_CONTENT_CHAR = '\0';
 const int64_t MIN_WRITING_THTOTTLING_TRIGGER_PERCENTAGE = 40;
+constexpr int64_t PALF_IO_WAIT_EVENT_TIMEOUT_MS = 100;
 const int64_t PALF_UPDATE_REGION_INTERVAL_US = 10 * 1000 * 1000L;                // 10s
 
 inline int64_t max_proposal_id(const int64_t a, const int64_t b)
@@ -351,7 +352,8 @@ int block_id_to_tmp_string(const block_id_t block_id,
 int block_id_to_flashback_string(const block_id_t block_id,
 																 char *str,
 																 const int64_t str_len);
-
+int construct_absolute_block_path(const char *dir_path, const block_id_t block_id, const int64_t buf_len, char *absolute_block_path);
+int construct_absolute_tmp_block_path(const char *dir_path, const block_id_t block_id, const int64_t buf_len, char *absolute_tmp_block_path);
 int convert_sys_errno();
 
 bool is_number(const char *);
@@ -416,7 +418,7 @@ enum PurgeThrottlingType
 
 inline const char *purge_throttling_type_2_str(const PurgeThrottlingType type)
 {
-#define EXTRACT_PURGE_TYPE(type_var) ({ case(type_var): return #type_var; })
+#define EXTRACT_PURGE_TYPE(type_var) case(type_var): return #type_var
   switch(type)
   {
     EXTRACT_PURGE_TYPE(INVALID_PURGE_TYPE);

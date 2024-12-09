@@ -78,6 +78,7 @@
 #include "rootserver/ob_admin_drtask_util.h"  // ObAdminDRTaskUtil
 #include "rootserver/ob_primary_ls_service.h" // for ObPrimaryLSService
 #include "rootserver/ob_root_utils.h"
+#include "rootserver/ob_split_partition_helper.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sess_info_verify.h"
 #include "observer/table/ttl/ob_ttl_service.h"
@@ -612,7 +613,7 @@ int ObRpcFreezeSplitSrcTabletP::process()
     LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
   } else {
     const int64_t abs_timeout_us = nullptr == rpc_pkt_ ? 0 : get_receive_timestamp() + rpc_pkt_->get_timeout();
-    ret = gctx_.ob_service_->freeze_split_src_tablet(arg_, result_, abs_timeout_us);
+    ret = ObSplitPartitionHelper::freeze_split_src_tablet(arg_, result_, abs_timeout_us);
   }
   return ret;
 }

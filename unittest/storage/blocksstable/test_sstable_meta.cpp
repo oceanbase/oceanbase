@@ -46,6 +46,17 @@ public:
   virtual ~TestRootBlockInfo() = default;
   virtual void SetUp() override;
   virtual void TearDown() override;
+  static void SetUpTestCase()
+  {
+    int ret = ObTimerService::get_instance().start();
+    ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret);
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 private:
   void prepare_tablet_read_info();
   void prepare_block_root();

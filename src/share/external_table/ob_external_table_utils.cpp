@@ -26,6 +26,8 @@
 #include "deps/oblib/src/lib/net/ob_addr.h"
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
 #include "share/external_table/ob_external_table_file_rpc_proxy.h"
+#include "sql/executor/ob_task_spliter.h"
+#include "sql/engine/table/ob_csv_table_row_iter.h"
 
 namespace oceanbase
 {
@@ -302,6 +304,7 @@ int ObExternalTableUtils::make_external_table_scan_range(const common::ObString 
 
 int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
                                                     const uint64_t table_id,
+                                                    const ObString &table_format_or_properties,
                                                     ObIArray<int64_t> &partition_ids,
                                                     ObIArray<ObNewRange *> &ranges,
                                                     ObIAllocator &range_allocator,
@@ -311,6 +314,8 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
   ObSEArray<ObExternalFileInfo, 16> file_urls;
   ObSEArray<ObNewRange *, 4> tmp_ranges;
   ObSEArray<ObAddr, 16> all_locations;
+  ObExternalFileFormat::FormatType external_table_type;
+  bool is_odps_external_table = false;
   if (OB_ISNULL(GCTX.location_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret));
@@ -330,7 +335,10 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
   } else {
     new_range.reset();
   }
-  if (!file_urls.empty() && file_urls.at(0).file_id_ == 0) {// if file_id_ == 0 means, it's odps table
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_format_or_properties, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps external table or not", K(ret), K(table_format_or_properties));
+  } else if (!file_urls.empty() && is_odps_external_table) {
     for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); ++i) {
       const ObExternalFileInfo& external_info = file_urls.at(i);
       ObNewRange *range = NULL;
@@ -344,6 +352,7 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
                                                                         external_info.file_id_,
                                                                         external_info.part_id_,
                                                                         0,
+                                                                        //external_info.file_size_,
                                                                         INT64_MAX,
                                                                         range_allocator,
                                                                         *range))) {
@@ -425,6 +434,217 @@ int ObExternalPathFilter::init(const ObString &pattern,
       LOG_WARN("init regex context failed", K(ret), K(pattern));
     }
   }
+  return ret;
+}
+
+int ObExternalTableUtils::assign_odps_file_to_sqcs(
+  ObDfo &dfo,
+  ObIArray<ObPxSqcMeta *> &sqcs,
+  int64_t parallel)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_CPP_ODPS
+  const common::ObIArray<share::ObExternalFileInfo> &files = dfo.get_external_table_files();
+  int64_t sqc_count = sqcs.count();
+  int64_t sqc_idx = 0;
+  bool use_partition_gi = false;
+  ObSEArray<const ObTableScanSpec *, 2> scan_ops;
+  const ObTableScanSpec *scan_op = nullptr;
+  const ObOpSpec *root_op = NULL;
+  dfo.get_root(root_op);
+  if (OB_ISNULL(root_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *root_op))) {
+    LOG_WARN("failed to find scan_ops", K(ret), KP(root_op));
+  } else if (scan_ops.count() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty scan_ops", K(ret));
+  } else if (OB_FAIL(ObOdpsPartitionDownloaderMgr::fetch_row_count(MTL_ID(),
+                                                                    files,
+                                                                    scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+                                                                    use_partition_gi))) {
+    LOG_WARN("failed to fetch row count", K(ret));
+  } else if (use_partition_gi) {
+    sqc_idx = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
+      OZ (sqcs.at(sqc_idx++ % sqc_count)->get_access_external_table_files().push_back(files.at(i)));
+    }
+  } else {
+    ObSEArray<share::ObExternalFileInfo, 8> temp_block_files;
+    ObSEArray<int64_t, 8> sqc_row_counts;
+    int64_t big_file_row_count = 0;
+    int64_t small_file_count = 0;
+    const int64_t SMALL_FILE_SIZE = 100000;
+    const double DROP_FACTOR = 0.05;
+    for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
+      if (OB_FAIL(sqc_row_counts.push_back(0))) {
+        LOG_WARN("failed to init sqc_row_counts", K(i), K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
+      if (files.at(i).file_size_ > SMALL_FILE_SIZE) {
+        big_file_row_count += files.at(i).file_size_;
+      } else {
+        ++small_file_count;
+      }
+    }
+    int64_t avg_row_count_to_sqc = big_file_row_count / sqc_count;
+    int64_t expected_row_count_to_sqc = 0;
+    int64_t row_tail = big_file_row_count % sqc_count;
+    int64_t file_idx = 0;
+    int64_t file_start = 0;
+    int64_t row_count_assigned_to_sqc = 0;
+    int64_t remaining_row_count_in_file = 0;
+    int64_t row_count_needed_to_sqc = 0;
+    int64_t droped_row_count_on_last_loop = 0;
+    sqc_idx = 0;
+    LOG_TRACE("before split odps file", K(ret), K(small_file_count), K(big_file_row_count), K(sqc_count), K(row_tail), K(avg_row_count_to_sqc), K(files));
+    while (OB_SUCC(ret) && big_file_row_count && sqc_idx < sqc_count) {
+      expected_row_count_to_sqc = avg_row_count_to_sqc + droped_row_count_on_last_loop;
+      row_count_assigned_to_sqc = 0;
+      droped_row_count_on_last_loop = 0;
+      if (sqc_idx == sqc_count - 1) {
+        expected_row_count_to_sqc += row_tail;
+      }
+      while (OB_SUCC(ret) && row_count_assigned_to_sqc != expected_row_count_to_sqc) {
+        while (file_idx < files.count() && files.at(file_idx).file_size_ < SMALL_FILE_SIZE) { ++file_idx; }
+        if (file_idx >= files.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("big odps files is iter end", K(sqc_idx), K(sqc_count), K(row_count_assigned_to_sqc), K(expected_row_count_to_sqc), K(avg_row_count_to_sqc), K(row_tail), K(files.count()), K(file_idx));
+        } else {
+          remaining_row_count_in_file = files.at(file_idx).file_size_ - file_start;
+          row_count_needed_to_sqc = expected_row_count_to_sqc - row_count_assigned_to_sqc;
+          if (remaining_row_count_in_file >= row_count_needed_to_sqc) {
+            ObExternalFileInfo splited_file_info = files.at(file_idx);
+            splited_file_info.row_start_ = file_start;
+            splited_file_info.row_count_ = row_count_needed_to_sqc;
+            row_count_assigned_to_sqc += row_count_needed_to_sqc;
+            file_start += row_count_needed_to_sqc;
+            OZ (sqcs.at(sqc_idx)->get_access_external_table_files().push_back(splited_file_info));
+          } else if (remaining_row_count_in_file > 0) {
+            ObExternalFileInfo splited_file_info = files.at(file_idx);
+            splited_file_info.row_start_ = file_start;
+            splited_file_info.row_count_ = remaining_row_count_in_file;
+            row_count_assigned_to_sqc += remaining_row_count_in_file;
+            file_start += remaining_row_count_in_file;
+            OZ (sqcs.at(sqc_idx)->get_access_external_table_files().push_back(splited_file_info));
+          } else { //remaining_row_count_in_file == 0
+            ++file_idx;
+            file_start = 0;
+            if (expected_row_count_to_sqc - row_count_assigned_to_sqc <= avg_row_count_to_sqc * DROP_FACTOR) {
+              droped_row_count_on_last_loop = expected_row_count_to_sqc - row_count_assigned_to_sqc;
+              expected_row_count_to_sqc = row_count_assigned_to_sqc;
+            }
+          }
+        }
+      }
+      sqc_row_counts.at(sqc_idx) = row_count_assigned_to_sqc;
+      sqc_idx++;
+      LOG_TRACE("assigned big odps file to sqc", K(ret), K(sqc_row_counts), K(row_count_assigned_to_sqc), K(expected_row_count_to_sqc), K(avg_row_count_to_sqc), K(file_idx), K(sqc_idx), K(remaining_row_count_in_file));
+    }
+    const int64_t block_cnt = parallel / sqcs.count() * 3;
+    LOG_TRACE("split big odps file to sqc, going to split files to block in sqc", K(ret), K(sqc_row_counts), K(sqcs.count()), K(block_cnt), K(parallel), K(small_file_count));
+    for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
+      ObIArray<share::ObExternalFileInfo> &sqc_files = sqcs.at(i)->get_access_external_table_files();
+      if (sqc_files.empty() || sqc_row_counts.at(i) <= 0) {
+        continue;
+      }
+      temp_block_files.reuse();
+      int64_t actual_block_cnt = block_cnt;
+      if (i < small_file_count % sqcs.count()) {
+        --actual_block_cnt;
+      }
+      LOG_WARN("split big odps file twice", K(i), K(i < small_file_count % sqcs.count()), K(actual_block_cnt), K(sqc_files), K(ret));
+      int64_t avg_row_count_to_block = sqc_row_counts.at(i) / actual_block_cnt;
+      int64_t expected_row_count_to_block = 0;
+      int64_t block_row_tail = sqc_row_counts.at(i) % actual_block_cnt;
+      int64_t block_idx = 0;
+      int64_t row_count_assigned_to_block = 0;
+      file_idx = 0;
+      file_start = sqc_row_counts.at(i) ? sqc_files.at(file_idx).row_start_ : 0; // sqc_row_counts.at(i) means sqc_files is not empty
+      droped_row_count_on_last_loop = 0;
+      while (OB_SUCC(ret) && sqc_row_counts.at(i) && block_idx < actual_block_cnt) {
+        expected_row_count_to_block = avg_row_count_to_block + droped_row_count_on_last_loop;
+        row_count_assigned_to_block = 0;
+        droped_row_count_on_last_loop = 0;
+        if (block_idx == actual_block_cnt - 1) {
+          expected_row_count_to_block += block_row_tail;
+        }
+        while (OB_SUCC(ret) && row_count_assigned_to_block != expected_row_count_to_block) {
+          if (file_idx >= sqc_files.count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("files in sqc iter end", K(i), K(block_idx), K(actual_block_cnt), K(row_count_assigned_to_block), K(expected_row_count_to_block), K(avg_row_count_to_block), K(block_row_tail), K(file_start), K(file_idx), K(sqc_files));
+          } else {
+            int64_t remaining_row_count_in_file = sqc_files.at(file_idx).row_count_ - (file_start - sqc_files.at(file_idx).row_start_);
+            int64_t row_count_needed_to_block = expected_row_count_to_block - row_count_assigned_to_block;
+            if (remaining_row_count_in_file >= row_count_needed_to_block) {
+              ObExternalFileInfo splited_file_info = sqc_files.at(file_idx);
+              splited_file_info.row_start_ = file_start;
+              splited_file_info.row_count_ = row_count_needed_to_block;
+              row_count_assigned_to_block += row_count_needed_to_block;
+              file_start += row_count_needed_to_block;
+              OZ (temp_block_files.push_back(splited_file_info));
+            } else if (remaining_row_count_in_file > 0) {
+              ObExternalFileInfo splited_file_info = sqc_files.at(file_idx);
+              splited_file_info.row_start_ = file_start;
+              splited_file_info.row_count_ = remaining_row_count_in_file;
+              row_count_assigned_to_block += remaining_row_count_in_file;
+              file_start += remaining_row_count_in_file;
+              OZ (temp_block_files.push_back(splited_file_info));
+            } else { //remaining_row_count_in_file == 0
+              ++file_idx;
+              file_start = file_idx >= sqc_files.count() ? 0 : sqc_files.at(file_idx).row_start_;
+              if (expected_row_count_to_block - row_count_assigned_to_block <= avg_row_count_to_block * DROP_FACTOR) {
+                droped_row_count_on_last_loop = expected_row_count_to_block - row_count_assigned_to_block;
+                expected_row_count_to_block = row_count_assigned_to_block;
+              }
+            }
+          }
+        }
+        block_idx++;
+      }
+      sqc_files.reuse();
+      int64_t part_id = OB_INVALID_ID;
+      for (int64_t j = 0; OB_SUCC(ret) && j < temp_block_files.count(); ++j) {
+        if (part_id != temp_block_files.at(j).part_id_) {// to find first distinct file
+          OZ(sqc_files.push_back(temp_block_files.at(j)));
+          part_id = temp_block_files.at(j).part_id_;
+        }
+      }
+      part_id = OB_INVALID_ID;
+      for (int64_t j = 0; OB_SUCC(ret) && j < temp_block_files.count(); ++j) {
+        if (part_id != temp_block_files.at(j).part_id_) {
+          part_id = temp_block_files.at(j).part_id_;
+        } else {
+          OZ(sqc_files.push_back(temp_block_files.at(j)));
+        }
+      }
+
+    }
+    sqc_idx = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
+      if (files.at(i).file_size_ <= SMALL_FILE_SIZE) {
+        OZ (sqcs.at(sqc_idx++ % sqc_count)->get_access_external_table_files().push_back(files.at(i)));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObExternalFileInfo dummy_file;
+    const char* dummy_file_name = "#######DUMMY_FILE#######";
+    dummy_file.file_url_ = dummy_file_name;
+    for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
+      if (sqcs.at(i)->get_access_external_table_files().empty()) {
+        OZ(sqcs.at(i)->get_access_external_table_files().push_back(dummy_file));
+      }
+    }
+  }
+#else
+  int64_t sqc_idx = 0;
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not supported featue", K(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "odps external table");
+#endif
   return ret;
 }
 

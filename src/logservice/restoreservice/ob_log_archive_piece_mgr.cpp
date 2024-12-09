@@ -2126,6 +2126,8 @@ int ObLogRawPathPieceContext::get_max_log_in_file_(const ObLogRawPathPieceContex
          K(file_id), K(file_offset), K(id_));
     } else if (OB_FAIL(iter.init(base_lsn, GetFileEndLSN(), &mem_storage))) {
       CLOG_LOG(WARN, "iter init failed", K(id_), K(base_lsn), K(log_buf), K(log_buf_size));
+    } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(palf::LogIOUser::ARCHIVE)))) {
+      CLOG_LOG(WARN, "iter set_io_context failed", K_(id), K(base_lsn));
     } else {
       palf::LogGroupEntry entry;
       while (OB_SUCC(ret)) {

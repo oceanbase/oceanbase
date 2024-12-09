@@ -43,6 +43,7 @@ struct ObPLTableColumnInfo
   common::ObCharsetType charset_type_;
   common::ObString column_name_;
   common::ObArray<common::ObString> type_info_;//used for enum and set
+  bool is_invisible_col_;
 
   ObPLTableColumnInfo():
     inner_alloc_(nullptr),
@@ -51,7 +52,8 @@ struct ObPLTableColumnInfo
     accuracy_(),
     charset_type_(CHARSET_INVALID),
     column_name_(),
-    type_info_()
+    type_info_(),
+    is_invisible_col_()
     {}
 
   explicit ObPLTableColumnInfo(ObIAllocator *alloc):
@@ -61,7 +63,8 @@ struct ObPLTableColumnInfo
     accuracy_(),
     charset_type_(CHARSET_INVALID),
     column_name_(),
-    type_info_()
+    type_info_(),
+    is_invisible_col_()
     {}
 
   bool operator==(const ObPLTableColumnInfo &other) const
@@ -78,7 +81,8 @@ struct ObPLTableColumnInfo
                 meta_type_ == other.meta_type_ &&
                 accuracy_ == other.accuracy_ &&
                 charset_type_ == other.charset_type_ &&
-                column_name_ == other.column_name_;
+                column_name_ == other.column_name_ &&
+                is_invisible_col_ == other.is_invisible_col_;
     }
     return is_same;
   }
@@ -99,7 +103,8 @@ struct ObPLTableColumnInfo
                K_(meta_type),
                K_(accuracy),
                K_(charset_type),
-               K_(column_name));
+               K_(column_name),
+               K_(is_invisible_col));
 };
 
 //todo:when PCVSchemaObj has been moved to appropriate header file, use PCVSchemaObj to instead of PCVPlSchemaObj

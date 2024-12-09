@@ -316,8 +316,8 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
     if (OB_ISNULL(paths.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(paths.at(i)));
-    } else if (paths.at(i)->pre_query_range_ != NULL &&
-               OB_FAIL(paths.at(i)->pre_query_range_->is_get(is_table_get))) {
+    } else if (paths.at(i)->get_query_range_provider() != NULL &&
+               OB_FAIL(paths.at(i)->get_query_range_provider()->is_get(is_table_get))) {
       LOG_WARN("check query range is table get", K(ret));
     }
   }
@@ -786,7 +786,10 @@ int ObAccessPathEstimation::add_storage_estimation_task(ObOptimizerContext &ctx,
                                                           index_partitions,
                                                           chosen_partitions))) {
     LOG_WARN("failed to choose partitions", K(ret));
-  } else if (OB_FAIL(choose_storage_estimation_ranges(range_limit, ap, chosen_scan_ranges))) {
+  } else if (OB_FAIL(choose_storage_estimation_ranges(range_limit,
+                                                      ap.est_cost_info_.ranges_,
+                                                      ap.est_cost_info_.index_meta_info_.is_geo_index_,
+                                                      chosen_scan_ranges))) {
     LOG_WARN("failed to choose scan ranges", K(ret));
   } else {
     result_helper.est_scan_range_count_ = chosen_scan_ranges.count();
@@ -846,7 +849,10 @@ int ObAccessPathEstimation::add_storage_estimation_task_by_ranges(ObOptimizerCon
       OB_UNLIKELY(ori_partitions.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret), K(table_meta), K(ori_partitions), K(index_partitions));
-  } else if (OB_FAIL(choose_storage_estimation_ranges(range_limit, ap, chosen_scan_ranges))) {
+  } else if (OB_FAIL(choose_storage_estimation_ranges(range_limit,
+                                                      ap.est_cost_info_.ranges_,
+                                                      ap.est_cost_info_.index_meta_info_.is_geo_index_,
+                                                      chosen_scan_ranges))) {
     LOG_WARN("failed to choose scan ranges", K(ret));
   } else if (OB_FAIL(result_helper.range_result_.prepare_allocate(chosen_scan_ranges.count()))) {
     LOG_WARN("failed to prepare allocate", K(ret));
@@ -1076,9 +1082,13 @@ int ObAccessPathEstimation::process_storage_estimation_result(ObIArray<ObBatchEs
   if (is_reliable) {
     for (int64_t i = 0; OB_SUCC(ret) && i < result_helpers.count(); ++i) {
       AccessPath *path = result_helpers.at(i).path_;
+      bool new_range_with_exec_param = (path->get_query_range_provider() != NULL &&
+                                        path->get_query_range_provider()->is_new_query_range() &&
+                                        path->get_query_range_provider()->has_exec_param());
       if (result_helpers.at(i).result_.logical_row_count_ >= 0 &&
           OB_FAIL(estimate_prefix_range_rowcount(result_helpers.at(i).result_.logical_row_count_,
                                                  result_helpers.at(i).result_.physical_row_count_,
+                                                 new_range_with_exec_param,
                                                  path->est_cost_info_))) {
         LOG_WARN("failed to estimate prefix range rowcount", K(ret));
       } else if (OB_FAIL(fill_cost_table_scan_info(path->est_cost_info_))) {
@@ -1166,6 +1176,7 @@ int ObAccessPathEstimation::do_storage_estimation(ObOptimizerContext &ctx,
 int ObAccessPathEstimation::estimate_prefix_range_rowcount(
     const double res_logical_row_count,
     const double res_physical_row_count,
+    bool new_range_with_exec_param,
     ObCostTableScanInfo &est_cost_info)
 {
   int ret = OB_SUCCESS;
@@ -1179,6 +1190,17 @@ int ObAccessPathEstimation::estimate_prefix_range_rowcount(
   physical_row_count += get_range_count;
 
   // NLJ or SPF push down prefix filters
+  if (new_range_with_exec_param) {
+    /**
+     * new query range extraction always get (min; max) for range graph with exec param.
+     * for NLJ push down path with expr (c1 = 1 and c2 = ?). old query range generate
+     * (1, min; 1, max), New query range generate (min, min; max, max). This behavior will
+     * cause row estimate with new query range get a larger result.Hence, we need multiple
+     * prefix_filter_sel for push down path with exec param to get a more accurate row count.
+    */
+    logical_row_count  *= est_cost_info.prefix_filter_sel_;
+    physical_row_count *= est_cost_info.prefix_filter_sel_;
+  }
   logical_row_count  *= est_cost_info.pushdown_prefix_filter_sel_;
   physical_row_count *= est_cost_info.pushdown_prefix_filter_sel_;
 
@@ -1299,16 +1321,17 @@ int ObAccessPathEstimation::choose_storage_estimation_partitions(const int64_t p
 }
 
 int ObAccessPathEstimation::choose_storage_estimation_ranges(const int64_t range_limit,
-                                                             AccessPath &ap,
+                                                             const ObRangesArray &ranges,
+                                                             bool is_geo_index,
                                                              ObIArray<common::ObNewRange> &scan_ranges)
 {
   int ret = OB_SUCCESS;
   ObSEArray<common::ObNewRange, 4> get_ranges;
   ObSEArray<common::ObNewRange, 4> valid_ranges;
-  if (ap.est_cost_info_.ranges_.empty()) {
+  if (ranges.empty()) {
     // do nothing
-  } else if (ap.est_cost_info_.index_meta_info_.is_geo_index_) {
-    ObIArray<common::ObNewRange> &geo_ranges = ap.est_cost_info_.ranges_;
+  } else if (is_geo_index) {
+    const ObIArray<common::ObNewRange> &geo_ranges = ranges;
     int64_t total_cnt = geo_ranges.count();
     if (geo_ranges.at(0).get_start_key().get_obj_cnt() < SPATIAL_ROWKEY_MIN_NUM) {
       ret = OB_ERR_UNEXPECTED;
@@ -1348,7 +1371,7 @@ int ObAccessPathEstimation::choose_storage_estimation_ranges(const int64_t range
     }
   } else {
     if (OB_FAIL(ObOptimizerUtil::classify_get_scan_ranges(
-                    ap.est_cost_info_.ranges_,
+                    ranges,
                     get_ranges,
                     scan_ranges))) {
       LOG_WARN("failed to clasiffy get scan ranges", K(ret));
@@ -1491,7 +1514,8 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
   ObJoinOrder *join_order = NULL;
   ObLogPlan *log_plan = NULL;
   const ObTableMetaInfo *table_meta_info = NULL;
-  if (OB_ISNULL(ap.pre_query_range_) || !ap.pre_query_range_->is_ss_range()
+  ObQueryRangeProvider *query_range_provider = ap.get_query_range_provider();
+  if (OB_ISNULL(query_range_provider) || !query_range_provider->is_ss_range()
       || OptSkipScanState::SS_DISABLE == ap.use_skip_scan_) {
     /* do nothing */
   } else if (OB_ISNULL(join_order = ap.parent_) || OB_ISNULL(log_plan = join_order->get_plan())
@@ -1509,7 +1533,7 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
       const double temp_rows = log_plan->get_selectivity_ctx().get_current_rows();
       log_plan->get_selectivity_ctx().init_op_ctx(&join_order->get_output_equal_sets(), prefix_range_row_count);
       if (OB_FAIL(get_skip_scan_prefix_exprs(ap.est_cost_info_.range_columns_,
-                                            ap.pre_query_range_->get_skip_scan_offset(),
+                                            query_range_provider->get_skip_scan_offset(),
                                             prefix_exprs))) {
         LOG_WARN("failed to get skip scan prefix expers", K(ret));
       } else if (OB_FAIL(ObOptSelectivity::update_table_meta_info(log_plan->get_basic_table_metas(),
@@ -1517,7 +1541,7 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
                                                                   log_plan->get_selectivity_ctx(),
                                                                   ap.get_table_id(),
                                                                   prefix_range_row_count,
-                                                                  ap.pre_query_range_->get_range_exprs(),
+                                                                  query_range_provider->get_range_exprs(),
                                                                   log_plan->get_predicate_selectivities()))) {
         LOG_WARN("failed to update table meta info", K(ret));
       } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(tmp_metas,
@@ -1812,7 +1836,7 @@ int ObAccessPathEstimation::estimate_full_table_rowcount(ObOptimizerContext &ctx
       LOG_TRACE("succeed to storage estimate full table rowcount", K(meta));
     }
   } else if (part_loc_info_array.count() > 1 && partition_limit >= 0) {
-    if (OB_FAIL(storage_estimate_full_table_rowcount(ctx, part_loc_info_array, meta))) {
+    if (OB_FAIL(storage_estimate_range_rowcount(ctx, part_loc_info_array, true, NULL, meta))) {
       LOG_WARN("failed to storage estimate full table rowcount", K(ret));
     } else {
       LOG_TRACE("succeed to storage estimate full table rowcount", K(meta));
@@ -1928,19 +1952,24 @@ int ObAccessPathEstimation::storage_estimate_full_table_rowcount(ObOptimizerCont
   return ret;
 }
 
-int ObAccessPathEstimation::storage_estimate_full_table_rowcount(ObOptimizerContext &ctx,
-                                                                 const ObCandiTabletLocIArray &part_loc_infos,
-                                                                 ObTableMetaInfo &meta)
+int ObAccessPathEstimation::storage_estimate_range_rowcount(ObOptimizerContext &ctx,
+                                                            const ObCandiTabletLocIArray &part_loc_infos,
+                                                            bool estimate_whole_range,
+                                                            const ObRangesArray *ranges,
+                                                            ObTableMetaInfo &meta)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena("CardEstimation");
   ObArray<ObBatchEstTasks *> tasks;
   ObArray<ObAddr> prefer_addrs;
   ObCandiTabletLocSEArray chosen_partitions;
+  ObSEArray<ObNewRange, 4> chosen_scan_ranges;
+  ObRangesArray whole_range;
   bool need_fallback = false;
   int64_t partition_limit = 0;
+  int64_t range_limit = 0;
   int64_t total_part_cnt = part_loc_infos.count();
-  if (OB_ISNULL(ctx.get_session_info())) {
+  if (OB_ISNULL(ctx.get_session_info()) || (!estimate_whole_range && OB_ISNULL(ranges))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if ((is_virtual_table(meta.ref_table_id_) &&
@@ -1952,12 +1981,48 @@ int ObAccessPathEstimation::storage_estimate_full_table_rowcount(ObOptimizerCont
                                                                    share::SYS_VAR_PARTITION_INDEX_DIVE_LIMIT,
                                                                    partition_limit))) {
     LOG_WARN("failed to get hint system variable", K(ret));
+  } else if (OB_FAIL(ctx.get_global_hint().opt_params_.get_sys_var(ObOptParamHint::RANGE_INDEX_DIVE_LIMIT,
+                                                                   ctx.get_session_info(),
+                                                                   share::SYS_VAR_RANGE_INDEX_DIVE_LIMIT,
+                                                                   range_limit))) {
+    LOG_WARN("failed to get hint system variable", K(ret));
+  } else {
+    if (partition_limit < 0 && range_limit < 0) {
+      partition_limit = 1;
+      range_limit = ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM;
+    }
+    // make whole range if need
+    if (estimate_whole_range) {
+      ObNewRange *range = NULL;
+      if (OB_FAIL(ObSQLUtils::make_whole_range(arena,
+                                               meta.ref_table_id_,
+                                               meta.table_rowkey_count_,
+                                               range))) {
+        LOG_WARN("failed to make whole range", K(ret));
+      } else if (OB_ISNULL(range)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null range", K(ret));
+      } else if (OB_FAIL(whole_range.push_back(*range))) {
+        LOG_WARN("failed to push back range", K(ret));
+      } else {
+        ranges = &whole_range;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(ranges)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ranges is null", K(ret));
+  } else if (OB_FAIL(choose_storage_estimation_ranges(range_limit, *ranges, false, chosen_scan_ranges))) {
+    LOG_WARN("failed to choose scan ranges", K(ret));
   } else if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
                                                           part_loc_infos,
                                                           chosen_partitions))) {
     LOG_WARN("failed to choose partitions", K(ret));
   } else {
     LOG_TRACE("choose partitions to estimate rowcount", K(chosen_partitions));
+    LOG_TRACE("choose ranges to estimate rowcount", K(chosen_scan_ranges));
   }
   for (int64_t i = 0; OB_SUCC(ret) && !need_fallback && i < chosen_partitions.count(); i ++) {
     EstimatedPartition best_index_part;
@@ -1973,7 +2038,6 @@ int ObAccessPathEstimation::storage_estimate_full_table_rowcount(ObOptimizerCont
       LOG_WARN("failed to get task", K(ret));
     } else if (NULL != task) {
       obrpc::ObEstPartArgElement path_arg;
-      ObNewRange *range = NULL;
       task->addr_ = best_index_part.addr_;
       path_arg.scan_flag_.index_back_ = 0;
       path_arg.index_id_ = meta.ref_table_id_;
@@ -1983,14 +2047,8 @@ int ObAccessPathEstimation::storage_estimate_full_table_rowcount(ObOptimizerCont
       path_arg.ls_id_ = best_index_part.ls_id_;
       path_arg.tenant_id_ = ctx.get_session_info()->get_effective_tenant_id();
       path_arg.tx_id_ = ctx.get_session_info()->get_tx_id();
-      if (OB_FAIL(ObSQLUtils::make_whole_range(arena,
-                                               meta.ref_table_id_,
-                                               meta.table_rowkey_count_,
-                                               range))) {
-        LOG_WARN("failed to make whole range", K(ret));
-      } else if (OB_ISNULL(path_arg.batch_.range_ = range)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to generate whole range", K(ret), K(range));
+      if (OB_FAIL(construct_scan_range_batch(ctx.get_allocator(), chosen_scan_ranges, path_arg.batch_))) {
+        LOG_WARN("failed to construct scan range batch", K(ret));
       } else if (OB_FAIL(task->arg_.index_params_.push_back(path_arg))) {
         LOG_WARN("failed to add primary key estimation arg", K(ret));
       }

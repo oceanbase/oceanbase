@@ -37,7 +37,7 @@ class ObDASExtraData;
 class ObExprFrameInfo;
 class ObDASScanOp;
 class ObDASTaskFactory;
-class ObDasAggregatedTasks;
+class ObDasAggregatedTask;
 
 typedef ObDLinkNode<ObIDASTaskOp*> DasTaskNode;
 typedef ObDList<DasTaskNode> DasTaskLinkedList;
@@ -135,9 +135,7 @@ public:
   uint64_t user_id_;
   uint64_t session_id_;
   uint64_t plan_id_;
-private:
-  uint64_t plan_hash_; // no use!!!
-public:
+  uint64_t plan_hash_;
   ObTSCMonitorInfo *tsc_monitor_info_;
 };
 
@@ -149,16 +147,17 @@ class ObIDASTaskOp
   friend class ObDASRef;
   friend class ObRpcDasAsyncAccessCallBack;
   friend class ObDataAccessService;
+  friend class ObDASParallelHandler;
   OB_UNIS_VERSION_V(1);
 public:
   ObIDASTaskOp(common::ObIAllocator &op_alloc)
-    : tenant_id_(common::OB_INVALID_ID),
-      task_id_(common::OB_INVALID_ID),
-      op_type_(DAS_OP_INVALID),
-      errcode_(OB_SUCCESS),
-      task_flag_(0),
+    : errcode_(OB_SUCCESS),
       trans_desc_(nullptr),
       snapshot_(nullptr),
+      tenant_id_(common::OB_INVALID_ID),
+      task_id_(common::OB_INVALID_ID),
+      op_type_(DAS_OP_INVALID),
+      task_flag_(0),
       write_branch_id_(0),
       tablet_loc_(nullptr),
       op_alloc_(op_alloc),
@@ -167,13 +166,14 @@ public:
       related_tablet_ids_(op_alloc),
       task_status_(ObDasTaskStatus::UNSTART),
       das_task_node_(),
-      agg_tasks_(nullptr),
+      agg_task_(nullptr),
       cur_agg_list_(nullptr),
       op_result_(nullptr),
       attach_ctdef_(nullptr),
       attach_rtdef_(nullptr),
       das_gts_opt_info_(op_alloc),
-      plan_line_id_(0)
+      plan_line_id_(0),
+      das_task_start_timestamp_(0)
   {
     das_task_node_.get_data() = this;
   }
@@ -181,6 +181,8 @@ public:
 
   virtual int open_op() = 0; //执行具体的DAS Task Op逻辑，由实例化的TaskOp自定义自己的执行逻辑
   virtual int release_op() = 0; //close DAS Task Op,释放对应的资源
+  virtual int record_task_result_to_rtdef() = 0;
+  virtual int assign_task_result(ObIDASTaskOp *other) = 0;
   void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
   const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   void set_task_id(const int64_t task_id) { task_id_ = task_id; }
@@ -207,7 +209,7 @@ public:
     return common::OB_NOT_IMPLEMENT;
   }
   virtual int init_task_info(uint32_t row_extend_size) = 0;
-  virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) = 0;
+  virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info);
   virtual const ObDASBaseCtDef *get_ctdef() const { return nullptr; }
   virtual ObDASBaseRtDef *get_rtdef() { return nullptr; }
   virtual void reset_access_datums_ptr() { }
@@ -219,6 +221,8 @@ public:
   DasTaskNode &get_node() { return das_task_node_; }
   int get_errcode() const { return errcode_; }
   void set_errcode(int errcode) { errcode_ = errcode; }
+  void set_plan_line_id(int64_t plan_line_id) { plan_line_id_ = plan_line_id; }
+  int64_t get_plan_line_id() const { return plan_line_id_; }
   void set_attach_ctdef(const ObDASBaseCtDef *attach_ctdef) { attach_ctdef_ = attach_ctdef; }
   void set_attach_rtdef(ObDASBaseRtDef *attach_rtdef) { attach_rtdef_ = attach_rtdef; }
   ObDASBaseRtDef *get_attach_rtdef() { return attach_rtdef_; }
@@ -259,13 +263,13 @@ public:
   bool is_in_retry() const { return in_part_retry_ || in_stmt_retry_; }
   void set_task_status(ObDasTaskStatus status);
   ObDasTaskStatus get_task_status() const { return task_status_; };
-  const ObDasAggregatedTasks *get_agg_tasks() const { return agg_tasks_; };
-  ObDasAggregatedTasks *get_agg_tasks() { return agg_tasks_; };
-  void set_agg_tasks(ObDasAggregatedTasks *agg_tasks)
+  const ObDasAggregatedTask *get_agg_task() const { return agg_task_; };
+  ObDasAggregatedTask *get_agg_task() { return agg_task_; };
+  void set_agg_task(ObDasAggregatedTask *agg_task)
   {
-    OB_ASSERT(agg_tasks != nullptr);
-    OB_ASSERT(agg_tasks_ == nullptr);
-    agg_tasks_ = agg_tasks;
+    OB_ASSERT(agg_task != nullptr);
+    OB_ASSERT(agg_task_ == nullptr);
+    agg_task_ = agg_task;
   };
   // NOT THREAD SAFE. We only advance state on das controller.
   int state_advance();
@@ -277,15 +281,25 @@ public:
 
   bool get_inner_rescan()          { return inner_rescan_; }
   void set_inner_rescan(bool flag) { inner_rescan_ = flag; }
+  void set_write_buff_full(bool v) { write_buff_full_ = v; }
+  bool is_write_buff_full() { return write_buff_full_; }
+  ObDASGTSOptInfo &get_das_gts_opt_info() { return das_gts_opt_info_; }
+  int init_das_gts_opt_info(transaction::ObTxIsolationLevel isolation_level);
 
 protected:
   int start_das_task();
   int end_das_task();
+
+public:
+  int errcode_; //don't need serialize it
+  transaction::ObTxDesc *trans_desc_; //trans desc，事务是全局信息，由RPC框架管理，这里不维护其内存
+  transaction::ObTxReadSnapshot *snapshot_; // Mvcc snapshot
+
 protected:
   uint64_t tenant_id_;
   int64_t task_id_;
   ObDASOpType op_type_; //DAS提供的operation type
-  int errcode_; //don't need serialize it
+protected:
   //事务相关信息
   union
   {
@@ -301,11 +315,10 @@ protected:
       uint16_t in_stmt_retry_    : 1;
       uint16_t need_switch_param_ : 1; //need to switch param in gi table rescan, this parameter has been deprecated
       uint16_t inner_rescan_ : 1; //disable das retry for inner_rescan
-      uint16_t status_reserved_  : 11;
+      uint16_t write_buff_full_  : 1;
+      uint16_t status_reserved_  : 10;
     };
   };
-  transaction::ObTxDesc *trans_desc_; //trans desc，事务是全局信息，由RPC框架管理，这里不维护其内存
-  transaction::ObTxReadSnapshot *snapshot_; // Mvcc snapshot
   int16_t write_branch_id_;  // branch id for parallel write, required for partially rollback
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
@@ -327,7 +340,7 @@ protected:
   ObTabletIDFixedArray related_tablet_ids_;
   ObDasTaskStatus task_status_;  // do not serialize
   DasTaskNode das_task_node_;  // tasks's linked list node, do not serialize
-  ObDasAggregatedTasks *agg_tasks_;  //task's agg task, do not serialize
+  ObDasAggregatedTask *agg_task_;  //task's agg task, do not serialize
   DasTaskLinkedList *cur_agg_list_;  //task's agg_list, do not serialize
   ObIDASTaskResult *op_result_;
   //The attach_ctdef describes the computations that are pushed down and executed as an attachment to the ObDASTaskOp,
@@ -337,6 +350,9 @@ protected:
   ObDASBaseRtDef *attach_rtdef_;
   ObDASGTSOptInfo das_gts_opt_info_;
   int64_t plan_line_id_; //plan operator id
+public:
+  int64_t das_task_start_timestamp_;
+
 };
 typedef common::ObObjStore<ObIDASTaskOp*, common::ObIAllocator&> DasTaskList;
 typedef DasTaskList::Iterator DASTaskIter;

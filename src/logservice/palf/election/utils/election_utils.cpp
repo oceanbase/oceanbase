@@ -260,7 +260,9 @@ int64_t MemberListWithStates::to_string(char *buf, const int64_t buf_len) const
   if (OB_ISNULL(p_impl_)) {
     common::databuff_printf(buf, buf_len, pos, "{p_impl:NULL}");
   } else {
-    common::databuff_printf(buf, buf_len, pos, "{member_list:%s, ", to_cstring(p_impl_->member_list_));
+    common::databuff_printf(buf, buf_len, pos, "{member_list:");
+    common::databuff_printf(buf, buf_len, pos, p_impl_->member_list_);
+    common::databuff_printf(buf, buf_len, pos, ", ");
     print_array_in_pretty_way_(buf, buf_len, pos, p_impl_->prepare_ok_, "prepare_ok", false);
     common::ObArray<int64_t> &v = p_impl_->accept_ok_promise_not_vote_before_local_ts_;
     bool is_synced = true;
@@ -471,7 +473,9 @@ int64_t ElectionMsgCounter::to_string(char *buf, const int64_t buf_len) const// 
   pos -= pos > 2 ? 2 : 0;
   databuff_printf(buf, buf_len, pos, "]");
   for (int64_t idx = 0; idx < p_cur_mapper_->idx_; ++idx) {
-    databuff_printf(buf, buf_len, pos, "|\t%s:", to_cstring(p_cur_mapper_->addr_mapper_[idx].element<0>()));
+    databuff_printf(buf, buf_len, pos, "|\t");
+    databuff_printf(buf, buf_len, pos, p_cur_mapper_->addr_mapper_[idx].element<0>());
+    databuff_printf(buf, buf_len, pos, ":");
     pos += p_cur_mapper_->addr_mapper_[idx].element<1>().to_string(buf + pos, buf_len - pos, p_old_mapper_->find(p_cur_mapper_->addr_mapper_[idx].element<0>()));
   }
   *p_old_mapper_ = *p_cur_mapper_;

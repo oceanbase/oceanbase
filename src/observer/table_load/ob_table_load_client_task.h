@@ -64,6 +64,7 @@ public:
   DEFINE_VAR_GETTER_AND_SETTER(uint64_t, heartbeat_timeout_us);
   DEFINE_STR_GETTER_AND_SETTER(ObString, load_method);
   DEFINE_STR_ARRAY_GETTER_AND_SETTER(ObString, column_names);
+  DEFINE_STR_ARRAY_GETTER_AND_SETTER(ObString, part_names);
 
 #undef DEFINE_VAR_GETTER_AND_SETTER
 #undef DEFINE_STR_GETTER_AND_SETTER
@@ -80,7 +81,8 @@ public:
                K_(timeout_us),
                K_(heartbeat_timeout_us),
                K_(load_method),
-               K_(column_names));
+               K_(column_names),
+               K_(part_names));
 
 private:
   int set_string(const ObString &src, ObString &dest);
@@ -101,6 +103,7 @@ private:
   int64_t heartbeat_timeout_us_;
   ObString load_method_;
   common::ObArray<ObString> column_names_;
+  common::ObArray<ObString> part_names_;
 };
 
 class ObTableLoadClientTask : public common::ObDLinkBase<ObTableLoadClientTask>
@@ -156,7 +159,9 @@ private:
   int advance_status(const table::ObTableLoadClientStatus expected,
                      const table::ObTableLoadClientStatus updated);
 
-  int init_instance(ObTableLoadParam &load_param, const ObIArray<uint64_t> &column_ids);
+  int init_instance(ObTableLoadParam &load_param,
+                    const ObIArray<uint64_t> &column_ids,
+                    const ObIArray<ObTabletID> &tablet_ids);
   int commit_instance();
   void destroy_instance();
 

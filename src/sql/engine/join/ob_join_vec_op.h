@@ -56,7 +56,8 @@ public:
   inline bool need_left_join() const;
   inline bool need_right_join() const;
 
-  int calc_other_conds(bool &is_match);
+  // TODO: @bingfan to see whether nlj can use batch calc other conds
+  int calc_other_conds(const ObBitVector &skip, bool &is_match);
   int batch_calc_other_conds(ObBatchRows &brs);
 
   const ObJoinVecSpec &get_spec() const

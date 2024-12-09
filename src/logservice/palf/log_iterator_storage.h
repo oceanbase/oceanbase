@@ -79,6 +79,7 @@ private:
   int64_t block_size_;
   ILogStorage *log_storage_;
   GetFileEndLSN get_file_end_lsn_;
+  LogIOContext io_ctx_;
   bool is_inited_;
 };
 
@@ -94,7 +95,7 @@ public:
 	    const int64_t in_read_size,
 	    ReadBuf &read_buf,
 	    int64_t &out_read_size,
-      LogIOContext &io_ctx) final;
+            LogIOContext &io_ctx) final;
   INHERIT_TO_STRING_KV("ILogStorage", ILogStorage, K_(start_lsn), K_(log_tail), KP(buf_), K_(buf_len), K_(is_inited));
 private:
   const char *buf_;

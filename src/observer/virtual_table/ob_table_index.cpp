@@ -16,6 +16,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "observer/virtual_table/ob_table_index.h"
 
 using namespace oceanbase::common;
@@ -617,7 +618,7 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
             } else if (OB_ISNULL(gen_column_schema = table_schema.get_column_schema(ft_col_id))) {
               ret = OB_SCHEMA_ERROR;
               SERVER_LOG(WARN, "fail to get data table column schema", K(ret));
-            } else if (OB_FAIL(gen_column_schema->get_cascaded_column_ids(dep_column_ids))) {
+            } else if (OB_FAIL(ObFtsIndexBuilderUtil::get_index_column_ids_for_fts(table_schema, *gen_column_schema, dep_column_ids))) {
               LOG_WARN("get cascaded column ids from column schema failed", K(ret), K(*gen_column_schema));
             } else if (dep_column_ids.count() <= ft_dep_col_idx_) {
               is_sub_end = true;

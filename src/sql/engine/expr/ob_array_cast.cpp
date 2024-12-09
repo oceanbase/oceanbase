@@ -122,7 +122,7 @@ int ObArrayCastUtils::cast_get_element(ObIArrayType *src, const ObCollectionBasi
       break;
     }
     case ObUInt32Type: {
-      ObArrayFixedSize<int32_t> *arr = static_cast<ObArrayFixedSize<int32_t> *>(src);
+      ObArrayFixedSize<uint32_t> *arr = static_cast<ObArrayFixedSize<uint32_t> *>(src);
       src_elem.set_uint32((*arr)[idx]);
       break;
     }
@@ -154,11 +154,13 @@ int ObArrayCastUtils::cast_get_element(ObIArrayType *src, const ObCollectionBasi
       src_elem.set_varchar((*arr)[idx]);
       break;
     }
+    case ObUDoubleType:
     case ObDoubleType: {
       ObArrayFixedSize<double> *arr = static_cast<ObArrayFixedSize<double> *>(src);
       src_elem.set_double((*arr)[idx]);
       break;
     }
+    case ObUFloatType:
     case ObFloatType: {
       ObArrayFixedSize<float> *arr = static_cast<ObArrayFixedSize<float> *>(src);
       src_elem.set_float((*arr)[idx]);
@@ -179,7 +181,14 @@ int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_e
   ObCastCtx cast_ctx(&alloc, NULL, mode, ObCharset::get_system_collation());
   ObObjType dst_obj_type = dst_elem_type->basic_meta_.get_obj_type();
   ObObj res;
-  if (OB_FAIL(ObObjCaster::to_type(dst_obj_type, cast_ctx, src_elem, res))) {
+  ObAccuracy out_acc = dst_elem_type->basic_meta_.get_accuracy();
+  const ObCollationType cs_type = dst_elem_type->basic_meta_.meta_.get_collation_type();
+  ObObj buf_obj;
+  const ObObj *res_obj = &src_elem;
+  if (dst_obj_type == ObVarcharType &&
+      OB_FAIL(obj_accuracy_check(cast_ctx, out_acc, cs_type, src_elem, buf_obj, res_obj))) {
+    LOG_WARN("varchar type length is too long", K(ret), K(src_elem.get_string_len()));
+  } else if (OB_FAIL(ObObjCaster::to_type(dst_obj_type, cast_ctx, src_elem, res))) {
     LOG_WARN("failed to cast number to double type", K(ret));
   } else {
     switch (dst_obj_type) {
@@ -244,6 +253,7 @@ int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_e
         // to do
         break;
       }
+      case ObUFloatType:
       case ObFloatType: {
         ObArrayFixedSize<float> *dst_arr = static_cast<ObArrayFixedSize<float> *>(dst);
         if (OB_FAIL(dst_arr->push_back(res.get_float()))) {
@@ -251,6 +261,7 @@ int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_e
         }
         break;
       }
+      case ObUDoubleType:
       case ObDoubleType: {
         ObArrayFixedSize<double> *dst_arr = static_cast<ObArrayFixedSize<double> *>(dst);
         if (OB_FAIL(dst_arr->push_back(res.get_double()))) {
@@ -464,9 +475,6 @@ int ObArrayBinaryCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, cons
         LOG_WARN("failed to get cast element", K(ret), K(i));
       } else if (FALSE_IT(src_elem.set_collation_type(elem_cs_type))) {
       } else if (FALSE_IT(src_elem.set_collation_level(elem_ncl_type))) {
-      }else if (elem_len_max < src_elem.get_string_len()) {
-        ret = OB_ERR_DATA_TOO_LONG;
-        LOG_WARN("varchar type length is too long", K(ret), K(i), K(elem_len_max), K(src_elem.get_string_len()));
       } else if (OB_FAIL(ObArrayCastUtils::cast_add_element(alloc, src_elem, dst, dst_type, mode))) {
         LOG_WARN("failed to cast and add element", K(ret));
       }

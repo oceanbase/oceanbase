@@ -384,7 +384,7 @@ int ObTableAccessParam::check_valid_before_query_init(
   if (OB_UNLIKELY(!tablet_handle.is_valid() || OB_ISNULL(tablet = tablet_handle.get_obj()))) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid table handle", K(ret), K(tablet_handle), KPC(tablet));
-  } else if (OB_UNLIKELY(tablet->is_cs_replica_compat() && !table_param.is_column_replica_table())) {
+  } else if (OB_UNLIKELY(tablet->is_cs_replica_compat() && !table_param.is_column_replica_table() && !table_param.is_normal_cgs_at_the_end())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid table param for cs replica tablet", K(ret), K(table_param), KPC(tablet));
   }

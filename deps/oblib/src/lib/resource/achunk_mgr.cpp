@@ -26,7 +26,6 @@
 #include "deps/oblib/src/lib/alloc/malloc_hook.h"
 
 using namespace oceanbase::lib;
-
 int ObLargePageHelper::large_page_type_ = INVALID_LARGE_PAGE_TYPE;
 
 void ObLargePageHelper::set_param(const char *param)
@@ -60,7 +59,7 @@ AChunkMgr &AChunkMgr::instance()
 
 AChunkMgr::AChunkMgr()
   : limit_(DEFAULT_LIMIT), urgent_(0), hold_(0),
-    total_hold_(0), cache_hold_(0),
+    total_hold_(0), cache_hold_(0), large_cache_hold_(0),
     max_chunk_cache_size_(limit_)
 {
   // only cache normal_chunk or large_chunk
@@ -215,7 +214,6 @@ AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
     for (int i = MAX_LARGE_ACHUNK_INDEX; !updated && i >= 0; --i) {
       while (!(updated = update_hold(hold_size, high_prio)) &&
           OB_NOT_NULL(chunk = pop_chunk_with_index(i))) {
-        // Wash chunk from all-cache when observer's hold reaches limit
         int64_t orig_all_size = chunk->aligned();
         int64_t orig_hold_size = chunk->hold();
         direct_free(chunk, orig_all_size);
@@ -259,12 +257,11 @@ void AChunkMgr::free_chunk(AChunk *chunk)
     const uint64_t all_size = chunk->aligned();
     const double max_large_cache_ratio = 0.5;
     int64_t max_large_cache_size = min(limit_ - get_used(), max_chunk_cache_size_) * max_large_cache_ratio;
-    const int64_t large_cache_hold = cache_hold_ - get_freelist(NORMAL_ACHUNK_INDEX).hold();
     bool freed = true;
     if (cache_hold_ + hold_size <= max_chunk_cache_size_
-        && (NORMAL_ACHUNK_SIZE == all_size || large_cache_hold <= max_large_cache_size)
+        && (NORMAL_ACHUNK_SIZE == all_size || large_cache_hold_ <= max_large_cache_size)
         && 0 == chunk->washed_size_) {
-      freed = !push_chunk(chunk);
+      freed = !push_chunk(chunk, all_size, hold_size);
     }
     if (freed) {
       direct_free(chunk, all_size);
@@ -283,6 +280,7 @@ AChunk *AChunkMgr::alloc_co_chunk(const uint64_t size)
   for (int i = MAX_LARGE_ACHUNK_INDEX; !updated && i >= 0; --i) {
     while (!(updated = update_hold(hold_size, true)) &&
       OB_NOT_NULL(chunk = pop_chunk_with_index(i))) {
+      // Wash chunk from all-cache when observer's hold reaches limit
       int64_t all_size = chunk->aligned();
       int64_t hold_size = chunk->hold();
       direct_free(chunk, all_size);
@@ -373,25 +371,30 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   int64_t resident_size = 0;
+  int64_t normal_maps = 0;
+  int64_t normal_unmaps = 0;
   int64_t large_maps = 0;
   int64_t large_unmaps = 0;
+  for (int i = 0; i <= MAX_NORMAL_ACHUNK_INDEX; ++i) {
+    normal_maps += get_maps(i);
+    normal_unmaps += get_unmaps(i);
+  }
   for (int i = MIN_LARGE_ACHUNK_INDEX; i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
     large_maps += get_maps(i);
     large_unmaps += get_unmaps(i);
   }
-  int64_t total_maps = 0;
-  int64_t total_unmaps = 0;
-  for (int i = 0; i <= MAX_ACHUNK_INDEX; ++i) {
-    total_maps += get_maps(i);
-    total_unmaps += get_unmaps(i);
-  }
+  int64_t huge_maps = get_maps(HUGE_ACHUNK_INDEX);
+  int64_t huge_unmaps = get_unmaps(HUGE_ACHUNK_INDEX);
+  int64_t total_maps = normal_maps + large_maps + huge_maps;
+  int64_t total_unmaps = normal_unmaps + large_unmaps + huge_unmaps;
+
   ret = databuff_printf(buf, buf_len, pos,
       "[CHUNK_MGR] limit=%'15ld hold=%'15ld total_hold=%'15ld used=%'15ld freelists_hold=%'15ld"
       " total_maps=%'15ld total_unmaps=%'15ld large_maps=%'15ld large_unmaps=%'15ld huge_maps=%'15ld huge_unmaps=%'15ld"
       " resident_size=%'15ld unmanaged_memory_size=%'15ld"
       " virtual_memory_used=%'15ld",
       limit_, hold_, total_hold_, get_used(), cache_hold_,
-      total_maps, total_unmaps, large_maps, large_unmaps, get_maps(HUGE_ACHUNK_INDEX), get_unmaps(HUGE_ACHUNK_INDEX),
+      total_maps, total_unmaps, large_maps, large_unmaps, huge_maps, huge_unmaps,
       resident_size, get_unmanaged_memory_size(),
       get_virtual_memory_used(&resident_size));
 #ifdef ENABLE_SANITY
@@ -402,13 +405,24 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   }
 #endif
   if (OB_SUCC(ret)) {
-    ret = databuff_printf(buf, buf_len, pos, "\n");
+    int64_t hold = 0, count = 0, pushes = 0, pops = 0;
+    for (int i = 0; i <= MAX_NORMAL_ACHUNK_INDEX; ++i) {
+      const AChunkList &free_list = get_freelist(i);
+      hold += free_list.hold();
+      count += free_list.count();
+      pushes += free_list.get_pushes();
+      pops += free_list.get_pops();
+    }
+    ret = databuff_printf(buf, buf_len, pos,
+        "\n[CHUNK_MGR] %'2d MB_CACHE: hold=%'15ld count=%'15ld pushes=%'15ld pops=%'15ld maps=%'15ld unmaps=%'15ld\n",
+        2, hold, count, pushes, pops, normal_maps, normal_unmaps);
   }
-  for (int i = 0; OB_SUCC(ret) && i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
+
+  for (int i = MIN_LARGE_ACHUNK_INDEX; OB_SUCC(ret) && i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
     const AChunkList &free_list = get_freelist(i);
     ret = databuff_printf(buf, buf_len, pos,
-        "[CHUNK_MGR] %'2d MB_CACHE: hold=%'15ld free=%'15ld pushes=%'15ld pops=%'15ld maps=%'15ld unmaps=%'15ld\n",
-        (i + 1) * 2, free_list.hold(), free_list.count(),
+        "[CHUNK_MGR] %'2d MB_CACHE: hold=%'15ld count=%'15ld pushes=%'15ld pops=%'15ld maps=%'15ld unmaps=%'15ld\n",
+        LARGE_ACHUNK_SIZE_MAP[i - MIN_LARGE_ACHUNK_INDEX], free_list.hold(), free_list.count(),
         free_list.get_pushes(), free_list.get_pops(),
         get_maps(i), get_unmaps(i));
   }
@@ -429,7 +443,6 @@ int64_t AChunkMgr::sync_wash()
         direct_free(chunk, all_size);
         chunk = next_chunk;
       } while (chunk != head);
-      ATOMIC_FAA(&cache_hold_, -cache_hold);
       IGNORE_RETURN update_hold(-cache_hold, false);
       washed_size += cache_hold;
     }

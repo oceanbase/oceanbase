@@ -34,6 +34,9 @@
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
 #include "share/external_table/ob_external_table_utils.h"
+#ifdef OB_BUILD_CPP_ODPS
+#include "sql/engine/table/ob_odps_table_row_iter.h"
+#endif
 
 
 using namespace oceanbase::common;
@@ -206,7 +209,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
     ObExecContext &ctx,
     uint64_t table_id,
     uint64_t ref_table_id,
-    const ObQueryRange &pre_query_range,
+    const ObQueryRangeProvider &pre_query_range,
     ObDfo &dfo,
     ObDASTableLoc *&table_loc)
 {
@@ -291,8 +294,28 @@ int ObPXServerAddrUtil::get_external_table_loc(
         }
       }
     } else {
-      int64_t expected_location_cnt = std::min(dfo.get_dop(), dfo.get_external_table_files().count());
-      if (1 == expected_location_cnt) {
+      bool is_odps_external_table = false;
+      ObSEArray<const ObTableScanSpec *, 2> scan_ops;
+      const ObTableScanSpec *scan_op = nullptr;
+      const ObOpSpec *root_op = NULL;
+      int64_t expected_location_cnt = 0;
+      dfo.get_root(root_op);
+      if (OB_ISNULL(root_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret));
+      } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *root_op))) {
+        LOG_WARN("failed to find scan_ops", K(ret), KP(root_op));
+      } else if (scan_ops.count() == 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("empty scan_ops", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+                                                            is_odps_external_table))) {
+        LOG_WARN("failed to check is odps external table or not", K(ret));
+      } else if (FALSE_IT(expected_location_cnt = std::min(dfo.get_dop(),
+                                      ((!ext_file_urls.empty() && is_odps_external_table) ?
+                                        all_locations.count() : dfo.get_external_table_files().count())))) {
+
+      } else if (1 == expected_location_cnt) {
         if (OB_FAIL(target_locations.push_back(GCTX.self_addr()))) {
           LOG_WARN("fail to push push back", K(ret));
         }
@@ -318,11 +341,13 @@ int ObPXServerAddrUtil::get_external_table_loc(
 }
 
 int ObPXServerAddrUtil::assign_external_files_to_sqc(
-    const ObIArray<ObExternalFileInfo> &files,
+    ObDfo &dfo,
     bool is_file_on_disk,
-    ObIArray<ObPxSqcMeta *> &sqcs)
+    ObIArray<ObPxSqcMeta *> &sqcs,
+    int64_t parallel)
 {
   int ret = OB_SUCCESS;
+  const common::ObIArray<share::ObExternalFileInfo> &files = dfo.get_external_table_files();
   if (is_file_on_disk) {
     ObAddr pre_addr;
     ObPxSqcMeta *target_sqc = NULL;
@@ -346,19 +371,41 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
       }
     }
   } else {
-    ObArray<int64_t> file_assigned_sqc_ids;
-    OZ (ObExternalTableUtils::calc_assigned_files_to_sqcs(files, file_assigned_sqc_ids, sqcs.count()));
-    if (OB_SUCC(ret) && file_assigned_sqc_ids.count() != files.count()) {
+    bool is_odps_external_table = false;
+    ObSEArray<const ObTableScanSpec *, 2> scan_ops;
+    const ObTableScanSpec *scan_op = nullptr;
+    const ObOpSpec *root_op = NULL;
+    dfo.get_root(root_op);
+    if (OB_ISNULL(root_op)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid result of assigned sqc", K(file_assigned_sqc_ids.count()), K(files.count()));
-    }
-    for (int i = 0; OB_SUCC(ret) && i < file_assigned_sqc_ids.count(); i++) {
-      int64_t assign_sqc_idx = file_assigned_sqc_ids.at(i);
-      if (OB_UNLIKELY(assign_sqc_idx >= sqcs.count() || assign_sqc_idx < 0)) {
+      LOG_WARN("unexpected null ptr", K(ret));
+    } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *root_op))) {
+      LOG_WARN("failed to find scan_ops", K(ret), KP(root_op));
+    } else if (scan_ops.count() == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("empty scan_ops", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+                                                     is_odps_external_table))) {
+      LOG_WARN("failed to check is odps external table or not", K(ret));
+    } else if (is_odps_external_table) {
+      if (OB_FAIL(ObExternalTableUtils::assign_odps_file_to_sqcs(dfo, sqcs, parallel))) {
+        LOG_WARN("failed to assisn odps file to sqcs", K(files), K(ret));
+      }
+    } else {
+      ObArray<int64_t> file_assigned_sqc_ids;
+      OZ (ObExternalTableUtils::calc_assigned_files_to_sqcs(files, file_assigned_sqc_ids, sqcs.count()));
+      if (OB_SUCC(ret) && file_assigned_sqc_ids.count() != files.count()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected file idx", K(file_assigned_sqc_ids.at(i)));
-      } else {
-        OZ (sqcs.at(assign_sqc_idx)->get_access_external_table_files().push_back(files.at(i)));
+        LOG_WARN("invalid result of assigned sqc", K(file_assigned_sqc_ids.count()), K(files.count()));
+      }
+      for (int i = 0; OB_SUCC(ret) && i < file_assigned_sqc_ids.count(); i++) {
+        int64_t assign_sqc_idx = file_assigned_sqc_ids.at(i);
+        if (OB_UNLIKELY(assign_sqc_idx >= sqcs.count() || assign_sqc_idx < 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected file idx", K(file_assigned_sqc_ids.at(i)));
+        } else {
+          OZ (sqcs.at(assign_sqc_idx)->get_access_external_table_files().push_back(files.at(i)));
+        }
       }
     }
   }
@@ -444,7 +491,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
         LOG_WARN("fail to get table loc", K(ret), K(table_location_key), K(ref_table_id), K(DAS_CTX(ctx).get_table_loc_list()));
       } else if (OB_NOT_NULL(scan_op) && scan_op->is_external_table_) {
         // create new table loc for a random dfo distribution for external table
-        OZ (get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range(), dfo, table_loc));
+        OZ (get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range_provider(), dfo, table_loc));
       }
     }
 
@@ -648,8 +695,8 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
     }
     if (OB_SUCC(ret) && !locations.empty()
         && (*locations.begin())->loc_meta_->is_external_table_) {
-      if (OB_FAIL(assign_external_files_to_sqc(dfo.get_external_table_files(),
-                    (*locations.begin())->loc_meta_->is_external_files_on_disk_, sqcs))) {
+      if (OB_FAIL(assign_external_files_to_sqc(dfo,
+                    (*locations.begin())->loc_meta_->is_external_files_on_disk_, sqcs, parallel))) {
         LOG_WARN("fail to assign external files to sqc", K(ret));
       }
     }
@@ -1136,7 +1183,7 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
       LOG_WARN("failed to get phy table location", K(ret));
     } else if (scan_op->is_external_table_
                && OB_FAIL(get_external_table_loc(ctx, table_location_key, ref_table_id,
-                                                 scan_op->get_query_range(), dfo, table_loc))) {
+                                                 scan_op->get_query_range_provider(), dfo, table_loc))) {
       LOG_WARN("fail to get external table loc", K(ret));
     } else if (OB_FAIL(set_sqcs_accessed_location(ctx,
           // dml op has already set sqc.get_location information,
@@ -2108,7 +2155,8 @@ int ObPxTreeSerializer::serialize_tree(char *buf,
     LOG_WARN("fail to encode op type", K(ret));
   } else if (OB_FAIL((seri_ctx == NULL ? root.serialize(buf, buf_len, pos) :
       root.serialize(buf, buf_len, pos, *seri_ctx)))) {
-    LOG_WARN("fail to serialize root", K(ret), "type", root.type_, "root", to_cstring(root));
+    ObCStringHelper helper;
+    LOG_WARN("fail to serialize root", K(ret), "type", root.type_, "root", helper.convert(root));
   } else if ((PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == root.type_)
              && OB_FAIL(serialize_sub_plan(buf, buf_len, pos, root))) {
     LOG_WARN("fail to serialize sub plan", K(ret));

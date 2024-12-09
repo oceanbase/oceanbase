@@ -703,7 +703,23 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
         //auto refresh after create external table
         ObArray<uint64_t> updated_part_ids; //not used
         bool has_partition_changed = false; //not used
-        OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(ctx, tenant_id, res.table_id_, file_urls, file_sizes, updated_part_ids, has_partition_changed));
+        const uint64_t part_id = -1;
+        bool collect_statistics_on_create = false;
+        bool is_odps_external_table = false;
+        if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
+          LOG_WARN("failed to check is odps external table or not", K(ret));
+        } else if (is_odps_external_table) {
+          sql::ObExternalFileFormat ex_format;
+          ex_format.format_type_ = sql::ObExternalFileFormat::ODPS_FORMAT;
+          ObArenaAllocator allocator("CreateTableExec");
+          if (OB_FAIL(ex_format.load_from_string(table_schema.get_external_properties(), allocator))) {
+            LOG_WARN("failed to load from string", K(ret));
+          } else {
+            collect_statistics_on_create = ex_format.odps_format_.collect_statistics_on_create_;
+          }
+        }
+        OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(ctx, tenant_id, res.table_id_, file_urls, file_sizes, updated_part_ids, has_partition_changed,
+                                                                                    part_id, collect_statistics_on_create));
       }
     } else {
       if (table_schema.is_external_table()) {

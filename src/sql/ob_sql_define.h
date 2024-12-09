@@ -125,6 +125,7 @@ enum JtColType {
   COL_TYPE_XMLTYPE_XML, // 8
   COL_TYPE_ORDINALITY_XML = 9,
   COL_TYPE_RB_ITERATE = 10,
+  COL_TYPE_UNNEST = 11,
 };
 
 enum ObNameTypeClass
@@ -426,6 +427,13 @@ enum DistinctType
 };
 
 enum class ObPDMLOption {
+  NOT_SPECIFIED = -1,
+  ENABLE,
+  DISABLE,
+  MAX_VALUE
+};
+
+enum class ObParallelDASOption {
   NOT_SPECIFIED = -1,
   ENABLE,
   DISABLE,

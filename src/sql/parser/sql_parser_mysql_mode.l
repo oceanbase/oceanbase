@@ -818,7 +818,7 @@ B'([01])*'|0B([01])+ {
     STORE_PARAM_NODE();
   } else {
     yylval->node->sql_str_off_ = yylloc->first_column - 1;
-    return HEX_STRING_VALUE;
+    return BIN_STRING_VALUE;
   }
 }
 
@@ -1119,6 +1119,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_REPLACE_CONST { return NO_REPLACE_CONST; }
 <hint>ENABLE_PARALLEL_DML  { return ENABLE_PARALLEL_DML; }
 <hint>DISABLE_PARALLEL_DML  { return DISABLE_PARALLEL_DML; }
+<hint>ENABLE_PARALLEL_DAS_DML  { return ENABLE_PARALLEL_DAS_DML; }
+<hint>DISABLE_PARALLEL_DAS_DML  { return DISABLE_PARALLEL_DAS_DML; }
 <hint>INLINE { return INLINE; }
 <hint>MATERIALIZE { return MATERIALIZE; }
 <hint>SEMI_TO_INNER { return SEMI_TO_INNER; }

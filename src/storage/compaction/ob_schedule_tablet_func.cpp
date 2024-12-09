@@ -202,18 +202,19 @@ int ObScheduleTabletFunc::schedule_tablet_execute(
   const ObTabletID &tablet_id = tablet.get_tablet_id();
   bool can_merge = false;
   int64_t schedule_scn = 0;
+  ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
   if (OB_FAIL(ObTenantTabletScheduler::check_ready_for_major_merge(ls_id, tablet, MEDIUM_MERGE))) {
     LOG_WARN("failed to check ready for major merge", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(get_schedule_execute_info(tablet, schedule_scn))) {
+  } else if (OB_FAIL(get_schedule_execute_info(tablet, schedule_scn, co_major_merge_type))) {
     if (OB_NO_NEED_MERGE == ret) {
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get schedule execute info", KR(ret), K_(ls_status), K(tablet_id));
     }
-  } else if (OB_FAIL(check_with_schedule_scn(tablet, schedule_scn, tablet_status_, can_merge))) {
+  } else if (OB_FAIL(check_with_schedule_scn(tablet, schedule_scn, tablet_status_, can_merge, co_major_merge_type))) {
     LOG_WARN("failed to check with schedule scn", KR(ret), K(schedule_scn));
   } else if (can_merge) {
-    if (OB_FAIL(ObTenantTabletScheduler::schedule_merge_dag(ls_id, tablet, MEDIUM_MERGE, schedule_scn, EXEC_MODE_LOCAL))) {
+    if (OB_FAIL(ObTenantTabletScheduler::schedule_merge_dag(ls_id, tablet, MEDIUM_MERGE, schedule_scn, EXEC_MODE_LOCAL, nullptr/*dag_net_id*/, co_major_merge_type))) {
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
         LOG_WARN("failed to schedule medium merge dag", K(ret), K_(ls_status), K(tablet_id));
       }
@@ -228,7 +229,8 @@ int ObScheduleTabletFunc::schedule_tablet_execute(
 
 int ObScheduleTabletFunc::get_schedule_execute_info(
     ObTablet &tablet,
-    int64_t &schedule_scn)
+    int64_t &schedule_scn,
+    ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_status_.ls_id_;
@@ -265,7 +267,7 @@ int ObScheduleTabletFunc::get_schedule_execute_info(
     LOG_INFO("mv creation has not finished, can not schedule mv tablet", K(ret),
              K(last_major_snapshot));
   } else if (OB_FAIL(tablet_status_.medium_list()->get_next_schedule_info(
-    last_major_snapshot, merge_version_, is_mv_major_refresh_tablet, compaction_type, schedule_scn))) {
+    last_major_snapshot, merge_version_, is_mv_major_refresh_tablet, compaction_type, schedule_scn, co_major_merge_type))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to get next schedule info", KR(ret), K(last_major_snapshot), K_(merge_version));
     }

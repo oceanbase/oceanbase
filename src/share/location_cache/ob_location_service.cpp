@@ -375,6 +375,7 @@ int ObLocationService::batch_renew_tablet_locations(
     const int error_code,
     const bool is_nonblock)
 {
+  ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::RENEW_TABLET_LOCATION);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;

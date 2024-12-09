@@ -16,7 +16,8 @@ using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::table::hfilter;
 Filter::Filter()
-  :is_reversed_(false)
+    : is_reversed_(false),
+      hbase_major_version_(1)
 {
 }
 
@@ -170,6 +171,18 @@ bool CompareFilter::compare_row(CompareOperator op, Comparable &comparator, cons
   return bret;
 }
 
+bool CompareFilter::compare_family(CompareOperator op, Comparable &comparator, const ObHTableCell &cell)
+{
+  bool bret = false;
+  if (CompareOperator::NO_OP == op) {
+    bret = true;
+  } else {
+    int cmp_ret = comparator.compare_to(cell.get_family());
+    bret = compare(op, cmp_ret);
+  }
+  return bret;
+}
+
 bool CompareFilter::compare_qualifier(CompareOperator op, Comparable &comparator, const ObHTableCell &cell)
 {
   bool bret = false;
@@ -245,10 +258,11 @@ void RowFilter::reset()
   filter_out_row_ = false;
 }
 
-bool RowFilter::filter_row_key(const ObHTableCell &first_row_cell)
+int RowFilter::filter_row_key(const ObHTableCell &first_row_cell, bool &filtered)
 {
   filter_out_row_ = compare_row(cmp_op_, *comparator_, first_row_cell);
-  return filter_out_row_;
+  filtered = filter_out_row_;
+  return OB_SUCCESS;
 }
 
 int RowFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
@@ -390,6 +404,146 @@ int ValueFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &p
 }
 
 ////////////////////////////////////////////////////////////////
+DependentColumnFilter::~DependentColumnFilter()
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    if (stamp_set_.created()) {
+      if (OB_FAIL(stamp_set_.destroy())) {
+        LOG_WARN("fail to destory time_stamp_", K(ret));
+      }
+    }
+  }
+}
+
+int DependentColumnFilter::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(stamp_set_.create(10001))) {
+    LOG_WARN("create timestamp set failed", KR(ret));
+  }
+  return ret;
+}
+
+int DependentColumnFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    if (OB_FAIL(init())) {
+      LOG_WARN("fail to init DependentColumnFilter", K(ret));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (cell.get_qualifier() != qualifier_) {
+      ret_code = ReturnCode::INCLUDE;
+    } else if (comparator_ != NULL && compare_value(cmp_op_, *comparator_, cell)) {
+      ret_code = ReturnCode::SKIP;
+    } else if (OB_FAIL(stamp_set_.set_refactored(cell.get_timestamp()))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else {
+      if (drop_dependent_column_) {
+        ret_code = ReturnCode::SKIP;
+      } else {
+        ret_code = ReturnCode::INCLUDE;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int DependentColumnFilter::filter_row_cells(ObTableQueryDListResult &cells)
+{
+  int ret = OB_SUCCESS;
+  common::ObDList<common::ObDLinkNode<ObHTableCellEntity*> > &cell_list = cells.get_cell_list();
+  common::ObArray<common::ObDLinkNode<ObHTableCellEntity*> *> rm_list;
+  DLIST_FOREACH(node, cell_list) {
+    if (OB_ISNULL(node)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("unexpected null pointer during filter row cells", K(ret));
+    } else if (OB_ISNULL(node->get_data())) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("unexpected null pointer during filter row cells", K(ret));
+    } else {
+      int64_t real_timestamp = -node->get_data()->get_timestamp();
+      if (OB_HASH_NOT_EXIST == stamp_set_.exist_refactored(real_timestamp)) {
+        if (OB_FAIL(rm_list.push_back(node))) {
+          LOG_WARN("fail to push back node into rm_list", K(ret));
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < rm_list.size(); ++i) {
+    common::ObDLinkNode<ObHTableCellEntity*> *node = rm_list.at(i);
+    // node will not be NULL or header
+    cell_list.remove(node);
+    int64_t &row_count = cells.get_row_count();
+    --row_count;
+  }
+  return ret;
+}
+
+void DependentColumnFilter::reset()
+{
+  stamp_set_.reuse();
+}
+
+int64_t DependentColumnFilter::get_format_filter_string_length() const
+{
+  int64_t len = 0;
+
+  len += strlen("DependentColumnFilter"); // "DependentColumnFilter"
+  len += 1; // blank
+  len += family_.length(); // "$family"
+  len += 1; // blank
+  len += qualifier_.length(); // "$qualifier"
+  len += 1; // blank
+  len += strlen(FilterUtils::get_compare_op_name(cmp_op_)); // "$compare_op_name"
+
+  return len;
+}
+
+int DependentColumnFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "DependentColumnFilter ");
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      strncat(buf + pos, family_.ptr(), family_.length());
+      pos += family_.length();
+      int64_t n = snprintf(buf + pos, buf_len - pos, " ");
+      if (n < 0 || n > buf_len - pos) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+      } else {
+        pos += n;
+        strncat(buf + pos, qualifier_.ptr(), qualifier_.length());
+        pos += qualifier_.length();
+        int64_t n = snprintf(buf + pos, buf_len - pos, " %s", FilterUtils::get_compare_op_name(cmp_op_));
+        if (n < 0 || n > buf_len - pos) {
+          ret = OB_BUF_NOT_ENOUGH;
+          LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+        } else {
+          pos += n;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
 FilterListBase::~FilterListBase()
 {}
 
@@ -430,6 +584,18 @@ void FilterListBase::reset()
     filters_.at(i)->reset();
     cell_included_.at(i) = false;
   } // end for
+}
+
+void FilterListBase::set_hbase_version(const ObString &version)
+{
+  const int64_t N = filters_.count();
+  for (int64_t i = 0; i < N; ++i) {
+    Filter* filter = nullptr;
+    if (nullptr != (filter = filters_.at(i))) {
+      filter->set_hbase_version(version);
+    }
+  } // end for
+  Filter::set_hbase_version(version);
 }
 
 // statement is "$list_filter_name $operator $filter0, $filter1, ..., $filtern"
@@ -494,6 +660,14 @@ int FilterListBase::get_format_filter_string(char *buf, int64_t buf_len, int64_t
   }
 
   return ret;
+}
+
+void FilterListBase::set_reversed(bool reversed)
+{
+  const int64_t N = filters_.count();
+  for (int64_t i = 0; i < N; ++i) {
+    filters_.at(i)->set_reversed(reversed);
+  } // end for
 }
 
 ////////////////////////////////////////////////////////////////
@@ -589,7 +763,11 @@ int FilterListAND::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
         LOG_WARN("failed to filter cell", K(ret));
         loop = false;
       } else {
-        ret_code = merge_return_code(ret_code, local_rc);
+        if (get_hbase_major_version() < 2) {
+          ret_code = local_rc;
+        } else {
+          ret_code = merge_return_code(ret_code, local_rc);
+        }
         switch (ret_code) {
           case ReturnCode::INCLUDE_AND_NEXT_COL:
           case ReturnCode::INCLUDE:
@@ -663,23 +841,31 @@ bool FilterListAND::filter_all_remaining()
   return bret;
 }
 
-bool FilterListAND::filter_row_key(const ObHTableCell &first_row_cell)
+int FilterListAND::filter_row_key(const ObHTableCell &first_row_cell, bool &filtered)
 {
-  bool bret = false;
+  int ret = OB_SUCCESS;
   if (filters_.empty()) {
-    bret = FilterListBase::filter_row_key(first_row_cell);
+    ret = FilterListBase::filter_row_key(first_row_cell, filtered);
   } else {
     const int64_t N = filters_.count();
-    for (int64_t i = 0; i < N; ++i)
-    {
+    for (int64_t i = 0; i < N && OB_SUCC(ret); ++i) {
       Filter *filter = filters_.at(i);
-      if (filter->filter_all_remaining() || filter->filter_row_key(first_row_cell)) {
-        bret = true;
+      bool cur_filtered = false;
+      if (OB_ISNULL(filter)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("filter is null", K(ret));
+      } else if (filter->filter_all_remaining()) {
+        filtered = true;
+        // can not break here
+      } else if (OB_FAIL(filter->filter_row_key(first_row_cell, cur_filtered))) {
+        LOG_WARN("failed to filter row key", K(ret), KP(filter));
+      } else if (cur_filtered) {
+        filtered = true;
         // can not break here
       }
     } // end for
   }
-  return bret;
+  return ret;
 }
 
 bool FilterListAND::filter_row()
@@ -755,22 +941,31 @@ bool FilterListOR::filter_all_remaining()
   return bret;
 }
 
-bool FilterListOR::filter_row_key(const ObHTableCell &first_row_cell)
+int FilterListOR::filter_row_key(const ObHTableCell &first_row_cell, bool &filtered)
 {
-  bool bret = true;
+  int ret = OB_SUCCESS;
   if (filters_.empty()) {
-    bret = FilterListBase::filter_row_key(first_row_cell);
+    ret = FilterListBase::filter_row_key(first_row_cell, filtered);
   } else {
     const int64_t N = filters_.count();
-    for (int64_t i = 0; i < N; ++i) {
+    for (int64_t i = 0; i < N && OB_SUCC(ret); ++i)
+    {
       Filter *filter = filters_.at(i);
-      if (!filter->filter_all_remaining() && !filter->filter_row_key(first_row_cell)) {
-        bret = false;
-        // can not break here
+      bool cur_filtered = true;
+      if (OB_ISNULL(filter)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("filter is null", K(ret));
+      } else if (!filter->filter_all_remaining()) {
+        if (OB_FAIL(filter->filter_row_key(first_row_cell, cur_filtered))) {
+          LOG_WARN("failed to filter row key", K(ret), KP(filter));
+        } else if (!cur_filtered) {
+          filtered = false;
+          // can not break here
+        }
       }
     } // end for
   }
-  return bret;
+  return ret;
 }
 
 // Minimal Step Rule
@@ -1008,10 +1203,11 @@ void SkipFilter::reset()
   filter_row_ = false;
 }
 
-bool SkipFilter::filter_row_key(const ObHTableCell &first_row_cell)
+int SkipFilter::filter_row_key(const ObHTableCell &first_row_cell, bool &filtered)
 {
   UNUSED(first_row_cell);
-  return false;
+  filtered = false;
+  return OB_SUCCESS;
 }
 
 // A wrapper filter that filters an entire row if any of the Cell checks do not pass.
@@ -1088,16 +1284,19 @@ bool WhileMatchFilter::filter_all_remaining()
   return filter_all_remaining_ || filter_->filter_all_remaining();
 }
 
-bool WhileMatchFilter::filter_row_key(const ObHTableCell &first_row_cell)
+int WhileMatchFilter::filter_row_key(const ObHTableCell &first_row_cell, bool &filtered)
 {
-  bool bret = true;
+  int ret = OB_SUCCESS;
   if (filter_all_remaining()) {
-    bret = true;
+    filtered = true;
   } else {
-    bret = filter_->filter_row_key(first_row_cell);
-    filter_all_remaining_ = filter_all_remaining_ || bret;
+    if (OB_FAIL(filter_->filter_row_key(first_row_cell, filtered))) {
+      LOG_WARN("failed to filter row key", K(ret));
+    } else {
+      filter_all_remaining_ = filter_all_remaining_ || filtered;
+    }
   }
-  return bret;
+  return ret;
 }
 
 int WhileMatchFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
@@ -1121,6 +1320,8 @@ bool WhileMatchFilter::filter_row()
   filter_all_remaining_ = filter_all_remaining_ || bret;
   return bret;
 }
+
+
 
 // statement is "WhileMatchFilter $filter"
 int64_t WhileMatchFilter::get_format_filter_string_length() const
@@ -1182,7 +1383,7 @@ int SingleColumnValueFilter::filter_cell(const ObHTableCell &cell, ReturnCode &r
     // found but not matched the column
     ret_code = ReturnCode::NEXT_ROW;
     LOG_DEBUG("[yzfdebug] latest verion only but not matched", K(ret_code));
-  } else if (!match_column(cell)) {
+  } else if (!match_family_column(cell)) {
     ret_code = ReturnCode::INCLUDE;
     LOG_DEBUG("[yzfdebug] not found column yet", K(ret_code));
   } else {
@@ -1200,9 +1401,9 @@ int SingleColumnValueFilter::filter_cell(const ObHTableCell &cell, ReturnCode &r
   return ret;
 }
 
-bool SingleColumnValueFilter::match_column(const ObHTableCell &cell)
+bool SingleColumnValueFilter::match_family_column(const ObHTableCell &cell)
 {
-  return qualifier_ == cell.get_qualifier();
+  return family_ == cell.get_family() && qualifier_ == cell.get_qualifier();
 }
 
 bool SingleColumnValueFilter::filter_column_value(const ObHTableCell &cell)
@@ -1274,6 +1475,93 @@ int SingleColumnValueFilter::get_format_filter_string(char *buf, int64_t buf_len
 }
 
 ////////////////////////////////////////////////////////////////
+SingleColumnValueExcludeFilter::~SingleColumnValueExcludeFilter()
+{}
+
+int SingleColumnValueExcludeFilter::filter_row_cells(ObTableQueryDListResult &cells)
+{
+  int ret = OB_SUCCESS;
+  common::ObDList<common::ObDLinkNode<ObHTableCellEntity*> > &cell_list = cells.get_cell_list();
+  common::ObArray<common::ObDLinkNode<ObHTableCellEntity*> *> rm_list;
+  DLIST_FOREACH(node, cell_list) {
+    if (OB_ISNULL(node)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("unexpected null pointer during filter row cells", K(ret));
+    } else if (OB_ISNULL(node->get_data())) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("unexpected null pointer during filter row cells", K(ret));
+    } else if (match_family_column(*node->get_data())) {
+      if (OB_FAIL(rm_list.push_back(node))) {
+        LOG_WARN("fail to push back node into rm_list", K(ret));
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < rm_list.size(); ++i) {
+    common::ObDLinkNode<ObHTableCellEntity*> *node = rm_list.at(i);
+    // node will not be NULL or header
+    cell_list.remove(node);
+    int64_t &row_count = cells.get_row_count();
+    --row_count;
+  }
+
+  return ret;
+}
+
+// statement is "SingleColumnValueFilter $family $qualifier $compare_op_name"
+int64_t SingleColumnValueExcludeFilter::get_format_filter_string_length() const
+{
+  int64_t len = 0;
+
+  len += strlen("SingleColumnValueExcludeFilter"); // "SingleColumnValueExcludeFilter"
+  len += 1; // blank
+  len += family_.length(); // "$family"
+  len += 1; // blank
+  len += qualifier_.length(); // "$qualifier"
+  len += 1; // blank
+  len += strlen(FilterUtils::get_compare_op_name(cmp_op_)); // "$compare_op_name"
+
+  return len;
+}
+
+int SingleColumnValueExcludeFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "SingleColumnValueExcludeFilter ");
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      strncat(buf + pos, family_.ptr(), family_.length());
+      pos += family_.length();
+      int64_t n = snprintf(buf + pos, buf_len - pos, " ");
+      if (n < 0 || n > buf_len - pos) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+      } else {
+        pos += n;
+        strncat(buf + pos, qualifier_.ptr(), qualifier_.length());
+        pos += qualifier_.length();
+        int64_t n = snprintf(buf + pos, buf_len - pos, " %s", FilterUtils::get_compare_op_name(cmp_op_));
+        if (n < 0 || n > buf_len - pos) {
+          ret = OB_BUF_NOT_ENOUGH;
+          LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+        } else {
+          pos += n;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
 bool PageFilter::filter_row()
 {
   rows_accepted_++;
@@ -1308,7 +1596,7 @@ int PageFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &po
 }
 
 ////////////////////////////////////////////////////////////////
-bool RandomRowFilter::filter_row_key(const ObHTableCell &first_row_cell)
+int RandomRowFilter::filter_row_key(const ObHTableCell &first_row_cell, bool &filtered)
 {
   UNUSED(first_row_cell);
   if (chance_ < 0) {
@@ -1318,7 +1606,8 @@ bool RandomRowFilter::filter_row_key(const ObHTableCell &first_row_cell)
   } else {
       filter_out_row_ = !((float(rand()) / (RAND_MAX + 1.0f)) < chance_);
   }
-  return filter_out_row_;
+  filtered = filter_out_row_;
+  return OB_SUCCESS;
 }
 
 int RandomRowFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
@@ -1568,6 +1857,296 @@ int KeyOnlyFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t 
 }
 
 ////////////////////////////////////////////////////////////////
+int RowTracker::update_with(const ObString &cur_row, const ObPair<ObString, ObString> &fuzzy_data)
+{
+  int ret = OB_SUCCESS;
+  ObString result;
+  int padding = is_reversed_ ? -1 : 0;
+  if (OB_FAIL(ob_write_string(allocator_, fuzzy_data.left_, result, OB_MAX(fuzzy_data.left_.length(), cur_row.length()), padding))) {
+    LOG_WARN("failed to clone fuzzy key bytes", K(ret), K_(fuzzy_data.left));
+  } else {
+    bool increased = false;
+    int to_inc = -1;
+    ObString fuzzy_key = fuzzy_data.left_;
+    ObString fuzzy_meta = fuzzy_data.right_;
+    bool loop = true;
+    for (int i = 0; i < result.length() && !increased && loop; i++) {
+      if (i >= fuzzy_meta.length() || fuzzy_meta[i] == 0) {
+        result.ptr()[i] = cur_row[i];
+        if (!order_->isMax(cur_row[i])) {
+          to_inc = i;
+        }
+      } else {
+        if (order_->lt(cur_row[i], fuzzy_key[i])) {
+          increased = true;
+        } else if (order_->gt(cur_row[i], fuzzy_key[i])) {
+          loop = false;
+        }
+      }
+    } // end for
+
+    if (!increased) {
+      if (to_inc >= 0) {
+        order_->inc(result.ptr()[to_inc]);
+        for (int i = to_inc + 1; i < result.length(); i++) {
+          if (i >= fuzzy_meta.length() || fuzzy_meta[i] == 0) {
+            result.ptr()[i] = order_->min();
+          }
+        } // end for
+      }
+    }
+    if (increased || to_inc >=0) {
+      if (is_reversed_) {
+        if (!result.empty()) {
+          NextRowType *ptr;
+          if (nullptr == (ptr = OB_NEWx(NextRowType, &allocator_, result, fuzzy_data))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("no memory", K(ret));
+          } else if (OB_FAIL(next_rows_.push(ptr))) {
+            LOG_WARN("failed to push to ob binary heap", K(ret));
+            ptr->~NextRowType();
+          }
+        }
+      } else {
+        ObString trim_result;
+        int offset = OB_MAX(fuzzy_meta.length() - 1, result.length() - 1);
+        while (offset > 0 && fuzzy_meta[offset] == 0) {
+          offset--;
+        }
+        offset = OB_MAX(offset, to_inc);
+        if (OB_FAIL(ob_write_string(allocator_, result, trim_result, offset + 1))) {
+          LOG_WARN("failed to clone result of row tracker", K(ret), K(result));
+        } else if (!trim_result.empty()) {
+          NextRowType *ptr;
+          if (nullptr == (ptr = OB_NEWx(NextRowType, &allocator_, trim_result, fuzzy_data))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("no memory", K(ret));
+          } else if (OB_FAIL(next_rows_.push(ptr))) {
+            LOG_WARN("failed to push to ob binary heap", K(ret));
+            ptr->~NextRowType();
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+bool RowTracker::less_than(const ObString &cur_row, const ObString &next_row)
+{
+  int cmp = cur_row.compare(next_row);
+  return is_reversed_ ? cmp > 0 : cmp < 0;
+}
+
+int RowTracker::init(const ObString &cur_row)
+{
+  int ret = OB_SUCCESS;
+  if (inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("row tracker has been inited", K(ret));
+  } else if (nullptr == (order_ = is_reversed_ ?
+      static_cast<Order*>(OB_NEWx(DESC, &allocator_))
+      : static_cast<Order*>(OB_NEWx(ASC, &allocator_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("no memory", K(ret));
+  } else {
+    int64_t fuzzy_key_count = fuzzy_key_data_.count();
+    ARRAY_FOREACH_X(fuzzy_key_data_, idx, fuzzy_key_count, OB_SUCC(ret)) {
+      ObPair<ObString, ObString> *it = fuzzy_key_data_.at(idx);
+      if (nullptr == it) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fuzzy key data is null", K(ret));
+      } else if (OB_FAIL(update_with(cur_row, *it))) {
+        LOG_WARN("failed to update row tracker", K(ret), K(cur_row));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int RowTracker::update_tracker(const ObString &cur_row, bool &done)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("row tracker is not inited", K(ret));
+  }
+  while (OB_SUCC(ret) && !next_rows_.empty() && !less_than(cur_row, next_rows_.top()->left_)) {
+    ObPair<ObString, ObString> &fuzzy_data = next_rows_.top()->right_;
+    if (OB_FAIL(next_rows_.pop())) {
+      LOG_WARN("failed to pop from binary heap", K(ret));
+    } else if (OB_FAIL(update_with(cur_row, fuzzy_data))) {
+      LOG_WARN("failed to update row tracker with row", K(ret));
+    }
+  }
+  done |= next_rows_.empty();
+  return ret;
+}
+
+int RowTracker::next_row(ObString &row)
+{
+  int ret = OB_SUCCESS;
+  if (next_rows_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("next rows should not be empty", K(ret), K_(next_rows));
+  } else {
+    row = next_rows_.top()->left_;
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+int FuzzyRowFilter::init(const ObHTableCell &cell)
+{
+  int ret = OB_SUCCESS;
+  ARRAY_FOREACH_NORET((fuzzy_key_), idx) {
+    ObPair<ObString, ObString> *it = fuzzy_key_.at(idx);
+    if (nullptr != it) {
+      ObString meta = it->right_;
+      for (int i = 0; i < meta.length(); i++) {
+        if ('0' == meta[i]) {
+          meta.ptr()[i] = -1;
+        } else if ('1' == meta[i]) {
+          meta.ptr()[i] = 0;
+          it->left_.ptr()[i] = 0;
+        }
+      }
+    }
+  }
+  if (nullptr == (row_tracker_ = OB_NEWx(RowTracker, &allocator_, allocator_, fuzzy_key_, is_reversed()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("no memory", K(ret));
+  } else if (OB_FAIL(row_tracker_->init(cell.get_rowkey()))) {
+    LOG_WARN("failed to init row tracker", K(ret));
+    row_tracker_->~RowTracker();
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int FuzzyRowFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (included_) {
+    ret_code = ReturnCode::INCLUDE;
+  } else if (!is_inited_ && OB_FAIL(init(cell))) {
+    LOG_WARN("failed to init FuzzyRowFilter");
+  } else {
+    filter_row_ = true;
+    ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
+    ARRAY_FOREACH_X((fuzzy_key_), idx, cnt, filter_row_) {
+      ObPair<ObString, ObString> *it = fuzzy_key_.at(idx);
+      if (nullptr != it) {
+        ObString fuzzy_meta = it->right_;
+        if (fuzzy_match(cell.get_rowkey(), (*it))) {
+          included_ = true;
+          filter_row_ = false;
+          ret_code = ReturnCode::INCLUDE;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int FuzzyRowFilter::get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(row_tracker_->update_tracker(cell.get_rowkey(), done_))) {
+    LOG_WARN("failed to update row trackser", K(ret), K_(row_tracker));
+  } else if (!done_) {
+    ObString new_key;
+    if (OB_FAIL(row_tracker_->next_row(new_key))) {
+      LOG_WARN("failed to get next row key from row tracker", K(ret), K_(row_tracker));
+    } else if (OB_FAIL(ObHTableUtils::create_first_cell_on_row(allocator, new_key, new_cell))) {
+      LOG_WARN("failed to create first cell on row", K(ret));
+    }
+  }
+  return ret;
+}
+
+void FuzzyRowFilter::reset()
+{
+  included_ = false;
+  filter_row_ = false;
+}
+
+// statement is "FuzzyRowFilter"
+int64_t FuzzyRowFilter::get_format_filter_string_length() const
+{
+  return strlen("FuzzyRowFilter");
+}
+
+int FuzzyRowFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "FuzzyRowFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
+  }
+  return ret;
+}
+
+bool FuzzyRowFilter::fuzzy_match(const ObString &rowkey, const ObPair<ObString, ObString> &fuzzy_key)
+{
+  bool bret = true;
+  int len = OB_MIN(rowkey.length(), fuzzy_key.left_.length());
+  int int_num = len / sizeof(int64_t);
+  int offset_bytes = int_num << 3;
+  const char* row_key_ptr = rowkey.ptr();
+  const char* fuzzy_key_ptr = fuzzy_key.left_.ptr();
+  const char* fuzzy_meta_ptr = fuzzy_key.right_.ptr();
+
+  // int64_t
+  for (int i = 0; i < offset_bytes && bret; i += sizeof(int64_t)) {
+    int64_t row_byte = *(reinterpret_cast<const int64_t*>(row_key_ptr + i));
+    int64_t fuzzy_byte = *(reinterpret_cast<const int64_t*>(fuzzy_key_ptr + i));
+    int64_t meta_byte = *(reinterpret_cast<const int64_t*>(fuzzy_meta_ptr + i));
+    if ((row_byte & meta_byte) != fuzzy_byte) {
+      bret = false;
+    }
+  }
+
+  // int32_t
+  if (bret && len - offset_bytes >= sizeof(int32_t)) {
+    int32_t row_byte = *(reinterpret_cast<const int32_t*>(row_key_ptr + offset_bytes));
+    int32_t fuzzy_byte = *(reinterpret_cast<const int32_t*>(fuzzy_key_ptr + offset_bytes));
+    int32_t meta_byte = *(reinterpret_cast<const int32_t*>(fuzzy_meta_ptr + offset_bytes));
+    if ((row_byte & meta_byte) != fuzzy_byte) {
+      bret = false;
+    } else {
+      offset_bytes += sizeof(int32_t);
+    }
+  }
+
+  // int16_t
+  if (bret && len - offset_bytes >= sizeof(int16_t)) {
+    int16_t row_byte = *(reinterpret_cast<const int16_t*>(row_key_ptr + offset_bytes));
+    int16_t fuzzy_byte = *(reinterpret_cast<const int16_t*>(fuzzy_key_ptr + offset_bytes));
+    int16_t meta_byte = *(reinterpret_cast<const int16_t*>(fuzzy_meta_ptr + offset_bytes));
+    if ((row_byte & meta_byte) != fuzzy_byte) {
+      bret = false;
+    } else {
+      offset_bytes += sizeof(int16_t);
+    }
+  }
+
+  // int8_t
+  if (bret && len - offset_bytes >= sizeof(int8_t)) {
+    int8_t row_byte = *(reinterpret_cast<const int8_t*>(row_key_ptr + offset_bytes));
+    int8_t fuzzy_byte = *(reinterpret_cast<const int8_t*>(fuzzy_key_ptr + offset_bytes));
+    int8_t meta_byte = *(reinterpret_cast<const int8_t*>(fuzzy_meta_ptr + offset_bytes));
+    if ((row_byte & meta_byte) != fuzzy_byte) {
+      bret = false;
+    }
+  }
+  return bret;
+}
+
+////////////////////////////////////////////////////////////////
 int TimestampsFilter::init()
 {
   int ret = OB_SUCCESS;
@@ -1660,15 +2239,320 @@ int TimestampsFilter::get_format_filter_string(char *buf, int64_t buf_len, int64
 }
 
 ////////////////////////////////////////////////////////////////
+int ColumnValueFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (cell.get_qualifier() != qualifier_ || cell.get_family() != cf_) {
+    ret_code = column_found_? ReturnCode::NEXT_ROW : ReturnCode::NEXT_COL;
+  } else {
+    column_found_ = true;
+    int cmp_ret = comparator_->compare_to(cell.get_value());
+    bool filtered = CompareFilter::compare(cmp_op_, cmp_ret);
+    ret_code = filtered? ReturnCode::SKIP : ReturnCode::INCLUDE;
+  }
+  return ret;
+}
+
+void ColumnValueFilter::reset()
+{
+  column_found_ = false;
+}
+
+// statement is "ColumnValueFilter"
+int64_t ColumnValueFilter::get_format_filter_string_length() const
+{
+  return strlen("ColumnValueFilter");
+}
+
+int ColumnValueFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "ColumnValueFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+int MultiRowRangeFilter::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(origin_range_)) {
+    FOREACH_X(range, (*origin_range_), OB_SUCC(ret)) {
+      ObKeyRangeNode node(*range);
+      if (OB_FAIL(nodes_.push_back(node))) {
+        LOG_WARN("failed to push back", K(ret), K(node));
+      } else {
+        ObKeyRangeNode* node_ptr = &*(nodes_.end() - 1);
+        if (OB_FAIL(ranges_.insert(node_ptr))) {
+          LOG_WARN("failed to insert to rb tree", K(ret), KP(node_ptr));
+        }
+      }
+    } // end for each
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObHTableUtils::merge_key_range(ranges_))) {
+        LOG_WARN("failed to merge key ranges", K(ret));
+      } else if (!is_reversed()) {
+        range_ = ranges_.get_first()->get_value();
+      } else {
+        range_ = ranges_.get_last()->get_value();
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    inited_ = true;
+  }
+  return ret;
+}
+
+int MultiRowRangeFilter::filter_row_key(const ObHTableCell &first_row_cell, bool &filtered)
+{
+  int ret = OB_SUCCESS;
+  filtered = false;
+  if (filter_all_remaining()) {
+    filtered = true;
+  } else if (!inited_ && OB_FAIL(init())) {
+    LOG_WARN("failed to init MultiRowRangeFilter", K(ret));
+  } else if (OB_NOT_NULL(range_) && range_->contain(first_row_cell.get_rowkey())) {
+    return_code_ = ReturnCode::INCLUDE;
+  } else {
+    KeyRange key_range(first_row_cell.get_rowkey(), true, ObString(), true);
+    ObKeyRangeNode key_node(&key_range);
+    ObKeyRangeNode* result = nullptr;
+    ranges_.psearch(&key_node, result);
+
+    if (result == NULL) {
+      if (is_reversed()) {
+        done_ = true;
+        return_code_ = ReturnCode::NEXT_ROW;
+      } else {
+        return_code_ = ReturnCode::SEEK_NEXT_USING_HINT;
+      }
+    } else {
+      range_ = result->get_value();
+      if (range_->contain(first_row_cell.get_rowkey())) {
+        return_code_ = ReturnCode::INCLUDE;
+      } else {
+        if (!is_reversed()) {
+          ObKeyRangeNode* next = nullptr;
+          ranges_.get_next(result, next);
+          if (OB_NOT_NULL(next)) {
+            range_ = next->get_value();
+          } else {
+            range_ = nullptr;
+            done_ = true;
+          }
+        }
+        return_code_ = ReturnCode::SEEK_NEXT_USING_HINT;
+      }
+    }
+  }
+  return ret;
+}
+
+int MultiRowRangeFilter::get_next_cell_hint(oceanbase::common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(range_)) {
+    if (OB_FAIL(FilterBase::get_next_cell_hint(allocator, cell, new_cell))) {
+      LOG_WARN("failed to get next cell hint", K(ret));
+    }
+  } else if (is_reversed()) {
+    if (OB_FAIL(ObHTableUtils::create_first_cell_on_row(allocator, range_->max(), new_cell))) {
+      LOG_WARN("failed to create first cell on row", K(ret));
+    }
+  } else if (OB_FAIL(ObHTableUtils::create_first_cell_on_row(allocator, range_->min(), new_cell))) {
+    LOG_WARN("failed to create first cell on row", K(ret));
+  }
+  return ret;
+}
+
+// statement is "MultiRowRangeFilter"
+int64_t MultiRowRangeFilter::get_format_filter_string_length() const
+{
+  return strlen("MultiRowRangeFilter");
+}
+
+int MultiRowRangeFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "MultiRowRangeFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+// statement is "InclusiveStopFilter"
+int64_t InclusiveStopFilter::get_format_filter_string_length() const
+{
+  return strlen("InclusiveStopFilter");
+}
+
+int InclusiveStopFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "InclusiveStopFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+int ColumnRangeFilter::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(origin_range_)) {
+    FOREACH_X(range, (*origin_range_), OB_SUCC(ret)) {
+      ObKeyRangeNode node(*range);
+      if (OB_FAIL(nodes_.push_back(node))) {
+        LOG_WARN("failed to push back", K(ret), K(node));
+      } else {
+        ObKeyRangeNode* node_ptr = &*(nodes_.end() - 1);
+        if (OB_FAIL(ranges_.insert(node_ptr))) {
+          LOG_WARN("failed to insert to rb tree", K(ret), KP(node_ptr));
+        }
+      }
+    } // end for each
+
+    if (OB_SUCC(ret) && OB_FAIL(ObHTableUtils::merge_key_range(ranges_))) {
+      LOG_WARN("failed to merge key ranges", K(ret));
+    } else if (!ranges_.is_empty()) {
+      range_ = ranges_.get_first()->get_value();
+    }
+  }
+  inited_ = true;
+  return ret;
+}
+
+int ColumnRangeFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_ && OB_FAIL(init())) {
+    LOG_WARN("failed to init ColumnRangeFilter", K(ret));
+  } else if (OB_NOT_NULL(range_) && range_->contain(cell.get_qualifier())) {
+    ret_code = ReturnCode::INCLUDE;
+  } else if (ranges_.is_empty()) {
+    ret_code = ReturnCode::NEXT_ROW;
+  } else {
+    KeyRange key_range(cell.get_qualifier(), true, ObString(), true);
+    ObKeyRangeNode key_node(&key_range);
+    ObKeyRangeNode* result = nullptr;
+    ranges_.psearch(&key_node, result);
+
+    if (result == NULL) {
+      ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
+    } else {
+      range_ = result->get_value();
+      if (range_->contain(cell.get_qualifier())) {
+        ret_code = ReturnCode::INCLUDE;
+      } else {
+        ObKeyRangeNode* next = nullptr;
+        ranges_.get_next(result, next);
+        if (OB_NOT_NULL(next)) {
+          range_ = next->get_value();
+          ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
+        } else {
+          range_ = nullptr;
+          ret_code = ReturnCode::NEXT_ROW;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+void ColumnRangeFilter::reset()
+{
+  ObKeyRangeNode* first = ranges_.get_first();
+  if (OB_NOT_NULL(first)) {
+    range_ = first->get_value();
+  }
+}
+
+int ColumnRangeFilter::get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(range_)) {
+    if (OB_FAIL(FilterBase::get_next_cell_hint(allocator, cell, new_cell))) {
+      LOG_WARN("failed to get next cell hint", K(ret));
+    }
+  } else if (OB_FAIL(ObHTableUtils::create_first_cell_on_row_col(allocator, cell, range_->min(), new_cell))) {
+    LOG_WARN("failed to create first cell on row", K(ret));
+  }
+  return ret;
+}
+
+// statement is "ColumnRangeFilter"
+int64_t ColumnRangeFilter::get_format_filter_string_length() const
+{
+  return strlen("ColumnRangeFilter");
+}
+
+int ColumnRangeFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "ColumnRangeFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+// statement is "MultipleColumnPrefixFilter"
+int64_t MultipleColumnPrefixFilter::get_format_filter_string_length() const
+{
+  return strlen("MultipleColumnPrefixFilter");
+}
+
+int MultipleColumnPrefixFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "MultipleColumnPrefixFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+int FamilyFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (!cell.get_family().empty() && compare_family(cmp_op_, *comparator_, cell)) {
+    ret_code = ReturnCode::NEXT_ROW;
+  } else {
+    ret_code = ReturnCode::INCLUDE;
+  }
+  return ret;
+}
+
+// statement is "FamilyFilter"
+int64_t FamilyFilter::get_format_filter_string_length() const
+{
+  return strlen("FamilyFilter");
+}
+
+int FamilyFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "FamilyFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
 void ColumnCountGetFilter::reset()
 {
   count_ = 0;
 }
 
-bool ColumnCountGetFilter::filter_row_key(const ObHTableCell &first_row_cell)
+int ColumnCountGetFilter::filter_row_key(const ObHTableCell &first_row_cell, bool &filtered)
 {
   UNUSED(first_row_cell);
-  return filter_all_remaining();
+  filtered = filter_all_remaining();
+  return OB_SUCCESS;
 }
 
 bool ColumnCountGetFilter::filter_all_remaining()
@@ -1703,6 +2587,46 @@ int ColumnCountGetFilter::get_format_filter_string(char *buf, int64_t buf_len, i
   }
   return ret;
 }
+
+////////////////////////////////////////////////////////////////
+int FirstKeyValueMatchingQualifiersFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (found_) {
+    ret_code = ReturnCode::NEXT_ROW;
+  } else {
+    if (OB_NOT_NULL(qualifiers_)) {
+      FOREACH_X(it, (*qualifiers_), OB_SUCC(ret) && !found_) {
+        if (it->length() == cell.get_qualifier().length() && it->compare(cell.get_qualifier()) == 0) {
+          found_ = true;
+        }
+      }
+    }
+    ret_code = ReturnCode::INCLUDE;
+  }
+  return ret;
+}
+
+void FirstKeyValueMatchingQualifiersFilter::reset()
+{
+  found_ = false;
+}
+
+// statement is "FirstKeyValueMatchingQualifiersFilter"
+int64_t FirstKeyValueMatchingQualifiersFilter::get_format_filter_string_length() const
+{
+  return strlen("FirstKeyValueMatchingQualifiersFilter");
+}
+
+int FirstKeyValueMatchingQualifiersFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObHTableUtils::get_format_filter_string(buf, buf_len, pos, "FirstKeyValueMatchingQualifiersFilter"))) {
+    LOG_WARN("failed to format filter string", K(ret));
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 CheckAndMutateFilter::~CheckAndMutateFilter()
 {}

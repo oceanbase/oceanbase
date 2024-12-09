@@ -22,37 +22,19 @@ namespace aggregate
 {
 namespace helper
 {
-int init_count_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
-                         ObIAllocator &allocator, IAggregate *&agg)
+int init_count_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id, ObIAllocator &allocator,
+                         IAggregate *&agg)
 {
-#define INIT_COUNT_CASE(vec_tc)                                                                    \
-  case (vec_tc): {                                                                                 \
-    if (lib::is_oracle_mode()) {                                                                   \
-      ret = init_agg_func<CountAggregate<vec_tc, VEC_TC_NUMBER>>(agg_ctx, agg_col_id,              \
-                                                                 has_distinct, allocator, agg);    \
-    } else {                                                                                       \
-      ret = init_agg_func<CountAggregate<vec_tc, VEC_TC_INTEGER>>(agg_ctx, agg_col_id,             \
-                                                                  has_distinct, allocator, agg);   \
-    }                                                                                              \
-  } break
-
   int ret = OB_SUCCESS;
   ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
   agg = nullptr;
   bool has_distinct = aggr_info.has_distinct_;
-  // count(*) param_exprs is empty
-  VecValueTypeClass vec_tc = VEC_TC_INTEGER;
-  if (aggr_info.param_exprs_.count() > 0) {
-    vec_tc =
-      get_vec_value_tc(aggr_info.get_first_child_type(), aggr_info.get_first_child_datum_scale(),
-                       aggr_info.get_first_child_datum_precision());
-  }
-  switch (vec_tc) {
-    LST_DO_CODE(INIT_COUNT_CASE, AGG_VEC_TC_LIST);
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid param format", K(ret), K(vec_tc));
-    }
+  if (lib::is_oracle_mode()) {
+    ret = init_agg_func<CountAggregate<VEC_TC_NUMBER>>(agg_ctx, agg_col_id, has_distinct, allocator,
+                                                       agg);
+  } else {
+    ret = init_agg_func<CountAggregate<VEC_TC_INTEGER>>(agg_ctx, agg_col_id, has_distinct,
+                                                        allocator, agg);
   }
   return ret;
 #undef INIT_COUNT_CASE
@@ -72,41 +54,28 @@ int quick_add_batch_rows_for_count(IAggregate *agg, RuntimeContext &agg_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid null aggregate", K(ret));
   } else if (!is_single_row_agg) {
-    auto &count_agg = *static_cast<CountAggregate<VEC_TC_INTEGER, VEC_TC_INTEGER> *>(agg);
-    if (OB_UNLIKELY(agg_ctx.removal_info_.enable_removal_opt_)) {
-      int64_t &count = *reinterpret_cast<int64_t *>(agg_cell);
-      if (!agg_ctx.removal_info_.is_inverse_agg_) {
-        if (row_sel.is_empty()) {
-          count += bound.range_size() - skip.accumulate_bit_cnt(bound);
-        } else {
-          count += row_sel.size();
-        }
-      } else {
-        if (row_sel.is_empty()) {
-          count -= bound.range_size() - skip.accumulate_bit_cnt(bound);
-        } else {
-          count -= row_sel.size();
-        }
-      }
-    } else if (OB_LIKELY(row_sel.is_empty() && bound.get_all_rows_active())) {
-      for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-        ret =
-          count_agg.add_row(agg_ctx, mock_cols, i, agg_col_id, agg_cell, nullptr, fake_calc_info);
-      }
-    } else if (!row_sel.is_empty()) {
-      for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
-        ret = count_agg.add_row(agg_ctx, mock_cols, row_sel.index(i), agg_col_id, agg_cell, nullptr,
-                                fake_calc_info);
+    int diff = 0;
+    if (row_sel.is_empty()) {
+      diff = bound.range_size();
+      if (!bound.get_all_rows_active()) {
+        diff -= skip.accumulate_bit_cnt(bound);
       }
     } else {
-      for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-        if (skip.at(i)) {
-        } else {
-          ret =
-            count_agg.add_row(agg_ctx, mock_cols, i, agg_col_id, agg_cell, nullptr, fake_calc_info);
+      for (int i = 0; i < row_sel.size(); i++) {
+        if (!skip.at(row_sel.index(i))) {
+          diff += 1;
         }
       }
     }
+
+    if (OB_UNLIKELY(agg_ctx.removal_info_.enable_removal_opt_)) {
+      if (agg_ctx.removal_info_.is_inverse_agg_) {
+        diff = -diff;
+      }
+    }
+    int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
+    data += diff;
+
   } else if (lib::is_mysql_mode()) {
     auto &count_agg = *static_cast<SingleRowAggregate<T_FUN_COUNT, VEC_TC_INTEGER, VEC_TC_INTEGER> *>(agg);
     if (OB_LIKELY(row_sel.is_empty() && bound.get_all_rows_active())) {
@@ -150,9 +119,12 @@ int quick_add_batch_rows_for_count(IAggregate *agg, RuntimeContext &agg_ctx,
       }
     }
   }
+
   SQL_LOG(DEBUG, "count: quick add batch rows", K(ret), K(*reinterpret_cast<int64_t *>(agg_cell)),
           K(agg_col_id), K(is_single_row_agg));
-  if (OB_FAIL(ret)) { SQL_LOG(WARN, "count: quick add batch rows failed", K(ret)); }
+  if (OB_FAIL(ret)) {
+    SQL_LOG(WARN, "count: quick add batch rows failed", K(ret));
+  }
   return ret;
 }
 

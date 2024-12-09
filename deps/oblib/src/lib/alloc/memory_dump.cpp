@@ -90,6 +90,7 @@ ObMemoryDump::ObMemoryDump()
     is_inited_(false)
 {
   STATIC_ASSERT(TASK_NUM <= 64, "task num too large");
+  task_mutex_.enable_record_stat(false);
 }
 
 ObMemoryDump::~ObMemoryDump()
@@ -244,19 +245,6 @@ int ObMemoryDump::check_sql_memory_leak()
   return ret;
 }
 
-int ObMemoryDump::load_malloc_sample_map(ObMallocSampleMap &malloc_sample_map)
-{
-  int ret = OB_SUCCESS;
-  if (is_inited_) {
-    ObLatchRGuard guard(iter_lock_, ObLatchIds::MEM_DUMP_ITER_LOCK);
-    auto &map = r_stat_->malloc_sample_map_;
-    for (auto it = map.begin(); OB_SUCC(ret) && it != map.end(); ++it) {
-      ret = malloc_sample_map.set_refactored(it->first, it->second);
-    }
-  }
-  return ret;
-}
-
 void ObMemoryDump::print_malloc_sample_info()
 {
   int ret = OB_SUCCESS;
@@ -324,7 +312,7 @@ void ObMemoryDump::run1()
         generate_mod_stat_task();
         last_dump_ts = current_ts;
       } else {
-        ob_usleep(1000);
+        ob_usleep(1000, true/*is_idle_sleep*/);
       }
     }
   }
@@ -721,91 +709,76 @@ void ObMemoryDump::handle(void *task)
           tm.tm_sec, tv.tv_usec);
       print_pos += m_task->to_string(print_buf_ + print_pos, PRINT_BUF_LEN - print_pos);
       ret = databuff_printf(print_buf_, PRINT_BUF_LEN, print_pos, "\n");
-      if (DUMP_CONTEXT == m_task->type_) {
-        __MemoryContext__ *context = reinterpret_cast<__MemoryContext__*>(m_task->p_context_);
-        auto func = [&] {
-            const char *str = to_cstring(*context);
-            ::write(fd, str, strlen(str));
-            ::write(fd, "\n", 1);
+      // chunk
+      int cnt = 0;
+      if (m_task->dump_all_) {
+        int tenant_cnt = 0;
+        get_tenant_ids(tenant_ids_, MAX_TENANT_CNT, tenant_cnt);
+        lib::ob_sort(tenant_ids_, tenant_ids_ + tenant_cnt);
+        for (int tenant_idx = 0; tenant_idx < tenant_cnt; tenant_idx++) {
+          uint64_t tenant_id = tenant_ids_[tenant_idx];
+          for (int ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
+            auto ta =
+              ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+            if (nullptr == ta) {
+              ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(tenant_id,
+                                                                                          ctx_id);
+            }
+            if (nullptr != ta) {
+              ta->get_chunks(chunks_, MAX_CHUNK_CNT, cnt);
+            }
+          }
+        }
+      } else if (m_task->dump_tenant_ctx_) {
+        auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(m_task->tenant_id_,
+                                                                              m_task->ctx_id_);
+        if (nullptr == ta) {
+          ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(m_task->tenant_id_,
+                                                                                      m_task->ctx_id_);
+        }
+        if (nullptr != ta) {
+          ta->get_chunks(chunks_, MAX_CHUNK_CNT, cnt);
+        }
+      } else {
+        AChunk *chunk = find_chunk(m_task->p_chunk_);
+        if (chunk != nullptr) {
+          chunks_[cnt++] = chunk;
+        }
+      }
+      LOG_INFO("chunk cnt", K(cnt));
+      // sort chunk
+      lib::ob_sort(chunks_, chunks_ + cnt);
+      // iter chunk
+      for (int i = 0; OB_SUCC(ret) && i < cnt; i++) {
+        AChunk *chunk = chunks_[i];
+        char *print_buf = print_buf_; // for lambda capture
+        auto func = [&, chunk] {
+            int ret = parse_chunk_meta(chunk,
+                [print_buf, &print_pos] (AChunk *chunk) {
+                  return print_chunk_meta(chunk, print_buf, PRINT_BUF_LEN, print_pos);
+                },
+                [print_buf, &print_pos, fd] (AChunk *chunk, ABlock *block) {
+                  UNUSEDx(chunk);
+                  return print_block_meta(chunk, block, print_buf, PRINT_BUF_LEN, print_pos, fd);
+                },
+                [print_buf, &print_pos] (AChunk *chunk, ABlock *block, AObject *object) {
+                  UNUSEDx(chunk, block);
+                  return print_object_meta(chunk, block, object, print_buf, PRINT_BUF_LEN, print_pos);
+                });
+            if (OB_FAIL(ret)) {
+              LOG_WARN("parse_chunk_meta failed", K(ret), KP(chunk));
+            }
             return OB_SUCCESS;
         };
         bool has_segv = false;
         do_with_segv_catch(func, has_segv, ret);
         if (has_segv) {
           LOG_INFO("restore from sigsegv, let's goon~");
+          continue;
         }
-      } else {
-        // chunk
-        int cnt = 0;
-        if (m_task->dump_all_) {
-          int tenant_cnt = 0;
-          get_tenant_ids(tenant_ids_, MAX_TENANT_CNT, tenant_cnt);
-          lib::ob_sort(tenant_ids_, tenant_ids_ + tenant_cnt);
-          for (int tenant_idx = 0; tenant_idx < tenant_cnt; tenant_idx++) {
-            uint64_t tenant_id = tenant_ids_[tenant_idx];
-            for (int ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
-              auto ta =
-                ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
-              if (nullptr == ta) {
-                ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(tenant_id,
-                                                                                            ctx_id);
-              }
-              if (nullptr != ta) {
-                ta->get_chunks(chunks_, MAX_CHUNK_CNT, cnt);
-              }
-            }
-          }
-        } else if (m_task->dump_tenant_ctx_) {
-          auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(m_task->tenant_id_,
-                                                                                m_task->ctx_id_);
-          if (nullptr == ta) {
-            ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(m_task->tenant_id_,
-                                                                                        m_task->ctx_id_);
-          }
-          if (nullptr != ta) {
-            ta->get_chunks(chunks_, MAX_CHUNK_CNT, cnt);
-          }
-        } else {
-          AChunk *chunk = find_chunk(m_task->p_chunk_);
-          if (chunk != nullptr) {
-            chunks_[cnt++] = chunk;
-          }
-        }
-        LOG_INFO("chunk cnt", K(cnt));
-        // sort chunk
-        lib::ob_sort(chunks_, chunks_ + cnt);
-        // iter chunk
-        for (int i = 0; OB_SUCC(ret) && i < cnt; i++) {
-          AChunk *chunk = chunks_[i];
-          char *print_buf = print_buf_; // for lambda capture
-          auto func = [&, chunk] {
-              int ret = parse_chunk_meta(chunk,
-                  [print_buf, &print_pos] (AChunk *chunk) {
-                    return print_chunk_meta(chunk, print_buf, PRINT_BUF_LEN, print_pos);
-                  },
-                  [print_buf, &print_pos, fd] (AChunk *chunk, ABlock *block) {
-                    UNUSEDx(chunk);
-                    return print_block_meta(chunk, block, print_buf, PRINT_BUF_LEN, print_pos, fd);
-                  },
-                  [print_buf, &print_pos] (AChunk *chunk, ABlock *block, AObject *object) {
-                    UNUSEDx(chunk, block);
-                    return print_object_meta(chunk, block, object, print_buf, PRINT_BUF_LEN, print_pos);
-                  });
-              if (OB_FAIL(ret)) {
-                LOG_WARN("parse_chunk_meta failed", K(ret), KP(chunk));
-              }
-              return OB_SUCCESS;
-          };
-          bool has_segv = false;
-          do_with_segv_catch(func, has_segv, ret);
-          if (has_segv) {
-            LOG_INFO("restore from sigsegv, let's goon~");
-            continue;
-          }
-        } // iter chunk end
-        if (OB_SUCC(ret) && print_pos > 0) {
-          ::write(fd, print_buf_, print_pos);
-        }
+      } // iter chunk end
+      if (OB_SUCC(ret) && print_pos > 0) {
+        ::write(fd, print_buf_, print_pos);
       }
     }
     if (fd > 0) {

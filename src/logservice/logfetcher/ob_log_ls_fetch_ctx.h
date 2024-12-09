@@ -479,7 +479,7 @@ public:
   }
 
 public:
-  TO_STRING_KV("type", "FETCH_TASK",
+  TO_STRING_KV_WITH_HELPER("type", "FETCH_TASK",
       "stype", print_fetch_stream_type(stype_),
       K_(state),
       "state_str", print_state(state_),
@@ -496,7 +496,7 @@ public:
       K_(fetch_info),
       K_(svr_list_need_update),
       "start_log_id_locate_req",
-      start_lsn_locate_req_.is_state_idle() ? "IDLE" : to_cstring(start_lsn_locate_req_),
+      start_lsn_locate_req_.is_state_idle() ? "IDLE" : helper.convert(start_lsn_locate_req_),
       KP_(next),
       KP_(prev));
 

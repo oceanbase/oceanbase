@@ -1006,7 +1006,8 @@ int ObFtsIndexBuilderUtil::generate_word_segment_column(
                                                      data_schema,
                                                      col_name_buf,
                                                      OB_MAX_COLUMN_NAME_LENGTH,
-                                                     name_pos))) {
+                                                     name_pos,
+                                                     col_id))) {
     LOG_WARN("failed to construct word segment col name", K(ret));
   } else if (OB_FAIL(check_fts_gen_col(data_schema,
                                        col_id,
@@ -1130,7 +1131,8 @@ int ObFtsIndexBuilderUtil::generate_word_count_column(
                                                    data_schema,
                                                    col_name_buf,
                                                    OB_MAX_COLUMN_NAME_LENGTH,
-                                                   name_pos))) {
+                                                   name_pos,
+                                                   col_id))) {
     LOG_WARN("failed to construct word count col name", K(ret));
   } else if (OB_FAIL(check_fts_gen_col(data_schema,
                                        col_id,
@@ -1245,7 +1247,8 @@ int ObFtsIndexBuilderUtil::generate_doc_length_column(
                                                    data_schema,
                                                    col_name_buf,
                                                    OB_MAX_COLUMN_NAME_LENGTH,
-                                                   name_pos))) {
+                                                   name_pos,
+                                                   col_id))) {
     LOG_WARN("fail to construct document length column name", K(ret));
   } else if (OB_FAIL(check_fts_gen_col(data_schema, col_id, col_name_buf, name_pos, col_exists))) {
     LOG_WARN("fail to check document count", K(ret), K(col_id));
@@ -1364,7 +1367,8 @@ int ObFtsIndexBuilderUtil::construct_word_segment_col_name(
     const ObTableSchema &data_schema,
     char *col_name_buf,
     const int64_t buf_len,
-    int64_t &name_pos)
+    int64_t &name_pos,
+    const uint64_t col_id)
 {
   int ret = OB_SUCCESS;
   name_pos = 0;
@@ -1383,25 +1387,7 @@ int ObFtsIndexBuilderUtil::construct_word_segment_col_name(
                                 OB_WORD_SEGMENT_COLUMN_NAME_PREFIX))) {
       LOG_WARN("print generate column prefix name failed", K(ret));
     }
-    const ObColumnSchemaV2 *col_schema = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
-      const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
-      if (column_name.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column name is empty", K(ret), K(column_name));
-      } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
-        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
-                       column_name.ptr());
-      } else if (OB_FAIL(databuff_printf(col_name_buf,
-                                         buf_len,
-                                         name_pos,
-                                         "_%ld",
-                                         col_schema->get_column_id()))) {
-        LOG_WARN("print column id to buffer failed", K(ret), K(col_schema->get_column_id()));
-      }
-    }
-    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu", ObTimeUtility::current_time()))){
+    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu_%ld", col_id, ObTimeUtility::current_time()))){
       LOG_WARN("fail to printf current time", K(ret));
     }
   }
@@ -1413,7 +1399,8 @@ int ObFtsIndexBuilderUtil::construct_word_count_col_name(
     const ObTableSchema &data_schema,
     char *col_name_buf,
     const int64_t buf_len,
-    int64_t &name_pos)
+    int64_t &name_pos,
+    const uint64_t col_id)
 {
   int ret = OB_SUCCESS;
   name_pos = 0;
@@ -1432,25 +1419,7 @@ int ObFtsIndexBuilderUtil::construct_word_count_col_name(
                                 OB_WORD_COUNT_COLUMN_NAME_PREFIX))) {
       LOG_WARN("print generate column prefix name failed", K(ret));
     }
-    const ObColumnSchemaV2 *col_schema = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
-      const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
-      if (column_name.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column name is empty", K(ret), K(column_name));
-      } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
-        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
-                       column_name.ptr());
-      } else if (OB_FAIL(databuff_printf(col_name_buf,
-                                         buf_len,
-                                         name_pos,
-                                         "_%ld",
-                                         col_schema->get_column_id()))) {
-        LOG_WARN("print column id to buffer failed", K(ret), K(col_schema->get_column_id()));
-      }
-    }
-    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu", ObTimeUtility::current_time()))){
+    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu_%ld", col_id, ObTimeUtility::current_time()))){
       LOG_WARN("fail to printf current time", K(ret));
     }
   }
@@ -1462,7 +1431,8 @@ int ObFtsIndexBuilderUtil::construct_doc_length_col_name(
     const ObTableSchema &data_schema,
     char *col_name_buf,
     const int64_t buf_len,
-    int64_t &name_pos)
+    int64_t &name_pos,
+    const uint64_t col_id)
 {
   int ret = OB_SUCCESS;
   name_pos = 0;
@@ -1480,24 +1450,7 @@ int ObFtsIndexBuilderUtil::construct_doc_length_col_name(
                                 OB_DOC_LENGTH_COLUMN_NAME_PREFIX))) {
       LOG_WARN("fail to printf document length column", K(ret));
     }
-    const ObColumnSchemaV2 *col_schema = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
-      const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
-      if (column_name.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column name is empty", K(ret), K(column_name));
-      } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
-        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
-      } else if (OB_FAIL(databuff_printf(col_name_buf,
-                                         buf_len,
-                                         name_pos,
-                                         "_%ld",
-                                         col_schema->get_column_id()))) {
-        LOG_WARN("fail to printf document length column", K(ret), K(col_schema->get_column_id()));
-      }
-    }
-    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu", ObTimeUtility::current_time()))){
+    if (FAILEDx(databuff_printf(col_name_buf, buf_len, name_pos, "_%lu_%ld", col_id, ObTimeUtility::current_time()))){
       LOG_WARN("fail to printf current time", K(ret));
     }
   }
@@ -1587,14 +1540,16 @@ int ObFtsIndexBuilderUtil::get_word_segment_col(
     const ObColumnSchemaV2 *&word_segment_col)
 {
   int ret = OB_SUCCESS;
-  schema::ColumnReferenceSet index_col_set;
+  const uint64_t tenant_id = OB_INVALID_TENANT_ID == MTL_ID() ? common::OB_SERVER_TENANT_ID : MTL_ID();
+  ObSEArray<uint64_t, 8> index_cols;
+  index_cols.set_attr(ObMemAttr(tenant_id, "FtsUWSC"));
   word_segment_col = nullptr;
   if (!data_schema.is_valid() ||
       OB_ISNULL(index_arg) ||
       !share::schema::is_fts_index(index_arg->index_type_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(data_schema), KPC(index_arg));
-  } else if (OB_FAIL(get_index_column_ids(data_schema, *index_arg, index_col_set))) {
+  } else if (OB_FAIL(get_index_column_ids(data_schema, *index_arg, index_cols))) {
     LOG_WARN("fail to get index column ids", K(ret), K(data_schema), KPC(index_arg));
   } else {
     for (ObTableSchema::const_column_iterator iter = data_schema.column_begin();
@@ -1606,8 +1561,8 @@ int ObFtsIndexBuilderUtil::get_word_segment_col(
         LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(data_schema));
       } else if (column_schema->is_word_segment_column()) {
         bool is_match = false;
-        if (OB_FAIL(check_index_match(*column_schema, index_col_set, is_match))) {
-          LOG_WARN("fail to check index match", K(ret), KPC(column_schema), K(index_col_set));
+        if (OB_FAIL(check_index_match(data_schema, *column_schema, index_cols, is_match))) {
+          LOG_WARN("fail to check index match", K(ret), KPC(column_schema), K(index_cols));
         } else if (is_match) {
           word_segment_col = column_schema;
         }
@@ -1623,14 +1578,16 @@ int ObFtsIndexBuilderUtil::get_word_cnt_col(
     const ObColumnSchemaV2 *&word_cnt_col)
 {
   int ret = OB_SUCCESS;
-  schema::ColumnReferenceSet index_col_set;
+  ObSEArray<uint64_t, 8> index_cols;
+  const uint64_t tenant_id = OB_INVALID_TENANT_ID == MTL_ID() ? common::OB_SERVER_TENANT_ID : MTL_ID();
+  index_cols.set_attr(ObMemAttr(tenant_id, "FtsUWCC"));
   word_cnt_col = nullptr;
   if (!data_schema.is_valid() ||
       OB_ISNULL(index_arg) ||
       !share::schema::is_fts_index(index_arg->index_type_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(data_schema), KPC(index_arg));
-  } else if (OB_FAIL(get_index_column_ids(data_schema, *index_arg, index_col_set))) {
+  } else if (OB_FAIL(get_index_column_ids(data_schema, *index_arg, index_cols))) {
     LOG_WARN("fail to get index column ids", K(ret), K(data_schema), KPC(index_arg));
   } else {
     for (ObTableSchema::const_column_iterator iter = data_schema.column_begin();
@@ -1642,8 +1599,8 @@ int ObFtsIndexBuilderUtil::get_word_cnt_col(
         LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(data_schema));
       } else if (column_schema->is_word_count_column()) {
         bool is_match = false;
-        if (OB_FAIL(check_index_match(*column_schema, index_col_set, is_match))) {
-          LOG_WARN("fail to check index match", K(ret), KPC(column_schema), K(index_col_set));
+        if (OB_FAIL(check_index_match(data_schema, *column_schema, index_cols, is_match))) {
+          LOG_WARN("fail to check index match", K(ret), KPC(column_schema), K(index_cols));
         } else if (is_match) {
           word_cnt_col = column_schema;
         }
@@ -1659,14 +1616,16 @@ int ObFtsIndexBuilderUtil::get_doc_length_col(
     const ObColumnSchemaV2 *&doc_len_col)
 {
   int ret = OB_SUCCESS;
-  schema::ColumnReferenceSet index_col_set;
+  ObSEArray<uint64_t, 8> index_cols;
+  const uint64_t tenant_id = OB_INVALID_TENANT_ID == MTL_ID() ? common::OB_SERVER_TENANT_ID : MTL_ID();
+  index_cols.set_attr(ObMemAttr(tenant_id, "FtsUDLC"));
   doc_len_col = nullptr;
   if (OB_UNLIKELY(!data_schema.is_valid())
       || OB_ISNULL(index_arg)
       || OB_UNLIKELY(!share::schema::is_fts_index(index_arg->index_type_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(data_schema), KPC(index_arg));
-  } else if (OB_FAIL(get_index_column_ids(data_schema, *index_arg, index_col_set))) {
+  } else if (OB_FAIL(get_index_column_ids(data_schema, *index_arg, index_cols))) {
     LOG_WARN("fail to get index column ids", K(ret), K(data_schema), KPC(index_arg));
   } else {
     for (ObTableSchema::const_column_iterator iter = data_schema.column_begin();
@@ -1678,8 +1637,8 @@ int ObFtsIndexBuilderUtil::get_doc_length_col(
         LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(data_schema));
       } else if (column_schema->is_doc_length_column()) {
         bool is_match = false;
-        if (OB_FAIL(check_index_match(*column_schema, index_col_set, is_match))) {
-          LOG_WARN("fail to check index match", K(ret), KPC(column_schema), K(index_col_set));
+        if (OB_FAIL(check_index_match(data_schema, *column_schema, index_cols, is_match))) {
+          LOG_WARN("fail to check index match", K(ret), KPC(column_schema), K(index_cols));
         } else if (is_match) {
           doc_len_col = column_schema;
         }
@@ -1755,7 +1714,7 @@ int ObFtsIndexBuilderUtil::generate_fts_parser_name(
 int ObFtsIndexBuilderUtil::get_index_column_ids(
     const ObTableSchema &data_schema,
     const obrpc::ObCreateIndexArg &arg,
-    schema::ColumnReferenceSet &index_column_ids)
+    common::ObIArray<uint64_t> &index_column_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!share::schema::is_fts_index(arg.index_type_) || !data_schema.is_valid())) {
@@ -1771,34 +1730,79 @@ int ObFtsIndexBuilderUtil::get_index_column_ids(
       } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
         ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
         LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
-      } else if (OB_FAIL(index_column_ids.add_member(col_schema->get_column_id()))) {
+      } else if (OB_FAIL(index_column_ids.push_back(col_schema->get_column_id()))) {
         LOG_WARN("fail to add index column id", K(ret), K(col_schema->get_column_id()));
       }
     }
   }
   return ret;
 }
+
 int ObFtsIndexBuilderUtil::check_index_match(
+    const ObTableSchema &data_schema,
     const schema::ObColumnSchemaV2 &column,
-    const schema::ColumnReferenceSet &index_column_ids,
+    const common::ObIArray<uint64_t> &index_column_ids,
     bool &is_match)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 4> cascaded_col_ids;
   is_match = false;
-  if (OB_UNLIKELY(!column.is_valid() || index_column_ids.is_empty())) {
+  if (OB_UNLIKELY(!column.is_valid() || !data_schema.is_valid() || 0 == index_column_ids.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(column), K(index_column_ids));
-  } else if (OB_FAIL(column.get_cascaded_column_ids(cascaded_col_ids))) {
-    LOG_WARN("fail to get cascaded column ids", K(ret), K(column));
-  } else if (cascaded_col_ids.count() == index_column_ids.num_members()) {
+    LOG_WARN("invalid arguments", K(ret), K(column), K(index_column_ids), K(data_schema));
+  } else if (OB_FAIL(get_index_column_ids_for_fts(data_schema, column, cascaded_col_ids))) {
+    LOG_WARN("fail to get index column ids for fts", K(ret), K(column), K(data_schema));
+  } else if (cascaded_col_ids.count() == index_column_ids.count()) {
     bool mismatch = false;
     for (int64_t i = 0; !mismatch && i < cascaded_col_ids.count(); ++i) {
-      if (!index_column_ids.has_member(cascaded_col_ids.at(i))) {
+      if (index_column_ids.at(i) != cascaded_col_ids.at(i)) {
         mismatch = true;
       }
     }
     is_match = !mismatch;
+  }
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::get_index_column_ids_for_fts(
+    const schema::ObTableSchema &data_schema,
+    const schema::ObColumnSchemaV2 &column_schema,
+    common::ObIArray<uint64_t> &index_column_ids)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  ObString col_def;
+  if (OB_UNLIKELY(!column_schema.is_valid() || !data_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(column_schema), K(data_schema));
+  } else if (OB_UNLIKELY(!column_schema.is_fulltext_column())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("The column isn't a fulltext column", K(ret), K(column_schema));
+  } else if (OB_FAIL(column_schema.get_cur_default_value().get_string(col_def))) {
+    LOG_WARN("fail to get current default value", K(ret), K(column_schema));
+  } else if (OB_FAIL(data_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check if oracle mode", K(ret));
+  } else {
+    const uint64_t tenant_id = OB_INVALID_TENANT_ID == MTL_ID() ? common::OB_SERVER_TENANT_ID : MTL_ID();
+    common::ObArenaAllocator allocator(common::ObMemAttr(tenant_id, "FtsIdxColIds"));
+    ObItemType root_expr_type = T_INVALID;
+    ObSEArray<ObString, 8> col_names;
+    col_names.set_attr(ObMemAttr(tenant_id, "FtsIdxColNa"));
+    lib::Worker::CompatMode compat_mode = is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
+    lib::CompatModeGuard guard(compat_mode);
+    if (OB_FAIL(ObResolverUtils::resolve_generated_column_info(col_def, allocator, root_expr_type, col_names))) {
+      LOG_WARN("fail to resolve generated column info", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < col_names.count(); ++i) {
+        const ObColumnSchemaV2 *col_schema = nullptr;
+        if (OB_ISNULL(col_schema = data_schema.get_column_schema(col_names.at(i)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get column schema", K(col_names.at(i)));
+        } else if (OB_FAIL(index_column_ids.push_back(col_schema->get_column_id()))) {
+          LOG_WARN("fail to get column schema", K(ret), KPC(col_schema));
+        }
+      }
+    }
   }
   return ret;
 }

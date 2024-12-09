@@ -168,6 +168,7 @@ private:
     NONE,
     SINGLE_ROW,
     BATCH,
+    DI_BASE,
   };
   ScanState scan_state_;
   // disallow copy

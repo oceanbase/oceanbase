@@ -111,6 +111,15 @@ int ObExprEncodeSortkey::eval_encode_sortkey(const ObExpr &expr, ObEvalCtx &ctx,
             param->is_var_len_ = !lib::is_oracle_mode() && is_pad_char_to_full_length(sess->get_sql_mode());
             param->is_memcmp_ = lib::is_oracle_mode();
             param->is_nullable_ = true;
+#if OB_USE_MULTITARGET_CODE
+            int tmp_ret = OB_SUCCESS;
+            tmp_ret = OB_E(EventTable::EN_DISABLE_ENCODESORTKEY_OPT) OB_SUCCESS;
+            if (OB_SUCCESS != tmp_ret) {
+              param->is_simdopt_ = false;
+            }
+#else
+            param->is_simdopt_ = false;
+#endif
             int64_t odr = order->get_int();
             int64_t np = nulls_pos->get_int();
             // null pos: null first -> 0, nulls last -> 1
@@ -240,6 +249,15 @@ int ObExprEncodeSortkey::eval_encode_sortkey_batch(const ObExpr &expr,
             param->is_var_len_ = is_pad_char_to_full_length(sess->get_sql_mode());
             param->is_memcmp_ = lib::is_oracle_mode();
             param->is_nullable_ = true;
+#if OB_USE_MULTITARGET_CODE
+            int tmp_ret = OB_SUCCESS;
+            tmp_ret = OB_E(EventTable::EN_DISABLE_ENCODESORTKEY_OPT) OB_SUCCESS;
+            if (OB_SUCCESS != tmp_ret) {
+              param->is_simdopt_ = false;
+            }
+#else
+            param->is_simdopt_ = false;
+#endif
             int64_t odr = order.get_int();
             int64_t np = nulls_pos.get_int();
             // null pos: null first -> 0, nulls last -> 1
@@ -335,6 +353,11 @@ int ObExprEncodeSortkey::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(expr_cg_ctx);
   rt_expr.eval_func_ = &eval_encode_sortkey;
   rt_expr.eval_batch_func_ = &eval_encode_sortkey_batch;
+  if (OB_UNLIKELY(rt_expr.arg_cnt_ % 3 != 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument number, param should be according to (colunm, asc/desc, "
+             "nulls_first/nulls_last)", K(ret), K(rt_expr.arg_cnt_));
+  }
   return ret;
 }
 

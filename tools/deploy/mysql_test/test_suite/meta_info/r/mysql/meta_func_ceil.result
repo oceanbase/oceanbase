@@ -126,22 +126,22 @@ ceil(-999999999999999999999999999999999999999999999499999.399999999)
 -999999999999999999999999999999999999999999999499999
 select ceil(-1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ceil(-1)	8	20	2	N	32897	0	63
+def					ceil(-1)	8	4	2	N	32897	0	63
 ceil(-1)
 -1
 select floor(-1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(-1)	8	20	2	N	32897	0	63
+def					floor(-1)	8	4	2	N	32897	0	63
 floor(-1)
 -1
 select ceil(-161);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ceil(-161)	8	20	4	N	32897	0	63
+def					ceil(-161)	8	4	4	N	32897	0	63
 ceil(-161)
 -161
 select floor(-161);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(-161)	8	20	4	N	32897	0	63
+def					floor(-161)	8	4	4	N	32897	0	63
 floor(-161)
 -161
 select ceil(null);

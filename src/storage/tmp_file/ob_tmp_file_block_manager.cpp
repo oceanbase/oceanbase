@@ -349,7 +349,7 @@ int ObTmpFileBlock::write_back_succ(blocksstable::MacroBlockId macro_block_id)
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("attempt to set macro_block_id for a block not in write_back state", KR(ret), KPC(this));
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_block_id))) {
-    LOG_ERROR("failed to dec macro block ref cnt", KR(ret), K(macro_block_id), KPC(this));
+    LOG_ERROR("failed to inc macro block ref cnt", KR(ret), K(macro_block_id), KPC(this));
   } else {
     macro_block_id_ = macro_block_id;
     block_state_ = BlockState::ON_DISK;
@@ -565,7 +565,7 @@ void ObTmpFileBlockManager::destroy()
   block_allocator_.reset();
 }
 
-int ObTmpFileBlockManager::init(const uint64_t tenant_id, const int64_t block_mem_limit)
+int ObTmpFileBlockManager::init(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
 
@@ -578,9 +578,8 @@ int ObTmpFileBlockManager::init(const uint64_t tenant_id, const int64_t block_me
   } else if (OB_FAIL(block_map_.init("TmpFileBlkMgr", tenant_id))) {
     LOG_WARN("fail to init tenant temporary file block manager", KR(ret), K(tenant_id));
   } else if (OB_FAIL(block_allocator_.init(common::OB_MALLOC_MIDDLE_BLOCK_SIZE,
-                                           ObModIds::OB_TMP_BLOCK_MANAGER, tenant_id_,
-                                           block_mem_limit))) {
-    LOG_WARN("fail to init temporary file block allocator", KR(ret), K(tenant_id_), K(block_mem_limit));
+                                           ObModIds::OB_TMP_BLOCK_MANAGER, tenant_id_, INT64_MAX))) {
+    LOG_WARN("fail to init temporary file block allocator", KR(ret), K(tenant_id_));
   } else {
     block_allocator_.set_attr(ObMemAttr(tenant_id, "TmpFileBlk"));
     tenant_id_ = tenant_id;

@@ -79,6 +79,7 @@ public:
   explicit ObExprHour(common::ObIAllocator &alloc);
   virtual ~ObExprHour();
   static int calc_hour(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_hour_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private :
   //disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprHour);
@@ -91,6 +92,7 @@ public:
   explicit ObExprMinute(common::ObIAllocator &alloc);
   virtual ~ObExprMinute();
   static int calc_minute(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_minute_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprMinute);
 };
@@ -124,6 +126,7 @@ public:
   explicit ObExprYear(common::ObIAllocator &alloc);
   virtual ~ObExprYear();
   static int calc_year(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_year_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprYear);
 };
@@ -135,6 +138,7 @@ public:
   explicit ObExprMonth(common::ObIAllocator &alloc);
   virtual ~ObExprMonth();
   static int calc_month(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_month_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprMonth);
 };
@@ -149,6 +153,7 @@ public:
                                 ObExprResType &type1,
                                 common::ObExprTypeCtx &type_ctx) const;
   static int calc_month_name(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_month_name_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
   static const char* get_month_name(int month);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprMonthName);

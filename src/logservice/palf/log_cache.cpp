@@ -501,7 +501,7 @@ int LogColdCache::read(const int64_t flashback_version,
                        const int64_t in_read_size,
                        ReadBuf &read_buf,
                        int64_t &out_read_size,
-                       LogIteratorInfo *iterator_info)
+                       LogIOContext &io_ctx)
 {
   #define PRINT_INFO K_(palf_id), K_(tenant_id)
 
@@ -512,20 +512,23 @@ int LogColdCache::read(const int64_t flashback_version,
   LSN read_lsn = lsn;
   int64_t real_read_size = in_read_size;
   int64_t disk_out_read_size = 0;
-  ObTenantStatEstGuard tenant_stat_guard(tenant_id_);
+  LogIteratorInfo *iterator_info = io_ctx.get_iterator_info();
   // read process:
   // 1. read from kv cache
   // 2. deal with miss if miss happens
   // 3. read from disk
   // 4. fill kv cache when it's allowed
-  if (OB_SUCC(get_cache_lines_(lsn, flashback_version,
+  if (OB_ISNULL(iterator_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(WARN, "iterator_info should not be NULL!", K(ret), KP(iterator_info));
+  } else if (OB_SUCC(get_cache_lines_(lsn, flashback_version,
                                in_read_size, read_buf.buf_, cache_lines_read_size, iterator_info))) {
     // read all logs from kv cache successfully
     out_read_size += cache_lines_read_size;
   } else if (OB_ENTRY_NOT_EXIST != ret) {
     // reading from disk directly if other error codes happen
     int original_ret = ret;
-    if (OB_FAIL(read_from_disk_(lsn, in_read_size, read_buf, out_read_size, iterator_info))) {
+    if (OB_FAIL(read_from_disk_(lsn, in_read_size, read_buf, out_read_size, io_ctx))) {
       PALF_LOG(WARN, "read_from_disk_ failed", K(ret), K(original_ret), K(lsn), K(in_read_size), K(out_read_size));
     }
   } else if (OB_FAIL(allow_filling_cache_(iterator_info, enable_fill_cache))) {
@@ -536,7 +539,7 @@ int LogColdCache::read(const int64_t flashback_version,
              K(read_lsn), K(real_read_size), K(out_read_size), K(cache_out_read_size), PRINT_INFO);
   } else if (FALSE_IT(read_buf.buf_ += cache_out_read_size)) {
   } else if (OB_FAIL(read_from_disk_(read_lsn, real_read_size, read_buf,
-                                     disk_out_read_size, iterator_info))) {
+                                     disk_out_read_size, io_ctx))) {
     read_buf.buf_ -= cache_out_read_size;
     PALF_LOG(WARN, "read_from_disk_ failed", K(ret), K(read_lsn), K(real_read_size), K(out_read_size));
   } else {
@@ -809,14 +812,14 @@ int LogColdCache::read_from_disk_(const LSN &read_lsn,
                                   const int64_t in_read_size,
                                   ReadBuf &read_buf,
                                   int64_t &out_read_size,
-                                  LogIteratorInfo *iterator_info)
+                                  LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   const block_id_t read_block_id = lsn_2_block(read_lsn, logical_block_size_);
   const offset_t real_read_offset = get_phy_offset_(read_lsn);
 
   if (OB_FAIL(log_reader_->pread(read_block_id, real_read_offset,
-                                 in_read_size, read_buf, out_read_size, iterator_info))) {
+                                 in_read_size, read_buf, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "read_from_disk failed", K(ret), K(read_lsn), K(in_read_size));
   } else {
     PALF_LOG(TRACE, "read_from_disk succeed", K(read_lsn), K(in_read_size),
@@ -932,7 +935,7 @@ int LogCache::init(const int64_t palf_id,
   return ret;
 }
 
-bool LogCache::is_inited()
+bool LogCache::is_inited() const
 {
   return is_inited_;
 }
@@ -942,7 +945,7 @@ int LogCache::read(const int64_t flashback_version,
                    const int64_t in_read_size,
                    ReadBuf &read_buf,
                    int64_t &out_read_size,
-                   LogIteratorInfo *iterator_info)
+                   LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   const bool is_cold_cache = false;
@@ -954,11 +957,11 @@ int LogCache::read(const int64_t flashback_version,
     PALF_LOG(WARN, "Invalid argument!!!", K(ret), K(lsn), K(in_read_size), K(read_buf));
   } else if (OB_SUCC(read_hot_cache_(lsn, in_read_size, read_buf.buf_, out_read_size))) {
     // read data from hot_cache successfully
-    iterator_info->inc_hit_cnt(is_cold_cache);
-    iterator_info->inc_cache_read_size(out_read_size, is_cold_cache);
-  } else if (FALSE_IT(iterator_info->inc_miss_cnt(is_cold_cache))) {
+    io_ctx.inc_hit_cnt(is_cold_cache);
+    io_ctx.inc_cache_read_size(out_read_size, is_cold_cache);
+  } else if (FALSE_IT(io_ctx.inc_miss_cnt(is_cold_cache))) {
   } else if (OB_FAIL(read_cold_cache_(flashback_version, lsn, in_read_size,
-                                      read_buf, out_read_size, iterator_info))) {
+                                      read_buf, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "fail to read from cold cache", K(ret), K(lsn), K(in_read_size), K(read_buf), K(out_read_size));
   } else {
     // read data from kv cache successfully
@@ -1055,15 +1058,14 @@ int LogCache::read_cold_cache_(const int64_t flashback_version,
                               const int64_t in_read_size,
                               ReadBuf &read_buf,
                               int64_t &out_read_size,
-                              LogIteratorInfo *iterator_info)
+                              LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   if (!lsn.is_valid() || 0 >= in_read_size || !read_buf.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K(lsn), K(in_read_size), K(read_buf));
   } else if (OB_FAIL(cold_cache_.read(flashback_version, lsn, in_read_size,
-                                      read_buf, out_read_size,
-                                      iterator_info))) {
+                                      read_buf, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "read cold cache failed", K(ret), K(lsn), K(in_read_size), K(read_buf), K(out_read_size));
   } else {
     PALF_LOG(TRACE, "read cold cache successfully", K(lsn), K(in_read_size), K(read_buf), K(out_read_size));

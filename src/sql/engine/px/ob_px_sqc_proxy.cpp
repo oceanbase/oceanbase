@@ -669,7 +669,7 @@ int ObPxSQCProxy::sync_wait_all(ObPxDatahubDataProvider &provider)
   do {
     ++loop_cnt;
     if (task_cnt == idx % (BREAK_TASK_CNT(task_cnt))) { // last thread
-      provider.msg_set_ = false;
+      provider.whole_msg_set_ = false;
       provider.reset(); // reset whole message
       ATOMIC_AAF(&provider.rescan_cnt_, 1);
       MEM_BARRIER();

@@ -160,8 +160,7 @@ struct ObKVCacheInstKey
   {
     return !(*this == other);
   }
-  inline bool is_valid() const { return cache_id_ >= 0 && cache_id_ < MAX_CACHE_NUM
-      && tenant_id_ < (uint64_t) OB_DEFAULT_TENANT_COUNT; }
+  inline bool is_valid() const { return cache_id_ >= 0 && cache_id_ < MAX_CACHE_NUM; }
   inline void reset()
   {
     tenant_id_ = OB_INVALID_ID;

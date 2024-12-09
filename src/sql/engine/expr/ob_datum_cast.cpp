@@ -180,6 +180,13 @@ static OB_INLINE int get_cast_ret(const ObCastMode &cast_mode, int ret, int &war
   return ret;
 }
 
+// Original static function get_cast_ret() cannot be called from util.ipp
+// A better solution is needed?
+int get_cast_ret_wrap(const ObCastMode &cast_mode, int ret, int &warning)
+{
+  return get_cast_ret(cast_mode, ret, warning);
+}
+
 // 出现错误时,处理如下：
 // 如果只设置了WARN_ON_FAIL，会覆盖错误码
 // 如果设置了WARN_ON_FAIL和ZERO_ON_WARN,会覆盖错误码，且结果被置为0
@@ -1139,6 +1146,15 @@ static OB_INLINE int common_string_float(const ObExpr &expr,
     LOG_WARN("common_double_float failed", K(ret), K(tmp_double));
   }
   return ret;
+}
+
+// Original static function common_string_float() cannot be called from string_float.ipp
+// A better solution is needed?
+int common_string_float_wrap(const ObExpr &expr,
+                             const ObString &in_str,
+                             float &out_val)
+{
+  return common_string_float(expr, in_str, out_val);
 }
 
 static OB_INLINE int common_string_date(const ObExpr &expr,
@@ -8772,7 +8788,12 @@ CAST_FUNC_NAME(json, year)
         LOG_WARN("fail to cast json int to year type", K(ret), K(int_val));
       } else {
         if (lib::is_mysql_mode() && (warning == OB_DATA_OUT_OF_RANGE)) {
-          res_datum.set_null(); // not change the behavior of int_year
+          if (CM_IS_WARN_ON_FAIL(expr.extra_)) {
+            out_val = 0;
+            SET_RES_YEAR(out_val);
+          } else {
+            res_datum.set_null(); // not change the behavior of int_year
+          }
         } else {
           SET_RES_YEAR(out_val);
         }
@@ -9813,11 +9834,7 @@ CAST_FUNC_NAME(collection, collection)
         LOG_WARN("alloc array cast failed", K(ret), K(src_coll_info));
       } else if (OB_FAIL(arr_cast->cast(temp_allocator, arr_src, elem_type, arr_dst, dst_elem_type, expr.extra_))) {
         LOG_WARN("array element cast failed", K(ret), K(*src_coll_info), K(*dst_coll_info));
-        if (ret == OB_ERR_ARRAY_TYPE_MISMATCH) {
-          ObString dst_def = dst_coll_info->get_def_string();
-          ObString src_def = src_coll_info->get_def_string();
-          LOG_USER_ERROR(OB_ERR_ARRAY_TYPE_MISMATCH, dst_def.length(), dst_def.ptr(), src_def.length(), src_def.ptr());
-        } else if (ret == OB_ERR_INVALID_VECTOR_DIM) {
+        if (ret == OB_ERR_INVALID_VECTOR_DIM) {
           LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM, static_cast<uint32_t>(dst_arr_type->dim_cnt_), arr_src->size());
         }
       } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {

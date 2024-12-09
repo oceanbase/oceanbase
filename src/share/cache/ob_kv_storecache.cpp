@@ -352,7 +352,7 @@ int ObKVGlobalCache::put(
     COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited, ", K(ret));
   } else if (OB_UNLIKELY(!inst_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "The tenant_id is too large, ", K(inst_key), K(ret));
+    COMMON_LOG(WARN, "invalid inst_key", K(inst_key), K(ret));
   } else if (OB_FAIL(insts_.get_cache_inst(inst_key, inst_handle))) {
     COMMON_LOG(WARN, "Fail to get cache inst, ", K(ret));
   } else if (NULL == inst_handle.get_inst()) {

@@ -10,12 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_MANAGER_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_MANAGER_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_MANAGER_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_MANAGER_H_
 
 #include "storage/tmp_file/ob_tmp_file_io_info.h"
 #include "storage/tmp_file/ob_tmp_file_io_handle.h"
-#include "storage/blocksstable/ob_ss_tmp_file_manager.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/tmp_file/ob_ss_tmp_file_manager.h"
+#endif
 #include "storage/tmp_file/ob_sn_tmp_file_manager.h"
 
 namespace oceanbase
@@ -23,22 +25,24 @@ namespace oceanbase
 namespace tmp_file
 {
 
-class ObTenantTmpFileManager final
+class ObTenantTmpFileManager
 {
 public:
   ObTenantTmpFileManager(): is_inited_(false) {}
-  ~ObTenantTmpFileManager() { destroy(); }
+  virtual ~ObTenantTmpFileManager() { destroy(); }
   static int mtl_init(ObTenantTmpFileManager *&manager);
-  ObSNTenantTmpFileManager &get_sn_file_manager() { return sn_file_manager_; }
-  blocksstable::ObSSTenantTmpFileManager &get_ss_file_manager() { return ss_file_manager_; }
-  int init();
+  virtual ObSNTenantTmpFileManager &get_sn_file_manager() { return sn_file_manager_; }
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSTenantTmpFileManager &get_ss_file_manager() { return ss_file_manager_; }
+#endif
+  virtual int init();
   int start();
   void stop();
   void wait();
   void destroy();
 
   int alloc_dir(int64_t &dir_id);
-  int open(int64_t &fd, const int64_t &dir_id, const char* const label);
+  virtual int open(int64_t &fd, const int64_t &dir_id, const char* const label);
   int remove(const int64_t fd);
 
 public:
@@ -55,15 +59,22 @@ public:
   //   only support append write.
   int write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
   int truncate(const int64_t fd, const int64_t offset);
+  int seal(const int64_t fd);
   int get_tmp_file_size(const int64_t fd, int64_t &file_size);
+  int get_tmp_file(const int64_t fd, ObITmpFileHandle &handle);
+  int get_tmp_file_disk_usage(int64_t &disk_data_size, int64_t &occupied_disk_size);
+
 public:
   //for virtual table to show
   int get_tmp_file_fds(ObIArray<int64_t> &fd_arr);
-  int get_tmp_file_info(const int64_t fd, ObSNTmpFileInfo &tmp_file_info);
+  int get_tmp_file_info(const int64_t fd, ObTmpFileInfo *tmp_file_info);
 private:
   bool is_inited_;
   ObSNTenantTmpFileManager sn_file_manager_;
-  blocksstable::ObSSTenantTmpFileManager ss_file_manager_;
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSTenantTmpFileManager ss_file_manager_;
+#endif
 };
 
 class ObTenantTmpFileManagerWithMTLSwitch final
@@ -89,13 +100,15 @@ public:
   //   only support append write.
   int write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
   int truncate(const uint64_t tenant_id, const int64_t fd, const int64_t offset);
+  int seal(const uint64_t tenant_id, const int64_t fd);
   int get_tmp_file_size(const uint64_t tenant_id, const int64_t fd, int64_t &file_size);
+  int get_tmp_file_disk_usage(const uint64_t tenant_id, int64_t &disk_data_size, int64_t &occupied_disk_size);
   int get_tmp_file_fds(const uint64_t tenant_id, ObIArray<int64_t> &fd_arr);
-  int get_tmp_file_info(const uint64_t tenant_id, const int64_t fd, ObSNTmpFileInfo &tmp_file_info);
+  int get_tmp_file_info(const uint64_t tenant_id, const int64_t fd, ObTmpFileInfo *tmp_file_info);
 };
 
 #define FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH (::oceanbase::tmp_file::ObTenantTmpFileManagerWithMTLSwitch::get_instance())
 }  // end namespace tmp_file
 }  // end namespace oceanbase
 
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_MANAGER_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_MANAGER_H_

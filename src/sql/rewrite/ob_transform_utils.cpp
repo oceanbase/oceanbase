@@ -39,7 +39,9 @@
 #include "sql/parser/ob_parser.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
+#include "sql/ob_sql_utils.h"
 #include "share/stat/ob_opt_stat_manager.h"
+
 
 namespace oceanbase {
 using namespace common;
@@ -3043,9 +3045,13 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
                    OB_ISNULL(right = expr->get_param_expr(1))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexcept null param expr", K(ret));
-        } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(left, left)) ||
-                   OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(right, right))) {
+        } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_unprecise_and_lossless_cast(left, left)) ||
+                   OB_FAIL(ObOptimizerUtil::get_expr_without_unprecise_and_lossless_cast(right, right))) {
           LOG_WARN("failed to get expr without lossless cast", K(ret));
+        } else if (IS_BASIC_CMP_OP(expr->get_expr_type()) &&
+                   (OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(left, left)) ||
+                    OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(right, right)))) {
+          LOG_WARN("failed to get column expr without nvl", K(ret));
         } else if (left->is_column_ref_expr() &&
                    table_id == static_cast<ObColumnRefRawExpr*>(left)->get_table_id()) {
           if (right->get_relation_ids().has_member(stmt->get_table_bit_index(table_id))) {
@@ -3485,27 +3491,50 @@ int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
   ObRawExpr *condition_expr = NULL;
   ObArenaAllocator alloc(ObMemAttr(MTL_ID(), "RewriteMinMax"));
   void *tmp_ptr = NULL;
-  ObQueryRange *query_range = NULL;
   const ParamStore *params = NULL;
   ObQueryCtx *query_ctx = NULL;
+  ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->exec_ctx_)
       || OB_ISNULL(ctx->exec_ctx_->get_physical_plan_ctx())
-      || OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
+      || OB_ISNULL(query_ctx = stmt->get_query_ctx())
+      || OB_ISNULL(session = ctx->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(ctx));
+  } else if (OB_FAIL(get_range_column_items_by_ids(stmt,
+                                                   table_id,
+                                                   index_cols,
+                                                   range_columns))) {
+    LOG_WARN("failed to get index column items by index cols", K(ret));
+  } else if (session->is_enable_new_query_range() &&
+            ObSQLUtils::is_min_cluster_version_ge_425_or_435() &&
+            ObSQLUtils::is_opt_feature_version_ge_425_or_435(query_ctx->optimizer_features_enable_version_)) {
+    ObPreRangeGraph *pre_range_graph = NULL;
+    params = &ctx->exec_ctx_->get_physical_plan_ctx()->get_param_store();
+    if (OB_ISNULL(tmp_ptr = alloc.alloc(sizeof(ObPreRangeGraph))) ||
+        OB_ISNULL(pre_range_graph = new(tmp_ptr)ObPreRangeGraph(alloc))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for pre range graph", K(ret));
+    } else if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns,
+                                                                        predicate_exprs,
+                                                                        ctx->exec_ctx_,
+                                                                        NULL,
+                                                                        params))) {
+      LOG_WARN("failed to extract query range", K(ret));
+    } else if (pre_range_graph->get_range_exprs().count() != predicate_exprs.count()) {
+      is_match = false;
+    }
+    if (OB_NOT_NULL(pre_range_graph)) {
+      pre_range_graph->~ObPreRangeGraph();
+      pre_range_graph = NULL;
+    }
   } else {
+    ObQueryRange *query_range = NULL;
     const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx->session_info_);
     params = &ctx->exec_ctx_->get_physical_plan_ctx()->get_param_store();
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(tmp_ptr = alloc.alloc(sizeof(ObQueryRange)))
-               || OB_ISNULL(query_range = new(tmp_ptr)ObQueryRange(alloc))) {
+    if (OB_ISNULL(tmp_ptr = alloc.alloc(sizeof(ObQueryRange))) ||
+        OB_ISNULL(query_range = new(tmp_ptr)ObQueryRange(alloc))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for query range", K(ret));
-    } else if (OB_FAIL(get_range_column_items_by_ids(stmt,
-                                                     table_id,
-                                                     index_cols,
-                                                     range_columns))) {
-      LOG_WARN("failed to get index column items by index cols", K(ret));
     } else if (OB_FAIL(query_range->preliminary_extract_query_range(range_columns,
                                                                     predicate_exprs,
                                                                     dtc_params,
@@ -4782,8 +4811,8 @@ int ObTransformUtils::compute_basic_table_property(const ObDMLStmt *stmt,
   ObSEArray<ObRawExpr*, 8> cur_cond_exprs;
   ObSqlBitSet<> table_set;
   ObSqlSchemaGuard *schema_guard = NULL;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   if (OB_ISNULL(stmt) || OB_ISNULL(table) || OB_ISNULL(check_helper.alloc_)
       || OB_ISNULL(check_helper.fd_factory_)
       || OB_ISNULL(check_helper.schema_checker_)
@@ -11190,6 +11219,8 @@ int ObTransformUtils::check_correlated_exprs_can_pullup_for_set(const ObIArray<O
   if (subquery.get_set_op() != ObSelectStmt::UNION || subquery.is_recursive_union()) {
     //TODO: pullup correlated exprs for intersect and minus
     can_pullup = !subquery.is_set_distinct();
+  } else if (subquery.has_order_by()) {
+    can_pullup = false;
   }
   ObSEArray<ObRawExpr*, 4> left_select_exprs;
   ObSEArray<ObRawExpr*, 4> right_select_exprs;

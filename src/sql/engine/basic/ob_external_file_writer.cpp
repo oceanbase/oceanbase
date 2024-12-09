@@ -56,7 +56,11 @@ int ObExternalFileWriter::close_file()
 {
   int ret = OB_SUCCESS;
   if (IntoFileLocation::SERVER_DISK == file_location_) {
-    file_appender_.close();
+    if (file_appender_.is_opened() && OB_FAIL(file_appender_.fsync())) {
+      LOG_WARN("failed to do fsync", K(ret));
+    } else {
+      file_appender_.close();
+    }
   } else if (OB_FAIL(storage_appender_.close())) {
     LOG_WARN("fail to close storage appender", K(ret), K(url_), K(access_info_));
   }

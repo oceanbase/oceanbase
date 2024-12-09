@@ -24,6 +24,14 @@ namespace oceanbase
 namespace sql
 {
 
+enum ObDmlGTSOptState
+{
+  WITHOUT_GTS_OPT_STATE = 0,
+  USE_PARTITION_SNAPSHOT_STATE = 1,
+  WITH_UNIQUE_GLOBAL_INDEX_STATE = 2,
+  GTE_GTS_STATE = 3,
+};
+
 class ForeignKeyHandle
 {
 public:
@@ -134,7 +142,8 @@ public:
       uint64_t has_instead_of_trigger_          : 1; // abandoned, don't use again
       uint64_t is_pdml_update_split_            : 1; // 标记delete, insert op是否由update拆分而来
       uint64_t check_fk_batch_                  : 1; // mark if the foreign key constraint can be checked in batch
-      uint64_t reserved_                        : 55;
+      uint64_t is_pdml_                         : 1;
+      uint64_t reserved_                        : 54;
     };
   };
   int64_t das_dop_; // default is 0
@@ -264,13 +273,25 @@ protected:
   //such as: set affected_rows to query context, rewrite some error code
   virtual int write_rows_post_proc(int last_errno)
   { UNUSED(last_errno); return common::OB_NOT_IMPLEMENT; }
+  virtual ObDasParallelType check_das_parallel_type();
 
   int init_das_dml_ctx();
   //to merge array binding cusor info when array binding is executed in batch mode
-  int merge_implict_cursor(int64_t insert_rows,
-                           int64_t update_rows,
-                           int64_t delete_rows,
-                           int64_t found_rows);
+  int merge_implict_cursor(int64_t affected_rows,
+                           int64_t found_rows,
+                           int64_t matched_rows,
+                           int64_t duplicated_rows);
+
+  int prepare_implict_cursor(int64_t affected_rows,
+                             int64_t found_rows,
+                             int64_t matched_rows_,
+                             int64_t duplicated_rows_,
+                             ObImplicitCursorInfo &implicit_cursor);
+
+  int replace_implict_cursor(int64_t insert_rows,
+                             int64_t update_rows,
+                             int64_t delete_rows,
+                             int64_t found_rows);
   int discharge_das_write_buffer();
   virtual void record_err_for_load_data(int err_ret, int row_num) { UNUSED(err_ret); UNUSED(row_num); }
 public:

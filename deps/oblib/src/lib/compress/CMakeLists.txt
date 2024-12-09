@@ -23,6 +23,13 @@ oblib_add_library(compress
   zlib_lite/ob_zlib_lite_compressor.cpp
   zlib_lite/ob_zlib_lite_compressor.h)
 
+if (CPP_STANDARD_20)
+  target_compile_options(compress
+    PRIVATE
+    -Wno-deprecated-non-prototype
+  )
+endif()
+
 add_subdirectory(zstd)
 add_subdirectory(zstd_1_3_8)
 add_subdirectory(lz4)

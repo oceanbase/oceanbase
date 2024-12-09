@@ -164,7 +164,7 @@ int ObDirectLoadOriginTable::prepare_tables()
 int ObDirectLoadOriginTable::scan(
     const ObDatumRange &key_range,
     ObIAllocator &allocator,
-    ObIStoreRowIterator *&row_iter,
+    ObDirectLoadIStoreRowIterator *&row_iter,
     bool skip_read_lob)
 {
   int ret = OB_SUCCESS;
@@ -260,6 +260,10 @@ int ObDirectLoadOriginTableScanner::init(ObDirectLoadOriginTable *origin_table, 
                  scan_merge_.init(table_access_param_, table_access_ctx_, get_table_param_))) {
       LOG_WARN("fail to init multi merge", KR(ret));
     } else {
+      row_flag_.uncontain_hidden_pk_ = false;
+      row_flag_.has_multi_version_cols_ = false;
+      row_flag_.has_delete_row_ = false;
+      column_count_ = col_ids_.count();
       is_inited_ = true;
     }
   }

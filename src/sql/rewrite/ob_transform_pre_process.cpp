@@ -7077,6 +7077,11 @@ int ObTransformPreProcess::try_transform_common_rownum_as_limit_or_false(ObDMLSt
         }
       }
     }
+    if (OB_FAIL(ret) || !is_valid || limit_expr == NULL) {
+    } else if (0 == stmt->get_from_item_size()) {
+      // limit expr (if not limit 0, and no offset) is useless for dual table
+      limit_expr = NULL;
+    }
   }
   return ret;
 }
@@ -7975,6 +7980,8 @@ int ObTransformPreProcess::build_rowid_expr(ObSelectStmt *select_stmt,
     ObSEArray<ObRawExpr*, 4> index_keys;
     uint64_t tid = table_item->ref_id_;
     ObRawExpr *same_rowid_expr = NULL;
+    ObRawExpr *part_expr = select_stmt->get_part_expr(table_item->table_id_, table_item->ref_id_);
+    ObRawExpr *subpart_expr = select_stmt->get_subpart_expr(table_item->table_id_, table_item->ref_id_);
     if (OB_FAIL(ctx_->schema_checker_->get_table_schema(ctx_->session_info_->get_effective_tenant_id(), tid, table_schema, table_item->is_link_table()))) {
       LOG_WARN("fail to get table schema", K(ret), K(tid));
     } else if (OB_ISNULL(table_schema)) {
@@ -7998,13 +8005,13 @@ int ObTransformPreProcess::build_rowid_expr(ObSelectStmt *select_stmt,
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObRawExprUtils::build_rowid_expr(select_stmt,
-                                                          *(ctx_->expr_factory_),
+      } else if (OB_FAIL(ObRawExprUtils::build_rowid_expr(*(ctx_->expr_factory_),
                                                           *(ctx_->allocator_),
                                                           *(ctx_->session_info_),
                                                           *table_schema,
-                                                          table_item->table_id_,
                                                           index_keys,
+                                                          part_expr,
+                                                          subpart_expr,
                                                           rowid_expr))) {
         LOG_WARN("build rowid col_expr failed", K(ret));
       } else if (OB_FAIL(select_stmt->check_and_get_same_rowid_expr(rowid_expr, same_rowid_expr))) {
@@ -8064,6 +8071,107 @@ int ObTransformPreProcess::transform_for_upd_del_batch_stmt(ObDMLStmt *batch_stm
                                           trans_happened))) {
     LOG_WARN("fail to formalize batch stmt", K(ret), KPC(batch_stmt));
   }
+  return ret;
+}
+
+int ObTransformPreProcess::transform_for_insertup_batch_stmt(ObDMLStmt *batch_stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObInsertStmt *insert_stmt = NULL;
+  ObExecContext *exec_ctx = nullptr;
+  ObPhysicalPlanCtx *plan_ctx = nullptr;
+  ObSQLSessionInfo *session_info = NULL;
+  ObSEArray<ObRawExpr*, 4> assignment_params;
+  ObSEArray<ObRawExpr*, 4> params;
+  ObSEArray<ObRawExpr*, 4> assignments_exprs;
+  ObSEArray<ObRawExpr*, 4> group_param_exprs;
+  ObPseudoColumnRawExpr *stmt_id_expr = NULL;
+  const ParamStore *param_store = nullptr;
+
+  if (OB_ISNULL(ctx_)
+      || OB_ISNULL(exec_ctx = ctx_->exec_ctx_)
+      || OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())
+      || OB_ISNULL(session_info = ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ctx_), K(exec_ctx), K(plan_ctx), K(ret));
+  } else if (FALSE_IT(param_store = &plan_ctx->get_param_store())) {
+    // do nothing
+  } else if (OB_ISNULL(batch_stmt) ||
+             OB_UNLIKELY(!batch_stmt->is_insert_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("batch_stmt or inner_view_stmt is null", K(ret), K(batch_stmt));
+  } else if (FALSE_IT(insert_stmt = static_cast<ObInsertStmt*>(batch_stmt))) {
+  } else if (FALSE_IT(batch_stmt->get_query_ctx()->ins_values_batch_opt_ = true)) {
+  } else if (OB_FAIL(create_stmt_id_expr(stmt_id_expr))) {
+    LOG_WARN("fail to create stmt id expr", K(ret));
+  } else if (FALSE_IT(static_cast<ObDelUpdStmt*>(batch_stmt)->set_ab_stmt_id_expr(stmt_id_expr))) {
+  } else if (OB_FAIL(insert_stmt->get_all_assignment_exprs(assignments_exprs))) {
+    LOG_WARN("fail to get all assignments exprs", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_params(assignments_exprs, assignment_params))) {
+    LOG_WARN("extract param expr from related exprs failed", K(ret));
+  }
+
+  // 1. record assignment params
+  for (int64_t i = 0; OB_SUCC(ret) && i < assignment_params.count(); ++i) {
+    ObConstRawExpr *param_expr = static_cast<ObConstRawExpr *>(assignment_params.at(i));
+    int64_t param_idx = param_expr->get_value().get_unknown();
+    if (param_idx < 0 || param_idx >= param_store->count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param_idx is invalid", K(ret), K(param_idx), KPC(param_store));
+    } else if (param_store->at(param_idx).is_batch_parameters()
+        && !has_exist_in_array(batch_stmt->get_query_ctx()->ab_param_exprs_,
+                               static_cast<ObRawExpr*>(param_expr))) {
+      ObPseudoColumnRawExpr *group_param_expr = nullptr;
+      //create pseudo column for the sql array param
+      if (OB_FAIL(create_params_expr(group_param_expr, param_expr, i))) {
+        LOG_WARN("fail to create group param expr", K(ret), K(param_expr));
+      } else if (OB_FAIL(batch_stmt->get_query_ctx()->ab_param_exprs_.push_back(param_expr))) {
+        LOG_WARN("add param expr to select list exprs failed", K(ret));
+      } else if (OB_FAIL(group_param_exprs.push_back(group_param_expr))) {
+        LOG_WARN("fail to push back group params", K(ret), K(group_param_expr));
+      }
+    }
+  }
+
+  // 2. deduce value_vector params
+  if (OB_FAIL(ret)) {
+
+  } else if (OB_FAIL(ObRawExprUtils::extract_params(insert_stmt->get_values_vector(), params))) {
+    LOG_WARN("extract param expr from related exprs failed", K(ret));
+  } else {
+    common::ObIArray<ObRawExpr*> &value_vector = insert_stmt->get_values_vector();
+    const ParamStore &param_store = plan_ctx->get_param_store();
+    for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
+      ObConstRawExpr *param_expr = static_cast<ObConstRawExpr *>(params.at(i));
+      ObPseudoColumnRawExpr *group_id = NULL;
+      int64_t param_idx = param_expr->get_value().get_unknown();
+      if (param_idx < 0 || param_idx >= param_store.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param_idx is invalid", K(ret), K(param_idx), K(param_store));
+      } else if (!param_store.at(param_idx).is_batch_parameters()) {
+        // is not batch params
+      } else {
+        param_expr->set_is_batch_stmt_parameter();
+      }
+    }
+    // Mark the expression in value_vector with a batch parameter flag.
+    // The expression will be cleared eval_flag and re-operated
+    // only when the subsequent values ​​operator iterates the parameters.
+    for (int64_t i = 0; OB_SUCC(ret) && i < value_vector.count(); ++i) {
+      if (OB_FAIL(value_vector.at(i)->formalize(session_info))) {
+        LOG_WARN("formalize expr failed", K(ret), K(i), KPC(value_vector.at(i)));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!group_param_exprs.empty() &&
+      OB_FAIL(batch_stmt->replace_relation_exprs(batch_stmt->get_query_ctx()->ab_param_exprs_, group_param_exprs))) {
+    LOG_WARN("fail to replace relation exprs", K(ret), K(batch_stmt->get_query_ctx()->ab_param_exprs_), K(group_param_exprs));
+  } else if (OB_FAIL(insert_stmt->get_group_param_exprs().assign(group_param_exprs))) {
+    LOG_WARN("fail to assign group expr", K(ret));
+  }
+
   return ret;
 }
 
@@ -8262,8 +8370,42 @@ int ObTransformPreProcess::transform_for_batch_stmt(ObDMLStmt *batch_stmt, bool 
     } else if (!can_batch) {
       ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
       LOG_TRACE("can't support insert batch optimization", K(ret), KPC(batch_stmt));
-    } else if (OB_FAIL(transform_for_ins_batch_stmt(batch_stmt, trans_happened))) {
+    } else if (!insert_stmt->is_insert_up() &&
+        OB_FAIL(transform_for_ins_batch_stmt(batch_stmt, trans_happened))) {
       LOG_WARN("fail to transform ins batch stmt", K(ret));
+    } else if (insert_stmt->is_insert_up() &&
+        OB_FAIL(transform_for_insertup_batch_stmt(batch_stmt, trans_happened))) {
+      LOG_WARN("fail to transform insertup batch opt", K(ret));
+    }
+  }
+  return ret;
+}
+
+bool ObTransformPreProcess::check_insertup_support_batch_opt(ObInsertStmt *insert_stmt, bool &can_batch)
+{
+  int ret = OB_SUCCESS;
+  int64_t child_size = 0;
+  ObSQLSessionInfo *session_info = NULL;
+  uint64_t tenant_data_version = 0;
+  if (OB_ISNULL(session_info = ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_ISNULL(insert_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (insert_stmt->is_insert_up() || insert_stmt->is_replace()) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(session_info->get_effective_tenant_id(), tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+    } else if ((DATA_VERSION_4_3_5_0 > tenant_data_version)) {
+      // ([4.3.5, ...)) support insertup/replace multi_query batch optimization
+      can_batch = false;
+      LOG_TRACE("insertup and replace can't supported batch_opt with this version", K(ret), K(tenant_data_version));
+    } else if (OB_FAIL(insert_stmt->get_child_stmt_size(child_size))) {
+      LOG_WARN("fail to get child_stmt size", K(ret), KPC(insert_stmt));
+    } else if (child_size != 0) {
+      // with subquery for insertup/replace/insert can't support batch_optimization
+      can_batch = false;
+      LOG_TRACE("insert with subquery supported batch exec opt", K(ret));
     }
   }
   return ret;
@@ -8288,9 +8430,12 @@ int ObTransformPreProcess::check_insert_can_batch(ObInsertStmt *insert_stmt, boo
   } else if (!insert_stmt->is_insert_single_value()) {
     can_batch = false;
     LOG_TRACE("multi row insert not supported batch exec opt", K(ret));
-  } else if (is_multi_query && (insert_stmt->is_insert_up() || insert_stmt->is_replace())) {
+  } else if (OB_FAIL(check_insertup_support_batch_opt(insert_stmt, can_batch))) {
+    LOG_WARN("fail to get child_stmt size", K(ret), KPC(insert_stmt));
+  } else if (!can_batch) {
+    // with subquery for insertup/replace/insert can't support batch_optimization
     can_batch = false;
-    LOG_TRACE("replace and insertup not supported batch exec opt", K(ret));
+    LOG_TRACE("insert with subquery supported batch exec opt", K(ret));
   } else {
     common::ObIArray<ObRawExpr*> &value_vector = insert_stmt->get_values_vector();
     for (int64_t i = 0; OB_SUCC(ret) && i < value_vector.count(); i++) {
@@ -8299,6 +8444,7 @@ int ObTransformPreProcess::check_insert_can_batch(ObInsertStmt *insert_stmt, boo
       }
     }
   }
+  LOG_TRACE("after check can support batch_optimization", K(ret), K(can_batch));
   return ret;
 }
 
@@ -10348,7 +10494,7 @@ int ObTransformPreProcess::preserve_order_for_fulltext_search(ObDMLStmt *stmt, b
   int ret = OB_SUCCESS;
   trans_happened = false;
   TableItem *table_item = NULL;
-  ObMatchFunRawExpr *match_expr = NULL;
+  ObRawExpr *match_expr = nullptr;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
@@ -10367,18 +10513,57 @@ int ObTransformPreProcess::preserve_order_for_fulltext_search(ObDMLStmt *stmt, b
     LOG_WARN("unexpected null", K(ret));
   } else if (!table_item->is_basic_table()) {
     // do nothing
-  } else if (OB_FAIL(stmt->get_match_expr_on_table(table_item->table_id_, match_expr))) {
-    LOG_WARN("failed to get fulltext search expr on table", K(table_item->table_id_), K(ret));
-  } else if (OB_ISNULL(match_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
+  } else if (0 == stmt->get_match_exprs().count()) {
+    // do nothing
   } else {
+    const common::ObIArray<ObRawExpr *> &condition_exprs = stmt->get_condition_exprs();
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < condition_exprs.count(); ++i) {
+      ObRawExpr *filter = nullptr;
+      if (OB_ISNULL(filter = condition_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr to where condition filter", K(ret), K(i), KP(filter));
+      } else if (filter->has_flag(IS_MATCH_EXPR)) {
+        match_expr = filter;
+        found = true;
+      } else if (!filter->has_flag(CNT_MATCH_EXPR)
+          || filter->has_flag(CNT_OR)) {
+        // skip
+      } else if (IS_RANGE_CMP_OP(filter->get_expr_type())) {
+        ObRawExpr *param_expr0 = filter->get_param_expr(0);
+        ObRawExpr *param_expr1 = filter->get_param_expr(1);
+        if (OB_ISNULL(param_expr0) || OB_ISNULL(param_expr1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpecter null param expr for range cmp op", K(ret), KP(param_expr0), KP(param_expr1));
+        } else if (param_expr0->is_const_expr() && param_expr1->has_flag(IS_MATCH_EXPR)) {
+          match_expr = param_expr1;
+          found = true;
+        } else if (param_expr1->is_const_expr() && param_expr0->has_flag(IS_MATCH_EXPR)) {
+          match_expr = param_expr0;
+          found = true;
+        }
+      } else if (filter->get_expr_type() == T_OP_BOOL) {
+        ObRawExpr *param_expr = filter->get_param_expr(0);
+        if (OB_ISNULL(param_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null param expr for bool op", K(ret));
+        } else if (param_expr->has_flag(IS_MATCH_EXPR)) {
+          found = true;
+          match_expr = param_expr;
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && nullptr != match_expr) {
     OrderItem item(match_expr, default_desc_direction());
     if (OB_FAIL(stmt->add_order_item(item))) {
       LOG_WARN("failed to add order item", K(ret), K(item));
+    } else {
+      trans_happened = true;
     }
-    trans_happened = true;
   }
+
   return ret;
 }
 

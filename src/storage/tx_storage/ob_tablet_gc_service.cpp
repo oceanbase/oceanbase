@@ -76,16 +76,21 @@ int ObTabletGCService::init()
 int ObTabletGCService::start()
 {
   int ret = OB_SUCCESS;
-  timer_for_tablet_change_.set_run_wrapper(MTL_CTX());
-  timer_for_tablet_shell_.set_run_wrapper(MTL_CTX());
   bool is_shared_storage = GCTX.is_shared_storage_mode();
 #ifdef OB_BUILD_SHARED_STORAGE
   if (is_shared_storage) {
-    timer_for_private_block_gc_.set_run_wrapper(MTL_CTX());
+    if (OB_FAIL(timer_for_private_block_gc_.set_run_wrapper(MTL_CTX()))) {
+      STORAGE_LOG(ERROR, "fail to set timer's run wrapper", KR(ret));
+    }
   }
 #endif
-  if (OB_FAIL(timer_for_tablet_change_.init())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(timer_for_tablet_change_.set_run_wrapper(MTL_CTX()))) {
+    STORAGE_LOG(ERROR, "fail to set timer's run wrapper", KR(ret));
+  } else if (OB_FAIL(timer_for_tablet_change_.init())) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
+  } else if (OB_FAIL(timer_for_tablet_shell_.set_run_wrapper(MTL_CTX()))) {
+    STORAGE_LOG(ERROR, "fail to set timer's run wrapper", KR(ret));
   } else if (OB_FAIL(timer_for_tablet_shell_.init("TabletShell", ObMemAttr(MTL_ID(), "TabletShell")))) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -244,7 +249,7 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
           // 5. wait unpersit_tablet_ids
           else if (no_need_wait_persist) {
             // temporariily skip for not support persist uncommited mds data.
-            ob_usleep(ObTabletGCHandler::FLUSH_CHECK_INTERVAL);
+            ob_usleep(ObTabletGCHandler::FLUSH_CHECK_INTERVAL, true);
           } else if(OB_FAIL(tablet_gc_handler->wait_unpersist_tablet_ids_flushed(unpersist_tablet_ids, decided_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "fail to wait unpersist tablet ids flushed", KR(ret), KPC(tablet_gc_handler->ls_), K(unpersist_tablet_ids));
@@ -666,7 +671,7 @@ int ObTabletGCHandler::wait_unpersist_tablet_ids_flushed(const common::ObTabletI
   }
   // wait all tablet flushed
   while (unpersist_tablet_ids.count() > i && retry_times > 0 && OB_SUCC(ret)) {
-    ob_usleep(FLUSH_CHECK_INTERVAL);
+    ob_usleep(FLUSH_CHECK_INTERVAL, true);
     while (unpersist_tablet_ids.count() > i && OB_SUCC(ret)) {
       ObTabletHandle handle;
       ObTablet *tablet = nullptr;

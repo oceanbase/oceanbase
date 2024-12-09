@@ -1005,7 +1005,9 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
     } else if (OB_FAIL(val.get_int(autocommit))) {
       LOG_WARN("fail get commit val", K(val), K(ret));
     } else if (0 != autocommit && 1 != autocommit) {
-      const char *autocommit_str = to_cstring(autocommit);
+      char autocommit_str[32] = {'\0'};
+      int64_t pos = 0;
+      (void)databuff_printf(autocommit_str, sizeof(autocommit_str), pos, "%ld", autocommit);
       ret = OB_ERR_WRONG_VALUE_FOR_VAR;
       LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, (int)strlen(OB_SV_AUTOCOMMIT), OB_SV_AUTOCOMMIT,
                      (int)strlen(autocommit_str), autocommit_str);
@@ -1367,6 +1369,9 @@ int ObVariableSetExecutor::is_support(const share::ObSetVar &set_var)
              (SYS_VAR_BIG_TABLES <= var_id && SYS_VAR_DELAYED_INSERT_LIMIT >= var_id) ||
              (SYS_VAR_GTID_EXECUTED <= var_id && SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION >= var_id) ||
              (SYS_VAR_INNODB_READ_ONLY <= var_id && SYS_VAR_SUPER_READ_ONLY >= var_id)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
+  } else if (SYS_VAR_LOW_PRIORITY_UPDATES <= var_id && SYS_VAR_MAX_INSERT_DELAYED_THREADS >= var_id) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
   }

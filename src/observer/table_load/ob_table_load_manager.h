@@ -204,6 +204,86 @@ private:
     Value *value_;
   };
 
+  template <typename Value>
+  class GetAllKeyFunc
+  {
+    typedef ObjHandle<Value> Handle;
+
+  public:
+    GetAllKeyFunc(common::ObIArray<ObTableLoadUniqueKey> &list) : list_(list) {}
+    int operator()(common::hash::HashMapPair<ObTableLoadUniqueKey, Handle> &entry)
+    {
+      int ret = OB_SUCCESS;
+      const ObTableLoadUniqueKey &key = entry.first;
+      if (OB_FAIL(list_.push_back(key))) {
+        SERVER_LOG(WARN, "fail to push back", KR(ret), K(key));
+      }
+      return ret;
+    }
+
+  private:
+    common::ObIArray<ObTableLoadUniqueKey> &list_;
+  };
+
+  template <typename Value>
+  class GetAllInactiveKeyFunc
+  {
+    typedef ObjHandle<Value> Handle;
+
+  public:
+    GetAllInactiveKeyFunc(common::ObIArray<ObTableLoadUniqueKey> &list) : list_(list) {}
+    int operator()(common::hash::HashMapPair<ObTableLoadUniqueKey, Handle> &entry)
+    {
+      int ret = OB_SUCCESS;
+      const ObTableLoadUniqueKey &key = entry.first;
+      const Handle &handle = entry.second;
+      if (OB_UNLIKELY(!handle.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "unexpected handle is invalid", KR(ret), K(key), K(handle));
+      } else {
+        Value *value = handle.get_value();
+        if (value->get_ref_count() > 1) {
+        } else if (OB_FAIL(list_.push_back(key))) {
+          SERVER_LOG(WARN, "fail to push back", KR(ret));
+        }
+      }
+      return ret;
+    }
+
+  private:
+    common::ObIArray<ObTableLoadUniqueKey> &list_;
+  };
+
+  template <typename Value>
+  class GetAllValueFunc
+  {
+    typedef ObjHandle<Value> Handle;
+
+  public:
+    GetAllValueFunc(common::ObIArray<Value *> &list) : list_(list) {}
+    int operator()(common::hash::HashMapPair<ObTableLoadUniqueKey, Handle> &entry)
+    {
+      int ret = OB_SUCCESS;
+      const ObTableLoadUniqueKey &key = entry.first;
+      const Handle &handle = entry.second;
+      if (OB_UNLIKELY(!handle.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "unexpected handle is invalid", KR(ret), K(key), K(handle));
+      } else {
+        Value *value = handle.get_value();
+        if (OB_FAIL(list_.push_back(value))) {
+          SERVER_LOG(WARN, "fail to push back", KR(ret), KP(value));
+        } else {
+          value->inc_ref_count();
+        }
+      }
+      return ret;
+    }
+
+  private:
+    common::ObIArray<Value *> &list_;
+  };
+
 private:
   const uint64_t tenant_id_;
 

@@ -594,9 +594,29 @@ DEF_TO_STRING(ObToStringExpr)
     J_OBJ_END();
   } else {
     ObDatum *datum = NULL;
-    int ret = e_.eval(c_, datum);
-    UNUSED(ret);
-    pos = ObToStringDatum(e_, *datum).to_string(buf, buf_len);
+    // avoid casting the vec2.0 format.
+    if (c_.is_vectorized() && e_.enable_rich_format()) {
+      // mock skip to use eval_vector
+      int64_t batch_size = c_.get_batch_size();
+      ObArenaAllocator tmp_allocator;
+      char *tmp_mem = (char *)tmp_allocator.alloc(ObBitVector::memory_size(batch_size));
+      if (NULL == tmp_mem) {
+        J_OBJ_START();
+        J_KV("Expr print ERROR", "alloc memory failed");
+        J_OBJ_END();
+      } else {
+        ObBitVector *skip = to_bit_vector(tmp_mem);
+        skip->set_all(batch_size);
+        skip->unset(c_.get_batch_idx());
+        pos = sql::ToStrVectorHeader(
+            e_, c_, skip, sql::EvalBound(1, c_.get_batch_idx(), c_.get_batch_idx() + 1, false))
+                  .to_string(buf, buf_len);
+      }
+    } else {
+      int ret = e_.eval(c_, datum);
+      UNUSED(ret);
+      pos = ObToStringDatum(e_, *datum).to_string(buf, buf_len);
+    }
   }
   return pos;
 }
@@ -1465,6 +1485,158 @@ int ToStrVectorHeader::to_string_helper(const VectorHeader &header, char *buf, c
   return pos;
 }
 
+template <typename VectorType>
+int ToStringExprRowVec::data_to_string_helper(
+    const VectorHeader &header, const int64_t index, char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  const VectorType *vector = reinterpret_cast<const VectorType *>(header.vector_buf_);
+  J_OBJ_START();
+  if (nullptr != skip_ && skip_->at(index)) {
+    BUF_PRINTF("skipped");
+  } else {
+    BUF_PRINTF("null: %d", vector->is_null(index));
+    if (!vector->is_null(index)) {
+      ObLength length = vector->get_length(index);
+      BUF_PRINTF(", len: %d, ptr: %p, hex: ", length, vector->get_payload(index));
+      hex_print(vector->get_payload(index), length, buf, buf_len, pos);
+    }
+  }
+  J_OBJ_END();
+  return pos;
+}
+
+template <typename VectorType>
+int ToStringExprRowVec::value_to_string_helper(const VectorHeader &header, const ObExpr &expr,
+    const int64_t index, char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  const VectorType *vector = reinterpret_cast<const VectorType *>(header.vector_buf_);
+  if (nullptr != skip_ && skip_->at(index)) {
+    J_OBJ_START();
+    BUF_PRINTF("skipped");
+    J_OBJ_END();
+  } else {
+    if (!vector->is_null(index)) {
+      ObLength length = vector->get_length(index);
+      ObDatum tmp_datum(vector->get_payload(index), length, vector->is_null(index));
+      ObObj tmp_obj;
+      if (OB_SUCCESS == tmp_datum.to_obj(tmp_obj, expr.obj_meta_, expr.obj_datum_map_)) {
+        pos += tmp_obj.to_string(buf + pos, buf_len - pos);
+      }
+    } else {
+      J_OBJ_START();
+      BUF_PRINTF("null");
+      J_OBJ_END();
+    }
+  }
+  return pos;
+}
+
+int ToStringExprRowVec::meta_to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  J_OBJ_START();
+  // output skip bitmap
+  BUF_PRINTF("skip: ");
+  J_ARRAY_START();
+  if (NULL == skip_) {
+    BUF_PRINTF("null");
+  } else {
+    for (int64_t i = 0; i < batch_size_; i++) {
+      if (skip_->at(i)) {
+        BUF_PRINTF("1");
+      } else {
+        BUF_PRINTF("0");
+      }
+      if ((i + 1) % 16 == 0) {
+        J_COMMA();
+      }
+    }
+  }
+  J_ARRAY_END();
+  J_COMMA();
+  J_ARRAY_START();
+  for (int64_t i = 0; i < exprs_.count(); i++) {
+    const ObExpr *expr = exprs_.at(i);
+    if (OB_LIKELY(expr != NULL)) {
+      J_OBJ_START();
+      J_KV(KP(expr));
+      J_COMMA();
+      if (expr->enable_rich_format()) {
+        if (NULL != skip_ && OB_FAIL(expr->eval_vector(ctx_, *skip_, bound_))) {
+          LOG_WARN("fail to eval_vector", K(ret));
+        } else {
+          const VectorHeader header = expr->get_vector_header(ctx_);
+          switch (header.format_) {
+            case VEC_FIXED: {
+              J_KV("format", "VEC_FIXED");
+              const ObFixedLengthBase *vector =
+                  reinterpret_cast<const ObFixedLengthBase *>(header.vector_buf_);
+              J_COMMA();
+              BUF_PRINTF("meta: ");
+              pos += vector->to_string(buf + pos, buf_len - pos);
+              break;
+            }
+            case VEC_DISCRETE: {
+              J_KV("format", "VEC_DISCRETE");
+              const ObDiscreteBase *vector =
+                  reinterpret_cast<const ObDiscreteBase *>(header.vector_buf_);
+              J_COMMA();
+              BUF_PRINTF("meta: ");
+              pos += vector->to_string(buf + pos, buf_len - pos);
+              break;
+            }
+            case VEC_CONTINUOUS: {
+              J_KV("format", "VEC_CONTINUOUS");
+              const ObContinuousBase *vector =
+                  reinterpret_cast<const ObContinuousBase *>(header.vector_buf_);
+              J_COMMA();
+              BUF_PRINTF("meta: ");
+              pos += vector->to_string(buf + pos, buf_len - pos);
+              break;
+            }
+            case VEC_UNIFORM: {
+              J_KV("format", "VEC_UNIFORM");
+              const UniformFormat *vector =
+                  reinterpret_cast<const UniformFormat *>(header.vector_buf_);
+              J_COMMA();
+              BUF_PRINTF("meta: ");
+              pos += vector->to_string(buf + pos, buf_len - pos);
+              break;
+            }
+            case VEC_UNIFORM_CONST: {
+              J_KV("format", "VEC_UNIFORM_CONST");
+              const ConstUniformFormat *vector =
+                  reinterpret_cast<const ConstUniformFormat *>(header.vector_buf_);
+              J_COMMA();
+              BUF_PRINTF("meta: ");
+              pos += vector->to_string(buf + pos, buf_len - pos);
+              break;
+            }
+            default: {
+              J_KV("format", "VEC_INVAILD");
+            }
+          }
+        }
+      } else {
+        J_KV("format", "UNIFORM");
+      }
+      J_OBJ_END();
+    } else {
+      J_OBJ_START();
+      J_OBJ_END();
+    }
+    if (i != exprs_.count() - 1) {
+      J_COMMA();
+    }
+  }
+  J_ARRAY_END();
+  J_OBJ_END();
+  return pos;
+}
+
 DEF_TO_STRING(ToStrVectorHeader)
 {
   int64_t pos = 0;
@@ -1503,5 +1675,108 @@ DEF_TO_STRING(ToStrVectorHeader)
   return pos;
 }
 
+DEF_TO_STRING(ToStringExprRowVec)
+{
+  int64_t pos = 0;
+  int ret = OB_SUCCESS;
+  int64_t index = ctx_.get_batch_idx();
+  J_OBJ_START();
+  BUF_PRINTF("data: ");
+  J_ARRAY_START();
+  for (int64_t i = 0; i < exprs_.count(); i++) {
+    const ObExpr *expr = exprs_.at(i);
+    if (OB_LIKELY(expr != NULL)) {
+      if (expr->enable_rich_format()) {
+        const VectorHeader header = expr->get_vector_header(ctx_);
+        switch (header.format_) {
+          case VEC_FIXED: {
+            pos +=
+                data_to_string_helper<ObFixedLengthBase>(header, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_DISCRETE: {
+            pos += data_to_string_helper<ObDiscreteBase>(header, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_CONTINUOUS: {
+            pos += data_to_string_helper<ObContinuousBase>(header, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_UNIFORM: {
+            pos += data_to_string_helper<UniformFormat>(header, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_UNIFORM_CONST: {
+            pos +=
+                data_to_string_helper<ConstUniformFormat>(header, index, buf + pos, buf_len - pos);
+            break;
+          }
+          default:
+            break;
+        }
+      } else {
+        pos += ObToStringExpr(ctx_, *expr).to_string(buf + pos, buf_len - pos);
+      }
+    } else {
+      J_OBJ_START();
+      J_OBJ_END();
+    }
+    if (i != exprs_.count() - 1) {
+      J_COMMA();
+    }
+  }
+  J_ARRAY_END();
+  J_COMMA();
+  BUF_PRINTF("value: ");
+  J_ARRAY_START();
+  for (int64_t i = 0; i < exprs_.count(); i++) {
+    const ObExpr *expr = exprs_.at(i);
+    if (OB_LIKELY(expr != NULL)) {
+      if (expr->enable_rich_format()) {
+        const VectorHeader header = expr->get_vector_header(ctx_);
+        switch (header.format_) {
+          case VEC_FIXED: {
+            pos += value_to_string_helper<ObFixedLengthBase>(
+                header, *expr, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_DISCRETE: {
+            pos += value_to_string_helper<ObDiscreteBase>(
+                header, *expr, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_CONTINUOUS: {
+            pos += value_to_string_helper<ObContinuousBase>(
+                header, *expr, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_UNIFORM: {
+            pos += value_to_string_helper<UniformFormat>(
+                header, *expr, index, buf + pos, buf_len - pos);
+            break;
+          }
+          case VEC_UNIFORM_CONST: {
+            pos += value_to_string_helper<ConstUniformFormat>(
+                header, *expr, index, buf + pos, buf_len - pos);
+            break;
+          }
+          default:
+            break;
+        }
+      } else {
+        pos += ObToStringExpr(ctx_, *expr).to_string(buf + pos, buf_len - pos);
+      }
+    } else {
+      J_OBJ_START();
+      J_OBJ_END();
+    }
+    if (i != exprs_.count() - 1) {
+      J_COMMA();
+    }
+  }
+  J_ARRAY_END();
+  J_OBJ_END();
+  return pos;
+}
 } // end namespace sql
 } // end namespace oceanbase

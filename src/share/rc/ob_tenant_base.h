@@ -21,17 +21,20 @@
 #include "lib/thread/threads.h"
 #include "lib/thread/thread_mgr.h"
 #include "lib/allocator/ob_malloc.h"
+#include "lib/task/ob_timer_service.h" // ObTimerService
 #include "share/ob_tenant_role.h"//ObTenantRole
 #ifdef OB_BUILD_DBLINK
 #include "lib/oracleclient/ob_oci_environment.h"
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
 #endif
 #include "lib/mysqlclient/ob_tenant_oci_envs.h"
+#include "observer/mysql/ob_query_response_time.h"
 namespace oceanbase
 {
 namespace common {
   class ObLDHandle;
   class ObTenantIOManager;
+  class ObDiagnosticInfoContainer;
   template<typename T> class ObServerObjectPool;
   class ObDetectManager;
   class ObOptStatMonitorManager;
@@ -211,6 +214,7 @@ namespace observer
   class ObTableLoadResourceService;
   class ObStartupAccelTaskHandler;
   class ObTabletTableUpdater;
+  class ObTenantQueryRespTimeCollector;
   class ObTableQueryASyncMgr;
 }
 
@@ -243,6 +247,7 @@ class ObSharedMemAllocMgr;
 class ObIndexUsageInfoMgr;
 class ObStorageIOUsageRepoter;
 class ObResourceLimitCalculator;
+class ObWorkloadRepositoryContext;
 class ObPluginVectorIndexService;
 class ObAutoSplitTaskCache;
 namespace schema
@@ -272,7 +277,7 @@ namespace detector
 #define TenantDiskSpaceManager storage::ObTenantDiskSpaceManager*,
 #define TenantFileManager storage::ObTenantFileManager*,
 #define SSMicroCachePrewarmService storage::ObSSMicroCachePrewarmService*,
-#define S2MicroCache storage::ObSSMicroCache*,
+#define SSMicroCache storage::ObSSMicroCache*,
 #define TenantCompactionObjMgr compaction::ObTenantCompactionObjMgr*,
 #define TenantLSMergeScheduler compaction::ObTenantLSMergeScheduler*,
 #define TenantLSMergeChecker compaction::ObTenantLSMergeChecker*,
@@ -281,7 +286,7 @@ namespace detector
 #define TenantDiskSpaceManager
 #define TenantFileManager
 #define SSMicroCachePrewarmService
-#define S2MicroCache
+#define SSMicroCache
 #define TenantCompactionObjMgr
 #define TenantLSMergeScheduler
 #define TenantLSMergeChecker
@@ -295,6 +300,8 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
 using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
+      common::ObDiagnosticInfoContainer*,            \
+      ObTimerService*,                               \
       blocksstable::ObDecodeResourcePool*,           \
       omt::ObSharedTimer*,                           \
       oceanbase::sql::ObTenantSQLSessionMgr*,        \
@@ -313,7 +320,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       logservice::ObGarbageCollector*,               \
       TenantDiskSpaceManager                         \
       TenantFileManager                              \
-      S2MicroCache                                   \
+      SSMicroCache                                   \
       SSMicroCachePrewarmService                     \
       storage::ObLSService*,                         \
       storage::ObTenantStorageMetaService*,          \
@@ -430,6 +437,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       share::ObAutoSplitTaskCache*    ,              \
       sql::ObAuditLogger*,                           \
       sql::ObAuditLogUpdater*,                       \
+      share::ObWorkloadRepositoryContext*,           \
+      observer::ObTenantQueryRespTimeCollector*,     \
       table::ObTableGroupCommitMgr*,                 \
       observer::ObTableQueryASyncMgr*,               \
       table::ObTableClientInfoMgr*,                  \
@@ -673,6 +682,11 @@ public:
 
   template<class T>
   void set(T v) { return inner_set(v); }
+
+  ObTimerService *get_timer_service() override
+  {
+    return get<ObTimerService *>();
+  }
 
 
 private:

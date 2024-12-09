@@ -62,7 +62,6 @@ private:
 
  private:
   bool inited_;
-  common::ObThreadCond cond_;
   share::ObLSTableOperator *lst_operator_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
 private:

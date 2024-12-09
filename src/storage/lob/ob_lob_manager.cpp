@@ -1174,7 +1174,7 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
         SMART_VAR(ObLobAccessParam, read_param) {
           read_param.tx_desc_ = param.tx_desc_;
           read_param.tenant_id_ = param.src_tenant_id_;
-          if (OB_FAIL(build_lob_param(read_param, *param.allocator_, param.coll_type_,
+          if (OB_FAIL(build_lob_param(read_param, *param.get_tmp_allocator(), param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
             LOG_WARN("fail to build read param", K(ret), K(lob));
           } else if (OB_FAIL(query(read_param, data))) {
@@ -1187,9 +1187,6 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
           if (new_lob_common->is_init_) {
             ObLobData *new_lob_data = reinterpret_cast<ObLobData*>(new_lob_common->buffer_);
             new_lob_data->byte_size_ += data.length();
-          }
-          if (alloc_inside) {
-            param.allocator_->free(param.lob_common_);
           }
           param.lob_common_ = new_lob_common;
           param.handle_size_ = total_size;
@@ -1213,15 +1210,18 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
     } else {
       // prepare out row ctx
       ObLobCtx lob_ctx = lob_ctx_;
+      int64_t store_chunk_size = 0;
       if (OB_FAIL(param.init_out_row_ctx(append_lob_len))) {
         LOG_WARN("init lob data out row ctx failed", K(ret));
+      } else if (OB_FAIL(param.get_store_chunk_size(store_chunk_size))) {
+        LOG_WARN("get_store_chunk_size fail", K(ret), K(param));
       }
       // prepare read buffer
       ObString read_buffer;
-      uint64_t read_buff_size = OB_MIN(LOB_READ_BUFFER_LEN, append_lob_len);
-      char *read_buff = static_cast<char*>(param.allocator_->alloc(read_buff_size));
+      uint64_t read_buff_size = OB_MIN(store_chunk_size, append_lob_len);
+      char *read_buff = nullptr;
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(read_buff)) {
+      } else if (OB_ISNULL(read_buff = static_cast<char*>(param.get_tmp_allocator()->alloc(read_buff_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc read buffer failed.", K(ret), K(read_buff_size));
       } else {
@@ -1231,11 +1231,11 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
       // prepare read full lob
       if (OB_SUCC(ret)) {
         ObLobLocatorV2* copy_locator = nullptr;
-        ObLobAccessParam *read_param = reinterpret_cast<ObLobAccessParam*>(param.allocator_->alloc(sizeof(ObLobAccessParam)));
+        ObLobAccessParam *read_param = reinterpret_cast<ObLobAccessParam*>(param.get_tmp_allocator()->alloc(sizeof(ObLobAccessParam)));
         if (OB_ISNULL(read_param)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("alloc read param failed.", K(ret), K(sizeof(ObLobAccessParam)));
-        } else if (OB_ISNULL(copy_locator = OB_NEWx(ObLobLocatorV2, param.allocator_))) {
+        } else if (OB_ISNULL(copy_locator = OB_NEWx(ObLobLocatorV2, param.get_tmp_allocator()))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("alloc ObLobLocatorV2 failed.", K(ret), K(sizeof(ObLobLocatorV2)));
         } else {
@@ -1243,7 +1243,7 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
           read_param->tx_desc_ = param.tx_desc_;
           read_param->tenant_id_ = param.src_tenant_id_;
           *copy_locator = lob;
-          if (OB_FAIL(build_lob_param(*read_param, *param.allocator_, param.coll_type_,
+          if (OB_FAIL(build_lob_param(*read_param, *param.get_tmp_allocator(), param.coll_type_,
                       0, UINT64_MAX, param.timeout_, *copy_locator))) {
             LOG_WARN("fail to build read param", K(ret), K(lob), KPC(copy_locator));
           } else {

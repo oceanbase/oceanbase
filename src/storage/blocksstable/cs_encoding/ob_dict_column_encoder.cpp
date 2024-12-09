@@ -26,32 +26,13 @@ namespace blocksstable
 
 using namespace common;
 
-bool ObDictColumnEncoder::DictCmp::operator()(
-    const ObEncodingHashNodeList &lhs,
-    const ObEncodingHashNodeList &rhs)
-{
-  bool res = false;
-  int &ret = ret_;
-  int cmp_ret = 0;
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(nullptr == lhs.header_ || nullptr == rhs.header_)) {
-    ret_ = OB_INVALID_ARGUMENT;
-    LOG_WARN_RET(ret_, "invalid argument", KP(lhs.header_), KP(rhs.header_));
-  } else if (OB_FAIL(cmp_func_.cmp_func_(*lhs.header_->datum_, *rhs.header_->datum_, cmp_ret))) {
-    LOG_WARN("failed to compare datums", K(ret), K(*lhs.header_->datum_), K(*rhs.header_->datum_));
-  } else {
-    res = cmp_ret < 0;
-  }
-  return res;
-}
-
 ObDictColumnEncoder::ObDictColumnEncoder()
   : dict_encoding_meta_(),
     ref_enc_ctx_(),
     max_ref_(0),
     ref_stream_max_value_(0),
     int_stream_idx_(0),
-    const_list_header_(nullptr),
+    const_node_(),
     ref_exception_cnt_(0)
 {
 }
@@ -66,7 +47,6 @@ void ObDictColumnEncoder::reuse()
   ref_enc_ctx_.reset();
   max_ref_ = 0;
   int_stream_idx_ = 0;
-  const_list_header_ = nullptr;
   ref_exception_cnt_ = 0;
 }
 
@@ -153,16 +133,16 @@ int ObDictColumnEncoder::try_const_encoding_ref_()
   int ret = OB_SUCCESS;
   int64_t max_const_cnt = 0;
 
-  FOREACH(l, *ctx_->ht_) { // choose the const value
-    if (l->size_ > max_const_cnt) {
-      max_const_cnt = l->size_;
-      const_list_header_ = l->header_;
+  FOREACH(node, *ctx_->ht_) { // choose the const value
+    if (node->duplicate_cnt_ > max_const_cnt) {
+      max_const_cnt = node->duplicate_cnt_;
+      const_node_ = *node; //copy the node for the node ptr will change when sort.
     }
   }
   if (ctx_->null_cnt_ > 0) {
     if (ctx_->null_cnt_ > max_const_cnt) {
       max_const_cnt = ctx_->null_cnt_;
-      const_list_header_ = ctx_->ht_->get_null_list().header_;
+      const_node_ = *ctx_->ht_->get_null_node();
     }
   }
   const int64_t exception_cnt = row_count_ - max_const_cnt;
@@ -172,14 +152,14 @@ int ObDictColumnEncoder::try_const_encoding_ref_()
   } else if (0 == exception_cnt) {
     ref_exception_cnt_ = 0;
     dict_encoding_meta_.set_const_encoding_ref(exception_cnt);
-    ref_stream_max_value_ = MAX(exception_cnt, const_list_header_->dict_ref_);
+    ref_stream_max_value_ = MAX(exception_cnt, const_node_.dict_ref_);
   } else if (exception_cnt <= MAX_EXCEPTION_COUNT &&
       exception_cnt < row_count_ * MAX_CONST_EXCEPTION_PCT / 100) {
     dict_encoding_meta_.set_const_encoding_ref(exception_cnt);
-    const ObEncodingHashNode *node_list = ctx_->ht_->get_node_list();
+    const int32_t *row_refs = ctx_->ht_->get_row_refs();
     uint32_t exception_max_row_id = 0;
-    for (int64_t i = ctx_->ht_->get_node_cnt() - 1; i >= 0; --i) {
-      if (const_list_header_->dict_ref_ != node_list[i].dict_ref_) {
+    for (int64_t i = row_count_ - 1; i >= 0; --i) {
+      if (const_node_.dict_ref_ != row_refs[i]) {
         exception_max_row_id = i;
         break;
       }
@@ -201,17 +181,15 @@ int ObDictColumnEncoder::do_sort_dict_()
   ObCmpFunc cmp_func;
   cmp_func.cmp_func_ = lib::is_oracle_mode()
       ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
-  lib::ob_sort(ctx_->ht_->begin(), ctx_->ht_->end(), DictCmp(ret, cmp_func));
-  // calc new dict_ref if dict is sorted
-  int64_t i = 0;
-  FOREACH(l, *ctx_->ht_) {
-    FOREACH(n, *l) {
-      n->dict_ref_ = i;
+  if (OB_FAIL(ctx_->ht_->sort_dict(cmp_func))) {
+    LOG_WARN("fail to sort dict", K(ret));
+  } else {
+    // update dict ref for const node
+    if (dict_encoding_meta_.is_const_encoding_ref() && !const_node_.datum_.is_null()) {
+      const_node_.dict_ref_ = ctx_->ht_->get_refs_permutation()[const_node_.dict_ref_];
     }
-    ++i;
+    dict_encoding_meta_.attrs_ |= ObDictEncodingMeta::Attribute::IS_SORTED;
   }
-  dict_encoding_meta_.attrs_ |= ObDictEncodingMeta::Attribute::IS_SORTED;
-
   return ret;
 }
 
@@ -232,10 +210,10 @@ int ObDictColumnEncoder::store_dict_encoding_meta_(ObMicroBufferWriter &buf_writ
 int ObDictColumnEncoder::store_dict_ref_(ObMicroBufferWriter &buf_writer)
 {
   int ret = OB_SUCCESS;
-  int64_t node_cnt = ctx_->ht_->get_node_cnt();
-  if (OB_UNLIKELY(node_cnt != row_count_)) {
+  const int64_t row_cnt = ctx_->ht_->get_row_count();
+  if (OB_UNLIKELY(row_cnt != row_count_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "dict node count must equal to row_count", K(ret), K(node_cnt), K_(row_count));
+    STORAGE_LOG(WARN, "row_count mismatch", K(ret), K(row_cnt), K_(row_count));
   } else if (0 == dict_encoding_meta_.distinct_val_cnt_) {
     // has no dict value, means all datums are null, so don't need to store ref
   } else {

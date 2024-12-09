@@ -16,8 +16,10 @@ namespace oceanbase
 namespace lib
 {
 
-volatile bool ObLibConfig::enable_diagnose_info_ = true;
+bool ObLibConfig::enable_diagnose_info_ = true;
 volatile bool ObLibConfig::enable_trace_log_ = true;
+
+bool ObPerfModeGuard::PERF_MODE_VALUE = false;
 
 } //lib
 } //oceanbase

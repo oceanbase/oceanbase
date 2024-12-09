@@ -56,8 +56,16 @@ public:
   virtual int init() { return OB_SUCCESS; }
   virtual int handle_record()
   {
-    fprintf(stdout, "%s\n", S(*rec_));
-    return OB_SUCCESS;
+    int ret = OB_SUCCESS;
+    ObCStringHelper helper;
+    const char *ptr = helper.convert(*rec_);
+    if (OB_ISNULL(ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "failed to convert rec", K(ret));
+    } else {
+      fprintf(stdout, "%s\n", ptr);
+    }
+    return ret;
   }
   virtual int report() { return OB_SUCCESS; }
 };
@@ -336,7 +344,8 @@ public:
   virtual int init() { return OB_SUCCESS; }
   virtual int handle_record()
   {
-    fprintf(stdout, "%s\n", S(*rec_));
+    ObCStringHelper helper;
+    fprintf(stdout, "%s\n", helper.convert(*rec_));
     return OB_SUCCESS;
   }
   virtual int report() { return OB_SUCCESS; }

@@ -14,202 +14,48 @@
 
 #include "share/ob_order_perserving_encoder.h"
 #include <byteswap.h>
+#include "common/ob_target_specific.h"
+#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
+#if OB_USE_MULTITARGET_CODE
+#include <emmintrin.h>
+#include <immintrin.h>
+#endif
+
 namespace oceanbase
 {
+using namespace common;
 namespace share
 {
-int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(ObObj &obj,
-                                                                       unsigned char *to,
-                                                                       int64_t max_buf_len,
-                                                                       int64_t &to_len)
-{
-  int ret = OB_SUCCESS;
 
-  switch (obj.get_type()) {
-    // for integer values
-    case ObTinyIntType: {
-      if (to_len + sizeof(int8_t) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_int8(obj.get_tinyint(), to, to_len);
-      }
-      break;
+// used for memcmp comparsion
+OB_DECLARE_AVX2_SPECIFIC_CODE(
+
+static constexpr int AVX2_SIZE = sizeof(__m256i);
+
+inline bool check_terminator_simd(unsigned char *data, int64_t len, char ch)
+{
+  bool ret = true;
+  uchar *end = data + len;
+  __m256i spch_bin = _mm256_set1_epi8(ch);
+  for (;ret && data + AVX2_SIZE <= end;) {
+    __m256i val = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(data));
+    __m256i cmp = _mm256_cmpeq_epi8(val, spch_bin);
+    uint32_t mask = _mm256_movemask_epi8(cmp);
+    if (0 != mask) {
+      ret = false;
     }
-    case ObSmallIntType: {
-      if (to_len + sizeof(int16_t) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_int16(obj.get_smallint(), to, to_len);
-      }
-      break;
-    }
-    case ObDateType:
-    case ObMediumIntType:
-    case ObInt32Type: {
-      if (to_len + sizeof(int32_t) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_int32(obj.get_int32(), to, to_len);
-      }
-      break;
-    }
-    case ObIntervalYMType:
-    case ObTimeType:
-    case ObDateTimeType:
-    case ObTimestampType:
-    case ObIntType: {
-      if (to_len + sizeof(int64_t) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_int(obj.get_int(), to, to_len);
-      }
-      break;
-    }
-    case ObYearType:
-    case ObUTinyIntType: {
-      if (to_len + sizeof(uint8_t) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_uint8(obj.get_utinyint(), to, to_len);
-      }
-      break;
-    }
-    case ObUSmallIntType: {
-      if (to_len + sizeof(uint16_t) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_uint16(obj.get_usmallint(), to, to_len);
-      }
-      break;
-    }
-    case ObUMediumIntType:
-    case ObUInt32Type: {
-      if (to_len + sizeof(uint32_t) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_uint32(obj.get_uint32(), to, to_len);
-      }
-      break;
-    }
-    case ObUInt64Type: {
-      if (to_len + sizeof(uint64_t) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_uint(obj.get_uint64(), to, to_len);
-      }
-      break;
-    }
-    // for float values
-    case ObFloatType:
-    case ObUFloatType: {
-      if (to_len + sizeof(float) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_float(obj.get_float(), to, to_len);
-      }
-      break;
-    }
-    case ObDoubleType:
-    case ObUDoubleType: {
-      if (to_len + sizeof(double) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_double(obj.get_double(), to, to_len);
-      }
-      break;
-    }
-    // for obnumber
-    case ObNumberType:
-    case ObUNumberType:
-    case ObNumberFloatType: {
-      if (OB_FAIL(encode_from_number(obj.get_number(), to, max_buf_len, to_len))) {
-        if (ret == OB_BUF_NOT_ENOUGH) {
-          // ignore ret
-        } else {
-          LOG_WARN("failed to encode number", K(ret));
-        }
-      }
-      break;
-    }
-    // for date
-    case ObTimestampTZType:
-    case ObTimestampLTZType:
-    case ObTimestampNanoType: {
-      if (to_len + sizeof(int64_t) + sizeof(uint16_t) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_timestamp(obj.get_otimestamp_value(), to, to_len);
-      }
-      break;
-    }
-    case ObIntervalDSType: {
-      if (to_len + sizeof(int64_t) + sizeof(int32_t) > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()));
-      } else {
-        encode_from_interval_ds(obj.get_interval_ds(), to, to_len);
-      }
-      break;
-    }
-    case ObVarcharType:
-    case ObNVarchar2Type:
-    case ObRawType:
-    case ObNCharType:
-    case ObCharType: {
-      if (OB_FAIL(encode_from_string_varlen(obj.get_string(), to, max_buf_len, to_len,
-                                            obj.get_collation_type()))) {
-        if (ret == OB_BUF_NOT_ENOUGH) {
-          // ignore ret
-        } else {
-          LOG_WARN("failed to encode string", K(ret));
-        }
-      }
-      break;
-    }
-    case ObDecimalIntType: {
-      if (to_len + obj.get_int_bytes() > max_buf_len) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()),
-                  K(obj.get_int_bytes()));
-      } else if (OB_FAIL(
-                   encode_from_decint(obj.get_decimal_int(), obj.get_int_bytes(), to, to_len))) {
-        LOG_WARN("encode from decimal int failed", K(ret));
-      }
-      break;
-    }
-    case ObURowIDType:
-    case ObUnknownType:
-    case ObTinyTextType:
-    case ObTextType:
-    case ObMediumTextType:
-    case ObLongTextType:
-    case ObBitType:
-    case ObEnumType:
-    case ObSetType:
-    case ObEnumInnerType:
-    case ObSetInnerType:
-    case ObLobType:
-    case ObExtendType:
-    case ObHexStringType:
-    default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("this type cannot make sortkey", K(ret), K(obj.get_type()));
-    }
+    data += AVX2_SIZE;
   }
 
+  while (ret && data < end) {
+    if (*data == ch) {
+      ret = false;
+    }
+    data++;
+  }
   return ret;
 }
+)
 
 int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
   ObDatum &data, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param)
@@ -491,58 +337,6 @@ int ObOrderPerservingEncoder::convert_ob_charset_utf8mb4_bin_sp(unsigned char *d
   return OB_SUCCESS;
 }
 
-int ObOrderPerservingEncoder::encode_from_string_varlen(
-  ObString str, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObCollationType cs)
-{
-  int ret = OB_SUCCESS;
-  bool is_valid_uni = false;
-  bool is_mem = lib::is_oracle_mode();
-
-  int64_t safety_buf_size = 20;
-  // tail is up to 8 byte and [space] will be expand to 10byte,
-  // therefore safty buffer size round up to 20(byte)
-  // and src will only expand 7 times at most when encoding.
-  // for bad case
-  // [space] A [space] A
-  // [space] will expand to 10 byte
-  // A will expand to 4 byte
-  // therefore src will expand (10+4)/2=>7 times at most when encoding
-  if ((to_len + 7 * str.length() + safety_buf_size) > max_buf_len) {
-    ret = OB_BUF_NOT_ENOUGH;
-    LOG_TRACE("no enough memory to do encoding for string", K(ret));
-  } else if (str.empty() ||  (str.length()==1 && *str.ptr()=='\0')) {
-    if (OB_FAIL(encode_tails(to, max_buf_len, to_len, is_mem, cs, str.length()==1 && *str.ptr()=='\0'))) {
-      LOG_WARN("failed to encode tails", K(ret));
-    }
-  } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY) {
-    convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
-  } else if (cs == CS_TYPE_UTF8MB4_BIN || cs == CS_TYPE_GBK_BIN
-             || cs == CS_TYPE_GB18030_BIN || cs == CS_TYPE_GB18030_2022_BIN) {
-    if (is_mem) {
-      convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
-    } else {
-      convert_ob_charset_utf8mb4_bin_sp((unsigned char *)str.ptr(), str.length(), to, to_len);
-    }
-  } else if (cs == CS_TYPE_UTF8MB4_GENERAL_CI || cs == CS_TYPE_GBK_CHINESE_CI
-             || cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
-             || cs == CS_TYPE_GB18030_CHINESE_CI || cs == CS_TYPE_UTF16LE_GENERAL_CI
-             || cs == CS_TYPE_UTF16LE_BIN
-             || (CS_TYPE_GB18030_2022_PINYIN_CI <= cs && cs <= CS_TYPE_GB18030_2022_STROKE_CS)) {
-    int64_t res_len = ObCharset::sortkey_var_len(cs, str.ptr(), str.length(), (char *)to,
-                                                 max_buf_len - to_len - safety_buf_size,
-                                                 is_mem, is_valid_uni);
-    if (res_len < 0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_TRACE("not support collation", K(cs));
-    } else {
-      to_len += res_len;
-    }
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_TRACE("not support collation", K(cs));
-  }
-  return ret;
-}
 
 int ObOrderPerservingEncoder::encode_from_string_varlen(
   ObString str, unsigned char *to, int64_t max_buf_len, int64_t &to_len, ObEncParam &param)
@@ -568,15 +362,96 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
       LOG_WARN("failed to encode tails", K(ret));
     }
   } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY) {
+#if OB_USE_MULTITARGET_CODE
+    if (param.is_simdopt_ && common::is_arch_supported(ObTargetArch::AVX2)
+      && specific::avx2::check_terminator_simd((unsigned char *)str.ptr(), str.length(), 0x00)) {
+      MEMCPY(to, str.ptr(), str.length());
+      to += str.length();
+      *(to) = 0x00;
+      *(to+1) = 0x00;
+      to += 2;
+      to_len += (str.length() + 2);
+    } else {
+      convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
+    }
+#else
     convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
+#endif
   } else if (cs == CS_TYPE_UTF8MB4_BIN || cs == CS_TYPE_GBK_BIN ||
              cs == CS_TYPE_GB18030_BIN || cs == CS_TYPE_GB18030_2022_BIN) {
     if (param.is_memcmp_) {
+#if OB_USE_MULTITARGET_CODE
+      if (param.is_simdopt_ && common::is_arch_supported(ObTargetArch::AVX2)
+        && specific::avx2::check_terminator_simd((unsigned char *)str.ptr(), str.length(), 0x00)) {
+        MEMCPY(to, str.ptr(), str.length());
+        to += str.length();
+        *(to) = 0x00;
+        *(to+1) = 0x00;
+        to += 2;
+        to_len += (str.length() + 2);
+      } else {
+        convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
+      }
+#else
       convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
+#endif
     } else {
+#if OB_USE_MULTITARGET_CODE
+      if (param.is_simdopt_ && common::is_arch_supported(ObTargetArch::AVX2)
+        && specific::avx2::check_terminator_simd((unsigned char *)str.ptr(), str.length(), 0x20)) {
+        MEMCPY(to, str.ptr(), str.length());
+        to += str.length();
+        *(to) = 0x20;
+        *(to+1) = 0x20;
+        to += 2;
+        to_len += (str.length() + 2);
+      } else {
+        convert_ob_charset_utf8mb4_bin_sp((unsigned char *)str.ptr(), str.length(), to, to_len);
+      }
+#else
       convert_ob_charset_utf8mb4_bin_sp((unsigned char *)str.ptr(), str.length(), to, to_len);
+#endif
     }
-  } else if (cs == CS_TYPE_UTF8MB4_GENERAL_CI || cs == CS_TYPE_GBK_CHINESE_CI
+  } else if (cs == CS_TYPE_UTF8MB4_GENERAL_CI) {
+#if OB_USE_MULTITARGET_CODE
+    if (param.is_simdopt_ && common::is_arch_supported(ObTargetArch::AVX2)
+      && storage::is_ascii_str(str.ptr(), str.length())
+      && ((param.is_memcmp_ && specific::avx2::check_terminator_simd((unsigned char *)str.ptr(), str.length(), 0x00))
+      || (!param.is_memcmp_ && specific::avx2::check_terminator_simd((unsigned char *)str.ptr(), str.length(), 0x20)))) {
+      MEMCPY(to, str.ptr(), str.length());
+      str_toupper((char *)to, str.length());
+      to += str.length();
+      if (param.is_memcmp_) {
+        *(to) = 0x00;
+        *(to+1) = 0x00;
+      } else {
+        *(to) = 0x20;
+        *(to+1) = 0x20;
+      }
+      to += 2;
+      to_len += (str.length() + 2);
+    } else {
+      // no simd opt
+      int64_t res_len = ObCharset::sortkey_var_len(cs, str.ptr(), str.length(), (char *)to,
+                                                 max_buf_len - to_len - safty_buf_size,
+                                                 param.is_memcmp_, param.is_valid_uni_);
+      if (!param.is_valid_uni_) {
+        // invalid unicode, do nothing
+      } else {
+        to_len += res_len;
+      }
+    }
+#else
+    int64_t res_len = ObCharset::sortkey_var_len(cs, str.ptr(), str.length(), (char *)to,
+                                                 max_buf_len - to_len - safty_buf_size,
+                                                 param.is_memcmp_, param.is_valid_uni_);
+    if (!param.is_valid_uni_) {
+      // invalid unicode, do nothing
+    } else {
+      to_len += res_len;
+    }
+#endif
+  } else if (cs == CS_TYPE_GBK_CHINESE_CI
              || cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
              || cs == CS_TYPE_UTF16LE_GENERAL_CI || cs == CS_TYPE_UTF16LE_BIN
              || cs == CS_TYPE_GB18030_CHINESE_CI
@@ -944,35 +819,6 @@ int ObSortkeyConditioner::process_key_conditioning(
   return ret;
 }
 
-int ObSortkeyConditioner::process_key_conditioning(ObObj &obj,
-                                                   unsigned char *to,
-                                                   int64_t max_buf_len,
-                                                   int64_t &to_len)
-{
-  int ret = OB_SUCCESS;
-  // process null pos
-  if (OB_ISNULL(to)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(to));
-  } else if (max_buf_len < 1) {
-    ret = OB_BUF_NOT_ENOUGH;
-    LOG_TRACE("no enough memory to do encoding for obnumber", K(ret));
-  } else {
-    *to = (obj.is_null()) ? 0x00 : 0x01;
-    to_len++;
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (*to != 0x01) {
-    // do nothing
-  } else if (OB_FAIL(share::ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
-               obj, to + to_len, max_buf_len, to_len))) {
-    LOG_WARN("failed to encode sortkey", K(ret));
-  }
-
-  return ret;
-}
 
 // simd opt
 void ObSortkeyConditioner::process_decrease(unsigned char *to, int64_t to_len)

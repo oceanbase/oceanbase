@@ -600,9 +600,10 @@ int ObMySQLConnectionPool::release(ObMySQLConnection *connection, const bool suc
   } else {
     const int64_t cost_time = ::oceanbase::common::ObTimeUtility::current_time() - connection->get_timestamp();
     if (cost_time > config_.connection_pool_warn_time_) {
+      char time_buf[OB_MAX_TIME_STR_LENGTH] = {'\0'};
       LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "this connection cost too much time", K(this), K(cost_time),
                K(config_.connection_pool_warn_time_), K(connection->get_server()),
-               "start time", time2str(connection->get_timestamp()));
+               "start time", time2str(connection->get_timestamp(), time_buf, sizeof(time_buf)));
     }
     //reset_trace_id(connection);//we just set a new one when acquire next time
     if (OB_ISNULL(pool = connection->get_root())) {

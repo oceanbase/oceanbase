@@ -106,6 +106,9 @@ int ObSrvNetworkFrame::init()
   opts.rpc_io_cnt_ = io_cnt;
   opts.high_prio_rpc_io_cnt_ = hp_io_cnt;
   opts.mysql_io_cnt_ = io_cnt;
+  if (enable_new_sql_nio()) {
+    opts.mysql_io_cnt_ = 0; // if sql_nio enabled, not to create MysqlIO under the old easy framework
+  }
   opts.batch_rpc_io_cnt_ = io_cnt;
   opts.use_ipv6_ = GCONF.use_ipv6;
   //TODO(tony.wzh): fix opts.tcp_keepidle  negative
@@ -963,7 +966,11 @@ int ObSrvNetworkFrame::shared_storage_net_throt_predict(
 int ObSrvNetworkFrame::shared_storage_net_throt_set(const ObSharedDeviceResourceArray &assigned_resource)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(OB_IO_MANAGER.get_tc().set_limit(assigned_resource))) {
+  if (GCONF._enable_tree_based_io_scheduler == false) {
+    if (OB_FAIL(OB_IO_MANAGER.get_tc().set_limit(assigned_resource))) {
+      LOG_WARN("set failed", K(assigned_resource));
+    }
+  } else if (OB_FAIL(OB_IO_MANAGER.get_tc().set_limit_v2(assigned_resource))) {
     LOG_WARN("set failed", K(assigned_resource));
   }
   return ret;

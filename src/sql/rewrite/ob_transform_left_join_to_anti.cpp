@@ -454,8 +454,8 @@ int ObTransformLeftJoinToAnti::check_condition_expr_validity(const ObRawExpr *ex
       }
     }
   } else if (expr->get_expr_type() == T_OP_AND) {
+    ObArray<ObRawExpr *> tmp_constraints;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
-      ObArray<ObRawExpr *> tmp_constraints;
       if (OB_FAIL(SMART_CALL(check_condition_expr_validity(expr->get_param_expr(i),
                                                            stmt,
                                                            joined_table,
@@ -463,12 +463,13 @@ int ObTransformLeftJoinToAnti::check_condition_expr_validity(const ObRawExpr *ex
                                                            is_valid)))) {
         LOG_WARN("fail to check condition expr validity", K(ret));
       } else if (!is_valid) {
-        // do nothing
-      } else if (OB_FAIL(append(constraints, tmp_constraints))) {
-        LOG_WARN("failed to append constraints", K(ret));
-      } else {
         break;
       }
+    }
+    if (OB_FAIL(ret) || !is_valid) {
+      // do nothing
+    } else if (OB_FAIL(append(constraints, tmp_constraints))) {
+      LOG_WARN("failed to append constraints", K(ret));
     }
   } else if (expr->get_expr_type() == T_OP_OR) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {

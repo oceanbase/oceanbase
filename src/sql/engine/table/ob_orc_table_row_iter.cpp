@@ -707,6 +707,7 @@ int ObOrcTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         column_exprs_.at(i)->set_evaluated_projected(eval_ctx);
       }
     }
+    OZ (calc_exprs_for_rowid(read_count, state_));
   }
   if (OB_SUCC(ret)) {
     state_.cur_stripe_read_row_count_ += read_count;
@@ -1414,6 +1415,22 @@ int ObOrcTableRowIterator::get_next_row()
 void ObOrcTableRowIterator::reset() {
   // reset state_ to initial values for rescan
   state_.reuse();
+}
+
+DEF_TO_STRING(ObOrcIteratorState)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_NAME("ob_external_iterator_state");
+  J_COLON();
+  pos += ObExternalIteratorState::to_string(buf + pos, buf_len - pos);
+  J_COMMA();
+  J_KV(K_(cur_stripe_idx),
+       K_(end_stripe_idx),
+       K_(cur_stripe_read_row_count),
+       K_(cur_stripe_row_count));
+  J_OBJ_END();
+  return pos;
 }
 
 }

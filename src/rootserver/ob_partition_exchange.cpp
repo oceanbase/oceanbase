@@ -54,6 +54,8 @@ int ObPartitionExchange::check_and_exchange_partition(const obrpc::ObExchangePar
   const ObTableSchema *base_table_schema = NULL;
   const ObTableSchema *inc_table_schema = NULL;
   bool is_oracle_mode = false;
+  bool base_table_has_instant_column = false;
+  bool inc_table_has_instant_column = false;
   if (OB_UNLIKELY(!ddl_service_.is_inited())) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("ddl_service not init", K(ret));
@@ -72,6 +74,15 @@ int ObPartitionExchange::check_and_exchange_partition(const obrpc::ObExchangePar
     LOG_WARN("table not found", K(ret), K(arg));
   } else if (OB_FAIL(base_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("check_if_oracle_compat_mode failed", K(ret), K(is_oracle_mode));
+  } else if (OB_FAIL(base_table_schema->has_add_column_instant(base_table_has_instant_column))) {
+    LOG_WARN("fail to check base table has add column instant", KR(ret), K(tenant_id), K(arg.base_table_id_));
+  } else if (OB_FAIL(inc_table_schema->has_add_column_instant(inc_table_has_instant_column))) {
+    LOG_WARN("fail to check inc table has add column instant", KR(ret), K(tenant_id), K(arg.inc_table_id_));
+  } else if (base_table_has_instant_column || inc_table_has_instant_column) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("base or inc table has add column instant, not supported to exchange partition", KR(ret),
+              K(base_table_has_instant_column), K(inc_table_has_instant_column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Non matching attribute 'INSTANT COLUMN(s)' between partition and table");
   } else if (OB_FAIL(check_partition_exchange_conditions_(arg, *base_table_schema, *inc_table_schema, is_oracle_mode, schema_guard))) {
     LOG_WARN("fail to check partition exchange conditions", K(ret), K(arg), KPC(base_table_schema), KPC(inc_table_schema), K(is_oracle_mode));
   } else if (OB_FAIL(inner_init(*base_table_schema, *inc_table_schema, arg.exchange_partition_level_, is_oracle_mode, schema_guard))) {

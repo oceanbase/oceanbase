@@ -424,6 +424,11 @@ int ObPlanCache::init(int64_t hash_bucket, uint64_t tenant_id)
       SQL_PC_LOG(WARN, "failed to init PlanCache", K(ret));
     } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::PlanCacheEvict, tg_id_))) {
       LOG_WARN("failed to create tg", K(ret));
+    } else {
+      // just for unittest test_create_executor, do not set error code
+      NEW_AND_SET_TIMER_SERVICE(tenant_id);
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(TG_START(tg_id_))) {
       LOG_WARN("failed to start tg", K(ret));
     } else if (OB_FAIL(TG_SCHEDULE(tg_id_, evict_task_, GCONF.plan_cache_evict_interval, true))) {
@@ -1128,7 +1133,6 @@ int ObPlanCache::add_cache_obj(ObILibCacheCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(ERROR, "unmatched tenant_id", K(ret), K(get_tenant_id()), K(cache_obj->get_tenant_id()));
   } else if (OB_FAIL(get_value(key, cache_node, w_ref_lock /*write locked*/))) {
-    ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(TRACE, "failed to get cache node from lib cache by key", K(ret));
   } else if (NULL == cache_node) {
     ObILibCacheKey *cache_key = NULL;
@@ -1236,7 +1240,6 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid null argument", K(ret), K(key));
   } else if (OB_FAIL(get_value(key, cache_node, r_ref_lock /*read locked*/))) {
-    ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(TRACE, "failed to get cache node from lib cache by key", K(ret));
   } else if (OB_UNLIKELY(NULL == cache_node)) {
     ret = OB_SQL_PC_NOT_EXIST;

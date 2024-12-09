@@ -206,8 +206,11 @@ public:
                               TableItem *&table_item);
   int resolve_rb_iterate_item(const ParseNode &table_node,
                               TableItem *&table_item);
+  int resolve_unnest_item(const ParseNode &table_node, TableItem *&table_item);
   int create_rb_iterate_table_item(TableItem *&table_item, ObString alias_name = NULL);
+  int create_unnest_table_item(TableItem *&table_item, ObItemType item_type, ObString table_name);
   int rb_iterate_table_add_column(TableItem *&table_item, ColumnItem *&col_item, int64_t col_id = 1);
+  int unnest_table_add_column(TableItem *&table_item, ColumnItem *&col_item, ObString col_name);
 
   int resolve_xml_namespaces(const ParseNode *namespace_node, ObJsonTableDef*& table_def);
   int fill_same_column_to_using(JoinedTable* &joined_table);
@@ -1031,10 +1034,6 @@ private:
   int resolve_match_index(const ColumnReferenceSet &match_column_set,
                           const ObTableSchema &table_schema,
                           ObMatchFunRawExpr &match_against);
-  int check_fulltext_search_simple_filter(ObRawExpr *expr,
-                                          ObRawExpr *match_expr,
-                                          bool &is_simple_filter,
-                                          ObIArray<ObExprConstraint> &constraints);
   int build_and_check_true_expr(ObRawExpr *const_expr,
                                 ObItemType compare_op,
                                 bool &is_true,

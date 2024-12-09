@@ -543,8 +543,13 @@ int ObConfigInfoInPC::load_influence_plan_config()
     enable_das_keep_order_ = tenant_config->_enable_das_keep_order;
     enable_hyperscan_regexp_engine_ =
         (0 == ObString::make_string("Hyperscan").case_compare(tenant_config->_regex_engine.str()));
+    enable_parallel_das_dml_ = tenant_config->_enable_parallel_das_dml;
     direct_load_allow_fallback_ = tenant_config->direct_load_allow_fallback;
     default_load_mode_ = ObDefaultLoadMode::get_type_value(tenant_config->default_load_mode.get_value_string());
+    hash_rollup_policy_ = tenant_config->_use_hash_rollup.case_compare("auto") == 0 ?
+                            0 :
+                            (tenant_config->_use_hash_rollup.case_compare("forced") == 0 ? 1 : 2);
+    enable_nlj_spf_use_rich_format_ = tenant_config->_enable_nlj_spf_use_rich_format;
   }
 
   return ret;
@@ -610,11 +615,19 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
                                "%d", realistic_runtime_bloom_filter_size_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(realistic_runtime_bloom_filter_size_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", enable_parallel_das_dml_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_parallel_das_dml_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d", direct_load_allow_fallback_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(direct_load_allow_fallback_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d", default_load_mode_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(default_load_mode_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d", hash_rollup_policy_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(hash_rollup_policy_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", enable_nlj_spf_use_rich_format_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_nlj_spf_use_rich_format_));
   } else {
     // do nothing
   }

@@ -3206,8 +3206,9 @@ int ObSchemaRetrieveUtils::retrieve_system_variable_obj(
     ObObj casted_val;
     const ObObj *res_val = NULL;
     if (OB_FAIL(ObObjCaster::to_type(var_type, cast_ctx, var_value, casted_val, res_val))) {
+      ObCStringHelper helper;
       _SHARE_SCHEMA_LOG(WARN,"failed to cast object, ret=%d cell=%s from_type=%s to_type=%s",
-                       ret, to_cstring(var_value), ob_obj_type_str(var_value.get_type()), ob_obj_type_str(var_type));
+                       ret, helper.convert(var_value), ob_obj_type_str(var_value.get_type()), ob_obj_type_str(var_type));
     } else if (OB_ISNULL(res_val)) {
       ret = common::OB_ERR_UNEXPECTED;
       SHARE_SCHEMA_LOG(WARN,"casted success, but res_val is NULL", K(ret), K(var_value), K(var_type));
@@ -4745,10 +4746,15 @@ int ObSchemaRetrieveUtils::fill_replica_options(T &result, SCHEMA &schema)
   ObString zone_list_str;
   ObString primary_zone_str;
   ObArray<ObString> zones;
+  ObCStringHelper helper;
+  const char *zone_list_str_ptr = nullptr;
 
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "primary_zone", primary_zone_str);
   EXTRACT_VARCHAR_FIELD_MYSQL(result, "zone_list", zone_list_str);
-  if (OB_FAIL(schema.str2string_array(to_cstring(zone_list_str), zones))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(helper.convert(zone_list_str, zone_list_str_ptr))) {
+    SHARE_SCHEMA_LOG(WARN, "convert zone_list_str failed", K(zone_list_str), K(ret));
+  } else if (OB_FAIL(schema.str2string_array(zone_list_str_ptr, zones))) {
     SHARE_SCHEMA_LOG(WARN, "str2string_array failed", K(zone_list_str), K(ret));
   } else {
     if (OB_FAIL(schema.set_zone_list(zones))) {

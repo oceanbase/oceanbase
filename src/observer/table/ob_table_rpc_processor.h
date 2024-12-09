@@ -148,8 +148,9 @@ protected:
   // init schema guard for tablegroup
   int init_tablegroup_schema(const ObString &arg_tablegroup_name);
   // init schema guard
+  virtual int init_schema_info(const ObString &arg_table_name, uint64_t arg_table_id);
+  virtual int init_schema_info(uint64_t table_id, const ObString &arg_table_name);
   virtual int init_schema_info(const ObString &arg_table_name);
-  virtual int init_schema_info(uint64_t table_id);
   int check_table_has_global_index(bool &exists, table::ObKvSchemaCacheGuard& schema_cache_guard);
   int get_tablet_id(const share::schema::ObSimpleTableSchemaV2 * simple_table_schema,
                     const ObTabletID &arg_tablet_id,
@@ -180,7 +181,6 @@ protected:
   table::ObTableTransParam trans_param_;
   transaction::ObTxReadSnapshot tx_snapshot_;
   ObAddr user_client_addr_;
-  ObSessionStatEstGuard sess_stat_guard_;
   table::ObTableAuditCtx audit_ctx_;
 };
 
@@ -239,6 +239,7 @@ struct ObTableInfoBase {
               K(schema_cache_guard_),
               K(schema_version_));
   int64_t table_id_;
+  ObString real_table_name_;
   const share::schema::ObSimpleTableSchemaV2* simple_schema_;
   table::ObKvSchemaCacheGuard schema_cache_guard_;
   int64_t schema_version_;

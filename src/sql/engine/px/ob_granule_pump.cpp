@@ -638,14 +638,14 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args)
     // if (!(args.asc_order() || args.desc_order() || ObGITaskSet::GI_RANDOM_NONE != random_type)) {
     //   random_type = ObGITaskSet::GI_RANDOM_TASK;
     // }
-    if (OB_FAIL(splitter.split_granule(args,
+    if (OB_FAIL(init_external_odps_table_downloader(args))) {
+      LOG_WARN("failed to init external odps table downloader", K(ret));
+    } else if (OB_FAIL(splitter.split_granule(args,
                                        scan_ops,
                                        gi_task_array_map_,
                                        random_type,
                                        partition_granule))) {
       LOG_WARN("failed to prepare random gi task", K(ret), K(partition_granule));
-    } else if (OB_FAIL(init_external_odps_table_downloader(args))) {
-      LOG_WARN("failed to init external odps table downloader", K(ret));
     }
   }
   return ret;
@@ -655,10 +655,16 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
 {
   int ret = OB_SUCCESS;
   const ObTableScanSpec *tsc = NULL;
-  sql::ObExternalFileFormat external_odps_format;
-  if (!args.external_table_files_.empty() &&
-      0 == args.external_table_files_.at(0).file_id_) { //file_id_ == 0 means it's a external odps table
-    ObIArray<const ObTableScanSpec *> &scan_ops = args.op_info_.get_scan_ops();
+  bool is_odps_external_table = false;
+  ObIArray<const ObTableScanSpec *> &scan_ops = args.op_info_.get_scan_ops();
+  if (scan_ops.count() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty scan_ops", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+                                                   is_odps_external_table))) {
+    LOG_WARN("failed to check is odps external table or not", K(ret));
+  } else if (!args.external_table_files_.empty() &&
+      is_odps_external_table) {
     if (scan_ops.empty() || scan_ops.count() != gi_task_array_map_.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid scan ops and gi task array result", K(ret), K(scan_ops.count()), K(gi_task_array_map_.count()));
@@ -666,12 +672,11 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret));
 #ifdef OB_BUILD_CPP_ODPS
-    } else if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(args.external_table_files_,
-                                                 tsc->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_))) {
+    } else if (OB_FAIL(odps_partition_downloader_mgr_.init_map(args.external_table_files_.count()))) {
       LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret), K(args.external_table_files_.count()));
-#endif
     } else {
-      LOG_TRACE("succ to init odps table partition downloader", K(ret));
+      LOG_TRACE("succ to init odps table partition downloader", K(ret), K(is_odps_downloader_inited()));
+#endif
     }
   }
   return ret;
@@ -721,10 +726,10 @@ int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_random
 void ObGranulePump::destroy()
 {
   gi_task_array_map_.reset();
-  pump_args_.reset();
 #ifdef OB_BUILD_CPP_ODPS
   odps_partition_downloader_mgr_.reset();
 #endif
+  pump_args_.reset();
 }
 
 void ObGranulePump::reset_task_array()
@@ -792,7 +797,7 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
              && OB_FAIL(ranges.assign(args.query_range_by_runtime_filter_))) {
     LOG_WARN("failed to assign query range", K(ret), K(tablets));
   } else if (args.query_range_by_runtime_filter_.empty()
-             && OB_FAIL(get_query_range(*args.ctx_, tsc->get_query_range(), ranges, ss_ranges,
+             && OB_FAIL(get_query_range(*args.ctx_, tsc->get_query_range_provider(), ranges, ss_ranges,
                                         table_id, op_id, partition_granule,
                                         ObGranuleUtil::with_param_down(args.gi_attri_flag_)))) {
     LOG_WARN("get query range failed", K(ret));
@@ -845,7 +850,7 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
 }
 
 int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
-                                       const ObQueryRange &tsc_pre_query_range,
+                                       const ObQueryRangeProvider &tsc_pre_query_range,
                                        ObIArray<ObNewRange> &ranges,
                                        ObIArray<ObNewRange> &ss_ranges,
                                        int64_t table_id,

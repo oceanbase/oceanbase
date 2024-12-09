@@ -735,7 +735,8 @@ int ObMediumCompactionInfoList::get_next_schedule_info(
     const int64_t major_frozen_snapshot,
     const bool is_mv_refresh_tablet,
     ObMediumCompactionInfo::ObCompactionType &compaction_type,
-    int64_t &schedule_scn) const
+    int64_t &schedule_scn,
+    ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type) const
 {
   int ret = OB_SUCCESS;
   DLIST_FOREACH_X(info, get_list(), OB_SUCC(ret)) {
@@ -747,6 +748,7 @@ int ObMediumCompactionInfoList::get_next_schedule_info(
           || is_mv_refresh_tablet) {
         schedule_scn = info->medium_snapshot_;
         compaction_type = (ObMediumCompactionInfo::ObCompactionType)info->compaction_type_;
+        co_major_merge_type = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(info->co_major_merge_type_);
       }
       break; // found one unfinish medium info, loop end
     }

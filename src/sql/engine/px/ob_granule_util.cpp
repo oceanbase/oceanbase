@@ -116,36 +116,28 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
              ObExternalFileFormat::ODPS_FORMAT == external_file_format.format_type_) {
 #ifdef OB_BUILD_CPP_ODPS
     int64_t task_idx = 0;
+    LOG_TRACE("odps external table granule switch", K(ret), K(external_table_files.count()), K(external_table_files));
     for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
       const ObExternalFileInfo& external_info = external_table_files.at(i);
+      ObNewRange new_range;
       if (0 != external_info.file_id_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected file id", K(ret), K(i), K(external_info.file_id_));
       } else {
-        // file_size_ is the total row cnt of odps table partition
-        uint64_t block_cnt = (external_info.file_size_ + sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE - 1)
-                             / sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE;
-        uint64_t start_idx = 0;
-        block_cnt = (0 == block_cnt ? 1 : block_cnt); // one odps table partition should have at least one task, even it's empty
-        for (int64_t j = 0; OB_SUCC(ret) && j < block_cnt; ++j) {
-          ObNewRange new_range;
-          int64_t start = start_idx + (sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE * j);
-          int64_t end = sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE;
-          if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(external_info.file_url_,
+        int64_t file_row_count = external_info.row_count_ ? external_info.row_count_ : (external_info.file_size_ > 0 ? external_info.file_size_ : INT64_MAX);
+        int64_t file_start = external_info.row_count_ ? external_info.row_start_ : 0;
+        if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(external_info.file_url_,
                                                     external_info.file_id_,
                                                     external_info.part_id_,
-                                                    start_idx + (sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE * j),
-                                                    j == block_cnt -1 ?
-                                                    INT64_MAX :
-                                                    sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE,
+                                                    file_start,
+                                                    file_row_count,
                                                     allocator,
                                                     new_range))) {
-            LOG_WARN("failed to make external table scan range", K(ret));
-          } else if ((OB_FAIL(granule_ranges.push_back(new_range)) ||
-                 OB_FAIL(granule_idx.push_back(task_idx++)) ||
-                 OB_FAIL(granule_tablets.push_back(tablets.at(0))))) {
-            LOG_WARN("fail to push back", K(ret));
-          }
+          LOG_WARN("failed to make external table scan range", K(ret));
+        } else if ((OB_FAIL(granule_ranges.push_back(new_range)) ||
+                OB_FAIL(granule_idx.push_back(task_idx++)) ||
+                OB_FAIL(granule_tablets.push_back(tablets.at(0))))) {
+          LOG_WARN("fail to push back", K(ret));
         }
       }
     }

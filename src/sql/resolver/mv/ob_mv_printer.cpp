@@ -1940,6 +1940,7 @@ int ObMVPrinter::gen_exists_cond_for_table(const TableItem *source_table,
   ObSEArray<uint64_t, 4> rowkey_column_ids;
   const ObTableSchema *source_table_schema = NULL;
   sel_item.expr_ = exprs_.int_one_;
+  ObConstRawExpr *const_expr = NULL;
   if (OB_ISNULL(outer_table) || OB_ISNULL(source_table) || OB_ISNULL(stmt_factory_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(outer_table), K(source_table), K(stmt_factory_.get_query_ctx()));
@@ -1968,8 +1969,12 @@ int ObMVPrinter::gen_exists_cond_for_table(const TableItem *source_table,
     LOG_WARN("failed to push back not exists expr", K(ret));
   } else if (OB_FAIL(gen_delta_table_view_conds(*delta_src_table, subquery->get_condition_exprs()))) {
     LOG_WARN("failed to generate delta table view conds", K(ret));
+  } else if (!use_mlog && OB_FAIL(ObRawExprUtils::build_const_string_expr(expr_factory_, ObVarcharType, ObString("F"),
+                                                        ObCharset::get_default_collation(ObCharset::get_default_charset()),
+                                                        const_expr))) {
+    LOG_WARN("fail to build const string expr", K(ret));
   } else if (!use_mlog && OB_FAIL(append_old_new_col_filter(*delta_src_table,
-                                                            exprs_.str_o_,
+                                                            const_expr,
                                                             subquery->get_condition_exprs()))) {
     LOG_WARN("failed to generate old new filter", K(ret));
   } else if (OB_FAIL(source_table_schema->get_rowkey_column_ids(rowkey_column_ids))) {
@@ -2610,8 +2615,8 @@ int ObMVPrinter::get_rowkey_pos_in_select(ObIArray<int64_t> &rowkey_sel_pos)
 
 /*
   select * from mv where
-  not exists (select 1 from t1 where t1.pk = mv.t1_pk and $$old_new = 'O' and ora_rowscn > last_refresh_scn(mv_id))
-  and not exists (select 1 from t2 where t2.pk = mv.t2_pk and $$old_new = 'O' and ora_rowscn > last_refresh_scn(mv_id))
+  not exists (select 1 from t1 where t1.pk = mv.t1_pk and $$old_new = 'F' and ora_rowscn > last_refresh_scn(mv_id))
+  and not exists (select 1 from t2 where t2.pk = mv.t2_pk and $$old_new = 'F' and ora_rowscn > last_refresh_scn(mv_id))
   union all
   select * from t1, t2
   where t1.c1 = t2.c1

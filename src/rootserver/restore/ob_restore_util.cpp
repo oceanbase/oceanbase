@@ -98,6 +98,10 @@ int ObRestoreUtil::fill_physical_restore_job(
         }
       }
     }
+
+    if (FAILEDx(fill_sts_credential_(arg, job))) {
+      LOG_WARN("fail to fill sts credential", K(ret));
+    }
   }
 
   LOG_INFO("finish fill_physical_restore_job", K(job_id), K(arg), K(job));
@@ -596,6 +600,24 @@ int ObRestoreUtil::fill_encrypt_info_(
     LOG_WARN("failed to fill kms encrypt key", KR(ret), K(arg));
   }
 #endif
+  return ret;
+}
+
+int ObRestoreUtil::fill_sts_credential_(
+    const obrpc::ObPhysicalRestoreTenantArg &arg,
+    share::ObPhysicalRestoreJob &job)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  if (arg.sts_credential_.empty()) {
+  } else {
+    ObStsCredential tmp_credential;
+    if (OB_FAIL(check_sts_credential_format(arg.sts_credential_.ptr(), tmp_credential))) {
+      LOG_WARN("fail to check sts credential format", K(ret), K(arg.sts_credential_));
+    } else if (OB_FAIL(job.set_sts_credential(arg.sts_credential_))) {
+      LOG_WARN("fail to set sts crendential", K(ret), K(arg.sts_credential_));
+    }
+  }
   return ret;
 }
 

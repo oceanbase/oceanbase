@@ -565,7 +565,10 @@ protected:
       const uint64_t cg_id,
       share::schema::ObColumnGroupSchema &column_group);
   int parse_cg_node(const ParseNode &cg_node, obrpc::ObCreateIndexArg &create_index_arg) const;
-  int parse_column_group(const ParseNode *cg_node,const share::schema::ObTableSchema &table_schema, share::schema::ObTableSchema &dst_table_schema);
+  int parse_column_group(const ParseNode *cg_node,
+                         const share::schema::ObTableSchema &table_schema,
+                         share::schema::ObTableSchema &dst_table_schema,
+                         const bool is_alter_column_group_delayed = false);
   int resolve_index_column_group(const ParseNode *node, obrpc::ObCreateIndexArg &create_index_arg);
   bool need_column_group(const ObTableSchema &table_schema);
   int resolve_hints(const ParseNode *parse_node, ObDDLStmt &stmt, const ObTableSchema &table_schema);
@@ -1072,7 +1075,7 @@ protected:
   common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper,
                                    common::OB_MAX_COLUMN_NUMBER> storing_column_set_;
   common::hash::ObPlacementHashSet<share::schema::ObForeignKeyNameHashWrapper,
-                                   common::OB_MAX_INDEX_PER_TABLE> current_foreign_key_name_set_;
+                                   OB_MAX_AUX_TABLE_PER_MAIN_TABLE> current_foreign_key_name_set_;
   common::ObBitSet<> alter_table_bitset_;
   bool has_index_using_type_;
   share::schema::ObIndexUsingType index_using_type_;

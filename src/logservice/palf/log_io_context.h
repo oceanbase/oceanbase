@@ -111,10 +111,34 @@ public:
     }
     return *this;
   }
-  share::ObFunctionType get_function_type() { return log_io_user_prio(user_); }
+  share::ObFunctionType get_function_type() const { return log_io_user_prio(user_); }
   void set_start_lsn(const LSN &start_lsn) { iterator_info_.set_start_lsn(start_lsn); }
   LogIteratorInfo *get_iterator_info() { return &iterator_info_; }
-  TO_STRING_KV("user", log_io_user_str(user_), K(palf_id_), K(iterator_info_));
+  void inc_read_io_cnt()
+  {
+    iterator_info_.inc_read_io_cnt();
+  }
+  void inc_read_io_size(const int64_t read_size)
+  {
+    iterator_info_.inc_read_io_size(read_size);
+  }
+  void inc_read_disk_cost_ts(const int64_t cost_ts)
+  {
+    iterator_info_.inc_read_disk_cost_ts(cost_ts);
+  }
+  void inc_hit_cnt(const bool is_cold_cache)
+  {
+    iterator_info_.inc_hit_cnt(is_cold_cache);
+  }
+  void inc_miss_cnt(const bool is_cold_cache)
+  {
+    iterator_info_.inc_miss_cnt(is_cold_cache);
+  }
+  void inc_cache_read_size(const int64_t read_size, const bool is_cold_cache)
+  {
+    iterator_info_.inc_cache_read_size(read_size, is_cold_cache);
+  }
+  TO_STRING_KV("user", log_io_user_str(user_), K_(palf_id), K_(iterator_info));
 private:
   bool is_enable_fill_cache_user_() const {
     return (LogIOUser::RESTART == user_ ||

@@ -68,6 +68,10 @@ int ObTableDirectInsertCtx::init(
   } else if (OB_UNLIKELY(session_info->get_ddl_info().is_mview_complete_refresh() && enable_inc_replace)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected mview complete refresh enable inc replace", KR(ret));
+  } else if (OB_UNLIKELY(phy_plan.is_vectorized() &&
+                         phy_plan.get_batch_size() > ObTableLoadParam::MAX_BATCH_SIZE)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "batch size exceeds 65536 in direct load is");
   } else {
     is_direct_ = true;
     if (OB_ISNULL(load_exec_ctx_ = OB_NEWx(ObTableLoadExecCtx, &exec_ctx->get_allocator()))) {
@@ -112,10 +116,11 @@ int ObTableDirectInsertCtx::init(
         param.table_id_ = table_id;
         param.parallel_ = parallel;
         param.session_count_ = parallel;
-        param.batch_size_ = 100;
+        param.batch_size_ = phy_plan.is_vectorized() ? phy_plan.get_batch_size()
+                                                     : ObTableLoadParam::DEFAULT_BATCH_SIZE;
         param.max_error_row_count_ = 0;
         param.column_count_ = column_ids.count();
-        param.need_sort_ = table_schema->is_heap_table() ? phy_plan.get_direct_load_need_sort() : true;
+        param.need_sort_ = phy_plan.get_direct_load_need_sort();
         param.px_mode_ = true;
         param.online_opt_stat_gather_ = is_online_gather_statistics_;
         param.dup_action_ = (enable_inc_replace ? sql::ObLoadDupActionType::LOAD_REPLACE

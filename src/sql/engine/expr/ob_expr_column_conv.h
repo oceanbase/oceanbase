@@ -90,6 +90,13 @@ public:
     PARAMS_MAX
   };
 
+  enum PARAM_TC {
+    INT_TC,
+    STRING_TC,
+    DECIMAL_INT_TC,
+    OTHER_TC,
+  };
+
   static const int64_t PARAMS_COUNT_WITHOUT_COLUMN_INFO = 5;
   static const int64_t PARAMS_COUNT_WITH_COLUMN_INFO = 6;
   class ObExprColumnConvCtx : public ObExprOperatorCtx
@@ -145,6 +152,21 @@ public:
                                        ObEvalCtx &ctx,
                                        const ObBitVector &skip,
                                        const int64_t batch_size);
+
+  inline static bool check_is_ascii(ObString &str);
+
+  template <PARAM_TC TC>
+  static int inner_loop_for_convert_batch(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          const ObBitVector &skip,
+                                          const int64_t batch_size,
+                                          const bool is_strict,
+                                          const ObLength max_accuracy_len,
+                                          const uint64_t cast_mode,
+                                          ObBitVector &eval_flags,
+                                          ObDatum *vals,
+                                          ObDatum *results,
+                                          ObEvalCtx::BatchInfoScopeGuard &batch_info_guard);
 
   virtual bool need_rt_ctx() const override
   { return ob_is_enum_or_set_type(result_type_.get_type()); }

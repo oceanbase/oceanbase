@@ -93,6 +93,7 @@ if(OB_BUILD_CLOSE_MODULES)
 endif()
 
 ob_unittest(test_ash_index)
+ob_unittest(test_wr)
 
 add_subdirectory(allocator)
 add_subdirectory(auto_increment)

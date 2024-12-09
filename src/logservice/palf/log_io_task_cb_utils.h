@@ -90,7 +90,7 @@ enum MetaType {
 
 inline const char *meta_type_2_str(const MetaType type)
 {
-#define EXTRACT_META_TYPE(type_var) ({ case(type_var): return #type_var; })
+#define EXTRACT_META_TYPE(type_var) case(type_var): return #type_var
   switch(type)
   {
     EXTRACT_META_TYPE(PREPARE_META);

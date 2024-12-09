@@ -462,6 +462,7 @@ void ObWindowFunctionVecOp::destroy()
   wf_list_.~WinFuncColExprList();
   rescan_alloc_.~ObArenaAllocator();
   patch_alloc_.~ObArenaAllocator();
+  hp_infras_mgr_.destroy();
   destroy_mem_context();
   local_allocator_ = nullptr;
   ObOperator::destroy();
@@ -518,11 +519,11 @@ int ObWindowFunctionVecOp::create_stores(const int64_t tenant_id)
   }
   FOREACH_WINCOL(END_WF) {
     it->res_ = OB_NEWx(winfunc::RowStores, local_allocator_);
-    it->res_->set_operator(this);
     if (OB_ISNULL(it->res_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else {
+      it->res_->set_operator(this);
       it->res_->processed_ = OB_NEWx(winfunc::RowStore, local_allocator_, tenant_id, store_alloc,
                                      local_allocator_, *it->res_);
       it->res_->cur_ = OB_NEWx(winfunc::RowStore, local_allocator_, tenant_id, store_alloc,
@@ -681,6 +682,11 @@ int ObWindowFunctionVecOp::init()
                 K(MY_SPEC.estimated_part_cnt_), K(MY_SPEC.input_rows_mem_bound_ratio_));
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(init_hp_infras_group_mgr())) {
+      LOG_WARN("init hp infras group mgr failed", K(ret));
+    }
+  }
 
   if (OB_FAIL(ret)) {
   } else {
@@ -716,6 +722,7 @@ int ObWindowFunctionVecOp::init()
       }
     }
     // create aggr rows
+    int64_t distinct_aggr_count = 0;
     for (int wf_idx = 1; OB_SUCC(ret) && wf_idx <= wf_infos.count(); wf_idx++) {
       WinFuncInfo &wf_info = wf_infos.at(wf_idx - 1);
       for (int j = 0; OB_SUCC(ret) && j < wf_info.partition_exprs_.count(); j++) {
@@ -778,13 +785,17 @@ int ObWindowFunctionVecOp::init()
         case T_FUN_JSON_OBJECTAGG:
         case T_FUN_ORA_JSON_ARRAYAGG:
         case T_FUN_ORA_JSON_OBJECTAGG:
-        case T_FUN_ORA_XMLAGG: {
+        case T_FUN_ORA_XMLAGG:
+        case T_FUNC_SYS_ARRAY_AGG: {
           aggregate::IAggregate *agg_func = nullptr;
           winfunc::AggrExpr *aggr_expr = nullptr;
           if (OB_FAIL(alloc_expr<winfunc::AggrExpr>(*local_allocator_, aggr_expr))) {
             LOG_WARN("allocate aggr expr failed", K(ret));
           } else {
             win_col->wf_expr_ = aggr_expr;
+            if (wf_info.aggr_info_.has_distinct_) {
+              distinct_aggr_count++;
+            }
           }
           break;
         }
@@ -906,6 +917,10 @@ int ObWindowFunctionVecOp::init()
     } // end for
     if (OB_SUCC(ret)) {
       max_pby_col_cnt_ = all_part_exprs_.count();
+    }
+
+    if (OB_SUCC(ret) && distinct_aggr_count > 0 && OB_FAIL(hp_infras_mgr_.reserve_hp_infras(distinct_aggr_count))) {
+      LOG_WARN("reserve hp infras failed", K(ret));
     }
 
     if (OB_SUCC(ret) && MY_SPEC.is_participator()) {
@@ -2233,7 +2248,8 @@ int ObWindowFunctionVecOp::compute_wf_values(WinFuncColExpr *end, int64_t &check
       if (OB_SUCC(ret) && it->wf_expr_->is_aggregate_expr()) {
         // enable removal optimization
         it->agg_ctx_->removal_info_.enable_removal_opt_ =
-          !(MY_SPEC.single_part_parallel_) && it->wf_info_.remove_type_ != common::REMOVE_INVALID;
+          !(MY_SPEC.single_part_parallel_) && it->wf_info_.remove_type_ != common::REMOVE_INVALID
+          && !it->wf_info_.aggr_info_.has_distinct_;
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(it->wf_expr_->process_partition(win_expr_ctx, it->part_first_row_idx_,
@@ -3320,8 +3336,12 @@ bool ObWindowFunctionVecOp::all_supported_winfuncs(const ObIArray<ObWinFunRawExp
   for (int i = 0; ret && i < win_exprs.count(); i++) {
     ObWinFunRawExpr *win_expr = win_exprs.at(i);
     if (win_expr->get_agg_expr() != nullptr) {
-      ret = aggregate::supported_aggregate_function(win_expr->get_func_type())
-            && !win_expr->get_agg_expr()->is_param_distinct();
+      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0) {
+        ret = aggregate::supported_aggregate_function(win_expr->get_func_type())
+              && !win_expr->get_agg_expr()->is_param_distinct();
+      } else {
+        ret = aggregate::supported_aggregate_function(win_expr->get_func_type());
+      }
     }
   }
   return ret;
@@ -3455,7 +3475,9 @@ int WinFuncColExpr::init_aggregate_ctx(const int64_t tenant_id)
       LOG_WARN("allocate memory failed", K(ret));
     } else if (OB_FAIL(agg_expr->aggr_processor_->init())) {
       LOG_WARN("processor init failed", K(ret), K(wf_info_.aggr_info_));
+    } else if (FALSE_IT(agg_expr->aggr_processor_->set_io_event_observer(&op_.io_event_observer_))) {
     } else if (FALSE_IT(agg_expr->aggr_processor_->set_support_fast_single_row_agg(true))) {
+    } else if (FALSE_IT(agg_expr->aggr_processor_->set_hp_infras_mgr(&op_.hp_infras_mgr_))) {
     } else if (FALSE_IT(agg_ctx_ = agg_expr->aggr_processor_->get_rt_ctx())) {
     } else if (FALSE_IT(aggr_row_buf_sz = op_.spec_.max_batch_size_ * agg_ctx_->row_meta().row_size_)) {
       // do nothing
@@ -4076,6 +4098,21 @@ int ObWindowFunctionVecOpInput::sync_wait(ObExecContext &ctx, ObReportingWFWhole
         shared_info->cond_.wait(key, 1000); // wait for 1000 us per loop
       }
     } // end while
+  }
+  return ret;
+}
+
+int ObWindowFunctionVecOp::init_hp_infras_group_mgr()
+{
+  int ret = OB_SUCCESS;
+  if (!hp_infras_mgr_.is_inited()) {
+    int64_t est_rows = MY_SPEC.rows_ / MY_SPEC.estimated_part_cnt_;
+    uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+    if (OB_FAIL(hp_infras_mgr_.init(tenant_id, GCONF.is_sql_operator_dump_enabled(), est_rows,
+                                    MY_SPEC.width_, true, 1, &eval_ctx_, &sql_mem_processor_,
+                                    &io_event_observer_, NONE_COMPRESSOR))) {
+      LOG_WARN("init hp mgr failed", K(ret));
+    }
   }
   return ret;
 }

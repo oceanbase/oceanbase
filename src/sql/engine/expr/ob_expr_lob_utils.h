@@ -111,6 +111,9 @@ int ObTextStringVectorResult<VectorType>::init_with_batch_idx(int64_t res_len, i
       SQL_LOG(WARN, "Lob: fill_temp_lob_header failed", K(ret), K(type_));
     }
   }
+  if (OB_SUCC(ret)) {
+    is_init_ = true;
+  }
   return ret;
 }
 

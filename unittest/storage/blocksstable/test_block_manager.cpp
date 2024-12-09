@@ -43,6 +43,16 @@ public:
   TestBlockManager();
   virtual ~TestBlockManager() = default;
   virtual void SetUp() override;
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 
 private:
   int init_multi_tenant();
@@ -134,10 +144,16 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
     ASSERT_EQ(common::OB_SUCCESS, ret);
   }
 
-  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
-  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
   static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
+
+  ObTimerService *timer_service = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
+  ASSERT_EQ(OB_SUCCESS, timer_service->start());
+  tenant_ctx.set(timer_service);
+
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
 
   tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
   EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));

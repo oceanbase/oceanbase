@@ -312,5 +312,12 @@ OB_SERIALIZE_MEMBER(ObDirectLoadControlInsertTransArg,
                     sequence_no_,
                     payload_);
 
+// init empty tablets
+OB_SERIALIZE_MEMBER(ObDirectLoadControlInitEmptyTabletsArg,
+                    table_id_,
+                    ddl_param_,
+                    partition_id_array_,
+                    target_partition_id_array_);
+
 } // namespace observer
 } // namespace oceanbase

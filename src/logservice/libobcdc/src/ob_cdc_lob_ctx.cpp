@@ -233,10 +233,10 @@ int64_t ObLobDataGetCtx::to_string(char *buf, const int64_t buf_len) const
 
     if (nullptr != lob_data_out_row_ctx) {
       (void)common::databuff_printf(buf, buf_len, pos,
-          "tenant_id=%ld, tx_id=%s, aux_tid=%ld, ",
-          lob_data_out_row_ctx->get_tenant_id(),
-          to_cstring(lob_data_out_row_ctx->get_trans_id()),
-          lob_data_out_row_ctx->get_aux_lob_meta_table_id());
+          "tenant_id=%ld, tx_id=", lob_data_out_row_ctx->get_tenant_id());
+      (void)common::databuff_printf(buf, buf_len, pos, lob_data_out_row_ctx->get_trans_id());
+      (void)common::databuff_printf(buf, buf_len, pos,
+          ", aux_tid=%ld, ", lob_data_out_row_ctx->get_aux_lob_meta_table_id());
     }
 
     (void)common::databuff_printf(buf, buf_len, pos,
@@ -245,16 +245,16 @@ int64_t ObLobDataGetCtx::to_string(char *buf, const int64_t buf_len) const
         old_lob_col_ctx_.get_col_ref_cnt(), lob_col_value_handle_done_count_, type_);
 
     if (nullptr != new_lob_data_) {
-      (void)common::databuff_printf(buf, buf_len, pos,
-          "byte_size=%ld, lob_id=%s ",
-           new_lob_data_->byte_size_, to_cstring(new_lob_data_->id_));
+      (void)common::databuff_printf(buf, buf_len, pos, "byte_size=%ld, lob_id=", new_lob_data_->byte_size_);
+      (void)common::databuff_printf(buf, buf_len, pos, new_lob_data_->id_);
+      (void)common::databuff_printf(buf, buf_len, pos, " ");
 
       const ObLobDataOutRowCtx *lob_data_out_row_ctx =
         reinterpret_cast<const ObLobDataOutRowCtx *>(new_lob_data_->buffer_);
 
       if (nullptr != lob_data_out_row_ctx) {
-        (void)common::databuff_printf(buf, buf_len, pos,
-            "lob_out_row=%s", to_cstring(*lob_data_out_row_ctx));
+        (void)common::databuff_printf(buf, buf_len, pos, "lob_out_row=");
+        (void)common::databuff_printf(buf, buf_len, pos, *lob_data_out_row_ctx);
       }
     }
   }
@@ -385,21 +385,23 @@ int64_t ObLobDataOutRowCtxList::to_string(char *buf, const int64_t buf_len) cons
   int64_t pos = 0;
 
   if (nullptr != buf && buf_len > 0) {
-    (void)common::databuff_printf(buf, buf_len, pos,
-          "tenant_id=%ld, tx_id=%s, aux_tid=%ld, lob_col_cnt=%ld/%ld,",
-          tenant_id_, to_cstring(trans_id_), aux_lob_meta_table_id_, lob_col_get_succ_count_, get_total_lob_count());
+    (void)common::databuff_printf(buf, buf_len, pos, "tenant_id=%ld, tx_id=", tenant_id_);
+    (void)common::databuff_printf(buf, buf_len, pos, trans_id_);
+    (void)common::databuff_printf(buf, buf_len, pos, ", aux_tid=%ld, lob_col_cnt=%ld/%ld,",
+        aux_lob_meta_table_id_, lob_col_get_succ_count_, get_total_lob_count());
 
     ObLobDataGetCtx *head = lob_data_get_ctxs_.head_;
     ObLobDataGetCtx *tail = lob_data_get_ctxs_.tail_;
 
     if (nullptr != head) {
-      (void)common::databuff_printf(buf, buf_len, pos,
-          "head=%s,", to_cstring(*head));
+      (void)common::databuff_printf(buf, buf_len, pos, "head=");
+      (void)common::databuff_printf(buf, buf_len, pos, *head);
+      (void)common::databuff_printf(buf, buf_len, pos, ",");
     }
 
     if (nullptr != tail && head != tail) {
-      (void)common::databuff_printf(buf, buf_len, pos,
-          "tail=%s", to_cstring(*tail));
+      (void)common::databuff_printf(buf, buf_len, pos, "tail=");
+      (void)common::databuff_printf(buf, buf_len, pos, *tail);
     }
   }
 

@@ -1336,6 +1336,10 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
                                               rt_expr.get_vec_value_tc(), just_eval_arg,
                                               rt_expr.eval_func_, cast_mode) :
             nullptr;
+        // 有些VEC_TC_XXXX类中尚有部分类型暂时没有实现向量化，仍走非向量化接口
+        if (ObTinyTextType == in_type || ObTinyTextType == out_type) {
+          rt_expr.eval_vector_func_ = nullptr;
+        }
       }
     }
     if (OB_SUCC(ret)) {

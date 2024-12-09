@@ -119,6 +119,34 @@ private:
   static const int64_t COMPRESSED_DATA_BUFFER_SIZE;
 };
 
+class ObExternalIteratorState
+{
+public:
+  ObExternalIteratorState() :
+    file_idx_(0),
+    part_id_(0),
+    cur_file_id_(0),
+    cur_line_number_(0),
+    cur_file_url_(),
+    part_list_val_() {}
+
+  virtual void reuse() {
+    file_idx_ = 0;
+    part_id_ = 0;
+    cur_file_id_ = 0;
+    cur_line_number_ = 0;
+    cur_file_url_.reset();
+    part_list_val_.reset();
+  }
+  DECLARE_VIRTUAL_TO_STRING;
+  int64_t file_idx_;
+  int64_t part_id_;
+  int64_t cur_file_id_;
+  int64_t cur_line_number_;
+  ObString cur_file_url_;
+  ObNewRow part_list_val_;
+};
+
 class ObExternalTableRowIterator : public common::ObNewRowIterator {
 public:
   ObExternalTableRowIterator() :
@@ -130,6 +158,7 @@ protected:
   int gen_ip_port(common::ObIAllocator &allocator);
   int calc_file_partition_list_value(const int64_t part_id, common::ObIAllocator &allocator, common::ObNewRow &value);
   int fill_file_partition_expr(ObExpr *expr, common::ObNewRow &value, const int64_t row_count);
+  int calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state);
 protected:
   const storage::ObTableScanParam *scan_param_;
   //external table column exprs
@@ -153,92 +182,6 @@ public:
 private:
 
   DISALLOW_COPY_AND_ASSIGN(ObExternalTableAccessService);
-};
-
-class ObCSVTableRowIterator : public ObExternalTableRowIterator {
-public:
-  static const int64_t MIN_EXTERNAL_TABLE_FILE_ID = 1;
-  static const int64_t MIN_EXTERNAL_TABLE_LINE_NUMBER = 1;
-  static const int max_ipv6_port_length = 100;
-public:
-  struct StateValues {
-    StateValues() :
-      buf_(nullptr), buf_len_(OB_MALLOC_NORMAL_BLOCK_SIZE),
-      pos_(nullptr), data_end_(nullptr), escape_buf_(nullptr), escape_buf_end_(nullptr),
-      file_idx_(0), skip_lines_(0),
-      cur_file_id_(MIN_EXTERNAL_TABLE_FILE_ID), cur_line_number_(MIN_EXTERNAL_TABLE_LINE_NUMBER),
-      line_count_limit_(INT64_MAX), part_id_(0), part_list_val_(), ip_port_buf_(NULL), ip_port_len_(0), file_with_url_() {}
-    char *buf_;
-    int64_t buf_len_;
-    const char *pos_;
-    const char *data_end_;
-    char *escape_buf_;
-    char *escape_buf_end_;
-    int64_t file_idx_;
-    int64_t skip_lines_;
-    common::ObString cur_file_name_;
-    int64_t cur_file_id_;
-    int64_t cur_line_number_;
-    int64_t line_count_limit_;
-    int64_t part_id_;
-    ObNewRow part_list_val_;
-    char *ip_port_buf_;
-    int ip_port_len_;
-    ObString file_with_url_;
-    void reuse() {
-      pos_ = buf_;
-      data_end_ = buf_;
-      file_idx_ = 0;
-      skip_lines_ = 0;
-      cur_file_name_.reset();
-      cur_file_id_ = MIN_EXTERNAL_TABLE_FILE_ID;
-      cur_line_number_ = MIN_EXTERNAL_TABLE_LINE_NUMBER;
-      line_count_limit_ = INT64_MAX;
-      part_id_ = 0;
-      part_list_val_.reset();
-      ip_port_len_ = 0;
-      file_with_url_.reset();
-    }
-    TO_STRING_KV(KP(buf_), K(buf_len_), KP(pos_), KP(data_end_), K(file_idx_),
-                 K(skip_lines_), K(line_count_limit_),
-                 K(cur_file_name_), K(cur_file_id_), K(cur_line_number_), K(line_count_limit_), K_(part_id), K_(ip_port_len), K_(file_with_url));
-  };
-
-  ObCSVTableRowIterator() : bit_vector_cache_(NULL) {}
-  virtual ~ObCSVTableRowIterator();
-  virtual int init(const storage::ObTableScanParam *scan_param) override;
-  int get_next_row() override;
-  int get_next_rows(int64_t &count, int64_t capacity) override;
-
-  virtual int get_next_row(ObNewRow *&row) override {
-    UNUSED(row);
-    return common::OB_ERR_UNEXPECTED;
-  }
-
-  virtual void reset() override;
-
-private:
-  int expand_buf();
-  int load_next_buf();
-  int open_next_file();
-  int get_next_file_and_line_number(const int64_t task_idx,
-                                    common::ObString &file_url,
-                                    int64_t &file_id,
-                                    int64_t &part_id,
-                                    int64_t &start_line,
-                                    int64_t &end_line);
-  int skip_lines();
-  void release_buf();
-  void dump_error_log(common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs);
-private:
-  ObBitVector *bit_vector_cache_;
-  StateValues state_;
-  common::ObMalloc malloc_alloc_; //for internal data buffers
-  common::ObArenaAllocator arena_alloc_;
-  ObCSVGeneralParser parser_;
-  ObExternalStreamFileReader file_reader_;
-  ObSqlString url_;
-  ObExpr *file_name_expr_;
 };
 
 

@@ -53,8 +53,8 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(1, DECIMAL(1, 0)) < cast('2009-12-17 06:03:17', DECIMAL(1, -1))]), filter(nil)
-      values({cast(1, DECIMAL(1, 0)) < cast('2009-12-17 06:03:17', DECIMAL(1, -1))})
+  0 - output([cast(1, DECIMAL(4, 0)) < cast('2009-12-17 06:03:17', DECIMAL(1, -1))]), filter(nil)
+      values({cast(1, DECIMAL(4, 0)) < cast('2009-12-17 06:03:17', DECIMAL(1, -1))})
 Outline Data: 
 -------------------------------------
   /*+

@@ -349,7 +349,7 @@ public:
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
-  static int redistribute_column_ids(
+  int redistribute_column_ids(
       ObTableSchema &new_table_schema);
   int add_new_column_to_table_schema(
       const share::schema::ObTableSchema &origin_table_schema,
@@ -1336,6 +1336,14 @@ private:
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       bool &domain_index_exist);
+  int check_has_vec_domain_index(
+      ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      bool &domain_index_exist);
+int check_will_be_having_domain_index_operation(
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    bool &will_be_having_domain_index_operation);
   int check_has_index_operation(
       ObSchemaGetterGuard &schema_guard,
       const uint64_t teannt_id,
@@ -1721,7 +1729,8 @@ private:
                                          const obrpc::ObIndexArg::IndexActionType &index_action_type,
                                          bool &is_support);
   int check_alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
-                              share::ObDDLType &ddl_type);
+                              share::ObDDLType &ddl_type,
+                              bool &has_drop_and_add_index);
   int check_is_change_column_order(const share::schema::ObTableSchema &table_schema,
                                    const share::schema::AlterColumnSchema &alter_column_schema,
                                    bool &is_change_column_order) const;
@@ -1730,9 +1739,24 @@ private:
                                     const share::schema::ObColumnSchemaV2 &orig_column_schema,
                                     share::schema::AlterColumnSchema &alter_column_schema,
                                     bool &is_offline) const;
-  int check_is_add_column_online(const share::schema::ObTableSchema &table_schema,
-                                 const share::schema::AlterColumnSchema &alter_column_schema,
-                                 share::ObDDLType &tmp_ddl_type);
+  int check_is_add_column_online_(const AlterTableSchema &alter_table_schema,
+                                  const share::schema::ObTableSchema &table_schema,
+                                  const share::schema::AlterColumnSchema &alter_column_schema,
+                                  const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm,
+                                  const bool is_oracle_mode,
+                                  const uint64_t tenant_data_version,
+                                  share::ObDDLType &tmp_ddl_type);
+  // except add column instant with modify column, add column instant with other ddl will be DDL_TABLE_REDEFINITION
+  int check_can_add_column_instant_(const ObTableSchema &orig_table_schema,
+                                    const AlterTableSchema &alter_table_schema,
+                                    const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm,
+                                    const uint64_t tenant_data_version,
+                                    const bool is_oracle_mode,
+                                    ObSchemaGetterGuard &schema_guard,
+                                    ObDDLType &ddl_type);
+  int check_can_add_column_use_instant_(const bool is_oracle_mode,
+                                        const uint64_t tenant_data_version,
+                                        bool &add_column_instant);
   int check_is_modify_partition_key(const ObTableSchema &orig_table_schema,
                                     const AlterTableSchema &alter_table_schema,
                                     bool &is_modify_partition_key);
@@ -1812,6 +1836,10 @@ private:
                          common::ObMySQLTransaction &trans);
 
 
+  int update_column_group_table_inplace(const share::schema::ObTableSchema &origin_table_schema,
+                                        const share::schema::ObTableSchema &new_table_schema,
+                                        ObDDLOperator &ddl_operator,
+                                        common::ObMySQLTransaction &trans);
   int check_alter_table_constraint(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const ObTableSchema &orig_table_schema,
@@ -1878,13 +1906,13 @@ private:
       const share::schema::ObTableSchema &hidden_table_schema,
       common::ObMySQLTransaction &trans,
       common::ObSArray<uint64_t> &cst_ids);
-  int rebuild_hidden_table_index(
+  int rebuild_hidden_table_index_and_mlog(
       const uint64_t tenant_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObSArray<share::schema::ObTableSchema> &new_table_schemas);
-  int add_new_index_schema(
+ int add_new_index_schema(
       obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
@@ -1894,6 +1922,16 @@ private:
       common::ObMySQLTransaction &trans,
       ObSArray<ObTableSchema> &new_table_schemas,
       ObSArray<uint64_t> &index_ids);
+  int add_new_mlog_schema(
+      const uint64_t tenant_id,
+      const share::schema::ObTableSchema &orig_table_schema,
+      const share::schema::ObTableSchema &hidden_table_schema,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObSchemaGetterGuard &dest_schema_guard,
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      common::ObSArray<ObTableSchema> &new_table_schemas,
+      common::ObSArray<uint64_t> &index_ids);
   int check_index_table_need_rebuild(
       const share::schema::ObTableSchema &index_table_schema,
       const common::ObIArray<int64_t> &drop_cols_id_arr,
@@ -3058,6 +3096,19 @@ private:
                                         ObDDLTaskRecord &task_record);
 
   bool need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const;
+  int swap_orig_and_hidden_table_mlog_state_(
+      ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      const uint64_t orig_table_mlog_tid,
+      const uint64_t hidden_table_mlog_tid,
+      ObIArray<ObTableSchema> &table_schemas);
+  int build_hidden_table_index_and_mlog_schema_(
+      const share::schema::ObTableSchema &hidden_table_schema,
+      share::schema::ObTableSchema &index_schema);
+
+// check whether the table adds column instant, we need to reorder the column
+  int reorder_column_after_add_column_instant_(const ObTableSchema &orig_table_schema,
+                                               ObTableSchema &new_table_schema);
 
 private:
   bool inited_;

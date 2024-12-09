@@ -193,7 +193,7 @@ public:
   // @param[in] const int64_t in_read_size: needed read size
   // @param[out] ReadBuf &read_buf: buf for read logs
   // @param[out] int64_t &out_read_size: actual read size
-  // @param[out] LogIteratorInfo *iterator_info: iterator info
+  // @param[out] LogIOContext &io_ctx: io ctx
   // @return
   // - OB_SUCCESS: read logs successfully
   // - OB_INVALID_ARGUEMENTS: invalid arguments
@@ -204,7 +204,7 @@ public:
            const int64_t in_read_size,
            ReadBuf &read_buf,
            int64_t &out_read_size,
-           LogIteratorInfo *iterator_info);
+           LogIOContext &io_ctx);
   int fill_cache_line(FillBuf &fill_buf);
   int alloc_kv_pair(const int64_t flashback_version, const LSN &aligned_lsn, FillBuf &fill_buf);
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(palf_id), K_(log_cache_stat));
@@ -249,7 +249,7 @@ private:
                       const int64_t in_read_size,
                       ReadBuf &read_buf,
                       int64_t &out_read_size,
-                      LogIteratorInfo *iterator_info);
+                      LogIOContext &io_ctx);
   offset_t get_phy_offset_(const LSN &lsn) const;
 private:
   class LogCacheStat
@@ -297,13 +297,13 @@ public:
            IPalfHandleImpl *palf_handle_impl,
            IPalfEnvImpl *palf_env_impl,
            LogStorage *log_storage);
-  bool is_inited();
+  bool is_inited() const;
   int read(const int64_t flashback_version,
            const LSN &lsn,
            const int64_t in_read_size,
            ReadBuf &read_buf,
            int64_t &out_read_size,
-           LogIteratorInfo *iterator_info);
+           LogIOContext &io_ctx);
   int fill_cache_when_slide(const LSN &lsn,
                             const int64_t size,
                             const int64_t flashback_version);
@@ -318,7 +318,7 @@ private:
                        const int64_t in_read_size,
                        ReadBuf &read_buf,
                        int64_t &out_read_size,
-                       LogIteratorInfo *iterator_info);
+                       LogIOContext &io_ctx);
   int try_update_fill_buf_(const int64_t flashback_version,
                            LSN &fill_lsn,
                            int64_t &fill_size);

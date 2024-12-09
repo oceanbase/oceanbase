@@ -220,7 +220,8 @@ public:
   static int check_disk_space_available(const char *sstable_dir,
                                         const int64_t data_disk_size,
                                         const int64_t reserved_size,
-                                        const int64_t used_disk_size);
+                                        const int64_t used_disk_size,
+                                        const bool need_report_user_error);
 
   static int open_block_file(const char *store_dir,
                              const char *sstable_dir,

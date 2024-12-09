@@ -121,6 +121,17 @@ public:
     TestChunkDatumStore &t_;
   };
 
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
+
   void init_exprs()
   {
     int64_t pos = 0;
@@ -175,6 +186,11 @@ public:
       EXPECT_EQ(OB_SUCCESS, io_service->start());
       tenant_ctx.set(io_service);
 
+      ObTimerService *timer_service = nullptr;
+      EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
+      EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_start(timer_service));
+      tenant_ctx.set(timer_service);
+
       tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
       EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
       EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
@@ -219,6 +235,11 @@ public:
 
     tmp_file::ObTmpBlockCache::get_instance().destroy();
     tmp_file::ObTmpPageCache::get_instance().destroy();
+    ObTimerService *timer_service = MTL(ObTimerService *);
+    ASSERT_NE(nullptr, timer_service);
+    timer_service->stop();
+    timer_service->wait();
+    timer_service->destroy();
     blocksstable::TestDataFilePrepare::TearDown();
     LOG_INFO("TearDown finished", K_(rs));
   }

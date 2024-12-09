@@ -126,7 +126,7 @@ int ObRpcDBMSSchedPurgeP::process()
   int ret = OB_SUCCESS;
   const ObDBMSSchedPurgeArg &arg = arg_;
   int64_t tenant_id = arg.tenant_id_;
-  const int64_t PURGE_RUN_DETAIL_TIMEOUT = 30 * 1000 * 1000L; // 30s
+  const int64_t PURGE_RUN_DETAIL_TIMEOUT = 5 * 60 * 1000 * 1000L; // 5min
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", K(ret), K(tenant_id));

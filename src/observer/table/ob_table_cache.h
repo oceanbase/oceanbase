@@ -125,9 +125,9 @@ public:
         SERVER_LOG(WARN, "fail to generate spec", K(ret));
       } else {
         cache_obj->set_spec(tmp_spec);
-        if (OB_FAIL(lib_cache_->add_cache_obj(cache_ctx_, &cache_key_, cache_obj))) {
-          // spec生成后直接加入的lib cache
-          SERVER_LOG(WARN, "fail to add cache obj to lib cache", K(ret), K(cache_key_));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(lib_cache_->add_cache_obj(cache_ctx_, &cache_key_, cache_obj))) {
+          SERVER_LOG(WARN, "fail to add cache obj to lib cache", K(tmp_ret));
         }
       }
     }

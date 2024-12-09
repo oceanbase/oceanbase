@@ -22,7 +22,6 @@
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
-#include "storage/direct_load/ob_direct_load_fast_heap_table.h"
 #include "storage/direct_load/ob_direct_load_multi_map.h"
 #include "storage/direct_load/ob_direct_load_range_splitter.h"
 #include "observer/table_load/ob_table_load_store_table_ctx.h"

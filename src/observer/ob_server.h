@@ -83,6 +83,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_tenant_gc_task.h"
 #endif
+#include "share/ob_device_credential_task.h"
 
 namespace oceanbase
 {
@@ -477,6 +478,7 @@ private:
   ObRefreshIOCalibrationTimeTask refresh_io_calibration_task_; // retry to success & no repeat
   blocksstable::ObStorageEnv storage_env_;
   share::ObSchemaStatusProxy schema_status_proxy_;
+  ObDeviceCredentialTask device_credential_task_;
 
   // for locality
   ObLocalityManager locality_manager_;

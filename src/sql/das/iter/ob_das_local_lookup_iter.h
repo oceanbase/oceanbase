@@ -40,11 +40,12 @@ public:
 
 class ObDASScanCtDef;
 class ObDASScanRtDef;
+class ObDASFuncLookupIter;
 class ObDASLocalLookupIter : public ObDASLookupIter
 {
 public:
-  ObDASLocalLookupIter()
-    : ObDASLookupIter(ObDASIterType::DAS_ITER_LOCAL_LOOKUP),
+  ObDASLocalLookupIter(const ObDASIterType type = ObDASIterType::DAS_ITER_LOCAL_LOOKUP)
+    : ObDASLookupIter(type),
       trans_info_array_(),
       lookup_param_(),
       lookup_tablet_id_(),
@@ -66,16 +67,16 @@ protected:
   virtual int inner_release() override;
   virtual int do_table_scan() override;
   virtual int rescan() override;
-  virtual void reset_lookup_state();
+  virtual void reset_lookup_state() override;
 
   virtual int add_rowkey() override;
   virtual int add_rowkeys(int64_t count) override;
   virtual int do_index_lookup() override;
   virtual int check_index_lookup() override;
-private:
+protected:
   int init_rowkey_exprs_for_compat();
 
-private:
+protected:
   ObSEArray<ObDatum *, 4> trans_info_array_;
    // Local lookup das task could rescan multiple times during execution, lookup_tablet_id_ and
    // lookup_ls_id_ store the lookup parameter for this time.

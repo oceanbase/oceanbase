@@ -39,6 +39,7 @@ public:
   int refresh_resource_plan(const uint64_t tenant_id, common::ObString &plan_name);
   int refresh_global_background_cpu();
   int get_cur_plan(const uint64_t tenant_id, ObResMgrVarcharValue &plan_name);
+  int64_t to_string(char *buf, const int64_t len) const;
 private:
   /* functions */
   int switch_resource_plan(const uint64_t tenant_id, common::ObString &plan_name);

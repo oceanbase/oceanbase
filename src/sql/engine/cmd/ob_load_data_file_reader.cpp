@@ -274,12 +274,19 @@ int ObRandomOSSReader::open(const share::ObBackupStorageInfo &storage_info, cons
     LOG_WARN("fail to get device manager", KR(ret), K(filename));
   } else if (OB_FAIL(util.set_access_type(&iod_opts, false, 1))) {
     LOG_WARN("fail to set access type", KR(ret));
-  } else if (OB_FAIL(device_handle_->open(to_cstring(filename), -1, 0, fd_, &iod_opts))) {
-    LOG_WARN("fail to open oss file", KR(ret), K(filename));
   } else {
-    offset_ = 0;
-    eof_ = false;
-    is_inited_ = true;
+    ObCStringHelper helper;
+    const char *filename_str = helper.convert(filename);
+    if (OB_ISNULL(filename_str)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to convert filename", K(ret), K(filename));
+    } else if (OB_FAIL(device_handle_->open(filename_str, -1, 0, fd_, &iod_opts))) {
+      LOG_WARN("fail to open oss file", KR(ret), K(filename));
+    } else {
+      offset_ = 0;
+      eof_ = false;
+      is_inited_ = true;
+    }
   }
   return ret;
 }

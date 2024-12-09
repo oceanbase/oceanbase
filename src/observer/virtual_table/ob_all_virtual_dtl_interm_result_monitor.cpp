@@ -63,8 +63,8 @@ int ObDTLIntermResultMonitorInfoGetter::operator() (common::hash::HashMapPair<Ob
     const char *owner = NULL;
     ObObj *cells = cur_row_.cells_;
     if (info.is_store_valid()) {
-      if (info.use_rich_format_) {
-        GET_CHUNK_STORE_INFO(info.col_store_);
+      if (info.is_rich_format()) {
+        GET_CHUNK_STORE_INFO(info.block_store_);
       } else {
         GET_CHUNK_STORE_INFO(info.datum_store_);
       }

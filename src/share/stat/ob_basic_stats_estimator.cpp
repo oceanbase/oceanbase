@@ -143,7 +143,7 @@ int ObBasicStatsEstimator::estimate(const ObOptStatGatherParam &param,
       LOG_WARN("failed to add avg row size estimator", K(ret));
     } else if (OB_FAIL(pack(raw_sql))) {
       LOG_WARN("failed to pack raw sql", K(ret));
-    } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), true, src_opt_stat, dst_opt_stats))) {
+    } else if (OB_FAIL(do_estimate(param, raw_sql.string(), true, src_opt_stat, dst_opt_stats))) {
       LOG_WARN("failed to evaluate basic stats", K(ret));
     } else if (OB_FAIL(refine_basic_stats(param, dst_opt_stats))) {
       LOG_WARN("failed to refine basic stats", K(ret));

@@ -194,7 +194,11 @@ public:
                     int64_t &agg_row_cnt,
                     int64_t &agg_group_cnt,
                     BatchAggrRowsTable *batch_aggr_rows,
-                    bool &has_new_row)
+                    bool &has_new_row,
+                    uint16_t *new_row_pos,
+                    uint16_t *old_row_pos,
+                    int64_t &new_row_cnt,
+                    int64_t &old_row_cnt)
   {
     int ret = OB_SUCCESS;
     new_row_selector_cnt_ = 0;
@@ -304,6 +308,7 @@ public:
           } else {
             ObGroupRowItemVec *new_item = static_cast<ObGroupRowItemVec *> (&srow[0]);
             batch_new_rows[i] = new_item->get_aggr_row(group_store_.get_row_meta());
+            new_row_pos[new_row_cnt++] = i;
             grs_array_[idx] = batch_new_rows[i];
             ser_num_array_[idx] = size_;
             CK (OB_NOT_NULL(batch_new_rows[i]));
@@ -313,6 +318,7 @@ public:
           }
         } else {
           batch_old_rows[i] = grs_array_[idx];
+          old_row_pos[old_row_cnt++] = i;
           if (batch_aggr_rows && batch_aggr_rows->is_valid()) {
             if (size_ > BatchAggrRowsTable::MAX_REORDER_GROUPS) {
               batch_aggr_rows->set_invalid();
@@ -534,7 +540,6 @@ public:
 
   ObExtendHashTableVec(int64_t tenant_id)
     : is_inited_vec_(false),
-      auto_extend_(false),
       hash_expr_cnt_(0),
       initial_bucket_num_(0),
       size_(0),
@@ -549,7 +554,6 @@ public:
       gby_exprs_(nullptr),
       eval_ctx_(nullptr),
       vector_ptrs_(),
-      locate_bucket_(nullptr),
       iter_(*this, group_store_.get_row_meta()),
       probe_cnt_(0),
       max_batch_size_(0),
@@ -558,7 +562,7 @@ public:
       old_row_selector_(),
       col_has_null_(),
       new_row_selector_cnt_(0),
-      old_row_selector_cnt_(),
+      old_row_selector_cnt_(0),
       change_valid_idx_(),
       change_valid_idx_cnt_(0),
       srows_(nullptr),
@@ -741,8 +745,7 @@ public:
           int64_t op_id,
           bool use_sstr_aggr,
           int64_t aggr_row_size,
-          int64_t initial_size,
-          bool auto_extend);
+          int64_t initial_size);
   int append_batch(const common::ObIArray<ObExpr *> &gby_exprs,
                    const ObBatchRows &child_brs,
                    const bool *is_dumped,
@@ -767,7 +770,12 @@ public:
                     int64_t &agg_row_cnt,
                     int64_t &agg_group_cnt,
                     BatchAggrRowsTable *batch_aggr_rows,
-                    bool need_reinit_vectors);
+                    bool need_reinit_vectors,
+                    uint16_t *new_row_pos,
+                    uint16_t *old_row_pos,
+                    int64_t &new_row_cnt,
+                    int64_t &old_row_cnt);
+  template <bool ALL_ROWS_ACTIVE>
   int inner_process_batch(const common::ObIArray<ObExpr *> &gby_exprs,
                           const ObBatchRows &child_brs,
                           const bool *is_dumped,
@@ -783,7 +791,11 @@ public:
                           bool need_reinit_vectors,
                           const bool probe_by_col,
                           const int64_t start_idx,
-                          int64_t &processed_idx);
+                          int64_t &processed_idx,
+                          uint16_t *new_row_pos,
+                          uint16_t *old_row_pos,
+                          int64_t &new_row_cnt,
+                          int64_t &old_row_cnt);
   int inner_process_batch(const RowMeta &row_meta,
                           const int64_t batch_size,
                           const ObBitVector *child_skip,
@@ -1011,6 +1023,24 @@ protected:
     }
     return *bucket;
   }
+  OB_NOINLINE void locate_batch_buckets(const BucketArray &buckets,
+                                        const uint64_t *hash_values,
+                                        const int64_t batch_size)
+  {
+    const int64_t cnt = buckets.count();
+    for (int64_t i = 0; i < batch_size; ++i) {
+      if (i < batch_size - 8) {
+        __builtin_prefetch((&buckets_->at((ObGroupRowBucketBase::HASH_VAL_MASK & hash_values[i + 8]) & (cnt - 1))),
+                          0/* read */, 2 /*high temp locality*/);
+      }
+      int64_t curr_pos = (hash_values[i] & ObGroupRowBucketBase::HASH_VAL_MASK & (cnt - 1));
+      locate_buckets_[i] = const_cast <GroupRowBucket *> (&buckets.at(curr_pos));
+      while (!locate_buckets_[i]->check_hash(hash_values[i] & ObGroupRowBucketBase::HASH_VAL_MASK)
+              && locate_buckets_[i]->is_valid()) {
+        locate_buckets_[i] = const_cast <GroupRowBucket *> (&buckets.at((++curr_pos) & (cnt - 1)));
+      }
+    }
+  }
   // used for extend
   OB_INLINE const GroupRowBucket &locate_empty_bucket(const BucketArray &buckets,
                                                       const uint64_t hash_val) const
@@ -1031,7 +1061,6 @@ protected:
 protected:
   lib::ObMemAttr mem_attr_;
   bool is_inited_vec_;
-  bool auto_extend_;
   int64_t hash_expr_cnt_;
   int64_t initial_bucket_num_;
   int64_t size_;
@@ -1044,7 +1073,6 @@ protected:
   ObEvalCtx *eval_ctx_;
   static const int64_t HASH_BUCKET_PREFETCH_MAGIC_NUM = 4 * 1024;
   common::ObFixedArray<ObIVector *, common::ObIAllocator> vector_ptrs_;
-  GroupRowBucket *locate_bucket_;
   Iterator iter_;
   int64_t probe_cnt_;
   int64_t max_batch_size_;

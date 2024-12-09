@@ -180,12 +180,13 @@ int ObDeleteLogPlan::candi_allocate_delete()
   int ret = OB_SUCCESS;
   ObSEArray<CandidatePlan, 8> candi_plans;
   ObSEArray<CandidatePlan, 8> delete_plans;
+  bool need_duplicate_date = false;
   const bool force_no_multi_part = get_log_plan_hint().no_use_distributed_dml();
   const bool force_multi_part = get_log_plan_hint().use_distributed_dml();
   OPT_TRACE("start generate normal insert plan");
   OPT_TRACE("force no multi part:", force_no_multi_part);
   OPT_TRACE("force multi part:", force_multi_part);
-  if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_))) {
+  if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_, need_duplicate_date))) {
     LOG_WARN("failed to check table rowkey distinct", K(ret));
   } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, candi_plans))) {
     LOG_WARN("failed to get minimal cost candidates", K(ret));
@@ -235,6 +236,7 @@ int ObDeleteLogPlan::create_delete_plans(ObIArray<CandidatePlan> &candi_plans,
                OB_FAIL(check_need_multi_partition_dml(*get_stmt(),
                                                       *candi_plan.plan_tree_,
                                                       index_dml_infos_,
+                                                      use_parallel_das_dml_,
                                                       is_multi_part_dml,
                                                       is_result_local))) {
       LOG_WARN("failed to check need multi-partition dml", K(ret));
@@ -270,6 +272,9 @@ int ObDeleteLogPlan::allocate_delete_as_top(ObLogicalOperator *&top,
     delete_op->set_is_returning(delete_stmt->is_returning());
     delete_op->set_is_multi_part_dml(is_multi_part_dml);
     delete_op->set_has_instead_of_trigger(delete_stmt->has_instead_of_trigger());
+    if (get_can_use_parallel_das_dml()) {
+      delete_op->set_das_dop(max_dml_parallel_);
+    }
     if (OB_FAIL(delete_op->assign_dml_infos(index_dml_infos_))) {
       LOG_WARN("failed to assign dml infos", K(ret));
     } else if (delete_stmt->is_error_logging() && OB_FAIL(delete_op->extract_err_log_info())) {

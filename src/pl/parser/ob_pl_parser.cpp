@@ -205,7 +205,8 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
         } else {
           out_len = static_cast<int64_t>(ob_convert(dst_str, dst_len, &ob_charset_utf8mb4_bin, err_str, err_len, parse_ctx.charset_info_, false, '?', &errors));
           if (0 != errors) {
-            ret = OB_ERR_INCORRECT_STRING_VALUE;
+            // The OB_ERR_INCORRECT_STRING_VALUE error code returned after convet fails will cause disconnection.
+            // Therefore, the error code is not changed here and the OB_ERR_PARSE_SQL error is still returned. Only the log is printed.
             LOG_WARN("ob_convert failed", K(ret), K(errors), K( parse_ctx.charset_info_), K(ObString(err_len, err_str)));
           } else {
             dst_str[out_len] = '\0';

@@ -22,6 +22,7 @@
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_utils.h"
 #include "share/stat/ob_dbms_stats_utils.h"
+#include "share/schema/ob_part_mgr_util.h"
 
 namespace oceanbase
 {
@@ -50,10 +51,12 @@ ObTableLoadClientTaskParam::ObTableLoadClientTaskParam()
     timeout_us_(0),
     heartbeat_timeout_us_(0),
     load_method_(),
-    column_names_()
+    column_names_(),
+    part_names_()
 {
   allocator_.set_tenant_id(MTL_ID());
   column_names_.set_block_allocator(ModulePageAllocator(allocator_));
+  part_names_.set_block_allocator(ModulePageAllocator(allocator_));
 }
 
 ObTableLoadClientTaskParam::~ObTableLoadClientTaskParam() {}
@@ -73,6 +76,7 @@ void ObTableLoadClientTaskParam::reset()
   heartbeat_timeout_us_ = 0;
   load_method_.reset();
   column_names_.reset();
+  part_names_.reset();
   allocator_.reset();
 }
 
@@ -97,6 +101,8 @@ int ObTableLoadClientTaskParam::assign(const ObTableLoadClientTaskParam &other)
       LOG_WARN("fail to set load method", KR(ret));
     } else if (OB_FAIL(set_column_names(other.column_names_))) {
       LOG_WARN("fail to deep copy column names", KR(ret));
+    } else if (OB_FAIL(set_part_names(other.part_names_))) {
+      LOG_WARN("fail to deep copy part names", KR(ret));
     }
   }
   return ret;
@@ -159,6 +165,7 @@ public:
     ObSchemaGetterGuard &schema_guard = client_task_->schema_guard_;
     ObTableLoadParam load_param;
     ObArray<uint64_t> column_ids;
+    ObArray<ObTabletID> tablet_ids;
     THIS_WORKER.set_session(session_info);
     if (OB_ISNULL(session_info)) {
       ret = OB_ERR_UNEXPECTED;
@@ -172,7 +179,7 @@ public:
     }
     // resolve
     if (OB_FAIL(
-          resolve(client_task_->client_exec_ctx_, client_task_->param_, load_param, column_ids))) {
+          resolve(client_task_->client_exec_ctx_, client_task_->param_, load_param, column_ids, tablet_ids))) {
       LOG_WARN("fail to resolve", KR(ret), K(client_task_->param_));
     }
     // check support
@@ -187,7 +194,7 @@ public:
     }
     // begin
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(client_task_->init_instance(load_param, column_ids))) {
+      if (OB_FAIL(client_task_->init_instance(load_param, column_ids, tablet_ids))) {
         LOG_WARN("fail to init instance", KR(ret));
       } else if (OB_FAIL(client_task_->set_status_waitting())) {
         LOG_WARN("fail to set status waitting", KR(ret));
@@ -228,7 +235,7 @@ public:
 
   static int resolve(ObTableLoadClientExecCtx &client_exec_ctx,
                      const ObTableLoadClientTaskParam &task_param, ObTableLoadParam &load_param,
-                     ObIArray<uint64_t> &column_ids)
+                     ObIArray<uint64_t> &column_ids, ObIArray<ObTabletID> &tablet_ids)
   {
     int ret = OB_SUCCESS;
     const uint64_t tenant_id = task_param.get_tenant_id();
@@ -240,7 +247,12 @@ public:
     ObCompressorType compressor_type = INVALID_COMPRESSOR;
     bool online_opt_stat_gather = false;
     double online_sample_percent = 100.;
-    if (OB_ISNULL(schema_guard = client_exec_ctx.get_schema_guard())) {
+    if (OB_UNLIKELY(!GCONF._ob_enable_direct_load)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when disable direct load, table load client task is");
+      LOG_WARN("when disable direct load, table load client task is not support", KR(ret));
+    }
+    else if (OB_ISNULL(schema_guard = client_exec_ctx.get_schema_guard())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected schema guard is null", KR(ret));
     }
@@ -271,13 +283,15 @@ public:
                                            *(client_exec_ctx.exec_ctx_), tenant_id,
                                            table_schema->get_table_id(), online_sample_percent))) {
       LOG_WARN("failed to get sys online sample percent", K(ret));
+    } else if (OB_FAIL(resolve_part_names(table_schema, task_param.get_part_names(), tablet_ids))) {
+      LOG_WARN("fail to resolve part name", KR(ret));
     }
     if (OB_SUCC(ret)) {
       load_param.tenant_id_ = tenant_id;
       load_param.table_id_ = table_schema->get_table_id();
       load_param.parallel_ = task_param.get_parallel();
       load_param.session_count_ = task_param.get_parallel();
-      load_param.batch_size_ = 100;
+      load_param.batch_size_ = ObTableLoadParam::DEFAULT_BATCH_SIZE;
       load_param.max_error_row_count_ = task_param.get_max_error_row_count();
       load_param.column_count_ = column_ids.count();
       load_param.need_sort_ = true;
@@ -294,7 +308,8 @@ public:
       load_param.load_mode_ = ObDirectLoadMode::TABLE_LOAD;
       load_param.compressor_type_ = compressor_type;
       load_param.online_sample_percent_ = online_sample_percent;
-      load_param.load_level_ = ObDirectLoadLevel::TABLE;
+      load_param.load_level_ = tablet_ids.empty() ? ObDirectLoadLevel::TABLE
+                                                  : ObDirectLoadLevel::PARTITION;
     }
     return ret;
   }
@@ -349,6 +364,42 @@ public:
             }
           }
         }
+      }
+    }
+    return ret;
+  }
+
+  static int resolve_part_names(const ObTableSchema *table_schema,
+                                const ObIArray<ObString> &part_names,
+                                ObIArray<ObTabletID> &tablet_ids)
+  {
+    int ret = OB_SUCCESS;
+    ObArray<ObPartID> part_ids;
+    uint64_t table_id = OB_INVALID_ID;
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schems is nullptr", KR(ret));
+    } else {
+      table_id = table_schema->get_table_id();
+      for (int i = 0; OB_SUCC(ret) && i < part_names.count(); i++) {
+        ObArray<ObObjectID> partition_ids;
+        ObString &partition_name = const_cast<ObString &>(part_names.at(i));
+        //here just conver partition_name to its lowercase
+        ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, partition_name);
+        ObPartGetter part_getter(*table_schema);
+        if (OB_FAIL(part_getter.get_part_ids(partition_name, partition_ids))) {
+          LOG_WARN("fail to get part ids", K(ret), K(partition_name));
+          if (OB_UNKNOWN_PARTITION == ret && lib::is_mysql_mode()) {
+            LOG_USER_ERROR(OB_UNKNOWN_PARTITION, partition_name.length(), partition_name.ptr(),
+                          table_schema->get_table_name_str().length(),
+                          table_schema->get_table_name_str().ptr());
+          }
+        } else if (OB_FAIL(append_array_no_dup(part_ids, partition_ids))) {
+          LOG_WARN("Push partition id error", K(ret));
+        }
+      } // end of for
+      if (OB_SUCC(ret) && OB_FAIL(ObTableLoadSchema::get_tablet_ids_by_part_ids(table_schema, part_ids, tablet_ids))) {
+        LOG_WARN("fail to get tablet ids", KR(ret));
       }
     }
     return ret;
@@ -779,11 +830,12 @@ void ObTableLoadClientTask::get_status(ObTableLoadClientStatus &client_status,
 }
 
 int ObTableLoadClientTask::init_instance(ObTableLoadParam &load_param,
-                                         const ObIArray<uint64_t> &column_ids)
+                                         const ObIArray<uint64_t> &column_ids,
+                                         const ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   const ObTableLoadTableCtx *tmp_ctx = nullptr;
-  if (OB_FAIL(instance_.init(load_param, column_ids, &client_exec_ctx_))) {
+  if (OB_FAIL(instance_.init(load_param, column_ids, tablet_ids, &client_exec_ctx_))) {
     LOG_WARN("fail to init instance", KR(ret));
   } else if (OB_FAIL(instance_.start_trans(trans_ctx_, ObTableLoadInstance::DEFAULT_SEGMENT_ID,
                                            allocator_))) {

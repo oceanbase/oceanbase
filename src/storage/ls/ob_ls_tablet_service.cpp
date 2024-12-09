@@ -2409,6 +2409,7 @@ int ObLSTabletService::create_tablet(
     const bool need_create_empty_major_sstable,
     const share::SCN &clog_checkpoint_scn,
     const share::SCN &mds_checkpoint_scn,
+    const storage::ObTabletMdsUserDataType &create_type,
     const bool micro_index_clustered,
     const bool has_cs_replica,
     ObTabletHandle &tablet_handle)
@@ -2426,6 +2427,7 @@ int ObLSTabletService::create_tablet(
   ObFreezer *freezer = ls_->get_freezer();
   tablet_handle.reset();
 
+  const bool is_split_dest_tablet = storage::ObTabletMdsUserDataType::START_SPLIT_DST == create_type;
   if (OB_FAIL(ObTabletCreateDeleteHelper::prepare_create_msd_tablet())) {
     LOG_WARN("fail to prepare create msd tablet", K(ret));
   } else {
@@ -2438,7 +2440,8 @@ int ObLSTabletService::create_tablet(
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("new tablet is null", K(ret), KP(tablet), KP(allocator), K(tablet_handle));
     } else if (OB_FAIL(tablet->init_for_first_time_creation(*allocator, ls_id, tablet_id, data_tablet_id,
-        create_scn, snapshot_version, create_tablet_schema, need_create_empty_major_sstable, clog_checkpoint_scn, mds_checkpoint_scn, micro_index_clustered, need_generate_cs_replica_cg_array, has_cs_replica, freezer))) {
+        create_scn, snapshot_version, create_tablet_schema, need_create_empty_major_sstable, clog_checkpoint_scn, mds_checkpoint_scn,
+        is_split_dest_tablet, micro_index_clustered, need_generate_cs_replica_cg_array, has_cs_replica, freezer))) {
       LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
           K(create_scn), K(snapshot_version), K(create_tablet_schema));
     } else if (OB_FAIL(tablet->get_updating_tablet_pointer_param(param))) {
@@ -2500,7 +2503,8 @@ int ObLSTabletService::create_inner_tablet(
     LOG_ERROR("new tablet is null", K(ret), KPC(tmp_tablet), K(tmp_tablet_hdl));
   } else if (FALSE_IT(time_guard.click("CreateTablet"))) {
   } else if (OB_FAIL(tmp_tablet->init_for_first_time_creation(allocator, ls_id, tablet_id, data_tablet_id,
-      create_scn, snapshot_version, create_tablet_schema, true/*need_create_empty_major_sstable*/, clog_checkpoint_scn, mds_checkpoint_scn, false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, freezer))) {
+      create_scn, snapshot_version, create_tablet_schema, true/*need_create_empty_major_sstable*/, clog_checkpoint_scn, mds_checkpoint_scn,
+      false/*is_split_dest_tablet*/, false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, freezer))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
         K(create_scn), K(snapshot_version), K(create_tablet_schema));
   } else if (FALSE_IT(time_guard.click("InitTablet"))) {
@@ -3137,21 +3141,6 @@ int ObLSTabletService::insert_rows(
       || OB_ISNULL(row_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ctx), K(dml_param), K(column_ids), KP(row_iter));
-  } else if (dml_param.is_direct_insert()) { // direct-insert mode
-    if (OB_FAIL(direct_insert_rows(dml_param.table_param_->get_data_table().get_table_id(),
-                                   dml_param.direct_insert_task_id_,
-                                   dml_param.ddl_task_id_,
-                                   ctx.tablet_id_,
-                                   column_ids,
-                                   row_iter,
-                                   afct_num))) {
-      LOG_WARN("failed to insert rows direct", KR(ret),
-          K(dml_param.table_param_->get_data_table().get_table_id()),
-          K(dml_param.direct_insert_task_id_),
-          K(dml_param.ddl_task_id_),
-          K(ctx.tablet_id_),
-          K(column_ids));
-    }
   } else {
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
@@ -3215,66 +3204,6 @@ int ObLSTabletService::insert_rows(
   }
   NG_TRACE(S_insert_rows_end);
 
-  return ret;
-}
-
-int ObLSTabletService::direct_insert_rows(
-    const uint64_t table_id,
-    const int64_t px_task_id,
-    const int64_t ddl_task_id,
-    const ObTabletID &tablet_id,
-    const ObIArray<uint64_t> &column_ids,
-    blocksstable::ObDatumRowIterator *row_iter,
-    int64_t &affected_rows)
-{
-  int ret = OB_SUCCESS;
-  ObTableLoadTableCtx *table_ctx = nullptr;
-  ObTableLoadUniqueKey key(table_id, ddl_task_id);
-  if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
-    LOG_WARN("fail to get table ctx", KR(ret), K(key));
-  } else {
-    int64_t row_count = 0;
-    ObDatumRow *rows = nullptr;
-    table::ObTableLoadTransId trans_id;
-    trans_id.segment_id_ = px_task_id;
-    trans_id.trans_gid_ = 1;
-    ObTableLoadStore store(table_ctx);
-    ObTableLoadStoreTransPXWriter writer;
-    if (OB_FAIL(store.init())) {
-      LOG_WARN("fail to init store", KR(ret));
-    } else if (OB_FAIL(store.px_get_trans_writer(trans_id, writer))) {
-      LOG_WARN("fail to get trans writer", KR(ret), K(trans_id));
-    } else if (OB_FAIL(writer.prepare_write(tablet_id, column_ids))) {
-      LOG_WARN("fail to prepare write", KR(ret), K(tablet_id), K(column_ids));
-    }
-
-    while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
-      if (OB_UNLIKELY(row_count <= 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("row_count should be greater than 0", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
-          const ObDatumRow &row = rows[i];
-          if (OB_FAIL(writer.write(row))) {
-            LOG_WARN("fail to write", KR(ret), K(i), K(row));
-          } else {
-            ++affected_rows;
-          }
-        }
-      }
-    }
-
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-    if (OB_SUCC(ret) && OB_FAIL(writer.finish_write())) {
-      LOG_WARN("px wirter fail to finish write", KR(ret));
-    }
-  }
-  if (OB_NOT_NULL(table_ctx)) {
-    ObTableLoadService::put_ctx(table_ctx);
-    table_ctx = nullptr;
-  }
   return ret;
 }
 
@@ -3494,6 +3423,13 @@ int ObLSTabletService::update_rows(
         timeguard.click("AllocOld");
       }
       lob_update = is_lob_update(run_ctx, update_idx);
+    }
+
+    if (OB_SUCC(ret)) {
+      // for major mv base table need update full column
+      if (dml_param.table_param_->get_data_table().get_mv_mode().table_referenced_by_fast_lsm_mv_flag_) {
+        ctx.update_full_column_ =  true;
+      }
     }
 
     int64_t cur_time = 0;

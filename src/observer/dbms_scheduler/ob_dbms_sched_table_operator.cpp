@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX RS
+#define USING_LOG_PREFIX SERVER
 
 #include "ob_dbms_sched_table_operator.h"
 
@@ -369,7 +369,7 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
       if (now >= job_info.end_date_) {
         job_info.state_ = ObString("COMPLETED");
       }
-    } else if (now >= job_info.end_date_ || job_info.get_interval_ts() == 0) {
+    } else if (now >= job_info.end_date_ || (job_info.get_interval_ts() == 0 && (job_info.get_repeat_interval().empty() || 0 == job_info.get_repeat_interval().case_compare("null")))) {
       // when end_date is reach and auto_drop is set false, disable set completed state.
       // for once job, not wait until end date, set completed state when running end
       job_info.state_ = ObString("COMPLETED");
@@ -804,14 +804,14 @@ int ObDBMSSchedTableOperator::_purge(uint64_t tenant_id, ObString &job_class_nam
   ObSqlString sql;
   int64_t affected_rows = 0;
   int64_t purge_rows = 0;
-  OZ (sql.assign_fmt("delete from %s where job_class=\'%.*s\' and time<DATE_SUB(NOW(), INTERVAL %ld DAY) order by time limit %ld",
+  OZ (sql.assign_fmt("delete from %s where job_class=\'%.*s\' and time<DATE_SUB(NOW(), INTERVAL %ld DAY) order by time asc limit %ld",
       OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TNAME,
       job_class_name.length(), job_class_name.ptr(),
       log_history,
       PURGE_LOG_BATCH_COUNT));
   while (OB_SUCC(ret) && !THIS_WORKER.is_timeout()) {
     OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
-    purge_rows += affected_rows;
+    OX (purge_rows += affected_rows);
     if (affected_rows < PURGE_LOG_BATCH_COUNT) {
       break;
     }
@@ -826,13 +826,13 @@ int ObDBMSSchedTableOperator::_purge_fallback(uint64_t tenant_id, int64_t log_hi
   ObSqlString sql;
   int64_t affected_rows = 0;
   int64_t purge_rows = 0;
-  OZ (sql.assign_fmt("delete from %s where time<DATE_SUB(NOW(), INTERVAL %ld DAY) order by time limit %ld",
+  OZ (sql.assign_fmt("delete from %s where time<DATE_SUB(NOW(), INTERVAL %ld DAY) order by time asc limit %ld",
       OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TNAME,
-      max(log_history, DEFAULT_LOG_HISTORY),
+      max(max(log_history, DEFAULT_LOG_HISTORY), ObInnerJobClassSet::instance().get_max_log_history()),
       PURGE_LOG_BATCH_COUNT));
   while (OB_SUCC(ret) && !THIS_WORKER.is_timeout()) {
     OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
-    purge_rows += affected_rows;
+    OX (purge_rows += affected_rows);
     if (affected_rows < PURGE_LOG_BATCH_COUNT) {
       break;
     }
@@ -841,9 +841,32 @@ int ObDBMSSchedTableOperator::_purge_fallback(uint64_t tenant_id, int64_t log_hi
   return ret;
 }
 
+int ObDBMSSchedTableOperator::_purge_old(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  int64_t purge_rows = 0;
+  OZ (sql.assign_fmt("delete from %s where tenant_id = %lu and time<DATE_SUB(NOW(), INTERVAL %ld DAY) order by time asc limit %ld",
+      OB_ALL_TENANT_SCHEDULER_JOB_RUN_DETAIL_TNAME,
+      ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+      DEFAULT_LOG_HISTORY,
+      PURGE_LOG_BATCH_COUNT));
+  while (OB_SUCC(ret) && !THIS_WORKER.is_timeout()) {
+    OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
+    OX (purge_rows += affected_rows);
+    if (affected_rows < PURGE_LOG_BATCH_COUNT) {
+      break;
+    }
+  }
+  LOG_INFO("purge old run detail finish", K(ret), K(tenant_id), K(THIS_WORKER.is_timeout()), K(purge_rows), K(sql));
+  return ret;
+}
+
 int ObDBMSSchedTableOperator::purge_run_detail(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   uint64_t data_version = 0;
 
   CK (OB_NOT_NULL(sql_proxy_));
@@ -856,33 +879,41 @@ int ObDBMSSchedTableOperator::purge_run_detail(uint64_t tenant_id)
     ObSEArray<ObDBMSSchedJobClassInfo, 16> job_class_infos;
     ObArenaAllocator allocator("DBMSSchedTmp");
     int64_t log_history = DEFAULT_LOG_HISTORY;
-    OZ (get_dbms_sched_job_class_infos_in_tenant(tenant_id, false/*is_oracle_tenant has no effect,so set false*/, allocator, job_class_infos));
-    if (OB_SUCC(ret)) {
+    if (OB_TMP_FAIL(get_dbms_sched_job_class_infos_in_tenant(tenant_id, false/*is_oracle_tenant has no effect,so set false*/, allocator, job_class_infos))) {
+      LOG_WARN("get job class infos failed", K(tmp_ret), K(tenant_id));
+    } else {
       ObDBMSSchedJobClassInfo job_class_info;
       for (int64_t i = 0; !THIS_WORKER.is_timeout() && i < job_class_infos.count(); i++) {
         int64_t purge_rows = 0;
         job_class_info = job_class_infos.at(i);
         if (!job_class_info.valid()) {
           LOG_WARN("job_class_info not valid", K(tenant_id), K(job_class_info));
-        } else if (OB_FAIL(job_class_info.get_log_history().extract_valid_int64_with_trunc(log_history))) {
-          LOG_WARN("get log_history failed", K(tenant_id), K(job_class_info));
-        } else if (i == 0) {
-          OZ (_purge_fallback(tenant_id, log_history));
+        } else if (OB_TMP_FAIL(job_class_info.get_log_history().extract_valid_int64_with_trunc(log_history))) {
+          LOG_WARN("get log_history failed", K(tmp_ret), K(tenant_id), K(job_class_info));
         } else {
-          OZ (_purge(tenant_id, job_class_info.get_job_class_name(), log_history));
+          if (OB_TMP_FAIL(_purge(tenant_id, job_class_info.get_job_class_name(), log_history))) {
+            LOG_WARN("purge run detail failed", K(tmp_ret), K(tenant_id), K(job_class_info));
+          }
+          // purge max log_history for fallback
+          if (i == 0 && OB_TMP_FAIL(_purge_fallback(tenant_id, log_history))) {
+            LOG_WARN("purge run detail fallback failed", K(tmp_ret), K(tenant_id), K(job_class_info));
+          }
         }
-        ret = OB_SUCCESS;
       }
     }
     // inner job class
-    ret = OB_SUCCESS;
     for (int64_t id = 0; !THIS_WORKER.is_timeout() && id < INNER_JOB_CLASS_MAXNUM; id++) {
       int64_t purge_rows = 0;
       ObString job_class_name = ObString(ObInnerJobClassSet::instance().id_to_name(id));
       log_history = ObInnerJobClassSet::instance().id_to_log_history(id);
-      OZ (_purge(tenant_id, job_class_name, log_history));
-      ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(_purge(tenant_id, job_class_name, log_history))) {
+        LOG_WARN("purge inner run detail failed", K(tmp_ret), K(tenant_id), K(job_class_name));
+      }
     }
+  }
+  // purge old run detail table
+  if (OB_TMP_FAIL(_purge_old(tenant_id))) {
+    LOG_WARN("purge old run detail failed", K(tmp_ret), K(tenant_id));
   }
   return ret;
 }

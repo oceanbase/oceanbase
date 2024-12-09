@@ -791,7 +791,7 @@ public:
                        char *read_buf,
                        const int64_t nbytes,
                        int64_t &read_size,
-                       palf::LogIOContext &io_ctx) = 0;
+                       LogIOContext &io_ctx) = 0;
   virtual int try_handle_next_submit_log() = 0;
   virtual int fill_cache_when_slide(const LSN &read_begin_lsn, const int64_t in_read_size) = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
@@ -816,7 +816,8 @@ public:
            IPalfEnvImpl *palf_env_impl,
            const common::ObAddr &self,
            common::ObOccamTimer *election_timer,
-           const int64_t palf_epoch);
+           const int64_t palf_epoch,
+           LogIOAdapter *io_adapter);
   bool check_can_be_used() const override final;
   // 重启接口
   // 1. 生成迭代器，定位meta_storage和log_storage的终点;
@@ -835,6 +836,7 @@ public:
            const common::ObAddr &self,
            common::ObOccamTimer *election_timer,
            const int64_t palf_epoch,
+           LogIOAdapter *io_adapter,
            bool &is_integrity);
   void destroy();
   int start();
@@ -943,7 +945,7 @@ public:
                char *buffer,
                const int64_t nbytes,
                int64_t &read_size,
-               palf::LogIOContext &io_ctx) override;
+               LogIOContext &io_ctx) override;
   int try_handle_next_submit_log();
   int fill_cache_when_slide(const LSN &read_begin_lsn, const int64_t in_read_size) override;
 public:

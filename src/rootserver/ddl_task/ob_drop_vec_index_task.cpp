@@ -42,8 +42,7 @@ ObDropVecIndexTask::ObDropVecIndexTask()
     delte_lob_meta_request_time_(0),
     delte_lob_meta_job_ret_code_(INT64_MAX),
     check_dag_exit_retry_cnt_(0),
-    del_lob_meta_row_task_submitted_(false),
-    snapshot_held_(false)
+    del_lob_meta_row_task_submitted_(false)
 {
 }
 
@@ -94,21 +93,38 @@ int ObDropVecIndexTask::init(
   } else if (tenant_data_format_version <= 0 && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_format_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
-    task_type_ = DDL_DROP_VEC_INDEX;
-    set_gmt_create(ObTimeUtility::current_time());
-    tenant_id_ = tenant_id;
-    object_id_ = data_table_id;
-    target_object_id_ = data_table_id;  // not use this id
-    schema_version_ = schema_version;
-    task_id_ = task_id;
-    parent_task_id_ = 0; // no parent task
-    consumer_group_id_ = consumer_group_id;
-    task_version_ = OB_DROP_VEC_INDEX_TASK_VERSION;
-    dst_tenant_id_ = tenant_id;
-    dst_schema_version_ = schema_version;
-    is_inited_ = true;
-    data_format_version_ = tenant_data_format_version;
-    execution_id_ = 1L;
+    // get valid object id, target_object_id_ // not use this id
+    if (domain_index_.is_valid()) {
+      target_object_id_ = domain_index_.table_id_;
+    } else if (rowkey_vid_.is_valid()) {
+      target_object_id_ = rowkey_vid_.table_id_;
+    } else if (vec_index_id_.is_valid()) {
+      target_object_id_ = vec_index_id_.table_id_;
+    } else if (vid_rowkey_.is_valid()) {
+      target_object_id_ = vid_rowkey_.table_id_;
+    } else if (vec_index_snapshot_data_.is_valid()) {
+      target_object_id_ = vec_index_snapshot_data_.table_id_;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid object id", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      task_type_ = DDL_DROP_VEC_INDEX;
+      set_gmt_create(ObTimeUtility::current_time());
+      tenant_id_ = tenant_id;
+      object_id_ = data_table_id;
+      schema_version_ = schema_version;
+      task_id_ = task_id;
+      parent_task_id_ = 0; // no parent task
+      consumer_group_id_ = consumer_group_id;
+      task_version_ = OB_DROP_VEC_INDEX_TASK_VERSION;
+      dst_tenant_id_ = tenant_id;
+      dst_schema_version_ = schema_version;
+      is_inited_ = true;
+      data_format_version_ = tenant_data_format_version;
+      execution_id_ = 1L;
+    }
   }
   return ret;
 }
@@ -168,7 +184,7 @@ int ObDropVecIndexTask::obtain_snapshot(const share::ObDDLTaskStatus next_task_s
     if (OB_FAIL(switch_status(ObDDLTaskStatus::DROP_AUX_INDEX_TABLE, true, ret))) {
       LOG_WARN("fail to switch task status to ObDDLTaskStatus::DROP_AUX_INDEX_TABLE", K(ret));
     }
-  } else if (snapshot_version_ > 0 && snapshot_held_) {
+  } else if (snapshot_version_ > 0) {
     // already hold snapshot, switch to next status
     state_finished = true;
     if (OB_FAIL(switch_status(next_task_status, true, ret))) {
@@ -176,8 +192,8 @@ int ObDropVecIndexTask::obtain_snapshot(const share::ObDDLTaskStatus next_task_s
     }
   } else if (OB_FAIL(ObDDLUtil::obtain_snapshot(next_task_status, vec_index_snapshot_data_.table_id_,
                                                 vec_index_snapshot_data_.table_id_, snapshot_version_,
-                                                snapshot_held_, this))) {
-    LOG_WARN("fail to obtain_snapshot", K(ret), K(snapshot_version_), K(snapshot_held_));
+                                                this))) {
+    LOG_WARN("fail to obtain_snapshot", K(ret), K(snapshot_version_));
   } else {
     state_finished = true;
   }

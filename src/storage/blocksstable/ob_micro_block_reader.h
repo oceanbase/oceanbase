@@ -78,6 +78,10 @@ public:
   virtual int get_row_header(
       const int64_t row_idx,
       const ObRowHeader *&row_header) override;
+  int get_logical_row_cnt(
+      const int64_t last,
+      int64_t &row_idx,
+      int64_t &row_cnt) const;
   virtual int get_row_count(int64_t &row_count) override;
   int get_multi_version_info(
       const int64_t row_idx,
@@ -152,6 +156,7 @@ public:
       const int64_t begin_idx,
       int64_t &row_idx) override;
   OB_INLINE bool single_version_rows() { return nullptr != header_ && header_->single_version_rows_; }
+  OB_INLINE bool committed_single_version_rows() { return single_version_rows() && !header_->contain_uncommitted_rows(); }
 
   // For column store
   virtual int find_bound(

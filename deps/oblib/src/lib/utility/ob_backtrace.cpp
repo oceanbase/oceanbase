@@ -149,18 +149,18 @@ int64_t get_rel_offset(int64_t addr)
 
 
 constexpr int MAX_ADDRS_COUNT = 100;
-using PointerBuf = void *[MAX_ADDRS_COUNT];
-RLOCAL(PointerBuf, addrs);
 RLOCAL(ByteBuf<LBT_BUFFER_LENGTH>, buffer);
 
 char *lbt()
 {
+  void *addrs[MAX_ADDRS_COUNT];
   int size = ob_backtrace(addrs, MAX_ADDRS_COUNT);
   return parray(*&buffer, LBT_BUFFER_LENGTH, (int64_t *)addrs, size);
 }
 
 char *lbt(char *buf, int32_t len)
 {
+  void *addrs[MAX_ADDRS_COUNT];
   int size = ob_backtrace(addrs, MAX_ADDRS_COUNT);
   return parray(buf, len, (int64_t *)addrs, size);
 }
@@ -215,6 +215,10 @@ char *parray_c(char *buf, int64_t len, int64_t *array, int size)
 int64_t get_rel_offset_c(int64_t addr)
 {
   return get_rel_offset(addr);
+}
+char *lbt_c()
+{
+  return lbt();
 }
 EXTERN_C_END
 

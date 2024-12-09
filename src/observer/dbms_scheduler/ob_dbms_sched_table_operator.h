@@ -57,11 +57,6 @@ public:
   int update_for_start(
     uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date);
 
-  int _build_job_drop_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
-  int _build_job_finished_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
-  int _build_job_rollback_start_dml(ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
-  int _build_job_log_dml(int64_t now, ObDBMSSchedJobInfo &job_info, int err, const ObString &errmsg, ObSqlString &sql);
-  int _check_need_record(ObDBMSSchedJobInfo &job_info, bool &need_record, bool err_state = true);
   int update_for_missed(ObDBMSSchedJobInfo &job_info);
   int update_for_zone_not_exist(ObDBMSSchedJobInfo &job_info);
   int update_for_enddate(ObDBMSSchedJobInfo &job_info);
@@ -95,10 +90,16 @@ public:
   int check_job_can_running(int64_t tenant_id, int64_t alive_job_count, bool &can_running);
 
   int purge_run_detail(uint64_t tenant_id);
-  int _purge(uint64_t tenant_id, ObString &job_class_name, int64_t log_history);
-  int _purge_fallback(uint64_t tenant_id, int64_t log_history);
 
 private:
+  int _purge(uint64_t tenant_id, ObString &job_class_name, int64_t log_history);
+  int _purge_fallback(uint64_t tenant_id, int64_t log_history);
+  int _purge_old(uint64_t tenant_id);
+  int _build_job_drop_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
+  int _build_job_finished_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
+  int _build_job_rollback_start_dml(ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
+  int _build_job_log_dml(int64_t now, ObDBMSSchedJobInfo &job_info, int err, const ObString &errmsg, ObSqlString &sql);
+  int _check_need_record(ObDBMSSchedJobInfo &job_info, bool &need_record, bool err_state = true);
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedTableOperator);
 
 private:

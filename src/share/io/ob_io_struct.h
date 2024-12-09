@@ -23,6 +23,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/lock/ob_spin_lock.h"
+#include "lib/lock/ob_qsync_lock.h"
 #include "share/io/ob_io_define.h"
 #include "share/io/io_schedule/ob_io_mclock.h"
 
@@ -245,20 +246,24 @@ struct ObIOFailedReqUsageInfo : ObIOGroupUsage
 class ObIOUsage final
 {
 public:
-  ObIOUsage() : info_(), failed_req_info_() {}
-  ~ObIOUsage() {}
-  int init(const int64_t group_num);
+  ObIOUsage() : info_(), failed_req_info_(), group_throttled_time_us_(), lock_() {}
+  ~ObIOUsage();
+  int init(const uint64_t tenant_id, const int64_t group_num);
   int refresh_group_num (const int64_t group_num);
   void accumulate(ObIORequest &request);
   void calculate_io_usage();
   const ObSEArray<ObIOUsageInfo, GROUP_START_NUM> &get_io_usage() { return info_; }
   ObSEArray<ObIOFailedReqUsageInfo, GROUP_START_NUM> &get_failed_req_usage() { return failed_req_info_; }
   ObSEArray<int64_t, GROUP_START_NUM> &get_group_throttled_time_us() { return group_throttled_time_us_; }
+  int assign(const ObIOUsage &other);
   int64_t to_string(char* buf, const int64_t buf_len) const;
+private:
+  int assign_unsafe(const ObIOUsage &other);
 private:
   ObSEArray<ObIOUsageInfo, GROUP_START_NUM> info_;
   ObSEArray<ObIOFailedReqUsageInfo, GROUP_START_NUM> failed_req_info_;
   ObSEArray<int64_t, GROUP_START_NUM> group_throttled_time_us_;
+  mutable common::ObQSyncLock lock_;
 };
 
 class ObCpuUsage final
@@ -390,6 +395,8 @@ public:
 private:
   int schedule_request_(ObIORequest &req, const int64_t schedule_request);
 private:
+  static const int64_t SENDER_QUEUE_WATERLEVEL = 64;
+  friend class ObIOTuner;
   bool is_inited_;
   const ObIOConfig &io_config_;
   ObIAllocator &allocator_;
@@ -483,6 +490,11 @@ private:
   static int64_t cal_thread_count(const int64_t conf_thread_count);
 private:
   bool is_inited_;
+  static const int64_t MAX_SYNC_IO_QUEUE_COUNT = 512;
+  ObFixedQueue<ObIORequest> req_queue_;
+  ObThreadCond cond_;
+  int64_t submit_count_;
+  bool is_wait_;
 };
 
 // each device has several channels, including async channels and sync channels.
@@ -516,6 +528,7 @@ private:
   ObIODevice *device_handle_; //local device_handle
   int64_t used_io_depth_;
   int64_t max_io_depth_;
+  ObSpinLock lock_for_sync_io_;
 };
 
 class ObIORunner : public lib::TGRunnable
@@ -746,9 +759,7 @@ private:
   hash::ObHashMap<int64_t /*request_ptr*/, TraceInfo> trace_map_;
 };
 
-
 // template function implementation
-
 template<typename T, typename... Args>
 int ObIOAllocator::alloc(T *&instance, Args &...args)
 {

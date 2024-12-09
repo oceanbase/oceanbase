@@ -16,9 +16,18 @@
 #include "sql/das/iter/ob_das_iter.h"
 namespace oceanbase
 {
-using namespace common;
+namespace common {
+class ObITabletScan;
+}
+
+namespace storage {
+class ObTableScanParam;
+}
+
 namespace sql
 {
+
+class ObDASScanCtDef;
 
 // DASScanIter is a wrapper class for storage iter, it doesn't require eval_ctx or exprs like other iters.
 struct ObDASScanIterParam : public ObDASIterParam

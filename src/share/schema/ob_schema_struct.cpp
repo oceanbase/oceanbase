@@ -1273,8 +1273,9 @@ int ObSchema::string_array2str(const common::ObIArray<common::ObString> &string_
     int64_t nwrite = 0;
     int64_t n = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < string_array.count(); ++i) {
+      ObCStringHelper helper;
       n = snprintf(str + nwrite, static_cast<uint32_t>(buf_size - nwrite),
-          "%s%s", to_cstring(string_array.at(i)), (i != string_array.count() - 1) ? ";" : "");
+          "%s%s", helper.convert(string_array.at(i)), (i != string_array.count() - 1) ? ";" : "");
       if (n <= 0 || n >= buf_size - nwrite) {
         ret = OB_BUF_NOT_ENOUGH;
         LOG_WARN("snprintf failed", K(ret));
@@ -2387,8 +2388,9 @@ int ObSysVarSchema::get_value(ObIAllocator *allocator, const ObDataTypeCastParam
     ObObj casted_val;
     const ObObj *res_val = NULL;
     if (OB_FAIL(ObObjCaster::to_type(data_type_, cast_ctx, var_value, casted_val, res_val))) {
+      ObCStringHelper helper;
       _LOG_WARN("failed to cast object, ret=%d cell=%s from_type=%s to_type=%s",
-                 ret, to_cstring(var_value), ob_obj_type_str(var_value.get_type()), ob_obj_type_str(data_type_));
+                 ret, helper.convert(var_value), ob_obj_type_str(var_value.get_type()), ob_obj_type_str(data_type_));
     } else if (OB_ISNULL(res_val)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("casted success, but res_val is NULL", K(ret), K(var_value), K_(data_type));

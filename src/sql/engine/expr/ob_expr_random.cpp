@@ -68,6 +68,8 @@ int ObExprRandom::calc_result_typeN(ObExprResType &type,
 			types[0].set_calc_type(ObIntType);
 		}
 		type.set_int();
+    ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY[type.get_type()];
+    type.set_accuracy(acc);
 	}
 	return ret;
 }

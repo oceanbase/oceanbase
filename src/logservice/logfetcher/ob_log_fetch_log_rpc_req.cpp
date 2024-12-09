@@ -49,9 +49,10 @@ void LogGroupEntryRpcCB::on_timeout()
   obrpc::ObRpcResultCode rcode;
   const common::ObAddr svr = LogGroupEntryRpcCBBase::dst_;
 
+  ObCStringHelper helper;
   rcode.rcode_ = OB_TIMEOUT;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_), "fetch log rpc timeout, svr=%s",
-      to_cstring(svr));
+      helper.convert(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
     LOG_ERROR("process fetch log callback on timeout fail", KR(ret), K(rcode), K(svr));
@@ -64,11 +65,12 @@ void LogGroupEntryRpcCB::on_invalid()
   obrpc::ObRpcResultCode rcode;
   const common::ObAddr svr = LogGroupEntryRpcCBBase::dst_;
 
+  ObCStringHelper helper;
   // Invalid package encountered, decode failed
   rcode.rcode_ = OB_RPC_PACKET_INVALID;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_),
       "fetch log rpc response packet is invalid, svr=%s",
-      to_cstring(svr));
+      helper.convert(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
     LOG_ERROR("process fetch log callback on invalid fail", KR(ret), K(rcode), K(svr));
@@ -405,9 +407,10 @@ void RawLogDataRpcCB::on_timeout()
   obrpc::ObRpcResultCode rcode;
   const common::ObAddr svr = RawLogDataRpcCB::dst_;
 
+  ObCStringHelper helper;
   rcode.rcode_ = OB_TIMEOUT;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_), "fetch log rpc timeout, svr=%s",
-      to_cstring(svr));
+      helper.convert(svr));
 
   // do not access (*this) after do_process_, because (this) may be freed
   if (OB_FAIL(do_process_(rcode, NULL))) {
@@ -421,11 +424,12 @@ void RawLogDataRpcCB::on_invalid()
   obrpc::ObRpcResultCode rcode;
   const common::ObAddr svr = RawLogDataRpcCB::dst_;
 
+  ObCStringHelper helper;
   // Invalid package encountered, decode failed
   rcode.rcode_ = OB_RPC_PACKET_INVALID;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_),
       "fetch log rpc response packet is invalid, svr=%s",
-      to_cstring(svr));
+      helper.convert(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
     LOG_ERROR("process fetch log callback on invalid fail", K(rcode), K(svr));

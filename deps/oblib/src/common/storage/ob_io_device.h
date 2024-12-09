@@ -507,6 +507,11 @@ public:
            || (ObStorageType::OB_STORAGE_FILE == device_type_);
   }
 
+  OB_INLINE bool is_local_device() const
+  {
+    return (ObStorageType::OB_STORAGE_LOCAL == device_type_);
+  }
+
   int get_io_aligned_size(int64_t &aligned_size) const;
   TO_STRING_KV(K_(device_type), K_(media_id), K_(ref_cnt));
 

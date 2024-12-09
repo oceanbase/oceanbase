@@ -87,68 +87,68 @@ int64_t ObTransStatItem::to_string(char *buf, const int64_t buf_len) const
 
 void ObTransStatistic::add_sys_trans_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   // EVENT_ADD(TRANS_SYSTEM_TRANS_COUNT, value);
   //sys_trans_count_stat_.add(value);
 }
 
 void ObTransStatistic::add_user_trans_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_USER_TRANS_COUNT, value);
   //user_trans_count_stat_.add(value);
 }
 
 void ObTransStatistic::add_commit_trans_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_COMMIT_COUNT, value);
 }
 
 void ObTransStatistic::add_rollback_trans_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_ROLLBACK_COUNT, value);
 }
 
 void ObTransStatistic::add_trans_start_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_START_COUNT, value);
 }
 void ObTransStatistic::add_trans_timeout_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_TIMEOUT_COUNT, value);
 }
 
 void ObTransStatistic::add_trans_total_used_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_TOTAL_USED_TIME, value);
   //trans_total_used_time_stat_.add(value);
 }
 
 void ObTransStatistic::add_elr_enable_trans_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_ELR_ENABLE_COUNT, value);
 }
 void ObTransStatistic::add_elr_unable_trans_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_ELR_UNABLE_COUNT, value);
 }
 void ObTransStatistic::add_read_elr_row_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(READ_ELR_ROW_COUNT, value);
 }
 
 void ObTransStatistic::add_local_stmt_count(const uint64_t tenant_id, const int64_t value)
 {
   UNUSED(value);
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_LOCAL_STMT_COUNT, value);
   //local_stmt_stat_.add(value);
 }
@@ -156,7 +156,7 @@ void ObTransStatistic::add_local_stmt_count(const uint64_t tenant_id, const int6
 void ObTransStatistic::add_remote_stmt_count(const uint64_t tenant_id, const int64_t value)
 {
   UNUSED(value);
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_REMOTE_STMT_COUNT, value);
   //remote_stmt_stat_.add(value);
 }
@@ -164,7 +164,7 @@ void ObTransStatistic::add_remote_stmt_count(const uint64_t tenant_id, const int
 void ObTransStatistic::add_distributed_stmt_count(const uint64_t tenant_id, const int64_t value)
 {
   UNUSED(value);
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_DISTRIBUTED_STMT_COUNT, value);
   //distributed_stmt_stat_.add(value);
 }
@@ -172,356 +172,356 @@ void ObTransStatistic::add_distributed_stmt_count(const uint64_t tenant_id, cons
 
 void ObTransStatistic::add_clog_submit_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_COMMIT_LOG_SUBMIT_COUNT, value);
   //clog_submit_count_stat_.add(value);
 }
 
 void ObTransStatistic::add_clog_sync_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_COMMIT_LOG_SYNC_TIME, value);
   //clog_sync_time_stat_.add(value);
 }
 
 void ObTransStatistic::add_clog_sync_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_COMMIT_LOG_SYNC_COUNT, value);
   //clog_sync_count_stat_.add(value);
 }
 
 void ObTransStatistic::add_trans_commit_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_COMMIT_TIME, value);
   //trans_commit_time_stat_.add(value);
 }
 
 void ObTransStatistic::add_trans_rollback_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_ROLLBACK_TIME, value);
   //trans_rollback_time_stat_.add(value);
 }
 
 void ObTransStatistic::add_readonly_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_READONLY_COUNT, value);
 }
 
 void ObTransStatistic::add_local_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_LOCAL_COUNT, value);
 }
 
 void ObTransStatistic::add_dist_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_DIST_COUNT, value);
 }
 
 void ObTransStatistic::add_redo_log_replay_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(REDO_LOG_REPLAY_COUNT, value);
 }
 
 void ObTransStatistic::add_redo_log_replay_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(REDO_LOG_REPLAY_TIME, value);
 }
 
 void ObTransStatistic::add_prepare_log_replay_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(PREPARE_LOG_REPLAY_COUNT, value);
 }
 
 void ObTransStatistic::add_prepare_log_replay_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(PREPARE_LOG_REPLAY_TIME, value);
 }
 
 void ObTransStatistic::add_commit_log_replay_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(COMMIT_LOG_REPLAY_COUNT, value);
 }
 
 void ObTransStatistic::add_commit_log_replay_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(COMMIT_LOG_REPLAY_TIME, value);
 }
 
 void ObTransStatistic::add_abort_log_replay_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(ABORT_LOG_REPLAY_COUNT, value);
 }
 
 void ObTransStatistic::add_abort_log_replay_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(ABORT_LOG_REPLAY_TIME, value);
 }
 
 void ObTransStatistic::add_clear_log_replay_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(CLEAR_LOG_REPLAY_COUNT, value);
 }
 
 void ObTransStatistic::add_clear_log_replay_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(CLEAR_LOG_REPLAY_TIME, value);
 }
 
 void ObTransStatistic::add_sp_redo_log_cb_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(SP_REDO_LOG_CB_COUNT, value);
 }
 
 void ObTransStatistic::add_sp_redo_log_cb_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(SP_REDO_LOG_CB_TIME, value);
 }
 
 void ObTransStatistic::add_sp_commit_log_cb_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(SP_COMMIT_LOG_CB_COUNT, value);
 }
 
 void ObTransStatistic::add_sp_commit_log_cb_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(SP_COMMIT_LOG_CB_TIME, value);
 }
 
 void ObTransStatistic::add_redo_log_cb_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(REDO_LOG_CB_COUNT, value);
 }
 
 void ObTransStatistic::add_redo_log_cb_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(REDO_LOG_CB_TIME, value);
 }
 
 void ObTransStatistic::add_prepare_log_cb_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(PREPARE_LOG_CB_COUNT, value);
 }
 
 void ObTransStatistic::add_prepare_log_cb_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(PREPARE_LOG_CB_TIME, value);
 }
 
 void ObTransStatistic::add_commit_log_cb_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(COMMIT_LOG_CB_COUNT, value);
 }
 
 void ObTransStatistic::add_commit_log_cb_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(COMMIT_LOG_CB_TIME, value);
 }
 
 void ObTransStatistic::add_abort_log_cb_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(ABORT_LOG_CB_COUNT, value);
 }
 
 void ObTransStatistic::add_abort_log_cb_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(ABORT_LOG_CB_TIME, value);
 }
 
 void ObTransStatistic::add_clear_log_cb_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(CLEAR_LOG_CB_COUNT, value);
 }
 
 void ObTransStatistic::add_clear_log_cb_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(CLEAR_LOG_CB_TIME, value);
 }
 
 void ObTransStatistic::add_trans_callback_sql_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_CALLBACK_SQL_COUNT, value);
 }
 
 void ObTransStatistic::add_trans_callback_sql_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_CALLBACK_SQL_TIME, value);
 }
 
 void ObTransStatistic::add_trans_mt_end_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_MT_END_COUNT, value);
 }
 
 void ObTransStatistic::add_trans_mt_end_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_MT_END_TIME, value);
 }
 
 void ObTransStatistic::add_memstore_mutator_size(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(CLOG_MEMSTORE_MUTATOR_TOTAL_SIZE, value);
 }
 void ObTransStatistic::add_stmt_timeout_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_STRONG_CONSISTENCY_STMT_TIMEOUT_COUNT, value);
 }
 void ObTransStatistic::add_slave_read_stmt_timeout_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_SLAVE_READ_STMT_TIMEOUT_COUNT, value);
 }
 void ObTransStatistic::add_slave_read_stmt_retry_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_SLAVE_READ_STMT_RETRY_COUNT, value);
 }
 void ObTransStatistic::add_fill_redo_log_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_FILL_REDO_LOG_COUNT, value);
 }
 void ObTransStatistic::add_fill_redo_log_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_FILL_REDO_LOG_TIME, value);
 }
 void ObTransStatistic::add_submit_trans_log_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_SUBMIT_LOG_COUNT, value);
 }
 void ObTransStatistic::add_submit_trans_log_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_SUBMIT_LOG_TIME, value);
 }
 void ObTransStatistic::add_gts_request_total_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(GTS_REQUEST_TOTAL_COUNT, value);
 }
 void ObTransStatistic::add_gts_acquire_total_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(GTS_ACQUIRE_TOTAL_TIME, value);
 }
 void ObTransStatistic::add_gts_acquire_total_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(GTS_ACQUIRE_TOTAL_COUNT, value);
 }
 void ObTransStatistic::add_gts_acquire_total_wait_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(GTS_ACQUIRE_TOTAL_WAIT_COUNT, value);
 }
 void ObTransStatistic::add_gts_wait_elapse_total_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(GTS_WAIT_ELAPSE_TOTAL_TIME, value);
 }
 void ObTransStatistic::add_gts_wait_elapse_total_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(GTS_WAIT_ELAPSE_TOTAL_COUNT, value);
 }
 void ObTransStatistic::add_gts_wait_elapse_total_wait_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(GTS_WAIT_ELAPSE_TOTAL_WAIT_COUNT, value);
 }
 void ObTransStatistic::add_gts_rpc_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(GTS_RPC_COUNT, value);
 }
 
 void ObTransStatistic::add_gts_try_acquire_total_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(GTS_TRY_ACQUIRE_TOTAL_COUNT, value);
 }
 
 void ObTransStatistic::add_gts_try_wait_elapse_total_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(GTS_TRY_WAIT_ELAPSE_TOTAL_COUNT, value);
 }
 
 void ObTransStatistic::add_stmt_total_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_STMT_TOTAL_COUNT, value);
 }
 
 void ObTransStatistic::add_stmt_interval_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_STMT_INTERVAL_TIME, value);
 }
 
 void ObTransStatistic::add_trans_multi_partition_update_stmt_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_MULTI_PARTITION_UPDATE_STMT_COUNT, value);
 }
 
 void ObTransStatistic::add_batch_commit_trans_count(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   //EVENT_ADD(TRANS_BATCH_COMMIT_COUNT, value);
 }
 
 void ObTransStatistic::add_trans_log_total_size(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(CLOG_TRANS_LOG_TOTAL_SIZE, value);
 }
 
 void ObTransStatistic::add_local_trans_total_used_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_LOCAL_TOTAL_USED_TIME, value);
 }
 void ObTransStatistic::add_dist_trans_total_used_time(const uint64_t tenant_id, const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id);
+  ObTenantDiagnosticInfoSummaryGuard g(tenant_id, 0);
   EVENT_ADD(TRANS_DIST_TOTAL_USED_TIME, value);
 }
 

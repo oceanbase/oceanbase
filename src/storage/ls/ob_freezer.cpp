@@ -1387,7 +1387,8 @@ namespace {
     DECLARE_TO_STRING
     {
       int64_t pos = 0;
-      BUF_PRINTF(fmt_, ObCurTraceId::get_trace_id_str(), ret_);
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+      BUF_PRINTF(fmt_, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)), ret_);
       return pos;
     }
   };
@@ -1429,7 +1430,8 @@ int ObFreezer::submit_log_for_freeze(const bool is_tablet_freeze, const bool is_
           TRANS_LOG(WARN, "[Freezer] traverse_trans_to_submit_redo_log failed", K(ret),
                     K(ls_id), K(cost_time), K(fail_tx_id));
           FreezeDiagnoseInfo diagnose("traverse_trans_to_submit_redo_log failed, traceId:%s, errorCode:%d", ret);
-          stat_.add_diagnose_info(to_cstring(diagnose));
+          ObCStringHelper helper;
+          stat_.add_diagnose_info(helper.convert(diagnose));
           if (OB_TMP_FAIL(ADD_SUSPECT_INFO(MINI_MERGE, ObDiagnoseTabletType::TYPE_MINI_MERGE,
                           ls_id, tablet_id, ObSuspectInfoType::SUSPECT_SUBMIT_LOG_FOR_FREEZE,
                           static_cast<int64_t>(ret), fail_tx_id.get_id()))) {

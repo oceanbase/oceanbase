@@ -94,7 +94,7 @@ public:
   ~ObTabletSplitCtx();
   int init(const ObTabletSplitParam &param);
   bool is_valid() const;
-  TO_STRING_KV(K_(is_inited), K_(data_split_ranges), K_(complement_data_ret), K_(row_inserted), K_(physical_row_count));
+  TO_STRING_KV(K_(is_inited), K_(data_split_ranges), K_(complement_data_ret), K_(row_inserted), K_(physical_row_count), K_(skipped_split_major_keys));
 
 private:
   struct GetMapItemKeyFn final
@@ -124,7 +124,7 @@ public:
   typedef common::hash::ObHashMap<
     ObSplitSSTableTaskKey, ObSSTableIndexBuilder*> INDEX_BUILDER_MAP;
   bool is_inited_;
-  ObSEArray<ObDatumRange, 16> data_split_ranges_;
+  ObArray<ObDatumRange> data_split_ranges_;
   int complement_data_ret_;
   ObLSHandle ls_handle_;
   ObTabletHandle tablet_handle_; // is important, rowkey_read_info, source_tables rely on it.
@@ -132,6 +132,7 @@ public:
   // for rewrite macro block task.
   INDEX_BUILDER_MAP index_builder_map_; // map between source sstable and dest sstables.
   common::ObArenaAllocator allocator_;
+  ObArray<ObITable::TableKey> skipped_split_major_keys_;
   int64_t row_inserted_;
   int64_t physical_row_count_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletSplitCtx);
@@ -259,7 +260,8 @@ public:
       const ObTabletID &dst_tablet_id,
       const ObTablesHandleArray &tables_handle,
       const compaction::ObMergeType &merge_type,
-      const bool can_reuse_macro_block);
+      const bool can_reuse_macro_block,
+      const ObIArray<ObITable::TableKey> &skipped_split_major_keys);
 private:
   int create_sstable(
       const share::ObSplitSSTableType &split_sstable_type);
@@ -410,9 +412,12 @@ public:
   static int get_participants(
       const share::ObSplitSSTableType &split_sstable_type,
       const ObTableStoreIterator &table_store_iterator,
+      const bool is_table_restore,
+      const ObIArray<ObITable::TableKey> &skipped_table_keys,
       ObIArray<ObITable *> &participants);
   static int split_task_ranges(
       ObIAllocator &allocator,
+      const share::ObDDLType ddl_type,
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       const int64_t user_parallelism,
@@ -428,10 +433,10 @@ public:
       ObIAllocator &allocator,
       const ObIArray<blocksstable::ObDatumRowkey> & datum_rowkey_list,
       ObIArray<ObDatumRange> &datum_ranges_array);
-  static int check_major_sstables_exist(
+  static int check_data_split_finished(
       const share::ObLSID &ls_id,
       const ObIArray<ObTabletID> &check_tablets_id,
-      bool &is_all_major_exists);
+      bool &is_finished);
   static int check_satisfy_split_condition(
       const ObLSHandle &ls_handle,
       const ObTabletHandle &source_tablet_handle,
@@ -457,6 +462,12 @@ public:
       const ObTabletHandle &source_tablet_handle,
       const ObTabletID &dest_tablet_id,
       ObTableHandleV2 &medium_mds_table_handle);
+  static int check_sstables_skip_data_split(
+      const ObLSHandle &ls_handle,
+      const ObTableStoreIterator &source_table_store_iter,
+      const ObIArray<ObTabletID> &dest_tablets_id,
+      const int64_t lob_major_snapshot/*OB_INVALID_VERSION for non lob tablets*/,
+      ObIArray<ObITable::TableKey> &skipped_split_major_keys);
 private:
   static int check_and_build_mds_sstable_merge_ctx(
       const ObLSHandle &ls_handle,

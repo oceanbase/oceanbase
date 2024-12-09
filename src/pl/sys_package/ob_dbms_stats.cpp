@@ -35,6 +35,8 @@
 #include "sql/ob_result_set.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "share/resource_manager/ob_resource_manager.h"
+#include "share/resource_manager/ob_resource_manager_proxy.h"
 
 namespace oceanbase
 {
@@ -114,6 +116,8 @@ int ObDbmsStats::gather_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
                                                 params.count() > 16 ? &params.at(16) : NULL,
                                                 stat_param))) {
       LOG_WARN("failed to parse stat optitions", K(ret));
+    } else if (OB_FAIL(get_stats_consumer_group_id(stat_param))) {
+      LOG_WARN("failed to get stats consumer gourp id");
     } else if (OB_FAIL(running_monitor.add_table_info(stat_param))) {
       LOG_WARN("failed to add table info", K(ret));
     } else if (stat_param.force_ &&
@@ -240,6 +244,8 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
                                                    NULL/*hist_block_sample*/,
                                                    stat_param))) {
         LOG_WARN("failed to parse stat optitions", K(ret));
+      } else if (OB_FAIL(get_stats_consumer_group_id(stat_param))) {
+        LOG_WARN("failed to get stats consumer gourp id");
       } else if (OB_FAIL(running_monitor.add_table_info(stat_param))) {
         LOG_WARN("failed to add table info", K(ret));
       } else if (stat_param.force_ &&
@@ -451,8 +457,8 @@ int ObDbmsStats::fast_gather_index_stats(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   is_all_fast_gather = true;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   if (OB_FAIL(get_table_index_infos(schema_guard,
                                     ctx.get_my_session()->get_effective_tenant_id(),
@@ -1123,8 +1129,8 @@ int ObDbmsStats::delete_table_index_stats(sql::ObExecContext &ctx,
                                           const ObTableStatParam data_param)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
                                     data_param.table_id_,
@@ -1608,8 +1614,8 @@ int ObDbmsStats::export_table_index_stats(sql::ObExecContext &ctx,
                                           const ObTableStatParam data_param)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
                                     data_param.table_id_,
@@ -2007,8 +2013,8 @@ int ObDbmsStats::import_table_index_stats(sql::ObExecContext &ctx,
                                           const ObTableStatParam data_param)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
                                     data_param.table_id_,
@@ -2229,8 +2235,8 @@ int ObDbmsStats::lock_or_unlock_index_stats(sql::ObExecContext &ctx,
                                             bool is_lock_stats)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
                                     data_param.table_id_,
@@ -3321,6 +3327,11 @@ int ObDbmsStats::update_stat_cache(const uint64_t rpc_tenant_id,
       LOG_WARN("failed to push back partition id", K(ret));
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < param.approx_part_infos_.count(); ++i) {
+    if (OB_FAIL(stat_arg.partition_ids_.push_back(param.approx_part_infos_.at(i).part_id_))) {
+      LOG_WARN("failed to push back partition id", K(ret));
+    }
+  }
   if (OB_SUCC(ret) && param.global_stat_param_.need_modify_) {
     int64_t part_id = param.global_part_id_;
     if (OB_FAIL(stat_arg.partition_ids_.push_back(part_id))) {
@@ -3675,24 +3686,24 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       }
     }
   }
-  uint64_t tids[OB_MAX_INDEX_PER_TABLE];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE;
+  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t index_aux_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   const ObTableSchema *index_schema = NULL;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   if (OB_FAIL(ret)) {//do nothing
   } else if (OB_FAIL(schema_guard.get_can_read_index_array(tenant_id,
                                                            table_schema.get_table_id(),
                                                            tids,
-                                                           index_count,
+                                                           index_aux_count,
                                                            false, /*with_mv*/
                                                            true, /*with_global_index*/
                                                            false /*domain index*/))) {
     LOG_WARN("failed to get can read index", K(table_schema.get_table_id()), K(ret));
-  } else if (index_count > OB_MAX_INDEX_PER_TABLE) {
+  } else if (index_aux_count > OB_MAX_AUX_TABLE_PER_MAIN_TABLE) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Invalid index count", K(table_schema.get_table_id()), K(index_count), K(ret));
+    LOG_WARN("Invalid index count", K(table_schema.get_table_id()), K(index_aux_count), K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_count; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_aux_count; ++i) {
       if (OB_FAIL(schema_guard.get_table_schema(tenant_id, tids[i], index_schema))) {
         LOG_WARN("failed to get index schema", K(ret), K(tenant_id), K(tids[i]));
       } else if (OB_ISNULL(index_schema)) {
@@ -6022,6 +6033,8 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
     LOG_WARN("failed to use default gather stat optitions", K(ret));
   } else if (!stat_param.need_gather_stats()) {
     //do nothing
+  } else if (OB_FAIL(get_stats_consumer_group_id(stat_param))) {
+    LOG_WARN("failed to get stats consumer gourp id");
   } else if (OB_FAIL(running_monitor.add_table_info(stat_param, stat_table.stale_percent_))) {
     LOG_WARN("failed to add table info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, stat_param, running_monitor))) {
@@ -6356,8 +6369,8 @@ int ObDbmsStats::get_index_schema(sql::ObExecContext &ctx,
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   index_schema = NULL;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_aux_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -6365,11 +6378,11 @@ int ObDbmsStats::get_index_schema(sql::ObExecContext &ctx,
                                            ctx.get_my_session()->get_effective_tenant_id(),
                                            data_table_id,
                                            index_tids,
-                                           index_count))) {
+                                           index_aux_count))) {
     LOG_WARN("failed to get table index infos", K(ret));
   } else {
     bool found_it = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !found_it && i < index_count; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && !found_it && i < index_aux_count; ++i) {
       const share::schema::ObTableSchema *cur_index_schema = NULL;
       ObString cur_index_name;
       if (index_tids[i] == data_table_id) {
@@ -6958,10 +6971,7 @@ int ObDbmsStats::copy_table_stats(sql::ObExecContext &ctx,
                                           params.at(3),
                                           table_stat_param))) {
     LOG_WARN("failed to parse partition name", K(ret));
-  } else if (ObCharset::case_insensitive_equal(copy_stat_helper.srcpart_name_,
-                                               copy_stat_helper.dstpart_name_)) {
-    LOG_TRACE("src part and dst part is the same, no need to copy");
-  } else if (OB_FAIL(ObDbmsStatsCopyTableStats::extract_partition_column_ids(copy_stat_helper, table_schema))) {
+  }  else if (OB_FAIL(ObDbmsStatsCopyTableStats::extract_partition_column_ids(copy_stat_helper, table_schema))) {
     LOG_WARN("failed to classify partition column ids", K(ret));
   } else if (OB_FAIL(ObDbmsStatsCopyTableStats::get_dst_part_infos(table_stat_param,
                                                 copy_stat_helper,
@@ -6975,6 +6985,9 @@ int ObDbmsStats::copy_table_stats(sql::ObExecContext &ctx,
   } else if (!copy_stat_helper.force_copy_ &&
              OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, table_stat_param))) {
     LOG_WARN("failed check stat locked", K(ret));
+  } else if (ObCharset::case_insensitive_equal(copy_stat_helper.srcpart_name_,
+                                               copy_stat_helper.dstpart_name_)) {
+    LOG_TRACE("src part and dst part is the same, no need to copy");
   } else if (OB_FAIL(parse_partition_name(ctx,
                                           table_schema,
                                           params.at(2),
@@ -7416,6 +7429,7 @@ int ObDbmsStats::adjust_text_column_basic_stats(ObExecContext &ctx,
   ObSEArray<PrefixColumnPair, 4> pairs;
   ObSEArray<int64_t, 4> text_column_ids;
   ObSEArray<ObColumnStatParam*, 4> auto_columns;
+  ObSEArray<uint64_t, 1> filter_cols;
   for (int64_t i = 0; OB_SUCC(ret) && i < param.column_params_.count(); ++i) {
     if (param.column_params_.at(i).is_text_column()) {
       if (OB_FAIL(auto_columns.push_back(&param.column_params_.at(i)))) {
@@ -7425,6 +7439,7 @@ int ObDbmsStats::adjust_text_column_basic_stats(ObExecContext &ctx,
   }
   if (OB_SUCC(ret) && !auto_columns.empty()) {
     if (OB_FAIL(ObDbmsStatsUtils::get_all_prefix_index_text_pairs(schema,
+                                                                  filter_cols,
                                                                   pairs))) {
       LOG_WARN("failed to get all prefix index text pairs", K(ret));
     } else if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx, true, false))) {
@@ -7447,6 +7462,38 @@ int ObDbmsStats::adjust_text_column_basic_stats(ObExecContext &ctx,
       } else if (col_stat->column_usage_flag_ > 0) {
         col_stat->unset_text_column();
       }
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStats::get_stats_consumer_group_id(ObTableStatParam &param)
+{
+  int ret = OB_SUCCESS;
+  uint64_t consumer_group_id = 0;
+  if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(param.tenant_id_,
+                                                                             ObFunctionType::PRIO_OPT_STATS,
+                                                                             consumer_group_id))) {
+    LOG_WARN("fail to get group id by function", K(param.tenant_id_));
+  } else if (FALSE_IT(SET_FUNCTION_TYPE(ObFunctionType::PRIO_OPT_STATS))) {
+  } else if (is_resource_manager_group(consumer_group_id)) {
+    param.consumer_group_id_ = consumer_group_id;
+    ObRefHolder<ObTenantIOManager> tenant_holder;
+    ObTenantIOConfig::GroupConfig group_config;
+    if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(param.tenant_id_, tenant_holder))) {
+      LOG_WARN("failed to get tenant io manager", K(ret), K(param.tenant_id_));
+    // ObIOMode::MAX_MODE mean local io
+    } else if (OB_FAIL(tenant_holder.get_ptr()->get_group_config(ObIOGroupKey(consumer_group_id, ObIOMode::MAX_MODE), group_config))) {
+      if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+        // tenant_io_manager may experience a delay of 10 seconds
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get group config", K(ret), K(consumer_group_id));
+      }
+    } else {
+      param.min_iops_ = group_config.min_percent_;
+      param.max_iops_ = group_config.max_percent_;
+      param.weight_iops_ = group_config.weight_percent_;
     }
   }
   return ret;

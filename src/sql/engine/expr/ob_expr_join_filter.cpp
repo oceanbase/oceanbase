@@ -213,12 +213,14 @@ int ObExprJoinFilter::check_rf_ready(
         join_filter_ctx->is_ready_ = true;
         join_filter_ctx->ready_ts_ = ObTimeUtility::current_time();
         join_filter_ctx->slide_window_.start_to_work();
+        join_filter_ctx->is_active_ = rf_msg->is_active();
       }
     }
   } else if (join_filter_ctx->need_check_ready() && rf_msg->check_ready()) {
     join_filter_ctx->ready_ts_ = ObTimeUtility::current_time();
     join_filter_ctx->is_ready_ = true;
     join_filter_ctx->slide_window_.start_to_work();
+    join_filter_ctx->is_active_ = rf_msg->is_active();
   }
   return ret;
 }

@@ -92,6 +92,8 @@ const static double VECTOR_INVALID_HASH_COST = -1;
 const static double VECTOR_CMP_UDF_COST = 100.0 * DEFAULT_CPU_SPEED;
 const static double VECTOR_CMP_LOB_COST = 9.707028746051587301587301588 * DEFAULT_CPU_SPEED; //NORMAL_CMP_CHAR_COST * 100
 const static double VECTOR_CMP_ERR_HANDLE_EXPR_COST = 1.00087103407539 * DEFAULT_CPU_SPEED; //NORMAL_CMP_INT_COST * 100
+//jinmao TODO: 系数要测算后再填
+const static double VECTOR_FUNCTIONAL_LOOKUP_PER_ROW_COST = 100.0 * DEFAULT_CPU_SPEED;
 
 const static double comparison_params_vector[ObMaxTC+1] = {
   VECTOR_CMP_INT_COST,            // null
@@ -224,6 +226,7 @@ const static ObOptCostModelParameter cost_params_vector(
    VECTOR_CMP_UDF_COST,
    VECTOR_CMP_LOB_COST,
    VECTOR_CMP_ERR_HANDLE_EXPR_COST,
+   VECTOR_FUNCTIONAL_LOOKUP_PER_ROW_COST,
    comparison_params_vector,
    hash_params_vector,
    project_params_vector

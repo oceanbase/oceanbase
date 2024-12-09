@@ -373,6 +373,7 @@ private:
                                 ObObjType type,
                                 int64_t &value);
   bool file_need_split(int64_t file_size);
+  int check_oracle_number(ObObjType obj_type, int16_t &precision, int8_t scale);
 
 private:
   int64_t top_limit_cnt_;

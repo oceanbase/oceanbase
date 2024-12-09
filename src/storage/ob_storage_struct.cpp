@@ -663,7 +663,8 @@ int ObBatchUpdateTableStoreParam::get_max_clog_checkpoint_scn(SCN &clog_checkpoi
 ObSplitTableStoreParam::ObSplitTableStoreParam()
   : snapshot_version_(-1),
     multi_version_start_(-1),
-    merge_type_(INVALID_MERGE_TYPE)
+    merge_type_(INVALID_MERGE_TYPE),
+    skip_split_keys_()
 {
 }
 
@@ -684,6 +685,7 @@ void ObSplitTableStoreParam::reset()
   snapshot_version_ = -1;
   multi_version_start_ = -1;
   merge_type_ = INVALID_MERGE_TYPE;
+  skip_split_keys_.reset();
 }
 
 ObPartitionReadableInfo::ObPartitionReadableInfo()

@@ -41,6 +41,7 @@
 #include "observer/mysql/obmp_base.h"
 #include "lib/alloc/ob_malloc_callback.h"
 #include "sql/engine/window_function/ob_window_function_vec_op.h"
+#include "sql/engine/direct_load/ob_table_direct_insert_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -135,6 +136,7 @@ int ObPxTaskProcess::process()
   enqueue_timestamp_ = ObTimeUtility::current_time();
   process_timestamp_ = enqueue_timestamp_;
   ObExecRecord exec_record;
+  ObExecutingSqlStatRecord sqlstat_record;
   ObExecTimestamp exec_timestamp;
   ObWaitEventDesc max_wait_desc;
   ObWaitEventStat total_wait_desc;
@@ -154,10 +156,10 @@ int ObPxTaskProcess::process()
     const bool enable_perf_event = lib::is_diagnose_info_enabled();
     const bool enable_sql_audit =
         GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
+    const bool enable_sqlstat = session->is_sqlstat_enabled();
     ObAuditRecordData &audit_record = session->get_raw_audit_record();
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
-    ObSessionStatEstGuard stat_est_guard(session->get_effective_tenant_id(), session->get_sessid());
     session->set_current_trace_id(ObCurTraceId::get_trace_id());
     session->get_raw_audit_record().request_memory_used_ = 0;
     observer::ObProcessMallocCallback pmcb(0,
@@ -173,9 +175,17 @@ int ObPxTaskProcess::process()
     arg_.exec_ctx_->set_branch_id(arg_.task_.get_branch_id());
     ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
     ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
-
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      session->set_ash_stat_value(di->get_ash_stat());
+    }
     if (enable_perf_event) {
       exec_record.record_start();
+    }
+    if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
+      sqlstat_record.record_sqlstat_start_value();
+      sqlstat_record.set_is_in_retry(session->get_is_in_retry());
+      session->sql_sess_record_sql_stat_start_value(sqlstat_record);
     }
 
     //监控项统计开始
@@ -200,6 +210,14 @@ int ObPxTaskProcess::process()
       exec_record.wait_count_end_ = total_wait_desc.total_waits_;
       audit_record.exec_record_ = exec_record;
       audit_record.update_event_stage_state();
+    }
+    if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
+      sqlstat_record.record_sqlstat_end_value();
+      ObPhysicalPlan *phy_plan = arg_.des_phy_plan_;
+      ObString sql = ObString::make_string("PX DFO EXECUTING");
+      sqlstat_record.set_is_plan_cache_hit(arg_.exec_ctx_->get_sql_ctx()->plan_cache_hit_);
+      sqlstat_record.move_to_sqlstat_cache(*session,
+                            sql, phy_plan, true/*is_px_remote_exec*/);
     }
 
     if (enable_sql_audit) {
@@ -891,6 +909,22 @@ int ObPxTaskProcess::OpPostparation::apply(ObExecContext &ctx, ObOpSpec &op)
       LOG_WARN("operator is NULL", K(ret), KP(kit));
     } else {
       ObPxMultiPartInsertOpInput *input = static_cast<ObPxMultiPartInsertOpInput *>(kit->input_);
+      if (OB_ISNULL(input)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
+      } else if (OB_SUCCESS != ret_) {
+        input->set_error_code(ret_);
+        LOG_TRACE("debug post apply info", K(ret_));
+      } else {
+        LOG_TRACE("debug post apply info", K(ret_));
+      }
+    }
+  } else if (PHY_TABLE_DIRECT_INSERT == op.get_type()) {
+    if (OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else {
+      ObTableDirectInsertOpInput *input = static_cast<ObTableDirectInsertOpInput *>(kit->input_);
       if (OB_ISNULL(input)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input not found for op", "op_id", op.id_, K(ret));

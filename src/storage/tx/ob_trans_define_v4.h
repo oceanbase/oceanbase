@@ -705,11 +705,12 @@ private:
   } alloc_link_;
 #endif
   static constexpr int16_t MAX_BRANCH_ID_VALUE = ~(1 << 15) & 0xFFFF; // 15bits
+  static constexpr int64_t MAX_TRANS_TIMEOUT_US = INT64_MAX - 1_day;
 private:
   /* these routine should be called by txn-service only to avoid corrupted state */
   void reset();
-  void set_tx_id(const ObTransID &tx_id) { tx_id_ = tx_id; }
-  void reset_tx_id() { tx_id_.reset(); }
+  void set_tx_id(const ObTransID &tx_id);
+  void reset_tx_id();
   // udpate clean part's unknown field
   int update_clean_part(const share::ObLSID &id,
                         const int64_t epoch,
@@ -976,10 +977,12 @@ public:
    ObTxDesc* alloc_value()
    {
      ATOMIC_INC(&alloc_cnt_);
-     ObTxDesc *it = op_alloc(ObTxDesc);
+     ObTxDesc *it = op_alloc_v2(ObTxDesc);
 #ifdef ENABLE_DEBUG_LOG
-     ObSpinLockGuard guard(lk_);
-     list_.insert(it->alloc_link_);
+     if (OB_NOT_NULL(it)) {
+       ObSpinLockGuard guard(lk_);
+       list_.insert(it->alloc_link_);
+     }
 #endif
       return it;
     }
@@ -991,12 +994,12 @@ public:
         ObSpinLockGuard guard(lk_);
         v->alloc_link_.remove();
 #endif
-        op_free(v);
+        op_free_v2(v);
       }
     }
     static void force_free(ObTxDesc *v)
     {
-      op_free(v);
+      op_free_v2(v);
     }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }
 #ifdef ENABLE_DEBUG_LOG

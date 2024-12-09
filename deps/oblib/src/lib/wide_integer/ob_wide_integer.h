@@ -141,6 +141,12 @@ struct ObWideInteger
     return _impl::template divide<check_overflow>(*this, rhs, res, rem);
   }
 
+  template<int check_overflow, typename T>
+  int divide(const T &rhs, ObWideInteger<Bits, Signed> &quo, ObWideInteger<Bits, Signed> &rem) const
+  {
+    return _impl::template divide<check_overflow>(*this, rhs, quo, rem);
+  }
+
   template<typename T>
   int bitwise_and(const T &rhs, ObWideInteger<Bits, Signed> &res) const
   {

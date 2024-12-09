@@ -1393,8 +1393,8 @@ int ObDDLUtil::obtain_snapshot(
     const uint64_t table_id,
     const uint64_t target_table_id,
     int64_t &snapshot_version,
-    bool &snapshot_held,
-    rootserver::ObDDLTask* task)
+    rootserver::ObDDLTask* task,
+    const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids)
 {
   int ret = OB_SUCCESS;
   rootserver::ObDDLWaitTransEndCtx* wait_trans_ctx = nullptr;
@@ -1402,9 +1402,9 @@ int ObDDLUtil::obtain_snapshot(
   if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_ISNULL(task)) {
-    ret = OB_BAD_NULL_ERROR;
-    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_UNLIKELY(nullptr == task || snapshot_version != 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(task), K(snapshot_version));
   } else if (OB_ISNULL(wait_trans_ctx = task->get_wait_trans_ctx())) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("wait trans ctx is null", K(ret));
@@ -1414,51 +1414,54 @@ int ObDDLUtil::obtain_snapshot(
   } else {
     ObDDLTaskStatus new_status = ObDDLTaskStatus::OBTAIN_SNAPSHOT;
     uint64_t tenant_id = task->get_src_tenant_id();
+    int64_t new_fetched_snapshot = 0;
+    int64_t persisted_snapshot = 0;
     if (!wait_trans_ctx->is_inited()) {
       if (OB_FAIL(wait_trans_ctx->init(tenant_id, task->get_task_id(), task->get_object_id(), rootserver::ObDDLWaitTransEndCtx::WAIT_SCHEMA_TRANS, task->get_src_schema_version()))) {
         LOG_WARN("fail to init wait trans ctx", K(ret));
       }
     } else {
       // to get snapshot version.
-      if (OB_SUCC(ret) && snapshot_version <= 0) {
-        bool is_trans_end = false;
-        const bool need_wait_trans_end = false;
-        if (OB_FAIL(wait_trans_ctx->try_wait(is_trans_end, snapshot_version, need_wait_trans_end))) {
-          LOG_WARN("just to get snapshot rather than wait trans end", K(ret));
-        }
+      bool is_trans_end = false;
+      const bool need_wait_trans_end = false;
+      if (OB_FAIL(wait_trans_ctx->try_wait(is_trans_end, new_fetched_snapshot, need_wait_trans_end))) {
+        LOG_WARN("just to get snapshot rather than wait trans end", K(ret));
       }
       DEBUG_SYNC(DDL_REDEFINITION_HOLD_SNAPSHOT);
       // try hold snapshot
       if (OB_FAIL(ret)) {
-      } else if (snapshot_version <= 0) {
+      } else if (new_fetched_snapshot <= 0) {
         // the snapshot version obtained here must be valid.
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("snapshot version is invalid", K(ret), KPC(wait_trans_ctx));
-      } else if (snapshot_version > 0 && !snapshot_held) {
+        LOG_WARN("snapshot version is invalid", K(ret), K(new_fetched_snapshot), KPC(wait_trans_ctx));
+      } else {
         ObMySQLTransaction trans;
         if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id))) {
           LOG_WARN("fail to start trans", K(ret), K(tenant_id));
-        } else if (OB_FAIL(rootserver::ObDDLTaskRecordOperator::update_snapshot_version(trans,
+        } else if (OB_FAIL(rootserver::ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(trans,
                                                                     tenant_id,
                                                                     task->get_task_id(),
-                                                                    snapshot_version))) {
-          LOG_WARN("update snapshot version failed", K(ret), K(task->get_task_id()), K(tenant_id));
-        } else if (OB_FAIL(hold_snapshot(trans, task, table_id, target_table_id, root_service, snapshot_version))) {
+                                                                    new_fetched_snapshot,
+                                                                    persisted_snapshot))) {
+          LOG_WARN("update snapshot version failed", K(ret), K(task->get_task_id()), K(tenant_id), K(new_fetched_snapshot), K(persisted_snapshot));
+        } else if (persisted_snapshot > 0) {
+          // found a persisted snapshot, do not hold it again.
+          FLOG_INFO("found a persisted snapshot in inner table", "task_id", task->get_task_id(), K(persisted_snapshot), K(new_fetched_snapshot));
+        } else if (OB_FAIL(hold_snapshot(trans, task, table_id, target_table_id, root_service, new_fetched_snapshot, extra_mv_tablet_ids))) {
           if (OB_SNAPSHOT_DISCARDED == ret) {
-            snapshot_version = 0;
-            snapshot_held = false;
             wait_trans_ctx->reset();
           } else {
             LOG_WARN("hold snapshot version failed", K(ret));
           }
-        } else {
-          snapshot_held = true;
         }
         if (trans.is_started()) {
-          bool need_commit = (ret == OB_SUCCESS);
-          int tmp_ret = trans.end(need_commit);
+          const bool need_commit = (ret == OB_SUCCESS);
+          const int tmp_ret = trans.end(need_commit);
           if (OB_SUCCESS != tmp_ret) {
             LOG_WARN("fail to end trans", K(ret), K(tmp_ret), K(need_commit));
+          } else if (need_commit) {
+            // update when commit succ.
+            snapshot_version = persisted_snapshot > 0 ? persisted_snapshot : new_fetched_snapshot;
           }
           ret = OB_SUCC(ret) ? tmp_ret : ret;
         }
@@ -1480,7 +1483,8 @@ int ObDDLUtil::obtain_snapshot(
       }
     }
     task->add_event_info("obtain snapshot finish");
-    LOG_INFO("obtain snapshot", K(ret), K(task->get_snapshot_version()), K(table_id), K(target_table_id), K(task->get_src_schema_version()), "ddl_event_info", ObDDLEventInfo());
+    LOG_INFO("obtain snapshot", K(ret), K(task->get_snapshot_version()), K(table_id), K(target_table_id), K(task->get_src_schema_version()), "ddl_event_info", ObDDLEventInfo(),
+        K(persisted_snapshot), K(new_fetched_snapshot));
   }
   return ret;
 }
@@ -1491,7 +1495,8 @@ int ObDDLUtil::hold_snapshot(
     const uint64_t table_id,
     const uint64_t target_table_id,
     rootserver::ObRootService *root_service,
-    const int64_t snapshot_version)
+    const int64_t snapshot_version,
+    const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(task) || OB_ISNULL(root_service)) {
@@ -1546,6 +1551,12 @@ int ObDDLUtil::hold_snapshot(
       if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
           trans, SNAPSHOT_FOR_DDL, tenant_id, schema_version, snapshot_scn, nullptr, tablet_ids))) {
         LOG_WARN("batch acquire snapshot failed", K(ret), K(tablet_ids));
+      } else if (OB_NOT_NULL(extra_mv_tablet_ids) &&
+                 !extra_mv_tablet_ids->empty() &&
+                 OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
+                     trans, SNAPSHOT_FOR_MAJOR_REFRESH_MV, tenant_id, schema_version, snapshot_scn,
+                     nullptr, *extra_mv_tablet_ids))) {
+        LOG_WARN("batch acquire mv snapshot failed", K(ret), K(extra_mv_tablet_ids));
       }
     }
     task->add_event_info("hold snapshot finish");
@@ -3062,7 +3073,7 @@ int ObDDLUtil::batch_check_tablet_checksum(
     const uint64_t tenant_id,
     const int64_t start_idx,
     const int64_t end_idx,
-    const ObArray<ObTabletID> &tablet_ids)
+    const ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == tenant_id || start_idx < 0 || end_idx > tablet_ids.count()
@@ -4135,6 +4146,7 @@ int ObSplitUtil::deserializ_parallel_datum_rowkey(
   }
   return ret;
 }
+OB_SERIALIZE_MEMBER(ObSplitTabletInfo, split_info_);
 
 //record trace_id
 ObDDLEventInfo::ObDDLEventInfo()

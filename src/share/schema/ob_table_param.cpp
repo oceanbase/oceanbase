@@ -630,7 +630,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_multivalue_index_(false),
     is_column_replica_table_(false),
     is_vec_index_(false),
-    is_partition_table_(false)
+    is_partition_table_(false),
+    is_normal_cgs_at_the_end_(false)
 {
   reset();
 }
@@ -662,6 +663,7 @@ void ObTableParam::reset()
   is_column_replica_table_ = false;
   is_vec_index_ = false;
   is_partition_table_ = false;
+  is_normal_cgs_at_the_end_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -708,6 +710,9 @@ OB_DEF_SERIALIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(is_partition_table_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(is_normal_cgs_at_the_end_);
   }
   return ret;
 }
@@ -805,6 +810,10 @@ OB_DEF_DESERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_DECODE,
                 is_partition_table_);
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_normal_cgs_at_the_end_);
+  }
   return ret;
 }
 
@@ -857,6 +866,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
                 is_partition_table_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                is_normal_cgs_at_the_end_);
   }
   return len;
 }
@@ -1215,6 +1228,10 @@ int ObTableParam::construct_columns_and_projector(
         LOG_WARN("Fail to add read infos", K(ret));
       }
     }
+  }
+
+  if (FAILEDx(table_schema.check_is_normal_cgs_at_the_end(is_normal_cgs_at_the_end_))) {
+    LOG_WARN("Fail to check whether normal cgs are at the end of schema array", K(ret), K(table_schema));
   }
   return ret;
 }
@@ -1581,7 +1598,8 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_fts_index),
        K_(parser_name),
        K_(is_vec_index),
-       K_(is_column_replica_table));
+       K_(is_column_replica_table),
+       K_(is_normal_cgs_at_the_end));
   J_OBJ_END();
 
   return pos;

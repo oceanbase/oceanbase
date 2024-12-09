@@ -254,6 +254,7 @@ public:
   virtual int64_t get_each_bucket_size() const = 0;
   virtual void reset_hash_table_for_by_pass() = 0;
   virtual int64_t get_hash_table_size() const = 0;
+  virtual int64_t get_hash_table_mem_used() const = 0;
   virtual int extend_hash_table_l3() = 0;
   virtual int resize(int64_t bucket_cnt) = 0;
   virtual int init_hash_table(int64_t bucket_cnt,
@@ -632,6 +633,7 @@ public:
     preprocess_part_.store_.reset();
   }
   int64_t get_hash_table_size() const override { return hash_table_.size(); }
+  int64_t get_hash_table_mem_used() const override { return hash_table_.mem_used(); }
   int extend_hash_table_l3() override
   {
     return hash_table_.extend(EXTEND_BKT_NUM_PUSH_DOWN);
@@ -643,6 +645,7 @@ public:
   int exists_batch(const common::ObIArray<ObExpr*> &exprs,
                   const ObBatchRows &brs, ObBitVector *skip,
                 uint64_t *hash_values_for_batch) override;
+  static const int64_t INIT_BKT_SIZE_FOR_ADAPTIVE_DISTINCT = 256;
 private:
   virtual int dump_preprocess_part() override;
   int set_distinct_batch(const common::ObIArray<ObExpr *> &exprs,
@@ -833,6 +836,7 @@ public:
                                 HpGroupAggrFunc slice_cnt_func);
   int set_need_rewind(bool need_rewind);
 
+  int64_t get_actual_mem_used() const;
 private:
   static const int64_t MIN_BUCKET_NUM = 128;
   static const int64_t MAX_BUCKET_NUM = 131072;   // 1M = 131072 * 8
@@ -940,15 +944,15 @@ int ObHashPartInfrastructureVec<HashBucket>::init_hash_table(int64_t initial_siz
   mem_attr.ctx_id_ = common::ObCtxIds::WORK_AREA;
   bool nullable = true;
   bool all_int64 = false;
-  int64_t avg_mem_bound = get_each_slice_avg_size(sql_mem_processor_->get_mem_bound());
-  int64_t hash_bucket_cnt = est_extend_hash_bucket_num(
-    initial_size * EXTENDED_RATIO, avg_mem_bound, min_bucket);
+  int64_t hash_bucket_cnt = is_push_down_ ? INIT_BKT_SIZE_FOR_ADAPTIVE_DISTINCT :
+    est_extend_hash_bucket_num(initial_size * EXTENDED_RATIO,
+    sql_mem_processor_->get_mem_bound(), min_bucket);
   if (OB_ISNULL(alloc_) || !start_round_) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "allocator is null or it don'e start to round", K(ret), K(start_round_));
   } else if (OB_FAIL(hash_table_.init(alloc_, mem_attr, *exprs_, sort_collations_->count(),
                                       eval_ctx_, max_batch_size_, nullable, all_int64, 0, false, 0,
-                                      hash_bucket_cnt, is_push_down_ ? false : true))) {
+                                      hash_bucket_cnt))) {
     SQL_ENG_LOG(WARN, "failed to init hash table", K(ret), K(hash_bucket_cnt));
   } else if (OB_FAIL(vector_ptrs_.prepare_allocate(exprs_->count()))) {
     SQL_ENG_LOG(WARN, "failed to alloc ptrs", K(ret));

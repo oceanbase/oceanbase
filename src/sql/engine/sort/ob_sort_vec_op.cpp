@@ -219,7 +219,7 @@ int ObSortVecOp::init_temp_row_store(const common::ObIArray<ObExpr *> &exprs,
   const bool reorder_fixed_expr = true;
   if (row_store.is_inited()) {
     // do nothing
-  } else if (OB_FAIL(row_store.init(exprs, batch_size, mem_attr, 2 * 1024 * 1024, true,
+  } else if (OB_FAIL(row_store.init(exprs, batch_size, mem_attr, 16 * 1024, true,
                              sort_op_provider_.get_extra_size(is_sort_key) /* row_extra_size */,
                              compress_type, reorder_fixed_expr, enable_trunc))) {
     LOG_WARN("init row store failed", K(ret));

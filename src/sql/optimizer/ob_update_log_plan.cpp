@@ -263,6 +263,7 @@ int ObUpdateLogPlan::generate_normal_raw_plan()
 int ObUpdateLogPlan::candi_allocate_update()
 {
   int ret = OB_SUCCESS;
+  bool need_duplicate_date = false;
   ObConstRawExpr *lock_row_flag_expr = NULL;
   ObSEArray<CandidatePlan, 8> candi_plans;
   ObSEArray<CandidatePlan, 8> update_plans;
@@ -271,7 +272,7 @@ int ObUpdateLogPlan::candi_allocate_update()
   OPT_TRACE("start generate normal update plan");
   OPT_TRACE("force no multi part:", force_no_multi_part);
   OPT_TRACE("force multi part:", force_multi_part);
-  if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_))) {
+  if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_, need_duplicate_date))) {
     LOG_WARN("failed to check table rowkey distinct", K(ret));
   } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_,
                                                  candi_plans))) {
@@ -329,6 +330,7 @@ int ObUpdateLogPlan::create_update_plans(ObIArray<CandidatePlan> &candi_plans,
                OB_FAIL(check_need_multi_partition_dml(*get_stmt(),
                                                       *candi_plan.plan_tree_,
                                                       index_dml_infos_,
+                                                      use_parallel_das_dml_,
                                                       is_multi_part_dml,
                                                       is_result_local))) {
       LOG_WARN("failed to check need multi-partition dml", K(ret));
@@ -371,6 +373,9 @@ int ObUpdateLogPlan::allocate_update_as_top(ObLogicalOperator *&top,
     update_op->set_has_instead_of_trigger(update_stmt->has_instead_of_trigger());
     update_op->set_is_multi_part_dml(is_multi_part_dml);
     update_op->set_lock_row_flag_expr(lock_row_flag_expr);
+    if (get_can_use_parallel_das_dml()) {
+      update_op->set_das_dop(max_dml_parallel_);
+    }
     if (update_stmt->is_error_logging() && OB_FAIL(update_op->extract_err_log_info())) {
       LOG_WARN("failed to extract error log info", K(ret));
     } else if (OB_FAIL(update_stmt->get_view_check_exprs(update_op->get_view_check_exprs()))) {

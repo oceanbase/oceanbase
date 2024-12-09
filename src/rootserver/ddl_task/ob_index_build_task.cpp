@@ -166,6 +166,7 @@ int ObIndexSSTableBuildTask::process()
         DEBUG_SYNC(BEFORE_INDEX_SSTABLE_BUILD_TASK_SEND_SQL);
         ObTimeoutCtx timeout_ctx;
         const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
+        ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::RS_CREATE_INDEX_BUILD_REPLICA);
         add_event_info(ret, "index sstable build task send innersql");
         LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT), "ddl_event_info", ObDDLEventInfo());
         if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
@@ -258,7 +259,7 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
 /***************         ObIndexBuildTask        *************/
 
 ObIndexBuildTask::ObIndexBuildTask()
-  : ObDDLTask(ObDDLType::DDL_CREATE_INDEX), index_table_id_(target_object_id_), root_service_(nullptr), snapshot_held_(false),
+  : ObDDLTask(ObDDLType::DDL_CREATE_INDEX), index_table_id_(target_object_id_), root_service_(nullptr),
     is_sstable_complete_task_submitted_(false), sstable_complete_request_time_(0), sstable_complete_ts_(0),
     check_unique_snapshot_(0), complete_sstable_job_ret_code_(INT64_MAX), create_index_arg_(), target_cg_cnt_(0)
 {
@@ -641,30 +642,27 @@ int ObIndexBuildTask::prepare()
 int ObIndexBuildTask::wait_trans_end()
 {
   int ret = OB_SUCCESS;
-  bool state_finished = false;
+  int64_t new_fetched_snapshot = 0;
+  int64_t persisted_snapshot = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (ObDDLTaskStatus::WAIT_TRANS_END != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", K(ret), K(task_status_));
-  } else if (snapshot_version_ > 0 && snapshot_held_) {
-    state_finished = true;
   }
 
   // wait all trans before the schema_version elapsed
-  if (OB_SUCC(ret) && !state_finished && snapshot_version_ <= 0) {
+  if (OB_SUCC(ret) && snapshot_version_ <= 0) {
     bool is_trans_end = false;
-    int64_t tmp_snapshot_version = 0;
     if (!wait_trans_ctx_.is_inited() && OB_FAIL(wait_trans_ctx_.init(
             tenant_id_, task_id_, object_id_, ObDDLWaitTransEndCtx::WaitTransType::WAIT_SCHEMA_TRANS, schema_version_))) {
       LOG_WARN("init wait_trans_ctx failed", K(ret), K(object_id_), K(index_table_id_));
-    } else if (OB_FAIL(wait_trans_ctx_.try_wait(is_trans_end, tmp_snapshot_version))) {
+    } else if (OB_FAIL(wait_trans_ctx_.try_wait(is_trans_end, new_fetched_snapshot))) {
       LOG_WARN("try wait transaction end failed", K(ret), K(object_id_), K(index_table_id_));
     } else if (is_trans_end) {
-      snapshot_version_ = tmp_snapshot_version;
       LOG_INFO("succ to wait schema transaction end",
-          K(object_id_), K(index_table_id_), K(schema_version_), K(snapshot_version_));
+          K(task_id_), K(object_id_), K(index_table_id_), K(schema_version_), K(snapshot_version_), K(new_fetched_snapshot));
       wait_trans_ctx_.reset();
     }
   }
@@ -672,39 +670,42 @@ int ObIndexBuildTask::wait_trans_end()
   DEBUG_SYNC(CREATE_INDEX_WAIT_TRANS_END);
 
   // persistent snapshot_version into inner table and hold snapshot of data_table and index table
-  if (OB_SUCC(ret) && !state_finished && snapshot_version_ > 0 && !snapshot_held_) {
+  if (OB_SUCC(ret) && snapshot_version_ <= 0 && new_fetched_snapshot > 0) {
     ObMySQLTransaction trans;
     if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
       LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
-    } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(trans,
+    } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(trans,
                                                                  tenant_id_,
                                                                  task_id_,
-                                                                 snapshot_version_))) {
-      LOG_WARN("update snapshot version failed", K(ret), K(task_id_), K(snapshot_version_));
-    } else if (OB_FAIL(hold_snapshot(trans, snapshot_version_))) {
+                                                                 new_fetched_snapshot,
+                                                                 persisted_snapshot))) {
+      LOG_WARN("update snapshot version failed", K(ret), K(task_id_), K(new_fetched_snapshot), K(persisted_snapshot));
+    } else if (persisted_snapshot > 0) {
+      // a persisted snapshot found, do not hold the new one repeatedly.
+      FLOG_INFO("found a persisted snapshot in inner table", K(task_id_), K(index_table_id_),
+          K(persisted_snapshot), K(new_fetched_snapshot));
+    } else if (OB_FAIL(hold_snapshot(trans, new_fetched_snapshot))) {
       if (OB_SNAPSHOT_DISCARDED == ret) {
-        snapshot_version_ = 0;
-        snapshot_held_ = false;
-        LOG_INFO("snapshot discarded, need retry waiting trans", K(ret));
+        LOG_INFO("snapshot discarded, need retry waiting trans", K(ret), K(task_id_), K(new_fetched_snapshot));
       } else {
-        LOG_WARN("hold snapshot failed", K(ret), K(snapshot_version_));
+        LOG_WARN("hold snapshot failed", K(ret), K(task_id_), K(new_fetched_snapshot));
       }
-    } else {
-      snapshot_held_ = true;
-      state_finished = true;
     }
     if (trans.is_started()) {
-      bool need_commit = (ret == OB_SUCCESS);
-      int tmp_ret = trans.end(need_commit);
+      const bool need_commit = (ret == OB_SUCCESS);
+      const int tmp_ret = trans.end(need_commit);
       if (OB_SUCCESS != tmp_ret) {
         LOG_WARN("fail to end trans", K(ret), K(tmp_ret), K(need_commit));
+      } else if (need_commit) {
+        // update only when commit succ.
+        snapshot_version_ = persisted_snapshot > 0 ? persisted_snapshot : new_fetched_snapshot;
       }
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
     ret = OB_SNAPSHOT_DISCARDED == ret ? OB_SUCCESS : ret;
   }
 
-  if (state_finished || OB_FAIL(ret)) {
+  if (snapshot_version_ > 0 || OB_FAIL(ret)) {
     // a newly-created mlog is empty
     ObDDLTaskStatus next_status = (ObIndexArg::ADD_MLOG == create_index_arg_.index_action_type_) ?
                                       ObDDLTaskStatus::TAKE_EFFECT : ObDDLTaskStatus::REDEFINITION;
@@ -1997,7 +1998,8 @@ int ObIndexBuildTask::update_mlog_last_purge_scn()
       mlog_info.set_last_purge_date(ObTimeUtility::current_time());
       mlog_info.set_last_purge_time(0);
       mlog_info.set_last_purge_rows(0);
-      if (OB_FAIL(mlog_info.set_last_purge_trace_id(ObCurTraceId::get_trace_id_str()))) {
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+      if (OB_FAIL(mlog_info.set_last_purge_trace_id(ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
         LOG_WARN("failed to set last purge trace id", KR(ret));
       } else if (OB_FAIL(ObMLogInfo::update_mlog_last_purge_info(trans, mlog_info))) {
         LOG_WARN("failed to update mlog last purge info", KR(ret), K(mlog_info));

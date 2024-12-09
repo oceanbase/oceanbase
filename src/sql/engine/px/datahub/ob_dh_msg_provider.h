@@ -26,53 +26,121 @@ class ObPxDatahubDataProvider
 {
 public:
   ObPxDatahubDataProvider()
-      : op_id_(-1), msg_type_(dtl::TESTING), msg_set_(false), dh_msg_cnt_(0), rescan_cnt_(0)
+      : op_id_(-1), msg_type_(dtl::TESTING), whole_msg_set_(false), dh_msg_cnt_(0), rescan_cnt_(0)
   {
   }
   virtual int get_msg_nonblock(const dtl::ObDtlMsg *&msg, int64_t timeout_ts) = 0;
+  inline int init(uint64_t op_id, dtl::ObDtlMsgType msg_type) {
+    op_id_ = op_id;
+    msg_type_ = msg_type;
+    return sqc_level_sync_cond_.init(common::ObWaitEventIds::DH_LOCAL_SYNC_COND_WAIT);
+  }
   virtual void reset() {}
   TO_STRING_KV(K_(op_id), K_(msg_type));
   uint64_t op_id_; // 注册本 provider 的算子 id，用于 provder 数组里寻址对应 provider
   dtl::ObDtlMsgType msg_type_;
-  bool msg_set_;
+  bool whole_msg_set_;
   volatile int64_t dh_msg_cnt_;
   volatile int64_t rescan_cnt_;
-};
+  common::ObThreadCond sqc_level_sync_cond_;
+public:
+  static constexpr uint64_t SYNC_WAIT_USEC = 100; // 100 us
+} CACHE_ALIGNED;
 
-template <typename T>
+template <typename PieceMsg, typename WholeMsg>
 class ObWholeMsgProvider : public ObPxDatahubDataProvider
 {
 public:
   ObWholeMsgProvider() {}
   virtual ~ObWholeMsgProvider() = default;
-  virtual void reset() override { msg_.reset();}
+  virtual void reset() override
+  {
+    whole_msg_.reset();
+    sqc_piece_msg_.reset();
+  }
+
+  int aggregate_sqc_piece_msgs_and_directly_return_whole(const PieceMsg &piece,
+                                                         const WholeMsg *&whole, int64_t timeout_ts,
+                                                         int64_t task_cnt, bool need_sync,
+                                                         bool need_wait_whole_msg)
+  {
+    int ret = OB_SUCCESS;
+    {
+      ObThreadCondGuard guard(sqc_level_sync_cond_);
+      if (OB_FAIL(whole_msg_.aggregate_piece(piece))) {
+        SQL_ENG_LOG(WARN, "failed to aggregate_piece");
+      } else {
+        ++dh_msg_cnt_;
+        whole_msg_set_ = (dh_msg_cnt_ == task_cnt);
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // For local datahub message, we also need to do sync_wait if need_wait_whole_msg here,
+      // because the whole message will be ready once all local piece gathered.
+      // While for rpc datahub message, there is a wait_whole_msg action outside to wait rpc back.
+    } else if ((need_sync || need_wait_whole_msg) && OB_FAIL(sync_wait(timeout_ts, task_cnt))) {
+      SQL_ENG_LOG(WARN, "failed to sync_wait");
+    } else if (need_wait_whole_msg) {
+      whole = &whole_msg_;
+    }
+
+    return ret;
+  }
+
+  int aggregate_sqc_piece_msgs(const PieceMsg &piece, const PieceMsg *&sqc_piece,
+                               int64_t timeout_ts, int64_t task_cnt, bool need_sync,
+                               bool &is_last_piece)
+  {
+    int ret = OB_SUCCESS;
+    {
+      ObThreadCondGuard guard(sqc_level_sync_cond_);
+      if (OB_FAIL(sqc_piece_msg_.aggregate_piece(piece))) {
+        SQL_ENG_LOG(WARN, "failed to aggregate_piece");
+      } else {
+        ++dh_msg_cnt_;
+      }
+      if (OB_SUCC(ret) && (dh_msg_cnt_ == task_cnt)) {
+        // only last piece is under obligation to send rpc message
+        is_last_piece = true;
+        sqc_piece = &sqc_piece_msg_;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if ((need_sync) && OB_FAIL(sync_wait(timeout_ts, task_cnt))) {
+      SQL_ENG_LOG(WARN, "failed to sync_wait");
+    }
+    return ret;
+  }
+
   int get_msg_nonblock(const dtl::ObDtlMsg *&msg, int64_t timeout_ts)
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(check_status(timeout_ts))) {
       // nop
-    } else if (!msg_set_) {
+    } else if (!whole_msg_set_) {
       ret = OB_DTL_WAIT_EAGAIN;
     } else {
-      msg = &msg_;
+      msg = &whole_msg_;
     }
     return ret;
   }
-  int add_msg(const T &msg)
+  int add_msg(const WholeMsg &msg)
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(msg_.assign(msg))) {
+    if (OB_FAIL(whole_msg_.assign(msg))) {
       SQL_ENG_LOG(WARN,"fail assign msg", K(msg), K(ret));
     } else {
-      msg_set_ = true;
+      whole_msg_set_ = true;
     }
     return ret;
   }
-  bool msg_set()
+  bool whole_msg_set()
   {
-    return msg_set_;
+    return whole_msg_set_;
   }
-  TO_STRING_KV(K_(msg_set), K_(msg));
+  TO_STRING_KV(K_(whole_msg_set), K_(whole_msg));
 private:
   int check_status(int64_t timeout_ts)
   {
@@ -89,9 +157,35 @@ private:
     }
     return ret;
   }
+
+  int sync_wait(int64_t timeout_ts, int64_t task_cnt)
+  {
+    int ret = common::OB_SUCCESS;
+    int64_t loop_time = 0;
+    while (OB_SUCC(ret)) {
+      {
+        ObThreadCondGuard guard(sqc_level_sync_cond_);
+        if (dh_msg_cnt_ == task_cnt) {
+          break;
+        }
+        // wait for timeout or until notified.
+        sqc_level_sync_cond_.wait_us(SYNC_WAIT_USEC);
+        if (dh_msg_cnt_ == task_cnt) {
+          break;
+        }
+      }
+      ++loop_time;
+      // check status each 256 loops
+      if (((loop_time & 0xFF) == 0) && OB_FAIL(check_status(timeout_ts))) {
+        loop_time = 0;
+      }
+    }
+    return ret;
+  }
+
 private:
-  T msg_;
-  common::ObThreadCond msg_ready_cond_;
+  WholeMsg whole_msg_;
+  PieceMsg sqc_piece_msg_;
 };
 
 

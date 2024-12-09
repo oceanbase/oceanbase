@@ -836,7 +836,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
               && !ObObjUDTUtil::ob_is_supported_sql_udt(udt_id)) {
             // array type
             field.type_.set_subschema_id(subschema_id);
-            field.charsetnr_ = CS_TYPE_BINARY;
+            field.charsetnr_ = CS_TYPE_UTF8MB4_BIN;
             field.length_ = OB_MAX_LONGTEXT_LENGTH;
           } else if (OB_FAIL(result_set.get_exec_context().get_subschema_id_by_udt_id(udt_id, tmp_subschema_id))) {
             LOG_WARN("unsupported udt id", K(ret), K(subschema_id));
@@ -3897,14 +3897,6 @@ int ObSql::code_generate(
       phy_plan->stat_.is_use_jit_ = use_jit;
       phy_plan->set_returning(stmt->is_returning());
       phy_plan->set_has_link_table(has_dblink || phy_plan->has_link_udf());
-      // set plan insert flag : insert into values(..); // value num is n (n >= 1);
-      if (stmt->is_insert_stmt()) {
-        ObInsertStmt *insert_stmt = static_cast<ObInsertStmt *>(stmt);
-        phy_plan->set_is_plain_insert(!insert_stmt->value_from_select()
-                                   && !insert_stmt->is_insert_up()
-                                   && insert_stmt->get_subquery_exprs().empty()
-                                   && !insert_stmt->is_replace());
-      }
       last_mem_usage = phy_plan->get_mem_size();
     }
   }

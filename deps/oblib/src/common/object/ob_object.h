@@ -473,6 +473,11 @@ public:
   OB_INLINE ObScale get_scale() const { return static_cast<ObScale>(scale_); }
   OB_INLINE void set_extend_type(uint8_t type) { extend_type_ = type; }
   OB_INLINE uint8_t get_extend_type() const { return is_ext() ? extend_type_ : -1; }
+  OB_INLINE bool is_pl_extend_type() const
+  {
+    return is_ext() && extend_type_ > 0
+                    && extend_type_ < T_EXT_SQL_ARRAY;
+  }
 
   TO_STRING_KV(N_TYPE, inner_obj_type_str(static_cast<ObObjType>(type_)),
                N_COLLATION, ObCharset::collation_name(get_collation_type()),
@@ -4293,6 +4298,7 @@ public:
   inline ObCharsetType get_charset_type() const { return charset_; }
   inline ObCollationType get_collation_type() const { return meta_.get_collation_type(); }
   inline ObCollationLevel get_collation_level() const { return meta_.get_collation_level(); }
+  inline uint16_t get_subschema_id() { return meta_.get_subschema_id(); }
   inline bool is_binary_collation() const { return is_binary_collation_; }
   inline bool is_zero_fill() const { return is_zero_fill_; }
   inline void set_obj_type(const ObObjType &type) { return meta_.set_type(type); }

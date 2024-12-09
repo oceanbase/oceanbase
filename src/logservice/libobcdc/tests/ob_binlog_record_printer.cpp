@@ -644,7 +644,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
       size_t new_col_value_len = new_cols[index].buf_used_size;
 
       if (! is_new_value_origin_redo) {
-         ROW_PRINTF(ptr, size, pos, ri, "C[%ld] column_value_new_origin: %s",
+         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_new_origin: %s",
              column_index, newValueOrigin == 2 ? "PADDING" : "BACK_QUERY");
       }
 

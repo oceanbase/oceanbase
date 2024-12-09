@@ -1387,9 +1387,13 @@ int ObTenantCheckpointSlogHandler::parse(
         snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "update tablet slog: ");
         if (OB_FAIL(slog_entry.deserialize(buf, len, pos))) {
           LOG_WARN("fail to deserialize tablet meta", K(ret), KP(buf), K(len), K(pos));
-        } else if (0 > fprintf(stream, "%s\n version:%d length:%d\n%s\n", slog_name, version, length, to_cstring(slog_entry))) {
-          ret = OB_IO_ERROR;
-          LOG_WARN("Fail to print slog to file.", K(ret));
+        } else {
+          ObCStringHelper helper;
+          if (0 > fprintf(stream, "%s\n version:%d length:%d\n%s\n", slog_name, version, length,
+              helper.convert(slog_entry))) {
+            ret = OB_IO_ERROR;
+            LOG_WARN("Fail to print slog to file.", K(ret));
+          }
         }
         break;
       }
@@ -1409,9 +1413,12 @@ int ObTenantCheckpointSlogHandler::parse(
         snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "empty shell tablet slog: ");
         if (OB_FAIL(slog_entry.deserialize_id(buf, len, pos))) {
           LOG_WARN("failed to deserialize empty shell tablet_id_", K(ret));
-        } else if (0 > fprintf(stream, "%s\n%s\n", slog_name, to_cstring(slog_entry))) {
-          ret = OB_IO_ERROR;
-          LOG_WARN("Fail to print slog to file.", K(ret));
+        } else {
+          ObCStringHelper helper;
+          if (0 > fprintf(stream, "%s\n%s\n", slog_name, helper.convert(slog_entry))) {
+            ret = OB_IO_ERROR;
+            LOG_WARN("Fail to print slog to file.", K(ret));
+          }
         }
         break;
       }

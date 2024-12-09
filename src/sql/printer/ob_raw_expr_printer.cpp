@@ -201,6 +201,14 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       PRINT_EXPR(match_against_expr);
       break;
     }
+    case ObRawExpr::EXPR_VAR: {
+      ObVarRawExpr *var_expr = static_cast<ObVarRawExpr *>(expr);
+      if (var_expr->get_ref_expr() != NULL) {
+        int64_t idx = var_expr->get_ref_index();
+        DATA_PRINTF("para%ld", idx);
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown expr class", K(ret), K(expr->get_expr_class()));
@@ -779,6 +787,35 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
     }
     case T_OP_MULTISET: {
       SET_SYMBOL_IF_EMPTY("MULTISET");
+      if (OB_UNLIKELY(2 != expr->get_param_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param count should be equal 2", K(ret), K(expr->get_param_count()));
+      } else {
+        ObMultiSetType type = static_cast<ObMultiSetRawExpr*>(expr)->get_multiset_type();
+        ObMultiSetModifier modifier = static_cast<ObMultiSetRawExpr*>(expr)->get_multiset_modifier();
+        if (type < MULTISET_TYPE_UNION || type > MULTISET_TYPE_EXCEPT || modifier < MULTISET_MODIFIER_ALL || modifier > MULTISET_MODIFIER_DISTINCT)  {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid multi set type or modifier", K(ret), K(type), K(modifier));
+        } else {
+          DATA_PRINTF("(");
+          PRINT_EXPR(expr->get_param_expr(0));
+          DATA_PRINTF("MULTISET ");
+          if (type == MULTISET_TYPE_UNION) {
+            DATA_PRINTF("UNION ");
+          } else if (type == MULTISET_TYPE_INTERSECT) {
+            DATA_PRINTF("INTERSECT ");
+          } else {
+            DATA_PRINTF("EXCEPT ");
+          }
+          if (modifier == MULTISET_MODIFIER_ALL) {
+            DATA_PRINTF("ALL ");
+          } else {
+            DATA_PRINTF("DISTINCT ");
+          }
+          PRINT_EXPR(expr->get_param_expr(1));
+          DATA_PRINTF(")");
+        }
+      }
       break;
     }
     case T_OP_BOOL:{
@@ -822,6 +859,42 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
     }
     case T_OP_COLL_PRED: {
       SET_SYMBOL_IF_EMPTY("collection predicate");
+      if (OB_UNLIKELY(2 != expr->get_param_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param count should be equal 2", K(ret), K(expr->get_param_count()));
+      } else {
+        ObMultiSetType type = static_cast<ObCollPredRawExpr*>(expr)->get_multiset_type();
+        ObMultiSetModifier modifier = static_cast<ObCollPredRawExpr*>(expr)->get_multiset_modifier();
+        if (type < MULTISET_TYPE_SUBMULTISET || type > MULTISET_TYPE_EMPTY || (modifier != MULTISET_MODIFIER_INVALID && modifier != MULTISET_MODIFIER_NOT))  {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid coll pred type or modifier", K(ret), K(type), K(modifier));
+        } else {
+          DATA_PRINTF("(");
+          PRINT_EXPR(expr->get_param_expr(0));
+          if (type == MULTISET_TYPE_SUBMULTISET || type == MULTISET_TYPE_MEMBER_OF) {
+            if (modifier == MULTISET_MODIFIER_NOT) {
+              DATA_PRINTF("NOT ");
+            }
+            if (type == MULTISET_TYPE_SUBMULTISET) {
+              DATA_PRINTF("SUBMULTISET ");
+            } else {
+              DATA_PRINTF("MEMBER ");
+            }
+            PRINT_EXPR(expr->get_param_expr(1));
+          } else {
+             DATA_PRINTF("IS ");
+             if (modifier == MULTISET_MODIFIER_NOT) {
+               DATA_PRINTF("NOT ");
+             }
+             if (type == MULTISET_TYPE_IS_SET) {
+               DATA_PRINTF("A SET");
+             } else {
+               DATA_PRINTF("EMPTY");
+             }
+          }
+          DATA_PRINTF(")");
+        }
+      }
       break;
     }
     case T_FUN_PL_GET_CURSOR_ATTR: {
@@ -835,38 +908,6 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
                  K(cursor_attr_expr->get_pl_get_cursor_attr_info()));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "only rowid for cursor is supported");
       }
-      break;
-    }
-    case T_FUN_SYS_POINT: {
-      SET_SYMBOL_IF_EMPTY("point");
-      break;
-    }
-    case T_FUN_SYS_LINESTRING: {
-      SET_SYMBOL_IF_EMPTY("linestring");
-      break;
-    }
-    case T_FUN_SYS_MULTIPOINT: {
-      SET_SYMBOL_IF_EMPTY("multipoint");
-      break;
-    }
-    case T_FUN_SYS_MULTILINESTRING: {
-      SET_SYMBOL_IF_EMPTY("multilinestring");
-      break;
-    }
-    case T_FUN_SYS_POLYGON: {
-      SET_SYMBOL_IF_EMPTY("polygon");
-      break;
-    }
-    case T_FUN_SYS_MULTIPOLYGON: {
-      SET_SYMBOL_IF_EMPTY("multipolygon");
-      break;
-    }
-    case T_FUN_SYS_GEOMCOLLECTION: {
-      SET_SYMBOL_IF_EMPTY("geomcollection");
-      break;
-    }
-    case T_FUN_SYS_ARRAY: {
-      SET_SYMBOL_IF_EMPTY("array");
       break;
     }
     default: {
@@ -1221,6 +1262,12 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
         DATA_PRINTF("rb_and_agg(");
         PRINT_EXPR(expr->get_param_expr(0));
         DATA_PRINTF(")");
+      }
+      break;
+    }
+    case T_FUNC_SYS_ARRAY_AGG: {
+      if (OB_FAIL(print_array_agg_expr(expr))) {
+        LOG_WARN("fail to print array_agg.", K(ret));
       }
       break;
     }
@@ -3469,6 +3516,10 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         OZ(print_sql_udt_attr_access(expr));
         break;
       }
+      case T_FUNC_SYS_ARRAY_MAP: {
+        OZ(print_array_map(expr));
+        break;
+      }
       default: {
         DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
         OZ(inner_print_fun_params(*expr));
@@ -5071,6 +5122,53 @@ int ObRawExprPrinter::print_xml_agg_expr(ObAggFunRawExpr *expr)
   return ret;
 }
 
+int ObRawExprPrinter::print_array_agg_expr(ObAggFunRawExpr *expr)
+{
+  INIT_SUCC(ret);
+  if (OB_UNLIKELY(1 != expr->get_real_param_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else {
+    DATA_PRINTF("array_agg(");
+    if (expr->is_param_distinct()) {
+      DATA_PRINTF(" distinct ");
+    }
+    PRINT_EXPR(expr->get_param_expr(0));
+    if (OB_NOT_NULL(expr->get_param_expr(1))) {
+      const ObIArray<OrderItem> &order_items = expr->get_order_items();
+      int64_t order_item_size = order_items.count();
+      if (order_item_size > 0) {
+        DATA_PRINTF(" order by ");
+        for (int64_t i = 0; OB_SUCC(ret) && i < order_item_size; ++i) {
+          const OrderItem &order_item = order_items.at(i);
+          PRINT_EXPR(order_item.expr_);
+          if (OB_SUCC(ret)) {
+            if (lib::is_mysql_mode()) {
+              if (is_descending_direction(order_item.order_type_)) {
+                DATA_PRINTF(" desc ");
+              }
+            } else if (order_item.order_type_ == NULLS_FIRST_ASC) {
+              DATA_PRINTF(" asc nulls first ");
+            } else if (order_item.order_type_ == NULLS_LAST_ASC) {//use default value
+              /*do nothing*/
+            } else if (order_item.order_type_ == NULLS_FIRST_DESC) {//use default value
+              DATA_PRINTF(" desc ");
+            } else if (order_item.order_type_ == NULLS_LAST_DESC) {
+              DATA_PRINTF(" desc nulls last ");
+            } else {/*do nothing*/}
+          }
+          DATA_PRINTF(",");
+        }
+        if (OB_SUCC(ret)) {
+          --*pos_;
+        }
+      }
+    }
+    DATA_PRINTF(")");
+  }
+  return ret;
+}
+
 int ObRawExprPrinter::print_xml_attributes_expr(ObSysFunRawExpr *expr)
 {
   int ret = OB_SUCCESS;
@@ -5228,6 +5326,60 @@ int ObRawExprPrinter::print_sql_udt_construct(ObSysFunRawExpr *expr)
   return ret;
 }
 
+int ObRawExprPrinter::get_max_lambda_param_idx(ObRawExpr *expr, uint32_t &max_idx)
+{
+  int ret = OB_SUCCESS;
+  if (expr->get_expr_type() == T_EXEC_VAR) {
+    ObVarRawExpr *var_expr = static_cast<ObVarRawExpr *>(expr);
+    int64_t idx = var_expr->get_ref_index();
+    if (idx > max_idx) {
+      max_idx = idx;
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      ObRawExpr *child_expr = NULL;
+      if (OB_ISNULL(child_expr = expr->get_param_expr(i))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      } else if (child_expr->get_expr_type() == T_FUNC_SYS_ARRAY_MAP) {
+        // do nothing
+      } else if (OB_FAIL(get_max_lambda_param_idx(child_expr, max_idx))) {
+        LOG_WARN("get max lambda param idx failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_array_map(ObSysFunRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  uint32_t max_idx = 0;
+  if (OB_ISNULL(expr) || (expr->get_param_count() < 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else if (OB_FAIL(get_max_lambda_param_idx(expr->get_param_expr(0), max_idx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("doc type value isn't int value");
+  } else {
+    DATA_PRINTF("array_map((");
+    for (uint32_t i = 0; i <= max_idx; i++) {
+      if (i != 0) {
+        DATA_PRINTF(",");
+      }
+      DATA_PRINTF("para%d", i);
+    }
+    DATA_PRINTF(")->(");
+    PRINT_EXPR(expr->get_param_expr(0));
+    DATA_PRINTF(")");
+    for (int i = 1; i < expr->get_param_count() && OB_SUCC(ret); i++) {
+      DATA_PRINTF(",");
+      PRINT_EXPR(expr->get_param_expr(i));
+    }
+    DATA_PRINTF(")");
+  }
+  return ret;
+}
 
 } //end of namespace sql
 } //end of namespace oceanbase

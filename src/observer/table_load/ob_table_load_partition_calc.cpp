@@ -45,7 +45,9 @@ ObTableLoadPartitionCalc::ObTableLoadPartitionCalc()
   allocator_.set_tenant_id(MTL_ID());
 }
 
-int ObTableLoadPartitionCalc::init(const ObTableLoadParam &param, sql::ObSQLSessionInfo *session_info)
+int ObTableLoadPartitionCalc::init(const ObTableLoadParam &param,
+                                   sql::ObSQLSessionInfo *session_info,
+                                   const ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -81,6 +83,17 @@ int ObTableLoadPartitionCalc::init(const ObTableLoadParam &param, sql::ObSQLSess
         // 获取part_key_obj_index_
         else if (OB_FAIL(init_part_key_index(table_schema, allocator_))) {
           LOG_WARN("fail to get rowkey index", KR(ret));
+        } else if (ObDirectLoadLevel::PARTITION == param.load_level_) {
+          ObMemAttr attr(MTL_ID(), "TLD_TABLETID");
+          if (OB_FAIL(tablet_ids_set_.create(1024, attr))) {
+            LOG_WARN("fail to init tablet ids set", KR(ret));
+          } else {
+            for (uint64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+              if (OB_FAIL(tablet_ids_set_.set_refactored(tablet_ids.at(i)))) {
+                LOG_WARN("fail to set tablet id", KR(ret));
+              }
+            }
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -213,9 +226,24 @@ int ObTableLoadPartitionCalc::get_partition_by_row(
     LOG_WARN("invalid args", K(part_ids.count()), K(tablet_ids.count()));
   }
   for (int i = 0; OB_SUCC(ret) && i < part_rows.count(); i++) {
-    if (OB_FAIL(
-          partition_ids.push_back(ObTableLoadPartitionId(part_ids.at(i), tablet_ids.at(i))))) {
-      LOG_WARN("fail to push partition id", KR(ret));
+    if (ObDirectLoadLevel::PARTITION == param_->load_level_) {
+      ret = tablet_ids_set_.exist_refactored(tablet_ids.at(i));
+      if (OB_LIKELY(OB_HASH_EXIST == ret)) {
+        if (OB_FAIL(partition_ids.push_back(ObTableLoadPartitionId(part_ids.at(i), tablet_ids.at(i))))) {
+          LOG_WARN("fail to push partition id", KR(ret), K(part_ids.at(i)), K(tablet_ids.at(i)));
+        }
+      } else if (OB_HASH_NOT_EXIST == ret) {
+        if (OB_FAIL(partition_ids.push_back(ObTableLoadPartitionId()))) {
+          LOG_WARN("fail to push empty partition id", KR(ret));
+        }
+      } else {
+        LOG_WARN("fail to search tablet ids set", KR(ret));
+      }
+    } else {
+      if (OB_FAIL(
+            partition_ids.push_back(ObTableLoadPartitionId(part_ids.at(i), tablet_ids.at(i))))) {
+        LOG_WARN("fail to push partition id", KR(ret));
+      }
     }
   }
   return ret;

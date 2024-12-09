@@ -322,6 +322,7 @@ public:
   inline bool has_virtual_column() const { return has_virtual_column_; }
   inline int64_t get_rowid_version() const { return rowid_version_; }
   inline bool is_column_replica_table() const { return is_column_replica_table_; }
+  inline bool is_normal_cgs_at_the_end() const { return is_normal_cgs_at_the_end_; }
   inline const common::ObIArray<int32_t> &get_rowid_projector() const { return rowid_projector_; }
   inline const common::ObIArray<int32_t> &get_output_projector() const { return output_projector_; }
   inline const common::ObIArray<int32_t> &get_aggregate_projector() const { return aggregate_projector_; }
@@ -414,6 +415,8 @@ private:
   bool is_column_replica_table_;
   bool is_vec_index_;
   bool is_partition_table_;
+  // column storage tables created after v435 will place the rowkey/all cg at the start of the table schema column group array
+  bool is_normal_cgs_at_the_end_;
 };
 } //namespace schema
 } //namespace share

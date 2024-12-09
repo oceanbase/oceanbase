@@ -79,6 +79,7 @@ ObQueryRange::ObQueryRange()
       key_part_store_(allocator_),
       range_exprs_(allocator_),
       ss_range_exprs_(allocator_),
+      unprecise_range_exprs_(allocator_),
       mbr_filters_(allocator_),
       has_exec_param_(false),
       is_equal_and_(false),
@@ -104,6 +105,7 @@ ObQueryRange::ObQueryRange(ObIAllocator &alloc)
       key_part_store_(allocator_),
       range_exprs_(allocator_),
       ss_range_exprs_(allocator_),
+      unprecise_range_exprs_(allocator_),
       mbr_filters_(allocator_),
       has_exec_param_(false),
       is_equal_and_(false),
@@ -147,6 +149,7 @@ void ObQueryRange::reset()
   table_graph_.reset();
   range_exprs_.reset();
   ss_range_exprs_.reset();
+  unprecise_range_exprs_.reset();
   inner_allocator_.reset();
   has_exec_param_ = false;
   is_equal_and_ = false;
@@ -1302,6 +1305,7 @@ int ObQueryRange::fill_range_exprs(const int64_t max_precise_pos,
   } else {
     ObSEArray<ObRawExpr*, 4> range_exprs;
     ObSEArray<ObRawExpr*, 4> ss_range_exprs;
+    ObSEArray<ObRawExpr*, 4> unprecise_range_exprs;
     bool precise = true;
     bool ss_precise = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < query_range_ctx_->precise_range_exprs_.count(); ++i) {
@@ -1330,6 +1334,8 @@ int ObQueryRange::fill_range_exprs(const int64_t max_precise_pos,
       LOG_WARN("failed to assign range exprs", K(ret));
     } else if (OB_FAIL(ss_range_exprs_.assign(ss_range_exprs))) {
       LOG_WARN("failed to assign skip scan range exprs", K(ret));
+    } else if (OB_FAIL(unprecise_range_exprs_.assign(unprecise_range_exprs))) {
+      LOG_WARN("failed to assign unprecise range exprs", K(ret));
     } else {
       LOG_DEBUG("finish fill range exprs", K(max_precise_pos), K(range_exprs));
       LOG_DEBUG("finish fill skip scan range exprs", K(ss_offset), K(ss_max_precise_pos), K(ss_range_exprs));
@@ -6017,7 +6023,8 @@ int ObQueryRange::link_or_graphs(ObKeyPartList &storage, ObKeyPart  *&out_key_pa
   ObKeyPart *last_gt_tail = NULL;
   if (OB_UNLIKELY(storage.get_size() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Or storage is empty", K(ret), "query range", to_cstring(*this));
+    ObCStringHelper helper;
+    LOG_WARN("Or storage is empty", K(ret), "query range", helper.convert(*this));
   } else {
     ObKeyPart *first_key_part = storage.get_first();
     bool b_flag  = false;
@@ -7253,7 +7260,7 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
                                    const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(THIS_WORKER.check_status())) {
+  if (OB_FAIL(THIS_WORKER.check_status())) {
     LOG_WARN("check status fail", K(ret));
   } else if (OB_ISNULL(search_state.start_) || OB_ISNULL(search_state.end_)
       || OB_ISNULL(search_state.include_start_) || OB_ISNULL(search_state.include_end_)
@@ -7518,6 +7525,25 @@ int ObQueryRange::get_tablet_ranges(common::ObIAllocator &allocator,
   return ret;
 }
 
+int ObQueryRange::get_tablet_ranges(common::ObIAllocator &allocator,
+                                    ObExecContext &exec_ctx,
+                                    ObQueryRangeArray &ranges,
+                                    bool &all_single_value_ranges,
+                                    const common::ObDataTypeCastParams &dtc_params,
+                                    ObIArray<common::ObSpatialMBR> &mbr_filters) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(mbr_filters);
+  if (OB_FAIL(get_tablet_ranges(allocator,
+                                exec_ctx,
+                                ranges,
+                                all_single_value_ranges,
+                                dtc_params))) {
+    LOG_WARN("failed to get tablet ranges", K(ret));
+  }
+  return ret;
+}
+
 int ObQueryRange::get_ss_tablet_ranges(common::ObIAllocator &allocator,
                                        ObExecContext &exec_ctx,
                                        ObQueryRangeArray &ss_ranges,
@@ -7540,6 +7566,26 @@ int ObQueryRange::get_ss_tablet_ranges(common::ObIAllocator &allocator,
   } else {
     LOG_DEBUG("get skip range success", K(ss_ranges));
   }
+  return ret;
+}
+
+int ObQueryRange::get_fast_nlj_tablet_ranges(ObFastFinalNLJRangeCtx &fast_nlj_range_ctx,
+                                             common::ObIAllocator &allocator,
+                                             ObExecContext &exec_ctx,
+                                             const ParamStore &param_store,
+                                             void *range_buffer,
+                                             ObQueryRangeArray &ranges,
+                                             const common::ObDataTypeCastParams &dtc_params) const
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(fast_nlj_range_ctx);
+  UNUSED(allocator);
+  UNUSED(exec_ctx);
+  UNUSED(param_store);
+  UNUSED(range_buffer);
+  UNUSED(ranges);
+  UNUSED(dtc_params);
+  LOG_WARN("old qeury range not support this interface");
   return ret;
 }
 
@@ -9121,6 +9167,8 @@ OB_NOINLINE int ObQueryRange::deep_copy(const ObQueryRange &other,
     LOG_WARN("assign range exprs failed", K(ret));
   } else if (OB_FAIL(ss_range_exprs_.assign(other.ss_range_exprs_))) {
     LOG_WARN("assign range exprs failed", K(ret));
+  } else if (OB_FAIL(unprecise_range_exprs_.assign(other.unprecise_range_exprs_))) {
+    LOG_WARN("assign unprecise range exprs failed", K(ret));
   } else if (OB_FAIL(table_graph_.assign(other_graph))) {
     LOG_WARN("Deep copy range columns failed", K(ret));
   } else if (OB_FAIL(equal_offs_.assign(other.equal_offs_))) {
@@ -9737,7 +9785,7 @@ DEF_TO_STRING(ObQueryRange::ObRangeExprItem)
   return pos;
 }
 
-common::ObDomainOpType ObQueryRange::get_geo_relation(ObItemType type) const
+common::ObDomainOpType ObQueryRange::get_geo_relation(ObItemType type)
 {
   common::ObDomainOpType rel_type = common::ObDomainOpType::T_INVALID;
   switch (type) {
@@ -9760,6 +9808,14 @@ common::ObDomainOpType ObQueryRange::get_geo_relation(ObItemType type) const
       rel_type = common::ObDomainOpType::T_GEO_COVEREDBY;
       break;
     }
+    case T_FUN_SYS_ST_CROSSES : {
+      rel_type = common::ObDomainOpType::T_GEO_INTERSECTS;
+      break;
+    }
+    case T_FUN_SYS_ST_OVERLAPS : {
+      rel_type = common::ObDomainOpType::T_GEO_INTERSECTS;
+      break;
+    }
     case T_FUN_SYS_SDO_RELATE : {
       rel_type = common::ObDomainOpType::T_GEO_RELATE;
       break;
@@ -9770,7 +9826,7 @@ common::ObDomainOpType ObQueryRange::get_geo_relation(ObItemType type) const
   return rel_type;
 }
 
-common::ObDomainOpType ObQueryRange::get_domain_op_type(ObItemType type) const
+common::ObDomainOpType ObQueryRange::get_domain_op_type(ObItemType type)
 {
   common::ObDomainOpType rel_type = common::ObDomainOpType::T_INVALID;
   switch (type) {
@@ -10271,7 +10327,6 @@ int ObQueryRange::get_geo_range(const common::ObObj &wkb, const common::ObDomain
       }
     }
   }
-
   return ret;
 }
 
@@ -10292,6 +10347,58 @@ int ObQueryRange::set_columnId_map(uint64_t columnId, const ObGeoColumnInfo &col
     LOG_WARN("set columnId map failed", K(ret), K(columnId));
   }
   return ret;
+}
+
+int ObQueryRange::get_prefix_info(int64_t &equal_prefix_count,
+                                  int64_t &range_prefix_count,
+                                  bool &contain_always_false) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_table_grapth().key_part_head_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("table_graph.key_part_head_ is not inited.", K(ret));
+  } else {
+    inner_get_prefix_info(get_table_grapth().key_part_head_,
+                          equal_prefix_count,
+                          range_prefix_count,
+                          contain_always_false);
+  }
+  return ret;
+}
+
+void ObQueryRange::inner_get_prefix_info(const ObKeyPart *key_part,
+                                         int64_t &equal_prefix_count,
+                                         int64_t &range_prefix_count,
+                                         bool &contain_always_false) const
+{
+  if (OB_NOT_NULL(key_part)) {
+    equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+    range_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+    for ( /*do nothing*/ ; NULL != key_part; key_part = key_part->or_next_) {
+      int64_t cur_equal_prefix_count = 0;
+      int64_t cur_range_prefix_count = 0;
+      if (key_part->is_equal_condition()) {
+        inner_get_prefix_info(key_part->and_next_,
+                              cur_equal_prefix_count,
+                              cur_range_prefix_count,
+                              contain_always_false);
+        ++cur_equal_prefix_count;
+        ++cur_range_prefix_count;
+      } else if (key_part->is_range_condition()) {
+        ++cur_range_prefix_count;
+      } else if (key_part->is_always_false()) {
+        contain_always_false = true;
+      }
+      equal_prefix_count = std::min(cur_equal_prefix_count, equal_prefix_count);
+      range_prefix_count = std::min(cur_range_prefix_count, range_prefix_count);
+    }
+  }
+}
+
+int ObQueryRange::get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const
+{
+  UNUSED(total_range_sizes);
+  return OB_SUCCESS;
 }
 
 }  // namespace sql

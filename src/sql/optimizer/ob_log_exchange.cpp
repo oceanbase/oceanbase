@@ -1065,10 +1065,7 @@ int ObLogExchange::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
 }
 
 bool ObLogExchange::support_rich_format_vectorize() const {
-  bool res = !(dist_method_ == ObPQDistributeMethod::SM_BROADCAST ||
-          dist_method_ == ObPQDistributeMethod::PARTITION_RANDOM ||
-          dist_method_ == ObPQDistributeMethod::PARTITION_RANGE ||
-          dist_method_ == ObPQDistributeMethod::PARTITION_HASH);
+  bool res = !(dist_method_ == ObPQDistributeMethod::SM_BROADCAST);
   int tmp_ret = abs(OB_E(EventTable::EN_OFS_IO_SUBMIT) OB_SUCCESS);
   if (tmp_ret & (1 << dist_method_)) {
     res = false;

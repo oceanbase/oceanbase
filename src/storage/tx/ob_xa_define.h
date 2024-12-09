@@ -131,6 +131,7 @@ public:
   static bool contain_tmreadonly(const int64_t flag) { return flag & OBTMREADONLY; }
   static bool contain_tmserializable(const int64_t flag) { return flag & OBTMSERIALIZABLE; }
   static bool is_tmnoflags(const int64_t flag, const int64_t xa_req_type);
+  static bool is_tmnoflags_for_mysql(const int64_t flag) { return OBTMNOFLAGS == flag; }
   static bool contain_loosely(const int64_t flag) { return flag & OBLOOSELY; }
   static bool contain_tmjoin(const int64_t flag) { return flag & OBTMJOIN; }
   static bool is_tmjoin(const int64_t flag) { return flag == OBTMJOIN; }
