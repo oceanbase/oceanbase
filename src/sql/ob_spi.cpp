@@ -2522,11 +2522,12 @@ int ObSPIService::prepare_dynamic(ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(GCTX.sql_engine_));
   stmt_type = stmt::T_NONE;
+  bool is_prepare_with_param = !is_dbms_sql && OB_NOT_NULL(params);
   OV ((is_dbms_sql && NULL != field_list)
       || (!is_dbms_sql && NULL == field_list),
       OB_ERR_UNEXPECTED, is_dbms_sql, field_list);
   if (OB_SUCC(ret)) {
-    PLPrepareCtx pl_prepare_ctx(*session, NULL, true, is_dbms_sql, false, !is_dbms_sql);
+    PLPrepareCtx pl_prepare_ctx(*session, NULL, true, is_dbms_sql, false, is_prepare_with_param);
 
     SMART_VAR(PLPrepareResult, pl_prepare_result) {
       OZ (pl_prepare_result.init(*session));
@@ -2553,7 +2554,7 @@ int ObSPIService::prepare_dynamic(ObPLExecCtx *ctx,
 
       if (OB_SUCC(ret)) {
         int64_t exec_param_cnt = 0;
-        if (lib::is_mysql_mode() || is_dbms_sql) {
+        if (lib::is_mysql_mode() || !is_prepare_with_param) {
           exec_param_cnt = ObStmt::is_dml_stmt(stmt_type)
                             ? pl_prepare_result.result_set_->get_external_params().count()
                             : pl_prepare_result.result_set_->get_param_fields()->count();
