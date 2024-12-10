@@ -44,6 +44,12 @@ bool get_enable_dblink_cfg()
   return GCONF.enable_dblink;
 }
 
+uint64_t get_max_dblink_conn_per_observer()
+{
+   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  return tenant_config.is_valid() ? tenant_config->_max_dblink_conn_per_observer : 256;
+}
+
 uint64_t get_current_tenant_id_for_dblink()
 {
   return MTL_ID();

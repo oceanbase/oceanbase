@@ -1933,7 +1933,9 @@ DEF_BOOL(_enable_dblink_reuse_connection, OB_TENANT_PARAMETER, "True",
 DEF_INT(_with_subquery, OB_TENANT_PARAMETER, "0", "[0,2]",
         "WITH subquery transformation,0: optimizer,1: materialize,2: inline",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_INT(_max_dblink_conn_per_observer, OB_TENANT_PARAMETER, "256", "[0,)",
+        "The maximum limit on the number of connections that can be opened simultaneously for a specific observer for any DBLink, default value is 256",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_xsolapi_generate_with_clause, OB_TENANT_PARAMETER, "True",
         "OLAP API generates WITH clause",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
