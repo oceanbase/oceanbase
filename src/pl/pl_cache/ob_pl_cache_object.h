@@ -87,6 +87,7 @@ struct PLCacheObjStat
   int64_t execute_times_;        //SUCC下执行次数
   int64_t  slowest_exec_time_;    // execution slowest time
   uint64_t slowest_exec_usec_;    // execution slowest usec
+  int64_t pl_evict_version_;
   int64_t schema_version_;
   int64_t ps_stmt_id_;//prepare stmt id
   common::ObString sys_vars_str_;
@@ -106,6 +107,7 @@ struct PLCacheObjStat
       execute_times_(0),
       slowest_exec_time_(0),
       slowest_exec_usec_(0),
+      pl_evict_version_(OB_INVALID_ID),
       schema_version_(OB_INVALID_ID),
       ps_stmt_id_(OB_INVALID_ID),
       sys_vars_str_()
@@ -134,6 +136,7 @@ struct PLCacheObjStat
     execute_times_ = 0;
     slowest_exec_time_ = 0;
     slowest_exec_usec_ = 0;
+    pl_evict_version_ = OB_INVALID_ID;
     schema_version_ = OB_INVALID_ID;
     ps_stmt_id_ = OB_INVALID_ID;
     sys_vars_str_.reset();
@@ -148,6 +151,7 @@ struct PLCacheObjStat
                K_(name),
                K_(compile_time),
                K_(type),
+               K_(pl_evict_version),
                K_(schema_version),
                K_(sys_vars_str));
 };
@@ -178,7 +182,7 @@ public:
   inline void set_tenant_schema_version(int64_t schema_version) { tenant_schema_version_ = schema_version; }
   inline int64_t get_tenant_schema_version() const { return tenant_schema_version_; }
   inline int64_t get_sys_schema_version() const { return sys_schema_version_; }
-
+  int set_tenant_sys_schema_version(schema::ObSchemaGetterGuard &schema_guard, int64_t tenant_id);
   inline int64_t get_dependency_table_size() const { return dependency_tables_.count(); }
   inline const sql::DependenyTableStore &get_dependency_table() const { return dependency_tables_; }
   int init_dependency_table_store(int64_t dependency_table_cnt) { return dependency_tables_.init(dependency_table_cnt); }

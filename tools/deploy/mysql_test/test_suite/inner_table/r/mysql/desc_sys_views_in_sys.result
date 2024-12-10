@@ -8054,6 +8054,7 @@ OBJECT_TYPE	longtext	NO		NULL
 OBJECT_ID	bigint(20) unsigned	NO		NULL	
 COMPILE_TIME	bigint(20) unsigned	NO		NULL	
 SCHEMA_VERSION	bigint(20)	NO		NULL	
+PL_EVICT_VERSION	bigint(20)	NO		NULL	
 PS_STMT_ID	bigint(20)	NO		NULL	
 DB_ID	bigint(20) unsigned	NO		NULL	
 PL_CG_MEM_HOLD	bigint(20)	NO		NULL	
@@ -8081,6 +8082,7 @@ OBJECT_TYPE	longtext	NO
 OBJECT_ID	bigint(20) unsigned	NO			
 COMPILE_TIME	bigint(20) unsigned	NO			
 SCHEMA_VERSION	bigint(20)	NO			
+PL_EVICT_VERSION	bigint(20)	NO			
 PS_STMT_ID	bigint(20)	NO			
 DB_ID	bigint(20) unsigned	NO			
 PL_CG_MEM_HOLD	bigint(20)	NO			
