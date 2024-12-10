@@ -49,6 +49,11 @@ uint64_t __attribute__((weak)) get_current_tenant_id_for_dblink()
   return oceanbase::OB_INVALID_ID;
 }
 
+uint64_t __attribute__((weak)) get_max_dblink_conn_per_observer()
+{
+  return 256;
+}
+
 namespace oceanbase
 {
 namespace common
