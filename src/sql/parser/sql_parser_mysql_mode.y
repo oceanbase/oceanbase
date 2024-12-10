@@ -493,7 +493,7 @@ END_P SET_VAR DELIMITER
 %type <node> string_list text_string string_val_list ulong_num
 %type <node> balance_task_type opt_balance_task_type
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
-%type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list
+%type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list opt_distribute_method_list
 %type <node> load_data_stmt opt_load_local opt_duplicate opt_load_charset opt_load_ignore_rows
 %type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option
 %type <node> load_set_list load_set_element load_data_with_opt_hint
@@ -10631,7 +10631,7 @@ pq_set_hint_desc:
 ;
 
 pq_subquery_hint_desc:
-opt_qb_name_list_with_quotes distribute_method_list
+opt_qb_name_list_with_quotes opt_distribute_method_list
 {
   ParseNode *method_list = NULL;
   merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $2);
@@ -10733,6 +10733,12 @@ NONE
 {
   $$[0] = 2;
 };
+
+opt_distribute_method_list:
+/* EMPTY */
+{ $$ = NULL; }
+| distribute_method_list
+{ $$ = $1; }
 
 distribute_method_list:
 distribute_method
