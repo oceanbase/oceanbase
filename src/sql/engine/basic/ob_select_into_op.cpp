@@ -279,6 +279,7 @@ int ObSelectIntoOp::inner_close()
       LOG_WARN("fail to flush data", K(ret));
     }
   }
+  OZ(close_file());
   return ret;
 }
 
@@ -370,16 +371,22 @@ int ObSelectIntoOp::open_file()
   return ret;
 }
 
-void ObSelectIntoOp::close_file()
+int ObSelectIntoOp::close_file()
 {
+  int ret = OB_SUCCESS;
   if (IntoFileLocation::SERVER_DISK == file_location_) {
-    file_appender_.close();
+    if (file_appender_.is_opened() && OB_FAIL(file_appender_.fsync())) {
+      LOG_WARN("failed to do fsync", K(ret));
+    } else {
+      file_appender_.close();
+    }
   } else {
     if (fd_.is_valid()) {
-      device_handle_->close(fd_);
+      OZ(device_handle_->close(fd_));
       fd_.reset();
     }
   }
+  return ret;
 }
 
 std::function<int(const char *, int64_t)> ObSelectIntoOp::get_flush_function()
@@ -411,11 +418,8 @@ std::function<int(const char *, int64_t)> ObSelectIntoOp::get_flush_function()
 int ObSelectIntoOp::split_file()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(data_writer_.flush(get_flush_function()))) {
-    LOG_WARN("fail to flush data", K(ret));
-  } else {
-    close_file();
-  }
+  OZ(data_writer_.flush(get_flush_function()));
+  OZ(close_file());
 
   //rename the first file name
   /* rename not support for current version
@@ -588,7 +592,6 @@ int ObSelectIntoOp::into_varlist()
 void ObSelectIntoOp::destroy()
 {
   file_appender_.~ObFileAppender();
-  close_file();
   if (NULL != device_handle_) {
     common::ObDeviceManager::get_instance().release_device(device_handle_);
     device_handle_ = NULL;

@@ -145,7 +145,7 @@ private:
   int open_file();
   int write_file(const char *data, int64_t data_len);
   int split_file();
-  void close_file();
+  int close_file();
   std::function<int(const char *, int64_t)> get_flush_function();
 
 private:
