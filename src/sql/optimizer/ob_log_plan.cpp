@@ -4909,6 +4909,10 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(top));
+  } else if (OB_UNLIKELY(!is_hash_rollup && rollup_exprs.count() > 0)) {
+    // merge rollup with three stage is unexpected
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected plan", K(ret), K(is_hash_rollup), K(rollup_exprs.count()));
   } else if (is_hash_rollup
              && OB_FAIL(static_cast<ObLogExpand *>(top)->gen_hash_rollup_info(hash_rollup_info))) {
     LOG_WARN("generate hash rollup info failed", K(ret));
@@ -5759,7 +5763,8 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   } else if (OB_FAIL(check_three_stage_groupby_pushdown(
                rollup_exprs, aggr_items, groupby_helper.non_distinct_aggr_items_,
                groupby_helper.distinct_aggr_items_, best_plan->get_output_equal_sets(),
-               groupby_helper.distinct_exprs_, groupby_helper.can_three_stage_pushdown_))) {
+               groupby_helper.distinct_exprs_, groupby_helper.enable_hash_rollup_,
+               groupby_helper.can_three_stage_pushdown_))) {
     LOG_WARN("failed to check use three stage push down", K(ret));
   }
   if (OB_FAIL(ret)) {
@@ -5910,6 +5915,7 @@ int ObLogPlan::check_three_stage_groupby_pushdown(const ObIArray<ObRawExpr *> &r
                                                   ObIArray<ObAggFunRawExpr *> &distinct_aggrs,
                                                   const EqualSets &equal_sets,
                                                   ObIArray<ObRawExpr *> &distinct_exprs,
+                                                  const bool enable_hash_rollup,
                                                   bool &can_push)
 {
   int ret = OB_SUCCESS;
@@ -5920,6 +5926,9 @@ int ObLogPlan::check_three_stage_groupby_pushdown(const ObIArray<ObRawExpr *> &r
   if (OB_ISNULL(session = get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session), K(ret));
+  } else if (!enable_hash_rollup && is_rollup) {
+    // disable merge rollup pushdown
+    can_push = false;
   }
   for (int64_t i = 0; OB_SUCC(ret) && can_push && i < aggr_items.count(); ++i) {
     ObAggFunRawExpr *aggr_expr = aggr_items.at(i);
@@ -5941,8 +5950,6 @@ int ObLogPlan::check_three_stage_groupby_pushdown(const ObIArray<ObRawExpr *> &r
     } else if (aggr_expr->get_expr_type() == T_FUN_SYS_RB_BUILD_AGG &&
               (! session->use_rich_format() || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0)) {
       // if vector 2.0 is not enable  can not pushdown for rb_build_agg
-      can_push = false;
-    } else if (is_rollup && aggr_expr->get_expr_type() == T_FUN_GROUPING) {
       can_push = false;
     } else if (aggr_expr->is_param_distinct()) {
       if (OB_FAIL(distinct_aggrs.push_back(aggr_expr))) {
@@ -5978,15 +5985,6 @@ int ObLogPlan::check_three_stage_groupby_pushdown(const ObIArray<ObRawExpr *> &r
         }
       }
       ret = OB_SUCCESS;
-    }
-  }
-  if (OB_SUCC(ret) && can_push && is_rollup) {
-    int64_t partial_rollup_pushdown = 0;
-    if (OB_FAIL(session->get_distinct_agg_partial_rollup_pushdown(
-                  partial_rollup_pushdown))) {
-      LOG_WARN("get force parallel ddl dop failed", K(ret));
-    } else {
-      can_push = (0 < partial_rollup_pushdown) && !aggr_items.empty();
     }
   }
   if (OB_SUCC(ret) && (!has_one_distinct || !can_push)) {

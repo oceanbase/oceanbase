@@ -42,6 +42,10 @@ public:
     int ret = OB_SUCCESS;
     ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(agg_col_idx);
     NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell);
+#ifndef NDEBUG
+    helper::print_input_rows(row_sel, skip, bound, agg_ctx.aggr_infos_.at(agg_col_idx), false,
+                             agg_ctx.eval_ctx_, this, agg_col_idx);
+#endif
     if (OB_ISNULL(aggr_info.hash_rollup_info_)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "unexpected null rollup grouping id", K(ret));
@@ -150,8 +154,7 @@ public:
     ColumnFormat *out_vec = static_cast<ColumnFormat *>(agg_expr.get_vector(agg_ctx.eval_ctx_));
     int64_t output_idx = agg_ctx.eval_ctx_.get_batch_idx();
     if (OB_UNLIKELY(!not_nulls.at(agg_col_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_LOG(WARN, "unexpected null result", K(ret));
+      out_vec->set_null(output_idx);
     } else if (agg_func == T_FUN_GROUPING) {
       if (out_tc == VEC_TC_INTEGER) {
         out_vec->set_int(output_idx, *reinterpret_cast<const int64_t *>(data));

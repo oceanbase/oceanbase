@@ -271,9 +271,11 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
                                                 groupby_plans))) {
         LOG_WARN("failed to allocate group by with hash rollup enabled", K(ret));
       } else if (groupby_helper.force_hash_rollup_) { // do nothing
-      } else if (rollup_exprs.count() > 0 && groupby_helper.dup_expr_pairs_.count() <= 0) {
+      } else if (rollup_exprs.count() > 0 && groupby_helper.dup_expr_pairs_.count() <= 0
+                 && !groupby_helper.can_three_stage_pushdown_) {
         // if duplicate expr exists in rollup_exprs or aggregation funcs, merge rollup can't be allocated
         // otherwise, we keep merge rollup plans
+        // rollup with three stage pushdown is abandoned!
         if (groupby_helper.can_three_stage_pushdown_) {// if use three stage plan, we need reset three stage info to generate correct plan
           if (OB_FAIL(groupby_helper.distinct_aggr_items_.assign(backup_distinct_aggr_items))) {
             LOG_WARN("assign array failed", K(ret));
@@ -696,29 +698,8 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
         if (group_dist_methods & j) {
           DistAlgo group_dist_method = get_dist_algo(j);
           candidate_plan = candidates_.candidate_plans_.at(i);
-          if (OB_FAIL(should_create_rollup_pushdown_plan(candidate_plan.plan_tree_,
-                                                          reduce_exprs,
-                                                          rollup_exprs,
-                                                          groupby_helper,
-                                                          group_dist_method,
-                                                          is_needed))) {
-            LOG_WARN("failed to check should create rollup pushdown plan", K(ret));
-          } else if (is_needed) {
-            if (OB_FAIL(create_rollup_pushdown_plan(group_by_exprs,
-                                                    rollup_exprs,
-                                                    aggr_items,
-                                                    having_exprs,
-                                                    groupby_helper,
-                                                    group_dist_method,
-                                                    candidate_plan.plan_tree_))) {
-              LOG_WARN("failed to create rollup pushdown plan", K(ret));
-            } else if (NULL != candidate_plan.plan_tree_ &&
-                      OB_FAIL(groupby_plans.push_back(candidate_plan))) {
-              LOG_WARN("failed to push merge group by", K(ret));
-            } else {
-              OPT_TRACE("succeed to generate rollup pushdown plan:", candidate_plan.plan_tree_);
-            }
-          } else if (OB_FAIL(create_merge_group_plan(reduce_exprs,
+          if (create_merge_plan
+              && OB_FAIL(create_merge_group_plan(reduce_exprs,
                                                     group_by_exprs,
                                                     group_directions,
                                                     rollup_exprs,
@@ -1392,7 +1373,10 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
         LOG_WARN("generate hash rollup info failed", K(ret));
       }
     }
-    if (OB_FAIL(try_allocate_sort_as_top(top, sort_keys, need_sort, prefix_pos, part_cnt))) {
+    if (OB_FAIL(ret)) {// rollup will lose ordering, sort is needed anyway
+    } else if (OB_FAIL(try_allocate_sort_as_top(top, sort_keys,
+                                                use_hash_rollup ? true : need_sort,
+                                                prefix_pos, part_cnt))) {
       LOG_WARN("failed to allocate sort as top", K(ret));
     } else if (OB_FAIL(allocate_group_by_as_top(top,
                                                 MERGE_AGGREGATE,

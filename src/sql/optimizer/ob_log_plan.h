@@ -862,6 +862,7 @@ public:
                                          ObIArray<ObAggFunRawExpr *> &distinct_aggrs,
                                          const EqualSets &equal_sets,
                                          ObIArray<ObRawExpr *> &distinct_exprs,
+                                         const bool enable_hash_rollup,
                                          bool &can_push);
 
   int check_rollup_pushdown(const ObSQLSessionInfo *info,
