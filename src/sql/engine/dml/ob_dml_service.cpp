@@ -1795,7 +1795,9 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
     } else {
       dml_op->set_das_ctdef(static_cast<const CtDefType*>(&ctdef));
       dml_op->set_das_rtdef(static_cast<RtDefType*>(&rtdef));
-      rtdef.table_loc_->is_writing_ = true;
+      if (lib::is_oracle_mode()) {
+        rtdef.table_loc_->is_writing_ = true;
+      }
     }
     if (OB_SUCC(ret) &&
         rtdef.related_ctdefs_ != nullptr && !rtdef.related_ctdefs_->empty()) {
