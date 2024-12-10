@@ -13821,7 +13821,7 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
 
 int ObJoinOrder::get_used_stat_partitions(const uint64_t ref_table_id,
                                           const share::schema::ObTableSchema &schema,
-                                          const ObIArray<int64_t> &all_used_part_ids,
+                                          ObIArray<int64_t> &all_used_part_ids,
                                           ObIArray<int64_t> &table_stat_part_ids,
                                           double &table_stat_scale_ratio,
                                           ObIArray<int64_t> *hist_stat_part_ids/* = NULL*/)
@@ -13837,6 +13837,7 @@ int ObJoinOrder::get_used_stat_partitions(const uint64_t ref_table_id,
   ObArray<int64_t> table_id;
   ObArray<int64_t> part_ids;
   ObArray<int64_t> subpart_ids;
+  ObArray<int64_t> new_used_part_ids;
   ObSchemaGetterGuard *schema_guard = NULL;
   common::ObOptStatManager *opt_stat_manager = NULL;
   int64_t subpart_cnt_in_parts = 0;
@@ -13907,6 +13908,9 @@ int ObJoinOrder::get_used_stat_partitions(const uint64_t ref_table_id,
         LOG_WARN("unexpected null", K(stat_parts));
       } else if (!stat_condition[i] || stat_parts[i]->empty()) {
         // do nothing
+      } else if (new_used_part_ids.empty() && scale_ratios[i] == 1.0 &&
+                 OB_FAIL(new_used_part_ids.assign(*stat_parts[i]))) {
+        LOG_WARN("failed to assign", K(ret));
       } else if (!table_stat_part_ids.empty() && NULL != hist_stat_part_ids &&
                  partition_limit < stat_parts[i]->count()) {
         // partitions are too many to use hist, do nothing
@@ -13935,6 +13939,10 @@ int ObJoinOrder::get_used_stat_partitions(const uint64_t ref_table_id,
                    (NULL == hist_stat_part_ids || !hist_stat_part_ids->empty());
       }
     }
+    if (OB_SUCC(ret) && !new_used_part_ids.empty() &&
+        OB_FAIL(all_used_part_ids.assign(new_used_part_ids))) {
+      LOG_WARN("failed to assign", K(ret));
+    }
   }
 
   LOG_TRACE("get table statistics partition infos",
@@ -13957,7 +13965,7 @@ int ObJoinOrder::get_partition_infos(const uint64_t ref_table_id,
   part_ids.reuse();
   subpart_ids.reuse();
   subpart_cnt_in_parts = 0;
-  if (FAILEDx(table_id.push_back(schema.is_partitioned_table() ? -1 : ref_table_id))) {
+  if (OB_FAIL(table_id.push_back(schema.is_partitioned_table() ? -1 : ref_table_id))) {
     LOG_WARN("failed to push back", K(ret));
   } else if (!schema.is_partitioned_table()) {
     // do nothing
@@ -13968,24 +13976,18 @@ int ObJoinOrder::get_partition_infos(const uint64_t ref_table_id,
   } else if (PARTITION_LEVEL_TWO == schema.get_part_level()) {
     if (OB_FAIL(subpart_ids.assign(all_used_part_id))) {
       LOG_WARN("failed to assign", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_used_part_id.count(); ++i) {
-      int64_t part_id = OB_INVALID_ID;
-      int64_t subpart_id = OB_INVALID_ID;
-      common::ObTabletID tablet_id;
-      ObArray<int64_t> subpart_ids_in_part;
-      if (OB_FAIL(schema.get_tablet_id_by_object_id(all_used_part_id.at(i), tablet_id))) {
-        LOG_WARN("failed to get tablet id", K(ret));
-      } else if (OB_FAIL(schema.get_part_id_by_tablet(tablet_id, part_id, subpart_id))) {
-        LOG_WARN("failed to get part id by tablet", K(ret), K(tablet_id));
-      } else if (!ObOptimizerUtil::find_item(part_ids, part_id)) {
-        if (OB_FAIL(part_ids.push_back(part_id))) {
-          LOG_WARN("failed to push back part id", K(ret));
-        } else if (OB_FAIL(schema.get_subpart_ids(part_id, subpart_ids_in_part))) {
-          LOG_WARN("failed to get subpart ids", K(ret));
-        } else {
-          subpart_cnt_in_parts += subpart_ids_in_part.count();
-        }
+    } else if (all_used_part_id.count() == schema.get_all_part_num()) {
+      // full table
+      if (OB_FAIL(schema.get_all_first_level_part_ids(part_ids))) {
+        LOG_WARN("failed to get part ids", K(ret));
+      } else {
+        subpart_cnt_in_parts = all_used_part_id.count();
+      }
+    } else {
+      if (OB_FAIL(schema.get_part_ids_by_subpart_ids(subpart_ids,
+                                                     part_ids,
+                                                     subpart_cnt_in_parts))) {
+        LOG_WARN("failed to get part id", K(ret));
       }
     }
   } else {
@@ -14136,6 +14138,52 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
   return ret;
 }
 
+int ObJoinOrder::get_index_partition_ids(const ObCandiTabletLocIArray &part_loc_info_array,
+                                         const share::schema::ObTableSchema &table_schema,
+                                         const share::schema::ObTableSchema &index_schema,
+                                         ObIArray<int64_t> &index_part_ids)
+{
+  int ret = OB_SUCCESS;
+  if (part_loc_info_array.count() == table_schema.get_all_part_num()) {
+    // full table
+    ObArray<ObTabletID> dummy;
+    ObArray<ObObjectID> tmp_part_ids;
+    if (OB_FAIL(index_schema.get_all_tablet_and_object_ids(dummy, tmp_part_ids))) {
+      LOG_WARN("failed to get part ids", K(ret));
+    } else if (OB_FAIL(append(index_part_ids, tmp_part_ids))) {
+      LOG_WARN("failed to append", K(ret));
+    }
+  } else {
+    ObArray<int64_t> table_part_ids;
+    ObArray<int64_t> part_idx;
+    ObArray<int64_t> subpart_idx;
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
+      const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
+      if (OB_FAIL(table_part_ids.push_back(part_loc.get_partition_id()))) {
+        LOG_WARN("failed to push back partition id", K(ret));
+      }
+    }
+    if (FAILEDx(table_schema.get_part_idx_by_part_id(table_part_ids, part_idx, subpart_idx))) {
+      LOG_WARN("failed to get part idx", K(ret));
+    } else if (OB_UNLIKELY(part_idx.count() != subpart_idx.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected part idx", K(part_idx), K(subpart_idx));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_idx.count(); ++i) {
+      ObObjectID object_id = -1;
+      ObObjectID dummy1;
+      ObTabletID dummy2;
+      if (OB_FAIL(index_schema.get_part_id_and_tablet_id_by_idx(
+              part_idx.at(i), subpart_idx.at(i), object_id, dummy1, dummy2))) {
+        LOG_WARN("failed to get part id", K(ret));
+      } else if (OB_FAIL(index_part_ids.push_back(static_cast<int64_t>(object_id)))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObJoinOrder::init_est_info_for_index(const uint64_t table_id,
                                          const uint64_t index_id,
                                          ObIndexMetaInfo &index_meta_info,
@@ -14172,22 +14220,11 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t table_id,
       if (OB_FAIL(all_used_part_id.push_back(index_id))) {
         LOG_WARN("failed to push back partition id", K(ret));
       }
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
-        const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
-        int64_t part_idx = -1;
-        int64_t subpart_idx = -1;
-        ObObjectID object_id = -1;
-        ObObjectID dummy1;
-        ObTabletID dummy2;
-        if (OB_FAIL(table_schema.get_part_idx_by_tablet(part_loc.get_tablet_id(), part_idx, subpart_idx))) {
-          LOG_WARN("failed to get part idx", K(ret), K(part_loc.get_tablet_id()));
-        } else if (OB_FAIL(index_schema.get_part_id_and_tablet_id_by_idx(part_idx, subpart_idx, object_id, dummy1, dummy2))) {
-          LOG_WARN("failed to get part id", K(ret));
-        } else if (OB_FAIL(all_used_part_id.push_back(static_cast<int64_t>(object_id)))) {
-          LOG_WARN("failed to push back", K(ret));
-        }
-      }
+    } else if (OB_FAIL(get_index_partition_ids(part_loc_info_array,
+                                               table_schema,
+                                               index_schema,
+                                               all_used_part_id))) {
+      LOG_WARN("failed to get index partition ids", K(ret));
     }
     if (OB_SUCC(ret)) {
       const int64_t origin_part_cnt = all_used_part_id.count();

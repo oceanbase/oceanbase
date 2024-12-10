@@ -687,6 +687,16 @@ public:
       const ObTabletID &tablet_id,
       int64_t &part_id,
       int64_t &subpart_id) const;
+  int get_all_first_level_part_ids(
+      ObIArray<int64_t> &first_level_part_ids) const;
+  int get_part_ids_by_subpart_ids(
+      const ObIArray<int64_t> &subpart_ids,
+      ObIArray<int64_t> &part_ids,
+      int64_t &subpart_cnt_in_parts) const;
+  int get_part_idx_by_part_id(
+      const ObIArray<int64_t> &part_ids,
+      ObIArray<int64_t> &part_idx,
+      ObIArray<int64_t> &subpart_idx) const;
   /**
    * first_level_part_id represent the first level part id of subpartition,
    * otherwise its value is OB_INVALID_ID
