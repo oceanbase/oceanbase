@@ -250,6 +250,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
         obj_print_params.ob_obj_type_  = ObObjType(param_type_value);
         obj_print_params.print_null_string_value_ = 1;
       }
+      //obj_print_params.cs_type_ = ObCollationType::CS_TYPE_UTF8MB4_BIN;
       obj_print_params.cs_type_ = spell_coll;
       obj_print_params.need_cast_expr_ = true;
       obj_print_params.print_const_expr_type_ = true;
@@ -321,7 +322,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
     if (OB_SUCC(ret)) {
       stmt_buf_pos_ = link_stmt_pos;
     }
-    LOG_WARN("succ to combine link sql", KP(stmt_buf_), K(stmt_buf_pos_), K(ObString(stmt_buf_pos_, stmt_buf_)));
+    LOG_TRACE("succ to combine dblink sql", KP(stmt_buf_), K(stmt_buf_pos_), K(ObString(stmt_buf_pos_, stmt_buf_)));
   }
   return ret;
 }

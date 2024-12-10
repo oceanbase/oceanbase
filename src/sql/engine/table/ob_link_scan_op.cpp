@@ -162,13 +162,13 @@ int ObLinkScanOp::inner_execute_link_stmt(const ObString &link_stmt)
     if (OB_FAIL(tm_rm_connection_->execute_read(OB_INVALID_TENANT_ID, link_stmt, res_))) {
       LOG_WARN("failed to read table data by tm_rm_connection", K(ret), K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));
     } else {
-      LOG_DEBUG("succ to read table data by tm_rm_connection", K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));
+      LOG_TRACE("succ to read table data by tm_rm_connection", K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));
     }
   } else if (sql::DblinkGetConnType::TEMP_CONN == conn_type_) {
     if (OB_FAIL(reverse_link_->read(link_stmt, res_))) {
       LOG_WARN("failed to read table data by reverse_link", K(ret));
     } else {
-      LOG_DEBUG("succ to read table data by reverse_link");
+      LOG_TRACE("succ to read table data by reverse_link");
     }
   } else if (OB_ISNULL(dblink_proxy_) || OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
@@ -209,7 +209,7 @@ int ObLinkScanOp::inner_execute_link_stmt(const ObString &link_stmt)
   } else if (OB_FAIL(result_->set_expected_charset_id(charset_id, ncharset_id))) {// for oci dblink set expected result charset, actually useless...
     LOG_WARN("failed to set result set expected charset", K(ret), K(charset_id), K(ncharset_id));
   } else {
-    LOG_DEBUG("succ to dblink read", K(link_stmt), KP(dblink_conn_));
+    LOG_TRACE("succ to dblink read", K(link_stmt), KP(dblink_conn_), K(charset_id), K(ncharset_id));
   }
   return ret;
 }
