@@ -462,7 +462,6 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
   int64_t minor_compact_trigger = DEFAULT_MINOR_COMPACT_TRIGGER;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
 
-
   if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_UNLIKELY(!table_store_wrapper.get_member()->is_valid())) {
@@ -530,7 +529,7 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
         result.reset_handle_and_range();
       }
       if (FAILEDx(result.handle_.add_table(tmp_table_handle))) {
-        LOG_WARN("Failed to add table", K(ret), KPC(table));
+        LOG_WARN("Failed to add table", K(ret));
       } else {
         if (1 == result.handle_.get_count()) {
           result.scn_range_.start_scn_ = tmp_table_handle.get_table()->get_start_scn();
@@ -543,7 +542,11 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(refine_minor_merge_result(param.merge_type_, minor_compact_trigger, result))) {
       if (OB_NO_NEED_MERGE != ret) {
-        LOG_WARN("failed to refine_minor_merge_result", K(ret));
+        LOG_WARN("failed to refine minor merge result", K(ret));
+      }
+    } else if (OB_FAIL(check_filled_tx_scn(result))) {
+      if (OB_NO_NEED_MERGE != ret) {
+        LOG_WARN("failed to check filled tx scn", K(ret), K(result));
       }
     } else if (FALSE_IT(result.version_range_.snapshot_version_ = tablet.get_snapshot_version())) {
     } else {
@@ -565,6 +568,29 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
       LOG_WARN("failed to add suspect info", K(tmp_ret));
     }
   }
+  return ret;
+}
+
+int ObPartitionMergePolicy::check_filled_tx_scn(const ObGetMergeTablesResult &result)
+{
+  int ret = OB_SUCCESS;
+  SCN max_filled_tx_scn(SCN::min_scn());
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < result.handle_.get_count(); ++idx) {
+    ObITable *table = result.handle_.get_table(idx);
+    if (OB_UNLIKELY(nullptr == table || !table->is_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected table from result", K(ret), K(result), KPC(table));
+    } else {
+      max_filled_tx_scn = SCN::max(static_cast<ObSSTable *>(table)->get_filled_tx_scn(), max_filled_tx_scn);
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (max_filled_tx_scn > result.scn_range_.end_scn_) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_WARN("minor merge max filled tx scn smaller than merge scn, no need merge", K(ret), K(max_filled_tx_scn), K(result));
+  }
+
   return ret;
 }
 

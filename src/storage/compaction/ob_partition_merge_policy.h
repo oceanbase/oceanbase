@@ -145,6 +145,7 @@ private:
       const ObMergeType merge_type,
       const int64_t minor_compact_trigger,
       storage::ObGetMergeTablesResult &result);
+  static int check_filled_tx_scn(const ObGetMergeTablesResult &result);
 
   static int deal_with_minor_result(
       const storage::ObMergeType &merge_type,
