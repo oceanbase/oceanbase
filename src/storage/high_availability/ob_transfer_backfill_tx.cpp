@@ -1292,40 +1292,40 @@ int ObTransferReplaceTableTask::check_src_memtable_is_valid_(
           ret = OB_TRANSFER_SYS_ERROR;
           LOG_ERROR("find a direct load memtable", K(ret), KPC(table));
         } else if (!memtable->is_frozen_memtable()) {
-          if (tablet_info.is_committed_) {
-            ret = OB_TRANSFER_SYS_ERROR;
-            LOG_ERROR("memtable should not be active", K(ret), KPC_(ctx),
-                KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(filled_max_minor_end_scn));
-          } else {
+          ret = OB_EAGAIN;
+          LOG_WARN("transfer src has active memtable and not empty, maybe transfer transaction rollback, need retry",
+              K(ret), KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(tablet_info), K(filled_max_minor_end_scn));
+        } else if (memtable->get_start_scn() >= transfer_scn) {
+          if (memtable->not_empty() || !memtable->get_key().scn_range_.is_empty()) {
             ret = OB_EAGAIN;
-            LOG_WARN("transfer src has active memtable and not empty, maybe transfer transaction rollback, need retry",
-                K(ret), KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(tablet_info), K(filled_max_minor_end_scn));
+            LOG_WARN("transfer src has frozen memtable which is not empty and start scn is bigger than transfer scn, "
+                "maybe transfer transaction rollback, need retry", K(ret), KPC(memtable), "transfer meta", tablet->get_tablet_meta(),
+                K(tablet_info), K(filled_max_minor_end_scn), K(transfer_scn));
           }
         } else if (memtable->get_start_scn() >= filled_max_minor_end_scn) {
-          if (memtable->not_empty() || !memtable->get_key().scn_range_.is_empty()) {
-            if (tablet_info.is_committed_) {
-              ret = OB_TRANSFER_SYS_ERROR;
-              LOG_ERROR("memtable should be empty", K(ret), KPC_(ctx),
-                  KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(filled_max_minor_end_scn));
-            } else {
-              ret = OB_EAGAIN;
-              LOG_WARN("transfer src has active memtable and not empty, maybe transfer transaction rollback, need retry",
-                  K(ret), KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(tablet_info), K(filled_max_minor_end_scn));
-            }
+          if (!memtable->is_empty()) {
+            ret = OB_EAGAIN;
+            LOG_WARN("transfer src has frozen memtable but start scn is bigger than max minor end scn,"
+                " maybe transfer transaction rollback, need retry", K(ret), KPC(memtable), "transfer meta", tablet->get_tablet_meta(),
+                K(tablet_info), K(filled_max_minor_end_scn));
           }
         } else {
           //memtable start scn < filled_max_minor_end_scn
           if (memtable->get_end_scn() > filled_max_minor_end_scn) {
-            if (tablet_info.is_committed_) {
-              ret = OB_TRANSFER_SYS_ERROR;
-              LOG_ERROR("memtable max end scn is bigger than filled_max_minor_end_scn, unexpected", K(ret),
-                  K(filled_max_minor_end_scn), KPC(memtable));
-            } else {
-              ret = OB_EAGAIN;
-              LOG_WARN("memtable max end scn is bigger than filled max minor end scn, maybe transfer transaction rollback, need retry",
-                  K(ret), KPC(memtable), "transfer meta", tablet->
-                  get_tablet_meta(), K(tablet_info), K(filled_max_minor_end_scn));
-            }
+            ret = OB_EAGAIN;
+            LOG_WARN("memtable max end scn is bigger than filled max minor end scn, maybe transfer transaction rollback, need retry",
+                K(ret), KPC(memtable), "transfer meta", tablet->
+                get_tablet_meta(), K(tablet_info), K(filled_max_minor_end_scn));
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+        if (OB_EAGAIN == ret) {
+          if (tablet_info.is_committed_) {
+            ret = OB_TRANSFER_SYS_ERROR;
+            LOG_ERROR("transfer tablet info is committed but memtable may still has data, unexpected", K(ret),
+                K(filled_max_minor_end_scn), KPC(tablet));
           }
         }
       }
