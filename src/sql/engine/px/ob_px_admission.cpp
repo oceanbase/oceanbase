@@ -65,8 +65,8 @@ int ObPxAdmission::get_parallel_session_target(ObSQLSessionInfo &session,
 //
 //   推论：一个需要**过量**线程的请求，只会在系统空闲下来之后才会被调度
 int64_t ObPxAdmission::admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
-                             int64_t wait_time_us, int64_t session_target,
-                             ObHashMap<ObAddr, int64_t> &worker_map,
+                             int64_t wait_time_us, int64_t minimal_px_worker_count,
+                             int64_t &session_target, ObHashMap<ObAddr, int64_t> &worker_map,
                              int64_t req_cnt, int64_t &admit_cnt)
 {
   int ret = OB_SUCCESS;
@@ -95,11 +95,16 @@ int64_t ObPxAdmission::admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
         // fake one retry record, not really a query retry
         session.get_retry_info_for_update().set_last_query_retry_err(OB_ERR_INSUFFICIENT_PX_WORKER);
       }
-      need_retry = true;
+      // parallel server target may changed
+      if (OB_FAIL(get_parallel_session_target(session, minimal_px_worker_count, session_target))) {
+        LOG_WARN("fail get session target", K(ret));
+      } else {
+        need_retry = true;
+      }
     } else {
       need_retry = false;
     }
-  } while (need_retry);
+  } while (need_retry && OB_SUCC(ret));
   return ret;
 }
 
@@ -147,7 +152,7 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
       } else if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("fail check query status", K(ret));
       } else if (OB_FAIL(ObPxAdmission::admit(session, exec_ctx,
-                                              wait_time_us, session_target,
+                                              wait_time_us, minimal_px_worker_count, session_target,
                                               acl_px_worker_map, req_worker_count, admit_worker_count))) {
         LOG_WARN("fail do px admission",
                 K(ret), K(wait_time_us), K(session_target));
