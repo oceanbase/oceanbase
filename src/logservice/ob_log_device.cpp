@@ -26,6 +26,10 @@ using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace logservice {
+
+constexpr int64_t PRINT_LOG_INTERVAL = 5 * 1000 * 1000;
+
+#define CLOG_LOG_FREQUENT(level, info_string, args...) {if (TC_REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) OB_MOD_LOG(CLOG, level, info_string, ##args);}
 // ===================== log store env =======================
 int init_log_store_env()
 {
@@ -148,7 +152,7 @@ int ObLogDevice::open(const char *pathname,
 
     do {
       if (OB_FAIL(grpc_adapter_.open(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for Open", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for Open", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         fd.first_id_ = ObIOFd::NORMAL_FILE_ID;
@@ -202,7 +206,7 @@ int ObLogDevice::close(const ObIOFd &fd)
     // close don't return eagain
     do {
       if (OB_FAIL(grpc_adapter_.close(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for close", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for close", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCCESS == ret || OB_STATE_NOT_MATCH == ret) {
         ret = OB_SUCCESS;
@@ -245,7 +249,7 @@ int ObLogDevice::mkdir(const char *pathname, mode_t mode)
 
     do {
       if (OB_FAIL(grpc_adapter_.mkdir(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for mkdir", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for mkdir", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         CLOG_LOG(TRACE, "ObLogDevice mkdir successfully", K(pathname), K(mode));
@@ -284,7 +288,7 @@ int ObLogDevice::rmdir(const char *pathname)
 
     do {
       if (OB_FAIL(grpc_adapter_.rmdir(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for rmdir", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for rmdir", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         CLOG_LOG(TRACE, "ObLogDevice rmdir successfully", K(pathname));
@@ -322,7 +326,7 @@ int ObLogDevice::unlink(const char *pathname)
 
     do {
       if (OB_FAIL(grpc_adapter_.unlink(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for unlink", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for unlink", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         CLOG_LOG(INFO, "ObLogDevice unlink successfully", K(pathname));
@@ -360,7 +364,7 @@ int ObLogDevice::rename(const char *oldpath, const char *newpath)
 
     do {
       if (OB_FAIL(grpc_adapter_.rename(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for mkdir", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for mkdir", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         CLOG_LOG(TRACE, "ObLogDevice rename successfully", K(oldpath), K(newpath));
@@ -458,7 +462,7 @@ int ObLogDevice::fsync(const ObIOFd &fd)
 
     do {
       if (OB_FAIL(grpc_adapter_.fsync(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for Fsync", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for Fsync", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         CLOG_LOG(TRACE, "ObLogDevice fsync successfully");
@@ -511,7 +515,7 @@ int ObLogDevice::fallocate(const ObIOFd &fd,
 
     do {
       if (OB_FAIL(grpc_adapter_.fallocate(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for fallocate", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for fallocate", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         CLOG_LOG(TRACE, "ObLogDevice fallocate successfully");
@@ -570,7 +574,7 @@ int ObLogDevice::ftruncate(const ObIOFd &fd, const int64_t len)
 
     do {
       if (OB_FAIL(grpc_adapter_.ftruncate(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for ftruncate", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for ftruncate", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         CLOG_LOG(TRACE, "ObLogDevice ftruncate successfully");
@@ -658,7 +662,7 @@ int ObLogDevice::stat(const char *pathname, ObIODFileStat &statbuf)
 
     do {
       if (OB_FAIL(grpc_adapter_.stat(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for stat", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for stat", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         statbuf.size_ = resp.st_size();
@@ -833,7 +837,7 @@ int ObLogDevice::pread(
 
     do {
       if (OB_FAIL(grpc_adapter_.pread(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for pread", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for pread", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         if (size != resp.size()) {
@@ -894,12 +898,12 @@ int ObLogDevice::pwrite(
     req.set_offset(offset);
     // 1: write to disk
     // 2: write to memory
-    const int32_t write_mode = (check_fd_is_in_sync_mode(fd.second_id_) ? 1 : 2);
+    const int32_t write_mode = (palf::check_fd_is_in_sync_mode(fd.second_id_) ? 1 : 2);
     req.set_write_mode(write_mode);
 
     do {
       if (OB_FAIL(grpc_adapter_.pwrite(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for pwrite", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for pwrite", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         if (size != resp.size()) {
@@ -1118,7 +1122,7 @@ int ObLogDevice::batch_fallocate(const char *dir_name,
     req.set_size(block_size);
     do {
       if (OB_FAIL(grpc_adapter_.batch_fallocate(req, resp))) {
-        CLOG_LOG(ERROR, "grpc call failed for batch_fallocate", K(ret));
+        CLOG_LOG_FREQUENT(ERROR, "grpc call failed for batch_fallocate", K(ret));
       } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
       } else if (OB_SUCC(ret)) {
         CLOG_LOG(TRACE, "ObLogDevice batch_fallocate successfully", K(dir_name), K(block_count));
@@ -1171,7 +1175,7 @@ int ObLogDevice::reload_epoch_()
   LoadLogStoreResp resp;
   req.set_version(version_);
   if (OB_FAIL(grpc_adapter_.load_log_store(req, resp))) {
-    CLOG_LOG(ERROR, "grpc call failed for LoadLogStore", K(ret));
+    CLOG_LOG_FREQUENT(ERROR, "grpc call failed for LoadLogStore", K(ret));
   } else {
     // 除了网络错误，LoadLogStoreResp预期只会返回OB_SUCCESS
     assert(OB_SUCCESS == resp.ret_code());

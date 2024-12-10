@@ -28,6 +28,9 @@ using namespace common;
 using namespace share;
 namespace palf
 {
+constexpr int64_t PRINT_LOG_INTERVAL = 5 * 1000 * 1000;
+#define PALF_LOG_FREQUENT(level, info_string, args...) {if (TC_REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) OB_MOD_LOG(PALF, level, info_string, ##args);}
+
 LogDIOAlignedBuf::LogDIOAlignedBuf(): buf_write_offset_(LOG_INVALID_LSN_VAL),
                                       buf_padding_size_(0),
                                       align_size_(-1),
@@ -308,7 +311,7 @@ int LogBlockHandler::open(const char *block_path)
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(fd_lock_);
   if (OB_FAIL(inner_open_(block_path))) {
-    PALF_LOG(ERROR, "inner open block failed", K(ret), K(block_path));
+    PALF_LOG_FREQUENT(ERROR, "inner open block failed", K(ret), K(block_path));
   } else if (FALSE_IT(dio_aligned_buf_.reset_buf())) {
   } else {
     memset(curr_block_path_, 0, OB_MAX_FILE_NAME_LENGTH);
@@ -407,7 +410,7 @@ int LogBlockHandler::inner_close_()
     if (!io_fd_.is_valid()) {
       PALF_LOG(INFO, "block has been closed or not eixst", K(ret));
     } else if (OB_FAIL(io_adapter_->close(io_fd_))) {
-      PALF_LOG(ERROR, "close block failed", K(ret), K(errno), KPC(this));
+      PALF_LOG_FREQUENT(ERROR, "close block failed", K(ret), K(errno), KPC(this));
       ob_usleep(RETRY_INTERVAL);
     } else {
       PALF_LOG(TRACE, "close block success", K(ret), KPC(this), K(tmp_io_fd));
@@ -430,7 +433,7 @@ int LogBlockHandler::inner_open_(const char *block_path)
       ObIOFd io_fd;
       fd_lock_.unlock();
       if (OB_FAIL(io_adapter_->open(block_path, LOG_WRITE_FLAG, FILE_OPEN_MODE, io_fd))) {
-        PALF_LOG(WARN, "open failed", KR(ret), KPC(this), K(block_path));
+        PALF_LOG_FREQUENT(WARN, "open failed", KR(ret), KPC(this), K(block_path));
         ob_usleep(RETRY_INTERVAL);
       }
       fd_lock_.lock();
@@ -477,7 +480,7 @@ int LogBlockHandler::inner_truncate_(const offset_t offset)
     ObIOFd io_fd;
     if (FALSE_IT(get_io_fd_(io_fd))) {
     } else if (OB_FAIL(io_adapter_->truncate(io_fd, offset))) {
-      PALF_LOG(ERROR, "ftruncate first phase failed", K(ret), KPC(this), K(offset));
+      PALF_LOG_FREQUENT(ERROR, "ftruncate first phase failed", K(ret), KPC(this), K(offset));
       ob_usleep(RETRY_INTERVAL);
     } else if (OB_FAIL(io_adapter_->truncate(io_fd, log_block_size_))) {
       PALF_LOG(ERROR, "ftruncate second phase failed", K(ret), KPC(this), K(log_block_size_));
@@ -718,7 +721,7 @@ int LogBlockHandler::inner_reopen_(const char *block_path, const int64_t offset)
   do {
     ObIOFd io_fd;
     if (OB_FAIL(inner_close_())) {
-      PALF_LOG(ERROR, "inner_close_ failed", KR(ret));
+      PALF_LOG_FREQUENT(ERROR, "inner_close_ failed", KR(ret));
       ob_usleep(RETRY_INTERVAL);
     } else if (OB_FAIL(inner_open_(block_path))) {
       PALF_LOG(ERROR, "inner_open_ failed", KR(ret), KPC(this), K(block_path));
@@ -742,7 +745,7 @@ int LogBlockHandler::inner_fsync_(const bool with_reopen)
     ObIOFd io_fd;
     if (FALSE_IT(get_io_fd_(io_fd))) {
     } else if (OB_FAIL(io_adapter_->fsync(io_fd))) {
-      PALF_LOG(WARN, "fsync failed", KR(ret), KPC(this));
+      PALF_LOG_FREQUENT(WARN, "fsync failed", KR(ret), KPC(this));
     } else {
       PALF_LOG(INFO, "fsync success", KR(ret), KPC(this));
     }

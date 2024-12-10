@@ -47,7 +47,7 @@ public:
   int batch_fallocate(const newlogstorepb::BatchFallocateReq &req, newlogstorepb::BatchFallocateResp &resp);
 private:
   bool is_need_retry_(const int ret) {
-    return OB_TIMEOUT == ret || OB_RPC_SEND_ERROR == ret;
+    return OB_TIMEOUT == ret || OB_RPC_SEND_ERROR == ret || OB_RPC_POST_ERROR;
   }
 private:
   static const int64_t retry_interval_us = 10 * 1000L;  // 10ms

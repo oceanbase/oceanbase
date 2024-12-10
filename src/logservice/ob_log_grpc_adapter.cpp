@@ -21,13 +21,16 @@
 using namespace oceanbase::common;
 using namespace newlogstorepb;
 
+constexpr int64_t PRINT_LOG_INTERVAL = 5 * 1000 * 1000;
+
+#define CLOG_LOG_FREQUENT(level, info_string, args...) {if (TC_REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) OB_MOD_LOG(CLOG, level, info_string, ##args);}
 #define CALL_LOGSTORE(grpc_client, func, args...)                                                 \
   ({                                                                                              \
     do {                                                                                          \
       if (OB_SUCC(GRPC_CALL((*grpc_client), func, req, &resp))) {                                 \
         CLOG_LOG(TRACE, "grpc call successfully");                                                \
       } else if (true == is_need_retry_(ret)) {                                                   \
-        CLOG_LOG(WARN, "grpc fails, maybe need to retry", K(ret));                                \
+        CLOG_LOG_FREQUENT(WARN, "grpc fails, maybe need to retry", K(ret));                       \
         ret = OB_EAGAIN;                                                                          \
         ob_usleep(ObLogGrpcAdapter::retry_interval_us);                                           \
       } else {                                                                                    \
