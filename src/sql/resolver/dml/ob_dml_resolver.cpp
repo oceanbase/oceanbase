@@ -7305,6 +7305,9 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
                                                         is_public_synonym))) {
     if (OB_TABLE_NOT_EXIST == ret) {
       if (synonym_checker.has_synonym()) {
+        if (is_public_synonym) {
+          synonym_db_name.reset();
+        }
         ret = OB_ERR_SYNONYM_TRANSLATION_INVALID;
         LOG_WARN("Synonym translation is no longer valid");
         ObCStringHelper helper;
