@@ -205,10 +205,10 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
   int64_t reserve_proxy_route_space = 0;
   int64_t next_param = 0;
   int64_t stmt_fmt_pos = 0;
+  ObCollationType spell_coll = CS_TYPE_INVALID;
   int64_t stmt_fmt_next_param_pos = (next_param < param_infos.count() ?
                                      param_infos.at(next_param).pos_ : link_stmt_fmt.length());
   char proxy_route_ip_port_str[proxy_route_ip_port_size_] = { 0 };
-  ObCollationType spell_coll = CS_TYPE_INVALID;
   if (OB_NOT_NULL(reverse_link)) {
     if (OB_FAIL(reverse_link->get_self_addr().ip_port_to_string(proxy_route_ip_port_str,
                                                  proxy_route_ip_port_size_))) {
@@ -250,7 +250,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
         obj_print_params.ob_obj_type_  = ObObjType(param_type_value);
         obj_print_params.print_null_string_value_ = 1;
       }
-      obj_print_params.cs_type_ = spell_coll;
+      obj_print_params.cs_type_ = spell_coll;//ObCollationType::CS_TYPE_UTF8MB4_BIN;
       obj_print_params.need_cast_expr_ = true;
       obj_print_params.print_const_expr_type_ = true;
       while (OB_SUCC(ret) && link_stmt_pos == saved_stmt_pos) {
@@ -321,7 +321,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
     if (OB_SUCC(ret)) {
       stmt_buf_pos_ = link_stmt_pos;
     }
-    LOG_WARN("succ to combine link sql", KP(stmt_buf_), K(stmt_buf_pos_), K(ObString(stmt_buf_pos_, stmt_buf_)));
+    LOG_TRACE("succ to combine dblink sql", K(spell_coll), KP(stmt_buf_), K(stmt_buf_pos_), K(ObString(stmt_buf_pos_, stmt_buf_)));
   }
   return ret;
 }
@@ -424,7 +424,7 @@ int ObLinkOp::get_charset_id(ObExecContext &exec_ctx,
     } else {
       charset_id = static_cast<uint16_t>(ObCharset::charset_type_to_ora_charset_id(cs_type));
       ncharset_id = static_cast<uint16_t>(ObCharset::charset_type_to_ora_charset_id(ncs_type));
-      LOG_DEBUG("get charset id", K(ret), K(charset_id), K(ncharset_id),
+      LOG_TRACE(" succ to get dblink charset id", K(ret), K(charset_id), K(ncharset_id),
                                   K(cs_type), K(ncs_type), K(coll_type), K(ncoll_type));
     }
   }

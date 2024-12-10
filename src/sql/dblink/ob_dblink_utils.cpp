@@ -165,58 +165,28 @@ int ObDblinkService::get_set_names_cstr(sql::ObSQLSessionInfo *session_info,
                                         const char *&set_results_charset)
 {
   int ret = OB_SUCCESS;
-  int64_t client = -1;
-  int64_t connection = -1;
-  int64_t results = -1;
   set_client_charset = NULL;
   set_connection_charset = NULL;
-  set_results_charset = "set character_set_results = NULL";
+  set_results_charset = NULL;
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
-  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_CHARACTER_SET_CLIENT, client))) {
-    LOG_WARN("failed to get client characterset", K(ret));
-  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_CHARACTER_SET_CONNECTION, connection))) {
-    LOG_WARN("failed to get connection characterset", K(ret));
-  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_CHARACTER_SET_CLIENT, results))) {
-    LOG_WARN("failed to get results characterset", K(ret));
   } else {
-    switch(ObCharset::charset_type_by_coll(ObCollationType(client))) {
+    ObCollationType tenant_collation = is_oracle_mode() ? session_info->get_nls_collation() : ObCollationType::CS_TYPE_UTF8MB4_BIN;
+    switch(ObCharset::charset_type_by_coll(tenant_collation)) {
       case ObCharsetType::CHARSET_UTF8MB4:
         set_client_charset = "set character_set_client = utf8mb4";
-        break;
-      case ObCharsetType::CHARSET_GBK:
-        set_client_charset = "set character_set_client = gbk";
-        break;
-      case ObCharsetType::CHARSET_BINARY:
-        set_client_charset = "set character_set_client = binary";
-        break;
-      default:
-        // do nothing
-        break;
-    }
-    switch(ObCharset::charset_type_by_coll(ObCollationType(connection))) {
-      case ObCharsetType::CHARSET_UTF8MB4:
         set_connection_charset = "set character_set_connection = utf8mb4";
-        break;
-      case ObCharsetType::CHARSET_GBK:
-        set_connection_charset = "set character_set_connection = gbk";
-        break;
-      case ObCharsetType::CHARSET_BINARY:
-        set_connection_charset = "set character_set_connection = binary";
-        break;
-      default:
-        // do nothing
-        break;
-    }
-    switch(ObCharset::charset_type_by_coll(ObCollationType(results))) {
-      case ObCharsetType::CHARSET_UTF8MB4:
         set_results_charset = "set character_set_results = utf8mb4";
         break;
       case ObCharsetType::CHARSET_GBK:
+        set_client_charset = "set character_set_client = gbk";
+        set_connection_charset = "set character_set_connection = gbk";
         set_results_charset = "set character_set_results = gbk";
         break;
       case ObCharsetType::CHARSET_BINARY:
+        set_client_charset = "set character_set_client = binary";
+        set_connection_charset = "set character_set_connection = binary";
         set_results_charset = "set character_set_results = binary";
         break;
       default:
@@ -239,22 +209,27 @@ int ObDblinkService::get_local_session_vars(sql::ObSQLSessionInfo *session_info,
                                         param_ctx.set_connection_charset_cstr_,
                                         param_ctx.set_results_charset_cstr_))) {
     LOG_WARN("failed to get set_names_cstr", K(ret));
+  } else {
+    LOG_TRACE("succ to get local session vars", K(param_ctx.set_client_charset_cstr_),
+                                                K(param_ctx.set_connection_charset_cstr_),
+                                                K(param_ctx.set_results_charset_cstr_),
+                                                K(param_ctx.set_sql_mode_cstr_),
+                                                K(param_ctx.dblink_id_),
+                                                K(ret));
   }
   return ret;
 }
 
-int ObDblinkService::get_spell_collation_type(ObSQLSessionInfo *session, ObCollationType &spell_coll) {
+int ObDblinkService::get_spell_collation_type(ObSQLSessionInfo *session, ObCollationType &spell_coll)
+{
   int ret = OB_SUCCESS;
-  common::ObCharsetType database_cs = ObCharsetType::CHARSET_UTF8MB4;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
   } else if (lib::is_oracle_mode()) {
     spell_coll = session->get_nls_collation();
-  } else if (OB_FAIL(session->get_character_set_database(database_cs))) {
-    LOG_WARN("failed to get character_set_database", K(ret));
   } else {
-    spell_coll = ObCharset::get_default_collation_by_mode(database_cs, false);
+    spell_coll = ObCollationType::CS_TYPE_UTF8MB4_BIN;
   }
   return ret;
 }

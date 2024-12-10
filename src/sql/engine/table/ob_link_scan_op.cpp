@@ -148,8 +148,8 @@ int ObLinkScanOp::free_snapshot()
 int ObLinkScanOp::inner_execute_link_stmt(const ObString &link_stmt)
 {
   int ret = OB_SUCCESS;
-  uint16_t charset_id = 0;
-  uint16_t ncharset_id = 0;
+  uint16_t charset_id = ObNlsCharsetId::CHARSET_AL32UTF8_ID;
+  uint16_t ncharset_id = ObNlsCharsetId::CHARSET_AL32UTF8_ID;
   ObSQLSessionInfo * my_session = NULL;
   my_session = ctx_.get_my_session();
   transaction::ObTransID tx_id;
@@ -163,13 +163,13 @@ int ObLinkScanOp::inner_execute_link_stmt(const ObString &link_stmt)
     if (OB_FAIL(tm_rm_connection_->execute_read(OB_INVALID_TENANT_ID, link_stmt, res_))) {
       LOG_WARN("failed to read table data by tm_rm_connection", K(ret), K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));
     } else {
-      LOG_DEBUG("succ to read table data by tm_rm_connection", K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));
+      LOG_TRACE("succ to read table data by tm_rm_connection", K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));
     }
   } else if (sql::DblinkGetConnType::TEMP_CONN == conn_type_) {
     if (OB_FAIL(reverse_link_->read(link_stmt, res_))) {
       LOG_WARN("failed to read table data by reverse_link", K(ret));
     } else {
-      LOG_DEBUG("succ to read table data by reverse_link");
+      LOG_TRACE("succ to read table data by reverse_link");
     }
   } else if (OB_ISNULL(dblink_proxy_) || OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
@@ -212,7 +212,7 @@ int ObLinkScanOp::inner_execute_link_stmt(const ObString &link_stmt)
   } else if (OB_FAIL(result_->set_expected_charset_id(charset_id, ncharset_id))) {// for oci dblink set expected result charset, actually useless...
     LOG_WARN("failed to set result set expected charset", K(ret), K(charset_id), K(ncharset_id));
   } else {
-    LOG_DEBUG("succ to dblink read", K(link_stmt), KP(dblink_conn_));
+    LOG_TRACE(" succ to dblink read", K(link_stmt), KP(dblink_conn_), K(charset_id), K(ncharset_id));
   }
   return ret;
 }
@@ -296,7 +296,7 @@ int ObLinkScanOp::inner_open()
   } else if (FALSE_IT(tenant_id_ = session->get_effective_tenant_id())) {
   } else if (MY_SPEC.is_reverse_link_) {
     // RM process sql within @! and @xxxx! send by TM
-    LOG_DEBUG("link scan op, RM process sql within @! and @xxxx! send by TM");
+    LOG_TRACE("link scan op, RM process sql within @! and @xxxx! send by TM");
     conn_type_ = sql::DblinkGetConnType::TEMP_CONN;
     ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
     if (OB_ISNULL(plan_ctx)) {
@@ -311,7 +311,7 @@ int ObLinkScanOp::inner_open()
       LOG_WARN("failed to open reverse_link", K(ret));
     }
   } else if (-1 != tm_sessid) { // TM process sql within @xxxx send by RM
-    LOG_DEBUG("link scan op, TM process sql within @xxxx send by RM", K(tm_sessid));
+    LOG_TRACE("link scan op, TM process sql within @xxxx send by RM", K(tm_sessid));
     sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
     if (OB_ISNULL(session_mgr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -324,7 +324,7 @@ int ObLinkScanOp::inner_open()
         LOG_WARN("failed to get dblink connection from session", KP(tm_session_), K(ret));
       } else if (NULL != tm_rm_connection_){
         conn_type_ = sql::DblinkGetConnType::TM_CONN;
-        LOG_DEBUG("get tm sesseion and connection", KP(tm_session_), KP(tm_rm_connection_));
+        LOG_TRACE("get tm sesseion and connection", KP(tm_session_), KP(tm_rm_connection_));
       }
       session_mgr->revert_session(tm_session_);
       tm_session_ = NULL;
@@ -349,7 +349,7 @@ int ObLinkScanOp::inner_open()
   // close reverse_link
   if (NULL != reverse_link_ && OB_FAIL(ret)) {
     reverse_link_->close();
-    LOG_DEBUG("close reverse link", KP(reverse_link_), K(ret));
+    LOG_TRACE("close reverse link", KP(reverse_link_), K(ret));
   }
   return ret;
 }
