@@ -2375,7 +2375,12 @@ ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
           ObInnerSqlWaitTypeId::NULL_INNER_SQL;
 
       // 2. switch the ptr of di session buffer to prev session buffer
-      ObLocalDiagnosticInfo::setup_diagnostic_info(prev_di_);
+      if (OB_NOT_NULL(prev_di_)) {
+        ObLocalDiagnosticInfo::setup_diagnostic_info(prev_di_);
+      } else {
+        ObLocalDiagnosticInfo::reset_diagnostic_info();
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "prev di ptr is nullptr", K(prev_di_));
+      }
     }
 
     // 4. wait event end

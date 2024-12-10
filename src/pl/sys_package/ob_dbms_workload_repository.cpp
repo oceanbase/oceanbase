@@ -3605,9 +3605,9 @@ int ObDbmsWorkloadRepository::print_top_plsql(const AshReportParams &ash_report_
                 *result, "OBJ_NAME", obj_name, common::OB_MAX_ROUTINE_NAME_LENGTH, tmp_real_str_len);
 
             tmp_real_str_len = 0;
-            char subpro_name[common::OB_MAX_ASH_PL_NAME_LENGTH + 1] = "\0";
+            char subpro_name[common::OB_MAX_ROUTINE_NAME_LENGTH + 1] = "\0";
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "PLSQL_ENTRY_SUBPROGRAM_NAME", subpro_name,
-                common::OB_MAX_ASH_PL_NAME_LENGTH, tmp_real_str_len);
+                common::OB_MAX_ROUTINE_NAME_LENGTH, tmp_real_str_len);
 
             int64_t plsql_entry_object_id = 0;
             char plsql_entry_object_id_char[64] = "";
@@ -3627,7 +3627,7 @@ int ObDbmsWorkloadRepository::print_top_plsql(const AshReportParams &ash_report_
             entry_act = round(100 * 100 * entry_act) / 100;
             sprintf(entry_activity, "%.2f%%", entry_act);
 
-            char pl_name[common::OB_MAX_ASH_PL_NAME_LENGTH * 3] = "";
+            char pl_name[common::OB_MAX_ROUTINE_NAME_LENGTH + 1] = "";
             if ('\0' == subpro_name[0]) {
               sprintf(pl_name, "%s.%s", obj_owner, obj_name);
             } else {
@@ -3729,9 +3729,9 @@ int ObDbmsWorkloadRepository::print_top_plsql(const AshReportParams &ash_report_
                           common::OB_MAX_ROUTINE_NAME_LENGTH, tmp_real_str_len);
 
                       tmp_real_str_len = 0;
-                      char subpro_name[common::OB_MAX_ASH_PL_NAME_LENGTH + 1] = "\0";
+                      char subpro_name[common::OB_MAX_ROUTINE_NAME_LENGTH + 1] = "\0";
                       EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*sub_result, "PLSQL_SUBPROGRAM_NAME",
-                          subpro_name, common::OB_MAX_ASH_PL_NAME_LENGTH, tmp_real_str_len);
+                          subpro_name, common::OB_MAX_ROUTINE_NAME_LENGTH, tmp_real_str_len);
                       int64_t plsql_subprogram_id = 0;
                       char plsql_subprogram_id_char[64] = "";
                       EXTRACT_INT_FIELD_FOR_ASH(
@@ -3745,7 +3745,7 @@ int ObDbmsWorkloadRepository::print_top_plsql(const AshReportParams &ash_report_
                       sub_act = round(100 * 100 * sub_act) / 100;
                       sprintf(sub_activity, "%.2f%%", sub_act);
 
-                      char sub_pl_name[common::OB_MAX_ASH_PL_NAME_LENGTH * 3 + 1] = "\0";
+                      char sub_pl_name[common::OB_MAX_ROUTINE_NAME_LENGTH + 1] = "\0";
                       if ('\0' == subpro_name[0]) {
                         sprintf(sub_pl_name, "%s.%s", sub_obj_owner, sub_obj_name);
                       } else {
