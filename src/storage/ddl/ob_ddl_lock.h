@@ -72,12 +72,19 @@ public:
       const ObIArray<ObTabletID> &dst_tablet_ids,
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
       ObMySQLTransaction &trans);
-  static int replace_lock_for_split_partition(
+  static int replace_table_lock_for_split(
     const share::schema::ObTableSchema &table_schema,
-    const ObIArray<ObTabletID> &src_tablet_ids,
-    const ObIArray<ObTabletID> &dst_tablet_ids,
-    const transaction::tablelock::ObTableLockOwnerID old_lock_owner,
+    const ObIArray<transaction::tablelock::ObTableLockOwnerID> &global_idx_lock_owners,
+    const ObIArray<transaction::tablelock::ObTableLockOwnerID> &old_lock_owners,
     const transaction::tablelock::ObTableLockOwnerID new_lock_owner,
+    ObMySQLTransaction &trans);
+  static int replace_tablet_lock_for_split(
+    const uint64_t tenant_id,
+    const ObTableSchema &table_schema,
+    const ObIArray<ObTabletID> &tablet_ids,
+    const ObTableLockOwnerID &lock_owner,
+    const ObTableLockOwnerID new_lock_owner,
+    const bool is_global_idx,
     ObMySQLTransaction &trans);
 
   static int lock_for_modify_auto_part_size_in_trans(
@@ -162,7 +169,7 @@ private:
     const transaction::tablelock::ObTableLockOwnerID new_lock_owner,
     const int64_t timeout_us,
     ObMySQLTransaction &trans);
-  static int replace_table_lock(
+  static int replace_tablet_lock(
     const uint64_t tenant_id,
     const uint64_t table_id,
     const ObIArray<ObTabletID> &tablet_ids,
