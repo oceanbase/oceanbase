@@ -1767,9 +1767,12 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
   ParseNode *alias_node = NULL;
   bool is_bald_star = false;
   ObSelectStmt *select_stmt = NULL;
+  ObExecContext *exec_ctx = NULL;
   //LOG_INFO("resolve_select_1", "usec", ObSQLUtils::get_usec());
   current_scope_ = T_FIELD_LIST_SCOPE;
-  if (OB_ISNULL(session_info_) || OB_ISNULL(select_stmt = get_select_stmt())) {
+  if (OB_ISNULL(session_info_)
+      || OB_ISNULL(select_stmt = get_select_stmt())
+      || OB_ISNULL(exec_ctx = session_info_->get_cur_exec_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info_),
         K(select_stmt), K(ret));
@@ -2187,6 +2190,11 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
     } else if (OB_FAIL(recursive_check_grouping_columns(select_stmt, select_item.expr_))) {
       LOG_WARN("failed to recursive check grouping columns", K(ret));
     } else {/*do nothing*/}
+
+    if (OB_FAIL(ret)) {
+    } else if ((0 == i % 1000) && OB_FAIL(exec_ctx->check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    }
   } // end for
 
   if (OB_SUCC(ret) && has_nested_aggr_) {
@@ -3544,33 +3552,40 @@ int ObSelectResolver::resolve_from_clause(const ParseNode *node)
     current_scope_ = T_FROM_SCOPE;
     ObSelectStmt *select_stmt = NULL;
     TableItem *table_item = NULL;
+    ObExecContext *exec_ctx = NULL;
     CK( OB_NOT_NULL(select_stmt = get_select_stmt()),
+        OB_NOT_NULL(session_info_),
+        OB_NOT_NULL(exec_ctx = session_info_->get_cur_exec_ctx()),
         node->type_ == T_FROM_LIST,
         node->num_child_ >= 1);
     for (int32_t i = 0; OB_SUCC(ret) && i < node->num_child_; i += 1) {
-      ParseNode *table_node = node->children_[i];
-      CK(OB_NOT_NULL(table_node));
-      const bool old_flag = session_info_->is_table_name_hidden();
-      bool is_table_hidden = false;
-      const ObSessionDDLInfo &ddl_info = session_info_->get_ddl_info();
-      // add foreign key will use select xx from t1 minus select xx from t2, here t1 is source table, t2 is dest table
-      if (ddl_info.is_ddl()) {
-        if (in_set_query_) {
-          is_table_hidden = is_left_child_ ? ddl_info.is_source_table_hidden() : ddl_info.is_dest_table_hidden();
-        } else {
-          is_table_hidden = ddl_info.is_source_table_hidden();
+      if ((0 == i % 1000) && OB_FAIL(exec_ctx->check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else {
+        ParseNode *table_node = node->children_[i];
+        CK(OB_NOT_NULL(table_node));
+        const bool old_flag = session_info_->is_table_name_hidden();
+        bool is_table_hidden = false;
+        const ObSessionDDLInfo &ddl_info = session_info_->get_ddl_info();
+        // add foreign key will use select xx from t1 minus select xx from t2, here t1 is source table, t2 is dest table
+        if (ddl_info.is_ddl()) {
+          if (in_set_query_) {
+            is_table_hidden = is_left_child_ ? ddl_info.is_source_table_hidden() : ddl_info.is_dest_table_hidden();
+          } else {
+            is_table_hidden = ddl_info.is_source_table_hidden();
+          }
         }
-      }
-      // TODO@wenqu: wait flags from session info
-      session_info_->set_table_name_hidden(is_table_hidden);
-      OZ( resolve_table(*table_node, table_item) );
-      session_info_->set_table_name_hidden(old_flag);
-      OZ( column_namespace_checker_.add_reference_table(table_item), table_item );
-      OZ( select_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()) );
-      // oracle outer join will change from items
-      OZ( add_from_items_order(table_item), table_item );
-      if (OB_SUCC(ret)) {
-        select_stmt->set_has_reverse_link(table_item->is_reverse_link_);
+        // TODO@wenqu: wait flags from session info
+        session_info_->set_table_name_hidden(is_table_hidden);
+        OZ( resolve_table(*table_node, table_item) );
+        session_info_->set_table_name_hidden(old_flag);
+        OZ( column_namespace_checker_.add_reference_table(table_item), table_item );
+        OZ( select_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()) );
+        // oracle outer join will change from items
+        OZ( add_from_items_order(table_item), table_item );
+        if (OB_SUCC(ret)) {
+          select_stmt->set_has_reverse_link(table_item->is_reverse_link_);
+        }
       }
     }
     OZ( gen_unpivot_target_column(node->num_child_, *select_stmt, *table_item) );
