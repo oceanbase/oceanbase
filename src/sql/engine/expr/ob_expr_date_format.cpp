@@ -523,6 +523,13 @@ int ObExprDateFormat::vector_date_format(const ObExpr &expr,
     LOG_WARN("get day month names fail", K(ret));
   } else if (OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("failed to get format", K(expr));
+  } else if (expr.args_[1]->get_vector(ctx)->is_null(0) ||
+             expr.args_[1]->get_vector(ctx)->get_string(0).empty()) {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) { continue; }
+      res_vec->set_null(idx);
+      eval_flags.set(idx);
+    }
   } else {
     const ObTimeZoneInfo *local_tz_info = (ObTimestampType == expr.args_[0]->datum_meta_.type_) ? tz_info : NULL;
     if (OB_FAIL(get_tz_offset(local_tz_info, tz_offset))) {
