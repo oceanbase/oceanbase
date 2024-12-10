@@ -310,6 +310,9 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::fetch_rows_batch()
         ObExpr *e = all_exprs_.at(i);
         if (OB_FAIL(e->eval_vector(*eval_ctx_, *brs_))) {
           SQL_ENG_LOG(WARN, "eval batch failed", K(ret));
+        } else if (e->is_nested_expr() && !is_uniform_format(e->get_format(*eval_ctx_)) &&
+                   OB_FAIL(e->nested_cast_to_uniform(brs_->size_, *eval_ctx_, brs_->skip_))) {
+          SQL_ENG_LOG(WARN, "failed to cast nested expr to uniform", K(ret));
         } else {
           e->get_eval_info(*eval_ctx_).projected_ = true;
         }
