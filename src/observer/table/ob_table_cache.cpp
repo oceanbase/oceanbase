@@ -25,9 +25,7 @@ int ObTableApiCacheKey::deep_copy(common::ObIAllocator &allocator, const ObILibC
   table_id_ = table_key.table_id_;
   index_table_id_ = table_key.index_table_id_;
   schema_version_ = table_key.schema_version_;
-  is_ttl_table_ = table_key.is_ttl_table_;
-  need_dist_das_ = table_key.need_dist_das_;
-  is_count_all_ = table_key.is_count_all_;
+  flags_ = table_key.flags_;
   operation_type_ = table_key.operation_type_;
   namespace_ = table_key.namespace_;
   for (int64_t i = 0; OB_SUCC(ret) && i < table_key.op_column_ids_.count(); i++) {
@@ -44,13 +42,11 @@ uint64_t ObTableApiCacheKey::hash() const
   hash_val = murmurhash(&table_id_, sizeof(table_id_), hash_val);
   hash_val = murmurhash(&index_table_id_, sizeof(index_table_id_), hash_val);
   hash_val = murmurhash(&schema_version_, sizeof(schema_version_), hash_val);
-  hash_val = murmurhash(&is_ttl_table_, sizeof(is_ttl_table_), hash_val);
-  hash_val = murmurhash(&need_dist_das_, sizeof(need_dist_das_), hash_val);
+  hash_val = murmurhash(&flags_, sizeof(flags_), hash_val);
   hash_val = murmurhash(&operation_type_, sizeof(operation_type_), hash_val);
   for (int64_t i = 0; i < op_column_ids_.count(); i++) {
     hash_val = murmurhash(&(op_column_ids_.at(i)), sizeof(uint64_t), hash_val);
   }
-  hash_val = murmurhash(&is_count_all_, sizeof(is_count_all_), hash_val);
   return hash_val;
 }
 
@@ -60,9 +56,7 @@ bool ObTableApiCacheKey::is_equal(const ObILibCacheKey &other) const
   bool cmp_ret = table_id_ == table_key.table_id_ &&
                  index_table_id_ == table_key.index_table_id_ &&
                  schema_version_ == table_key.schema_version_ &&
-                 is_ttl_table_ == table_key.is_ttl_table_ &&
-                 need_dist_das_ == table_key.need_dist_das_ &&
-                 is_count_all_ == table_key.is_count_all_ &&
+                 flags_ == table_key.flags_ &&
                  operation_type_ == table_key.operation_type_ &&
                  namespace_ == table_key.namespace_ &&
                  op_column_ids_.count() == table_key.op_column_ids_.count();
@@ -79,9 +73,7 @@ void ObTableApiCacheKey::reset()
   table_id_ = common::OB_INVALID_ID;
   index_table_id_ = common::OB_INVALID_ID;
   schema_version_ = -1;
-  is_ttl_table_ = false;
-  need_dist_das_ = false;
-  is_count_all_ = false;
+  flags_ = 0;
   namespace_ = ObLibCacheNameSpace::NS_TABLEAPI;
 }
 
@@ -144,6 +136,7 @@ int ObTableApiCacheGuard::create_cache_key(ObTableCtx *tb_ctx)
   cache_key_.is_ttl_table_ = tb_ctx->is_ttl_table();
   cache_key_.need_dist_das_ = tb_ctx->need_dist_das();
   cache_key_.is_count_all_ = tb_ctx->is_count_all();
+  cache_key_.is_total_quantity_log_ = tb_ctx->is_total_quantity_log();
   ObTableOperationType::Type operation_type = tb_ctx->get_opertion_type();
   cache_key_.operation_type_ = operation_type;
   if (operation_type == ObTableOperationType::Type::UPDATE
