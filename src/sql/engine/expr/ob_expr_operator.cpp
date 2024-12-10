@@ -1297,8 +1297,8 @@ int ObExprOperator::aggregate_result_type_for_merge(
       } else if (ob_is_string_or_lob_type(res_type)) {
         const ObExprResType *new_types = types;
         const ObSQLSessionInfo *session_info = type_ctx.get_session();
+        ObSEArray<ObExprResType, 2> restored_types;
         if (has_new_enum_set_type && session_info != NULL) {
-          ObSEArray<ObExprResType, 2> restored_types;
           for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
             if (OB_FAIL(restored_types.push_back(types[i]))) {
               LOG_WARN("fail to push back types", K(ret));
