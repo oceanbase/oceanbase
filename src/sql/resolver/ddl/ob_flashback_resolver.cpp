@@ -110,6 +110,13 @@ int ObFlashBackTableFromRecyclebinResolver::resolve(const ParseNode &parser_tree
                             origin_db_name,
                             stmt::T_FLASHBACK_TABLE_FROM_RECYCLEBIN,
                             session_info_->get_enable_role_array()));
+      // need to check if user has create table priv on the new db
+      OZ (schema_checker_->check_ora_ddl_priv(
+                            session_info_->get_effective_tenant_id(),
+                            session_info_->get_priv_user_id(),
+                            flashback_table_from_recyclebin_stmt->get_new_db_name(),
+                            stmt::T_CREATE_TABLE,
+                            session_info_->get_enable_role_array()));
     }
   }
   return ret;
