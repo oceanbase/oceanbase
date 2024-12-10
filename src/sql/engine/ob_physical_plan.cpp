@@ -583,7 +583,9 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     }
   } // long route stat ends
 
-  update_plan_expired_info(record, is_first, table_row_count_list);
+  if (!is_expired() && stat_.enable_plan_expiration_) {
+    update_plan_expired_info(record, is_first, table_row_count_list);
+  }
 }
 
 void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
@@ -593,20 +595,13 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
   bool bret = false;
   bool is_evolution = ATOMIC_LOAD(&stat_.is_evolution_);
   bool info_inited = ATOMIC_LOAD(&(stat_.first_exec_row_count_)) >= 0;
-  if (is_expired()) {
-    /* do nothing */
-  } else if (!is_evolution && stat_.enable_plan_expiration_
-             && (record.is_timeout() || OB_SESSION_KILLED == record.status_)) {
+  if (!is_evolution && (record.is_timeout() || OB_SESSION_KILLED == record.status_)) {
     set_is_expired(true);
     LOG_INFO("query plan is expired due to execution timeout", K(stat_));
   } else if (is_first) {
-    if (stat_.enable_plan_expiration_) {
-      ATOMIC_STORE(&(stat_.sample_times_), 0);
-      ATOMIC_STORE(&(stat_.first_exec_row_count_), record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
-      ATOMIC_STORE(&(stat_.first_exec_usec_), record.exec_timestamp_.executor_t_);
-    } else {
-      ATOMIC_STORE(&(stat_.first_exec_row_count_), 0);
-    }
+    ATOMIC_STORE(&(stat_.sample_times_), 0);
+    ATOMIC_STORE(&(stat_.first_exec_row_count_), record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
+    ATOMIC_STORE(&(stat_.first_exec_usec_), record.exec_timestamp_.executor_t_);
     if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL) {
       fill_row_count_info(true, stat_.access_table_num_, stat_.table_row_count_first_exec_, *table_row_count_list);
     }
@@ -615,10 +610,8 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
   } else if (!info_inited && is_evolution) {
     /* in evolution, sampling infos */
     ATOMIC_INC(&(stat_.sample_times_));
-    if (stat_.enable_plan_expiration_) {
-      ATOMIC_AAF(&(stat_.sample_exec_row_count_), record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
-      ATOMIC_AAF(&(stat_.sample_exec_usec_), record.exec_timestamp_.executor_t_);
-    }
+    ATOMIC_AAF(&(stat_.sample_exec_row_count_), record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
+    ATOMIC_AAF(&(stat_.sample_exec_usec_), record.exec_timestamp_.executor_t_);
     if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL) {
       fill_row_count_info(false, stat_.access_table_num_, stat_.table_row_count_first_exec_, *table_row_count_list);
     }
@@ -630,13 +623,11 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
     } while (first_exec_row_count != ATOMIC_VCAS(&(stat_.first_exec_row_count_), first_exec_row_count, 0));
     if (-1 == first_exec_row_count) {  // only one thread can init first exec infos by get sample_count
       int64_t sample_count = ATOMIC_LOAD(&(stat_.sample_times_));
-      if (stat_.enable_plan_expiration_) {
-        if (sample_count <= 0) {
-          sample_count = 1;
-        }
-        stat_.first_exec_row_count_ = stat_.sample_exec_row_count_ / sample_count;
-        stat_.first_exec_usec_ = stat_.sample_exec_usec_ / sample_count;
+      if (sample_count <= 0) {
+        sample_count = 1;
       }
+      stat_.first_exec_row_count_ = stat_.sample_exec_row_count_ / sample_count;
+      stat_.first_exec_usec_ = stat_.sample_exec_usec_ / sample_count;
       ATOMIC_STORE(&(stat_.sample_exec_row_count_), 0);
       ATOMIC_STORE(&(stat_.sample_exec_usec_), 0);
       ATOMIC_STORE(&(stat_.sample_times_), 0);
@@ -649,15 +640,14 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
           LOG_DEBUG("init first row stat for spm plan", K(i), K(stat_.table_row_count_first_exec_[i]));
         }
       }
-      LOG_DEBUG("init first exec info for spm plan", K(stat_.enable_plan_expiration_), K(sample_count),
-                                                    K(stat_.first_exec_row_count_), K(stat_.first_exec_usec_));
+      LOG_DEBUG("init first exec info for spm plan", K(sample_count), K(stat_.first_exec_row_count_), K(stat_.first_exec_usec_));
     }
   } else if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL
              && record.get_elapsed_time() > SLOW_QUERY_TIME_FOR_PLAN_EXPIRE
              && check_if_is_expired(record.get_elapsed_time(), stat_.access_table_num_, stat_.table_row_count_first_exec_, *table_row_count_list)) {
     /* expire plan by range scan row count */
     set_is_expired(true);
-  } else if (stat_.enable_plan_expiration_) {
+  } else {
     /* expire plan by local plan row count and dist plan exec time */
     int64_t sample_count = ATOMIC_AAF(&(stat_.sample_times_), 1);
     int64_t sample_exec_row_count = ATOMIC_AAF(&(stat_.sample_exec_row_count_),
@@ -667,9 +657,15 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
       ATOMIC_STORE(&(stat_.sample_times_), 0);
       ATOMIC_STORE(&(stat_.sample_exec_row_count_), 0);
       ATOMIC_STORE(&(stat_.sample_exec_usec_), 0);
-      if (stat_.elapsed_time_ > SLOW_QUERY_TIME_FOR_PLAN_EXPIRE * stat_.execute_times_
-          && is_plan_unstable(sample_count, sample_exec_row_count, sample_exec_usec)) {
+      if (is_plan_unstable(sample_count, sample_exec_row_count, sample_exec_usec)) {
         set_is_expired(true);
+        if (stat_.elapsed_time_ > SLOW_QUERY_TIME_FOR_PLAN_EXPIRE * stat_.execute_times_) {
+          LOG_INFO("plan expired for physical plan avg elapsed_time more than 5ms", K(stat_.plan_id_), K(stat_.elapsed_time_/stat_.execute_times_),
+                                      K(stat_.elapsed_time_), K(stat_.execute_times_));
+        } else {
+          LOG_INFO("plan expired for physical plan avg elapsed_time no more than 5ms", K(stat_.plan_id_), K(stat_.elapsed_time_/stat_.execute_times_),
+                                      K(stat_.elapsed_time_), K(stat_.execute_times_));
+        }
       }
     }
   }
