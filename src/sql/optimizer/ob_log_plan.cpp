@@ -10616,14 +10616,22 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
 {
   int ret = OB_SUCCESS;
   enable = false;
-  if (OB_ISNULL(get_stmt())) {
+  const ObSqlCtx *sql_ctx = NULL;
+  if (OB_ISNULL(get_stmt())
+      || OB_ISNULL(get_optimizer_context().get_exec_ctx())
+      || OB_ISNULL(sql_ctx = optimizer_context_.get_exec_ctx()->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is null", K(ret));
+    LOG_WARN("unexpected null", K(ret), K(get_stmt()), K(sql_ctx));
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
   } else if (optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&
              optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
     // do nothing
+#ifdef OB_BUILD_SPM
+  } else if (SPM_MODE_BASELINE_FIRST == sql_ctx->spm_ctx_.spm_mode_
+             && sql_ctx->spm_ctx_.is_retry_for_spm_) {
+    // do nothing
+#endif
   } else {
     enable = true;
   }
@@ -12234,8 +12242,16 @@ int ObLogPlan::calc_plan_resource()
 int ObLogPlan::add_explain_note()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(add_parallel_explain_note())) {
-    LOG_WARN("fail to add explain note", K(ret));
+  ObOptimizerContext &opt_ctx = get_optimizer_context();
+  if (OB_ISNULL(opt_ctx.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(opt_ctx.get_query_ctx()));
+#ifdef OB_BUILD_SPM
+  } else if (opt_ctx.get_query_ctx()->is_spm_evolution_
+             && OB_FALSE_IT(opt_ctx.add_plan_note(PLAN_GENERATED_BY_SPM_BASELINE))) {
+#endif
+  } else if (OB_FAIL(add_parallel_explain_note())) {
+    LOG_WARN("fail to add parallel explain note", K(ret));
   } else if (OB_FAIL(add_direct_load_explain_note())) {
     LOG_WARN("fail to add direct load explain note", K(ret));
   }
