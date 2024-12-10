@@ -539,8 +539,28 @@ int ObPrimaryLSService::create_duplicate_ls()
   SCN create_scn;
   const uint64_t ls_group_id = 0;
   share::ObLSAttr new_ls;
+  //先检查一次是否存在广播日志流，防止出现ls_id的浪费
+  ObArray<ObLSAttr> dup_ls_array;
   ObLSFlag flag(ObLSFlag::DUPLICATE_FLAG);
-  if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_id(GCTX.sql_proxy_, tenant_id_, ls_id))) {
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_FAIL(ls_operator.get_duplicate_ls_attr(false,
+          *GCTX.sql_proxy_, dup_ls_array))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to get dulicate ls", KR(ret));
+    } else {
+      ret = OB_SUCCESS;
+      LOG_INFO("need create new duplicate ls");
+    }
+  } else if (dup_ls_array.count() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("must has duplicate ls", KR(ret), K(dup_ls_array));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (dup_ls_array.count() > 0) {
+    LOG_INFO("duplicate ls exist", K(dup_ls_array));
+  } else if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_id(GCTX.sql_proxy_, tenant_id_, ls_id))) {
     LOG_WARN("failed to fetch new LS id", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(tenant_id_, create_scn))) {
     LOG_WARN("failed to get tenant gts", KR(ret), K(tenant_id_));
@@ -552,7 +572,7 @@ int ObPrimaryLSService::create_duplicate_ls()
               new_ls, share::NORMAL_SWITCHOVER_STATUS))) {
     LOG_WARN("failed to insert new operation", KR(ret), K(new_ls));
   }
-  LOG_INFO("[LS_MGR] create duplicate ls", KR(ret), K(new_ls));
+  LOG_INFO("[LS_MGR] create duplicate ls", KR(ret), K(new_ls), K(dup_ls_array));
   return ret;
 }
 
