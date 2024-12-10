@@ -36,8 +36,6 @@ public:
   int get_all_table_ctx(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);
   // table ctx holds a reference count
   int get_table_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTableCtx *&table_ctx);
-  // table ctx holds a reference count
-  int get_table_ctx_by_table_id(uint64_t table_id, ObTableLoadTableCtx *&table_ctx);
   // all table ctx hold a reference count
   int get_inactive_table_ctx_list(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);
   void put_table_ctx(ObTableLoadTableCtx *table_ctx);
@@ -52,10 +50,6 @@ private:
   typedef common::hash::ObHashMap<ObTableLoadUniqueKey, ObTableLoadTableCtx *,
                                   common::hash::NoPthreadDefendMode>
     TableCtxMap;
-  // table_id => table_ctx
-  typedef common::hash::ObHashMap<uint64_t, ObTableLoadTableCtx *,
-                                  common::hash::NoPthreadDefendMode>
-    TableCtxIndexMap;
 
   class HashMapEraseIfEqual
   {
@@ -76,7 +70,6 @@ private:
 private:
   mutable obsys::ObRWLock rwlock_;
   TableCtxMap table_ctx_map_;
-  TableCtxIndexMap table_ctx_index_map_; // index of the latest task
   // for release table ctx in background
   mutable lib::ObMutex mutex_;
   common::ObDList<ObTableLoadTableCtx> dirty_list_;

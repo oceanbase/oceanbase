@@ -53,6 +53,7 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_INSERT, ObDASDMLIterator>::write_rows(cons
   int ret = OB_SUCCESS;
   ObAccessService *as = MTL(ObAccessService *);
   dml_param_.direct_insert_task_id_ = rtdef.direct_insert_task_id_;
+  dml_param_.ddl_task_id_ = rtdef.ddl_task_id_;
   if (rtdef.use_put_) {
     ret = as->put_rows(ls_id,
                        tablet_id,

@@ -36,9 +36,13 @@ public:
       is_online_gather_statistics_(false),
       is_direct_(false) {}
   ~ObTableDirectInsertCtx();
-  TO_STRING_KV(K_(is_inited));
+  TO_STRING_KV(K_(is_inited), K_(is_direct),
+               K_(is_online_gather_statistics));
 public:
-  int init(sql::ObExecContext *exec_ctx, const uint64_t table_id, const int64_t parallel);
+  int init(sql::ObExecContext *exec_ctx,
+           sql::ObPhysicalPlan &phy_plan,
+           const uint64_t table_id,
+           const int64_t parallel);
   int commit();
   int finish();
   void destroy();
