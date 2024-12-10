@@ -2021,6 +2021,35 @@ int ObTableScanOp::close_and_reopen()
     MY_INPUT.key_ranges_.reuse();
     MY_INPUT.ss_key_ranges_.reuse();
     MY_INPUT.mbr_filters_.reuse();
+
+    // replace stmt allocator of lookup and attached table scan to index table scan
+    // at each rescan to avoid memory expansion.
+    if (nullptr != tsc_rtdef_.lookup_rtdef_) {
+      tsc_rtdef_.lookup_rtdef_->stmt_allocator_.set_alloc(scan_iter_->get_das_alloc());
+    }
+    if (nullptr != tsc_rtdef_.attach_rtinfo_) {
+      if (OB_FAIL(set_stmt_allocator(tsc_rtdef_.attach_rtinfo_->attach_rtdef_, scan_iter_->get_das_alloc()))) {
+        LOG_WARN("failed to set stmt allocator", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableScanOp::set_stmt_allocator(ObDASBaseRtDef *rtdef, ObIAllocator *alloc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rtdef) || OB_ISNULL(alloc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(rtdef), K(alloc), K(ret));
+  } else if (DAS_OP_TABLE_SCAN == rtdef->op_type_) {
+    static_cast<ObDASScanRtDef*>(rtdef)->stmt_allocator_.set_alloc(alloc);
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rtdef->children_cnt_; ++i) {
+      if (OB_FAIL(set_stmt_allocator(rtdef->children_[i], alloc))) {
+        LOG_WARN("failed to set stmt allocator", K(ret), K(rtdef));
+      }
+    }
   }
   return ret;
 }
