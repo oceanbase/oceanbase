@@ -1284,9 +1284,12 @@ int64_t ObObjectDevice::get_max_block_count(int64_t reserved_size) const
   return -1;
 }
 
-int ObObjectDevice::check_space_full(const int64_t required_size) const
+int ObObjectDevice::check_space_full(
+    const int64_t required_size,
+    const bool alarm_if_space_full) const
 {
   UNUSED(required_size);
+  UNUSED(alarm_if_space_full);
   OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "check_space_full is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }

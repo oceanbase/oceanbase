@@ -103,7 +103,7 @@ int ObDDLEmptyShellChecker::check_disk_space_exceeds(
     can_become_empty_shell = false;
   } else {
     const int64_t required_size = LOCAL_DEVICE_INSTANCE.get_total_block_size() * 0.1;
-    if (OB_FAIL(LOCAL_DEVICE_INSTANCE.check_space_full(required_size))) {
+    if (OB_FAIL(LOCAL_DEVICE_INSTANCE.check_space_full(required_size, false/*alarm_if_space_full*/))) {
       if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
         ret = OB_SUCCESS;
         can_become_empty_shell = true;
