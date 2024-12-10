@@ -5399,7 +5399,6 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
 {
   int ret = OB_SUCCESS;
   bool is_partition_wise = false;
-  bool need_pull_to_local = false;
   group_dist_methods = 0;
   if (OB_ISNULL(top) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -5429,8 +5428,6 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
       group_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
       if (groupby_helper.distinct_aggr_items_.empty()) {
         group_dist_methods &= ~DistAlgo::DIST_HASH_HASH;
-      } else if (!groupby_helper.distinct_aggr_items_.empty()) {
-        need_pull_to_local = true;
       }
       if (!groupby_helper.can_three_stage_pushdown_) {
         group_dist_methods &= ~DistAlgo::DIST_HASH_HASH;
@@ -5477,7 +5474,6 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
   }
 
   if (OB_SUCC(ret) &&
-      !need_pull_to_local &&
       DistAlgo::DIST_PULL_TO_LOCAL != group_dist_methods) {
     group_dist_methods &= ~DistAlgo::DIST_PULL_TO_LOCAL;
     OPT_TRACE("group operator will not use pull to local method");

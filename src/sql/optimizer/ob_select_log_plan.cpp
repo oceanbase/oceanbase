@@ -472,9 +472,7 @@ int ObSelectLogPlan::allocate_three_stage_group_by(const ObIArray<ObRawExpr*> &r
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (DistAlgo::DIST_BASIC_METHOD == algo ||
-             DistAlgo::DIST_PARTITION_WISE == algo ||
-             (DistAlgo::DIST_HASH_HASH == algo &&
-              !get_log_plan_hint().pushdown_group_by())) {
+             DistAlgo::DIST_PARTITION_WISE == algo) {
     bool part_sort_valid = !groupby_helper.force_normal_sort_
                                && (groupby_helper.enable_hash_rollup_ ?
                                     !(group_by_exprs.empty() && rollup_exprs.empty()) : !group_by_exprs.empty());
@@ -497,8 +495,6 @@ int ObSelectLogPlan::allocate_three_stage_group_by(const ObIArray<ObRawExpr*> &r
                                               false))) {
       LOG_WARN("failed to create merge group by plan", K(ret));
     }
-  }
-  if (OB_FAIL(ret)) {
   } else if (DistAlgo::DIST_HASH_HASH == algo) {
     if (use_hash_rollup) {
       ObSEArray<ObAggFunRawExpr *, 8> all_aggr_items;
