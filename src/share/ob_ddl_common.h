@@ -1061,12 +1061,14 @@ class ObSplitTabletInfo final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObSplitTabletInfo() : split_info_(0) { }
+  ObSplitTabletInfo() : split_info_(0), split_src_tablet_id_() { }
   ~ObSplitTabletInfo() { reset(); }
-  void reset() { split_info_ = 0; }
+  void reset() { split_info_ = 0; split_src_tablet_id_.reset(); }
   void set_data_incomplete(const bool is_data_incomplete) { is_data_incomplete_ = is_data_incomplete; }
+  void set_split_src_tablet_id(const ObTabletID &split_src_tablet_id) { split_src_tablet_id_ = split_src_tablet_id; }
   bool is_data_incomplete() const { return is_data_incomplete_; }
-  TO_STRING_KV(K_(split_info));
+  const ObTabletID &get_split_src_tablet_id() const { return split_src_tablet_id_; }
+  TO_STRING_KV(K_(split_info), K_(split_src_tablet_id));
 private:
   union {
     uint32_t split_info_;
@@ -1075,6 +1077,7 @@ private:
       uint32_t reserved: 31;
     };
   };
+  ObTabletID split_src_tablet_id_;
 };
 
 typedef common::ObCurTraceId::TraceId DDLTraceId;

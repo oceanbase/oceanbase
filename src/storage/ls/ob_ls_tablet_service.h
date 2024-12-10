@@ -175,6 +175,7 @@ public:
       const storage::ObTabletMdsUserDataType &create_type,
       const bool micro_index_clustered,
       const bool has_cs_replica,
+      const ObTabletID &split_src_tablet_id,
       ObTabletHandle &tablet_handle);
   int create_transfer_in_tablet(
       const share::ObLSID &ls_id,

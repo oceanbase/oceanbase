@@ -60,6 +60,7 @@ public:
       const obrpc::ObFreezeSplitSrcTabletArg &arg,
       obrpc::ObFreezeSplitSrcTabletRes &res,
       const int64_t abs_timeout_us);
+  static int get_split_src_tablet_id_if_any(const share::schema::ObTableSchema &table_schema, ObTabletID &tablet_id);
 
 private:
   static int prepare_start_args_(

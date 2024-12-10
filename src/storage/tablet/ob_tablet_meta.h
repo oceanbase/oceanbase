@@ -232,7 +232,7 @@ public:
   bool has_next_tablet_; // alignment: 1B, size: 2B
   bool is_empty_shell_; // alignment: 1B, size: 2B
   bool micro_index_clustered_; // alignment: 1B, size: 2B
-  share::ObSplitTabletInfo split_info_; // alignment: 8B, size: 4B
+  share::ObSplitTabletInfo split_info_; // alignment: 8B, size: 16B
 
 private:
   void update_extra_medium_info(

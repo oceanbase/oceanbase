@@ -237,6 +237,41 @@ int ObSplitPartitionHelper::freeze_split_src_tablet(const ObFreezeSplitSrcTablet
   return ret;
 }
 
+// only used for create split dst tablet
+int ObSplitPartitionHelper::get_split_src_tablet_id_if_any(
+    const share::schema::ObTableSchema &table_schema,
+    ObTabletID &split_src_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+  bool finish = false;
+  ObPartitionSchemaIter iter(table_schema, mode);
+  ObPartitionSchemaIter::Info info;
+  split_src_tablet_id.reset();
+  while (OB_SUCC(ret) && !finish) {
+    if (OB_FAIL(iter.next_partition_info(info))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        finish = true;
+      } else {
+        LOG_WARN("iter partition failed", KR(ret));
+      }
+    } else if (nullptr != info.partition_) {
+      const ObTabletID &tablet_id = info.partition_->get_split_source_tablet_id();
+      if (tablet_id.is_valid()) {
+        if (split_src_tablet_id.is_valid() && OB_UNLIKELY(tablet_id != split_src_tablet_id)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("all split src tablet id must be same in schema", K(ret), K(split_src_tablet_id), KPC(info.partition_));
+        } else {
+          split_src_tablet_id = tablet_id;
+        }
+      }
+      break;
+    }
+  }
+  return ret;
+}
+
 int ObSplitPartitionHelper::prepare_start_args_(
     const uint64_t tenant_id,
     const ObIArray<ObTableSchema *> &new_table_schemas,
@@ -451,7 +486,7 @@ int ObSplitPartitionHelper::prepare_dst_tablet_creator_(
                                     tenant_data_version,
                                     need_create_empty_majors,
                                     create_commit_versions,
-                                    false/*has cs replica*/))) {
+                                    false/*has_cs_replica*/))) {
           LOG_WARN("failed to init", K(ret));
         } else if (OB_FAIL(tablet_creator->add_create_tablet_arg(arg))) {
           LOG_WARN("failed to add create tablet arg", K(ret));

@@ -10392,16 +10392,18 @@ OB_SERIALIZE_MEMBER(ObCreateTabletInfo, tablet_ids_, data_tablet_id_, table_sche
 int ObCreateTabletExtraInfo::init(
     const uint64_t tenant_data_version,
     const bool need_create_empty_major,
-    const bool micro_index_clustered)
+    const bool micro_index_clustered,
+    const ObTabletID &split_src_tablet_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_data_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(tenant_data_version), K(need_create_empty_major), K(micro_index_clustered));
+    LOG_WARN("invalid arg", K(ret), K(tenant_data_version), K(need_create_empty_major), K(micro_index_clustered), K(split_src_tablet_id));
   } else {
     tenant_data_version_ = tenant_data_version;
     need_create_empty_major_ = need_create_empty_major;
     micro_index_clustered_ = micro_index_clustered;
+    split_src_tablet_id_ = split_src_tablet_id;
   }
   return ret;
 }
@@ -10411,6 +10413,7 @@ void ObCreateTabletExtraInfo::reset()
   need_create_empty_major_ = true;
   tenant_data_version_ = 0;
   micro_index_clustered_ = false;
+  split_src_tablet_id_.reset();
 }
 
 int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
@@ -10419,10 +10422,11 @@ int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
   tenant_data_version_ = other.tenant_data_version_;
   need_create_empty_major_ = other.need_create_empty_major_;
   micro_index_clustered_ = other.micro_index_clustered_;
+  split_src_tablet_id_ = other.split_src_tablet_id_;
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo, tenant_data_version_, need_create_empty_major_, micro_index_clustered_);
+OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo, tenant_data_version_, need_create_empty_major_, micro_index_clustered_, split_src_tablet_id_);
 
 bool ObBatchCreateTabletArg::is_inited() const
 {

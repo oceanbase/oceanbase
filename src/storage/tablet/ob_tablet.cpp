@@ -269,7 +269,7 @@ ObTablet::ObTablet(const bool is_external_tablet)
     is_external_tablet_(is_external_tablet)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  check_size<ObTablet, ObRowkeyReadInfo, 1464>();
+  check_size<ObTablet, ObRowkeyReadInfo, 1480>();
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -346,6 +346,7 @@ int ObTablet::init_for_first_time_creation(
     const share::SCN &clog_checkpoint_scn,
     const share::SCN &mds_checkpoint_scn,
     const bool is_split_dest_tablet,
+    const ObTabletID &split_src_tablet_id,
     const bool micro_index_clustered,
     const bool need_generate_cs_replica_cg_array,
     const bool has_cs_replica,
@@ -382,6 +383,7 @@ int ObTablet::init_for_first_time_creation(
   } else if (OB_FAIL(init_shared_params(ls_id, tablet_id, compat_mode))) {
     LOG_WARN("failed to init shared params", K(ret), K(ls_id), K(tablet_id), K(compat_mode), KP(freezer));
   } else if (is_split_dest_tablet && OB_FALSE_IT(split_info.set_data_incomplete(true))) {
+  } else if (OB_FALSE_IT(split_info.set_split_src_tablet_id(split_src_tablet_id))) {
   } else if (OB_FAIL(tablet_meta_.init(ls_id, tablet_id, data_tablet_id,
       create_scn, snapshot_version, compat_mode, table_store_flag, create_tablet_schema.get_schema_version()/*create_schema_version*/,
       clog_checkpoint_scn, mds_checkpoint_scn, split_info, micro_index_clustered, has_cs_replica, need_generate_cs_replica_cg_array))) {

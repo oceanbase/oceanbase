@@ -1466,7 +1466,7 @@ int ObDDLScheduler::schedule_auto_split_task()
         LOG_WARN("split global index failed", K(tmp_ret), K(single_arg));
       } else if (!single_arg->alter_table_schema_.is_global_index_table()
           && OB_TMP_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(GCONF._ob_ddl_timeout).alter_table(*single_arg, unused_res))) {
-        LOG_WARN("alter table failed", K(tmp_ret), K(single_arg), K(unused_res));
+        LOG_WARN("alter table failed", K(tmp_ret), KPC(single_arg), K(unused_res));
       }
       if (OB_TMP_FAIL(tmp_ret) && split_task_scheduler.can_retry(task, tmp_ret)) {
         failed_task.reuse();
