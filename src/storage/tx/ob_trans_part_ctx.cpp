@@ -3524,6 +3524,13 @@ int ObPartTransCtx::submit_commit_log_()
     }
   }
 
+  // sanity check, all redo has been submitted
+#ifdef ENABLE_DEBUG_LOG
+  if (OB_SUCC(ret) && !is_local_tx_()) {
+    mt_ctx_.check_all_redo_flushed();
+  }
+#endif
+
   if (OB_SUCC(ret)) {
     SCN log_commit_version;
     ObSEArray<uint64_t, 1> checksum_arr;
