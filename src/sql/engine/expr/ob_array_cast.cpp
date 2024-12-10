@@ -544,7 +544,8 @@ int ObArrayTypeCastFactory::alloc(ObIAllocator &alloc, const ObCollectionTypeBas
     } else {
       arr_cast = OB_NEWx(ObArrayFixedSizeCast, &alloc);
     }
-  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
+             || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
     arr_cast = OB_NEWx(ObArrayNestedCast, &alloc);
   } else {
     // to do

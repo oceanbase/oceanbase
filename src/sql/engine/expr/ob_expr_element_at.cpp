@@ -69,7 +69,8 @@ int ObExprElementAt::calc_result_type2(ObExprResType &type,
       ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
       type.set_meta(elem_type->basic_meta_.get_meta_type());
       type.set_accuracy(elem_type->basic_meta_.get_accuracy());
-    } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+    } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
+               || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
       ObString child_def;
       uint16_t child_subschema_id = 0;
       if (OB_FAIL(coll_info->get_child_def_string(child_def))) {
@@ -79,8 +80,6 @@ int ObExprElementAt::calc_result_type2(ObExprResType &type,
       } else {
         type.set_collection(child_subschema_id);
       }
-    } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-      type.set_float();
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected ObNestedType type", K(ret), K(arr_type->element_type_->type_id_));
@@ -132,7 +131,8 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     } else {
       res.from_obj(elem_obj);
     }
-  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
+             || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
     uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
     ObIArrayType* child_arr = NULL;
     ObString child_arr_str;
@@ -145,9 +145,6 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     } else {
       res.set_string(child_arr_str);
     }
-  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-    float *vector_data = reinterpret_cast<float*>(src_arr->get_data());
-    res.set_float(vector_data[idx]);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid element type", K(ret), K(arr_type->element_type_->type_id_));
@@ -215,7 +212,8 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
         } else {
           res_datum.at(j)->from_obj(elem_obj);
         }
-      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
+                 || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
         uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
         ObString child_arr_str;
         if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,ctx, child_subschema_id, child_arr, false))) {
@@ -243,9 +241,6 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
             output_result.set_result();
           }
         }
-      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-        float *vector_data = reinterpret_cast<float*>(src_arr->get_data());
-        res_datum.at(j)->set_float(vector_data[idx]);
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid element type", K(ret), K(arr_type->element_type_->type_id_));
@@ -340,7 +335,8 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
           ret = OB_ERR_UNEXPECTED;
           OB_LOG(WARN, "unexpected element type", K(ret), K(elem_obj.get_type()));
         }
-      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
+                 || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
         uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
         ObString child_arr_str;
         if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,ctx, child_subschema_id, child_arr, false))) {
@@ -359,9 +355,6 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
         } else if (OB_FAIL(ObArrayExprUtils::set_array_res<ObVectorBase>(child_arr, expr, ctx, static_cast<ObVectorBase *>(res_vec), idx))) {
           LOG_WARN("set array res failed", K(ret));
         }
-      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-        float *vector_data = reinterpret_cast<float*>(src_arr->get_data());
-        res_vec->set_float(idx, vector_data[arr_idx]);
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid element type", K(ret), K(arr_type->element_type_->type_id_));
