@@ -279,12 +279,13 @@ bool ObTenantFreezer::memstore_remain_memory_is_exhausting()
   return memstore_remain_memory_is_exhausting_cache_.value_;
 }
 
-int ObTenantFreezer::ls_freeze_data_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts)
+int ObTenantFreezer::ls_freeze_data_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
   const int64_t SLEEP_TS = 1000 * 1000; // 1s
-  int64_t current_ts = 0;
+  const int64_t abs_timeout_ts = ObClockGenerator::getClock() + TENANT_FREEZE_RETRY_TIME_US;
   int64_t retry_times = 0;
+  const bool is_sync = true;
   bool is_timeout = false;
   bool need_retry = false;
   // wait and retry if there is a freeze is doing
@@ -396,9 +397,7 @@ int ObTenantFreezer::tenant_freeze_data_()
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       // wait until this ls freeze finished to make sure not freeze frequently because
       // of this ls freeze stuck.
-      const bool is_sync = true;
-      const int64_t abs_timeout_ts = 0;
-      if (OB_FAIL(ls_freeze_data_(ls, is_sync, abs_timeout_ts))) {
+      if (OB_FAIL(ls_freeze_data_(ls))) {
         if (OB_SUCCESS == first_fail_ret) {
           first_fail_ret = ret;
         }

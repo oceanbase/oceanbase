@@ -124,6 +124,7 @@ public:
   // replay use 1G/s
   const static int64_t REPLAY_RESERVE_MEMSTORE_BYTES = 100 * 1024 * 1024; // 100 MB
   const static int64_t MEMSTORE_USED_CACHE_REFRESH_INTERVAL = 100_ms;
+  const static int64_t TENANT_FREEZE_RETRY_TIME_US = 600LL * 1000LL * 1000LL; // 10 minutes
   static double MDS_TABLE_FREEZE_TRIGGER_TENANT_PERCENTAGE;
 
 public:
@@ -251,7 +252,7 @@ private:
                            int64_t &last_check_timestamp,
                            bool &is_out_of_mem,
                            const bool from_user = true);
-  static int ls_freeze_data_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts);
+  static int ls_freeze_data_(ObLS *ls);
   static int ls_freeze_all_unit_(ObLS *ls, const int64_t abs_timeout_ts = INT64_MAX);
   static int tablet_freeze_(ObLS *ls,
                             const common::ObTabletID &tablet_id,
