@@ -496,28 +496,41 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     return ret;
     }
   };
+  if (state_.need_expand_buf_) {
+    OZ (expand_buf());
+    state_.need_expand_buf_ = false;
+  }
   struct Functor handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode, returned_row_cnt);
   int64_t nrows = 0;
-  do {
-    if (state_.skip_lines_ > 0) {
-      OZ (skip_lines());
-    }
-    if (OB_SUCC(ret)) {
-      nrows = MIN(batch_size, state_.line_count_limit_);
-      if (OB_UNLIKELY(0 == nrows)) {
-        // if line_count_limit = 0, get next file.
-      } else {
-        ret = parser_.scan<decltype(handle_one_line), true>(state_.pos_, state_.data_end_, nrows,
-                                        state_.escape_buf_, state_.escape_buf_end_, handle_one_line,
-                                        error_msgs, file_reader_.eof());
-        if (OB_FAIL(ret)) {
-          LOG_WARN("fail to scan csv", K(ret));
-        } else if (OB_UNLIKELY(error_msgs.count() > 0)) {
-          dump_error_log(error_msgs);
+  if (OB_SUCC(ret)) {
+    do {
+      if (state_.skip_lines_ > 0) {
+        OZ (skip_lines());
+      }
+      if (OB_SUCC(ret)) {
+        nrows = MIN(batch_size, state_.line_count_limit_);
+        if (OB_UNLIKELY(0 == nrows)) {
+          // if line_count_limit = 0, get next file.
+        } else {
+          ret = parser_.scan<decltype(handle_one_line), true>(state_.pos_, state_.data_end_, nrows,
+                                          state_.escape_buf_, state_.escape_buf_end_, handle_one_line,
+                                          error_msgs, file_reader_.eof());
+          if (OB_FAIL(ret)) {
+            LOG_WARN("fail to scan csv", K(ret));
+          } else if (OB_UNLIKELY(error_msgs.count() > 0)) {
+            dump_error_log(error_msgs);
+          }
         }
       }
-    }
-  } while (OB_SUCC(ret) && returned_row_cnt < 1 && OB_SUCC(load_next_buf()));
+      if (OB_SUCC(ret)
+          && !file_reader_.eof()
+          && returned_row_cnt >= 1
+          && returned_row_cnt < capacity
+          && state_.buf_len_ * 2 <= OB_MALLOC_BIG_BLOCK_SIZE) {
+        state_.need_expand_buf_ = true;
+      }
+    } while (OB_SUCC(ret) && returned_row_cnt < 1 && OB_SUCC(load_next_buf()));
+  }
 
   if (OB_ITER_END == ret && returned_row_cnt > 0) {
     ret = OB_SUCCESS;
