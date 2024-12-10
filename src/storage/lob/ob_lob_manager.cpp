@@ -655,8 +655,6 @@ int ObLobManager::compare(ObLobLocatorV2& lob_left,
     // get lob access param
     ObLobAccessParam param_left;
     ObLobAccessParam param_right;
-    param_left.tx_desc_ = cmp_params.tx_desc_;
-    param_right.tx_desc_ = cmp_params.tx_desc_;
     if (OB_FAIL(build_lob_param(param_left, tmp_allocator, cmp_params.collation_left_,
                 cmp_params.offset_left_, cmp_params.compare_len_, cmp_params.timeout_, lob_left))) {
       LOG_WARN("fail to build read param left", K(ret), K(lob_left), K(cmp_params));
@@ -1071,7 +1069,6 @@ int ObLobManager::append(
         ObString data;
         data.assign_buffer(buf + cur_handle_size, append_lob_len);
         SMART_VAR(ObLobAccessParam, read_param) {
-          read_param.tx_desc_ = param.tx_desc_;
           read_param.tenant_id_ = param.src_tenant_id_;
           if (OB_FAIL(build_lob_param(read_param, *param.get_tmp_allocator(), param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
@@ -1172,7 +1169,6 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
         ObString data;
         data.assign_buffer(buf + cur_handle_size, append_lob_len);
         SMART_VAR(ObLobAccessParam, read_param) {
-          read_param.tx_desc_ = param.tx_desc_;
           read_param.tenant_id_ = param.src_tenant_id_;
           if (OB_FAIL(build_lob_param(read_param, *param.get_tmp_allocator(), param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
@@ -1240,7 +1236,6 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
           LOG_WARN("alloc ObLobLocatorV2 failed.", K(ret), K(sizeof(ObLobLocatorV2)));
         } else {
           read_param = new(read_param)ObLobAccessParam();
-          read_param->tx_desc_ = param.tx_desc_;
           read_param->tenant_id_ = param.src_tenant_id_;
           *copy_locator = lob;
           if (OB_FAIL(build_lob_param(*read_param, *param.get_tmp_allocator(), param.coll_type_,
@@ -1756,7 +1751,6 @@ int ObLobManager::write_inrow(ObLobAccessParam& param, ObLobLocatorV2& lob, uint
 {
   int ret = OB_SUCCESS;
   SMART_VAR(ObLobAccessParam, read_param) {
-    read_param.tx_desc_ = param.tx_desc_;
     if (OB_ISNULL(param.allocator_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("param tmp allocator is null", K(ret), K(param));
@@ -1816,7 +1810,6 @@ int ObLobManager::write_outrow(ObLobAccessParam& param, ObLobLocatorV2& lob, uin
   int ret = OB_SUCCESS;
   ObLobQueryIter *iter = nullptr;
   SMART_VAR(ObLobAccessParam, read_param) {
-    read_param.tx_desc_ = param.tx_desc_;
     if (OB_ISNULL(param.allocator_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("param tmp allocator is null", K(ret), K(param));
@@ -2182,7 +2175,6 @@ int ObLobManager::append_outrow(
   int ret = OB_SUCCESS;
   ObLobQueryIter *iter = nullptr;
   SMART_VAR(ObLobAccessParam, read_param) {
-    read_param.tx_desc_ = param.tx_desc_;
     read_param.tenant_id_ = param.src_tenant_id_;
     if (OB_ISNULL(param.get_tmp_allocator())) {
       ret = OB_INVALID_ARGUMENT;
