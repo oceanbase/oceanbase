@@ -252,8 +252,8 @@ int ObUnitResource::init_and_check_iops_(const ObUnitResource &user_spec)
         // user specified
         iops_weight_ = user_spec.iops_weight();
       } else {
-        // not specified, init to 0
-        iops_weight_ = DEFAULT_IOPS_WEIGHT;
+        // not specified, init to min_cpu
+        iops_weight_ = get_default_iops_weight(min_cpu_);
       }
     }
   }
