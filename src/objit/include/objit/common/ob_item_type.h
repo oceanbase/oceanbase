@@ -2690,6 +2690,10 @@ typedef enum ObItemType
   T_CREATE_WRAPPED_FUNCTION = 4769,
   T_CREATE_WRAPPED_PROCEDURE = 4770,
   T_BASE64_CIPHER = 4771,
+
+  // optimizer hint
+  T_INDEX_ASC_HINT = 4772,
+  T_INDEX_DESC_HINT = 4773,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

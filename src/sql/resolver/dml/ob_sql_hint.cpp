@@ -1942,6 +1942,39 @@ int ObLogPlanHint::check_use_skip_scan(uint64_t table_id,
   return ret;
 }
 
+int ObLogPlanHint::check_scan_direction(const ObQueryCtx &ctx,
+                                        uint64_t table_id,
+                                        uint64_t index_id,
+                                        ObOrderDirection &direction) const
+{
+  int ret = OB_SUCCESS;
+  direction = ObOrderDirection::UNORDERED;
+  const LogTableHint *log_table_hint = get_log_table_hint(table_id);
+  int64_t pos = OB_INVALID_INDEX;
+  static const uint64_t index_desc_enable_version = COMPAT_VERSION_4_3_5;
+  if (!ctx.check_opt_compat_version(index_desc_enable_version)) {
+    direction = ObOrderDirection::UNORDERED;
+  } else if (NULL != log_table_hint &&
+             ObOptimizerUtil::find_item(log_table_hint->index_list_, index_id, &pos)) {
+    const ObIndexHint *hint = NULL;
+    if (OB_UNLIKELY(pos >= log_table_hint->index_hints_.count() || pos < 0)
+        || OB_ISNULL(hint = log_table_hint->index_hints_.at(pos))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected pos", K(ret), K(pos), K(log_table_hint->index_hints_.count()), K(hint));
+    } else if (hint->is_asc_hint()) {
+      direction = default_asc_direction();
+    } else if (hint->is_desc_hint()) {
+      direction = default_desc_direction();
+    } else if (is_outline_data_ &&
+               hint->is_unordered_hint()) {
+      direction = default_asc_direction();
+    } else {
+      direction = ObOrderDirection::UNORDERED;
+    }
+  }
+  return ret;
+}
+
 const ObTableDynamicSamplingHint *ObLogPlanHint::get_dynamic_sampling_hint(uint64_t table_id) const
 {
   const LogTableHint *log_table_hint = get_log_table_hint(table_id);
@@ -2498,7 +2531,11 @@ int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
       if (OB_SUCC(ret) && (!index_name.empty())) {
         int64_t no_index_hint_pos = OB_INVALID_INDEX;
         int64_t index_hint_pos = OB_INVALID_INDEX;
+        int64_t index_asc_hint_pos = OB_INVALID_INDEX;
+        int64_t index_desc_hint_pos = OB_INVALID_INDEX;
         int64_t index_ss_hint_pos = OB_INVALID_INDEX;
+        int64_t index_ss_asc_hint_pos = OB_INVALID_INDEX;
+        int64_t index_ss_desc_hint_pos = OB_INVALID_INDEX;
         const uint64_t N = index_hints_.count();
         const ObIndexHint *index_hint = NULL;
         for (int64_t hint_i = 0; OB_SUCC(ret) && hint_i < N; ++hint_i) {
@@ -2512,10 +2549,40 @@ int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
             /* do nothing */
           } else if (T_NO_INDEX_HINT == index_hint->get_hint_type()) {
             no_index_hint_pos = hint_i;
-          } else if (T_INDEX_SS_HINT == index_hint->get_hint_type()) {
-            index_ss_hint_pos = hint_i;
+          } else if (index_hint->use_skip_scan()) {
+            if (index_hint->is_asc_hint()) {
+              index_ss_asc_hint_pos = hint_i;
+            } else if (index_hint->is_desc_hint()) {
+              index_ss_desc_hint_pos = hint_i;
+            } else {
+              index_ss_hint_pos = hint_i;
+            }
           } else {
-            index_hint_pos = hint_i;
+            if (index_hint->is_asc_hint()) {
+              index_asc_hint_pos = hint_i;
+            } else if (index_hint->is_desc_hint()) {
+              index_desc_hint_pos = hint_i;
+            } else {
+              index_hint_pos = hint_i;
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_INVALID_INDEX != index_asc_hint_pos &&
+              OB_INVALID_INDEX != index_desc_hint_pos) {
+            // ignore both asc and desc hint if both are present
+          } else if (OB_INVALID_INDEX != index_asc_hint_pos) {
+            index_hint_pos = index_asc_hint_pos;
+          } else if (OB_INVALID_INDEX != index_desc_hint_pos) {
+            index_hint_pos = index_desc_hint_pos;
+          }
+          if (OB_INVALID_INDEX != index_ss_asc_hint_pos &&
+              OB_INVALID_INDEX != index_ss_desc_hint_pos) {
+            // ignore both asc and desc hint if both are present
+          } else if (OB_INVALID_INDEX != index_ss_asc_hint_pos) {
+            index_ss_hint_pos = index_ss_asc_hint_pos;
+          } else if (OB_INVALID_INDEX != index_ss_desc_hint_pos) {
+            index_ss_hint_pos = index_ss_desc_hint_pos;
           }
         }
         if (OB_FAIL(ret)) {
@@ -2713,7 +2780,9 @@ int LogTableHint::get_index_prefix(const uint64_t index_id, int64_t &index_prefi
       } else if (OB_ISNULL(index_hints_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(i), K(index_hints_));
-      } else if (T_INDEX_HINT == index_hints_.at(i)->get_hint_type()) {
+      } else if (T_INDEX_HINT == index_hints_.at(i)->get_hint_type() ||
+                 T_INDEX_ASC_HINT == index_hints_.at(i)->get_hint_type() ||
+                 T_INDEX_DESC_HINT == index_hints_.at(i)->get_hint_type()) {
         index_prefix = index_hints_.at(i)->get_index_prefix();
       }
     }

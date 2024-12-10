@@ -1577,6 +1577,19 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
       }
       break;
     }
+    case ADJUST_SCAN_DIRECTION: {
+      if (LOG_SORT == get_type()) {
+        ObLogSort *log_sort = static_cast<ObLogSort *>(this);
+        if (NULL != log_sort->get_topn_filter_node() &&
+            LOG_TABLE_SCAN == log_sort->get_topn_filter_node()->get_type()) {
+          ObLogTableScan *log_tsc = static_cast<ObLogTableScan *>(log_sort->get_topn_filter_node());
+          if (OB_FAIL(log_tsc->try_adjust_scan_direction(log_sort->get_sort_keys()))) {
+            LOG_WARN("failed to adjust table scan direction", K(ret));
+          }
+        }
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected access of default branch", K(op), K(ret));
@@ -1716,6 +1729,9 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
         if (OB_FAIL(collect_batch_exec_param_post(ctx))) {
           LOG_WARN("failed to gen batch exec param post",  K(ret));
         }
+        break;
+      }
+      case ADJUST_SCAN_DIRECTION: {
         break;
       }
       default:

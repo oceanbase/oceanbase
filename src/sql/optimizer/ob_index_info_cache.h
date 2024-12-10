@@ -157,6 +157,7 @@ public:
     is_fulltext_index_(false),
     is_multivalue_index_(false),
     is_vector_index_(false),
+    force_direction_(false),
     range_info_(),
     ordering_info_(),
     interesting_order_info_(OrderingFlag::NOT_MATCH),
@@ -200,6 +201,8 @@ public:
   ObShardingInfo *get_sharding_info() const { return sharding_info_; }
   bool is_multivalue_index() const { return is_multivalue_index_; }
   void set_is_multivalue_index(const bool is_multivalue_index) { is_multivalue_index_ = is_multivalue_index; }
+  bool is_force_direction() const { return force_direction_; }
+  void set_force_direction(bool force) { force_direction_ = force; }
   TO_STRING_KV(K_(index_id), K_(is_unique_index), K_(is_index_back), K_(is_index_global),
                K_(is_fulltext_index), K_(is_multivalue_index), K_(range_info), K_(ordering_info), K_(interesting_order_info),
                K_(interesting_order_prefix_count));
@@ -212,6 +215,7 @@ private:
   bool is_fulltext_index_;
   bool is_multivalue_index_;
   bool is_vector_index_;
+  bool force_direction_;
   QueryRangeInfo range_info_;
   OrderingInfo ordering_info_;
   int64_t interesting_order_info_;  // 记录索引的序在stmt中的哪些地方用到 e.g. join, group by, order by

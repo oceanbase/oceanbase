@@ -2331,7 +2331,9 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
   int64_t index_prefix = index_prefix_;
   ObItemType index_type = T_INDEX_HINT;
   const ObDMLStmt *stmt = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+  bool use_desc_hint = get_scan_direction() == default_desc_direction();
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
+      OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULl", K(ret), K(get_plan()), K(stmt));
   } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
@@ -2348,19 +2350,22 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
       LOG_WARN("failed to print table parallel hint", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    use_desc_hint &= stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5);
+  }
   if (OB_FAIL(ret)) {
   } else if (is_skip_scan()) {
-    index_type = T_INDEX_SS_HINT;
+    index_type = use_desc_hint ? T_INDEX_SS_DESC_HINT : T_INDEX_SS_HINT;
     if (ref_table_id_ == index_table_id_) {
       index_name = &ObIndexHint::PRIMARY_KEY;
     } else {
       index_name = &get_index_name();
     }
-  } else if (ref_table_id_ == index_table_id_ && index_prefix < 0) {
+  } else if (ref_table_id_ == index_table_id_ && index_prefix < 0 && !use_desc_hint) {
     index_type = T_FULL_HINT;
     index_name = &ObIndexHint::PRIMARY_KEY;
   } else {
-    index_type = T_INDEX_HINT;
+    index_type = use_desc_hint ? T_INDEX_DESC_HINT : T_INDEX_HINT;
     if (ref_table_id_ == index_table_id_) {
       index_name = &ObIndexHint::PRIMARY_KEY;
     } else {
@@ -2466,16 +2471,17 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected log index hint", K(ret), K(*table_hint));
     } else if (table_hint->is_use_index_hint()) {// print used use index hint
+      const ObIndexHint *index_hint = NULL;
       if (ObOptimizerUtil::find_item(table_hint->index_list_, index_table_id_, &idx)) {
         if (OB_UNLIKELY(idx < 0 || idx >= table_hint->index_list_.count())
-            || OB_ISNULL(hint = table_hint->index_hints_.at(idx))) {
+            || OB_ISNULL(index_hint = static_cast<const ObIndexHint *>(table_hint->index_hints_.at(idx)))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected idx", K(ret), K(idx), K(table_hint->index_list_));
-        } else if (!is_skip_scan() && T_INDEX_SS_HINT == hint->get_hint_type()) {
+        } else if (!is_skip_scan() && index_hint->use_skip_scan()) {
           /* is not index skip scan but exist index_ss hint */
-        } else if (hint->is_trans_added()) {
+        } else if (index_hint->is_trans_added()) {
           //do nothing
-        } else if (OB_FAIL(hint->print_hint(plan_text))) {
+        } else if (OB_FAIL(index_hint->print_hint(plan_text))) {
           LOG_WARN("failed to print index hint", K(ret), K(*hint));
         }
       }
@@ -4162,6 +4168,36 @@ int ObLogTableScan::copy_gen_col_range_exprs()
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObLogTableScan::try_adjust_scan_direction(const ObIArray<OrderItem> &sort_keys)
+{
+  int ret = OB_SUCCESS;
+  bool order_used = false;
+  const AccessPath *path = NULL;
+  if (OB_ISNULL(path = get_access_path())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(path));
+  } else if (sort_keys.empty() || path->ordering_.empty() ||
+             path->force_direction_ || use_batch()) {
+    // do nothing
+  } else if (OB_FAIL(check_op_orderding_used_by_parent(order_used))) {
+    LOG_WARN("failed to check op ordering", K(ret));
+  } else if (!order_used) {
+    const OrderItem &first_sortkey = sort_keys.at(0);
+    bool found = false;
+    bool need_reverse = false;
+    for (int64_t i = 0; !found && i < path->ordering_.count(); i ++) {
+      const OrderItem &path_order = path->ordering_.at(i);
+      if (path_order.expr_ == first_sortkey.expr_) {
+        found = true;
+      }
+    }
+    if (OB_SUCC(ret) && found) {
+      set_scan_direction(first_sortkey.order_type_);
     }
   }
   return ret;

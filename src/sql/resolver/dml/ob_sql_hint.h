@@ -464,6 +464,10 @@ struct ObLogPlanHint
   int check_use_skip_scan(uint64_t table_id,  uint64_t index_id,
                           bool &force_skip_scan,
                           bool &force_no_skip_scan) const;
+  int check_scan_direction(const ObQueryCtx &ctx,
+                           uint64_t table_id,
+                           uint64_t index_id,
+                           ObOrderDirection &direction) const;
   const LogJoinHint* get_join_hint(const ObRelIds &join_tables) const;
   const ObIArray<LogJoinHint> &get_join_hints() const { return join_hints_; }
   SetAlgo get_valid_set_algo() const;
