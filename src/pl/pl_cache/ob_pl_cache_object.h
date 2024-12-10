@@ -89,6 +89,7 @@ struct PLCacheObjStat
   uint64_t slowest_exec_usec_;    // execution slowest usec
   int64_t schema_version_;
   int64_t ps_stmt_id_;//prepare stmt id
+  int64_t pl_cg_mem_hold_;
   common::ObString sys_vars_str_;
 
   PLCacheObjStat()
@@ -108,6 +109,7 @@ struct PLCacheObjStat
       slowest_exec_usec_(0),
       schema_version_(OB_INVALID_ID),
       ps_stmt_id_(OB_INVALID_ID),
+      pl_cg_mem_hold_(0),
       sys_vars_str_()
   {
     sql_id_[0] = '\0';
@@ -136,6 +138,7 @@ struct PLCacheObjStat
     slowest_exec_usec_ = 0;
     schema_version_ = OB_INVALID_ID;
     ps_stmt_id_ = OB_INVALID_ID;
+    pl_cg_mem_hold_ = 0;
     sys_vars_str_.reset();
   }
 
@@ -149,6 +152,7 @@ struct PLCacheObjStat
                K_(compile_time),
                K_(type),
                K_(schema_version),
+               K_(pl_cg_mem_hold),
                K_(sys_vars_str));
 };
 

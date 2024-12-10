@@ -7914,6 +7914,7 @@ def_table_schema(
       ('is_in_pc', 'bool'),
       ('erase_time', 'timestamp'),
       ('compile_time', 'uint'),
+      ('pl_cg_mem_hold', 'int'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -32761,7 +32762,8 @@ def_table_schema(
            COMPILE_TIME,
            SCHEMA_VERSION,
            PS_STMT_ID,
-           DB_ID
+           DB_ID,
+           PL_CG_MEM_HOLD
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true
 """.replace("\n", " "),
     normal_columns = [
@@ -32797,7 +32799,8 @@ def_table_schema(
            COMPILE_TIME,
            SCHEMA_VERSION,
            PS_STMT_ID,
-           DB_ID
+           DB_ID,
+           PL_CG_MEM_HOLD
     FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 
@@ -63752,7 +63755,8 @@ def_table_schema(
            COMPILE_TIME AS COMPILE_TIME,
            SCHEMA_VERSION AS SCHEMA_VERSION,
            PS_STMT_ID AS PS_STMT_ID,
-           DB_ID AS DB_ID
+           DB_ID AS DB_ID,
+           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD
     FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc='1'
 """.replace("\n", " "),
     normal_columns = [
@@ -63790,7 +63794,8 @@ def_table_schema(
            COMPILE_TIME AS COMPILE_TIME,
            SCHEMA_VERSION AS SCHEMA_VERSION,
            PS_STMT_ID AS PS_STMT_ID,
-           DB_ID AS DB_ID
+           DB_ID AS DB_ID,
+           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD
     FROM SYS.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 

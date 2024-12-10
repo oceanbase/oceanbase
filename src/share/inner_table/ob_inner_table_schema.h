@@ -101,7 +101,8 @@ struct ALL_VIRTUAL_PLAN_STAT_CDE {
     RULE_NAME,
     IS_IN_PC,
     ERASE_TIME,
-    COMPILE_TIME
+    COMPILE_TIME,
+    PL_CG_MEM_HOLD
   };
 };
 
@@ -248,7 +249,8 @@ struct ALL_VIRTUAL_PLAN_STAT_ORA_CDE {
     RULE_NAME,
     IS_IN_PC,
     ERASE_TIME,
-    COMPILE_TIME
+    COMPILE_TIME,
+    PL_CG_MEM_HOLD
   };
 };
 
