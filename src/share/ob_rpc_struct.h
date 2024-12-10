@@ -4417,14 +4417,18 @@ struct ObCreateTabletExtraInfo final
 public:
   ObCreateTabletExtraInfo() { reset(); }
   ~ObCreateTabletExtraInfo() { reset(); }
-  int init(const uint64_t tenant_data_version, const bool need_create_empty_major, const bool micro_index_clustered);
+  int init(const uint64_t tenant_data_version,
+           const bool need_create_empty_major,
+           const bool micro_index_clustered,
+           const ObTabletID &split_src_tablet_id);
   void reset();
   int assign(const ObCreateTabletExtraInfo &other);
 public:
   uint64_t tenant_data_version_;
   bool need_create_empty_major_;
   bool micro_index_clustered_;
-  TO_STRING_KV(K_(tenant_data_version), K_(need_create_empty_major), K_(micro_index_clustered));
+  ObTabletID split_src_tablet_id_;
+  TO_STRING_KV(K_(tenant_data_version), K_(need_create_empty_major), K_(micro_index_clustered), K_(split_src_tablet_id));
 };
 
 struct ObBatchCreateTabletArg
