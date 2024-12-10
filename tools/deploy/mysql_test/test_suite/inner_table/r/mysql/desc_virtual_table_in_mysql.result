@@ -380,6 +380,7 @@ is_in_pc	tinyint(4)	NO		NULL
 erase_time	timestamp(6)	NO		NULL	
 compile_time	bigint(20) unsigned	NO		NULL	
 pl_cg_mem_hold	bigint(20)	NO		NULL	
+pl_evict_version	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_plan_stat;
 IF(count(*) >= 0, 1, 0)
 1

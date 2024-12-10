@@ -8499,6 +8499,7 @@ def_table_schema(
       ('erase_time', 'timestamp'),
       ('compile_time', 'uint'),
       ('pl_cg_mem_hold', 'int'),
+      ('pl_evict_version', 'int'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -34279,6 +34280,7 @@ def_table_schema(
            PL_SCHEMA_ID AS OBJECT_ID,
            COMPILE_TIME,
            SCHEMA_VERSION,
+           PL_EVICT_VERSION,
            PS_STMT_ID,
            DB_ID,
            PL_CG_MEM_HOLD
@@ -34316,6 +34318,7 @@ def_table_schema(
            OBJECT_ID,
            COMPILE_TIME,
            SCHEMA_VERSION,
+           PL_EVICT_VERSION,
            PS_STMT_ID,
            DB_ID,
            PL_CG_MEM_HOLD
@@ -67949,6 +67952,7 @@ def_table_schema(
            PL_SCHEMA_ID AS OBJECT_ID,
            COMPILE_TIME AS COMPILE_TIME,
            SCHEMA_VERSION AS SCHEMA_VERSION,
+           PL_EVICT_VERSION AS PL_EVICT_VERSION,
            PS_STMT_ID AS PS_STMT_ID,
            DB_ID AS DB_ID,
            PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD
@@ -67987,6 +67991,7 @@ def_table_schema(
            OBJECT_ID AS OBJECT_ID,
            COMPILE_TIME AS COMPILE_TIME,
            SCHEMA_VERSION AS SCHEMA_VERSION,
+           PL_EVICT_VERSION AS PL_EVICT_VERSION,
            PS_STMT_ID AS PS_STMT_ID,
            DB_ID AS DB_ID,
            PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD

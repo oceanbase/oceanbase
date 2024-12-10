@@ -506,6 +506,16 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       }
       break;
     }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::PL_EVICT_VERSION: {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (NULL != pl_object) {
+        cells[i].set_int(pl_object->get_stat().pl_evict_version_);
+      } else {
+        cells[i].set_int(0);
+      }
+      break;
+    }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::LAST_ACTIVE_TIME: {
       int64_t last_active_time = 0;
       if (!cache_stat_updated) {
