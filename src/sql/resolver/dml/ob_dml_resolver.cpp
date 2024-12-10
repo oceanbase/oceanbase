@@ -384,7 +384,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.view_ref_id_ = view_ref_id_;
     ctx.is_in_sys_view_ = params_.is_in_sys_view_;
     ctx.is_variable_allowed_ = !(is_mysql_mode() && params_.is_from_create_view_);
-    ctx.is_need_print_ = params_.is_from_create_view_ || params_.is_from_create_table_;
+    ctx.is_need_print_ = params_.is_from_create_view_ || params_.is_from_create_table_ || params_.is_returning_;
     ctx.is_from_show_resolver_ = params_.is_from_show_resolver_;
     ObRawExprResolverImpl expr_resolver(ctx);
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();

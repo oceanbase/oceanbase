@@ -323,6 +323,7 @@ typedef struct
     uint32_t is_for_remap_                     : 1;
     uint32_t is_external_table_                : 1;
     uint32_t is_into_cluster_                  : 1;
+    uint32_t is_returning_                     : 1;
   };
 
   ParseNode *result_tree_;

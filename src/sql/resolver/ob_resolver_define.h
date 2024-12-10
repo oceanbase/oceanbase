@@ -376,7 +376,8 @@ struct ObResolverParams
        star_expansion_infos_(),
        is_resolve_lateral_derived_table_(false),
        package_guard_(NULL),
-       is_resolve_fake_cte_table_(false)
+       is_resolve_fake_cte_table_(false),
+       is_returning_(false)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
 
@@ -444,6 +445,7 @@ public:
   bool is_resolve_lateral_derived_table_; // used to mark resolve lateral derived table.
   pl::ObPLPackageGuard *package_guard_;
   bool is_resolve_fake_cte_table_;
+  bool is_returning_;
 };
 } // end namespace sql
 } // end namespace oceanbase
