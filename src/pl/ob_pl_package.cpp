@@ -226,7 +226,8 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
       } else if (OB_NOT_NULL(ser_value = resolve_ctx.session_info_.get_user_variable_value(key))) {
         need_deserialize = true;
       }
-      if (OB_SUCC(ret) && need_deserialize) {
+      if (OB_FAIL(ret)) {
+      } else if (need_deserialize) {
         if (OB_FAIL(package_state.get_package_var_val(var_idx, value))) {
           LOG_WARN("failt to get package var", K(ret), K(var_idx));
         } else {
@@ -298,6 +299,13 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
           if (OB_NOT_NULL(resolve_ctx.session_info_.get_pl_sync_pkg_vars())) {
             OZ (resolve_ctx.session_info_.get_pl_sync_pkg_vars()->set_refactored(key));
           }
+        }
+      } else {
+        const sql::ObSqlExpression *default_expr = var->is_formal_param() ? NULL : get_default_expr(var->get_default());
+        if (OB_NOT_NULL(default_expr) &&
+            !IS_CONST_TYPE(default_expr->get_expr_items().at(0).get_item_type())) { // has default value, make user var to sync it
+          OZ (package_state.update_changed_vars(var_idx));
+          OX (resolve_ctx.session_info_.set_pl_can_retry(false));
         }
       }
     }
