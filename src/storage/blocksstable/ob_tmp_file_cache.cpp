@@ -1491,6 +1491,9 @@ int ObTmpTenantMemBlockManager::exec_wait()
             STORAGE_LOG(WARN, "fail to guard request condition", K(ret));
           } else {
             ATOMIC_DEC(&washing_count_);
+            uint64_t hash_val = 0;
+            hash_val = murmurhash(&block_id, sizeof(block_id), hash_val);
+            ObBucketHashWLockGuard lock_guard(map_lock_, hash_val);
             if (OB_FAIL(blk.give_back_buf_into_cache(true/*set block disked for washed block*/))) {
               STORAGE_LOG(WARN, "fail to give back buf into cache", K(ret), K(block_id));
             } else if (OB_FAIL(t_mblk_map_.erase_refactored(block_id))) {
