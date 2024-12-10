@@ -73,10 +73,7 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
       OX (package_clause_node = package_block_node->children_[1]);
       OX (package_stmts_node = package_block_node->children_[2]);
       OX (package_name_node = package_block_node->children_[3]);
-      OZ (ObResolverUtils::resolve_sp_name(*session_info_,
-                                                   *sp_name_node,
-                                                   db_name,
-                                                   package_name));
+      OZ (ObResolverUtils::resolve_sp_name(*session_info_, *sp_name_node, db_name, package_name));
       CK (OB_NOT_NULL(schema_checker_));
       if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
         OZ (schema_checker_->check_ora_ddl_priv(
@@ -142,8 +139,7 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
                                                                         : common::ORACLE_MODE;
           obrpc::ObCreatePackageArg &create_package_arg = stmt->get_create_package_arg();
           ObPackageInfo &package_info = create_package_arg.package_info_;
-          ObString package_block(static_cast<int32_t>(package_block_node->str_len_),
-                                 package_block_node->str_value_);
+          ObString package_block(static_cast<int32_t>(package_block_node->str_len_), package_block_node->str_value_);
           create_package_arg.is_replace_ = static_cast<bool>(parse_tree.int32_values_[0]);
           create_package_arg.is_editionable_ = !static_cast<bool>(parse_tree.int32_values_[1]);
           create_package_arg.db_name_ = db_name;
@@ -240,9 +236,9 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
               (const_cast<ObPLBlockNS &>(package_ast.get_body()->get_namespace())).set_external_ns(NULL);
             }
             OZ (compiler.analyze_package(source,
-                                        &(package_ast.get_body()->get_namespace()),
-                                        package_body_ast,
-                                        false));
+                                         &(package_ast.get_body()->get_namespace()),
+                                         package_body_ast,
+                                         false));
             if (OB_SUCC(ret)) {
               obrpc::ObCreatePackageArg &create_package_arg = stmt->get_create_package_arg();
               ObIArray<ObRoutineInfo> &routine_list = create_package_arg.public_routine_infos_;
@@ -253,8 +249,8 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
               for (int64_t i = 0; OB_SUCC(ret) && i < routine_list.count(); ++i) {
                 OZ (routine_infos.push_back(&routine_list.at(i)));
               }
-              OZ (ObCreatePackageBodyResolver::update_routine_route_sql(*allocator_, *session_info_, routines,
-                                      spec_routine_table, body_routine_table, routine_infos));
+              OZ (ObCreatePackageBodyResolver::update_routine_route_sql(
+                *allocator_, *session_info_, routines, spec_routine_table, body_routine_table, routine_infos));
               if (OB_FAIL(ret)) {
                 routines.reset();
               } else {
@@ -590,11 +586,12 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
         && OB_NOT_NULL(package_body_block_node->str_value_)
         && OB_LIKELY(package_body_block_node->str_len_ > 0)) {
       ObString package_body_src(package_body_block_node->str_len_, package_body_block_node->str_value_);
-      HEAP_VARS_2((ObPLPackageAST, package_spec_ast, *allocator_),
-                  (ObPLPackageAST, package_body_ast, *allocator_)) {
+      ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      HEAP_VARS_2((ObPLPackageAST, package_spec_ast, tmp_allocator),
+                  (ObPLPackageAST, package_body_ast, tmp_allocator)) {
         ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
         ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_mgr();
-        ObPLCompiler compiler(*params_.allocator_,
+        ObPLCompiler compiler(tmp_allocator,
                               *params_.session_info_,
                               *schema_guard,
                               package_guard,
@@ -613,6 +610,7 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
           ret = OB_ERR_SPEC_NOT_EXIST;
           LOG_USER_ERROR(OB_ERR_SPEC_NOT_EXIST, package_name.length(), package_name.ptr());
         }
+
         CK (OB_NOT_NULL(package_spec_info));
         OX (is_invoker_right = package_spec_info->is_invoker_right());
         OZ (package_spec_ast.init(db_name,
@@ -624,11 +622,9 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
                                   NULL));
 
         OX (source = package_spec_info->get_source());
-        OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
-              *allocator_, session_info_->get_dtc_params(), source));
+        OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(tmp_allocator, session_info_->get_dtc_params(), source));
+        OZ (compiler.analyze_package(source,NULL, package_spec_ast, false));
 
-        OZ (compiler.analyze_package(source,
-                                     NULL, package_spec_ast, false));
         OZ (package_body_ast.init(db_name,
                                   package_name,
                                   PL_PACKAGE_BODY,
@@ -636,10 +632,12 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
                                   OB_INVALID_ID,
                                   OB_INVALID_VERSION,
                                   &package_spec_ast));
+
         OZ (compiler.analyze_package(package_body_src,
                                   &(package_spec_ast.get_body()->get_namespace()),
                                   package_body_ast,
                                   false));
+
         if (OB_SUCC(ret)) {
           if (package_body_ast.get_serially_reusable()
               != package_spec_ast.get_serially_reusable()) {
@@ -789,11 +787,13 @@ int ObCreatePackageBodyResolver::update_routine_route_sql(ObIAllocator &allocato
     for (int64_t j = 0; OB_SUCC(ret) && j < routine_infos.count(); ++j) {
       tmp_routine_info = routine_infos.at(j);
       if (tmp_routine_info->get_subprogram_id() == i) {
-        ObString route_sql = pl_routine_info->get_route_sql();
-        ObString routine_body = pl_routine_info->get_routine_body();
+        ObString route_sql;
+        ObString routine_body;
         CK (false == found);
         OX (found = true);
         OX (routine_info = *tmp_routine_info);
+        OZ (ob_write_string(allocator, pl_routine_info->get_route_sql(), route_sql));
+        OZ (ob_write_string(allocator, pl_routine_info->get_routine_body(), routine_body));
         OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator, session_info.get_dtc_params(), route_sql));
         OX (routine_info.set_route_sql(route_sql));
         OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator, session_info.get_dtc_params(), routine_body));

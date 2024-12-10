@@ -102,6 +102,13 @@ int ObPLCompiler::init_anonymous_ast(
   for (int64_t i = 0; OB_SUCC(ret) && OB_NOT_NULL(params) && i < params->count(); ++i) {
     ObObjParam& param = const_cast<ObObjParam&>(params->at(i));
     if (param.is_pl_extend()) {
+#ifdef OB_BUILD_ORACLE_PL
+      if (PL_REF_CURSOR_TYPE == param.get_meta().get_extend_type()) {
+        pl_type.reset();
+        pl_type.set_type(pl::PL_REF_CURSOR_TYPE);
+        pl_type.set_type_from(pl::PL_TYPE_SYS_REFCURSOR);
+      } else
+#endif
       if (!is_mocked_anonymous_array_id(param.get_udt_id())) {
         const ObUserDefinedType *user_type = nullptr;
         // try schema type first
@@ -157,10 +164,6 @@ int ObPLCompiler::init_anonymous_ast(
         OX (pl_type.reset());
         OX (pl_type = *user_type);
 #ifdef OB_BUILD_ORACLE_PL
-      } else if (PL_REF_CURSOR_TYPE == param.get_meta().get_extend_type()) {
-        pl_type.reset();
-        pl_type.set_type(pl::PL_REF_CURSOR_TYPE);
-        pl_type.set_type_from(pl::PL_TYPE_SYS_REFCURSOR);
       } else if (PL_NESTED_TABLE_TYPE == param.get_meta().get_extend_type()) {
         ObPLCollection *coll = reinterpret_cast<ObPLCollection *>(param.get_ext());
         ObNestedTableType *nested_type = NULL;
