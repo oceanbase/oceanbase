@@ -1539,7 +1539,9 @@ int ObTableScanOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
   in_rescan_ = true;
-  if (OB_FAIL(ObOperator::inner_rescan())) {
+  if (OB_FAIL(try_check_status())) {
+    LOG_WARN("failed to check status", K(ret));
+  } else if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to exec inner rescan");
   } else {
     if (OB_FAIL(inner_rescan_for_tsc())) {
