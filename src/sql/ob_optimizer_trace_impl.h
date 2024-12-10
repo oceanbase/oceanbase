@@ -36,6 +36,7 @@ class ObDMLStmt;
 class ObSelectStmt;
 class ObRawExpr;
 class ObLogPlan;
+class ObLogicalOperator;
 class ObJoinOrder;
 class Path;
 class JoinPath;
@@ -330,6 +331,7 @@ public:
 ////print plan info
 /***********************************************/
   int append(const ObLogPlan *log_plan);
+  int append(const ObLogicalOperator *plan_top);
   int append(const ObJoinOrder *join_order);
   int append(const Path *value);
   int append(const JoinPath *value);

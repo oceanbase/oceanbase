@@ -78,6 +78,7 @@ public:
   virtual int get_card_without_filter(double &card) override;
   virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
   virtual int compute_property() override;
+  virtual int compute_op_parallel_and_server_info() override;
 
 private:
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> distinct_exprs_;

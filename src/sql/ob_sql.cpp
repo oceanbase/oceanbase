@@ -3491,7 +3491,7 @@ int ObSql::generate_plan(ParseResult &parse_result,
       option.with_tree_line_ = false;
       ObSqlPlan sql_plan(logical_plan->get_allocator());
       ObSEArray<common::ObString, 32> plan_strs;
-      if (OB_TMP_FAIL(sql_plan.print_sql_plan(logical_plan,
+      if (OB_TMP_FAIL(sql_plan.print_sql_plan(logical_plan->get_plan_root(),
                                           EXPLAIN_EXTENDED,
                                           option,
                                           plan_strs))) {

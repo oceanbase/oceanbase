@@ -10918,7 +10918,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   bool is_partition_wise = false;
   bool is_ext_partition_wise = false;
   bool right_is_base_table = false;
-  bool need_pull_to_local = false;
   ObSEArray<ObRawExpr*, 8> target_part_keys;
   ObShardingInfo *left_sharding = NULL;
   ObShardingInfo *right_sharding = NULL;
@@ -11150,11 +11149,9 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     } else if (is_partition_wise) {
       bool need_reduce_dop = left_path.parallel_more_than_part_cnt()
                              || right_path.parallel_more_than_part_cnt();
-      if (!need_reduce_dop && left_path.exchange_allocated_ == right_path.exchange_allocated_) {
+      if (!need_reduce_dop) {
         distributed_methods = DIST_PARTITION_WISE;
         OPT_TRACE("plan will use partition wise method");
-      } else {
-        need_pull_to_local = true;
       }
     } else {
       distributed_methods &= ~DIST_PARTITION_WISE;
@@ -11249,7 +11246,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       if (use_shared_hash_join && HASH_JOIN == join_algo) {
         distributed_methods &= ~DIST_BC2HOST_NONE;
       }
-      need_pull_to_local = right_path.exchange_allocated_;
     }
   }
   // check if match hash none
@@ -11290,7 +11286,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       OPT_TRACE("plan will use none partition method and prune none broadcast/hash method");
       distributed_methods &= ~DIST_NONE_BROADCAST;
       distributed_methods &= ~DIST_NONE_HASH;
-      need_pull_to_local = false;
     }
   }
   // check if match none-hash
@@ -11326,8 +11321,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
    * if we have other parallel join methods, avoid pull to local execution,
    * we may change this strategy in future
    */
-  if (OB_SUCC(ret) && distributed_methods != DIST_PULL_TO_LOCAL &&
-      !need_pull_to_local) {
+  if (OB_SUCC(ret) && distributed_methods != DIST_PULL_TO_LOCAL) {
     distributed_methods &= ~DIST_PULL_TO_LOCAL;
     OPT_TRACE("plan will not use pull to local method");
   }

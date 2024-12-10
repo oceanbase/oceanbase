@@ -1223,6 +1223,7 @@ class ObPQHint : public ObOptHint
   inline bool is_force_basic()  const { return T_DISTRIBUTE_BASIC == dist_method_; }
   inline bool is_force_partition_wise()  const { return T_DISTRIBUTE_NONE == dist_method_; }
   inline bool is_force_dist_hash()  const { return T_DISTRIBUTE_HASH == dist_method_; }
+  inline bool is_force_pull_to_local() const { return T_DISTRIBUTE_LOCAL == dist_method_; }
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_method));
 private:

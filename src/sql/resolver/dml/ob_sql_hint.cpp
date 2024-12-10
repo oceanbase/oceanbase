@@ -1761,7 +1761,8 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
                                         bool &force_normal_sort,
                                         bool &force_basic,
                                         bool &force_partition_wise,
-                                        bool &force_dist_hash) const
+                                        bool &force_dist_hash,
+                                        bool &force_pull_to_local) const
 {
   int ret = OB_SUCCESS;
   force_use_hash = false;
@@ -1792,10 +1793,12 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
     force_basic = pq_hint->is_force_basic();
     force_partition_wise = pq_hint->is_force_partition_wise();
     force_dist_hash = pq_hint->is_force_dist_hash();
+    force_pull_to_local = pq_hint->is_force_pull_to_local();
   } else if (is_outline_data_) {
     force_basic = true;
     force_partition_wise = false;
     force_dist_hash = false;
+    force_pull_to_local = false;
   }
   return ret;
 }

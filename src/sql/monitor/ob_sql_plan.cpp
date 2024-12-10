@@ -94,7 +94,7 @@ int ObSqlPlan::store_sql_plan(ObLogPlan* log_plan, ObPhysicalPlan* phy_plan)
   } else if (OB_FAIL(init_buffer(plan_text))) {
     LOG_WARN("failed to init buffer", K(ret));
   } else if (OB_FAIL(get_sql_plan_infos(plan_text,
-                                        log_plan,
+                                        log_plan->get_plan_root(),
                                         sql_plan_infos))) {
     LOG_WARN("failed to get sql plan infos", K(ret));
   } else if (OB_FAIL(compress_plan.compress_logical_plan(allocator_, sql_plan_infos))) {
@@ -127,7 +127,7 @@ int ObSqlPlan::store_sql_plan_for_explain(ObExecContext *ctx,
   if (OB_FAIL(init_buffer(plan_text))) {
     LOG_WARN("failed to init buffer", K(ret));
   } else if (OB_FAIL(get_sql_plan_infos(plan_text,
-                                        plan,
+                                        plan->get_plan_root(),
                                         sql_plan_infos))) {
     LOG_WARN("failed to get sql plan infos", K(ret));
   }
@@ -164,7 +164,7 @@ int ObSqlPlan::store_sql_plan_for_explain(ObExecContext *ctx,
   return ret;
 }
 
-int ObSqlPlan::print_sql_plan(ObLogPlan* plan,
+int ObSqlPlan::print_sql_plan(ObLogicalOperator* plan_top,
                               ExplainType type,
                               const ObExplainDisplayOpt& option,
                               ObIArray<common::ObString> &plan_strs)
@@ -177,7 +177,7 @@ int ObSqlPlan::print_sql_plan(ObLogPlan* plan,
   if (OB_FAIL(init_buffer(plan_text))) {
     LOG_WARN("failed to init buffer", K(ret));
   } else if (OB_FAIL(get_sql_plan_infos(plan_text,
-                                        plan,
+                                        plan_top,
                                         sql_plan_infos))) {
     LOG_WARN("failed to get sql plan infos", K(ret));
   } else if (OB_FAIL(format_sql_plan(sql_plan_infos,
@@ -614,16 +614,16 @@ int ObSqlPlan::inner_escape_quotes(char* &ptr, int64_t &length)
 }
 
 int ObSqlPlan::get_sql_plan_infos(PlanText &plan_text,
-                                  ObLogPlan* plan,
+                                  ObLogicalOperator* plan_top,
                                   ObIArray<ObSqlPlanItem*> &sql_plan_infos)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(plan)) {
+  if (OB_ISNULL(plan_top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null plan", K(ret));
   //get operator tree info
   } else if (OB_FAIL(get_plan_tree_infos(plan_text,
-                                         plan->get_plan_root(),
+                                         plan_top,
                                          sql_plan_infos,
                                          0,
                                          1,
@@ -634,19 +634,19 @@ int ObSqlPlan::get_sql_plan_infos(PlanText &plan_text,
     LOG_WARN("unexpect null plan", K(ret));
   //get used hint、outline info
   } else if (OB_FAIL(get_plan_used_hint_info(plan_text,
-                                             plan,
+                                             plan_top,
                                              sql_plan_infos.at(0)))) {
     LOG_WARN("failed to get plan outline info", K(ret));
   } else if (OB_FAIL(get_qb_name_trace(plan_text,
-                                      plan,
+                                      plan_top->get_plan(),
                                       sql_plan_infos.at(0)))) {
     LOG_WARN("failed to get qb name trace", K(ret));
   } else if (OB_FAIL(get_plan_outline_info(plan_text,
-                                           plan,
+                                           plan_top,
                                            sql_plan_infos.at(0)))) {
     LOG_WARN("failed to get plan outline info", K(ret));
   } else if (OB_FAIL(get_plan_other_info(plan_text,
-                                         plan,
+                                         plan_top->get_plan(),
                                          sql_plan_infos.at(0)))) {
     LOG_WARN("failed to get plan other info", K(ret));
   }
@@ -694,16 +694,16 @@ int ObSqlPlan::get_plan_tree_infos(PlanText &plan_text,
 }
 
 int ObSqlPlan::get_plan_used_hint_info(PlanText &plan_text,
-                                      ObLogPlan* plan,
+                                      ObLogicalOperator* plan_top,
                                       ObSqlPlanItem* sql_plan_item)
 {
   int ret = OB_SUCCESS;
   const ObQueryCtx *query_ctx = NULL;
   //print_plan_tree:print_used_hint
-  if (OB_ISNULL(plan) || OB_ISNULL(sql_plan_item) ||
-      OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx())) {
+  if (OB_ISNULL(plan_top) || OB_ISNULL(plan_top->get_plan()) || OB_ISNULL(sql_plan_item) ||
+      OB_ISNULL(query_ctx = plan_top->get_plan()->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), K(plan), K(query_ctx));
+    LOG_WARN("unexpected NULL", K(ret), K(plan_top), K(query_ctx));
   } else {
     const ObQueryHint &query_hint = query_ctx->get_query_hint();
     PlanText temp_text;
@@ -714,7 +714,7 @@ int ObSqlPlan::get_plan_used_hint_info(PlanText &plan_text,
     BUF_PRINT_CONST_STR("  /*+", temp_text);
     BUF_PRINT_CONST_STR(NEW_LINE, temp_text);
     BUF_PRINT_CONST_STR(OUTPUT_PREFIX, temp_text);
-    if (OB_FAIL(get_plan_tree_used_hint(temp_text, plan->get_plan_root()))) {
+    if (OB_FAIL(get_plan_tree_used_hint(temp_text, plan_top))) {
       LOG_WARN("failed to get plan tree used hint", K(ret));
     } else if (OB_FAIL(query_hint.print_qb_name_hints(temp_text))) {
       LOG_WARN("failed to print qb name hints", K(ret));
@@ -789,15 +789,15 @@ int ObSqlPlan::get_qb_name_trace(PlanText &plan_text,
 }
 
 int ObSqlPlan::get_plan_outline_info(PlanText &plan_text,
-                                    ObLogPlan* plan,
+                                    ObLogicalOperator* plan_top,
                                     ObSqlPlanItem* sql_plan_item)
 {
   int ret = OB_SUCCESS;
   const ObQueryCtx *query_ctx = NULL;
-  if (OB_ISNULL(plan) || OB_ISNULL(sql_plan_item) ||
-      OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx())) {
+  if (OB_ISNULL(plan_top) || OB_ISNULL(plan_top->get_plan()) || OB_ISNULL(sql_plan_item) ||
+      OB_ISNULL(query_ctx = plan_top->get_plan()->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), K(plan), K(query_ctx));
+    LOG_WARN("unexpected NULL", K(ret), K(plan_top), K(query_ctx));
   } else {
     PlanText temp_text;
     temp_text.is_used_hint_ = false;
@@ -810,13 +810,13 @@ int ObSqlPlan::get_plan_outline_info(PlanText &plan_text,
     BUF_PRINT_CONST_STR(OUTPUT_PREFIX, temp_text);
     BUF_PRINT_CONST_STR("BEGIN_OUTLINE_DATA", temp_text);
     const ObQueryHint &query_hint = query_ctx->get_query_hint();
-    if (OB_FAIL(reset_plan_tree_outline_flag(plan->get_plan_root()))) {
+    if (OB_FAIL(reset_plan_tree_outline_flag(plan_top))) {
       LOG_WARN("failed to reset plan tree outline flag", K(ret));
-    } else if (OB_FAIL(get_plan_tree_outline(temp_text, plan->get_plan_root()))) {
+    } else if (OB_FAIL(get_plan_tree_outline(temp_text, plan_top))) {
       LOG_WARN("failed to get plan tree outline", K(ret));
     } else if (OB_FAIL(query_hint.print_transform_hints(temp_text))) {
       LOG_WARN("failed to print all transform hints", K(ret));
-    } else if (OB_FAIL(get_global_hint_outline(temp_text, *plan))) {
+    } else if (OB_FAIL(get_global_hint_outline(temp_text, *plan_top->get_plan()))) {
       LOG_WARN("failed to get plan global hint outline", K(ret));
     } else {
       BUF_PRINT_CONST_STR(NEW_LINE, temp_text);
@@ -1114,7 +1114,11 @@ int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
   } else if (sql_plan_infos.empty()) {
     //do nothing
   } else {
-    if (EXPLAIN_BASIC == type) {
+    if (EXPLAIN_PLAN_TABLE == type) {
+      if (OB_FAIL(format_plan_table(sql_plan_infos, option, plan_text))) {
+        LOG_WARN("failed to print plan", K(ret));
+      }
+    } else if (EXPLAIN_BASIC == type) {
       if (OB_FAIL(format_basic_plan_table(sql_plan_infos, option, plan_text))) {
         LOG_WARN("failed to print plan", K(ret));
       } else if (OB_FAIL(format_plan_output(sql_plan_infos, plan_text))) {
