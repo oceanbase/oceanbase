@@ -149,45 +149,42 @@ int ObExprPLAssocIndex::do_eval_assoc_index(int64_t &assoc_idx,
 
   if (OB_FAIL(ret)) {
   } else if (info.for_write_) {
-    if (OB_INVALID_INDEX == index
-        && OB_FAIL(ObSPIService::spi_extend_assoc_array(session->get_effective_tenant_id(),
-                                                        session->get_pl_context()->get_current_ctx(),
-                                                        allocator,
-                                                        *assoc_array,
-                                                        1))) {
-      LOG_WARN("failed to extend assoc array", K(ret), KPC(assoc_array));
-    }
-
-    if (OB_SUCC(ret)) {
-      assoc_idx = (OB_INVALID_INDEX == index) ? assoc_array->get_count() : index + 1; //pos是传给ObjAccess使用的下标，从1开始
-
-      if (OB_INVALID_INDEX == index) { // new Key
-        ObObj new_key;
-        if (OB_FAIL(deep_copy_obj(*assoc_array->get_allocator(), key, new_key))) {
-          LOG_WARN("failed to copy key", K(ret), K(key), K(new_key), KPC(assoc_array));
-        } else if (OB_FAIL(assoc_array->set_key(assoc_array->get_count() - 1, new_key))) {
-          LOG_WARN("failed to set new key", K(ret), K(key), K(new_key), KPC(assoc_array));
-        } else if (OB_FAIL(assoc_array->insert_sort(key, assoc_array->get_count() - 1, search_end, assoc_array->get_count() - 1))) {
-          LOG_WARN("failed to insert new key", K(ret), K(key), K(new_key), KPC(assoc_array));
-        } else if (OB_FAIL(assoc_array->update_first_last(OB_INVALID_INDEX == search_end ? 0 : search_end))) {
-          LOG_WARN("failed to update first last", K(ret), K(search_end));
+    if (OB_INVALID_INDEX == index) {
+      ObObj new_key;
+      if (OB_FAIL(deep_copy_obj(*assoc_array->get_allocator(), key, new_key))) {
+        LOG_WARN("failed to copy key", K(ret), K(key), K(new_key), KPC(assoc_array));
+      } else if (OB_FAIL(ObSPIService::spi_extend_assoc_array(session->get_effective_tenant_id(),
+                                                              session->get_pl_context()->get_current_ctx(),
+                                                              allocator,
+                                                              *assoc_array,
+                                                              1))) {
+        int tmp_ret = pl::ObUserDefinedType::destruct_objparam(*assoc_array->get_allocator(), new_key, session);
+        LOG_WARN("failed to extend assoc array", K(ret), K(tmp_ret), KPC(assoc_array));
+      } else if (OB_FAIL(assoc_array->set_key(assoc_array->get_count() - 1, new_key))) {
+        LOG_ERROR("failed to set new key", K(ret), K(key), K(new_key), KPC(assoc_array));
+      } else if (OB_FAIL(assoc_array->insert_sort(key, assoc_array->get_count() - 1, search_end, assoc_array->get_count() - 1))) {
+        LOG_ERROR("failed to insert new key", K(ret), K(key), K(new_key), KPC(assoc_array));
+      } else if (OB_FAIL(assoc_array->update_first_last(OB_INVALID_INDEX == search_end ? 0 : search_end))) {
+        LOG_WARN("failed to update first last", K(ret), K(search_end));
+      } else {
+        assoc_idx = assoc_array->get_count();
+      }
+    } else { // old Key
+      bool is_deleted = false;
+      assoc_idx = index + 1;
+      if (OB_FAIL(assoc_array->is_elem_deleted(index, is_deleted))) {
+        LOG_WARN("failed to test element deleted.", K(ret));
+      } else if (is_deleted) {
+        if (assoc_array->get_element_desc().is_composite_type()) { // renew a composite memmory
+          if (OB_FAIL(ObSPIService::spi_new_coll_element(assoc_array->get_id(),
+                                                         assoc_array->get_allocator(),
+                                                         session->get_pl_context()->get_current_ctx(),
+                                                         assoc_array->get_data() + index))) {
+            LOG_WARN("failed to new coll element", K(ret), KPC(assoc_array), K(index));
+          }
         }
-      } else { // old Key
-        bool is_deleted = false;
-        if (OB_FAIL(assoc_array->is_elem_deleted(index, is_deleted))) {
-          LOG_WARN("failed to test element deleted.", K(ret));
-        } else if (is_deleted) {
-          if (assoc_array->get_element_desc().is_composite_type()) { // renew a composite memmory
-            if (OB_FAIL(ObSPIService::spi_new_coll_element(assoc_array->get_id(),
-                                                           assoc_array->get_allocator(),
-                                                           session->get_pl_context()->get_current_ctx(),
-                                                           assoc_array->get_data() + index))) {
-              LOG_WARN("failed to new coll element", K(ret), KPC(assoc_array), K(index));
-            }
-          }
-          if (OB_SUCC(ret) && OB_FAIL(assoc_array->update_first_last(search_end))) {
-            LOG_WARN("failed to update first last", K(ret), K(search_end));
-          }
+        if (OB_SUCC(ret) && OB_FAIL(assoc_array->update_first_last(search_end))) {
+          LOG_WARN("failed to update first last", K(ret), K(search_end));
         }
       }
     }
