@@ -389,7 +389,8 @@ typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ObStrValues
 
 #ifndef NDEBUG
 #define CHECK_STRING_LENGTH(expr, datum)   \
-  if (OB_SUCC(ret) && 0 == datum.len_ && !datum.is_null() && is_oracle_mode() &&\
+  if (OB_SUCC(ret) && expr.type_ != T_FUN_SYS_INNER_DECODE_LIKE &&\
+      0 == datum.len_ && !datum.is_null() && is_oracle_mode() &&\
       (ob_is_string_tc(expr.datum_meta_.type_) || ob_is_raw(expr.datum_meta_.type_))) {  \
     SQL_ENG_LOG(ERROR, "unexpected datum length", K(expr)); \
   }
