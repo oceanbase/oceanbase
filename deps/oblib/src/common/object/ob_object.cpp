@@ -1446,13 +1446,17 @@ void* ObObj::get_deep_copy_obj_ptr()
       ptr = (void *)v_.string_;
     }
   } else if (ob_is_raw(this->get_type())) {
-    ptr = (void *)v_.string_;
+    if (val_len_ != 0) {
+      ptr = (void *)v_.string_;
+    }
   } else if (ob_is_number_tc(this->get_type())
             && 0 != nmb_desc_.len_
             && NULL != v_.nmb_digits_) {
     ptr = (void *)v_.nmb_digits_;
   } else if (ob_is_rowid_tc(this->get_type())) {
-    ptr = (void *)v_.string_;
+    if (val_len_ != 0) {
+      ptr = (void *)v_.string_;
+    }
   } else if (ob_is_lob_locator(this->get_type())) {
     ptr = (void *)v_.lob_locator_;
   } else {
