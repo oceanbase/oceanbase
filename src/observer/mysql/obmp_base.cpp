@@ -404,12 +404,12 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
   // 注意，此处req_has_wokenup_可能为true，不能再访问req对象
   // @todo 重构wb逻辑
   if (!async_resp_used) { // 异步回包不重置warning buffer，重置操作在callback中做
-    session.reset_cur_sql_id();
-    session.reset_current_plan_hash();
-    session.reset_current_plan_id();
     session.reset_warnings_buf();
     if (!session.get_is_in_retry()) {
       session.set_session_sleep();
+      session.reset_cur_sql_id();
+      session.reset_current_plan_id();
+      session.reset_current_plan_hash();
     }
   }
   // clear tsi warning buffer
