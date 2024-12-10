@@ -499,6 +499,7 @@ protected:
 
   int local_iter_rescan();
   int close_and_reopen();
+  int set_stmt_allocator(ObDASBaseRtDef *rtdef, ObIAllocator *alloc);
 
   int cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op);
   int can_prune_by_tablet_id(const common::ObTabletID &tablet_id,

@@ -75,6 +75,9 @@ void ObDASGlobalLookupIter::reset_lookup_state()
 {
   index_ordered_idx_ = 0;
   ObDASLookupIter::reset_lookup_state();
+  // lookup stmt allocator is replaced with index stmt allocator at each rescan,
+  // change it to lookup memctx allocator
+  lookup_rtdef_->stmt_allocator_.set_alloc(&get_arena_allocator());
 }
 
 int ObDASGlobalLookupIter::add_rowkey()
