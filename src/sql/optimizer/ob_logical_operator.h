@@ -1543,7 +1543,7 @@ public:
   {
     inherit_sharding_index_ = inherit_sharding_index;
   }
-
+  inline bool need_re_est_child_cost() const { return need_re_est_child_cost_; }
   inline bool need_osg_merge() const { return need_osg_merge_; }
   inline void set_need_osg_merge(bool v)
   {
@@ -1633,6 +1633,8 @@ public:
   int get_part_column_exprs(const uint64_t table_id,
                             const uint64_t ref_table_id,
                             ObIArray<ObRawExpr *> &part_cols) const;
+  bool is_parallel_more_than_part_cnt() const;
+  int64_t get_part_cnt() const;
   inline void set_parallel(int64_t parallel) { parallel_ = parallel; }
   inline int64_t get_parallel() const { return parallel_; }
   inline void set_op_parallel_rule(OpParallelRule op_parallel_rule) { op_parallel_rule_ = op_parallel_rule; }
@@ -1977,6 +1979,7 @@ protected:
   bool need_osg_merge_;
   int64_t max_px_thread_branch_;
   int64_t max_px_group_branch_;
+  bool need_re_est_child_cost_;
 };
 
 template <typename Allocator>

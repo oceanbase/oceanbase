@@ -925,6 +925,54 @@ int ObLogSet::compute_op_parallel_and_server_info()
   int ret = OB_SUCCESS;
   if (OB_FAIL(compute_normal_multi_child_parallel_and_server_info())) {
     LOG_WARN("failed to compute multi child parallel and server info", K(ret), K(get_distributed_algo()));
+  } else if (DistAlgo::DIST_PARTITION_WISE == get_distributed_algo()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
+  } else if (DistAlgo::DIST_SET_PARTITION_WISE == get_distributed_algo()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_server_list().count() > 0 &&
+               get_parallel() > child->get_server_list().count()) {
+      int64_t reduce_parallel = child->get_server_list().count();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
+  } else if (DistAlgo::DIST_PARTITION_NONE == get_distributed_algo()) {
+    ObLogicalOperator *child = get_child(second_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
+  } else if (DistAlgo::DIST_NONE_PARTITION == get_distributed_algo()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
   }
   return ret;
 }

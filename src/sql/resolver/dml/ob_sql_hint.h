@@ -482,7 +482,8 @@ struct ObLogPlanHint
                            bool &force_normal_sort,
                            bool &force_basic,
                            bool &force_partition_wise,
-                           bool &force_dist_hash) const;
+                           bool &force_dist_hash,
+                           bool &force_pull_to_local) const;
   int get_distinct_info(bool &force_use_hash,
                         bool &force_use_merge,
                         bool &force_basic,

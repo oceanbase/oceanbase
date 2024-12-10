@@ -132,6 +132,10 @@ int ObLogDistinct::est_cost()
   double distinct_cost = 0.0;
   ObLogicalOperator *child = NULL;
   double child_ndv = total_ndv_;
+  EstimateCostInfo param;
+  param.need_parallel_ = get_parallel();
+  double child_card = 0;
+  double child_cost = 0;
   if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(child), K(ret));
@@ -140,9 +144,14 @@ int ObLogDistinct::est_cost()
     LOG_WARN("get unexpected total ndv", K(child_ndv), K(ret));
   } else if (OB_FAIL(inner_est_cost(get_parallel(), child->get_card(), child_ndv, distinct_cost))) {
     LOG_WARN("failed to est distinct cost", K(ret));
+  } else if (need_re_est_child_cost() &&
+             OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+    LOG_WARN("failed to re est child cost", K(ret));
+  } else if (!need_re_est_child_cost() &&
+             OB_FALSE_IT(child_cost=child->get_cost())) {
   } else {
     set_op_cost(distinct_cost);
-    set_cost(child->get_cost() + distinct_cost);
+    set_cost(child_cost + distinct_cost);
     set_card(child_ndv);
   }
   return ret;
@@ -448,6 +457,27 @@ int ObLogDistinct::compute_property()
     input_sorted_ = true;
   } else {
     input_sorted_ = false;
+  }
+  return ret;
+}
+
+int ObLogDistinct::compute_op_parallel_and_server_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::compute_op_parallel_and_server_info())) {
+    LOG_WARN("failed to compute parallel and server info", K(ret));
+  } else if (is_partition_wise() && !is_push_down()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
   }
   return ret;
 }

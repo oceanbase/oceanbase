@@ -226,13 +226,15 @@ public:
   { return ObRollupStatus::ROLLUP_COLLECTOR == rollup_adaptive_info_.rollup_status_; }
   inline void set_force_push_down(bool force_push_down)
   { force_push_down_ = force_push_down; }
-  void set_group_by_outline_info(bool is_basic,
-                                 bool is_partition_wise,
+  void set_group_by_outline_info(DistAlgo algo,
                                  bool use_hash_aggr,
                                  bool has_push_down,
                                  bool use_part_sort = false)
   {
-    dist_method_ = is_basic ? T_DISTRIBUTE_BASIC : (is_partition_wise ? T_DISTRIBUTE_NONE : T_DISTRIBUTE_HASH);
+    dist_method_ = DistAlgo::DIST_BASIC_METHOD == algo ? T_DISTRIBUTE_BASIC :
+                  (DistAlgo::DIST_PARTITION_WISE == algo ? T_DISTRIBUTE_NONE :
+                  (DistAlgo::DIST_HASH_HASH == algo ? T_DISTRIBUTE_HASH : T_DISTRIBUTE_LOCAL));
+
     use_hash_aggr_ = use_hash_aggr;
     has_push_down_ = has_push_down;
     use_part_sort_ = use_part_sort;
@@ -267,6 +269,7 @@ private:
   virtual int print_outline_data(PlanText &plan_text) override;
   virtual int print_used_hint(PlanText &plan_text) override;
   virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
+  virtual int compute_op_parallel_and_server_info() override;
 private:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> group_exprs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> rollup_exprs_;

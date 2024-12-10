@@ -344,6 +344,9 @@ int ObLogWindowFunction::est_cost()
   double child_card = 0.0;
   double child_width = 0.0;
   double sel = 0.0;
+  EstimateCostInfo param;
+  param.need_parallel_ = get_parallel();
+  double child_cost = 0;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(first_child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
@@ -352,8 +355,13 @@ int ObLogWindowFunction::est_cost()
     LOG_WARN("get child est info failed", K(ret));
   } else if (OB_FAIL(inner_est_cost(child_card, child_width, op_cost_))) {
     LOG_WARN("calculate cost of window function failed", K(ret));
+  } else if (need_re_est_child_cost() &&
+             OB_FAIL(SMART_CALL(first_child->re_est_cost(param, child_card, child_cost)))) {
+    LOG_WARN("failed to re est child cost", K(ret));
+  } else if (!need_re_est_child_cost() &&
+             OB_FALSE_IT(child_cost=first_child->get_cost())) {
   } else {
-    set_cost(first_child->get_cost() + op_cost_);
+    set_cost(child_cost + op_cost_);
     set_op_cost(op_cost_);
     set_card(child_card * sel);
   }
@@ -686,6 +694,27 @@ int ObLogWindowFunction::check_use_child_ordering(bool &used, int64_t &inherit_c
   inherit_child_ordering_index = first_child;
   if (get_sort_keys().empty()) {
     used = false;
+  }
+  return ret;
+}
+
+int ObLogWindowFunction::compute_op_parallel_and_server_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::compute_op_parallel_and_server_info())) {
+    LOG_WARN("failed to compute parallel and server info", K(ret));
+  } else if (is_partition_wise()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
   }
   return ret;
 }

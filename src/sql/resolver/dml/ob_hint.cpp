@@ -2788,6 +2788,7 @@ const char *ObPQHint::get_dist_method_str(ObItemType dist_method)
     case T_DISTRIBUTE_BASIC:  return  "BASIC";
     case T_DISTRIBUTE_NONE:   return  "NONE";
     case T_DISTRIBUTE_HASH:   return  "HASH";
+    case T_DISTRIBUTE_LOCAL:  return  "LOCAL";
     default:  return NULL;
   }
   return NULL;

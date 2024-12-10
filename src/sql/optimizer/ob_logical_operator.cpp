@@ -442,7 +442,8 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     inherit_sharding_index_(-1),
     need_osg_merge_(false),
     max_px_thread_branch_(OB_INVALID_INDEX),
-    max_px_group_branch_(OB_INVALID_INDEX)
+    max_px_group_branch_(OB_INVALID_INDEX),
+    need_re_est_child_cost_(false)
 
 {
 }
@@ -6741,4 +6742,24 @@ int ObLogicalOperator::check_contain_dist_das(const ObIArray<ObAddr> &exec_serve
     }
   }
   return ret;
+}
+
+bool ObLogicalOperator::is_parallel_more_than_part_cnt() const
+{
+  if (NULL == strong_sharding_) {
+    return false;
+  } else if (strong_sharding_->get_part_cnt() < 1) {
+    return false;
+  } else {
+    return get_parallel() > strong_sharding_->get_part_cnt();
+  }
+}
+
+int64_t ObLogicalOperator::get_part_cnt() const
+{
+  if (NULL == strong_sharding_) {
+    return 0;
+  } else {
+    return strong_sharding_->get_part_cnt();
+  }
 }
