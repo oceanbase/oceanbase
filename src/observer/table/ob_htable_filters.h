@@ -78,9 +78,12 @@ public:
   virtual int get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell) = 0;
   void set_reversed(bool reversed) { is_reversed_ = reversed; }
   bool is_reversed() const { return is_reversed_; }
+  virtual void set_hbase_version(const ObString &version) { hbase_major_version_ = version[0] - '0'; }
+  int8_t get_hbase_major_version() const { return hbase_major_version_; }
   VIRTUAL_TO_STRING_KV("filter", "Filter");
 protected:
   bool is_reversed_;
+  int8_t hbase_major_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(Filter);
 };
@@ -330,6 +333,7 @@ public:
   virtual int64_t get_format_filter_string_length() const override;
   virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
   virtual const char *filter_name() const { return "FilterListBase"; }
+  virtual void set_hbase_version(const ObString &version) override;
 
   TO_STRING_KV("filter", "FilterList",
                "op", operator_to_string(op_),
@@ -431,6 +435,7 @@ public:
   virtual int transform_cell(ObIAllocator &allocator, ObHTableCellEntity &cell) override;
   virtual bool filter_row() override;
   virtual bool has_filter_row() override { return true; }
+  virtual void set_hbase_version(const ObString &version) override { filter_->set_hbase_version(version); }
   virtual int64_t get_format_filter_string_length() const override;
   virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
 

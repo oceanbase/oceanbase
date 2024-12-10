@@ -882,7 +882,7 @@ public:
   virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const = 0;
   virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos) = 0;
   virtual int64_t get_serialize_size() const = 0;
-  virtual int deep_copy(ObKVParamsBase *ob_params) const = 0;
+  virtual int deep_copy(ObIAllocator &allocator, ObKVParamsBase *ob_params) const = 0;
   virtual int64_t to_string(char* buf, const int64_t buf_len) const = 0;
 protected:
   ParamType param_type_;
@@ -891,12 +891,14 @@ protected:
 class ObHBaseParams : public ObKVParamsBase
 {
 public:
+  const ObString DEFAULT_HBASE_VERSION = ObString("1.3.6");
   ObHBaseParams()
       : caching_(0),
         call_timeout_(0),
         allow_partial_results_(false),
         is_cache_block_(true),
-        check_existence_only_(false)
+        check_existence_only_(false),
+        hbase_version_(DEFAULT_HBASE_VERSION)
   {
     param_type_ = ParamType::HBase;
   }
@@ -908,14 +910,15 @@ public:
   OB_INLINE void set_allow_partial_results(const bool allow_partial_results) { allow_partial_results_ = allow_partial_results; }
   OB_INLINE void set_is_cache_block(const bool is_cache_block) { is_cache_block_ = is_cache_block; }
   OB_INLINE void set_check_existence_only(const bool check_existence_only) {check_existence_only_ = check_existence_only; }
-  int deep_copy(ObKVParamsBase *ob_params) const;
+  int deep_copy(ObIAllocator &allocator, ObKVParamsBase *ob_params) const override;
   NEED_SERIALIZE_AND_DESERIALIZE;
   TO_STRING_KV( K_(param_type),
               K_(caching),
               K_(call_timeout),
               K_(allow_partial_results),
               K_(is_cache_block),
-              K_(check_existence_only));
+              K_(check_existence_only),
+              K_(hbase_version));
 public:
   int32_t caching_;
   int32_t call_timeout_;
@@ -928,6 +931,7 @@ public:
       bool check_existence_only_ : 1;
     };
   };
+  ObString hbase_version_;
 };
 
 class ObKVParams
