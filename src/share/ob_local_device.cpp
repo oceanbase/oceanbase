@@ -1277,7 +1277,9 @@ int64_t ObLocalDevice::get_max_block_size(int64_t reserved_size) const
   return block_file_max_size;
 }
 
-int ObLocalDevice::check_space_full(const int64_t required_size) const
+int ObLocalDevice::check_space_full(
+    const int64_t required_size,
+    const bool alarm_if_space_full) const
 {
   int ret = OB_SUCCESS;
   int64_t used_percent = 0;
@@ -1293,7 +1295,7 @@ int ObLocalDevice::check_space_full(const int64_t required_size) const
     if (GCONF.data_disk_usage_limit_percentage != NO_LIMIT_PERCENT
         && used_percent >= GCONF.data_disk_usage_limit_percentage) {
       ret = OB_SERVER_OUTOF_DISK_SPACE;
-      if (REACH_TIME_INTERVAL(24 * 3600LL * 1000 * 1000 /* 24h */)) {
+      if (alarm_if_space_full && REACH_TIME_INTERVAL(24 * 3600LL * 1000 * 1000 /* 24h */)) {
         LOG_DBA_ERROR_V2(OB_SHARE_OUTOF_DISK_SPACE, OB_SERVER_OUTOF_DISK_SPACE,
                          "disk is almost full. resuired size is ", required_size,
                          " and used percent is ", used_percent, "%. ",
