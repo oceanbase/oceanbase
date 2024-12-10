@@ -341,6 +341,7 @@ _load_tde_encrypt_engine
 _log_writer_parallelism
 _ls_gc_wait_readonly_tx_time
 _ls_migration_wait_completing_timeout
+_max_dblink_conn_per_observer
 _max_elr_dependent_trx_count
 _max_ls_cnt_per_server
 _max_malloc_sample_interval

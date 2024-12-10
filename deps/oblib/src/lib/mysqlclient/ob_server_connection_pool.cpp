@@ -210,6 +210,7 @@ int ObServerConnectionPool::init_dblink(uint64_t tenant_id, uint64_t dblink_id, 
                                         ObMySQLConnectionPool *root, int64_t max_allowed_conn_count)
 {
   UNUSED(conn_str);
+  UNUSED(max_allowed_conn_count);
   int ret = OB_SUCCESS;
   if (OB_ISNULL(root)) {
     ret = OB_INVALID_ARGUMENT;
@@ -236,7 +237,7 @@ int ObServerConnectionPool::init_dblink(uint64_t tenant_id, uint64_t dblink_id, 
     root_ = root;
     last_renew_timestamp_ = ::oceanbase::common::ObTimeUtility::current_time();
     server_not_available_ = false;
-    max_allowed_conn_count_ = max_allowed_conn_count;
+    max_allowed_conn_count_ = get_max_dblink_conn_per_observer();
     connection_pool_ptr_ = &dblink_connection_pool_;
     if (cluster_str.empty()) {
       (void)snprintf(db_user_, sizeof(db_user_), "%.*s@%.*s", db_user.length(), db_user.ptr(),
