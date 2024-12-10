@@ -24165,11 +24165,6 @@ int ObDDLService::generate_tenant_schema(
              || OB_ISNULL(schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP_(schema_service));
-  } else if (OB_FAIL(schema_service_->get_schema_service()->fetch_new_tenant_id(user_tenant_id))) {
-    LOG_WARN("fetch_new_tenant_id failed", KR(ret));
-  } else if (OB_INVALID_ID == user_tenant_id) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant id is invalid", KR(ret), K(user_tenant_id));
   } else if (OB_FAIL(user_tenant_schema.assign(arg.tenant_schema_))) {
     LOG_WARN("fail to assign user tenant schema", KR(ret), K(arg));
   } else if (OB_FAIL(meta_tenant_schema.assign(user_tenant_schema))) {
@@ -24180,6 +24175,11 @@ int ObDDLService::generate_tenant_schema(
   } else if (OB_FAIL(check_create_tenant_schema(
           arg.pool_list_, user_tenant_schema, schema_guard))) {
     LOG_WARN("check tenant schema failed", KR(ret), K(user_tenant_schema), K(arg));
+  } else if (OB_FAIL(schema_service_->get_schema_service()->fetch_new_tenant_id(user_tenant_id))) {
+    LOG_WARN("fetch_new_tenant_id failed", KR(ret));
+  } else if (OB_INVALID_ID == user_tenant_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant id is invalid", KR(ret), K(user_tenant_id));
   } else {
     // user tenant
     if (OB_SUCC(ret)) {
