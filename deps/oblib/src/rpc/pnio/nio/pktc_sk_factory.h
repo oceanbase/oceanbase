@@ -84,8 +84,8 @@ static void pktc_sk_delete(pktc_sf_t* sf, pktc_sk_t* s) {
   pktc_t* io = structof(sf, pktc_t, sf);
   rk_info("sk_destroy: s=%p io=%p", s, io);
   pktc_sk_destroy(sf, s);
-  pktc_write_queue_on_sk_destroy(io, s);
   pktc_resp_cb_on_sk_destroy(io, s);
+  pktc_write_queue_on_sk_destroy(io, s);
   ib_destroy(&s->ib);
   dlink_delete(&s->rl_ready_link);
   pktc_sk_free(s);

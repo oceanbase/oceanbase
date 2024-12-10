@@ -110,6 +110,7 @@ void pn_print_diag_info(pn_comm_t* pn_comm);
 #define PNIO_DISCONNECT_NOT_SENT_OUT    (-55)
 #define PNIO_LISTEN_ERROR               (-56)
 #define PNIO_PKT_TERMINATE              (-57)
+#define PNIO_PKT_TERMINATE_NOT_SENT_OUT (-58)
 
 enum {
   PN_NORMAL_PKT = 0,
