@@ -511,15 +511,9 @@ int is_exists(const char *block_path, bool &result)
 {
   result = false;
   int ret = OB_SUCCESS;
-  common::ObIODFileStat file_stat;
-  if (OB_FAIL(LOG_IO_ADAPTER.stat(block_path, file_stat))
-      && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
-    PALF_LOG(WARN, "stat file failed", KR(ret), K(block_path));
-  } else if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
-    ret = OB_SUCCESS;
-    result = false;
+  if (OB_FAIL(LOG_IO_ADAPTER.exist(block_path, result))) {
+    PALF_LOG(WARN, "exist file failed", KR(ret), K(block_path));
   } else {
-    result = true;
   }
   return ret;
 }

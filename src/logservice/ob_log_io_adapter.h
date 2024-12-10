@@ -163,6 +163,8 @@ public:
   int rename(const char *oldpath,
              const char *newpath);
   int unlink(const char *pathname);
+  int exist(const char *block_path,
+            bool &result);
 
   // dir interface
   int scan_dir(const char *dir_name,

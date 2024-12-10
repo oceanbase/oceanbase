@@ -587,9 +587,53 @@ int ObLogDevice::ftruncate(const ObIOFd &fd, const int64_t len)
 
 int ObLogDevice::exist(const char *pathname, bool &is_exist)
 {
-  UNUSED(pathname);
-  UNUSED(is_exist);
-  return OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!is_running_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(WARN, "ObLogDevice has not been started", K(ret), K_(is_running));
+  } else if (OB_ISNULL(pathname) || OB_UNLIKELY(0 == STRLEN(pathname))) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid arguments.", K(pathname), K(ret));
+  } else if (true == get_reloading_state_()) {
+    ret = OB_STATE_NOT_MATCH;
+  } else {
+    //wait_if_epoch_changing();
+    StatReq req;
+    StatResp resp;
+    req.set_epoch(ATOMIC_LOAD(&epoch_));
+    req.set_pathname(pathname);
+
+    do {
+      if (OB_FAIL(grpc_adapter_.stat(req, resp))) {
+        CLOG_LOG(ERROR, "grpc call failed for stat", K(ret));
+      } else if (FALSE_IT(ret = get_resp_ret_code(resp))) {
+      } else if (OB_SUCC(ret)) {
+        mode_t mode = 0;
+        if (resp.is_dir()) {
+          mode |= S_IFDIR;
+        }
+        CLOG_LOG(TRACE, "ObLogDevice stat successfully", K(mode), K(S_ISDIR(mode)));
+      } else if (OB_STATE_NOT_MATCH == ret) {
+        CLOG_LOG(WARN, "epoch changed, need to retry", K(ret));
+        deal_with_epoch_changed(req, resp);
+        //ret = OB_EAGAIN;
+      } else if (OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
+      }
+    } while (OB_EAGAIN == ret);
+
+    if (OB_SUCC(ret)) {
+      is_exist = true;
+    }
+    if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
+      is_exist = false;
+      ret = OB_SUCCESS;
+    }
+  }
+
+  return ret;
 }
 
 int ObLogDevice::stat(const char *pathname, ObIODFileStat &statbuf)

@@ -562,6 +562,30 @@ int ObLogIOAdapter::unlink(const char *pathname)
   return ret;
 }
 
+int ObLogIOAdapter::exist(const char *pathname,
+                          bool &result)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "LogIOAdapter is not inited", K(ret));
+  } else if (NULL == pathname) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", KP(pathname));
+  } else {
+    do {
+      RLockGuard guard(using_device_lock_);
+      if (OB_FAIL(using_device_->exist(pathname, result))) {
+        CLOG_LOG(WARN, "exist failed", K(ret), KP(pathname));
+      } else {
+        CLOG_LOG(TRACE, "exist success", K(pathname), KPC(this));
+      }
+      BREAK_IF_NOT_STATE_NOT_MATCH;
+    } while (OB_SUCC(deal_with_state_not_match_()));
+  }
+  return ret;
+}
+
 // dir interface
 int ObLogIOAdapter::scan_dir(const char *dir_name,
                              common::ObBaseDirEntryOperator &op)
