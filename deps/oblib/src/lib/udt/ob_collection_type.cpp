@@ -445,7 +445,9 @@ int ObSqlCollectionInfo::parse_type_info()
       const auto& match = *it;
       std::string type_name = match.str();
       if (is_root) {
-        if (OB_FAIL(create_meta_info_by_name(type_name, collection_meta_, arr_depth))) {
+        // vector element is float
+        std::string root_elem = isNumber(type_name) ? "FLOAT" : type_name;
+        if (OB_FAIL(create_meta_info_by_name(root_elem, collection_meta_, arr_depth))) {
           LOG_WARN("get type by name failed", K(ret));
         } else {
           is_root = false;
@@ -497,12 +499,16 @@ bool ObSqlCollectionInfo::has_same_super_type(const ObSqlCollectionInfo &other) 
 int ObSqlCollectionInfo::get_child_def_string(ObString &child_def) const
 {
   int ret = OB_SUCCESS;
-  const uint32_t min_len = 7; // array()
-  if (name_len_ <= min_len) {
+  if (name_len_ <= 7) { // array()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(*this));
+  } else if (ObString(6, name_def_).compare("ARRAY(") == 0) {
+    child_def = ObString(name_len_ - 7, name_def_ + 6);
+  } else if (ObString(7, name_def_).compare("VECTOR(") == 0) {
+    child_def = ObString(name_len_ - 8, name_def_ + 7);
   } else {
-    child_def = ObString(name_len_ - min_len, name_def_ + (min_len - 1));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(*this));
   }
   return ret;
 }

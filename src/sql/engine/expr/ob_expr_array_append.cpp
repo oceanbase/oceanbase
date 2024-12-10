@@ -349,7 +349,8 @@ int ObExprArrayAppendCommon::append_elem(ObIAllocator &tmp_allocator, ObEvalCtx 
     if (OB_FAIL(ObArrayUtil::append(*res_arr, elem_type->basic_meta_.get_obj_type(), val_datum))) {
       LOG_WARN("failed to append array value", K(ret));
     }
-  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
+             || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
     bool is_null_elem = val_datum->is_null();
     if (!is_null_elem && OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, val_subschema_id, val_datum->get_string(), val_arr))) {
       LOG_WARN("construct array obj failed", K(ret));
@@ -357,8 +358,8 @@ int ObExprArrayAppendCommon::append_elem(ObIAllocator &tmp_allocator, ObEvalCtx 
       LOG_WARN("failed to append array", K(ret));
     }
   } else {
-    ret = OB_NOT_SUPPORTED;
-    OB_LOG(WARN, "invalid array type", K(ret), K(arr_type->element_type_->type_id_));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid element type", K(ret), K(arr_type->element_type_->type_id_));
   }
   return ret;
 }
@@ -384,7 +385,8 @@ int ObExprArrayAppendCommon::append_elem_vector(ObIAllocator &tmp_allocator, ObE
     if (OB_FAIL(ObArrayUtil::append(*res_arr, elem_type->basic_meta_.get_obj_type(), &val_datum))) {
       LOG_WARN("failed to append array value", K(ret));
     }
-  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
+             || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
     bool is_null_elem = val_vec->is_null(idx);
     if (is_null_elem) {
       // do nothing
@@ -400,8 +402,8 @@ int ObExprArrayAppendCommon::append_elem_vector(ObIAllocator &tmp_allocator, ObE
       LOG_WARN("failed to append array", K(ret));
     }
   } else {
-    ret = OB_NOT_SUPPORTED;
-    OB_LOG(WARN, "invalid array type", K(ret), K(arr_type->element_type_->type_id_));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid element type", K(ret), K(arr_type->element_type_->type_id_));
   }
   return ret;
 }

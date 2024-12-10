@@ -5575,7 +5575,8 @@ int ObDMLResolver::unnest_table_add_column(TableItem *&table_item, ColumnItem *&
       if (arr_type->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
         ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
         data_type = elem_type->basic_meta_;
-      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
+                 || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
         ObString child_def;
         uint16_t child_subschema_id = 0;
         if (OB_FAIL(coll_info->get_child_def_string(child_def))) {
@@ -5588,8 +5589,8 @@ int ObDMLResolver::unnest_table_add_column(TableItem *&table_item, ColumnItem *&
           data_type.set_subschema_id(child_subschema_id);
         }
       } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supportted array data type provided.", K(ret), K(arr_type->element_type_->type_id_));
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid element type", K(ret), K(arr_type->element_type_->type_id_));
       }
     }
   }
