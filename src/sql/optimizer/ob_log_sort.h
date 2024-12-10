@@ -27,16 +27,17 @@ struct ObTopNFilterInfo
 public:
   ObTopNFilterInfo()
       : enabled_(false), p2p_sequence_id_(OB_INVALID_ID), pushdown_topn_filter_expr_(nullptr),
-        effective_sk_cnt_(0), is_shuffle_(false)
+        effective_sk_cnt_(0), is_shuffle_(false), topn_filter_node_(NULL)
   {}
   inline void init(int64_t p2p_sequence_id, ObRawExpr *pushdown_topn_filter_expr,
-                   int64_t effective_sk_cnt, bool is_shuffle)
+                   int64_t effective_sk_cnt, bool is_shuffle, ObLogicalOperator* node)
   {
     p2p_sequence_id_ = p2p_sequence_id;
     pushdown_topn_filter_expr_ = pushdown_topn_filter_expr;
     effective_sk_cnt_ = effective_sk_cnt;
     is_shuffle_ = is_shuffle;
     enabled_ = true;
+    topn_filter_node_ = node;
   }
   TO_STRING_KV(K_(enabled), K_(p2p_sequence_id), KP_(pushdown_topn_filter_expr),
                K_(effective_sk_cnt), K_(is_shuffle));
@@ -49,6 +50,7 @@ public:
   int64_t effective_sk_cnt_;
   // the topn sort op and the tsc op not in same dfo, need shuffle
   bool is_shuffle_;
+  ObLogicalOperator *topn_filter_node_;
 };
 
 class ObLogSort : public ObLogicalOperator
@@ -145,6 +147,7 @@ public:
   inline bool is_shuffle_pd_topn_filter() { return topn_filter_info_.is_shuffle_; }
   int try_allocate_pushdown_topn_runtime_filter();
   int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index);
+  ObLogicalOperator *get_topn_filter_node() const { return topn_filter_info_.topn_filter_node_; }
 protected:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer);
   int est_sort_key_width();

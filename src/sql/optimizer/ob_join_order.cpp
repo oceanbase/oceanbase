@@ -1776,6 +1776,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->index_prefix_ = index_info_entry->get_range_info().get_index_prefix();
     ap->use_column_store_ = use_column_store;
     ap->est_cost_info_.use_column_store_ = use_column_store;
+    ap->force_direction_ = index_info_entry->is_force_direction();
 
     ap->contain_das_op_ = ap->use_das_;
     ap->is_ror_ = (ref_id == index_id) ? true
@@ -2153,6 +2154,7 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
                                           common::ObIArray<ObRawExpr*> &index_keys,
                                           common::ObIArray<ObRawExpr*> &ordering,
                                           ObOrderDirection &direction,
+                                          bool &force_direction,
                                           const bool is_index_back)
 {
   int ret = OB_SUCCESS;
@@ -2161,10 +2163,13 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
   ObOptimizerContext *opt_ctx = NULL;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *index_schema = NULL;
+  ObOrderDirection hint_direction = UNORDERED;
+  force_direction = false;
   if (OB_ISNULL(get_plan())
       || OB_ISNULL(stmt = get_plan()->get_stmt())
       || OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())
-      || OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard())) {
+      || OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard())
+      || OB_ISNULL(opt_ctx->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error",
              K(get_plan()), K(stmt), K(opt_ctx),  K(schema_guard), K(ret));
@@ -2181,6 +2186,14 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
     // for global index lookup without keep order, the ordering is wrong.
   } else if (OB_FAIL(append(ordering, index_keys))) {
     LOG_WARN("failed to append index ordering expr", K(ret));
+  } else if (OB_FAIL(get_plan()->get_log_plan_hint().check_scan_direction(*opt_ctx->get_query_ctx(),
+                                                                          table_id,
+                                                                          index_id,
+                                                                          hint_direction))) {
+    LOG_WARN("failed to check scan direction", K(ret), K(table_id));
+  } else if (UNORDERED != hint_direction) {
+    direction = hint_direction;
+    force_direction = true;
   } else if (OB_FAIL(get_index_scan_direction(ordering, stmt,
                                               get_plan()->get_equal_sets(), direction))) {
     LOG_WARN("failed to get index scan direction", K(ret));
@@ -2639,6 +2652,7 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
       entry->set_index_id(index_id);
       int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
       int64_t max_prefix_count = 0;
+      bool force_direction = false;
       if (OB_FAIL(get_simple_index_info(table_id, base_table_id, index_id,
                                                is_unique_index, is_index_back, is_index_global))) {
         LOG_WARN("failed to get simple index info", K(ret));
@@ -2646,6 +2660,7 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
                                            entry->get_ordering_info().get_index_keys(),
                                            entry->get_ordering_info().get_ordering(),
                                            direction,
+                                           force_direction,
                                            is_index_back))) {
         LOG_WARN("get access path ordering ", K(ret));
       } else {
@@ -2657,6 +2672,7 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
         entry->set_is_multivalue_index(index_schema->is_multivalue_index_aux());
         entry->set_is_vector_index(index_schema->is_vec_index());
         entry->get_ordering_info().set_scan_direction(direction);
+        entry->set_force_direction(force_direction);
       }
       if (OB_SUCC(ret)) {
         ObSEArray<OrderItem, 4> index_ordering;
@@ -6194,6 +6210,7 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
   table_partition_info_ = other.table_partition_info_;
   is_get_ = other.is_get_;
   order_direction_ = other.order_direction_;
+  force_direction_ = other.force_direction_;
   is_hash_index_ = other.is_hash_index_;
   sample_info_ = other.sample_info_;
   range_prefix_count_ = other.range_prefix_count_;

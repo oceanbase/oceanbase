@@ -573,6 +573,7 @@ struct TRIndexAccessInfo
         pre_range_graph_(NULL),
         is_get_(false),
         order_direction_(direction),
+        force_direction_(false),
         is_hash_index_(false),
         est_cost_info_(table_id,
                        ref_table_id,
@@ -727,6 +728,7 @@ struct TRIndexAccessInfo
     ObPreRangeGraph* pre_range_graph_; // pre_query_graph for each access path
     bool is_get_;
     ObOrderDirection order_direction_;//序的方向（升序or倒序）
+    bool force_direction_;
     bool is_hash_index_;  // is hash index (virtual table and is index)
     ObCostTableScanInfo est_cost_info_; // estimate cost info
     common::ObSEArray<ObEstRowCountRecord, 2,
@@ -1846,6 +1848,7 @@ struct NullAwareAntiJoinInfo {
                                  common::ObIArray<ObRawExpr *> &index_keys,
                                  common::ObIArray<ObRawExpr *> &ordering,
                                  ObOrderDirection &direction,
+                                 bool &force_direction,
                                  const bool is_index_back);
 
     int get_index_scan_direction(const ObIArray<ObRawExpr *> &keys,

@@ -9468,6 +9468,9 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
       case ALLOC_STARTUP_EXPR:
       default:
         break;
+      case ADJUST_SCAN_DIRECTION: {
+        break;
+      }
       }
       if (OB_SUCC(ret)) {
         if (((PX_ESTIMATE_SIZE == operation) ||
@@ -10929,7 +10932,8 @@ int ObLogPlan::generate_plan()
                                         GEN_LOCATION_CONSTRAINT,
                                         PX_ESTIMATE_SIZE,
                                         ALLOC_STARTUP_EXPR,
-                                        COLLECT_BATCH_EXEC_PARAM))) {
+                                        COLLECT_BATCH_EXEC_PARAM,
+                                        ADJUST_SCAN_DIRECTION))) {
     LOG_WARN("failed to do plan traverse", K(ret));
   } else if (OB_FAIL(do_post_traverse_processing())) {
     LOG_WARN("failed to post traverse processing", K(ret));

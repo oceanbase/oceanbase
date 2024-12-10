@@ -15191,7 +15191,9 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     case T_INDEX_SS_ASC_HINT:
     case T_INDEX_SS_DESC_HINT:
     case T_USE_COLUMN_STORE_HINT:
-    case T_NO_USE_COLUMN_STORE_HINT: {
+    case T_NO_USE_COLUMN_STORE_HINT:
+    case T_INDEX_ASC_HINT:
+    case T_INDEX_DESC_HINT: {
       if (OB_FAIL(resolve_index_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve index hint", K(ret));
       }
@@ -15375,12 +15377,14 @@ int ObDMLResolver::resolve_index_hint(const ParseNode &index_node,
     LOG_WARN("unexpected index hint", K(ret), K(index_node.type_), K(index_node.num_child_),
                                       K(index_name_node));
   } else {
-    //T_NO_INDEX or T_INDEX_HINT
+    //T_NO_INDEX or T_INDEX_HINT or T_INDEX_ASC_HINT or T_INDEX_DESC_HINT
     index_hint->set_qb_name(qb_name);
     index_hint->get_index_name().assign_ptr(index_name_node->str_value_,
                                             static_cast<int32_t>(index_name_node->str_len_));
     opt_hint = index_hint;
-    if (T_INDEX_HINT == index_hint->get_hint_type()) {
+    if (T_INDEX_HINT == index_hint->get_hint_type() ||
+        T_INDEX_ASC_HINT == index_hint->get_hint_type() ||
+        T_INDEX_DESC_HINT == index_hint->get_hint_type()) {
       if (OB_UNLIKELY(4 != index_node.num_child_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected index hint", K(ret), K(index_node.type_), K(index_node.num_child_),

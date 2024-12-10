@@ -371,6 +371,8 @@ int ObTransformLateMaterialization::get_accessible_index(const ObSelectStmt &sel
     } else if (FALSE_IT(index_hint = static_cast<ObIndexHint *>(opt_hints.at(i)))) {
       /* do nothing */
     } else if (T_INDEX_HINT == index_hint->get_hint_type() ||
+               T_INDEX_ASC_HINT == index_hint->get_hint_type() ||
+               T_INDEX_DESC_HINT == index_hint->get_hint_type() ||
                T_INDEX_SS_HINT == index_hint->get_hint_type() ||
                T_INDEX_SS_ASC_HINT == index_hint->get_hint_type() ||
                T_INDEX_SS_DESC_HINT == index_hint->get_hint_type()) {
@@ -962,6 +964,8 @@ int ObTransformLateMaterialization::generate_late_materialization_hint(
         } else if (hint->is_access_path_hint()) {
           ObIndexHint *index_hint = static_cast<ObIndexHint *>(hint);
           if ((T_INDEX_HINT == index_hint->get_hint_type() ||
+               T_INDEX_ASC_HINT == index_hint->get_hint_type() ||
+               T_INDEX_DESC_HINT == index_hint->get_hint_type() ||
                T_INDEX_SS_HINT == index_hint->get_hint_type() ||
                T_INDEX_SS_ASC_HINT == index_hint->get_hint_type() ||
                T_INDEX_SS_DESC_HINT == index_hint->get_hint_type() ||
@@ -982,6 +986,8 @@ int ObTransformLateMaterialization::generate_late_materialization_hint(
         } else if (hint->is_access_path_hint()) {
           ObIndexHint *index_hint = static_cast<ObIndexHint *>(hint);
           if ((T_INDEX_HINT == index_hint->get_hint_type() ||
+               T_INDEX_ASC_HINT == index_hint->get_hint_type() ||
+               T_INDEX_DESC_HINT == index_hint->get_hint_type() ||
                T_INDEX_SS_HINT == index_hint->get_hint_type() ||
                T_INDEX_SS_ASC_HINT == index_hint->get_hint_type() ||
                T_INDEX_SS_DESC_HINT == index_hint->get_hint_type() ||

@@ -89,6 +89,7 @@ namespace sql
 
     COLLECT_BATCH_EXEC_PARAM,
     ALLOC_OP,
+    ADJUST_SCAN_DIRECTION,
     TRAVERSE_OP_END
   };
 
