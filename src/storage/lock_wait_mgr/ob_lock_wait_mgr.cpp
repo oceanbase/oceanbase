@@ -199,7 +199,7 @@ void ObLockWaitMgr::remove_placeholder_node(Node *node)
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected error that already exist, please contact with jianyue",
         K(err), KPC(node), KP(tmp_node));
     }
-    TRANS_LOG(TRACE, "remove placeholder", KPC(node), KP(tmp_node));
+    TRANS_LOG(INFO, "remove placeholder", K(err), KPC(node), KP(tmp_node));
   }
   if (NULL != tmp_node) {
     WaitQuiescent(get_qs());
@@ -808,7 +808,7 @@ void ObLockWaitMgr::on_lock_conflict(ObSArray<ObRowConflictInfo> &cflict_infos, 
         cflict_info.conflict_tx_id_,
         cflict_info.conflict_tx_hold_seq_.get_seq(),
         calc_holder_tx_lock_timestamp(cflict_info.holder_tx_start_time_, cflict_info.conflict_tx_hold_seq_.get_seq()));
-    TRANS_LOG_RET(LOG_LEVEL_FOR_LWM, OB_SUCCESS, "handle lock conflict end", K(ret), K(cflict_infos), KPC(node));
+    TRANS_LOG_RET(INFO, OB_SUCCESS, "handle lock conflict end", K(ret), K(cflict_infos), KPC(node));
   }
   if (OB_UNLIKELY(!ObDeadLockDetectorMgr::is_deadlock_enabled())) {
     cflict_infos.reset();
@@ -1148,7 +1148,6 @@ bool ObLockWaitMgr::on_seq_change_(Node *node,
   bool wait_succ = false;
   uint64_t hash = node->hash();
   int64_t cur_seq = 0;
-  int err = 0;
   Node* wait_node = get_wait_head(hash);
   if (NULL != wait_node) {
     // has someone in queue, enqueue itself
@@ -1168,7 +1167,7 @@ bool ObLockWaitMgr::on_seq_change_(Node *node,
     }
     (void)insert_node_(node);
   }
-  TRANS_LOG(TRACE, "LockWaitMgr.wait seq change after insert", K(wait_succ), K(enqueue_succ), KPC(node), KPC(wait_node), K(err));
+  TRANS_LOG(INFO, "LockWaitMgr.wait seq change after insert", K(wait_succ), K(enqueue_succ), KPC(node), KPC(wait_node));
   return wait_succ;
 }
 
