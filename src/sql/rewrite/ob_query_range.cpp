@@ -6442,7 +6442,7 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
                                    const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(THIS_WORKER.check_status())) {
+  if (OB_FAIL(THIS_WORKER.check_status())) {
     LOG_WARN("check status fail", K(ret));
   } else if (OB_ISNULL(search_state.start_) || OB_ISNULL(search_state.end_)
       || OB_ISNULL(search_state.include_start_) || OB_ISNULL(search_state.include_end_)
