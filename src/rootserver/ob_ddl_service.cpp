@@ -23246,8 +23246,8 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *orig_data_table_schema = nullptr;
   const ObDatabaseSchema *orig_database_schema = nullptr;
-  ObArray<int64_t>  task_ids;
-  ObArray<uint64_t> table_ids;
+  ObSEArray<int64_t, 10> task_ids;
+  ObSEArray<uint64_t, 10> table_ids;
   ObTableLockOwnerID new_owner_id;
   ObDDLSQLTransaction trans(schema_service_);
   if (OB_UNLIKELY(!alter_table_arg.is_valid())) {
@@ -23295,25 +23295,39 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
     //1、设置当前table的处于DDL_PARTITION_SPLIT状态的task任务状态设置为WAIT_PARTITION_SPLIT_RECOVERY_TASK_FINISH, 等待新表完成补数据任务
     //2、依次根据task_id获取task_record, 根据record在ObPartitionSplitTask中初始化, 解除相应ddl锁, 并且替换掉表级锁
     common::ObArenaAllocator allocator;
+    ObTableLockOwnerID old_owner_id;
+    ObDDLTaskStatus new_status = WAIT_PARTITION_SPLIT_RECOVERY_TASK_FINISH;
+
     for (int64_t i = 0; OB_SUCC(ret) && i < task_ids.count(); i++) {
-      ObDDLTaskStatus new_status = WAIT_PARTITION_SPLIT_RECOVERY_TASK_FINISH;
-      if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(trans, dest_tenant_id, task_ids.at(i), static_cast<int64_t>(new_status)))) {
-        LOG_WARN("update task status failed", K(ret), K(dest_tenant_id), K(task_ids.at(i)), K(new_status));
+      int64_t task_id = task_ids.at(i);
+      if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(trans, dest_tenant_id, task_id, static_cast<int64_t>(new_status)))) {
+        LOG_WARN("update task status failed", K(ret), K(dest_tenant_id), K(task_id), K(new_status));
       }
     }
+
+    ObSEArray<ObTabletID, 10> src_tablet_ids;
+    ObSEArray<ObTabletID, 10> dst_tablet_ids;
+    ObSEArray<ObTabletID, 10> tablet_ids;
+    ObSEArray<ObTableLockOwnerID, 10> global_split_owner_ids;
+    ObSEArray<ObTableLockOwnerID, 10> main_split_owner_ids;
+    const ObTableSchema *table_schema = nullptr;
+    ObDDLTaskRecord old_split_task_record;
+
     for (int64_t i = 0; OB_SUCC(ret) && i < task_ids.count(); i++) {
-      const ObTableSchema *table_schema = nullptr;
-      ObDDLTaskRecord old_split_task_record;
-      ObArray<ObTabletID> src_tablet_ids;
-      ObArray<ObTabletID> dst_tablet_ids;
-      ObTableLockOwnerID old_owner_id;
+      src_tablet_ids.reuse();
+      dst_tablet_ids.reuse();
+      tablet_ids.reuse();
+      old_owner_id.reset();
+      old_split_task_record.reset();
+      int64_t task_id = task_ids.at(i);
+      bool is_global_idx = false;
       HEAP_VAR(ObPartitionSplitTask, split_task) {
         if (OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(tenant_id,
-                                                                task_ids.at(i),
-                                                                root_service->get_sql_proxy(),
-                                                                allocator,
-                                                                old_split_task_record))) {
-          LOG_WARN("get ddl task record failed", K(ret), K(tenant_id), K(task_ids.at(i)));
+                                                                 task_id,
+                                                                 root_service->get_sql_proxy(),
+                                                                 allocator,
+                                                                 old_split_task_record))) {
+          LOG_WARN("get ddl task record failed", K(ret), K(tenant_id), K(task_id));
         } else if (OB_FAIL(split_task.init(old_split_task_record))) {
           LOG_WARN("init partition split task failed", K(ret), K(old_split_task_record));
         } else if (OB_FAIL(split_task.get_src_tablet_ids(src_tablet_ids))) {
@@ -23325,19 +23339,39 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("table schema is null", K(ret), K(tenant_id), K(table_schema));
-        } else if (OB_FAIL(old_owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_ids.at(i)))) {
-          LOG_WARN("failed to get old owner id", K(ret), K(task_ids.at(i)));
-        } else if (OB_FAIL(ObDDLLock::replace_lock_for_split_partition(*table_schema,
-                                                                        src_tablet_ids,
-                                                                        dst_tablet_ids,
-                                                                        old_owner_id,
-                                                                        new_owner_id,
-                                                                        trans))) {
-          LOG_WARN("fail to replace lock for split partition", K(ret));
+        } else if (OB_FALSE_IT(is_global_idx = table_schema->is_global_index_table())) {
+        } else if (OB_FAIL(old_owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id))) {
+          LOG_WARN("failed to get old owner id", K(ret), K(task_id));
+        } else if (OB_FAIL(append(tablet_ids, src_tablet_ids))) {
+          LOG_WARN("failed to append", K(ret));
+        } else if (OB_FAIL(append(tablet_ids, dst_tablet_ids))) {
+          LOG_WARN("failed to append", K(ret));
+        } else if OB_FAIL(ObDDLLock::replace_tablet_lock_for_split(tenant_id, *table_schema, tablet_ids, old_owner_id, new_owner_id, is_global_idx, trans)) {
+          LOG_WARN("failed to replace online lock for split partition", K(ret));
+        } else if (!is_global_idx) {
+          if (OB_FAIL(main_split_owner_ids.push_back(old_owner_id))) {
+            LOG_WARN("failed to push back main_split_owner_ids", K(ret), K(i));
+          }
+        } else if (OB_FAIL(global_split_owner_ids.push_back(old_owner_id))) {
+          LOG_WARN("failed to push bakc global_idx_owner_id", K(ret), K(global_split_owner_ids));
         }
       }
     }
-    if (OB_SUCC(ret)) {
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(orig_data_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected", K(ret), K(orig_data_table_schema));
+    } else if (OB_FAIL(ObDDLLock::replace_table_lock_for_split(*orig_data_table_schema,
+                                                               global_split_owner_ids,
+                                                               main_split_owner_ids,
+                                                               new_owner_id,
+                                                               trans))) {
+      LOG_WARN("fail to replace lock for split partition", K(ret), K(global_split_owner_ids), K(main_split_owner_ids), K(new_owner_id));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else {
       HEAP_VAR(ObTableSchema, new_table_schema) {
         if (OB_FAIL(new_table_schema.assign(*orig_data_table_schema))) {
           LOG_WARN("fail to assign schema", K(ret));
@@ -23527,8 +23561,7 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
             const int64_t part_num = orig_table_schema->get_hidden_partition_num();
             ObPartition **part_array = orig_table_schema->get_hidden_part_array();
             if (OB_ISNULL(part_array)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("part array is null", K(ret), KPC(orig_table_schema));
+                //do nothing
             } else {
               for (int64_t i = 0; OB_SUCC(ret) && i < part_num; ++i) {
                 if (OB_ISNULL(part_array[i])) {
@@ -23557,7 +23590,7 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
                 }
               }
             }
-            if (OB_SUCC(ret)) {
+            if (OB_SUCC(ret) && !tablet_ids.empty()) {
               if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
                                                             orig_table_schema->get_table_id(),
                                                             &tablet_ids,
