@@ -2876,9 +2876,6 @@ int ObTransformPredicateMoveAround::pushdown_into_semi_info(ObDMLStmt *stmt,
       OB_ISNULL(right_table = stmt->get_table_item_by_id(semi_info->right_table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(semi_info), K(right_table));
-  } else if (right_table->is_values_table()) {
-    /* not allow predicate moving into values table */
-    OPT_TRACE("right table is values table");
   } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->left_table_ids_, left_rel_ids))) {
     LOG_WARN("failed to get left rel ids", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->right_table_id_, right_rel_ids))) {
@@ -2904,6 +2901,11 @@ int ObTransformPredicateMoveAround::pushdown_into_semi_info(ObDMLStmt *stmt,
   } else if (OB_FAIL(accept_predicates(*stmt, semi_info->semi_conditions_,
                                        properites, new_preds))) {
     LOG_WARN("failed to check different", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (right_table->is_values_table()) {
+    /* not allow predicate moving into values table */
+    OPT_TRACE("right table is values table");
   } else if (OB_FAIL(append_condition_array(pred_conditions,
                                             semi_info->semi_conditions_.count(),
                                             &semi_info->semi_conditions_))) {
