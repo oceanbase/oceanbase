@@ -3043,7 +3043,7 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
         if (OB_FAIL(get_pl_udt_cmp_func(type1, type2, CO_EQ, eq_cmp_fp))) {
           LOG_WARN("get cmp func failed", K(type1), K(type2), K(cmp_op), K(ret));
         } else {
-          for (int64_t i = 0; 1 == cmp_res && i < c1->get_count(); ++i) {
+          for (int64_t i = 0; 1 == cmp_res && i < c1_copy.count(); ++i) {
            cmp_res = eq_cmp_fp(*(c1_copy.at(i)), *(c2_copy.at(i)), cmp_ctx);
           }
         }

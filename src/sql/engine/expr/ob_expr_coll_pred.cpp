@@ -90,8 +90,11 @@ int ObExprCollPred::calc_result_type2(ObExprResType &type,
 
 #define FILL_HASH_MAP(map_name, coll, map_cnt) \
 do { \
-  if (OB_FAIL(map_name.create(coll->get_actual_count(), ObModIds::OB_SQL_HASH_SET))) { \
-    LOG_WARN("fail create hash map", K(coll->get_actual_count()), K(ret)); \
+  int64_t count = coll->get_actual_count(); \
+  if (OB_FAIL(map_name.create(std::max(count, 1L), ObModIds::OB_SQL_HASH_SET))) { \
+    LOG_WARN("fail create hash map", K(count), K(ret)); \
+  } else if (0 == count) { \
+    /* do nothing */ \
   } else { \
     const ObObj *elem = NULL; \
     bool is_del = false; \
@@ -517,12 +520,15 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       }
         break;
       case MULTISET_TYPE_MEMBER_OF: {
-        if (!obj2.is_ext()) {
+        if (!obj2.is_pl_extend()
+              || (pl::PL_NESTED_TABLE_TYPE != obj2.get_meta().get_extend_type()
+                    && pl::PL_VARRAY_TYPE != obj2.get_meta().get_extend_type()
+                    && pl::PL_ASSOCIATIVE_ARRAY_TYPE != obj2.get_meta().get_extend_type())) {
           ret = OB_ERR_CALL_WRONG_ARG;
 
           LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG,
                          MEMBER_OF_EXPR_NAME.length(), MEMBER_OF_EXPR_NAME.ptr());
-          LOG_WARN("failed to eval MEMBER OF", K(ret));
+          LOG_WARN("failed to eval MEMBER OF", K(ret), K(obj2));
         } else {
           pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
           if (OB_NOT_NULL(c2)) {
@@ -541,11 +547,16 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
               } else {
                 result.set_bool(tmp_result);
               }
+            } else if (c2->is_collection_null()) {
+              result.set_null();
+            } else if (0 == c2->get_actual_count()) {
+              result.set_bool(MULTISET_MODIFIER_NOT == info->ms_modifier_);
+            } else if (obj1.is_null()) {
+              result.set_null();
             } else {
-              ObObj *elem = static_cast<ObObj*>(c2->get_data());
               ObObj mem_cast;
-              const ObObj * res_obj1 = &obj1;
-              ObCollationType cast_coll_type = elem->get_collation_type();
+              const ObObj *res_obj1 = &obj1;
+              ObCollationType cast_coll_type = c2->get_element_type().get_collation_type();
               ObCastMode cp_cast_mode;
               if (OB_FAIL(ObSQLUtils::get_default_cast_mode(ctx.exec_ctx_.get_my_session(),
                                                             cp_cast_mode))) {
@@ -560,18 +571,40 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
                                 cast_coll_type,
                                 nullptr);
               if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(ObObjCaster::to_type(elem->get_type(), cast_ctx,
-                                                      obj1, mem_cast, res_obj1))) {
+              } else if (OB_FAIL(ObObjCaster::to_type(c2->get_element_type().get_obj_type(),
+                                                      cast_ctx,
+                                                      obj1,
+                                                      mem_cast,
+                                                      res_obj1))) {
                 LOG_WARN("failed to cast member to collection elem type", K(ret));
               } else {
                 LocalNTSHashMap dmap_c;
                 int64_t res_cnt = 0;
                 FILL_HASH_MAP(dmap_c, c2, res_cnt);
                 if (OB_SUCC(ret)) {
-                  if (OB_NOT_NULL(dmap_c.get(*res_obj1)) ^ (MULTISET_MODIFIER_NOT == info->ms_modifier_)) {
-                    result.set_tinyint(1);
+                  if (OB_NOT_NULL(dmap_c.get(*res_obj1))) {
+                    result.set_bool(MULTISET_MODIFIER_NOT != info->ms_modifier_);
                   } else {
-                    result.set_tinyint(0);
+                    bool has_null = false;
+
+                    for (int64_t i = 0; OB_SUCC(ret) && i < c2->get_count(); ++i) {
+                      ObObj *curr = c2->get_data() + i;
+
+                      CK (OB_NOT_NULL(curr));
+
+                      if (OB_SUCC(ret) && curr->is_null()) {
+                        has_null = true;
+                        break;
+                      }
+                    }
+
+                    if (OB_FAIL(ret)) {
+                      // do nothing
+                    } else if (has_null) {
+                      result.set_null();
+                    } else {
+                      result.set_bool(false);
+                    }
                   }
                 }
               }
