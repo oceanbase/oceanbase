@@ -469,28 +469,24 @@ static inline int def_eval_vector_is_true(const ObExpr &expr,
                                           DataType (ObVectorBase::*get_data)(int64_t) const)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
-    LOG_WARN("fail to eval is not null param", K(ret));
-  } else {
-    VectorFormat res_format = expr.get_format(ctx);
-    // The 'res_format' is expected to be Type 'IntegerFixedVec' under the regular circumstances. 
-    // So a condition is added to optimize performance accordingly.
-    if (VEC_FIXED == res_format) {
-      VectorFormat arg_format = expr.args_[0]->get_format(ctx);
-      if (VEC_FIXED == arg_format || VEC_DISCRETE == arg_format || VEC_CONTINUOUS == arg_format) {
-        ret = eval_vector_is_true<ArgVec, IntegerFixedVec, DataType, ExprIs, IsTrue>
-                                  (expr, ctx, skip, bound, get_data);
-      } else if (VEC_UNIFORM == arg_format) {
-        ret = eval_vector_is_true<ObUniformBase, IntegerFixedVec, DataType, ExprIs, IsTrue>
-                                  (expr, ctx, skip, bound, get_data);
-      } else {
-        ret = eval_vector_is_true<ObVectorBase, IntegerFixedVec, DataType, ExprIs, IsTrue>
-                                  (expr, ctx, skip, bound, get_data);
-      }
+  VectorFormat res_format = expr.get_format(ctx);
+  // The 'res_format' is expected to be Type 'IntegerFixedVec' under the regular circumstances. 
+  // So a condition is added to optimize performance accordingly.
+  if (VEC_FIXED == res_format) {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    if (VEC_FIXED == arg_format || VEC_DISCRETE == arg_format || VEC_CONTINUOUS == arg_format) {
+      ret = eval_vector_is_true<ArgVec, IntegerFixedVec, DataType, ExprIs, IsTrue>
+                                (expr, ctx, skip, bound, get_data);
+    } else if (VEC_UNIFORM == arg_format) {
+      ret = eval_vector_is_true<ObUniformBase, IntegerFixedVec, DataType, ExprIs, IsTrue>
+                                (expr, ctx, skip, bound, get_data);
     } else {
-      ret = eval_vector_is_true<ObVectorBase, ObVectorBase, DataType, ExprIs, IsTrue>
-                                  (expr, ctx, skip, bound, get_data);
+      ret = eval_vector_is_true<ObVectorBase, IntegerFixedVec, DataType, ExprIs, IsTrue>
+                                (expr, ctx, skip, bound, get_data);
     }
+  } else {
+    ret = eval_vector_is_true<ObVectorBase, ObVectorBase, DataType, ExprIs, IsTrue>
+                                (expr, ctx, skip, bound, get_data);
   }
   return ret;
 }
@@ -502,60 +498,64 @@ static inline int def_calc_vector_is_true(const ObExpr &expr,
                                           const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
-  ObObjType data_type = expr.args_[0]->datum_meta_.type_;
-  VectorFormat arg_format = expr.args_[0]->get_format(ctx);
-  switch(data_type) {
-    case ObTinyIntType:
-    case ObSmallIntType:
-    case ObMediumIntType:
-    case ObInt32Type:
-    case ObIntType:
-    case ObUTinyIntType:
-    case ObUSmallIntType:
-    case ObUMediumIntType:
-    case ObUInt32Type:
-    case ObUInt64Type:
-    case ObBitType: {
-      ret = def_eval_vector_is_true<IntegerFixedVec, int64_t, ExprIs, IsTrue>
-                                    (expr, ctx, skip, bound, &ObVectorBase::get_int);
-      break;
-    }
-    case ObFloatType:
-    case ObUFloatType: {
-      ret = def_eval_vector_is_true<FloatFixedVec, float, ExprIs, IsTrue>
-                                    (expr, ctx, skip, bound, &ObVectorBase::get_float);
-      break;
-    }
-    case ObDoubleType:
-    case ObUDoubleType: {
-      ret = def_eval_vector_is_true<DoubleFixedVec, double, ExprIs, IsTrue>
-                                    (expr, ctx, skip, bound, &ObVectorBase::get_double);
-      break;
-    }
-    case ObDecimalIntType: {
-      ret = def_eval_vector_is_true<ObFixedLengthBase, const ObDecimalInt*, ExprIs, IsTrue>
-                                    (expr, ctx, skip, bound, &ObVectorBase::get_decimal_int);
-      break;
-    }
-    case common::ObJsonType: {
-      if (VEC_DISCRETE == arg_format) {
-        ret = def_eval_vector_is_true<JsonDiscVec, ObString, ExprIs, IsTrue>
-                                      (expr, ctx, skip, bound, &ObVectorBase::get_string);
-      } else {
-        ret = def_eval_vector_is_true<JsonContVec, ObString, ExprIs, IsTrue>
-                                      (expr, ctx, skip, bound, &ObVectorBase::get_string);
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval is/isnot true/false param", K(ret));
+  } else {
+    ObObjType data_type = expr.args_[0]->datum_meta_.type_;
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    switch(data_type) {
+      case ObTinyIntType:
+      case ObSmallIntType:
+      case ObMediumIntType:
+      case ObInt32Type:
+      case ObIntType:
+      case ObUTinyIntType:
+      case ObUSmallIntType:
+      case ObUMediumIntType:
+      case ObUInt32Type:
+      case ObUInt64Type:
+      case ObBitType: {
+        ret = def_eval_vector_is_true<IntegerFixedVec, int64_t, ExprIs, IsTrue>
+                                      (expr, ctx, skip, bound, &ObVectorBase::get_int);
+        break;
       }
-      break;
-    }
-    default:
-      if (VEC_DISCRETE == arg_format) {
-        ret = def_eval_vector_is_true<NumberDiscVec, const number::ObCompactNumber &, ExprIs, IsTrue>
-                                      (expr, ctx, skip, bound, &ObVectorBase::get_number);
-      } else {
-        ret = def_eval_vector_is_true<NumberContVec, const number::ObCompactNumber &, ExprIs, IsTrue>
-                                      (expr, ctx, skip, bound, &ObVectorBase::get_number);
+      case ObFloatType:
+      case ObUFloatType: {
+        ret = def_eval_vector_is_true<FloatFixedVec, float, ExprIs, IsTrue>
+                                      (expr, ctx, skip, bound, &ObVectorBase::get_float);
+        break;
       }
-      break;
+      case ObDoubleType:
+      case ObUDoubleType: {
+        ret = def_eval_vector_is_true<DoubleFixedVec, double, ExprIs, IsTrue>
+                                      (expr, ctx, skip, bound, &ObVectorBase::get_double);
+        break;
+      }
+      case ObDecimalIntType: {
+        ret = def_eval_vector_is_true<ObFixedLengthBase, const ObDecimalInt*, ExprIs, IsTrue>
+                                      (expr, ctx, skip, bound, &ObVectorBase::get_decimal_int);
+        break;
+      }
+      case common::ObJsonType: {
+        if (VEC_DISCRETE == arg_format) {
+          ret = def_eval_vector_is_true<JsonDiscVec, ObString, ExprIs, IsTrue>
+                                        (expr, ctx, skip, bound, &ObVectorBase::get_string);
+        } else {
+          ret = def_eval_vector_is_true<JsonContVec, ObString, ExprIs, IsTrue>
+                                        (expr, ctx, skip, bound, &ObVectorBase::get_string);
+        }
+        break;
+      }
+      default:
+        if (VEC_DISCRETE == arg_format) {
+          ret = def_eval_vector_is_true<NumberDiscVec, const number::ObCompactNumber &, ExprIs, IsTrue>
+                                        (expr, ctx, skip, bound, &ObVectorBase::get_number);
+        } else {
+          ret = def_eval_vector_is_true<NumberContVec, const number::ObCompactNumber &, ExprIs, IsTrue>
+                                        (expr, ctx, skip, bound, &ObVectorBase::get_number);
+        }
+        break;
+    } //switch
   }
   return ret;
 }
