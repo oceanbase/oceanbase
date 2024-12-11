@@ -1372,6 +1372,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
     } else if (routine_param->is_schema_routine_param()) {
       ObRoutineParam *param = static_cast<ObRoutineParam*>(routine_param);
       CK (OB_NOT_NULL(param));
+      OX (dst_pl_type.set_enum_set_ctx(resolve_ctx.enum_set_ctx_));
       OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                   resolve_ctx.schema_guard_,
                                                   resolve_ctx.session_info_,
@@ -8123,9 +8124,11 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
       ObRoutineParam *param = nullptr;
       common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
       ObArray<ObSchemaObjVersion> version;
+      pl::ObPLEnumSetCtx enum_set_ctx(alloc);
       CK (routine_info->get_routine_params().count() > 0);
       OX (param = routine_info->get_routine_params().at(0));
       CK (OB_NOT_NULL(sql_proxy));
+      OX (param_type.set_enum_set_ctx(&enum_set_ctx));
       OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                   schema_guard,
                                                   session_info,
