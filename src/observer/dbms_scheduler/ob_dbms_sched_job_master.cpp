@@ -173,7 +173,11 @@ int ObDBMSSchedJobMaster::scheduler()
             LOG_WARN("fail to update server", K(tmp_ret));
           }
         }
-
+        if (is_leader && TC_REACH_TIME_INTERVAL(PURGE_RUN_DETAIL_INTERVAL)) {
+          if (OB_SUCCESS != (tmp_ret = purge_run_detail())) {
+            LOG_WARN("fail to purge run detail", K(tmp_ret));
+          }
+        }
         if (!is_leader) {
           clear_wait_vector();
           alive_jobs_.clear();
@@ -589,6 +593,25 @@ int ObDBMSSchedJobMaster::update_tenant_server_cache()
            }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObDBMSSchedJobMaster::purge_run_detail()
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("dbms sched job not init yet", K(ret), K(inited_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
+  } else if (DATA_VERSION_SUPPORT_JOB_CLASS(data_version)) {
+    if (OB_FAIL(job_rpc_proxy_->purge_run_detail(tenant_id_, self_addr_))) {
+      LOG_WARN("failed to run dbms sched job", K(ret), K(tenant_id_), K(self_addr_));
+    } else {
+      LOG_INFO("send purge run detail rpc finish", K(ret), K(tenant_id_));
     }
   }
   return ret;

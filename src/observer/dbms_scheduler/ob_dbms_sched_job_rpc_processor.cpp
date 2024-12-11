@@ -114,5 +114,43 @@ int ObRpcStopDBMSSchedJobP::process()
   return ret;
 }
 
+int ObRpcDBMSSchedPurgeCB::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("dbms sched purge done!");
+  return ret;
+}
+
+int ObRpcDBMSSchedPurgeP::process()
+{
+  int ret = OB_SUCCESS;
+  const ObDBMSSchedPurgeArg &arg = arg_;
+  int64_t tenant_id = arg.tenant_id_;
+  const int64_t PURGE_RUN_DETAIL_TIMEOUT = 5 * 60 * 1000 * 1000L; // 5min
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", K(ret), K(tenant_id));
+  } else {
+    dbms_scheduler::ObDBMSSchedTableOperator table_operator;
+    if (OB_FAIL(table_operator.init(GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init table_operator", K(ret), K(tenant_id));
+    } else {
+      bool is_tenant_standby = false;
+      if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
+        LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id));
+      } else if (is_tenant_standby) {
+        LOG_INFO("tenant is standby, not GC", K(tenant_id));
+      } else {
+        const int64_t save_timeout_ts = THIS_WORKER.get_timeout_ts();
+        THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + PURGE_RUN_DETAIL_TIMEOUT);
+        OZ (table_operator.purge_run_detail(tenant_id));
+        THIS_WORKER.set_timeout_ts(save_timeout_ts);
+      }
+    }
+    LOG_INFO("[DBMS_SCHED_GC] finish once", K(ret), K(tenant_id_));
+  }
+  return ret;
+}
+
 }
 } // namespace oceanbase

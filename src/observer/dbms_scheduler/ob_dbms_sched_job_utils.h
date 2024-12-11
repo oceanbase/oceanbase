@@ -18,6 +18,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/container/ob_iarray.h"
+#include "lib/number/ob_number_v2.h"
 
 
 #define DATA_VERSION_SUPPORT_JOB_CLASS(data_version) (data_version >= DATA_VERSION_4_2_5_1)
@@ -56,6 +57,91 @@ class ObUserInfo;
 
 namespace dbms_scheduler
 {
+enum ObInnerJobCLassId
+{
+#define INNER_JOB_CLASS_DEF(name, ...) ID_##name,
+#include "ob_inner_job_class_list.h"
+#undef INNER_JOB_CLASS_DEF
+  INNER_JOB_CLASS_MAXNUM,
+};
+
+#define INNER_JOB_CLASS_DEF(name, ...) static const char *name = #name;
+#include "ob_inner_job_class_list.h"
+#undef INNER_JOB_CLASS_DEF
+
+static const int64_t DEFAULT_LOG_HISTORY = 30; // days
+
+class ObInnerJobClassInfo
+{
+public:
+  ObInnerJobClassInfo() : name_(nullptr), log_history_(0) {}
+  void set_name(const char *name) { name_ = name; }
+  void set_args(int64_t log_history = DEFAULT_LOG_HISTORY)
+  {
+    log_history_ = log_history;
+  }
+  const char *name_;
+  int64_t log_history_;
+};
+
+class ObInnerJobClassSet
+{
+  ObInnerJobClassSet()
+  {
+#define INNER_JOB_CLASS_DEF(name, args...) job_class_infos_[ID_##name].set_name(#name); job_class_infos_[ID_##name].set_args(args);
+#include "ob_inner_job_class_list.h"
+#undef INNER_JOB_CLASS_DEF
+  }
+
+public:
+  const char *id_to_name(int64_t id) const
+  {
+    const char *str = "DEFAULT_JOB_CLASS";
+    if (id >= 0 && id < INNER_JOB_CLASS_MAXNUM) {
+      str = job_class_infos_[id].name_;
+    }
+    return str;
+  }
+
+  int64_t id_to_log_history(int64_t id) const
+  {
+    int64_t log_history = DEFAULT_LOG_HISTORY;
+    if (id >= 0 && id < INNER_JOB_CLASS_MAXNUM) {
+      log_history = job_class_infos_[id].log_history_;
+    }
+    return log_history;
+  }
+
+  bool check_name_exist(const char *name) const
+  {
+    bool is_exist = false;
+    for (int i = 0; i < INNER_JOB_CLASS_MAXNUM; i++) {
+      if (0 == strcmp(job_class_infos_[i].name_, name)) {
+        is_exist = true;
+        break;
+      }
+    }
+    return is_exist;
+  }
+
+  int64_t get_max_log_history() const
+  {
+    int64_t log_history = DEFAULT_LOG_HISTORY;
+    for (int i = 0; i < INNER_JOB_CLASS_MAXNUM; i++) {
+      log_history = max(job_class_infos_[i].log_history_, log_history);
+    }
+    return log_history;
+  }
+
+  static ObInnerJobClassSet &instance()
+  {
+    return instance_;
+  }
+
+private:
+  static ObInnerJobClassSet instance_;
+  ObInnerJobClassInfo job_class_infos_[INNER_JOB_CLASS_MAXNUM];
+};
 
 class ObDBMSSchedJobInfo
 {
@@ -181,9 +267,10 @@ public:
   common::ObString &get_job_action() { return job_action_; }
 
   bool is_oracle_tenant() { return is_oracle_tenant_; }
+  bool is_default_job_class() const { return (0 == job_class_.case_compare(DEFAULT_JOB_CLASS)); }
   bool is_date_expression_job_class() const { return !!(scheduler_flags_ & JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS); }
-  bool is_mysql_event_job_class() const { return (0 == job_class_.case_compare("MYSQL_EVENT_JOB_CLASS")); }
-  bool is_olap_async_job_class() const { return (0 == job_class_.case_compare("OLAP_ASYNC_JOB_CLASS")); }
+  bool is_mysql_event_job_class() const { return (0 == job_class_.case_compare(MYSQL_EVENT_JOB_CLASS)); }
+  bool is_olap_async_job_class() const { return (0 == job_class_.case_compare(OLAP_ASYNC_JOB_CLASS)); }
 
   int deep_copy(common::ObIAllocator &allocator, const ObDBMSSchedJobInfo &other);
 
@@ -246,7 +333,7 @@ public:
     job_class_name_(),
     resource_consumer_group_(),
     logging_level_(),
-    log_history_(0),
+    log_history_(),
     comments_(),
     is_oracle_tenant_(true) {}
 
@@ -263,7 +350,7 @@ public:
             && !job_class_name_.empty();
   }
   uint64_t get_tenant_id() { return tenant_id_; }
-  uint64_t get_log_history() { return log_history_; }
+  common::number::ObNumber &get_log_history() { return log_history_; }
   common::ObString &get_job_class_name() { return job_class_name_; }
   common::ObString &get_service() { return service_; }
   common::ObString &get_resource_consumer_group() { return resource_consumer_group_; }
@@ -277,7 +364,7 @@ public:
   common::ObString service_;
   common::ObString resource_consumer_group_;
   common::ObString logging_level_;
-  uint64_t log_history_;
+  common::number::ObNumber log_history_;
   common::ObString comments_;
   bool is_oracle_tenant_;
 };
