@@ -134,7 +134,11 @@ int ObMdsTableMergeTask::process()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet is null", K(ret), K(ls_id), K(tablet_id));
     } else if (CLICK_FAIL(tablet->get_mds_table_for_dump(mds_table))) {
-      LOG_WARN("fail to get mds table", K(ret), K(ls_id), K(tablet_id));
+      if (OB_EMPTY_RESULT != ret) {
+        LOG_WARN("fail to get mds table", K(ret), K(ls_id), K(tablet_id));
+      } else {
+        ret = OB_NO_NEED_MERGE;
+      }
     } else if (OB_UNLIKELY(!mds_table.get_mds_table_ptr()->is_construct_sequence_matched(mds_construct_sequence))) {
       ret = OB_NO_NEED_MERGE;
       LOG_WARN("construct sequence does not match current mds table, no need to merge", K(ret), K(ls_id), K(tablet_id), K(mds_construct_sequence));
