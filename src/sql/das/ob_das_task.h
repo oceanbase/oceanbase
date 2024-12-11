@@ -14,6 +14,7 @@
 #define OBDEV_SRC_SQL_DAS_OB_DAS_TASK_H_
 #include "share/ob_define.h"
 #include "share/ob_encryption_struct.h"
+#include "share/detect/ob_detectable_id.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
@@ -173,7 +174,8 @@ public:
       attach_rtdef_(nullptr),
       das_gts_opt_info_(op_alloc),
       plan_line_id_(0),
-      das_task_start_timestamp_(0)
+      das_task_start_timestamp_(0),
+      detectable_id_()
   {
     das_task_node_.get_data() = this;
   }
@@ -245,7 +247,8 @@ public:
                        K_(task_status),
                        K_(related_tablet_ids),
                        K_(das_task_node),
-                       K_(plan_line_id));
+                       K_(plan_line_id),
+                       K_(detectable_id));
 public:
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   uint64_t get_tenant_id() const { return tenant_id_; }
@@ -352,6 +355,7 @@ protected:
   int64_t plan_line_id_; //plan operator id
 public:
   int64_t das_task_start_timestamp_;
+  ObDetectableId detectable_id_;
 
 };
 typedef common::ObObjStore<ObIDASTaskOp*, common::ObIAllocator&> DasTaskList;
