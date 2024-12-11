@@ -1745,6 +1745,8 @@
 # 15487: __all_virtual_logstore_service_status  # BASE_TABLE_NAME
 # 15488: ALL_VIRTUAL_LOGSTORE_SERVICE_INFO
 # 15488: __all_virtual_logstore_service_info  # BASE_TABLE_NAME
+# 15489: ALL_VIRTUAL_TABLET_POINTER_STATUS
+# 15489: __all_virtual_tablet_pointer_status  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA

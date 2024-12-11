@@ -1363,6 +1363,7 @@ public:
   static int all_virtual_ncomp_dll_v2_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_logstore_service_status_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_logstore_service_info_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tablet_pointer_status_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
   static int schemata_schema(share::schema::ObTableSchema &table_schema);
@@ -4174,6 +4175,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_ncomp_dll_v2_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_logstore_service_status_ora_schema,
   ObInnerTableSchema::all_virtual_logstore_service_info_ora_schema,
+  ObInnerTableSchema::all_virtual_tablet_pointer_status_ora_schema,
   NULL,};
 
 const schema_create_func virtual_table_index_schema_creators [] = {
@@ -5793,6 +5795,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_BACKUP_DELETE_JOB_HISTORY_TID,
   OB_ALL_VIRTUAL_BACKUP_DELETE_POLICY_TID,
   OB_ALL_VIRTUAL_PRIVILEGE_TID,
+  OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_TID,
   OB_ALL_VIRTUAL_LOG_RESTORE_SOURCE_TID,
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TID,
   OB_ALL_VIRTUAL_KV_TTL_TASK_TID,
@@ -6160,6 +6163,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_LOGSTORE_SERVICE_STATUS_ORA_TID,
   OB_ALL_VIRTUAL_LOGSTORE_SERVICE_INFO_ORA_TID,
+  OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
   OB_SCHEMATA_TID,
@@ -7890,7 +7894,8 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_WR_SQL_PLAN_TID,
   OB_ALL_VIRTUAL_RES_MGR_SYSSTAT_TID,
   OB_ALL_VIRTUAL_LOGSTORE_SERVICE_STATUS_TID,
-  OB_ALL_VIRTUAL_LOGSTORE_SERVICE_INFO_TID,  };
+  OB_ALL_VIRTUAL_LOGSTORE_SERVICE_INFO_TID,
+  OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_TID,  };
 
 const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID
 ,  OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID
@@ -8051,6 +8056,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_RES_MGR_SYSSTAT_ORA_TID
 ,  OB_ALL_VIRTUAL_LOGSTORE_SERVICE_STATUS_ORA_TID
 ,  OB_ALL_VIRTUAL_LOGSTORE_SERVICE_INFO_ORA_TID
+,  OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_ORA_TID
 ,  };
 
 /* start/end_pos is start/end postition for column with tenant id */
@@ -8491,6 +8497,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_BACKUP_DELETE_JOB_HISTORY_TNAME,
   OB_ALL_VIRTUAL_BACKUP_DELETE_POLICY_TNAME,
   OB_ALL_VIRTUAL_PRIVILEGE_TNAME,
+  OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_TNAME,
   OB_ALL_VIRTUAL_LOG_RESTORE_SOURCE_TNAME,
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TNAME,
   OB_ALL_VIRTUAL_KV_TTL_TASK_TNAME,
@@ -8858,6 +8865,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_LOGSTORE_SERVICE_STATUS_ORA_TNAME,
   OB_ALL_VIRTUAL_LOGSTORE_SERVICE_INFO_ORA_TNAME,
+  OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
   OB_SCHEMATA_TNAME,
@@ -10474,7 +10482,6 @@ const uint64_t cluster_distributed_vtables [] = {
   OB_ALL_VIRTUAL_TABLET_INFO_TID,
   OB_ALL_VIRTUAL_TX_DATA_TABLE_TID,
   OB_ALL_VIRTUAL_TABLET_DDL_KV_INFO_TID,
-  OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_TID,
   OB_ALL_VIRTUAL_STORAGE_META_MEMORY_STATUS_TID,
   OB_ALL_VIRTUAL_KVCACHE_STORE_MEMBLOCK_TID,
   OB_ALL_VIRTUAL_KVCACHE_HANDLE_LEAK_INFO_TID,
@@ -10559,6 +10566,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_ASH_TID,
   OB_ALL_VIRTUAL_ASH_ALL_VIRTUAL_ASH_I1_TID,
   OB_ALL_VIRTUAL_DML_STATS_TID,
+  OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_TID,
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TID,
   OB_ALL_VIRTUAL_TABLET_COMPACTION_INFO_TID,
   OB_ALL_VIRTUAL_SQL_PLAN_TID,
@@ -10669,7 +10677,8 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_LOG_TRANSPORT_DEST_STAT_ORA_TID,
   OB_ALL_VIRTUAL_RES_MGR_SYSSTAT_ORA_TID,
   OB_ALL_VIRTUAL_LOGSTORE_SERVICE_STATUS_ORA_TID,
-  OB_ALL_VIRTUAL_LOGSTORE_SERVICE_INFO_ORA_TID,  };
+  OB_ALL_VIRTUAL_LOGSTORE_SERVICE_INFO_ORA_TID,
+  OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_ORA_TID,  };
 
 const uint64_t restrict_access_virtual_tables[] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
@@ -13348,11 +13357,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 291;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 839;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 840;
 const int64_t OB_SYS_VIEW_COUNT = 960;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2095;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2096;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2098;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2099;
 
 } // end namespace share
 } // end namespace oceanbase

@@ -12741,6 +12741,7 @@ def_table_schema(
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
+  in_tenant_space = True,
 )
 
 def_table_schema(
@@ -15174,6 +15175,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15482'
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15486', all_def_keywords['__all_ncomp_dll_v2']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15487', all_def_keywords['__all_virtual_logstore_service_status'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15488', all_def_keywords['__all_virtual_logstore_service_info'])))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keywords['__all_virtual_tablet_pointer_status']))
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -15595,9 +15597,9 @@ def_table_schema(
                     cast(a.store_format as char(10)) as ROW_FORMAT,
                     cast( coalesce(ts.row_cnt,0) as unsigned) as TABLE_ROWS,
                     cast( coalesce(ts.avg_row_len,0) as unsigned) as AVG_ROW_LENGTH,
-                    cast( coalesce(ts.data_size,0) as unsigned) as DATA_LENGTH,
+                    cast( coalesce( su. size,0) as unsigned) as DATA_LENGTH,
                     cast(NULL as unsigned) as MAX_DATA_LENGTH,
-                    cast( coalesce(idx_stat.index_length, 0) as unsigned) as INDEX_LENGTH,
+                    cast( coalesce( su_idx.size , 0) as unsigned) as INDEX_LENGTH,
                     cast(NULL as unsigned) as DATA_FREE,
                     cast(NULL as unsigned) as AUTO_INCREMENT,
                     cast(a.gmt_create as datetime) as CREATE_TIME,
@@ -15645,12 +15647,86 @@ def_table_schema(
                       select tenant_id,
                              table_id,
                              row_cnt,
-                             avg_row_len,
-                             (macro_blk_cnt * 2 * 1024 * 1024) as data_size
+                             avg_row_len
                       from oceanbase.__all_table_stat
                       where partition_id = -1 or partition_id = table_id) ts
                     on a.table_id = ts.table_id
                     and a.tenant_id = ts.tenant_id
+                    left join (
+                      SELECT
+                        avt.database_id as database_id,
+                        avt.table_id as table_id,
+                        SUM(avtps.required_size) AS size
+                      FROM oceanbase.__all_virtual_tablet_pointer_status avtps
+                      INNER JOIN oceanbase.__all_tablet_to_ls avttl
+                        ON avttl.tablet_id = avtps.tablet_id
+                      INNER JOIN oceanbase.__all_table avt
+                        ON avt.table_id = avttl.table_id
+                          AND avt.table_type != 5
+                      INNER JOIN oceanbase.__all_database ad
+                        ON ad.database_id = avt.database_id
+                      INNER JOIN oceanbase.DBA_OB_LS_LOCATIONS avlmt
+                        ON avtps.ls_id = avlmt.ls_id
+                          AND avtps.svr_ip = avlmt.svr_ip
+                          AND avtps.svr_port = avlmt.svr_port
+                          AND avlmt.role = 'LEADER'
+                      group by database_id, table_id
+                      UNION
+                      SELECT
+                        avt.database_id as database_id,
+                        avt.table_id as table_id,
+                        SUM(avtps.required_size) AS size
+                      FROM oceanbase.__all_virtual_tablet_pointer_status avtps
+                      INNER JOIN oceanbase.__all_table avt
+                        ON table_type = 0
+                          AND avt.tablet_id = avtps.tablet_id
+                      INNER JOIN oceanbase.__all_database ad
+                        ON ad.database_id = avt.database_id
+                      INNER JOIN oceanbase.DBA_OB_LS_LOCATIONS avlmt
+                        ON avtps.ls_id = avlmt.ls_id
+                          AND avtps.svr_ip = avlmt.svr_ip
+                          AND avtps.svr_port = avlmt.svr_port
+                          AND avlmt.role = 'LEADER'
+                      group by database_id, table_id) su
+                        ON a.database_id = su.database_id and a.table_id = su.table_id
+
+                    left join (
+                      SELECT
+                        avt.database_id as database_id,
+                        avt.data_table_id as data_table_id,
+                        SUM(avtps.required_size) AS size
+                      FROM oceanbase.__all_virtual_tablet_pointer_status avtps
+                      INNER JOIN oceanbase.__all_tablet_to_ls avttl
+                        ON avttl.tablet_id = avtps.tablet_id
+                      INNER JOIN oceanbase.__all_table avt
+                        ON avt.table_id = avttl.table_id
+                          AND table_type = 5
+                      INNER JOIN oceanbase.__all_database ad
+                        ON ad.database_id = avt.database_id
+                      INNER JOIN oceanbase.DBA_OB_LS_LOCATIONS avlmt
+                        ON avtps.ls_id = avlmt.ls_id
+                          AND avtps.svr_ip = avlmt.svr_ip
+                          AND avtps.svr_port = avlmt.svr_port
+                          AND avlmt.role = 'LEADER'
+                      group by database_id, data_table_id
+                      UNION
+                      SELECT
+                        avt.database_id as database_id,
+                        avt.data_table_id as data_table_id,
+                        SUM(avtps.required_size) AS size
+                      FROM oceanbase.__all_virtual_tablet_pointer_status avtps
+                      INNER JOIN oceanbase.__all_table avt
+                        ON table_type = 0
+                          AND avt.tablet_id = avtps.tablet_id
+                      INNER JOIN oceanbase.__all_database ad
+                        ON ad.database_id = avt.database_id
+                      INNER JOIN oceanbase.DBA_OB_LS_LOCATIONS avlmt
+                        ON avtps.ls_id = avlmt.ls_id
+                          AND avtps.svr_ip = avlmt.svr_ip
+                          AND avtps.svr_port = avlmt.svr_port
+                          AND avlmt.role = 'LEADER'
+                      group by database_id, data_table_id) su_idx
+                        ON su_idx.database_id = a.database_id and su_idx.data_table_id = a.table_id
                     left join (
                       select e.tenant_id as tenant_id,
                              e.data_table_id as data_table_id,
@@ -30410,9 +30486,9 @@ def_table_schema(
        END AS CHAR(4096)) AS SUBPARTITION_DESCRIPTION,
   CAST(TS.ROW_CNT AS UNSIGNED) AS TABLE_ROWS,
   CAST(TS.AVG_ROW_LEN AS UNSIGNED) AS AVG_ROW_LENGTH,
-  CAST(COALESCE(TS.MACRO_BLK_CNT * 2 * 1024 * 1024, 0) AS UNSIGNED) AS DATA_LENGTH,
+  CAST(COALESCE( P_SP.size , 0) AS UNSIGNED) AS DATA_LENGTH,
   CAST(NULL AS UNSIGNED) AS MAX_DATA_LENGTH,
-  CAST(COALESCE(IDX_STAT.INDEX_LENGTH, 0) AS UNSIGNED) AS INDEX_LENGTH,
+  CAST(COALESCE( P_IDX_SP.INDEX_LENGTH, 0) AS UNSIGNED) AS INDEX_LENGTH,
   CAST(NULL AS UNSIGNED) AS DATA_FREE,
   CASE T.PART_LEVEL
     WHEN 0 THEN T.GMT_CREATE
@@ -30446,6 +30522,7 @@ FROM
         GMT_CREATE,
         COMMENT,
         PART_IDX,
+        TABLET_ID,
         ROW_NUMBER() OVER(PARTITION BY TENANT_ID,TABLE_ID ORDER BY PART_IDX) AS PART_POSITION
       FROM OCEANBASE.__ALL_PART
   ) P ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
@@ -30462,25 +30539,44 @@ FROM
         GMT_CREATE,
         COMMENT,
         SUB_PART_IDX,
+        TABLET_ID,
         ROW_NUMBER() OVER(PARTITION BY TENANT_ID,TABLE_ID,PART_ID ORDER BY SUB_PART_IDX) AS SUB_PART_POSITION
     FROM OCEANBASE.__ALL_SUB_PART
   ) SP ON T.TABLE_ID = SP.TABLE_ID AND P.PART_ID = SP.PART_ID AND T.TENANT_ID = SP.TENANT_ID
 
   LEFT JOIN OCEANBASE.__ALL_TENANT_TABLESPACE TP ON TP.TABLESPACE_ID = IFNULL(SP.TABLESPACE_ID, P.TABLESPACE_ID) AND TP.TENANT_ID = T.TENANT_ID
   LEFT JOIN OCEANBASE.__ALL_TABLE_STAT TS ON T.TENANT_ID = TS.TENANT_ID AND TS.TABLE_ID = T.TABLE_ID AND TS.PARTITION_ID = CASE T.PART_LEVEL WHEN 0 THEN T.TABLE_ID WHEN 1 THEN P.PART_ID WHEN 2 THEN SP.SUB_PART_ID END
+LEFT JOIN (
+      select
+        tablet_id,
+        avtps.required_size as size
+      from OCEANBASE.__ALL_VIRTUAL_TABLET_POINTER_STATUS avtps
+      JOIN oceanbase.DBA_OB_LS_LOCATIONS avlmt
+        ON avtps.ls_id = avlmt.ls_id
+          AND avtps.svr_ip = avlmt.svr_ip
+          AND avtps.svr_port = avlmt.svr_port
+          AND avlmt.role = 'LEADER'
+    ) P_SP
+      ON P_SP.tablet_id = CASE T.PART_LEVEL WHEN 0 THEN T.tablet_id WHEN 1 THEN P.tablet_id WHEN 2 THEN SP.tablet_id END
   LEFT JOIN (
-    SELECT E.TENANT_ID AS TENANT_ID,
-           E.DATA_TABLE_ID AS DATA_TABLE_ID,
-           F.PART_IDX AS PART_IDX,
-           SF.SUB_PART_IDX AS SUB_PART_IDX,
-           SUM(G.macro_blk_cnt * 2 * 1024 * 1024) AS INDEX_LENGTH
-    FROM OCEANBASE.__ALL_TABLE E LEFT JOIN OCEANBASE.__ALL_PART F ON E.TENANT_ID = F.TENANT_ID AND E.TABLE_ID = F.TABLE_ID
-                                 LEFT JOIN OCEANBASE.__ALL_SUB_PART SF ON E.TENANT_ID = SF.TENANT_ID AND E.TABLE_ID = SF.TABLE_ID AND F.PART_ID = SF.PART_ID
-         JOIN OCEANBASE.__ALL_TABLE_STAT G ON E.TENANT_ID = G.TENANT_ID AND E.TABLE_ID = G.TABLE_ID AND G.PARTITION_ID = CASE E.PART_LEVEL WHEN 0 THEN E.TABLE_ID WHEN 1 THEN F.PART_ID WHEN 2 THEN SF.SUB_PART_ID END
-    WHERE E.INDEX_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12) AND E.TABLE_TYPE = 5 GROUP BY TENANT_ID, DATA_TABLE_ID, PART_IDX, SUB_PART_IDX
-  ) IDX_STAT ON IDX_STAT.TENANT_ID = T.TENANT_ID AND
-                IDX_STAT.DATA_TABLE_ID = T.TABLE_ID AND
-                CASE T.PART_LEVEL WHEN 0 THEN 1 WHEN 1 THEN P.PART_IDX = IDX_STAT.PART_IDX WHEN 2 THEN P.PART_IDX = IDX_STAT.PART_IDX AND SP.SUB_PART_IDX = IDX_STAT.SUB_PART_IDX END
+      select
+		E.DATA_TABLE_ID AS DATA_TABLE_ID,
+        F.PART_IDX AS PART_IDX,
+        SF.SUB_PART_IDX AS SUB_PART_IDX,
+        sum(avtps.required_size) as INDEX_LENGTH
+      from OCEANBASE.__ALL_VIRTUAL_TABLET_POINTER_STATUS avtps
+		 JOIN OCEANBASE.__ALL_TABLE E ON E.INDEX_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12) AND E.TABLE_TYPE = 5
+         LEFT JOIN OCEANBASE.__ALL_PART F ON E.TABLE_ID = F.TABLE_ID
+         LEFT JOIN OCEANBASE.__ALL_SUB_PART SF ON E.TABLE_ID = SF.TABLE_ID AND F.PART_ID = SF.PART_ID
+         JOIN OCEANBASE.DBA_OB_LS_LOCATIONS avlmt
+          ON avtps.ls_id = avlmt.ls_id
+            AND avtps.svr_ip = avlmt.svr_ip
+            AND avtps.svr_port = avlmt.svr_port
+            AND avlmt.role = 'LEADER'
+		 where avtps.tablet_id = case E.PART_LEVEL WHEN 0 THEN E.tablet_id WHEN 1 THEN F.tablet_id WHEN 2 THEN SF.tablet_id end
+		 GROUP BY DATA_TABLE_ID, PART_IDX, SUB_PART_IDX
+  ) P_IDX_SP ON P_IDX_SP.DATA_TABLE_ID = T.TABLE_ID AND
+                CASE T.PART_LEVEL WHEN 0 THEN 1 WHEN 1 THEN P.PART_IDX = P_IDX_SP.PART_IDX WHEN 2 THEN P.PART_IDX = P_IDX_SP.PART_IDX AND SP.SUB_PART_IDX = P_IDX_SP.SUB_PART_IDX END
 WHERE T.TABLE_TYPE IN (3,6,8,9,14)
   """.replace("\n", " "),
 
