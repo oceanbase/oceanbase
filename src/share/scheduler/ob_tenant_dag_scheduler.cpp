@@ -2588,6 +2588,10 @@ int ObDagPrioScheduler::finish_dag_(
   } else if (FALSE_IT(add_dag_warning_info_into_dag_net_(dag, need_add))) {
   } else if (OB_FAIL(dag.finish(status, dag_net_finished))) { // dag record will be erase, making this dag_net could be free.
     COMMON_LOG(WARN, "dag finished failed", K(ret), K(dag), "dag_ret", dag.get_dag_ret());
+  } else if (OB_TMP_FAIL(dag.report_result())) {
+    COMMON_LOG(WARN, "failed to report result", K(tmp_ret), K(dag));
+  }
+  if (OB_FAIL(ret)) {
   } else if (try_move_child && OB_FAIL(try_move_child_to_ready_list_(dag))) {
     LOG_WARN("failed to try move child to ready list", K(ret), K(&dag));
   } else if (OB_FAIL(erase_dag_(dag))) {
@@ -2600,9 +2604,7 @@ int ObDagPrioScheduler::finish_dag_(
     if (dag.get_dag_id().is_valid() && OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(dag.get_dag_id()))) {
       STORAGE_LOG(WARN, "failed to del sys task", K(tmp_ret), K(dag.get_dag_id()));
     }
-    if (OB_TMP_FAIL(dag.report_result())) {
-      COMMON_LOG(WARN, "failed to report result", K(tmp_ret), K(dag));
-    }
+
     compaction::ObCompactionSuggestionMgr *suggestion_mgr = MTL(compaction::ObCompactionSuggestionMgr *);
     if (OB_NOT_NULL(suggestion_mgr)
       && OB_TMP_FAIL(suggestion_mgr->update_finish_cnt(

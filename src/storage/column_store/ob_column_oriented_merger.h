@@ -56,7 +56,7 @@ private:
   const int64_t co_major_snapshot_version_;
 };
 
-typedef oceanbase::common::ObSEArray<oceanbase::compaction::ObCOMergeWriter *, ObCOTabletMergeCtx::DEFAULT_CG_MERGE_BATCH_SIZE, common::ObIAllocator&> MERGEWRITERS;
+typedef oceanbase::common::ObSEArray<oceanbase::compaction::ObCOMergeWriter *, DEFAULT_CG_MERGE_BATCH_SIZE, common::ObIAllocator&> MERGEWRITERS;
 
 class ObCOMerger : public ObMerger
 {
