@@ -285,7 +285,10 @@ int ObLobAccessParam::init_seq_no(const uint64_t modified_len)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("seq_no has been inited", K(ret), KPC(this));
   } else if (OB_FAIL(get_store_chunk_size(store_chunk_size))) {
-    LOG_WARN("get_store_chunk_size fail", KR(ret), K(this));
+    LOG_WARN("get_store_chunk_size fail", K(ret), KPC(this));
+  } else if (store_chunk_size <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("store_chunk_size is invalid", K(ret), KPC(this));
   } else {
     // pre-calc seq_no_cnt and init seq_no_st
     // for insert, most oper len/128K + 2
