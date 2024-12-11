@@ -23,7 +23,6 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
 #include "share/ob_table_range.h"
-#include "share/resource_manager/ob_resource_plan_info.h"
 #include "common/errsim_module/ob_errsim_module_type.h"
 
 namespace oceanbase

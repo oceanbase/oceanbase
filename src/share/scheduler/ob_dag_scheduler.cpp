@@ -3149,41 +3149,6 @@ int ObTenantDagScheduler::loop_ready_dag_lists()
   return ret;
 }
 
-ObFunctionType ObTenantDagScheduler::convert_priority_to_function_type(const int64_t priority)
-{
-  ObFunctionType function_type = ObFunctionType::DEFAULT_FUNCTION;
-  switch (priority) {
-    case ObDagPrio::DAG_PRIO_COMPACTION_HIGH:
-      function_type = ObFunctionType::PRIO_COMPACTION_HIGH;
-      break;
-    case ObDagPrio::DAG_PRIO_HA_HIGH:
-      function_type = ObFunctionType::PRIO_HA_HIGH;
-      break;
-    case ObDagPrio::DAG_PRIO_COMPACTION_MID:
-      function_type = ObFunctionType::PRIO_COMPACTION_MID;
-      break;
-    case ObDagPrio::DAG_PRIO_HA_MID:
-      function_type = ObFunctionType::PRIO_HA_MID;
-      break;
-    case ObDagPrio::DAG_PRIO_COMPACTION_LOW:
-      function_type = ObFunctionType::PRIO_COMPACTION_LOW;
-      break;
-    case ObDagPrio::DAG_PRIO_HA_LOW:
-      function_type = ObFunctionType::PRIO_HA_LOW;
-      break;
-    case ObDagPrio::DAG_PRIO_DDL:
-      function_type = ObFunctionType::PRIO_DDL;
-      break;
-    case ObDagPrio::DAG_PRIO_DDL_HIGH:
-      function_type = ObFunctionType::PRIO_DDL_HIGH;
-      break;
-    default:
-      // keep the default value
-      break;
-  }
-  return function_type;
-}
-
 int ObTenantDagScheduler::dispatch_task(ObITask &task, ObTenantDagWorker *&ret_worker, const int64_t priority)
 {
   int ret = OB_SUCCESS;
@@ -3196,7 +3161,11 @@ int ObTenantDagScheduler::dispatch_task(ObITask &task, ObTenantDagWorker *&ret_w
   if (OB_SUCC(ret)) {
     ret_worker = free_workers_.remove_first();
     ret_worker->set_task(&task);
-    ret_worker->set_function_type(convert_priority_to_function_type(priority));
+    if (is_valid_dag_priority(static_cast<ObDagPrio::ObDagPrioEnum>(priority))) {
+      ret_worker->set_function_type(OB_DAG_PRIOS[priority].function_type_);
+    } else {
+      ret_worker->set_function_type(ObFunctionType::DEFAULT_FUNCTION);
+    }
   }
   return ret;
 }

@@ -27,17 +27,17 @@ DAG_SCHEDULER_DAG_NET_TYPE_DEF(DAG_NET_TYPE_MAX, "DAG_NET_TYPE_MAX")
 #endif
 
 #ifdef DAG_SCHEDULER_DAG_PRIO_DEF
-// DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_ENUM, DAG_PRIORITY_SCORE, DAG_PRIORITY_STR)
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_HIGH,   6, "PRIO_COMPACTION_HIGH")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_HIGH,        8, "PRIO_HA_HIGH")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_MID, 6, "PRIO_COMPACTION_MID")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_MID,         5, "PRIO_HA_MID")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_LOW, 6, "PRIO_COMPACTION_LOW")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_LOW,         2, "PRIO_HA_LOW")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_DDL,            2, "PRIO_DDL")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_DDL_HIGH,       6, "PRIO_DDL_HIGH")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_TTL,            2, "PRIO_TTL")
-DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_MAX,            0, "INVALID")
+// DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_ENUM, DAG_PRIORITY_SCORE, DAG_PRIORITY_STR, DAG_FUNCTION_TYPE)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_HIGH,   6, "PRIO_COMPACTION_HIGH", PRIO_COMPACTION_HIGH)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_HIGH,        8, "PRIO_HA_HIGH", PRIO_HA_HIGH)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_MID, 6, "PRIO_COMPACTION_MID", PRIO_COMPACTION_MID)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_MID,         5, "PRIO_HA_MID", PRIO_HA_MID)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_COMPACTION_LOW, 6, "PRIO_COMPACTION_LOW", PRIO_COMPACTION_LOW)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_HA_LOW,         2, "PRIO_HA_LOW", PRIO_HA_LOW)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_DDL,            2, "PRIO_DDL", PRIO_DDL)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_DDL_HIGH,       6, "PRIO_DDL_HIGH", PRIO_DDL_HIGH)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_TTL,            2, "PRIO_TTL", DEFAULT_FUNCTION)
+DAG_SCHEDULER_DAG_PRIO_DEF(DAG_PRIO_MAX,            0, "INVALID", MAX_FUNCTION_NUM)
 #endif
 
 #ifdef DAG_SCHEDULER_DAG_TYPE_DEF
@@ -136,6 +136,7 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MAX, ObDagPrio::DAG_PRIO_MAX, ObSysTaskType:
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "ob_sys_task_stat.h"
+#include "share/resource_manager/ob_resource_plan_info.h"
 
 namespace oceanbase
 {
@@ -146,6 +147,7 @@ struct ObDagPrioStruct
 {
   int64_t score_;
   const char *dag_prio_str_;
+  const ObFunctionType function_type_;
   TO_STRING_KV(K_(score), K_(dag_prio_str));
 };
 
@@ -153,15 +155,15 @@ struct ObDagPrio
 {
   enum ObDagPrioEnum
   {
-#define DAG_SCHEDULER_DAG_PRIO_DEF(dag_prio, score, dag_prio_str) dag_prio,
+#define DAG_SCHEDULER_DAG_PRIO_DEF(dag_prio, score, dag_prio_str, dag_function_type) dag_prio,
 #include "ob_dag_scheduler_config.h"
 #undef DAG_SCHEDULER_DAG_PRIO_DEF
   };
 };
 
 static constexpr ObDagPrioStruct OB_DAG_PRIOS[] = {
-#define DAG_SCHEDULER_DAG_PRIO_DEF(dag_prio, score, dag_prio_str) \
-    {score, dag_prio_str},
+#define DAG_SCHEDULER_DAG_PRIO_DEF(dag_prio, score, dag_prio_str, dag_function_type) \
+    {score, dag_prio_str, ObFunctionType::dag_function_type},
 #include "ob_dag_scheduler_config.h"
 #undef DAG_SCHEDULER_DAG_PRIO_DEF
 };
@@ -214,6 +216,12 @@ static constexpr ObDagTypeStruct OB_DAG_TYPES[] = {
 #include "ob_dag_scheduler_config.h"
 #undef DAG_SCHEDULER_DAG_TYPE_DEF
 };
+
+inline bool is_valid_dag_priority(ObDagPrio::ObDagPrioEnum priority)
+{
+  return priority < ObDagPrio::DAG_PRIO_MAX &&
+         priority >= ObDagPrio::DAG_PRIO_COMPACTION_HIGH;
+}
 
 } // namespace share
 } // namespace oceanbase
