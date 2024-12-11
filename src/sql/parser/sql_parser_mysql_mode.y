@@ -474,7 +474,7 @@ END_P SET_VAR DELIMITER
 %type <node> column_name relation_name relation_name_list opt_relation_name function_name column_label var_name relation_name_or_string row_format_option compression_name
 %type <node> audit_stmt audit_clause op_audit_tail_clause audit_operation_clause audit_all_shortcut_list audit_all_shortcut auditing_on_clause auditing_by_user_clause audit_user_list audit_user audit_user_with_host_name
 %type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint hint_list_with_end global_hint transform_hint optimize_hint
-%type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr alter_with_opt_hint
+%type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list opt_fulltext_index_option_list index_option fulltext_index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr alter_with_opt_hint
 %type <node> opt_when check_state constraint_definition
 %type <node> create_mlog_stmt opt_mlog_option_list opt_mlog_options mlog_option opt_mlog_with mlog_with_values mlog_with_special_columns mlog_with_reference_columns mlog_with_special_column_list mlog_with_reference_column_list mlog_with_special_column mlog_with_reference_column opt_mlog_new_values mlog_including_or_excluding opt_mlog_purge mlog_purge_values mlog_purge_immediate_sync_or_async mlog_purge_start mlog_purge_next
 %type <node> drop_mlog_stmt
@@ -498,7 +498,7 @@ END_P SET_VAR DELIMITER
 %type <node> namespace_expr opt_namespace
 %type <node> server_action server_list opt_server_list
 %type <node> zone_action upgrade_action
-%type <node> opt_index_name opt_key_or_index opt_index_options opt_primary  opt_all
+%type <node> opt_index_name opt_key_or_index opt_index_options opt_fulltext_index_options opt_primary  opt_all
 %type <node> charset_key database_key charset_name charset_name_or_default collation_name compression_key databases_or_schemas trans_param_name trans_param_value
 %type <node> charset_introducer complex_string_literal literal number_literal now_or_signed_literal signed_literal
 %type <node> create_tablegroup_stmt drop_tablegroup_stmt alter_tablegroup_stmt default_tablegroup
@@ -5621,7 +5621,7 @@ column_definition
   malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX, 6, $5 ? $5 : $2, col_list, index_option, $6, NULL, $11);
   $$->value_ = 1;
 }
-| FULLTEXT opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list
+| FULLTEXT opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_fulltext_index_option_list
 {
   (void)($2);
   ParseNode *col_list = NULL;
@@ -9471,7 +9471,44 @@ opt_index_option_list opt_partition_option with_column_group
                            $14,                  /* column group */
                            $4,                   /* if not exists*/
                            $1);                  /* index hint*/
-};
+}
+| create_with_opt_hint FULLTEXT INDEX opt_if_not_exists normal_relation_factor opt_index_using_algorithm ON relation_factor '(' sort_column_list ')' opt_fulltext_index_option_list opt_partition_option
+{
+  ParseNode *idx_columns = NULL;
+  ParseNode *index_options = NULL;
+  merge_nodes(idx_columns, result, T_INDEX_COLUMN_LIST, $10);
+  merge_nodes(index_options, result, T_TABLE_OPTION_LIST, $12);
+  $5->value_ = 3; /* index prefix keyname */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_INDEX, 9,
+                           $5,                   /* index name */
+                           $8,                   /* table name */
+                           idx_columns,          /* index columns */
+                           index_options,        /* index option(s) */
+                           $6,                   /* index method */
+                           $13,                  /* partition method*/
+                           NULL,                 /* column group */
+                           $4,                   /* if not exists*/
+                           $1);                  /* index hint*/
+}
+| create_with_opt_hint FULLTEXT INDEX opt_if_not_exists normal_relation_factor opt_index_using_algorithm ON relation_factor '(' sort_column_list ')' opt_fulltext_index_option_list opt_partition_option with_column_group
+{
+  ParseNode *idx_columns = NULL;
+  ParseNode *index_options = NULL;
+  merge_nodes(idx_columns, result, T_INDEX_COLUMN_LIST, $10);
+  merge_nodes(index_options, result, T_TABLE_OPTION_LIST, $12);
+  $5->value_ = 3; /* index prefix keyname */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_INDEX, 9,
+                           $5,                   /* index name */
+                           $8,                   /* table name */
+                           idx_columns,          /* index columns */
+                           index_options,        /* index option(s) */
+                           $6,                   /* index method */
+                           $13,                  /* partition method*/
+                           $14,                  /* column group */
+                           $4,                   /* if not exists*/
+                           $1);                  /* index hint*/
+}
+;
 
 create_with_opt_hint:
 CREATE {$$ = NULL;}
@@ -9487,12 +9524,10 @@ ALTER {$$ = NULL;}
 
 opt_index_keyname:
 VECTOR { $$[0] = 6; }
-| FULLTEXT { $$[0] = 3; }
 | SPATIAL { $$[0] = 2; }
 | UNIQUE { $$[0] = 1; }
 | /*EMPTY*/ { $$[0] = 0; }
 ;
-
 
 opt_index_name:
 index_name
@@ -9617,6 +9652,18 @@ opt_index_option_list:
 }
 ;
 
+opt_fulltext_index_option_list:
+/*EMPTY*/
+{
+  $$ = NULL;
+}
+| opt_fulltext_index_options
+{
+  $$ = $1;
+}
+;
+
+
 opt_index_options:
 index_option
 {
@@ -9627,6 +9674,30 @@ index_option
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
 }
 ;
+
+opt_fulltext_index_options:
+fulltext_index_option
+{
+  $$ = $1;
+}
+| opt_fulltext_index_options fulltext_index_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+;
+
+
+fulltext_index_option:
+index_option
+{
+  $$ = $1;
+}
+| WITH PARSER relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARSER_NAME, 1, $3);
+}
+;
+
 
 index_option:
 GLOBAL
@@ -9690,10 +9761,6 @@ GLOBAL
 {
   merge_nodes($$, result, T_VEC_INDEX_PARAMS, $3);
   dup_expr_string($$, result, @3.first_column, @3.last_column);
-}
-| WITH PARSER relation_name
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PARSER_NAME, 1, $3);
 }
 | index_using_algorithm
 {
@@ -18226,7 +18293,7 @@ ADD add_key_or_index_opt
 {
   $$ = $2;
 }
-| ADD FULLTEXT opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list
+| ADD FULLTEXT opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_fulltext_index_option_list
 {
   (void)($3);
   ParseNode *col_list = NULL;
