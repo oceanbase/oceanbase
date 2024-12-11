@@ -118,7 +118,8 @@ ObGroupJoinBufffer::ObGroupJoinBufffer()
     above_group_size_(0), max_group_size_(0),
     group_scan_size_(0), group_rescan_cnt_(0), rescan_params_info_(), flags_(0)
 {
-  need_check_above_ = true;
+  // disable multi level NLJ batch rescan
+  need_check_above_ = false;
 }
 
 int ObGroupJoinBufffer::init(ObOperator *op,
