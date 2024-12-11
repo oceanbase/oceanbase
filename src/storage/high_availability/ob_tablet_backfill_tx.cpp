@@ -1168,6 +1168,7 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
     ObTabletHandle new_tablet_handle;
     const int64_t rebuild_seq = tablet_merge_ctx_.rebuild_seq_;
     const int64_t transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
+    const bool need_check_sstable = true;
     ObUpdateTableStoreParam param(&(tablet_merge_ctx_.merged_sstable_),
                                   tablet_merge_ctx_.sstable_version_range_.snapshot_version_,
                                   tablet_merge_ctx_.sstable_version_range_.multi_version_start_,
@@ -1176,7 +1177,8 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
                                   true/*need_check_transfer_seq*/,
                                   transfer_seq,
                                   is_major_merge_type(tablet_merge_ctx_.param_.merge_type_),
-                                  tablet_merge_ctx_.merged_sstable_.get_end_scn());
+                                  tablet_merge_ctx_.merged_sstable_.get_end_scn(),
+                                  need_check_sstable);
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = EN_UPDATE_TRANSFER_TABLET_TABLE_ERROR ? : OB_SUCCESS;
@@ -1208,6 +1210,10 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
       }
     } else if (OB_FAIL(ls->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(param));
+      if (OB_NO_NEED_MERGE == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("no need update tablet table store, transfer backfill need continue", K(ret), K(param), K(tablet_id_));
+      }
     } else if (is_mini_merge(tablet_merge_ctx_.param_.merge_type_)) {
       if (OB_FAIL(new_tablet_handle.get_obj()->release_memtables(tablet_merge_ctx_.scn_range_.end_scn_))) {
         LOG_WARN("failed to release memtable", K(ret), "end_scn", tablet_merge_ctx_.scn_range_.end_scn_);

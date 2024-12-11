@@ -1220,12 +1220,14 @@ int ObTransferReplaceTableTask::init(
 int ObTransferReplaceTableTask::check_src_memtable_is_empty_(
     const ObTabletBackfillInfo &tablet_info,
     ObTablet *tablet,
-    const share::SCN &transfer_scn)
+    const share::SCN &transfer_scn,
+    const ObTabletMemberWrapper<ObTabletTableStore> &wrapper)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableHandleV2> memtables;
   ObIMemtableMgr *memtable_mgr = nullptr;
-  if (!tablet_info.is_valid() || OB_ISNULL(tablet) || !transfer_scn.is_valid()) {
+
+  if (!tablet_info.is_valid() || OB_ISNULL(tablet) || !transfer_scn.is_valid() || !wrapper.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet should not be nullptr.", KR(ret), K(tablet_info), K(transfer_scn), KPC(this));
   } else if (OB_ISNULL(memtable_mgr = tablet->get_memtable_mgr())) {
@@ -1234,6 +1236,9 @@ int ObTransferReplaceTableTask::check_src_memtable_is_empty_(
   } else if (OB_FAIL(memtable_mgr->get_all_memtables(memtables))) {
     LOG_WARN("failed to get all memtables", K(ret), KPC(tablet));
   } else if (!memtables.empty()) {
+    const ObTabletTableStore &table_store = *(wrapper.get_member());
+    ObITable *last_minor_mini_sstable = table_store.get_minor_sstables().get_boundary_table(true /*is_last*/);
+
     for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
       ObITable *table = memtables.at(i).get_table();
       memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
@@ -1254,8 +1259,12 @@ int ObTransferReplaceTableTask::check_src_memtable_is_empty_(
         }
       } else if (!memtable->get_key().scn_range_.is_empty()) {
         if (tablet_info.is_committed_) {
-          ret = OB_TRANSFER_SYS_ERROR;
-          LOG_ERROR("The range of the memtable is not empty", K(ret), KPC(memtable));
+          if (OB_NOT_NULL(last_minor_mini_sstable) && last_minor_mini_sstable->get_end_scn() >= memtable->get_end_scn()) {
+            //memtable scn range is contained by sstable, no need check
+          } else {
+            ret = OB_TRANSFER_SYS_ERROR;
+            LOG_ERROR("The range of the memtable is not empty", K(ret), KPC(memtable));
+          }
         } else {
           ret = OB_EAGAIN;
           LOG_WARN("transfer src forzen memtable scn range is not empty, maybe transfer transaction rollback, need retry",
@@ -1530,7 +1539,7 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
     LOG_WARN("failed to get tablet restore status", K(ret));
   } else if (OB_FAIL(tablet->fetch_table_store(wrapper))) {
     LOG_WARN("fetch table store fail", K(ret), KP(tablet));
-  } else if (OB_FAIL(check_src_memtable_is_empty_(tablet_info, tablet, transfer_scn))) {
+  } else if (OB_FAIL(check_src_memtable_is_empty_(tablet_info, tablet, transfer_scn, wrapper))) {
     LOG_WARN("failed to check src memtable", K(ret), KPC(tablet));
   } else if (OB_FAIL(check_source_minor_end_scn_(tablet_info, wrapper, dest_tablet, need_backill))) {
     LOG_WARN("fail to check source max end scn from tablet", K(ret), KPC(tablet));

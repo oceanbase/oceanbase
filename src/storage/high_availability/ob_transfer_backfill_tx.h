@@ -232,7 +232,8 @@ private:
   int check_src_memtable_is_empty_(
       const ObTabletBackfillInfo &tablet_info,
       ObTablet *tablet,
-      const share::SCN &transfer_scn);
+      const share::SCN &transfer_scn,
+      const ObTabletMemberWrapper<ObTabletTableStore> &wrapper);
   int build_migration_param_(
       const ObTablet *tablet,
       ObTabletHandle &src_tablet_handle,
