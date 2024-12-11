@@ -2775,10 +2775,15 @@ int ObDagPrioScheduler::loop_waiting_dag_list()
       ObIDag *cur = head->get_next();
       ObIDag *move_dag = nullptr;
       while (NULL != cur && head != cur && OB_SUCC(ret)) {
-        if (0 == cur->get_indegree() && OB_NOT_NULL(cur->get_dag_net()) && cur->get_dag_net()->is_cancel()) {
+        if (OB_UNLIKELY(cur->get_list_idx() != WAITING_DAG_LIST)) {
+          ret = OB_ERR_UNEXPECTED;
+          COMMON_LOG(ERROR, "get unexpceted dag", K(ret), KPC(cur));
+          break;
+        } else if (0 == cur->get_indegree() && OB_NOT_NULL(cur->get_dag_net()) && cur->get_dag_net()->is_cancel()) {
           move_dag = cur;
           cur = cur->get_next();
-          if (OB_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *move_dag, true/*try_move_child*/))) { // will report result
+          /* the child of the moving dag maybe the next one in the waiting list, cannot move its children to READY LIST */
+          if (OB_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *move_dag, false/*try_move_child*/))) { // will report result
             COMMON_LOG(WARN, "failed to deal with failed dag", K(ret), KPC(cur));
             ob_abort();
           }
