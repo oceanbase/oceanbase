@@ -1142,7 +1142,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_optimizer_stats_gathering.cpp
   optimizer/ob_dynamic_sampling.cpp
   optimizer/ob_log_values_table_access.cpp
-  optimizer/ob_direct_load_optimizer.cpp
+  optimizer/ob_direct_load_optimizer_ctx.cpp
   optimizer/ob_log_expand.cpp
 )
 

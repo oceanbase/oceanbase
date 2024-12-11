@@ -27,7 +27,7 @@
 #include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
 #include "share/config/ob_config_helper.h"
-#include "sql/optimizer/ob_direct_load_optimizer.h"
+#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 
 
 namespace oceanbase

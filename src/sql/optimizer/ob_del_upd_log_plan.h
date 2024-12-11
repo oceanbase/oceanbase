@@ -241,7 +241,6 @@ public:
   int allocate_link_dml_as_top(ObLogicalOperator *&old_top);
   bool use_pdml() const { return use_pdml_; }
   int compute_dml_parallel();
-  int check_is_direct_load(const ObInsertStmt &insert_stmt, const int64_t dml_parallel);
   int get_parallel_info_from_candidate_plans(int64_t &dop) const;
   int get_pdml_parallel_degree(const int64_t target_part_cnt, int64_t &dop) const;
   bool get_can_use_parallel_das_dml() const { return use_parallel_das_dml_; }
@@ -260,6 +259,10 @@ protected:
                                     ObIArray<ObRawExpr*> &normal_query_refs,
                                     ObIArray<ObRawExpr*> &alias_query_refs);
 private:
+  int get_parallel_info_from_direct_load(const ObDelUpdStmt *del_upd_stmt,
+                                         const ObSQLSessionInfo *session_info,
+                                         int64_t &dml_parallel) const;
+  int check_use_direct_load();
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
 protected:

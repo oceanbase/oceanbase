@@ -19,7 +19,7 @@
 #include "sql/optimizer/ob_log_update.h"
 #include "sql/optimizer/ob_log_exchange.h"
 #include "sql/optimizer/ob_log_link_dml.h"
-#include "sql/optimizer/ob_direct_load_optimizer.h"
+#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/dblink/ob_dblink_utils.h"
@@ -66,51 +66,27 @@ int ObDelUpdLogPlan::compute_dml_parallel()
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "online ddl without pdml");
     }
   } else if (OB_FAIL(get_parallel_info_from_candidate_plans(dml_parallel))) {
-    LOG_WARN("failed to get parallel info from candidate plans", K(ret));
+    LOG_WARN("failed to get parallel info", K(ret));
+  } else if (OB_FAIL(get_parallel_info_from_direct_load(del_upd_stmt, session_info, dml_parallel))) {
+    LOG_WARN("failed to get parallel info from direct load", K(ret));
   } else if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > dml_parallel)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected parallel", K(ret), K(dml_parallel), K(opt_ctx.get_parallel_rule()));
   } else if (opt_ctx.can_use_pdml()) {
-    if (del_upd_stmt->is_insert_stmt()) {
-      const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(del_upd_stmt);
-      if (insert_stmt->is_normal_table_overwrite()) {
-        const int64_t default_insert_overwrite_parallel = 2;
-        if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL) {
-          dml_parallel = default_insert_overwrite_parallel;
-        }
-      }
-      if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL && opt_ctx.get_parallel_rule() == PXParallelRule::MANUAL_HINT) {
-        // do nothing
-      } else if (OB_FAIL(check_is_direct_load(*insert_stmt, dml_parallel))) {
-        LOG_WARN("failed to check is direct load", K(ret));
-      } else if (opt_ctx.get_direct_load_optimizer_ctx().can_use_direct_load()) {
-        const int64_t default_direct_insert_parallel = 2;
-        if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL) {
-          dml_parallel = default_direct_insert_parallel;
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      max_dml_parallel_ = dml_parallel;
-      use_pdml_ = (opt_ctx.is_online_ddl() ||
-                  (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
-                  is_strict_mode(session_info->get_sql_mode())));
-      if (opt_ctx.get_direct_load_optimizer_ctx().can_use_direct_load() && use_pdml_) {
-        get_optimizer_context().get_direct_load_optimizer_ctx().set_use_direct_load();
-        ObExecContext *exec_ctx = get_optimizer_context().get_exec_ctx();
-        if (OB_ISNULL(exec_ctx)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("exec_ctx is null", K(ret));
-        } else {
-          exec_ctx->get_table_direct_insert_ctx().set_is_direct(true);
-        }
-      }
-    }
+    max_dml_parallel_ = dml_parallel;
+    use_pdml_ = (opt_ctx.is_online_ddl() ||
+                (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
+                is_strict_mode(session_info->get_sql_mode())));
   } else if (opt_ctx.get_can_use_parallel_das_dml()) {
     max_dml_parallel_ = dml_parallel;
     use_parallel_das_dml_ = (!opt_ctx.is_online_ddl() &&
                                 (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
                                 is_strict_mode(session_info->get_sql_mode())));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_use_direct_load())) {
+      LOG_WARN("failed to check use direct load", K(ret));
+    }
   }
   LOG_TRACE("finish compute dml parallel", K(use_pdml_), K(max_dml_parallel_), K(use_parallel_das_dml_),
                               K(opt_ctx.can_use_pdml()), K(opt_ctx.is_online_ddl()),
@@ -138,6 +114,63 @@ int ObDelUpdLogPlan::get_parallel_info_from_candidate_plans(int64_t &dop) const
     }
   }
   LOG_DEBUG("finish get max dop from candidate plans", K(dop));
+  return ret;
+}
+
+int ObDelUpdLogPlan::get_parallel_info_from_direct_load(const ObDelUpdStmt *del_upd_stmt,
+                                                        const ObSQLSessionInfo *session_info,
+                                                        int64_t &dml_parallel) const
+{
+  int ret = OB_SUCCESS;
+  ObOptimizerContext &opt_ctx = get_optimizer_context();
+  ObDirectLoadOptimizerCtx &direct_load_opt_ctx = opt_ctx.get_direct_load_optimizer_ctx();
+  if (direct_load_opt_ctx.is_insert_overwrite()) {
+    const int64_t default_insert_overwrite_parallel = 2;
+    dml_parallel = MAX(dml_parallel, default_insert_overwrite_parallel);
+  } else if (opt_ctx.get_parallel_rule() == PXParallelRule::MANUAL_HINT) {
+    // do nothing
+  } else if (direct_load_opt_ctx.can_use_direct_load() && direct_load_opt_ctx.is_optimized_by_default_load_mode()) {
+    const int64_t default_direct_insert_parallel = 2;
+    bool can_use_pdml = opt_ctx.can_use_pdml() && (opt_ctx.is_online_ddl() || is_strict_mode(session_info->get_sql_mode()));
+    if (can_use_pdml) {
+      dml_parallel = MAX(dml_parallel, default_direct_insert_parallel);
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdLogPlan::check_use_direct_load()
+{
+  int ret = OB_SUCCESS;
+  ObOptimizerContext &opt_ctx = get_optimizer_context();
+  ObDirectLoadOptimizerCtx &direct_load_opt_ctx = opt_ctx.get_direct_load_optimizer_ctx();
+  ObExecContext *exec_ctx = nullptr;
+  if (OB_ISNULL(exec_ctx = opt_ctx.get_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(opt_ctx.get_exec_ctx()));
+  } else {
+    bool use_direct_load = false;
+    if (direct_load_opt_ctx.is_insert_overwrite()) {
+      if (OB_UNLIKELY(!use_pdml_)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "PDML is disabled, insert overwrite is");
+      } else {
+        use_direct_load = true;
+      }
+    } else if (direct_load_opt_ctx.can_use_direct_load()) {
+      if (OB_UNLIKELY(!use_pdml_)) {
+        LOG_USER_WARN(OB_NOT_SUPPORTED, "PDML is disabled, direct load is");
+      } else {
+        use_direct_load = true;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (use_direct_load) {
+        direct_load_opt_ctx.set_use_direct_load();
+        exec_ctx->get_table_direct_insert_ctx().set_is_direct(true);
+      }
+    }
+  }
   return ret;
 }
 
@@ -2391,26 +2424,6 @@ int ObDelUpdLogPlan::allocate_link_dml_as_top(ObLogicalOperator *&old_top)
     LOG_WARN("failed to compute property", K(ret));
   } else {
     old_top = link_dml;
-  }
-  return ret;
-}
-
-// Direct-insert is enabled only:
-// 1. pdml insert
-// 2. insert into select, insert overwrite
-// 3. _ob_enable_direct_load
-// 4. append hint or direct_load hint or default load mode
-// 5. full_direct_load(auto_commit, not in a transaction) or inc_direct_load
-int ObDelUpdLogPlan::check_is_direct_load(const ObInsertStmt &insert_stmt, const int64_t dml_parallel)
-{
-  int ret = OB_SUCCESS;
-  if (insert_stmt.value_from_select() && !insert_stmt.is_external_table_overwrite()) {
-    ObOptimizerContext &optimize_ctx = get_optimizer_context();
-    ObDirectLoadOptimizerCtx &direct_load_optimize_ctx = get_optimizer_context().get_direct_load_optimizer_ctx();
-    ObDirectLoadOptimizer optimizer(direct_load_optimize_ctx);
-    if (OB_FAIL(optimizer.optimize(insert_stmt, optimize_ctx, dml_parallel))) {
-      LOG_WARN("fail to optimize", K(ret));
-    }
   }
   return ret;
 }
