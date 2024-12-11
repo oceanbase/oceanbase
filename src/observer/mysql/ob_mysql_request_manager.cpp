@@ -239,6 +239,10 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
         record->data_.proxy_user_name_ = buf + pos;
         pos += user_len;
       }
+      if (nullptr != audit_record.sql_memory_used_) {
+        record->data_.request_memory_used_ = *audit_record.sql_memory_used_;
+      }
+
       //for find bug
       // only print this log if enable_perf_event is enable,
       // for `receive_ts_` might be invalid if `enable_perf_event` is false

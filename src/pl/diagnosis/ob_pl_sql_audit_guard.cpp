@@ -38,7 +38,11 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
     ret_(ret),
     ps_sql_(ps_sql),
     retry_ctrl_(retry_ctrl),
-    traceid_guard_(traceid_guard)
+    traceid_guard_(traceid_guard),
+    sql_used_memory_size_(0),
+    pmcb_(0, sql_used_memory_size_),
+    memory_guard_(pmcb_)
+
 {
   enable_perf_event_ = lib::is_diagnose_info_enabled();
   enable_sql_audit_ = GCONF.enable_sql_audit && session_info_.get_local_ob_enable_sql_audit();
@@ -55,6 +59,7 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
   }
   // 监控项统计开始
   record_.time_record_.set_send_timestamp(ObTimeUtility::current_time());
+  session_info_.get_raw_audit_record().sql_memory_used_ = &sql_used_memory_size_;
 }
 
 ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
@@ -109,6 +114,9 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
     } else {
       LOG_WARN("result_set is null", K(ret_), K(ps_sql_));
     }
+  }
+  if(nullptr != session_info_.get_raw_audit_record().sql_memory_used_) {
+    session_info_.get_raw_audit_record().sql_memory_used_ = nullptr;
   }
 }
 
