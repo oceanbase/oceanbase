@@ -838,7 +838,6 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
   ObSArray<obrpc::ObIndexArg *> add_index_arg_list;
   ObSArray<obrpc::ObIndexArg *> drop_index_args;
   alter_table_arg.index_arg_list_.reset();
-  DEBUG_SYNC(BEFORE_SEND_ALTER_TABLE);
   if (OB_ISNULL(my_session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
@@ -895,6 +894,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
       //overwrite ret code
       ret = OB_SUCCESS;
     }
+    DEBUG_SYNC(BEFORE_SEND_ALTER_TABLE);
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
