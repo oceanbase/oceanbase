@@ -14395,8 +14395,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                       trans))) {
             LOG_WARN("failed to alter table column group table", K(ret));
           } else {
-            // only change schemas here, leave data reshaping in daily merge
-            LOG_DEBUG("alter column group in trans", K(ret), K(new_table_schema));
+            // only change schemas here, leave data reshaping in major merge
+            LOG_INFO("alter column group delayed", K(ret), KPC(orig_table_schema), K(new_table_schema));
           }
         }
 
