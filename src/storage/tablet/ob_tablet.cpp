@@ -95,6 +95,7 @@
 #include "share/ob_tablet_replica_checksum_operator.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -5615,6 +5616,9 @@ int ObTablet::build_migration_tablet_param_major_ckm_info(
       LOG_WARN("major ckm info on table store is invalid", K(ret), K(tablet_id), K(major_ckm_info));
     } else if (major_ckm_info.is_empty() || is_output_exec_mode(major_ckm_info.get_exec_mode())) {
       // do not copy OUTPUT major ckm info to migrate or backup
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("ss_merge_errsim", "src_is_exec_svr", "tenant_id", MTL_ID(), "ls_id", tablet_meta_.get_ls_id());
+#endif
     } else if (OB_FAIL(mig_tablet_param.major_ckm_info_.assign(major_ckm_info, &mig_tablet_param.allocator_))) {
       LOG_WARN("failed to assign major ckm info from table store", K(ret), K(tablet_id), K(table_store));
     }
