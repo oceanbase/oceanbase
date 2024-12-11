@@ -53,6 +53,7 @@ int ObExprNullif::calc_result_type2(ObExprResType &type,
   if (type1.is_null()) {
     // eval_nullif() just return null, no need to set cmp type
     type.set_type(ObCharType);
+    type.set_length(0);
     type.set_collation_level(type1.get_collation_level());
     type.set_default_collation_type();
     type.set_calc_type(ObCharType);
