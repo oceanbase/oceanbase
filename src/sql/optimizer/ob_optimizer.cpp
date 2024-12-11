@@ -26,6 +26,7 @@
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/optimizer/ob_log_temp_table_insert.h"
+#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 #include "share/stat/ob_opt_system_stat.h"
 #include "sql/optimizer/ob_opt_cost_model_parameter.h"
 #include "src/share/stat/ob_opt_stat_manager.h"
@@ -511,6 +512,21 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
   return ret;
 }
 
+int ObOptimizer::check_direct_load_enabled(const ObDMLStmt &stmt, const ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  if (stmt::T_INSERT == stmt.get_stmt_type()) {
+    const ObInsertStmt &insert_stmt = static_cast<const ObInsertStmt &>(stmt);
+    if (insert_stmt.value_from_select() && !insert_stmt.is_external_table_overwrite()) {
+      ObDirectLoadOptimizerCtx &direct_load_optimize_ctx = ctx_.get_direct_load_optimizer_ctx();
+      if (OB_FAIL(direct_load_optimize_ctx.init_direct_load_ctx(insert_stmt, ctx_))) {
+        LOG_WARN("fail to init direct load ctx", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 // check pdml enable sql case
 int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
     const ObSQLSessionInfo &session, bool &is_use_pdml)
@@ -631,6 +647,8 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("fail to extract opt ctx basic flags", K(ret));
   } else if (OB_FAIL(check_pdml_enabled(stmt, *session_info))) {
     LOG_WARN("fail to check enable pdml", K(ret));
+  } else if (OB_FAIL(check_direct_load_enabled(stmt, *session_info))) {
+    LOG_WARN("fail to check enable direct load", K(ret));
   } else if (OB_FAIL(check_parallel_das_dml_enabled(stmt, *session_info))) {
     LOG_WARN("fail to check enable parallel das dml", K(ret));
   } else if (OB_FAIL(check_dml_parallel_mode())) {

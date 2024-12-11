@@ -208,6 +208,8 @@ namespace sql
     int set_auto_dop_params(const ObSQLSessionInfo &session);
     int check_pdml_enabled(const ObDMLStmt &stmt,
                            const ObSQLSessionInfo &session);
+    int check_direct_load_enabled(const ObDMLStmt &stmt,
+                                  const ObSQLSessionInfo &session);
     int check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
                                      const ObSQLSessionInfo &session,
                                      bool &is_use_pdml);
