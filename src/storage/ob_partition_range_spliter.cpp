@@ -1155,8 +1155,6 @@ int ObPartitionMultiRangeSpliter::get_split_tables(ObTableStoreIterator &table_i
       } else if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected null table", K(ret), K(table_iter));
-      } else if (table->is_sstable() && (static_cast<ObSSTable *>(table))->is_small_sstable()) {
-        // skip small sstable
       } else if (table->is_major_sstable()) {
         if (table->is_co_sstable()) {
           ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
