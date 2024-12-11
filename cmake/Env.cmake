@@ -7,7 +7,7 @@ ob_define(DEP_3RD_DIR "${CMAKE_SOURCE_DIR}/deps/3rd")
 ob_define(DEVTOOLS_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools")
 ob_define(DEP_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/deps/devel")
 
-ob_define(OB_BUILD_CDC OFF)
+ob_define(BUILD_CDC_ONLY OFF)
 ob_define(OB_USE_CLANG ON)
 ob_define(OB_ERRSIM OFF)
 ob_define(BUILD_NUMBER 1)
@@ -207,7 +207,7 @@ if(OB_BUILD_CPP_ODPS)
 endif()
 
 # should not use initial-exec for tls-model if building OBCDC.
-if(OB_BUILD_CDC)
+if(BUILD_CDC_ONLY)
   add_definitions(-DOB_BUILD_CDC_DISABLE_VSAG)
 else()
   add_definitions(-DENABLE_INITIAL_EXEC_TLS_MODEL)

@@ -69,6 +69,10 @@ function parse_args
         then
             CPP_STANDARD_OPTION=20
             CPP_STANDARD_20_OPTION=ON
+        elif [[ "$i" == "-DBUILD_CDC_ONLY=ON" ]]
+        then
+            ENABLE_BOLT_OPTION=OFF
+            BUILD_ARGS+=("$i")
         elif [[ $NEED_MAKE == false ]]
         then
             BUILD_ARGS+=("$i")

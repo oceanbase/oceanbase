@@ -28,7 +28,7 @@ devdeps-zlib-static-1.2.13-82024102414.al8.x86_64.rpm
 devdeps-ncurses-static-6.2-112024092810.al8.x86_64.rpm
 devdeps-boost-1.74.0-72024092811.al8.x86_64.rpm
 devdeps-s2geometry-0.9.0-112024100811.al8.x86_64.rpm
-devdeps-icu-69.1-192024092811.al8.x86_64.rpm
+devdeps-icu-69.1-232024120517.al8.x86_64.rpm
 devdeps-cloud-qpl-1.1.0-312024092814.al8.x86_64.rpm
 devdeps-cos-c-sdk-5.0.21-282024102810.al8.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-222024100811.al8.x86_64.rpm

@@ -88,7 +88,7 @@ install(FILES
 endif()
 
 ## oceanbase-cdc
-if (NOT OB_SO_CACHE AND OB_BUILD_CDC)
+if (NOT OB_SO_CACHE AND BUILD_CDC_ONLY)
   list(APPEND CPACK_COMPONENTS_ALL cdc)
   include(GNUInstallDirs)
   install(
