@@ -636,13 +636,22 @@ int ObBasicTabletMergeCtx::swap_tablet()
   return ret;
 }
 
-bool ObBasicTabletMergeCtx::need_swap_tablet(ObProtectedMemtableMgrHandle &memtable_mgr_handle,
-                                             const int64_t row_count,
-                                             const int64_t macro_count)
-{
-  bool bret = memtable_mgr_handle.has_memtable()
-    && (row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD
+bool ObBasicTabletMergeCtx::need_swap_tablet(
+    ObProtectedMemtableMgrHandle &memtable_mgr_handle,
+    const int64_t row_count,
+    const int64_t macro_count,
+    const int64_t cg_count) {
+  bool bret = false;
+  if (memtable_mgr_handle.has_memtable()) {
+    if (0 == cg_count) {
+      bret = (row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD
       || macro_count >= LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD);
+    } else { // col_store
+      bret = cg_count > ALL_CG_IN_ONE_BATCH_CNT
+        || row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD_FOR_CS
+        || macro_count >= LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD_FOR_CS;
+    }
+  }
 #ifdef ERRSIM
   int ret = OB_E(EventTable::EN_SWAP_TABLET_IN_COMPACTION) OB_SUCCESS;
   if (OB_FAIL(ret)) {
@@ -1296,7 +1305,14 @@ int ObBasicTabletMergeCtx::swap_tablet(ObGetMergeTablesResult &get_merge_table_r
     ObProtectedMemtableMgrHandle *protected_handle = NULL;
     int64_t row_count = 0;
     int64_t macro_count = 0;
+    int64_t cg_count = 0;
     const ObSSTable *sstable = nullptr;
+    if (!get_tablet()->is_row_store()) {
+      ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(tables_handle.get_table(0));
+      if (OB_NOT_NULL(co_sstable)) {
+        cg_count = co_sstable->get_cs_meta().get_column_group_count();
+      }
+    }
     for (int64_t i = 0; i < tables_handle.get_count(); ++i) {
       sstable = static_cast<const ObSSTable*>(tables_handle.get_table(i));
       row_count += sstable->get_row_count();
@@ -1304,7 +1320,7 @@ int ObBasicTabletMergeCtx::swap_tablet(ObGetMergeTablesResult &get_merge_table_r
     } // end of for
     if (OB_FAIL(get_tablet()->get_protected_memtable_mgr_handle(protected_handle))) {
       LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(get_tablet()));
-    } else if (need_swap_tablet(*protected_handle, row_count, macro_count)) {
+    } else if (need_swap_tablet(*protected_handle, row_count, macro_count, cg_count)) {
       tables_handle.reset(); // clear tables array
       if (OB_FAIL(swap_tablet())) {
         LOG_WARN("failed to get alloc tablet handle", KR(ret));
