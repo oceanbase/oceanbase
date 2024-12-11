@@ -12035,7 +12035,16 @@ int ObLogPlan::get_source_table_info(ObLogicalOperator &top,
     LOG_WARN("too deep recursive", K(ret));
   } else if (top.is_table_scan()) {
     ObLogTableScan &table_scan = static_cast<ObLogTableScan&>(top);
-    if (table_scan.get_table_id() == source_table_id && !table_scan.get_is_index_global()) {
+    bool is_adaptive_nlj = false;
+    if (OB_NOT_NULL(top.get_parent())) {
+      ObLogJoin *join_op = static_cast<ObLogJoin *>(top.get_parent());
+      if (join_op->get_join_algo() == NESTED_LOOP_JOIN &&
+          join_op->is_adaptive()) {
+        is_adaptive_nlj = true;
+      }
+    }
+    if (is_adaptive_nlj) {
+    } else if (table_scan.get_table_id() == source_table_id && !table_scan.get_is_index_global()) {
       source_sharding = table_scan.get_strong_sharding();
       source_table_part = table_scan.get_table_partition_info();
     }
