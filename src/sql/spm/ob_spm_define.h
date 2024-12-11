@@ -105,7 +105,6 @@ public:
     executions_(0),
     elapsed_time_(UINT64_MAX),
     cpu_time_( UINT64_MAX),
-    need_evict_(false),
     need_sync_(false) {}
 
   virtual ~ObPlanBaselineItem() { destroy(); }
@@ -178,8 +177,6 @@ public:
   inline void set_elapsed_time(int64_t v) { elapsed_time_ = v; }
   inline int64_t get_cpu_time() const { return cpu_time_; }
   inline void set_cpu_time(int64_t v) { cpu_time_ = v; }
-  inline bool get_need_evict() const { return need_evict_; }
-  inline void set_need_evict(bool v) { need_evict_ = v; }
   inline bool get_need_sync() const { return need_sync_; }
   inline void set_need_sync(bool v) { need_sync_ = v; }
   
@@ -207,7 +204,6 @@ public:
   int64_t  cpu_time_;         // The total CPU time consumed during the evolution process
   // common::ObString hints_info_;
   // for lib cache management
-  bool need_evict_;
   bool need_sync_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanBaselineItem);
@@ -238,6 +234,7 @@ public:
   void destroy();
   void set_baseline_key(ObBaselineKey &key) { baseline_key_ = key; }
   ObBaselineKey &get_baseline_key() { return baseline_key_; }
+  bool check_has_accepted_baseline() const;
 
   TO_STRING_KV(K_(is_inited));
 private:
