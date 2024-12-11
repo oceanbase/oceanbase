@@ -3191,6 +3191,7 @@ int ObMPStmtExecute::parse_oracle_interval_ds_value(const char *&data, ObObj &pa
     if (OB_FAIL(ObTimeConverter::decode_interval_ds(data, length, value, scale))) {
       LOG_WARN("fail to decode interval day to second", K(ret), K(length));
     } else {
+      data += length;
       param.set_interval_ds(value);
       param.set_scale(scale);
     }
@@ -3212,6 +3213,7 @@ int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &pa
     if (OB_FAIL(ObTimeConverter::decode_interval_ym(data, length, value, scale))) {
       LOG_WARN("fail to decode interval year to month", K(ret), K(length));
     } else {
+      data += length;
       param.set_interval_ym(value);
       param.set_scale(scale);
     }
