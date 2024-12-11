@@ -10602,7 +10602,7 @@ cnt
 1
 desc oceanbase.DBA_OB_TABLE_SPACE_USAGE;
 Field	Type	Null	Key	Default	Extra
-TABLE_ID	bigint(20)	NO		NULL	
+TABLE_ID	bigint(20)	NO			
 DATABASE_NAME	varchar(128)	NO			
 TABLE_NAME	varchar(256)	NO			
 OCCUPY_SIZE	decimal(42,0)	NO			
@@ -10612,9 +10612,9 @@ cnt
 1
 desc oceanbase.CDB_OB_TABLE_SPACE_USAGE;
 Field	Type	Null	Key	Default	Extra
-TENANT_ID	varchar(128)	NO		NULL	
-TABLE_ID	bigint(20)	NO		NULL	
-TENANT_NAME	varchar(128)	NO		NULL	
+TENANT_ID	varchar(128)	NO			
+TABLE_ID	bigint(20)	NO			
+TENANT_NAME	varchar(128)	NO			
 DATABASE_NAME	varchar(128)	NO			
 TABLE_NAME	varchar(256)	NO			
 OCCUPY_SIZE	decimal(42,0)	NO			
