@@ -594,8 +594,13 @@ struct DatumFixedDoubleHashCalculator : public DefHashMethod<T>
   static int calc_datum_hash(const ObDatum &datum, const uint64_t seed, uint64_t &res)
   {
     // format fixed double to string first, then calc hash value of the string
-    const double d_val = datum.get_double();
+    double d_val = datum.get_double();
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    // zero distinguishes positive and negative zeros, formatted as positive zero to calculate
+    // hash value
+    if (d_val == 0.0) {
+      d_val = 0.0;
+    }
     int64_t length = ob_fcvt(d_val, static_cast<int>(SCALE), sizeof(buf) - 1, buf, NULL);
     res = T::hash(buf, static_cast<int32_t>(length), seed);
     return OB_SUCCESS;
