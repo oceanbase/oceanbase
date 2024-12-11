@@ -395,6 +395,7 @@ int ObInnerSQLConnection::init_session_info(
           session->set_database_id(OB_SYS_DATABASE_ID);
           session->set_shadow(true); // inner session will not be show
           session->set_real_inner_session(true);
+          session->set_current_trace_id(ObCurTraceId::get_trace_id());
         }
       }
       if (OB_SUCC(ret)) {
@@ -466,6 +467,40 @@ int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, co
     if (OB_SUCC(ret)) {
       if (OB_FAIL(init_session_info(inner_session_, is_extern_session, oracle_mode_, is_ddl))) {
         LOG_WARN("fail to init session info", K(ret), KPC(inner_session_));
+      }
+    }
+
+    if (OB_SUCC(ret) && oceanbase::lib::is_diagnose_info_enabled()) {
+      int tmp_ret = OB_SUCCESS;
+      ObDiagnosticInfo *di = nullptr;
+      ObDiagnosticInfo *cur_di = ObLocalDiagnosticInfo::get();
+      int64_t tenant_id = ((0 == ob_get_tenant_id()) ? OB_SYS_TENANT_ID : ob_get_tenant_id()); // thread local tenant id
+      const int64_t bg_sess_id = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
+      MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_switch_guard);
+      if (OB_TMP_FAIL(tenant_switch_guard.switch_to(tenant_id))) {
+        LOG_DEBUG("failed to switch tenant", K(tmp_ret), K(tenant_id));
+      } else {
+        oceanbase::ObDiagnosticInfoContainer *container = MTL(common::ObDiagnosticInfoContainer *);
+        if (OB_ISNULL(container)) {
+          // FIX ME: Threads like TbltTblUp and OmtNodeBalancer are not bound to a tenant and cannot obtain the container pointer.
+          tmp_ret = OB_ERR_UNEXPECTED;
+        } else if (OB_TMP_FAIL(container->acquire_diagnostic_info(tenant_id, THIS_WORKER.get_group_id(), bg_sess_id, di))) {
+          OB_ASSERT(di == nullptr);
+          LOG_WARN("failed to acquire diagnostic info", K(tmp_ret), K(tenant_id),
+              K(THIS_WORKER.get_group_id()));
+        } else {
+          OB_ASSERT(di != nullptr);
+          inner_session_->set_ash_stat_value(di->get_ash_stat());
+          di->get_ash_stat().tenant_id_ = tenant_id;
+          di->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
+          ObDiagnosticInfo *cur_di = ObLocalDiagnosticInfo::get();
+          if (OB_NOT_NULL(cur_di)) {
+            MEMCPY(di->get_ash_stat().program_, cur_di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN);
+          }
+          STRNCPY(di->get_ash_stat().module_, "LOCAL INNER SQL EXEC", ASH_MODULE_STR_LEN);
+          STRNCPY(di->get_ash_stat().action_, inner_sql_action_name(di->get_ash_stat().inner_sql_wait_type_id_), ASH_ACTION_STR_LEN);
+          diagnostic_info_ = di;
+        }
       }
     }
   } else {
@@ -2247,28 +2282,6 @@ int ObInnerSQLConnection::create_session_by_mgr()
     free_session_ctx_.tenant_id_ = tenant_id;
     EVENT_INC(ACTIVE_SESSIONS);
     free_session_ctx_.has_inc_active_num_ = true;
-    ObDiagnosticInfo *di = nullptr;
-    if (oceanbase::lib::is_diagnose_info_enabled()) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(MTL(common::ObDiagnosticInfoContainer *)
-                      ->acquire_diagnostic_info(tenant_id, THIS_WORKER.get_group_id(), sid, di))) {
-        OB_ASSERT(di == nullptr);
-        LOG_WARN("failed to acquire diagnostic info", K(tmp_ret), K(tenant_id),
-            K(THIS_WORKER.get_group_id()), K(sid));
-      } else {
-        OB_ASSERT(di != nullptr);
-        inner_session_->set_ash_stat_value(di->get_ash_stat());
-        di->get_ash_stat().tenant_id_ = tenant_id;
-        di->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
-        ObDiagnosticInfo *cur_di = ObLocalDiagnosticInfo::get();
-        if (OB_NOT_NULL(cur_di)) {
-          MEMCPY(di->get_ash_stat().program_, cur_di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN);
-        }
-        STRNCPY(di->get_ash_stat().module_, "LOCAL INNER SQL EXEC", ASH_MODULE_STR_LEN);
-        STRNCPY(di->get_ash_stat().action_, inner_sql_action_name(di->get_ash_stat().inner_sql_wait_type_id_), ASH_ACTION_STR_LEN);
-        diagnostic_info_ = di;
-      }
-    }
   }
   return ret;
 }
