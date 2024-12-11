@@ -9838,7 +9838,7 @@ int ObTableSchema::get_column_group_index(
 
     if (OB_SUCC(ret) && !found) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected, can not find cg idx", K(ret), K(column_id));
+      LOG_WARN("Unexpected, can not find cg idx", K(ret), K(column_id), K_(max_used_column_group_id));
     }
   }
   LOG_TRACE("[CS-Replica] get column group index", K(ret), K(need_calculate_cg_idx), K(param), K(cg_idx), KPC(this));

@@ -906,7 +906,7 @@ int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
     // REBUILD_COLUMN_GROUP is requested by user or implicitly required by delayed column group transform
     // only use row store to build column store
     medium_info.co_major_merge_type_ = ObCOMajorMergePolicy::USE_RS_BUILD_SCHEMA_MATCH_MERGE;
-    LOG_INFO("use row store to build column store", K(ret), K(merge_reason_), K(result.handle_));
+    LOG_INFO("use row store to build column store", K(ret), K(merge_reason_), K(result.handle_), KPC(first_sstable));
   } else if (FALSE_IT(co_sstable = static_cast<ObCOSSTableV2 *>(first_sstable))) {
   } else if (OB_FAIL(iter.set_tablet_handle(tablet_handle_))) {
     LOG_WARN("failed to set tablet handle", K(ret), K(iter), K(tablet_handle_));

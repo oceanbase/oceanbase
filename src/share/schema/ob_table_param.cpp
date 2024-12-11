@@ -1033,7 +1033,7 @@ int ObTableParam::construct_columns_and_projector(
           LOG_WARN("fail to push_back tmp_access_cols_extend", K(ret));
         } else if (is_cs) {
           if (OB_FAIL(table_schema.get_column_group_index(*column, is_column_replica_table_, cg_idx))) {
-            LOG_WARN("Fail to get column group index", K(ret));
+            LOG_WARN("Fail to get column group index", K(ret), KPC(column));
           } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
             LOG_WARN("Fail to push back cg idx", K(ret));
           }
