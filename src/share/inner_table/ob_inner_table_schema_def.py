@@ -39158,26 +39158,39 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
     select
-      attl.table_id as TABLE_ID,
-      ad.database_name as DATABASE_NAME,
-      at.table_name as TABLE_NAME,
-      sum(avtps.occupy_size) as OCCUPY_SIZE,
-      sum(avtps.required_size) as REQUIRED_SIZE
+      subquery.TABLE_ID AS TABLE_ID,
+      subquery.DATABASE_NAME AS DATABASE_NAME,
+      at_name.TABLE_NAME AS TABLE_NAME,
+      subquery.OCCUPY_SIZE AS OCCUPY_SIZE,
+      subquery.REQUIRED_SIZE AS REQUIRED_SIZE
     from
-    oceanbase.__all_virtual_tablet_pointer_status avtps
-    INNER JOIN oceanbase.__all_tablet_to_ls attl
-      ON      attl.tablet_id = avtps.tablet_id
-    INNER JOIN oceanbase.__all_table at
-      ON      at.table_id = attl.table_id
-        and   at.table_id > 500000
-    INNER JOIN oceanbase.__all_database ad
-      ON      ad.database_id = at.database_id
-    INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
-      ON     avtps.ls_id = avlmt.ls_id
-        AND  avtps.svr_ip = avlmt.svr_ip
-        AND  avtps.svr_port = avlmt.svr_port
-        AND  avlmt.role = 1
-    group by table_id
+    (
+      select
+        CASE
+          WHEN at.table_type in (12, 13) THEN at.data_table_id
+          ELSE at.table_id
+        END as TABLE_ID,
+        ad.database_name as DATABASE_NAME,
+        sum(avtps.occupy_size) as OCCUPY_SIZE,
+        sum(avtps.required_size) as REQUIRED_SIZE
+      from
+      oceanbase.__all_virtual_tablet_pointer_status avtps
+      INNER JOIN oceanbase.__all_tablet_to_ls attl
+        ON      attl.tablet_id = avtps.tablet_id
+      INNER JOIN oceanbase.__all_table at
+        ON      at.table_id = attl.table_id
+          and   at.table_id > 500000
+      INNER JOIN oceanbase.__all_database ad
+        ON      ad.database_id = at.database_id
+      INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
+        ON     avtps.ls_id = avlmt.ls_id
+          AND  avtps.svr_ip = avlmt.svr_ip
+          AND  avtps.svr_port = avlmt.svr_port
+          AND  avlmt.role = 1
+      group by table_id
+    ) as subquery
+    INNER JOIN oceanbase.__all_table at_name
+      ON    subquery.TABLE_ID = at_name.table_id
     order by table_id
 """.replace("\n", " ")
 )
@@ -39192,11 +39205,23 @@ def_table_schema(
   gm_columns      = [],
   view_definition = """
     select
+      subquery.TENANT_ID AS TENANT_ID,
+      subquery.TABLE_ID AS TABLE_ID,
+      subquery.TENANT_NAME AS TENANT_NAME,
+      subquery.DATABASE_NAME AS DATABASE_NAME,
+      avt_name.TABLE_NAME AS TABLE_NAME,
+      subquery.OCCUPY_SIZE AS OCCUPY_SIZE,
+      subquery.REQUIRED_SIZE AS REQUIRED_SIZE
+    from
+    (select
       CASE
         WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
         ELSE atnt.tenant_id
       END AS TENANT_ID,
-      avttl.table_id as TABLE_ID,
+      CASE
+	WHEN avt.table_type in (12, 13) THEN avt.data_table_id
+	ELSE avt.table_id
+      END as TABLE_ID,
       CASE
         WHEN atnt.tenant_name LIKE 'META$%' THEN
           (SELECT t.tenant_name
@@ -39205,7 +39230,6 @@ def_table_schema(
         ELSE atnt.tenant_name
       END AS TENANT_NAME,
       ad.database_name as DATABASE_NAME,
-      avt.table_name as TABLE_NAME,
       sum(avtps.occupy_size) as OCCUPY_SIZE,
       sum(avtps.required_size) as REQUIRED_SIZE
     from
@@ -39228,6 +39252,10 @@ def_table_schema(
         AND   avtps.svr_port = avlmt.svr_port
         AND   avlmt.role = 1
     group by tenant_id, table_id
+    ) as subquery
+    INNER JOIN oceanbase.__all_virtual_table avt_name
+      ON    subquery.TENANT_ID = avt_name.tenant_id
+        AND subquery.TABLE_ID = avt_name.table_id
     order by tenant_id, table_id
 """.replace("\n", " ")
 )
@@ -69287,27 +69315,45 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT
-      attl.table_id AS TABLE_ID,
-      ad.database_name AS DATABASE_NAME,
-      atrg.table_name AS TABLE_NAME,
-      SUM(avtps.occupy_size) AS OCCUPY_SIZE,
-      SUM(avtps.required_size) AS REQUIRED_SIZE
-    FROM SYS.ALL_VIRTUAL_TABLET_POINTER_STATUS avtps
-    JOIN SYS.DBA_OB_TABLE_LOCATIONS attl
-      ON attl.tablet_id = avtps.tablet_id
-    JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT atrg
-      ON atrg.table_id = attl.table_id
+    select
+      subquery.TABLE_ID AS TABLE_ID,
+      subquery.DATABASE_NAME AS DATABASE_NAME,
+      atrg_name.TABLE_NAME AS TABLE_NAME,
+      subquery.OCCUPY_SIZE AS OCCUPY_SIZE,
+      subquery.REQUIRED_SIZE AS REQUIRED_SIZE
+    from
+    (
+      SELECT
+        CASE
+          WHEN (atrg.table_type IN (12, 13)) THEN atrg.data_table_id
+          ELSE atrg.table_id
+        END AS TABLE_ID,
+        ad.database_name AS DATABASE_NAME,
+        SUM(avtps.occupy_size) AS OCCUPY_SIZE,
+        SUM(avtps.required_size) AS REQUIRED_SIZE
+      FROM SYS.ALL_VIRTUAL_TABLET_POINTER_STATUS avtps
+      JOIN SYS.DBA_OB_TABLE_LOCATIONS attl
+        ON attl.tablet_id = avtps.tablet_id
+      JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT atrg
+        ON atrg.table_id = attl.table_id
         AND atrg.table_id > 500000
-    JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT ad
-      ON ad.database_id = atrg.database_id
-    JOIN SYS.DBA_OB_LS_LOCATIONS avlmt
-      ON avtps.ls_id = avlmt.ls_id
+      JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT ad
+        ON ad.database_id = atrg.database_id
+      JOIN SYS.DBA_OB_LS_LOCATIONS avlmt
+        ON avtps.ls_id = avlmt.ls_id
         AND avtps.svr_ip = avlmt.svr_ip
         AND avtps.svr_port = avlmt.svr_port
         AND avlmt.role = 'LEADER'
-    GROUP BY attl.table_id, ad.database_name, atrg.table_name
-    ORDER BY attl.table_id
+      GROUP BY
+        CASE
+          WHEN (atrg.table_type IN (12, 13)) THEN atrg.data_table_id
+          ELSE atrg.table_id
+        END,
+        ad.database_name
+    ) subquery
+    JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT atrg_name
+      ON   subquery.TABLE_ID = atrg_name.table_id
+    ORDER BY TABLE_ID
 """.replace("\n", " ")
 )
 
