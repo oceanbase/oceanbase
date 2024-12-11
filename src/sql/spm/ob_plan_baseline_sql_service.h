@@ -117,6 +117,7 @@ public:
   static int convert_sql_string(ObIAllocator &allocator,
                                 const ObCollationType input_collation,
                                 const ObString &input_str,
+                                bool truncate_str,
                                 ObString &output_str);
 
   int update_plan_baselines_result(const uint64_t tenant_id,
@@ -170,6 +171,7 @@ public:
                                          const ObEvolutionStat &evo_stat,
                                          int64_t& affected_rows);
 private:
+  static const int64_t max_sql_text_size = 10 * 1024 * 1024; // 10M
   const static char *EMPTY_STR;
   bool inited_;
   char ip_buff_[common::MAX_IP_ADDR_LENGTH] = {'\0'};
