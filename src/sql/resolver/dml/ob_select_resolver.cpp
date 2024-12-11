@@ -1770,12 +1770,12 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
   ObExecContext *exec_ctx = NULL;
   //LOG_INFO("resolve_select_1", "usec", ObSQLUtils::get_usec());
   current_scope_ = T_FIELD_LIST_SCOPE;
-  if (OB_ISNULL(session_info_)
-      || OB_ISNULL(select_stmt = get_select_stmt())
-      || OB_ISNULL(exec_ctx = session_info_->get_cur_exec_ctx())) {
+  if (OB_ISNULL(session_info_) || OB_ISNULL(select_stmt = get_select_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info_),
         K(select_stmt), K(ret));
+  } else {
+    exec_ctx = session_info_->get_cur_exec_ctx();
   }
   for (int32_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
     alias_node = NULL;
@@ -2192,7 +2192,7 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
     } else {/*do nothing*/}
 
     if (OB_FAIL(ret)) {
-    } else if ((0 == i % 1000) && OB_FAIL(exec_ctx->check_status())) {
+    } else if ((0 == i % 1000) && NULL != exec_ctx && OB_FAIL(exec_ctx->check_status())) {
       LOG_WARN("check status failed", K(ret));
     }
   } // end for
@@ -3555,11 +3555,13 @@ int ObSelectResolver::resolve_from_clause(const ParseNode *node)
     ObExecContext *exec_ctx = NULL;
     CK( OB_NOT_NULL(select_stmt = get_select_stmt()),
         OB_NOT_NULL(session_info_),
-        OB_NOT_NULL(exec_ctx = session_info_->get_cur_exec_ctx()),
         node->type_ == T_FROM_LIST,
         node->num_child_ >= 1);
+    if (OB_SUCC(ret)) {
+      exec_ctx = session_info_->get_cur_exec_ctx();
+    }
     for (int32_t i = 0; OB_SUCC(ret) && i < node->num_child_; i += 1) {
-      if ((0 == i % 1000) && OB_FAIL(exec_ctx->check_status())) {
+      if ((0 == i % 1000) && NULL != exec_ctx && OB_FAIL(exec_ctx->check_status())) {
         LOG_WARN("check status failed", K(ret));
       } else {
         ParseNode *table_node = node->children_[i];
