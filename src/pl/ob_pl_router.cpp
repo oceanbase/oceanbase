@@ -178,6 +178,7 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
     ObRoutineParam *param = routine_info_.get_routine_params().at(i);
     ObPLDataType param_type;
     CK (OB_NOT_NULL(param));
+    OX (param_type.set_enum_set_ctx(&func_ast.get_enum_set_ctx()));
     OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                 schema_guard_,
                                                 session_info_,
@@ -187,7 +188,7 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
     if (OB_SUCC(ret)) {
       if (param->is_ret_param()) {
         func_ast.set_ret_type(param_type);
-        if (OB_FAIL(func_ast.set_ret_type_info(param->get_extended_type_info()))) {
+        if (OB_FAIL(func_ast.set_ret_type_info(param->get_extended_type_info(), &func_ast.get_enum_set_ctx()))) {
           LOG_WARN("fail to set type info", K(ret));
         }
       } else if (OB_FAIL(func_ast.add_argument(param->get_param_name(),

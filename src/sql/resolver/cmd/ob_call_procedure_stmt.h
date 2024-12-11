@@ -42,7 +42,8 @@ public:
         out_name_(),
         out_type_(),
         db_name_(),
-        is_udt_routine_(false) {
+        is_udt_routine_(false),
+        enum_set_ctx_(allocator_) {
   }
 
   virtual ~ObCallProcedureInfo() {
@@ -84,6 +85,7 @@ public:
 
   void set_is_udt_routine(bool v) { is_udt_routine_ = v; }
   bool is_udt_routine() const { return is_udt_routine_; }
+  pl::ObPLEnumSetCtx& get_enum_set_ctx() { return enum_set_ctx_; };
 
   int prepare_expression(const common::ObIArray<sql::ObRawExpr*> &params);
   int final_expression(const common::ObIArray<sql::ObRawExpr*> &params,
@@ -119,6 +121,7 @@ private:
   ParamTypeInfoArray in_type_infos_;
   ObString db_name_;
   bool is_udt_routine_;
+  pl::ObPLEnumSetCtx enum_set_ctx_;
 
   DISALLOW_COPY_AND_ASSIGN(ObCallProcedureInfo);
 };
