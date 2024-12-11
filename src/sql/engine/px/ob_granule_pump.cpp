@@ -142,6 +142,7 @@ int ObGITaskSet::assign(const ObGITaskSet &other)
     LOG_WARN("failed to assign gi_task_set", K(ret));
   } else {
     cur_pos_ = other.cur_pos_;
+    task_count_ = other.task_count_;
   }
   return ret;
 }
@@ -250,7 +251,9 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
     ObNewRange whole_range;
     whole_range.set_whole_range();
     ObNewRange &ss_range = ss_ranges.empty() ? whole_range : ss_ranges.at(0);
+    int64_t max_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < taskset_tablets.count(); i++) {
+      max_idx = max(max_idx, taskset_idxs.at(i));
       ObGITaskInfo task_info(taskset_tablets.at(i), taskset_ranges.at(i), ss_range, taskset_idxs.at(i));
       if (random_type != ObGITaskSet::GI_RANDOM_NONE) {
         task_info.hash_value_ = common::murmurhash(&task_info.idx_, sizeof(task_info.idx_), 0);
@@ -259,6 +262,7 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
         LOG_WARN("add partition key failed", K(ret));
       }
     }
+    task_count_ = max_idx + 1;
     if (OB_SUCC(ret) && random_type != GI_RANDOM_NONE) {
       auto compare_fun = [](const ObGITaskInfo &a, const ObGITaskInfo &b) -> bool { return a.hash_value_ > b.hash_value_; };
       lib::ob_sort(gi_task_set_.begin(), gi_task_set_.end(), compare_fun);
@@ -268,7 +272,6 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
-
 int ObGranulePump::try_fetch_pwj_tasks(ObIArray<ObGranuleTaskInfo> &infos,
                                        const ObIArray<int64_t> &op_ids,
                                        int64_t worker_id)
@@ -308,7 +311,8 @@ int ObGranulePump::try_fetch_pwj_tasks(ObIArray<ObGranuleTaskInfo> &infos,
 int ObGranulePump::fetch_granule_task(const ObGITaskSet *&res_task_set,
                                       int64_t &pos,
                                       int64_t worker_id,
-                                      uint64_t tsc_op_id)
+                                      uint64_t tsc_op_id,
+                                      uint64_t fetched_task_cnt)
 {
   int ret = OB_SUCCESS;
   /*try get gi task*/
@@ -332,7 +336,7 @@ int ObGranulePump::fetch_granule_task(const ObGITaskSet *&res_task_set,
       }
       break;
     case GIT_RANDOM:
-      if (OB_FAIL(fetch_granule_from_shared_pool(res_task_set, pos, tsc_op_id))) {
+      if (OB_FAIL(fetch_granule_from_shared_pool(res_task_set, pos, tsc_op_id, fetched_task_cnt))) {
         if (ret != OB_ITER_END) {
           LOG_WARN("fetch granule from shared pool failed", K(ret));
         }
@@ -377,7 +381,8 @@ int ObGranulePump::fetch_granule_by_worker_id(const ObGITaskSet *&res_task_set,
 
 int ObGranulePump::fetch_granule_from_shared_pool(const ObGITaskSet *&res_task_set,
                                                   int64_t &pos,
-                                                  uint64_t tsc_op_id)
+                                                  uint64_t tsc_op_id,
+                                                  uint64_t fetched_task_cnt)
 {
   int ret = OB_SUCCESS;
   if (no_more_task_from_shared_pool_) {
@@ -402,11 +407,22 @@ int ObGranulePump::fetch_granule_from_shared_pool(const ObGITaskSet *&res_task_s
     } else {
       res_task_set = &taskset_array->at(OB_GRANULE_SHARED_POOL_POS);
       ObGITaskSet &taskset = taskset_array->at(OB_GRANULE_SHARED_POOL_POS);
-      if (OB_FAIL(taskset.get_next_gi_task_pos(pos))) {
+      if (parallelism_ > 0 && fetched_task_cnt > 0) {
+        bool last_finish_thread = finished_cnt_ == parallelism_ - 1;
+        if (!last_finish_thread &&
+            fetched_task_cnt >= ((taskset.task_count_ + parallelism_ - 1) / parallelism_)) {
+          ret = OB_ITER_END;
+          finished_cnt_++;
+          LOG_TRACE("return iter end to make GI tasks allocated evenly.");
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(taskset.get_next_gi_task_pos(pos))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to get next gi task pos", K(ret));
         } else {
           no_more_task_from_shared_pool_ = true;
+          finished_cnt_ = (finished_cnt_ + 1) % parallelism_;
         }
       } else {
         LOG_TRACE("get GI task", K(taskset), K(ret));

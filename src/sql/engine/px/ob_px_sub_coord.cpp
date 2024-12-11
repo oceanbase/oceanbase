@@ -353,6 +353,8 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
       LOG_WARN("fail to setup gi op input", K(ret));
     } else {
       gi_input->set_parallelism(sqc.get_task_count());
+      sqc_ctx.gi_pump_.set_parallelism(sqc.get_task_count());
+
     }
   } else if (IS_PX_JOIN_FILTER(root.get_type())) {
     ObPxSqcMeta &sqc = sqc_arg_.sqc_;
