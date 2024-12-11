@@ -123,7 +123,7 @@ int ObLobTabletDmlHelper::process_lob_column_after_insert(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(lob_disk_locator.reset_for_dml())) {
     LOG_WARN("reset_for_dml fail", K(ret), K(lob_disk_locator));
-  } else if(OB_FAIL(insert_lob_col(run_ctx, row, column, datum, &del_param, locator_data, &info.lob_meta_list_))) {
+  } else if(OB_FAIL(insert_lob_col(run_ctx, row, column, datum, &del_param, locator_data, &info.lob_meta_list_, true/*try_flush_redo*/))) {
     LOG_WARN("insert_lob_col fail", K(ret), K(column), K(datum), K(info), K(row));
   } else if (datum.get_string().ptr() != locator_data.ptr() || datum.get_string().length() != locator_data.length()) {
     ret = OB_ERR_UNEXPECTED;
@@ -186,7 +186,7 @@ int ObLobTabletDmlHelper::process_lob_column_after_update(
   bool use_seq_pre_alloc = false;
   if (OB_FAIL(info.src_data_locator_.get_lob_data_byte_len(lob_param.update_len_))) {
     LOG_WARN("fail to get new lob byte len", K(ret), K(info));
-  } else if (OB_FAIL(delete_lob_col(run_ctx, old_row, column, old_datum, old_lob_common, lob_param))) {
+  } else if (OB_FAIL(delete_lob_col(run_ctx, old_row, column, old_datum, old_lob_common, lob_param, true/*try_flush_redo*/))) {
     LOG_WARN("[STORAGE_LOB]failed to erase old lob col", K(ret), K(old_row));
   } else if (OB_FAIL(lob_disk_locator.init(info.cur_data_locator_.ptr_, info.cur_data_locator_.size_))) {
     LOG_WARN("init disk locator fail", K(ret), K(info));
@@ -207,10 +207,11 @@ int ObLobTabletDmlHelper::process_lob_column_after_update(
     LOG_WARN("new lob common is null", K(ret), K(lob_disk_locator));
   } else if (data_tbl_rowkey_change) {
     // need lob_param when use pre alloc seq no
-    if (OB_FAIL(insert_lob_col(run_ctx, new_row, column, new_datum, use_seq_pre_alloc ? &lob_param : nullptr, locator_data, &info.lob_meta_list_))) {
+    if (OB_FAIL(insert_lob_col(run_ctx, new_row, column, new_datum,
+        use_seq_pre_alloc ? &lob_param : nullptr, locator_data, &info.lob_meta_list_, true/*try_flush_redo*/))) {
       LOG_WARN("[STORAGE_LOB]failed to insert new lob col.", K(ret), K(new_row));
     }
-  } else if (OB_FAIL(insert_lob_col(run_ctx, new_row, column, new_datum, &lob_param, locator_data, &info.lob_meta_list_))) {
+  } else if (OB_FAIL(insert_lob_col(run_ctx, new_row, column, new_datum, &lob_param, locator_data, &info.lob_meta_list_, true/*try_flush_redo*/))) {
     LOG_WARN("[STORAGE_LOB]failed to insert new lob col.", K(ret), K(new_row));
   }
 
@@ -231,7 +232,8 @@ int ObLobTabletDmlHelper::insert_lob_col(
     blocksstable::ObStorageDatum &datum,
     ObLobAccessParam *del_param,
     ObString &disk_locator_data,
-    ObArray<ObLobMetaInfo> *lob_meta_list)
+    ObArray<ObLobMetaInfo> *lob_meta_list,
+    const bool try_flush_redo)
 {
   int ret = OB_SUCCESS;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
@@ -249,6 +251,7 @@ int ObLobTabletDmlHelper::insert_lob_col(
       lob_param.used_seq_cnt_ = del_param->used_seq_cnt_;
       lob_param.seq_no_st_ = del_param->seq_no_st_;
     }
+    lob_param.try_flush_redo_ = try_flush_redo;
     ObString raw_data = datum.get_string();
     // for not strict sql mode, will insert empty string without lob header
     bool has_lob_header = datum.has_lob_header() && raw_data.length() > 0;
@@ -278,7 +281,8 @@ int ObLobTabletDmlHelper::delete_lob_col(
     const ObColDesc &column,
     blocksstable::ObStorageDatum &datum,
     ObLobCommon *&lob_common,
-    ObLobAccessParam &lob_param)
+    ObLobAccessParam &lob_param,
+    const bool try_flush_redo)
 {
   int ret = OB_SUCCESS;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
@@ -312,6 +316,7 @@ int ObLobTabletDmlHelper::delete_lob_col(
       // use byte size to delete all
       } else if (OB_FALSE_IT(lob_param.len_ = lob_param.byte_size_)) {
       } else if (OB_FALSE_IT(lob_param.need_read_latest_ = true)) {
+      } else if (OB_FALSE_IT(lob_param.try_flush_redo_ = try_flush_redo)) {
       } else if (OB_FAIL(lob_mngr->erase(lob_param))) {
         LOG_WARN("[STORAGE_LOB]lob erase failed.", K(ret), K(lob_param));
       }
