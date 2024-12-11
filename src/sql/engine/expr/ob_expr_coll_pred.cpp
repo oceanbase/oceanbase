@@ -914,6 +914,12 @@ int ObExprCollPred::eval_is_set_composit(ObExecContext &exec_ctx,
     }
   }
 
+  int temp_ret = pl::ObUserDefinedType::destruct_obj(params.at(2));
+  if (OB_SUCCESS != temp_ret) {
+    LOG_WARN("failed to destruct obj", K(temp_ret));
+  }
+  ret = OB_SUCCESS == ret ? temp_ret : ret;
+
 #endif // OB_BUILD_ORACLE_PL
 
   return ret;
