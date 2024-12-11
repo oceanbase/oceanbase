@@ -27684,12 +27684,12 @@ static const _error _error_OB_BACKUP_ZONE_IDC_REGION_INVALID = {
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
       .str_error             = "backup zone or backup idc or backup region invalid",
-      .str_user_error        = "backup zone or backup idc or backup region invalid",
+      .str_user_error        = "%s",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -9133, backup zone or backup idc or backup region invalid",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9133, backup zone or backup idc or backup region invalid",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9133, %s",
       .ob_str_error          = "OBE-00600: internal error code, arguments: -9133, backup zone or backup idc or backup region invalid",
-      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -9133, backup zone or backup idc or backup region invalid"
+      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -9133, %s"
 };
 static const _error _error_OB_ERR_TMP_FILE_ALREADY_SEALED = {
       .error_name            = "OB_ERR_TMP_FILE_ALREADY_SEALED",
