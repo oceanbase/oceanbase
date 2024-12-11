@@ -2699,34 +2699,34 @@ bool ObLogTableScan::is_duplicate_table()
 int ObLogTableScan::extract_bnlj_param_idxs(ObIArray<int64_t> &bnlj_params)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObRawExpr*> range_param_exprs;
-  ObArray<ObRawExpr*> filter_param_exprs;
-  if (OB_FAIL(ObRawExprUtils::extract_params(range_conds_, range_param_exprs))) {
-    LOG_WARN("extract range params failed", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::extract_params(filter_exprs_, filter_param_exprs))) {
-    LOG_WARN("extract filter params failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < range_param_exprs.count(); ++i) {
-    ObRawExpr *expr = range_param_exprs.at(i);
-    if (expr->has_flag(IS_DYNAMIC_PARAM)) {
-      ObConstRawExpr *exec_param = static_cast<ObConstRawExpr*>(expr);
-      if (OB_FAIL(add_var_to_array_no_dup(bnlj_params, exec_param->get_value().get_unknown()))) {
-        LOG_WARN("add var to array no dup failed", K(ret));
+  if (use_batch()) {
+    ObArray<ObRawExpr*> range_param_exprs;
+    ObArray<ObRawExpr*> filter_param_exprs;
+    if (OB_FAIL(ObRawExprUtils::extract_params(range_conds_, range_param_exprs))) {
+      LOG_WARN("extract range params failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_params(filter_exprs_, filter_param_exprs))) {
+      LOG_WARN("extract filter params failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < range_param_exprs.count(); ++i) {
+      ObRawExpr *expr = range_param_exprs.at(i);
+      if (expr->has_flag(IS_DYNAMIC_PARAM)) {
+        ObConstRawExpr *exec_param = static_cast<ObConstRawExpr*>(expr);
+        if (OB_FAIL(add_var_to_array_no_dup(bnlj_params, exec_param->get_value().get_unknown()))) {
+          LOG_WARN("add var to array no dup failed", K(ret));
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter_param_exprs.count(); ++i) {
+      ObRawExpr *expr = filter_param_exprs.at(i);
+      if (expr->has_flag(IS_DYNAMIC_PARAM)) {
+        ObConstRawExpr *exec_param = static_cast<ObConstRawExpr*>(expr);
+        if (OB_FAIL(add_var_to_array_no_dup(bnlj_params, exec_param->get_value().get_unknown()))) {
+          LOG_WARN("add var to array no dup failed", K(ret));
+        }
       }
     }
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < filter_param_exprs.count(); ++i) {
-    ObRawExpr *expr = filter_param_exprs.at(i);
-    if (expr->has_flag(IS_DYNAMIC_PARAM)) {
-      ObConstRawExpr *exec_param = static_cast<ObConstRawExpr*>(expr);
-      if (OB_FAIL(add_var_to_array_no_dup(bnlj_params, exec_param->get_value().get_unknown()))) {
-        LOG_WARN("add var to array no dup failed", K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    LOG_DEBUG("extract bnlj params", K(range_param_exprs), K(filter_param_exprs), K(bnlj_params));
-  }
+  LOG_TRACE("extract bnlj params", K(use_batch_), K(bnlj_params), K(ret));
   return ret;
 }
 
