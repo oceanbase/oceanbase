@@ -53,7 +53,6 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
                                  ObExprResType &type2,
                                  ObExprTypeCtx &type_ctx) const
 {
-  static const int16_t extra_scale_for_decint_div = 8;
   int ret = OB_SUCCESS;
   int64_t div_precision_increment = 0;
 
