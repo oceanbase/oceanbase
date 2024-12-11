@@ -4900,11 +4900,11 @@ Optimization Info:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select * from t12 where c2 < 0 and c2 > 0;
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t12 |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t12 |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t12.c1], [t12.c2], [t12.c3], [t12.c4]), filter([t12.c2 < 0], [t12.c2 > 0]), rowset=16
@@ -4952,11 +4952,11 @@ Optimization Info:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t12 where c2 < 0 and c2 > 0 and c3 = 1;
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t12 |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t12 |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([1]), filter([t12.c2 < 0], [t12.c2 > 0], [t12.c3 = 1]), rowset=16
@@ -5006,11 +5006,11 @@ Optimization Info:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select * from t12 where c2 < 0 and c2 > 0 and c3 = 1;
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t12 |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t12 |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t12.c1], [t12.c2], [t12.c3], [t12.c4]), filter([t12.c2 < 0], [t12.c2 > 0], [t12.c3 = 1]), rowset=16

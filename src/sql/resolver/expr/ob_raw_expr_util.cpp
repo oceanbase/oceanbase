@@ -7641,15 +7641,30 @@ bool ObRawExprUtils::has_prefix_str_expr(const ObRawExpr &expr,
         int64_t one = 1;
         int cmp_ret = 0;
         const ObRawExpr *param_expr2 = tmp->get_param_expr(1);
+        const ObRawExpr *param_expr3 = tmp->get_param_expr(2);
+        bool param2_valid = false;
+        bool param3_valid = false;
         if (param_expr2 != NULL && param_expr2->is_const_raw_expr()) {
           const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(param_expr2);
           if ((const_expr->get_value().is_int() && const_expr->get_value().get_int() == 1)
               || (const_expr->get_value().is_oracle_decimal()
                   && OB_SUCCESS == ora_cmp_integer(*const_expr, one, cmp_ret) && cmp_ret == 0))
             {
-              bret = true;
-              substr_expr = tmp;
+              param2_valid = true;
             }
+        }
+        if (param_expr3 != NULL && param_expr3->is_const_raw_expr()) {
+          const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(param_expr3);
+          if ((const_expr->get_value().is_int() && const_expr->get_value().get_int() >= 1)
+              || (const_expr->get_value().is_oracle_decimal()
+                  && OB_SUCCESS == ora_cmp_integer(*const_expr, one, cmp_ret) && cmp_ret >= 0))
+            {
+              param3_valid = true;
+            }
+        }
+        if (param2_valid && param3_valid) {
+          bret = true;
+          substr_expr = tmp;
         }
       }
     }

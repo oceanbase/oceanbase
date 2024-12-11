@@ -2478,8 +2478,9 @@ struct NullAwareAntiJoinInfo {
                  K_(interesting_paths));
   private:
     int add_access_filters(AccessPath *path,
-                           const common::ObIArray<ObRawExpr*> &index_keys,
+                           const ObIArray<ColumnItem> &range_cols,
                            const common::ObIArray<ObRawExpr*> *range_exprs,
+                           const common::ObIArray<ObRawExpr*> *unprecise_range_exprs,
                            PathHelper &helper);
 
     int set_nl_filters(JoinPath *join_path,
@@ -2656,7 +2657,7 @@ struct NullAwareAntiJoinInfo {
 
     int can_extract_unprecise_range(const uint64_t table_id,
                                     const ObRawExpr *filter,
-                                    const ObBitSet<> &ex_prefix_column_bs,
+                                    const ObIArray<uint64_t> &prefix_column_ids,
                                     const ObIArray<ObRawExpr*> &unprecise_exprs,
                                     bool &can_extract);
 
@@ -2795,6 +2796,7 @@ struct NullAwareAntiJoinInfo {
                                ObIArray<ObRawExpr *> &param_pushdown_quals,
                                ObIArray<ObExecParamRawExpr *> &nl_params,
                                ObIArray<ObRawExpr *> &subquery_exprs,
+                               PathHelper &helper,
                                bool &is_valid);
 
     int remove_redudant_filter(ObJoinOrder &left_tree,
@@ -2849,28 +2851,58 @@ struct NullAwareAntiJoinInfo {
                                         ObRawExpr *&new_op_expr,
                                         PathHelper &helper);
 
-    int get_prefix_str_idx_exprs(ObRawExpr *expr,
-                                ObColumnRefRawExpr *column_expr,
-                                ObRawExpr *value_expr,
-                                ObRawExpr *escape_expr,
-                                const TableItem *table_item,
-                                ObItemType type,
-                                ObIArray<ObRawExpr*> &new_exprs,
-                                PathHelper &helper);
-
-    int deduce_prefix_str_idx_exprs(ObRawExpr *expr,
-                                    const TableItem *table_item,
-                                    ObIArray<ObRawExpr*> &new_exprs,
-                                    PathHelper &helper);
-
-    int deduce_common_gen_col_index_expr(ObRawExpr *qual,
+    int deduce_common_gen_col_index_expr(ObRawExpr *pred,
                                         const TableItem *table_item,
-                                        ObRawExpr *&new_qual);
+                                        ObColumnRefRawExpr *gen_col,
+                                        ObIArray<ObRawExpr*> &simple_gen_col_preds,
+                                        ObRawExpr *&new_pred,
+                                        PathHelper &helper);
 
-    int try_get_generated_col_index_expr(ObRawExpr *qual,
-                                         ObRawExpr *depend_expr,
-                                         ObColumnRefRawExpr *col_expr,
-                                         ObRawExpr *&new_qual);
+    int check_match_prefix_index(ObRawExpr *expr,
+                                const TableItem *table_item,
+                                ObIArray<ObColumnRefRawExpr*> &prefix_cols,
+                                ObIArray<ObRawExpr*> &simple_prefix_preds,
+                                bool &is_match);
+
+    int check_match_common_gen_col_index(ObRawExpr *expr,
+                                        const TableItem *table_item,
+                                        ObIArray<ObColumnRefRawExpr*> &common_gen_cols,
+                                        ObIArray<ObRawExpr*> &simple_gen_col_preds,
+                                        bool &match_common_gen_col_idx);
+
+    int check_simple_expr_match_prefix_index(ObRawExpr *expr,
+                                            const TableItem *table_item,
+                                            ObColumnRefRawExpr *&column_expr,
+                                            ObRawExpr *&value_expr,
+                                            ObRawExpr *&escape_expr,
+                                            ObItemType &type,
+                                            ObIArray<ObColumnRefRawExpr*> &cur_prefix_cols,
+                                            bool &is_match);
+
+    int check_simple_expr_match_gen_col_index(ObRawExpr *expr,
+                                              const TableItem *table_item,
+                                              ObIArray<ObColumnRefRawExpr*> &candi_gen_cols,
+                                              bool &is_match);
+
+    int check_simple_gen_col_cmp_expr(ObRawExpr *expr,
+                                      ObColumnRefRawExpr *gen_col_expr,
+                                      ObIArray<ObPCConstParamInfo> &param_infos,
+                                      int64_t &matched_param_idx,
+                                      bool &is_match);
+
+    int check_simple_prefix_cmp_expr(ObRawExpr *expr,
+                                      ObColumnRefRawExpr *&column_expr,
+                                      ObRawExpr *&value_expr,
+                                      ObRawExpr *&escape_expr,
+                                      ObItemType &type,
+                                      bool &is_valid);
+
+    int deduce_prefix_str_idx_expr(ObRawExpr *pred,
+                                  const TableItem *table_item,
+                                  ObColumnRefRawExpr *prefix_col,
+                                  ObIArray<ObRawExpr*> &simple_prefix_preds,
+                                  ObRawExpr *&new_pred,
+                                  PathHelper &helper);
 
     int try_get_json_generated_col_index_expr(ObRawExpr *depend_expr,
                                               ObColumnRefRawExpr *col_expr,
@@ -2897,9 +2929,9 @@ struct NullAwareAntiJoinInfo {
                                      ObIArray<ObRawExpr*> &equal_join_conditions,
                                      NullAwareAntiJoinInfo &naaj_info);
     bool is_main_table_use_das(const common::ObIArray<AccessPath *> &access_paths);
-    int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from, bool is_persistent);
+    int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from, bool is_precise);
     int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from,
-                          bool is_persistent, ObExprEqualCheckContext &equal_ctx);
+                         bool is_precise, ObIArray<ObPCConstParamInfo> &param_infos);
     int check_match_to_type(ObRawExpr *to_type, ObRawExpr *candi_expr, bool &is_same, ObExprEqualCheckContext &equal_ctx);
     int check_can_use_global_stat_instead(const uint64_t ref_table_id,
                                           const ObTableSchema &table_schema,

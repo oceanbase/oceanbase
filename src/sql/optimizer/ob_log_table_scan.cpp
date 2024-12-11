@@ -47,7 +47,7 @@ const char *ObLogTableScan::get_name() const
     if (OB_FAIL(pre_range->is_get(is_get))) {
       // is_get always return true
       LOG_WARN("failed to get is_get", K(ret));
-    } else if (range_conds_.count() > 0) {
+    } else if (use_query_range()) {
       is_range = true;
     }
   }
@@ -87,6 +87,39 @@ const char *ObLogTableScan::get_name() const
     }
   }
   return name;
+}
+
+bool ObLogTableScan::use_query_range() const
+{
+  bool res = false;
+  const ObRangeNode *head = NULL;
+  bool cnt_dynamic_param = false;
+  if (range_conds_.count() > 0) {
+    // can extract precise range (for old query range)
+    res = true;
+  } else {
+    if (!ranges_.empty()) {
+      bool valid_range = false;
+      for (int64_t i = 0; !valid_range && i < ranges_.count(); ++i) {
+        if (!ranges_.at(i).is_whole_range()) {
+          valid_range = true;
+        }
+      }
+      res = valid_range;
+    }
+    // check pre range graph head for dynamic param
+    if (!res && OB_NOT_NULL(get_pre_range_graph()) &&
+                OB_NOT_NULL(head = get_pre_range_graph()->get_range_head())) {
+      for (int64_t i = 0; !cnt_dynamic_param && i < filter_exprs_.count(); ++i) {
+        cnt_dynamic_param = OB_NOT_NULL(filter_exprs_.at(i)) &&
+                            filter_exprs_.at(i)->has_flag(CNT_DYNAMIC_PARAM);
+      }
+      res = cnt_dynamic_param &&
+            get_pre_range_graph()->get_skip_scan_offset() == -1 &&
+            head->min_offset_ == 0 && !head->always_true_;
+    }
+  }
+  return res;
 }
 
 void ObLogTableScan::set_ref_table_id(uint64_t ref_table_id)
