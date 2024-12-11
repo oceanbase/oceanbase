@@ -4126,7 +4126,7 @@ int ObLogPlan::init_rescan_info_for_query_ref(const ObLogPlan &parent_plan,
   is_rescan_subplan_ = parent_plan.is_rescan_subplan_ || is_rescan_subquery;
   disable_child_batch_rescan_ = parent_plan.disable_child_batch_rescan_
                                 || (is_rescan_subquery
-                                    && !get_optimizer_context().enable_experimental_batch_rescan());
+                                    && !get_optimizer_context().enable_spf_semi_anti_child_batch());
   return ret;
 }
 
@@ -4138,7 +4138,7 @@ int ObLogPlan::init_rescan_info_for_subquery_paths(const ObLogPlan &parent_plan,
   is_rescan_subplan_ = parent_plan.is_rescan_subplan_ || is_inner_path;
   disable_child_batch_rescan_ = parent_plan.disable_child_batch_rescan_
                                 || (is_semi_anti_join_inner_path
-                                    && !get_optimizer_context().enable_experimental_batch_rescan());
+                                    && !get_optimizer_context().enable_spf_semi_anti_child_batch());
   return ret;
 }
 

@@ -115,6 +115,7 @@ struct ObOptParamHint
     DEF(RANGE_INDEX_DIVE_LIMIT,) \
     DEF(PARTITION_INDEX_DIVE_LIMIT,) \
     DEF(ENABLE_ENUM_SET_SUBSCHEMA,)       \
+    DEF(DAS_BATCH_RESCAN_FLAG,)          \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

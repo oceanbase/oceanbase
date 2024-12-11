@@ -251,7 +251,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     optimizer_index_cost_adj_(0),
     is_skip_scan_enabled_(false),
     enable_better_inlist_costing_(false),
-    push_join_pred_into_view_enabled_(true)
+    push_join_pred_into_view_enabled_(true),
+    enable_distributed_das_scan_(true)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -405,20 +406,75 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     return enable_px_batch_rescan_;
   }
 
+  static const int BATCH_RESCAN_BIT_GLOBAL_INDEX_FILTER = 0;
+  static const int BATCH_RESCAN_BIT_SPF_SEMI_ANTI_LEFT_CHILD = 1;
+  static const int BATCH_RESCAN_BIT_SPF_SEMI_ANTI_CHILD = 2;
+  static const int BATCH_RESCAN_BIT_SEMI_ANTI_JOIN = 3;
+  static const int BATCH_RESCAN_BIT_LIMIT_PUSHDOWN = 4;
+  static const int BATCH_RESCAN_BIT_NON_PREFIX_EXEC_PARAM = 5;
+  static const int BATCH_RESCAN_BIT_NORMAL_SCAN = 6;
+  static const int BATCH_RESCAN_BIT_ONETIME_INITPLAN = 7;
+  static const int BATCH_RESCAN_BIT_CONTAINS_SUBQUERY = 8;
+  static const int BATCH_RESCAN_BIT_NON_BASIC_SCAN = 9;
+  static const int BATCH_RESCAN_BIT_STARTUP_FILTER = 10;
+
+  // whether batch rescan can be enabled depends on two factors:
+  // 1. current version must support corresponding batch rescan scenario
+  // 2. corresponding batch rescan configuration must be enabled
   void init_batch_rescan_flags(const bool enable_batch_nlj,
                                const bool enable_batch_spf,
-                               const uint64_t opt_version)
+                               const uint64_t opt_version,
+                               const int64_t batch_rescan_flag)
   {
     enable_nlj_batch_rescan_ = enable_batch_nlj;
     enable_spf_batch_rescan_ = enable_batch_nlj && enable_batch_spf;
-    // adaptive group-rescan is supported in 4.2.3.0
-    enable_425_batch_rescan_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0
-                               && opt_version >= COMPAT_VERSION_4_2_5;
+    enable_425_opt_batch_rescan_ = opt_version >= COMPAT_VERSION_4_2_5;
+    enable_global_index_filter_ = opt_version > COMPAT_VERSION_4_2_1_BP8 &&
+      (batch_rescan_flag & (0x1L << BATCH_RESCAN_BIT_GLOBAL_INDEX_FILTER));
+    enable_spf_semi_anti_left_child_ = opt_version > COMPAT_VERSION_4_2_1_BP8 &&
+      (batch_rescan_flag & (0x1L << BATCH_RESCAN_BIT_SPF_SEMI_ANTI_LEFT_CHILD));
+    enable_spf_semi_anti_child_ = opt_version >= COMPAT_VERSION_4_2_5 &&
+      (batch_rescan_flag & (0x1L << BATCH_RESCAN_BIT_SPF_SEMI_ANTI_CHILD));
+    enable_semi_anti_join_ = opt_version >= COMPAT_VERSION_4_2_5 &&
+      (batch_rescan_flag & (0x1L << BATCH_RESCAN_BIT_SEMI_ANTI_JOIN));
+    enable_limit_pushdown_ = opt_version >= COMPAT_VERSION_4_2_5 &&
+      (batch_rescan_flag & (0x1L << BATCH_RESCAN_BIT_LIMIT_PUSHDOWN));
+    enable_non_prefix_exec_param_ = opt_version >= COMPAT_VERSION_4_2_5 &&
+      (batch_rescan_flag & (0x1L << BATCH_RESCAN_BIT_NON_PREFIX_EXEC_PARAM));
+    enable_normal_scan_ = opt_version >= COMPAT_VERSION_4_2_5 &&
+      (batch_rescan_flag & (0x1L << BATCH_RESCAN_BIT_NORMAL_SCAN));
+    enable_onetime_initplan_ = opt_version >= COMPAT_VERSION_4_2_5 &&
+      (batch_rescan_flag & (0x1L << BATCH_RESCAN_BIT_ONETIME_INITPLAN));
+    enable_contains_subquery_ = opt_version >= COMPAT_VERSION_4_2_5 &&
+      (batch_rescan_flag & (0x1L << BATCH_RESCAN_BIT_CONTAINS_SUBQUERY));
+    enable_non_basic_scan_ = opt_version >= COMPAT_VERSION_4_2_5 &&
+      (batch_rescan_flag & (0x1L << BATCH_RESCAN_BIT_NON_BASIC_SCAN));
+    enable_startup_filter_ = opt_version >= COMPAT_VERSION_4_2_5 &&
+      (batch_rescan_flag & (0x1L << BATCH_RESCAN_BIT_STARTUP_FILTER));
+    // when enable das batch rescan flag and opt_version >= 4.2.5, use new interface to check can batch rescan,
+    // otherwise, use old interface to check can batch rescan for compatibility.
+    enable_425_exec_batch_rescan_ = (batch_rescan_flag != 0) && (opt_version >= COMPAT_VERSION_4_2_5);
+    // when use tracepoint, enable all batch rescan.
+    if ((OB_E(EventTable::EN_DAS_GROUP_RESCAN_TEST_MODE) OB_SUCCESS) != OB_SUCCESS) {
+      batch_rescan_flags_ = INT64_MAX;
+    }
   }
+
   inline bool enable_nlj_batch_rescan() const { return enable_nlj_batch_rescan_; }
   inline bool enable_spf_batch_rescan() const { return enable_spf_batch_rescan_; }
-  inline bool enable_425_batch_rescan() const { return enable_425_batch_rescan_; }
-  inline bool enable_experimental_batch_rescan() const { return (OB_E(EventTable::EN_DAS_GROUP_RESCAN_TEST_MODE) OB_SUCCESS) != OB_SUCCESS; }
+  inline bool enable_425_opt_batch_rescan() const { return enable_425_opt_batch_rescan_; }
+  inline bool enable_425_exec_batch_rescan() const { return enable_425_exec_batch_rescan_; }
+  inline bool enable_global_index_filter_batch() const { return enable_global_index_filter_; }
+  inline bool enable_spf_semi_anti_left_child_batch() const { return enable_spf_semi_anti_left_child_; }
+  inline bool enable_spf_semi_anti_child_batch() const { return enable_spf_semi_anti_child_; }
+  inline bool enable_semi_anti_join_batch() const { return enable_semi_anti_join_; }
+  inline bool enable_limit_pushdown_batch() const { return enable_limit_pushdown_; }
+  inline bool enable_non_prefix_exec_param_batch() const { return enable_non_prefix_exec_param_; }
+  inline bool enable_normal_scan_batch() const { return enable_normal_scan_; }
+  inline bool enable_onetime_initplan_batch() const { return enable_onetime_initplan_; }
+  inline bool enable_contains_subquery_batch() const { return enable_contains_subquery_; }
+  inline bool enable_non_basic_scan_batch() const { return enable_non_basic_scan_; }
+  inline bool enable_startup_filter_batch() const { return enable_startup_filter_; }
 
   int get_px_object_sample_rate()
   {
@@ -659,6 +715,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline ObEstCorrelationType get_correlation_type() const { return correlation_type_; }
   inline bool is_push_join_pred_into_view_enabled() const { return push_join_pred_into_view_enabled_; }
   inline void set_push_join_pred_into_view_enabled(bool enabled) { push_join_pred_into_view_enabled_ = enabled; }
+  inline bool is_enable_distributed_das_scan() const { return enable_distributed_das_scan_; }
+  inline void set_enable_distributed_das_scan(bool enabled) { enable_distributed_das_scan_ = enabled; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -698,9 +756,21 @@ private:
   union {
     int64_t batch_rescan_flags_;
     struct {
-      int64_t enable_nlj_batch_rescan_  : 1;  // enable nestloop inner path batch rescan
-      int64_t enable_spf_batch_rescan_  : 1;  // enable subplan filter batch rescan
-      int64_t enable_425_batch_rescan_  : 1;  // enbale batch rescan behaviors supported in 4.2.5
+      int64_t enable_nlj_batch_rescan_  : 1;         // enable nestloop inner path batch rescan
+      int64_t enable_spf_batch_rescan_  : 1;         // enable subplan filter batch rescan
+      int64_t enable_425_opt_batch_rescan_  : 1;     // enable optimizer batch rescan behaviors supported in 4.2.5
+      int64_t enable_425_exec_batch_rescan_ : 1;     // enable exec batch rescan behaviors supported in 4.2.5
+      int64_t enable_global_index_filter_ : 1;       // enable batch rescan when has global index filter
+      int64_t enable_spf_semi_anti_left_child_ : 1;  // enable batch rescan when as spf/semi-anti join left child
+      int64_t enable_spf_semi_anti_child_ : 1;       // enable batch rescan when as spf/semi-anti join child
+      int64_t enable_semi_anti_join_ : 1;            // enable semi/anti join batch rescan
+      int64_t enable_limit_pushdown_ : 1;            // enable batch rescan when contains limit pushdown
+      int64_t enable_non_prefix_exec_param_ : 1;     // enable batch rescan when no prefix exec param
+      int64_t enable_normal_scan_ : 1;               // enable batch rescan when use normal table scan
+      int64_t enable_onetime_initplan_ : 1;          // enable batch rescan when contains onetime init plan
+      int64_t enable_contains_subquery_ : 1;         // enable batch rescan when exec param contains subquery
+      int64_t enable_non_basic_scan_ : 1;            // enable batch rescan when not basic table scan/subplan scan
+      int64_t enable_startup_filter_ : 1;            // enable batch rescan when startup filter contains exec param
     };
   };
   common::ObSEArray<ColumnUsageArg, 16, common::ModulePageAllocator, true> column_usage_infos_;
@@ -759,6 +829,7 @@ private:
   bool is_skip_scan_enabled_;
   bool enable_better_inlist_costing_;
   bool push_join_pred_into_view_enabled_;
+  bool enable_distributed_das_scan_;
 };
 }
 }

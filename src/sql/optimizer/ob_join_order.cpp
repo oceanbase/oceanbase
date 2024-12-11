@@ -1583,6 +1583,10 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     LOG_WARN("failed to check hint use das", K(ret));
   } else if (create_das_path || create_basic_path) {
     LOG_TRACE("will use das by hint", K(create_das_path), K(create_basic_path));
+  } else if (OB_UNLIKELY(!get_plan()->get_optimizer_context().is_enable_distributed_das_scan())) {
+    create_das_path = false;
+    create_basic_path = true;
+    LOG_TRACE("disable das scan by tenant config", K(create_das_path), K(create_basic_path));
   } else if (OB_FAIL(check_opt_rule_use_das(table_id,
                                             index_id,
                                             index_info_cache,
@@ -5923,8 +5927,6 @@ int AccessPath::compute_access_path_batch_rescan()
     can_batch_rescan = false;
   } else if (order_direction_ != default_asc_direction() && order_direction_ != ObOrderDirection::UNORDERED) {
     can_batch_rescan = false;
-  } else if (plan->get_optimizer_context().enable_experimental_batch_rescan()) {
-    can_batch_rescan = true;
   } else if (est_cost_info_.index_meta_info_.is_global_index_ &&
              est_cost_info_.index_meta_info_.is_index_back_ &&
              OB_FAIL(ObOptimizerUtil::get_has_global_index_filters(plan->get_optimizer_context().get_sql_schema_guard(),
@@ -5934,8 +5936,8 @@ int AccessPath::compute_access_path_batch_rescan()
                                                                    has_index_lookup_filter))) {
     LOG_WARN("failed to get has global index filters", K(ret));
   } else {
-    // For the global index lookup, if there is a pushdown filter when scanning the index, batch cannot be used.
-    can_batch_rescan = !has_index_scan_filter;
+    // batch rescan when global lookup has index pushdown filter, enabled after 4.2.1.9.
+    can_batch_rescan = !has_index_scan_filter || plan->get_optimizer_context().enable_global_index_filter_batch();
   }
 
   if (OB_SUCC(ret)) {
@@ -5956,7 +5958,7 @@ int AccessPath::compute_is_das_dynamic_part_pruning(const EqualSets &equal_sets,
              || OB_ISNULL(table_partition_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected params", K(ret), K(parent_), K(table_partition_info_));
-  } else if (!parent_->get_plan()->get_optimizer_context().enable_425_batch_rescan()) {
+  } else if (!parent_->get_plan()->get_optimizer_context().enable_425_opt_batch_rescan()) {
     can_das_dynamic_part_pruning_ = false;
   } else if (table_partition_info_->get_phy_tbl_location_info().get_partition_cnt() <= 1) {
     can_das_dynamic_part_pruning_ = false;
@@ -6868,8 +6870,8 @@ int JoinPath::compute_nlj_batch_rescan()
     /* join type not support */
   } else if (!right_path_->subquery_exprs_.empty()) {
     /* subplan filter allocated for on condition subquery, not support */
-  } else if (IS_SEMI_ANTI_JOIN(join_type_) && !plan->get_optimizer_context().enable_experimental_batch_rescan()) {
-    /* semi/anti join not support */
+  } else if (IS_SEMI_ANTI_JOIN(join_type_) && !plan->get_optimizer_context().enable_semi_anti_join_batch()) {
+    /* semi/anti join batch, enabled after 4.2.5 */
   } else if (OB_FAIL(check_right_has_gi_or_exchange(right_has_gi_or_exchange))) {
     LOG_WARN("failed to check right has gi or exchange", K(ret));
   } else if (right_has_gi_or_exchange) {
@@ -6877,20 +6879,22 @@ int JoinPath::compute_nlj_batch_rescan()
   } else if (right_path_->is_access_path()) {
     const AccessPath *ap = static_cast<const AccessPath*>(right_path_);
     can_use_batch_nlj_ = ap->can_batch_rescan_;
-    if (can_use_batch_nlj_ && !plan->get_optimizer_context().enable_experimental_batch_rescan()
-        && OB_FAIL(ObOptimizerUtil::check_exec_param_filter_exprs(ap->est_cost_info_.pushdown_prefix_filters_,
-                                                                  right_path_->nl_params_,
-                                                                  can_use_batch_nlj_))) {
-      LOG_WARN("failed to check exec param filter exprs", K(ret));
+    if (can_use_batch_nlj_ && !plan->get_optimizer_context().enable_non_prefix_exec_param_batch()) {
+      if (OB_FAIL(ObOptimizerUtil::check_exec_param_filter_exprs(ap->est_cost_info_.pushdown_prefix_filters_,
+                                                                 right_path_->nl_params_,
+                                                                 can_use_batch_nlj_))) {
+        LOG_WARN("failed to check exec param filter exprs", K(ret));
+      }
     }
   } else if (!right_path_->is_subquery_path()) {
     /* do nothing, only access_path and subquery_path may use batch nlj */
-  } else if (plan->get_optimizer_context().enable_experimental_batch_rescan() &&
+  } else if (plan->get_optimizer_context().enable_425_exec_batch_rescan() &&
              OB_FAIL(ObOptimizerUtil::check_can_batch_rescan(static_cast<const SubQueryPath*>(right_path_)->root_,
-                                                             false,
+                                                             right_path_->nl_params_,
+                                                             true,
                                                              can_use_batch_nlj_))) {
     LOG_WARN("failed to check plan can batch rescan", K(ret));
-  } else if (!plan->get_optimizer_context().enable_experimental_batch_rescan() &&
+  } else if (!plan->get_optimizer_context().enable_425_exec_batch_rescan() &&
              OB_FAIL(ObOptimizerUtil::check_can_batch_rescan_compat(static_cast<const SubQueryPath*>(right_path_)->root_,
                                                                     right_path_->nl_params_,
                                                                     true,
