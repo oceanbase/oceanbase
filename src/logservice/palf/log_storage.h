@@ -197,6 +197,7 @@ private:
   void reset_log_tail_for_last_block_(const LSN &lsn, bool last_block_exist);
   int update_manifest_(const block_id_t expected_next_block_id, const bool in_restart = false);
   int check_read_integrity_(const block_id_t &block_id);
+  bool check_in_flashback_(const int64_t flashback_version) const;
 private:
   // Used to perform IO tasks in the background
   LogBlockMgr block_mgr_;
