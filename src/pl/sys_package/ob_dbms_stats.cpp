@@ -6700,9 +6700,6 @@ int ObDbmsStats::copy_table_stats(sql::ObExecContext &ctx,
                                           params.at(3),
                                           table_stat_param))) {
     LOG_WARN("failed to parse partition name", K(ret));
-  } else if (ObCharset::case_insensitive_equal(copy_stat_helper.srcpart_name_,
-                                               copy_stat_helper.dstpart_name_)) {
-    LOG_TRACE("src part and dst part is the same, no need to copy");
   } else if (OB_FAIL(ObDbmsStatsCopyTableStats::extract_partition_column_ids(copy_stat_helper, table_schema))) {
     LOG_WARN("failed to classify partition column ids", K(ret));
   } else if (OB_FAIL(ObDbmsStatsCopyTableStats::get_dst_part_infos(table_stat_param,
@@ -6717,6 +6714,9 @@ int ObDbmsStats::copy_table_stats(sql::ObExecContext &ctx,
   } else if (!copy_stat_helper.force_copy_ &&
              OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, table_stat_param))) {
     LOG_WARN("failed check stat locked", K(ret));
+  } else if (ObCharset::case_insensitive_equal(copy_stat_helper.srcpart_name_,
+                                               copy_stat_helper.dstpart_name_)) {
+    LOG_TRACE("src part and dst part is the same, no need to copy");
   } else if (OB_FAIL(parse_partition_name(ctx,
                                           table_schema,
                                           params.at(2),
