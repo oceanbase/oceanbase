@@ -116,7 +116,9 @@ add_library(ob_sql_proxy_parser_objects OBJECT
             ${ob_sql_parser_hash_object_list}
             ${ob_sql_parser_charset_object_list}
             )
-
+if (BUILD_CDC_ONLY)
+  set_target_properties(ob_sql_proxy_parser_objects PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
 
 # ob_sql_server_parser_object is the static library for observer
 add_library(ob_sql_server_parser_objects OBJECT
