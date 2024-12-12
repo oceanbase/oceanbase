@@ -260,7 +260,7 @@ public:
   bool is_file_writer_null() {return !orc_file_writer_; }
   bool is_valid_to_write(orc::StructVectorBatch* &root)
   {
-    root = dynamic_cast<orc::StructVectorBatch *>(orc_row_batch_.get());
+    root = static_cast<orc::StructVectorBatch *>(orc_row_batch_.get());
     return orc_file_writer_ && orc_row_batch_ && OB_NOT_NULL(root);
   }
   int64_t get_file_size() override

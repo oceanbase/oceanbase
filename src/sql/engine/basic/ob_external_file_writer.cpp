@@ -600,7 +600,7 @@ int ObOrcFileWriter::open_orc_file_writer(const orc::Type &orc_schema,
 int ObOrcFileWriter::write_file()
 {
   int ret = OB_SUCCESS;
-  orc::StructVectorBatch* root = dynamic_cast<orc::StructVectorBatch *>(orc_row_batch_.get());
+  orc::StructVectorBatch* root = static_cast<orc::StructVectorBatch *>(orc_row_batch_.get());
   orc::ColumnVectorBatch* col_vector_batch = NULL;
   if (batch_has_written_) {
     // do nothing
