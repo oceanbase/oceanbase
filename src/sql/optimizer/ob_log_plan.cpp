@@ -12036,7 +12036,7 @@ int ObLogPlan::get_source_table_info(ObLogicalOperator &top,
   } else if (top.is_table_scan()) {
     ObLogTableScan &table_scan = static_cast<ObLogTableScan&>(top);
     bool is_adaptive_nlj = false;
-    if (OB_NOT_NULL(top.get_parent())) {
+    if (OB_NOT_NULL(top.get_parent()) && top.get_parent()->get_type() == LOG_JOIN) {
       ObLogJoin *join_op = static_cast<ObLogJoin *>(top.get_parent());
       if (join_op->get_join_algo() == NESTED_LOOP_JOIN &&
           join_op->is_adaptive()) {
