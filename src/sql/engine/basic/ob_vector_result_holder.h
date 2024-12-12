@@ -49,7 +49,9 @@ public:
   VectorFormat get_single_row_restore_format(VectorFormat src_format, const ObExpr *expr) const
   {
     // continuous format don't support restore single row, so if the backup vector is continuous format, we need to convert it to other format
-    return src_format == VEC_CONTINUOUS ? expr->get_default_res_format() : src_format;
+    return src_format == VEC_CONTINUOUS ?
+           (expr->datum_meta_.type_ == ObCollectionSQLType ? VEC_DISCRETE : expr->get_default_res_format())
+           : src_format;
   }
   int extend_save(const int64_t size);
   void clear_saved_size() { saved_size_ = 0; }
@@ -120,6 +122,10 @@ private:
     void restore_continuous_base_single_row(ObExpr *expr, int64_t from_idx, int64_t to_idx, VectorFormat dst_fmt,ObEvalCtx &eval_ctx) const;
     void restore_uniform_base_single_row(const ObExpr *expr, ObUniformBase &vec,
                               int64_t from_idx, int64_t to_idx, ObEvalCtx &eval_ctx, bool is_const) const;
+    int restore_nested_single_row(const ObExpr &expr, ObEvalCtx &eval_ctx, const VectorFormat extend_format,
+                                  int64_t from_idx, int64_t to_idx) const;
+    int extend_nested_rows(const ObExpr &expr, ObEvalCtx &eval_ctx, const VectorFormat extend_format,
+                                 int64_t from_idx, int64_t start_dst_idx, int64_t size) const;
 
     void extend_fixed_base_vector(ObFixedLengthBase &vec, int64_t from_idx, int64_t start_dst_idx, int64_t size, ObEvalCtx &eval_ctx) const;
 
