@@ -194,7 +194,7 @@ private:
   int try_trans_any_all_as_exists(ObDMLStmt *stmt,
                                   ObRawExpr *&expr,
                                   ObNotNullContext *not_null_ctx,
-                                  bool is_bool_expr,
+                                  bool used_as_condition,
                                   bool &trans_happened);
   int add_limit_for_any_all_subquery(ObRawExpr *stmt,bool &trans_happened);
   int transform_any_all_as_exists(ObDMLStmt *stmt, bool &trans_happened);
@@ -204,7 +204,7 @@ private:
   int try_trans_any_all_as_exists(ObDMLStmt *stmt,
                                   ObIArray<ObRawExpr* > &exprs,
                                   ObNotNullContext *not_null_cxt,
-                                  bool is_bool_expr,
+                                  bool used_as_condition,
                                   bool &trans_happened);
   int empty_table_subquery_can_be_eliminated_in_exists(ObRawExpr *expr,
                                                        bool &is_valid);

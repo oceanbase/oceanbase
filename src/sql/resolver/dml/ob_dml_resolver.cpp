@@ -18889,8 +18889,11 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = get_stmt();
   ObQuestionmarkEqualCtx check_ctx;
+  ObExprEqualCheckContext equal_ctx;
+  equal_ctx.override_const_compare_ = true;
+  const ParamStore *param_store = params_.param_list_;
   ObRawExprReplacer replacer;
-  if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(params_.query_ctx_)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(params_.query_ctx_) || OB_ISNULL(param_store)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(expr));
   } else {
@@ -18901,7 +18904,7 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
       ObSEArray<ObRawExpr *, 4> match_exprs_on_table;
       bool table_on_null_side = false;
       bool is_simple_filter = false;
-      ObSEArray<ObExprConstraint, 1> constraints;
+      ObSEArray<ObPCConstParamInfo, 4> param_constraints;
       if (OB_ISNULL(cur_match_expr = match_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
@@ -18912,10 +18915,29 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
       } else if (OB_FAIL(resolve_match_against_expr(*cur_match_expr))) {
         LOG_WARN("failed to resolve match index", K(ret));
       } else {
-        for (int64_t match_idx = 0; match_idx < match_exprs_on_table.count(); ++match_idx) {
-          if (match_exprs_on_table.at(match_idx)->same_as(*cur_match_expr, &check_ctx)) {
-            match_expr_on_table = static_cast<ObMatchFunRawExpr *>(match_exprs_on_table.at(match_idx));
-            break;
+        bool shared = false;
+        for (int64_t idx = 0; OB_SUCC(ret) && !shared && idx < match_exprs_on_table.count(); ++idx) {
+          if (match_exprs_on_table.at(idx)->same_as(*cur_match_expr, &check_ctx)) {
+            match_expr_on_table = static_cast<ObMatchFunRawExpr *>(match_exprs_on_table.at(idx));
+            shared = true;
+          } else if (match_exprs_on_table.at(idx)->same_as(*cur_match_expr, &equal_ctx)) {
+            match_expr_on_table = static_cast<ObMatchFunRawExpr *>(match_exprs_on_table.at(idx));
+            shared = true;
+            // constraints need to be added if the same_as judgement relies on specific const value
+            for(int64_t i = 0; OB_SUCC(ret) && i < equal_ctx.param_expr_.count(); i++) {
+              ObPCConstParamInfo param_info;
+              int64_t param_idx = equal_ctx.param_expr_.at(i).param_idx_;
+              if (OB_UNLIKELY(param_idx < 0 || param_idx >= param_store->count())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected error", K(ret), K(param_idx), K(param_store->count()));
+              } else if (OB_FAIL(param_info.const_idx_.push_back(param_idx))) {
+                LOG_WARN("failed to push back param idx", K(ret));
+              } else if (OB_FAIL(param_info.const_params_.push_back(param_store->at(param_idx)))) {
+                LOG_WARN("failed to push back value", K(ret));
+              } else if (OB_FAIL(param_constraints.push_back(param_info))) {
+                LOG_WARN("failed to push back param info", K(ret));
+              }
+            }
           }
         }
       }
@@ -18938,6 +18960,8 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
         LOG_WARN("failed to replace expr", K(ret));
       } else if (OB_FAIL(append(params_.query_ctx_->all_equal_param_constraints_, check_ctx.equal_pairs_))) {
         LOG_WARN("failed to append equal param info", K(ret));
+      } else if (OB_FAIL(append(params_.query_ctx_->all_plan_const_param_constraints_, param_constraints))) {
+        LOG_WARN("failed to append param info", K(ret));
       }
     }
   }
