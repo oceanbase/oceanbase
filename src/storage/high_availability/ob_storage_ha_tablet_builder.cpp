@@ -2724,13 +2724,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
 }
 
 int ObStorageHATabletBuilderUtil::build_table_with_minor_tables(
-    ObLS *ls,
-    const common::ObTabletID &tablet_id,
-    const ObMigrationTabletParam *src_tablet_meta,
-    const ObTablesHandleArray &mds_tables,
-    const ObTablesHandleArray &minor_tables,
-    const ObTablesHandleArray &ddl_tables,
-    const ObTabletRestoreAction::ACTION &restore_action)
+    const BatchBuildMinorSSTablesParam &param)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
@@ -2738,7 +2732,7 @@ int ObStorageHATabletBuilderUtil::build_table_with_minor_tables(
   ObTablesHandleArray sstables;
   ObTablesHandleArray ddl_co_tables;
 
-  const bool is_replace_remote = ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action);
+  const bool is_replace_remote = ObTabletRestoreAction::is_restore_replace_remote_sstable(param.restore_action_);
   bool need_tablet_meta_merge = true;
   // When we want to place the minor tables on the source side in the local table store,
   // whatever from backup or other observer, tablet meta merge action is necessary,
@@ -2748,32 +2742,32 @@ int ObStorageHATabletBuilderUtil::build_table_with_minor_tables(
     need_tablet_meta_merge = false;
   }
 
-  if (OB_ISNULL(ls) || !tablet_id.is_valid() || OB_ISNULL(src_tablet_meta) || !ObTabletRestoreAction::is_valid(restore_action)) {
+  if (!param.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("build tablet with major tables get invalid argument", K(ret), KP(ls), K(tablet_id), K(restore_action));
-  } else if (ObTabletRestoreAction::is_restore_major(restore_action)) {
+    LOG_WARN("build tablet with major tables get invalid argument", K(ret), K(param));
+  } else if (ObTabletRestoreAction::is_restore_major(param.restore_action_)) {
     //do nothing
   } else {
-    if (OB_FAIL(append_sstable_array_(sstables, mds_tables))) {
-      LOG_WARN("failed to append mds tables handle into array", K(ret), K(mds_tables));
-    } else if (OB_FAIL(append_sstable_array_(sstables, minor_tables))) {
-      LOG_WARN("failed to append minor tables handle into array", K(ret), K(minor_tables));
-    } else if (!ddl_tables.empty() && ddl_tables.get_table(0)->is_column_store_sstable()) {
-      if (OB_FAIL(assemble_column_oriented_sstable_(ddl_tables, ddl_co_tables))) {
-        LOG_WARN("assemble co tables failed", K(ret), K(ddl_tables));
+    if (OB_FAIL(append_sstable_array_(sstables, param.mds_tables_))) {
+      LOG_WARN("failed to append mds tables handle into array", K(ret), K(param));
+    } else if (OB_FAIL(append_sstable_array_(sstables, param.minor_tables_))) {
+      LOG_WARN("failed to append minor tables handle into array", K(ret), K(param));
+    } else if (!param.ddl_tables_.empty() && param.ddl_tables_.get_table(0)->is_column_store_sstable()) {
+      if (OB_FAIL(assemble_column_oriented_sstable_(param.ddl_tables_, ddl_co_tables))) {
+        LOG_WARN("assemble co tables failed", K(ret), K(param));
       } else if (OB_FAIL(append_sstable_array_(sstables, ddl_co_tables))) {
         LOG_WARN("failed to append ddl tables handle", K(ret), K(ddl_co_tables));
       }
-    } else if (OB_FAIL(append_sstable_array_(sstables, ddl_tables))) {
-      LOG_WARN("failed to append ddl tables handle", K(ret), K(ddl_tables));
+    } else if (OB_FAIL(append_sstable_array_(sstables, param.ddl_tables_))) {
+      LOG_WARN("failed to append ddl tables handle", K(ret), K(param));
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(get_tablet_(tablet_id, ls, tablet_handle))) {
-      LOG_WARN("failed to get tablet", K(ret), K(tablet_id), KPC(ls));
+    } else if (OB_FAIL(get_tablet_(param.tablet_id_, param.ls_, tablet_handle))) {
+      LOG_WARN("failed to get tablet", K(ret), K(param));
     } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
-    } else if (OB_FAIL(inner_update_tablet_table_store_with_minor_(ls, tablet, need_tablet_meta_merge,
-        src_tablet_meta, sstables, is_replace_remote))) {
+    } else if (OB_FAIL(inner_update_tablet_table_store_with_minor_(param, tablet, need_tablet_meta_merge,
+        sstables, is_replace_remote))) {
       LOG_WARN("failed to update tablet table store with minor", K(ret));
     }
   }
@@ -2781,29 +2775,29 @@ int ObStorageHATabletBuilderUtil::build_table_with_minor_tables(
 }
 
 int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_minor_(
-    ObLS *ls,
+    const BatchBuildMinorSSTablesParam &param,
     ObTablet *tablet,
     const bool &need_tablet_meta_merge,
-    const ObMigrationTabletParam *src_tablet_meta,
     const ObTablesHandleArray &tables_handle,
     const bool is_replace_remote)
 {
   int ret = OB_SUCCESS;
   ObBatchUpdateTableStoreParam update_table_store_param;
 
-  if (OB_ISNULL(ls) || OB_ISNULL(tablet) || (need_tablet_meta_merge && OB_ISNULL(src_tablet_meta))) {
+  if (!param.is_valid() || OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("inner update tablet table store with minor get invalid argument", K(ret), KP(ls), KP(tablet));
+    LOG_WARN("inner update tablet table store with minor get invalid argument", K(ret), K(param), KP(tablet));
   } else {
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    update_table_store_param.tablet_meta_ = need_tablet_meta_merge ? src_tablet_meta : nullptr;
-    update_table_store_param.rebuild_seq_ = ls->get_rebuild_seq();
+    update_table_store_param.tablet_meta_ = need_tablet_meta_merge ? param.src_tablet_meta_ : nullptr;
+    update_table_store_param.rebuild_seq_ = param.ls_->get_rebuild_seq();
     update_table_store_param.need_replace_remote_sstable_ = is_replace_remote;
+    update_table_store_param.release_mds_scn_ = param.release_mds_scn_;
 
     if (OB_FAIL(update_table_store_param.tables_handle_.assign(tables_handle))) {
       LOG_WARN("failed to assign tables handle", K(ret), K(tables_handle));
-    } else if (OB_FAIL(ls->build_tablet_with_batch_tables(tablet_id, update_table_store_param))) {
-      LOG_WARN("failed to build ha tablet new table store", K(ret), K(tablet_id), KPC(tablet), KPC(src_tablet_meta), K(update_table_store_param));
+    } else if (OB_FAIL(param.ls_->build_tablet_with_batch_tables(tablet_id, update_table_store_param))) {
+      LOG_WARN("failed to build ha tablet new table store", K(ret), K(tablet_id), KPC(tablet), K(param), K(update_table_store_param));
     }
   }
   return ret;
@@ -2875,6 +2869,56 @@ int ObStorageHATabletBuilderUtil::check_hybrid_store(
         break;
       }
     }
+  }
+  return ret;
+}
+
+ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam::BatchBuildMinorSSTablesParam()
+  : ls_(nullptr),
+    tablet_id_(),
+    src_tablet_meta_(nullptr),
+    mds_tables_(),
+    minor_tables_(),
+    ddl_tables_(),
+    restore_action_(ObTabletRestoreAction::MAX),
+    release_mds_scn_()
+{
+}
+
+bool ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam::is_valid() const
+{
+  return OB_NOT_NULL(ls_)
+      && tablet_id_.is_valid()
+      && OB_NOT_NULL(src_tablet_meta_)
+      && src_tablet_meta_->is_valid()
+      && ObTabletRestoreAction::is_valid(restore_action_)
+      && release_mds_scn_.is_valid();
+}
+
+void ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam::reset()
+{
+  ls_ = nullptr;
+  tablet_id_.reset();
+  src_tablet_meta_ = nullptr;
+  mds_tables_.reset();
+  minor_tables_.reset();
+  ddl_tables_.reset();
+  restore_action_ = ObTabletRestoreAction::MAX;
+  release_mds_scn_.reset();
+}
+
+int ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam::assign_sstables(
+    ObTablesHandleArray &mds_tables,
+    ObTablesHandleArray &minor_tables,
+    ObTablesHandleArray &ddl_tables)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(mds_tables_.assign(mds_tables))) {
+    LOG_WARN("failed to assign mds tables", K(ret), K(mds_tables));
+  } else if (OB_FAIL(minor_tables_.assign(minor_tables))) {
+    LOG_WARN("failed to assign minor tables", K(ret), K(minor_tables));
+  } else if (OB_FAIL(ddl_tables_.assign(ddl_tables))) {
+    LOG_WARN("failed to assign ddl tables", K(ret), K(ddl_tables));
   }
   return ret;
 }

@@ -292,7 +292,6 @@ int ObTabletCopyFinishTask::create_new_table_store_with_minor_()
   share::SCN mds_max_end_scn(SCN::min_scn());
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
-  ObTabletPointer *pointer = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
@@ -301,34 +300,30 @@ int ObTabletCopyFinishTask::create_new_table_store_with_minor_()
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id_));
-  } else if (OB_ISNULL(pointer = tablet->get_pointer_handle().get_resource_ptr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet pointer should not be NULL", K(ret), KPC(tablet));
   } else if (OB_FAIL(get_mds_sstable_max_end_scn_(mds_max_end_scn))) {
     LOG_WARN("failed to get mds sstable max end scn", K(ret), K(mds_tables_handle_));
   } else {
-    TabletMdsLockGuard<LockMode::EXCLUSIVE> guard;
-    pointer->get_mds_truncate_lock_guard(guard);
-      //Release mds node failed must do dag net retry.
-      //Because ls still replay and mds may has residue node which makes data incorrect.
-      //So should make ls offline and online
-    if (OB_FAIL(ObStorageHATabletBuilderUtil::build_table_with_minor_tables(ls_,
-                                                                            tablet_id_,
-                                                                            src_tablet_meta_,
-                                                                            mds_tables_handle_,
-                                                                            minor_tables_handle_,
-                                                                            ddl_tables_handle_,
-                                                                            restore_action_))) {
+    ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam param;
+    param.ls_ = ls_;
+    param.tablet_id_ = tablet_id_;
+    param.src_tablet_meta_ = src_tablet_meta_;
+    param.restore_action_ = restore_action_;
+    param.release_mds_scn_ = mds_max_end_scn;
+
+    if (OB_FAIL(param.assign_sstables(mds_tables_handle_, minor_tables_handle_, ddl_tables_handle_))) {
+      LOG_WARN("failed to assign sstables", K(ret), KPC(ls_), K(tablet_id_));
+    } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_table_with_minor_tables(param))) {
       LOG_WARN("failed to build table with minor tables", K(ret), K(mds_tables_handle_),
         K(minor_tables_handle_), K(ddl_tables_handle_), K(restore_action_));
-    } else if (mds_max_end_scn.is_min()) {
-      //do nothing
-    } else if (OB_FAIL(pointer->release_mds_nodes_redo_scn_below(tablet_id_, mds_max_end_scn))) {
-      LOG_WARN("failed to relase mds node redo scn blow", K(ret), K(tablet_id_), K(mds_max_end_scn));
-      int tmp_ret = OB_SUCCESS;
-      const bool need_retry = false;
-      if (OB_SUCCESS != (tmp_ret = ha_dag_->get_ha_dag_net_ctx()->set_result(ret, need_retry))) {
-        LOG_ERROR("failed to set ha dag net ctx result", K(tmp_ret), K(ret));
+      if (OB_RELEASE_MDS_NODE_ERROR == ret) {
+        //Release mds node failed must do dag net retry.
+        //Because ls still replay and mds may has residue node which makes data incorrect.
+        //So should make ls offline and online
+        int tmp_ret = OB_SUCCESS;
+        const bool need_retry = false;
+        if (OB_SUCCESS != (tmp_ret = ha_dag_->get_ha_dag_net_ctx()->set_result(ret, need_retry))) {
+          LOG_ERROR("failed to set ha dag net ctx result", K(tmp_ret), K(ret));
+        }
       }
     }
   }

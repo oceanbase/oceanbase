@@ -93,6 +93,7 @@
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -3989,6 +3990,7 @@ int ObLSTabletService::build_tablet_with_batch_tables(
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "BuildHaTab"));
   ObMetaDiskAddr disk_addr;
+  ObTabletPointer *pointer = nullptr;
   ObTimeGuard time_guard("ObLSTabletService::build_ha_tablet_new_table_store", 1_s);
 
   if (IS_NOT_INIT) {
@@ -4012,8 +4014,25 @@ int ObLSTabletService::build_tablet_with_batch_tables(
       LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
     } else if (old_tablet_handle.get_obj()->is_empty_shell()) {
       LOG_INFO("old tablet is empty shell tablet, should skip this operation", K(ret), "old_tablet", old_tablet_handle.get_obj());
+    } else if (OB_ISNULL(pointer = old_tablet_handle.get_obj()->get_pointer_handle().get_resource_ptr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet pointer should not be NULL", K(ret), K(old_tablet_handle));
     } else {
       time_guard.click("GetTablet");
+
+      if (param.release_mds_scn_.is_min()) {
+        //do nothing
+      } else {
+        TabletMdsLockGuard<storage::LockMode::EXCLUSIVE> guard;
+        pointer->get_mds_truncate_lock_guard(guard);
+        if (OB_FAIL(pointer->release_mds_nodes_redo_scn_below(tablet_id, param.release_mds_scn_))) {
+          //overwrite ret
+          LOG_WARN("failed to relase mds node redo scn below", K(ret), K(tablet_id), "release mds scn", param.release_mds_scn_);
+          ret = OB_RELEASE_MDS_NODE_ERROR;
+        }
+      }
+
+      time_guard.click("ReleaseMDS");
 
       ObTablet *old_tablet = old_tablet_handle.get_obj();
       ObTablet *tmp_tablet = nullptr;
@@ -4021,7 +4040,8 @@ int ObLSTabletService::build_tablet_with_batch_tables(
       const ObTabletMapKey key(ls_id, tablet_id);
       const ObTabletPersisterParam persist_param(ls_id, ls_->get_ls_epoch(), tablet_id, old_tablet->get_transfer_seq());
 
-      if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_handle))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_handle))) {
         LOG_WARN("failed to acquire tablet", K(ret), K(key));
       } else if (FALSE_IT(tmp_tablet = tmp_tablet_handle.get_obj())) {
       } else if (OB_FAIL(tmp_tablet->init_for_sstable_replace(allocator, param, *old_tablet))) {

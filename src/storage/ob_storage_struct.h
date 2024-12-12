@@ -500,7 +500,8 @@ struct ObBatchUpdateTableStoreParam final
   int get_max_clog_checkpoint_scn(share::SCN &clog_checkpoint_scn) const;
 
   TO_STRING_KV(K_(tables_handle), K_(rebuild_seq), K_(is_transfer_replace),
-      K_(start_scn), KP_(tablet_meta), K_(restore_status), K_(tablet_split_param), K_(need_replace_remote_sstable));
+      K_(start_scn), KP_(tablet_meta), K_(restore_status), K_(tablet_split_param),
+      K_(need_replace_remote_sstable), K_(release_mds_scn));
 
   ObTablesHandleArray tables_handle_;
 #ifdef ERRSIM
@@ -513,6 +514,7 @@ struct ObBatchUpdateTableStoreParam final
   ObTabletRestoreStatus::STATUS restore_status_;
   ObSplitTableStoreParam tablet_split_param_;
   bool need_replace_remote_sstable_;
+  share::SCN release_mds_scn_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBatchUpdateTableStoreParam);
 };
