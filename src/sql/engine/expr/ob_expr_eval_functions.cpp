@@ -1344,6 +1344,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArrayLength::eval_array_length,                      /* 812 */
   NULL, // ObExprRange::eval_range,                                   /* 813 */
   NULL, // ObExprArrayPosition::eval_array_position,                  /* 814 */
+  NULL, // ObExprURLEncode::eval_url_encode,                          /* 815 */
+  NULL, // ObExprURLDecode::eval_url_decode,                          /* 816 */
 
 };
 
@@ -1519,6 +1521,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL,// ObExprArrayLength::eval_array_length_batch,                 /* 168 */
   NULL,// ObExprRange::eval_range_batch,                              /* 169 */
   NULL,// ObExprArrayPosition::eval_array_position_batch,             /* 170 */
+  NULL, // ObExprURLEncode::eval_url_encode_batch,                    /* 171 */
+  NULL, // ObExprURLDecode::eval_url_decode_batch,                    /* 172 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1713,6 +1717,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprArraySlice::eval_array_slice_vector,                    /* 188 */
   NULL, // ObExprArrayLength::eval_array_length_vector,                  /* 189 */
   NULL, // ObExprRange::eval_range_vector,                               /* 190 */
+  NULL, // ObExprURLEncode::eval_url_encode_vector,                      /* 191 */
+  NULL, // ObExprURLDecode::eval_url_decode_vector,                      /* 192 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
