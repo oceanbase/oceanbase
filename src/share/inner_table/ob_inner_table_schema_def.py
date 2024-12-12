@@ -15728,6 +15728,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12512: __all_virtual_tablet_mds_info
 # 12513: __all_virtual_cs_replica_tablet_stats
 # 12514: __all_virtual_ddl_diagnose_info
+# 12515: __all_virtual_plugin_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -39969,6 +39970,8 @@ def_table_schema(
 # 21632: V$OB_STANDBY_LOG_TRANSPORT_STAT
 # 21633: DBA_OB_CS_REPLICA_STATS
 # 21634: CDB_OB_CS_REPLICA_STATS
+# 21635: DBA_OB_PLUGINS
+# 21636: CDB_OB_PLUGINS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
