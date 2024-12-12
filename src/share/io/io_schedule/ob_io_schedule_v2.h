@@ -71,7 +71,7 @@ public:
   int schedule_request(ObIORequest &req);
 private:
   static int64_t get_qindex(ObIORequest& req);
-  int get_qid(int64_t index);
+  int get_qid(int64_t index, ObIORequest& req, bool& is_default_q);
 private:
   DRWLock rwlock_;
   uint64_t tenant_id_;
