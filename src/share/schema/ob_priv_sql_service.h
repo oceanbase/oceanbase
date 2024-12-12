@@ -260,6 +260,12 @@ private:
     ObDMLSqlSplicer &dml,
     bool is_deleted);
 
+  static int gen_delete_routine_priv_sql(
+    ObISQLClient &sql_client,
+    const uint64_t exec_tenant_id,
+    const ObRoutinePrivSortKey &routine_priv_key,
+    ObDMLSqlSplicer &dml);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPrivSqlService);
 };
