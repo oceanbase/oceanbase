@@ -43,7 +43,7 @@ struct RefreshInfo
 };
 
 typedef common::hash::
-    ObHashMap<uint64_t, RefreshInfo, common::hash::NoPthreadDefendMode>
+    ObHashMap<uint64_t, RefreshInfo>
     ObMviewRefreshInfoMap;
 class ObMViewMaintenanceService : public logservice::ObIReplaySubHandler,
                                   public logservice::ObICheckpointSubHandler,

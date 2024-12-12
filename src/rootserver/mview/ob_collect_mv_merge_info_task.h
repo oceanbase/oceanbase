@@ -34,8 +34,6 @@ namespace rootserver
     int (obrpc::ObSrvRpcProxy::*)(const arg &, obrpc::ObSrvRpcProxy::AsyncCB<code> *, const obrpc::ObRpcOpts &), obrpc::ObSrvRpcProxy> name
 RPC_MVIEW(obrpc::OB_COLLECT_MV_MERGE_INFO, obrpc::ObCollectMvMergeInfoArg, obrpc::ObCollectMvMergeInfoResult, ObCollectMvMergeInfoProxy);
 
-typedef common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> NewMvBaseTabletSet;
-
 class ObCollectMvMergeInfoTask : public ObMViewTimerTask
 {
 public:
