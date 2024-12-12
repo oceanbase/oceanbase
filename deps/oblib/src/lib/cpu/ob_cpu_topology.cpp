@@ -10,10 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/cpu/ob_cpu_topology.h"
+#define USING_LOG_PREFIX COMMON
 
-#include "lib/ob_define.h"
-#include "lib/container/ob_bit_set.h"
+#include "lib/cpu/ob_cpu_topology.h"
+#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase {
 namespace common {
@@ -30,12 +30,6 @@ static bool cpu_have_avx2();
 static bool cpu_have_avxf();
 static bool cpu_have_avx512bw();
 
-const CpuFlagSet& CpuFlagSet::get_instance()
-{
-  static CpuFlagSet instance;
-  return instance;
-}
-
 bool CpuFlagSet::have_flag(const CpuFlag flag) const
 {
   return flags_ & (1 << (int)flag);
@@ -43,46 +37,73 @@ bool CpuFlagSet::have_flag(const CpuFlag flag) const
 
 CpuFlagSet::CpuFlagSet() : flags_(0)
 {
-  uint64_t flags_from_cpu = init_from_cpu();
-  uint64_t flags_from_os = init_from_os();
-  if (flags_from_cpu != flags_from_os) {
+  int ret = OB_SUCCESS;
+  uint64_t flags_from_cpu, flags_from_os;
+  init_from_cpu(flags_from_cpu);
+  if (OB_FAIL(init_from_os(flags_from_os))) {
+    COMMON_LOG(WARN, "failed to init cpu flags from os", K(ret));
+    // fork failed or grep failed
+    // use flags from cpu
+    flags_ = flags_from_cpu;
+  } else if (flags_from_cpu != flags_from_os) {
     COMMON_LOG_RET(ERROR,
         OB_ERR_SYS,
         "There is a mismatch between the cpu flags from cpu and those from os, "
-        "ISA extension like avx512bw may be not supported by your virtualization setup");
+        "ISA extension like avx512bw may be not supported by the virtualization setup", K(flags_from_cpu), K(flags_from_os));
     flags_ = flags_from_cpu & flags_from_os;
   } else {
     flags_ = flags_from_cpu;
   }
+#define LOG_CPUFLAG(flag) \
+  if (have_flag(CpuFlag::flag)) { \
+    _LOG_INFO("#flag is supported"); \
+  } else { \
+    _LOG_WARN("#flag is not supported"); \
+  }
+  LOG_CPUFLAG(SSE4_2)
+  LOG_CPUFLAG(AVX)
+  LOG_CPUFLAG(AVX2)
+  LOG_CPUFLAG(AVX512BW)
+#undef LOG_CPUFLAG
 }
 
-uint64_t CpuFlagSet::init_from_cpu()
+void CpuFlagSet::init_from_cpu(uint64_t& flags)
 {
-  uint64_t flags = 0;
-#define cpu_have(flag, FLAG)            \
+  flags = 0;
+#define CPU_HAVE(flag, FLAG)            \
   if (cpu_have_##flag()) {              \
     flags |= (1 << (int)CpuFlag::FLAG); \
   }
-  cpu_have(sse42, SSE4_2);
-  cpu_have(avx, AVX);
-  cpu_have(avx2, AVX2);
-  cpu_have(avx512bw, AVX512BW);
-  return flags;
+  CPU_HAVE(sse42, SSE4_2);
+  CPU_HAVE(avx, AVX);
+  CPU_HAVE(avx2, AVX2);
+  CPU_HAVE(avx512bw, AVX512BW);
+#undef CPU_HAVE
 }
 
-uint64_t CpuFlagSet::init_from_os()
+int CpuFlagSet::init_from_os(uint64_t& flags)
 {
-  uint64_t flags = 0;
   int ret = OB_SUCCESS;
-  const char* const CPU_FLAG_CMDS[(int)CpuFlag::MAX] = {
-      "grep -E ' sse4_2( |$)' /proc/cpuinfo",
+  flags = 0;
+  const char* const CPU_FLAG_CMDS[(int)CpuFlag::MAX] = {"grep -E ' sse4_2( |$)' /proc/cpuinfo",
       "grep -E ' avx( |$)' /proc/cpuinfo",
       "grep -E ' avx2( |$)' /proc/cpuinfo",
       "grep -E ' avx512bw( |$)' /proc/cpuinfo"};
   for (int i = 0; i < (int)CpuFlag::MAX; ++i) {
-    flags |= (0 == system(CPU_FLAG_CMDS[i])) << i;
+    int system_ret = system(CPU_FLAG_CMDS[i]);
+    if (system_ret != 0) {
+      if (-1 != system_ret && 1 == WEXITSTATUS(system_ret)) {
+        // not found
+        COMMON_LOG(WARN, "cpu flag is not found", K(CPU_FLAG_CMDS[i]));
+      } else {
+        ret = OB_ERR_SYS;
+        _LOG_WARN("system(\"%s\") returns %d", CPU_FLAG_CMDS[i], system_ret);
+      }
+    } else {
+      flags |= (1 << i);
+    }
   }
-  return flags;
+  return ret;
 }
 
 #if defined(__x86_64__)

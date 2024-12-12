@@ -146,6 +146,7 @@
 #endif
 #include "storage/backup/ob_backup_meta_cache.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
+#include "common/ob_target_specific.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -297,6 +298,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   DBA_STEP_RESET(server_start);
   int ret = OB_SUCCESS;
   opts_ = opts;
+  init_arches();
   scramble_rand_.init(static_cast<uint64_t>(start_time_), static_cast<uint64_t>(start_time_ / 2));
 
   // start ObTimerService first, because some timers depend on it
