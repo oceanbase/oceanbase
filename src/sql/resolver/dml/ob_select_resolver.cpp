@@ -5263,20 +5263,6 @@ int ObSelectResolver::resolve_into_outfile_with_format(const ParseNode *node, Ob
         LOG_WARN("failed to init csv format", K(ret));
       }
     }
-    // delete later
-    if (OB_SUCC(ret) && is_oracle_mode()
-        && (ObExternalFileFormat::PARQUET_FORMAT == external_format.format_type_
-            || ObExternalFileFormat::ORC_FORMAT == external_format.format_type_)) {
-      ret = OB_E(EventTable::EN_EXTERNAL_TABLE_ORACLE) OB_SUCCESS;
-      bool enable_oracle_orc = OB_SUCCESS != ret;
-      if (enable_oracle_orc) {
-        ret = OB_SUCCESS;
-      } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support orc or parquet in oracle mode", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "orc or parquet in oracle mode");
-      }
-    }
     for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
       if (OB_ISNULL(option_node = format_node->children_[i])) {
         ret = OB_ERR_UNEXPECTED;

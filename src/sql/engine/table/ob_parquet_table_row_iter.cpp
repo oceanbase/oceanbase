@@ -703,7 +703,9 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
     }
   } else if (reader_->descr()->physical_type() == parquet::Type::Type::BYTE_ARRAY) {
     ObArrayWrap<parquet::ByteArray> values;
-    int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(file_col_expr_->datum_meta_.precision_);
+    int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+                                                    (file_col_expr_->datum_meta_.precision_ == -1)
+                                                    ? 38 : file_col_expr_->datum_meta_.precision_);
     ObArrayWrap<char> buffer;
     OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
     OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
