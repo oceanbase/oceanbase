@@ -78,6 +78,7 @@ enum ObVectorIndexDistAlgorithm
 enum ObVectorIndexAlgorithmLib
 {
   VIAL_VSAG = 0,
+  IAL_OB,
   VIAL_MAX
 };
 
@@ -85,6 +86,9 @@ enum ObVectorIndexAlgorithmType
 {
   VIAT_HNSW = 0,
   VIAT_HNSW_SQ,
+  VIAT_IVF_FLAT,
+  VIAT_IVF_SQ8,
+  VIAT_IVF_PQ,
   VIAT_MAX
 };
 
@@ -97,7 +101,7 @@ struct ObVectorIndexAlgorithmHeader
 struct ObVectorIndexHNSWParam
 {
   ObVectorIndexHNSWParam() :
-    type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0)
+    type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0), nlist_(0), sample_per_nlist_(0)
   {}
   void reset() {
     type_ = VIAT_MAX;
@@ -107,6 +111,8 @@ struct ObVectorIndexHNSWParam
     m_ = 0;
     ef_construction_ = 0;
     ef_search_ = 0;
+    nlist_ = 0;
+    sample_per_nlist_ = 0;
   };
   ObVectorIndexAlgorithmType type_;
   ObVectorIndexAlgorithmLib lib_;
@@ -115,9 +121,12 @@ struct ObVectorIndexHNSWParam
   int64_t m_;
   int64_t ef_construction_;
   int64_t ef_search_;
+  int64_t nlist_;
+  int64_t sample_per_nlist_;
   OB_UNIS_VERSION(1);
 public:
-  TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search));
+  TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
+    K_(nlist), K_(sample_per_nlist));
 };
 
 enum ObVectorIndexRecordType
