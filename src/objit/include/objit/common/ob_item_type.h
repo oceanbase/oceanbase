@@ -871,6 +871,7 @@ typedef enum ObItemType
   T_FUN_SYS_VECTOR_NORM = 1743,
   T_FUN_SYS_VECTOR_DISTANCE = 1744,
   T_FUN_SYS_ORA_LOGIN_USER = 1754,
+  T_FUN_SYS_TO_PINYIN = 1771,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table

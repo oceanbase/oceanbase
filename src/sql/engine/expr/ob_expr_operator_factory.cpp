@@ -448,7 +448,7 @@
 #include "sql/engine/expr/ob_expr_mysql_proc_info.h"
 #include "sql/engine/expr/ob_expr_get_mysql_routine_parameter_type_str.h"
 #include "sql/engine/expr/ob_expr_ora_login_user.h"
-
+#include "sql/engine/expr/ob_expr_to_pinyin.h"
 #include "sql/engine/expr/ob_expr_lock_func.h"
 
 using namespace oceanbase::common;
@@ -1103,6 +1103,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprEnhancedAesEncrypt);
     REG_OP(ObExprEnhancedAesDecrypt);
     REG_OP(ObExprGetMySQLRoutineParameterTypeStr);
+    REG_OP(ObExprToPinyin);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1288,6 +1289,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprSysExtractUtc);
   REG_OP_ORCL(ObExprTzOffset);
   REG_OP_ORCL(ObExprFromTz);
+  REG_OP_ORCL(ObExprToPinyin);
   //label security
   REG_OP_ORCL(ObExprOLSPolicyCreate);
   REG_OP_ORCL(ObExprOLSPolicyAlter);

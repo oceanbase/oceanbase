@@ -1138,4 +1138,5 @@
 #define N_MYSQL_PROC_INFO                   "mysql_proc_info"
 #define N_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR   "get_mysql_routine_parameter_type_str"
 #define N_ORA_LOGIN_USER                    "ora_login_user"
+#define N_TO_PINYIN                         "to_pinyin"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_
