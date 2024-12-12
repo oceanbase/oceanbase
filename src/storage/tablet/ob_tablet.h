@@ -184,6 +184,7 @@ public:
   int scan_mds_table_with_op(
       const int64_t mds_construct_sequence,
       ObMdsMiniMergeOperator &op) const;
+  int get_valid_last_major_column_count(int64_t &last_major_column_cnt) const;
 
 public:
   // first time create tablet

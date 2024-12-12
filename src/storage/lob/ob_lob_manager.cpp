@@ -186,6 +186,25 @@ int ObLobManager::fill_lob_header(ObIAllocator &allocator, ObString &data, ObStr
   return ret;
 }
 
+// Only use for default lob col val.
+int ObLobManager::fill_lob_header(
+    ObIAllocator &allocator,
+    ObStorageDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (datum.is_null() || datum.is_nop_value()) {
+  } else {
+    ObString data = datum.get_string();
+    ObString out;
+    if (OB_FAIL(ObLobManager::fill_lob_header(allocator, data, out))) {
+      LOG_WARN("failed to fill lob header for column.", K(data));
+    } else {
+      datum.set_string(out);
+    }
+  }
+  return ret;
+}
+
 // Only use for default lob col val
 int ObLobManager::fill_lob_header(ObIAllocator &allocator,
     const ObIArray<share::schema::ObColDesc> &column_ids,
@@ -194,15 +213,8 @@ int ObLobManager::fill_lob_header(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
     if (column_ids.at(i).col_type_.is_lob_storage()) {
-      if (datum_row.storage_datums_[i].is_null() || datum_row.storage_datums_[i].is_nop_value()) {
-      } else {
-        ObString data = datum_row.storage_datums_[i].get_string();
-        ObString out;
-        if (OB_FAIL(ObLobManager::fill_lob_header(allocator, data, out))) {
-          LOG_WARN("failed to fill lob header for column.", K(i), K(column_ids), K(data));
-        } else {
-          datum_row.storage_datums_[i].set_string(out);
-        }
+      if (OB_FAIL(fill_lob_header(allocator, datum_row.storage_datums_[i]))) {
+        LOG_WARN("failed to fill lob header for column.", K(i), K(column_ids), K(datum_row));
       }
     }
   }

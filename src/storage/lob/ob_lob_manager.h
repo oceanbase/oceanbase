@@ -71,6 +71,7 @@ public:
 
   // Only use for default lob col val
   static int fill_lob_header(ObIAllocator &allocator, ObString &data, ObString &out);
+  static int fill_lob_header(ObIAllocator &allocator, ObStorageDatum &datum);
   static int fill_lob_header(ObIAllocator &allocator,
                              const ObIArray<share::schema::ObColDesc> &column_ids,
                              blocksstable::ObDatumRow &datum_row);

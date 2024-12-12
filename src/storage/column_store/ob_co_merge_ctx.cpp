@@ -246,12 +246,15 @@ int ObCOTabletMergeCtx::check_convert_co_checksum(const ObSSTable *new_sstable)
       LOG_WARN("failed to fill column ckm array", K(ret), KPC(co_sstable));
     } else if (row_column_checksums.count() != col_column_checksums.count()) {
       ret = OB_CHECKSUM_ERROR;
-      LOG_WARN("column count not match", K(ret), K(row_column_checksums), K(col_column_checksums));
+      LOG_WARN("column count not match", K(ret), "row_column_ckm_cnt", row_column_checksums.count(), "col_column_ckm_cnt", col_column_checksums.count(),
+                K(row_column_checksums), K(col_column_checksums), KPC(row_sstable)); // only print partia ObIArray; co_sstable will be printed before.
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < row_column_checksums.count(); ++i) {
         if (row_column_checksums.at(i) != col_column_checksums.at(i)) {
           ret = OB_CHECKSUM_ERROR;
-          LOG_ERROR("column checksum error match", K(ret), K(i), K(row_column_checksums), K(col_column_checksums));
+          LOG_ERROR("column checksum error match", K(ret), "row_ckm", row_column_checksums.at(i) , "col_ckm", col_column_checksums.at(i),
+            K(i), "row_column_ckm_cnt", row_column_checksums.count(), "col_column_ckm_cnt", col_column_checksums.count(),
+            K(row_column_checksums), K(col_column_checksums), KPC(row_sstable));
         }
       }
     }
