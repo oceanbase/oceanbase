@@ -298,7 +298,7 @@ public:
   int gc_tenant_infos();
 private:
   void inner_calc_();
-
+  static int transform_ret(int ret);
 private:
   // for device limitation
   hash::ObHashMap<ObStorageKey, ObSharedDeviceControl> shared_device_map_;

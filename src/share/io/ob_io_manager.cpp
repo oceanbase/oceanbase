@@ -198,7 +198,7 @@ int ObTrafficControl::ObSharedDeviceControlV2::fill_qsched_req_storage_key(ObIOR
 }
 
 int ObTrafficControl::ObSharedDeviceControlV2::add_group(const ObIOSSGrpKey &grp_key, const int qid) {
-  return group_list_.add_group(grp_key, qid, limit_ids_, ResourceType::ResourceTypeCnt);
+  return transform_ret(group_list_.add_group(grp_key, qid, limit_ids_, ResourceType::ResourceTypeCnt));
 }
 
 
@@ -338,6 +338,31 @@ int ObTrafficControl::calc_usage(ObIORequest &req)
         failed_shared_storage_obw_.inc(io_size);
       }
     }
+  }
+  return ret;
+}
+int ObTrafficControl::transform_ret(int ret)
+{
+  switch (ret) {
+    case 0:
+      ret = OB_SUCCESS;
+      break;
+    case ENOENT:
+      ret = OB_EAGAIN;
+      break;
+    case -ENOENT:
+      ret = OB_EAGAIN;
+      break;
+    case ENOMEM:
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      break;
+    case -ENOMEM:
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      break;
+    default:
+      LOG_WARN("unknow ret", K(ret));
+      ret = OB_ERR_UNEXPECTED;
+      break;
   }
   return ret;
 }

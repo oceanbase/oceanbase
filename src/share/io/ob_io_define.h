@@ -532,7 +532,7 @@ public:
   void cancel();
   int wait(int64_t wait_ms);
   void finish(const ObIORetCode &ret_code, ObIORequest *req = nullptr);
-  ObIOMode get_mode() const;
+  ObIOMode get_mode() const; // 2 mode : read and write
   ObIOGroupKey get_group_key() const;
   uint64_t get_sys_module_id() const;
   bool is_sys_module() const;
@@ -609,8 +609,8 @@ public:
   bool is_sys_module() const;
   char *calc_io_buf();  // calc the aligned io_buf of raw_buf_, which interact with the operating system
   const ObIOFlag &get_flag() const;
-  ObIOMode get_mode() const;
-  ObIOGroupMode get_group_mode() const;
+  ObIOMode get_mode() const; // 2 mode
+  ObIOGroupMode get_group_mode() const; // 4 mode
   ObIOCallback *get_callback() const;
   int alloc_io_buf(char *&io_buf);
   int get_buf_size() const;
