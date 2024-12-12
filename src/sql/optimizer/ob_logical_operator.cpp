@@ -4884,7 +4884,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
   ObLogOperatorFactory &factory = get_plan()->get_log_op_factory();
   CK(LOG_JOIN == get_type());
   ObLogJoin *join_op = static_cast<ObLogJoin*>(this);
-  DistAlgo join_dist_algo = join_op->get_join_distributed_method();
+  DistAlgo join_dist_algo = join_op->get_real_dist_method();
   for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
     filter_create = NULL;
     bool right_has_exchange = false;
@@ -4970,7 +4970,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
   ObLogOperatorFactory &factory = get_plan()->get_log_op_factory();
   CK(LOG_JOIN == get_type());
   if (OB_SUCC(ret)) {
-    DistAlgo join_dist_algo = static_cast<ObLogJoin*>(this)->get_join_distributed_method();
+    DistAlgo join_dist_algo = static_cast<ObLogJoin*>(this)->get_real_dist_method();
     for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
       bool right_has_exchange = false;
       bool right_has_px_coord = false;

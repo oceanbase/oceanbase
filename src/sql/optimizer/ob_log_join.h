@@ -58,7 +58,6 @@ namespace sql
     inline void set_late_mat(const bool late_mat) { late_mat_ = late_mat; }
     inline bool is_late_mat() const { return late_mat_; }
     inline void set_join_distributed_method(const DistAlgo dist_method ) { join_dist_algo_ = dist_method; }
-    inline DistAlgo get_join_distributed_method() const { return join_dist_algo_; }
     inline bool is_cartesian() const { return join_conditions_.empty() && join_filters_.empty() &&
                                               nl_params_.empty() && filter_exprs_.empty(); }
     inline DistAlgo get_dist_method() const { return join_dist_algo_; }
