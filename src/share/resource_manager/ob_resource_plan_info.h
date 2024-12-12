@@ -10,6 +10,34 @@
  * See the Mulan PubL v2 for more details.
  */
 
+// Define a function type of resource manager
+// Examples:
+//   Defination:
+//     DAG_SCHEDULER_DAG_PRIO_DEF(TEST_FUNCTION)
+//   Use this function type:
+//     ObFunctionType func_type = ObFunctionType::PRIO_TEST_FUNCTION
+//   Get function name:
+//     ObString functiono_name = get_io_function_name(ObFunctionType::PRIO_TEST_FUNCTION)
+//   Check if function name exist:
+//     bool is_exist = false;
+//     check_if_function_exist("TEST_FUNCTION", is_exist)
+#ifdef OB_RESOURCE_FUNCTION_TYPE_DEF
+// DAG_SCHEDULER_DAG_PRIO_DEF(function_type_string)
+OB_RESOURCE_FUNCTION_TYPE_DEF(COMPACTION_HIGH)
+OB_RESOURCE_FUNCTION_TYPE_DEF(HA_HIGH)
+OB_RESOURCE_FUNCTION_TYPE_DEF(COMPACTION_MID)
+OB_RESOURCE_FUNCTION_TYPE_DEF(HA_MID)
+OB_RESOURCE_FUNCTION_TYPE_DEF(COMPACTION_LOW)
+OB_RESOURCE_FUNCTION_TYPE_DEF(HA_LOW)
+OB_RESOURCE_FUNCTION_TYPE_DEF(DDL)
+OB_RESOURCE_FUNCTION_TYPE_DEF(DDL_HIGH)
+OB_RESOURCE_FUNCTION_TYPE_DEF(GC_MACRO_BLOCK)  // block manager scans for bad blocks in the background
+OB_RESOURCE_FUNCTION_TYPE_DEF(CLOG_LOW)
+OB_RESOURCE_FUNCTION_TYPE_DEF(CLOG_MID)
+OB_RESOURCE_FUNCTION_TYPE_DEF(CLOG_HIGH)
+OB_RESOURCE_FUNCTION_TYPE_DEF(OPT_STATS)
+#endif
+
 #ifndef OB_SHARE_RESOURCE_MANAGER_OB_PLAN_INFO_H_
 #define OB_SHARE_RESOURCE_MANAGER_OB_PLAN_INFO_H_
 
@@ -26,29 +54,17 @@ class ObString;
 }
 namespace share
 {
-enum ObFunctionType : uint8_t
+enum ObFunctionType : uint8_t  // FARM COMPAT WHITELIST: refine ObFuncType interface
 {
-  DEFAULT_FUNCTION = 0, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_COMPACTION_HIGH = 1, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_HA_HIGH = 2, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_COMPACTION_MID = 3, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_HA_MID = 4, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_COMPACTION_LOW = 5, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_HA_LOW = 6, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_DDL = 7, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_DDL_HIGH = 8, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_GC_MACRO_BLOCK = 9, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_CLOG_LOW = 10, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_CLOG_MID = 11, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  PRIO_CLOG_HIGH = 12, // FARM COMPAT WHITELIST: refine ObFuncType interface
-  /* add new function type below, or you will have compatibility issues. */
-  PRIO_OPT_STATS = 13, // FARM COMPAT WHITELIST: refine ObFuncType interface
-
-  /* add new function type above */
+  DEFAULT_FUNCTION = 0,
+#define OB_RESOURCE_FUNCTION_TYPE_DEF(function_type_string) PRIO_##function_type_string,
+#include "ob_resource_plan_info.h"
+#undef OB_RESOURCE_FUNCTION_TYPE_DEF
   MAX_FUNCTION_NUM
 };
 
 ObString get_io_function_name(ObFunctionType function_type);
+int check_if_function_exist(const ObString &function_name, bool &exist);
 
 // 为了便于作为 hash value，所以把 ObString 包一下
 class ObResMgrVarcharValue

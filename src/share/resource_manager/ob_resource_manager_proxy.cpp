@@ -614,30 +614,6 @@ int ObResourceManagerProxy::check_if_user_exist(
   return ret;
 }
 
-int ObResourceManagerProxy::check_if_function_exist(const ObString &function_name, bool &exist)
-{
-  int ret = OB_SUCCESS;
-  if (0 == function_name.compare("COMPACTION_HIGH") ||
-      0 == function_name.compare("HA_HIGH") ||
-      0 == function_name.compare("COMPACTION_MID") ||
-      0 == function_name.compare("HA_MID") ||
-      0 == function_name.compare("COMPACTION_LOW") ||
-      0 == function_name.compare("HA_LOW") ||
-      0 == function_name.compare("DDL_HIGH") ||
-      0 == function_name.compare("DDL") ||
-      0 == function_name.compare("OPT_STATS") ||
-      0 == function_name.compare("CLOG_LOW")  ||
-      0 == function_name.compare("CLOG_MID")  ||
-      0 == function_name.compare("CLOG_HIGH") ||
-      0 == function_name.compare("GC_MACRO_BLOCK")) {
-    exist = true;
-  } else {
-    exist = false;
-    LOG_WARN("invalid function name", K(function_name));
-  }
-  return ret;
-}
-
 int ObResourceManagerProxy::check_if_column_exist(
     uint64_t tenant_id,
     const ObString &db_name,
@@ -1316,7 +1292,7 @@ int ObResourceManagerProxy::replace_function_mapping_rule(ObMySQLTransaction &tr
   bool function_exist = false;
   if (OB_SUCC(ret)) {
     // Same as user rule, the mapping is unsuccessful but no error is thrown
-    if (OB_FAIL(check_if_function_exist(value, function_exist))) {
+    if (OB_FAIL(oceanbase::share::check_if_function_exist(value, function_exist))) {
       LOG_WARN("fail check if function exist", K(tenant_id), K(value), K(ret));
     } else if (OB_UNLIKELY(!function_exist)) {
       ret = OB_INVALID_CONFIG;

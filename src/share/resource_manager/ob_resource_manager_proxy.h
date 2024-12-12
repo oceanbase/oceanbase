@@ -206,7 +206,6 @@ private:
       uint64_t tenant_id,
       const common::ObString &user_name,
       bool &exist);
-  int check_if_function_exist(const common::ObString &function_name, bool &exist);
   int check_if_column_exist(
       uint64_t tenant_id,
       const common::ObString &db_name,
