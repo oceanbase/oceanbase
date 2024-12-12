@@ -602,7 +602,7 @@ int ObHTableDeleteExecutor::delete_rows(ObTableQueryResult &result)
   int ret = OB_SUCCESS;
   const ObITableEntity *entity = nullptr;
   executor_->set_skip_scan(true);
-  while (OB_SUCC(result.get_next_entity(entity))) {
+  while (OB_SUCC(ret) && OB_SUCC(result.get_next_entity(entity))) {
     ObTableOperation op;
     op.set_type(ObTableOperationType::Type::DEL);
     op.set_entity(entity);
