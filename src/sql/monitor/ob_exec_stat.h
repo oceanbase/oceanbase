@@ -323,6 +323,7 @@ struct ObAuditRecordData {
     is_perf_event_closed_ = false;
     pl_trace_id_.reset();
     stmt_type_ = sql::stmt::T_NONE;
+    sql_memory_used_ = nullptr;
   }
 
   int64_t get_elapsed_time() const
@@ -445,6 +446,7 @@ struct ObAuditRecordData {
   stmt::StmtType stmt_type_;
   uint64_t total_memstore_read_row_count_;
   uint64_t total_ssstore_read_row_count_;
+  int64_t *sql_memory_used_;
 };
 
 } //namespace sql
