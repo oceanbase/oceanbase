@@ -159,8 +159,7 @@ public:
   bool check_cgroup_status();
   static int check_cgroup_root_dir();
   void destroy();
-  void set_valid(bool valid) { ATOMIC_STORE(&valid_, valid); }
-  bool is_valid() { return ATOMIC_LOAD(&valid_); }
+  bool is_valid() { return valid_; }
 
   bool is_valid_group_name(common::ObString &group_name);
   static int compare_cpu(const double cpu1, const double cpu2, int &compare_ret);

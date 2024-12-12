@@ -174,10 +174,10 @@ bool ObCgroupCtrl::check_cgroup_status()
     // In case symbolic link is deleted
     if (OB_TMP_FAIL(check_cgroup_root_dir())) {
       LOG_WARN_RET(tmp_ret, "check cgroup root dir failed", K(tmp_ret));
-      set_valid(false);
+      valid_ = false;
     }
   } else if (GCONF.enable_cgroup == false && is_valid() == true) {
-    set_valid(false);
+    valid_ = false;
     if (OB_TMP_FAIL(check_cgroup_root_dir())) {
       LOG_WARN_RET(tmp_ret, "check cgroup root dir failed", K(tmp_ret));
     } else if (OB_TMP_FAIL(regist_observer_to_cgroup(OBSERVER_ROOT_CGROUP_DIR))) {
@@ -200,7 +200,7 @@ bool ObCgroupCtrl::check_cgroup_status()
       LOG_WARN_RET(tmp_ret, "regist observer thread to cgroup failed", K(tmp_ret), K(OTHER_CGROUP_DIR));
     } else {
       need_regist_cgroup = true;
-      set_valid(true);
+      valid_ = true;
       LOG_INFO("init cgroup success");
     }
   }
@@ -226,7 +226,7 @@ int ObCgroupCtrl::check_cgroup_root_dir()
 void ObCgroupCtrl::destroy()
 {
   if (is_valid()) {
-    set_valid(false);
+    valid_ = false;
     recursion_remove_group_(OBSERVER_ROOT_CGROUP_DIR, false /* if_remove_top */);
   }
 }
