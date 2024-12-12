@@ -97,6 +97,8 @@
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache_io_helper.h"
 #endif
 #include "share/object_storage/ob_device_config_mgr.h"
+#include "rootserver/restore/ob_restore_service.h"
+#include "rootserver/backup/ob_archive_scheduler_service.h"
 
 namespace oceanbase
 {
@@ -4059,6 +4061,46 @@ int ObNotifySharedStorageInfoP::process()
     }
   }
   result_.set_ret(ret);
+  return ret;
+}
+
+int ObRpcNotifyLSRestoreFinishP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg_));
+  } else {
+    MTL_SWITCH(gen_meta_tenant_id(arg_.get_tenant_id())) {
+      rootserver::ObRestoreService* restore_service = MTL(rootserver::ObRestoreService*);
+      if (OB_ISNULL(restore_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("restore service is null", KR(ret), K(arg_));
+      } else {
+        restore_service->wakeup();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRpcStartArchiveP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg_));
+  } else {
+    MTL_SWITCH(gen_meta_tenant_id(arg_.get_tenant_id())) {
+      rootserver::ObArchiveSchedulerService* archive_service = MTL(rootserver::ObArchiveSchedulerService*);
+      if (OB_ISNULL(archive_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("archive service is null", KR(ret), K(arg_));
+      } else {
+        archive_service->wakeup();
+      }
+    }
+  }
   return ret;
 }
 } // end of namespace observer

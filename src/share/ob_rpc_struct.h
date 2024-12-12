@@ -13591,6 +13591,47 @@ public:
 private:
   int ret_;
 };
+
+struct ObNotifyLSRestoreFinishArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyLSRestoreFinishArg()
+    : tenant_id_(common::OB_INVALID_TENANT_ID),
+      ls_id_(share::ObLSID::INVALID_LS_ID) {}
+  ~ObNotifyLSRestoreFinishArg() {}
+  bool is_valid() const;
+  int assign(const ObNotifyLSRestoreFinishArg &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  share::ObLSID get_ls_id() const { return ls_id_; }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifyLSRestoreFinishArg);
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
+
+struct ObNotifyStartArchiveArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyStartArchiveArg()
+    : tenant_id_(common::OB_INVALID_TENANT_ID)
+  {}
+  ~ObNotifyStartArchiveArg() {}
+  bool is_valid() const;
+  int assign(const ObNotifyStartArchiveArg &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  TO_STRING_KV(K_(tenant_id));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifyStartArchiveArg);
+private:
+  uint64_t tenant_id_;
+};
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif
