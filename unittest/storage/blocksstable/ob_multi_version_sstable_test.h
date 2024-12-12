@@ -505,6 +505,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->close(res));
 
   ObTabletCreateSSTableParam param;
+  param.set_init_value_for_column_store_();
   table_key_.table_type_ = table_type;
   ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
   ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
@@ -543,6 +544,11 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   param.table_backup_flag_.reset();
   param.table_shared_flag_.reset();
   param.filled_tx_scn_ = table_key_.get_end_scn();
+  param.tx_data_recycle_scn_.set_min();
+  param.sstable_logic_seq_ = 0;
+  param.row_count_ = 0;
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
   if (table_type == ObITable::MAJOR_SSTABLE) {
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   }

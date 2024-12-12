@@ -76,6 +76,7 @@ void TestSharedBlockRWriter::TearDown()
 void TestSharedBlockRWriter::create_empty_sstable(ObSSTable &empty_sstable)
 {
   ObTabletCreateSSTableParam param;
+  param.set_init_value_for_column_store_();
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
   MEMSET(param.encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
@@ -106,12 +107,19 @@ void TestSharedBlockRWriter::create_empty_sstable(ObSSTable &empty_sstable)
   param.occupy_size_ = 0;
   param.ddl_scn_.set_min();
   param.filled_tx_scn_.set_min();
+  param.tx_data_recycle_scn_.set_min();
   param.original_size_ = 0;
   param.ddl_scn_.set_min();
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.column_cnt_ = 1;
   param.table_backup_flag_.reset();
   param.table_shared_flag_.reset();
+  param.sstable_logic_seq_ = 0;
+  param.row_count_ = 0;
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
+  param.nested_size_ = 0;
+  param.nested_offset_ = 0;
   OK(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   OK(empty_sstable.init(param, &allocator_));
 }

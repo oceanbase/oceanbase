@@ -126,6 +126,8 @@ public:
       K_(original_size),
       K_(max_merged_trans_version),
       K_(ddl_scn),
+      K_(filled_tx_scn),
+      K_(tx_data_recycle_scn),
       K_(is_co_table_without_cgs),
       K_(contain_uncommitted_row),
       K_(is_meta_root),
@@ -145,6 +147,7 @@ private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
   int inner_init_with_shared_sstable(const blocksstable::ObMigrationSSTableParam &migration_param);
+  void set_init_value_for_column_store_();
 public:
   ObITable::TableKey table_key_;
   int16_t sstable_logic_seq_;
