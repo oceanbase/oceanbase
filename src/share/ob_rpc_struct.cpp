@@ -13421,5 +13421,38 @@ int ObNotifySharedStorageInfoResult::get_ret() const
 {
   return ret_;
 }
+
+OB_SERIALIZE_MEMBER(ObNotifyLSRestoreFinishArg, tenant_id_, ls_id_);
+bool ObNotifyLSRestoreFinishArg::is_valid() const
+{
+  return is_user_tenant(tenant_id_) && ls_id_.is_valid();
+}
+
+int ObNotifyLSRestoreFinishArg::assign(const ObNotifyLSRestoreFinishArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObNotifyStartArchiveArg, tenant_id_);
+bool ObNotifyStartArchiveArg::is_valid() const
+{
+  return is_user_tenant(tenant_id_);
+}
+
+int ObNotifyStartArchiveArg::assign(const ObNotifyStartArchiveArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
 }//end namespace obrpc
 }//end namespace oceanbase

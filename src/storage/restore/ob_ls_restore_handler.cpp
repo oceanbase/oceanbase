@@ -874,7 +874,19 @@ int ObILSRestoreState::advance_status_(
   if (OB_SUCCESS != (tmp_ret = report_ls_restore_progress_(ls, next_status, *ObCurTraceId::get_trace_id()))) {
     LOG_WARN("fail to reprot ls restore progress", K(tmp_ret), K(ls), K(next_status));
   }
+
+  if (need_notify_rs_restore_finish_(next_status)) {
+    notify_rs_restore_finish_();
+  }
   return ret;
+}
+
+bool ObILSRestoreState::need_notify_rs_restore_finish_(const ObLSRestoreStatus &ls_restore_status)
+{
+  return ObLSRestoreStatus::WAIT_RESTORE_TO_CONSISTENT_SCN  == ls_restore_status
+         || ObLSRestoreStatus::QUICK_RESTORE_FINISH == ls_restore_status
+         || ObLSRestoreStatus::NONE == ls_restore_status
+         || ObLSRestoreStatus::RESTORE_FAILED == ls_restore_status;
 }
 
 int ObILSRestoreState::report_ls_restore_progress_(
@@ -1576,6 +1588,26 @@ int ObILSRestoreState::report_unfinished_bytes(const int64_t bytes)
   }
 
   return ret;
+}
+
+void ObILSRestoreState::notify_rs_restore_finish_()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = ls_restore_arg_->tenant_id_;
+  common::ObAddr leader_addr;
+  obrpc::ObNotifyLSRestoreFinishArg arg;
+  arg.set_tenant_id(tenant_id);
+  arg.set_ls_id(ls_->get_ls_id());
+
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc proxy or location service is null", KR(ret), KP(GCTX.srv_rpc_proxy_), KP(GCTX.location_service_));
+  } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
+              GCONF.cluster_id, gen_meta_tenant_id(tenant_id), ObLSID(ObLSID::SYS_LS_ID), leader_addr))) {
+    LOG_WARN("failed to get meta tenant leader address", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).by(tenant_id).notify_ls_restore_finish(arg))) {
+    LOG_WARN("failed to notify tenant restore scheduler", KR(ret), K(leader_addr), K(arg));
+  }
 }
 
 //================================ObLSRestoreStartState=======================================

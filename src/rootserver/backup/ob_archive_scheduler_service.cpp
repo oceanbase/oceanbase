@@ -437,6 +437,8 @@ int ObArchiveSchedulerService::open_archive_mode(const uint64_t tenant_id, const
     } else {
       if (OB_FAIL(open_tenant_archive_mode_(archive_tenant_ids))) {
         LOG_WARN("failed to open archive mode for indicated tenants", K(ret), K(archive_tenant_ids));
+      } else if (1 == archive_tenant_ids.count()) {
+        notify_start_archive_(archive_tenant_ids.at(0));
       }
     }
   } else {
@@ -446,6 +448,8 @@ int ObArchiveSchedulerService::open_archive_mode(const uint64_t tenant_id, const
       LOG_WARN("normal tenant can only open archive mode for itself.", K(ret), K(tenant_id), K(archive_tenant_ids));
     } else if (OB_FAIL(open_tenant_archive_mode_(tenant_id))) {
       LOG_WARN("failed to open archive mode", K(ret), K(tenant_id));
+    } else {
+      notify_start_archive_(tenant_id);
     }
   }
 
@@ -522,6 +526,8 @@ int ObArchiveSchedulerService::close_archive_mode(
     } else {
       if (OB_FAIL(close_tenant_archive_mode_(archive_tenant_ids))) {
         LOG_WARN("failed to close archive mode for indicated tenants", K(ret), K(archive_tenant_ids));
+      } else if (1 == archive_tenant_ids.count()) {
+        notify_start_archive_(archive_tenant_ids.at(0));
       }
     }
   } else {
@@ -531,6 +537,8 @@ int ObArchiveSchedulerService::close_archive_mode(
       LOG_WARN("normal tenant can only close archive mode for itself.", K(ret), K(tenant_id), K(archive_tenant_ids));
     } else if (OB_FAIL(close_tenant_archive_mode_(tenant_id))) {
       LOG_WARN("failed to close archive mode", K(ret), K(tenant_id));
+    } else {
+      notify_start_archive_(tenant_id);
     }
   }
 
@@ -560,4 +568,22 @@ int ObArchiveSchedulerService::close_tenant_archive_mode_(const uint64_t tenant_
     LOG_WARN("failed to close archive mode", K(ret), K(tenant_id));
   }
   return ret;
+}
+
+void ObArchiveSchedulerService::notify_start_archive_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  common::ObAddr leader_addr;
+  obrpc::ObNotifyStartArchiveArg arg;
+  arg.set_tenant_id(tenant_id);
+
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc proxy or location service is null", KR(ret), KP(GCTX.srv_rpc_proxy_), KP(GCTX.location_service_));
+  } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
+              GCONF.cluster_id, gen_meta_tenant_id(tenant_id), ObLSID(ObLSID::SYS_LS_ID), leader_addr))) {
+    LOG_WARN("failed to get meta tenant leader address", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).by(tenant_id).notify_start_archive(arg))) {
+    LOG_WARN("failed to notify tenant archive scheduler service", KR(ret), K(leader_addr), K(tenant_id), K(arg));
+  }
 }
