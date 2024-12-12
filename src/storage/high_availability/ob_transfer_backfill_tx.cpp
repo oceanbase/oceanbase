@@ -1718,6 +1718,7 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
     param.rebuild_seq_ = ls->get_rebuild_seq();
     param.is_transfer_replace_ = true;
     param.tablet_meta_ = &mig_param;
+    param.release_mds_scn_.set_min();
 #ifdef ERRSIM
     param.errsim_point_info_ = ctx_->errsim_point_info_;
     SERVER_EVENT_SYNC_ADD("TRANSFER", "TRANSFER_REPLACE_TABLE_WITH_LOG_REPLAY_SKIP_CHECK",

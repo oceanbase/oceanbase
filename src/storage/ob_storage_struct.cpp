@@ -592,7 +592,8 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
     tablet_meta_(nullptr),
     restore_status_(ObTabletRestoreStatus::FULL),
     tablet_split_param_(),
-    need_replace_remote_sstable_(false)
+    need_replace_remote_sstable_(false),
+    release_mds_scn_()
 {
 }
 
@@ -606,12 +607,14 @@ void ObBatchUpdateTableStoreParam::reset()
   restore_status_ = ObTabletRestoreStatus::FULL;
   tablet_split_param_.reset();
   need_replace_remote_sstable_ = false;
+  release_mds_scn_.reset();
 }
 
 bool ObBatchUpdateTableStoreParam::is_valid() const
 {
   return rebuild_seq_ > OB_INVALID_VERSION
-      && ObTabletRestoreStatus::is_valid(restore_status_);
+      && ObTabletRestoreStatus::is_valid(restore_status_)
+      && release_mds_scn_.is_valid();
 }
 
 int ObBatchUpdateTableStoreParam::assign(
@@ -630,6 +633,7 @@ int ObBatchUpdateTableStoreParam::assign(
     tablet_meta_ = param.tablet_meta_;
     restore_status_ = param.restore_status_;
     need_replace_remote_sstable_ = param.need_replace_remote_sstable_;
+    release_mds_scn_ = param.release_mds_scn_;
 #ifdef ERRSIM
     errsim_point_info_ = param.errsim_point_info_;
 #endif

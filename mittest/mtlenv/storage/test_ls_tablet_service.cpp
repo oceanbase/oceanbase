@@ -1271,6 +1271,7 @@ TEST_F(TestLSTabletService, test_new_tablet_has_backup_table_with_ha_status)
   update_table_store_param.tablet_meta_ = nullptr;
   update_table_store_param.rebuild_seq_ = ls->get_rebuild_seq();
   update_table_store_param.need_replace_remote_sstable_ = false;
+  update_table_store_param.release_mds_scn_.set_min();
   ret = update_table_store_param.tables_handle_.add_table(table_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 
