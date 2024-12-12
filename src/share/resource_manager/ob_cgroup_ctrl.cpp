@@ -468,8 +468,11 @@ int ObCgroupCtrl::set_cpu_shares(const uint64_t tenant_id,
   } else if (OB_FAIL(set_cgroup_config_(group_path, CPU_SHARES_FILE, cpu_shares_value))) {
     LOG_WARN("set cpu shares failed", K(ret), K(group_path), K(tenant_id));
   } else {
-    LOG_INFO("set cpu shares success",
-             K(group_path), K(cpu), K(cpu_shares_value), K(tenant_id));
+    _LOG_INFO("set cpu shares success, "
+              "group_path=%s, cpu=%.2f, "
+              "cpu_shares_value=%s, tenant_id=%lu",
+              group_path, cpu,
+              cpu_shares_value, tenant_id);
   }
   return ret;
 }
@@ -571,14 +574,21 @@ int ObCgroupCtrl::set_cpu_cfs_quota(const uint64_t tenant_id, const double cpu, 
       ret = set_cpu_cfs_quota_by_path_(group_path, target_cpu);
     }
     if (OB_FAIL(ret)) {
-      LOG_WARN("set cpu cfs quota failed",
-          K(ret),
-          K(tenant_id),
-          K(group_id),
-          K(cpu),
-          K(target_cpu),
-          K(current_cpu),
-          K(group_path));
+      _LOG_WARN("set cpu cfs quota failed, "
+                "tenant_id=%lu, group_id=%lu, "
+                "cpu=%.2f, target_cpu=%.2f, "
+                "current_cpu=%.2f, group_path=%s",
+                tenant_id, group_id,
+                cpu, target_cpu,
+                current_cpu, group_path);
+    } else {
+      _LOG_INFO("set cpu cfs quota success, "
+                "tenant_id=%lu, group_id=%lu, "
+                "cpu=%.2f, target_cpu=%.2f, "
+                "current_cpu=%.2f, group_path=%s",
+                tenant_id, group_id,
+                cpu, target_cpu,
+                current_cpu, group_path);
     }
   }
   return ret;
@@ -659,7 +669,11 @@ int ObCgroupCtrl::set_cpu_cfs_quota_by_path_(const char *group_path, const doubl
       loop_times++;
     }
     if (OB_SUCC(ret)) {
-      LOG_INFO("set cpu quota success", K(group_path), K(cpu), K(cfs_quota_us), K(cfs_period_us));
+      _LOG_INFO("set cpu quota success, "
+                "group_path=%s, cpu=%.2f, "
+                "cfs_quota_us=%d, cfs_period_us=%d",
+                group_path, cpu,
+                cfs_quota_us, cfs_period_us);
     }
   }
   return ret;

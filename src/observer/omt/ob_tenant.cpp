@@ -1210,7 +1210,7 @@ void ObTenant::set_unit_max_cpu(double cpu)
                  is_sys_tenant(id_) ? -1 : cpu,
                  OB_INVALID_GROUP_ID,
                  GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
-    LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K_(id));
+    _LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed, tenant_id=%lu, cpu=%.2f", id_, cpu);
   }
 }
 
@@ -1224,7 +1224,7 @@ void ObTenant::set_unit_min_cpu(double cpu)
           cpu,
           OB_INVALID_GROUP_ID,
           GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
-    LOG_WARN_RET(tmp_ret, "set tenant cpu shares failed", K(tmp_ret), K_(id), K(cpu));
+    _LOG_WARN_RET(tmp_ret, "set tenant cpu shares failed, tenant_id=%lu, cpu=%.2f", id_, cpu);
   }
 }
 

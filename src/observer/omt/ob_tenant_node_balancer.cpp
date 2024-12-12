@@ -486,6 +486,7 @@ void ObTenantNodeBalancer::periodically_check_tenant()
   }
   omt_->unlock_tenant_list();
 
+  G_RES_MGR.get_plan_mgr().refresh_global_background_cpu();
   int i = 0;
   for (auto it = pairs.begin();
        it != pairs.end();
