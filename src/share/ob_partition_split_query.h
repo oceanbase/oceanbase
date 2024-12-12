@@ -85,8 +85,8 @@ public:
       bool &is_splited_range);
 
   int fill_auto_split_params(
-      const ObTabletID &tablet_id,
-      const share::ObLSID &ls_id,
+      ObTablet &tablet,
+      const bool is_split_dst,
       sql::ObPushdownOperator *op,
       const uint64_t filter_type,
       sql::ExprFixedArray *filter_params,

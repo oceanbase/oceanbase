@@ -632,9 +632,9 @@ public:
   ObTabletSplitTscInfo();
   ~ObTabletSplitTscInfo() = default;
 
-  bool is_valid() const;
+  bool is_split_dst_with_partkey() const;
+  bool is_split_dst_without_partkey() const;
   void reset();
-  int assign(const ObTabletSplitTscInfo &param);
 
   TO_STRING_KV(K_(start_partkey),
     K_(end_partkey), K_(src_tablet_handle), K_(split_type), K_(split_cnt), K_(partkey_is_rowkey_prefix));
