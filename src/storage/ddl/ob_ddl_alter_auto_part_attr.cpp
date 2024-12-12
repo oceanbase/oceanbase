@@ -45,9 +45,6 @@ int ObAlterAutoPartAttrOp::check_alter_table_partition_attr(
     if (is_oracle_mode && PARTITION_LEVEL_ZERO != part_level && OB_NOT_NULL(alter_part_array)) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "re-partition a patitioned table");
-    } else if (OB_INVALID_ID != tablegroup_id) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter auto partition attribute of a table in tablegroup is");
     } else {
       ddl_type = ObDDLType::DDL_ALTER_PARTITION_BY;
     }
