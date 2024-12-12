@@ -2489,8 +2489,13 @@ int ObTransformUtils::is_general_expr_not_null(ObNotNullContext &ctx,
       }
     }
   } else if (T_FUN_SYS_CAST == expr->get_expr_type()) {
-    if (OB_FAIL(check_list.push_back(expr->get_param_expr(0)))) {
-      LOG_WARN("failed to append check list", K(ret));
+    const ObExprResType &res_type = expr->get_result_type();
+    if (res_type.is_numeric_type()
+        || res_type.is_string_or_lob_locator_type()
+        || res_type.is_oracle_temporal_type()) {
+      if (OB_FAIL(check_list.push_back(expr->get_param_expr(0)))) {
+        LOG_WARN("failed to append check list", K(ret));
+      }
     }
   } else if (T_FUN_SYS_NVL == expr->get_expr_type()) {
     if (OB_FAIL(check_list.push_back(expr->get_param_expr(1)))) {
