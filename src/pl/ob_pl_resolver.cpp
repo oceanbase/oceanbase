@@ -4463,6 +4463,10 @@ int ObPLResolver::resolve_case(const ObStmtNodeTree *parse_tree, ObPLCaseStmt *s
         case_var->set_value(val);
         case_var->set_result_type(case_expr->get_result_type());
         OZ (case_var->extract_info());
+        if (ob_is_enumset_tc(case_expr->get_data_type())) {
+          OZ (case_var->add_flag(IS_ENUM_OR_SET));
+          OZ (case_var->set_enum_set_values(case_expr->get_enum_set_values()));
+        }
       }
     }
 
@@ -4573,6 +4577,10 @@ int ObPLResolver::resolve_when(const ObStmtNodeTree *parse_tree, ObRawExpr *case
                                              case_expr_var,
                                              expr,
                                              cmp_expr));
+        if (OB_SUCC(ret) && is_mysql_mode()) {
+          ObRawExprWrapEnumSet enum_set_wrapper(expr_factory_, &resolve_ctx_.session_info_);
+          OZ (enum_set_wrapper.analyze_expr(cmp_expr));
+        }
         OX (expr = cmp_expr);
       }
 
