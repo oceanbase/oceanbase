@@ -921,6 +921,7 @@ public:
    * end_access - end of txn protected resources access
    */
   int end_access();
+  int check_pending_log_overflow(const int64_t stmt_timeout);
   int rollback_to_savepoint(const int64_t op_sn,
                             const ObTxSEQ to_seq,
                             const int64_t seq_base,

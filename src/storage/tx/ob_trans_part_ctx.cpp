@@ -2137,6 +2137,11 @@ int ObPartTransCtx::on_dist_end_(const bool commit)
 
   return ret;
 }
+
+#ifdef ENABLE_DEBUG_LOG
+ERRSIM_POINT_DEF(EN_TX_ON_SUCCESS_DELAY)
+#endif
+
 int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
 {
   int ret = OB_SUCCESS;
@@ -2146,6 +2151,17 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
   bool try_submit_next_log = false;
   bool need_return_log_cb = false;
   {
+    #ifdef ENABLE_DEBUG_LOG
+    uint64_t sleep_us = abs(EN_TX_ON_SUCCESS_DELAY);
+    if (sleep_us > 0) {
+      usleep(sleep_us);
+      TRANS_LOG(INFO, "ERRSIM: delay tx on_success", K(ret), KPC(log_cb), K(sleep_us),
+                K(EN_TX_ON_SUCCESS_DELAY));
+    } else if (sleep_us < 0) {
+      TRANS_LOG(WARN, "ERRSIM: unexpectd sleep us", K(ret), KPC(log_cb), K(sleep_us),K(EN_TX_ON_SUCCESS_DELAY));
+    }
+    #endif
+
     // allow fill redo concurrently with log callback
     CtxLockGuard guard(lock_, is_committing_() ? CtxLockGuard::MODE::ALL : CtxLockGuard::MODE::CTX);
 
@@ -8122,29 +8138,14 @@ inline int ObPartTransCtx::check_status_()
  * 2) acquire memtable ctx's ref
  * 3) alloc data_scn if not specified
  */
-int ObPartTransCtx::start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_scn, const int16_t branch)
+int ObPartTransCtx::start_access(const ObTxDesc &tx_desc,
+                                 ObTxSEQ &data_scn,
+                                 const int16_t branch)
 {
   int ret = OB_SUCCESS;
   int pending_write = -1;
   const bool alloc = !data_scn.is_valid();
   int callback_list_idx = 0;
-
-  if (OB_SUCC(ret) && ATOMIC_LOAD(&has_extra_log_cb_group_)) {
-    const int64_t private_buffer_size = GCONF._private_buffer_size;
-    const int64_t pending_log_size = get_pending_log_size();
-    if (private_buffer_size > 0 && private_buffer_size <= 2 * 1024 * 1024
-        && pending_log_size > 4 * ObTxLogCbGroup::MAX_LOG_CB_COUNT_IN_GROUP * 2 * 1024 * 1024) {
-      ObSpinLockGuard guard(log_cb_lock_);
-      if (free_cbs_.is_empty() && ls_tx_ctx_mgr_->get_log_cb_pool_mgr().is_all_busy()) {
-        ret = OB_EAGAIN;
-        if (REACH_COUNT_PER_SEC(3) && REACH_TIME_INTERVAL(100 * 1000)) {
-          TRANS_LOG(WARN, "too may pending log", K(ret), K(free_cbs_.get_size()),
-                    K(extra_cb_group_list_.get_size()), KPC(this), K(tx_desc), K(data_scn),
-                    K(branch));
-        }
-      }
-    }
-  }
 
   if(OB_SUCC(ret)) {
     CtxLockGuard guard(lock_, CtxLockGuard::MODE::ACCESS);
@@ -8187,6 +8188,7 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_scn, con
       mt_ctx_.acquire_callback_list(false, true /* need merge to main */);
     }
   }
+
   last_request_ts_ = ObClockGenerator::getClock();
   TRANS_LOG(TRACE, "start_access", K(ret), K(data_scn.support_branch()), K(data_scn), KPC(this));
   common::ObTraceIdAdaptor trace_id;
@@ -8223,6 +8225,62 @@ int ObPartTransCtx::end_access()
                       OB_ID(pending), pending_write,
                       OB_ID(ref), get_ref(),
                       OB_ID(tid), get_itid() + 1);
+  return ret;
+}
+
+int ObPartTransCtx::check_pending_log_overflow(const int64_t stmt_timeout)
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_LOCAL_RETRY_US = 1 * 1000 * 1000; // 1s
+  const int64_t LOCAL_RETRY_INTERVAL_US = 50 * 1000;  // 50ms
+
+  if (OB_SUCC(ret) && ATOMIC_LOAD(&has_extra_log_cb_group_)) {
+    const int64_t private_buffer_size = GCONF._private_buffer_size;
+    if (private_buffer_size > 0 && private_buffer_size <= 2 * 1024 * 1024) {
+      const int64_t start_wait_us = ObTimeUtility::current_time();
+      int64_t cur_us = start_wait_us;
+      int64_t busy_cb_cnt = 0;
+      int64_t extra_cb_group_cnt = 0;
+      while (get_pending_log_size()
+             > 4 * ObTxLogCbGroup::MAX_LOG_CB_COUNT_IN_GROUP * 2 * 1024 * 1024) {
+        {
+          ObSpinLockGuard guard(log_cb_lock_);
+          busy_cb_cnt = busy_cbs_.get_size();
+          extra_cb_group_cnt = extra_cb_group_list_.get_size();
+          if (free_cbs_.is_empty() && ls_tx_ctx_mgr_->get_log_cb_pool_mgr().is_all_busy()) {
+            ret = OB_TX_PENDING_LOG_OVERFLOW;
+            if (REACH_COUNT_PER_SEC(3) && REACH_TIME_INTERVAL(100 * 1000)) {
+              TRANS_LOG(WARN, "too may pending log", K(ret), K(free_cbs_.get_size()),
+                        K(extra_cb_group_cnt), K(busy_cb_cnt), KPC(this));
+            }
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
+
+        cur_us = ObTimeUtility::current_time();
+
+        if (cur_us >= stmt_timeout) {
+          TRANS_LOG(INFO, "retry to wait log cb until stmt timeout", K(ret), K(stmt_timeout),
+                    K(busy_cb_cnt), K(extra_cb_group_cnt), K(start_wait_us), KPC(this));
+          ret = OB_TIMEOUT;
+        }
+
+        if (OB_TX_PENDING_LOG_OVERFLOW!= ret) {
+          break;
+        } else {
+          if (cur_us - start_wait_us > MAX_LOCAL_RETRY_US) {
+            TRANS_LOG(INFO, "retry to wait log cb with a long time", K(ret), K(stmt_timeout),
+                      K(busy_cb_cnt), K(extra_cb_group_cnt), K(start_wait_us), K(MAX_LOCAL_RETRY_US),
+                      KPC(this));
+            break;
+          }
+          usleep(LOCAL_RETRY_INTERVAL_US);
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

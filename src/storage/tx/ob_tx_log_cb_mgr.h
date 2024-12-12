@@ -67,6 +67,7 @@ private:
 
   enum SyncSizeHistoryFlag
   {
+    UNKNOWN = 0,
     NO_CHANGE = -1,
     EXPAND = -2,
     SHRINK = -3
@@ -94,6 +95,7 @@ private:
   int check_sync_size_increased_(int64_t &expand_cnt, int64_t &sync_size_increased_cnt);
   int push_back_sync_size_history_(const int64_t sync_size, SyncSizeHistoryFlag his_flag);
   int print_sync_size_history_();
+  void clear_sync_size_history_();
 
   int cal_expected_log_cb_pool_cnt_(int64_t &expectd_pool_cnt);
 
@@ -102,13 +104,15 @@ private:
   ObLSID ls_id_;
   TransModulePageAllocator allocator_;
 
-  common::SpinRWLock rw_lock_;
+  common::SpinRWLock pool_list_rw_lock_;
   TxLogCbPoolList pool_list_;
   bool allow_expand_;
 
+  common::SpinRWLock sync_size_his_lock_;
   int64_t sync_size_history_[MAX_SYNC_SIZE_HISTORY_RECORD_SIZE * 2];
 
   int64_t ls_occupying_cnt_;
+  int64_t acquire_extra_log_cb_group_failed_cnt_;
 
   // modified by the read-only lock
   ObTxLogCbPool *idle_pool_ptr_;

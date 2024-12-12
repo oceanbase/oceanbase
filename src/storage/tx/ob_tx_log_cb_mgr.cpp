@@ -28,6 +28,7 @@ int ObTxLogCbPoolMgr::init(const int64_t tenant_id, const ObLSID ls_id)
     ret = OB_INIT_TWICE;
     TRANS_LOG(WARN, "init twice", K(ret), KPC(this));
   } else {
+    clear_sync_size_history_();
     allocator_.set_tenant_id(tenant_id);
     ls_id_ = ls_id;
     ATOMIC_STORE(&is_inited_, true);
@@ -41,8 +42,10 @@ void ObTxLogCbPoolMgr::reset()
   ATOMIC_STORE(&is_inited_, false);
   ATOMIC_STORE(&idle_pool_ptr_, nullptr);
   ATOMIC_STORE(&ls_occupying_cnt_, 0);
+  ATOMIC_STORE(&acquire_extra_log_cb_group_failed_cnt_, 0);
+  clear_sync_size_history_();
   {
-    SpinWLockGuard guard(rw_lock_);
+    SpinWLockGuard guard(pool_list_rw_lock_);
     ObTxLogCbPool *pool_ptr = nullptr;
     while (OB_NOT_NULL(pool_ptr = pool_list_.remove_first())) {
       // TODO check
@@ -61,14 +64,14 @@ int ObTxLogCbPoolMgr::clear_log_cb_pool(const bool for_replay)
   ATOMIC_STORE(&allow_expand_, false);
 
   if (OB_SUCC(ret) && for_replay) {
-    SpinRLockGuard guard(rw_lock_);
+    SpinRLockGuard guard(pool_list_rw_lock_);
     if (pool_list_.is_empty()) {
       ret = OB_EMPTY_RANGE;
     }
   }
 
   if (OB_SUCC(ret)) {
-    SpinWLockGuard guard(rw_lock_);
+    SpinWLockGuard guard(pool_list_rw_lock_);
     ObTxLogCbPool *pool_ptr = nullptr;
     while (OB_SUCC(ret) && pool_list_.get_size() > 0) {
       if (OB_ISNULL(pool_ptr = pool_list_.remove_first())) {
@@ -86,6 +89,8 @@ int ObTxLogCbPoolMgr::clear_log_cb_pool(const bool for_replay)
       }
     }
   }
+
+  clear_sync_size_history_();
 
   return ret;
 }
@@ -110,7 +115,7 @@ int ObTxLogCbPoolMgr::switch_to_leader(const int64_t active_tx_cnt)
   if (OB_SUCC(ret)) {
     int64_t pool_list_size = 0;
     {
-      SpinRLockGuard guard(rw_lock_);
+      SpinRLockGuard guard(pool_list_rw_lock_);
       const int64_t pool_list_size = pool_list_.get_size();
     }
     if (target_log_pool_cnt >= pool_list_size) {
@@ -128,6 +133,9 @@ int ObTxLogCbPoolMgr::switch_to_leader(const int64_t active_tx_cnt)
   return ret;
 }
 
+#ifdef ENABLE_DEBUG_LOG
+ERRSIM_POINT_DEF(EN_ADJUST_TX_LOG_CB_POOL)
+#endif
 int ObTxLogCbPoolMgr::adjust_log_cb_pool(const int64_t active_tx_cnt)
 {
   int ret = OB_SUCCESS;
@@ -135,6 +143,15 @@ int ObTxLogCbPoolMgr::adjust_log_cb_pool(const int64_t active_tx_cnt)
   int estimated_ret = OB_SUCCESS;
   int64_t expected_pool_cnt = -1;
   int64_t limit_pool_cnt = -1;
+
+#ifdef ENABLE_DEBUG_LOG
+  ret = EN_ADJUST_TX_LOG_CB_POOL;
+  if (ret != OB_SUCCESS) {
+    TRANS_LOG(WARN, "adjust tx log cb pool", K(ret), K(active_tx_cnt), KPC(this));
+  }
+#endif
+
+  SpinWLockGuard w_lock_guard(sync_size_his_lock_);
 
   const int64_t start_estimated_time = ObTimeUtility::fast_current_time();
   int64_t total_synced_size = 0;
@@ -162,7 +179,7 @@ int ObTxLogCbPoolMgr::adjust_log_cb_pool(const int64_t active_tx_cnt)
   // ::oceanbase::lib::get_tenant_label_memory(MTL_ID(), ObLabel &label, common::ObLabelItem &item);
 
   if (OB_SUCC(ret)) {
-    SpinRLockGuard guard(rw_lock_);
+    SpinRLockGuard guard(pool_list_rw_lock_);
     pool_list_size = pool_list_.get_size();
     DLIST_FOREACH(pool_iter, pool_list_)
     {
@@ -235,6 +252,11 @@ int ObTxLogCbPoolMgr::adjust_log_cb_pool(const int64_t active_tx_cnt)
     if (pool_list_size == 0) {
       expected_pool_float_cnt = ObTxLogCbGroup::ACTIVE_TX_DEFAULT_LOG_GROUP_COUNT * active_tx_cnt
                                 * 1.0 / ObTxLogCbPool::MAX_LOG_CB_GROUP_COUNT_IN_POOL;
+      if (expected_pool_float_cnt <= 0.0
+          && ATOMIC_LOAD(&acquire_extra_log_cb_group_failed_cnt_)
+                 > ObTxLogCbPool::MAX_LOG_CB_GROUP_COUNT_IN_POOL / 4) {
+        expected_pool_float_cnt = 1.0;
+      }
     } else if (cur_group_occupy_percent >= max_group_occupy_percent
                || cur_group_occupy_percent <= min_group_occupy_percent) {
       expected_pool_float_cnt = total_occupied_time / expected_group_occupy_percent
@@ -265,7 +287,7 @@ int ObTxLogCbPoolMgr::adjust_log_cb_pool(const int64_t active_tx_cnt)
               : pool_list_size - expected_pool_cnt;
       int64_t iter_cnt = 0;
 
-      SpinWLockGuard guard(rw_lock_);
+      SpinWLockGuard guard(pool_list_rw_lock_);
       DLIST_FOREACH_REMOVESAFE_X(
           curr, pool_list_, removed_cnt < actual_need_remove_cnt && iter_cnt < MAX_ITER_POOL_CNT)
       {
@@ -277,10 +299,14 @@ int ObTxLogCbPoolMgr::adjust_log_cb_pool(const int64_t active_tx_cnt)
         }
         iter_cnt++;
       }
+
+      if (removed_cnt > 0) {
+        sync_his_flag = SyncSizeHistoryFlag::SHRINK;
+      }
     }
 
     TRANS_LOG(INFO, "[LogCbPool Adjust] cal expected pool count", K(ret), K(estimated_ret),
-              K(expected_pool_cnt), K(expected_pool_float_cnt), K(cur_group_occupy_percent),
+              K(expected_pool_cnt), K(expected_pool_float_cnt), K(active_tx_cnt),K(acquire_extra_log_cb_group_failed_cnt_), K(cur_group_occupy_percent),
               K(max_group_occupy_percent), K(pool_list_size), K(sync_his_flag));
   }
 
@@ -299,6 +325,8 @@ int ObTxLogCbPoolMgr::adjust_log_cb_pool(const int64_t active_tx_cnt)
             K(total_occupied_count), K(total_occupied_time), K(total_syncing_size),
             K(total_occpying_size), K(aver_adjust_interval), K(sync_his_flag), KPC(this));
   (void)print_sync_size_history_();
+
+  ATOMIC_STORE(&acquire_extra_log_cb_group_failed_cnt_, 0);
 
   return ret;
 }
@@ -331,6 +359,8 @@ int ObTxLogCbPoolMgr::acquire_idle_log_cb_group(ObTxLogCbGroup *&group_ptr, ObPa
 
   if (OB_SUCC(ret)) {
     ATOMIC_INC(&ls_occupying_cnt_);
+  } else if (OB_TX_NOLOGCB == ret) {
+    ATOMIC_INC(&acquire_extra_log_cb_group_failed_cnt_);
   }
   TRANS_LOG(DEBUG, "finish to acquire_log_cb_group", K(ret), KPC(group_ptr), KPC(tx_ctx));
 
@@ -339,11 +369,12 @@ int ObTxLogCbPoolMgr::acquire_idle_log_cb_group(ObTxLogCbGroup *&group_ptr, ObPa
 
 bool ObTxLogCbPoolMgr::is_all_busy()
 {
-  SpinRLockGuard r_guard(rw_lock_);
+  SpinRLockGuard r_guard(pool_list_rw_lock_);
 
-  return pool_list_.get_size() > 0
-         && ATOMIC_LOAD(&ls_occupying_cnt_)
-                == pool_list_.get_size() * ObTxLogCbPool::MAX_LOG_CB_GROUP_COUNT_IN_POOL;
+  return pool_list_.get_size() == 0
+         || (pool_list_.get_size() > 0
+             && ATOMIC_LOAD(&ls_occupying_cnt_)
+                    == pool_list_.get_size() * ObTxLogCbPool::MAX_LOG_CB_GROUP_COUNT_IN_POOL);
 }
 
 int ObTxLogCbPoolMgr::append_new_log_cb_pool_()
@@ -354,7 +385,7 @@ int ObTxLogCbPoolMgr::append_new_log_cb_pool_()
   if (OB_FAIL(alloc_log_cb_pool_(log_cb_alloc_ptr))) {
     TRANS_LOG(WARN, "alloc a log cb pool failed", K(ret), KPC(log_cb_alloc_ptr), KPC(this));
   } else {
-    SpinWLockGuard guard(rw_lock_);
+    SpinWLockGuard guard(pool_list_rw_lock_);
     if (false == pool_list_.add_last(log_cb_alloc_ptr)) {
       ret = OB_EAGAIN;
       TRANS_LOG(WARN, "push back into pool_list failed", K(ret), KPC(log_cb_alloc_ptr), KPC(this));
@@ -436,7 +467,7 @@ int ObTxLogCbPoolMgr::iter_idle_pool_(ObTxLogCbPoolRefGuard &ref_guard)
   }
 
   if (!ref_guard.is_valid()) {
-    SpinRLockGuard guard(rw_lock_);
+    SpinRLockGuard guard(pool_list_rw_lock_);
     ObTxLogCbPool *tmp_idle_pool_ptr = ATOMIC_LOAD(&idle_pool_ptr_);
     ObTxLogCbPool *origin_idle_pool_ptr = tmp_idle_pool_ptr;
 
@@ -506,6 +537,12 @@ int ObTxLogCbPoolMgr::push_back_sync_size_history_(const int64_t sync_size,
   return ret;
 }
 
+void ObTxLogCbPoolMgr::clear_sync_size_history_()
+{
+  SpinWLockGuard w_lock_guard(sync_size_his_lock_);
+  memset(sync_size_history_, 0, sizeof(int64_t) * MAX_SYNC_SIZE_HISTORY_RECORD_SIZE * 2);
+}
+
 int ObTxLogCbPoolMgr::print_sync_size_history_()
 {
   int ret = OB_SUCCESS;
@@ -544,7 +581,7 @@ int ObTxLogCbPoolMgr::cal_expected_log_cb_pool_cnt_(int64_t &expected_pool_cnt)
   expected_pool_cnt = -1;
 
   if (OB_SUCC(ret)) {
-    SpinRLockGuard guard(rw_lock_);
+    SpinRLockGuard guard(pool_list_rw_lock_);
     DLIST_FOREACH(cur_pool, pool_list_) {}
   }
 

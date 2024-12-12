@@ -852,6 +852,8 @@ void ObQueryRetryCtrl::short_wait_retry_proc(ObRetryParam &v)
       start_px_worker_insufficient_retry_wait_event(v.session_ ,v.ctx_);
     } else if (OB_GTS_NOT_READY == v.err_ || OB_GTI_NOT_READY == v.err_) {
       start_gts_not_ready_retry_wait_event(v.session_ ,v.err_);
+    } else if (OB_TX_PENDING_LOG_OVERFLOW == v.err_) {
+      start_log_cb_not_ready_retry_wait_event(v.session_, v.err_);
     } else if ( OB_REPLICA_NOT_READABLE == v.err_) {
       start_replica_not_readable_retry_wait_event(v.session_);
     }
@@ -1162,6 +1164,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("TRX",      OB_TRY_LOCK_ROW_CONFLICT,           try_lock_row_conflict_proc, inner_try_lock_row_conflict_proc,                     nullptr);
   ERR_RETRY_FUNC("TRX",      OB_TRANSACTION_SET_VIOLATION,       trx_set_violation_proc,     trx_set_violation_proc,                               nullptr);
   ERR_RETRY_FUNC("TRX",      OB_TRANS_CANNOT_SERIALIZE,          trx_can_not_serialize_proc, trx_can_not_serialize_proc,                           nullptr);
+  ERR_RETRY_FUNC("TRX",      OB_TX_PENDING_LOG_OVERFLOW,         short_wait_retry_proc,      short_wait_retry_proc,                                ObDASRetryCtrl::task_network_retry_proc);
   ERR_RETRY_FUNC("TRX",      OB_GTS_NOT_READY,                   short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
   ERR_RETRY_FUNC("TRX",      OB_GTI_NOT_READY,                   short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
   ERR_RETRY_FUNC("TRX",      OB_TRANS_WEAK_READ_VERSION_NOT_READY, short_wait_retry_proc,    short_wait_retry_proc,                                nullptr);
@@ -1376,6 +1379,15 @@ void ObQueryRetryCtrl::start_gts_not_ready_retry_wait_event(ObSQLSessionInfo &se
         error_code,
         session.get_retry_info_for_update().get_retry_ash_diag_info().sys_ls_leader_addr_,
         session.get_retry_info_for_update().get_retry_ash_diag_info().admitted_px_workers_number_);
+}
+
+void ObQueryRetryCtrl::start_log_cb_not_ready_retry_wait_event(ObSQLSessionInfo &session, const int error_code)
+{
+  GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
+        ObWaitEventIds::TX_PENDING_LOG_OVERFLOW_RETRY_WAIT,
+        error_code,
+        session.get_retry_info_for_update().get_retry_ash_diag_info().ls_id_,
+        0);
 }
 
 
