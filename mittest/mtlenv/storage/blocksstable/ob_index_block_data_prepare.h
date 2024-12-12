@@ -593,13 +593,19 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
   ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
   ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
   param.ddl_scn_.set_min();
-  param.filled_tx_scn_.set_min();
   param.contain_uncommitted_row_ = false;
   param.encrypt_id_ = res.encrypt_id_;
   param.master_key_id_ = res.master_key_id_;
   param.table_backup_flag_.reset();
   param.table_shared_flag_.reset();
-  param.filled_tx_scn_ = table_key.get_end_scn();
+  param.filled_tx_scn_ = table_key.is_major_sstable() ? SCN::min_scn() : table_key.get_end_scn();
+  param.tx_data_recycle_scn_.set_min();
+  param.sstable_logic_seq_ = 0;
+  param.column_group_cnt_ = 1;
+  param.full_column_cnt_ = 0;
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
+  param.co_base_snapshot_version_ = 0;
   MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   if (merge_type_ == MAJOR_MERGE) {
     OK(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
@@ -1124,12 +1130,20 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
   param.nested_size_ = res.nested_size_;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.ddl_scn_.convert_from_ts(ObTimeUtility::current_time());
-  param.filled_tx_scn_.set_min();
   param.contain_uncommitted_row_ = false;
   param.encrypt_id_ = res.encrypt_id_;
   param.master_key_id_ = res.master_key_id_;
   param.table_backup_flag_.reset();
   param.table_shared_flag_.reset();
+  param.filled_tx_scn_ = table_key.is_major_sstable() ? SCN::min_scn() : table_key.get_end_scn();
+  param.tx_data_recycle_scn_.set_min();
+  param.sstable_logic_seq_ = 0;
+  param.column_group_cnt_ = 1;
+  param.full_column_cnt_ = 0;
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
+  param.co_base_snapshot_version_ = 0;
+
   ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
   ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
   if (param.table_key_.is_co_sstable() && param.column_group_cnt_ <= 1) {

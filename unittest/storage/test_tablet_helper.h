@@ -64,6 +64,7 @@ inline void TestTabletHelper::prepare_sstable_param(
     const share::schema::ObTableSchema &table_schema,
     ObTabletCreateSSTableParam &param)
 {
+  param.set_init_value_for_column_store_();
   const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   param.table_key_.tablet_id_ = tablet_id;
@@ -91,12 +92,19 @@ inline void TestTabletHelper::prepare_sstable_param(
   param.occupy_size_ = 0;
   param.ddl_scn_.set_min();
   param.filled_tx_scn_.set_min();
+  param.tx_data_recycle_scn_.set_min();
   param.original_size_ = 0;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
   param.table_backup_flag_.reset();
   param.table_shared_flag_.reset();
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
+  param.row_count_ = 0;
+  param.sstable_logic_seq_ = 0;
+  param.nested_offset_ = 0;
+  param.nested_size_ = 0;
 }
 
 inline int TestTabletHelper::create_tablet(

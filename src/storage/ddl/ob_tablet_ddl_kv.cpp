@@ -148,7 +148,7 @@ int ObDDLMemtable::init_sstable_param(
           sstable_param.table_key_.table_type_ = ObITable::TableType::DDL_MEM_CG_SSTABLE;
           sstable_param.rowkey_column_cnt_ = 0;
           sstable_param.column_cnt_ = 1;
-        } else { // co sstable with all cg or rowkey cg
+        } else {
           sstable_param.table_key_.table_type_ = ObITable::TableType::DDL_MEM_CO_SSTABLE;
           sstable_param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
 
@@ -196,9 +196,28 @@ int ObDDLMemtable::init_sstable_param(
       sstable_param.use_old_macro_block_count_ = 0; // all new, no reuse
       sstable_param.index_blocks_cnt_ = 0; // index macro block count, the index is in memory, so be 0.
       sstable_param.other_block_ids_.reset(); // other blocks contains only index macro blocks now, so empty.
-      sstable_param.filled_tx_scn_ = table_key.get_end_scn();
+      sstable_param.filled_tx_scn_ = table_key.is_major_sstable() ? SCN::min_scn() : table_key.get_end_scn();
+      sstable_param.tx_data_recycle_scn_.set_min();
+      sstable_param.table_backup_flag_.reset();
+      sstable_param.table_shared_flag_.reset();
+      sstable_param.sstable_logic_seq_ = 0;
+      sstable_param.row_count_ = 0;
+      sstable_param.recycle_version_ = 0;
+      sstable_param.root_macro_seq_ = 0;
+      sstable_param.nested_size_ = 0;
+      sstable_param.nested_offset_ = 0;
+      sstable_param.data_blocks_cnt_ = 0;
+      sstable_param.micro_block_cnt_ = 0;
+      sstable_param.occupy_size_ = 0;
+      sstable_param.original_size_ = 0;
+      sstable_param.progressive_merge_round_ = 0;
+      sstable_param.progressive_merge_step_ = 0;
+      sstable_param.column_group_cnt_ = 1;
+      sstable_param.co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
+      sstable_param.full_column_cnt_ = 0;
+      sstable_param.is_co_table_without_cgs_ = false;
+      sstable_param.co_base_snapshot_version_ = 0;
     }
-
     if (OB_SUCC(ret)) {
       // set root block for data tree
       if (OB_FAIL(sstable_param.root_block_addr_.set_mem_addr(0/*offset*/, root_block_size/*size*/))) {
