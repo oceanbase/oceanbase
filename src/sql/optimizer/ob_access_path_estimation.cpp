@@ -2010,7 +2010,7 @@ int ObAccessPathEstimation::storage_estimate_range_rowcount(ObOptimizerContext &
     }
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || need_fallback) {
   } else if (OB_ISNULL(ranges)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ranges is null", K(ret));

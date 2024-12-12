@@ -1889,7 +1889,7 @@ int ObTransformSimplifySubquery::check_const_select(const ObSelectStmt &stmt,
 int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
                                                              ObRawExpr *&expr,
                                                              ObNotNullContext *not_null_ctx,
-                                                             bool is_bool_expr,
+                                                             bool used_as_condition,
                                                              bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -1901,7 +1901,7 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
   } else if (IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type())) {
     if (OB_FAIL(ObTransformUtils::check_can_trans_any_all_as_exists(ctx_,
                                                                     expr,
-                                                                    is_bool_expr,
+                                                                    used_as_condition,
                                                                     true,
                                                                     is_valid))) {
       LOG_WARN("failed to check in can tras as exists", K(ret));
@@ -1965,11 +1965,14 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
     }
   } else {
     //check children
+    used_as_condition = (expr->get_expr_type() == T_OP_AND ||
+                         expr->get_expr_type() == T_OP_OR ||
+                         expr->get_expr_type() == T_OP_BOOL) ? used_as_condition : false;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(stmt,
                                                          expr->get_param_expr(i),
                                                          not_null_ctx,
-                                                         false,
+                                                         used_as_condition,
                                                          is_happened)))) {
         LOG_WARN("failed to try_transform_any_all for param", K(ret));
       } else {
@@ -2104,7 +2107,7 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(
                                  ObDMLStmt *stmt,
                                  ObIArray<ObRawExpr* > &exprs,
                                  ObNotNullContext *not_null_cxt,
-                                 bool is_bool_expr,
+                                 bool used_as_condition,
                                  bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -2113,7 +2116,7 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(
     if (OB_FAIL(try_trans_any_all_as_exists(stmt,
                                             exprs.at(i),
                                             not_null_cxt,
-                                            is_bool_expr,
+                                            used_as_condition,
                                             is_happened))) {
       LOG_WARN("failed to try trans any all as exists", K(ret));
     } else {
