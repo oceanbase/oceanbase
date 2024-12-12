@@ -1080,7 +1080,7 @@ int ObMacroBlockWriter::append_row_and_hash_index(const ObDatumRow &row)
     } else {
       int64_t hash_index_size = hash_index_builder_.estimate_size(true);
       if (OB_UNLIKELY(!micro_writer_->has_enough_space_for_hash_index(hash_index_size))) {
-        ret = OB_BUF_NOT_ENOUGH;
+        hash_index_builder_.reset();
       } else if (OB_FAIL(hash_index_builder_.add(row))) {
         if (ret != OB_NOT_SUPPORTED) {
           STORAGE_LOG(WARN, "Failed to append hash index", K(ret), K(row));
