@@ -871,7 +871,7 @@ void ObTxDesc::implicit_start_tx_()
   if (parts_.count() > 0 && state_ == ObTxDesc::State::IDLE) {
     state_ = ObTxDesc::State::IMPLICIT_ACTIVE;
     active_ts_ = ObClockGenerator::getClock();
-    expire_ts_ = active_ts_ + timeout_us_;
+    expire_ts_ = get_expire_ts();
     active_scn_ = get_tx_seq();
     state_change_flags_.mark_all();
     TX_STAT_START_INC;
@@ -885,8 +885,12 @@ int64_t ObTxDesc::get_expire_ts() const
    * because create TxCtx (which need acquire tx expire_ts) happens before
    * tx state switch to IMPLICIT_ACTIVE
    */
-  return expire_ts_ == INT64_MAX ?
-    ObClockGenerator::getClock() + timeout_us_ : expire_ts_;
+  int64_t ret = expire_ts_;
+  if (expire_ts_ == INT64_MAX || expire_ts_ <=0) { // unset
+    const int64_t start_ts = active_ts_ <= 0 ? ObClockGenerator::getClock() : active_ts_;
+    ret = (MAX_TRANS_TIMEOUT_US - start_ts) <= timeout_us_ ? MAX_TRANS_TIMEOUT_US : (start_ts + timeout_us_);
+  }
+  return ret;
 }
 
 bool ObTxDesc::is_dup_ls_modified() const

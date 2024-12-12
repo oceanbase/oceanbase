@@ -715,6 +715,8 @@ private:
     DLink *prev_;
   } alloc_link_;
 #endif
+  static constexpr int16_t MAX_BRANCH_ID_VALUE = ~(1 << 15) & 0xFFFF; // 15bits
+  static constexpr int64_t MAX_TRANS_TIMEOUT_US = INT64_MAX - 1_day;
 private:
   /* these routine should be called by txn-service only to avoid corrupted state */
   void reset();
