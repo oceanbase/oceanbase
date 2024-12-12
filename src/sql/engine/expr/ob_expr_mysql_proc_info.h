@@ -64,6 +64,9 @@ private:
                                   ObDatum &expr_datum,
                                   uint64_t routine_id,
                                   uint64_t field_id);
+  static int get_routine_info(ObSQLSessionInfo *session,
+                              uint64_t routine_id,
+                              const ObRoutineInfo *&routine_info);
   static int set_return_result(const ObExpr &expr,
                                ObEvalCtx &ctx,
                                ObDatum &expr_datum,

@@ -16,6 +16,8 @@
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/ob_spi.h"
+#include "pl/ob_pl_stmt.h"
 #include "share/schema/ob_schema_printer.h"
 
 using namespace oceanbase::common;
@@ -114,13 +116,36 @@ int ObExprMysqlProcInfo::extract_create_node_from_routine_info(ObIAllocator &all
   return ret;
 }
 
+int ObExprMysqlProcInfo::get_routine_info(ObSQLSessionInfo *session,
+                                          uint64_t routine_id,
+                                          const ObRoutineInfo *&routine_info)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = OB_INVALID_ID;
+ObSchemaGetterGuard schema_guard;
+
+  CK (OB_NOT_NULL(session));
+  CK (OB_NOT_NULL(GCTX.schema_service_));
+  OX (tenant_id = pl::get_tenant_id_by_object_id(routine_id));
+  OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+  OZ (schema_guard.get_routine_info(tenant_id, routine_id, routine_info));
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(OB_ISNULL(routine_info))) { //refresh schema try again
+    OZ (ObSPIService::force_refresh_schema(tenant_id));
+    OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+    OZ (schema_guard.get_routine_info(tenant_id, routine_id, routine_info));
+  }
+  CK (OB_NOT_NULL(routine_info));
+  return ret;
+}
+
 int ObExprMysqlProcInfo::get_param_list_info(const ObExpr &expr,
                                              ObEvalCtx &ctx,
                                              ObDatum &expr_datum,
                                              uint64_t routine_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_id = OB_INVALID_ID;
   const ObRoutineInfo *routine_info = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   ObSchemaGetterGuard &schema_guard = *ctx.exec_ctx_.get_sql_ctx()->schema_guard_;
@@ -130,10 +155,7 @@ int ObExprMysqlProcInfo::get_param_list_info(const ObExpr &expr,
   ObIAllocator &calc_alloc = alloc_guard.get_allocator();
   ParseNode *create_node = nullptr;
 
-  CK (OB_NOT_NULL(session));
-  OX (tenant_id = session->get_effective_tenant_id());
-  OZ (schema_guard.get_routine_info(tenant_id, routine_id, routine_info));
-  CK (OB_NOT_NULL(routine_info))
+  OZ (get_routine_info(session, routine_id, routine_info));
   OZ (exec_env.init(routine_info->get_exec_env()));
 
   if (OB_FAIL(ret)) {
@@ -204,18 +226,13 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
   int ret = OB_SUCCESS;
   char *returns_buf = NULL;
   int64_t pos = 0;
-  uint64_t tenant_id = OB_INVALID_ID;
   const ObRoutineInfo *routine_info = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-  ObSchemaGetterGuard &schema_guard = *ctx.exec_ctx_.get_sql_ctx()->schema_guard_;
 
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
   ObIAllocator &calc_alloc = alloc_guard.get_allocator();
 
-  CK (OB_NOT_NULL(session));
-  OX (tenant_id = session->get_effective_tenant_id());
-  OZ (schema_guard.get_routine_info(tenant_id, routine_id, routine_info));
-  CK (OB_NOT_NULL(routine_info))
+  OZ (get_routine_info(session, routine_id, routine_info));
 
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(NULL == (returns_buf = static_cast<char *>(calc_alloc.alloc(OB_MAX_VARCHAR_LENGTH))))) {
@@ -252,20 +269,15 @@ int ObExprMysqlProcInfo::get_body_info(const ObExpr &expr,
                                        uint64_t routine_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_id = OB_INVALID_ID;
   const ObRoutineInfo *routine_info = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-  ObSchemaGetterGuard &schema_guard = *ctx.exec_ctx_.get_sql_ctx()->schema_guard_;
 
   sql::ObExecEnv exec_env;
   ParseNode *create_node = nullptr;
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
   ObIAllocator &calc_alloc = alloc_guard.get_allocator();
 
-  CK (OB_NOT_NULL(session));
-  OX (tenant_id = session->get_effective_tenant_id());
-  OZ (schema_guard.get_routine_info(tenant_id, routine_id, routine_info));
-  CK (OB_NOT_NULL(routine_info))
+  OZ (get_routine_info(session, routine_id, routine_info));
   OZ (exec_env.init(routine_info->get_exec_env()));
 
   if (OB_FAIL(ret)) {
@@ -314,17 +326,12 @@ int ObExprMysqlProcInfo::get_info_by_field_id(const ObExpr &expr,
                                                     uint64_t field_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_id = OB_INVALID_ID;
   const ObRoutineInfo *routine_info = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-  ObSchemaGetterGuard &schema_guard = *ctx.exec_ctx_.get_sql_ctx()->schema_guard_;
 
   sql::ObExecEnv exec_env;
 
-  CK (OB_NOT_NULL(session));
-  OX (tenant_id = session->get_effective_tenant_id());
-  OZ (schema_guard.get_routine_info(tenant_id, routine_id, routine_info));
-  CK (OB_NOT_NULL(routine_info))
+  OZ (get_routine_info(session, routine_id, routine_info));
   OZ (exec_env.init(routine_info->get_exec_env()));
 
   if (OB_SUCC(ret)) {
