@@ -400,6 +400,12 @@ int ObTabletSplitMdsUserData::get_tsc_split_info(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported such op", K(ret), KPC(this));
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!(split_info.is_split_dst_with_partkey() || split_info.is_split_dst_without_partkey()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tsc split info", K(ret), K(tablet_id), K(ls.get_ls_id()), K(split_info));
+  }
   return ret;
 }
 

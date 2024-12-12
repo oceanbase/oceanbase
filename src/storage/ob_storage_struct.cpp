@@ -737,10 +737,19 @@ ObTabletSplitTscInfo::ObTabletSplitTscInfo()
 {
 }
 
-bool ObTabletSplitTscInfo::is_valid() const
+bool ObTabletSplitTscInfo::is_split_dst_with_partkey() const
 {
   return start_partkey_.is_valid()
       && end_partkey_.is_valid()
+      && src_tablet_handle_.is_valid()
+      && split_type_ < ObTabletSplitType::MAX_TYPE;
+}
+
+// e.g., lob split dst tablet
+bool ObTabletSplitTscInfo::is_split_dst_without_partkey() const
+{
+  return !start_partkey_.is_valid()
+      && !end_partkey_.is_valid()
       && src_tablet_handle_.is_valid()
       && split_type_ < ObTabletSplitType::MAX_TYPE;
 }
@@ -753,23 +762,6 @@ void ObTabletSplitTscInfo::reset()
   split_type_ = ObTabletSplitType::MAX_TYPE;
   split_cnt_ = 0;
   partkey_is_rowkey_prefix_ = false;
-}
-
-int ObTabletSplitTscInfo::assign(const ObTabletSplitTscInfo &param)
-{
-  int ret = OB_SUCCESS;
-  if (!param.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(param));
-  } else {
-    start_partkey_ = param.start_partkey_;
-    end_partkey_ = param.end_partkey_;
-    src_tablet_handle_ = param.src_tablet_handle_;
-    split_type_ = param.split_type_;
-    split_cnt_ = param.split_cnt_;
-    partkey_is_rowkey_prefix_ = param.partkey_is_rowkey_prefix_;
-  }
-  return ret;
 }
 
 int ObCreateSSTableParamExtraInfo::assign(const ObCreateSSTableParamExtraInfo &other)

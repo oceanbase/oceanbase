@@ -93,7 +93,7 @@ public:
   // for split dst data tablet
   int partkey_compare(const blocksstable::ObDatumRowkey &rowkey, const ObITableReadInfo &rowkey_read_info, const ObIArray<uint64_t> &partkey_projector, int &cmp_ret) const;
 
-  // for split dst data/local index tablet
+  // for split dst data/lob/local index tablet
   int get_tsc_split_info(
     const ObTabletID &tablet_id,
     ObLS &ls,
