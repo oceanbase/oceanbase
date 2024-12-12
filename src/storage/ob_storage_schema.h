@@ -175,14 +175,26 @@ public:
 struct ObUpdateCSReplicaSchemaParam
 {
 public:
+  enum UpdateType : uint8_t {
+    REFRESH_TABLE_SCHEMA = 0,  // storage schema is simplified, need get storage schema from table schema
+    TRUNCATE_COLUMN_ARRAY = 1, // column array in tablet storage schema is newer than last row store major, need truncate
+    MAX_TYPE
+  };
+public:
   ObUpdateCSReplicaSchemaParam();
   ~ObUpdateCSReplicaSchemaParam();
-  int init(const ObTablet &tablet);
+  int init(
+      const ObTabletID &tablet_id,
+      const int64_t major_column_cnt,
+      const UpdateType update_type);
   bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id), K_(major_column_cnt), K_(is_inited));
+  inline bool need_refresh_schema() const { return REFRESH_TABLE_SCHEMA == update_type_; }
+  inline bool need_truncate_column_array() const { return TRUNCATE_COLUMN_ARRAY == update_type_; }
+  TO_STRING_KV(K_(tablet_id), K_(major_column_cnt), K_(update_type), K_(is_inited));
 public:
   ObTabletID tablet_id_;
   int64_t major_column_cnt_;
+  UpdateType update_type_;
   bool is_inited_;
 };
 

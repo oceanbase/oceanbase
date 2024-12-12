@@ -400,6 +400,7 @@ int ObStorageColumnGroupSchema::copy_from(ObIArray<ObColDesc> &column_ids,
 ObUpdateCSReplicaSchemaParam::ObUpdateCSReplicaSchemaParam()
   : tablet_id_(),
     major_column_cnt_(0),
+    update_type_(UpdateType::MAX_TYPE),
     is_inited_(false)
 {
 
@@ -410,25 +411,23 @@ ObUpdateCSReplicaSchemaParam::~ObUpdateCSReplicaSchemaParam()
 
 }
 
-int ObUpdateCSReplicaSchemaParam::init(const ObTablet &tablet)
+int ObUpdateCSReplicaSchemaParam::init(
+    const ObTabletID &tablet_id,
+    const int64_t major_column_cnt,
+    const UpdateType update_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObUpdateCSReplicaSchemaParam has been inited", K(ret), KPC(this));
-  } else if (tablet.get_last_major_column_count() < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "invalid last major column count", K(ret), K(tablet));
-  } else if (tablet.get_last_major_column_count() == 0) {
-    if (tablet.get_tablet_meta().table_store_flag_.with_major_sstable()) {
-      ret = OB_EAGAIN;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-    }
-    STORAGE_LOG(WARN, "tablet has no major sstable", K(ret), K(tablet));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() || update_type >= UpdateType::MAX_TYPE
+             || major_column_cnt <= ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tablet_id), K(major_column_cnt), K(update_type));
   } else {
-    tablet_id_ = tablet.get_tablet_meta().tablet_id_;
-    major_column_cnt_ = tablet.get_last_major_column_count();
+    tablet_id_ = tablet_id;
+    major_column_cnt_ = major_column_cnt;
+    update_type_ = update_type;
     is_inited_ = true;
   }
   return ret;
@@ -438,7 +437,9 @@ bool ObUpdateCSReplicaSchemaParam::is_valid() const
 {
   return is_inited_
       && tablet_id_.is_valid()
-      && major_column_cnt_ > 0;
+      && major_column_cnt_ > ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()
+      && update_type_ >= UpdateType::REFRESH_TABLE_SCHEMA
+      && update_type_ < UpdateType::MAX_TYPE;
 }
 
 /*
@@ -582,11 +583,21 @@ int ObStorageSchema::init(
   } else if (OB_FAIL(copy_from(old_schema))) {
     STORAGE_LOG(WARN, "failed to copy from old schema", K(ret), K(old_schema));
   } else if (FALSE_IT(column_info_simplified_ = (skip_column_info || old_schema.column_info_simplified_))) {
-  } else if (OB_UNLIKELY((generate_cs_replica_cg_array && column_group_schema != nullptr)
-                      || (nullptr != update_param && !column_info_simplified_)
-                      || (nullptr != update_param && nullptr != column_group_schema))) {
+  } else if (OB_UNLIKELY(generate_cs_replica_cg_array && column_group_schema != nullptr)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument to init storage schema", K(ret), K(column_info_simplified_), K(column_group_schema), KPC(update_param));
+    STORAGE_LOG(WARN, "invalid args to init storage schema", K(ret), KPC(column_group_schema));
+  } else if (nullptr != update_param) {
+    if (OB_UNLIKELY(!update_param->is_valid() || nullptr != column_group_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid args", K(ret), K(update_param), KPC(column_group_schema));
+    } else if (OB_UNLIKELY(update_param->need_refresh_schema() && !column_info_simplified_
+                        || update_param->need_truncate_column_array() && column_info_simplified_)) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid args", K(ret), K(update_param), K(skip_column_info), K(old_schema));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else {
     allocator_ = &allocator;
     rowkey_array_.set_allocator(&allocator);
@@ -680,16 +691,46 @@ int ObStorageSchema::rebuild_column_array(
     const ObUpdateCSReplicaSchemaParam &update_param)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!update_param.is_valid() || !src_schema.is_column_info_simplified())) {
+  int64_t expected_stored_column_cnt = 0;
+  if (OB_UNLIKELY(!update_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(update_param), K(src_schema));
-  } else if (OB_FAIL(ObCSReplicaUtil::get_full_column_array_from_table_schema(allocator, update_param, src_schema, column_array_))) {
-    STORAGE_LOG(WARN, "failed to get full column array from table schema", K(ret), K(update_param));
-  } else {
-    column_info_simplified_ = false;
-    column_cnt_ = column_array_.count();
-    store_column_cnt_ = update_param.major_column_cnt_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    STORAGE_LOG(INFO, "rebuild column array from table schema", K(ret), K(update_param), K(src_schema), K_(column_array));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(update_param));
+  } else if (FALSE_IT(expected_stored_column_cnt = update_param.major_column_cnt_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt())) {
+  } else if (update_param.need_refresh_schema()) {
+    if (OB_UNLIKELY(!src_schema.is_column_info_simplified())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "src schema is not simplified", K(ret), K(src_schema));
+    } else if (OB_FAIL(ObCSReplicaUtil::get_full_column_array_from_table_schema(allocator, update_param, src_schema, column_array_))) {
+      STORAGE_LOG(WARN, "failed to get full column array from table schema", K(ret), K(update_param));
+    } else {
+      column_info_simplified_ = false;
+      column_cnt_ = column_array_.count();
+      store_column_cnt_ = expected_stored_column_cnt;
+      STORAGE_LOG(INFO, "rebuild column array from table schema", K(ret), K(update_param), K(src_schema), K_(column_array));
+    }
+  } else if (update_param.need_truncate_column_array()) {
+    const int64_t original_column_cnt = column_array_.count();
+    int64_t stored_column_cnt = 0;
+    bool finish_truncate = false;
+    for (int64_t i = 0; i < original_column_cnt; ++i) {
+      if (column_array_.at(i).is_column_stored_in_sstable()) {
+        stored_column_cnt++;
+        if (stored_column_cnt == expected_stored_column_cnt) {
+          for (int64_t j = i + 1; j < original_column_cnt; ++j) {
+            column_array_.pop_back();
+          }
+          finish_truncate = true;
+          column_cnt_ = column_array_.count();
+          store_column_cnt_ = expected_stored_column_cnt;
+          STORAGE_LOG(INFO, "truncate column array for convert co merge", K(ret), K(update_param), K_(column_array));
+          break;
+        }
+      }
+    }
+    if (!finish_truncate) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "failed to truncate column array", K(ret), K(update_param), K_(column_array));
+    }
   }
   return ret;
 }
@@ -1593,6 +1634,9 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       col_schema.meta_type_ = meta_type;
       if (OB_FAIL(datum.from_obj_enhance(col->get_orig_default_value()))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
+      } else if (ob_is_large_text(col->get_data_type()) && !datum.has_lob_header()
+              && OB_FAIL(ObLobManager::fill_lob_header(*allocator_, datum))) {
+        STORAGE_LOG(WARN, "failed to fill lob header", K(ret), K(datum));
       } else {
         col_schema.default_checksum_ = datum.checksum(0);
 #ifdef ERRSIM

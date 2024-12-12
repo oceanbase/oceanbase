@@ -1451,7 +1451,10 @@ int ObTablet::init_with_replace_members(
     } else if (old_storage_schema->is_column_info_simplified()) {
       ObUpdateCSReplicaSchemaParam param;
       ObStorageSchema *full_storage_schema = nullptr;
-      if (OB_FAIL(param.init(*this))) {
+      int64_t base_major_column_cnt = 0;
+      if (OB_FAIL(get_valid_last_major_column_count(base_major_column_cnt))) {
+        LOG_WARN("failed to get valid last major column count", K(ret), KPC(this));
+      } else if (OB_FAIL(param.init(get_tablet_id(), base_major_column_cnt, ObUpdateCSReplicaSchemaParam::REFRESH_TABLE_SCHEMA))) {
         LOG_WARN("fail to init param", K(ret), KPC(this));
       } else if (OB_FAIL(ObCSReplicaUtil::get_rebuild_storage_schema(allocator, param, *old_storage_schema, full_storage_schema))) {
         LOG_WARN("failed to get rebuild storage schema", K(ret), K(param), KPC(old_storage_schema));
@@ -6902,6 +6905,29 @@ int ObTablet::scan_mds_table_with_op(
     LOG_WARN("failed to traverse mds table", K(ret), K(tablet_id));
   } else if (CLICK_FAIL(op.finish())) {
     LOG_WARN("Fail to finish dump op", K(ret), K(tablet_id));
+  }
+  return ret;
+}
+
+int ObTablet::get_valid_last_major_column_count(int64_t &last_major_column_cnt) const
+{
+  int ret = OB_SUCCESS;
+  last_major_column_cnt = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(get_last_major_column_count() < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "invalid last major column count", K(ret), KPC(this));
+  } else if (get_last_major_column_count() == 0) {
+    if (tablet_meta_.table_store_flag_.with_major_sstable()) {
+      ret = OB_EAGAIN;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+    }
+    STORAGE_LOG(WARN, "tablet has no major sstable", K(ret), KPC(this));
+  } else {
+    last_major_column_cnt = get_last_major_column_count();
   }
   return ret;
 }

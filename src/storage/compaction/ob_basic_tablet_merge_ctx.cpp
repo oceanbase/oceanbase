@@ -1447,9 +1447,14 @@ int ObBasicTabletMergeCtx::get_convert_compaction_info()
   ObStorageSchema *schema_for_merge = nullptr;
   ObUpdateCSReplicaSchemaParam param;
   bool generate_cs_replica_cg_array = false;
+  uint64_t min_data_version = 0;
+  int64_t schema_stored_column_cnt = 0;
+  int64_t base_major_column_cnt = 0; // include 2 multi version column
 
   if (OB_FAIL(OB_UNLIKELY(EN_COMPACTION_DISABLE_CONVERT_CO))) {
     LOG_INFO("EN_COMPACTION_DISABLE_CONVERT_CO: disable convert co merge", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
   } else if (OB_FAIL(static_param_.tablet_schema_guard_.load(schema_on_tablet))) {
     LOG_WARN("failed to load schema on tablet", K(ret), KPC(tablet));
   } else if (OB_UNLIKELY(!is_convert_co_major_merge(get_merge_type()) || OB_ISNULL(schema_on_tablet) || OB_ISNULL(tablet))) {
@@ -1457,22 +1462,39 @@ int ObBasicTabletMergeCtx::get_convert_compaction_info()
     LOG_WARN("get unexpected static param", K(ret), KPC(schema_on_tablet), K_(static_param), KPC(tablet));
   } else if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(mem_ctx_.get_allocator(), schema_for_merge))) {
     LOG_WARN("failed to alloc storage schema", K(ret));
-  } else if (schema_on_tablet->is_column_info_simplified() && OB_FAIL(param.init(*tablet))) {
-    LOG_WARN("failed to init param", K(ret), KPC(tablet));
-  } else if (FALSE_IT(generate_cs_replica_cg_array = (schema_on_tablet->is_row_store() || schema_on_tablet->is_column_info_simplified() || schema_on_tablet->need_generate_cg_array()))) {
+  } else if (OB_FAIL(tablet->get_valid_last_major_column_count(base_major_column_cnt))) {
+    LOG_WARN("failed to get valid last major column count", K(ret), KPC(tablet));
+  } else if (schema_on_tablet->is_column_info_simplified()) {
+    if (OB_FAIL(param.init(tablet->get_tablet_id(), base_major_column_cnt, ObUpdateCSReplicaSchemaParam::REFRESH_TABLE_SCHEMA))) {
+      LOG_WARN("failed to init param", K(ret), KPC(tablet));
+    } else {
+      generate_cs_replica_cg_array = true;
+    }
+  } else if (OB_FAIL(schema_on_tablet->get_stored_column_count_in_sstable(schema_stored_column_cnt))) {
+    LOG_WARN("failed to get stored column count in sstable", K(ret), KPC(schema_on_tablet));
+  } else if (schema_stored_column_cnt > base_major_column_cnt) {
+    if (OB_FAIL(param.init(tablet->get_tablet_id(), base_major_column_cnt, ObUpdateCSReplicaSchemaParam::TRUNCATE_COLUMN_ARRAY))) {
+      LOG_WARN("failed to init param", K(ret), KPC(tablet));
+    } else {
+      generate_cs_replica_cg_array = true;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(generate_cs_replica_cg_array |= (schema_on_tablet->is_row_store() || schema_on_tablet->need_generate_cg_array()))) {
     // 1. storage schema is column store but simplifed, it should become not simplified before it can be used for merge
     // 2. if need generate cg array (column group cnt <= column cnt), need generate cg array from the latest column array
   } else if (OB_FAIL(schema_for_merge->init(mem_ctx_.get_allocator(), *schema_on_tablet,
                         false /*skip_column_info*/, nullptr /*column_group_schema*/, generate_cs_replica_cg_array,
-                        schema_on_tablet->is_column_info_simplified() ? &param : nullptr))) {
+                        param.is_valid() ? &param : nullptr))) {
     LOG_WARN("failed to init storage schema for convert co major merge", K(ret), K(tablet), KPC(schema_on_tablet));
   } else {
     static_param_.schema_ = schema_for_merge;
-    static_param_.data_version_ = DATA_CURRENT_VERSION;
+    static_param_.data_version_ = min_data_version;
     static_param_.is_rebuild_column_store_ = true;
     static_param_.is_schema_changed_ = true; // use MACRO_BLOCK_MERGE_LEVEL
     static_param_.merge_reason_ = ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP;
-    FLOG_INFO("[CS-Replica] get storage schema to convert co merge", "param", get_dag_param(), KPC_(static_param_.schema));
+    FLOG_INFO("[CS-Replica] get storage schema to convert co merge", K(param), K(generate_cs_replica_cg_array), "dag_param", get_dag_param(), KPC_(static_param_.schema));
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(schema_for_merge)) {
