@@ -73,7 +73,7 @@ int ObDBMSSchedJobUtils::check_is_valid_job_style(const ObString &str)
 int ObDBMSSchedJobUtils::check_is_valid_argument_num(const int64_t num)
 {
   int ret = OB_SUCCESS;
-  if (0 != num) {
+  if (0 > num) {
     ret = OB_NOT_SUPPORTED;
   }
   return ret;
@@ -124,7 +124,7 @@ int ObDBMSSchedJobUtils::check_is_valid_end_date(const int64_t start_date, const
   return ret;
 }
 
-int ObDBMSSchedJobUtils::check_is_valid_repeat_interval(const ObString &str) {
+int ObDBMSSchedJobUtils::check_is_valid_repeat_interval(const ObString &str, bool is_limit_interval_num) {
   int ret = OB_SUCCESS;
   if (!str.empty() && 0 != str.case_compare("null")) {
     ObString repeat_expr(str);
@@ -132,17 +132,25 @@ int ObDBMSSchedJobUtils::check_is_valid_repeat_interval(const ObString &str) {
     ObString repeat_type_str = repeat_expr.split_on(';').trim_space_only();
     ObString interval_str = repeat_expr.split_on('=').trim_space_only();
     ObString repeat_num_str = repeat_expr.trim_space_only();
-    if (!repeat_num_str.is_numeric()) {
+    const int MAX_REPTAT_NUM_LEN = 16;
+    if (!repeat_num_str.is_numeric() || MAX_REPTAT_NUM_LEN <= repeat_num_str.length()) {
       ret = OB_NOT_SUPPORTED;
-    } else if (0 >= atoi(repeat_num_str.ptr())) {
-      ret = OB_NOT_SUPPORTED;
-    } else if (0 != freq_str.case_compare("FREQ") || 0 != interval_str.case_compare("INTERVAL") ||
-              (0 != repeat_type_str.case_compare("SECONDLY") && 0 != repeat_type_str.case_compare("MINUTELY") &&
-               0 != repeat_type_str.case_compare("HOURLY") &&
-               0 != repeat_type_str.case_compare("DAILY") && 0 != repeat_type_str.case_compare("DAYLY") &&
-               0 != repeat_type_str.case_compare("WEEKLY") && 0 != repeat_type_str.case_compare("MONTHLY") &&
-               0 != repeat_type_str.case_compare("YEARLY"))) {
-      ret = OB_NOT_SUPPORTED;
+    } else {
+      char repeat_num_buf[MAX_REPTAT_NUM_LEN];
+      int64_t pos = repeat_num_str.to_string(repeat_num_buf, MAX_REPTAT_NUM_LEN);
+      int64_t repeat_num = atoi(repeat_num_buf);
+      if (0 >= repeat_num) {
+        ret = OB_NOT_SUPPORTED;
+      } else if (is_limit_interval_num && 8000 <= repeat_num) {
+        ret = OB_INVALID_ARGUMENT_NUM;
+      } else if (0 != freq_str.case_compare("FREQ") || 0 != interval_str.case_compare("INTERVAL") ||
+                (0 != repeat_type_str.case_compare("SECONDLY") && 0 != repeat_type_str.case_compare("MINUTELY") &&
+                0 != repeat_type_str.case_compare("HOURLY") &&
+                0 != repeat_type_str.case_compare("DAILY") && 0 != repeat_type_str.case_compare("DAYLY") &&
+                0 != repeat_type_str.case_compare("WEEKLY") && 0 != repeat_type_str.case_compare("MONTHLY") &&
+                0 != repeat_type_str.case_compare("YEARLY"))) {
+        ret = OB_NOT_SUPPORTED;
+      }
     }
   }
   return ret;
@@ -308,7 +316,12 @@ int ObDBMSSchedJobUtils::stop_dbms_sched_job(
               }
             } while (OB_SUCC(ret));
             if (OB_ITER_END == ret) {
+              if (result_empty) {
+                ret = OB_ENTRY_NOT_EXIST;
+                LOG_WARN("no running job", K(ret), K(tenant_id), K(job_info.job_name_));
+              } else {
                 ret = OB_SUCCESS;
+              }
             }
           }
         }
@@ -362,7 +375,7 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
   int ret = OB_SUCCESS;
   bool is_oracle_tenant =  lib::is_oracle_mode();
   //chcek job name
-  if (job_info.job_name_.empty() || OB_FAIL(check_is_valid_name(job_info.job_name_))) {
+  if (job_info.job_name_.empty() || OB_FAIL(check_is_valid_name(job_info.job_name_)) || 0 == (job_info.job_name_.case_compare("__dummy_guard"))) {
     ret = OB_INVALID_ARGUMENT;
   //check job style
   } else if (job_info.job_style_.empty() || OB_FAIL(check_is_valid_job_style(job_info.job_style_))) {
@@ -504,7 +517,7 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
   } else if (0 == job_attribute_name.case_compare("enabled")) {
     if (OB_FAIL(dml.add_column("enabled", job_attribute_value.get_bool()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_bool()));
-    } else if (job_info.state_.case_compare("BROKEN")) {
+    } else if (job_attribute_value.get_bool() && job_info.state_.case_compare("BROKEN")) {
       if (OB_FAIL(dml.add_column("state", "SCHEDULED"))) {
         LOG_WARN("add state column failed", KR(ret), K(job_info.state_));
       } else if (OB_FAIL(dml.add_column("failures", 0))) {
@@ -649,7 +662,11 @@ int ObDBMSSchedJobUtils::calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &j
     int64_t N = (now - job_info.start_date_) / job_info.interval_ts_;
     next_run_time = job_info.start_date_ + (N + 1) * job_info.interval_ts_;
   } else if (job_info.repeat_interval_.empty() || 0 == job_info.repeat_interval_.case_compare("null")) {
-    next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+    if (now < job_info.start_date_) { //job 未开始
+      next_run_time = job_info.start_date_;
+    } else {
+      next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+    }
   } else {
     ObString repeat_expr(job_info.repeat_interval_);
     ObString freq_str = repeat_expr.split_on('=').trim_space_only();
@@ -657,38 +674,45 @@ int ObDBMSSchedJobUtils::calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &j
     ObString interval_str = repeat_expr.split_on('=').trim_space_only();
     ObString repeat_num_str = repeat_expr.trim_space_only();
 
-    if (!repeat_num_str.is_numeric() || 0 >= atoi(repeat_num_str.ptr())) { //未加参数检查前的 job 可能会有这种错误
-      next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+    const int MAX_REPTAT_NUM_LEN = 16;
+    if (!repeat_num_str.is_numeric() || MAX_REPTAT_NUM_LEN <= repeat_num_str.length()) {
+      next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE; //非数字/数字太大
     } else {
-      if (0 != freq_str.case_compare("FREQ")) {
-        ret = OB_NOT_SUPPORTED;
-      } else if (0 != interval_str.case_compare("INTERVAL")) {
-        ret = OB_NOT_SUPPORTED;
-      } else if (0 == repeat_type_str.case_compare("SECONDLY")) {
-        freq_num = 1;
-      } else if (0 == repeat_type_str.case_compare("MINUTELY")) {
-        freq_num = 60;
-      } else if (0 == repeat_type_str.case_compare("HOURLY")) {
-        freq_num = 60 * 60;
-      } else if (0 == repeat_type_str.case_compare("DAILY") || 0 == repeat_type_str.case_compare("DAYLY")) {
-        freq_num = 24 * 60 * 60;
-      } else if (0 == repeat_type_str.case_compare("WEEKLY")) {
-        freq_num = 7 * 24 * 60 * 60;
-      } else if (0 == repeat_type_str.case_compare("MONTHLY")) {
-        freq_num = 30 * 24 * 60 * 60;
-      } else if (0 == repeat_type_str.case_compare("YEARLY")) {
-        freq_num = 12 * 30 * 24 * 60 * 60;
+      char repeat_num_buf[MAX_REPTAT_NUM_LEN];
+      int64_t pos = repeat_num_str.to_string(repeat_num_buf, MAX_REPTAT_NUM_LEN);
+      repeat_num = atoi(repeat_num_buf);
+      if (0 >= repeat_num) { //未加参数检查前的 job 可能会有这种错误
+        next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
       } else {
-        ret = OB_NOT_SUPPORTED;
-      }
+        if (0 != freq_str.case_compare("FREQ")) {
+          ret = OB_NOT_SUPPORTED;
+        } else if (0 != interval_str.case_compare("INTERVAL")) {
+          ret = OB_NOT_SUPPORTED;
+        } else if (0 == repeat_type_str.case_compare("SECONDLY")) {
+          freq_num = 1;
+        } else if (0 == repeat_type_str.case_compare("MINUTELY")) {
+          freq_num = 60;
+        } else if (0 == repeat_type_str.case_compare("HOURLY")) {
+          freq_num = 60 * 60;
+        } else if (0 == repeat_type_str.case_compare("DAILY") || 0 == repeat_type_str.case_compare("DAYLY")) {
+          freq_num = 24 * 60 * 60;
+        } else if (0 == repeat_type_str.case_compare("WEEKLY")) {
+          freq_num = 7 * 24 * 60 * 60;
+        } else if (0 == repeat_type_str.case_compare("MONTHLY")) {
+          freq_num = 30 * 24 * 60 * 60;
+        } else if (0 == repeat_type_str.case_compare("YEARLY")) {
+          freq_num = 12 * 30 * 24 * 60 * 60;
+        } else {
+          ret = OB_NOT_SUPPORTED;
+        }
 
-      if (OB_SUCC(ret)) {
-        repeat_num = atoi(repeat_num_str.ptr());
-        int64_t repeat_interval_ts = freq_num * repeat_num * 1000000LL;
-        int64_t N = (now - job_info.start_date_) / repeat_interval_ts;
-        next_run_time = job_info.start_date_ + (N + 1) * repeat_interval_ts;
-        //未开始执行时，重新计算下次执行时间应该还是 start_date
-        next_run_time = max(next_run_time, job_info.start_date_);
+        if (OB_SUCC(ret)) {
+          int64_t repeat_interval_ts = freq_num * repeat_num * 1000000LL;
+          int64_t N = (now - job_info.start_date_) / repeat_interval_ts;
+          next_run_time = job_info.start_date_ + (N + 1) * repeat_interval_ts;
+          //未开始执行时，重新计算下次执行时间应该还是 start_date
+          next_run_time = max(next_run_time, job_info.start_date_);
+        }
       }
     }
   }

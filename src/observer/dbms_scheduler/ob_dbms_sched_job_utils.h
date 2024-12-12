@@ -429,12 +429,13 @@ public:
    * @retval OB_SUCCESS execute success
    * @retval OB_NOT_SUPPORTED 不支持
   */
-  static int check_is_valid_repeat_interval(const ObString &str);
+  static int check_is_valid_repeat_interval(const ObString &str, bool is_limit_interval_num = false);
   /**
    * @brief  检查是否有效的 max_run_duration
    * @param [in] max_run_duration
    * @retval OB_SUCCESS execute success
-   * @retval OB_NOT_SUPPORTED 不支持
+   * @retval OB_INVALID_ARGUMENT_NUM interval_num 超出范围
+   * @retval OB_NOT_SUPPORTED 语法不支持
   */
   static int check_is_valid_max_run_duration(const int64_t max_run_duration);
 
