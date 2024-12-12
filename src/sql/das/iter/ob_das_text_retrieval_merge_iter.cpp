@@ -948,7 +948,7 @@ int ObDASTRTaatIter::get_next_batch_rows(int64_t &count, int64_t capacity)
     LOG_WARN("failed to init stores by partition", K(ret));
   } else if (!is_chunk_store_inited_ && OB_FAIL(fill_chunk_store_by_tr_iter())) {
     LOG_WARN("failed to fill chunk store by tr iter", K(ret));
-  } else if (cur_map_idx_>= hash_map_size_) {
+  } else if (cur_map_idx_ >= hash_map_size_) {
     ret = OB_ITER_END;
   }
   bool clear_tag = OB_SUCC(ret) || ret == OB_ITER_END;
@@ -1328,7 +1328,7 @@ int ObDASTRTaatIter::fill_chunk_store_by_tr_iter()
 int ObDASTRTaatIter::load_next_hashmap()
 {
   int ret = OB_SUCCESS;
-  if (cur_map_idx_>= hash_map_size_ - 1) {
+  if (cur_map_idx_ >= hash_map_size_ - 1) {
     cur_map_idx_= hash_map_size_;
     ret = OB_ITER_END;
   } else if (FALSE_IT(++cur_map_idx_)) {
@@ -1575,7 +1575,7 @@ int ObDASTRTaatLookupIter::inner_get_next_row()
     if (OB_FAIL(get_next_batch_rows(count, cap))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("failed to get next row with taat", K(ret));
-      } else if (OB_UNLIKELY(count != 0)) {
+      } else if (0 != count) {
         ret = OB_SUCCESS;
       }
     } else if (OB_UNLIKELY(count != 1)) {
@@ -1613,7 +1613,6 @@ int ObDASTRTaatLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
         ObEvalCtx::BatchInfoScopeGuard guard(*ctx);
         guard.set_batch_idx(next_written_idx_);
         if (OB_FAIL(project_result(default_docid, 0))) {
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to project result", K(ret));
         }
         next_written_idx_ ++;
@@ -1640,7 +1639,7 @@ int ObDASTRTaatLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   } else if (next_written_idx_ > rangekey_size_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected capacity size", K(ret), K(capacity));
-  } else if (next_written_idx_ == 0 &&OB_FAIL(get_next_batch_rows(count, capacity))) {
+  } else if (next_written_idx_ == 0 && OB_FAIL(get_next_batch_rows(count, capacity))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to get next rows with taat", K(ret));
     }
@@ -1654,7 +1653,6 @@ int ObDASTRTaatLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       ObEvalCtx::BatchInfoScopeGuard guard(*ctx);
       guard.set_batch_idx(count);
       if (OB_FAIL(project_result(cache_doc_ids_[pos], relevances_[next_written_idx_]))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to project result", K(ret));
       }
       next_written_idx_++;
@@ -2120,7 +2118,6 @@ int ObDASTRDaatLookupIter::inner_get_next_row()
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("failed to pull next batch rows from iterator", K(ret));
       } else if (OB_FAIL(project_result(cache_doc_ids_[0], 0))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to project result", K(ret));
       } else {
         next_written_idx_ ++;
@@ -2160,7 +2157,6 @@ int ObDASTRDaatLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
         ObEvalCtx::BatchInfoScopeGuard guard(*ctx);
         guard.set_batch_idx(next_written_idx_);
         if (OB_FAIL(project_result(default_docid, 0))) {
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to project result", K(ret));
         }
         next_written_idx_ ++;
@@ -2210,7 +2206,6 @@ int ObDASTRDaatLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
           ObEvalCtx::BatchInfoScopeGuard guard(*ctx);
           guard.set_batch_idx(pos);
           if (OB_FAIL(project_result(cache_doc_ids_[next_written_idx_], 0))) {
-            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to project result", K(ret));
           }
         }
@@ -2238,7 +2233,6 @@ int ObDASTRDaatLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       ObEvalCtx::BatchInfoScopeGuard guard(*ctx);
       guard.set_batch_idx(count);
       if (OB_FAIL(project_result(cache_doc_ids_[pos], relevances_[next_written_idx_]))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to project result", K(ret));
       }
       next_written_idx_++;
