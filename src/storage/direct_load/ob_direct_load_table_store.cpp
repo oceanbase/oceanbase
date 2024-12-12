@@ -42,7 +42,8 @@ ObDirectLoadTableStoreParam::ObDirectLoadTableStoreParam()
     fast_heap_table_ctx_(nullptr),
     dml_row_handler_(nullptr),
     extra_buf_(nullptr),
-    extra_buf_size_(0)
+    extra_buf_size_(0),
+    dir_id_(-1)
 {
 }
 
@@ -56,7 +57,7 @@ bool ObDirectLoadTableStoreParam::is_valid() const
          nullptr != datum_utils_ && nullptr != col_descs_ && nullptr != file_mgr_ &&
          (!is_fast_heap_table_ ||
           (nullptr != insert_table_ctx_ && nullptr != fast_heap_table_ctx_)) &&
-         nullptr != dml_row_handler_;
+         nullptr != dml_row_handler_ && dir_id_ != -1;
 }
 
 /**
@@ -133,6 +134,7 @@ int ObDirectLoadTableStoreBucket::init(const ObDirectLoadTableStoreParam &param,
       sstable_build_param.file_mgr_ = param.file_mgr_;
       sstable_build_param.extra_buf_ = param.extra_buf_;
       sstable_build_param.extra_buf_size_ = param.extra_buf_size_;
+      sstable_build_param.dir_id_ = param.dir_id_;
       ObDirectLoadMultipleSSTableBuilder *sstable_builder = nullptr;
       if (OB_ISNULL(sstable_builder =
                       table_builder_allocator_->alloc<ObDirectLoadMultipleSSTableBuilder>())) {

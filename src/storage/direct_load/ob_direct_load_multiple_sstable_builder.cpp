@@ -26,7 +26,7 @@ using namespace blocksstable;
  */
 
 ObDirectLoadMultipleSSTableBuildParam::ObDirectLoadMultipleSSTableBuildParam()
-  : datum_utils_(nullptr), file_mgr_(nullptr), extra_buf_(nullptr), extra_buf_size_(0)
+  : datum_utils_(nullptr), file_mgr_(nullptr), extra_buf_(nullptr), extra_buf_size_(0), dir_id_(-1)
 {
 }
 
@@ -118,8 +118,8 @@ int ObDirectLoadMultipleSSTableBuilder::init(const ObDirectLoadMultipleSSTableBu
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
-    int64_t dir_id = -1;
-    if (OB_FAIL(param_.file_mgr_->alloc_dir(dir_id))) {
+    int64_t dir_id = param.dir_id_;
+    if (dir_id == -1 && OB_FAIL(param_.file_mgr_->alloc_dir(dir_id))) {
       LOG_WARN("fail to alloc dir", KR(ret));
     } else if (OB_FAIL(param_.file_mgr_->alloc_file(dir_id, index_file_handle_))) {
       LOG_WARN("fail to alloc file", KR(ret));

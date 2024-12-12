@@ -37,7 +37,7 @@ public:
   TO_STRING_KV(K_(snapshot_version), K_(table_data_desc), KP_(datum_utils),
                KP_(col_descs), KP_(file_mgr), K_(is_multiple_mode), K_(is_fast_heap_table),
                KP_(insert_table_ctx), KP_(fast_heap_table_ctx), KP_(dml_row_handler),
-               KP_(extra_buf), K_(extra_buf_size));
+               KP_(extra_buf), K_(extra_buf_size), K_(dir_id));
 public:
   int64_t snapshot_version_;
   ObDirectLoadTableDataDesc table_data_desc_;
@@ -51,6 +51,7 @@ public:
   ObDirectLoadDMLRowHandler *dml_row_handler_;
   char *extra_buf_;
   int64_t extra_buf_size_;
+  int64_t dir_id_;
 };
 
 class ObDirectLoadTableStoreBucket

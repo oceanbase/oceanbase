@@ -21,6 +21,7 @@
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_trans_ctx.h"
 #include "observer/table_load/ob_table_load_utils.h"
+#include "storage/direct_load/ob_direct_load_tmp_file.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/ob_sql_utils.h"
@@ -238,8 +239,11 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
       param.extra_buf_size_ = store_ctx_->session_ctx_array_[i].extra_buf_size_;
     }
     if (OB_SUCC(ret)) {
+      if (OB_FAIL(param.file_mgr_->alloc_dir(param.dir_id_))) {
+        LOG_WARN("fail to alloc dir", KR(ret));
+      }
       // init table_store_
-      if (OB_FAIL(session_ctx->table_store_.init(param))) {
+      else if (OB_FAIL(session_ctx->table_store_.init(param))) {
         LOG_WARN("fail to init table store", KR(ret));
       }
       // init datum_row_
