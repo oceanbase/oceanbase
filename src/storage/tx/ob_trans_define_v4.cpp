@@ -476,7 +476,7 @@ ObTxDesc::ObTxDesc()
     commit_task_(),
     xa_ctx_(NULL),
     continuous_lock_conflict_cnt_(0)
-#ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
   , alloc_link_()
 #endif
 {}
@@ -559,7 +559,7 @@ ObTxDesc::~ObTxDesc()
 
 void ObTxDesc::reset()
 {
-#ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
   FORCE_PRINT_TRACE(&tlog_, "[tx desc trace]");
 #else
   if (state_ == State::IDLE || state_ == State::COMMITTED) {
@@ -1794,8 +1794,8 @@ int ObTxDescMgr::wait()
       ret = OB_TIMEOUT;
       TRANS_LOG(WARN, "txDescMgr.wait timeout", K(ret));
       PrintTxDescFunctor fn(128);
-#ifndef NDEBUG
-      (void)map_.alloc_handle_.for_each(fn);
+#ifdef ENABLE_DEBUG_LOG
+      (void)map_.get_alloc_handle().for_each(fn);
 #else
       (void)map_.for_each(fn);
 #endif

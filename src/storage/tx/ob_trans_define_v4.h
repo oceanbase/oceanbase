@@ -697,7 +697,7 @@ private:
   // when end_stmt() with -6005 and continuous_lock_conflict_cnt_ greater than a threshold value: start detect deadlock.
   int64_t continuous_lock_conflict_cnt_;
   ObTransTraceLog tlog_;
-#ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
   struct DLink {
     DLink(): next_(this), prev_(this) {}
     void reset() { next_ = this; prev_ = this; }
@@ -978,36 +978,38 @@ public:
   {
   public:
     ObTxDescAlloc(): alloc_cnt_(0)
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
                    , lk_()
                    , list_()
-  #endif
+#endif
    {}
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
     ~ObTxDescAlloc()
     {
       ObSpinLockGuard guard(lk_);
       list_.remove();
     }
-  #endif
+#endif
    ObTxDesc* alloc_value()
    {
      ATOMIC_INC(&alloc_cnt_);
      ObTxDesc *it = op_alloc(ObTxDesc);
-  #ifndef NDEBUG
-      ObSpinLockGuard guard(lk_);
-      list_.insert(it->alloc_link_);
-  #endif
+#ifdef ENABLE_DEBUG_LOG
+     if (OB_NOT_NULL(it)) {
+       ObSpinLockGuard guard(lk_);
+       list_.insert(it->alloc_link_);
+     }
+#endif
       return it;
     }
     void free_value(ObTxDesc *v)
     {
       if (NULL != v) {
         ATOMIC_DEC(&alloc_cnt_);
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
         ObSpinLockGuard guard(lk_);
         v->alloc_link_.remove();
-  #endif
+#endif
         op_free(v);
       }
     }
@@ -1016,7 +1018,7 @@ public:
       op_free(v);
     }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
     template<typename Function>
     int for_each(Function &fn)
     {
@@ -1030,13 +1032,13 @@ public:
       }
       return ret;
     }
-  #endif
+#endif
     private:
       int64_t alloc_cnt_;
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
       ObSpinLock lk_;
       ObTxDesc::DLink list_;
-  #endif
+#endif
   };
   static void force_release(ObTxDesc &tx) {
     if (tx.dec_ref(1) == 0) {

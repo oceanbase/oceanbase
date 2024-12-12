@@ -508,7 +508,10 @@ private:
     RLOCAL_INLINE(Node, node);
     return node;
   }
-
+#ifdef ENABLE_DEBUG_LOG
+public:
+  AllocHandle &get_alloc_handle() { return alloc_handle_; }
+#endif
 private:
   // sizeof(ObLightHashMap) = BUCKETS_CNT * sizeof(LockType);
   // sizeof(SpinRWLock) = 20B;
@@ -517,9 +520,6 @@ private:
   ObLightHashHeader buckets_[BUCKETS_CNT];
   LockType locks_[LOCKS_CNT];
   int64_t total_cnt_;
-#ifndef NDEBUG
-public:
-#endif
   AllocHandle alloc_handle_;
 };
 

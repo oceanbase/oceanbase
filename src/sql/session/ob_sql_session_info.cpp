@@ -698,7 +698,9 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
         // 这里调用end_trans无需上锁，因为调用reclaim_value时意味着已经没有query并发使用session
         // 调用这个函数之前会调session.set_session_state(SESSION_KILLED)，
         bool need_disconnect = false;
-        if (is_in_transaction() && !is_txn_free_route_temp()) {
+        // NOTE: only rollback trans if it is started on this node
+        // otherwise the transaction maybe rollbacked by idle session disconnect
+        if (is_in_transaction() && (tx_desc_->get_session_id() == get_sessid())) {
           transaction::ObTransID tx_id = get_tx_id();
           MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
           // inner session skip check switch tenant, because the inner connection was shared between tenant
