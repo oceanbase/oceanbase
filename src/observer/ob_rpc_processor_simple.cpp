@@ -3753,13 +3753,12 @@ int ObGetSSMicroBlockMetaP::process()
     MTL_SWITCH(arg_.tenant_id_) {
       ObSSMicroCache *micro_cache = nullptr;
       ObSSMicroBlockMetaHandle micro_meta_handle;
+      result_.micro_meta_info_.micro_key_ = arg_.micro_key_;
       if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObSSMicroCache is null", KR(ret), K_(arg_.tenant_id));
       } else if (OB_FAIL(micro_cache->get_micro_meta_handle(arg_.micro_key_, micro_meta_handle))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
-          LOG_WARN("fail to get micro block meta", KR(ret), K_(arg));
-        }
+        LOG_WARN("fail to get micro block meta", KR(ret), K_(arg));
       } else if (OB_UNLIKELY(!micro_meta_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("micro_meta handle should be valid", KR(ret), K_(arg));
