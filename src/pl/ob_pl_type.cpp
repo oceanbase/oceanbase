@@ -1078,7 +1078,7 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
     } else if (OB_ISNULL(udt_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("udt info is null", K(ret), K(get_user_type_id()));
-    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, user_type))) {
+    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, schema_guard, user_type))) {
       LOG_WARN("failed to transform to pl type", K(ret), KPC(udt_info));
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1145,7 +1145,7 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     } else if (OB_ISNULL(udt_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("udt info is null", K(ret));
-    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, user_type))) {
+    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, schema_guard, user_type))) {
       LOG_WARN("failed to transform to pl type", K(ret));
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;

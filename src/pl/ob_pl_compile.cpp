@@ -93,6 +93,7 @@ int ObPLCompiler::init_anonymous_ast(
   int ret = OB_SUCCESS;
   ObPLDataType pl_type;
   common::ObDataType data_type;
+  ObPLResolveCtx resolve_ctx(allocator, session_info, schema_guard, package_guard, sql_proxy, false);
 
   func_ast.set_name(ObPLResolver::ANONYMOUS_BLOCK);
   data_type.set_obj_type(common::ObNullType);
@@ -112,15 +113,16 @@ int ObPLCompiler::init_anonymous_ast(
       if (!is_mocked_anonymous_array_id(param.get_udt_id())) {
         const ObUserDefinedType *user_type = nullptr;
         // try schema type first
-        if (OB_FAIL(ObResolverUtils::get_user_type(&allocator,
-                                                   &session_info,
-                                                   &sql_proxy,
-                                                   &schema_guard,
-                                                   package_guard,
-                                                   param.get_udt_id(),
-                                                   user_type))) {
+        if (OB_FAIL(resolve_ctx.get_user_type(param.get_udt_id(), user_type, &allocator))) {
           LOG_WARN("failed to ObResolverUtils::get_user_type", K(ret), K(param.get_udt_id()), KPC(user_type));
-        } else if (OB_ISNULL(user_type)) {
+        } else if (OB_NOT_NULL(user_type)) {
+          // schema type, add it to dependencies recursively
+          if (OB_FAIL(func_ast.get_user_type_table().add_external_type(user_type))) {
+            LOG_WARN("failed to add_external_type", K(ret), KPC(user_type));
+          } else if (OB_FAIL(SMART_CALL(func_ast.add_dependency_object(resolve_ctx, *user_type)))) {
+            LOG_WARN("failed to add_dependency_object", K(ret), KPC(user_type));
+          }
+        } else {
           // not schema type, try AST
           if (OB_NOT_NULL(user_type = func_ast.get_user_type_table().get_type(param.get_udt_id()))) {
             // do nothing

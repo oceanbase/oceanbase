@@ -5091,7 +5091,7 @@ int ObSPIService::spi_delete_collection(pl::ObPLExecCtx *ctx,
                  * both m and n exist and m <= n; otherwise, it does nothing.
                  * */
               } else {
-                OX (table->delete_collection_elem(m - 1));
+                OZ (table->delete_collection_elem(m - 1));
               }
             }
           } else if (table->is_varray()) {

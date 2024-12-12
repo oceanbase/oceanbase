@@ -2472,7 +2472,7 @@ int ObPLResolver::fill_record_type(
       uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
       OZ (schema_guard.get_udt_info(tenant_id, udt_id, udt_info));
       CK (OB_NOT_NULL(udt_info));
-      OZ (udt_info->transform_to_pl_type(allocator, user_type));
+      OZ (udt_info->transform_to_pl_type(allocator, schema_guard, user_type));
       OX (pl_type = *user_type);
     } else {
       OX (data_type.set_meta_type(expr->get_result_type()));
@@ -2580,7 +2580,7 @@ int ObPLResolver::build_record_type_by_table_schema(ObSchemaGetterGuard &schema_
           uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
           OZ (schema_guard.get_udt_info(tenant_id, udt_id, udt_info));
           CK (OB_NOT_NULL(udt_info));
-          OZ (udt_info->transform_to_pl_type(allocator, user_type));
+          OZ (udt_info->transform_to_pl_type(allocator, schema_guard, user_type));
           CK (OB_NOT_NULL(user_type));
           OX (pl_type = *user_type);
         } else {
@@ -12587,6 +12587,7 @@ int ObPLResolver::resolve_udf_info(
           tenant_id, package_routine_info->get_pkg_id(), udt_info));
         CK (OB_NOT_NULL(udt_info));
         OZ (ObPLUDTObjectManager::check_overload_default_cons(udf_info,
+                                                              resolve_ctx_.schema_guard_,
                                                               package_routine_info,
                                                               udt_info));
       }
@@ -12682,6 +12683,7 @@ int ObPLResolver::resolve_udf_info(
 
           // to check is this overload the default constructor
           OZ (ObPLUDTObjectManager::check_overload_default_cons(udf_info,
+                                                                resolve_ctx_.schema_guard_,
                                                                 schema_routine_info,
                                                                 udt_info));
         }
@@ -18067,7 +18069,7 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
     } else if (OB_FAIL(schema_guard_.get_udt_info(tenant_id, type_id, udt_info))) {
       LOG_WARN("get udt info failed", K(ret), K(type_id));
     } else if (OB_NOT_NULL(udt_info)) {
-      OZ (udt_info->transform_to_pl_type(*alloc, user_type), type_id);
+      OZ (udt_info->transform_to_pl_type(*alloc, schema_guard_, user_type), type_id);
     } else {
       ret = OB_SUCCESS;
       const ObTableSchema* table_schema = NULL;

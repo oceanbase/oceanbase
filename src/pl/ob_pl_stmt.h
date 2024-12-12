@@ -1655,6 +1655,7 @@ public:
   int add_dependency_objects(
                   const common::ObIArray<share::schema::ObSchemaObjVersion> &dependency_objects);
   int add_dependency_object(const share::schema::ObSchemaObjVersion &obj_version);
+  int add_dependency_object(ObPLResolveCtx &resolve_ctx, const ObPLDataType &type);
   static int add_dependency_object_impl(const ObPLDependencyTable &dep_tbl,
                                         const share::schema::ObSchemaObjVersion &obj_version);
   static int add_dependency_object_impl(ObPLDependencyTable &dep_tbl,
