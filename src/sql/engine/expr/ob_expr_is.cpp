@@ -364,7 +364,7 @@ static int eval_vector_is_null(const ObExpr &expr,
   ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  const bool isFixedLenRes = std::is_same<ResVec, IntegerFixedVec>::value;
+  constexpr bool isFixedLenRes = std::is_same<ResVec, IntegerFixedVec>::value;
   int64_t *data_ptr = isFixedLenRes ?
                       const_cast<int64_t*>(reinterpret_cast<const int64_t *>(res_vec->get_payload(0))) :
                       nullptr;
@@ -435,7 +435,7 @@ static int eval_vector_is_true(const ObExpr &expr,
   ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  const bool isFixedLenRes = std::is_same<ResVec, IntegerFixedVec>::value;
+  constexpr bool isFixedLenRes = std::is_same<ResVec, IntegerFixedVec>::value;
   int64_t *data_ptr = isFixedLenRes ?
                       const_cast<int64_t*>(reinterpret_cast<const int64_t *>(res_vec->get_payload(0))) :
                       nullptr;
@@ -503,7 +503,7 @@ static inline int def_calc_vector_is_true(const ObExpr &expr,
   } else {
     ObObjType data_type = expr.args_[0]->datum_meta_.type_;
     VectorFormat arg_format = expr.args_[0]->get_format(ctx);
-    switch(data_type) {
+    switch (data_type) {
       case ObTinyIntType:
       case ObSmallIntType:
       case ObMediumIntType:
