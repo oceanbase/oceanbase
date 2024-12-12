@@ -29,6 +29,7 @@ ObCOTabletMergeCtx::ObCOTabletMergeCtx(
   : ObBasicTabletMergeCtx(param, allocator),
     array_count_(0),
     start_schedule_cg_idx_(0),
+    base_rowkey_cg_idx_(-1),
     exe_stat_(),
     dag_net_(dag_net),
     cg_merge_info_array_(nullptr),
@@ -277,9 +278,16 @@ int ObCOTabletMergeCtx::prepare_schema()
 int ObCOTabletMergeCtx::build_ctx(bool &finish_flag)
 {
   int ret = OB_SUCCESS;
+  int32_t base_rowkey_cg_idx = -1;
   // finish_flag in this function is useless, just for virtual function definition.
   if (OB_FAIL(ObBasicTabletMergeCtx::build_ctx(finish_flag))) {
     LOG_WARN("failed to build basic ctx", KR(ret), "param", get_dag_param(), KPC(this));
+  } else if (OB_ISNULL(get_schema())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema is null", K(ret), K_(static_param));
+  } else if (OB_FAIL(get_schema()->get_base_rowkey_column_group_index(base_rowkey_cg_idx))) {
+    LOG_WARN("fail to get base rowkey column group index", K(ret), KPC(get_schema()));
+  } else if (FALSE_IT(base_rowkey_cg_idx_ = base_rowkey_cg_idx)) {
   } else if (is_major_merge_type(get_merge_type())) {
     // meta major merge not support row col switch now
     if (is_build_row_store_from_rowkey_cg() && OB_FAIL(mock_row_store_table_read_info())) {
@@ -307,6 +315,9 @@ int ObCOTabletMergeCtx::check_merge_ctx_valid()
   } else if (OB_UNLIKELY(!base_table->is_major_sstable())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid base table type", K(ret), KPC(base_table));
+  } else if (OB_UNLIKELY(base_rowkey_cg_idx_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid base rowkey cg idx", K(ret), K_(base_rowkey_cg_idx));
   } else if (ObCOMajorMergePolicy::is_use_rs_build_schema_match_merge(static_param_.co_major_merge_type_)) {
     if (base_table->is_co_sstable()) {
       const ObSSTable *sstable = nullptr;
