@@ -1164,8 +1164,10 @@ DEF_COMMAND(SERVER, get_ss_micro_block_meta, 1, "tenant_id:micro_key_mode:micro_
     } else {
       ObCStringHelper helper;
       fprintf(stdout, "ret=%s\n", ob_error_name(result.ret_));
-      fprintf(stdout, "micro_key=%s\n", helper.convert(arg.micro_key_));
-      fprintf(stdout, "micro_meta=%s\n", helper.convert(result.micro_meta_info_));
+      if (OB_SUCC(result.ret_)) {
+        fprintf(stdout, "micro_key=%s\n", helper.convert(arg.micro_key_));
+        fprintf(stdout, "micro_meta=%s\n", helper.convert(result.micro_meta_info_));
+      }
     }
   }
 
