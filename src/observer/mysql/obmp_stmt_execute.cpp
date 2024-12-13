@@ -1850,25 +1850,30 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
       if (OB_FAIL(do_process_single(session, params_, has_more_result, force_sync_resp, async_resp_used))) {
         LOG_WARN("fail to do process", K(ret), K(ctx_.cur_sql_));
       }
-      if (OB_UNLIKELY(NULL != GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && is_conn_valid()) {
-        int bak_ret = ret;
-        ObSQLSessionInfo *sess = NULL;
-        if (OB_FAIL(get_session(sess))) {
-          LOG_WARN("get session fail", K(ret));
-        } else if (OB_ISNULL(sess)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("session is NULL or invalid", K(ret));
-        } else {
-          // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
-          if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
-            LOG_WARN("fail setup user resource group", K(ret));
-          }
-        }
-        if (sess != NULL) {
-          revert_session(sess);
-        }
-        ret = OB_SUCC(bak_ret) ? ret : bak_ret;
-      }
+
+      /* Function setup_user_resource_group cause performance regression.
+          No need to setup group_id here,
+          Only setup group_id in MPConnect
+      */
+      // if (is_conn_valid()) {
+      //   int bak_ret = ret;
+      //   ObSQLSessionInfo *sess = NULL;
+      //   if (OB_FAIL(get_session(sess))) {
+      //     LOG_WARN("get session fail", K(ret));
+      //   } else if (OB_ISNULL(sess)) {
+      //     ret = OB_ERR_UNEXPECTED;
+      //     LOG_WARN("session is NULL or invalid", K(ret));
+      //   } else {
+      //     // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
+      //     if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
+      //       LOG_WARN("fail setup user resource group", K(ret));
+      //     }
+      //   }
+      //   if (sess != NULL) {
+      //     revert_session(sess);
+      //   }
+      //   ret = OB_SUCC(bak_ret) ? ret : bak_ret;
+      // }
     }
     ObThreadLogLevelUtils::clear();
     const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
