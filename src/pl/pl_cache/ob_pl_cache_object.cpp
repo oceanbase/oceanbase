@@ -135,13 +135,6 @@ int ObPLCacheObject::update_cache_obj_stat(sql::ObILibCacheCtx &ctx)
   PLCacheObjStat &stat = get_stat_for_update();
 
   stat.pl_schema_id_ = pc_ctx.key_.key_id_;
-  if (ObTriggerInfo::is_trigger_package_id(pc_ctx.key_.key_id_)) {
-    // trigger
-    OX (stat.pl_schema_id_ = ObTriggerInfo::get_package_trigger_id(pc_ctx.key_.key_id_));
-  } else if (ObUDTObjectType::is_object_id(pc_ctx.key_.key_id_)) {
-    // udt
-    OX (stat.pl_schema_id_ = ObUDTObjectType::clear_object_id_mask(pc_ctx.key_.key_id_));
-  }
   stat.gen_time_ = ObTimeUtility::current_time();
   stat.last_active_time_ = ObTimeUtility::current_time();
   stat.hit_count_ = 0;

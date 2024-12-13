@@ -1057,7 +1057,14 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
           cache_obj->is_sfc() ||
           cache_obj->is_prcr() ||
           cache_obj->is_pkg()) {
-        pl_schema_id = pl_object->get_stat().pl_schema_id_;
+        uint64_t stat_pl_schema_id = pl_object->get_stat().pl_schema_id_;
+        if (ObTriggerInfo::is_trigger_package_id(stat_pl_schema_id)) {
+          pl_schema_id = ObTriggerInfo::get_package_trigger_id(stat_pl_schema_id);
+        } else if (ObUDTObjectType::is_object_id(stat_pl_schema_id)) {
+          pl_schema_id = ObUDTObjectType::clear_object_id_mask(stat_pl_schema_id);
+        } else {
+          pl_schema_id = stat_pl_schema_id;
+        }
       }
       cells[i].set_uint64(pl_schema_id);
       break;
