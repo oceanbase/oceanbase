@@ -9197,6 +9197,7 @@ def_table_schema(
     ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
     ('user_client_port', 'int'),
     ('trans_status', 'varchar:256'),
+    ('plsql_compile_time', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
