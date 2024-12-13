@@ -332,10 +332,7 @@ int ObOrcTableRowIterator::next_file()
             const orc::Type *type = nullptr;
             OZ (id_to_type_.get_refactored(col_id, type));
             CK (type != nullptr);
-            if (OB_SUCC(ret) && ob_is_text_tc(file_column_exprs_.at(i)->datum_meta_.type_)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "text type for orc");
-            }
+
             if (OB_SUCC(ret)) {
               load_funcs_.at(i) = DataLoader::select_load_function(file_column_exprs_.at(i)->datum_meta_,
                                                                     *type);
@@ -411,7 +408,7 @@ int64_t ObOrcTableRowIterator::DataLoader::calc_tz_adjust_us()
     if (OB_NOT_NULL(eval_ctx_.exec_ctx_.get_my_session())
         && OB_NOT_NULL(eval_ctx_.exec_ctx_.get_my_session()->get_timezone_info())
         && OB_SUCCESS == eval_ctx_.exec_ctx_.get_my_session()->get_timezone_info()->get_timezone_offset(0, tmp_offset)) {
-      res = SEC_TO_USEC(tmp_offset) * (is_utc_dst ? 1 : -1);
+      res = SEC_TO_USEC(tmp_offset) * (is_utc_src ? 1 : -1);
     }
   }
   LOG_DEBUG("tz adjust", K(is_utc_src), K(is_utc_dst), K(res), K(file_col_expr_->datum_meta_));
