@@ -683,17 +683,12 @@ bool ObSQLSessionInfo::is_enable_new_query_range() const
   return bret;
 }
 
-
-bool ObSQLSessionInfo::is_sqlstat_enabled() const
+bool ObSQLSessionInfo::is_sqlstat_enabled()
 {
   bool bret = false;
   if (lib::is_diagnose_info_enabled()) {
-    int64_t tenant_id = get_effective_tenant_id();
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (tenant_config.is_valid()) {
-      bret = tenant_config->_ob_sqlstat_enable;
-      // sqlstat has a dependency on the statistics mechanism, so turning off perf event will turn off sqlstat at the same time.
-    }
+    bret = get_tenant_ob_sqlstat_enable();
+    // sqlstat has a dependency on the statistics mechanism, so turning off perf event will turn off sqlstat at the same time.
   }
   return bret;
 }
@@ -3047,6 +3042,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&enable_insertup_replace_gts_opt_, tenant_config->_enable_insertup_replace_gts_opt);
       ATOMIC_STORE(&range_optimizer_max_mem_size_, tenant_config->range_optimizer_max_mem_size);
       ATOMIC_STORE(&_query_record_size_limit_, tenant_config->_query_record_size_limit);
+      ATOMIC_STORE(&_ob_sqlstat_enable_, tenant_config->_ob_sqlstat_enable);
       // 5.allow security audit
       if (OB_SUCCESS != (tmp_ret = ObSecurityAuditUtils::check_allow_audit(*session_, at_type_))) {
         LOG_WARN_RET(tmp_ret, "fail get tenant_config", "ret", tmp_ret,
