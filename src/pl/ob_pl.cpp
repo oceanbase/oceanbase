@@ -1598,6 +1598,27 @@ int ObPL::execute(ObExecContext &ctx,
               ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                 pl.get_params().at(i),
                                                 ctx.get_my_session());
+            } else if (pl.is_top_call()
+                       && pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+              ObObjParam &cursor_param = pl.get_params().at(i);
+              const ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(cursor_param.get_ext());
+              OX (params->at(i) = cursor_param);
+              if (OB_NOT_NULL(cursor)) {
+                uint64_t compat_version = 0;
+                bool null_value_for_closed_cursor = false;
+                CK (OB_NOT_NULL(ctx.get_my_session()));
+                OZ (ctx.get_my_session()->get_compatibility_version(compat_version));
+                OZ (ObCompatControl::check_feature_enable(compat_version,
+                                                          ObCompatFeatureType::NULL_VALUE_FOR_CLOSED_CURSOR,
+                                                          null_value_for_closed_cursor));
+                if (null_value_for_closed_cursor && cursor->is_session_cursor() && !cursor->isopen()) {
+                  OZ (ObSPIService::spi_add_ref_cursor_refcount(&pl.get_exec_ctx(), &cursor_param, -1));
+                  OX (params->at(i).set_obj_value(static_cast<uint64_t>(0)));  // return closed refcursor as null
+                  if (0 == cursor->get_ref_count()) {
+                    OZ (ctx.get_my_session()->close_cursor(cursor->get_id()));
+                  }
+                }
+              }
             } else {
               OX (params->at(i) = pl.get_params().at(i));
             }
