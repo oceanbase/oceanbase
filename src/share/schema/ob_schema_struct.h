@@ -3216,6 +3216,27 @@ public:
 
   static bool is_default_list_part(const ObPartition &part);
 
+  static int check_param_valid(
+        const share::schema::ObTableSchema &table_schema,
+        RelatedTableInfo *related_table)
+  {
+    return check_param_valid_(table_schema, related_table);
+  }
+
+  static int fill_tablet_and_object_ids(
+      const bool fill_tablet_id,
+      const int64_t part_idx,
+      const common::ObIArray<PartitionIndex> &partition_indexes,
+      const share::schema::ObTableSchema &table_schema,
+      RelatedTableInfo *related_table,
+      common::ObIArray<common::ObTabletID> &tablet_ids,
+      common::ObIArray<common::ObObjectID> &object_ids)
+  {
+    return fill_tablet_and_object_ids_(fill_tablet_id, part_idx, partition_indexes,
+                                       table_schema, related_table,
+                                       tablet_ids, object_ids);
+  }
+
   /* ----------------------------------------------------------------- */
 
 private:

@@ -404,6 +404,13 @@ ObPartLocCalcNode *ObPartLocCalcNode::create_part_calc_node(
       }
       break;
     }
+    case ObPartLocCalcNode::LIST_VALUE: {
+      ptr = allocator.alloc(sizeof(ObPLListValueNode));
+      if (NULL != ptr) {
+        ret_node = new(ptr) ObPLListValueNode(allocator);
+      }
+      break;
+    }
     case ObPartLocCalcNode::CALC_AND: {
       ptr = allocator.alloc(sizeof(ObPLAndNode));
       if (NULL != ptr) {
@@ -469,6 +476,13 @@ int ObPartLocCalcNode::create_part_calc_node(common::ObIAllocator &allocator,
       ptr = allocator.alloc(sizeof(ObPLColumnValueNode));
       if (NULL != ptr) {
         ret_node = new(ptr) ObPLColumnValueNode(allocator);
+      }
+      break;
+    }
+    case ObPartLocCalcNode::LIST_VALUE: {
+      ptr = allocator.alloc(sizeof(ObPLListValueNode));
+      if (NULL != ptr) {
+        ret_node = new(ptr) ObPLListValueNode(allocator);
       }
       break;
     }
@@ -679,6 +693,48 @@ int ObPLColumnValueNode::deep_copy(
   return ret;
 }
 int ObPLColumnValueNode::add_part_calc_node(common::ObIArray<ObPartLocCalcNode*> &calc_nodes)
+{
+  return calc_nodes.push_back(this);
+}
+
+int ObPLListValueNode::deep_copy(
+    ObIAllocator &allocator,
+    ObIArray<ObPartLocCalcNode*> &calc_nodes,
+    ObPartLocCalcNode *&other) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(other = create_part_calc_node(allocator, calc_nodes, LIST_VALUE))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("Allocate calc node failed", K(ret));
+  } else {
+    ObPLListValueNode *list_node = static_cast<ObPLListValueNode*>(other);
+    int64_t N = vies_.count();
+    if (OB_FAIL(list_node->vies_.init(N))) {
+      LOG_WARN("failed to init vies count", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+        void *ptr = allocator.alloc(sizeof(ValueItemExpr));
+        if (OB_ISNULL(vies_.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null value item expr");
+        } else if (OB_ISNULL(ptr)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for ValueItemExpr");
+        } else {
+          ValueItemExpr *vie = new(ptr) ValueItemExpr();
+          if (OB_FAIL(vies_.at(i)->deep_copy(allocator, *vie))) {
+            LOG_WARN("Failed to deep copy value", K(ret));
+          } else if (OB_FAIL(list_node->vies_.push_back(vie))) {
+            LOG_WARN("failed to push back vie");
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPLListValueNode::add_part_calc_node(common::ObIArray<ObPartLocCalcNode*> &calc_nodes)
 {
   return calc_nodes.push_back(this);
 }
@@ -2704,6 +2760,23 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       is_range_get = is_func_range_get || is_column_range_get;
     }
   }
+  if (OB_SUCC(ret) && !is_range_get &&
+      GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0 &&
+      ((PARTITION_LEVEL_ONE == part_level && is_column_list_part(part_type_, is_col_part_expr_)) ||
+       (PARTITION_LEVEL_TWO == part_level && is_column_list_part(subpart_type_, is_col_subpart_expr_)))) {
+    ObPartLocCalcNode *list_value_node = NULL;
+    bool list_value_always_true = false;
+    if (OB_FAIL(get_list_value_node(part_level, partition_columns, filter_exprs,
+                                   list_value_always_true, list_value_node, exec_ctx))) {
+      LOG_WARN("faield to get list part node");
+    } else if (list_value_always_true) {
+      // do nothing
+    } else if (OB_FAIL(add_and_node(list_value_node, res_node))) {
+      LOG_WARN("Failed to add and node", K(ret));
+    } else {
+      get_all = false;
+    }
+  }
   return ret;
 }
 
@@ -2935,7 +3008,8 @@ int ObTableLocation::extract_eq_op(ObExecContext *exec_ctx,
 int ObTableLocation::extract_value_item_expr(ObExecContext *exec_ctx,
                                              const ObRawExpr *expr,
                                              const ObRawExpr *dst_expr,
-                                             ValueItemExpr &vie)
+                                             ValueItemExpr &vie,
+                                             RowDesc *row_desc /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr) || OB_ISNULL(dst_expr) || OB_ISNULL(exec_ctx) ||
@@ -2956,15 +3030,16 @@ int ObTableLocation::extract_value_item_expr(ObExecContext *exec_ctx,
     }
   } else {
     vie.type_ = CONST_EXPR_TYPE;
-    RowDesc row_desc;
+    RowDesc empty_row_desc;
     ObTempExpr *temp_expr = NULL;
     if (OB_FAIL(ObStaticEngineExprCG::gen_expr_with_row_desc(expr,
-                                                             row_desc,
+                                                             row_desc == nullptr ? empty_row_desc : *row_desc,
                                                              exec_ctx->get_allocator(),
                                                              exec_ctx->get_my_session(),
                                                              exec_ctx->get_sql_ctx()->schema_guard_,
-                                                             temp_expr))) {
-      LOG_WARN("failed to generate expr with row desc", K(ret));
+                                                             temp_expr,
+                                                             true))) {
+      LOG_WARN("failed to generate expr with row desc", K(ret), KPC(expr), KPC(row_desc));
     } else {
       vie.expr_ = temp_expr;
     }
@@ -3422,6 +3497,13 @@ int ObTableLocation::calc_partition_ids_by_calc_node(ObExecContext &exec_ctx,
                                                 static_cast<const ObPLColumnValueNode*>(calc_node),
                                                 tablet_ids, partition_ids,
                                                 dtc_params, part_ids))) {
+      LOG_WARN("Failed to calc and partition ids", K(ret));
+    }
+  } else if (ObPartLocCalcNode::LIST_VALUE == calc_node->get_node_type()) {
+    if (OB_FAIL(calc_list_value_partition_ids(exec_ctx, tablet_mapper, params,
+                                              static_cast<const ObPLListValueNode*>(calc_node),
+                                              tablet_ids, partition_ids,
+                                              dtc_params, part_ids))) {
       LOG_WARN("Failed to calc and partition ids", K(ret));
     }
   } else {
@@ -4491,8 +4573,8 @@ int ObTableLocation::se_calc_value_item(ObCastCtx cast_ctx,
                                         ObExecContext &exec_ctx,
                                         const ParamStore &params,
                                         const ValueItemExpr &vie,
-                                        ObNewRow &input_row,
-                                        ObObj &value) const
+                                        const ObNewRow &input_row,
+                                        ObObj &value)
 {
   int ret = OB_SUCCESS;
   if (QUESTMARK_TYPE == vie.type_) {
@@ -4886,6 +4968,67 @@ OB_DEF_DESERIALIZE(ObPLColumnValueNode)
   int ret = OB_SUCCESS;
   BASE_DESER(ObPartLocCalcNode);
   OZ (vie_.deserialize(allocator_, buf, data_len, pos));
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObPLListValueNode)
+{
+  int ret = OB_SUCCESS;
+  BASE_SER(ObPartLocCalcNode);
+  int64_t N = vies_.count();
+  OB_UNIS_ENCODE(N);
+  for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+    if (OB_ISNULL(vies_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null vie");
+    } else {
+      OB_UNIS_ENCODE(*vies_.at(i));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObPLListValueNode)
+{
+  int64_t len = 0;
+  BASE_ADD_LEN(ObPartLocCalcNode);
+  int64_t N = vies_.count();
+  OB_UNIS_ADD_LEN(N);
+  for (int64_t i = 0; i < N; ++i) {
+    if (OB_ISNULL(vies_.at(i))) {
+    int ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null vie");
+    } else {
+      OB_UNIS_ADD_LEN(*vies_.at(i));
+    }
+  }
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObPLListValueNode)
+{
+  int ret = OB_SUCCESS;
+  BASE_DESER(ObPartLocCalcNode);
+  int64_t N = 0;
+  OB_UNIS_DECODE(N);
+  if (OB_FAIL(vies_.init(N))) {
+    LOG_WARN("failed to init vies");
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+      void *ptr = allocator_.alloc(sizeof(ValueItemExpr));
+      if (OB_ISNULL(ptr)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for vie");
+      } else {
+        ValueItemExpr *vie = new(ptr) ValueItemExpr();
+        if (OB_FAIL(vie->deserialize(allocator_, buf, data_len, pos))) {
+          LOG_WARN("failed to deserialize vie");
+        } else if (OB_FAIL(vies_.push_back(vie))) {
+          LOG_WARN("failed to push back vie");
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -5929,5 +6072,198 @@ int ObTableLocation::fill_related_tablet_and_object_ids(ObDASTabletMapper &table
       }
     }
   }
+  return ret;
+}
+
+int ObTableLocation::get_list_value_node(const ObPartitionLevel part_level,
+                                        const ColumnIArray &partition_columns,
+                                        const ObIArray<ObRawExpr*> &filter_exprs,
+                                        bool &always_true,
+                                        ObPartLocCalcNode *&calc_node,
+                                        ObExecContext *exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  RowDesc row_desc;
+  ObSQLSessionInfo *session_info = nullptr;
+  if (OB_ISNULL(exec_ctx) || OB_ISNULL(session_info = exec_ctx->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KP(exec_ctx), KP(session_info));
+  } else if (filter_exprs.empty()) {
+    always_true = true;
+  } else if (OB_ISNULL(calc_node = ObPartLocCalcNode::create_part_calc_node(
+      allocator_, calc_nodes_, ObPartLocCalcNode::LIST_VALUE))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("Allocate memory failed", K(ret));
+  } else if (OB_FAIL(row_desc.init())) {
+    LOG_WARN("Failed to init row desc", K(ret));
+  } else {
+    ObPLListValueNode *node = static_cast<ObPLListValueNode*>(calc_node);
+    ObSEArray<ObRawExpr*, 4> part_column_exprs;
+    ObSEArray<ValueItemExpr*, 4> vies;
+    bool need_replace_column = false;
+    ObSEArray<ObRawExpr*, 4> ori_exprs;
+    ObSEArray<ObRawExpr*, 4> new_exprs;
+    ObRawExprFactory expr_factory(allocator_);
+    ObRawExprCopier expr_copier(expr_factory);
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_columns.count(); ++i) {
+      ObColumnRefRawExpr * cur_expr = partition_columns.at(i).expr_;
+      if (OB_ISNULL(cur_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Column item's expr is NULL", K(ret));
+      } else if (OB_FAIL(part_column_exprs.push_back(cur_expr))) {
+        LOG_WARN("failed to push back part column expr");
+      } else if ((ObIntTC == cur_expr->get_type_class() && ObIntType != cur_expr->get_data_type()) ||
+                 (ObUIntTC == cur_expr->get_type_class() && ObUInt64Type != cur_expr->get_data_type())) {
+        /*对于int类型分区键，OB内部存储的分区定义值是用INT64保存的，因此这里需要把column expr也mock成int64的，
+          否则表达式计算时会出现column的预期类型与实际类型不符的问题*/
+        need_replace_column = true;
+        ObRawExpr *new_expr = nullptr;
+        if (OB_FAIL(expr_copier.copy(cur_expr, new_expr))) {
+          LOG_WARN("failed to copy column expr", K(ret));
+        } else if (OB_ISNULL(new_expr) || OB_UNLIKELY(ObRawExpr::EXPR_COLUMN_REF != new_expr->get_expr_class())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected expr", KPC(new_expr));
+        } else if (ObIntTC == cur_expr->get_type_class()) {
+          new_expr->set_data_type(ObIntType);
+        } else {
+          new_expr->set_data_type(ObUInt64Type);
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(ori_exprs.push_back(cur_expr))) {
+          LOG_WARN("failed to push back origen column expr");
+        } else if (OB_FAIL(new_exprs.push_back(new_expr))) {
+          LOG_WARN("failed to push back cast expr");
+        } else {
+          cur_expr = static_cast<ObColumnRefRawExpr*>(new_expr);
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(row_desc.add_column(cur_expr))) {
+        LOG_WARN("Failed to add column item to temporary row desc", K(ret));
+      } else if (OB_FAIL(cur_expr->add_flag(IS_COLUMNLIZED))) {
+        LOG_WARN("failed to add flag IS_COLUMNLIZED", K(ret));
+      }
+    }
+    /* int类型的列做分区键时，内部保存的分区定义中的值都会转换成INT64存储，因此*/
+    if (OB_SUCC(ret) && need_replace_column) {
+      if (OB_FAIL(expr_copier.add_replaced_expr(ori_exprs, new_exprs))) {
+        LOG_WARN("failed to add replace pair", K(ret));
+      }
+    }
+
+    ObSEArray<ObRawExpr*, 4> part_filters;
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+      ObSEArray<ObRawExpr*, 4> expr_columns;
+      ObRawExpr *expr = filter_exprs.at(i);
+      bool has_exec = false;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null expr");
+      } else if (OB_FAIL(expr->has_exec_param(has_exec))) {
+        LOG_WARN("failed to check expr has exec param");
+      } else if (has_exec || expr->has_flag(CNT_SUB_QUERY) || !expr->is_op_expr()) {
+        // do nothing
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, expr_columns))) {
+        LOG_WARN("extract column exprs failed", K(ret));
+      } else if (!ObOptimizerUtil::subset_exprs(expr_columns, part_column_exprs)) {
+        // do nothing
+      } else if (OB_FAIL(part_filters.push_back(expr))) {
+        LOG_WARN("failed to push back part filter");
+      }
+    }
+
+    if (OB_SUCC(ret) && need_replace_column) {
+      ObSEArray<ObRawExpr*, 4> tmp_exprs;
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_filters.count(); ++i) {
+        ObRawExpr *filter = part_filters.at(i);
+        ObRawExpr *new_filter = nullptr;
+        if (OB_ISNULL(filter)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null expr");
+        } else if (OB_FAIL(expr_copier.copy_on_replace(filter, new_filter))) {
+          LOG_WARN("failed to copy on replace");
+        } else if (new_filter == filter) {
+          if (OB_FAIL(tmp_exprs.push_back(filter))) {
+            LOG_WARN("failed to assign part filters");
+          }
+        } else if (OB_FAIL(new_filter->formalize(session_info))) {
+          LOG_WARN("failed to formalize expr");
+        } else if (OB_FAIL(tmp_exprs.push_back(new_filter))) {
+          LOG_WARN("failed to assign part filters");
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(part_filters.assign(tmp_exprs))) {
+          LOG_WARN("failed to push back exprs");
+        }
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_filters.count(); ++i) {
+      ObRawExpr *expr = part_filters.at(i);
+      void *ptr = allocator_.alloc(sizeof(ValueItemExpr));
+      if (OB_ISNULL(ptr)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("Allocate memory failed", K(ret));
+      } else if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null expr");
+      } else {
+        ValueItemExpr *vie = new(ptr) ValueItemExpr();
+        if (OB_FAIL(extract_value_item_expr(exec_ctx, expr, expr, *vie, &row_desc))) {
+          LOG_WARN("failed to extract value item expr", K(ret));
+        } else if (OB_FAIL(vies.push_back(vie))) {
+          LOG_WARN("failed to push back vie");
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (vies.empty()) {
+        always_true = true;
+        calc_node = NULL;
+      } else if (OB_FAIL(node->vies_.assign(vies))) {
+        LOG_WARN("failed to assign vies");
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(clear_columnlized_in_row_desc(row_desc))) {
+        LOG_WARN("Failed to clear columnlized in row desc", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLocation::calc_list_value_partition_ids(
+    ObExecContext &exec_ctx,
+    ObDASTabletMapper &tablet_mapper,
+    const ParamStore &params,
+    const ObPLListValueNode *calc_node,
+    ObIArray<ObTabletID> &tablet_ids,
+    ObIArray<ObObjectID> &partition_ids,
+    const ObDataTypeCastParams &dtc_params,
+    const ObIArray<ObObjectID> *part_ids) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(calc_node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Calc node should not be NULL", K(ret));
+  } else if (NULL == part_ids) {
+    if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(PARTITION_LEVEL_ONE, OB_INVALID_ID,
+                                   exec_ctx, params, dtc_params, calc_node->vies_, tablet_ids, partition_ids))) {
+      LOG_WARN("fail to get tablet ids", K(ret));
+    }
+  } else {
+    for (int64_t p_idx = 0; OB_SUCC(ret) && p_idx < part_ids->count(); ++p_idx) {
+      ObObjectID part_id = part_ids->at(p_idx);
+      if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(PARTITION_LEVEL_TWO, part_id,
+                                     exec_ctx, params, dtc_params, calc_node->vies_, tablet_ids, partition_ids))) {
+        LOG_WARN("fail to get tablet ids", K(ret));
+      }
+    }
+  }
+  LOG_TRACE("calc list partition ids", KP(calc_node), KP(part_ids), K(partition_ids));
   return ret;
 }
