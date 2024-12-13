@@ -577,17 +577,21 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
   const ObDMLStmt *stmt = NULL;
   ObSEArray<ObRawExpr*, 8> range_exprs;
   ObSEArray<OrderItem, 8> range_orders;
-  path->is_local_order_ = false;
-  path->is_range_order_ = false;
   if (OB_ISNULL(path) || OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
       OB_ISNULL(path->strong_sharding_) || OB_ISNULL(path->table_partition_info_) ||
       OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(path), K(ret));
+  } else if (OB_FALSE_IT(path->is_local_order_ = false)) {
+  } else if (OB_FALSE_IT(path->is_range_order_ = false)) {
   } else if (path->est_cost_info_.index_meta_info_.is_multivalue_index_) {
     // The Json multi-value index scan operator will perform sorting and deduplication based on the primary key or docid.
     // As a result, the final output order of the data may not match the original index table output order.
     // Therefore, it's necessary to add an additional sort operator at the upper level.
+    path->ordering_.reset();
+  } else if (share::is_oracle_mapping_real_virtual_table(path->ref_table_id_)) {
+    // Oracle agent tabel may has different collation between schema and real table.
+    // Hence we should not use the ordering from oracle agent table.
     path->ordering_.reset();
   } else if (path->use_das_ &&
              !path->ordering_.empty() &&
