@@ -209,6 +209,7 @@ int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
   ObString sql;
   ObObjPrintParams print_param;
   print_param.for_dblink_ = 1;
+  //print_param.cs_type_ = ObCollationType::CS_TYPE_UTF8MB4_BIN;
   // only link scan need print flashback query for dblink table
   ObOptimizerContext *opt_ctx = NULL;
   ObSQLSessionInfo *session = NULL;
@@ -229,7 +230,7 @@ int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
   } else {
     stmt_fmt_buf_ = sql.ptr();
     stmt_fmt_len_ = sql.length();
-    LOG_DEBUG("loglink succ to reconstruct link sql", K(sql));
+    LOG_TRACE("succ to reconstruct dblink sql", K(sql), KP(stmt_fmt_buf_), K(stmt_fmt_len_),  K(ret), K(spell_coll));
   }
   return ret;
 }

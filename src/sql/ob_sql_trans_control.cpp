@@ -710,8 +710,6 @@ bool print_log = false;
 int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
-  uint16_t charset_id = 0;
-  uint16_t ncharset_id = 0;
   uint64_t tenant_id = -1;
   uint32_t sessid = -1;
   uint32_t tm_sessid = 0;
@@ -728,9 +726,7 @@ int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
   } else if (lib::is_oracle_mode() &&
              !plan_ctx->get_dblink_ids().empty() &&
              plan_ctx->get_main_xa_trans_branch()) {
-    if (OB_FAIL(ObDblinkService::get_charset_id(session, charset_id, ncharset_id))) {
-      LOG_WARN("failed to get session charset id", K(ret));
-    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
       LOG_WARN("failed to get schema guard", K(ret), K(session->get_effective_tenant_id()));
     } else {
       ObIArray<uint64_t> &dblink_ids = plan_ctx->get_dblink_ids();

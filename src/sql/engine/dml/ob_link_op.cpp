@@ -321,7 +321,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
     if (OB_SUCC(ret)) {
       stmt_buf_pos_ = link_stmt_pos;
     }
-    LOG_WARN("succ to combine link sql", KP(stmt_buf_), K(stmt_buf_pos_), K(ObString(stmt_buf_pos_, stmt_buf_)));
+    LOG_TRACE("succ to combine dblink sql", KP(stmt_buf_), K(stmt_buf_pos_), K(ObString(stmt_buf_pos_, stmt_buf_)));
   }
   return ret;
 }
