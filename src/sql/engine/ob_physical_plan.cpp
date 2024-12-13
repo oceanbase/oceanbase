@@ -660,10 +660,10 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
       if (is_plan_unstable(sample_count, sample_exec_row_count, sample_exec_usec)) {
         set_is_expired(true);
         if (stat_.elapsed_time_ > SLOW_QUERY_TIME_FOR_PLAN_EXPIRE * stat_.execute_times_) {
-          LOG_INFO("plan expired for physical plan avg elapsed_time more than 5ms", K(stat_.plan_id_), K(stat_.elapsed_time_/stat_.execute_times_),
+          LOG_INFO("plan expired for physical plan avg elapsed_time more than 5ms", K(stat_.plan_id_),
                                       K(stat_.elapsed_time_), K(stat_.execute_times_));
         } else {
-          LOG_INFO("plan expired for physical plan avg elapsed_time no more than 5ms", K(stat_.plan_id_), K(stat_.elapsed_time_/stat_.execute_times_),
+          LOG_INFO("plan expired for physical plan avg elapsed_time no more than 5ms", K(stat_.plan_id_),
                                       K(stat_.elapsed_time_), K(stat_.execute_times_));
         }
       }

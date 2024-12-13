@@ -2532,16 +2532,8 @@ int ObPQSetHint::set_pq_set_hint(const DistAlgo dist_algo,
         dist_methods_.at(1) = T_DISTRIBUTE_LOCAL;
         break;
       } 
-      case DistAlgo::DIST_PARTITION_WISE:  {
-        dist_methods_.at(0) = T_DISTRIBUTE_NONE;
-        dist_methods_.at(1) = T_DISTRIBUTE_NONE;
-        break;
-      }
-      case DistAlgo::DIST_EXT_PARTITION_WISE:  {
-        dist_methods_.at(0) = T_DISTRIBUTE_NONE;
-        dist_methods_.at(1) = T_DISTRIBUTE_NONE;
-        break;
-      }
+      case DistAlgo::DIST_PARTITION_WISE:
+      case DistAlgo::DIST_EXT_PARTITION_WISE:
       case DistAlgo::DIST_SET_PARTITION_WISE:  {
         dist_methods_.at(0) = T_DISTRIBUTE_NONE;
         dist_methods_.at(1) = T_DISTRIBUTE_NONE;
@@ -2649,10 +2641,10 @@ bool ObPQSetHint::is_valid_dist_methods(const ObIArray<ObItemType> &dist_methods
 }
 
 // DistAlgo::DIST_BASIC_METHOD indicate 
-DistAlgo ObPQSetHint::get_dist_algo(const ObIArray<ObItemType> &dist_methods,
+uint64_t ObPQSetHint::get_dist_algo(const ObIArray<ObItemType> &dist_methods,
                                     int64_t &random_none_idx)
 {
-  DistAlgo dist_algo = DistAlgo::DIST_INVALID_METHOD;
+  uint64_t dist_algo = DistAlgo::DIST_INVALID_METHOD;
   random_none_idx = OB_INVALID_INDEX;
   if (dist_methods.empty()) {
     dist_algo = DistAlgo::DIST_BASIC_METHOD;
@@ -2713,6 +2705,11 @@ DistAlgo ObPQSetHint::get_dist_algo(const ObIArray<ObItemType> &dist_methods,
         || DistAlgo::DIST_SET_RANDOM == tmp) {
       dist_algo = sql::get_dist_algo(tmp);
     }
+  }
+  if (DistAlgo::DIST_PARTITION_WISE == dist_algo) {
+    dist_algo = DistAlgo::DIST_PARTITION_WISE
+                | DistAlgo::DIST_EXT_PARTITION_WISE
+                | DistAlgo::DIST_SET_PARTITION_WISE;
   }
   return dist_algo;
 }

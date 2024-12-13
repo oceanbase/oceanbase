@@ -2710,7 +2710,7 @@ int ObSelectLogPlan::get_distibute_union_all_method(const ObIArray<ObLogicalOper
   bool is_set_partition_wise = false;
   int64_t random_none_idx = OB_INVALID_INDEX;
   largest_op = NULL;
-  DistAlgo hint_dist_methods = get_log_plan_hint().get_valid_set_dist_algo(&random_none_idx);
+  uint64_t hint_dist_methods = get_log_plan_hint().get_valid_set_dist_algo(&random_none_idx);
   if (OB_ISNULL(select_stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(select_stmt), K(ret));
@@ -2739,7 +2739,7 @@ int ObSelectLogPlan::get_distibute_union_all_method(const ObIArray<ObLogicalOper
   }
   int64_t max_child_parallel = ObGlobalHint::DEFAULT_PARALLEL;
   int64_t first_child_part_cnt = 0;
-  int64_t first_child_server_cnt = 0;
+  int64_t max_child_part_cnt = 0;
   const ObLogicalOperator *child = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < child_ops.count(); ++i) {
     if (OB_ISNULL(child = child_ops.at(i))) {
@@ -2748,9 +2748,12 @@ int ObSelectLogPlan::get_distibute_union_all_method(const ObIArray<ObLogicalOper
     } else if (0 == i) {
       max_child_parallel = child->get_parallel();
       first_child_part_cnt = child->get_part_cnt();
-      first_child_server_cnt = child->get_server_list().count();
-    } else if (max_child_parallel < child->get_parallel()) {
-      max_child_parallel = child->get_parallel();
+      max_child_part_cnt = child->get_part_cnt();
+    } else {
+      max_child_parallel = child->get_parallel() > max_child_parallel ? child->get_parallel()
+                                                                      : max_child_parallel;
+      max_child_part_cnt = child->get_part_cnt() > max_child_part_cnt ? child->get_part_cnt()
+                                                                      : max_child_part_cnt;
     }
   }
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_BASIC_METHOD)) {
@@ -2805,7 +2808,7 @@ int ObSelectLogPlan::get_distibute_union_all_method(const ObIArray<ObLogicalOper
     } else if (!is_set_partition_wise) {
       set_dist_methods &= ~DIST_SET_PARTITION_WISE;
       OPT_TRACE("will not use set partition wise");
-    } else if (first_child_server_cnt <= max_child_parallel &&
+    } else if (max_child_part_cnt <= max_child_parallel &&
                get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5)) {
       OPT_TRACE("will use set partition wise");
     } else {
@@ -3341,7 +3344,7 @@ int ObSelectLogPlan::get_recursive_union_all_distribute_method(ObLogicalOperator
   ObSEArray<ObLogicalOperator*, 2> child_ops;
   dist_set_method = DistAlgo::DIST_INVALID_METHOD;
   uint64_t set_dist_methods = DistAlgo::DIST_BASIC_METHOD | DistAlgo::DIST_PULL_TO_LOCAL;
-  DistAlgo hint_dist_methods = get_log_plan_hint().get_valid_set_dist_algo();
+  uint64_t hint_dist_methods = get_log_plan_hint().get_valid_set_dist_algo();
   if (!ignore_hint && DistAlgo::DIST_INVALID_METHOD != hint_dist_methods) {
     set_dist_methods &= hint_dist_methods;
   }
