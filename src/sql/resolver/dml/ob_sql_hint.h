@@ -471,7 +471,7 @@ struct ObLogPlanHint
   const LogJoinHint* get_join_hint(const ObRelIds &join_tables) const;
   const ObIArray<LogJoinHint> &get_join_hints() const { return join_hints_; }
   SetAlgo get_valid_set_algo() const;
-  DistAlgo get_valid_set_dist_algo(int64_t *random_none_idx = NULL) const;
+  uint64_t get_valid_set_dist_algo(int64_t *random_none_idx = NULL) const;
   int check_valid_set_left_branch(const ObSelectStmt *select_stmt,
                                   bool &hint_valid,
                                   bool &need_swap) const;
