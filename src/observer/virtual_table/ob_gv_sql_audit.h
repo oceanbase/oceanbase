@@ -180,6 +180,7 @@ private:
     FORMAT_SQL_ID,
     USER_CLIENT_PORT,
     TRANS_STATUS,
+    PLSQL_COMPILE_TIME,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;
