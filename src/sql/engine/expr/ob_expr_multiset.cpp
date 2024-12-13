@@ -862,13 +862,17 @@ int ObExprMultiSet::eval_composite_relative_anonymous_block(ObExecContext &exec_
 
     out_args.reuse();
 
-    if (OB_FAIL(GCTX.pl_engine_->execute(exec_ctx,
-                                         params,
-                                         OB_INVALID_ID,
-                                         pl,
-                                         out_args))) {
-      LOG_WARN("failed to execute PS anonymous bolck",
-               K(ret), K(pl), K(params), K(out_args));
+    CREATE_WITH_TEMP_CONTEXT(lib::ContextParam().set_mem_attr(MTL_ID(),
+                                                              GET_PL_MOD_STRING(pl::OB_PL_MULTISET),
+                                                              ObCtxIds::DEFAULT_CTX_ID)) {
+      if (OB_FAIL(GCTX.pl_engine_->execute(exec_ctx,
+                                          params,
+                                          OB_INVALID_ID,
+                                          pl,
+                                          out_args))) {
+        LOG_WARN("failed to execute PS anonymous bolck",
+                 K(ret), K(pl), K(params), K(out_args));
+      }
     }
   }
 

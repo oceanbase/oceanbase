@@ -2959,13 +2959,10 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
     SET_CMP_RESULT(COLL_PRED_FALSE, COLL_PRED_TRUE, COLL_PRED_INVALID);
   } else if (0 == c1->get_actual_count() && 0 == c2->get_actual_count()) {
     SET_CMP_RESULT(COLL_PRED_TRUE, COLL_PRED_FALSE, COLL_PRED_INVALID);
-  } else if (c1->is_contain_null_val() || c2->is_contain_null_val()) {
-    cmp_result = CollectionPredRes::COLL_PRED_NULL;
-  } else if (c1 == c2) {
-    // self compare
-    SET_CMP_RESULT(COLL_PRED_TRUE, COLL_PRED_FALSE, COLL_PRED_INVALID);
   } else {
     common::ObArray<const ObObj *> c1_copy, c2_copy;
+    int64_t c1_null_count = 0;
+    int64_t c2_null_count = 0;
     // for (int64_t i = 0; OB_SUCC(ret) && i < c1->get_count(); ++i) {
     //   OZ (c1_copy.push_back(reinterpret_cast<const ObObj*>(c1->get_data()) + i));
     //   OZ (c2_copy.push_back(reinterpret_cast<const ObObj*>(c2->get_data()) + i));
@@ -2976,6 +2973,7 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
       CK (OB_NOT_NULL(elem));
       if (OB_SUCC(ret)) {
         if (elem->is_null()) {
+          c1_null_count += 1;
         } else if (c1->is_elem_deleted(i, del_flag)) {
           LOG_WARN("failed to test if element is deleted", K(*elem), K(ret), K(i));
         } else {
@@ -2990,6 +2988,7 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
       CK (OB_NOT_NULL(elem));
       if (OB_SUCC(ret)) {
         if (elem->is_null()) {
+          c2_null_count += 1;
         } else if (c2->is_elem_deleted(i, del_flag)) {
           LOG_WARN("failed to test if element is deleted", K(*elem), K(ret), K(i));
         } else {
@@ -3000,54 +2999,59 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
       }
     }
     if (OB_SUCC(ret)) {
-      // 小于比较函数
-      obj_cmp_func lt_cmp_fp;
-      const ObTimeZoneInfo *tz_info = get_timezone_info(exec_ctx.get_my_session());
-      int64_t tz_off;
-      CK(NULL != tz_info);
-      OZ(get_tz_offset(tz_info, tz_off));
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(get_pl_udt_cmp_func(c1->get_element_type().get_obj_type(),
-                                      c2->get_element_type().get_obj_type(),
-                                      CO_LT,
-                                      lt_cmp_fp))) {
-        LOG_WARN("set compare function failed.", K(ret), K(obj1), K(obj2));
+      if (0 == c1_copy.count()) {  // all element in c1 is NULL
+        cmp_result = CollectionPredRes::COLL_PRED_NULL;
       } else {
-        ObCompareCtx cmp_ctx(c1->get_element_type().get_obj_type(),
-                             c1->get_element_type().get_collation_type(),
-                             false /* null safe */,
-                             tz_off,
-                             default_null_pos());
-        struct udtComparer{
-          udtComparer(ObCompareCtx &cmp_ctx, common::obj_cmp_func cmp_func) :
-          cmp_ctx_(cmp_ctx),
-          cmp_func_(cmp_func) {}
-
-          bool operator()(const ObObj *&e1, const ObObj *&e2) {
-            int cmpRes = cmp_func_(*e1, *e2, cmp_ctx_);
-            return cmpRes;
-          }
-          ObCompareCtx &cmp_ctx_;
-          common::obj_cmp_func cmp_func_;
-        };
-        udtComparer uc(cmp_ctx, lt_cmp_fp);
-        const ObObj **first = &c1_copy.at(0);
-        lib::ob_sort(first, first + c1_copy.count(), uc);
-        first = &c2_copy.at(0);
-        lib::ob_sort(first, first + c2_copy.count(), uc);
-        int cmp_res = 1;
-        // 可能是等值或者不等值
-        common::obj_cmp_func eq_cmp_fp;
-        ObObjType type1 = c1->get_element_type().get_obj_type();
-        ObObjType type2 = c2->get_element_type().get_obj_type();
-        if (OB_FAIL(get_pl_udt_cmp_func(type1, type2, CO_EQ, eq_cmp_fp))) {
-          LOG_WARN("get cmp func failed", K(type1), K(type2), K(cmp_op), K(ret));
+        common::hash::ObHashMap<ObObj, int64_t, common::hash::NoPthreadDefendMode> c1_map;
+        if (OB_FAIL(c1_map.create(c1_copy.count(), ObModIds::OB_SQL_HASH_SET))) {
+          LOG_WARN("failed to create hash map of c1", K(ret), K(obj1), KPC(c1), K(c1_copy));
         } else {
-          for (int64_t i = 0; 1 == cmp_res && i < c1_copy.count(); ++i) {
-           cmp_res = eq_cmp_fp(*(c1_copy.at(i)), *(c2_copy.at(i)), cmp_ctx);
+          for (int64_t i = 0; OB_SUCC(ret) && i < c1_copy.count(); ++i) {
+            if (OB_ISNULL(c1_copy.at(i))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected NULL element ptr", K(ret), K(i), K(obj1), KPC(c1), K(c1_copy));
+            } else if (OB_FAIL(c1_map.set_refactored(*c1_copy.at(i), 1))) {
+              if (OB_HASH_EXIST == ret) {
+                ret = OB_SUCCESS;
+
+                int64_t *count = const_cast<int64_t*>(c1_map.get(*c1_copy.at(i)));
+
+                if (OB_ISNULL(count)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected NULL count ptr", K(ret), K(i), KPC(c1_copy.at(i)));
+                } else {
+                  *count += 1;
+                }
+              } else {
+                LOG_WARN("failed to set_refactored", K(ret), K(i), KPC(c1_copy.at(i)));
+              }
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            int64_t c2_unique = 0;
+
+            for (int64_t i = 0; OB_SUCC(ret) && i < c2_copy.count(); ++i) {
+              int64_t *count = const_cast<int64_t*>(c1_map.get(*c2_copy.at(i)));
+
+              if (OB_NOT_NULL(count) && 0 < *count) {
+                *count -= 1;
+              } else {
+                c2_unique +=1;
+              }
+            }
+
+            if (OB_SUCC(ret)) {
+              if (0 == c2_unique && 0 == c2_null_count) {
+                SET_CMP_RESULT(COLL_PRED_TRUE, COLL_PRED_FALSE, COLL_PRED_INVALID);
+              } else if (c2_unique > c1_null_count) {
+                SET_CMP_RESULT(COLL_PRED_FALSE, COLL_PRED_TRUE, COLL_PRED_INVALID);
+              } else {
+                cmp_result = CollectionPredRes::COLL_PRED_NULL;
+              }
+            }
           }
         }
-        cmp_result = static_cast<CollectionPredRes>(CO_EQ == cmp_op ? cmp_res : !cmp_res);
       }
     }
   }
@@ -3102,19 +3106,19 @@ int ObRelationalExprOperator::eval_compare_composite(CollectionPredRes &cmp_resu
   // LHS = common_part(C) + unique_part(Ul) + null_part(Nl)
   // RHS = common_part(C) + unique_part(Ur) + null_part(Nr)
   // LHS == RHS if and only if |LHS| == |RHS| && |Ul| == 0 && |Nl| == 0 && |Ur| == 0 && |Nr| == 0
-  // LHS != RHS if and only if |LHS| != |RHS| || |Ul| > |Nr| || |Ur| > |Nr|
+  // LHS != RHS if and only if |LHS| != |RHS| || |Ul| > |Nr| || |Ur| > |Nl|
   // otherwise (LHS == RHS) is NULL, because for all element, there are always a counterpart(equal or NULL).
 
   // when |LHS| == |RHS|, we have |Ul| + |Nl| = |Ur| + |Nr|
   // which leads to |Ul| == 0 && |Nl| == 0 <=> |Ur| == 0 && |Nr| == 0
-  // and |Ul| > |Nr| <=> |Ur| > |Nr|
+  // and |Ul| > |Nr| <=> |Ur| > |Nl|
   // these formulas can reduce the condition.
   static constexpr char CMP_EQ_PL[] =
       "declare\n"
       "cmp boolean;\n"
       "round boolean;\n"
-      "lhs_null pls_integer := 0;\n"  // Nl
-      "rhs_null pls_integer := 0;\n"  // Nr
+      "lhs_null pls_integer := 0;\n" // Nl
+      "rhs_null pls_integer := 0;\n" // Nr
       "matched pls_integer := 0;\n"  // C
       "null_result boolean := NULL;\n"
       "begin\n"
@@ -3123,6 +3127,8 @@ int ObRelationalExprOperator::eval_compare_composite(CollectionPredRes &cmp_resu
       "  :result := FALSE;\n"
       "elsif :lhs.count = 0 then\n"
       "  :result := TRUE;\n"
+      "elsif :lhs.count = 1 then\n"
+      "  :result := (:lhs(:lhs.first) = :rhs(:rhs.first));\n"
       "else\n"
       "  for j in :rhs.first..:rhs.last loop\n"
       "    if :rhs.exists(j) and (:rhs(j) = :rhs(j)) is null then\n"

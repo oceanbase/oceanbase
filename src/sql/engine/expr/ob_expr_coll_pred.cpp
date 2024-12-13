@@ -532,7 +532,14 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         } else {
           pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
           if (OB_NOT_NULL(c2)) {
-            if (c2->is_of_composite()) {
+            if (ObTinyIntType == obj1.get_type()
+                  && ObTinyIntType != c2->get_element_type().get_obj_type()) {
+              ret = OB_ERR_CALL_WRONG_ARG;
+
+              LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG,
+                            MEMBER_OF_EXPR_NAME.length(), MEMBER_OF_EXPR_NAME.ptr());
+              LOG_WARN("failed to eval MEMBER OF, BOOLEAN cannot convert to other types", K(ret), K(obj1), K(obj2));
+            } else if (c2->is_of_composite()) {
               ObObj res;
               bool tmp_result = false;
 
@@ -603,7 +610,7 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
                     } else if (has_null) {
                       result.set_null();
                     } else {
-                      result.set_bool(false);
+                      result.set_bool(MULTISET_MODIFIER_NOT == info->ms_modifier_);
                     }
                   }
                 }
@@ -638,7 +645,7 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
               int res_cnt = 0;
               if (0 == count) {
                 // empty nest table is a set
-                result.set_tinyint(1);
+                result.set_tinyint(MULTISET_MODIFIER_NOT != info->ms_modifier_);
               } else if (!c1->is_inited()) {
                 result.set_null();
               } else {
