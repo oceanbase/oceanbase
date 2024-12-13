@@ -1551,6 +1551,19 @@ int ObILSRestoreState::report_unfinished_tablet_cnt(const int64_t unfinished_tab
   return ret;
 }
 
+int ObILSRestoreState::check_recover_finish(bool &is_finish) const
+{
+  int ret = OB_SUCCESS;
+  is_finish = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(check_replay_to_target_scn_(ls_restore_arg_->get_restore_scn(), is_finish))) {
+    LOG_WARN("failed to check clog replay to restore scn", K(ret));
+  }
+  return ret;
+}
+
 //================================ObLSRestoreStartState=======================================
 ObLSRestoreStartState::ObLSRestoreStartState()
   : ObILSRestoreState(ObLSRestoreStatus::Status::RESTORE_START)
@@ -2295,15 +2308,6 @@ ObLSQuickRestoreState::~ObLSQuickRestoreState()
 {
 }
 
-int ObLSQuickRestoreState::check_recover_finish(bool &is_finish) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_replay_to_target_scn_(ls_restore_arg_->get_restore_scn(), is_finish))) {
-    LOG_WARN("failed to check clog replay to restore scn", K(ret));
-  }
-
-  return ret;
-}
 
 int ObLSQuickRestoreState::do_restore()
 {
@@ -2352,6 +2356,10 @@ int ObLSQuickRestoreState::leader_quick_restore_()
       }
     } else if (OB_FAIL(report_finish_replay_clog_lsn_())) {
       LOG_WARN("fail to report finish replay clog lsn", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (ls_->get_ls_id().is_user_ls() && !is_finish) {
+      // sys ls does not have to finish replay, since upgrade log requires readable sys ls
     } else if (!tablet_mgr_.is_restore_completed()) {
     } else if (!has_rechecked_after_clog_recovered_) {
       // Force reload all tablets, ensure all transfer tablets has no transfer table.
@@ -2419,6 +2427,10 @@ int ObLSQuickRestoreState::follower_quick_restore_()
       }
     } else if (OB_FAIL(report_finish_replay_clog_lsn_())) {
       LOG_WARN("fail to report finish replay clog lsn", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (ls_->get_ls_id().is_user_ls() && !is_finish) {
+      // sys ls does not have to finish replay, since upgrade log requires readable sys ls
     } else if (!tablet_mgr_.is_restore_completed()) {
     } else if (!has_rechecked_after_clog_recovered_) {
       // Force reload all tablets, ensure all transfer tablets has no transfer table.
@@ -2660,8 +2672,23 @@ int ObLSRestoreMajorState::leader_restore_major_data_()
   } else if (OB_FAIL(tablet_mgr_.choose_tablets_to_restore(tablet_need_restore))) {
     LOG_WARN("fail to choose need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
+    bool is_replay_finish = false;
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::WAIT_RESTORE_MAJOR_DATA);
-    if (!tablet_mgr_.is_restore_completed()) {
+    if (ls_->get_ls_id().is_sys_ls()) {
+      if (OB_FAIL(check_clog_replay_finish_(is_replay_finish))) {
+        LOG_WARN("fail to check clog replay finish", K(ret), KPC(ls_));
+      } else if (!is_replay_finish) {
+        if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+          LOG_INFO("clog replay not finish, wait later", KPC(ls_));
+        }
+      } else if (OB_FAIL(report_finish_replay_clog_lsn_())) {
+        LOG_WARN("fail to report finish replay clog lsn", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (ls_->get_ls_id().is_sys_ls() && !is_replay_finish) {
+    } else if (!tablet_mgr_.is_restore_completed()) {
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance status to WAIT_RESTORE_MAJOR_DATA from RESTORE_MAJOR_DATA", K(ret), KPC(ls_), K(next_status));
     } else {
@@ -2703,7 +2730,22 @@ int ObLSRestoreMajorState::follower_restore_major_data_()
     LOG_WARN("fail to choose need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::WAIT_RESTORE_MAJOR_DATA);
-    if (!tablet_mgr_.is_restore_completed()) {
+    bool is_replay_finish = false;
+    if (ls_->get_ls_id().is_sys_ls()) {
+      if (OB_FAIL(check_clog_replay_finish_(is_replay_finish))) {
+        LOG_WARN("fail to check clog replay finish", K(ret), KPC(ls_));
+      } else if (!is_replay_finish) {
+        if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+          LOG_INFO("clog replay not finish, wait later", KPC(ls_));
+        }
+      } else if (OB_FAIL(report_finish_replay_clog_lsn_())) {
+        LOG_WARN("fail to report finish replay clog lsn", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (ls_->get_ls_id().is_sys_ls() && !is_replay_finish) {
+    } else if (!tablet_mgr_.is_restore_completed()) {
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance status", K(ret), K(next_status), KPC(ls_));
     } else {
@@ -2751,6 +2793,26 @@ int ObLSRestoreMajorState::do_restore_major_(
     LOG_WARN("fail to schedule schedule tablet group restore", KR(ret), K(arg), K(ls_restore_status_));
   } else {
     LOG_INFO("success schedule restore major", K(ret), K(arg), K(ls_restore_status_));
+  }
+  return ret;
+}
+
+int ObLSRestoreMajorState::check_clog_replay_finish_(bool &is_finish)
+{
+  int ret = OB_SUCCESS;
+  bool done = false;
+  ObLogRestoreHandler *log_restore_handle = nullptr;
+  if (OB_ISNULL(log_restore_handle = ls_->get_log_restore_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log restore handler can't nullptr", K(ret));
+  } else if (OB_FAIL(log_restore_handle->check_restore_done(ls_restore_arg_->get_restore_scn(), done))) {
+    if (OB_EAGAIN == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to check clog replay done", K(ret), KPC(ls_));
+    }
+  } else if (done) {
+    is_finish = true;
   }
   return ret;
 }

@@ -187,12 +187,7 @@ public:
   storage::ObLS *get_ls() const { return ls_; }
 
   // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const
-  {
-    is_finish = false;
-    return OB_SUCCESS;
-  }
-
+  int check_recover_finish(bool &is_finish) const;
   int report_start_replay_clog_lsn_();
   int report_finish_replay_clog_lsn_();
   int add_finished_tablet_cnt(const int64_t cnt);
@@ -354,9 +349,6 @@ public:
   virtual ~ObLSQuickRestoreState();
   virtual int do_restore() override;
 
-  // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override;
-
 private:
   int leader_quick_restore_();
   int follower_quick_restore_();
@@ -375,13 +367,6 @@ public:
   ObLSQuickRestoreFinishState();
   virtual ~ObLSQuickRestoreFinishState();
   virtual int do_restore() override;
-
-  // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
-  {
-    is_finish = true;
-    return OB_SUCCESS;
-  }
 private:
   int leader_quick_restore_finish_();
   int follower_quick_restore_finish_();
@@ -394,18 +379,12 @@ public:
   ObLSRestoreMajorState();
   virtual ~ObLSRestoreMajorState();
   virtual int do_restore() override;
-
-  // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
-  {
-    is_finish = true;
-    return OB_SUCCESS;
-  }
 private:
   int leader_restore_major_data_();
   int follower_restore_major_data_();
   int do_restore_major_(
       const ObLSRestoreTaskMgr::ToRestoreTabletGroup &tablet_need_restore);
+  int check_clog_replay_finish_(bool &is_finish);
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreMajorState);
 };
 
@@ -415,13 +394,6 @@ class ObLSRestoreFinishState final : public ObILSRestoreState
     ObLSRestoreFinishState();
     virtual ~ObLSRestoreFinishState();
     virtual int do_restore() override;
-
-  // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
-  {
-    is_finish = true;
-    return OB_SUCCESS;
-  }
   private:
     int restore_finish_();
     DISALLOW_COPY_AND_ASSIGN(ObLSRestoreFinishState);
@@ -486,13 +458,6 @@ public:
     : ObLSRestoreWaitState(ObLSRestoreStatus::Status::WAIT_RESTORE_TO_CONSISTENT_SCN, false /* require multi replica sync */) {}
   virtual ~ObLSWaitRestoreConsistentScnState() {}
 
-  // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
-  {
-    is_finish = false;
-    return OB_SUCCESS;
-  }
-
 protected:
   int check_can_advance_status_(bool &can) const override;
 
@@ -507,13 +472,6 @@ public:
   ObLSRestoreWaitQuickRestoreState()
     : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_QUICK_RESTORE, false /* require multi replica sync */) {}
   virtual ~ObLSRestoreWaitQuickRestoreState() {}
-
-  // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
-  {
-    is_finish = true;
-    return OB_SUCCESS;
-  }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitQuickRestoreState);
 };
@@ -525,14 +483,6 @@ public:
     : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_MAJOR_DATA, false /* require multi replica sync */),
       has_reported_(false) {}
   virtual ~ObLSRestoreWaitRestoreMajorDataState() {}
-
-  // Check if log has been recovered to restore_scn.
-  virtual int check_recover_finish(bool &is_finish) const override
-  {
-    is_finish = true;
-    return OB_SUCCESS;
-  }
-
 protected:
   virtual int report_restore_stat_() override;
 
