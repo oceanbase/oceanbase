@@ -14,7 +14,6 @@
 #define OCEANBASE_SHARE_AGGREGATE_FIRST_ROW_H_
 
 #include "iaggregate.h"
-#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
