@@ -169,9 +169,6 @@ int ObDASDocIdMergeIter::inner_reuse()
       LOG_WARN("fail to reuse rowkey doc iter", K(ret));
     }
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(merge_memctx_)) {
-    merge_memctx_->reset_remain_one_page();
-  }
   return ret;
 }
 
@@ -479,7 +476,7 @@ int ObDASDocIdMergeIter::sorted_merge_join_row()
         LOG_WARN("fail to get next rowkey doc row", K(ret));
       } else if (OB_FAIL(get_rowkey(allocator, rowkey_doc_ctdef_, rowkey_doc_rtdef_, rowkey_doc_rowkey))) {
         LOG_WARN("fail to get rowkey doc rowkey");
-      } else if (rowkey_doc_rowkey.equal(data_table_rowkey, is_found)) {
+      } else if (OB_FAIL(rowkey_doc_rowkey.equal(data_table_rowkey, is_found))) {
         LOG_WARN("fail to equal rowkey between data table and rowkey", K(ret));
       }
       LOG_TRACE("compare one row in rowkey doc", K(ret), "need_skip=", !is_found, K(data_table_rowkey),
@@ -541,7 +538,7 @@ int ObDASDocIdMergeIter::sorted_merge_join_rows(int64_t &count, int64_t capacity
           bool is_equal = false;
           LOG_TRACE("compare one row in rowkey doc", K(ret), K(i), K(j), K(rowkeys_in_data_table.at(i)),
               K(rowkeys_in_rowkey_doc.at(j)));
-          if (rowkeys_in_rowkey_doc.at(j).equal(rowkeys_in_data_table.at(i), is_equal)) {
+          if (OB_FAIL(rowkeys_in_rowkey_doc.at(j).equal(rowkeys_in_data_table.at(i), is_equal))) {
             LOG_WARN("fail to equal rowkey between data table and rowkey", K(ret));
           } else if (is_equal) {
             if (OB_FAIL(doc_ids.push_back(doc_ids_in_rowkey_doc.at(j)))) {
