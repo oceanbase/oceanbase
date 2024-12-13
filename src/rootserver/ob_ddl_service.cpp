@@ -4664,14 +4664,18 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
   const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
   bool has_drop_index = false;
   bool has_create_index = false;
+  bool is_add_many_fts_indexes = false;
   has_drop_and_add_index = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
     ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
-    if (OB_ISNULL(index_arg)) {
+    ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
+    if (OB_ISNULL(index_arg) || OB_ISNULL(create_index_arg)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("index arg should not be null", K(ret));
     } else {
       const ObIndexArg::IndexActionType type = index_arg->index_action_type_;
+      bool is_add_fts_or_multivalue_index = share::schema::is_fts_or_multivalue_index(create_index_arg->index_type_)
+                                            &&  ObIndexArg::ADD_INDEX == type;
       switch(type) {
         case ObIndexArg::DROP_PRIMARY_KEY: {
           if (!is_invalid_ddl_type(ddl_type)) {
@@ -4770,6 +4774,14 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
         }
         if (!has_drop_and_add_index) {
           has_drop_and_add_index = has_drop_index && has_create_index;
+        }
+        if (!is_add_many_fts_indexes) {
+          is_add_many_fts_indexes =  is_add_fts_or_multivalue_index;
+        } else if (is_add_fts_or_multivalue_index) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("adding many fulltext or multivalue indexes at the same time is a high-risk operation, which is not support", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+              "adding many fulltext or multivalue indexes at the same time is a high-risk operation, which is");
         }
       }
     }
