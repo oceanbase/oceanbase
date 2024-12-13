@@ -1546,8 +1546,12 @@ int ObTabletSplitMergeTask::build_create_sstable_param(
     create_sstable_param.nested_offset_ = res.nested_offset_;
     create_sstable_param.data_block_ids_ = res.data_block_ids_;
     create_sstable_param.other_block_ids_ = res.other_block_ids_;
+    create_sstable_param.root_macro_seq_ = res.root_macro_seq_;
     create_sstable_param.ddl_scn_.set_min();
     create_sstable_param.table_backup_flag_ = res.table_backup_flag_; // to tag whether there is any remote macro block.
+    create_sstable_param.full_column_cnt_ = 0;
+    create_sstable_param.tx_data_recycle_scn_.set_min();
+    create_sstable_param.column_group_cnt_ = 1;
     MEMCPY(create_sstable_param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     if (src_table.is_major_sstable()) {
       if (OB_FAIL(create_sstable_param.column_checksums_.assign(res.data_column_checksums_))) {
@@ -1639,12 +1643,19 @@ int ObTabletSplitMergeTask::build_create_empty_sstable_param(
     create_sstable_param.data_blocks_cnt_ = 0;
     create_sstable_param.micro_block_cnt_ = 0;
     create_sstable_param.use_old_macro_block_count_ = 0;
+    create_sstable_param.row_count_ = 0;
     create_sstable_param.data_checksum_ = 0;
     create_sstable_param.occupy_size_ = 0;
     create_sstable_param.ddl_scn_.set_min();
     create_sstable_param.filled_tx_scn_ = end_scn;
+    create_sstable_param.tx_data_recycle_scn_.set_min();
     create_sstable_param.original_size_ = 0;
     create_sstable_param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+    create_sstable_param.nested_offset_ = 0;
+    create_sstable_param.nested_size_ = 0;
+    create_sstable_param.root_macro_seq_ = 0;
+    create_sstable_param.full_column_cnt_ = 0;
+    create_sstable_param.column_group_cnt_ = 1;
   }
   return ret;
 }

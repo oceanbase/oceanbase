@@ -1688,12 +1688,16 @@ int ObTabletLobWriteDataTask::create_sstable(ObSSTableIndexBuilder *sstable_inde
     create_sstable_param.co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
 
     create_sstable_param.ddl_scn_.set_min();
+    create_sstable_param.full_column_cnt_ = 0;
+    create_sstable_param.tx_data_recycle_scn_.set_min();
+    create_sstable_param.column_group_cnt_ = 1;
 
     // init from merge_res
     create_sstable_param.column_cnt_ = res.data_column_cnt_;
     create_sstable_param.max_merged_trans_version_ = res.max_merged_trans_version_;
     create_sstable_param.nested_size_ = res.nested_size_;
     create_sstable_param.nested_offset_ = res.nested_offset_;
+    create_sstable_param.root_macro_seq_ = res.root_macro_seq_;
 
     // ObTabletCreateSSTableParam::inner_init_with_merge_res
     ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
