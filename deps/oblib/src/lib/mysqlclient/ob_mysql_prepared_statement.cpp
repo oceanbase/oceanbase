@@ -2391,11 +2391,15 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
       } else {
         field_cnt = 1;
       }
-      OX (elem_desc.set_field_count(field_cnt));
-      OX (elem_desc.set_pl_type(coll_type->get_element_type().get_type()));
-      OX (elem_desc.set_udt_id(coll_type->get_element_type().get_user_type_id()));
-      OX (coll->set_element_desc(elem_desc));
-      OX (param.set_extend(reinterpret_cast<int64_t>(ptr), coll_type->get_type(), init_size));
+      if (OB_SUCC(ret)) {
+        elem_desc.set_field_count(field_cnt);
+        elem_desc.set_pl_type(coll_type->get_element_type().get_type());
+        elem_desc.set_udt_id(coll_type->get_element_type().get_user_type_id());
+        coll->set_element_desc(elem_desc);
+        param.set_extend(reinterpret_cast<int64_t>(ptr), coll_type->get_type(), init_size);
+      } else if (NULL != ptr) {
+        allocator.free(ptr);
+      }
     }
   }
   // deal with is null
