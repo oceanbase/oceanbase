@@ -248,7 +248,11 @@ public:
   int update_storage_schema_by_memtable(
     const ObStorageSchema &schema_on_tablet,
     const ObTablesHandleArray &merge_tables_handle);
-  static bool need_swap_tablet(ObProtectedMemtableMgrHandle &memtable_mgr_handle, const int64_t row_count, const int64_t macro_count);
+  static bool need_swap_tablet(
+    ObProtectedMemtableMgrHandle &memtable_mgr_handle,
+    const int64_t row_count,
+    const int64_t macro_count,
+    const int64_t cg_count);
   virtual int get_macro_seq_by_stage(const ObGetMacroSeqStage stage,
                                      int64_t &macro_start_seq) const;
   int build_update_table_store_param(
@@ -298,6 +302,8 @@ protected:
   int get_convert_compaction_info(); // for convert co major merge
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
+  static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD_FOR_CS = 300L * 1000L; // 30w
+  static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD_FOR_CS = 100L;
 public:
   ObCompactionMemoryContext mem_ctx_;
   ObStaticMergeParam static_param_;

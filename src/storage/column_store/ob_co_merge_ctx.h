@@ -155,7 +155,6 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   INHERIT_TO_STRING_KV("ObCOTabletMergeCtx", ObBasicTabletMergeCtx,
       K_(array_count), K_(exe_stat), K_(base_rowkey_cg_idx));
   virtual int mark_cg_finish(const int64_t start_cg_idx, const int64_t end_cg_idx) { return OB_SUCCESS; }
-  static const int64_t DEFAULT_CG_MERGE_BATCH_SIZE = 10;
   static const int64_t SCHEDULE_MINOR_CG_CNT_THREASHOLD = 20;
   static const int64_t SCHEDULE_MINOR_TABLE_CNT_THREASHOLD = 3;
   static const int64_t SCHEDULE_MINOR_ROW_CNT_THREASHOLD = 100 * 1000L;

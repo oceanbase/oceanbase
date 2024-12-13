@@ -1083,7 +1083,7 @@ ObCOMergeDagNet::ObCOMergeDagNet()
     finish_added_(false),
     batch_reduced_(false),
     ctx_lock_(),
-    merge_batch_size_(ObCOTabletMergeCtx::DEFAULT_CG_MERGE_BATCH_SIZE),
+    merge_batch_size_(DEFAULT_CG_MERGE_BATCH_SIZE),
     merge_status_(COMergeStatus::NOT_INIT),
     basic_param_(),
     tmp_allocator_("CoDagNet", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::MERGE_NORMAL_CTX_ID),
@@ -1248,10 +1248,10 @@ int ObCOMergeDagNet::choose_merge_batch_size(const int64_t column_group_cnt)
   if (OB_UNLIKELY(column_group_cnt <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected count", K(ret), K(column_group_cnt));
-  } else if (column_group_cnt < ObCOTabletMergeCtx::DEFAULT_CG_MERGE_BATCH_SIZE * 2) {
+  } else if (column_group_cnt < ALL_CG_IN_ONE_BATCH_CNT) {
     merge_batch_size_ = column_group_cnt;
   } else {
-    const int64_t batch_cnt = column_group_cnt / ObCOTabletMergeCtx::DEFAULT_CG_MERGE_BATCH_SIZE;
+    const int64_t batch_cnt = column_group_cnt / DEFAULT_CG_MERGE_BATCH_SIZE;
     merge_batch_size_ = column_group_cnt / batch_cnt;
   }
 
@@ -1314,7 +1314,7 @@ void ObCOMergeDagNet::try_update_merge_batch_size(const int64_t column_group_cnt
   if (mem_allow_batch_size > merge_batch_size_ * 2) {
     merge_batch_size_ = MIN(merge_batch_size_ * 2, column_group_cnt);
   } else if (OB_TMP_FAIL(choose_merge_batch_size(column_group_cnt))) {
-    merge_batch_size_ = ObCOTabletMergeCtx::DEFAULT_CG_MERGE_BATCH_SIZE;
+    merge_batch_size_ = DEFAULT_CG_MERGE_BATCH_SIZE;
     LOG_WARN_RET(tmp_ret, "failed to choose merge batch size, use default batch size", K(column_group_cnt), K(merge_batch_size_));
   }
 
