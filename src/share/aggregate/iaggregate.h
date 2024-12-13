@@ -26,6 +26,7 @@
 #include "share/aggregate/agg_ctx.h"
 #include "share/aggregate/aggr_extra.h"
 #include "sql/engine/basic/ob_compact_row.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -240,7 +241,7 @@ public:
 #define INNER_ADD(vec_tc)                                                                          \
   case (vec_tc): {                                                                                 \
     ret = inner_add_for_multi_groups<ObFixedLengthFormat<RTCType<vec_tc>>>(                        \
-      agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr->get_vector(eval_ctx));       \
+      agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr);                             \
   } break
 
     int ret = OB_SUCCESS;
@@ -248,7 +249,6 @@ public:
     ObEvalCtx &eval_ctx = agg_ctx.eval_ctx_;
     VectorFormat fmt = VEC_INVALID;
     ObExpr *param_expr = nullptr;
-    ObIVector *param_vec = nullptr;
     Derived *derived_this = static_cast<Derived *>(this);
 #ifndef NDEBUG
     int64_t mock_skip_data = 0;
@@ -272,29 +272,27 @@ public:
           SQL_LOG(WARN, "inner add one row failed", K(ret));
         }
       }
-    } else if (OB_FAIL(get_nested_expr_vec(agg_ctx, param_expr, param_vec))) {
-      SQL_LOG(WARN, "get nested expr vec failed", K(ret));
     } else {
       VecValueTypeClass vec_tc = param_expr->get_vec_value_tc();
       switch(fmt) {
       case common::VEC_UNIFORM: {
         ret = inner_add_for_multi_groups<uniform_fmt<Derived::IN_TC, false>>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr);
         break;
       }
       case common::VEC_UNIFORM_CONST: {
         ret = inner_add_for_multi_groups<uniform_fmt<Derived::IN_TC, true>>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr);
         break;
       }
       case common::VEC_DISCRETE: {
         ret = inner_add_for_multi_groups<discrete_fmt<Derived::IN_TC>>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr);
         break;
       }
       case common::VEC_CONTINUOUS: {
         ret = inner_add_for_multi_groups<continuous_fmt<Derived::IN_TC>>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr);
         break;
       }
       case common::VEC_FIXED: {
@@ -443,19 +441,32 @@ protected:
   template <typename ColumnFmt>
   int inner_add_for_multi_groups(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows, RowSelector &row_sel,
                                  const int64_t batch_size, const int32_t agg_col_id,
-                                 ObIVector *ivec)
+                                 ObExpr *param_expr)
   {
     int ret = OB_SUCCESS;
+    ObIVector *ivec = param_expr->get_vector(agg_ctx.eval_ctx_);
     ColumnFmt *param_vec = static_cast<ColumnFmt *>(ivec);
+    VectorFormat fmt = ivec->get_format();
+    ObArenaAllocator tmp_allocator;
     bool is_null = false;
     const char *payload = nullptr;
     int32_t len = 0;
     Derived *derived_this = static_cast<Derived *>(this);
     for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
       int64_t batch_idx = row_sel.index(i);
-      param_vec->get_payload(batch_idx, is_null, payload, len);
+      if (param_expr->is_nested_expr() && !is_uniform_format(ivec->get_format())) {
+        payload = nullptr;
+        if (OB_FAIL(ObArrayExprUtils::get_collection_payload(tmp_allocator, agg_ctx.eval_ctx_, *param_expr, batch_idx, payload, len))) {
+          SQL_LOG(WARN, "get nested collection payload failed", K(ret));
+        } else {
+          is_null = (payload == nullptr);
+        }
+      } else {
+        param_vec->get_payload(batch_idx, is_null, payload, len);
+      }
       char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_rows[batch_idx]);
-      if (OB_FAIL(derived_this->add_one_row(agg_ctx, batch_idx, batch_size, is_null, payload, len,
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(derived_this->add_one_row(agg_ctx, batch_idx, batch_size, is_null, payload, len,
                                             agg_col_id, agg_cell))) {
         SQL_LOG(WARN, "inner add one row failed", K(ret));
       }
@@ -465,7 +476,7 @@ protected:
   template <>
   int inner_add_for_multi_groups<ObVectorBase>(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows,
                                                RowSelector &row_sel, const int64_t batch_size,
-                                               const int32_t agg_col_id, ObIVector *ivec)
+                                               const int32_t agg_col_id, ObExpr *param_expr)
   {
     return OB_NOT_IMPLEMENT;
   }

@@ -725,10 +725,9 @@ int ObVectorsResultHolder::drive_row_extended(int64_t from_idx, int64_t start_ds
       VectorFormat extend_format = get_single_row_restore_format(backup_cols_[i].header_.get_format(), exprs_->at(i));
       if (OB_FAIL(exprs_->at(i)->init_vector(*eval_ctx_, extend_format, eval_ctx_->max_batch_size_))) {
         LOG_WARN("failed to init vector for backup expr", K(i), K(backup_cols_[i].header_.get_format()), K(ret));
-      } else if (exprs_->at(i)->is_nested_expr() && !is_uniform_format(backup_format)) {
-        if (OB_FAIL(backup_cols_[i].extend_nested_rows(*exprs_->at(i), *eval_ctx_, extend_format, from_idx, start_dst_idx, size))) {
-          LOG_WARN("failed to restore nested single row", K(ret), K(i), K(backup_cols_[i].header_.get_format()));
-        }
+      } else if (exprs_->at(i)->is_nested_expr() && !is_uniform_format(backup_format)
+                 && OB_FAIL(backup_cols_[i].extend_nested_rows(*exprs_->at(i), *eval_ctx_, extend_format, from_idx, start_dst_idx, size))) {
+        LOG_WARN("failed to restore nested single row", K(ret), K(i), K(backup_cols_[i].header_.get_format()));
       } else {
         switch(backup_format) {
           case VEC_FIXED:
@@ -775,10 +774,9 @@ int ObVectorsResultHolder::restore_single_row(int64_t from_idx, int64_t to_idx) 
       VectorFormat extend_format = get_single_row_restore_format(backup_cols_[i].header_.get_format(), exprs_->at(i));
       if (OB_FAIL(exprs_->at(i)->init_vector(*eval_ctx_, extend_format, eval_ctx_->max_batch_size_))) {
         LOG_WARN("failed to init vector for backup expr", K(i), K(backup_cols_[i].header_.get_format()), K(ret));
-      } else if (exprs_->at(i)->is_nested_expr() && !is_uniform_format(backup_cols_[i].header_.format_)) {
-        if (OB_FAIL(backup_cols_[i].restore_nested_single_row(*exprs_->at(i), *eval_ctx_, extend_format, from_idx, to_idx))) {
-          LOG_WARN("failed to restore nested single row", K(ret), K(i), K(backup_cols_[i].header_.get_format()));
-        }
+      } else if (exprs_->at(i)->is_nested_expr() && !is_uniform_format(backup_cols_[i].header_.format_) &&
+                 OB_FAIL(backup_cols_[i].restore_nested_single_row(*exprs_->at(i), *eval_ctx_, extend_format, from_idx, to_idx))) {
+        LOG_WARN("failed to restore nested single row", K(ret), K(i), K(backup_cols_[i].header_.get_format()));
       } else {
         VectorFormat format = backup_cols_[i].header_.format_;
         LOG_TRACE("vector format is", K(format));
