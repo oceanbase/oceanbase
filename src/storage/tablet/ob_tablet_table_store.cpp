@@ -1332,9 +1332,13 @@ int ObTabletTableStore::build_minor_tables(
              new_table->get_key().scn_range_.is_empty()) {
     ret = OB_ERR_SYS;
     LOG_ERROR("meet invalid or empty scn_range sstable", KPC(new_table));
-  } else if (param.need_check_sstable_) { // fix issue 45431762
+  } else if (param.check_sstable_for_minor_merge_) { // fix issue 45431762
     const ObSSTableArray &old_minor_tables = old_store.minor_tables_;
-    if (old_minor_tables.empty()) {
+    if (OB_ISNULL(new_sstable) || new_sstable->is_mini_sstable()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("check sstable for minor merge but without sstable or with a mini sstable, unexpected",
+          K(ret), KPC(new_sstable), K(param));
+    } else if (old_minor_tables.empty()) {
       // no minor tables to override new_table, skip to add new_table
       ret = OB_NO_NEED_MERGE;
       LOG_WARN("No minor tables in old store, cannot add a minor sstable", K(ret), K(param), KPC(new_table), K(old_store));

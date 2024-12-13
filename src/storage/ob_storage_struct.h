@@ -372,7 +372,7 @@ struct ObUpdateTableStoreParam
     const int64_t transfer_seq,
     const bool need_report = false,
     const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
-    const bool need_check_sstable = false,
+    const bool check_sstable_for_minor_merge = false,
     const bool allow_duplicate_sstable = false,
     const ObMergeType merge_type = MERGE_TYPE_MAX,
     const bool is_only_replace_major = false);
@@ -390,7 +390,7 @@ struct ObUpdateTableStoreParam
   bool is_valid() const;
   TO_STRING_KV(KP_(sstable), K_(snapshot_version), K_(clog_checkpoint_scn), K_(multi_version_start),
                K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
-               K_(need_check_sstable), K_(ddl_info), K_(allow_duplicate_sstable),
+               K_(check_sstable_for_minor_merge), K_(ddl_info), K_(allow_duplicate_sstable),
                "merge_type", merge_type_to_str(merge_type_),
                K_(need_check_transfer_seq), K_(transfer_seq), K_(upper_trans_param), K_(is_only_replace_major));
 
@@ -402,7 +402,7 @@ struct ObUpdateTableStoreParam
   const ObStorageSchema *storage_schema_;
   int64_t rebuild_seq_;
   bool update_with_major_flag_;
-  bool need_check_sstable_;
+  bool check_sstable_for_minor_merge_;
   ObDDLTableStoreParam ddl_info_;
   bool allow_duplicate_sstable_;
   bool need_check_transfer_seq_;

@@ -1168,7 +1168,7 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
     ObTabletHandle new_tablet_handle;
     const int64_t rebuild_seq = tablet_merge_ctx_.rebuild_seq_;
     const int64_t transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
-    const bool need_check_sstable = true;
+    const bool check_sstable_for_minor_merge = is_minor_merge(tablet_merge_ctx_.param_.merge_type_);
     ObUpdateTableStoreParam param(&(tablet_merge_ctx_.merged_sstable_),
                                   tablet_merge_ctx_.sstable_version_range_.snapshot_version_,
                                   tablet_merge_ctx_.sstable_version_range_.multi_version_start_,
@@ -1178,7 +1178,7 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_()
                                   transfer_seq,
                                   is_major_merge_type(tablet_merge_ctx_.param_.merge_type_),
                                   tablet_merge_ctx_.merged_sstable_.get_end_scn(),
-                                  need_check_sstable);
+                                  check_sstable_for_minor_merge);
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = EN_UPDATE_TRANSFER_TABLET_TABLE_ERROR ? : OB_SUCCESS;
