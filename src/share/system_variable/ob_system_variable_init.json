@@ -11909,5 +11909,19 @@
     "background_cn": "",
     "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
     "placeholder": true
+  },
+  "materialized_view_parallelism": {
+    "id": 10746,
+    "name": "materialized_view_parallelism",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "int",
+    "info": "The default refresh parallelism of materialized view",
+    "flags": "GLOBAL | SESSION ",
+    "publish_version": "435",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
   }
 }
