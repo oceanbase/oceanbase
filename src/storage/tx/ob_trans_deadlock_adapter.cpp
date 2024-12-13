@@ -989,7 +989,7 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
     }
   } else {
     ObTransDeadlockDetectorKey self_detector_key(ObDeadlockKeyType::REMOTE_EXEC_SIDE, self_trans_id);
-    ObTransDeadlockDetectorKey conflict_detector_key(ObDeadlockKeyType::REMOTE_EXEC_SIDE, conflict_trans_id);
+    ObTransDeadlockDetectorKey conflict_detector_key(ObDeadlockKeyType::DEFAULT, conflict_trans_id);
     if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_detector_key, exist))) {
       DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
     } else if (exist) {
