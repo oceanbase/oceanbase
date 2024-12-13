@@ -470,7 +470,8 @@ int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, co
       }
     }
 
-    if (OB_SUCC(ret) && oceanbase::lib::is_diagnose_info_enabled()) {
+    // ATTENTION: resource_conn will not collect diagnostic info!
+    if (OB_SUCC(ret) && oceanbase::lib::is_diagnose_info_enabled() && !is_resource_conn()) {
       int tmp_ret = OB_SUCCESS;
       ObDiagnosticInfo *di = nullptr;
       ObDiagnosticInfo *cur_di = ObLocalDiagnosticInfo::get();
