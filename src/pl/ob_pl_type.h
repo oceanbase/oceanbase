@@ -31,6 +31,7 @@
 
 #define ObCursorType ObIntType
 #define ObPtrType ObIntType
+#define OB_PL_MOCK_ANONYMOUS_ID 0xFFFFFFFFFFFFFFFE
 
 #define IS_TYPE_FROM_TYPE_OR_ROWTYPE(type_from)  \
       (PL_TYPE_ATTR_ROWTYPE == type_from) ||     \
@@ -234,6 +235,25 @@ struct ObPLExternTypeInfo
 };
 
 class ObPLEnumSetCtx;
+
+OB_INLINE bool is_mocked_anonymous_array_id(uint64_t udt_id)
+{
+  uint64_t mask = 0xFFFFFFFFFF000000;
+  uint64_t res =  0xFFFFFFFFFE000000;
+  // anonymous_array will use OB_PL_MOCK_ANONYMOUS_ID to generate a mocked id ,
+  // OB_PL_MOCK_ANONYMOUS_ID = (uint64)OB_INVALID_ID - 1.
+  // Why do not use OB_INVALID_ID? Anonymous block has declare local nested type (this package_id is OB_INVALID_ID)
+  // use OB_INVALID_ID - 1 to identify this scenery.
+  // So the first 40 bits of mocked id in hex is: 0xFFFFFFFFFE
+  // We can use (mocked_id & mask) to get the first 40 bits and check if it is mocked.
+  return (udt_id & mask) == res || OB_INVALID_ID == udt_id;
+}
+
+OB_INLINE bool is_invalid_or_mocked_package_id(uint64_t udt_id)
+{
+  return OB_INVALID_ID == extract_package_id(udt_id) || OB_PL_MOCK_ANONYMOUS_ID == extract_package_id(udt_id);
+}
+
 class ObPLDataType
 {
 public:
