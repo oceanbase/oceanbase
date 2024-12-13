@@ -27,6 +27,9 @@
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/high_availability/ob_tablet_ha_status.h"
+#include "storage/ddl/ob_direct_load_struct.h"
+#include "storage/ddl/ob_ddl_merge_task.h"
+#include "storage/compaction/ob_schedule_dag_func.h"
 
 namespace oceanbase
 {
@@ -846,7 +849,27 @@ int ObTabletTableStore::calculate_read_tables(
         LOG_WARN("ddl major sstable is empty", K(ret));
       } else {
         ObSSTable *first_ddl_sstable = static_cast<ObSSTable *>(ddl_major_sstables.at(0));
-        if (first_ddl_sstable->get_data_version() <= snapshot_version) {
+        if (first_ddl_sstable->is_column_store_sstable() && ddl_sstables_.count() > 1) {
+          ret = OB_DATA_NOT_UPTODATE;
+          LOG_WARN("ddl query only support one co sstable", K(ret), K(ddl_sstables_.count()));
+          ObDDLTableMergeDagParam param;
+          param.ls_id_               = tablet.get_ls_id();
+          param.tablet_id_           = tablet.get_tablet_meta().tablet_id_;
+          param.start_scn_           = tablet.get_tablet_meta().ddl_start_scn_;
+          param.rec_scn_             = tablet.get_tablet_meta().ddl_commit_scn_;
+          param.direct_load_type_    = ObDirectLoadType::DIRECT_LOAD_DDL;
+          param.is_commit_           = true;
+          param.data_format_version_ = tablet.get_tablet_meta().ddl_data_format_version_;
+          param.snapshot_version_    = tablet.get_tablet_meta().ddl_snapshot_version_;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(ObTabletDDLUtil::freeze_ddl_kv(param))) {
+            LOG_WARN("try to freeze ddl kv failed", K(tmp_ret), K(param));
+          } else if (OB_TMP_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
+            LOG_WARN("try schedule ddl merge dag failed when ddl kv is full ", K(tmp_ret), K(param));
+          }
+          LOG_INFO("schedule ddl merge dag", K(tmp_ret), K(param));
+
+        } else if (first_ddl_sstable->get_data_version() <= snapshot_version) {
           for (int64_t i = 0; OB_SUCC(ret) && i < ddl_major_sstables.count(); ++i) {
             if (OB_FAIL(iterator.add_table(ddl_major_sstables.at(i)))) {
               LOG_WARN("add ddl major sstable failed", K(ret), K(i), K(ddl_major_sstables));
