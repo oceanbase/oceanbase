@@ -250,6 +250,8 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
             // sync other server modify for this server! (from porxy or distribute plan)
             if (var_type.is_obj_type()) {
               OZ (ObUserDefinedType::destruct_objparam(package_state.get_pkg_allocator(), value, &(resolve_ctx.session_info_)));
+              // set basic type value inside symbol table to null
+              OZ (package_state.set_package_var_val(var_idx, value, resolve_ctx, false));
             } else {
               OZ (ObUserDefinedType::destruct_obj(value, &(resolve_ctx.session_info_), true));
               if (OB_SUCC(ret) && var_type.is_record_type() && PL_RECORD_TYPE == value.get_meta().get_extend_type()) {
