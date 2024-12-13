@@ -134,6 +134,7 @@ public:
       // do sleep when expected_wait_time and left_interval are not equal to 0
       const int64_t sleep_interval = min(SLEEP_INTERVAL_PER_TIME, expected_wait_time);
       if (0 < sleep_interval && sleep_interval < UINT32_MAX) {
+        lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
         sleep_time += sleep_interval;
         left_interval -= sleep_interval;
         ::usleep((uint32_t)sleep_interval);
