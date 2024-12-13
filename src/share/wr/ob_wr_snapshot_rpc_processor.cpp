@@ -180,7 +180,7 @@ int ObWrAsyncSnapshotTaskP::process()
       }
     } else {
       // scheduled task must be processed
-      if (OB_FAIL(MTL(ObWorkloadRepositoryContext*)->lock(snapshot_arg.get_timeout_ts() - common::ObTimeUtility::current_time()))) {
+      if (OB_FAIL(MTL(ObWorkloadRepositoryContext*)->lock(snapshot_arg.get_timeout_ts()))) {
         LOG_WARN("scheduled aysnc snapshot task failed", K(MTL_ID()), K(snapshot_arg), K(common::ObTimeUtility::current_time()));
         status = ObWrSnapshotStatus::FAILED;
         int tmp_ret = OB_SUCCESS;
@@ -240,11 +240,7 @@ int ObWrAsyncSnapshotTaskP::process()
     THIS_WORKER.set_timeout_ts(origin_worker_timeout);
 
     if (OB_FAIL(ret) && LAST_SNAPSHOT_RECORD_SNAP_ID != snapshot_arg.get_snap_id()) {
-#ifdef ENABLE_DEBUG_LOG
-      LOG_ERROR("failed to collect wr data", K(ret), K(MTL_ID()), K(arg));
-#else
       LOG_WARN("failed to collect wr data", K(ret), K(MTL_ID()), K(arg));
-#endif
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
