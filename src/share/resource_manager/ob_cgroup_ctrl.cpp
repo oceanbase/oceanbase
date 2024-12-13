@@ -402,20 +402,6 @@ int ObCgroupCtrl::get_group_info_by_group_id(const uint64_t tenant_id,
   return ret;
 }
 
-int ObCgroupCtrl::remove_self_from_cgroup(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  char tid_value[VALUE_BUFSIZE];
-  // 把该tid加入other_cgroup目录的tasks文件中就会从其它tasks中删除
-  snprintf(tid_value, VALUE_BUFSIZE, "%ld", gettid());
-  if (OB_FAIL(set_cgroup_config_(other_cgroup_, TASKS_FILE, tid_value))) {
-    LOG_WARN("remove tid to cgroup failed", K(ret), K(other_cgroup_), K(tid_value), K(tenant_id));
-  } else {
-    LOG_INFO("remove tid to cgroup success", K(other_cgroup_), K(tid_value), K(tenant_id));
-  }
-  return ret;
-}
-
 int ObCgroupCtrl::get_cgroup_config_(const char *group_path, const char *config_name, char *config_value)
 {
   int ret = OB_SUCCESS;

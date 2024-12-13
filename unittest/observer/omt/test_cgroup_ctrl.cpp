@@ -26,7 +26,7 @@ void *thread_func(void *args)
 {
   ASSERT_EQ(OB_SUCCESS, cg_ctrl.add_self_to_cgroup(1001));
   sleep(3);
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.remove_self_from_cgroup(1001));
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.add_self_to_cgroup(1001));
   return nullptr;
 }
 

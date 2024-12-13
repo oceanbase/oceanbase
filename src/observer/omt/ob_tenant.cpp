@@ -545,9 +545,6 @@ void ObResourceGroup::check_worker_count(ObThWorker &w)
   if (OB_UNLIKELY(ATOMIC_LOAD(&shrink_))
       && OB_LIKELY(ATOMIC_BCAS(&shrink_, true, false))) {
     w.stop();
-    if (cgroup_ctrl_->is_valid() && OB_FAIL(cgroup_ctrl_->remove_self_from_cgroup(tenant_->id()))) {
-      LOG_WARN("remove thread from cgroup failed", K(ret), "tenant:", tenant_->id(), K_(group_id));
-    }
     LOG_INFO("worker thread exit", K(tenant_->id()), K(workers_.get_size()));
   }
 }
@@ -1816,9 +1813,6 @@ void ObTenant::check_worker_count(ObThWorker &w)
       && OB_UNLIKELY(ATOMIC_LOAD(&shrink_))
       && OB_LIKELY(ATOMIC_BCAS(&shrink_, true, false))) {
     w.stop();
-    if (cgroup_ctrl_.is_valid() && OB_FAIL(cgroup_ctrl_.remove_self_from_cgroup(id_))) {
-      LOG_WARN("remove thread from cgroup failed", K(ret), K_(id));
-    }
     LOG_INFO("worker thread exit", K(id_), K(workers_.get_size()));
   }
 }

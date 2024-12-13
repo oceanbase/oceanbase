@@ -382,9 +382,6 @@ int ObTenantBase::end_run()
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(nullptr);
   ObCgroupCtrl *cgroup_ctrl = get_cgroup();
-  if (cgroup_ctrl != nullptr && cgroup_ctrl->is_valid()) {
-    ret = cgroup_ctrl->remove_self_from_cgroup(id_);
-  }
   {
     ThreadListNode *node = lib::Thread::current().get_thread_list_node();
     lib::ObMutexGuard guard(thread_list_lock_);

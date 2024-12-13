@@ -154,9 +154,6 @@ public:
 
   int add_self_to_cgroup(const uint64_t tenant_id, uint64_t group_id = OBCG_DEFAULT, const char *base_path = "");
 
-  // 从指定租户cgroup组移除指定tid
-  int remove_self_from_cgroup(const uint64_t tenant_id);
-
   static int get_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
   static int set_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
   // 设定指定租户cgroup组的cpu.shares
