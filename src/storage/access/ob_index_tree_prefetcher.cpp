@@ -750,6 +750,7 @@ int ObIndexTreeMultiPrefetcher::drill_down(
       LOG_WARN("fail to prefetch_block_data", K(ret), K(read_handle), K(index_block_info), K(cur_level_is_leaf));
     } else if (FALSE_IT(read_handle.set_cur_micro_handle(next_handle))) {
     } else if (pre_locate &&
+               ObSSTableMicroBlockState::IN_BLOCK_CACHE == next_handle.block_state_ &&
                index_block_info.rowkey_end_idx_ - index_block_info.rowkey_begin_idx_ > 1) {
       level_handles_.at(read_handle.cur_level_).set_handle(index_block_info.is_leaf_block(),
                                                            index_block_info.rowkey_begin_idx_,
