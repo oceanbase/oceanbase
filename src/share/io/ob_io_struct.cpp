@@ -1276,7 +1276,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
       } else {
         uint64_t index = INT_MAX64;
         const int64_t group_id = tmp_req->get_resource_group_id();
-        if (!is_user_group(group_id)) { //other
+        if (!is_resource_manager_group(group_id)) { //other
           tmp_phy_queue = &(io_group_queues->other_phy_queue_);
         } else if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->get_group_index(group_id, index))) {
           // 防止删除group、新建group等情况发生时在途req无法找到对应的group

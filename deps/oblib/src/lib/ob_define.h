@@ -190,7 +190,7 @@ OB_INLINE bool is_valid_group(const uint64_t group_id)
   return group_id >= USER_RESOURCE_OTHER_GROUP_ID && group_id != OB_INVALID_GROUP_ID;
 }
 
-OB_INLINE bool is_user_group(const uint64_t group_id)
+OB_INLINE bool is_resource_manager_group(const uint64_t group_id)
 {
   return group_id >= USER_RESOURCE_GROUP_START_ID && group_id != OB_INVALID_GROUP_ID;
 }
@@ -198,7 +198,7 @@ OB_INLINE bool is_user_group(const uint64_t group_id)
 OB_INLINE bool is_valid_resource_group(const uint64_t group_id)
 {
   //other group or user group
-  return group_id == USER_RESOURCE_OTHER_GROUP_ID || is_user_group(group_id);
+  return group_id == USER_RESOURCE_OTHER_GROUP_ID || is_resource_manager_group(group_id);
 }
 
 // See ObDeviceHealthStatus for more information

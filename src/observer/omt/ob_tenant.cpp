@@ -459,7 +459,7 @@ void ObResourceGroup::check_worker_count()
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(workers_lock_.trylock())) {
-    if ((is_user_group(group_id_) || is_dbms_job_group(group_id_))
+    if ((is_resource_manager_group(group_id_) || is_dbms_job_group(group_id_))
       && nesting_worker_cnt_ < (MAX_REQUEST_LEVEL - GROUP_MULTI_LEVEL_THRESHOLD)) {
       for (int level = GROUP_MULTI_LEVEL_THRESHOLD + nesting_worker_cnt_; OB_SUCC(ret) && level < MAX_REQUEST_LEVEL; level++) {
         if (OB_SUCC(acquire_level_worker(level))) {
@@ -490,7 +490,7 @@ void ObResourceGroup::check_worker_count()
     }
 
     int64_t token = 0;
-    bool is_group_critical = share::ObCgSet::instance().is_group_critical(group_id_) || is_user_group(group_id_);
+    bool is_group_critical = share::ObCgSet::instance().is_group_critical(group_id_) || is_resource_manager_group(group_id_);
     if (is_group_critical) {
       token = 1 + blocking_cnt;
       token = std::min(token, max_worker_cnt());
@@ -1415,7 +1415,7 @@ int ObTenant::recv_group_request(ObRequest &req, int64_t group_id)
     if (req_level < 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpected level", K(req_level), K(id_), K(group_id));
-    } else if ((is_user_group(group_id) || is_dbms_job_group(group_id)) && req_level >= GROUP_MULTI_LEVEL_THRESHOLD) {
+    } else if ((is_resource_manager_group(group_id) || is_dbms_job_group(group_id)) && req_level >= GROUP_MULTI_LEVEL_THRESHOLD) {
       group->recv_level_rpc_cnt_.atomic_inc(req_level);
       if (OB_FAIL(group->multi_level_queue_.push(req, req_level, 0))) {
         LOG_WARN("push request to queue fail", K(req_level), K(id_), K(group_id));
@@ -1643,7 +1643,7 @@ void ObTenant::print_throttled_time()
       ObCgSet &set = ObCgSet::instance();
       while (NULL != (iter = tenant_->group_map_.quick_next(iter))) {
         group = static_cast<ObResourceGroup *>(iter);
-        if (!is_user_group(group->group_id_)) {
+        if (!is_resource_manager_group(group->group_id_)) {
           if (OB_TMP_FAIL(group->get_throttled_time(group_throttled_time))) {
             LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret), K(group));
           } else {

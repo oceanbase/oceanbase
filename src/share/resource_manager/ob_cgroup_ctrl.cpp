@@ -322,7 +322,7 @@ int ObCgroupCtrl::get_group_path(
       const int WARN_LOG_INTERVAL = 10 * 1000 * 1000L;
       ObCgSet &set = ObCgSet::instance();
 
-      if (is_user_group(group_id)) {
+      if (is_resource_manager_group(group_id)) {
         // if group is resource group
         if (OB_TMP_FAIL(get_group_info_by_group_id(tenant_id, group_id, g_name))) {
           if (REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) {

@@ -1418,7 +1418,7 @@ int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
 {
   int ret = OB_SUCCESS;
   uint64_t consumer_group_id = USER_RESOURCE_OTHER_GROUP_ID;
-  if (is_user_group(group_id)) {
+  if (is_resource_manager_group(group_id)) {
     //user level
     consumer_group_id = group_id;
   } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), static_cast<share::ObFunctionType>(function_type_), consumer_group_id))) {
