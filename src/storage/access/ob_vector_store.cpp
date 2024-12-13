@@ -544,7 +544,6 @@ int ObVectorStore::do_group_by(
     }
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("Unexpected ret, should be OB_ITER_END", K(ret));
-      ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(group_by_cell_->collect_result())) {
       LOG_WARN("Failed to collect result", K(ret));
     }
