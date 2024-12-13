@@ -626,10 +626,13 @@ void ObSerialDfoScheduler::clean_dtl_interm_result(ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObDfo *> &all_dfos = coord_info_.dfo_mgr_.get_all_dfos();
-  ObDfo *last_dfo = all_dfos.at(all_dfos.count() - 1);
+  ObDfo *last_dfo = nullptr;
   int clean_ret = OB_E(EventTable::EN_ENABLE_CLEAN_INTERM_RES) OB_SUCCESS;
   if (clean_ret != OB_SUCCESS) {
     // Fault injection: Do not clean up interm results.
+  } else if (all_dfos.empty()) {
+    // do nothing
+  } else if (FALSE_IT(last_dfo = all_dfos.at(all_dfos.count() - 1))) {
   } else if (OB_NOT_NULL(last_dfo) && last_dfo->is_scheduled() && OB_NOT_NULL(last_dfo->parent())
       && last_dfo->parent()->is_root_dfo()) {
     // all dfo scheduled, do nothing.
