@@ -409,8 +409,7 @@ OB_SERIALIZE_MEMBER(ObIDASTaskOp,
                     attach_ctdef_,
                     attach_rtdef_,
                     das_gts_opt_info_,
-                    plan_line_id_,
-                    detectable_id_);
+                    plan_line_id_);
 
 OB_DEF_SERIALIZE(ObDASGTSOptInfo)
 {
