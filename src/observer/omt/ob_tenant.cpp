@@ -451,11 +451,16 @@ int ObResourceGroup::acquire_more_worker(int64_t num, int64_t &succ_num, bool fo
   return ret;
 }
 
+inline bool is_dbms_job_group(int64_t group_id)
+{
+  return share::OBCG_DBMS_SCHED_JOB == group_id || share::OBCG_OLAP_ASYNC_JOB == group_id;
+}
+
 void ObResourceGroup::check_worker_count()
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(workers_lock_.trylock())) {
-    if ((is_resource_manager_group(group_id_) || is_job_group(group_id_))
+    if ((is_resource_manager_group(group_id_) || is_dbms_job_group(group_id_))
       && nesting_worker_cnt_ < (MAX_REQUEST_LEVEL - GROUP_MULTI_LEVEL_THRESHOLD)) {
       for (int level = GROUP_MULTI_LEVEL_THRESHOLD + nesting_worker_cnt_; OB_SUCC(ret) && level < MAX_REQUEST_LEVEL; level++) {
         if (OB_SUCC(acquire_level_worker(level))) {
@@ -1386,7 +1391,7 @@ int ObTenant::recv_group_request(ObRequest &req, int64_t group_id)
     if (req_level < 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpected level", K(req_level), K(id_), K(group_id));
-    } else if ((is_resource_manager_group(group_id) || is_job_group(group_id)) && req_level >= GROUP_MULTI_LEVEL_THRESHOLD) {
+    } else if ((is_resource_manager_group(group_id) || is_dbms_job_group(group_id)) && req_level >= GROUP_MULTI_LEVEL_THRESHOLD) {
       group->recv_level_rpc_cnt_.atomic_inc(req_level);
       if (OB_FAIL(group->multi_level_queue_.push(req, req_level, 0))) {
         LOG_WARN("push request to queue fail", K(req_level), K(id_), K(group_id));
