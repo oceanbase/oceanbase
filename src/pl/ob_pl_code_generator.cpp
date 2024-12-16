@@ -2778,7 +2778,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
             OZ (generator_.get_llvm_type(*pl_type, ir_type));
             OZ (ir_type.get_pointer_to(ir_ptr_type));
             OZ (generator_.get_helper().create_int_to_ptr(ObString("cast_extend_to_ptr"), extend_value, ir_ptr_type, value));
-            OZ (pl_type->generate_construct(generator_, *s.get_namespace(), value, allocator, true, &s));
 
             if (OB_SUCC(ret) && pl_type->is_collection_type()) {
               const ObUserDefinedType *user_type = NULL;
@@ -2811,6 +2810,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
                                                             var_addr));
               OZ (generator_.extract_obobj_ptr_from_objparam(p_result_obj, p_dest_value));
               OZ (generator_.generate_set_extend(p_dest_value, var_type, init_value, var_addr));
+              OZ (pl_type->generate_construct(generator_, *s.get_namespace(), value, allocator, true, &s));
             }
           }
         } else {
