@@ -153,7 +153,8 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
       LOG_WARN("failed to set null collection", K(ret));
     }
   } else {
-    if (types_stack[0].get_type() == ObDecimalIntType || types_stack[0].get_type() == ObNumberType) {
+    if (types_stack[0].get_type() == ObDecimalIntType || types_stack[0].get_type() == ObNumberType ||
+        types_stack[0].get_type() == ObUNumberType) {
       // decimalint isn't supported in array, so cast to supported type
       ObObjType calc_type = ObIntType;
       if (types_stack[0].get_scale() != 0) {
