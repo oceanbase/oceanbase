@@ -2795,6 +2795,11 @@ int ObTransformPredicateMoveAround::pushdown_into_semi_info(ObDMLStmt *stmt,
   } else if (OB_FAIL(accept_predicates(*stmt, semi_info->semi_conditions_,
                                        properites, new_preds))) {
     LOG_WARN("failed to check different", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (right_table->is_values_table()) {
+    /* not allow predicate moving into values table */
+    OPT_TRACE("right table is values table");
   } else if (OB_FAIL(append_condition_array(pred_conditions,
                                             semi_info->semi_conditions_.count(),
                                             &semi_info->semi_conditions_))) {

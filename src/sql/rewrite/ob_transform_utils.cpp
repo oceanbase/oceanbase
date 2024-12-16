@@ -11269,7 +11269,8 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
                                                             const ObIArray<ObExecParamRawExpr *> &right_exec_params,
                                                             bool &is_valid,
                                                             ObIArray<ObRawExpr*> &left_new_select_exprs,
-                                                            ObIArray<ObRawExpr*> &right_new_select_exprs)
+                                                            ObIArray<ObRawExpr*> &right_new_select_exprs,
+                                                            const bool ignore_select_item)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
@@ -11348,7 +11349,7 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
     if (OB_FAIL(pullup_correlated_exprs(left_exec_params,
                                         left_select_exprs,
                                         left_new_select_exprs,
-                                        false))) {
+                                        ignore_select_item))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(left_exec_params,
                                                left_where_exprs,
@@ -11361,7 +11362,7 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
     } else if (OB_FAIL(pullup_correlated_exprs(right_exec_params,
                                                right_select_exprs,
                                                right_new_select_exprs,
-                                               false))) {
+                                               ignore_select_item))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(right_exec_params,
                                                right_where_exprs,
@@ -11825,10 +11826,16 @@ int ObTransformUtils::check_result_type_same(ObRawExpr* left_expr,
   * Separate spj and pull up related expressions
   * You need to call check_correlated_exprs_can_pullup before calling the interface
   * Ensure that all related expressions can be pulled up
+  * the params ignore_select_item and skip_const_select_item are both used to indicate
+  * whether the const select item can be skipped when pullup correlated exprs.
+  * set ignore_select_item to true when the subquery is in T_OP_EXISTS/T_OP_NOT_EXISTS.
+  * DO NOT explicit set skip_const_select_item, it will be set to true only when
+  * ignore_select_item is false and the subquery is child of a set stmt
   */
 int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                              ObSelectStmt *&subquery,
                                                              ObTransformerCtx *ctx,
+                                                             const bool ignore_select_item,
                                                              const bool skip_const_select_item)
 {
   int ret = OB_SUCCESS;
@@ -11845,7 +11852,7 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObIArray<ObEx
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt_factory), K(view_stmt));
   } else if (view_stmt->is_set_stmt()) {
-    if (OB_FAIL(create_spj_and_pullup_correlated_exprs_for_set(exec_params, view_stmt, ctx))) {
+    if (OB_FAIL(create_spj_and_pullup_correlated_exprs_for_set(exec_params, view_stmt, ctx, ignore_select_item))) {
       LOG_WARN("failed to create spj without correlated exprs for set", K(ret));
     } else {
       subquery = view_stmt;
@@ -11925,7 +11932,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObIArray<ObEx
 
 int ObTransformUtils::create_spj_and_pullup_correlated_exprs_for_set(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                                      ObSelectStmt *&stmt,
-                                                                     ObTransformerCtx *ctx)
+                                                                     ObTransformerCtx *ctx,
+                                                                     const bool ignore_select_item)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_)) {
@@ -11958,7 +11966,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs_for_set(const ObIAr
                                                                  exec_params,
                                                                  can_pullup,
                                                                  left_new_select_exprs.at(i),
-                                                                 right_new_select_exprs.at(i)))) {
+                                                                 right_new_select_exprs.at(i),
+                                                                 ignore_select_item))) {
           LOG_WARN("failed to check correlated subquery isomorphic", K(ret));                                                        
         }
       }
@@ -11970,7 +11979,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs_for_set(const ObIAr
           LOG_WARN("unexpect null stmt", K(ret));
         // somehow, the following implemenation is quite tircky,
         // the function actually modify the origin set stmt
-        } else if (OB_FAIL(create_spj_and_pullup_correlated_exprs(exec_params, query, ctx, false))) {
+        } else if (OB_FAIL(create_spj_and_pullup_correlated_exprs(exec_params, query, ctx,
+                                                        ignore_select_item, ignore_select_item))) {
           LOG_WARN("failed to create spj", K(ret));
         } else if (0 < i &&
                   OB_FAIL(adjust_select_item_pos(right_new_select_exprs.at(i),

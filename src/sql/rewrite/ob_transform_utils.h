@@ -1558,7 +1558,8 @@ public:
                                                    const ObIArray<ObExecParamRawExpr *> &right_exec_params,
                                                    bool &is_valid,
                                                    ObIArray<ObRawExpr*> &left_new_select_exprs,
-                                                   ObIArray<ObRawExpr*> &right_new_select_exprs);
+                                                   ObIArray<ObRawExpr*> &right_new_select_exprs,
+                                                   const bool skip_const_select_item = true);
 
   static int check_result_type_same(ObIArray<ObRawExpr*> &left_exprs, 
                                     ObIArray<ObRawExpr*> &right_exprs,
@@ -1615,11 +1616,13 @@ public:
   static int create_spj_and_pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                     ObSelectStmt *&subquery,
                                                     ObTransformerCtx *ctx,
+                                                    const bool ignore_select_item = false,
                                                     const bool skip_const_select_item = true);
 
   static int create_spj_and_pullup_correlated_exprs_for_set(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                             ObSelectStmt *&stmt,
-                                                            ObTransformerCtx *ctx);
+                                                            ObTransformerCtx *ctx,
+                                                            const bool ignore_select_item);
 
   static int adjust_select_item_pos(ObIArray<ObRawExpr*> &right_select_exprs,
                                     ObSelectStmt *right_query);
