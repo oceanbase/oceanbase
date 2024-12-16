@@ -380,7 +380,8 @@ struct ObResolverParams
        package_guard_(NULL),
        star_expansion_infos_(),
        is_for_rt_mv_(false),
-       is_resolve_fake_cte_table_(false)
+       is_resolve_fake_cte_table_(false),
+       is_returning_(false)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
 
@@ -452,6 +453,7 @@ public:
   common::ObArray<ObStarExpansionInfo> star_expansion_infos_;
   bool is_for_rt_mv_; // call resolve in transformation for expanding inline real-time materialized view
   bool is_resolve_fake_cte_table_;
+  bool is_returning_;
 };
 } // end namespace sql
 } // end namespace oceanbase
