@@ -2970,6 +2970,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     if (NULL != pc_ctx) {
       resolver_ctx.select_item_param_infos_ = &pc_ctx->select_item_param_infos_;
     }
+    resolver_ctx.is_returning_ = parse_result.is_returning_;
     plan_ctx = result.get_exec_context().get_physical_plan_ctx();
     if (OB_ISNULL(plan_ctx) || OB_ISNULL(result.get_exec_context().get_stmt_factory())) {
       ret = OB_INVALID_ARGUMENT;
