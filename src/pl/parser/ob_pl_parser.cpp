@@ -192,28 +192,33 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
     if (parse_ctx.cur_error_info_ != NULL) {
       int first_column = parse_ctx.cur_error_info_->stmt_loc_.first_column_;
       int last_column = parse_ctx.cur_error_info_->stmt_loc_.last_column_;
-      err_len = last_column - first_column + 1;
-      err_str = parse_ctx.stmt_str_ + first_column;
-      if (parse_ctx.is_not_utf8_connection_) {
-        char *dst_str = NULL;
-        uint errors = 0;
-        size_t dst_len = err_len * 4;
-        size_t out_len = 0;
-        if (OB_ISNULL(dst_str = static_cast<char *>(allocator_.alloc(dst_len + 1)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate string buffer", K(ret), K(dst_len + 1));
-        } else {
-          out_len = static_cast<int64_t>(ob_convert(dst_str, dst_len, &ob_charset_utf8mb4_bin, err_str, err_len, parse_ctx.charset_info_, false, '?', &errors));
-          if (0 != errors) {
-            // The OB_ERR_INCORRECT_STRING_VALUE error code returned after convet fails will cause disconnection.
-            // Therefore, the error code is not changed here and the OB_ERR_PARSE_SQL error is still returned. Only the log is printed.
-            LOG_WARN("ob_convert failed", K(ret), K(errors), K( parse_ctx.charset_info_), K(ObString(err_len, err_str)));
+      if (0 <= first_column && 0 <= last_column && last_column >= first_column && last_column < parse_ctx.stmt_len_) {
+        err_len = last_column - first_column + 1;
+        err_str = parse_ctx.stmt_str_ + first_column;
+        if (parse_ctx.is_not_utf8_connection_) {
+          char *dst_str = NULL;
+          uint errors = 0;
+          size_t dst_len = err_len * 4;
+          size_t out_len = 0;
+          if (OB_ISNULL(dst_str = static_cast<char *>(allocator_.alloc(dst_len + 1)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate string buffer", K(ret), K(dst_len + 1));
           } else {
-            dst_str[out_len] = '\0';
-            err_str = dst_str;
-            err_len = out_len;
+            out_len = static_cast<int64_t>(ob_convert(dst_str, dst_len, &ob_charset_utf8mb4_bin, err_str, err_len, parse_ctx.charset_info_, false, '?', &errors));
+            if (0 != errors) {
+              // The OB_ERR_INCORRECT_STRING_VALUE error code returned after convet fails will cause disconnection.
+              // Therefore, the error code is not changed here and the OB_ERR_PARSE_SQL error is still returned. Only the log is printed.
+              LOG_WARN("ob_convert failed", K(ret), K(errors), K( parse_ctx.charset_info_), K(ObString(err_len, err_str)));
+            } else {
+              dst_str[out_len] = '\0';
+              err_str = dst_str;
+              err_len = out_len;
+            }
           }
         }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected first column or last column", K(ret), K(first_column), K(last_column), K(parse_ctx.stmt_len_));
       }
       err_line = parse_ctx.cur_error_info_->stmt_loc_.last_line_ + 1;
       global_errmsg = parse_ctx.global_errmsg_;
