@@ -1405,7 +1405,7 @@ int ObInnerTableSchema::all_virtual_tenant_trigger_real_agent_ora_schema(ObTable
       OB_MAX_TRIGGER_BODY_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1420,7 +1420,7 @@ int ObInnerTableSchema::all_virtual_tenant_trigger_real_agent_ora_schema(ObTable
       OB_MAX_TRIGGER_BODY_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1435,7 +1435,7 @@ int ObInnerTableSchema::all_virtual_tenant_trigger_real_agent_ora_schema(ObTable
       OB_MAX_TRIGGER_BODY_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1585,6 +1585,21 @@ int ObInnerTableSchema::all_virtual_tenant_trigger_real_agent_ora_schema(ObTable
       38, //column_length
       38, //column_precision
       0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("TRIGGER_BODY_V2", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObLongTextType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      0, //column_length
+      -1, //column_precision
+      -1, //column_scale
       false, //is_nullable
       false); //is_autoincrement
   }

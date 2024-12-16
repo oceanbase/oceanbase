@@ -2758,9 +2758,28 @@ int ObSchemaRetrieveUtils::fill_trigger_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, ref_new_name, trigger_info);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, ref_parent_name, trigger_info);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, when_condition, trigger_info);
-    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, trigger_body, trigger_info);
-    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, package_spec_source, trigger_info);
-    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, package_body_source, trigger_info);
+    if (OB_SUCC(ret)) {
+      ObString str_value;
+      if (OB_FAIL(result.get_varchar("trigger_body", str_value))) {
+        if (OB_ERR_NULL_VALUE == ret) {
+          ret = OB_SUCCESS;
+          if (OB_FAIL(result.get_varchar("trigger_body_v2", str_value))) {
+            SQL_LOG(WARN, "fail to extract varchar field mysql.", K(ret));
+          }
+        } else {
+          SQL_LOG(WARN, "fail to extract varchar field mysql.", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(trigger_info.set_trigger_body(str_value))) {
+          SQL_LOG(WARN, "fail to set value", KR(ret), K(str_value));
+        }
+      }
+    }
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, package_spec_source, trigger_info,
+      true, false, default_value);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, package_body_source, trigger_info,
+      true, false, default_value);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, package_flag, trigger_info, int64_t);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, package_comp_flag, trigger_info, int64_t);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, package_exec_env, trigger_info);
