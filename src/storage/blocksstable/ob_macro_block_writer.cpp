@@ -1210,7 +1210,8 @@ int ObMacroBlockWriter::init_hash_index_builder()
   int ret = OB_SUCCESS;
   if (data_store_desc_->get_tablet_id().is_user_tablet()
       && !data_store_desc_->is_major_or_meta_merge_type()
-      && !data_store_desc_->is_for_index_or_meta()) {
+      && !data_store_desc_->is_for_index_or_meta()
+      && data_store_desc_->get_row_store_type() == FLAT_ROW_STORE) {
     // only build hash index for data block in minor
     if (OB_FAIL(hash_index_builder_.init_if_needed(data_store_desc_))) {
       STORAGE_LOG(WARN, "Failed to build hash_index builder", K(ret));
@@ -1271,22 +1272,14 @@ int ObMacroBlockWriter::append_row_and_hash_index(const ObDatumRow &row)
       STORAGE_LOG(WARN, "Failed to append row in micro writer", K(ret), K(row));
     }
   } else if (hash_index_builder_.is_valid()) {
-    if (OB_UNLIKELY(FLAT_ROW_STORE != data_store_desc_->get_row_store_type())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexpected row store type", K(ret), K(data_store_desc_->get_row_store_type()));
-    } else {
-      int64_t hash_index_size = hash_index_builder_.estimate_size(true);
-      if (OB_UNLIKELY(!micro_writer_->has_enough_space_for_hash_index(hash_index_size))) {
-        hash_index_builder_.reset();
-      } else if (OB_FAIL(hash_index_builder_.add(row))) {
-        if (ret != OB_NOT_SUPPORTED) {
-          STORAGE_LOG(WARN, "Failed to append hash index", K(ret), K(row));
-        } else {
-          ret = OB_SUCCESS;
-        }
-        hash_index_builder_.reset();
+    if (OB_FAIL(hash_index_builder_.add(row))) {
+      if (ret != OB_NOT_SUPPORTED) {
+        STORAGE_LOG(WARN, "Failed to append hash index", K(ret), K(row));
+      } else {
+        ret = OB_SUCCESS;
       }
-    }
+      hash_index_builder_.reset();
+      }
   }
   return ret;
 }

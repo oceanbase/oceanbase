@@ -259,6 +259,9 @@ int ObMicroBlockWriter::append_hash_index(ObMicroBlockHashIndexBuilder& hash_ind
       if (ret != OB_NOT_SUPPORTED) {
         STORAGE_LOG(WARN, "data buffer fail to write hash index.", K(ret));
       }
+    } else if (data_buffer_.remain() < get_index_size()) {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "row data buffer is overflow", K(data_buffer_.remain()), K(get_index_size()), K(ret));
     } else {
       get_header(data_buffer_)->contains_hash_index_ = 1;
       get_header(data_buffer_)->hash_index_offset_from_end_ = hash_index_builder.estimate_size();
