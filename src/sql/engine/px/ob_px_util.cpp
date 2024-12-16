@@ -115,9 +115,6 @@ int ObBaseOrderMap::reorder_partition_as_base_order(int64_t pwj_group_id,
   if (OB_FAIL(map_.get_refactored(pwj_group_id, base_order))) {
     LOG_WARN("hash not found", K(pwj_group_id));
   } else if (FALSE_IT(base_order_arr = base_order.first)) {
-  } else if (base_order_arr->count() != dst_locations.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not match count", K(base_order_arr->count()), K(dst_locations.count()));
   } else {
     int index = 0;
     for (int i = 0; i < base_order_arr->count() && OB_SUCC(ret); ++i) {
