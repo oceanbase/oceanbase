@@ -158,6 +158,8 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
         LOG_WARN("generate table loc meta failed", K(ret));
       } else {
         tsc_ctdef.flashback_item_.need_scn_ |= has_rowscn;
+        // lookup to main table should invoke get
+        tsc_ctdef.lookup_ctdef_->is_get_ = true;
       }
 
       if (OB_SUCC(ret) && op.get_index_back() && op.get_is_index_global()) {
