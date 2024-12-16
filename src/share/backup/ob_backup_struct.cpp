@@ -2983,6 +2983,7 @@ const char* ObBackupStatus::get_str() const
     "BEFORE_BACKUP_LOG",
     "BACKUP_LOG",
     "BACKUP_FUSE_TABLET_META",
+    "PREPARE_BACKUP_LOG",
   };
 
   STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(status_strs), "status count mismatch");
@@ -3013,6 +3014,7 @@ int ObBackupStatus::set_status(const char *str)
     "BEFORE_BACKUP_LOG",
     "BACKUP_LOG",
     "BACKUP_FUSE_TABLET_META",
+    "PREPARE_BACKUP_LOG",
   };
   const int64_t count = ARRAYSIZEOF(status_strs);
   if (s.empty()) {

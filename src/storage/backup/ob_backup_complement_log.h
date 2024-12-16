@@ -167,11 +167,6 @@ public:
   virtual int process() override;
 
 private:
-  int get_active_round_dest_id_(const uint64_t tenant_id, int64_t &dest_id);
-  int get_newly_created_ls_in_piece_(const int64_t dest_id, const uint64_t tenant_id,
-      const share::SCN &start_scn, const share::SCN &end_scn);
-  int inner_get_newly_created_ls_in_piece_(const int64_t dest_id, const uint64_t tenant_id,
-      const share::SCN &start_scn, const share::SCN &end_scn, common::ObIArray<share::ObLSID> &ls_array);
   int get_next_ls_id_(share::ObLSID &ls_id);
   int generate_ls_dag_();
   int record_server_event_();
@@ -339,6 +334,45 @@ private:
   ObBackupComplementLogCtx *ctx_;
   common::ObArray<ObBackupPieceFile> file_list_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupLSLogFinishTask);
+};
+
+class ObBackupLSLogGroupFinishDag : public share::ObIDag
+{
+public:
+  ObBackupLSLogGroupFinishDag();
+  virtual ~ObBackupLSLogGroupFinishDag();
+  int init(ObBackupComplementLogCtx *ctx);
+  virtual bool operator == (const share::ObIDag &other) const override;
+  virtual int64_t hash() const override;
+  virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
+  virtual int create_first_task() override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
+  virtual lib::Worker::CompatMode get_compat_mode() const { return lib::Worker::CompatMode::MYSQL; }
+  virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return true; }
+
+protected:
+  bool is_inited_;
+  ObBackupComplementLogCtx *ctx_;
+  DISALLOW_COPY_AND_ASSIGN(ObBackupLSLogGroupFinishDag);
+};
+
+class ObBackupLSLogGroupFinishTask : public share::ObITask
+{
+public:
+  ObBackupLSLogGroupFinishTask();
+  virtual ~ObBackupLSLogGroupFinishTask();
+  int init(ObBackupComplementLogCtx *ctx);
+  virtual int process() override;
+
+private:
+  int report_task_result_();
+  int record_server_event_();
+
+private:
+  bool is_inited_;
+  ObBackupComplementLogCtx *ctx_;
+  DISALLOW_COPY_AND_ASSIGN(ObBackupLSLogGroupFinishTask);
 };
 
 }  // namespace backup
