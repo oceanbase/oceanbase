@@ -434,6 +434,16 @@ int ObSimpleDynamicThreadPool::set_max_thread_count(int64_t max_thread_cnt)
   return ret;
 }
 
+int ObSimpleDynamicThreadPool::set_thread_count_and_try_recycle(int64_t cnt)
+{
+  int ret = OB_SUCCESS;
+  ret = Threads::set_thread_count(cnt);
+  if (OB_SUCC(ret)) {
+    ret = Threads::try_thread_recycle();
+  }
+  return ret;
+}
+
 void ObSimpleDynamicThreadPool::try_expand_thread_count()
 {
   int ret = OB_SUCCESS;
@@ -462,9 +472,9 @@ void ObSimpleDynamicThreadPool::try_expand_thread_count()
         lib::Threads::get_expect_run_wrapper() = NULL;
         DEFER(lib::Threads::get_expect_run_wrapper() = run_wrapper);
         ObResetThreadTenantIdGuard guard;
-        ret = Threads::set_thread_count(cur_thread_count + inc_cnt);
+        ret = set_thread_count_and_try_recycle(cur_thread_count + inc_cnt);
       } else {
-        ret = Threads::set_thread_count(cur_thread_count + inc_cnt);
+        ret = set_thread_count_and_try_recycle(cur_thread_count + inc_cnt);
       }
       if (OB_FAIL(ret)) {
         COMMON_LOG(ERROR, "set thread count failed", KP(this), K(cur_thread_count), K(inc_cnt));
@@ -487,7 +497,7 @@ void ObSimpleDynamicThreadPool::try_inc_thread_count(int64_t cnt)
     new_thread_count = min(new_thread_count, max_thread_cnt_);
     COMMON_LOG(INFO, "try inc thread count", K(*this), K(cur_thread_count), K(cnt), K(new_thread_count));
     if (new_thread_count != cur_thread_count) {
-      if (OB_FAIL(Threads::set_thread_count(new_thread_count))) {
+      if (OB_FAIL(set_thread_count_and_try_recycle(new_thread_count))) {
         COMMON_LOG(ERROR, "set thread count failed", K(*this), K(cur_thread_count), K(cnt), K(new_thread_count));
       } else {
         COMMON_LOG(INFO, "inc thread count", K(*this), K(cur_thread_count), K(cnt), K(new_thread_count));
