@@ -463,10 +463,10 @@ def					0x636174	253	3	3	N	129	0	63
 cat
 SELECT TRUE, true, FALSE, false;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					TRUE	1	1	1	N	32897	0	63
-def					true	1	1	1	N	32897	0	63
-def					FALSE	1	1	1	N	32897	0	63
-def					false	1	1	1	N	32897	0	63
+def					TRUE	8	1	1	N	32897	0	63
+def					true	8	1	1	N	32897	0	63
+def					FALSE	8	1	1	N	32897	0	63
+def					false	8	1	1	N	32897	0	63
 TRUE	true	FALSE	false
 1	1	0	0
 select 'abcde';
