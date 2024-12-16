@@ -6840,7 +6840,7 @@ static OB_INLINE int common_enumset_string(const ObObj &in,
     } else if (ObEnumType == in_type) {
       ret = ObExprEnumToStr::inner_to_str(in.get_uint64(), *meta->get_str_values(), text_result);
     } else if (ObSetType == in_type) {
-      ret = ObExprSetToStr::inner_to_str(in.get_collation_type(), in.get_uint64(),
+      ret = ObExprSetToStr::inner_to_str(meta->get_collation_type(), in.get_uint64(),
                                           *meta->get_str_values(), text_result);
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -7380,6 +7380,7 @@ static int enumset_text(const ObObjType expect_type, ObObjCastParams &params,
       LOG_WARN("common_enumset_string failed", K(ret), K(in));
     } else if (FALSE_IT(text_result.get_result_buffer(es_str))) {
     } else if (FALSE_IT(temp_obj.set_varchar(es_str))) {
+    } else if (FALSE_IT(temp_obj.set_collation_type(params.dest_collation_))) {
     } else if (OB_FAIL(string_text(expect_type, params, temp_obj, out, cast_mode))) {
       LOG_WARN("common_string_datetime failed", K(ret), K(es_str));
     }
