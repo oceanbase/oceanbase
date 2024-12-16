@@ -780,8 +780,8 @@ int ObSelectStmt::get_same_win_func_item(const ObRawExpr *expr, ObWinFunRawExpr 
         LOG_WARN("failed to check status", K(ret));
       }
     }
-    if (OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
-                       cmp_ctx.equal_pairs_))) {
+    if (OB_SUCC(ret) && OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
+                                       cmp_ctx.equal_pairs_))) {
       LOG_WARN("failed to append equal param info", K(ret));
     }
   }
