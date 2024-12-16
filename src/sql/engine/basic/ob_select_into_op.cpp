@@ -2234,8 +2234,8 @@ int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_lengt
         orc_type = orc::createDecimalType(meta.precision_, meta.scale_);
       } else {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "this type for orc");
-        LOG_WARN("unsupport type for orc", K(obj_type), K(int_bytes));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "this type is not supported in orc");
+        LOG_WARN("unsupport type in orc", K(obj_type), K(int_bytes));
       }
     }
   } else if (ObTimestampType == obj_type || ObTimestampLTZType == obj_type) {
@@ -2247,7 +2247,13 @@ int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_lengt
   } else if (ObVarcharType == obj_type && meta.cs_type_ != CS_TYPE_BINARY) {
     orc_type = orc::createCharType(orc::TypeKind::VARCHAR, max_length);
   } else if (ObCharType == obj_type && meta.cs_type_ != CS_TYPE_BINARY) {
-    orc_type = orc::createCharType(orc::TypeKind::CHAR, max_length);
+    if (!(is_oracle_mode() && meta.length_semantics_ == LS_BYTE)) {
+      orc_type = orc::createCharType(orc::TypeKind::CHAR, max_length);
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupport type for oracle mode byte LENGTH BYTES in orc", K(obj_type), K(meta.length_semantics_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "oracle mode char length by bytes not support in orc");
+    }
   } else if (ObYearType == obj_type) {
     orc_type = orc::createPrimitiveType(orc::TypeKind::INT);
   } else if (ObNullType == obj_type || ObRawType == obj_type
@@ -2257,8 +2263,8 @@ int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_lengt
     orc_type = orc::createCharType(orc::TypeKind::STRING, max_length);
   } else {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("unsupport type for orc", K(obj_type));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "unsupported column type for orc file");
+    LOG_WARN("unsupport type in orc", K(obj_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "unsupported column type in orc file");
   }
   return ret;
 }
@@ -2271,6 +2277,7 @@ int ObSelectIntoOp::create_orc_schema(std::unique_ptr<orc::Type> &schema)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema is not null", K(ret));
   }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); i++) {
     ObString alias_name = MY_SPEC.alias_names_.strs_.at(i);
     std::string column_name(alias_name.ptr(), alias_name.length());
