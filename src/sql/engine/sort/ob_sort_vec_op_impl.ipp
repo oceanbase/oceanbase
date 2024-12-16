@@ -1180,7 +1180,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::preprocess_dump(bool &dumped
   dumped = false;
   if (OB_FAIL(sql_mem_processor_.get_max_available_mem_size(&mem_context_->get_malloc_allocator()))) {
     SQL_ENG_LOG(WARN, "failed to get max available memory size", K(ret));
-  } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(mem_context_->used()))) {
+  } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
     SQL_ENG_LOG(WARN, "failed to update used memory size", K(ret));
   } else {
     dumped = need_dump();
@@ -1203,10 +1203,10 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::preprocess_dump(bool &dumped
                                                                 UNUSED(max_memory_size);
                                                                 return need_dump();
                                                               },
-                                                              dumped, mem_context_->used()))) {
+                                                              dumped, get_total_used_size()))) {
           SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret));
         }
-        LOG_TRACE("trace sort need dump", K(dumped), K(mem_context_->used()), K(get_memory_limit()),
+        LOG_TRACE("trace sort need dump", K(dumped), K(get_total_used_size()), K(get_memory_limit()),
                   K(profile_.get_cache_size()), K(profile_.get_expect_size()));
       } else {
         // one-pass
