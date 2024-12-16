@@ -369,8 +369,7 @@ int ObStorageHASrcProvider::init(
   } else {
     storage_rpc_ = storage_rpc;
     member_helper_ = member_helper;
-    if (OB_FAIL(init_palf_parent_checkpoint_scn_(param.tenant_id_, param.ls_id_,
-        param.local_clog_checkpoint_scn_, param.arg_.dst_.get_replica_type()))) {
+    if (OB_FAIL(init_palf_parent_checkpoint_scn_(param.tenant_id_, param.ls_id_, param.local_clog_checkpoint_scn_, param.arg_.dst_.get_replica_type(), param.arg_.type_))) {
       LOG_WARN("failed to init palf parent checkpoint scn", K(ret), K(param), KP(storage_rpc_));
     } else if (OB_FAIL(member_list_info_.assign(param.info_))) {
       LOG_WARN("failed to assign member list info", K(ret), K(param));
@@ -548,7 +547,7 @@ int ObStorageHASrcProvider::check_replica_type_(
 }
 
 int ObStorageHASrcProvider::init_palf_parent_checkpoint_scn_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const share::SCN &local_clog_checkpoint_scn, const common::ObReplicaType replica_type)
+    const share::SCN &local_clog_checkpoint_scn, const common::ObReplicaType replica_type, const ObMigrationOpType::TYPE op_type)
 {
   int ret = OB_SUCCESS;
   // local_clog_checkpoint_scn is min means firstly run migration.
@@ -565,7 +564,7 @@ int ObStorageHASrcProvider::init_palf_parent_checkpoint_scn_(const uint64_t tena
     const int64_t start_ts = ObTimeUtility::current_time();
     const int64_t DEFAULT_GET_PARENT_CHECKPOINT_TIMEOUT = 1 * 60 * 1000 * 1000L;
     do {
-      if (OB_FAIL(get_palf_parent_checkpoint_scn_from_rpc_(tenant_id, ls_id, replica_type, palf_parent_checkpoint_scn_))) {
+      if (OB_FAIL(get_palf_parent_checkpoint_scn_from_rpc_(tenant_id, ls_id, replica_type, op_type, palf_parent_checkpoint_scn_))) {
         if (renew_count++ < max_renew_count) {  // retry three times
           LOG_WARN("failed to get parent checkpoint scn", K(ret), K(tenant_id), K(ls_id), K(replica_type), KP(storage_rpc_));
           if (ObTimeUtility::current_time() - start_ts > DEFAULT_GET_PARENT_CHECKPOINT_TIMEOUT) {
@@ -591,7 +590,7 @@ int ObStorageHASrcProvider::init_palf_parent_checkpoint_scn_(const uint64_t tena
 }
 
 int ObStorageHASrcProvider::get_palf_parent_checkpoint_scn_from_rpc_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObReplicaType replica_type, share::SCN &parent_checkpoint_scn)
+    const common::ObReplicaType replica_type, const ObMigrationOpType::TYPE op_type, share::SCN &parent_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   common::ObAddr parent_addr;
@@ -600,7 +599,7 @@ int ObStorageHASrcProvider::get_palf_parent_checkpoint_scn_from_rpc_(const uint6
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(get_palf_parent_addr_(tenant_id, ls_id, replica_type, parent_addr))) {
+  } else if (OB_FAIL(get_palf_parent_addr_(tenant_id, ls_id, replica_type, op_type, parent_addr))) {
     LOG_WARN("failed to get palf parent addr", K(ret), K(tenant_id), K(ls_id), K(replica_type));
   } else if (OB_FAIL(fetch_ls_meta_info_(tenant_id, ls_id, parent_addr, ls_info))) {
     LOG_WARN("failed to fetch palf parent ls meta", K(ret), K(tenant_id), K(ls_id), K(parent_addr), KP(storage_rpc_));
@@ -612,7 +611,7 @@ int ObStorageHASrcProvider::get_palf_parent_checkpoint_scn_from_rpc_(const uint6
 }
 
 int ObStorageHASrcProvider::get_palf_parent_addr_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObReplicaType replica_type, common::ObAddr &parent_addr)
+    const common::ObReplicaType replica_type, const ObMigrationOpType::TYPE op_type, common::ObAddr &parent_addr)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -623,17 +622,14 @@ int ObStorageHASrcProvider::get_palf_parent_addr_(const uint64_t tenant_id, cons
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
-  } else if (common::ObReplicaType::REPLICA_TYPE_FULL == replica_type) {
+  } else if (common::ObReplicaType::REPLICA_TYPE_FULL == replica_type && ObMigrationOpType::TYPE::REBUILD_LS_OP == op_type) {
+    // if replica type is F and rebuild, it will fetch log from leader
     if (OB_FAIL(member_helper_->get_ls_leader(tenant_id, ls_id, parent_addr))) {
       LOG_WARN("failed to get leader addr", K(ret), K(tenant_id), K(ls_id));
     }
-  } else if (ObReplicaTypeCheck::is_non_paxos_replica(replica_type)) {
-    if (OB_FAIL(ls->get_log_handler()->get_parent(parent_addr))) {
-      LOG_WARN("failed to get parent addr", K(ret), K(tenant_id), K(ls_id));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected dst replica type", K(ret), K(replica_type));
+  } else if (OB_FAIL(ls->get_log_handler()->get_parent(parent_addr))) {
+    // otherwise, this replica is in learner list, it will fetch log from parent
+    LOG_WARN("failed to get parent addr", K(ret), K(tenant_id), K(ls_id));
   }
   return ret;
 }
