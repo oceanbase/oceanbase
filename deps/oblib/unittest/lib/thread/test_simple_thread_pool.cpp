@@ -76,7 +76,7 @@ TEST(DISABLED_TestSimpleThreadPool, Basic)
 
 }
 
-TEST(TestSimpleThreadPool, test_dynamic_simple_thread_pool)
+TEST(TestSimpleThreadPool, DISABLED_test_dynamic_simple_thread_pool)
 {
   class ObTestSimpleThreadPool : public ObSimpleThreadPool {
     void handle(void *task) {

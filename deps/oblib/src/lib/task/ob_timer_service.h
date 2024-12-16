@@ -44,7 +44,7 @@ public:
   {
     int64_t pos = 0;
     if (NULL != buf && buf_len > 0) {
-      databuff_printf(buf, buf_len, pos, "tasktype:%s, timeout_check:%s",
+      databuff_printf(buf, buf_len, pos, "task_type:%s, timeout_check:%s",
           typeid(*this).name(), timeout_check_ ? "True" : "False");
     }
     return pos;
@@ -69,8 +69,9 @@ public:
   TaskToken(const TaskToken &other) = delete;
   TaskToken &operator=(const TaskToken &other) = delete;
   ~TaskToken();
-  TO_STRING_KV(KP_(timer), KPC_(timer), KP_(task), KPC_(task), K_(scheduled_time), K_(delay));
+  TO_STRING_KV(KP(this), KP_(timer), KP_(task), K_(task_type), K_(scheduled_time), K_(delay));
 public:
+  char task_type_[128];
   const ObTimer *timer_;
   ObTimerTask *task_;
   int64_t scheduled_time_;
@@ -107,6 +108,11 @@ public:
   }
   ObTimerService(const ObTimerService &) = delete;
   ObTimerService &operator=(const ObTimerService &) = delete;
+  TO_STRING_KV(KP(this), K(tenant_id_),
+      K(priority_task_queue_.size()),
+      K(running_task_set_.size()),
+      K(uncanceled_task_set_.size()),
+      K(worker_thread_pool_.get_queue_num()));
   int start();
   void stop();
   void wait();
@@ -149,7 +155,7 @@ private:
       const int64_t st,
       const int64_t dt);
   void delete_token(TaskToken *&token);
-
+  void dump_info();
 private:
   bool is_never_started_;
   bool is_stopped_;
@@ -162,13 +168,14 @@ private:
   ObTimerTaskThreadPool worker_thread_pool_;
   lib::ObMutex mutex_;
 private:
-  static constexpr int64_t WAIT_INTERVAL_US = 10L * 1000L;          // 10ms
+  static constexpr int64_t MIN_WAIT_INTERVAL = 10L * 1000L;          // 10ms
+  static constexpr int64_t MAX_WAIT_INTERVAL = 100L * 1000L;         // 100ms
   static constexpr int64_t MIN_WORKER_THREAD_NUM = 4L;
   static constexpr int64_t MAX_WORKER_THREAD_NUM = 128L;
   static constexpr int64_t TASK_NUM_LIMIT = 10000L;
   static constexpr int64_t CLOCK_SKEW_DELTA = 20L * 1000L;          // 20ms
   static constexpr int64_t CLOCK_ERROR_DELTA = 500L * 1000L;        // 500ms
-  static constexpr int64_t DUMP_INTERVAL_US = 600L * 1000L * 1000L; // 10min
+  static constexpr int64_t DUMP_INTERVAL = 60L * 1000L * 1000L;     // 60s
   using VecIter = ObSortedVector<TaskToken *>::iterator;
 };
 

@@ -124,6 +124,7 @@ protected:
   {
     return ATOMIC_AAF(&running_thread_cnt_, cnt);
   }
+  int set_thread_count_and_try_recycle(int64_t cnt);
 private:
   int64_t min_thread_cnt_;
   int64_t max_thread_cnt_;
