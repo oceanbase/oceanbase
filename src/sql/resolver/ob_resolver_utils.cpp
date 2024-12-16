@@ -446,9 +446,9 @@ int ObResolverUtils::resolve_collection_type_info(const ParseNode &type_node, Ob
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported element type", K(ret), K(type_node.type_));
   } else if (type_node.int32_values_[1]/*is binary*/ && (type_node.type_ == T_CHAR || type_node.type_ == T_VARCHAR)) {
-    if (OB_FAIL(buf.append(type_node.type_ == T_CHAR ? "BINARY" : "VARBINARY"))) {
-      LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
-    }
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported binary", K(ret), K(type_node.type_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element in binary type");
   } else if (is_vector) {
     // vector type
     if (OB_FAIL(buf.append("VECTOR"))) {
@@ -469,10 +469,10 @@ int ObResolverUtils::resolve_collection_type_info(const ParseNode &type_node, Ob
     int32_t length = is_bit ? type_node.int16_values_[0]
                               : (is_char ? type_node.int32_values_[0] : type_node.int16_values_[1]);
     int64_t pos = 0;
-    if (is_char && (length <= -1 || length > OB_MAX_ORACLE_VARCHAR_LENGTH)) {
+    if (is_char && (length <= -1 || length > OB_MAX_VARCHAR_LENGTH / 4)) {
       ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
       LOG_WARN("data length is invalid", K(ret), K(length));
-      LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, "varchar", static_cast<int>(OB_MAX_ORACLE_VARCHAR_LENGTH));
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, "varchar", static_cast<int>(OB_MAX_VARCHAR_LENGTH / 4));
     } else if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "(%d)",length))) {
       LOG_WARN("failed to convert len to string", K(ret), K(length));
     } else if (OB_FAIL(buf.append(tmp, pos))) {

@@ -308,7 +308,7 @@ int ObSqlCollectionInfo::set_element_meta_info(const std::string &name, uint8_t 
         meta_info->basic_meta_.set_scale(default_accuracy.get_scale());
         break;
       case ObStringTC:
-        if (val <= -1 || val > OB_MAX_ORACLE_VARCHAR_LENGTH) {
+        if (val <= -1 || val > OB_MAX_VARCHAR_LENGTH / 4) {
           ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
           LOG_WARN("data length is invalid", K(ret), K(val));
         } else {
