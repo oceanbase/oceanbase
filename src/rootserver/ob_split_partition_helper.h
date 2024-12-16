@@ -132,6 +132,9 @@ private:
       storage::ObTabletSplitMdsArg &start_dst_arg,
       ObTabletCreator *&tablet_creator,
       ObMySQLTransaction &trans);
+  static int check_mem_usage_for_split_(
+      const uint64_t tenant_id,
+      const int64_t dst_tablets_number);
 
 private:
   ObDDLSQLTransaction &trans_;
@@ -142,6 +145,8 @@ private:
   share::ObDDLType split_type_;
   const static int64_t MYSQL_MAX_NUM_TABLETS_IN_TABLE = 8L * 1024L;
   const static int64_t ORACLE_MAX_NUM_TABLETS_IN_TABLE = 1024L * 1024L - 1L;
+  const static int64_t OB_MAX_SPLIT_PER_ROUND = 8L * 1024L;
+  const static int64_t MEMORY_USAGE_SPLIT_PER_DST = 8L * 1024L * 1024L;
   const common::ObIArray<share::schema::ObTableSchema *> &new_table_schemas_;
   const common::ObIArray<share::schema::ObTableSchema *> &upd_table_schemas_;
   const common::ObIArray<const share::schema::ObTableSchema *> &inc_table_schemas_;
