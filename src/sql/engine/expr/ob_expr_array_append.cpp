@@ -175,7 +175,6 @@ int ObExprArrayAppendCommon::eval_append_batch(const ObExpr &expr, ObEvalCtx &ct
     ObDatumVector val_datum = expr.args_[1]->locate_expr_datumvector(ctx);
     for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
       bool is_null_res = false;
-      int64_t idx = 0;
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }

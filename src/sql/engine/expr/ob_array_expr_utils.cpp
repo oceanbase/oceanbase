@@ -477,6 +477,10 @@ int ObArrayExprUtils::deduce_array_element_type(ObExecContext *exec_ctx, ObExprR
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unsupported element type", K(ret), K(types_stack[i].get_type()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element type");
+    } else if (ob_is_varbinary_or_binary(types_stack[i].get_type(), types_stack[i].get_collation_type())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("array element in binary type isn't supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element in binary type");
     } else if (OB_FAIL(ObExprResultTypeUtil::get_deduce_element_type(types_stack[i], elem_type))) {
       LOG_WARN("get deduce type failed", K(ret), K(types_stack[i].get_type()), K(elem_type.get_obj_type()), K(i));
     }
@@ -487,7 +491,7 @@ int ObArrayExprUtils::deduce_array_element_type(ObExecContext *exec_ctx, ObExprR
     for (int64_t i = 0; i < param_num && OB_SUCC(ret); i++) {
       if (types_stack[i].is_null()) {
       } else if (types_stack[i].get_type() != elem_type.get_obj_type()) {
-        types_stack[i].set_calc_type(elem_type.get_obj_type());
+        types_stack[i].set_calc_meta(elem_type.get_meta_type());
         types_stack[i].set_calc_accuracy(elem_type.get_accuracy());
       }
     }
