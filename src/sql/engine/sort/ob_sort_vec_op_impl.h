@@ -325,11 +325,11 @@ protected:
         ret = OB_ERR_UNEXPECTED;
         SQL_ENG_LOG(WARN, "the number of rows in sort key store and addon store is expected to be equal",
           K(chunk->sk_store_.get_row_cnt()), K(chunk->addon_store_.get_row_cnt()), K(ret));
-      } else if (OB_FAIL(chunk->sk_store_.dump(false, true))) {
+      } else if (OB_FAIL(chunk->sk_store_.dump(true))) {
         SQL_ENG_LOG(WARN, "failed to dump row store", K(ret));
       } else if (OB_FAIL(chunk->sk_store_.finish_add_row(true /*+ need dump */))) {
         SQL_ENG_LOG(WARN, "finish add row failed", K(ret));
-      } else if (has_addon && OB_FAIL(chunk->addon_store_.dump(false, true))) {
+      } else if (has_addon && OB_FAIL(chunk->addon_store_.dump(true))) {
         SQL_ENG_LOG(WARN, "failed to dump row store", K(ret));
       } else if (has_addon && OB_FAIL(chunk->addon_store_.finish_add_row(true /*+ need dump */))) {
         SQL_ENG_LOG(WARN, "finish add row failed", K(ret));
