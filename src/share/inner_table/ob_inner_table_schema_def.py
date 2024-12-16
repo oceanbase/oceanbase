@@ -7873,6 +7873,12 @@ def_table_schema(**all_ncomp_dll_v2)
 
 # 529: __all_object_balance_weight
 # 530: __wr_sql_plan_aux_key2snapshot
+# 531: __ft_dict_ik_utf8
+# 532: __ft_stopword_ik_utf8
+# 533: __ft_quantifier_ik_utf8
+# 534: __ft_dict_ik_gbk
+# 535: __ft_stopword_ik_gbk
+# 536: __ft_quantifier_ik_gbk
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
