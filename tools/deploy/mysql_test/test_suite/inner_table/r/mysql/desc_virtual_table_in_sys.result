@@ -4485,9 +4485,9 @@ ref_old_name	varchar(128)	NO		NULL
 ref_new_name	varchar(128)	NO		NULL	
 ref_parent_name	varchar(128)	NO		NULL	
 when_condition	varchar(4000)	YES		NULL	
-trigger_body	varchar(65536)	NO		NULL	
-package_spec_source	varchar(65536)	NO		NULL	
-package_body_source	varchar(65536)	NO		NULL	
+trigger_body	varchar(65536)	YES		NULL	
+package_spec_source	varchar(65536)	YES		NULL	
+package_body_source	varchar(65536)	YES		NULL	
 package_flag	bigint(20)	NO		NULL	
 package_comp_flag	bigint(20)	NO		NULL	
 package_exec_env	varchar(2048)	YES		NULL	
@@ -4498,6 +4498,7 @@ ref_trg_db_name	varchar(128)	YES		NULL
 ref_trg_name	varchar(128)	YES		NULL	
 action_order	bigint(20)	NO		NULL	
 analyze_flag	bigint(20)	NO		0	
+trigger_body_v2	longtext	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_trigger;
 IF(count(*) >= 0, 1, 0)
 1
@@ -4537,6 +4538,7 @@ ref_trg_db_name	varchar(128)	YES		NULL
 ref_trg_name	varchar(128)	YES		NULL	
 action_order	bigint(20)	YES		NULL	
 analyze_flag	bigint(20)	YES		0	
+trigger_body_v2	longtext	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_trigger_history;
 IF(count(*) >= 0, 1, 0)
 1
