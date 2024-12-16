@@ -164,12 +164,12 @@ private:
       const bool &must_choose_c_replica,
       bool &is_replica_type_valid);
   int init_palf_parent_checkpoint_scn_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const share::SCN &local_clog_checkpoint_scn, const common::ObReplicaType replica_type);
+      const share::SCN &local_clog_checkpoint_scn, const common::ObReplicaType replica_type, const ObMigrationOpType::TYPE op_type);
 
   int get_palf_parent_checkpoint_scn_from_rpc_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const common::ObReplicaType replica_type, share::SCN &parent_checkpoint_scn);
+      const common::ObReplicaType replica_type, const ObMigrationOpType::TYPE op_type, share::SCN &parent_checkpoint_scn);
   int get_palf_parent_addr_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const common::ObReplicaType replica_type, common::ObAddr &parent_addr);
+      const common::ObReplicaType replica_type, const ObMigrationOpType::TYPE op_type, common::ObAddr &parent_addr);
   int check_replica_type_for_normal_replica_(
       const common::ObAddr &addr,
       const common::ObReplicaMember &dst,
