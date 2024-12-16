@@ -198,7 +198,8 @@ public:
 
   int handle_pl_prepare(const ObString &sql,
                         ObSPIService::PLPrepareCtx &pl_prepare_ctx,
-                        ObSPIService::PLPrepareResult &pl_prepare_result);
+                        ObSPIService::PLPrepareResult &pl_prepare_result,
+                        ParamStore *params = nullptr);
 
   int handle_pl_execute(const ObString &sql,
                         ObSQLSessionInfo &session_info,
