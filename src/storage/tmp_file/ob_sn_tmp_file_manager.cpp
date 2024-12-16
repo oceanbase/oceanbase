@@ -176,9 +176,10 @@ int ObSNTenantTmpFileManager::get_macro_block_list(common::ObIArray<blocksstable
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSNTenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
-  } else if (OB_UNLIKELY(!is_running())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ObSNTenantTmpFileManager is not running", KR(ret), K(is_running_));
+// XXX This function must still be available after the tenant is stopped and before it is destroyed.
+//  } else if (OB_UNLIKELY(!is_running())) {
+//    ret = OB_ERR_UNEXPECTED;
+//    LOG_WARN("ObSNTenantTmpFileManager is not running", KR(ret), K(is_running_));
   } else if (OB_FAIL(tmp_file_block_manager_.get_macro_block_list(macro_id_list))) {
     LOG_WARN("fail to get macro block id list", KR(ret));
   }
@@ -198,9 +199,10 @@ int ObSNTenantTmpFileManager::get_tmp_file_disk_usage(int64_t &disk_data_size, i
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSNTenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
-  } else if (OB_UNLIKELY(!is_running())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ObSNTenantTmpFileManager is not running", KR(ret), K(is_running_));
+// XXX This function must still be available after the tenant is stopped and before it is destroyed.
+//  } else if (OB_UNLIKELY(!is_running())) {
+//    ret = OB_ERR_UNEXPECTED;
+//    LOG_WARN("ObSNTenantTmpFileManager is not running", KR(ret), K(is_running_));
   } else if (OB_FAIL(tmp_file_block_manager_.get_block_usage_stat(used_page_num, macro_block_count))) {
     LOG_WARN("fail to get block usage stat", KR(ret));
   } else {
