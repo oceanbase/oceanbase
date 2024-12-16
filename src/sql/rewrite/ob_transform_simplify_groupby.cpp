@@ -908,7 +908,8 @@ int ObTransformSimplifyGroupby::remove_aggr_distinct(ObDMLStmt *stmt, bool &tran
         trans_happened = true;
       } else if (T_FUN_SUM == aggr_expr->get_expr_type() ||
                  T_FUN_COUNT == aggr_expr->get_expr_type() ||
-                 T_FUN_GROUP_CONCAT == aggr_expr->get_expr_type()) {
+                 T_FUN_GROUP_CONCAT == aggr_expr->get_expr_type() ||
+                 T_FUNC_SYS_ARRAY_AGG == aggr_expr->get_expr_type()) {
         // sum/count/group_concat(distinct) 要求param在做group by之前是非严格unique的
         ObSEArray<ObRawExpr *, 4> aggr_param_exprs;
         bool is_unique = false;
