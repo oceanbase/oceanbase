@@ -1105,12 +1105,18 @@ int ObPartitionMergePolicy::get_multi_version_start(
   if (tablet.is_ls_inner_tablet()) {
     result_version_range.multi_version_start_ = INT64_MAX;
   } else if (OB_FAIL(tablet.get_kept_snapshot_info(ls.get_min_reserved_snapshot(), snapshot_info))) {
-    if (is_mini_merge(merge_type) || OB_TENANT_NOT_EXIST == ret) {
+    // Minor Merge need read medium list to decide boundary snapshot and multi version start.
+    // Bug when ls is migrating, data is not complete and mds data can not be read.
+    // So if the sstable cnt is unsafe, a emergency minor should be scheduled.
+    const bool need_emergency_minor = OB_EAGAIN == ret && is_minor_merge_type(merge_type)
+                                   && !tablet.get_tablet_meta().ha_status_.is_data_status_complete()
+                                   && (tablet.get_major_table_count() + tablet.get_minor_table_count()) > OB_UNSAFE_TABLE_CNT;
+    if (is_mini_merge(merge_type) || OB_TENANT_NOT_EXIST == ret || need_emergency_minor) {
       snapshot_info.reset();
       snapshot_info.snapshot_type_ = ObStorageSnapshotInfo::SNAPSHOT_MULTI_VERSION_START_ON_TABLET;
       snapshot_info.snapshot_ = tablet.get_multi_version_start();
       FLOG_INFO("failed to get multi_version_start, use multi_version_start on tablet", K(ret),
-          "merge_type", merge_type_to_str(merge_type), K(snapshot_info));
+          "merge_type", merge_type_to_str(merge_type), K(snapshot_info), K(need_emergency_minor));
       ret = OB_SUCCESS; // clear errno
     } else {
       LOG_WARN("failed to get kept multi_version_start", K(ret),
