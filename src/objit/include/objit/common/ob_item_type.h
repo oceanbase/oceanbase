@@ -988,6 +988,8 @@ typedef enum ObItemType
   T_FUN_SYS_CALC_PARTITION_IDX = 2054,
   T_FUN_SYS_CALC_SUB_PARTITION_IDX = 2055,
   T_FUN_SYS_CALC_ODPS_SIZE = 2056,
+  T_FUN_URL_ENCODE = 2057,
+  T_FUN_URL_DECODE = 2058,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
