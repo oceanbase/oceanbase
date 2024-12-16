@@ -2995,8 +2995,9 @@ int ObStaticEngineCG::generate_merge_with_das(ObLogMerge &op,
   if (OB_SUCC(ret)) {
     ObMergeCtDef *merge_ctdef = spec.merge_ctdefs_.at(0);
     bool find = false;
-
+    bool update_exist = false;
     if (OB_NOT_NULL(merge_ctdef->upd_ctdef_)) {
+      update_exist = true;
       const ObUpdCtDef &upd_ctdef = *merge_ctdef->upd_ctdef_;
       for (int64_t i = 0; OB_SUCC(ret) && !find && i < upd_ctdef.fk_args_.count(); ++i) {
         const ObForeignKeyArg &fk_arg = upd_ctdef.fk_args_.at(i);
@@ -3016,7 +3017,10 @@ int ObStaticEngineCG::generate_merge_with_das(ObLogMerge &op,
     }
 
     if (OB_SUCC(ret)) {
-      if (find) {
+      // When both UPDATE and INSERT exist,
+      // foreign key check_exist cannot use the das_scan optimization method for the time being.
+      // There is a bug here, issue_id: 2024102800104824214
+      if (find || update_exist) {
         spec.check_fk_batch_ = false;
       } else {
         spec.check_fk_batch_ = true;
@@ -3672,6 +3676,10 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
             break;
           }
         }
+        // When both UPDATE and INSERT exist,
+        // foreign key check_exist cannot use the das_scan optimization method for the time being.
+        // There is a bug here, issue_id: 2024102800104824214
+        spec.check_fk_batch_ = false;
       }
     }
   }
