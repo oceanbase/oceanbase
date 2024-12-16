@@ -63,6 +63,9 @@ void TestSSTmpFileFlushTask::SetUpTestCase()
 {
   GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  MTL(tmp_file::ObTenantTmpFileManager *)->stop();
+  MTL(tmp_file::ObTenantTmpFileManager *)->wait();
+  MTL(tmp_file::ObTenantTmpFileManager *)->destroy();
 }
 
 void TestSSTmpFileFlushTask::TearDownTestCase()
@@ -125,9 +128,21 @@ TEST_F(TestSSTmpFileFlushTask, basic_flush)
     ObStorageObjectHandle write_object_handle;
     ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_ids[i]));
 
-    write_info_.io_desc_.set_sealed();
     ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
     ASSERT_NE(nullptr, file_manager);
+    write_info_.buffer_ = write_buf_;
+    write_info_.offset_ = 0;
+    write_info_.size_ = WRITE_IO_SIZE / 2;
+    write_info_.tmp_file_valid_length_ = WRITE_IO_SIZE / 2;
+    write_info_.io_desc_.set_unsealed();
+    ASSERT_EQ(OB_SUCCESS, file_manager->async_append_file(write_info_, write_object_handle));
+    ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+
+    write_info_.buffer_ = write_buf_ + WRITE_IO_SIZE / 2;
+    write_info_.offset_ = WRITE_IO_SIZE / 2;
+    write_info_.size_ = WRITE_IO_SIZE / 2;
+    write_info_.tmp_file_valid_length_ = WRITE_IO_SIZE;
+    write_info_.io_desc_.set_sealed();
     ASSERT_EQ(OB_SUCCESS, file_manager->async_append_file(write_info_, write_object_handle));
     ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
     ObIOFlag flag;
