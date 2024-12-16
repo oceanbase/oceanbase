@@ -8367,6 +8367,7 @@ int ObDDLService::get_index_schema_by_name(
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
   const ObString &index_name = drop_index_arg.index_name_;
   const bool is_mlog = (obrpc::ObIndexArg::DROP_MLOG == drop_index_arg.index_action_type_);
+  index_table_schema = nullptr;
 
   //build index name and get index schema
   if (is_mlog) {
@@ -8390,6 +8391,12 @@ int ObDDLService::get_index_schema_by_name(
       LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, index_name.length(), index_name.ptr());
       LOG_WARN("get index table schema failed", K(tenant_id),
           K(database_id), K(index_table_name), K(ret));
+    } else if (is_index && data_table_id != index_table_schema->get_data_table_id()) {
+      ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+      LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, index_name.length(), index_name.ptr());
+      LOG_WARN("get index table schema failed", K(tenant_id),
+          K(database_id), K(index_table_name), K(index_table_schema->get_table_id()), K(ret));
+      index_table_schema = nullptr;
     } else if (index_table_schema->is_in_recyclebin()) {
       ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
       LOG_WARN("index table is in recyclebin", K(ret));
