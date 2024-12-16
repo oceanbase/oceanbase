@@ -644,6 +644,16 @@ int64_t get_stream_rpc_max_wait_timeout(int64_t tenant_id)
   }
   return stream_rpc_max_wait_timeout;
 }
+
+bool stream_rpc_update_timeout()
+{
+  bool bool_ret = false;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
 } // end of namespace obrpc
 } // end of namespace oceanbase
 
