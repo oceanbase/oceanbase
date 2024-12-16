@@ -981,6 +981,30 @@ int ObBackupLSLogTask::get_complement_log_dir_path_(ObBackupPath &backup_path)
   return ret;
 }
 
+int ObBackupLSLogTask::get_ls_replay_start_scn_if_not_newly_created_(const share::ObLSID &ls_id, share::SCN &start_scn)
+{
+  int ret = OB_SUCCESS;
+  storage::ObBackupDataStore store;
+  storage::ObLSMetaPackage ls_meta_package;
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx should not be null", KPC_(ctx));
+  } else if (OB_FAIL(store.init(ctx_->backup_dest_, ctx_->backup_set_desc_))) {
+    LOG_WARN("failed to init backup data store", K(ret));
+  } else if (OB_FAIL(store.read_ls_meta_infos(ls_id, ls_meta_package))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("should be newly created ls", K(ls_id));
+    } else {
+      LOG_WARN("failed to read ls meta infos", K(ret), K(ls_id));
+    }
+  } else {
+    start_scn = ls_meta_package.palf_meta_.prev_log_info_.scn_;
+    LOG_INFO("get ls replay start scn if not newly created", K(ls_id), K(start_scn));
+  }
+  return ret;
+}
+
 int ObBackupLSLogTask::calc_backup_file_range_(const int64_t dest_id, const share::ObLSID &ls_id,
     common::ObArray<ObTenantArchivePieceAttr> &piece_list, common::ObIArray<ObBackupPieceFile> &file_list)
 {
@@ -998,6 +1022,8 @@ int ObBackupLSLogTask::calc_backup_file_range_(const int64_t dest_id, const shar
   } else if (FALSE_IT(tenant_id = ctx_->tenant_id_)) {
   } else if (FALSE_IT(start_scn = ctx_->compl_start_scn_)) {
   } else if (FALSE_IT(end_scn = ctx_->compl_end_scn_)) {
+  } else if (OB_FAIL(get_ls_replay_start_scn_if_not_newly_created_(ls_id, start_scn))) {
+    LOG_WARN("failed to get ls replay start scn if newly created", K(ret), K(ls_id));
   } else if (OB_FAIL(get_piece_id_by_scn_(tenant_id, dest_id, start_scn, start_piece_id))) {
     LOG_WARN("failed to get piece id by ts", K(ret), K(tenant_id), K(start_scn));
   } else if (OB_FAIL(get_piece_id_by_scn_(tenant_id, dest_id, end_scn, end_piece_id))) {

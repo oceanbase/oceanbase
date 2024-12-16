@@ -220,6 +220,7 @@ private:
   int get_complement_log_dir_path_(share::ObBackupPath &backup_path);
 
 private:
+  int get_ls_replay_start_scn_if_not_newly_created_(const share::ObLSID &ls_id, share::SCN &start_scn);
   int calc_backup_file_range_(const int64_t dest_id, const share::ObLSID &ls_id,
       common::ObArray<ObTenantArchivePieceAttr> &piece_list, common::ObIArray<ObBackupPieceFile> &file_list);
   int update_ls_task_stat_(const share::ObBackupStats &old_backup_stat,
