@@ -39,8 +39,10 @@ private:
                           ObIArray<ObAggFunRawExpr*> &non_distinct_aggr,
                           ObIArray<ObAggFunRawExpr*> &distinct_aggr);
   int construct_view_select_exprs(const ObIArray<ObAggFunRawExpr*> &non_distinct_aggr,
-                                  const ObIArray<ObAggFunRawExpr*> &distinct_aggr,
                                   ObIArray<ObRawExpr*> &view_select_exprs);
+  int construct_view_group_exprs(const ObIArray<ObRawExpr*> &ori_group_expr,
+                                 const ObIArray<ObAggFunRawExpr*> &distinct_aggr,
+                                 ObIArray<ObRawExpr*> &view_group_exprs);
   int replace_aggr_func(ObSelectStmt *stmt,
                         TableItem *view_table,
                         const ObIArray<ObAggFunRawExpr*> &distinct_aggr);

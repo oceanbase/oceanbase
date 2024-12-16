@@ -178,7 +178,7 @@ public:
           agg_row = agg_ctx.agg_rows_.at(i);
           NotNullBitVector &notnulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
           if (!pvt_skip.at(i)) {
-            notnulls.set(i);
+            notnulls.set(agg_col_id);
           }
         }
       } else {
@@ -186,7 +186,7 @@ public:
           agg_row = agg_ctx.agg_rows_.at(row_sel.index(i));
           NotNullBitVector &notnulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
           if (!pvt_skip.at(row_sel.index(i))) {
-            notnulls.set(row_sel.index(i));
+            notnulls.set(agg_col_id);
           }
         }
       }
