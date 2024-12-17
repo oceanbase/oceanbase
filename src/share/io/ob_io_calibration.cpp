@@ -620,6 +620,7 @@ void ObIOBenchController::run1()
 
   ret_code_ = ret;
   finish_ts_ = ObTimeUtility::fast_current_time();
+  TG_DESTROY(tg_id_);
 }
 
 int64_t ObIOBenchController::get_start_timestamp()
