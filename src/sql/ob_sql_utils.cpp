@@ -655,7 +655,19 @@ int ObSQLUtils::is_collation_data_version_valid(ObCollationType collation_type, 
                  CS_TYPE_UTF8MB4_0900_AI_CI != collation_type &&
                  ((CS_TYPE_UTF8MB4_0900_AI_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_MN_CYRL_0900_AS_CS)
                   || (CS_TYPE_UTF16_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF16_VIETNAMESE_CI)
-                  || (CS_TYPE_UTF8MB4_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_VIETNAMESE_CI)))) {
+                  || (CS_TYPE_UTF8MB4_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_VIETNAMESE_CI)
+                  || CS_TYPE_BIG5_BIN == collation_type
+                  || CS_TYPE_BIG5_CHINESE_CI == collation_type
+                  || CS_TYPE_LATIN1_GERMAN2_CI == collation_type
+                  || CS_TYPE_LATIN1_GERMAN1_CI == collation_type
+                  || CS_TYPE_LATIN1_SWEDISH_CI == collation_type
+                  || CS_TYPE_LATIN1_DANISH_CI == collation_type
+                  || CS_TYPE_LATIN1_SPANISH_CI == collation_type
+                  || CS_TYPE_HKSCS31_BIN == collation_type
+                  || CS_TYPE_HKSCS_BIN == collation_type
+                  || CS_TYPE_DEC8_BIN == collation_type
+                  || CS_TYPE_DEC8_SWEDISH_CI == collation_type
+                  ))) {
       ret = OB_NOT_SUPPORTED;
       SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_5_0", K(collation_type), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.5, collation is");
