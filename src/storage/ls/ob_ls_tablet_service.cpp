@@ -4468,8 +4468,11 @@ int ObLSTabletService::insert_tablet_rows(
 {
   int ret = OB_SUCCESS;
   ObRelativeTable &table = run_ctx.relative_table_;
+#ifdef OB_BUILD_PACKAGE
   const bool check_exists = !table.is_storage_index_table() || table.is_unique_index();
-
+#else
+  const bool check_exists = !table.is_storage_index_table() || table.is_unique_index() || table.is_fts_index();
+#endif
   // 1. Defensive checking of new rows.
   if (GCONF.enable_defensive_check()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
@@ -4503,6 +4506,12 @@ int ObLSTabletService::insert_tablet_rows(
         blocksstable::ObDatumRowkey &duplicate_rowkey = rows_info.get_conflict_rowkey();
         LOG_WARN("Rowkey already exist", K(ret), K(table), K(duplicate_rowkey),
                  K(rows_info.get_conflict_idx()));
+#ifndef OB_BUILD_PACKAGE
+        if (table.is_fts_index()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("unexpected error, duplicated row", K(ret), K(table));
+        }
+#endif
       } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("Failed to insert rows to tablet", K(ret), K(rows_info));
       }
