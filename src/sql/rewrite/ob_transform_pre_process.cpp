@@ -6741,6 +6741,7 @@ int ObTransformPreProcess::transform_inner_op_row_cmp_for_decimal_int(
   const uint64_t extra = static_cast<uint64_t>(error_ret);
   const int64_t row_count = row_expr->get_param_count();
   ObSEArray<ObRawExpr *, 4> new_params;
+  bool trans_happened_in_row_op = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < row_count - 1; ++i) {
     ObRawExpr *param_expr = row_expr->get_param_expr(i);
     ObRawExpr *next_expr = row_expr->get_param_expr(i + 1);
@@ -6776,7 +6777,7 @@ int ObTransformPreProcess::transform_inner_op_row_cmp_for_decimal_int(
         LOG_WARN("fail to build inner row cmp expr", K(ret));
       } else {
         new_expr = inner_row_cmp_expr;
-        trans_happened = true;
+        trans_happened_in_row_op = true;
       }
     }
     if (OB_SUCC(ret)) {
@@ -6788,8 +6789,8 @@ int ObTransformPreProcess::transform_inner_op_row_cmp_for_decimal_int(
       }
     }
   }
-  // replace all params expr to new param exprs
-  if (OB_FAIL(ret)) {
+  // replace all params expr to new param exprs if tansform happened
+  if (OB_FAIL(ret) || !trans_happened_in_row_op) {
   } else if (new_params.count() != row_count) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected row count", K(ret), K(new_params.count()), K(row_count));
@@ -6799,6 +6800,7 @@ int ObTransformPreProcess::transform_inner_op_row_cmp_for_decimal_int(
     for (int64_t i = 0; OB_SUCC(ret) && trans_happened && i < row_count; ++i) {
       row_expr->get_param_expr(i) = new_params.at(i);
     }
+    trans_happened = true;
   }
   return ret;
 }
