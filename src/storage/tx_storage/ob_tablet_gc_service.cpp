@@ -361,7 +361,8 @@ uint8_t ObTabletGCHandler::get_tablet_persist_trigger_and_reset()
 int ObTabletGCHandler::disable_gc()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(gc_rwlock_.rdlock(GC_LOCK_TIMEOUT))) {
+  const int64_t abs_timeout_us = get_gc_lock_abs_timeout();
+  if (OB_FAIL(gc_rwlock_.rdlock(abs_timeout_us))) {
     ret = OB_TABLET_GC_LOCK_CONFLICT;
     LOG_WARN("try lock failed, please retry later", KPC(ls_), K(ret));
   } else if (check_stop()) {
@@ -384,7 +385,8 @@ void ObTabletGCHandler::enable_gc()
 int ObTabletGCHandler::set_tablet_change_checkpoint_scn(const share::SCN &scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(gc_rwlock_.wrlock(GC_LOCK_TIMEOUT))) {
+  const int64_t abs_timeout_us = get_gc_lock_abs_timeout();
+  if (OB_FAIL(gc_rwlock_.wrlock(abs_timeout_us))) {
     ret = OB_TABLET_GC_LOCK_CONFLICT;
     LOG_WARN("try lock failed, please retry later", KPC(ls_), K(ret));
   } else {
@@ -822,11 +824,12 @@ int ObTabletGCHandler::set_ls_transfer_scn(const common::ObIArray<ObTabletHandle
 int ObTabletGCHandler::offline()
 {
   int ret = OB_SUCCESS;
+  const int64_t abs_timeout_us = get_gc_lock_abs_timeout();
   set_stop();
   if (!is_finish()) {
     ret = OB_EAGAIN;
     STORAGE_LOG(INFO, "tablet gc handler not finish, retry", KR(ret), KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
-  } else if (OB_FAIL(gc_rwlock_.wrlock(GC_LOCK_TIMEOUT))) {
+  } else if (OB_FAIL(gc_rwlock_.wrlock(abs_timeout_us))) {
     // make sure 'gc_rwlock_' is not using.
     ret = OB_TABLET_GC_LOCK_CONFLICT;
     LOG_WARN("tablet gc handler not finish, retry", KPC(ls_), K(ret));
@@ -845,6 +848,11 @@ void ObTabletGCHandler::online()
   STORAGE_LOG(INFO, "tablet gc handler online", KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
 }
 
+int64_t ObTabletGCHandler::get_gc_lock_abs_timeout() const
+{
+  const int64_t abs_timeout_us = GC_LOCK_TIMEOUT + ObTimeUtility::current_time();
+  return abs_timeout_us;
+}
 } // checkpoint
 } // storage
 } // oceanbase
