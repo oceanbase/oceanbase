@@ -468,6 +468,12 @@ int ObIOBenchController::start_io_bench()
       ret = OB_SUCCESS;
     }
   } else {
+    if (-1 != tg_id_) {
+      TG_STOP(tg_id_);
+      TG_WAIT(tg_id_);
+      TG_DESTROY(tg_id_);
+      tg_id_ = -1;
+    }
     if (OB_FAIL(TG_CREATE(TGDefIDs::IO_BENCHMARK, tg_id_))) {
       LOG_WARN("create tg failed", K(ret));
     } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(tg_id_, *this))) {
