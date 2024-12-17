@@ -291,12 +291,21 @@ ObTabletRestoreAction::ACTION ObRestoreCompatibilityUtil::get_restore_action_pre
     }
 
     case ObLSRestoreStatus::QUICK_RESTORE: {
-      action = ObTabletRestoreAction::RESTORE_MINOR;
+      if (ls_id.is_sys_ls()) {
+        //restore full sys tablet, otherwise can not replay upgrade log
+        action =  ObTabletRestoreAction::RESTORE_ALL;
+      } else {
+        action = ObTabletRestoreAction::RESTORE_MINOR;
+      }
       break;
     }
 
     case ObLSRestoreStatus::RESTORE_MAJOR_DATA : {
-      action = ObTabletRestoreAction::RESTORE_MAJOR;
+      if (ls_id.is_sys_ls()) {
+        //do nothing
+      } else {
+        action = ObTabletRestoreAction::RESTORE_MAJOR;
+      }
       break;
     }
 
