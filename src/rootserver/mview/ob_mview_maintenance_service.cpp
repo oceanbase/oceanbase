@@ -274,13 +274,14 @@ int ObMViewMaintenanceService::update_mview_refresh_info_cache(
   int ret = OB_SUCCESS;
   int update_cache_cnt = 0;
   const int invalid_refresh_scn = 0;
+  int64_t now_ts = ObTimeUtility::fast_current_time();
   ARRAY_FOREACH_X(mview_ids, idx, cnt, OB_SUCC(ret)) {
     RefreshInfo new_refresh_info;
     if (mview_refresh_scns.at(idx) == invalid_refresh_scn) {
       // skip update invalid scn in cache
     } else if (mview_refresh_modes.at(idx) == (uint64_t)ObMVRefreshMode::MAJOR_COMPACTION) {
       new_refresh_info.refresh_scn_ = mview_refresh_scns.at(idx);
-      new_refresh_info.refresh_ts_ = ObTimeUtility::fast_current_time();
+      new_refresh_info.refresh_ts_ = now_ts;
       new_refresh_info.expired_ts_ = new_refresh_info.refresh_ts_ +
                                      ObMViewMaintenanceService::CacheValidInterval;
       if (OB_FAIL(mview_refresh_info_map.set_refactored(mview_ids.at(idx), new_refresh_info, 1/*overwrite*/))) {
