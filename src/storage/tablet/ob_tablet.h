@@ -931,6 +931,7 @@ private:
       common::ObIAllocator &allocator,
       storage::ObMetaDiskAddr &addr,
       char *&buf) const;
+  int get_kept_snapshot_for_split(int64_t &min_split_snapshot) const;
 public:
   static constexpr int32_t VERSION_V1 = 1;
   static constexpr int32_t VERSION_V2 = 2;

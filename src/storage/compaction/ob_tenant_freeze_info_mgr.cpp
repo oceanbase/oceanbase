@@ -55,7 +55,8 @@ const char *ObStorageSnapshotInfo::ObSnapShotTypeStr[] = {
     "MULTI_VERSION_START_ON_TABLET",
     "SNAPSHOT_ON_TABLET",
     "LS_RESERVED",
-    "MIN_MEDIUM"
+    "MIN_MEDIUM",
+    "SPLIT"
 };
 
 ObStorageSnapshotInfo::ObStorageSnapshotInfo()

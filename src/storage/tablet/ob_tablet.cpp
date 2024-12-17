@@ -5949,6 +5949,11 @@ int ObTablet::get_kept_snapshot_info(
     }
   }
 
+  int64_t min_split_snapshot = INT64_MAX;
+  if (FAILEDx(get_kept_snapshot_for_split(min_split_snapshot))) {
+    LOG_WARN("failed to get kept snapshot for split", K(ret), K(tablet_id));
+  }
+
   ObStorageSnapshotInfo old_snapshot_info;
   if (FAILEDx(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(tablet_id, max_merged_snapshot, snapshot_info))) {
     LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(tablet_id));
@@ -5963,6 +5968,7 @@ int ObTablet::get_kept_snapshot_info(
     } else if (min_reserved_snapshot_on_ls > 0) {
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_LS_RESERVED, min_reserved_snapshot_on_ls);
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_MIN_MEDIUM, min_medium_snapshot);
+      snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_SPLIT, min_split_snapshot);
       if (snapshot_info.snapshot_ < get_multi_version_start()) {
         use_multi_version_start_on_tablet = true;
       }
@@ -5993,6 +5999,35 @@ int ObTablet::get_kept_snapshot_info(
   LOG_INFO("get multi version start", "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
            K(snapshot_info), K(old_snapshot_info),
            K(min_medium_snapshot), K(min_reserved_snapshot_on_ls), K(max_merged_snapshot));
+  return ret;
+}
+
+int ObTablet::get_kept_snapshot_for_split(int64_t &min_split_snapshot) const
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet_meta_.ls_id_;
+  const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
+  min_split_snapshot = INT64_MAX;
+  if (!is_ls_inner_tablet()) {
+    mds::MdsWriter writer;
+    mds::TwoPhaseCommitState trans_stat;
+    share::SCN trans_version;
+    ObTabletCreateDeleteMdsUserData user_data;
+    if (OB_FAIL(ObITabletMdsInterface::get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
+      if (OB_EMPTY_RESULT == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id));
+      }
+    } else if (ObTabletStatus::SPLIT_SRC == user_data.get_tablet_status()) {
+      if (mds::TwoPhaseCommitState::ON_PREPARE == trans_stat) {
+        // commit version may be smaller than min_reserved_snapshot_on_ls, which is calculated from gts
+        min_split_snapshot = get_multi_version_start();
+      } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {
+        min_split_snapshot = user_data.start_split_commit_version_;
+      }
+    }
+  }
   return ret;
 }
 

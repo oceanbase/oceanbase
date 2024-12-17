@@ -105,7 +105,7 @@ public:
   share::SCN delete_commit_scn_; // delete tx commit log scn
   int64_t delete_commit_version_; // delete tx commit trans version
   int64_t start_transfer_commit_version_; // start transfer commit trans version(transfer in/transfer out)
-  int64_t start_split_commit_version_; // start split commit trans version TODO(lihongqin.lhq): master占位
+  int64_t start_split_commit_version_; // start split commit trans version
 };
 
 inline bool ObTabletCreateDeleteMdsUserData::is_valid() const
