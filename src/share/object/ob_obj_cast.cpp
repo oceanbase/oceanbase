@@ -7736,7 +7736,7 @@ static int bit_string(const ObObjType expect_type, ObObjCastParams &params,
     ObFastFormatInt ffi(value);
     ObString tmp_str;
     if (OB_FAIL(convert_string_collation(ObString(ffi.length(), ffi.ptr()),
-                ObCharset::get_system_collation(), tmp_str, params.dest_collation_, params))) {
+                CS_TYPE_BINARY, tmp_str, params.dest_collation_, params))) {
       LOG_WARN("fail to convert string collation", K(ret));
     } else if (OB_FAIL(copy_string(params, expect_type, tmp_str.ptr(), tmp_str.length(), out))) {
       LOG_WARN("fail to copy string", KP(tmp_str.ptr()), K(tmp_str.length()), K(value),
@@ -7749,9 +7749,13 @@ static int bit_string(const ObObjType expect_type, ObObjCastParams &params,
     int64_t pos = 0;
     char tmp_buf[BUF_LEN];
     MEMSET(tmp_buf, 0, BUF_LEN);
+    ObString tmp_str;
     if (OB_FAIL(bit_to_char_array(value, scale, tmp_buf, BUF_LEN, pos))) {
-      LOG_WARN("fail to store val", KP(tmp_buf), K(BUF_LEN), K(value), K(pos));
-    } else if (OB_FAIL(copy_string(params, expect_type, tmp_buf, pos, out))) {
+      LOG_WARN("fail to store val", K(ret), KP(tmp_buf), K(BUF_LEN), K(value), K(pos));
+    } else if (OB_FAIL(convert_string_collation(ObString(pos, tmp_buf),
+                CS_TYPE_BINARY, tmp_str, params.dest_collation_, params))) {
+      LOG_WARN("fail to convert string collation", K(ret));
+    } else if (OB_FAIL(copy_string(params, expect_type, tmp_str.ptr(), tmp_str.length(), out))) {
       LOG_WARN("fail to copy string", KP(tmp_buf), K(pos), K(value),
                                       K(out), K(expect_type));
     }
