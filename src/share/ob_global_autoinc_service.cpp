@@ -688,9 +688,10 @@ int ObGlobalAutoIncService::deserialize_autoinc_cache(DESERIAL_PARAMS)
 int ObGlobalAutoIncService::wait_all_requests_to_finish()
 {
   int ret = OB_SUCCESS;
+  const int64_t abs_timeout_us = ObTimeUtility::current_time() + BROADCAST_OP_TIMEOUT;
   for (int64_t i = 0; OB_SUCC(ret) && i < MUTEX_NUM; i++) {
     // wait for all working threads to finish
-    if (OB_FAIL(op_mutex_[i].lock(BROADCAST_OP_TIMEOUT))) {
+    if (OB_FAIL(op_mutex_[i].lock(abs_timeout_us))) {
       LOG_WARN("fail to lock mutex", K(ret), K(i));
     } else {
       op_mutex_[i].unlock();
