@@ -80,7 +80,8 @@ public:
         reuse_row = dst_row;
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(reuse_row->assign(
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(reuse_row->assign(
             *reinterpret_cast<const ObCompactRow *>(src_row)))) {
       LOG_WARN("stored row assign failed", K(ret));
     } else {

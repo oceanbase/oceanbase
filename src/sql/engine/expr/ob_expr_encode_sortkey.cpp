@@ -287,58 +287,58 @@ int ObExprEncodeSortkey::eval_encode_sortkey_batch(const ObExpr &expr,
   } else if (OB_ISNULL(encode_ctx->params_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret));
-  }
-
-  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  share::ObEncParam *params = encode_ctx->params_;
-  for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i += 3) {
-    if (OB_FAIL(expr.args_[i]->eval_batch(ctx, skip, batch_size))) {
-      LOG_WARN("incorrect data", K(ret), K(i));
-    } else {
-      // do nothing
-    }
-  }
-
-  // do encoding
-  for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; i++) {
-    if (skip.at(i) || eval_flags.at(i)) {
-      continue;
-    }
-    while (true) {
-      ret = OB_SUCCESS;
-      int64_t encode_len = 0;
-      unsigned char *buf
-        = reinterpret_cast<unsigned char *>(expr.get_str_res_mem(ctx, encode_ctx->max_len_, i));
-      if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("invalid argument", K(ret), K(buf));
+  } else {
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    share::ObEncParam *params = encode_ctx->params_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i += 3) {
+      if (OB_FAIL(expr.args_[i]->eval_batch(ctx, skip, batch_size))) {
+        LOG_WARN("incorrect data", K(ret), K(i));
+      } else {
+        // do nothing
       }
-      bool has_invalid_uni = false;
-      for (int64_t j = 0; !has_invalid_uni && OB_SUCC(ret) && j < expr.arg_cnt_; j += 3) {
-        ObDatum &data = expr.args_[j]->locate_expr_datum(ctx, i);
-        int64_t tmp_data_len = 0;
-        if (OB_FAIL(share::ObSortkeyConditioner::process_key_conditioning(
-                     data, buf + encode_len, encode_ctx->max_len_ - encode_len, tmp_data_len,
-                     params[j / 3]))) {
-          if (ret != OB_BUF_NOT_ENOUGH) {
-            LOG_WARN("failed  to encode sortkey", K(ret));
-          }
-        } else {
-          if (!params[j/3].is_valid_uni_) has_invalid_uni=true;
-          encode_len += tmp_data_len;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (has_invalid_uni) {
-          expr.locate_expr_datum(ctx, i).set_null();
-        } else {
-          expr.locate_expr_datum(ctx, i).set_string(ObString(encode_len, (char *)buf));
-        }
-      } else if (ret == OB_BUF_NOT_ENOUGH) {
-        encode_ctx->max_len_ = encode_ctx->max_len_ * 2;
+    }
+
+    // do encoding
+    for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; i++) {
+      if (skip.at(i) || eval_flags.at(i)) {
         continue;
       }
-      break;
+      while (true) {
+        ret = OB_SUCCESS;
+        int64_t encode_len = 0;
+        unsigned char *buf
+          = reinterpret_cast<unsigned char *>(expr.get_str_res_mem(ctx, encode_ctx->max_len_, i));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("invalid argument", K(ret), K(buf));
+        }
+        bool has_invalid_uni = false;
+        for (int64_t j = 0; !has_invalid_uni && OB_SUCC(ret) && j < expr.arg_cnt_; j += 3) {
+          ObDatum &data = expr.args_[j]->locate_expr_datum(ctx, i);
+          int64_t tmp_data_len = 0;
+          if (OB_FAIL(share::ObSortkeyConditioner::process_key_conditioning(
+                      data, buf + encode_len, encode_ctx->max_len_ - encode_len, tmp_data_len,
+                      params[j / 3]))) {
+            if (ret != OB_BUF_NOT_ENOUGH) {
+              LOG_WARN("failed  to encode sortkey", K(ret));
+            }
+          } else {
+            if (!params[j/3].is_valid_uni_) has_invalid_uni=true;
+            encode_len += tmp_data_len;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (has_invalid_uni) {
+            expr.locate_expr_datum(ctx, i).set_null();
+          } else {
+            expr.locate_expr_datum(ctx, i).set_string(ObString(encode_len, (char *)buf));
+          }
+        } else if (ret == OB_BUF_NOT_ENOUGH) {
+          encode_ctx->max_len_ = encode_ctx->max_len_ * 2;
+          continue;
+        }
+        break;
+      }
     }
   }
   return ret;
