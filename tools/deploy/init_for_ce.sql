@@ -54,5 +54,6 @@ alter system set _enable_var_assign_use_das = true tenant = all_meta;
 alter system set _enable_spf_batch_rescan = true tenant = sys;
 alter system set _enable_spf_batch_rescan = true tenant = all_user;
 alter system set _enable_spf_batch_rescan = true tenant = all_meta;
+alter tenant mysql set variables ob_plan_cache_percentage = 20;
 
 alter system set _use_hash_rollup = "forced" tenant = 'mysql';
