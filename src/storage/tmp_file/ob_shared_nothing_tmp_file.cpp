@@ -1227,7 +1227,8 @@ int64_t ObSharedNothingTmpFile::get_dirty_data_page_size_() const
 int ObSharedNothingTmpFile::copy_info_for_virtual_table(ObTmpFileInfo &tmp_file_info)
 {
   int ret = OB_SUCCESS;
-  common::TCRWLock::RLockGuardWithTimeout lock_guard(meta_lock_, 100 * 1000L, ret);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + 100 * 1000L;
+  common::TCRWLock::RLockGuardWithTimeout lock_guard(meta_lock_, abs_timeout_us, ret);
   ObSNTmpFileInfo &sn_tmp_file_info = static_cast<ObSNTmpFileInfo&>(tmp_file_info);
 
   if (OB_FAIL(ret)) {

@@ -3228,8 +3228,9 @@ void ObSharedNothingTmpFileMetaTree::read_page_simple_content_(
 int ObSharedNothingTmpFileMetaTree::copy_info(ObSNTmpFileInfo &tmp_file_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(lock_.rdlock(100 * 1000L))) {
-    STORAGE_LOG(WARN, "fail to rdlock", KR(ret), K(fd_));
+  const int64_t abs_timeout_us = ObTimeUtility::current_time() + 100 * 1000L;
+  if (OB_FAIL(lock_.rdlock(abs_timeout_us))) {
+    STORAGE_LOG(WARN, "fail to rdlock", KR(ret), K(fd_), K(abs_timeout_us));
   } else {
     int64_t cached_page_num = 0;
     int64_t total_page_num = 0;
