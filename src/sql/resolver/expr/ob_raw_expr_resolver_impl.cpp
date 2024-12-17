@@ -3572,7 +3572,7 @@ int ObRawExprResolverImpl::extract_var_exprs(ObRawExpr *expr, ObIArray<ObVarRawE
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (expr->get_expr_type() == T_FUNC_SYS_ARRAY_MAP) {
+      if (expr->get_expr_type() == T_FUNC_SYS_ARRAY_MAP && i == 0) {
       } else if (OB_FAIL(SMART_CALL(extract_var_exprs(expr->get_param_expr(i), var_exprs)))) {
         LOG_WARN("Failed to extract var exprs", K(ret));
       }
@@ -3614,7 +3614,7 @@ int ObRawExprResolverImpl::check_replace_lambda_params_node(const ParseNode *par
     } else {
       for (uint32_t i = 0; OB_SUCC(ret) && i < curr_node->num_child_; ++i) {
         if (curr_node->children_[i] == NULL) {
-        } else if (curr_node->children_[i]->type_ == T_FUNC_SYS_ARRAY_MAP) {
+        } else if (curr_node->type_ == T_FUNC_SYS_ARRAY_MAP && i == 0) {
         } else if (OB_FAIL(check_replace_lambda_params_node(params_node, const_cast<ParseNode *>(curr_node->children_[i])))) {
           LOG_WARN("fail to replace lambda params", K(ret));
         }
