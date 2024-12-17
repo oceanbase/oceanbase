@@ -187,6 +187,17 @@ public:
   }
 };
 
+// used only for debug during mvcc_write
+struct ObMvccWriteDebugInfo {
+  ObMvccWriteDebugInfo()
+    : memtable_iterate_cnt_(0),
+    sstable_iterate_cnt_(0) {}
+
+  int64_t memtable_iterate_cnt_;
+  int64_t sstable_iterate_cnt_;
+  // TODO(handora.qc): add more debug info if necessary
+  // int64_t exist_table_bitmap_;
+};
 
 } // namespace memtable
 } // namespace oceanbase

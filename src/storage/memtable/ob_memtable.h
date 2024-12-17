@@ -501,6 +501,7 @@ private:
       const blocksstable::ObDmlFlag writer_dml_flag,
       const share::SCN &max_trans_version,
       storage::ObTableAccessContext &context,
+      ObMvccWriteDebugInfo &debug_info,
       ObMvccRow *value,
       ObMvccWriteResult &res);
 
@@ -524,6 +525,7 @@ private:
                                           const storage::ObTableIterParam &param,
                                           const ObIArray<ObITable *> &iter_tables,
                                           storage::ObTableAccessContext &context,
+                                          ObMvccWriteDebugInfo &debug_info,
                                           ObMvccWriteResult &res,
                                           ObRowState &row_state);
 
@@ -532,6 +534,7 @@ private:
       const ObIArray<ObITable *> &iter_tables,
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
+      ObMvccWriteDebugInfo &debug_info,
       share::SCN &max_trans_version,
       ObRowsInfo &rows_info);
 

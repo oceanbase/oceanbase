@@ -285,6 +285,11 @@ void ObMvccRow::reset()
   last_compact_cnt_ = 0;
   max_modify_scn_.set_invalid();
   min_modify_scn_.set_invalid();
+
+#ifdef ENABLE_DEBUG_LOG
+  lower_lock_scanned_ts_ = 0;
+  lower_lock_scanned_info_.raw_value_ = 0;
+#endif
 }
 
 int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
@@ -323,6 +328,19 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
   common::databuff_printf(buf, buf_len, pos, max_modify_scn_);
   common::databuff_printf(buf, buf_len, pos, " min_modify_scn=");
   common::databuff_printf(buf, buf_len, pos, min_modify_scn_);
+
+#ifdef ENABLE_DEBUG_LOG
+  common::databuff_printf(buf, buf_len, pos,
+                          " lower_lock_ts=%ld "
+                          "lower_lock_mem_cnt=%hd "
+                          "lower_lock_sst_cnt=%hd "
+                          "lower_lock_tx_id=%d",
+                          lower_lock_scanned_ts_,
+                          lower_lock_scanned_info_.lower_lock_scanned_memtable_cnt_,
+                          lower_lock_scanned_info_.lower_lock_scanned_sstable_cnt_,
+                          lower_lock_scanned_info_.lower_lock_scanned_tx_id_);
+#endif
+
   common::databuff_printf(buf, buf_len, pos, "}");
   return pos;
 }
