@@ -1131,7 +1131,6 @@ int ObPlanCache::add_cache_obj(ObILibCacheCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(ERROR, "unmatched tenant_id", K(ret), K(get_tenant_id()), K(cache_obj->get_tenant_id()));
   } else if (OB_FAIL(get_value(key, cache_node, w_ref_lock /*write locked*/))) {
-    ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(TRACE, "failed to get cache node from lib cache by key", K(ret));
   } else if (NULL == cache_node) {
     ObILibCacheKey *cache_key = NULL;
@@ -1246,7 +1245,6 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid null argument", K(ret), K(key));
   } else if (OB_FAIL(get_value(key, cache_node, r_ref_lock /*read locked*/))) {
-    ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(TRACE, "failed to get cache node from lib cache by key", K(ret));
   } else if (OB_UNLIKELY(NULL == cache_node)) {
     ret = OB_SQL_PC_NOT_EXIST;

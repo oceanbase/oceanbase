@@ -336,13 +336,10 @@ int ObKvSchemaCacheGuard::get_or_create_cache_obj(ObSchemaGetterGuard &schema_gu
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is NULL", K(ret));
   } else if (OB_FAIL(lib_cache_->get_cache_obj(cache_ctx_, &cache_key_, cache_guard_))) {
-    if (ret == OB_SQL_PC_NOT_EXIST) {
-      is_use_cache_ = false;
-      if (OB_FAIL(create_schema_cache_obj(schema_guard))) {
-        LOG_WARN("fail to create schema cache obj", K(ret));
-      }
-    } else {
-      LOG_WARN("fail to get cache obj", K(ret), K(cache_key_));
+    LOG_TRACE("fail to get cache obj, try create cache obj", K(ret), K(cache_key_));
+    is_use_cache_ = false;
+    if (OB_FAIL(create_schema_cache_obj(schema_guard))) {
+      LOG_WARN("fail to create schema cache obj", K(ret));
     }
   } else {
     is_use_cache_ = true;
@@ -385,8 +382,11 @@ int ObKvSchemaCacheGuard::create_schema_cache_obj(ObSchemaGetterGuard &schema_gu
       LOG_WARN("fail to construct column info array", K(ret));
     } else if (OB_FAIL(cache_obj->cons_rowkey_array(table_schema))) {
       LOG_WARN("fail to construct column info array", K(ret));
-    } else if (OB_FAIL(lib_cache_->add_cache_obj(cache_ctx_, &cache_key_, cache_obj))) {
-      LOG_WARN("fail to add cache obj to lib cache", K(ret));
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(lib_cache_->add_cache_obj(cache_ctx_, &cache_key_, cache_obj))) {
+        LOG_WARN("fail to add cache obj to lib cache", K(tmp_ret));
+      }
     }
   }
   return ret;
