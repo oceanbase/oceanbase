@@ -14,6 +14,7 @@
 #include "ob_ls_transfer_info.h"
 #include "common/ob_version_def.h"
 #include "share/ob_cluster_version.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -407,9 +408,7 @@ int ObLSTransferMetaInfo::get_tablet_id_array(
 
 bool ObLSTransferMetaInfo::is_in_compatible_status()
 {
-  // TODO(@muwei.ym): validate version here
-  return (data_version_ < MOCK_CLUSTER_VERSION_4_2_3_0
-      || data_version_ < CLUSTER_VERSION_4_3_2_0);
+  return !ObTransferUtils::enable_transfer_dml_ctrl(data_version_);
 }
 
 int ObLSTransferMetaInfo::check_transfer_tablet_is_same(
