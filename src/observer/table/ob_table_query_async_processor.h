@@ -43,7 +43,7 @@ struct ObTableSingleQueryInfo : public ObTableInfoBase {
 
   ~ObTableSingleQueryInfo() {
     row_iter_.close();
-    if (OB_NOT_NULL(spec_)) {
+    if (OB_NOT_NULL(spec_) && OB_NOT_NULL(executor_)) {
       spec_->destroy_executor(executor_);
       spec_->~ObTableApiSpec();
     }
@@ -116,13 +116,13 @@ struct ObTableQueryAsyncCtx
   virtual ~ObTableQueryAsyncCtx()
   {
     row_iter_.close();
+    if (OB_NOT_NULL(spec_) && OB_NOT_NULL(executor_)) {
+      spec_->destroy_executor(executor_);
+    }
     for (int i = 0; i < multi_cf_infos_.count(); i++) {
       if (OB_NOT_NULL(multi_cf_infos_.at(i))) {
         multi_cf_infos_.at(i)->~ObTableSingleQueryInfo();
       }
-    }
-    if (OB_NOT_NULL(spec_) && OB_NOT_NULL(executor_)) {
-      spec_->destroy_executor(executor_);
     }
   }
 
@@ -184,7 +184,7 @@ public:
   ~ObTableQueryAsyncSession() {}
 
   void set_result_iterator(table::ObTableQueryResultIterator* iter);
-  table::ObTableQueryResultIterator *get_result_iter() { return result_iterator_; };
+  table::ObTableQueryResultIterator *& get_result_iter() { return result_iterator_; };
   void set_in_use(bool in_use) {in_use_ = in_use;}
   bool is_in_use() {return in_use_;}
   int init();
@@ -341,7 +341,7 @@ private:
 
   int create_result_iterator(ObTableQueryAsyncSession* query_session, table::ObTableQueryResultIterator*& result_iter, uint64_t table_id);
 
-  int generate_multi_result_iterator(common::ObIArray<table::ObTableQueryResultIterator*>& array);
+  int generate_multi_result_iterator(ResultMergeIterator *merge_result_iter);
 
   int generate_merge_result_iterator();
 

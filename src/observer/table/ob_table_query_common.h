@@ -37,7 +37,7 @@ public:
                                              ResultType &one_result,
                                              const ObTableCtx &tb_ctx,
                                              ObTableQueryResultIterator *&result_iter);
-  static void destroy_result_iterator(ObTableQueryResultIterator *result_iter);
+  static void destroy_result_iterator(ObTableQueryResultIterator *&result_iter);
   static int get_rowkey_column_names(ObKvSchemaCacheGuard &schema_cache_guard, ObIArray<ObString> &names);
   static int get_full_column_names(ObKvSchemaCacheGuard &schema_cache_guard, ObIArray<ObString> &names);
 
