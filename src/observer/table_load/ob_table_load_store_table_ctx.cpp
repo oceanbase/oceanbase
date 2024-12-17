@@ -288,7 +288,7 @@ int ObTableLoadStoreTableCtx::init_insert_table_ctx()
   insert_table_param.is_partitioned_table_ = schema_->is_partitioned_table_;
   insert_table_param.is_heap_table_ = schema_->is_heap_table_;
   insert_table_param.is_column_store_ = schema_->is_column_store_;
-  insert_table_param.online_opt_stat_gather_ = store_ctx_->ctx_->param_.online_opt_stat_gather_;
+  insert_table_param.online_opt_stat_gather_ = store_ctx_->ctx_->param_.online_opt_stat_gather_ && !is_index_table_;
   insert_table_param.is_incremental_ = ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
   insert_table_param.trans_param_ = store_ctx_->trans_param_;
   insert_table_param.datum_utils_ = &(schema_->datum_utils_);
