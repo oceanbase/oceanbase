@@ -6878,9 +6878,19 @@ CAST_FUNC_NAME(bit, string)
     if (CM_IS_COLUMN_CONVERT(expr.extra_)) {
       // if cast mode is column convert, using bit as int64 to do cast.
       ObFastFormatInt ffi(in_val);
-      if (OB_FAIL(common_copy_string_zf(expr, ObString(ffi.length(), ffi.ptr()),
-                                        ctx, res_datum))) {
-        LOG_WARN("common_copy_string_zf failed", K(ret), K(ObString(ffi.length(), ffi.ptr())));
+      ObString in_str(ffi.length(), ffi.ptr());
+      // When convert binary bit to other charset, need to align to mbminlen of destination charset
+      // by add '\0' prefix in mysql mode. (see mysql String::copy)
+      const ObCharsetInfo *cs = NULL;
+      int64_t align_offset = 0;
+      if (CS_TYPE_BINARY == expr.args_[0]->datum_meta_.cs_type_
+          && (NULL != (cs = ObCharset::get_charset(expr.datum_meta_.cs_type_)))) {
+        if (cs->mbminlen > 0 && in_str.length() % cs->mbminlen != 0) {
+          align_offset = cs->mbminlen - in_str.length() % cs->mbminlen;
+        }
+      }
+      if (OB_FAIL(common_copy_string_zf(expr, in_str, ctx, res_datum, align_offset))) {
+        LOG_WARN("common_copy_string_zf failed", K(ret), K(in_str));
       }
     } else {
       // using bit as char array to do cast.
