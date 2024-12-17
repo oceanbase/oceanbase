@@ -535,7 +535,9 @@ TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
   ASSERT_NE(nullptr, disk_space_manager);
 
   // to avoid affecting tmp file seg_meta_map and tmp file tmp_file_write_free_disk_size
-  // disable tmp_file_flush_task, calibrate_disk_space_task and gc_unsealed_tmp_file_task
+  // disable tmp_file_flush_task, preread_task_, calibrate_disk_space_task and gc_unsealed_tmp_file_task
+  // preread_task_ will affect local disk size, so preread_task_ need to disble
+  file_manager->preread_cache_mgr_.preread_task_.is_inited_ = false;
   file_manager->tmp_file_flush_task_.is_inited_ = false;
   file_manager->calibrate_disk_space_task_.is_inited_ = false;
   file_manager->segment_file_mgr_.gc_segment_file_task_.is_inited_ = false;
@@ -570,7 +572,8 @@ TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
   macro_id.set_third_id(20); // segment_id
   write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, true/*is_sealed*/, write_buf_);
   read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
-  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
+  // because offset is 0 and is_sealed segment file write through object storage, is_meta_exist is false
+  check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
 
   // 3. write one new unsealed segment with offset > 0
   macro_id.set_third_id(30); // segment_id
@@ -636,8 +639,12 @@ TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
 
   // 10. local seg meta already exist, io.valid_len > seg_meta.valid_len.
   // disk space not enough, write through, append sealed segment
+  // because preread_task_ has been disabled, aio_read segment_id of No.10 will push segment_id of No.11 to queue, segment_id of No.11 is FAKE node
+  // when deleting segment_id of No.11, it will free tmp_file_read_cache_size, there free_disk_size is 0
   int64_t free_disk_size = disk_space_manager->get_tmp_file_write_free_disk_size();
-  alloc_tmp_file_write_disk_size(free_disk_size);
+  if (free_disk_size > 0) {
+    alloc_tmp_file_write_disk_size(free_disk_size);
+  }
 
   macro_id.set_third_id(12); // segment_id
   write_tmp_file_data(macro_id, 8192/*offset*/, 8192/*size*/, 8192 * 2/*valid_length*/, true/*is_sealed*/, write_buf_ + 8192);
