@@ -123,6 +123,7 @@ public:
   bool is_udt_udf_ctx_; // indicate this context is belong to a udt udf
   bool is_sync_package_var_;
   ObSEArray<const ObUserDefinedType *, 32> type_buffer_;
+  ObPLEnumSetCtx *enum_set_ctx_;
 };
 
 class ObPLMockSelfArg
@@ -418,6 +419,7 @@ public:
                                 common::ObIAllocator &allocator,
                                 const share::schema::ObTableSchema* table_schema,
                                 ObRecordType *&record_type,
+                                pl::ObPLEnumSetCtx *enum_set_ctx,
                                 bool with_rowid = false);
   static int collect_dep_info_by_view_schema(const ObPLResolveCtx &ctx,
                                              const ObTableSchema* view_schema,
@@ -523,7 +525,9 @@ public:
   static int check_composite_compatible(const ObUserDefinedType *actual_param_type,
                                         const ObUserDefinedType *formal_param_type,
                                         bool &is_compatible);
-
+  int check_anonymous_array_compatible( uint64_t actual_param_type_id,
+                                        uint64_t formal_param_type_id,
+                                        bool &is_compatible);
   static
   int resolve_nocopy_params(const share::schema::ObIRoutineInfo *routine_info,
                             sql::ObUDFInfo &udf_info);

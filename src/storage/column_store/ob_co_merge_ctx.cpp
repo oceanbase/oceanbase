@@ -29,6 +29,7 @@ ObCOTabletMergeCtx::ObCOTabletMergeCtx(
   : ObBasicTabletMergeCtx(param, allocator),
     array_count_(0),
     start_schedule_cg_idx_(0),
+    base_rowkey_cg_idx_(-1),
     exe_stat_(),
     dag_net_(dag_net),
     cg_merge_info_array_(nullptr),
@@ -245,12 +246,15 @@ int ObCOTabletMergeCtx::check_convert_co_checksum(const ObSSTable *new_sstable)
       LOG_WARN("failed to fill column ckm array", K(ret), KPC(co_sstable));
     } else if (row_column_checksums.count() != col_column_checksums.count()) {
       ret = OB_CHECKSUM_ERROR;
-      LOG_WARN("column count not match", K(ret), K(row_column_checksums), K(col_column_checksums));
+      LOG_WARN("column count not match", K(ret), "row_column_ckm_cnt", row_column_checksums.count(), "col_column_ckm_cnt", col_column_checksums.count(),
+                K(row_column_checksums), K(col_column_checksums), KPC(row_sstable)); // only print partia ObIArray; co_sstable will be printed before.
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < row_column_checksums.count(); ++i) {
         if (row_column_checksums.at(i) != col_column_checksums.at(i)) {
           ret = OB_CHECKSUM_ERROR;
-          LOG_ERROR("column checksum error match", K(ret), K(i), K(row_column_checksums), K(col_column_checksums));
+          LOG_ERROR("column checksum error match", K(ret), "row_ckm", row_column_checksums.at(i) , "col_ckm", col_column_checksums.at(i),
+            K(i), "row_column_ckm_cnt", row_column_checksums.count(), "col_column_ckm_cnt", col_column_checksums.count(),
+            K(row_column_checksums), K(col_column_checksums), KPC(row_sstable));
         }
       }
     }
@@ -290,9 +294,16 @@ int ObCOTabletMergeCtx::prepare_schema()
 int ObCOTabletMergeCtx::build_ctx(bool &finish_flag)
 {
   int ret = OB_SUCCESS;
+  int32_t base_rowkey_cg_idx = -1;
   // finish_flag in this function is useless, just for virtual function definition.
   if (OB_FAIL(ObBasicTabletMergeCtx::build_ctx(finish_flag))) {
     LOG_WARN("failed to build basic ctx", KR(ret), "param", get_dag_param(), KPC(this));
+  } else if (OB_ISNULL(get_schema())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema is null", K(ret), K_(static_param));
+  } else if (OB_FAIL(get_schema()->get_base_rowkey_column_group_index(base_rowkey_cg_idx))) {
+    LOG_WARN("fail to get base rowkey column group index", K(ret), KPC(get_schema()));
+  } else if (FALSE_IT(base_rowkey_cg_idx_ = base_rowkey_cg_idx)) {
   } else if (is_major_merge_type(get_merge_type())) {
     // meta major merge not support row col switch now
     if (is_build_row_store_from_rowkey_cg() || is_build_redundant_row_store_from_rowkey_cg()) {
@@ -323,6 +334,9 @@ int ObCOTabletMergeCtx::check_merge_ctx_valid()
   } else if (OB_UNLIKELY(!base_table->is_major_sstable())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid base table type", K(ret), KPC(base_table));
+  } else if (OB_UNLIKELY(base_rowkey_cg_idx_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid base rowkey cg idx", K(ret), K_(base_rowkey_cg_idx));
   } else if (ObCOMajorMergePolicy::is_use_rs_build_schema_match_merge(static_param_.co_major_merge_type_)) {
     if (base_table->is_co_sstable()) {
       const ObSSTable *sstable = nullptr;
@@ -365,14 +379,25 @@ int ObCOTabletMergeCtx::cal_merge_param()
 int ObCOTabletMergeCtx::collect_running_info()
 {
   int ret = OB_SUCCESS;
-  dag_net_merge_history_.static_info_.shallow_copy(static_history_);
-  dag_net_merge_history_.static_info_.is_fake_ = true;
-  dag_net_merge_history_.running_info_.merge_start_time_ = dag_net_.get_start_time();
-  // add a fake merge info into history with only dag_net time_guard
-  (void) ObBasicTabletMergeCtx::add_sstable_merge_info(dag_net_merge_history_, dag_net_.get_dag_id(), dag_net_.hash(),
-                            info_collector_.time_guard_, nullptr/*sstable*/,
-                            &static_param_.snapshot_info_,
-                            0/*start_cg_idx*/, array_count_/*end_cg_idx*/);
+  const int64_t batch_exe_dag_cnt = dag_net_.get_batch_dag_count();
+
+  if (is_build_row_store() || 1 >= batch_exe_dag_cnt) {
+    // no need to report dag net merge history
+  } else {
+    dag_net_merge_history_.static_info_.shallow_copy(static_history_);
+    dag_net_merge_history_.static_info_.is_fake_ = true;
+    dag_net_merge_history_.running_info_.merge_start_time_ = dag_net_.get_start_time();
+    // add a fake merge info into history with only dag_net time_guard
+    (void) ObBasicTabletMergeCtx::add_sstable_merge_info(dag_net_merge_history_,
+                                                         dag_net_.get_dag_id(),
+                                                         dag_net_.hash(),
+                                                         info_collector_.time_guard_,
+                                                         nullptr/*sstable*/,
+                                                         &static_param_.snapshot_info_,
+                                                         0/*start_cg_idx*/,
+                                                         array_count_/*end_cg_idx*/,
+                                                         batch_exe_dag_cnt);
+  }
   return ret;
 }
 
@@ -417,7 +442,7 @@ int ObCOTabletMergeCtx::collect_running_info(
     LOG_WARN("failed to collect running info in batch");
   } else {
     const ObSSTable *new_sstable = static_cast<ObSSTable *>(new_table);
-    add_sstable_merge_info(cg_merge_info_array_[start_cg_idx]->get_merge_history(),
+    ObBasicTabletMergeCtx::add_sstable_merge_info(cg_merge_info_array_[start_cg_idx]->get_merge_history(),
           dag_id, hash, time_guard, new_sstable, &static_param_.snapshot_info_, start_cg_idx, end_cg_idx);
   }
   return ret;

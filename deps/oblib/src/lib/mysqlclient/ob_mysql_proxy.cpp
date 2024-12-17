@@ -536,7 +536,7 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
       } else if (OB_FAIL(stmt.execute_update())) {
         LOG_WARN("execute sql failed",  K(ret), K(param_ctx));
       } else {
-        // do nothing
+        LOG_TRACE("succ to excute initial dblink sql", K(sql_ptr[i]), K(ret));
       }
     }
   } else if (DBLINK_DRV_OB == param_ctx.link_type_) {
@@ -559,6 +559,8 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
         LOG_WARN("create statement failed", K(ret), K(param_ctx));
       } else if (OB_FAIL(stmt.execute_update())) {
         LOG_WARN("execute sql failed",  K(ret), K(param_ctx));
+      } else {
+        LOG_TRACE("succ to excute initial dblink sql", K(sql_ptr[i]), K(ret));
       }
     }
   }
@@ -584,6 +586,8 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
         LOG_WARN("failed to set sql text", K(ret), K(ObString(sql_ptr_ora[i])));
       } else if (OB_FAIL(stmt.execute_update(affected_rows))) {
         LOG_WARN("execute sql failed",  K(ret), K(param_ctx));
+      } else {
+        LOG_TRACE("succ to excute initial dblink sql", K(sql_ptr_ora[i]), K(ret));
       }
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = stmt.terminate())) {

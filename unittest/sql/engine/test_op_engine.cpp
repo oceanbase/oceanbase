@@ -352,7 +352,7 @@ int TestOpEngine::get_tested_op_from_string(const std::string &sql, bool vector_
     option.with_tree_line_ = true;
     ObSqlPlan sql_plan(log_plan->get_allocator());
     ObSEArray<common::ObString, 64> plan_strs;
-    if (OB_FAIL(sql_plan.print_sql_plan(log_plan, EXPLAIN_EXTENDED_NOADDR, option, plan_strs))) {
+    if (OB_FAIL(sql_plan.print_sql_plan(log_plan->get_plan_root(), EXPLAIN_EXTENDED_NOADDR, option, plan_strs))) {
       LOG_WARN("failed to store sql plan", K(ret));
     } else {
       LOG_INFO("Generate Logical plan:");

@@ -353,26 +353,7 @@ int ObLogExpand::gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *s
       }
     }
   } else {
-    for (int i = rollup_exprs.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
-      ObRawExpr *org_expr = rollup_exprs.at(i);
-      ObRawExpr *new_expr = nullptr;
-      for (int j = i - 1; OB_SUCC(ret) && j >= 0; j--) {
-        if (rollup_exprs.at(j) == org_expr) {
-          if (OB_FAIL(ObRawExprUtils::build_dup_data_expr(factory, org_expr, new_expr))) {
-            LOG_WARN("build expr failed", K(ret));
-          } else if (OB_ISNULL(new_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid null expr", K(ret));
-          } else if (OB_FAIL(new_expr->formalize(sess))) {
-            LOG_WARN("formalize failed", K(ret));
-          } else if (OB_FAIL(dup_expr_pairs.push_back(DupRawExprPair(org_expr, new_expr)))) {
-            LOG_WARN("push back element failed", K(ret));
-          } else {
-            rollup_exprs.at(j) = new_expr;
-          }
-        }
-      } // end for
-    } // end for
+    // do nothing
   }
   return ret;
 }

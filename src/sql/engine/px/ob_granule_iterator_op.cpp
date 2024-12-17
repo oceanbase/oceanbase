@@ -250,7 +250,7 @@ int ObGranuleIteratorOp::try_pruning_repart_partition(
 // 2. 开始扫描后，对于左边来的每一行，都会反复从 rescan_tasks_pos_ 选择合适的 task 来做
 //    扫描。之所以引入 partition pruning 是为了处理 NLJ 右表是分区表场景
 //    下，避免扫描无效分区。
-int ObGranuleIteratorOp::try_fetch_task(ObGranuleTaskInfo &info)
+int ObGranuleIteratorOp::try_fetch_task(ObGranuleTaskInfo &info, bool round_robin)
 {
   int ret = OB_SUCCESS;
   ObGranulePump *gi_task_pump = nullptr;
@@ -275,10 +275,13 @@ int ObGranuleIteratorOp::try_fetch_task(ObGranuleTaskInfo &info)
       }
     } else {
       const bool from_share_pool = !MY_SPEC.affinitize_ && !MY_SPEC.access_all_;
+      uint64_t fetched_task_cnt = round_robin && from_share_pool ?
+                                   rescan_tasks_info_.get_rescan_task_count() :
+                                   0;
       if (OB_FAIL(gi_task_pump->fetch_granule_task(taskset,
                                                    pos,
                                                    from_share_pool ? 0: worker_id_,
-                                                   tsc_op_id_))) {
+                                                   tsc_op_id_, fetched_task_cnt))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("failed to fetch next granule task", K(ret),
                    K(gi_task_pump), K(worker_id_), K(MY_SPEC.affinitize_));
@@ -404,7 +407,7 @@ int ObGranuleIteratorOp::rescan()
     all_task_fetched_ = false;
     pwj_rescan_task_infos_.reset();
     pruning_partition_ids_.reset();
-    while (OB_SUCC(get_next_granule_task())) {}
+    while (OB_SUCC(get_next_granule_task(false /* prepare */, true /* round_robin */))) {}
     if (ret != OB_ITER_END) {
       LOG_WARN("failed to get all granule task", K(ret));
     } else {
@@ -420,7 +423,7 @@ int ObGranuleIteratorOp::rescan()
       // NJ call rescan before iterator rows, need to nothing for the first scan.
     } else if (GI_PREPARED == state_) {
       // At the open-stage we get a granule task, and now, we fetch all the granule task.
-      while (OB_SUCC(get_next_granule_task())) {}
+      while (OB_SUCC(get_next_granule_task(false /* prepare */, true /* round_robin */))) {}
       if (ret != OB_ITER_END) {
         LOG_WARN("failed to get all granule task", K(ret));
       } else {
@@ -638,12 +641,13 @@ int ObGranuleIteratorOp::try_get_rows(const int64_t max_row_cnt)
   return ret;
 }
 
-int ObGranuleIteratorOp::get_next_granule_task(bool prepare /* = false */)
+// round_robin = true means limit count of fetched tasks <= total_task_count / parallelism
+int ObGranuleIteratorOp::get_next_granule_task(bool prepare /* =false */, bool round_robin /* =false */)
 {
   int ret = OB_SUCCESS;
   bool partition_pruning = true;
   while (OB_SUCC(ret) && partition_pruning) {
-    if (OB_FAIL(do_get_next_granule_task(partition_pruning))) {
+    if (OB_FAIL(do_get_next_granule_task(partition_pruning, round_robin))) {
       if (ret != OB_ITER_END) {
         LOG_WARN("failed to get all granule task", K(ret));
       }
@@ -670,7 +674,7 @@ int ObGranuleIteratorOp::get_next_granule_task(bool prepare /* = false */)
  *  we will reset all table-scan operator
  *  in this plan.
  * */
-int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning)
+int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning, bool round_robin)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObGranuleTaskInfo, 4> gi_task_infos;
@@ -705,7 +709,7 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning)
         state_ = GI_END;
         all_task_fetched_ = true;
       }
-    } else if (OB_FAIL(try_fetch_task(gi_task_info))) {
+    } else if (OB_FAIL(try_fetch_task(gi_task_info, round_robin))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("try fetch task failed", K(ret));
       } else {

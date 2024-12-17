@@ -53,7 +53,7 @@ int ObAddWord::process_word(
     LOG_DEBUG("skip too small or large word", K(ret), K(src_word), K(char_cnt));
   } else if (OB_FAIL(casedown_word(src_word, dst_word))) {
     LOG_WARN("fail to casedown word", K(ret), K(src_word));
-  } else if (check_stopword(dst_word, is_stopword)) {
+  } else if (OB_FAIL(check_stopword(dst_word, is_stopword))) {
     LOG_WARN("fail to check stopword", K(ret), K(dst_word));
   } else if (OB_UNLIKELY(is_stopword)) {
     ++stopword_cnt_;

@@ -1290,7 +1290,7 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
     LOG_WARN("failed to serialize major ckm info", K(ret), K(len), K(new_pos), K_(major_ckm_info));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialization::encode_bool(buf, len, new_pos, is_storage_schema_cs_replica_))) {
     LOG_WARN("failed to serialize is_storage_schema_cs_replica_", K(ret), K(len), K(new_pos), K_(is_storage_schema_cs_replica));
-  } else if (new_pos - pos < length && OB_FAIL(split_info_.serialize(buf, len, new_pos))) {
+  } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(split_info_.serialize(buf, len, new_pos))) {
     LOG_WARN("failed to serialize split info", K(ret), K(len), K(new_pos), K_(split_info));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;

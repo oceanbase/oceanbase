@@ -211,7 +211,7 @@ int ObPredicateDeduce::choose_unequal_preds(ObTransformerCtx &ctx,
   if (OB_FAIL(topo_sort(topo_order_))) {
     LOG_WARN("failed to topo sort", K(ret));
   }
-  for (int64_t i = 0; i < topo_order_.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < topo_order_.count(); ++i) {
     // if a variable A equal with a const B,
     // there is no need to deduce unequal predicates like A > c1 for A
     // because, it is better to replace that with B > c1

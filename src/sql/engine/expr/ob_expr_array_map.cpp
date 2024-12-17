@@ -153,7 +153,8 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
       LOG_WARN("failed to set null collection", K(ret));
     }
   } else {
-    if (types_stack[0].get_type() == ObDecimalIntType || types_stack[0].get_type() == ObNumberType) {
+    if (types_stack[0].get_type() == ObDecimalIntType || types_stack[0].get_type() == ObNumberType ||
+        types_stack[0].get_type() == ObUNumberType) {
       // decimalint isn't supported in array, so cast to supported type
       ObObjType calc_type = ObIntType;
       if (types_stack[0].get_scale() != 0) {
@@ -172,6 +173,14 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
       } else {
         type.set_collection(subschema_id);
       }
+    } else if (!ob_is_array_supported_type(elem_type.get_obj_type())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported element type", K(ret), K(elem_type.get_obj_type()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element type");
+    } else if (ob_is_varbinary_or_binary(elem_type.get_obj_type(), elem_type.get_collation_type())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported binary", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element in binary type");
     } else if (OB_FAIL(exec_ctx->get_subschema_id_by_collection_elem_type(ObNestedType::OB_ARRAY_TYPE,
                                                                           elem_type, subschema_id))) {
       LOG_WARN("failed to get collection subschema id", K(ret));

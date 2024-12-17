@@ -175,9 +175,9 @@ int ObOptOSGColumnStat::update_column_stat_info(const ObDatum *datum,
 {
   int ret = OB_SUCCESS;
   int64_t col_len = 0;
-  if (OB_ISNULL(datum) || OB_ISNULL(col_stat_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null");
+  if (OB_ISNULL(datum) || OB_ISNULL(col_stat_) || datum->is_nop()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KPC(datum), KP(col_stat_));
   } else if (OB_FAIL(calc_col_len(*datum, meta, col_len))) {
     LOG_WARN("failed to calc col len", K(datum), K(meta));
   } else if (OB_FALSE_IT(col_stat_->add_col_len(col_len))) {

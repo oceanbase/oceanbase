@@ -284,11 +284,14 @@ int64_t ObTenantIOSchedulerV2::get_qindex(ObIORequest& req)
   int64_t index = -1;
   const ObIOGroupKey grp_key = req.get_group_key();
   if (is_sys_group(grp_key.group_id_)) { //other
-    index = static_cast<int64_t>(req.get_mode());
+    index = static_cast<int64_t>(grp_key.mode_);
   } else if (!is_valid_group(grp_key.group_id_)) {
   } else if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->get_group_index(grp_key, (uint64_t&)index))) {
     if (ret == OB_HASH_NOT_EXIST || ret == OB_STATE_NOT_MATCH) {
       ret = OB_SUCCESS;
+      if (REACH_TIME_INTERVAL(1 * 1000L * 1000L)) {
+        LOG_INFO("get group index failed, but maybe it is ok", K(ret), K(grp_key), K(index)); // group is not build
+      }
     } else {
       LOG_WARN("get group index failed", K(ret), K(grp_key), K(index));
     }
@@ -298,19 +301,20 @@ int64_t ObTenantIOSchedulerV2::get_qindex(ObIORequest& req)
   }
   return index;
 }
-
-int ObTenantIOSchedulerV2::get_qid(int64_t index)
+int ObTenantIOSchedulerV2::get_qid(int64_t index, ObIORequest& req, bool& is_default_q)
 {
   int qid = -1;
   if (index >= 0 && index < qid_.count()) {
     qid = qid_.at(index);
   }
-  if (qid < 0 && index >= 0) {
-    qid = default_qid_[index % N_SUB_ROOT];
+  if (qid < 0) {
+    is_default_q = true;
+    ObIOGroupKey grp_key = req.get_group_key();
+    int default_index = static_cast<int>(grp_key.mode_);
+    qid = default_qid_[default_index % N_SUB_ROOT];
   }
   return qid;
 }
-
 static uint32_t g_io_chan_id = 0;
 static uint32_t assign_chan_id()
 {
@@ -320,17 +324,23 @@ static uint32_t assign_chan_id()
 int ObTenantIOSchedulerV2::schedule_request(ObIORequest &req)
 {
   int ret = OB_SUCCESS;
+  bool is_default_q = false;
   int root = OB_IO_MANAGER_V2.get_root_qid();
   int64_t index = get_qindex(req);
-  int qid = get_qid(index);
+  int qid = get_qid(index, req, is_default_q);
   fill_qsched_req(req, qid);
   req.inc_ref("phyqueue_inc"); //ref for phy_queue
   if (OB_ISNULL(req.io_result_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret), K(req));
+  } else if (FALSE_IT(req.io_result_->time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time())) {
+  } else if (OB_UNLIKELY(is_default_q)) {
+    if (0 != qsched_submit(root, &req.qsched_req_, assign_chan_id())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("qsched_submit fail", K(ret), K(req));
+    }
   } else if (OB_FAIL(OB_IO_MANAGER.get_tc().register_bucket(req, qid))) {
     LOG_WARN("register bucket fail", K(ret), K(req));
-  } else if (FALSE_IT(req.io_result_->time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time())) {
   } else if (0 != qsched_submit(root, &req.qsched_req_, assign_chan_id())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("qsched_submit fail", K(ret), K(req));

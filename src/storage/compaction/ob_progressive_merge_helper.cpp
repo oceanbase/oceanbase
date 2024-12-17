@@ -159,7 +159,7 @@ int ObProgressiveMergeHelper::init(
       if (rewrite_block_cnt_for_progressive > 0) {
         need_rewrite_block_cnt_ = MAX(rewrite_block_cnt_for_progressive /
             (mgr->get_progressive_merge_num() - mgr->get_progressive_merge_step()), 1L);
-        LOG_INFO("There are some macro block need rewrite", "tablet_id", static_param.get_tablet_id(),
+        FLOG_INFO("There are some macro block need rewrite", "tablet_id", static_param.get_tablet_id(),
             K(rewrite_block_cnt_for_progressive), K(need_rewrite_block_cnt_), KPC(mgr), K(table_idx_));
       } else {
         need_rewrite_block_cnt_ = 0;
@@ -173,7 +173,7 @@ int ObProgressiveMergeHelper::init(
           && sstable.is_normal_cg_sstable() && rewrite_macro_cnt < CG_TABLE_CHECK_REWRITE_CNT_) {
         check_macro_need_merge_ = true;
       }
-      LOG_INFO("finish macro block need merge check", K(check_macro_need_merge_), K(rewrite_macro_cnt), K(reduce_macro_cnt), K(table_idx_));
+      FLOG_INFO("finish macro block need merge check", "tablet_id", static_param.get_tablet_id(), K(check_macro_need_merge_), K(rewrite_macro_cnt), K(reduce_macro_cnt), K(table_idx_));
     }
   }
 

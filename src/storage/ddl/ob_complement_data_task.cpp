@@ -571,6 +571,12 @@ ObComplementDataDag::ObComplementDataDag()
 
 ObComplementDataDag::~ObComplementDataDag()
 {
+  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+  if (nullptr != tenant_direct_load_mgr) {
+    (void) tenant_direct_load_mgr->close_tablet_direct_load(context_.context_id_, context_.direct_load_type_,
+      param_.dest_ls_id_, param_.dest_tablet_id_, false/*need_commit*/, true/*emergent_finish*/,
+      param_.task_id_, param_.dest_table_id_, 1/*execution_id*/);
+  }
 }
 
 int ObComplementDataDag::init(const ObDDLBuildSingleReplicaRequestArg &arg)

@@ -2014,8 +2014,8 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
               result_precision += precision_increment;
             }
             result_type.set_precision(static_cast<ObPrecision>(result_precision));
-            result_type.unset_result_flag(ZEROFILL_FLAG);
           }
+          result_type.unset_result_flag(ZEROFILL_FLAG);
           expr.set_result_type(result_type);
           ObObjTypeClass from_tc = expr.get_param_expr(0)->get_type_class();
           //use fast path
@@ -3770,7 +3770,18 @@ int ObRawExprDeduceType::set_array_agg_result_type(ObAggFunRawExpr &expr,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("unsupported element type", K(ret), K(elem_type.get_obj_type()));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element type");
-        } else if (elem_type.get_obj_type() == ObDecimalIntType) {
+        } else if (ob_is_varbinary_or_binary(elem_type.get_obj_type(), elem_type.get_collation_type())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("array element in binary type isn't supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element in binary type");
+        } else if (elem_type.get_obj_type() == ObVarcharType) {
+          elem_type.set_accuracy(param_expr->get_accuracy());
+          if (elem_type.get_length() < 0) {
+            elem_type.set_length(OB_MAX_VARCHAR_LENGTH / 4);
+          }
+        } else if (elem_type.get_obj_type() == ObDecimalIntType
+                   || elem_type.get_obj_type() == ObNumberType
+                   || elem_type.get_obj_type() == ObUNumberType) {
           ObObjMeta meta;
           if (param_expr->get_scale() != 0) {
             meta.set_double();

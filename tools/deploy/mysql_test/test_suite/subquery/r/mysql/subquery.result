@@ -633,7 +633,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
   4 - output([t1.c1 + 1], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
-      equal_conds([t2.c1 = t3.c3]), other_conds([t3.c1 > t1.c1 + 1])
+      equal_conds([t3.c3 = t2.c1]), other_conds([t3.c1 > t1.c1 + 1])
       merge_directions([ASC])
   5 - output([t1.c1 + 1], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
       conds([lnnvl(cast(t1.c1 + 1 = t2.c2, TINYINT(-1, 0)))]), nl_params_(nil), use_batch=false
@@ -999,11 +999,11 @@ Outputs & filters:
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1 where not exists (select 1, round(1.1) from dual);
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t1  |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t1  |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16
@@ -1012,11 +1012,11 @@ Outputs & filters:
       range_key([t1.__pk_increment]), range(MAX ; MIN)always false
 explain select * from t1 where not exists (select max(a) from t2);
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t1  |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t1  |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16
@@ -1046,11 +1046,11 @@ Outputs & filters:
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2);
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t1  |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t1  |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16

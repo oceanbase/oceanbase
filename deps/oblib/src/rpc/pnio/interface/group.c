@@ -512,6 +512,7 @@ typedef struct pn_resp_ctx_t
   void* req_handle;
   uint64_t sock_id;
   uint64_t pkt_id;
+  void* resp_ptr;
   char reserve[sizeof(pkts_req_t)];
 } pn_resp_ctx_t;
 
@@ -525,6 +526,7 @@ static pn_resp_ctx_t* create_resp_ctx(pn_t* pn, void* req_handle, uint64_t sock_
     ctx->req_handle = req_handle;
     ctx->sock_id = sock_id;
     ctx->pkt_id = pkt_id;
+    ctx->resp_ptr = NULL;
   }
   return ctx;
 }
@@ -557,8 +559,11 @@ static void pn_pkts_flush_cb_func(pkts_req_t* req)
   if ((uint64_t)resp->ctx->reserve == (uint64_t)resp) {
     fifo_free(resp->ctx);
   } else {
+    void* resp_ptr = resp->ctx->resp_ptr;
     fifo_free(resp->ctx);
-    cfifo_free(resp);
+    if (likely(resp_ptr)) {
+      cfifo_free(resp_ptr);
+    }
   }
 }
 
@@ -567,15 +572,35 @@ static void pn_pkts_flush_cb_error_func(pkts_req_t* req)
   pn_resp_ctx_t* ctx = (typeof(ctx))structof(req, pn_resp_ctx_t, reserve);
   fifo_free(ctx);
 }
+PN_API void* pn_resp_pre_alloc(uint64_t req_id, int64_t sz)
+{
+  void* p = NULL;
+  pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
+  if (likely(ctx)) {
+    if (unlikely(ctx->resp_ptr != NULL)) {
+      int err = PNIO_ERROR;
+      rk_error("pn_resp_pre_alloc might has been executed, it is unexpected, ctx=%p, resp_ptr=%p", ctx, ctx->resp_ptr);
+      cfifo_free(ctx->resp_ptr);
+    }
+    p = cfifo_alloc(&ctx->pn->server_resp_alloc, sz);
+    ctx->resp_ptr = p;
+  }
+  return p;
+}
 
-PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz, int64_t resp_expired_abs_us)
+PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t hdr_sz, int64_t payload_sz, int64_t resp_expired_abs_us)
 {
   pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
   pn_resp_t* resp = NULL;
-  if (sizeof(pn_resp_t) + sz <= sizeof(ctx->reserve)) {
-    resp = (typeof(resp))(ctx->reserve);
+  if (unlikely(0 == hdr_sz)) { // response null or response error
+    if (ctx->resp_ptr) {
+      cfifo_free(ctx->resp_ptr);
+    }
+    ctx->resp_ptr = cfifo_alloc(&ctx->pn->server_resp_alloc, sizeof(*resp) + payload_sz);
+    resp = (typeof(resp))ctx->resp_ptr;
   } else {
-    resp = (typeof(resp))cfifo_alloc(&ctx->pn->server_resp_alloc, sizeof(*resp) + sz);
+    assert(hdr_sz >= sizeof(*resp));
+    resp = (typeof(resp))(buf + hdr_sz - sizeof(*resp));
   }
   pkts_req_t* r = NULL;
   if (NULL != resp) {
@@ -586,8 +611,9 @@ PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz, int64_t resp_ex
     r->sock_id = ctx->sock_id;
     r->categ_id = 0;
     r->expire_us = resp_expired_abs_us;
-    eh_copy_msg(&r->msg, ctx->pkt_id, buf, sz);
+    eh_copy_msg(&r->msg, ctx->pkt_id, buf + hdr_sz, payload_sz);
   } else {
+    rk_warn("allocate memory for pn_resp_t failed");
     r = (typeof(r))(ctx->reserve);
     r->errcode = ENOMEM;
     r->flush_cb = pn_pkts_flush_cb_error_func;

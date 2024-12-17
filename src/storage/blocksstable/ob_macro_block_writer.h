@@ -192,6 +192,7 @@ public:
                                 const int64_t verify_level = MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION);
   inline int64_t get_macro_data_size() const { return macro_blocks_[current_index_].get_data_size() + micro_writer_->get_block_size(); }
   const compaction::ObMergeBlockInfo& get_merge_block_info() const { return merge_block_info_; }
+  void inc_incremental_row_count() { ++merge_block_info_.incremental_row_count_; }
 protected:
   virtual int build_micro_block();
   virtual int try_switch_macro_block();

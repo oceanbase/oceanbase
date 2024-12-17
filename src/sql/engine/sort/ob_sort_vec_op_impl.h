@@ -202,7 +202,14 @@ protected:
   bool need_dump()
   {
     return sql_mem_processor_.get_data_size() > get_tmp_buffer_mem_bound()
-           || mem_context_->used() >= profile_.get_max_bound();
+           || get_total_used_size() >= profile_.get_max_bound();
+  }
+  int64_t get_total_used_size()
+  {
+    int64_t row_cnt = sk_store_.get_row_cnt();
+    return mem_context_->used() + ((part_cnt_ == 0) ? 0 :
+          ((row_cnt * FIXED_PART_NODE_SIZE * 2) +                         // size of(part_hash_nodes_)
+          (next_pow2(std::max(16L, row_cnt)) * FIXED_PART_BKT_SIZE * 2))); // size of(buckets_)
   }
   inline int64_t get_tmp_buffer_mem_bound() {
     // The memory reserved for ObSortVecOpEagerFilter should be deducted when topn filter is enabled.
@@ -325,11 +332,11 @@ protected:
         ret = OB_ERR_UNEXPECTED;
         SQL_ENG_LOG(WARN, "the number of rows in sort key store and addon store is expected to be equal",
           K(chunk->sk_store_.get_row_cnt()), K(chunk->addon_store_.get_row_cnt()), K(ret));
-      } else if (OB_FAIL(chunk->sk_store_.dump(false, true))) {
+      } else if (OB_FAIL(chunk->sk_store_.dump(true))) {
         SQL_ENG_LOG(WARN, "failed to dump row store", K(ret));
       } else if (OB_FAIL(chunk->sk_store_.finish_add_row(true /*+ need dump */))) {
         SQL_ENG_LOG(WARN, "finish add row failed", K(ret));
-      } else if (has_addon && OB_FAIL(chunk->addon_store_.dump(false, true))) {
+      } else if (has_addon && OB_FAIL(chunk->addon_store_.dump(true))) {
         SQL_ENG_LOG(WARN, "failed to dump row store", K(ret));
       } else if (has_addon && OB_FAIL(chunk->addon_store_.finish_add_row(true /*+ need dump */))) {
         SQL_ENG_LOG(WARN, "finish add row failed", K(ret));
@@ -400,6 +407,8 @@ protected:
   using BucketNodeArray = common::ObSegmentArray<PartHashNode,
                                                  OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                  common::ModulePageAllocator>;
+  const static int64_t FIXED_PART_NODE_SIZE = sizeof(PartHashNode);
+  const static int64_t FIXED_PART_BKT_SIZE = sizeof(PartHashNode *);
   static const int64_t MAX_ROW_CNT = 268435456; // (2G / 8)
   static const int64_t EXTEND_MULTIPLE = 2;
   static const int64_t MAX_MERGE_WAYS = 256;

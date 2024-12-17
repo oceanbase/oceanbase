@@ -16,6 +16,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/container/ob_array.h"
 #include "share/schema/ob_schema_getter_guard.h"
+#include "share/schema/ob_schema_printer.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_schema_mgr.h"
 #include "share/schema/ob_multi_version_schema_service.h"
@@ -1250,8 +1251,185 @@ int ObAutoSplitArgBuilder::build_arg_(const uint64_t tenant_id,
     arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT;
     arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT;
     arg.set_tz_info_map(tz_map_wrap.get_tz_map());
+    if (table_schema.is_user_table() && OB_FAIL(build_ddl_stmt_str_(table_schema, alter_table_schema, split_source_tablet_id, arg.tz_info_wrap_.get_time_zone_info(), arg.allocator_, arg.ddl_stmt_str_))) {
+      LOG_WARN("failed to build ddl stmt str", K(ret), K(tenant_id), K(table_schema.get_table_id()), K(split_source_tablet_id));
+    }
   }
 
+  return ret;
+}
+
+int ObAutoSplitArgBuilder::print_identifier(
+    ObIAllocator &allocator,
+    const bool is_oracle_mode,
+    const ObString &name,
+    ObString &ident)
+{
+  int ret = OB_SUCCESS;
+  int64_t buf_len = OB_MAX_TEXT_LENGTH;
+  int64_t pos = 0;
+  char *buf = nullptr;
+  const char *quote = is_oracle_mode ? "\"" : "`";
+  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc", KR(ret));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ObString(quote)))) {
+    LOG_WARN("failed to print quote", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::print_identifier(buf, buf_len, pos, CS_TYPE_UTF8MB4_GENERAL_CI, name, is_oracle_mode))) {
+    LOG_WARN("print partition name failed", K(ret), K(name), K(is_oracle_mode));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ObString(quote)))) {
+    LOG_WARN("failed to print quote", K(ret));
+  } else {
+    ident.assign_ptr(buf, pos);
+  }
+  return ret;
+}
+
+int ObAutoSplitArgBuilder::convert_rowkey_to_sql_literal(
+    const ObRowkey &rowkey,
+    const bool is_oracle_mode,
+    const ObTimeZoneInfo *tz_info,
+    ObIAllocator &allocator,
+    ObString &rowkey_str)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  const int64_t buf_len = OB_MAX_B_HIGH_BOUND_VAL_LENGTH;
+  int64_t pos = 0;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc", K(ret), K(buf_len));
+  } else if (OB_FAIL(ObPartitionUtils::convert_rowkey_to_sql_literal(is_oracle_mode, rowkey, buf, buf_len, pos, false/*print_collation*/, tz_info))) {
+    LOG_WARN("failed to convert rowkey to sql text", K(tz_info), K(ret));
+  } else {
+    rowkey_str.assign_ptr(buf, pos);
+  }
+  return ret;
+}
+
+int ObAutoSplitArgBuilder::build_ddl_stmt_str_(
+    const share::schema::ObTableSchema &orig_table_schema,
+    const share::schema::AlterTableSchema &alter_table_schema,
+    const ObTabletID &src_tablet_id,
+    const ObTimeZoneInfo *tz_info,
+    ObIAllocator &allocator,
+    ObString &ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  const bool from_non_partitioned_table = orig_table_schema.get_part_level() == PARTITION_LEVEL_ZERO;
+  const int64_t part_num = alter_table_schema.get_partition_num();
+  share::schema::ObPartition **part_array = alter_table_schema.get_part_array();
+  bool is_oracle_mode = false;
+  ObSqlString sql_string;
+  ObArenaAllocator tmp_allocator;
+  ObString table_name; // by allocator
+  share::schema::ObSchemaGetterGuard mock_schema_guard;
+  share::schema::ObSchemaPrinter schema_printer(mock_schema_guard);
+
+  if (OB_FAIL(sql_string.append_fmt("/*ob_auto_split*/ "))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("failed to check if oracle mode", K(ret), K(orig_table_schema.get_table_id()));
+  } else if (OB_FAIL(print_identifier(allocator, is_oracle_mode, orig_table_schema.get_table_name_str(), table_name))) {
+    LOG_WARN("failed to generate new name with escape character", K(ret), K(orig_table_schema.get_table_name()));
+  } else if (from_non_partitioned_table) {
+    ObArray<uint64_t> presetting_partition_keys;
+    if (OB_FAIL(sql_string.append_fmt("ALTER TABLE %.*s", table_name.length(), table_name.ptr()))) {
+      LOG_WARN("failed to append fmt", K(ret));
+    } else if (OB_FAIL(orig_table_schema.get_presetting_partition_keys(presetting_partition_keys))) {
+      LOG_WARN("failed to get presetting partition key columns", KR(ret), K(orig_table_schema));
+    } else if (presetting_partition_keys.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid schema for auto partitioning", KR(ret), K(orig_table_schema));
+    } else {
+      const bool is_multi_partkey = presetting_partition_keys.count() > 1;
+      const ObString &orig_part_func_expr = orig_table_schema.get_part_option().get_part_func_expr_str();
+      ObString part_func_expr(orig_part_func_expr.length(), orig_part_func_expr.ptr());
+      ObPartitionFuncType part_func_type = orig_table_schema.get_part_option().get_part_func_type();
+      if (part_func_expr.empty()) {
+        int64_t buf_len = OB_MAX_TEXT_LENGTH;
+        int64_t pos = 0;
+        char *buf = static_cast<char *>(tmp_allocator.alloc(buf_len));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc", KR(ret));
+        } else if (OB_FAIL(schema_printer.print_column_list(orig_table_schema, presetting_partition_keys, buf, buf_len, pos))) {
+          LOG_WARN("failed to print part func expr", K(ret), K(orig_table_schema.get_table_id()), K(presetting_partition_keys));
+        } else {
+          part_func_expr.assign_ptr(buf, pos);
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < presetting_partition_keys.count(); i++) {
+          const ObColumnSchemaV2 *column_schema = orig_table_schema.get_column_schema(presetting_partition_keys.at(i));
+          if (OB_ISNULL(column_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column_schema is null", KR(ret));
+          } else if (ObResolverUtils::is_partition_range_column_type(column_schema->get_meta_type().get_type())) {
+            part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (sql_string.append_fmt(" %s(%.*s) (",
+            is_oracle_mode ? "MODIFY PARTITION BY RANGE" : ((is_multi_partkey || part_func_type == PARTITION_FUNC_TYPE_RANGE_COLUMNS) ? "PARTITION BY RANGE COLUMNS" : "PARTITION BY RANGE"),
+            part_func_expr.length(), part_func_expr.ptr())) {
+        LOG_WARN("failed to append fmt", K(ret));
+      }
+    }
+  } else {
+    int64_t part_idx = OB_INVALID_INDEX_INT64;
+    int64_t subpart_idx = OB_INVALID_INDEX_INT64;
+    ObBasePartition *src_partition = nullptr;
+    ObString part_name;
+    if (OB_FAIL(orig_table_schema.get_part_idx_by_tablet(src_tablet_id, part_idx, subpart_idx))) {
+      LOG_WARN("failed to get part idx", K(ret), K(src_tablet_id));
+    } else if (OB_FAIL(orig_table_schema.get_part_by_idx(part_idx, subpart_idx, src_partition))) {
+      LOG_WARN("failed to get part by idx", K(ret), K(part_idx), K(subpart_idx));
+    } else if (OB_ISNULL(src_partition)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid partition", K(ret), K(part_idx), K(subpart_idx));
+    } else if (OB_FAIL(print_identifier(tmp_allocator, is_oracle_mode, src_partition->get_part_name(), part_name))) {
+      LOG_WARN("print partition name failed", K(ret), KPC(src_partition));
+    } else if (OB_FAIL(sql_string.append_fmt(is_oracle_mode ? "ALTER TABLE %.*s SPLIT PARTITION %.*s INTO ("
+                                                            : "ALTER TABLE %.*s REORGANIZE PARTITION %.*s INTO (",
+        table_name.length(), table_name.ptr(),
+        part_name.length(), part_name.ptr()))) {
+      LOG_WARN("failed to append fmt", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(part_array) || OB_UNLIKELY(part_num < 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part_array is null or invalid split part num", K(ret), K(part_array), K(part_num));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_num; ++i) {
+    tmp_allocator.reuse();
+    const bool is_last_part = i+1 == part_num;
+    ObString part_name;
+    ObString high_bound_val_str;
+    if (OB_ISNULL(part_array[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part is null", K(ret), K(part_array[i]));
+    } else if (OB_FAIL(print_identifier(tmp_allocator, is_oracle_mode, part_array[i]->get_part_name(), part_name))) {
+      LOG_WARN("print partition name failed", K(ret), KPC(part_array[i]));
+    } else if (OB_FAIL(sql_string.append_fmt("PARTITION %.*s", part_name.length(), part_name.ptr()))) {
+      LOG_WARN("failed to append fmt", K(ret), K(part_name));
+    } else if (OB_FAIL(convert_rowkey_to_sql_literal(part_array[i]->get_high_bound_val(), is_oracle_mode, tz_info, tmp_allocator, high_bound_val_str))) {
+      LOG_WARN("failed to convert high bound val", K(ret), KPC(part_array[i]), K(is_oracle_mode));
+    } else if (!is_oracle_mode || (is_oracle_mode && (!is_last_part || from_non_partitioned_table))) {
+      if (OB_FAIL(sql_string.append_fmt(" VALUES LESS THAN (%.*s)%s",
+              high_bound_val_str.length(), high_bound_val_str.ptr(),
+              is_last_part ? "" : ", "))) {
+        LOG_WARN("failed to append fmt", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(sql_string.append_fmt(")"))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, sql_string.string(), ddl_stmt_str, true/*c_style*/))) {
+    LOG_WARN("failed to write string", K(ret));
+  }
   return ret;
 }
 
@@ -1301,6 +1479,11 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
         new_part.reset();
       }
     }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(rootserver::ObDDLService::fill_part_name(table_schema, alter_table_schema))) {
+      LOG_WARN("failed to fill part name", K(ret));
+    }
   }
   return ret;
 }
@@ -1315,7 +1498,7 @@ int ObAutoSplitArgBuilder::build_partition_(const uint64_t tenant_id, const uint
   if (OB_FAIL(new_part.set_high_bound_val(high_bound_val))) {
     LOG_WARN("failed to set high_bound_val", KR(ret));
   } else {
-    new_part.set_is_empty_partition_name(true); // rs will generate the name
+    new_part.set_is_empty_partition_name(true);
     new_part.set_tenant_id(tenant_id);
     new_part.set_table_id(table_id);
     new_part.set_split_source_tablet_id(split_source_tablet_id);
@@ -1679,16 +1862,24 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
                                       ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
+  const bool is_oracle_mode = false; // inner_sql is mysql mode
+  ObArenaAllocator tmp_allocator;
+  ObString table_name_quoted;
+  ObString db_name_quoted;
   ObSqlString col_alias_str;
   ObSqlString col_name_alias_str;
 
   if (OB_FAIL(gen_column_alias_(column_names, col_alias_str, col_name_alias_str))) {
     LOG_WARN("fail to gen column alias", KR(ret), K(column_names));
+  } else if (OB_FAIL(ObAutoSplitArgBuilder::print_identifier(tmp_allocator, is_oracle_mode, db_name, db_name_quoted))) {
+    LOG_WARN("failed to generate new name with escape character", K(ret), K(db_name));
+  } else if (OB_FAIL(ObAutoSplitArgBuilder::print_identifier(tmp_allocator, is_oracle_mode, table_name, table_name_quoted))) {
+    LOG_WARN("failed to generate new name with escape character", K(ret), K(table_name));
   } else if (OB_FAIL(sql.assign_fmt(
       "SELECT %.*s FROM "
       "(SELECT %.*s, bucket, ROW_NUMBER() OVER (PARTITION BY bucket ORDER BY %.*s) rn FROM "
       "(SELECT %.*s, NTILE(%d) OVER (ORDER BY %.*s) bucket FROM "
-      "(SELECT /*+ index(%.*s primary) */ %.*s FROM %s%.*s%s.%s%.*s%s ",
+      "(SELECT /*+ index(%.*s primary) */ %.*s FROM %.*s.%.*s ",
       static_cast<int>(col_alias_str.length()), col_alias_str.ptr(),
 
       static_cast<int>(col_alias_str.length()), col_alias_str.ptr(),
@@ -1700,19 +1891,18 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
 
       table_name.length(), table_name.ptr(),
       static_cast<int>(col_name_alias_str.length()), col_name_alias_str.ptr(),
-      "`",
-      db_name.length(), db_name.ptr(),
-      "`",
-      "`",
-      table_name.length(), table_name.ptr(),
-      "`"))) {
-    LOG_WARN("string assign failed", KR(ret), K(col_alias_str), K(col_name_alias_str), K(db_name), K(table_name));
+      db_name_quoted.length(), db_name_quoted.ptr(),
+      table_name_quoted.length(), table_name_quoted.ptr()))) {
+    LOG_WARN("string assign failed", KR(ret), K(col_alias_str), K(col_name_alias_str), K(db_name_quoted), K(table_name_quoted));
   }
 
   if (OB_FAIL(ret)){
   } else if (part_name != nullptr) {
-    if (OB_FAIL(sql.append_fmt("PARTITION (%.*s) ", part_name->length(), part_name->ptr()))) {
-      LOG_WARN("string assign failed", KR(ret), KPC(part_name));
+    ObString part_name_quoted;
+    if (OB_FAIL(ObAutoSplitArgBuilder::print_identifier(tmp_allocator, is_oracle_mode, *part_name, part_name_quoted))) {
+      LOG_WARN("failed to print identifier", K(ret), KPC(part_name), K(is_oracle_mode));
+    } else if (OB_FAIL(sql.append_fmt("PARTITION (%.*s) ", part_name_quoted.length(), part_name_quoted.ptr()))) {
+      LOG_WARN("string assign failed", KR(ret), K(part_name_quoted));
     }
   }
 
@@ -1852,7 +2042,9 @@ int ObSplitSampler::gen_column_alias_(const ObIArray<ObString> &columns,
   col_alias_str.reset();
   col_name_alias_str.reset();
 
+  ObArenaAllocator tmp_allocator;
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
+    tmp_allocator.reuse();
     if (i > 0) {
       if (OB_FAIL(col_alias_str.append(", "))) {
         LOG_WARN("string append failed", KR(ret));
@@ -1861,17 +2053,18 @@ int ObSplitSampler::gen_column_alias_(const ObIArray<ObString> &columns,
       }
     }
     if (OB_SUCC(ret)) {
+      const ObString &column_name = columns.at(i);
       ObSqlString alias;
-      const ObString &column = columns.at(i);
+      ObString column_name_quoted;
       if (OB_FAIL(alias.append_fmt("col%ld", i))) {
         LOG_WARN("append string failed", KR(ret));
       } else if (OB_FAIL(col_alias_str.append(alias.string()))) {
         LOG_WARN("append string failed", KR(ret));
+      } else if (OB_FAIL(ObAutoSplitArgBuilder::print_identifier(tmp_allocator, false/*is_oracle_mode*/, column_name, column_name_quoted))) {
+        LOG_WARN("failed to generate new name with escape character", K(ret), K(column_name));
       } else if (OB_FAIL(col_name_alias_str.append_fmt(
-                                              "%s%.*s%s AS %.*s",
-                                              "`",
-                                              column.length(), column.ptr(),
-                                              "`",
+                                              "%.*s AS %.*s",
+                                              column_name_quoted.length(), column_name_quoted.ptr(),
                                               alias.string().length(),
                                               alias.string().ptr()))) {
         LOG_WARN("append string failed", KR(ret));

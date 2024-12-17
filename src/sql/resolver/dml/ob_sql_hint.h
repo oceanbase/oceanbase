@@ -464,10 +464,14 @@ struct ObLogPlanHint
   int check_use_skip_scan(uint64_t table_id,  uint64_t index_id,
                           bool &force_skip_scan,
                           bool &force_no_skip_scan) const;
+  int check_scan_direction(const ObQueryCtx &ctx,
+                           uint64_t table_id,
+                           uint64_t index_id,
+                           ObOrderDirection &direction) const;
   const LogJoinHint* get_join_hint(const ObRelIds &join_tables) const;
   const ObIArray<LogJoinHint> &get_join_hints() const { return join_hints_; }
   SetAlgo get_valid_set_algo() const;
-  DistAlgo get_valid_set_dist_algo(int64_t *random_none_idx = NULL) const;
+  uint64_t get_valid_set_dist_algo(int64_t *random_none_idx = NULL) const;
   int check_valid_set_left_branch(const ObSelectStmt *select_stmt,
                                   bool &hint_valid,
                                   bool &need_swap) const;
@@ -482,7 +486,8 @@ struct ObLogPlanHint
                            bool &force_normal_sort,
                            bool &force_basic,
                            bool &force_partition_wise,
-                           bool &force_dist_hash) const;
+                           bool &force_dist_hash,
+                           bool &force_pull_to_local) const;
   int get_distinct_info(bool &force_use_hash,
                         bool &force_use_merge,
                         bool &force_basic,

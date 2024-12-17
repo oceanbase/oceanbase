@@ -1119,7 +1119,14 @@ int ObIndexBuildTask::wait_data_complement()
       }
     }
   }
-
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::FTS_INDEX_SUBTASK_FAILED) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("errsim ddl execute building the subtask of fts index failed", KR(ret));
+    }
+  }
+#endif
   if (state_finished || OB_FAIL(ret)) {
     (void)switch_status(ObDDLTaskStatus::VALIDATE_CHECKSUM, true, ret);
     LOG_INFO("wait data complement finished", K(ret), K(*this));

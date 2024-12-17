@@ -344,7 +344,10 @@ int ObLobAccessParam::init_seq_no(const uint64_t modified_len)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("seq_no has been inited", K(ret), KPC(this));
   } else if (OB_FAIL(get_store_chunk_size(store_chunk_size))) {
-    LOG_WARN("get_store_chunk_size fail", KR(ret), K(this));
+    LOG_WARN("get_store_chunk_size fail", K(ret), KPC(this));
+  } else if (store_chunk_size <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("store_chunk_size is invalid", K(ret), KPC(this));
   } else {
     // pre-calc seq_no_cnt and init seq_no_st
     // for insert, most oper len/128K + 2
@@ -527,8 +530,8 @@ int ObLobAccessParam::set_tx_read_snapshot(ObLobLocatorV2 &locator)
     // if tx_desc is not null
     //    and tx_id in tx_desc is not equal to tx_id in locator read snapshot
     //    and tx_id in locator read snapshot is not zero,
-    // that means lob locator is old but tx_id in tx_desc is zero, so get latest read snaptshot from trans service
-    //
+    // that means lob locator is old but tx_id in tx_desc is zero, that means transaction mab be commited.
+    // so return not support because the data of the current transaction is not guaranteed to be read
     // and this situation happens in jdbc read wirte with lob locator
     // for example:
     //      begin;
@@ -536,14 +539,9 @@ int ObLobAccessParam::set_tx_read_snapshot(ObLobLocatorV2 &locator)
     //      call dbms_lob.write(lob_var, new_data);
     //      commit;                                            // reset tx_desc and tx_id in tx_desc is zero
     //      call dbms_lob.read(lob_var);                       // should return updated data
-
-    // TODO aozeliu.azl make sure this behavior is reasonable.
-    transaction::ObTransService* txs = MTL(transaction::ObTransService*);
-    transaction::ObTxIsolationLevel tx_level = transaction::ObTxIsolationLevel::RC;
-    if (OB_FAIL(txs->get_ls_read_snapshot(*this->tx_desc_, tx_level, this->ls_id_,
-                                          this->timeout_, this->snapshot_))) {
-      LOG_WARN("fail to get read snapshot", K(ret), KPC(this));
-    }
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("it is not support for reading lob after tranaction commit", K(ret), K(locator), K(read_snapshot), KPC(this));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "it is not support for reading lob after tranaction commit, please re-select lob locator");
   }
   return ret;
 }

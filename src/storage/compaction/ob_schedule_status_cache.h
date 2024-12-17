@@ -152,13 +152,14 @@ protected:
     const bool is_remote_tenant);
   int check_medium_list(
     const share::ObLSID &ls_id,
-    const storage::ObTablet &tablet);
+    const storage::ObTablet &tablet,
+    const bool normal_schedule);
   int register_map(const ObTablet &tablet);
   void inner_init_could_schedule_new_round(
     const ObLSID &ls_id,
     const ObTablet &tablet,
     const bool ls_could_schedule_new_round,
-    const bool need_register_map);
+    const bool normal_schedule);
   int update_tablet_report_status(
     storage::ObLS &ls,
     const storage::ObTablet &tablet);

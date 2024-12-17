@@ -3957,12 +3957,16 @@ int ObPartitionSchema::get_tablet_and_object_id_by_index(
 {
   int ret = OB_SUCCESS;
   const ObPartition *partition = NULL;
+  // Data of external table is stored in file outside of observer. It doesn't have
+  // a tablet id. So skip tablet check for external table, and use part id or subpart
+  // id represent tablet id.
+  bool is_external_tbl = is_external_table();
   ObPartitionLevel part_level = get_part_level();
   if (part_level >= PARTITION_LEVEL_MAX
       || PARTITION_LEVEL_ZERO == part_level) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid part level", KR(ret), K(part_level));
-  } else if (!has_tablet()) {
+  } else if (!is_external_tbl && !has_tablet()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("There are no tablets in virtual table and view", KR(ret));
   } else if (OB_FAIL(get_partition_by_partition_index(
@@ -3972,7 +3976,7 @@ int ObPartitionSchema::get_tablet_and_object_id_by_index(
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("partition not exist", KR(ret), K(part_idx));
   } else {
-    tablet_id = partition->get_tablet_id();
+    tablet_id = is_external_tbl ? static_cast<ObTabletID>(partition->get_part_id()) : partition->get_tablet_id();
     object_id = partition->get_part_id();
     first_level_part_id = OB_INVALID_ID;
     ObSubPartition **subpartition_array = partition->get_subpart_array();
@@ -3988,7 +3992,7 @@ int ObPartitionSchema::get_tablet_and_object_id_by_index(
       LOG_WARN("subpartition not exist", KR(ret), K(part_idx), K(subpart_idx));
     } else {
       const ObSubPartition *subpartition = subpartition_array[subpart_idx];
-      tablet_id = subpartition->get_tablet_id();
+      tablet_id = is_external_tbl ? static_cast<ObTabletID>(subpartition->get_sub_part_id()) : subpartition->get_tablet_id();
       first_level_part_id = object_id;
       object_id = subpartition->get_sub_part_id();
     }
@@ -6219,7 +6223,7 @@ int ObPartitionUtils::check_param_valid_(
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   const uint64_t table_id = table_schema.get_table_id();
-   if (!table_schema.has_tablet()) {
+   if (!table_schema.is_external_table() && !table_schema.has_tablet()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table schema has no tablet", KR(ret), K(tenant_id), K(table_id),
              "table_type", table_schema.get_table_type(),

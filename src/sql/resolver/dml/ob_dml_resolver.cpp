@@ -1706,7 +1706,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.is_from_show_resolver_ = params_.is_from_show_resolver_;
     ctx.is_expanding_view_ = params_.is_expanding_view_;
     ctx.is_in_system_view_ = params_.is_in_sys_view_;
-    ctx.is_need_print_ = params_.is_from_create_view_ || params_.is_from_create_table_;
+    ctx.is_need_print_ = params_.is_from_create_view_ || params_.is_from_create_table_ || params_.is_returning_;
     ObRawExprResolverImpl expr_resolver(ctx);
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();
     bool is_multi_stmt = session_info_->get_cur_exec_ctx() != NULL &&
@@ -3095,7 +3095,15 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
 {
   int ret = OB_SUCCESS;
   bool is_external = false;
-  if (OB_ISNULL(stmt_) || OB_ISNULL(stmt_->get_query_ctx())) {
+  ObExecContext *exec_ctx = NULL;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null session_info or exec context", K(ret), K(session_info_));
+  } else {
+    exec_ctx = session_info_->get_cur_exec_ctx();
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(stmt_) || OB_ISNULL(stmt_->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(stmt_));
   } else if (q_name.is_sys_func()) {
@@ -3285,7 +3293,9 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
   //因为obj access的参数拉平处理，a(b,c)在columns会被存储为b,c,a，所以解释完一个ObQualifiedName，
   //都要把他前面的ObQualifiedName拿过来尝试替换一遍参数
   for (int64_t i = 0; OB_SUCC(ret) && i < real_exprs.count(); ++i) {
-    if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr, columns.at(i).ref_expr_, real_exprs.at(i)))) {
+    if ((0 == i % 1000) && NULL != exec_ctx && OB_FAIL(exec_ctx->check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr, columns.at(i).ref_expr_, real_exprs.at(i)))) {
       LOG_WARN("replace column ref expr failed", K(ret));
     }
   }
@@ -3303,7 +3313,11 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
-    OZ (columns.at(i).replace_access_ident_params(q_name.ref_expr_, real_ref_expr));
+    if ((0 == i % 1000) && NULL != exec_ctx && OB_FAIL(exec_ctx->check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    } else {
+      OZ (columns.at(i).replace_access_ident_params(q_name.ref_expr_, real_ref_expr));
+    }
   }
 
   if (OB_ERR_BAD_FIELD_ERROR == ret) {
@@ -5575,7 +5589,8 @@ int ObDMLResolver::unnest_table_add_column(TableItem *&table_item, ColumnItem *&
       if (arr_type->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
         ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
         data_type = elem_type->basic_meta_;
-      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
+                 || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
         ObString child_def;
         uint16_t child_subschema_id = 0;
         if (OB_FAIL(coll_info->get_child_def_string(child_def))) {
@@ -5588,8 +5603,8 @@ int ObDMLResolver::unnest_table_add_column(TableItem *&table_item, ColumnItem *&
           data_type.set_subschema_id(child_subschema_id);
         }
       } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supportted array data type provided.", K(ret), K(arr_type->element_type_->type_id_));
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid element type", K(ret), K(arr_type->element_type_->type_id_));
       }
     }
   }
@@ -7693,6 +7708,7 @@ int ObDMLResolver::resolve_approx_clause(const ParseNode *approx_node)
     bool found = false;
     bool has_const = false;
     bool is_match = false;
+    bool is_vec_index_valid = false;
     ObRawExpr *tmp_expr = stmt->get_order_item(0).expr_;
     if (OB_NOT_NULL(tmp_expr) && tmp_expr->is_vector_sort_expr()) {
       // only order by distance with approx, set it true
@@ -7736,13 +7752,16 @@ int ObDMLResolver::resolve_approx_clause(const ParseNode *approx_node)
           } else if (!is_match) {
             LOG_WARN("distance expr and index distance algorithm is not match, will not set using index",
               K(tmp_expr->get_expr_type()));
+          } else if (OB_FAIL(ObVectorIndexUtil::check_vector_index_by_column_name(
+              *schema_guard, *table_schema, column_name, is_vec_index_valid))) {
+            LOG_WARN("fail to check vector index is valid", K(ret), K(column_name));
           }
         } else {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using vector index without column ref or vector const expr is");
         }
       }
-      if (OB_SUCC(ret) && is_match && tmp_expr->get_expr_type() != T_FUN_SYS_INNER_PRODUCT) {
+      if (OB_SUCC(ret) && is_match && is_vec_index_valid && tmp_expr->get_expr_type() != T_FUN_SYS_INNER_PRODUCT) {
         stmt->set_has_vec_approx(true);
       }
       if (OB_SUCC(ret) && !has_const) {
@@ -8689,18 +8708,6 @@ int ObDMLResolver::resolve_external_table_generated_column(
                                             table_schema->get_external_file_format();
     if (OB_FAIL(format.load_from_string(table_format_or_properties, *params_.allocator_))) {
       LOG_WARN("load from string failed", K(ret));
-    }
-    // delete later
-    if (OB_SUCC(ret) && format.format_type_ == ObExternalFileFormat::ORC_FORMAT && lib::is_oracle_mode()) {
-      ret = OB_E(EventTable::EN_EXTERNAL_TABLE_ORACLE) OB_SUCCESS;
-      bool enable_oracle_orc = OB_SUCCESS != ret;
-      if (enable_oracle_orc) {
-        ret = OB_SUCCESS;
-      } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support orc in oracle mode", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "orc in oracle mode");
-      }
     }
     if (OB_SUCC(ret) && format.format_type_ != ObResolverUtils::resolve_external_file_column_type(col.col_name_)) {
       if (format.format_type_ == ObExternalFileFormat::ORC_FORMAT &&
@@ -15186,7 +15193,9 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     case T_INDEX_SS_ASC_HINT:
     case T_INDEX_SS_DESC_HINT:
     case T_USE_COLUMN_STORE_HINT:
-    case T_NO_USE_COLUMN_STORE_HINT: {
+    case T_NO_USE_COLUMN_STORE_HINT:
+    case T_INDEX_ASC_HINT:
+    case T_INDEX_DESC_HINT: {
       if (OB_FAIL(resolve_index_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve index hint", K(ret));
       }
@@ -15370,12 +15379,14 @@ int ObDMLResolver::resolve_index_hint(const ParseNode &index_node,
     LOG_WARN("unexpected index hint", K(ret), K(index_node.type_), K(index_node.num_child_),
                                       K(index_name_node));
   } else {
-    //T_NO_INDEX or T_INDEX_HINT
+    //T_NO_INDEX or T_INDEX_HINT or T_INDEX_ASC_HINT or T_INDEX_DESC_HINT
     index_hint->set_qb_name(qb_name);
     index_hint->get_index_name().assign_ptr(index_name_node->str_value_,
                                             static_cast<int32_t>(index_name_node->str_len_));
     opt_hint = index_hint;
-    if (T_INDEX_HINT == index_hint->get_hint_type()) {
+    if (T_INDEX_HINT == index_hint->get_hint_type() ||
+        T_INDEX_ASC_HINT == index_hint->get_hint_type() ||
+        T_INDEX_DESC_HINT == index_hint->get_hint_type()) {
       if (OB_UNLIKELY(4 != index_node.num_child_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected index hint", K(ret), K(index_node.type_), K(index_node.num_child_),
@@ -18553,7 +18564,21 @@ int ObDMLResolver::fill_vec_id_expr_param(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", KP_(session_info), KP_(params_.expr_factory), KP(stmt));
   } else if (table_schema->is_user_table() && OB_FAIL(table_schema->get_rowkey_vid_tid(rowkey_vid_tid))) {
-    LOG_WARN("fail to get rowkey vid tid", K(ret), KPC(table_schema));
+    ObSchemaGetterGuard &schema_guard = *params_.schema_checker_->get_schema_guard();
+    int tmp_ret = ret;
+    bool is_all_deleted = false;
+    /* 1. 这里不可能是后建未完成，而取不到rowkey_vid的场景，因为rowkey_vid是第一个后建的索引表，如果判断函数外层的column是vid列，那么说明rowkey_vid已经被创建
+       2. 这里只能是删除向量索引的场景，删除时可能rowkey_vid已经被删除，但vid_rowkey没有删除，外层函数判断主表上的vid列还在，会进入到这个函数。因此需要判断345号表
+       是否存在，如果都不存在了，说明当前正在删除1，2号表，获取不到rowkey_vid的场景是有可能的，这个时候要返回success
+     */
+    if (OB_FAIL(ObVectorIndexUtil::check_vec_aux_index_deleted(schema_guard, *table_schema, is_all_deleted))) {
+      LOG_WARN("fail to check vec index exist", K(ret));
+    }
+    if (OB_SUCC(ret) && is_all_deleted) {
+      ret = OB_SUCCESS;
+    } else {
+      ret = tmp_ret;
+    }
   } else {
     CopySchemaExpr copier(*params_.expr_factory_);
     ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(vec_id_expr);
@@ -18866,8 +18891,11 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = get_stmt();
   ObQuestionmarkEqualCtx check_ctx;
+  ObExprEqualCheckContext equal_ctx;
+  equal_ctx.override_const_compare_ = true;
+  const ParamStore *param_store = params_.param_list_;
   ObRawExprReplacer replacer;
-  if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(params_.query_ctx_)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(params_.query_ctx_) || OB_ISNULL(param_store)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(expr));
   } else {
@@ -18878,7 +18906,7 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
       ObSEArray<ObRawExpr *, 4> match_exprs_on_table;
       bool table_on_null_side = false;
       bool is_simple_filter = false;
-      ObSEArray<ObExprConstraint, 1> constraints;
+      ObSEArray<ObPCConstParamInfo, 4> param_constraints;
       if (OB_ISNULL(cur_match_expr = match_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
@@ -18889,10 +18917,29 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
       } else if (OB_FAIL(resolve_match_against_expr(*cur_match_expr))) {
         LOG_WARN("failed to resolve match index", K(ret));
       } else {
-        for (int64_t match_idx = 0; match_idx < match_exprs_on_table.count(); ++match_idx) {
-          if (match_exprs_on_table.at(match_idx)->same_as(*cur_match_expr, &check_ctx)) {
-            match_expr_on_table = static_cast<ObMatchFunRawExpr *>(match_exprs_on_table.at(match_idx));
-            break;
+        bool shared = false;
+        for (int64_t idx = 0; OB_SUCC(ret) && !shared && idx < match_exprs_on_table.count(); ++idx) {
+          if (match_exprs_on_table.at(idx)->same_as(*cur_match_expr, &check_ctx)) {
+            match_expr_on_table = static_cast<ObMatchFunRawExpr *>(match_exprs_on_table.at(idx));
+            shared = true;
+          } else if (match_exprs_on_table.at(idx)->same_as(*cur_match_expr, &equal_ctx)) {
+            match_expr_on_table = static_cast<ObMatchFunRawExpr *>(match_exprs_on_table.at(idx));
+            shared = true;
+            // constraints need to be added if the same_as judgement relies on specific const value
+            for(int64_t i = 0; OB_SUCC(ret) && i < equal_ctx.param_expr_.count(); i++) {
+              ObPCConstParamInfo param_info;
+              int64_t param_idx = equal_ctx.param_expr_.at(i).param_idx_;
+              if (OB_UNLIKELY(param_idx < 0 || param_idx >= param_store->count())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected error", K(ret), K(param_idx), K(param_store->count()));
+              } else if (OB_FAIL(param_info.const_idx_.push_back(param_idx))) {
+                LOG_WARN("failed to push back param idx", K(ret));
+              } else if (OB_FAIL(param_info.const_params_.push_back(param_store->at(param_idx)))) {
+                LOG_WARN("failed to push back value", K(ret));
+              } else if (OB_FAIL(param_constraints.push_back(param_info))) {
+                LOG_WARN("failed to push back param info", K(ret));
+              }
+            }
           }
         }
       }
@@ -18915,6 +18962,8 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
         LOG_WARN("failed to replace expr", K(ret));
       } else if (OB_FAIL(append(params_.query_ctx_->all_equal_param_constraints_, check_ctx.equal_pairs_))) {
         LOG_WARN("failed to append equal param info", K(ret));
+      } else if (OB_FAIL(append(params_.query_ctx_->all_plan_const_param_constraints_, param_constraints))) {
+        LOG_WARN("failed to append param info", K(ret));
       }
     }
   }

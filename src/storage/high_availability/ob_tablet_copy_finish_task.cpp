@@ -102,7 +102,27 @@ int ObTabletCopyFinishTask::process()
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
   ObCopyTabletRecordExtraInfo *extra_info = nullptr;
 
-  if (!is_inited_) {
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_BLOCK_SPLIT_BEFORE_SSTABLES_SPLIT) OB_SUCCESS;
+  if (OB_SUCC(ret)) {
+    // do nothing.
+  } else if (OB_DDL_TASK_EXECUTE_TOO_MUCH_TIME == ret ) { // ret=-4192, errsim trigger to test ddl-split orthogonal ls-migration.
+    ret = OB_SUCCESS;
+    if (tablet_id_.is_inner_tablet() || tablet_id_.is_ls_inner_tablet()) {
+    } else if (GCONF.errsim_test_tablet_id.get_value() > 0 && tablet_id_.id() == GCONF.errsim_test_tablet_id.get_value()){
+      LOG_INFO("[ERRSIM] stuck before create table store", K(tablet_id_), KPC(this));
+      DEBUG_SYNC(BEFORE_MIGRATION_CREATE_TABLE_STORE);
+    } else {
+      LOG_INFO("start to process copy finish task", K(tablet_id_), KPC(this));
+    }
+  } else {
+    ret = OB_SUCCESS; // other errsim errors of ddl split, ignored here.
+  }
+#endif
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("error found", K(ret));
+  } else if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
   } else if (ha_dag_->get_ha_dag_net_ctx()->is_failed()) {
@@ -111,8 +131,6 @@ int ObTabletCopyFinishTask::process()
     LOG_WARN("failed to get tablet status", K(ret), K(tablet_id_));
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == status) {
     FLOG_INFO("copy tablet from src do not exist, skip copy finish task", K(tablet_id_), K(status));
-  } else if (OB_FAIL(check_log_replay_to_mds_sstable_end_scn_())) {
-    LOG_WARN("failed to check log replay to mds sstable end scn", K(ret), K(tablet_id_));
   } else if (OB_FAIL(create_new_table_store_with_major_())) {
     LOG_WARN("failed to create new table store with major", K(ret), K_(tablet_id));
   } else if (OB_FAIL(create_new_table_store_with_minor_())) {
@@ -271,18 +289,43 @@ int ObTabletCopyFinishTask::create_new_table_store_with_major_()
 int ObTabletCopyFinishTask::create_new_table_store_with_minor_()
 {
   int ret = OB_SUCCESS;
+  share::SCN mds_max_end_scn(SCN::min_scn());
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_table_with_minor_tables(ls_,
-                                                                                 tablet_id_,
-                                                                                 src_tablet_meta_,
-                                                                                 mds_tables_handle_,
-                                                                                 minor_tables_handle_,
-                                                                                 ddl_tables_handle_,
-                                                                                 restore_action_))) {
-    LOG_WARN("failed to build table with minor tables", K(ret), K(mds_tables_handle_),
-      K(minor_tables_handle_), K(ddl_tables_handle_), K(restore_action_));
+  } else if (OB_FAIL(ls_->ha_get_tablet(tablet_id_, tablet_handle))) {
+    LOG_WARN("failed to get tablet", K(ret), K(tablet_id_));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id_));
+  } else if (OB_FAIL(get_mds_sstable_max_end_scn_(mds_max_end_scn))) {
+    LOG_WARN("failed to get mds sstable max end scn", K(ret), K(mds_tables_handle_));
+  } else {
+    ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam param;
+    param.ls_ = ls_;
+    param.tablet_id_ = tablet_id_;
+    param.src_tablet_meta_ = src_tablet_meta_;
+    param.restore_action_ = restore_action_;
+    param.release_mds_scn_ = mds_max_end_scn;
+
+    if (OB_FAIL(param.assign_sstables(mds_tables_handle_, minor_tables_handle_, ddl_tables_handle_))) {
+      LOG_WARN("failed to assign sstables", K(ret), KPC(ls_), K(tablet_id_));
+    } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_table_with_minor_tables(param))) {
+      LOG_WARN("failed to build table with minor tables", K(ret), K(mds_tables_handle_),
+        K(minor_tables_handle_), K(ddl_tables_handle_), K(restore_action_));
+      if (OB_RELEASE_MDS_NODE_ERROR == ret) {
+        //Release mds node failed must do dag net retry.
+        //Because ls still replay and mds may has residue node which makes data incorrect.
+        //So should make ls offline and online
+        int tmp_ret = OB_SUCCESS;
+        const bool need_retry = false;
+        if (OB_SUCCESS != (tmp_ret = ha_dag_->get_ha_dag_net_ctx()->set_result(ret, need_retry))) {
+          LOG_ERROR("failed to set ha dag net ctx result", K(tmp_ret), K(ret));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -547,30 +590,13 @@ int ObTabletCopyFinishTask::check_major_valid_()
   return ret;
 }
 
-int ObTabletCopyFinishTask::check_log_replay_to_mds_sstable_end_scn_()
+int ObTabletCopyFinishTask::get_mds_sstable_max_end_scn_(share::SCN &max_end_scn)
 {
   int ret = OB_SUCCESS;
-  SCN max_end_scn(SCN::min_scn());
-  SCN current_replay_scn;
-  const int64_t total_timeout = 20_min;
-  const int64_t wait_replay_timeout = 10_min;
-  bool is_ls_deleted = false;
-  SCN last_replay_scn;
-  share::SCN readable_scn;
-  const int64_t start_ts = ObTimeUtil::current_time();
-  int64_t current_ts = 0;
-  int64_t last_replay_ts = 0;
-  const int64_t CHECK_CONDITION_INTERVAL = 200_ms;
-  ObTimeoutCtx timeout_ctx;
-  int32_t result = OB_SUCCESS;
-
+  max_end_scn.set_min();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
-  } else if (tablet_id_.is_ls_inner_tablet()) {
-    //do nothing
-  } else if (OB_FAIL(timeout_ctx.set_timeout(total_timeout))) {
-    LOG_WARN("failed to set timeout ctx", K(ret), K(tablet_id_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < mds_tables_handle_.get_count(); ++i) {
       const ObITable *table = mds_tables_handle_.get_table(i);
@@ -581,70 +607,7 @@ int ObTabletCopyFinishTask::check_log_replay_to_mds_sstable_end_scn_()
         max_end_scn = SCN::max(table->get_end_scn(), max_end_scn);
       }
     }
-
-    while (OB_SUCC(ret)) {
-      if (timeout_ctx.is_timeouted()) {
-        ret = OB_WAIT_REPLAY_TIMEOUT;
-        LOG_WARN("wait log replay to mds sstable end scn already timeout", K(ret));
-      } else if (ha_dag_->get_ha_dag_net_ctx()->is_failed()) {
-        FLOG_INFO("ha dag net is already failed, skip physical copy finish task", K(tablet_id_), KPC(ha_dag_));
-        ret = OB_CANCELED;
-      } else if (ls_->is_stopped()) {
-        ret = OB_NOT_RUNNING;
-        LOG_WARN("ls is not running, stop check log replay scn", K(ret), K(tablet_id_));
-      } else if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(ls_->get_ls_id(), is_ls_deleted))) {
-        LOG_WARN("failed to get ls status from inner table", K(ret));
-      } else if (is_ls_deleted) {
-        ret = OB_CANCELED;
-        LOG_WARN("ls will be removed, no need run migration", K(ret), KPC(ls_), K(is_ls_deleted));
-      } else if (OB_FAIL(ObStorageHAUtils::check_log_status(ls_->get_tenant_id(), ls_->get_ls_id(), result))) {
-        LOG_WARN("failed to check log status", K(ret), KPC(ls_), K(tablet_id_));
-      } else if (OB_SUCCESS != result) {
-        LOG_INFO("can not replay log, it will retry", K(result), KPC(ha_dag_));
-        if (OB_FAIL(ha_dag_->get_ha_dag_net_ctx()->set_result(result/*result*/, true/*need_retry*/, this->get_dag()->get_type()))) {
-          LOG_WARN("failed to set result", K(ret), KPC(ha_dag_));
-        } else {
-          ret = result;
-          LOG_WARN("log sync or replay error, need retry", K(ret), KPC(ha_dag_));
-        }
-      } else if (OB_FAIL(ls_->get_max_decided_scn(current_replay_scn))) {
-        LOG_WARN("failed to get current replay log ts", K(ret), K(tablet_id_));
-      } else if (current_replay_scn >= max_end_scn) {
-        break;
-      } else {
-        current_ts = ObTimeUtility::current_time();
-        if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
-          LOG_INFO("replay log is not ready, retry next loop", K(tablet_id_),
-              "current_replay_scn", current_replay_scn,
-              "mds max end scn", max_end_scn);
-        }
-
-        if (current_replay_scn == last_replay_scn) {
-          if (current_ts - last_replay_ts > wait_replay_timeout) {
-            ret = OB_WAIT_REPLAY_TIMEOUT;
-            LOG_WARN("failed to check log replay to mds end scn", K(ret), K(tablet_id_), K(current_replay_scn), K(max_end_scn));
-          }
-        } else if (last_replay_scn > current_replay_scn) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("last end log ts should not smaller than current end log ts", K(ret),
-              K(last_replay_scn), K(current_replay_scn));
-        } else {
-          last_replay_scn = current_replay_scn;
-          last_replay_ts = current_ts;
-        }
-
-        if (OB_SUCC(ret)) {
-          ob_usleep(CHECK_CONDITION_INTERVAL);
-          if (OB_FAIL(share::dag_yield())) {
-            LOG_WARN("fail to yield dag", KR(ret));
-          }
-        }
-      }
-    }
   }
-
-  LOG_INFO("finish check_log_replay_to_mds_sstable_end_scn_",
-      K(ret), K(tablet_id_), "cost", ObTimeUtil::current_time() - start_ts);
   return ret;
 }
 

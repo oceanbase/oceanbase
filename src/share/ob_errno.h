@@ -479,6 +479,7 @@ constexpr int OB_SERVICE_STOPPED = -4783;
 constexpr int OB_SERVER_CONNECTION_ERROR = -4784;
 constexpr int OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX = -4785;
 constexpr int OB_ERR_FLASHBACK_QUERY_EXP_NULL = -4786;
+constexpr int OB_RELEASE_MDS_NODE_ERROR = -4787;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -1954,6 +1955,9 @@ constexpr int OB_JNI_CREATE_JVM_ERROR = -11069;
 constexpr int OB_JNI_DESTORY_JVM_ERROR = -11070;
 constexpr int OB_JNI_PARAMS_ERROR = -11071;
 constexpr int OB_JNI_FORCE_CLOSE_JAVA_ENV_ERROR = -11075;
+constexpr int OB_PLUGIN_VERSION_INCOMPATIBLE = -11076;
+constexpr int OB_PLUGIN_DLOPEN_FAILED = -11077;
+constexpr int OB_PLUGIN_ERROR = -11078;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2547,6 +2551,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SERVER_CONNECTION_ERROR__USER_ERROR_MSG "Server '%s' connection error"
 #define OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX__USER_ERROR_MSG "Cannot drop index '%.*s': needed in a foreign key constraint"
 #define OB_ERR_FLASHBACK_QUERY_EXP_NULL__USER_ERROR_MSG "NULL snapshot expression not allowed here"
+#define OB_RELEASE_MDS_NODE_ERROR__USER_ERROR_MSG "Release mds node error"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -3939,7 +3944,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH__USER_ERROR_MSG "the pwrite offset of the object storage is inconsistent"
 #define OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH__USER_ERROR_MSG "the contents of pwrite are inconsistent"
 #define OB_OBJECT_STORAGE_CHECKSUM_ERROR__USER_ERROR_MSG "object storage data checksum error"
-#define OB_BACKUP_ZONE_IDC_REGION_INVALID__USER_ERROR_MSG "backup zone or backup idc or backup region invalid"
+#define OB_BACKUP_ZONE_IDC_REGION_INVALID__USER_ERROR_MSG "%s"
+#define OB_ERR_TMP_FILE_ALREADY_SEALED__USER_ERROR_MSG "tmp file has already sealed"
+#define OB_TMP_FILE_EXCEED_DISK_QUOTA__USER_ERROR_MSG "tmp file exceeds disk quota"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4344,6 +4351,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR__USER_ERROR_MSG "connector path could not be found"
 #define OB_JNI_NOT_ENABLE_JAVA_ENV_ERROR__USER_ERROR_MSG "java env was not enabled"
 #define OB_JNI_FORCE_CLOSE_JAVA_ENV_ERROR__USER_ERROR_MSG "Forcefully close java env with error: %.*s"
+#define OB_PLUGIN_VERSION_INCOMPATIBLE__USER_ERROR_MSG "The plugin's version is incompatible with current server"
+#define OB_PLUGIN_DLOPEN_FAILED__USER_ERROR_MSG "Failed to open library"
+#define OB_PLUGIN_ERROR__USER_ERROR_MSG "Plugin internal error"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -5519,6 +5529,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX__OBE_USER_ERROR_MSG "OBE-02266: Cannot drop index '%.*s': needed in a foreign key constraint"
 #define OB_ERR_FLASHBACK_QUERY_EXP_NULL__ORA_USER_ERROR_MSG "ORA-30055: NULL snapshot expression not allowed here"
 #define OB_ERR_FLASHBACK_QUERY_EXP_NULL__OBE_USER_ERROR_MSG "OBE-30055: NULL snapshot expression not allowed here"
+#define OB_RELEASE_MDS_NODE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4787, Release mds node error"
+#define OB_RELEASE_MDS_NODE_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4787, Release mds node error"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSER_INIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
@@ -8303,8 +8315,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9131, the contents of pwrite are inconsistent"
 #define OB_OBJECT_STORAGE_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9132, object storage data checksum error"
 #define OB_OBJECT_STORAGE_CHECKSUM_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9132, object storage data checksum error"
-#define OB_BACKUP_ZONE_IDC_REGION_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9133, backup zone or backup idc or backup region invalid"
-#define OB_BACKUP_ZONE_IDC_REGION_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9133, backup zone or backup idc or backup region invalid"
+#define OB_BACKUP_ZONE_IDC_REGION_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9133, %s"
+#define OB_BACKUP_ZONE_IDC_REGION_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9133, %s"
+#define OB_ERR_TMP_FILE_ALREADY_SEALED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9134, tmp file has already sealed"
+#define OB_ERR_TMP_FILE_ALREADY_SEALED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9134, tmp file has already sealed"
+#define OB_TMP_FILE_EXCEED_DISK_QUOTA__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9135, tmp file exceeds disk quota"
+#define OB_TMP_FILE_EXCEED_DISK_QUOTA__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9135, tmp file exceeds disk quota"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9113,6 +9129,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_JNI_NOT_ENABLE_JAVA_ENV_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11074, java env was not enabled"
 #define OB_JNI_FORCE_CLOSE_JAVA_ENV_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11075, Forcefully close java env with error: %.*s"
 #define OB_JNI_FORCE_CLOSE_JAVA_ENV_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11075, Forcefully close java env with error: %.*s"
+#define OB_PLUGIN_VERSION_INCOMPATIBLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11076, The plugin's version is incompatible with current server"
+#define OB_PLUGIN_VERSION_INCOMPATIBLE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11076, The plugin's version is incompatible with current server"
+#define OB_PLUGIN_DLOPEN_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11077, Failed to open library"
+#define OB_PLUGIN_DLOPEN_FAILED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11077, Failed to open library"
+#define OB_PLUGIN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11078, Plugin internal error"
+#define OB_PLUGIN_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11078, Plugin internal error"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9132,7 +9154,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2386];
+extern int g_all_ob_errnos[2392];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

@@ -50,6 +50,7 @@ ERRSIM_POINT_DEF(EN_JOIN_LEARNER_LIST_FAILED);
 ERRSIM_POINT_DEF(EN_MIGRATION_RPC_NOT_SUPPORT);
 ERRSIM_POINT_DEF(EN_DATA_TABLET_MIGRATION_DAG_OUT_OF_RETRY);
 ERRSIM_POINT_DEF(MIGRATION_START_RUNNING_FAILED);
+ERRSIM_POINT_DEF(MIGRATION_WAIT_UPDATE_TABLET_HA_STATUS );
 /******************ObMigrationCtx*********************/
 ObMigrationCtx::ObMigrationCtx()
   : ObIHADagNetCtx(),
@@ -3460,6 +3461,13 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_()
 {
   int ret = OB_SUCCESS;
   ObCopyTabletStatus::STATUS status;
+#ifdef ERRSIM
+  int tmp_wait_tablet_id = -MIGRATION_WAIT_UPDATE_TABLET_HA_STATUS;
+  if (tmp_wait_tablet_id == copy_tablet_ctx_->tablet_id_.id()) {
+    LOG_INFO("ERRSIM MIGRATION_WAIT_UPDATE_TABLET_HA_STATUS", K(tmp_wait_tablet_id));
+    DEBUG_SYNC(BEFORE_UPDATE_TABLET_HA_STATUS);
+  }
+#endif
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));

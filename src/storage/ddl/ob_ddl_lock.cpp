@@ -92,9 +92,9 @@ int ObDDLLock::lock_for_add_drop_index(
   const int64_t timeout_us = DEFAULT_TIMEOUT;
   ObSEArray<ObTabletID, 1> data_tablet_ids;
   ObInnerSQLConnection *iconn = nullptr;
-  if (data_table_schema.is_user_hidden_table()) {
+  if (OB_UNLIKELY(data_table_schema.is_user_hidden_table() || data_table_id != index_schema.get_data_table_id())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lock for rebuild hidden table index", K(ret));
+    LOG_WARN("lock for rebuild hidden table index", K(ret), K(tenant_id), K(data_table_id), K(index_table_id), K(index_schema.get_data_table_id()));
   } else if (!need_lock(data_table_schema)) {
     LOG_INFO("skip ddl lock", K(data_table_id));
   } else {
@@ -342,46 +342,104 @@ int ObDDLLock::unlock_for_split_partition(
   return ret;
 }
 
-int ObDDLLock::replace_lock_for_split_partition(
+int ObDDLLock::replace_tablet_lock_for_split(
+    const uint64_t tenant_id,
+    const ObTableSchema &table_schema,
+    const ObIArray<ObTabletID> &tablet_ids,
+    const ObTableLockOwnerID &lock_owner,
+    const ObTableLockOwnerID new_lock_owner,
+    const bool is_global_idx,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout_us = DEFAULT_TIMEOUT;
+  bool some_lock_not_exist = false;
+  uint64_t table_id =OB_INVALID_ID;
+
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !table_schema.is_valid() || tablet_ids.empty() || !lock_owner.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(tablet_ids), K(lock_owner));
+  } else if (OB_FALSE_IT(table_id = table_schema.get_table_id())) {
+  } else if (!is_global_idx && !need_lock(table_schema)) {
+    LOG_INFO("skip ddl lock", K(ret), K(table_id));
+  } else if (OB_FAIL(ObOnlineDDLLock::unlock_table(tenant_id, table_id, ROW_SHARE, lock_owner, timeout_us, trans, some_lock_not_exist))) {
+    LOG_WARN("failed to lock data table", K(ret), K(tenant_id), K(table_id), K(lock_owner), K(timeout_us));
+  } else if (OB_FAIL(ObOnlineDDLLock::unlock_tablets(tenant_id, tablet_ids, EXCLUSIVE, lock_owner, timeout_us, trans, some_lock_not_exist))) {
+    LOG_WARN("failed to lock tablets", K(ret), K(tenant_id), K(tablet_ids), K(lock_owner), K(timeout_us));
+    /*wait split source tablets trans end, split source tablets table lock will be unlocked in unlock_for_offline_ddl function*/
+  } else if (!is_global_idx && OB_FAIL(replace_tablet_lock(tenant_id, table_id, tablet_ids, ROW_EXCLUSIVE, lock_owner, EXCLUSIVE, new_lock_owner, timeout_us, trans))) {
+    LOG_WARN("failed to replace table lock", K(ret), K(tenant_id), K(table_id), K(tablet_ids), K(lock_owner), K(new_lock_owner), K(timeout_us));
+  }
+  return ret;
+}
+int ObDDLLock::replace_table_lock_for_split(
     const share::schema::ObTableSchema &table_schema,
-    const ObIArray<ObTabletID> &src_tablet_ids,
-    const ObIArray<ObTabletID> &dst_tablet_ids,
-    const transaction::tablelock::ObTableLockOwnerID old_lock_owner,
+    const ObIArray<transaction::tablelock::ObTableLockOwnerID> &global_split_owner_ids,
+    const ObIArray<transaction::tablelock::ObTableLockOwnerID> &main_split_owner_ids,
     const transaction::tablelock::ObTableLockOwnerID new_lock_owner,
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = table_schema.get_tenant_id();
-  const uint64_t table_id = table_schema.get_table_id();
-  const int64_t timeout_us = DEFAULT_TIMEOUT;
-  bool some_lock_not_exist = false;
-  ObArray<ObTabletID> tablet_ids;
-  if (OB_FAIL(append(tablet_ids, src_tablet_ids))) {
-    LOG_WARN("failed to append", K(ret));
-  } else if (OB_FAIL(append(tablet_ids, dst_tablet_ids))) {
-    LOG_WARN("failed to append", K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (table_schema.is_global_index_table()) {
-    if (OB_FAIL(ObOnlineDDLLock::unlock_table(tenant_id, table_id, ROW_SHARE, old_lock_owner, timeout_us, trans, some_lock_not_exist))) {
-      LOG_WARN("failed to lock data table", K(ret), K(tenant_id), K(table_id), K(old_lock_owner), K(timeout_us));
-    } else if (OB_FAIL(ObOnlineDDLLock::unlock_tablets(tenant_id, tablet_ids, EXCLUSIVE, old_lock_owner, timeout_us, trans, some_lock_not_exist))) {
-      LOG_WARN("failed to lock tablets", K(ret), K(tenant_id), K(tablet_ids), K(old_lock_owner), K(timeout_us));
-    } else if (OB_FAIL(replace_table_lock(tenant_id, table_schema.get_data_table_id(), ROW_SHARE, old_lock_owner, EXCLUSIVE, new_lock_owner, timeout_us, trans))) {
-      LOG_WARN("failed to replace table lock", K(ret), K(tenant_id), K(table_schema.get_data_table_id()), K(old_lock_owner), K(new_lock_owner), K(timeout_us));
-    }
-  } else if (need_lock(table_schema)) {
-    if (OB_FAIL(ObOnlineDDLLock::unlock_table(tenant_id, table_id, ROW_SHARE, old_lock_owner, timeout_us, trans, some_lock_not_exist))) {
-      LOG_WARN("failed to lock data table", K(ret));
-    } else if (OB_FAIL(ObOnlineDDLLock::unlock_tablets(tenant_id, tablet_ids, EXCLUSIVE, old_lock_owner, timeout_us, trans, some_lock_not_exist))) {
-      LOG_WARN("failed to lock tablets", K(ret));
-      /*wait split source tablets trans end, split source tablets table lock will be unlocked in unlock_for_offline_ddl function*/
-    } else if (OB_FAIL(replace_table_lock(tenant_id, table_id, tablet_ids, ROW_EXCLUSIVE, old_lock_owner, EXCLUSIVE, new_lock_owner, timeout_us, trans))) {
-      LOG_WARN("failed to replace table lock", K(ret), K(tenant_id), K(table_id), K(tablet_ids), K(old_lock_owner), K(new_lock_owner), K(timeout_us));
-    }
+  if (OB_UNLIKELY(!table_schema.is_valid() || !new_lock_owner.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_schema), K(new_lock_owner));
   } else {
-    LOG_INFO("skip ddl lock", K(ret), K(table_id));
+    ObSEArray<ObUnLockTableRequest, 10> unlock_req_list;
+    ObArenaAllocator lock_req_allocator("SplitRecov");
+    ObReplaceAllLocksRequest rep_all_lock_req(lock_req_allocator);
+
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    const uint64_t table_id = table_schema.get_table_id();
+    const int64_t timeout_us = DEFAULT_TIMEOUT;
+    ObUnLockTableRequest req;
+    for (int64_t i = 0; OB_SUCC(ret) && i < main_split_owner_ids.count(); ++i) {
+      req.reset();
+      req.table_id_ = table_id;
+      req.owner_id_ = main_split_owner_ids.at(i);
+      req.lock_mode_ = ROW_EXCLUSIVE; //old lock mode
+      req.op_type_ = OUT_TRANS_UNLOCK;
+      req.timeout_us_ = timeout_us;
+      if (OB_FAIL(unlock_req_list.push_back(req))) {
+        LOG_WARN("failed to push back unlock_req_list", K(ret), K(i));
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < global_split_owner_ids.count(); ++i) {
+      /*the global split task holds the main table RS lock, we also need to replace them*/
+      req.reset();
+      const ObTableLockOwnerID &old_lock_owner = global_split_owner_ids.at(i);
+      req.table_id_ = table_id;
+      req.owner_id_ = old_lock_owner;
+      req.lock_mode_ = ROW_SHARE; //old lock mode
+      req.op_type_ = OUT_TRANS_UNLOCK;
+      req.timeout_us_ = timeout_us;
+      if (OB_FAIL(unlock_req_list.push_back(req))) {
+        LOG_WARN("failed to push back unlock_req_list", K(ret), K(i));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < unlock_req_list.count(); ++i) {
+      if (OB_FAIL(rep_all_lock_req.unlock_req_list_.push_back(&unlock_req_list.at(i)))) {
+        LOG_WARN("faild to push back unlock_req_list_", K(ret), K(i));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else {
+      ObLockTableRequest lock_req;
+      lock_req.owner_id_ = new_lock_owner;
+      lock_req.op_type_ = OUT_TRANS_LOCK;
+      lock_req.type_ = ObLockRequest::ObLockMsgType::LOCK_TABLE_REQ;
+      lock_req.lock_mode_ = EXCLUSIVE;
+      lock_req.table_id_ = table_schema.is_global_index_table() ? table_schema.get_data_table_id() : table_schema.get_table_id();
+      rep_all_lock_req.lock_req_ = &lock_req;
+      ObInnerSQLConnection *iconn = nullptr;
+      if (OB_ISNULL(iconn = static_cast<ObInnerSQLConnection *>(trans.get_connection()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid conn", K(ret));
+      } else if (OB_FAIL(ObInnerConnectionLockUtil::replace_lock(tenant_id, rep_all_lock_req, iconn))) {
+        LOG_WARN("failed to replace all lock", K(ret), K(rep_all_lock_req));
+      }
+    }
   }
   return ret;
 }
@@ -824,7 +882,7 @@ int ObDDLLock::replace_table_lock(
   return ret;
 }
 
-int ObDDLLock::replace_table_lock(
+int ObDDLLock::replace_tablet_lock(
     const uint64_t tenant_id,
     const uint64_t table_id,
     const ObIArray<ObTabletID> &tablet_ids,
@@ -856,11 +914,6 @@ int ObDDLLock::replace_table_lock(
       replace_req.unlock_req_ = &unlock_args[i];
       if (OB_FAIL(ObInnerConnectionLockUtil::replace_lock(tenant_id, replace_req, iconn))) {
         LOG_WARN("failed to replace lock", K(ret), K(tenant_id), K(replace_req));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(replace_table_lock(tenant_id, table_id, old_lock_mode, old_lock_owner, new_lock_mode, new_lock_owner, timeout_us, trans))) {
-        LOG_WARN("failed to replace table lock", K(ret), K(tenant_id), K(table_id), K(old_lock_mode), K(old_lock_owner), K(new_lock_owner), K(timeout_us));
       }
     }
   }

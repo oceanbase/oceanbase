@@ -281,9 +281,9 @@ int ObDASFuncDataIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       ret = OB_SUCCESS;
     }
   }
-  if (OB_UNLIKELY(main_lookup_iter_ &&
-                  main_lookup_count != capacity && // case: limit, read once
-                  default_size != main_lookup_count + read_count_)) { // case: limit, read more times
+  if (OB_SUCC(ret) && OB_UNLIKELY(main_lookup_iter_ &&
+                      main_lookup_count != capacity && // case: limit, read once
+                      default_size != main_lookup_count + read_count_)) { // case: limit, read more times
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, main lookup count is not equal to capacity", K(ret), K(default_size), K(main_lookup_count));
   }
@@ -293,12 +293,13 @@ int ObDASFuncDataIter::inner_get_next_rows(int64_t &count, int64_t capacity)
     tr_merge_count = 0;
     if (OB_FAIL(tr_merge_iters_[i]->get_next_rows(tr_merge_count, capacity))) {
       if (OB_ITER_END != ret) {
-        LOG_WARN("fail to get next row for tr merge iter", K(ret), K(i), KPC(tr_merge_iters_[i]));
+        LOG_WARN("fail to get next rows for tr merge iter", K(ret), K(i), KPC(tr_merge_iters_[i]));
       } else {
         ret = OB_SUCCESS;
       }
     }
-    if (OB_UNLIKELY(tmp_count != 0 && tmp_count != tr_merge_count)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(tmp_count != 0 && tmp_count != tr_merge_count)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, tr merge count is not equal to tmp count", K(ret), K(tr_merge_count), K(tmp_count), K(i));
     } else if (OB_UNLIKELY(0 != tr_merge_count &&

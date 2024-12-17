@@ -2316,9 +2316,9 @@ all_trigger_def = dict(
     ('ref_new_name', 'varchar:OB_MAX_TRIGGER_NAME_LENGTH', 'false'),
     ('ref_parent_name', 'varchar:OB_MAX_TRIGGER_NAME_LENGTH', 'false'),
     ('when_condition', 'varchar:OB_MAX_WHEN_CONDITION_LENGTH', 'true'),
-    ('trigger_body', 'varchar:OB_MAX_TRIGGER_BODY_LENGTH', 'false'),
-    ('package_spec_source', 'varchar:OB_MAX_TRIGGER_BODY_LENGTH', 'false'),
-    ('package_body_source', 'varchar:OB_MAX_TRIGGER_BODY_LENGTH', 'false'),
+    ('trigger_body', 'varchar:OB_MAX_TRIGGER_BODY_LENGTH', 'true'),
+    ('package_spec_source', 'varchar:OB_MAX_TRIGGER_BODY_LENGTH', 'true'),
+    ('package_body_source', 'varchar:OB_MAX_TRIGGER_BODY_LENGTH', 'true'),
     ('package_flag', 'int', 'false'),
     ('package_comp_flag', 'int', 'false'),
     ('package_exec_env', 'varchar:OB_MAX_PROC_ENV_LENGTH', 'true'),
@@ -2329,6 +2329,7 @@ all_trigger_def = dict(
     ('ref_trg_name', 'varchar:OB_MAX_TRIGGER_NAME_LENGTH', 'true'),
     ('action_order', 'int', 'false'),
     ('analyze_flag', 'int', 'false', 0),
+    ('trigger_body_v2', 'longtext', 'false', ''),
   ],
 )
 
@@ -7872,6 +7873,12 @@ def_table_schema(**all_ncomp_dll_v2)
 
 # 529: __all_object_balance_weight
 # 530: __wr_sql_plan_aux_key2snapshot
+# 531: __ft_dict_ik_utf8
+# 532: __ft_stopword_ik_utf8
+# 533: __ft_quantifier_ik_utf8
+# 534: __ft_dict_ik_gbk
+# 535: __ft_stopword_ik_gbk
+# 536: __ft_quantifier_ik_gbk
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -8498,6 +8505,8 @@ def_table_schema(
       ('is_in_pc', 'bool'),
       ('erase_time', 'timestamp'),
       ('compile_time', 'uint'),
+      ('pl_cg_mem_hold', 'int'),
+      ('pl_evict_version', 'int'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -9195,6 +9204,7 @@ def_table_schema(
     ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
     ('user_client_port', 'int'),
     ('trans_status', 'varchar:256'),
+    ('plsql_compile_time', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -10638,7 +10648,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-#11121: __all_virtual_ddl_diagnose_info
+# 11121: abandoned # __all_virtual_ddl_diagnose_info, which is moved to 12514
 
 ################################################################
 # INFORMATION SCHEMA
@@ -15698,6 +15708,17 @@ def_table_schema(
     ('page_flush_cnt', 'int'),
     ('type', 'int'),
     ('compressible_fd', 'int'),
+    ('persisted_tail_page_writes', 'int'),
+    ('lack_page_cnt', 'int'),
+    ('total_truncated_page_read_cnt', 'int'),
+    ('truncated_page_hits', 'int'),
+    ('total_kv_cache_page_read_cnt', 'int'),
+    ('kv_cache_page_read_hits', 'int'),
+    ('total_uncached_page_read_cnt', 'int'),
+    ('uncached_page_hits', 'int'),
+    ('aggregate_read_io_cnt', 'int'),
+    ('total_wbp_page_read_cnt', 'int'),
+    ('wbp_page_hits', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -15714,6 +15735,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12511: __all_virtual_wr_sql_plan_aux_key2snapshot
 # 12512: __all_virtual_tablet_mds_info
 # 12513: __all_virtual_cs_replica_tablet_stats
+# 12514: __all_virtual_ddl_diagnose_info
+# 12515: __all_virtual_plugin_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -31634,7 +31657,7 @@ def_table_schema(
       CAST(t.table_name AS CHAR(64)) collate utf8mb4_name_case AS EVENT_OBJECT_TABLE,
       CAST(trg.action_order AS SIGNED) AS ACTION_ORDER,
       CAST(NULL AS CHAR(4194304)) AS ACTION_CONDITION,
-      CAST(trg.trigger_body AS CHAR(4194304)) AS ACTION_STATEMENT,
+      CAST(NVL(trg.trigger_body, trg.trigger_body_v2) AS CHAR(4194304)) AS ACTION_STATEMENT,
       CAST('ROW' AS CHAR(9)) AS ACTION_ORIENTATION,
       CAST((case when trg.TIMING_POINTS=4 then 'BEFORE'
                 when trg.TIMING_POINTS=8 then 'AFTER' end)
@@ -34266,8 +34289,10 @@ def_table_schema(
            PL_SCHEMA_ID AS OBJECT_ID,
            COMPILE_TIME,
            SCHEMA_VERSION,
+           PL_EVICT_VERSION,
            PS_STMT_ID,
-           DB_ID
+           DB_ID,
+           PL_CG_MEM_HOLD
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true
 """.replace("\n", " "),
     normal_columns = [
@@ -34302,8 +34327,10 @@ def_table_schema(
            OBJECT_ID,
            COMPILE_TIME,
            SCHEMA_VERSION,
+           PL_EVICT_VERSION,
            PS_STMT_ID,
-           DB_ID
+           DB_ID,
+           PL_CG_MEM_HOLD
     FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 
@@ -39140,26 +39167,39 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
     select
-      attl.table_id as TABLE_ID,
-      ad.database_name as DATABASE_NAME,
-      at.table_name as TABLE_NAME,
-      sum(avtps.occupy_size) as OCCUPY_SIZE,
-      sum(avtps.required_size) as REQUIRED_SIZE
+      subquery.TABLE_ID AS TABLE_ID,
+      subquery.DATABASE_NAME AS DATABASE_NAME,
+      at_name.TABLE_NAME AS TABLE_NAME,
+      subquery.OCCUPY_SIZE AS OCCUPY_SIZE,
+      subquery.REQUIRED_SIZE AS REQUIRED_SIZE
     from
-    oceanbase.__all_virtual_tablet_pointer_status avtps
-    INNER JOIN oceanbase.__all_tablet_to_ls attl
-      ON      attl.tablet_id = avtps.tablet_id
-    INNER JOIN oceanbase.__all_table at
-      ON      at.table_id = attl.table_id
-        and   at.table_id > 500000
-    INNER JOIN oceanbase.__all_database ad
-      ON      ad.database_id = at.database_id
-    INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
-      ON     avtps.ls_id = avlmt.ls_id
-        AND  avtps.svr_ip = avlmt.svr_ip
-        AND  avtps.svr_port = avlmt.svr_port
-        AND  avlmt.role = 1
-    group by table_id
+    (
+      select
+        CASE
+          WHEN at.table_type in (12, 13) THEN at.data_table_id
+          ELSE at.table_id
+        END as TABLE_ID,
+        ad.database_name as DATABASE_NAME,
+        sum(avtps.occupy_size) as OCCUPY_SIZE,
+        sum(avtps.required_size) as REQUIRED_SIZE
+      from
+      oceanbase.__all_virtual_tablet_pointer_status avtps
+      INNER JOIN oceanbase.__all_tablet_to_ls attl
+        ON      attl.tablet_id = avtps.tablet_id
+      INNER JOIN oceanbase.__all_table at
+        ON      at.table_id = attl.table_id
+          and   at.table_id > 500000
+      INNER JOIN oceanbase.__all_database ad
+        ON      ad.database_id = at.database_id
+      INNER JOIN oceanbase.__all_virtual_ls_meta_table avlmt
+        ON     avtps.ls_id = avlmt.ls_id
+          AND  avtps.svr_ip = avlmt.svr_ip
+          AND  avtps.svr_port = avlmt.svr_port
+          AND  avlmt.role = 1
+      group by table_id
+    ) as subquery
+    INNER JOIN oceanbase.__all_table at_name
+      ON    subquery.TABLE_ID = at_name.table_id
     order by table_id
 """.replace("\n", " ")
 )
@@ -39174,11 +39214,23 @@ def_table_schema(
   gm_columns      = [],
   view_definition = """
     select
+      subquery.TENANT_ID AS TENANT_ID,
+      subquery.TABLE_ID AS TABLE_ID,
+      subquery.TENANT_NAME AS TENANT_NAME,
+      subquery.DATABASE_NAME AS DATABASE_NAME,
+      avt_name.TABLE_NAME AS TABLE_NAME,
+      subquery.OCCUPY_SIZE AS OCCUPY_SIZE,
+      subquery.REQUIRED_SIZE AS REQUIRED_SIZE
+    from
+    (select
       CASE
         WHEN atnt.tenant_name LIKE 'META$%' THEN REPLACE(atnt.tenant_name, 'META$', '')
         ELSE atnt.tenant_id
       END AS TENANT_ID,
-      avttl.table_id as TABLE_ID,
+      CASE
+	WHEN avt.table_type in (12, 13) THEN avt.data_table_id
+	ELSE avt.table_id
+      END as TABLE_ID,
       CASE
         WHEN atnt.tenant_name LIKE 'META$%' THEN
           (SELECT t.tenant_name
@@ -39187,7 +39239,6 @@ def_table_schema(
         ELSE atnt.tenant_name
       END AS TENANT_NAME,
       ad.database_name as DATABASE_NAME,
-      avt.table_name as TABLE_NAME,
       sum(avtps.occupy_size) as OCCUPY_SIZE,
       sum(avtps.required_size) as REQUIRED_SIZE
     from
@@ -39210,6 +39261,10 @@ def_table_schema(
         AND   avtps.svr_port = avlmt.svr_port
         AND   avlmt.role = 1
     group by tenant_id, table_id
+    ) as subquery
+    INNER JOIN oceanbase.__all_virtual_table avt_name
+      ON    subquery.TENANT_ID = avt_name.tenant_id
+        AND subquery.TABLE_ID = avt_name.table_id
     order by tenant_id, table_id
 """.replace("\n", " ")
 )
@@ -39923,6 +39978,8 @@ def_table_schema(
 # 21632: V$OB_STANDBY_LOG_TRANSPORT_STAT
 # 21633: DBA_OB_CS_REPLICA_STATS
 # 21634: CDB_OB_CS_REPLICA_STATS
+# 21635: DBA_OB_PLUGINS
+# 21636: CDB_OB_PLUGINS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -46838,7 +46895,7 @@ def_table_schema(
       CAST(T.TRIGGER_NAME AS VARCHAR2(128)) AS NAME,
       CAST('TRIGGER' AS VARCHAR2(12)) AS TYPE,
       CAST(1 AS NUMBER) AS LINE,
-      TO_CLOB(T.TRIGGER_BODY) AS TEXT,
+      NVL(TO_CLOB(T.TRIGGER_BODY), T.TRIGGER_BODY_V2) AS TEXT,
       T.TENANT_ID AS ORIGIN_CON_ID
     FROM
       (SELECT * FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT
@@ -46873,7 +46930,7 @@ def_table_schema(
       CAST(TS.TRIGGER_NAME AS VARCHAR2(128)) AS NAME,
       CAST('TRIGGER' AS VARCHAR2(12)) AS TYPE,
       CAST(1 AS NUMBER) AS LINE,
-      TO_CLOB(TS.TRIGGER_BODY) AS TEXT,
+      NVL(TO_CLOB(TS.TRIGGER_BODY), TS.TRIGGER_BODY_V2) AS TEXT,
       TS.TENANT_ID AS ORIGIN_CON_ID
     FROM
       SYS.ALL_VIRTUAL_TENANT_TRIGGER_SYS_AGENT TS
@@ -47183,7 +47240,7 @@ def_table_schema(
       CAST(T.TRIGGER_NAME AS VARCHAR2(128)) AS NAME,
       CAST('TRIGGER' AS VARCHAR2(12)) AS TYPE,
       CAST(1 AS NUMBER) AS LINE,
-      TO_CLOB(T.TRIGGER_BODY) AS TEXT,
+      NVL(TO_CLOB(T.TRIGGER_BODY), T.TRIGGER_BODY_V2) AS TEXT,
       T.TENANT_ID AS ORIGIN_CON_ID
     FROM
       (SELECT * FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT
@@ -47220,7 +47277,7 @@ def_table_schema(
       CAST(TS.TRIGGER_NAME AS VARCHAR2(128)) AS NAME,
       CAST('TRIGGER' AS VARCHAR2(12)) AS TYPE,
       CAST(1 AS NUMBER) AS LINE,
-      TO_CLOB(TS.TRIGGER_BODY) AS TEXT,
+      NVL(TO_CLOB(TS.TRIGGER_BODY), TS.TRIGGER_BODY_V2) AS TEXT,
       TS.TENANT_ID AS ORIGIN_CON_ID
     FROM
       SYS.ALL_VIRTUAL_TENANT_TRIGGER_SYS_AGENT TS
@@ -47438,7 +47495,7 @@ def_table_schema(
       CAST(T.TRIGGER_NAME AS VARCHAR2(128)) AS NAME,
       CAST('TRIGGER' AS VARCHAR2(12)) AS TYPE,
       CAST(1 AS NUMBER) AS LINE,
-      TO_CLOB(T.TRIGGER_BODY) AS TEXT,
+      NVL(TO_CLOB(T.TRIGGER_BODY), T.TRIGGER_BODY_V2) AS TEXT,
       T.TENANT_ID AS ORIGIN_CON_ID
     FROM
       (SELECT * FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT
@@ -54021,7 +54078,7 @@ SELECT DB1.DATABASE_NAME AS OWNER,
        CAST(decode(BITAND(TRG.trigger_flags, 1), 1, 'ENABLED', 'DISABLED') AS VARCHAR2(8)) AS STATUS,
        TRIGGER_BODY AS DESCRIPTION,
        CAST('PL/SQL' AS VARCHAR2(11)) AS ACTION_TYPE,
-       TRIGGER_BODY AS TRIGGER_BODY,
+       NVL(TO_CLOB(TRIGGER_BODY), TRIGGER_BODY_V2) AS TRIGGER_BODY,
        CAST('NO' AS VARCHAR2(7)) AS CROSSEDITION,
        CAST(DECODE(BITAND(TRG.TIMING_POINTS, 2), 2, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_STATEMENT,
        CAST(DECODE(BITAND(TRG.TIMING_POINTS, 4), 4, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_ROW,
@@ -54092,7 +54149,7 @@ SELECT DB1.DATABASE_NAME AS OWNER,
        CAST(decode(BITAND(TRG.trigger_flags, 1), 1, 'ENABLED', 'DISABLED') AS VARCHAR2(8)) AS STATUS,
        TRIGGER_BODY AS DESCRIPTION,
        CAST('PL/SQL' AS VARCHAR2(11)) AS ACTION_TYPE,
-       TRIGGER_BODY AS TRIGGER_BODY,
+       NVL(TO_CLOB(TRIGGER_BODY), TRIGGER_BODY_V2) AS TRIGGER_BODY,
        CAST('NO' AS VARCHAR2(7)) AS CROSSEDITION,
        CAST(DECODE(BITAND(TRG.TIMING_POINTS, 2), 2, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_STATEMENT,
        CAST(DECODE(BITAND(TRG.TIMING_POINTS, 4), 4, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_ROW,
@@ -54161,7 +54218,7 @@ SELECT TRG.TRIGGER_NAME AS TRIGGER_NAME,
        CAST(decode(BITAND(TRG.trigger_flags, 1), 1, 'ENABLED', 'DISABLED') AS VARCHAR2(8)) AS STATUS,
        TRIGGER_BODY AS DESCRIPTION,
        CAST('PL/SQL' AS VARCHAR2(11)) AS ACTION_TYPE,
-       TRIGGER_BODY AS TRIGGER_BODY,
+       NVL(TO_CLOB(TRIGGER_BODY), TRIGGER_BODY_V2) AS TRIGGER_BODY,
        CAST('NO' AS VARCHAR2(7)) AS CROSSEDITION,
        CAST(DECODE(BITAND(TRG.TIMING_POINTS, 2), 2, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_STATEMENT,
        CAST(DECODE(BITAND(TRG.TIMING_POINTS, 4), 4, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_ROW,
@@ -55933,7 +55990,25 @@ def_table_schema(
     AUTHORIZATION,
     EXTENSION,
     CHECK_FILE_NAME,
-    TO_CHAR(LAST_CHECK_TIME / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS LAST_CHECK_TIMESTAMP
+    TO_CHAR(LAST_CHECK_TIME / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS LAST_CHECK_TIMESTAMP,
+    MAX_IOPS,
+    MAX_BANDWIDTH,
+    CASE
+      WHEN MAX_BANDWIDTH = 0
+        THEN 'UNLIMITED'
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024,2), 'GB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024,2), 'MB/s')
+      WHEN MAX_BANDWIDTH >= 1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')
+      ELSE
+        CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')
+    END AS MAX_BANDWIDTH_DISPLAY
     FROM SYS.ALL_VIRTUAL_BACKUP_STORAGE_INFO
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -55960,7 +56035,25 @@ def_table_schema(
     AUTHORIZATION,
     EXTENSION,
     CHECK_FILE_NAME,
-    TO_CHAR(LAST_CHECK_TIME / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS LAST_CHECK_TIMESTAMP
+    TO_CHAR(LAST_CHECK_TIME / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS LAST_CHECK_TIMESTAMP,
+    MAX_IOPS,
+    MAX_BANDWIDTH,
+    CASE
+      WHEN MAX_BANDWIDTH = 0
+        THEN 'UNLIMITED'
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024/1024,2), 'GB/s')
+      WHEN MAX_BANDWIDTH >= 1024*1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024/1024,2), 'MB/s')
+      WHEN MAX_BANDWIDTH >= 1024
+        THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')
+      ELSE
+        CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')
+      END AS MAX_BANDWIDTH_DISPLAY
     FROM SYS.ALL_VIRTUAL_BACKUP_STORAGE_INFO_HISTORY
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -67934,8 +68027,10 @@ def_table_schema(
            PL_SCHEMA_ID AS OBJECT_ID,
            COMPILE_TIME AS COMPILE_TIME,
            SCHEMA_VERSION AS SCHEMA_VERSION,
+           PL_EVICT_VERSION AS PL_EVICT_VERSION,
            PS_STMT_ID AS PS_STMT_ID,
-           DB_ID AS DB_ID
+           DB_ID AS DB_ID,
+           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD
     FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc='1'
 """.replace("\n", " "),
     normal_columns = [
@@ -67971,8 +68066,10 @@ def_table_schema(
            OBJECT_ID AS OBJECT_ID,
            COMPILE_TIME AS COMPILE_TIME,
            SCHEMA_VERSION AS SCHEMA_VERSION,
+           PL_EVICT_VERSION AS PL_EVICT_VERSION,
            PS_STMT_ID AS PS_STMT_ID,
-           DB_ID AS DB_ID
+           DB_ID AS DB_ID,
+           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD
     FROM SYS.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
     normal_columns = [
@@ -69229,27 +69326,45 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT
-      attl.table_id AS TABLE_ID,
-      ad.database_name AS DATABASE_NAME,
-      atrg.table_name AS TABLE_NAME,
-      SUM(avtps.occupy_size) AS OCCUPY_SIZE,
-      SUM(avtps.required_size) AS REQUIRED_SIZE
-    FROM SYS.ALL_VIRTUAL_TABLET_POINTER_STATUS avtps
-    JOIN SYS.DBA_OB_TABLE_LOCATIONS attl
-      ON attl.tablet_id = avtps.tablet_id
-    JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT atrg
-      ON atrg.table_id = attl.table_id
+    select
+      subquery.TABLE_ID AS TABLE_ID,
+      subquery.DATABASE_NAME AS DATABASE_NAME,
+      atrg_name.TABLE_NAME AS TABLE_NAME,
+      subquery.OCCUPY_SIZE AS OCCUPY_SIZE,
+      subquery.REQUIRED_SIZE AS REQUIRED_SIZE
+    from
+    (
+      SELECT
+        CASE
+          WHEN (atrg.table_type IN (12, 13)) THEN atrg.data_table_id
+          ELSE atrg.table_id
+        END AS TABLE_ID,
+        ad.database_name AS DATABASE_NAME,
+        SUM(avtps.occupy_size) AS OCCUPY_SIZE,
+        SUM(avtps.required_size) AS REQUIRED_SIZE
+      FROM SYS.ALL_VIRTUAL_TABLET_POINTER_STATUS avtps
+      JOIN SYS.DBA_OB_TABLE_LOCATIONS attl
+        ON attl.tablet_id = avtps.tablet_id
+      JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT atrg
+        ON atrg.table_id = attl.table_id
         AND atrg.table_id > 500000
-    JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT ad
-      ON ad.database_id = atrg.database_id
-    JOIN SYS.DBA_OB_LS_LOCATIONS avlmt
-      ON avtps.ls_id = avlmt.ls_id
+      JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT ad
+        ON ad.database_id = atrg.database_id
+      JOIN SYS.DBA_OB_LS_LOCATIONS avlmt
+        ON avtps.ls_id = avlmt.ls_id
         AND avtps.svr_ip = avlmt.svr_ip
         AND avtps.svr_port = avlmt.svr_port
         AND avlmt.role = 'LEADER'
-    GROUP BY attl.table_id, ad.database_name, atrg.table_name
-    ORDER BY attl.table_id
+      GROUP BY
+        CASE
+          WHEN (atrg.table_type IN (12, 13)) THEN atrg.data_table_id
+          ELSE atrg.table_id
+        END,
+        ad.database_name
+    ) subquery
+    JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT atrg_name
+      ON   subquery.TABLE_ID = atrg_name.table_id
+    ORDER BY TABLE_ID
 """.replace("\n", " ")
 )
 

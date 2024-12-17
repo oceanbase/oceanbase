@@ -442,6 +442,36 @@ int ObDirectLoadTabletMergeCtx::build_merge_task(
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (task_array_.empty()) {
+        if (OB_FAIL(build_empty_merge_task())) {
+          LOG_WARN("fail to build empty merge task", KR(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadTabletMergeCtx::build_empty_merge_task()
+{
+  int ret = OB_SUCCESS;
+  // construct empty task for close tablet
+  ObDirectLoadPartitionEmptyMergeTask *merge_task = nullptr;
+  if (OB_ISNULL(merge_task = OB_NEWx(ObDirectLoadPartitionEmptyMergeTask, (&allocator_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObDirectLoadPartitionEmptyMergeTask", KR(ret));
+  } else if (OB_FAIL(merge_task->init(ctx_, param_, this))) {
+    LOG_WARN("fail to init merge task", KR(ret));
+  } else if (OB_FAIL(task_array_.push_back(merge_task))) {
+    LOG_WARN("fail to push back merge task", KR(ret));
+  }
+  if (OB_FAIL(ret)) {
+    if (nullptr != merge_task) {
+      merge_task->~ObDirectLoadPartitionEmptyMergeTask();
+      allocator_.free(merge_task);
+      merge_task = nullptr;
+    }
   }
   return ret;
 }
@@ -451,22 +481,8 @@ int ObDirectLoadTabletMergeCtx::build_empty_data_merge_task(const ObIArray<ObCol
 {
   int ret = OB_SUCCESS;
   if (!merge_with_origin_data()) {
-    // construct empty task for close tablet
-    ObDirectLoadPartitionEmptyMergeTask *merge_task = nullptr;
-    if (OB_ISNULL(merge_task = OB_NEWx(ObDirectLoadPartitionEmptyMergeTask, (&allocator_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObDirectLoadPartitionEmptyMergeTask", KR(ret));
-    } else if (OB_FAIL(merge_task->init(ctx_, param_, this))) {
-      LOG_WARN("fail to init merge task", KR(ret));
-    } else if (OB_FAIL(task_array_.push_back(merge_task))) {
-      LOG_WARN("fail to push back merge task", KR(ret));
-    }
-    if (OB_FAIL(ret)) {
-      if (nullptr != merge_task) {
-        merge_task->~ObDirectLoadPartitionEmptyMergeTask();
-        allocator_.free(merge_task);
-        merge_task = nullptr;
-      }
+    if (OB_FAIL(build_empty_merge_task())) {
+      LOG_WARN("fail to build empty merge task", KR(ret));
     }
   } else {
     // only origin data, construct task by split range
@@ -615,6 +631,13 @@ int ObDirectLoadTabletMergeCtx::build_merge_task_for_multiple_pk_table(
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_UNLIKELY(task_array_.empty())) {
+        if (OB_FAIL(build_empty_merge_task())) {
+          LOG_WARN("fail to build empty merge task", KR(ret));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -738,6 +761,12 @@ int ObDirectLoadTabletMergeCtx::build_aggregate_merge_task_for_multiple_heap_tab
       merge_task->~ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask();
       allocator_.free(merge_task);
       merge_task = nullptr;
+    }
+  } else {
+    if (OB_UNLIKELY(task_array_.empty())) {
+      if (OB_FAIL(build_empty_merge_task())) {
+        LOG_WARN("fail to build empty merge task", KR(ret));
+      }
     }
   }
   return ret;

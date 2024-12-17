@@ -1031,10 +1031,28 @@ public:
   int64_t &get_index_prefix() { return index_prefix_; }
   const int64_t &get_index_prefix() const { return index_prefix_; }
   bool is_use_index_hint()  const { return T_NO_INDEX_HINT != get_hint_type(); }
-  bool use_skip_scan()  const { return T_INDEX_SS_HINT == get_hint_type(); }
+  bool use_skip_scan()  const { return T_INDEX_SS_HINT == get_hint_type() ||
+                                       T_INDEX_SS_ASC_HINT == get_hint_type() ||
+                                       T_INDEX_SS_DESC_HINT == get_hint_type(); }
   bool is_match_index(const ObCollationType cs_type,
                       const TableItem &ref_table,
                       const ObTableSchema &index_schema) const;
+  bool is_asc_hint() const
+  {
+    return T_INDEX_ASC_HINT == get_hint_type() ||
+           T_INDEX_SS_ASC_HINT == get_hint_type();
+  }
+  bool is_desc_hint() const
+  {
+    return T_INDEX_DESC_HINT == get_hint_type() ||
+           T_INDEX_SS_DESC_HINT == get_hint_type();
+  }
+  bool is_unordered_hint() const
+  {
+    return T_INDEX_HINT == get_hint_type() ||
+           T_INDEX_SS_HINT == get_hint_type() ||
+           T_FULL_HINT == get_hint_type();
+  }
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name), K_(index_prefix));
 
@@ -1109,7 +1127,9 @@ public:
 
   ObIArray<ObTableInHint> &get_tables() { return tables_; }
   const ObIArray<ObTableInHint> &get_tables() const { return tables_; }
-  DistAlgo get_dist_algo() const { return dist_algo_; }
+  uint64_t get_dist_algo() const { return DistAlgo::DIST_PARTITION_WISE == dist_algo_
+                                          ? DistAlgo::DIST_PARTITION_WISE | DistAlgo::DIST_EXT_PARTITION_WISE
+                                          : dist_algo_; }
   void set_dist_algo(DistAlgo dist_algo) { dist_algo_ = dist_algo; }
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables), K_(dist_algo));
@@ -1164,14 +1184,14 @@ class ObPQSetHint : public ObOptHint
   virtual ~ObPQSetHint() {}
   virtual int print_hint_desc(PlanText &plan_text) const override;
   static bool is_valid_dist_methods(const ObIArray<ObItemType> &dist_methods);
-  static DistAlgo get_dist_algo(const ObIArray<ObItemType> &dist_methods,
+  static uint64_t get_dist_algo(const ObIArray<ObItemType> &dist_methods,
                                 int64_t &random_none_idx);
   static const char* get_dist_method_str(const ObItemType dist_method);
 
   const ObIArray<ObItemType> &get_dist_methods() const { return dist_methods_; }
   ObIArray<ObItemType> &get_dist_methods() { return dist_methods_; }
   int set_pq_set_hint(const DistAlgo dist_algo, const int64_t child_num, const int64_t random_none_idx);
-  DistAlgo get_dist_algo(int64_t &random_none_idx) const { return get_dist_algo(dist_methods_, random_none_idx); }
+  uint64_t get_dist_algo(int64_t &random_none_idx) const { return get_dist_algo(dist_methods_, random_none_idx); }
   const ObString &get_left_branch() const { return left_branch_; }
   void set_left_branch(const ObString &left_branch) { return left_branch_.assign_ptr(left_branch.ptr(), left_branch.length()); }
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_methods), K_(left_branch));
@@ -1223,6 +1243,7 @@ class ObPQHint : public ObOptHint
   inline bool is_force_basic()  const { return T_DISTRIBUTE_BASIC == dist_method_; }
   inline bool is_force_partition_wise()  const { return T_DISTRIBUTE_NONE == dist_method_; }
   inline bool is_force_dist_hash()  const { return T_DISTRIBUTE_HASH == dist_method_; }
+  inline bool is_force_pull_to_local() const { return T_DISTRIBUTE_LOCAL == dist_method_; }
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_method));
 private:

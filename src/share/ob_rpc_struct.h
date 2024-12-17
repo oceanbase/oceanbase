@@ -4353,6 +4353,7 @@ public:
   {
     INVALID_TYPE = -1,
     RECOVERY_LS_SERVICE,
+    BALANCE_TASK_EXECUTE,
   };
   ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
   ~ObNotifyTenantThreadArg() {}
@@ -4416,14 +4417,18 @@ struct ObCreateTabletExtraInfo final
 public:
   ObCreateTabletExtraInfo() { reset(); }
   ~ObCreateTabletExtraInfo() { reset(); }
-  int init(const uint64_t tenant_data_version, const bool need_create_empty_major, const bool micro_index_clustered);
+  int init(const uint64_t tenant_data_version,
+           const bool need_create_empty_major,
+           const bool micro_index_clustered,
+           const ObTabletID &split_src_tablet_id);
   void reset();
   int assign(const ObCreateTabletExtraInfo &other);
 public:
   uint64_t tenant_data_version_;
   bool need_create_empty_major_;
   bool micro_index_clustered_;
-  TO_STRING_KV(K_(tenant_data_version), K_(need_create_empty_major), K_(micro_index_clustered));
+  ObTabletID split_src_tablet_id_;
+  TO_STRING_KV(K_(tenant_data_version), K_(need_create_empty_major), K_(micro_index_clustered), K_(split_src_tablet_id));
 };
 
 struct ObBatchCreateTabletArg
@@ -13585,6 +13590,47 @@ public:
   TO_STRING_KV(K_(ret));
 private:
   int ret_;
+};
+
+struct ObNotifyLSRestoreFinishArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyLSRestoreFinishArg()
+    : tenant_id_(common::OB_INVALID_TENANT_ID),
+      ls_id_(share::ObLSID::INVALID_LS_ID) {}
+  ~ObNotifyLSRestoreFinishArg() {}
+  bool is_valid() const;
+  int assign(const ObNotifyLSRestoreFinishArg &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  share::ObLSID get_ls_id() const { return ls_id_; }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifyLSRestoreFinishArg);
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
+
+struct ObNotifyStartArchiveArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyStartArchiveArg()
+    : tenant_id_(common::OB_INVALID_TENANT_ID)
+  {}
+  ~ObNotifyStartArchiveArg() {}
+  bool is_valid() const;
+  int assign(const ObNotifyStartArchiveArg &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  TO_STRING_KV(K_(tenant_id));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifyStartArchiveArg);
+private:
+  uint64_t tenant_id_;
 };
 }//end namespace obrpc
 }//end namespace oceanbase

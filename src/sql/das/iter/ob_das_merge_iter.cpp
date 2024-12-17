@@ -744,7 +744,7 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
           }
         }
         MergeStoreRows &store_rows = merge_store_rows_arr_.at(output_idx);
-        int64_t ret_count = used_for_keep_order_ ? 1 : store_rows.row_cnt_with_cur_group_idx();
+        int64_t ret_count = used_for_keep_order_ ? 1 : std::min(store_rows.row_cnt_with_cur_group_idx(), capacity);
         ret = store_rows.to_expr(true, ret_count);
         if (OB_SUCC(ret)) {
           count = ret_count;

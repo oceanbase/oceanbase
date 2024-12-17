@@ -218,6 +218,7 @@ int ObDASFuncLookupIter::add_rowkey()
     ObDatum &col_datum = expr->locate_expr_datum(*eval_ctx_);
     doc_id.from_string(col_datum.get_string());
     if (OB_UNLIKELY(!doc_id.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid doc id", K(doc_id));
     } else if (OB_FAIL(merge_iter->add_doc_id(doc_id))) {
       LOG_WARN("failed to add doc id", K(ret));

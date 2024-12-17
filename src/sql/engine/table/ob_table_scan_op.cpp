@@ -932,7 +932,7 @@ int ObTableScanOp::prepare_pushdown_limit_param()
   int ret = OB_SUCCESS;
   if (!limit_param_.is_valid()) {
     //ignore, do nothing
-  } else if (in_batch_rescan_subplan() || nullptr != tsc_rtdef_.attach_rtinfo_) {
+  } else if (MY_SPEC.batch_scan_flag_ || nullptr != tsc_rtdef_.attach_rtinfo_) {
     //batch scan can not pushdown limit param to storage
     // do final limit for TSC op with attached ops for now
     need_final_limit_ = true;
@@ -1363,7 +1363,7 @@ int ObTableScanOp::build_bnlj_params()
         OZ(tsc_rtdef_.bnlj_params_.push_back(GroupRescanParamInfo(param_idx, group_param.gr_param_)));
       }
     }
-    if (OB_SUCC(ret) && (OB_ISNULL(fold_iter_))) {
+    if (OB_SUCC(ret) && !tsc_rtdef_.bnlj_params_.empty() && (OB_ISNULL(fold_iter_))) {
       if (OB_FAIL(ObDASIterUtils::create_group_fold_iter(MY_CTDEF,
                                                           tsc_rtdef_,
                                                           eval_ctx_,
@@ -1372,7 +1372,7 @@ int ObTableScanOp::build_bnlj_params()
                                                           MY_SPEC,
                                                           iter_tree_,
                                                           fold_iter_))) {
-        LOG_WARN("failed to create group fold iter", K(ret));
+        LOG_WARN("failed to create group fold iter", K(ret), K(spec_.id_));
       }
     }
   }
@@ -1946,7 +1946,9 @@ int ObTableScanOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
   in_rescan_ = true;
-  if (OB_FAIL(ObOperator::inner_rescan())) {
+  if (OB_FAIL(try_check_status())) {
+    LOG_WARN("failed to check status", K(ret));
+  } else if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to exec inner rescan");
   } else {
     if (OB_FAIL(inner_rescan_for_tsc())) {
@@ -2021,6 +2023,35 @@ int ObTableScanOp::close_and_reopen()
     MY_INPUT.key_ranges_.reuse();
     MY_INPUT.ss_key_ranges_.reuse();
     MY_INPUT.mbr_filters_.reuse();
+
+    // replace stmt allocator of lookup and attached table scan to index table scan
+    // at each rescan to avoid memory expansion.
+    if (nullptr != tsc_rtdef_.lookup_rtdef_) {
+      tsc_rtdef_.lookup_rtdef_->stmt_allocator_.set_alloc(scan_iter_->get_das_alloc());
+    }
+    if (nullptr != tsc_rtdef_.attach_rtinfo_) {
+      if (OB_FAIL(set_stmt_allocator(tsc_rtdef_.attach_rtinfo_->attach_rtdef_, scan_iter_->get_das_alloc()))) {
+        LOG_WARN("failed to set stmt allocator", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableScanOp::set_stmt_allocator(ObDASBaseRtDef *rtdef, ObIAllocator *alloc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rtdef) || OB_ISNULL(alloc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(rtdef), K(alloc), K(ret));
+  } else if (DAS_OP_TABLE_SCAN == rtdef->op_type_) {
+    static_cast<ObDASScanRtDef*>(rtdef)->stmt_allocator_.set_alloc(alloc);
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rtdef->children_cnt_; ++i) {
+      if (OB_FAIL(set_stmt_allocator(rtdef->children_[i], alloc))) {
+        LOG_WARN("failed to set stmt allocator", K(ret), K(rtdef));
+      }
+    }
   }
   return ret;
 }
@@ -2134,6 +2165,9 @@ int ObTableScanOp::check_need_real_rescan(bool &bret)
   } else if (tsc_rtdef_.bnlj_params_.empty()) {
     //batch rescan not init, need to do real rescan
     bret = true;
+  } else if (OB_UNLIKELY(MY_SPEC.gi_above_ && !MY_INPUT.get_need_extract_query_range())) {
+    // partition-wise rescan with no dynamic range, disable batch rescan
+    bret = true;
   } else {
     // the above operator of tsc support batch group rescan
     if (group_rescan_cnt_ < ctx_.get_das_ctx().get_group_rescan_cnt()) {
@@ -2184,6 +2218,39 @@ int ObTableScanOp::check_need_real_rescan(bool &bret)
         bret = true;
         output_ = iter_tree_;
         LOG_TRACE("[group rescan] found unexpected group rescan cnt", K(group_rescan_cnt_), K(ctx_.get_das_ctx().get_group_rescan_cnt()));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // need to perform batch rescan, but we need to ensure that the number of key ranges is not too large to avoid memory expansion
+    // this check is only for static partition pruning, the limit for the number of key ranges is set to 100000
+    if (output_ == fold_iter_ && bret) {
+      if (OB_LIKELY(nullptr == MY_CTDEF.das_dppr_tbl_)) {
+        int64_t partition_cnt = 0;
+        int64_t group_size = 0;
+        if (OB_UNLIKELY(tsc_rtdef_.bnlj_params_.empty()) ||
+            OB_ISNULL(tsc_rtdef_.bnlj_params_.at(0).gr_param_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid bnlj params", K(tsc_rtdef_.bnlj_params_), K(ret));
+        } else if (OB_ISNULL(tsc_rtdef_.scan_rtdef_.table_loc_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr table loc", K(ret));
+        } else if (FALSE_IT(group_size = tsc_rtdef_.bnlj_params_.at(0).gr_param_->count_)) {
+        } else {
+          ObDASTableLoc *table_loc = tsc_rtdef_.scan_rtdef_.table_loc_;
+          for (DASTabletLocListIter node = table_loc->tablet_locs_begin();
+              OB_SUCC(ret) && node != table_loc->tablet_locs_end(); ++node) {
+            partition_cnt++;
+          }
+          if (OB_SUCC(ret)) {
+            if (group_size * partition_cnt > 100000) {
+              // to many key ranges, fall back to single-row rescan
+              output_ = iter_tree_;
+              LOG_TRACE("[group rescan] too many key ranges, fall back to single-row rescan", K(group_size), K(partition_cnt));
+            }
+          }
+        }
       }
     }
   }

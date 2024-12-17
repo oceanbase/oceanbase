@@ -82,6 +82,12 @@ enum ObDDLType
   DDL_CREATE_VEC_INDEX = 15,
   DDL_CREATE_MULTIVALUE_INDEX = 16,
   DDL_REBUILD_INDEX = 17,
+  DDL_CREATE_VEC_IVFFLAT_INDEX = 18,
+  DDL_CREATE_VEC_IVFSQ8_INDEX = 19,
+  DDL_CREATE_VEC_IVFPQ_INDEX = 20,
+  DDL_DROP_VEC_IVFFLAT_INDEX = 21,
+  DDL_DROP_VEC_IVFSQ8_INDEX = 22,
+  DDL_DROP_VEC_IVFPQ_INDEX = 23,
 
   ///< @note tablet split.
   DDL_AUTO_SPLIT_BY_RANGE = 100,
@@ -197,6 +203,13 @@ enum ObDDLTaskStatus {
   WRITE_SPLIT_START_LOG = 37,
   DROP_AUX_INDEX_TABLE = 38,
   DROP_LOB_META_ROW = 39,
+  GENERATE_SQ_META_TABLE_SCHEMA = 40,
+  WAIT_SQ_META_TABLE_COMPLEMENT = 41,
+  GENERATE_CENTROID_TABLE_SCHEMA = 42,
+  WAIT_CENTROID_TABLE_COMPLEMENT = 43,
+  GENERATE_PQ_CENTROID_TABLE_SCHEMA = 44,
+  WAIT_PQ_CENTROID_TABLE_COMPLEMENT = 45,
+
   FAIL = 99,
   SUCCESS = 100
 };
@@ -348,6 +361,24 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::DROP_LOB_META_ROW:
       str = "DROP_LOB_META_ROW";
+      break;
+    case ObDDLTaskStatus::GENERATE_SQ_META_TABLE_SCHEMA:
+      str = "GENERATE_SQ_META_TABLE_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_SQ_META_TABLE_COMPLEMENT:
+      str = "WAIT_SQ_META_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::GENERATE_CENTROID_TABLE_SCHEMA:
+      str = "GENERATE_CENTROID_TABLE_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_CENTROID_TABLE_COMPLEMENT:
+      str = "WAIT_CENTROID_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::GENERATE_PQ_CENTROID_TABLE_SCHEMA:
+      str = "GENERATE_PQ_CENTROID_TABLE_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_PQ_CENTROID_TABLE_COMPLEMENT:
+      str = "WAIT_PQ_CENTROID_TABLE_COMPLEMENT";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
@@ -1061,12 +1092,14 @@ class ObSplitTabletInfo final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObSplitTabletInfo() : split_info_(0) { }
+  ObSplitTabletInfo() : split_info_(0), split_src_tablet_id_() { }
   ~ObSplitTabletInfo() { reset(); }
-  void reset() { split_info_ = 0; }
+  void reset() { split_info_ = 0; split_src_tablet_id_.reset(); }
   void set_data_incomplete(const bool is_data_incomplete) { is_data_incomplete_ = is_data_incomplete; }
+  void set_split_src_tablet_id(const ObTabletID &split_src_tablet_id) { split_src_tablet_id_ = split_src_tablet_id; }
   bool is_data_incomplete() const { return is_data_incomplete_; }
-  TO_STRING_KV(K_(split_info));
+  const ObTabletID &get_split_src_tablet_id() const { return split_src_tablet_id_; }
+  TO_STRING_KV(K_(split_info), K_(split_src_tablet_id));
 private:
   union {
     uint32_t split_info_;
@@ -1075,6 +1108,7 @@ private:
       uint32_t reserved: 31;
     };
   };
+  ObTabletID split_src_tablet_id_;
 };
 
 typedef common::ObCurTraceId::TraceId DDLTraceId;

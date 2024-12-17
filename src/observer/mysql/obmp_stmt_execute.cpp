@@ -1449,6 +1449,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         audit_record.plan_hash_ = plan->get_plan_hash_value();
         audit_record.rule_name_ = const_cast<char *>(plan->get_rule_name().ptr());
         audit_record.rule_name_len_ = plan->get_rule_name().length();
+      }
+      if (NULL != plan || result.is_pl_stmt(result.get_stmt_type())) {
         audit_record.partition_hit_ = session.partition_hit().get_bool();
       }
       audit_record.affected_rows_ = result.get_affected_rows();
@@ -1858,25 +1860,30 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
       if (OB_FAIL(do_process_single(session, params_, has_more_result, force_sync_resp, async_resp_used))) {
         LOG_WARN("fail to do process", K(ret), K(ctx_.cur_sql_));
       }
-      if (is_conn_valid()) {
-        int bak_ret = ret;
-        ObSQLSessionInfo *sess = NULL;
-        if (OB_FAIL(get_session(sess))) {
-          LOG_WARN("get session fail", K(ret));
-        } else if (OB_ISNULL(sess)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("session is NULL or invalid", K(ret));
-        } else {
-          // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
-          if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
-            LOG_WARN("fail setup user resource group", K(ret));
-          }
-        }
-        if (sess != NULL) {
-          revert_session(sess);
-        }
-        ret = OB_SUCC(bak_ret) ? ret : bak_ret;
-      }
+
+      /* Function setup_user_resource_group cause performance regression.
+          No need to setup group_id here,
+          Only setup group_id in MPConnect
+      */
+      // if (is_conn_valid()) {
+      //   int bak_ret = ret;
+      //   ObSQLSessionInfo *sess = NULL;
+      //   if (OB_FAIL(get_session(sess))) {
+      //     LOG_WARN("get session fail", K(ret));
+      //   } else if (OB_ISNULL(sess)) {
+      //     ret = OB_ERR_UNEXPECTED;
+      //     LOG_WARN("session is NULL or invalid", K(ret));
+      //   } else {
+      //     // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
+      //     if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
+      //       LOG_WARN("fail setup user resource group", K(ret));
+      //     }
+      //   }
+      //   if (sess != NULL) {
+      //     revert_session(sess);
+      //   }
+      //   ret = OB_SUCC(bak_ret) ? ret : bak_ret;
+      // }
     }
     ObThreadLogLevelUtils::clear();
     const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
@@ -3188,6 +3195,7 @@ int ObMPStmtExecute::parse_oracle_interval_ds_value(const char *&data, ObObj &pa
     if (OB_FAIL(ObTimeConverter::decode_interval_ds(data, length, value, scale))) {
       LOG_WARN("fail to decode interval day to second", K(ret), K(length));
     } else {
+      data += length;
       param.set_interval_ds(value);
       param.set_scale(scale);
     }
@@ -3209,6 +3217,7 @@ int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &pa
     if (OB_FAIL(ObTimeConverter::decode_interval_ym(data, length, value, scale))) {
       LOG_WARN("fail to decode interval year to month", K(ret), K(length));
     } else {
+      data += length;
       param.set_interval_ym(value);
       param.set_scale(scale);
     }

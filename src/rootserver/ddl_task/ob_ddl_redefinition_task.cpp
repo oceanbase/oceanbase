@@ -468,7 +468,10 @@ int ObDDLRedefinitionTask::obtain_snapshot(const ObDDLTaskStatus next_task_statu
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
   } else if (snapshot_version_ > 0) {
-    // do nothing, already hold snapshot.
+    // already obtained, to switch to the next status.
+    if (OB_FAIL(switch_status(next_task_status, true, ret))) {
+      LOG_WARN("fail to switch task status", K(ret));
+    }
   } else if (alter_table_arg_.mview_refresh_info_.is_mview_complete_refresh_ &&
              alter_table_arg_.alter_table_schema_.mv_major_refresh() &&
              OB_FAIL(prepare_tablets_for_major_refresh_mv_(mv_tablet_ids))) {

@@ -1276,6 +1276,7 @@ public:
     BEFORE_BACKUP_LOG = 11,
     BACKUP_LOG = 12,
     BACKUP_FUSE_TABLET_META = 13,
+    PREPARE_BACKUP_LOG = 14,
     MAX_STATUS
   };
   ObBackupStatus(): status_(MAX_STATUS) {}

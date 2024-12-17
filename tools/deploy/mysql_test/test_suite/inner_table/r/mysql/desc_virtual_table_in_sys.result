@@ -392,6 +392,8 @@ rule_name	varchar(256)	NO		NULL
 is_in_pc	tinyint(4)	NO		NULL	
 erase_time	timestamp(6)	NO		NULL	
 compile_time	bigint(20) unsigned	NO		NULL	
+pl_cg_mem_hold	bigint(20)	NO		NULL	
+pl_evict_version	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_plan_stat;
 IF(count(*) >= 0, 1, 0)
 1
@@ -898,6 +900,7 @@ proxy_user	varchar(128)	YES		NULL
 format_sql_id	varchar(32)	NO		NULL	
 user_client_port	bigint(20)	NO		NULL	
 trans_status	varchar(256)	NO		NULL	
+plsql_compile_time	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_audit;
 IF(count(*) >= 0, 1, 0)
 1
@@ -4482,9 +4485,9 @@ ref_old_name	varchar(128)	NO		NULL
 ref_new_name	varchar(128)	NO		NULL	
 ref_parent_name	varchar(128)	NO		NULL	
 when_condition	varchar(4000)	YES		NULL	
-trigger_body	varchar(65536)	NO		NULL	
-package_spec_source	varchar(65536)	NO		NULL	
-package_body_source	varchar(65536)	NO		NULL	
+trigger_body	varchar(65536)	YES		NULL	
+package_spec_source	varchar(65536)	YES		NULL	
+package_body_source	varchar(65536)	YES		NULL	
 package_flag	bigint(20)	NO		NULL	
 package_comp_flag	bigint(20)	NO		NULL	
 package_exec_env	varchar(2048)	YES		NULL	
@@ -4495,6 +4498,7 @@ ref_trg_db_name	varchar(128)	YES		NULL
 ref_trg_name	varchar(128)	YES		NULL	
 action_order	bigint(20)	NO		NULL	
 analyze_flag	bigint(20)	NO		0	
+trigger_body_v2	longtext	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_trigger;
 IF(count(*) >= 0, 1, 0)
 1
@@ -4534,6 +4538,7 @@ ref_trg_db_name	varchar(128)	YES		NULL
 ref_trg_name	varchar(128)	YES		NULL	
 action_order	bigint(20)	YES		NULL	
 analyze_flag	bigint(20)	YES		0	
+trigger_body_v2	longtext	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_trigger_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -10901,6 +10906,17 @@ write_back_meta_page_num	bigint(20)	NO		NULL
 page_flush_cnt	bigint(20)	NO		NULL	
 type	bigint(20)	NO		NULL	
 compressible_fd	bigint(20)	NO		NULL	
+persisted_tail_page_writes	bigint(20)	NO		NULL	
+lack_page_cnt	bigint(20)	NO		NULL	
+total_truncated_page_read_cnt	bigint(20)	NO		NULL	
+truncated_page_hits	bigint(20)	NO		NULL	
+total_kv_cache_page_read_cnt	bigint(20)	NO		NULL	
+kv_cache_page_read_hits	bigint(20)	NO		NULL	
+total_uncached_page_read_cnt	bigint(20)	NO		NULL	
+uncached_page_hits	bigint(20)	NO		NULL	
+aggregate_read_io_cnt	bigint(20)	NO		NULL	
+total_wbp_page_read_cnt	bigint(20)	NO		NULL	
+wbp_page_hits	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_temp_file;
 IF(count(*) >= 0, 1, 0)
 1

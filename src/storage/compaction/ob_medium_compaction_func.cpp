@@ -726,8 +726,21 @@ int ObMediumCompactionScheduleFunc::check_if_schema_changed(
     bool &is_schema_changed)
 {
   int ret = OB_SUCCESS;
+  is_schema_changed = false;
   int64_t full_stored_col_cnt = 0;
-  if (OB_UNLIKELY(!schema.is_inited())) {
+  ObTabletMemberWrapper<ObTabletTableStore> wrapper;
+  ObSSTable *last_major = nullptr;
+
+  if (OB_FAIL(tablet.fetch_table_store(wrapper))) {
+    LOG_WARN("failed to get table store wrapper", K(ret));
+  } else if (FALSE_IT(last_major = static_cast<ObSSTable*>(wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/)))) {
+  } else if (OB_ISNULL(last_major)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null major sstable", KR(ret), KPC(last_major));
+  } else if (0 == last_major->get_data_macro_block_count()
+          && ObCompressorType::NONE_COMPRESSOR == tablet.get_last_major_compressor_type()) {
+    // empty major, no need to check whether schema changed
+  } else if (OB_UNLIKELY(!schema.is_inited())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema is not inited", KR(ret), K(schema));
   } else if (OB_FAIL(schema.get_stored_column_count_in_sstable(full_stored_col_cnt))) {
@@ -735,19 +748,23 @@ int ObMediumCompactionScheduleFunc::check_if_schema_changed(
   } else if (OB_UNLIKELY(tablet.get_last_major_column_count() > full_stored_col_cnt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("stored col cnt in curr schema is less than old major sstable", K(ret),
-      "col_cnt_in_sstable", tablet.get_last_major_column_count(),
-      "col_cnt_in_schema", full_stored_col_cnt, K(schema));
-  } else if (tablet.get_last_major_column_count() != full_stored_col_cnt
-    || tablet.get_last_major_compressor_type() != schema.get_compressor_type()
-    || (ObRowStoreType::DUMMY_ROW_STORE != tablet.get_last_major_latest_row_store_type()
-      && tablet.get_last_major_latest_row_store_type() != schema.row_store_type_)) {
+              "col_cnt_in_sstable", tablet.get_last_major_column_count(),
+              "col_cnt_in_schema", full_stored_col_cnt, K(schema));
+  } else if (tablet.get_last_major_column_count() != full_stored_col_cnt) {
     is_schema_changed = true;
-    LOG_INFO("schema changed", K(schema), K(schema), K(full_stored_col_cnt),
-      "col_cnt_in_sstable", tablet.get_last_major_column_count(),
-      "compressor_type_in_sstable", tablet.get_last_major_compressor_type(),
-      "latest_row_store_type_in_sstable", tablet.get_last_major_latest_row_store_type());
+    LOG_INFO("schema changed", K(schema), K(full_stored_col_cnt),
+             "col_cnt_in_sstable", tablet.get_last_major_column_count());
+  } else if (ObRowStoreType::DUMMY_ROW_STORE != tablet.get_last_major_latest_row_store_type()
+          && tablet.get_last_major_latest_row_store_type() != schema.row_store_type_) {
+    is_schema_changed = true;
+    LOG_INFO("schema changed", K(schema),
+             "latest_row_store_type_in_sstable", tablet.get_last_major_latest_row_store_type());
+  } else if (tablet.get_last_major_compressor_type() == schema.get_compressor_type()) {
+    // schema not changed, do nothing
   } else {
-    is_schema_changed = false;
+    is_schema_changed = true;
+    LOG_INFO("schema changed", K(schema), KPC(last_major),
+             "compressor_type_in_sstable", tablet.get_last_major_compressor_type());
   }
   return ret;
 }
@@ -906,7 +923,7 @@ int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
     // REBUILD_COLUMN_GROUP is requested by user or implicitly required by delayed column group transform
     // only use row store to build column store
     medium_info.co_major_merge_type_ = ObCOMajorMergePolicy::USE_RS_BUILD_SCHEMA_MATCH_MERGE;
-    LOG_INFO("use row store to build column store", K(ret), K(merge_reason_), K(result.handle_));
+    LOG_INFO("use row store to build column store", K(ret), K(merge_reason_), K(result.handle_), KPC(first_sstable));
   } else if (FALSE_IT(co_sstable = static_cast<ObCOSSTableV2 *>(first_sstable))) {
   } else if (OB_FAIL(iter.set_tablet_handle(tablet_handle_))) {
     LOG_WARN("failed to set tablet handle", K(ret), K(iter), K(tablet_handle_));

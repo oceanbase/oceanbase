@@ -25,7 +25,7 @@
 #include "sql/optimizer/ob_log_subplan_filter.h"
 #include "sql/optimizer/ob_log_insert_all.h"
 #include "sql/optimizer/ob_log_link_dml.h"
-#include "sql/optimizer/ob_direct_load_optimizer.h"
+#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 #include "sql/ob_optimizer_trace_impl.h"
 #include "common/ob_smart_call.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"

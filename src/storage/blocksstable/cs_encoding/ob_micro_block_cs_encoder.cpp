@@ -441,7 +441,7 @@ int ObMicroBlockCSEncoder::append_row(const ObDatumRow &row)
     if (OB_UNLIKELY(appended_row_count_ >= ObCSEncodingUtil::MAX_MICRO_BLOCK_ROW_CNT
           || appended_row_count_ > ctx_.encoding_granularity_)) {
       ret = OB_BUF_NOT_ENOUGH;
-      LOG_INFO("Try to encode more rows than maximum of row cnt in header, force to build a block",
+      LOG_DEBUG("Try to encode more rows than maximum of row cnt in header, force to build a block",
           K_(appended_row_count), K(row), K(ctx_.encoding_granularity_));
     } else if (OB_FAIL(copy_and_append_row_(row, store_size))) {
       if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {

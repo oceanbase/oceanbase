@@ -90,6 +90,10 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     ++exe_stat_.error_count_;
     ++exe_stat_.period_error_count_;
   }
+  OB_INLINE int64_t get_unfinished_cg_cnt() const
+  {
+    return array_count_ - exe_stat_.finish_cg_count_;
+  }
   const ObITableReadInfo *get_full_read_info() const
   {
     const ObITableReadInfo *ret_info = NULL;
@@ -155,9 +159,8 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   int get_cg_schema_for_merge(const int64_t idx, const ObStorageColumnGroupSchema *&cg_schema_ptr);
   const ObSSTableMergeHistory &get_merge_history() { return dag_net_merge_history_; }
   INHERIT_TO_STRING_KV("ObCOTabletMergeCtx", ObBasicTabletMergeCtx,
-      K_(array_count), K_(exe_stat));
+      K_(array_count), K_(exe_stat), K_(base_rowkey_cg_idx));
   virtual int mark_cg_finish(const int64_t start_cg_idx, const int64_t end_cg_idx) { return OB_SUCCESS; }
-  static const int64_t DEFAULT_CG_MERGE_BATCH_SIZE = 10;
   static const int64_t SCHEDULE_MINOR_CG_CNT_THREASHOLD = 20;
   static const int64_t SCHEDULE_MINOR_TABLE_CNT_THREASHOLD = 3;
   static const int64_t SCHEDULE_MINOR_ROW_CNT_THREASHOLD = 100 * 1000L;
@@ -169,6 +172,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   static const int64_t DAG_NET_ERROR_COUNT_UP_THREASHOLD = 2000;
   int64_t array_count_; // equal to cg count
   int64_t start_schedule_cg_idx_;
+  int64_t base_rowkey_cg_idx_;
   ObCOMergeExeStat exe_stat_;
   ObCOMergeDagNet &dag_net_;
   ObTabletMergeInfo **cg_merge_info_array_;

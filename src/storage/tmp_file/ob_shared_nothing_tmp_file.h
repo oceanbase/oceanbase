@@ -50,27 +50,6 @@ public:
     write_back_meta_page_num_(0),
     all_type_page_flush_cnt_(0) {}
   virtual ~ObSNTmpFileInfo() { reset(); }
-  virtual int init(const ObCurTraceId::TraceId &trace_id,
-                   const uint64_t tenant_id,
-                   const int64_t dir_id,
-                   const int64_t fd,
-                   const int64_t file_size,
-                   const int64_t truncated_offset,
-                   const bool is_deleting,
-                   const int64_t cached_page_num,
-                   const int64_t write_back_data_page_num,
-                   const int64_t flushed_data_page_num,
-                   const int64_t ref_cnt,
-                   const int64_t write_req_cnt,
-                   const int64_t unaligned_write_req_cnt,
-                   const int64_t read_req_cnt,
-                   const int64_t unaligned_read_req_cnt,
-                   const int64_t total_read_size,
-                   const int64_t last_access_ts,
-                   const int64_t last_modify_ts,
-                   const int64_t birth_ts,
-                   const void* const tmp_file_ptr,
-                   const char* const label) override;
   virtual void reset() override;
 public:
   int64_t meta_tree_epoch_;
@@ -215,7 +194,11 @@ private:
                                     ObTmpFileIOCtx &io_ctx);
   int inner_cached_read_from_block_(const int64_t block_index,
                                     const int64_t begin_read_offset_in_block, const int64_t end_read_offset_in_block,
-                                    ObTmpFileIOCtx &io_ctx);
+                                    ObTmpFileIOCtx &io_ctx,
+                                    int64_t &total_kv_cache_page_read_cnt,
+                                    int64_t &total_uncached_page_read_cnt,
+                                    int64_t &kv_cache_page_read_hits,
+                                    int64_t &uncached_page_read_hits);
   int collect_pages_in_block_(const int64_t block_index,
                               const int64_t begin_page_idx_in_block,
                               const int64_t end_page_idx_in_block,

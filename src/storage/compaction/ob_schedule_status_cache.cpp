@@ -188,7 +188,7 @@ int ObTabletStatusCache::init_for_major(
     } else {
       inner_init_could_schedule_new_round(ls_id, tablet,
                                           ls_could_schedule_new_round,
-                                          true /*need_register_map*/);
+                                          true /*normal_schedule*/);
     }
     if (OB_SUCC(ret)) {
       tablet_id_ = tablet_id;
@@ -219,7 +219,7 @@ int ObTabletStatusCache::init_for_diagnose(
     } else {
       inner_init_could_schedule_new_round(ls.get_ls_id(), tablet,
                                           true /*ls_could_schedule_new_round*/,
-                                          false /*need_register_map*/);
+                                          false /*normal_schedule*/);
     }
     if (OB_SUCC(ret)) {
       tablet_id_ = tablet_id;
@@ -281,7 +281,7 @@ void ObTabletStatusCache::inner_init_could_schedule_new_round(
   const ObLSID &ls_id,
   const ObTablet &tablet,
   const bool ls_could_schedule_new_round,
-  const bool need_register_map)
+  const bool normal_schedule)
 {
   int ret = OB_SUCCESS;
   const ObTabletID &tablet_id = tablet.get_tablet_id();
@@ -304,12 +304,12 @@ void ObTabletStatusCache::inner_init_could_schedule_new_round(
     if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("tablet status is split, merging is not allowed", K(user_data), K(tablet));
     }
-  } else if (OB_FAIL(check_medium_list(ls_id, tablet))) {
-     // call medium_list_->need_check_finish even if ls_could_schedule_new_round=false
+  } else if (OB_FAIL(check_medium_list(ls_id, tablet, normal_schedule))) {
+    // call medium_list_->need_check_finish even if ls_could_schedule_new_round=false
     LOG_WARN("failed to check medium list", K(ret), K(ls_id), K(tablet_id));
   } else if (!ls_could_schedule_new_round || NEW_ROUND_STATE_MAX != new_round_state_) {
     // do nothing
-  } else if (need_register_map) {
+  } else if (normal_schedule) {
     if (OB_FAIL(register_map(tablet))) {
       // register_map must be the last step
       LOG_WARN("failed to add tablet", K(ret), K(ls_id), K(tablet_id));
@@ -345,7 +345,8 @@ void ObTabletStatusCache::inner_destroy()
 
 int ObTabletStatusCache::check_medium_list(
   const ObLSID &ls_id,
-  const ObTablet &tablet)
+  const ObTablet &tablet,
+  const bool normal_schedule)
 {
   int ret = OB_SUCCESS;
 
@@ -355,12 +356,14 @@ int ObTabletStatusCache::check_medium_list(
     LOG_WARN("medium info list is unexpected null", K(ret), K(tablet_id));
   } else if (medium_list_->need_check_finish()) { // need check finished
     new_round_state_ = NEED_CHECK_LAST_MEDIUM_CKM;
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(MTL(ObTenantMediumChecker *)->add_tablet_ls(
-        tablet_id, ls_id, medium_list_->get_wait_check_medium_scn()))) {
-      LOG_WARN("failed to add tablet", K(tmp_ret), K(ls_id), K(tablet_id));
-    } else {
-      LOG_INFO("success to add tablet into checker", KR(ret), K(ls_id), K(tablet_id));
+    if (normal_schedule) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(MTL(ObTenantMediumChecker *)->add_tablet_ls(
+          tablet_id, ls_id, medium_list_->get_wait_check_medium_scn()))) {
+        LOG_WARN("failed to add tablet", K(tmp_ret), K(ls_id), K(tablet_id));
+      } else {
+        LOG_INFO("success to add tablet into checker", KR(ret), K(ls_id), K(tablet_id));
+      }
     }
   } else if (!medium_list_->could_schedule_next_round(tablet.get_last_major_snapshot_version())) {
     new_round_state_ = EXIST_UNFINISH_MEDIUM;

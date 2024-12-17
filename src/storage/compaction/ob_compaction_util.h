@@ -165,6 +165,8 @@ enum ObGetMacroSeqStage : uint8_t
 bool is_valid_get_macro_seq_stage(const ObGetMacroSeqStage stage);
 
 const int64_t MAX_MERGE_THREAD = 64;
+const int64_t DEFAULT_CG_MERGE_BATCH_SIZE = 10;
+const int64_t ALL_CG_IN_ONE_BATCH_CNT = DEFAULT_CG_MERGE_BATCH_SIZE * 2;
 
 } // namespace compaction
 } // namespace oceanbase

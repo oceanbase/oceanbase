@@ -377,19 +377,23 @@ int ObMPQuery::process()
     }
   }
 
-  if (is_conn_valid()) {
-    int tmp_ret = OB_SUCCESS;
-    // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
-    // because we have to reset conn.group_id_ according to user_name.
-    // Otherwise, suppose we execute a query with a mapping rule on the column in the query at first,
-    // we switch to the defined consumer group, batch_group for example,
-    // and after that, the next query will also be executed with batch_group.
-    if (OB_UNLIKELY(OB_SUCCESS !=
-            (tmp_ret = setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess)))) {
-      LOG_WARN("fail setup user resource group", K(tmp_ret), K(ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-  }
+  /* Function setup_user_resource_group cause performance regression.
+      No need to setup group_id here,
+      Only setup group_id in MPConnect
+  */
+  // if (is_conn_valid()) {
+  //   int tmp_ret = OB_SUCCESS;
+  //   // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
+  //   // because we have to reset conn.group_id_ according to user_name.
+  //   // Otherwise, suppose we execute a query with a mapping rule on the column in the query at first,
+  //   // we switch to the defined consumer group, batch_group for example,
+  //   // and after that, the next query will also be executed with batch_group.
+  //   if (OB_UNLIKELY(OB_SUCCESS !=
+  //           (tmp_ret = setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess)))) {
+  //     LOG_WARN("fail setup user resource group", K(tmp_ret), K(ret));
+  //     ret = OB_SUCC(ret) ? tmp_ret : ret;
+  //   }
+  // }
 
   if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
     send_error_packet(ret, NULL);
@@ -946,6 +950,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         audit_record.plan_hash_ = plan->get_plan_hash_value();
         audit_record.rule_name_ = const_cast<char *>(plan->get_rule_name().ptr());
         audit_record.rule_name_len_ = plan->get_rule_name().length();
+      }
+      if (NULL != plan || result.is_pl_stmt(result.get_stmt_type())) {
         audit_record.partition_hit_ = session.partition_hit().get_bool();
       }
       if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {

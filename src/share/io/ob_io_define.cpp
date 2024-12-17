@@ -774,7 +774,6 @@ ObIOMode ObIOResult::get_mode() const
   return flag_.get_mode();
 }
 
-
 ObIOGroupKey ObIOResult::get_group_key() const
 {
   return ObIOGroupKey(flag_.get_resource_group_id(), is_object_device_req_ ? get_mode() : ObIOMode::MAX_MODE);
@@ -1271,7 +1270,7 @@ const ObIOFlag &ObIORequest::get_flag() const
 
 ObIOMode ObIORequest::get_mode() const
 {
-  return io_result_->flag_.get_mode();
+  return io_result_->flag_.get_mode(); // 2 mode : read and write
 }
 
 ObIOGroupMode ObIORequest::get_group_mode() const

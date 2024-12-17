@@ -1532,7 +1532,8 @@ public:
                                                    const ObIArray<ObExecParamRawExpr *> &right_exec_params,
                                                    bool &is_valid,
                                                    ObIArray<ObRawExpr*> &left_new_select_exprs,
-                                                   ObIArray<ObRawExpr*> &right_new_select_exprs);
+                                                   ObIArray<ObRawExpr*> &right_new_select_exprs,
+                                                   const bool skip_const_select_item = true);
 
   static int check_result_type_same(ObIArray<ObRawExpr*> &left_exprs, 
                                     ObIArray<ObRawExpr*> &right_exprs,
@@ -1589,11 +1590,13 @@ public:
   static int create_spj_and_pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                     ObSelectStmt *&subquery,
                                                     ObTransformerCtx *ctx,
+                                                    const bool ignore_select_item = false,
                                                     const bool skip_const_select_item = true);
 
   static int create_spj_and_pullup_correlated_exprs_for_set(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                             ObSelectStmt *&stmt,
-                                                            ObTransformerCtx *ctx);
+                                                            ObTransformerCtx *ctx,
+                                                            const bool ignore_select_item);
 
   static int adjust_select_item_pos(ObIArray<ObRawExpr*> &right_select_exprs,
                                     ObSelectStmt *right_query);
@@ -2019,6 +2022,19 @@ public:
   static int check_const_select(ObTransformerCtx *ctx,
                                 const ObSelectStmt *stmt,
                                 bool &is_const_select);
+  static int get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
+                                             ObDMLStmt *stmt,
+                                             ObIArray<ObRawExpr *> &conditions);
+  static int check_left_join_chain_recursively(ObDMLStmt *stmt,
+                                              JoinedTable *joined_table,
+                                              const ObSqlBitSet<> &target_relation_ids,
+                                              const ObSqlBitSet<> &upper_join_left_rels,
+                                              const ObSqlBitSet<> &upper_join_right_rels,
+                                              const ObSqlBitSet<> &null_reject_rels,
+                                              bool check_top_level,
+                                              bool &is_valid_join_chain);
+  static int get_null_reject_rels(const ObIArray<ObRawExpr *> &conditions,
+                                  ObSqlBitSet<> &null_reject_rels);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,

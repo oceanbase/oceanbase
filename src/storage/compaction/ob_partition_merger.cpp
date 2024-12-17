@@ -356,7 +356,9 @@ int ObPartitionMerger::process(const ObMicroBlock &micro_block)
   return ret;
 }
 
-int ObPartitionMerger::process(const ObDatumRow &row)
+int ObPartitionMerger::process(
+    const ObDatumRow &row,
+    bool is_incremental_row)
 {
   int ret = OB_SUCCESS;
   ObICompactionFilter::ObFilterRet filter_ret = ObICompactionFilter::FILTER_RET_MAX;
@@ -385,7 +387,7 @@ int ObPartitionMerger::process(const ObDatumRow &row)
     // drop this row
   } else if (OB_FAIL(check_row_columns(row))) {
     STORAGE_LOG(WARN, "Failed to check row columns", K(ret), K(row));
-  } else if (OB_FAIL(inner_process(row))) {
+  } else if (OB_FAIL(inner_process(row, is_incremental_row))) {
     STORAGE_LOG(WARN, "Failed to inner append row", K(ret));
   } else {
     LOG_DEBUG("append row", K(ret), K(row));
@@ -531,7 +533,9 @@ void write_wrong_row(const ObTabletID &tablet_id, const ObDatumRow &row)
 }
 #endif
 
-int ObPartitionMajorMerger::inner_process(const ObDatumRow &row)
+int ObPartitionMajorMerger::inner_process(
+    const ObDatumRow &row,
+    bool is_incremental_row)
 {
   int ret = OB_SUCCESS;
   const bool is_delete = row.row_flag_.is_delete();
@@ -548,6 +552,8 @@ int ObPartitionMajorMerger::inner_process(const ObDatumRow &row)
       STORAGE_LOG(WARN, "Failed to get base iter macro", K(ret));
     } else if (OB_FAIL(macro_writer_->append_row(row, macro_desc))) {
       STORAGE_LOG(WARN, "Failed to append row to macro writer", K(ret));
+    } else if (is_incremental_row) {
+      macro_writer_->inc_incremental_row_count();
     }
   }
 
@@ -624,7 +630,7 @@ int ObPartitionMajorMerger::merge_partition(
             STORAGE_LOG(WARN, "cur row is null, but block opened", K(ret), KPC(iter));
           }
         } else if (OB_FAIL(merge_same_rowkey_iters(minimum_iters_))) {
-          STORAGE_LOG(WARN, "failed to merge_same_rowkey_iters", K(ret), K(minimum_iters_));
+          STORAGE_LOG(WARN, "failed to merge same rowkey iters", K(ret), K(minimum_iters_));
         }
 
         if (OB_FAIL(ret)) {
@@ -681,12 +687,22 @@ int ObPartitionMajorMerger::init_progressive_merge_helper()
   return ret;
 }
 
-int ObPartitionMajorMerger::merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters)
+int ObPartitionMajorMerger::merge_same_rowkey_iters(
+    MERGE_ITER_ARRAY &merge_iters,
+    bool is_incremental_row)
 {
   int ret = OB_SUCCESS;
+
+  if (is_incremental_row &&
+      1 == merge_iters.count() &&
+      OB_NOT_NULL(merge_iters.at(0)) &&
+      merge_iters.at(0)->is_major_sstable_iter()) {
+    is_incremental_row = false;
+  }
+
   if (OB_FAIL(partition_fuser_->fuse_row(merge_iters))) {
     STORAGE_LOG(WARN, "Failed to fuse row", KPC_(partition_fuser), K(ret));
-  } else if (OB_FAIL(process(partition_fuser_->get_result_row()))) {
+  } else if (OB_FAIL(process(partition_fuser_->get_result_row(), is_incremental_row))) {
     STORAGE_LOG(WARN, "Failed to process row", K(ret), K(partition_fuser_->get_result_row()));
   } else if (OB_FAIL(merge_helper_->move_iters_next(merge_iters))) {
     STORAGE_LOG(WARN, "failed to move iters", K(ret), K(merge_iters));
@@ -743,7 +759,7 @@ int ObPartitionMajorMerger::rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters)
     curr_macro_id = curr_macro->macro_block_id_;
     // TODO maybe we need use macro_block_ctx to decide whether the result row came from the same macro block
     while (OB_SUCC(ret) && !iter->is_iter_end() && iter->is_macro_block_opened()) {
-      if (OB_FAIL(merge_same_rowkey_iters(minimum_iters))) {
+      if (OB_FAIL(merge_same_rowkey_iters(minimum_iters, false))) {
         STORAGE_LOG(WARN, "failed to merge_same_rowkey_iters", K(ret), K(minimum_iters));
       } else if (OB_FAIL(iter->get_curr_macro_block(tmp_macro))) {
         STORAGE_LOG(WARN, "failed to get curr macro block", K(ret), KPC(tmp_macro));
@@ -893,15 +909,20 @@ int ObPartitionMinorMerger::rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters)
   return ret;
 }
 
-int ObPartitionMinorMerger::inner_process(const ObDatumRow &row)
+int ObPartitionMinorMerger::inner_process(
+    const ObDatumRow &row,
+    bool is_incremental_row)
 {
   int ret = OB_SUCCESS;
+  UNUSED(is_incremental_row);
+
   const blocksstable::ObMacroBlockDesc *macro_desc;
   if (OB_FAIL(get_base_iter_curr_macro_block(macro_desc))) {
     STORAGE_LOG(WARN, "Failed to get base iter macro", K(ret));
   } else if (OB_FAIL(macro_writer_->append_row(row, macro_desc))) {
     STORAGE_LOG(WARN, "Failed to append row to macro writer", K(ret));
   } else {
+    macro_writer_->inc_incremental_row_count();
     STORAGE_LOG(DEBUG, "Success to append row to minor macro writer", K(ret), K(row));
   }
 
@@ -1250,9 +1271,12 @@ int ObPartitionMinorMerger::try_remove_ghost_iters(MERGE_ITER_ARRAY &merge_iters
   return ret;
 }
 
-int ObPartitionMinorMerger::merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters)
+int ObPartitionMinorMerger::merge_same_rowkey_iters(
+    MERGE_ITER_ARRAY &merge_iters,
+    bool is_incremental_row)
 {
   int ret = OB_SUCCESS;
+  UNUSED(is_incremental_row);
 
   if (OB_UNLIKELY(merge_iters.empty())) {
     ret = OB_INVALID_ARGUMENT;

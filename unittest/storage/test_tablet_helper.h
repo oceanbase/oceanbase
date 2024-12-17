@@ -64,6 +64,7 @@ inline void TestTabletHelper::prepare_sstable_param(
     const share::schema::ObTableSchema &table_schema,
     ObTabletCreateSSTableParam &param)
 {
+  param.set_init_value_for_column_store_();
   const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   param.table_key_.tablet_id_ = tablet_id;
@@ -91,12 +92,19 @@ inline void TestTabletHelper::prepare_sstable_param(
   param.occupy_size_ = 0;
   param.ddl_scn_.set_min();
   param.filled_tx_scn_.set_min();
+  param.tx_data_recycle_scn_.set_min();
   param.original_size_ = 0;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
   param.table_backup_flag_.reset();
   param.table_shared_flag_.reset();
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
+  param.row_count_ = 0;
+  param.sstable_logic_seq_ = 0;
+  param.nested_offset_ = 0;
+  param.nested_size_ = 0;
 }
 
 inline int TestTabletHelper::create_tablet(
@@ -139,7 +147,7 @@ inline int TestTabletHelper::create_tablet(
         *tablet_handle.get_allocator(),
         ls_id, tablet_id, tablet_id, share::SCN::base_scn(),
         snapshot_version, create_tablet_schema, need_create_empty_major_sstable, share::SCN::invalid_scn()/*clog_checkpoint_scn*/,
-        share::SCN::invalid_scn()/*mds_checkpoint_scn*/, false/*is_split_dest_tablet*/,
+        share::SCN::invalid_scn()/*mds_checkpoint_scn*/, false/*is_split_dest_tablet*/, ObTabletID()/*split_src_tablet_id*/,
         false/*micro_index_clustered*/, need_generate_cs_replica_cg_array, false/*has_cs_replica*/, freezer))){
       STORAGE_LOG(WARN, "failed to init tablet", K(ret), K(ls_id), K(tablet_id));
     } else if (ObTabletStatus::Status::MAX != tablet_status) {

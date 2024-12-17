@@ -1,3 +1,6 @@
+// owner: jingyu.cr
+// owner group: rs
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -16,8 +19,6 @@
 #include <gmock/gmock.h>
 #include "env/ob_simple_cluster_test_base.h"
 #include "lib/ob_errno.h"
-#include "share/arbitration_service/ob_arbitration_service_table_operator.h" // for ObArbitrationServiceTableOperator
-
 
 namespace oceanbase
 {
@@ -31,15 +32,13 @@ using ::testing::Return;
 using namespace schema;
 using namespace common;
 
-class TestAddRemoveReplaceArbitrationService : public unittest::ObSimpleClusterTestBase
+class TestChangeArbServiceStatus : public unittest::ObSimpleClusterTestBase
 {
 public:
-  TestAddRemoveReplaceArbitrationService() : unittest::ObSimpleClusterTestBase("test_add_remove_replace_arbitration_service") {}
-protected:
-  ObArbitrationServiceTableOperator arb_service_table_operator_;
+  TestChangeArbServiceStatus() : unittest::ObSimpleClusterTestBase("test_change_arb_service_status") {}
 };
 
-TEST_F(TestAddRemoveReplaceArbitrationService, test_add_remove_replace)
+TEST_F(TestChangeArbServiceStatus, test_change_arb_service_status)
 {
   int ret = OB_SUCCESS;
   // 0. prepare initial members
@@ -69,19 +68,26 @@ TEST_F(TestAddRemoveReplaceArbitrationService, test_add_remove_replace)
 
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as cnt "
                                        "from __all_tenant "
-                                       "where tenant_id = %ld and arbitration_service_status = 'DISABLED';", tenant_id));
+                                       "where (tenant_id = %ld or tenant_id = %ld) "
+                                       "and arbitration_service_status = 'DISABLED';", tenant_id, gen_meta_tenant_id(tenant_id)));
   SMART_VAR(ObMySQLProxy::MySQLResult, res1) {
     ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res1, sql.ptr()));
     sqlclient::ObMySQLResult *result1 = res1.get_result();
     ASSERT_NE(nullptr, result1);
     ASSERT_EQ(OB_SUCCESS, result1->next());
     ASSERT_EQ(OB_SUCCESS, result1->get_int("cnt", tmp_cnt));
-    ASSERT_EQ(1, tmp_cnt);
+    ASSERT_EQ(2, tmp_cnt);
   }
 
-  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as cnt "
-                                       "from __all_tenant "
-                                       "where tenant_id = %ld and arbitration_service_status = 'DISABLED';", gen_meta_tenant_id(tenant_id)));
+  // 2. enable tenant's arbitration service without arbitration service addr
+  ASSERT_EQ(OB_SUCCESS, sql.assign("alter tenant arbitration_tenant_1 enable_arbitration_service = true;"));
+  ASSERT_EQ(OB_OP_NOT_ALLOW, sql_proxy.write(sql.ptr(), affected_rows));
+
+  // 3. enable tenant's arbitration service with arbitration service addr
+  ASSERT_EQ(OB_SUCCESS, sql.assign("alter system add arbitration service '127.0.0.1:10000';"));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+
+  ASSERT_EQ(OB_SUCCESS, sql.assign("select count(*) as cnt from __all_arbitration_service;"));
   SMART_VAR(ObMySQLProxy::MySQLResult, res2) {
     ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res2, sql.ptr()));
     sqlclient::ObMySQLResult *result2 = res2.get_result();
@@ -91,63 +97,39 @@ TEST_F(TestAddRemoveReplaceArbitrationService, test_add_remove_replace)
     ASSERT_EQ(1, tmp_cnt);
   }
 
-  ASSERT_EQ(OB_SUCCESS, sql.assign("drop tenant arbitration_tenant_1 force"));
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+  // 1F not allow to enable arb service
+  ASSERT_EQ(OB_SUCCESS, sql.assign("alter tenant arbitration_tenant_1 enable_arbitration_service = true;"));
+  ASSERT_EQ(OB_OP_NOT_ALLOW, sql_proxy.write(sql.ptr(), affected_rows));
 
-  // 2. create tenant with disabled arbitration service
-  ASSERT_EQ(OB_SUCCESS, sql.assign("create tenant arbitration_tenant_2 resource_pool_list=('arbitration_pool'), enable_arbitration_service = false;"));
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
-  ASSERT_EQ(OB_SUCCESS, sql.assign("select tenant_id "
-                                   "from __all_tenant "
-                                   "where tenant_name = 'arbitration_tenant_2';"));
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as cnt "
+                                       "from __all_tenant "
+                                       "where (tenant_id = %ld or tenant_id = %ld) "
+                                       "and arbitration_service_status = 'ENABLING';", tenant_id, gen_meta_tenant_id(tenant_id)));
   SMART_VAR(ObMySQLProxy::MySQLResult, res3) {
     ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res3, sql.ptr()));
     sqlclient::ObMySQLResult *result3 = res3.get_result();
     ASSERT_NE(nullptr, result3);
     ASSERT_EQ(OB_SUCCESS, result3->next());
-    ASSERT_EQ(OB_SUCCESS, result3->get_int("tenant_id", tenant_id));
+    ASSERT_EQ(OB_SUCCESS, result3->get_int("cnt", tmp_cnt));
+    ASSERT_EQ(0, tmp_cnt);
   }
+
+  // 5. disable tenant's arbitration service when tenant already in disabled status
+  ASSERT_EQ(OB_SUCCESS, sql.assign("alter tenant arbitration_tenant_1 enable_arbitration_service = false;"));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
 
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as cnt "
                                        "from __all_tenant "
-                                       "where tenant_id = %ld and arbitration_service_status = 'DISABLED';", tenant_id));
+                                       "where (tenant_id = %ld or tenant_id = %ld) "
+                                       "and arbitration_service_status = 'DISABLING';", tenant_id, gen_meta_tenant_id(tenant_id)));
   SMART_VAR(ObMySQLProxy::MySQLResult, res4) {
     ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res4, sql.ptr()));
     sqlclient::ObMySQLResult *result4 = res4.get_result();
     ASSERT_NE(nullptr, result4);
     ASSERT_EQ(OB_SUCCESS, result4->next());
     ASSERT_EQ(OB_SUCCESS, result4->get_int("cnt", tmp_cnt));
-    ASSERT_EQ(1, tmp_cnt);
+    ASSERT_EQ(0, tmp_cnt);
   }
-
-  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as cnt "
-                                       "from __all_tenant "
-                                       "where tenant_id = %ld and arbitration_service_status = 'DISABLED';", gen_meta_tenant_id(tenant_id)));
-  SMART_VAR(ObMySQLProxy::MySQLResult, res5) {
-    ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res5, sql.ptr()));
-    sqlclient::ObMySQLResult *result5 = res5.get_result();
-    ASSERT_NE(nullptr, result5);
-    ASSERT_EQ(OB_SUCCESS, result5->next());
-    ASSERT_EQ(OB_SUCCESS, result5->get_int("cnt", tmp_cnt));
-    ASSERT_EQ(1, tmp_cnt);
-  }
-
-  ASSERT_EQ(OB_SUCCESS, sql.assign("drop tenant arbitration_tenant_2 force"));
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
-
-  // 3. create tenant with disabled arbitration service, but __all_arbitration_service is null
-  ASSERT_EQ(OB_SUCCESS, sql.assign("create tenant arbitration_tenant_3 resource_pool_list=('arbitration_pool'), enable_arbitration_service = true;"));
-  ASSERT_EQ(OB_OP_NOT_ALLOW, sql_proxy.write(sql.ptr(), affected_rows));
-
-  // 4. create tenant with disabled arbitration service, and __all_arbitration_service not null
-  ASSERT_EQ(OB_SUCCESS, sql.assign("insert into __all_arbitration_service "
-                                   "(arbitration_service_key, arbitration_service, previous_arbitration_service, type) "
-                                   "values "
-                                   "('default', '127.0.0.1:1000', '', 'ADDR');"));
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
-
-  ASSERT_EQ(OB_SUCCESS, sql.assign("create tenant arbitration_tenant_4 resource_pool_list=('arbitration_pool'), enable_arbitration_service = true;"));
-  ASSERT_EQ(OB_OP_NOT_ALLOW, sql_proxy.write(sql.ptr(), affected_rows));
 
 }
 } // namespace share

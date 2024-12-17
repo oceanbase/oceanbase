@@ -154,8 +154,8 @@ public:
     GI_RANDOM_RANGE,    // a task have only one query range, it can get the best randomness, but it speed more in rescan
   };
 
-  ObGITaskSet() : gi_task_set_(), cur_pos_(0) {}
-  TO_STRING_KV(K(gi_task_set_), K(cur_pos_));
+  ObGITaskSet() : gi_task_set_(), cur_pos_(0), task_count_(0) {}
+  TO_STRING_KV(K(gi_task_set_), K(cur_pos_), K(task_count_));
   int get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) const;
   int get_task_tablet_id_at_pos(const int64_t &pos, uint64_t &tablet_id) const;
 
@@ -172,6 +172,7 @@ public:
 public:
   common::ObArray<ObGITaskInfo> gi_task_set_;
   int64_t cur_pos_;
+  int64_t task_count_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGITaskSet);
 };
@@ -498,7 +499,8 @@ public:
   pruning_table_locations_(),
   pump_version_(0),
   is_taskset_reset_(false),
-  fetch_task_ret_(OB_SUCCESS)
+  fetch_task_ret_(OB_SUCCESS),
+  finished_cnt_(0)
   {
   }
 
@@ -537,7 +539,8 @@ public:
   int fetch_granule_task(const ObGITaskSet *&task_set,
                          int64_t &pos,
                          int64_t worker_id,
-                         uint64_t tsc_op_id);
+                         uint64_t tsc_op_id,
+                         uint64_t fetched_task_cnt);
   // 通过phy op ids获得其对应的gi tasks
   int try_fetch_pwj_tasks(ObIArray<ObGranuleTaskInfo> &infos,
                           const ObIArray<int64_t> &op_ids,
@@ -553,6 +556,7 @@ public:
   int reset_gi_task();
 
   common::ObIArray<ObGranulePumpArgs> &get_pump_args() { return pump_args_; }
+  void set_parallelism(int64_t parallelism) { parallelism_ = parallelism; }
 
   inline void set_need_partition_pruning(bool flag) { need_partition_pruning_ = flag; };
   inline bool need_partition_pruning() { return need_partition_pruning_; }
@@ -583,7 +587,8 @@ private:
 
   int fetch_granule_from_shared_pool(const ObGITaskSet *&task_set,
                                      int64_t &pos,
-                                     uint64_t tsc_op_id);
+                                     uint64_t tsc_op_id,
+                                     uint64_t fetched_task_cnt);
 
   int fetch_pw_granule_by_worker_id(ObIArray<ObGranuleTaskInfo> &infos,
                                     const ObIArray<int64_t> &op_ids,
@@ -633,6 +638,7 @@ private:
   // when granule tasks are fetched concurrently, if one thread failed to fetch task,
   // others should not fetch tasks any more.
   int fetch_task_ret_;
+  uint64_t finished_cnt_;
 };
 
 }//sql

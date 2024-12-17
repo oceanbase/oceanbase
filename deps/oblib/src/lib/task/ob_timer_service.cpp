@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX COMMON
 #include "lib/task/ob_timer_service.h"
 #include "lib/task/ob_timer_monitor.h"       // ObTimerMonitor
 #include "lib/thread/thread_mgr.h"           // get_tenant_tg_helper
@@ -55,10 +56,17 @@ TaskToken::TaskToken(
     const int64_t st,
     const int64_t dt)
   : timer_(timer), task_(task), scheduled_time_(st), delay_(dt)
-{}
+{
+  char *buf = task_type_;
+  int buf_len = sizeof(task_type_);
+  if (task != NULL) {
+    strncpy(buf, typeid(*task).name(), buf_len);
+  }
+  buf[buf_len - 1] = '\0';
+}
 
 TaskToken::TaskToken(const ObTimer *timer, ObTimerTask *task)
-  : timer_(timer), task_(task), scheduled_time_(0L), delay_(0L)
+  : TaskToken(timer, task, 0, 0)
 {}
 
 TaskToken::~TaskToken()
@@ -72,6 +80,11 @@ TaskToken::~TaskToken()
 void ObTimerTaskThreadPool::handle(void *task_token)
 {
   TaskToken *token = reinterpret_cast<TaskToken *>(task_token);
+  const int64_t delay =
+    ObSysTime::now().toMicroSeconds() - token->scheduled_time_;
+  if (delay > 10 * 1000 * 1000) {
+    LOG_WARN_RET(OB_SUCCESS, "timer task too much delay", K(*token), K(delay));
+  }
   if (nullptr == token) {
     OB_LOG_RET(WARN, OB_ERR_NULL_VALUE, "TaskToken is NULL", K(ret));
   } else if (nullptr == token->task_) {
@@ -190,7 +203,7 @@ void ObTimerService::stop()
     while (priority_task_queue_.size() > 0
         || running_task_set_.size() > 0
         || uncanceled_task_set_.size() > 0) {
-      (void)monitor_.timed_wait(ObSysTime(WAIT_INTERVAL_US));
+      (void)monitor_.timed_wait(ObSysTime(MIN_WAIT_INTERVAL));
     }
   }
   // STEP6: stop worker threads and the scheduling thread
@@ -229,7 +242,7 @@ int ObTimerService::schedule_task(
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(delay), K_(tenant_id), K(ret));
   } else {
-    int64_t time = ObSysTime::now(ObSysTime::Monotonic).toMicroSeconds();
+    int64_t time = ObSysTime::now().toMicroSeconds();
     TaskToken *token = nullptr;
     if (OB_FAIL(new_token(
         token,
@@ -329,7 +342,7 @@ int ObTimerService::wait_task(const ObTimer *timer, const ObTimerTask *task)
       if (!exist) {
         break;
       } else {
-        IGNORE_RETURN monitor_.timed_wait(ObSysTime(WAIT_INTERVAL_US));
+        IGNORE_RETURN monitor_.timed_wait(ObSysTime(MIN_WAIT_INTERVAL));
       }
     } while (true);
   }
@@ -377,7 +390,7 @@ int ObTimerService::schedule_task(TaskToken *token)
           if (0 == token->delay_ || is_stopped_) { // no need re-schedule
             delete_token(token);
           } else { // re-schedule
-            int64_t time = ObSysTime::now(ObSysTime::Monotonic).toMicroSeconds();
+            int64_t time = ObSysTime::now().toMicroSeconds();
             token->scheduled_time_ = time + token->delay_;
             VecIter pos;
             if (OB_FAIL(
@@ -508,18 +521,8 @@ void ObTimerService::run1()
 
   while(true) {
     IGNORE_RETURN lib::Thread::update_loop_ts();
-
     {  // lock
       ObMonitor<Mutex>::Lock guard(monitor_);
-
-      if (REACH_TIME_INTERVAL(DUMP_INTERVAL_US)) {
-        OB_LOG(INFO, "dump TaskToken info [summary]",
-            KP(this), K_(tenant_id), "token_num", priority_task_queue_.size());
-        for (int64_t idx = 0L; idx < priority_task_queue_.size(); ++idx) {
-          TaskToken *token = priority_task_queue_.at(idx);
-          OB_LOG(INFO, "dump TaskToken info", KP(token), KPC(token));
-        }
-      }
 
       while(!is_stopped_ && 0 == priority_task_queue_.size()) {
         monitor_.wait();
@@ -528,7 +531,10 @@ void ObTimerService::run1()
         break;
       }
       while(priority_task_queue_.size() > 0 && !is_stopped_) {
-        const int64_t now = ObSysTime::now(ObSysTime::Monotonic).toMicroSeconds();
+        if (REACH_TIME_INTERVAL(DUMP_INTERVAL)) {
+          dump_info();
+        }
+        const int64_t now = ObSysTime::now().toMicroSeconds();
         TaskToken *first_token = priority_task_queue_.at(0);
         abort_unless(nullptr != first_token);
         if (first_token->scheduled_time_ <= now) {
@@ -539,7 +545,9 @@ void ObTimerService::run1()
             OB_LOG(WARN, "pop TaskToken from priority_task_queue failed", K_(tenant_id), K(ret));
           } else if (nullptr == token) {
             // wait for a schedulable task
-            int64_t wait_time = st > 0 ? (st - now) : WAIT_INTERVAL_US;
+            int64_t wait_time = st - now;
+            wait_time = MIN(wait_time, MAX_WAIT_INTERVAL);
+            wait_time = MAX(wait_time, MIN_WAIT_INTERVAL);
             monitor_.timed_wait(ObSysTime(wait_time));
           } else {
             VecIter it = nullptr;
@@ -636,6 +644,16 @@ int ObTimerService::new_token(
 void ObTimerService::delete_token(TaskToken *&token)
 {
   token_alloc_.free(token);
+}
+
+void ObTimerService::dump_info()
+{
+  OB_LOG(INFO, "dump info [summary]",
+      KP(this), KPC(this));
+  for (int idx = 0; idx < priority_task_queue_.size(); ++idx) {
+    TaskToken *token = priority_task_queue_.at(idx);
+    OB_LOG(INFO, "dump queue token", KP(this), KPC(token));
+  }
 }
 
 }

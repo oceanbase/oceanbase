@@ -491,7 +491,9 @@ public:
   virtual int64_t get_max_block_size(int64_t reserved_size) const = 0;
   virtual int64_t get_max_block_count(int64_t reserved_size) const = 0;
   virtual int64_t get_reserved_block_count() const = 0;
-  virtual int check_space_full(const int64_t required_size) const = 0;
+  virtual int check_space_full(
+    const int64_t required_size,
+    const bool alarm_if_space_full = true) const = 0;
   virtual int check_write_limited() const = 0;
 
   // ref cnt

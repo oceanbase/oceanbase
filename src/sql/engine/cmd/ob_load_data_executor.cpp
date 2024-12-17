@@ -18,7 +18,7 @@
 #include "sql/engine/cmd/ob_load_data_impl.h"
 #include "sql/engine/cmd/ob_load_data_direct_impl.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/optimizer/ob_direct_load_optimizer.h"
+#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 #include "sql/optimizer/ob_optimizer.h"
 
 namespace oceanbase
@@ -32,15 +32,17 @@ int ObLoadDataExecutor::execute(ObExecContext &ctx, ObLoadDataStmt &stmt)
   ObTableDirectInsertCtx &table_direct_insert_ctx = ctx.get_table_direct_insert_ctx();
   ObLoadDataBase *load_impl = NULL;
   ObDirectLoadOptimizerCtx optimizer_ctx;
-  ObDirectLoadOptimizer optimizer(optimizer_ctx);
   stmt.set_optimizer_ctx(&optimizer_ctx);
   if (!stmt.get_load_arguments().is_csv_format_) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("invalid resolver results", K(ret));
-  } else if (OB_FAIL(optimizer.optimize(&ctx, stmt))) {
-    LOG_WARN("fail to optimize", K(ret), K(stmt));
-  } else if (FALSE_IT(table_direct_insert_ctx.set_is_direct(optimizer_ctx.use_direct_load()))) {
+  } else if (OB_FAIL(optimizer_ctx.init_direct_load_ctx(&ctx, stmt))) {
+    LOG_WARN("fail to init direct load ctx", K(ret), K(stmt));
   } else {
+    if (optimizer_ctx.can_use_direct_load()) {
+      optimizer_ctx.set_use_direct_load();
+    }
+    table_direct_insert_ctx.set_is_direct(optimizer_ctx.use_direct_load());
     if (!table_direct_insert_ctx.get_is_direct()) {
       if (OB_ISNULL(load_impl = OB_NEWx(ObLoadDataSPImpl, (&ctx.get_allocator())))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

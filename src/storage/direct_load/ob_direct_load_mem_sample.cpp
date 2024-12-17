@@ -16,6 +16,7 @@
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "share/table/ob_table_load_handle.h"
+#include "lib/random/ob_random.h"
 
 namespace oceanbase
 {
@@ -38,9 +39,9 @@ int ObDirectLoadMemSample::gen_ranges(ObIArray<ChunkType *> &chunks, ObIArray<Ra
   ObArray<RowType *> sample_rows;
   sample_rows.set_tenant_id(MTL_ID());
   for (int64_t i = 0; OB_SUCC(ret) && i < DEFAULT_SAMPLE_TIMES; i ++) {
-    int idx = abs(rand()) % chunks.count();
+    int idx = ObRandom::rand(0, chunks.count() - 1);
     ChunkType *chunk = chunks.at(idx);
-    int idx2 = abs(rand()) % chunk->get_size();
+    int idx2 = ObRandom::rand(0, chunk->get_size() - 1);
     RowType *row = chunk->get_item(idx2);
     if (OB_FAIL(sample_rows.push_back(row))) {
       LOG_WARN("fail to push row", KR(ret));

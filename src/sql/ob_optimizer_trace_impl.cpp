@@ -531,10 +531,6 @@ int ObOptimizerTraceImpl::append(const OptSystemStat& stat)
 int ObOptimizerTraceImpl::append(const ObLogPlan *log_plan)
 {
   int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t buf_len = 1024 * 1024;
-  ObExplainDisplayOpt option;
-  option.with_tree_line_ = true;
   const ObLogPlan *target_plan = log_plan;
   if (OB_NOT_NULL(target_plan) &&
       target_plan->get_stmt()->is_explain_stmt()) {
@@ -542,15 +538,45 @@ int ObOptimizerTraceImpl::append(const ObLogPlan *log_plan)
     target_plan = op->get_explain_plan();
   }
   if (OB_NOT_NULL(target_plan)) {
+    ObExplainDisplayOpt option;
+    option.with_tree_line_ = true;
     ObSqlPlan sql_plan(target_plan->get_allocator());
     ObSEArray<common::ObString, 64> plan_strs;
-    if (OB_FAIL(sql_plan.print_sql_plan(const_cast<ObLogPlan*>(target_plan),
+    if (OB_FAIL(sql_plan.print_sql_plan(const_cast<ObLogicalOperator*>(target_plan->get_plan_root()),
                                         EXPLAIN_EXTENDED,
                                         option,
                                         plan_strs))) {
       LOG_WARN("failed to store sql plan", K(ret));
     }
     OPT_TRACE_TITLE("Query Plan");
+    for (int64_t i = 0; OB_SUCC(ret) && i < plan_strs.count(); ++i) {
+      if (OB_FAIL(new_line())) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(append(plan_strs.at(i)))) {
+        LOG_WARN("failed to append plan", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObLogicalOperator *plan_top)
+{
+  int ret = OB_SUCCESS;
+  ObExplainDisplayOpt option;
+  option.with_tree_line_ = true;
+  if (OB_NOT_NULL(plan_top) && OB_NOT_NULL(plan_top->get_plan())) {
+    ObSqlPlan sql_plan(plan_top->get_plan()->get_allocator());
+    ObSEArray<common::ObString, 64> plan_strs;
+    if (OB_FAIL(sql_plan.print_sql_plan(const_cast<ObLogicalOperator*>(plan_top),
+                                        EXPLAIN_PLAN_TABLE,
+                                        option,
+                                        plan_strs))) {
+      LOG_WARN("failed to store sql plan", K(ret));
+    }
+    OPT_TRACE_TITLE("Query Plan");
+    new_line();
+    append_ptr(plan_top);
     for (int64_t i = 0; OB_SUCC(ret) && i < plan_strs.count(); ++i) {
       if (OB_FAIL(new_line())) {
         LOG_WARN("failed to append msg", K(ret));

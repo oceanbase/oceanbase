@@ -623,9 +623,13 @@ int ObSelectIntoOp::calc_first_file_path(ObString &path)
   ObString input_file_name = file_location_ == IntoFileLocation::REMOTE_OSS
                              ? path.split_on('?').trim()
                              : path;
-  if (input_file_name.length() == 0 || path.length() == 0 || OB_ISNULL(input)) {
+  if (OB_ISNULL(input)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected path or input is null", K(ret));
+    LOG_WARN("op input is null", K(ret));
+  } else if (input_file_name.length() == 0 || path.length() == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid outfile path");
+    LOG_WARN("invalid outfile path", K(ret));
   } else {
     if (input_file_name.ptr()[input_file_name.length() - 1] == '/'){
       OZ(file_name_with_suffix.append_fmt("%.*sdata", input_file_name.length(), input_file_name.ptr()));
@@ -648,7 +652,7 @@ int ObSelectIntoOp::calc_first_file_path(ObString &path)
     if (file_location_ == IntoFileLocation::REMOTE_OSS) {
       OZ(file_name_with_suffix.append_fmt("?%.*s", path.length(), path.ptr()));
     }
-    if (OB_FAIL(ob_write_string(ctx_.get_allocator(), file_name_with_suffix.string(), path))) {
+    if (OB_SUCC(ret) && OB_FAIL(ob_write_string(ctx_.get_allocator(), file_name_with_suffix.string(), path))) {
       LOG_WARN("failed to write string", K(ret));
     }
   }
@@ -744,10 +748,13 @@ int ObSelectIntoOp::split_file(ObExternalFileWriter &data_writer)
 {
   int ret = OB_SUCCESS;
   if (ObExternalFileFormat::FormatType::CSV_FORMAT == format_type_) {
-    ObCsvFileWriter &csv_data_writer = dynamic_cast<ObCsvFileWriter&>(data_writer);
-    if (!use_shared_buf_ && OB_FAIL(csv_data_writer.flush_buf())) {
+    ObCsvFileWriter *csv_data_writer = static_cast<ObCsvFileWriter*>(&data_writer);
+    if (OB_ISNULL(csv_data_writer)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null data writer", K(ret));
+    } else if (!use_shared_buf_ && OB_FAIL(csv_data_writer->flush_buf())) {
       LOG_WARN("failed to flush buffer", K(ret));
-    } else if (has_lob_ && use_shared_buf_ && OB_FAIL(csv_data_writer.flush_shared_buf(shared_buf_))) {
+    } else if (has_lob_ && use_shared_buf_ && OB_FAIL(csv_data_writer->flush_shared_buf(shared_buf_))) {
       // 要保证文件中每一行的完整性, 有lob的时候shared buffer里不一定是完整的一行
       // 因此剩下的shared buffer里的内容也要刷到当前文件里, 这种情况下无法严格满足max_file_size的限制
       LOG_WARN("failed to flush shared buffer", K(ret));
@@ -1291,7 +1298,7 @@ int ObSelectIntoOp::into_outfile(ObExternalFileWriter *data_writer)
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(data_writer) || OB_ISNULL(csv_data_writer = dynamic_cast<ObCsvFileWriter *>(data_writer))) {
+    if (OB_ISNULL(csv_data_writer = static_cast<ObCsvFileWriter *>(data_writer))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null data writer", K(ret));
     }
@@ -2062,8 +2069,7 @@ int ObSelectIntoOp::into_outfile_batch_csv(const ObBatchRows &brs, ObExternalFil
     } else if (do_partition_ && OB_FAIL(get_data_writer_for_partition(partition_datum_vector.at(i)->get_string(),
                                                                       data_writer))) {
       LOG_WARN("failed to set data writer for partition", K(ret));
-    } else if (OB_ISNULL(data_writer)
-               || OB_ISNULL(csv_data_writer = dynamic_cast<ObCsvFileWriter *>(data_writer))) {
+    } else if (OB_ISNULL(csv_data_writer = static_cast<ObCsvFileWriter *>(data_writer))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null data writer", K(ret));
     } else if (has_compress_ && OB_ISNULL(csv_data_writer->get_compress_stream_writer())
@@ -2228,8 +2234,8 @@ int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_lengt
         orc_type = orc::createDecimalType(meta.precision_, meta.scale_);
       } else {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "this type for orc");
-        LOG_WARN("unsupport type for orc", K(obj_type), K(int_bytes));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "this type is not supported in orc");
+        LOG_WARN("unsupport type in orc", K(obj_type), K(int_bytes));
       }
     }
   } else if (ObTimestampType == obj_type || ObTimestampLTZType == obj_type) {
@@ -2241,7 +2247,13 @@ int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_lengt
   } else if (ObVarcharType == obj_type && meta.cs_type_ != CS_TYPE_BINARY) {
     orc_type = orc::createCharType(orc::TypeKind::VARCHAR, max_length);
   } else if (ObCharType == obj_type && meta.cs_type_ != CS_TYPE_BINARY) {
-    orc_type = orc::createCharType(orc::TypeKind::CHAR, max_length);
+    if (!(is_oracle_mode() && meta.length_semantics_ == LS_BYTE)) {
+      orc_type = orc::createCharType(orc::TypeKind::CHAR, max_length);
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupport type for oracle mode byte LENGTH BYTES in orc", K(obj_type), K(meta.length_semantics_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "oracle mode char length by bytes not support in orc");
+    }
   } else if (ObYearType == obj_type) {
     orc_type = orc::createPrimitiveType(orc::TypeKind::INT);
   } else if (ObNullType == obj_type || ObRawType == obj_type
@@ -2251,8 +2263,8 @@ int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_lengt
     orc_type = orc::createCharType(orc::TypeKind::STRING, max_length);
   } else {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("unsupport type for orc", K(obj_type));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "unsupported column type for orc file");
+    LOG_WARN("unsupport type in orc", K(obj_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "unsupported column type in orc file");
   }
   return ret;
 }
@@ -2265,6 +2277,7 @@ int ObSelectIntoOp::create_orc_schema(std::unique_ptr<orc::Type> &schema)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema is not null", K(ret));
   }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); i++) {
     ObString alias_name = MY_SPEC.alias_names_.strs_.at(i);
     std::string column_name(alias_name.ptr(), alias_name.length());
@@ -2394,13 +2407,14 @@ int ObSelectIntoOp::into_outfile_batch_parquet(const ObBatchRows &brs, ObExterna
     } else if (do_partition_ && OB_FAIL(get_data_writer_for_partition(partition_vector->get_string(row_idx),
                                                                       data_writer))) {
       LOG_WARN("failed to set data writer for partition", K(ret));
-    } else if (OB_ISNULL(data_writer) || OB_ISNULL(parquet_data_writer = dynamic_cast<ObParquetFileWriter*>(data_writer))) {
+    } else if (OB_ISNULL(parquet_data_writer = static_cast<ObParquetFileWriter*>(data_writer))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null data writer", K(ret));
     } else if (parquet_data_writer->is_file_writer_null()
                && OB_FAIL(parquet_data_writer->open_parquet_file_writer(arrow_alloc_,
                                                                         external_properties_.parquet_format_.row_group_size_,
                                                                         external_properties_.parquet_format_.compress_type_index_,
+                                                                        brs.size_,
                                                                         ctx_.get_allocator()))) {
       LOG_WARN("failed to init parquet file writer", K(ret));
     } else if (!parquet_data_writer->is_valid_to_write()) {
@@ -2520,11 +2534,11 @@ int ObSelectIntoOp::into_outfile_batch_orc(const ObBatchRows &brs, ObExternalFil
     } else if (do_partition_ && OB_FAIL(get_data_writer_for_partition(partition_vector->get_string(row_idx),
                                                                       data_writer))) {
       LOG_WARN("failed to set data writer for partition", K(ret));
-    } else if (OB_ISNULL(data_writer) || OB_ISNULL(orc_data_writer = dynamic_cast<ObOrcFileWriter*>(data_writer))) {
+    } else if (OB_ISNULL(orc_data_writer = static_cast<ObOrcFileWriter*>(data_writer))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null data writer", K(ret));
     } else if (orc_data_writer->is_file_writer_null()
-               && OB_FAIL(orc_data_writer->open_orc_file_writer(*orc_schema_, options_))) {
+               && OB_FAIL(orc_data_writer->open_orc_file_writer(*orc_schema_, options_, brs.size_))) {
       LOG_WARN("failed to init orc file writer", K(ret));
     } else if (!orc_data_writer->is_valid_to_write(root)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2587,11 +2601,8 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
     LOG_WARN("unexpected error", K(ret), K(col_idx), K(row_idx));
   } else if (ob_is_integer_type(datum_meta.type_)
              || ObYearType == datum_meta.type_ || ObDateType == datum_meta.type_) {
-    orc::LongVectorBatch *long_batch = dynamic_cast<orc::LongVectorBatch *>(col_vector_batch);
-    if (OB_ISNULL(long_batch)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", K(ret), K(col_idx));
-    } else if (expr_vector->is_null(row_idx)) {
+    orc::LongVectorBatch *long_batch = static_cast<orc::LongVectorBatch *>(col_vector_batch);
+    if (expr_vector->is_null(row_idx)) {
       col_vector_batch->hasNulls = true;
       col_vector_batch->notNull[row_offset] = false;
     } else {
@@ -2623,27 +2634,19 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
       }
       if (OB_FAIL(ret)) {
       } else if (int_bytes <= sizeof(int64_t)) {
-        orc::Decimal64VectorBatch *decimal64vectorbatch = dynamic_cast<orc::Decimal64VectorBatch *>(col_vector_batch);
+        orc::Decimal64VectorBatch *decimal64vectorbatch = static_cast<orc::Decimal64VectorBatch *>(col_vector_batch);
         decimal64vectorbatch->precision = datum_meta.precision_;
         decimal64vectorbatch->scale = datum_meta.scale_;
-        if (OB_ISNULL(decimal64vectorbatch)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error", K(ret), K(col_idx));
-        } else if (int_bytes == sizeof(int32_t)) {
+        if (int_bytes == sizeof(int32_t)) {
           decimal64vectorbatch->values[row_offset] = value->int32_v_[0];
         } else {
           decimal64vectorbatch->values[row_offset] = value->int64_v_[0];
         }
       } else if (int_bytes <= sizeof(int128_t)) {
-        orc::Decimal128VectorBatch *decimal128vectorbatch = dynamic_cast<orc::Decimal128VectorBatch *>(col_vector_batch);
+        orc::Decimal128VectorBatch *decimal128vectorbatch = static_cast<orc::Decimal128VectorBatch *>(col_vector_batch);
         decimal128vectorbatch->precision = datum_meta.precision_;
         decimal128vectorbatch->scale = datum_meta.scale_;
-        if (OB_ISNULL(decimal128vectorbatch)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error", K(ret), K(col_idx));
-        } else {
-          decimal128vectorbatch->values[row_offset] = orc::Int128(value->int128_v_[0] >> 64, value->int128_v_[0]);
-        }
+        decimal128vectorbatch->values[row_offset] = orc::Int128(value->int128_v_[0] >> 64, value->int128_v_[0]);
       } else {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "this decimal type for orc");
@@ -2651,11 +2654,8 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
       }
     }
   } else if (ObDoubleType == datum_meta.type_ || ObFloatType == datum_meta.type_) {
-    orc::DoubleVectorBatch *double_vector_batch = dynamic_cast<orc::DoubleVectorBatch *>(col_vector_batch);
-    if (OB_ISNULL(double_vector_batch)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", K(ret), K(col_idx));
-    } else if (expr_vector->is_null(row_idx)) {
+    orc::DoubleVectorBatch *double_vector_batch = static_cast<orc::DoubleVectorBatch *>(col_vector_batch);
+    if (expr_vector->is_null(row_idx)) {
       col_vector_batch->hasNulls = true;
       col_vector_batch->notNull[row_offset] = false;
     } else {
@@ -2667,14 +2667,11 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
     }
   } else if (ob_is_text_tc(datum_meta.type_) || ob_is_string_tc(datum_meta.type_) || ObRawType == datum_meta.type_
              || ObNullType == datum_meta.type_) {
-    orc::StringVectorBatch * string_vector_batch = dynamic_cast<orc::StringVectorBatch *>(col_vector_batch);
+    orc::StringVectorBatch * string_vector_batch = static_cast<orc::StringVectorBatch *>(col_vector_batch);
     bool has_lob_header = obj_meta.has_lob_header();
     char *buf = nullptr;
     uint32_t res_len = 0;
-    if (OB_ISNULL(string_vector_batch)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", K(ret), K(col_idx));
-    } else if (expr_vector->is_null(row_idx)) {
+    if (expr_vector->is_null(row_idx)) {
       col_vector_batch->hasNulls = true;
       col_vector_batch->notNull[row_offset] = false;
     } else {
@@ -2687,11 +2684,8 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
       }
     }
   } else if (ob_is_datetime_tc(datum_meta.type_)) { // ObDatetimeType | ObTimestampType
-    orc::TimestampVectorBatch *timestamp_vector_batch = dynamic_cast<orc::TimestampVectorBatch *>(col_vector_batch);
-    if (OB_ISNULL(timestamp_vector_batch)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", K(ret), K(col_idx), K(row_idx));
-    } else if (expr_vector->is_null(row_idx)) {
+    orc::TimestampVectorBatch *timestamp_vector_batch = static_cast<orc::TimestampVectorBatch *>(col_vector_batch);
+    if (expr_vector->is_null(row_idx)) {
       col_vector_batch->hasNulls = true;
       col_vector_batch->notNull[row_offset] = false;
     } else {
@@ -2701,11 +2695,8 @@ int ObSelectIntoOp::build_orc_cell(const ObDatumMeta &datum_meta,
       timestamp_vector_batch->nanoseconds[row_offset] = (out_usec % USECS_PER_SEC) * NSECS_PER_USEC; //  usec to nanosecond
     }
   } else if (ObTimestampNanoType == datum_meta.type_ || ObTimestampLTZType == datum_meta.type_) {
-    orc::TimestampVectorBatch *timestamp_vector_batch = dynamic_cast<orc::TimestampVectorBatch *>(col_vector_batch);
-    if (OB_ISNULL(timestamp_vector_batch)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", K(ret), K(col_idx), K(row_idx));
-    } else if (expr_vector->is_null(row_idx)) {
+    orc::TimestampVectorBatch *timestamp_vector_batch = static_cast<orc::TimestampVectorBatch *>(col_vector_batch);
+    if (expr_vector->is_null(row_idx)) {
       col_vector_batch->hasNulls = true;
       col_vector_batch->notNull[row_offset] = false;
     } else {
@@ -3461,11 +3452,12 @@ int ObSelectIntoOp::get_data_writer_for_partition(const ObString &partition_str,
     bool writer_added = false;
     if (OB_FAIL(new_data_writer(data_writer))) {
       LOG_WARN("failed to new data writer", K(ret));
+    } else if (OB_ISNULL(data_writer)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
     } else if (ObExternalFileFormat::FormatType::CSV_FORMAT == format_type_ && MY_SPEC.buffer_size_ > 0) {
-      if (OB_ISNULL(csv_data_writer = dynamic_cast<ObCsvFileWriter*>(data_writer))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(csv_data_writer->alloc_buf(ctx_.get_allocator(), MY_SPEC.buffer_size_))) {
+      csv_data_writer = static_cast<ObCsvFileWriter*>(data_writer);
+      if (OB_FAIL(csv_data_writer->alloc_buf(ctx_.get_allocator(), MY_SPEC.buffer_size_))) {
         LOG_WARN("failed to alloc buffer", K(ret));
       }
     }
@@ -3498,6 +3490,9 @@ int ObSelectIntoOp::create_the_only_data_writer(ObExternalFileWriter *&data_writ
   ObCsvFileWriter *csv_data_writer = NULL;
   if (OB_FAIL(new_data_writer(data_writer))) {
     LOG_WARN("failed to new data writer", K(ret));
+  } else if (OB_ISNULL(data_writer)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
   } else {
     data_writer->url_ = basic_url_;
     data_writer_ = data_writer;
@@ -3507,10 +3502,8 @@ int ObSelectIntoOp::create_the_only_data_writer(ObExternalFileWriter *&data_writ
              && OB_FAIL(data_writer->open_file())) {
     LOG_WARN("failed to open file", K(ret));
   } else if (ObExternalFileFormat::FormatType::CSV_FORMAT == format_type_ && MY_SPEC.buffer_size_ > 0) {
-    if (OB_ISNULL(csv_data_writer = dynamic_cast<ObCsvFileWriter*>(data_writer))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(csv_data_writer->alloc_buf(ctx_.get_allocator(), MY_SPEC.buffer_size_))) {
+    csv_data_writer = static_cast<ObCsvFileWriter*>(data_writer);
+    if (OB_FAIL(csv_data_writer->alloc_buf(ctx_.get_allocator(), MY_SPEC.buffer_size_))) {
       LOG_WARN("failed to alloc buffer", K(ret));
     }
   }

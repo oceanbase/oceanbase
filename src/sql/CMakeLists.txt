@@ -823,6 +823,8 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_eval_functions.cpp
   engine/expr/ob_expr_in.cpp
   engine/expr/ob_expr_calc_odps_size.cpp
+  engine/expr/ob_expr_to_pinyin_tab.cpp
+  engine/expr/ob_expr_to_pinyin.cpp
 )
 
 ob_set_subtarget(ob_sql ALONE
@@ -1140,7 +1142,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_optimizer_stats_gathering.cpp
   optimizer/ob_dynamic_sampling.cpp
   optimizer/ob_log_values_table_access.cpp
-  optimizer/ob_direct_load_optimizer.cpp
+  optimizer/ob_direct_load_optimizer_ctx.cpp
   optimizer/ob_log_expand.cpp
 )
 

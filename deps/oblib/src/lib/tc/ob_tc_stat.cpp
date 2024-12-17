@@ -18,7 +18,7 @@ public:
   }
   ~QSchedStat() {}
   void try_report(int n_chan, int64_t cur_us, bool leaf_only) {
-    char buf[4096];
+    char buf[7168];
     int idx[128];
     StrFormat f(buf, sizeof(buf));
     int active_cnt = 0;

@@ -544,10 +544,10 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(refresh_table_on_demand())) {
-    LOG_WARN("fail to refresh table on demand", K(ret));
   } else if (OB_FAIL(refresh_filter_params_on_demand(false/*is_open*/))) {
     LOG_WARN("failed to refresh split params on demand", K(ret));
+  } else if (OB_FAIL(refresh_table_on_demand())) {
+    LOG_WARN("fail to refresh table on demand", K(ret));
   } else {
     ObVectorStore *vector_store = reinterpret_cast<ObVectorStore *>(block_row_store_);
     int64_t batch_size = min(capacity, access_param_->get_op()->get_batch_size());
@@ -1297,12 +1297,17 @@ int ObMultipleMerge::refresh_filter_params_on_demand(const bool is_open)
     STORAGE_LOG(WARN, "ObMultipleMerge has not been inited", K(ret));
   } else {
     const ObTableIterParam &iter_param = access_param_->iter_param_;
-    const int64_t table_id = access_param_->iter_param_.table_id_;
+    const int64_t table_id = iter_param.table_id_;
     const bool has_split_filter = OB_NOT_NULL(iter_param.auto_split_filter_)
         && iter_param.auto_split_filter_type_ < static_cast<uint64_t>(ObTabletSplitType::MAX_TYPE);
     if (has_split_filter && (is_open || (OB_NOT_NULL(iter_param.need_update_tablet_param_) && *iter_param.need_update_tablet_param_))) {
+      const bool is_split_dst = iter_param.is_tablet_spliting();
+      ObTablet *tablet = get_table_param_->tablet_iter_.get_tablet_handle().get_obj();
       ObPartitionSplitQuery split_query;
-      if (OB_FAIL(split_query.fill_auto_split_params(iter_param.tablet_id_, iter_param.ls_id_,
+      if (OB_ISNULL(tablet)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet is null", K(ret), K(table_id), K(iter_param));
+      } else if (OB_FAIL(split_query.fill_auto_split_params(*tablet, is_split_dst,
           iter_param.op_, iter_param.auto_split_filter_type_, iter_param.auto_split_params_, *access_ctx_->stmt_allocator_))) {
         LOG_WARN("fail to fill split params.", K(ret));
       }
@@ -1370,7 +1375,7 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
       }
     } else if (OB_FAIL(get_table_param_->tablet_iter_.refresh_read_tables_from_tablet(
         generate_read_tables_version(),
-	false/*allow_not_ready*/,
+        false/*allow_not_ready*/,
         false/*major_sstable_only*/,
         need_split_src_table,
         need_split_dst_table))) {

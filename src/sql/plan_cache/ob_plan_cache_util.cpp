@@ -22,7 +22,7 @@
 #include "sql/ob_phy_table_location.h"
 #include "sql/optimizer/ob_phy_table_location_info.h"
 #include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_direct_load_optimizer.h"
+#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::omt;

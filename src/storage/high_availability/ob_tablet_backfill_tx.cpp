@@ -2090,7 +2090,6 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_sstable_merge_ctx_(
   ObLSService *ls_service = nullptr;
   compaction::ObStaticMergeParam &static_param = tablet_merge_ctx.static_param_;
   bool unused_finish_flag = false;
-  const bool is_shared_storage_mode = GCTX.is_shared_storage_mode();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2127,7 +2126,8 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_sstable_merge_ctx_(
     } else if (1 != tablet_merge_ctx.parallel_merge_ctx_.get_concurrent_cnt()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("parallel merge concurrent cnt should be 1", K(ret), K(tablet_merge_ctx));
-    } else if (is_shared_storage_mode) {
+    } else {
+      // need to filter tablet_status in minor, so always use full merge
       static_param.set_full_merge_and_level(true/*is_full_merge*/);
     }
   }

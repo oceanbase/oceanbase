@@ -53,7 +53,7 @@
 #include "sql/optimizer/ob_insert_log_plan.h"
 #include "sql/optimizer/ob_log_stat_collector.h"
 #include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
-#include "sql/optimizer/ob_direct_load_optimizer.h"
+#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 #include "sql/optimizer/ob_log_expand.h"
 #include "share/datum/ob_datum_funcs.h"
 #include "share/schema/ob_schema_mgr.h"
@@ -2995,8 +2995,9 @@ int ObStaticEngineCG::generate_merge_with_das(ObLogMerge &op,
   if (OB_SUCC(ret)) {
     ObMergeCtDef *merge_ctdef = spec.merge_ctdefs_.at(0);
     bool find = false;
-
+    bool update_exist = false;
     if (OB_NOT_NULL(merge_ctdef->upd_ctdef_)) {
+      update_exist = true;
       const ObUpdCtDef &upd_ctdef = *merge_ctdef->upd_ctdef_;
       for (int64_t i = 0; OB_SUCC(ret) && !find && i < upd_ctdef.fk_args_.count(); ++i) {
         const ObForeignKeyArg &fk_arg = upd_ctdef.fk_args_.at(i);
@@ -3016,7 +3017,10 @@ int ObStaticEngineCG::generate_merge_with_das(ObLogMerge &op,
     }
 
     if (OB_SUCC(ret)) {
-      if (find) {
+      // When both UPDATE and INSERT exist,
+      // foreign key check_exist cannot use the das_scan optimization method for the time being.
+      // There is a bug here, issue_id: 2024102800104824214
+      if (find || update_exist) {
         spec.check_fk_batch_ = false;
       } else {
         spec.check_fk_batch_ = true;
@@ -3672,6 +3676,10 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
             break;
           }
         }
+        // When both UPDATE and INSERT exist,
+        // foreign key check_exist cannot use the das_scan optimization method for the time being.
+        // There is a bug here, issue_id: 2024102800104824214
+        spec.check_fk_batch_ = false;
       }
     }
   }
@@ -5090,37 +5098,13 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec,
       OB_LOG(WARN, "fail to init_duplicate_rollup_expr", K(ret));
     }
     bool is_duplicate = false;
-    const bool is_oracle_mode = lib::is_oracle_mode();
-    // In the two different modes of mysql and oracle, the behavior of rollup duplicate columns
-    // is different. For example, when there is one row [1] in t1, in oracle mode
-    // select c1 from t1 group by rollup(c1, c1);
-    // +------+
-    // | c1   |
-    // +------+
-    // |    1 |
-    // |    1 |
-    // | NULL |
-    // +------+
-    // In mysql mode
-    // select c1 from t1 group by c1, c1 with rollup;
-    // +------+
-    // | c1   |
-    // +------+
-    // |    1 |
-    // | NULL |
-    // | NULL |
-    // +------+
-    // So we need to distinguish between two modes when initializing `is_duplicate_rollup_expr_`
-    // array. For oracle, it is initialized from left to right. For mysql, it is initialized from
-    // right to left.
     ARRAY_FOREACH(rollup_exprs, i) {
       const ObRawExpr* raw_expr = rollup_exprs.at(i);
       ObExpr *expr = NULL;
       if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
         LOG_WARN("failed to generate_rt_expr", K(ret));
-      } else if (FALSE_IT(is_duplicate = (is_oracle_mode && // set is_duplicate to false in mysql
-                                           (has_exist_in_array(spec.group_exprs_, expr)
-                                             || has_exist_in_array(spec.rollup_exprs_, expr))))) {
+      } else if (FALSE_IT(is_duplicate = (has_exist_in_array(spec.group_exprs_, expr)
+                                           || has_exist_in_array(spec.rollup_exprs_, expr)))) {
       } else if (OB_FAIL(spec.is_duplicate_rollup_expr_.push_back(is_duplicate))) {
         OB_LOG(WARN, "fail to push distinct_rollup_expr", K(ret));
       } else if (OB_FAIL(spec.add_rollup_expr(expr))) {
@@ -5129,21 +5113,6 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec,
         LOG_DEBUG("rollup is duplicate key", K(is_duplicate));
       }
     } // end for
-    // mysql mode, reinit duplicate rollup expr from right to left
-    if (OB_SUCC(ret) && !is_oracle_mode && rollup_exprs.count() > 0) {
-      for (int64_t i = spec.rollup_exprs_.count() - 2; OB_SUCC(ret) && i >= 0; --i) {
-        if (has_exist_in_array(spec.group_exprs_, spec.rollup_exprs_.at(i))) {
-          spec.is_duplicate_rollup_expr_.at(i) = true;
-        } else {
-          for (int64_t j = i + 1; !spec.is_duplicate_rollup_expr_.at(i)
-                                      && j < spec.rollup_exprs_.count(); ++j) {
-            if (spec.rollup_exprs_.at(i) == spec.rollup_exprs_.at(j)) {
-              spec.is_duplicate_rollup_expr_.at(i) = true;
-            }
-          }
-        }
-      }
-    }
   }
 
   // 3. add aggr columns

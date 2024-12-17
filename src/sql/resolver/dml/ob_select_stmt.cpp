@@ -837,15 +837,20 @@ int ObSelectStmt::get_same_win_func_item(const ObRawExpr *expr, ObWinFunRawExpr 
     LOG_WARN("unexpected null", K(ret));
   } else {
     ObQuestionmarkEqualCtx cmp_ctx;
-    for (int64_t i = 0; i < win_func_exprs_.count(); ++i) {
+    bool is_existed = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !is_existed && i < win_func_exprs_.count(); ++i) {
+      bool need_check_status = (i + 1) % 1000 == 0;
       if (win_func_exprs_.at(i) != NULL && expr != NULL &&
           expr->same_as(*win_func_exprs_.at(i), &cmp_ctx)) {
         win_expr = win_func_exprs_.at(i);
-        break;
+        is_existed = true;
+      } else if (need_check_status &&
+                 OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("failed to check status", K(ret));
       }
     }
-    if (OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
-                       cmp_ctx.equal_pairs_))) {
+    if (OB_SUCC(ret) && OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
+                                       cmp_ctx.equal_pairs_))) {
       LOG_WARN("failed to append equal param info", K(ret));
     }
   }

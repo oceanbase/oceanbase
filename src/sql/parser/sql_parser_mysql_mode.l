@@ -998,6 +998,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
   }
 }
 <hint>INDEX { return INDEX_HINT; }
+<hint>INDEX_ASC { return INDEX_ASC_HINT; }
+<hint>INDEX_DESC { return INDEX_DESC_HINT; }
 <hint>NO_INDEX { return NO_INDEX_HINT; }
 <hint>UNION_MERGE { return UNION_MERGE_HINT; }
 <hint>USE_DAS { return USE_DAS_HINT; }

@@ -670,7 +670,7 @@ int ObLogSort::try_allocate_pushdown_topn_runtime_filter()
       LOG_WARN("fail to generate p2p dh id", K(ret));
     } else {
       (void)topn_filter_info_.init(p2p_sequence_id, pushdown_topn_filter_expr, effective_sk_cnt,
-                                   tsc_has_exchange);
+                                   tsc_has_exchange, node);
     }
   }
 

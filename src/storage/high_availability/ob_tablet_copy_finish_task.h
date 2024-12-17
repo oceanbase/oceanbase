@@ -75,12 +75,12 @@ private:
   int deal_with_major_sstables_();
   int check_restore_major_valid_(
       const ObTablesHandleArray &major_tables_handle);
+  int get_mds_sstable_max_end_scn_(share::SCN &max_escn);
   int check_log_replay_to_mds_sstable_end_scn_();
   int classify_major_sstables_(
       ObTablesHandleArray &shared_major_sstables,
       ObTablesHandleArray &local_major_sstables);
   int deal_with_shared_majors_(ObTablesHandleArray &major_tables_handle);
-
 
 private:
   bool is_inited_;

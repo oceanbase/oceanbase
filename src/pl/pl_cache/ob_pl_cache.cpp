@@ -463,11 +463,16 @@ int ObPLObjectValue::check_value_version(share::schema::ObSchemaGetterGuard *sch
           LOG_DEBUG("matched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
           // do nothing
         } else if (schema_obj1->schema_type_ == schema_obj2.schema_type_ &&
-                   TABLE_SCHEMA == schema_obj1->schema_type_ &&
                    schema_obj1->schema_id_ == schema_obj2.schema_id_) {
-          ObSEArray<ObPLTableColumnInfo, 6> column_infos;
-          OZ (obtain_new_column_infos(*schema_guard, schema_obj2, column_infos));
-          OX (is_old_version = !schema_obj1->match_columns(column_infos));
+          if (TABLE_SCHEMA == schema_obj1->schema_type_) {
+            ObSEArray<ObPLTableColumnInfo, 6> column_infos;
+            OZ (obtain_new_column_infos(*schema_guard, schema_obj2, column_infos));
+            OX (is_old_version = !schema_obj1->match_columns(column_infos));
+          } else if (SEQUENCE_SCHEMA == schema_obj1->schema_type_) {
+            // alter sequence should not make pl cache obj expired
+          } else {
+            is_old_version = true;
+          }
         } else {
           is_old_version = true;
         }
@@ -650,9 +655,12 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
           LOG_WARN("failed to get schema version",
                    K(ret), K(tenant_id), K(pcv_schema->schema_type_), K(pcv_schema->schema_id_));
         }
-        if (OB_SUCC(ret)) {
-          tmp_schema_obj.schema_id_ = pcv_schema->schema_id_;
-          tmp_schema_obj.schema_type_ = pcv_schema->schema_type_;
+        if (OB_INVALID_VERSION == new_version) {
+          ret = OB_OLD_SCHEMA_VERSION;
+          LOG_WARN("can not get newer schema version", K(ret));
+        } else if (OB_SUCC(ret)) {
+          tmp_schema_obj.schema_id_ = pcv_schema->schema_id_; // same id
+          tmp_schema_obj.schema_type_ = pcv_schema->schema_type_; // same type
           tmp_schema_obj.schema_version_ = new_version;
           if (OB_FAIL(schema_array.push_back(tmp_schema_obj))) {
             LOG_WARN("failed to push back array", K(ret));

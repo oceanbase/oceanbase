@@ -40,7 +40,8 @@ public:
     cur_file_name_(),
     line_count_limit_(INT64_MAX),
     ip_port_buf_(NULL),
-    ip_port_len_(0) {}
+    ip_port_len_(0),
+    need_expand_buf_(false) {}
 
   virtual void reuse() override
   {
@@ -53,6 +54,7 @@ public:
     cur_file_name_.reset();
     line_count_limit_ = INT64_MAX;
     ip_port_len_ = 0;
+    need_expand_buf_ = false;
   }
   DECLARE_VIRTUAL_TO_STRING;
   char *buf_;
@@ -66,6 +68,7 @@ public:
   int64_t line_count_limit_;
   char *ip_port_buf_;
   int ip_port_len_;
+  bool need_expand_buf_;
 };
 
 class ObCSVTableRowIterator : public ObExternalTableRowIterator {

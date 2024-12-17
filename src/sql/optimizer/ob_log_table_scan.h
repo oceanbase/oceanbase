@@ -745,6 +745,7 @@ public:
 
   int copy_gen_col_range_exprs();
   inline bool need_replace_gen_column() { return !(is_index_scan() && !(get_index_back())); }
+  int try_adjust_scan_direction(const ObIArray<OrderItem> &sort_keys);
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
@@ -778,6 +779,7 @@ private: // member functions
   int generate_filter_monotonicity();
   int get_filter_assist_exprs(ObIArray<ObRawExpr *> &assist_exprs);
   int prepare_rowkey_domain_id_dep_exprs();
+  bool use_query_range() const;
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id

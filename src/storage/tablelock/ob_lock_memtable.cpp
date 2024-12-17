@@ -332,6 +332,7 @@ int ObLockMemtable::lock_(
             need_retry = true;
           }
           LOG_WARN("record lock at mem_ctx failed.", K(ret), K(lock_op));
+        } else if (FALSE_IT(succ_step = STEP_IN_MEM_CTX)) {
         } else {
           input_transfer_counter = output_transfer_counter;
           ret = check_tablet_write_allow_(lock_op,
@@ -546,6 +547,7 @@ int ObLockMemtable::unlock_(
           need_retry = true;
         }
         LOG_WARN("record lock at mem_ctx failed.", K(ret), K(unlock_op));
+      } else if (FALSE_IT(succ_step = STEP_IN_MEM_CTX)) {
       } else {
         input_transfer_counter = output_transfer_counter;
         ret = check_tablet_write_allow_(unlock_op,

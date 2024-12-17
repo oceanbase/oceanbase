@@ -1124,6 +1124,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                               ObCharset::get_default_charset()));
         } break;
+        case PLSQL_COMPILE_TIME: {
+          cells[cell_idx].set_int(0);
+        } break;
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));

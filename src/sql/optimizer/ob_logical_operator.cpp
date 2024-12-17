@@ -442,7 +442,8 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     inherit_sharding_index_(-1),
     need_osg_merge_(false),
     max_px_thread_branch_(OB_INVALID_INDEX),
-    max_px_group_branch_(OB_INVALID_INDEX)
+    max_px_group_branch_(OB_INVALID_INDEX),
+    need_re_est_child_cost_(false)
 
 {
 }
@@ -1576,6 +1577,19 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
       }
       break;
     }
+    case ADJUST_SCAN_DIRECTION: {
+      if (LOG_SORT == get_type()) {
+        ObLogSort *log_sort = static_cast<ObLogSort *>(this);
+        if (NULL != log_sort->get_topn_filter_node() &&
+            LOG_TABLE_SCAN == log_sort->get_topn_filter_node()->get_type()) {
+          ObLogTableScan *log_tsc = static_cast<ObLogTableScan *>(log_sort->get_topn_filter_node());
+          if (OB_FAIL(log_tsc->try_adjust_scan_direction(log_sort->get_sort_keys()))) {
+            LOG_WARN("failed to adjust table scan direction", K(ret));
+          }
+        }
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected access of default branch", K(op), K(ret));
@@ -1715,6 +1729,9 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
         if (OB_FAIL(collect_batch_exec_param_post(ctx))) {
           LOG_WARN("failed to gen batch exec param post",  K(ret));
         }
+        break;
+      }
+      case ADJUST_SCAN_DIRECTION: {
         break;
       }
       default:
@@ -6741,4 +6758,24 @@ int ObLogicalOperator::check_contain_dist_das(const ObIArray<ObAddr> &exec_serve
     }
   }
   return ret;
+}
+
+bool ObLogicalOperator::is_parallel_more_than_part_cnt() const
+{
+  if (NULL == strong_sharding_) {
+    return false;
+  } else if (strong_sharding_->get_part_cnt() < 1) {
+    return false;
+  } else {
+    return get_parallel() > strong_sharding_->get_part_cnt();
+  }
+}
+
+int64_t ObLogicalOperator::get_part_cnt() const
+{
+  if (NULL == strong_sharding_) {
+    return 0;
+  } else {
+    return strong_sharding_->get_part_cnt();
+  }
 }

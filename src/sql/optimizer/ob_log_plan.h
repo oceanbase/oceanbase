@@ -469,6 +469,10 @@ public:
       force_use_merge_(false),
       force_part_sort_(false),
       force_normal_sort_(false),
+      force_basic_(false),
+      force_partition_wise_(false),
+      force_dist_hash_(false),
+      force_pull_to_local_(false),
       is_scalar_group_by_(false),
       distinct_exprs_(),
       aggr_code_expr_(NULL),
@@ -488,14 +492,21 @@ public:
 
     void set_ignore_hint()  { ignore_hint_ = true;  }
     void clear_ignore_hint()  { ignore_hint_ = false; }
-    inline bool allow_basic() const { return ignore_hint_ || (!force_partition_wise_ && !force_dist_hash_); }
-    inline bool allow_dist_hash() const { return ignore_hint_ || (!force_basic_ && !force_partition_wise_); }
+    inline bool allow_basic() const { return ignore_hint_ || (!force_partition_wise_ &&
+                                                              !force_dist_hash_ &&
+                                                              !force_pull_to_local_); }
+    inline bool allow_dist_hash() const { return ignore_hint_ || (!force_basic_ &&
+                                                                  !force_partition_wise_ &&
+                                                                  !force_pull_to_local_); }
     inline bool allow_partition_wise(bool enable_partition_wise_plan) const
     {
       bool disable_by_rule = !enable_partition_wise_plan && optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2;
       return ignore_hint_ ? !disable_by_rule
-                          : (disable_by_rule ? force_partition_wise_ : (!force_basic_ && !force_dist_hash_));
+                          : (disable_by_rule ? force_partition_wise_ : (!force_basic_ && !force_dist_hash_ && !force_pull_to_local_));
     }
+    inline bool allow_pull_to_local() const { return ignore_hint_ || (!force_basic_ &&
+                                                                      !force_dist_hash_ &&
+                                                                      !force_partition_wise_); }
 
     inline void reset_three_stage_info()
     {
@@ -515,6 +526,7 @@ public:
     bool force_basic_;          // pq hint force use basic plan
     bool force_partition_wise_; // pq hint force use partition wise plan
     bool force_dist_hash_;      // pq hint force use hash distributed method plan
+    bool force_pull_to_local_;
     bool is_scalar_group_by_;
     bool is_from_povit_;
     bool ignore_hint_;
@@ -553,6 +565,7 @@ public:
                  K_(force_basic),
                  K_(force_partition_wise),
                  K_(force_dist_hash),
+                 K_(force_pull_to_local),
                  K_(is_scalar_group_by),
                  K_(is_from_povit),
                  K_(ignore_hint),
@@ -734,6 +747,10 @@ public:
                                           GroupingOpHelper &groupby_helper,
                                           ObIArray<CandidatePlan> &groupby_plans);
 
+  int get_distribute_group_by_method(ObLogicalOperator *top,
+                                    GroupingOpHelper &groupby_helper,
+                                    const ObIArray<ObRawExpr*> &reduce_exprs,
+                                    uint64_t &group_dist_methods);
   int prepare_three_stage_info(const ObIArray<ObRawExpr *> &group_by_exprs,
                                const ObIArray<ObRawExpr *> &rollup_exprs,
                                GroupingOpHelper &helper);
@@ -772,7 +789,8 @@ public:
   int create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &agg_items,
                               const ObIArray<ObRawExpr*> &having_exprs,
                               GroupingOpHelper &groupby_helper,
-                              ObLogicalOperator *&top);
+                              ObLogicalOperator *&top,
+                              const DistAlgo algo);
 
   int check_can_pullup_gi(ObLogicalOperator &top,
                           bool is_partition_wise,
@@ -844,6 +862,7 @@ public:
                                          ObIArray<ObAggFunRawExpr *> &distinct_aggrs,
                                          const EqualSets &equal_sets,
                                          ObIArray<ObRawExpr *> &distinct_exprs,
+                                         const bool enable_hash_rollup,
                                          bool &can_push);
 
   int check_rollup_pushdown(const ObSQLSessionInfo *info,

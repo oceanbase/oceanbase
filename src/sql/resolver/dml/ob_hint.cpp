@@ -1355,6 +1355,8 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_PQ_SUBQUERY: return "PQ_SUBQUERY";
     case T_PQ_GBY_HINT: return "PQ_GBY";
     case T_PQ_DISTINCT_HINT:  return "PQ_DISTINCT";
+    case T_INDEX_ASC_HINT:    return "INDEX_ASC";
+    case T_INDEX_DESC_HINT:   return "INDEX_DESC";
     default:                    return NULL;
   }
 }
@@ -2335,7 +2337,8 @@ int ObIndexHint::print_hint_desc(PlanText &plan_text) const
     /* do nothing */
   } else if (OB_FAIL(BUF_PRINTF(" \"%.*s\"", index_name_.length(), index_name_.ptr()))) {
     LOG_WARN("fail to print index name", K(ret));
-  } else if (T_INDEX_HINT != hint_type_  || index_prefix_ < 0) {
+  } else if ((T_INDEX_HINT != hint_type_ && T_INDEX_ASC_HINT != hint_type_ && T_INDEX_DESC_HINT != hint_type_)
+             || index_prefix_ < 0) {
     //do nothing
   } else if (OB_FAIL(BUF_PRINTF(" %ld", index_prefix_))) {
     LOG_WARN("fail to print index prefix", K(ret));
@@ -2529,16 +2532,8 @@ int ObPQSetHint::set_pq_set_hint(const DistAlgo dist_algo,
         dist_methods_.at(1) = T_DISTRIBUTE_LOCAL;
         break;
       } 
-      case DistAlgo::DIST_PARTITION_WISE:  {
-        dist_methods_.at(0) = T_DISTRIBUTE_NONE;
-        dist_methods_.at(1) = T_DISTRIBUTE_NONE;
-        break;
-      }
-      case DistAlgo::DIST_EXT_PARTITION_WISE:  {
-        dist_methods_.at(0) = T_DISTRIBUTE_NONE;
-        dist_methods_.at(1) = T_DISTRIBUTE_NONE;
-        break;
-      }
+      case DistAlgo::DIST_PARTITION_WISE:
+      case DistAlgo::DIST_EXT_PARTITION_WISE:
       case DistAlgo::DIST_SET_PARTITION_WISE:  {
         dist_methods_.at(0) = T_DISTRIBUTE_NONE;
         dist_methods_.at(1) = T_DISTRIBUTE_NONE;
@@ -2646,10 +2641,10 @@ bool ObPQSetHint::is_valid_dist_methods(const ObIArray<ObItemType> &dist_methods
 }
 
 // DistAlgo::DIST_BASIC_METHOD indicate 
-DistAlgo ObPQSetHint::get_dist_algo(const ObIArray<ObItemType> &dist_methods,
+uint64_t ObPQSetHint::get_dist_algo(const ObIArray<ObItemType> &dist_methods,
                                     int64_t &random_none_idx)
 {
-  DistAlgo dist_algo = DistAlgo::DIST_INVALID_METHOD;
+  uint64_t dist_algo = DistAlgo::DIST_INVALID_METHOD;
   random_none_idx = OB_INVALID_INDEX;
   if (dist_methods.empty()) {
     dist_algo = DistAlgo::DIST_BASIC_METHOD;
@@ -2710,6 +2705,11 @@ DistAlgo ObPQSetHint::get_dist_algo(const ObIArray<ObItemType> &dist_methods,
         || DistAlgo::DIST_SET_RANDOM == tmp) {
       dist_algo = sql::get_dist_algo(tmp);
     }
+  }
+  if (DistAlgo::DIST_PARTITION_WISE == dist_algo) {
+    dist_algo = DistAlgo::DIST_PARTITION_WISE
+                | DistAlgo::DIST_EXT_PARTITION_WISE
+                | DistAlgo::DIST_SET_PARTITION_WISE;
   }
   return dist_algo;
 }
@@ -2788,6 +2788,7 @@ const char *ObPQHint::get_dist_method_str(ObItemType dist_method)
     case T_DISTRIBUTE_BASIC:  return  "BASIC";
     case T_DISTRIBUTE_NONE:   return  "NONE";
     case T_DISTRIBUTE_HASH:   return  "HASH";
+    case T_DISTRIBUTE_LOCAL:  return  "LOCAL";
     default:  return NULL;
   }
   return NULL;

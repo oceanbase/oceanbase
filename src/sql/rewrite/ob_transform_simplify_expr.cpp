@@ -18,6 +18,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "common/ob_smart_call.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
+#include "sql/resolver/expr/ob_shared_expr_resolver.h"
 
 using namespace oceanbase::sql;
 
@@ -2963,8 +2964,7 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null pointer error", K_(ctx), K_(ctx_->expr_factory), K(ret));
   } else {
-    ObStmtCompareContext cmp_ctx;
-    cmp_ctx.init(&query_ctx.calculable_items_);
+    ObQuestionmarkEqualCtx cmp_ctx(false);
     for (int64_t i = param_count - 1; OB_SUCC(ret) && i >= 1; i--) {
       if (OB_ISNULL(exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -2977,17 +2977,16 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
         } else if (exprs.at(i)->same_as(*exprs.at(j), &cmp_ctx)) {
           if (OB_FAIL(exprs.remove(i))) {
             LOG_WARN("failed to remove", K(ret));
-          } else if (!cmp_ctx.equal_param_info_.empty()) {
-            if (OB_FAIL(append(ctx_->equal_param_constraints_,
-                               cmp_ctx.equal_param_info_))) {
+          } else if (!cmp_ctx.equal_pairs_.empty()) {
+            if (OB_FAIL(append(ctx_->equal_param_constraints_, cmp_ctx.equal_pairs_))) {
               LOG_WARN("failed to append expr", K(ret));
             } else {
-              cmp_ctx.equal_param_info_.reset();
+              cmp_ctx.equal_pairs_.reset();
             }
           }
           break;
-        } else if (!cmp_ctx.equal_param_info_.empty()) {
-          cmp_ctx.equal_param_info_.reset();
+        } else if (!cmp_ctx.equal_pairs_.empty()) {
+          cmp_ctx.equal_pairs_.reset();
         }
       }
     }

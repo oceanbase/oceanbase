@@ -186,6 +186,25 @@ int ObLobManager::fill_lob_header(ObIAllocator &allocator, ObString &data, ObStr
   return ret;
 }
 
+// Only use for default lob col val.
+int ObLobManager::fill_lob_header(
+    ObIAllocator &allocator,
+    ObStorageDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (datum.is_null() || datum.is_nop_value()) {
+  } else {
+    ObString data = datum.get_string();
+    ObString out;
+    if (OB_FAIL(ObLobManager::fill_lob_header(allocator, data, out))) {
+      LOG_WARN("failed to fill lob header for column.", K(data));
+    } else {
+      datum.set_string(out);
+    }
+  }
+  return ret;
+}
+
 // Only use for default lob col val
 int ObLobManager::fill_lob_header(ObIAllocator &allocator,
     const ObIArray<share::schema::ObColDesc> &column_ids,
@@ -194,15 +213,8 @@ int ObLobManager::fill_lob_header(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
     if (column_ids.at(i).col_type_.is_lob_storage()) {
-      if (datum_row.storage_datums_[i].is_null() || datum_row.storage_datums_[i].is_nop_value()) {
-      } else {
-        ObString data = datum_row.storage_datums_[i].get_string();
-        ObString out;
-        if (OB_FAIL(ObLobManager::fill_lob_header(allocator, data, out))) {
-          LOG_WARN("failed to fill lob header for column.", K(i), K(column_ids), K(data));
-        } else {
-          datum_row.storage_datums_[i].set_string(out);
-        }
+      if (OB_FAIL(fill_lob_header(allocator, datum_row.storage_datums_[i]))) {
+        LOG_WARN("failed to fill lob header for column.", K(i), K(column_ids), K(datum_row));
       }
     }
   }
@@ -655,8 +667,6 @@ int ObLobManager::compare(ObLobLocatorV2& lob_left,
     // get lob access param
     ObLobAccessParam param_left;
     ObLobAccessParam param_right;
-    param_left.tx_desc_ = cmp_params.tx_desc_;
-    param_right.tx_desc_ = cmp_params.tx_desc_;
     if (OB_FAIL(build_lob_param(param_left, tmp_allocator, cmp_params.collation_left_,
                 cmp_params.offset_left_, cmp_params.compare_len_, cmp_params.timeout_, lob_left))) {
       LOG_WARN("fail to build read param left", K(ret), K(lob_left), K(cmp_params));
@@ -1071,7 +1081,6 @@ int ObLobManager::append(
         ObString data;
         data.assign_buffer(buf + cur_handle_size, append_lob_len);
         SMART_VAR(ObLobAccessParam, read_param) {
-          read_param.tx_desc_ = param.tx_desc_;
           read_param.tenant_id_ = param.src_tenant_id_;
           if (OB_FAIL(build_lob_param(read_param, *param.get_tmp_allocator(), param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
@@ -1172,7 +1181,6 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
         ObString data;
         data.assign_buffer(buf + cur_handle_size, append_lob_len);
         SMART_VAR(ObLobAccessParam, read_param) {
-          read_param.tx_desc_ = param.tx_desc_;
           read_param.tenant_id_ = param.src_tenant_id_;
           if (OB_FAIL(build_lob_param(read_param, *param.get_tmp_allocator(), param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
@@ -1240,7 +1248,6 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
           LOG_WARN("alloc ObLobLocatorV2 failed.", K(ret), K(sizeof(ObLobLocatorV2)));
         } else {
           read_param = new(read_param)ObLobAccessParam();
-          read_param->tx_desc_ = param.tx_desc_;
           read_param->tenant_id_ = param.src_tenant_id_;
           *copy_locator = lob;
           if (OB_FAIL(build_lob_param(*read_param, *param.get_tmp_allocator(), param.coll_type_,
@@ -1756,7 +1763,6 @@ int ObLobManager::write_inrow(ObLobAccessParam& param, ObLobLocatorV2& lob, uint
 {
   int ret = OB_SUCCESS;
   SMART_VAR(ObLobAccessParam, read_param) {
-    read_param.tx_desc_ = param.tx_desc_;
     if (OB_ISNULL(param.allocator_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("param tmp allocator is null", K(ret), K(param));
@@ -1816,7 +1822,6 @@ int ObLobManager::write_outrow(ObLobAccessParam& param, ObLobLocatorV2& lob, uin
   int ret = OB_SUCCESS;
   ObLobQueryIter *iter = nullptr;
   SMART_VAR(ObLobAccessParam, read_param) {
-    read_param.tx_desc_ = param.tx_desc_;
     if (OB_ISNULL(param.allocator_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("param tmp allocator is null", K(ret), K(param));
@@ -2182,7 +2187,6 @@ int ObLobManager::append_outrow(
   int ret = OB_SUCCESS;
   ObLobQueryIter *iter = nullptr;
   SMART_VAR(ObLobAccessParam, read_param) {
-    read_param.tx_desc_ = param.tx_desc_;
     read_param.tenant_id_ = param.src_tenant_id_;
     if (OB_ISNULL(param.get_tmp_allocator())) {
       ret = OB_INVALID_ARGUMENT;

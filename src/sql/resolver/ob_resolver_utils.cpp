@@ -446,9 +446,9 @@ int ObResolverUtils::resolve_collection_type_info(const ParseNode &type_node, Ob
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported element type", K(ret), K(type_node.type_));
   } else if (type_node.int32_values_[1]/*is binary*/ && (type_node.type_ == T_CHAR || type_node.type_ == T_VARCHAR)) {
-    if (OB_FAIL(buf.append(type_node.type_ == T_CHAR ? "BINARY" : "VARBINARY"))) {
-      LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
-    }
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported binary", K(ret), K(type_node.type_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element in binary type");
   } else if (is_vector) {
     // vector type
     if (OB_FAIL(buf.append("VECTOR"))) {
@@ -469,10 +469,10 @@ int ObResolverUtils::resolve_collection_type_info(const ParseNode &type_node, Ob
     int32_t length = is_bit ? type_node.int16_values_[0]
                               : (is_char ? type_node.int32_values_[0] : type_node.int16_values_[1]);
     int64_t pos = 0;
-    if (is_char && (length <= -1 || length > OB_MAX_ORACLE_VARCHAR_LENGTH)) {
+    if (is_char && (length <= -1 || length > OB_MAX_VARCHAR_LENGTH / 4)) {
       ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
       LOG_WARN("data length is invalid", K(ret), K(length));
-      LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, "varchar", static_cast<int>(OB_MAX_ORACLE_VARCHAR_LENGTH));
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, "varchar", static_cast<int>(OB_MAX_VARCHAR_LENGTH / 4));
     } else if (OB_FAIL(databuff_printf(tmp, MAX_LEN, pos, "(%d)",length))) {
       LOG_WARN("failed to convert len to string", K(ret), K(length));
     } else if (OB_FAIL(buf.append(tmp, pos))) {
@@ -1080,7 +1080,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
       OX (match_info = (ObRoutineMatchInfo::MatchInfo(false, src_type, dst_type)));
     } else if (resolve_ctx.is_prepare_protocol_ &&
                ObExtendType == src_type &&
-               OB_INVALID_ID == src_type_id &&
+               is_mocked_anonymous_array_id(src_type_id) &&
                T_QUESTIONMARK == expr->get_expr_type()) { // 匿名数组
       const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(expr);
       int64_t idx = const_expr->get_value().get_unknown();
@@ -1372,6 +1372,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
     } else if (routine_param->is_schema_routine_param()) {
       ObRoutineParam *param = static_cast<ObRoutineParam*>(routine_param);
       CK (OB_NOT_NULL(param));
+      OX (dst_pl_type.set_enum_set_ctx(resolve_ctx.enum_set_ctx_));
       OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                   resolve_ctx.schema_guard_,
                                                   resolve_ctx.session_info_,
@@ -3055,6 +3056,9 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
     case T_BOOL: {
       val.set_is_boolean(true);
       val.set_bool(node->value_ == 1 ? true : false);
+      if (lib::is_mysql_mode()) {
+        val.meta_.set_int();
+      }
       val.set_scale(0);
       val.set_precision(1);
       val.set_length(1);
@@ -8123,9 +8127,11 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
       ObRoutineParam *param = nullptr;
       common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
       ObArray<ObSchemaObjVersion> version;
+      pl::ObPLEnumSetCtx enum_set_ctx(alloc);
       CK (routine_info->get_routine_params().count() > 0);
       OX (param = routine_info->get_routine_params().at(0));
       CK (OB_NOT_NULL(sql_proxy));
+      OX (param_type.set_enum_set_ctx(&enum_set_ctx));
       OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                   schema_guard,
                                                   session_info,
@@ -9773,7 +9779,15 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         break;
       }
       case T_FILE_EXTENSION: {
-        format.csv_format_.file_extension_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        ObString file_extension = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        if (OB_NOT_NULL(file_extension.find('/'))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("file_extension can not contain '/'", K(ret), K(file_extension));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file_extension can not contain '/'");
+        }
+        if (OB_SUCC(ret)) {
+          format.csv_format_.file_extension_ = file_extension;
+        }
         break;
       }
       default: {

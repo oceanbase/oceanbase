@@ -129,7 +129,8 @@ public:
     QUERY_RANGE,
     FUNC_VALUE,
     COLUMN_VALUE,
-    PRE_RANGE_GRAPH
+    PRE_RANGE_GRAPH,
+    LIST_VALUE
   };
 
   ObPartLocCalcNode (common::ObIAllocator &allocator): node_type_(INVALID), allocator_(allocator)
@@ -290,6 +291,27 @@ public:
   virtual int add_part_calc_node(common::ObIArray<ObPartLocCalcNode*> &calc_nodes);
 
   ValueItemExpr vie_;
+};
+
+struct ObPLListValueNode : public ObPartLocCalcNode
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObPLListValueNode(common::ObIAllocator &allocator) :
+      ObPartLocCalcNode(allocator),
+      vies_(allocator)
+  {
+    set_node_type(LIST_VALUE);
+  }
+
+  virtual ~ObPLListValueNode()
+  { }
+  virtual int deep_copy(common::ObIAllocator &allocator,
+                        common::ObIArray<ObPartLocCalcNode*> &calc_nodes,
+                        ObPartLocCalcNode *&other) const;
+  virtual int add_part_calc_node(common::ObIArray<ObPartLocCalcNode*> &calc_nodes);
+
+  common::ObFixedArray<ValueItemExpr*, common::ObIAllocator> vies_;
 };
 
 struct ObListPartMapKey {
@@ -518,7 +540,8 @@ public:
     object_id_(OB_INVALID_ID),
     related_list_(allocator_),
     check_no_partition_(false),
-    is_broadcast_table_(false)
+    is_broadcast_table_(false),
+    is_dynamic_replica_select_table_(false)
   {
   }
 
@@ -568,7 +591,8 @@ public:
     object_id_(OB_INVALID_ID),
     related_list_(allocator_),
     check_no_partition_(false),
-    is_broadcast_table_(false)
+    is_broadcast_table_(false),
+    is_dynamic_replica_select_table_(false)
   {
   }
   virtual ~ObTableLocation() { reset(); }
@@ -748,9 +772,10 @@ public:
                                        uint64_t ref_table_id,
                                        ObDASTableLoc *&table_loc);
   bool is_duplicate_table() const { return loc_meta_.is_dup_table_; }
-  bool is_dynamic_replica_select_table() const { return (is_duplicate_table() || get_is_broadcast_table()) &&
-                                                         !is_partitioned() &&
-                                                         loc_meta_.is_weak_read_; }
+  bool is_dynamic_replica_select_table() const { return is_dynamic_replica_select_table_; }
+  void set_dynamic_replica_select_table(const bool is_dynamic_replica_select_table) {
+    is_dynamic_replica_select_table_ = is_dynamic_replica_select_table;
+  }
   void set_broadcast_table(const bool is_broadcast_table) {
     is_broadcast_table_ = is_broadcast_table;
   }
@@ -803,6 +828,11 @@ public:
     return (part_level_ == share::schema::PARTITION_LEVEL_ZERO) ||
            (part_level_ == share::schema::PARTITION_LEVEL_ONE && (part_get_all_ || !is_part_range_get_)) ||
            (part_level_ == share::schema::PARTITION_LEVEL_TWO && (subpart_get_all_ || part_get_all_ || !is_part_range_get_ || !is_subpart_range_get_));
+  }
+
+  inline bool is_column_list_part(share::schema::ObPartitionFuncType part_type, bool is_col_expr)
+  {
+    return (PARTITION_FUNC_TYPE_LIST == part_type && is_col_expr) || PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type;
   }
 
   void set_has_dynamic_exec_param(bool flag) {  has_dynamic_exec_param_ = flag; }
@@ -1064,7 +1094,8 @@ private:
   int extract_value_item_expr(ObExecContext *exec_ctx,
                               const ObRawExpr *expr,
                               const ObRawExpr *dst_expr,
-                              ValueItemExpr &vie);
+                              ValueItemExpr &vie,
+                              RowDesc *row_desc = nullptr);
 
   int check_expr_equal(const ObRawExpr *partition_expr,
                        const ObRawExpr *check_expr,
@@ -1110,13 +1141,14 @@ private:
                const int64_t column_num,
                common::ObNewRow &row) const;
 
-  int se_calc_value_item(ObCastCtx cast_ctx,
-                         ObExecContext &exec_ctx,
-                         const ParamStore &params,
-                         const ValueItemExpr &vie,
-                         ObNewRow &input_row,
-                         ObObj &value) const;
-
+public:
+  static int se_calc_value_item(ObCastCtx cast_ctx,
+                                ObExecContext &exec_ctx,
+                                const ParamStore &params,
+                                const ValueItemExpr &vie,
+                                const ObNewRow &input_row,
+                                ObObj &value);
+private:
   int se_calc_value_item_row(common::ObExprCtx &expr_ctx,
                              ObExecContext &exec_ctx,
                              const ISeValueItemExprs &vies,
@@ -1187,6 +1219,23 @@ private:
                                          const uint64_t tenant_id,
                                          const ObTabletID src_tablet_id,
                                          const int64_t idx) const;
+
+  int get_list_value_node(const ObPartitionLevel part_level,
+                         const ColumnIArray &partition_columns,
+                         const ObIArray<ObRawExpr*> &filter_exprs,
+                         bool &always_true,
+                         ObPartLocCalcNode *&calc_node,
+                         ObExecContext *exec_ctx);
+
+  int calc_list_value_partition_ids(
+      ObExecContext &exec_ctx,
+      ObDASTabletMapper &tablet_mapper,
+      const ParamStore &params,
+      const ObPLListValueNode *calc_node,
+      ObIArray<ObTabletID> &tablet_ids,
+      ObIArray<ObObjectID> &partition_ids,
+      const ObDataTypeCastParams &dtc_params,
+      const ObIArray<ObObjectID> *part_ids) const;
 public:
   inline const ObIArray<common::ObObjectID> &get_part_hint_ids() const
   {
@@ -1248,6 +1297,7 @@ private:
   common::ObList<DASRelatedTabletMap::MapEntry, common::ObIAllocator> related_list_;
   bool check_no_partition_;
   bool is_broadcast_table_;
+  bool is_dynamic_replica_select_table_;
 };
 
 }

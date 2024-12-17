@@ -174,10 +174,10 @@ bool ObCgroupCtrl::check_cgroup_status()
     // In case symbolic link is deleted
     if (OB_TMP_FAIL(check_cgroup_root_dir())) {
       LOG_WARN_RET(tmp_ret, "check cgroup root dir failed", K(tmp_ret));
-      set_valid(false);
+      valid_ = false;
     }
   } else if (GCONF.enable_cgroup == false && is_valid() == true) {
-    set_valid(false);
+    valid_ = false;
     if (OB_TMP_FAIL(check_cgroup_root_dir())) {
       LOG_WARN_RET(tmp_ret, "check cgroup root dir failed", K(tmp_ret));
     } else if (OB_TMP_FAIL(regist_observer_to_cgroup(OBSERVER_ROOT_CGROUP_DIR))) {
@@ -200,7 +200,7 @@ bool ObCgroupCtrl::check_cgroup_status()
       LOG_WARN_RET(tmp_ret, "regist observer thread to cgroup failed", K(tmp_ret), K(OTHER_CGROUP_DIR));
     } else {
       need_regist_cgroup = true;
-      set_valid(true);
+      valid_ = true;
       LOG_INFO("init cgroup success");
     }
   }
@@ -226,7 +226,7 @@ int ObCgroupCtrl::check_cgroup_root_dir()
 void ObCgroupCtrl::destroy()
 {
   if (is_valid()) {
-    set_valid(false);
+    valid_ = false;
     recursion_remove_group_(OBSERVER_ROOT_CGROUP_DIR, false /* if_remove_top */);
   }
 }
@@ -273,25 +273,22 @@ int ObCgroupCtrl::remove_dir_(const char *curr_dir, bool is_delete_group)
   char target_task_path[PATH_BUFSIZE];
   snprintf(group_task_path, PATH_BUFSIZE, "%s/tasks", curr_dir);
   if (is_delete_group) {
-    snprintf(target_task_path, PATH_BUFSIZE, "%s/../tasks", curr_dir);
-  } else {
     snprintf(target_task_path, PATH_BUFSIZE, "%s/../OBCG_DEFAULT/tasks", curr_dir);
-  }
-  FILE *group_task_file = nullptr;
-  if (OB_ISNULL(group_task_file = fopen(group_task_path, "r"))) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("open group failed", K(ret), K(group_task_path), K(errno), KERRMSG);
-  } else {
-    char tid_buf[VALUE_BUFSIZE];
-    int tmp_ret = OB_SUCCESS;
-    while (fgets(tid_buf, VALUE_BUFSIZE, group_task_file)) {
-      if (OB_TMP_FAIL(ObCgroupCtrl::write_string_to_file_(target_task_path, tid_buf))) {
-        LOG_WARN("remove tenant task failed", K(tmp_ret), K(target_task_path));
+    FILE *group_task_file = nullptr;
+    if (OB_ISNULL(group_task_file = fopen(group_task_path, "r"))) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("open group failed", K(ret), K(group_task_path), K(errno), KERRMSG);
+    } else {
+      char tid_buf[VALUE_BUFSIZE];
+      int tmp_ret = OB_SUCCESS;
+      while (fgets(tid_buf, VALUE_BUFSIZE, group_task_file)) {
+        if (OB_TMP_FAIL(ObCgroupCtrl::write_string_to_file_(target_task_path, tid_buf))) {
+          LOG_WARN("remove tenant task failed", K(tmp_ret), K(target_task_path));
+        }
       }
+      fclose(group_task_file);
     }
-    fclose(group_task_file);
   }
-
   if (OB_SUCCESS != ret) {
   } else if (OB_FAIL(FileDirectoryUtils::delete_directory(curr_dir))) {
     LOG_WARN("remove group directory failed", K(ret), K(curr_dir));
@@ -397,8 +394,7 @@ int ObCgroupCtrl::remove_cgroup(const uint64_t tenant_id, const uint64_t group_i
 
 // return "root_cgroup_path/[base_path]/[user_tenant_path]/[meta_tenant_path]/[group_path]"
 int ObCgroupCtrl::get_group_path(
-    char *group_path, int path_bufsize, const uint64_t tenant_id, uint64_t group_id, const bool is_background /* = false*/,
-    const char *base_path /* = ""*/)
+    char *group_path, int path_bufsize, const uint64_t tenant_id, uint64_t group_id, const bool is_background /* = false*/)
 {
   int ret = OB_SUCCESS;
 

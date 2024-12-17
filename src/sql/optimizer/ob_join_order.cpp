@@ -577,17 +577,21 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
   const ObDMLStmt *stmt = NULL;
   ObSEArray<ObRawExpr*, 8> range_exprs;
   ObSEArray<OrderItem, 8> range_orders;
-  path->is_local_order_ = false;
-  path->is_range_order_ = false;
   if (OB_ISNULL(path) || OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
       OB_ISNULL(path->strong_sharding_) || OB_ISNULL(path->table_partition_info_) ||
       OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(path), K(ret));
+  } else if (OB_FALSE_IT(path->is_local_order_ = false)) {
+  } else if (OB_FALSE_IT(path->is_range_order_ = false)) {
   } else if (path->est_cost_info_.index_meta_info_.is_multivalue_index_) {
     // The Json multi-value index scan operator will perform sorting and deduplication based on the primary key or docid.
     // As a result, the final output order of the data may not match the original index table output order.
     // Therefore, it's necessary to add an additional sort operator at the upper level.
+    path->ordering_.reset();
+  } else if (share::is_oracle_mapping_real_virtual_table(path->ref_table_id_)) {
+    // Oracle agent tabel may has different collation between schema and real table.
+    // Hence we should not use the ordering from oracle agent table.
     path->ordering_.reset();
   } else if (path->use_das_ &&
              !path->ordering_.empty() &&
@@ -1776,6 +1780,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->index_prefix_ = index_info_entry->get_range_info().get_index_prefix();
     ap->use_column_store_ = use_column_store;
     ap->est_cost_info_.use_column_store_ = use_column_store;
+    ap->force_direction_ = index_info_entry->is_force_direction();
 
     ap->contain_das_op_ = ap->use_das_;
     ap->is_ror_ = (ref_id == index_id) ? true
@@ -1785,8 +1790,9 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     } else if (OB_FAIL(init_sample_info_for_access_path(ap, table_id, table_item))) {
       LOG_WARN("failed to init sample info", K(ret));
     } else if (OB_FAIL(add_access_filters(ap,
-                                          ordering_info.get_index_keys(),
+                                          range_info.get_range_columns(),
                                           (nullptr == range_info.get_query_range_provider()) ? nullptr : &range_info.get_query_range_provider()->get_range_exprs(),
+                                          (nullptr == range_info.get_query_range_provider()) ? nullptr : &range_info.get_query_range_provider()->get_unprecise_range_exprs(),
                                           helper))) {
       LOG_WARN("failed to add access filters", K(*ap), K(ordering_info.get_index_keys()), K(ret));
     } else if (OB_FAIL(get_plan()->get_stmt()->get_column_items(table_id, ap->est_cost_info_.access_column_items_))) {
@@ -2153,6 +2159,7 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
                                           common::ObIArray<ObRawExpr*> &index_keys,
                                           common::ObIArray<ObRawExpr*> &ordering,
                                           ObOrderDirection &direction,
+                                          bool &force_direction,
                                           const bool is_index_back)
 {
   int ret = OB_SUCCESS;
@@ -2161,10 +2168,13 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
   ObOptimizerContext *opt_ctx = NULL;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *index_schema = NULL;
+  ObOrderDirection hint_direction = UNORDERED;
+  force_direction = false;
   if (OB_ISNULL(get_plan())
       || OB_ISNULL(stmt = get_plan()->get_stmt())
       || OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())
-      || OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard())) {
+      || OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard())
+      || OB_ISNULL(opt_ctx->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error",
              K(get_plan()), K(stmt), K(opt_ctx),  K(schema_guard), K(ret));
@@ -2181,6 +2191,14 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
     // for global index lookup without keep order, the ordering is wrong.
   } else if (OB_FAIL(append(ordering, index_keys))) {
     LOG_WARN("failed to append index ordering expr", K(ret));
+  } else if (OB_FAIL(get_plan()->get_log_plan_hint().check_scan_direction(*opt_ctx->get_query_ctx(),
+                                                                          table_id,
+                                                                          index_id,
+                                                                          hint_direction))) {
+    LOG_WARN("failed to check scan direction", K(ret), K(table_id));
+  } else if (UNORDERED != hint_direction) {
+    direction = hint_direction;
+    force_direction = true;
   } else if (OB_FAIL(get_index_scan_direction(ordering, stmt,
                                               get_plan()->get_equal_sets(), direction))) {
     LOG_WARN("failed to get index scan direction", K(ret));
@@ -2322,26 +2340,47 @@ int ObJoinOrder::get_direction_in_order_by(const ObIArray<OrderItem> &order_by,
 }
 
 int ObJoinOrder::add_access_filters(AccessPath *path,
-                                    const ObIArray<ObRawExpr *> &index_keys,
+                                    const ObIArray<ColumnItem> &range_cols,
                                     const ObIArray<ObRawExpr *> *range_exprs,
+                                    const common::ObIArray<ObRawExpr*> *unprecise_range_exprs,
                                     PathHelper &helper)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
   const ObIArray<ObRawExpr *> &restrict_infos = helper.filters_;
+  ObSEArray<uint64_t, 4> range_col_ids;
+  ObSEArray<ObRawExpr *, 4> dummy;
+  ObSEArray<ObRawExpr *, 4> remove_dup;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(path)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error", K(get_plan()), K(stmt), K(path), K(ret));
   } else {
-    ObSEArray<ObRawExpr *, 4> remove_dup;
+    for (int i = 0; OB_SUCC(ret) && i < range_cols.count(); i++) {
+      if (OB_FAIL(range_col_ids.push_back(range_cols.at(i).column_id_))) {
+        LOG_WARN("failed to push back column_id", K(ret), K(i));
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < restrict_infos.count(); i++) {
       bool found = false;
       for (int64_t j = 0; OB_SUCC(ret) && !found && j < deduced_exprs_info_.count(); j++) {
         const DeducedExprInfo &deduced_expr_info = deduced_exprs_info_.at(j);
-        if (ObOptimizerUtil::is_expr_equivalent(deduced_expr_info.deduced_expr_, restrict_infos.at(i),
+        if (ObOptimizerUtil::is_expr_equivalent(deduced_expr_info.deduced_expr_,
+                                                restrict_infos.at(i),
                                                 get_plan()->get_equal_sets())) {
           found = true;
-          if (range_exprs != nullptr && ObOptimizerUtil::find_equal_expr(*range_exprs, restrict_infos.at(i))) {
+          bool extract_unprecise_range = false;
+          // old query range unprecise check
+          if (OB_FAIL(can_extract_unprecise_range(path->table_id_,
+                                                  deduced_expr_info.deduced_expr_,
+                                                  range_col_ids,
+                                                  dummy,
+                                                  extract_unprecise_range))) {
+            LOG_WARN("failed to check can extract unprecise range", K(ret));
+          } else if (extract_unprecise_range ||
+                     (OB_NOT_NULL(range_exprs) &&
+                     ObOptimizerUtil::find_equal_expr(*range_exprs, restrict_infos.at(i))) ||
+                     (OB_NOT_NULL(unprecise_range_exprs) &&
+                     ObOptimizerUtil::find_equal_expr(*unprecise_range_exprs, restrict_infos.at(i)))) {
             if (OB_FAIL(path->filter_.push_back(restrict_infos.at(i)))) {
               LOG_WARN("push back error", K(ret));
             } else if (OB_FAIL(append(helper.const_param_constraints_, deduced_expr_info.const_param_constraints_))) {
@@ -2415,6 +2454,7 @@ int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
       if (index_info_entry.is_index_geo()) {
         range_prefix_count = 1;
       }
+      ObSEArray<uint64_t, 4> range_col_ids;
       if (OB_UNLIKELY(range_prefix_count > range_columns.count())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("range prefix count is invalid", K(range_prefix_count), K(ret));
@@ -2422,6 +2462,38 @@ int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
         for (int i = 0; OB_SUCC(ret) && i < range_prefix_count; ++i) {
           if (OB_FAIL(prefix_range_ids.push_back(range_columns.at(i).column_id_))) {
             LOG_WARN("failed to push back column_id", K(ret), K(i));
+          }
+        }
+        // deal with unprecise dynamic range generated on execution stage
+        for (int i = 0; OB_SUCC(ret) && i < range_columns.count(); i++) {
+          if (OB_FAIL(range_col_ids.push_back(range_columns.at(i).column_id_))) {
+            LOG_WARN("failed to push back column_id", K(ret), K(i));
+          }
+        }
+        for (int i = 0; OB_SUCC(ret) && i < restrict_infos.count(); i++) {
+          bool can_extract = false;
+          ObSEArray<ObRawExpr *, 4> unprecise_exprs;
+          ObSEArray<uint64_t, 4> expr_col_ids;
+          if (OB_ISNULL(restrict_infos.at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("restrict_infos.at(i) is null", K(ret), K(i));
+          } else if (OB_NOT_NULL(query_range_info->get_pre_range_graph()) &&
+                     OB_FAIL(unprecise_exprs.assign(query_range_info->get_pre_range_graph()->get_unprecise_range_exprs()))) {
+            LOG_WARN("failed to assign unprecise range exprs", K(ret));
+          } else if (OB_FAIL(can_extract_unprecise_range(table_id,
+                                                        restrict_infos.at(i),
+                                                        range_col_ids,
+                                                        unprecise_exprs,
+                                                        can_extract))) {
+            LOG_WARN("failed to check can extract unprecise range", K(ret));
+          } else if (!can_extract) {
+            // do nothing
+          } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(restrict_infos.at(i), table_id, expr_col_ids))) {
+            LOG_WARN("failed to extract column ids", K(ret));
+          } else if (!ObOptimizerUtil::is_subset(expr_col_ids, range_col_ids)) {
+            // do nothing
+          } else if (OB_FAIL(append_array_no_dup(prefix_range_ids, expr_col_ids))) {
+            LOG_WARN("failed to append array no dup", K(ret));
           }
         }
       }
@@ -2639,6 +2711,7 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
       entry->set_index_id(index_id);
       int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
       int64_t max_prefix_count = 0;
+      bool force_direction = false;
       if (OB_FAIL(get_simple_index_info(table_id, base_table_id, index_id,
                                                is_unique_index, is_index_back, is_index_global))) {
         LOG_WARN("failed to get simple index info", K(ret));
@@ -2646,6 +2719,7 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
                                            entry->get_ordering_info().get_index_keys(),
                                            entry->get_ordering_info().get_ordering(),
                                            direction,
+                                           force_direction,
                                            is_index_back))) {
         LOG_WARN("get access path ordering ", K(ret));
       } else {
@@ -2657,6 +2731,7 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
         entry->set_is_multivalue_index(index_schema->is_multivalue_index_aux());
         entry->set_is_vector_index(index_schema->is_vec_index());
         entry->get_ordering_info().set_scan_direction(direction);
+        entry->set_force_direction(force_direction);
       }
       if (OB_SUCC(ret)) {
         ObSEArray<OrderItem, 4> index_ordering;
@@ -6194,6 +6269,7 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
   table_partition_info_ = other.table_partition_info_;
   is_get_ = other.is_get_;
   order_direction_ = other.order_direction_;
+  force_direction_ = other.force_direction_;
   is_hash_index_ = other.is_hash_index_;
   sample_info_ = other.sample_info_;
   range_prefix_count_ = other.range_prefix_count_;
@@ -10918,7 +10994,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   bool is_partition_wise = false;
   bool is_ext_partition_wise = false;
   bool right_is_base_table = false;
-  bool need_pull_to_local = false;
   ObSEArray<ObRawExpr*, 8> target_part_keys;
   ObShardingInfo *left_sharding = NULL;
   ObShardingInfo *right_sharding = NULL;
@@ -11150,11 +11225,9 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     } else if (is_partition_wise) {
       bool need_reduce_dop = left_path.parallel_more_than_part_cnt()
                              || right_path.parallel_more_than_part_cnt();
-      if (!need_reduce_dop && left_path.exchange_allocated_ == right_path.exchange_allocated_) {
+      if (!need_reduce_dop) {
         distributed_methods = DIST_PARTITION_WISE;
         OPT_TRACE("plan will use partition wise method");
-      } else {
-        need_pull_to_local = true;
       }
     } else {
       distributed_methods &= ~DIST_PARTITION_WISE;
@@ -11249,7 +11322,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       if (use_shared_hash_join && HASH_JOIN == join_algo) {
         distributed_methods &= ~DIST_BC2HOST_NONE;
       }
-      need_pull_to_local = right_path.exchange_allocated_;
     }
   }
   // check if match hash none
@@ -11290,7 +11362,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       OPT_TRACE("plan will use none partition method and prune none broadcast/hash method");
       distributed_methods &= ~DIST_NONE_BROADCAST;
       distributed_methods &= ~DIST_NONE_HASH;
-      need_pull_to_local = false;
     }
   }
   // check if match none-hash
@@ -11326,8 +11397,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
    * if we have other parallel join methods, avoid pull to local execution,
    * we may change this strategy in future
    */
-  if (OB_SUCC(ret) && distributed_methods != DIST_PULL_TO_LOCAL &&
-      !need_pull_to_local) {
+  if (OB_SUCC(ret) && distributed_methods != DIST_PULL_TO_LOCAL) {
     distributed_methods &= ~DIST_PULL_TO_LOCAL;
     OPT_TRACE("plan will not use pull to local method");
   }
@@ -13698,10 +13768,10 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
   } else {
     ObSqlSchemaGuard *schema_guard = NULL;
     const ObTableSchema* index_schema = NULL;
-    ObBitSet<> expr_column_bs;
-    ObBitSet<> index_column_bs;
-    ObBitSet<> prefix_column_bs;
-    ObBitSet<> ex_prefix_column_bs;
+    ObSEArray<uint64_t, 4> expr_column_ids;
+    ObSEArray<uint64_t, 4> index_column_ids;
+    ObSEArray<uint64_t, 4> prefix_column_ids;
+    ObSEArray<uint64_t, 4> ex_prefix_column_ids;
     ObSEArray<ObColDesc, 16> index_column_descs;
     const ObIArray<ObRawExpr*> &unprecise_range_exprs = query_range_provider->get_unprecise_range_exprs();
     if (OB_ISNULL(get_plan()) ||
@@ -13724,9 +13794,9 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
       }
       // replace cellid column id with geo column id, since filters only record geo column id.
       for (int64_t i = 0; OB_SUCC(ret) && i < index_column_descs.count(); i++) {
-        if (is_geo_index && (i == 0) && OB_FAIL(index_column_bs.add_member(geo_column_id))) {
+        if (is_geo_index && (i == 0) && OB_FAIL(add_var_to_array_no_dup(index_column_ids, geo_column_id))) {
           LOG_WARN("failed to add geo member", K(ret), K(i), K(geo_column_id));
-        } else if (OB_FAIL(index_column_bs.add_member(index_column_descs.at(i).col_id_))) {
+        } else if (OB_FAIL(add_var_to_array_no_dup(index_column_ids, static_cast<uint64_t>(index_column_descs.at(i).col_id_)))) {
           LOG_WARN("failed to add member", K(ret));
         }
       }
@@ -13749,7 +13819,7 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
       //真正的prefix filter是c1 = 1 and c2 = 1 and c3 = 3，
       //c1 = ? and c2 = ? 需要放到pushdown prefix filter中
       ObSEArray<ObRawExpr*, 4> new_prefix_filters;
-      ObBitSet<> column_bs;
+      ObSEArray<uint64_t, 4> column_ids;
       //首先找到所有条件下推的表达式包含的index column ids
       for (int64_t i = 0; OB_SUCC(ret) && i < est_cost_info.prefix_filters_.count(); ++i) {
         ObRawExpr *expr = est_cost_info.prefix_filters_.at(i);
@@ -13759,8 +13829,8 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
         } else if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
           ret = est_cost_info.pushdown_prefix_filters_.push_back(expr);
         } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(expr,
-                                                       est_cost_info.table_id_,
-                                                       column_bs))) {
+                                                              est_cost_info.table_id_,
+                                                              column_ids))) {
           LOG_WARN("failed to extract column ids", K(ret));
         } else {
           ret = new_prefix_filters.push_back(expr);
@@ -13776,27 +13846,27 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
         if (is_geo_index && (i == 0)) {
           column_id = geo_column_id;
         }
-        if (!column_bs.has_member(column_id)) {
+        if (!ObOptimizerUtil::find_item(column_ids, column_id)) {
           first_param_column_idx = i;
         } else {
-          ret = prefix_column_bs.add_member(column_id);
+          ret = add_var_to_array_no_dup(prefix_column_ids, column_id);
         }
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ex_prefix_column_bs.add_members(prefix_column_bs))) {
+      } else if (OB_FAIL(append_array_no_dup(ex_prefix_column_ids, prefix_column_ids))) {
         LOG_WARN("failed to add members", K(ret));
       } else if (-1 != first_param_column_idx) {
         uint64_t column_id = est_cost_info.range_columns_.at(first_param_column_idx).column_id_;
         if (is_geo_index && (first_param_column_idx == 0)) {
           column_id = geo_column_id;
         }
-        ret = ex_prefix_column_bs.add_member(column_id);
+        ret = add_var_to_array_no_dup(ex_prefix_column_ids, column_id);
       }
 
       //如果filter不在prefix filter中，但是是索引列的filter，那么应该在回表前计算
       for (int64_t i = 0; OB_SUCC(ret) && i < all_filters.count(); i++) {
-        expr_column_bs.reset();
+        expr_column_ids.reset();
         ObRawExpr *filter = NULL;
         bool can_extract = false;
         if (OB_ISNULL(filter = all_filters.at(i))) {
@@ -13805,12 +13875,12 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
         } else if (ObOptimizerUtil::find_equal_expr(est_cost_info.prefix_filters_, filter)) {
           /*do nothing*/
         } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(filter, est_cost_info.table_id_,
-                                                       expr_column_bs))) {
+                                                               expr_column_ids))) {
           LOG_WARN("failed to extract column ids", K(ret));
-        } else if (!expr_column_bs.is_subset(index_column_bs)) {
+        } else if (!ObOptimizerUtil::is_subset(expr_column_ids, index_column_ids)) {
           ret = est_cost_info.table_filters_.push_back(filter);
         } else if (OB_FAIL(can_extract_unprecise_range(est_cost_info.table_id_, filter,
-                                                       ex_prefix_column_bs,
+                                                       ex_prefix_column_ids,
                                                        unprecise_range_exprs,
                                                        can_extract))) {
           LOG_WARN("failed to extract column ids", K(ret));
@@ -13834,20 +13904,20 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
 
       if (est_cost_info.pushdown_prefix_filters_.empty()) {
         //没有EXEC_PARAM, do nothing
-      } else if (!column_bs.is_empty()) {
+      } else if (!column_ids.empty()) {
         est_cost_info.prefix_filters_.reset();
         //没有query range的prefix_filters需要放到pushdown prefix filter中
         for (int64_t i = 0; OB_SUCC(ret) && i < new_prefix_filters.count(); ++i) {
-          expr_column_bs.reset();
+          expr_column_ids.reset();
           ObRawExpr *filter = new_prefix_filters.at(i);
           if (OB_ISNULL(filter)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null expr", K(ret));
           } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(filter,
                                                         est_cost_info.table_id_,
-                                                        expr_column_bs))) {
+                                                        expr_column_ids))) {
             LOG_WARN("failed to extract column ids", K(ret));
-          } else if (expr_column_bs.is_subset(prefix_column_bs)) {
+          } else if (ObOptimizerUtil::is_subset(expr_column_ids, prefix_column_ids)) {
             ret = est_cost_info.prefix_filters_.push_back(filter);
           } else {
             ret = est_cost_info.pushdown_prefix_filters_.push_back(filter);
@@ -13872,7 +13942,7 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
 
 int ObJoinOrder::can_extract_unprecise_range(const uint64_t table_id,
                                              const ObRawExpr *filter,
-                                             const ObBitSet<> &ex_prefix_column_bs,
+                                             const ObIArray<uint64_t> &prefix_column_ids,
                                              const ObIArray<ObRawExpr*> &unprecise_exprs,
                                              bool &can_extract)
 {
@@ -13908,7 +13978,7 @@ int ObJoinOrder::can_extract_unprecise_range(const uint64_t table_id,
       ObObjType column_type = column->get_result_type().get_type();
       ObObjType exec_param_type = exec_param->get_result_type().get_type();
       if (column->get_table_id() != table_id
-          || !ex_prefix_column_bs.has_member(column->get_column_id())) {
+          || !ObOptimizerUtil::find_item(prefix_column_ids, column->get_column_id())) {
         /*do nothing*/
       } else if ((ObCharType == column_type && ObVarcharType == exec_param_type)
                 || (ObNCharType == column_type && ObNVarchar2Type == exec_param_type)) {
@@ -13933,7 +14003,7 @@ int ObJoinOrder::can_extract_unprecise_range(const uint64_t table_id,
       ObObjType column_type = column->get_result_type().get_type();
       ObObjType patten_type = patten_expr->get_result_type().get_type();
       if (column->get_table_id() != table_id
-          || !ex_prefix_column_bs.has_member(column->get_column_id())) {
+          || !ObOptimizerUtil::find_item(prefix_column_ids, column->get_column_id())) {
         /*do nothing*/
       } else if (column_type == patten_type && ob_is_string_type(column_type)) {
         can_extract = true;
@@ -13964,7 +14034,7 @@ int ObJoinOrder::can_extract_unprecise_range(const uint64_t table_id,
       ObObjType column_type = column->get_result_type().get_type();
       ObObjType exec_param_type = exec_param->get_result_type().get_type();
       if (column->get_table_id() != table_id
-          || !ex_prefix_column_bs.has_member(column->get_column_id())) {
+          || !ObOptimizerUtil::find_item(prefix_column_ids, column->get_column_id())) {
         /*do nothing*/
       } else if ((ob_is_string_type(column_type) || ob_is_geometry(column_type))
                 && (ob_is_string_type(exec_param_type) || ob_is_geometry(exec_param_type))) {
@@ -16169,6 +16239,7 @@ int ObJoinOrder::generate_inner_base_table_paths(const ObIArray<ObRawExpr *> &jo
                                             helper.pushdown_filters_,
                                             nl_params,
                                             helper.subquery_exprs_,
+                                            helper,
                                             is_valid))) {
     LOG_WARN("failed to check inner path valid", K(ret));
   } else if (!is_valid) {
@@ -16211,6 +16282,7 @@ int ObJoinOrder::check_inner_path_valid(const ObIArray<ObRawExpr *> &join_condit
                                         ObIArray<ObRawExpr *> &param_pushdown_quals,
                                         ObIArray<ObExecParamRawExpr *> &nl_params,
                                         ObIArray<ObRawExpr *> &subquery_exprs,
+                                        PathHelper &helper,
                                         bool &is_valid)
 {
   int ret = OB_SUCCESS;
@@ -16240,6 +16312,10 @@ int ObJoinOrder::check_inner_path_valid(const ObIArray<ObRawExpr *> &join_condit
                                                    pushdown_quals,
                                                    param_pushdown_quals))) {
     LOG_WARN("failed to extract params for inner path", K(ret));
+  } else if (OB_FAIL(get_generated_col_index_qual(table_item->table_id_,
+                                                  param_pushdown_quals,
+                                                  helper))) {
+    LOG_WARN("failed to deduce generated col index expr", K(ret));
   } else if (force_inner_nl) {
     is_valid = true;
   } else if (OB_FAIL(ObOptimizerUtil::check_pushdown_filter_to_base_table(
@@ -16759,19 +16835,18 @@ int ObJoinOrder::add_deduced_expr(ObRawExpr *deduced_expr,
                       ObRawExpr *deduce_from,
                       bool is_persistent)
 {
-  ObExprEqualCheckContext equal_ctx;
-  return add_deduced_expr(deduced_expr, deduce_from, is_persistent, equal_ctx);
+  ObSEArray<ObPCConstParamInfo, 2> param_infos;
+  return add_deduced_expr(deduced_expr, deduce_from, is_persistent, param_infos);
 }
 
 int ObJoinOrder::add_deduced_expr(ObRawExpr *deduced_expr,
-                      ObRawExpr *deduced_from,
-                      bool is_precise,
-                      ObExprEqualCheckContext &equal_ctx)
+                                  ObRawExpr *deduced_from,
+                                  bool is_precise,
+                                  ObIArray<ObPCConstParamInfo> &param_infos)
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *phy_plan_ctx = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(OPT_CTX.get_exec_ctx()) ||
-      OB_ISNULL(phy_plan_ctx = OPT_CTX.get_exec_ctx()->get_physical_plan_ctx())) {
+  if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
   } else {
@@ -16779,25 +16854,8 @@ int ObJoinOrder::add_deduced_expr(ObRawExpr *deduced_expr,
     deduced_expr_info.deduced_expr_ = deduced_expr;
     deduced_expr_info.deduced_from_expr_ = deduced_from;
     deduced_expr_info.is_precise_ = is_precise;
-    for(int64_t i = 0; OB_SUCC(ret) && i < equal_ctx.param_expr_.count(); i++) {
-      int64_t param_idx = equal_ctx.param_expr_.at(i).param_idx_;
-      ObPCConstParamInfo param_info;
-      if (OB_UNLIKELY(param_idx < 0 || param_idx >= phy_plan_ctx->get_param_store().count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(param_idx),
-                                          K(phy_plan_ctx->get_param_store().count()));
-      } else if (OB_FAIL(param_info.const_idx_.push_back(param_idx))) {
-        LOG_WARN("failed to push back param idx", K(ret));
-      } else if (OB_FAIL(param_info.const_params_.push_back(
-                                                    phy_plan_ctx->get_param_store().at(param_idx)))) {
-        LOG_WARN("failed to push back value", K(ret));
-      } else if (OB_FAIL(deduced_expr_info.const_param_constraints_.push_back(param_info))) {
-        LOG_WARN("failed to push back param info", K(ret));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-      //do nothing
+    if (OB_FAIL(append(deduced_expr_info.const_param_constraints_, param_infos))) {
+      LOG_WARN("failed to assign pc constraint", K(ret));
     } else if (OB_FAIL(deduced_exprs_info_.push_back(deduced_expr_info))) {
       LOG_WARN("push back failed", K(ret));
     }
@@ -16822,195 +16880,78 @@ int ObJoinOrder::get_generated_col_index_qual(const int64_t table_id,
     deduced_exprs_info_.reset();
     bool is_persistent = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
-      ObRawExpr *new_qual = NULL;
-      ObSEArray<ObRawExpr *, 4> new_quals;
       ObRawExpr *qual = quals.at(i);
+      ObRawExpr *new_prefix_qual = NULL;
+      bool match_prefix_idx = false;
+      ObSEArray<ObColumnRefRawExpr*, 4> prefix_cols;
+      ObSEArray<ObRawExpr*, 4> simple_prefix_preds;
+      bool match_common_gen_col_idx = false;
+      ObSEArray<ObColumnRefRawExpr*, 4> common_gen_cols;
+      ObSEArray<ObRawExpr*, 4> simple_gen_col_preds;
+      ObRawExpr *new_qual = NULL;
+      // deduce prefix index predicate
       if (OB_ISNULL(qual)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null", K(ret));
-      } else if (OB_FAIL(deduce_prefix_str_idx_exprs(qual, table_item, new_quals, helper))) {
-        LOG_WARN("deduce prefix str failed", K(ret));
-      } else if (!new_quals.empty()) {
-        if (OB_FAIL(append(quals, new_quals))) {
-          LOG_WARN("push back failed", K(ret));
+      } else if (OB_FAIL(get_plan()->get_stmt()->get_column_exprs(prefix_cols))) {
+        LOG_WARN("get column exprs failed", K(ret));
+      } else if (OB_FAIL(check_match_prefix_index(qual,
+                                                  table_item,
+                                                  prefix_cols,
+                                                  simple_prefix_preds,
+                                                  match_prefix_idx))) {
+        LOG_WARN("check match prefix idx failed", K(ret));
+      } else if (!match_prefix_idx || prefix_cols.empty()) {
+        // do nothing
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < prefix_cols.count(); j++) {
+          if (OB_FAIL(deduce_prefix_str_idx_expr(qual,
+                                                table_item,
+                                                prefix_cols.at(j),
+                                                simple_prefix_preds,
+                                                new_prefix_qual,
+                                                helper))) {
+            LOG_WARN("deduce prefix str idx expr failed", K(ret));
+          } else if (OB_ISNULL(new_prefix_qual)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("new qual is null", K(ret));
+          } else if (ObOptimizerUtil::find_equal_expr(quals, new_prefix_qual)) {
+            /*do nothing*/
+          } else if (OB_FAIL(quals.push_back(new_prefix_qual))) {
+            LOG_WARN("push back failed", K(ret));
+          }
+          LOG_TRACE("deduce prefix index expr", KPC(new_prefix_qual), KPC(qual));
         }
-        LOG_TRACE("deduce gen col of prefix str", K(new_quals), KPC(qual));
       }
+      // deduce common generated column index predicate
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(deduce_common_gen_col_index_expr(qual, table_item, new_qual))) {
-        LOG_WARN("deduce expr failed", K(ret));
-      } else if (new_qual != NULL) {
-        if (OB_FAIL(quals.push_back(new_qual))) {
-          LOG_WARN("push back failed", K(ret));
-        }
-        LOG_TRACE("deduce gen col of common", KPC(new_qual), KPC(qual));
+      } else if (OB_FAIL(get_plan()->get_stmt()->get_column_exprs(common_gen_cols))) {
+        LOG_WARN("get column exprs failed", K(ret));
+      } else if (OB_FAIL(check_match_common_gen_col_index(qual,
+                                                          table_item,
+                                                          common_gen_cols,
+                                                          simple_gen_col_preds,
+                                                          match_common_gen_col_idx))) {
+        LOG_WARN("check match prefix idx failed", K(ret));
+      } else if (!match_common_gen_col_idx || common_gen_cols.empty()) {
+        // do nothing
       } else {
-        //do nothing
-      }
-    }
-  }
-  return ret;
-}
-
-int ObJoinOrder::deduce_prefix_str_idx_exprs(ObRawExpr *expr,
-                                          const TableItem *table_item,
-                                          ObIArray<ObRawExpr*> &new_exprs,
-                                          PathHelper &helper)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else {
-    ObColumnRefRawExpr *column_expr = NULL;
-    ObRawExpr *value_expr = NULL;
-    ObRawExpr *escape_expr = NULL;
-    ObRawExpr *param_expr1 = NULL;
-    ObRawExpr *param_expr2 = NULL;
-    ObItemType type = expr->get_expr_type();
-
-    if (IS_BASIC_CMP_OP(expr->get_expr_type())
-                || IS_SINGLE_VALUE_OP(expr->get_expr_type())) {
-      //only =/</<=/>/>=/IN/like can deduce generated exprs
-      if (OB_ISNULL(param_expr1 = expr->get_param_expr(0)) || OB_ISNULL(param_expr2 = expr->get_param_expr(1))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null", K(*expr), K(expr->get_param_expr(0)), K(expr->get_param_expr(1)), K(ret));
-      } else if (T_OP_LIKE == expr->get_expr_type()) {
-        if (3 != expr->get_param_count() || OB_ISNULL(expr->get_param_expr(2))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("escape param is unexpected null", K(ret));
-        } else if (param_expr1->is_column_ref_expr()
-           && param_expr1->get_result_type().is_string_type()
-           && param_expr2->get_result_type().is_string_type()
-           && expr->get_param_expr(1)->is_static_scalar_const_expr()
-           && expr->get_param_expr(2)->is_static_scalar_const_expr()) {
-          column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
-          value_expr = expr->get_param_expr(1);
-          escape_expr = expr->get_param_expr(2);
-        }
-      } else if (T_OP_IN == expr->get_expr_type()) {
-        if (T_OP_ROW == param_expr2->get_expr_type()
-            && !param_expr2->has_generalized_column()
-            && param_expr1->get_result_type().is_string_type()
-            && param_expr1->is_column_ref_expr()) {
-          bool all_match = true;
-          for (int64_t j = 0; OB_SUCC(ret) && all_match && j < param_expr2->get_param_count(); ++j) {
-            if (OB_ISNULL(param_expr2->get_param_expr(j))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("param expr2 is null");
-            } else if (!param_expr2->get_param_expr(j)->get_result_type().is_string_type()
-                || param_expr2->get_param_expr(j)->get_collation_type() != param_expr1->get_collation_type()) {
-              all_match = false;
-            }
-          }
-          if (OB_SUCC(ret) && all_match && expr->get_param_expr(0)->is_column_ref_expr()) {
-            column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
-            value_expr = expr->get_param_expr(1);
-          }
-        }
-      } else if (param_expr1->is_column_ref_expr() && param_expr2->is_static_scalar_const_expr()) {
-        if (param_expr1->get_result_type().is_string_type() //only for string and same collation
-            && param_expr2->get_result_type().is_string_type()
-            && param_expr1->get_collation_type() == param_expr2->get_collation_type()) {
-          column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
-          value_expr = expr->get_param_expr(1);
-        }
-      } else if (param_expr1->is_static_scalar_const_expr() && param_expr2->is_column_ref_expr()) {
-        if (param_expr1->get_result_type().is_string_type()
-            && param_expr2->get_result_type().is_string_type()) {
-          type = get_opposite_compare_type(expr->get_expr_type());
-          column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(1));
-          value_expr = expr->get_param_expr(0);
-        }
-      } else if (param_expr1->is_column_ref_expr() && param_expr2->is_column_ref_expr()) {
-        //do nothing
-      }
-      if (OB_SUCC(ret) && column_expr != NULL && value_expr != NULL &&
-         column_expr->get_table_id() == table_item->table_id_ &&
-         OB_FAIL(get_prefix_str_idx_exprs(expr,
-                                          column_expr,
-                                          value_expr,
-                                          escape_expr,
-                                          table_item,
-                                          type,
-                                          new_exprs,
-                                          helper))) {
-        LOG_WARN("get_prefix str idx exprs failed", K(ret));
-      } else {
-        //do nothing
-      }
-    }
-  }
-
-  return ret;
-}
-
-
-int ObJoinOrder::get_prefix_str_idx_exprs(ObRawExpr *expr,
-                                        ObColumnRefRawExpr *column_expr,
-                                        ObRawExpr *value_expr,
-                                        ObRawExpr *escape_expr,
-                                        const TableItem *table_item,
-                                        ObItemType type,
-                                        ObIArray<ObRawExpr*> &new_exprs,
-                                        PathHelper &helper)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr) || OB_ISNULL(table_item) ||
-      OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else if (OB_ISNULL(column_expr) || OB_ISNULL(value_expr )) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else if (column_expr->has_generated_column_deps()) {
-    ObSEArray<ObColumnRefRawExpr *, 4> column_exprs;
-    if (OB_FAIL(get_plan()->get_stmt()->get_column_exprs(table_item->table_id_, column_exprs))) {
-      LOG_WARN("failed to get column exprs", K(ret));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < column_exprs.count(); ++j) {
-      ObRawExpr *new_expr = NULL;
-      ObColumnRefRawExpr *gen_column_expr = column_exprs.at(j);
-      if (OB_ISNULL(gen_column_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null", K(ret));
-      } else if (!gen_column_expr->is_generated_column()) {
-        //do nothing
-      } else {
-        const ObRawExpr *dep_expr = gen_column_expr->get_dependant_expr();
-        const ObRawExpr *substr_expr = NULL;
-        if (OB_ISNULL(dep_expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("generated column expr is null", K(*gen_column_expr), K(j), K(ret));
-        } else if (ObRawExprUtils::has_prefix_str_expr(*dep_expr, *column_expr, substr_expr)) {
-          ObItemType gen_type = type;
-          if (T_OP_GT == type) {
-            gen_type = T_OP_GE;
-          } else if (T_OP_LT == type) {
-            gen_type = T_OP_LE;
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(build_prefix_index_compare_expr(*gen_column_expr,
-                                                              const_cast<ObRawExpr*>(substr_expr),
-                                                              gen_type,
-                                                              *value_expr,
-                                                              escape_expr,
-                                                              new_expr,
-                                                              helper))) {
-            LOG_WARN("build prefix index compare expr failed", K(ret));
-          } else if (OB_ISNULL(new_expr)) {
-            //do nothing
-          } else if (OB_FAIL(new_expr->formalize(get_plan()->get_optimizer_context().get_session_info()))) {
-            LOG_WARN("formalize failed", K(ret));
-          } else if (OB_FAIL(new_expr->pull_relation_id())) {
-            LOG_WARN("pullup relids and level failed", K(ret));
-          } else if (OB_FAIL(add_deduced_expr(new_expr, expr, false))) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < common_gen_cols.count(); j++) {
+          if (OB_FAIL(deduce_common_gen_col_index_expr(qual,
+                                                      table_item,
+                                                      common_gen_cols.at(j),
+                                                      simple_gen_col_preds,
+                                                      new_qual,
+                                                      helper))) {
+            LOG_WARN("deduce gen col index expr failed", K(ret));
+          } else if (OB_ISNULL(new_qual)) {
+            // do nothing
+          } else if (ObOptimizerUtil::find_equal_expr(quals, new_qual)) {
+            /*do nothing*/
+          } else if (OB_FAIL(quals.push_back(new_qual))) {
             LOG_WARN("push back failed", K(ret));
-          } else if (OB_FAIL(new_exprs.push_back(new_expr))) {
-            LOG_WARN("push back failed", K(ret));
-          } else {
-            gen_column_expr->set_explicited_reference();
           }
+          LOG_TRACE("deduce gen col index expr", KPC(new_qual), KPC(qual));
         }
       }
     }
@@ -17028,33 +16969,26 @@ int ObJoinOrder::build_prefix_index_compare_expr(ObRawExpr &column_expr,
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *substr_expr = NULL;
-  bool got_result = false;
   if (T_OP_LIKE == type) {
     //build value substr expr
     ObOpRawExpr *like_expr = NULL;
     bool got_result = false;
     ObObj result;
     ObOptimizerContext *opt_ctx = NULL;
+    ObRawExpr *prefix_len_expr = NULL;
     if (OB_ISNULL(get_plan()) ||
         OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
-        OB_ISNULL(allocator_)) {
+        OB_ISNULL(allocator_) || OB_ISNULL(prefix_expr) ||
+        OB_ISNULL(prefix_len_expr = prefix_expr->get_param_expr(2))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(ret));
     } else if (OB_FAIL(ObRawExprUtils::create_prefix_pattern_expr(get_plan()->get_optimizer_context().get_expr_factory(),
                                                             get_plan()->get_optimizer_context().get_session_info(),
                                                             &value_expr,
-                                                            prefix_expr->get_param_expr(2),
+                                                            prefix_len_expr,
                                                             escape_expr,
                                                             substr_expr))) {
       LOG_WARN("create substr expr failed", K(ret));
-    } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(opt_ctx->get_exec_ctx(),
-                                                                 substr_expr,
-                                                                 result,
-                                                                 got_result,
-                                                                 *allocator_))) {
-      LOG_WARN("fail to calc prefix pattern expr", K(ret));
-    } else if (!got_result || result.is_null()) {
-      // prefix pattern is invalid, do nothing
     } else if (OB_FAIL(ObRawExprUtils::build_like_expr(get_plan()->get_optimizer_context().get_expr_factory(),
                                                        get_plan()->get_optimizer_context().get_session_info(),
                                                        &column_expr,
@@ -17128,64 +17062,6 @@ int ObJoinOrder::build_prefix_index_compare_expr(ObRawExpr &column_expr,
   return ret;
 }
 
-int ObJoinOrder::deduce_common_gen_col_index_expr(ObRawExpr *qual,
-                                                  const TableItem *table_item,
-                                                  ObRawExpr *&new_qual)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObColumnRefRawExpr *, 4> column_exprs;
-  new_qual = NULL;
-  if (OB_ISNULL(qual) || OB_ISNULL(get_plan()->get_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("qual is null", K(ret));
-  } else if (qual->get_expr_class() != ObRawExpr::EXPR_OPERATOR) { // these can extract query range
-    //do nothing
-  } else if (!qual->has_flag(CNT_COLUMN)) {
-    //do nothing
-  } else if (OB_FAIL(get_plan()->get_stmt()->get_column_exprs(table_item->table_id_, column_exprs))) {
-    LOG_WARN("failed to get column exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); i++) {
-      ObColumnRefRawExpr *column_expr = column_exprs.at(i);
-      if (OB_ISNULL(column_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("col is null", K(ret));
-      } else if (!column_expr->is_generated_column()) {
-        //do nothing
-      } else {
-        ObRawExpr* depend_expr = column_expr->get_dependant_expr();
-        bool is_lossless = true;
-        bool is_valid = true;
-        if (OB_ISNULL(depend_expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("depend epxr is null", K(ret));
-        } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_conv(depend_expr, is_lossless))) {
-          LOG_WARN("check depend epxr lossless failed", K(ret));
-        } else if(is_lossless) {
-          depend_expr = depend_expr->get_param_expr(4);
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(depend_expr, is_lossless))) {
-          LOG_WARN("check depend epxr lossless failed", K(ret));
-        } else if(is_lossless) {
-          depend_expr = depend_expr->get_param_expr(0);
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_ISNULL(depend_expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("depend epxr is null", K(ret));
-        } else if (OB_FAIL(try_get_generated_col_index_expr(qual, depend_expr, column_expr,
-                                                                 new_qual))) {
-          LOG_WARN("try get expr failed", K(ret));
-        } else if (new_qual != NULL) {
-          break;
-        }
-      }
-    } //end for
-  } //end loop
-  return ret;
-}
-
 int ObJoinOrder::try_get_json_generated_col_index_expr(ObRawExpr *depend_expr,
                                                        ObColumnRefRawExpr *col_expr,
                                                        ObRawExprCopier& copier,
@@ -17222,86 +17098,6 @@ int ObJoinOrder::try_get_json_generated_col_index_expr(ObRawExpr *depend_expr,
         if (OB_FAIL(ObRawExprUtils::replace_domain_wrapper_expr(depend_expr,
           col_expr, copier, expr_factory, session_info, tmp_qual, qual_pos, new_qual))) {
           LOG_WARN("failed to replace expr", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObJoinOrder::try_get_generated_col_index_expr(ObRawExpr *qual,
-                                                ObRawExpr *depend_expr,
-                                                ObColumnRefRawExpr *col_expr,
-                                                ObRawExpr *&new_qual)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(qual) || OB_ISNULL(depend_expr) ||
-      OB_ISNULL(get_plan()->get_stmt()) ||
-      OB_ISNULL(col_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("qual is null", K(ret));
-  } else {
-    ObRawExprFactory &expr_factory = OPT_CTX.get_expr_factory();
-    for (int64_t j = 0; OB_SUCC(ret) && new_qual == NULL && j < qual->get_param_count(); j++) {
-      ObRawExpr *child = qual->get_param_expr(j);
-      //to replace the j-th child
-      //remove inner cast's influence.
-      ObExprEqualCheckContext equal_ctx;
-      equal_ctx.override_const_compare_ = true;
-      bool is_same = false;
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("child is null", K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(child, child))) {
-        LOG_WARN("fail to get real child without lossless cast", K(ret));
-      } else if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("real child is null", K(ret));
-      } else if (depend_expr->same_as(*child, &equal_ctx)) {
-        is_same = true;
-      } else {
-        equal_ctx.reset();
-        equal_ctx.override_const_compare_ = true;
-        if (OB_FAIL(check_match_to_type(depend_expr, child, is_same, equal_ctx))) {
-          LOG_WARN("fail to check if to_<type> expr can be extracted", K(ret));
-        }
-      }
-      if (OB_SUCC(ret) && is_same) {
-        ObRawExprCopier copier(expr_factory);
-        ObSEArray<ObRawExpr *, 4> column_exprs;
-        ObSQLSessionInfo *session_info = OPT_CTX.get_session_info();
-
-        if (ObRawExprUtils::is_domain_expr_need_special_replace(child, depend_expr)) {
-          if (OB_FAIL(try_get_json_generated_col_index_expr(depend_expr,
-            col_expr, copier, expr_factory, session_info, qual, j, new_qual))) {
-            LOG_WARN("failed to replace expr", K(ret));
-          }
-        } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(qual, column_exprs))) {
-          LOG_WARN("extract_column_exprs error", K(ret));
-        } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
-          LOG_WARN("failed to add skipped exprs", K(ret));
-        } else if (OB_FAIL(copier.copy(qual, new_qual))) {
-          LOG_WARN("failed to copy expr node", K(ret));
-          //depend_expr's res type may be diff from its column's. copy real_qual and deduce type again.
-        } else if (OB_FAIL(static_cast<ObOpRawExpr *>(new_qual)->replace_param_expr(j, col_expr))) {
-          LOG_WARN("replace failed", K(ret));
-        }
-
-        if (OB_FAIL(ret) || OB_ISNULL(new_qual)) {
-        } else if (OB_FAIL(new_qual->formalize(session_info))) {
-          if (ret != OB_SUCCESS) {
-            //probably type deduced failed. do nothing
-            LOG_WARN("new qual is not formalized correctly", K(ret), K(*new_qual));
-            ret = OB_SUCCESS;
-            new_qual = NULL;
-            continue; //do not add this expr.
-          }
-        } else if (OB_FAIL(new_qual->pull_relation_id())) {
-          LOG_WARN("pull up rel and level failed", K(ret));
-        } else if (FALSE_IT(col_expr->set_explicited_reference())) {
-          //do nothing
-        } else if (OB_FAIL(add_deduced_expr(new_qual, qual, true, equal_ctx))) {
-          LOG_WARN("push back failed", K(ret));
         }
       }
     }
@@ -18665,5 +18461,539 @@ int ObJoinOrder::get_better_index_prefix(const ObIArray<ObRawExpr*> &range_exprs
       LOG_TRACE("choose better index prefix", K(better_index_prefix));
     }
   }
-    return ret;
+  return ret;
+}
+
+int ObJoinOrder::deduce_prefix_str_idx_expr(ObRawExpr *pred,
+                                            const TableItem *table_item,
+                                            ObColumnRefRawExpr *prefix_col,
+                                            ObIArray<ObRawExpr*> &simple_prefix_preds,
+                                            ObRawExpr *&new_pred,
+                                            PathHelper &helper)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> new_simple_preds;
+  if (OB_ISNULL(pred) || OB_ISNULL(table_item) || OB_ISNULL(prefix_col) || OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    // deduce for each simple prefix preds
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_prefix_preds.count(); i++) {
+      ObColumnRefRawExpr *column_expr = NULL;
+      ObRawExpr *value_expr = NULL;
+      ObRawExpr *escape_expr = NULL;
+      ObItemType type;
+      bool is_simple_pred = false;
+      if (OB_ISNULL(simple_prefix_preds.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FALSE_IT(type = simple_prefix_preds.at(i)->get_expr_type())) {
+      } else if (OB_FAIL(check_simple_prefix_cmp_expr(simple_prefix_preds.at(i),
+                                                      column_expr,
+                                                      value_expr,
+                                                      escape_expr,
+                                                      type,
+                                                      is_simple_pred))) {
+        LOG_WARN("check simple gen col cmp expr failed", K(ret));
+      } else if (OB_ISNULL(column_expr) || OB_ISNULL(value_expr) || !is_simple_pred ||
+                column_expr->get_table_id() != table_item->table_id_ || !prefix_col->is_generated_column()) {
+        // do nothing
+      } else {
+        const ObRawExpr *substr_expr = NULL;
+        const ObRawExpr *dep_expr = prefix_col->get_dependant_expr();
+        ObRawExpr *deduced_simple_pred = NULL;
+        if (OB_ISNULL(dep_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("generated column expr is null", K(ret));
+        } else if (ObRawExprUtils::has_prefix_str_expr(*dep_expr, *column_expr, substr_expr)) {
+          ObItemType gen_type = type;
+          if (T_OP_GT == type) {
+            gen_type = T_OP_GE;
+          } else if (T_OP_LT == type) {
+            gen_type = T_OP_LE;
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(build_prefix_index_compare_expr(*prefix_col,
+                                                              const_cast<ObRawExpr*>(substr_expr),
+                                                              gen_type,
+                                                              *value_expr,
+                                                              escape_expr,
+                                                              deduced_simple_pred,
+                                                              helper))) {
+            LOG_WARN("build prefix index compare expr failed", K(ret));
+          } else if (OB_ISNULL(deduced_simple_pred)) {
+            //do nothing
+          } else if (OB_FAIL(deduced_simple_pred->formalize(get_plan()->get_optimizer_context().get_session_info()))) {
+            LOG_WARN("formalize failed", K(ret));
+          } else if (OB_FAIL(deduced_simple_pred->pull_relation_id())) {
+            LOG_WARN("pullup relids and level failed", K(ret));
+          } else if (OB_FAIL(new_simple_preds.push_back(deduced_simple_pred))) {
+            LOG_WARN("push back failed", K(ret));
+          } else {
+            prefix_col->set_explicited_reference();
+          }
+        }
+      }
+    }
+    // copy and replace root predicate
+    if (OB_SUCC(ret) && simple_prefix_preds.count() == new_simple_preds.count()) {
+      ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+      if (OB_FAIL(copier.add_replaced_expr(simple_prefix_preds, new_simple_preds))) {
+        LOG_WARN("add replaced expr failed", K(ret));
+      } else if (OB_FAIL(copier.copy_on_replace(pred, new_pred))) {
+        LOG_WARN("copy on replace failed", K(ret));
+      } else if (OB_ISNULL(new_pred)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("new pred is null", K(ret));
+      } else if (OB_FAIL(new_pred->formalize(get_plan()->get_optimizer_context().get_session_info()))) {
+        LOG_WARN("formalize failed", K(ret));
+      } else if (OB_FAIL(new_pred->pull_relation_id())) {
+        LOG_WARN("pullup relids and level failed", K(ret));
+      } else if (OB_FAIL(add_deduced_expr(new_pred, pred, false))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_match_prefix_index(ObRawExpr *expr,
+                                          const TableItem *table_item,
+                                          ObIArray<ObColumnRefRawExpr*> &prefix_cols,
+                                          ObIArray<ObRawExpr*> &simple_prefix_preds,
+                                          bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  ObColumnRefRawExpr *column_expr = NULL;
+  ObRawExpr *value_expr = NULL;
+  ObRawExpr *escape_expr = NULL;
+  ObItemType type = expr->get_expr_type();
+  ObSEArray<ObColumnRefRawExpr*, 4> candi_prefix_cols;
+  if (OB_ISNULL(expr) || OB_ISNULL(table_item)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(expr), K(table_item));
+  } else if (expr->get_expr_type() == T_OP_AND || expr->get_expr_type() == T_OP_OR) {
+    is_match = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_match && i < expr->get_param_count(); ++i) {
+      ObRawExpr *param = expr->get_param_expr(i);
+      bool child_match = false;
+      if (OB_ISNULL(param)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(param));
+      } else if (OB_FAIL(SMART_CALL(check_match_prefix_index(param,
+                                                            table_item,
+                                                            prefix_cols,
+                                                            simple_prefix_preds,
+                                                            child_match)))) {
+        LOG_WARN("failed to check match prefix index", K(ret));
+      } else if (!child_match) {
+        is_match = false;
+      }
+    }
+  } else if (OB_FAIL(check_simple_expr_match_prefix_index(expr,
+                                                          table_item,
+                                                          column_expr,
+                                                          value_expr,
+                                                          escape_expr,
+                                                          type,
+                                                          candi_prefix_cols,
+                                                          is_match))) {
+    LOG_WARN("failed to check simple expr match prefix index", K(ret));
+  } else if (is_match) {
+    // candi_prefix_cols should be subset of prefix_cols
+    for (int64_t i = 0; OB_SUCC(ret) && is_match && i < candi_prefix_cols.count(); i++) {
+      if (ObOptimizerUtil::find_item(prefix_cols, candi_prefix_cols.at(i))) {
+        // do nothing
+      } else {
+        is_match = false;
+      }
+    }
+    if (OB_SUCC(ret) && is_match) {
+      if (OB_FAIL(simple_prefix_preds.push_back(expr))) {
+        LOG_WARN("failed to push back array", K(ret));
+      } else if (OB_FAIL(prefix_cols.assign(candi_prefix_cols))) {
+        LOG_WARN("failed to assign array", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_simple_expr_match_prefix_index(ObRawExpr *expr,
+                                                      const TableItem *table_item,
+                                                      ObColumnRefRawExpr *&column_expr,
+                                                      ObRawExpr *&value_expr,
+                                                      ObRawExpr *&escape_expr,
+                                                      ObItemType &type,
+                                                      ObIArray<ObColumnRefRawExpr*> &candi_prefix_cols,
+                                                      bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(expr));
+  } else if (OB_FAIL(check_simple_prefix_cmp_expr(expr,
+                                                   column_expr,
+                                                   value_expr,
+                                                   escape_expr,
+                                                   type,
+                                                   is_match))) {
+    LOG_WARN("failed to check simple gen col cmp expr", K(ret));
+  } else if (!is_match) {
+    // do nothing
+  } else if (OB_NOT_NULL(column_expr) && column_expr->has_generated_column_deps()) {
+    ObSEArray<ObColumnRefRawExpr *, 4> column_exprs;
+    if (OB_FAIL(get_plan()->get_stmt()->get_column_exprs(table_item->table_id_, column_exprs))) {
+      LOG_WARN("failed to get column exprs", K(ret));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < column_exprs.count(); ++j) {
+      ObColumnRefRawExpr *gen_column_expr = column_exprs.at(j);
+      if (OB_ISNULL(gen_column_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else if (!gen_column_expr->is_generated_column()) {
+        //do nothing
+      } else {
+        const ObRawExpr *dep_expr = gen_column_expr->get_dependant_expr();
+        const ObRawExpr *substr_expr = NULL;
+        if (OB_ISNULL(dep_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("generated column expr is null", K(*gen_column_expr), K(j), K(ret));
+        } else if (!ObRawExprUtils::has_prefix_str_expr(*dep_expr, *column_expr, substr_expr)) {
+          // do nothing
+        } else if (OB_FAIL(candi_prefix_cols.push_back(gen_column_expr))) {
+          LOG_WARN("failed to push back column expr", K(ret));
+        }
+      }
+    }
+    is_match &= candi_prefix_cols.count() > 0;
+  } else {
+    is_match = false;
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_simple_prefix_cmp_expr(ObRawExpr *expr,
+                                              ObColumnRefRawExpr *&column_expr,
+                                              ObRawExpr *&value_expr,
+                                              ObRawExpr *&escape_expr,
+                                              ObItemType &type,
+                                              bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  ObRawExpr *param_expr1 = NULL;
+  ObRawExpr *param_expr2 = NULL;
+  if (OB_ISNULL(expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(expr));
+  } else if (!IS_BASIC_CMP_OP(expr->get_expr_type()) && !IS_SINGLE_VALUE_OP(expr->get_expr_type())) {
+    //only =/</<=/>/>=/IN/like can deduce generated exprs
+    is_valid = false;
+  } else if (OB_ISNULL(param_expr1 = expr->get_param_expr(0)) || OB_ISNULL(param_expr2 = expr->get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(*expr), K(expr->get_param_expr(0)), K(expr->get_param_expr(1)), K(ret));
+  } else if (T_OP_LIKE == expr->get_expr_type()) {
+    if (3 != expr->get_param_count() || OB_ISNULL(expr->get_param_expr(2))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("escape param is unexpected null", K(ret));
+    } else if (param_expr1->is_column_ref_expr() &&
+              param_expr1->get_result_type().is_string_type() &&
+              param_expr2->get_result_type().is_string_type() &&
+              expr->get_param_expr(1)->is_const_expr() &&
+              expr->get_param_expr(2)->is_const_expr()) {
+      column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
+      value_expr = expr->get_param_expr(1);
+      escape_expr = expr->get_param_expr(2);
+    } else {
+      is_valid = false;
+    }
+  } else if (T_OP_IN == expr->get_expr_type()) {
+    if (T_OP_ROW == param_expr2->get_expr_type() &&
+        !param_expr2->has_generalized_column() &&
+        param_expr1->get_result_type().is_string_type() &&
+        param_expr1->is_column_ref_expr()) {
+      bool all_match = true;
+      for (int64_t j = 0; OB_SUCC(ret) && all_match && j < param_expr2->get_param_count(); ++j) {
+        if (OB_ISNULL(param_expr2->get_param_expr(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param expr2 is null");
+        } else if (!param_expr2->get_param_expr(j)->get_result_type().is_string_type()
+            || param_expr2->get_param_expr(j)->get_collation_type() != param_expr1->get_collation_type()) {
+          all_match = false;
+        }
+      }
+      if (OB_SUCC(ret) && all_match && expr->get_param_expr(0)->is_column_ref_expr()) {
+        column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
+        value_expr = expr->get_param_expr(1);
+      } else {
+        is_valid = false;
+      }
+    }
+  } else if (param_expr1->is_column_ref_expr() && param_expr2->is_const_expr()) {
+    if (param_expr1->get_result_type().is_string_type() //only for string and same collation
+        && param_expr2->get_result_type().is_string_type()
+        && param_expr1->get_collation_type() == param_expr2->get_collation_type()) {
+      column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
+      value_expr = expr->get_param_expr(1);
+    } else {
+      is_valid = false;
+    }
+  } else if (param_expr1->is_const_expr() && param_expr2->is_column_ref_expr()) {
+    if (param_expr1->get_result_type().is_string_type()
+        && param_expr2->get_result_type().is_string_type()) {
+      type = get_opposite_compare_type(expr->get_expr_type());
+      column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(1));
+      value_expr = expr->get_param_expr(0);
+    } else {
+      is_valid = false;
+    }
+  } else if (param_expr1->is_column_ref_expr() && param_expr2->is_column_ref_expr()) {
+    is_valid = false;
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_match_common_gen_col_index(ObRawExpr *expr,
+                                                  const TableItem *table_item,
+                                                  ObIArray<ObColumnRefRawExpr*> &common_gen_cols,
+                                                  ObIArray<ObRawExpr*> &simple_gen_col_preds,
+                                                  bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObColumnRefRawExpr*, 4> cur_gen_cols;
+  if (OB_ISNULL(expr) || OB_ISNULL(table_item)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(expr), K(table_item));
+  } else if (expr->get_expr_type() == T_OP_AND || expr->get_expr_type() == T_OP_OR) {
+    is_match = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_match && i < expr->get_param_count(); ++i) {
+      ObRawExpr *param = expr->get_param_expr(i);
+      bool child_match = false;
+      if (OB_ISNULL(param)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(param));
+      } else if (OB_FAIL(SMART_CALL(check_match_common_gen_col_index(param,
+                                                                    table_item,
+                                                                    common_gen_cols,
+                                                                    simple_gen_col_preds,
+                                                                    child_match)))) {
+        LOG_WARN("failed to check match common gen col index", K(ret));
+      } else if (!child_match) {
+        is_match = false;
+      }
+    }
+  } else if (OB_FAIL(check_simple_expr_match_gen_col_index(expr, table_item, cur_gen_cols, is_match))) {
+    LOG_WARN("failed to check simple gen col prefix index", K(ret));
+  } else if (is_match) {
+    // cur_gen_cols should be subset of common_gen_cols
+    for (int64_t i = 0; OB_SUCC(ret) && is_match && i < cur_gen_cols.count(); i++) {
+      if (ObOptimizerUtil::find_item(common_gen_cols, cur_gen_cols.at(i))) {
+        // do nothing
+      } else {
+        is_match = false;
+      }
+    }
+    if (OB_SUCC(ret) && is_match) {
+      if (OB_FAIL(simple_gen_col_preds.push_back(expr))) {
+        LOG_WARN("failed to push back array", K(ret));
+      } else if (OB_FAIL(common_gen_cols.assign(cur_gen_cols))) {
+        LOG_WARN("failed to assign array", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_simple_expr_match_gen_col_index(ObRawExpr *expr,
+                                                       const TableItem *table_item,
+                                                       ObIArray<ObColumnRefRawExpr*> &candi_gen_cols,
+                                                       bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  ObSEArray<ObColumnRefRawExpr*, 4> column_exprs;
+  ObSEArray<ObPCConstParamInfo, 4> dummy;
+  if (OB_ISNULL(expr) || OB_ISNULL(table_item) || OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(expr));
+  } else if (expr->get_expr_class() != ObRawExpr::EXPR_OPERATOR) { // these can extract query range
+    //do nothing
+  } else if (!expr->has_flag(CNT_COLUMN)) {
+    //do nothing
+  } else if (OB_FAIL(get_plan()->get_stmt()->get_column_exprs(table_item->table_id_, column_exprs))) {
+    LOG_WARN("failed to get column exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); i++) {
+      ObColumnRefRawExpr *gen_col_expr = column_exprs.at(i);
+      ObRawExpr* depend_expr = NULL;
+      bool cur_match = false;
+      int64_t matched_param_idx = -1;
+      if (OB_ISNULL(gen_col_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col is null", K(ret));
+      } else if (!gen_col_expr->is_generated_column()) {
+        //do nothing
+      } else if (OB_FAIL(check_simple_gen_col_cmp_expr(expr, gen_col_expr, dummy, matched_param_idx, cur_match))) {
+        LOG_WARN("failed to check simple gen col cmp expr", K(ret));
+      } else if (!cur_match) {
+        // do nothing
+      } else if (OB_FAIL(candi_gen_cols.push_back(gen_col_expr))) {
+        LOG_WARN("failed to push back array", K(ret));
+      } else {
+        is_match = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_simple_gen_col_cmp_expr(ObRawExpr *expr,
+                                               ObColumnRefRawExpr *gen_col_expr,
+                                               ObIArray<ObPCConstParamInfo> &param_infos,
+                                               int64_t &matched_param_idx,
+                                               bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  ObRawExpr* depend_expr = NULL;
+  bool is_lossless = false;
+  ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+  if (OB_ISNULL(expr) || OB_ISNULL(gen_col_expr) || OB_ISNULL(OPT_CTX.get_exec_ctx()) ||
+      OB_ISNULL(phy_plan_ctx = OPT_CTX.get_exec_ctx()->get_physical_plan_ctx())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(expr), K(gen_col_expr));
+  } else if (expr->get_expr_class() != ObRawExpr::EXPR_OPERATOR) { // these can extract query range
+    //do nothing
+  } else if (OB_FALSE_IT(depend_expr = gen_col_expr->get_dependant_expr())) {
+  } else if (OB_ISNULL(depend_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("depend_expr is null", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_conv(depend_expr, is_lossless))) {
+    LOG_WARN("check depend epxr lossless failed", K(ret));
+  } else if(is_lossless) {
+    depend_expr = depend_expr->get_param_expr(4);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(depend_expr, is_lossless))) {
+    LOG_WARN("check depend epxr lossless failed", K(ret));
+  } else if(is_lossless) {
+    depend_expr = depend_expr->get_param_expr(0);
+  }
+  // compare each param expr with depend_expr
+  for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < expr->get_param_count(); i++) {
+    ObRawExpr *param_expr = expr->get_param_expr(i);
+    ObExprEqualCheckContext equal_ctx;
+    equal_ctx.override_const_compare_ = true;
+    bool is_same = false;
+    if (OB_ISNULL(param_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param expr is null", K(ret));
+      //remove inner cast's influence.
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(param_expr, param_expr))) {
+      LOG_WARN("fail to get real child without lossless cast", K(ret));
+    } else if (OB_ISNULL(param_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("real child is null", K(ret));
+    } else if (depend_expr->same_as(*param_expr, &equal_ctx)) {
+      is_same = true;
+    } else {
+      equal_ctx.reset();
+      equal_ctx.override_const_compare_ = true;
+      if (OB_FAIL(check_match_to_type(depend_expr, param_expr, is_same, equal_ctx))) {
+        LOG_WARN("fail to check if to_<type> expr can be extracted", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && is_same) {
+      matched_param_idx = i;
+      is_match = true;
+      // collect param constraints
+      for(int64_t i = 0; OB_SUCC(ret) && i < equal_ctx.param_expr_.count(); i++) {
+        int64_t param_idx = equal_ctx.param_expr_.at(i).param_idx_;
+        ObPCConstParamInfo param_info;
+        if (OB_UNLIKELY(param_idx < 0 || param_idx >= phy_plan_ctx->get_param_store().count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(param_idx), K(phy_plan_ctx->get_param_store().count()));
+        } else if (OB_FAIL(param_info.const_idx_.push_back(param_idx))) {
+          LOG_WARN("failed to push back param idx", K(ret));
+        } else if (OB_FAIL(param_info.const_params_.push_back(phy_plan_ctx->get_param_store().at(param_idx)))) {
+          LOG_WARN("failed to push back value", K(ret));
+        } else if (OB_FAIL(param_infos.push_back(param_info))) {
+          LOG_WARN("failed to push back param info", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::deduce_common_gen_col_index_expr(ObRawExpr *pred,
+                                                  const TableItem *table_item,
+                                                  ObColumnRefRawExpr *gen_col,
+                                                  ObIArray<ObRawExpr*> &simple_gen_col_preds,
+                                                  ObRawExpr *&new_pred,
+                                                  PathHelper &helper)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> from_exprs;
+  ObSEArray<ObRawExpr*, 4> to_exprs;
+  ObSEArray<ObPCConstParamInfo, 4> const_param_infos;
+  if (OB_ISNULL(pred) || OB_ISNULL(table_item) || OB_ISNULL(gen_col) || OB_ISNULL(get_plan())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(pred), K(table_item), K(gen_col));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_gen_col_preds.count(); i++) {
+      ObRawExpr *simple_pred = simple_gen_col_preds.at(i);
+      bool is_match = false;
+      int64_t matched_param_idx = -1;
+      if (OB_ISNULL(simple_pred)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("simple pred is null", K(ret));
+      } else if (OB_FAIL(check_simple_gen_col_cmp_expr(simple_pred,
+                                                       gen_col,
+                                                       const_param_infos,
+                                                       matched_param_idx,
+                                                       is_match))) {
+        LOG_WARN("failed to check simple gen col cmp expr", K(ret));
+      } else if (!is_match || OB_UNLIKELY(matched_param_idx < 0 || matched_param_idx >= simple_pred->get_param_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid argument", K(ret), K(is_match), K(matched_param_idx));
+      } else if (OB_ISNULL(simple_pred->get_param_expr(matched_param_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(ret));
+      } else if (ObOptimizerUtil::find_item(from_exprs, simple_pred->get_param_expr(matched_param_idx))) {
+        // do nothing
+      } else if (OB_FAIL(from_exprs.push_back(simple_pred->get_param_expr(matched_param_idx)))) {
+        LOG_WARN("failed to push back array", K(ret));
+      } else if (OB_FAIL(to_exprs.push_back(gen_col))) {
+        LOG_WARN("failed to push back array", K(ret));
+      } else {
+        gen_col->set_explicited_reference();
+      }
+    }
+  }
+  // copy and replace root predicate
+  if (OB_SUCC(ret) && !from_exprs.empty()) {
+    ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+    if (OB_FAIL(copier.add_replaced_expr(from_exprs, to_exprs))) {
+      LOG_WARN("add replaced expr failed", K(ret));
+    } else if (OB_FAIL(copier.copy_on_replace(pred, new_pred))) {
+      LOG_WARN("copy on replace failed", K(ret));
+    } else if (OB_ISNULL(new_pred)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("new pred is null", K(ret));
+    } else if (OB_FAIL(new_pred->formalize(get_plan()->get_optimizer_context().get_session_info()))) {
+      if (ret != OB_SUCCESS) {
+        //probably type deduced failed. do nothing
+        LOG_WARN("new qual is not formalized correctly", K(ret), KPC(new_pred));
+        ret = OB_SUCCESS;
+        new_pred = NULL;
+      }
+    } else if (OB_FAIL(new_pred->pull_relation_id())) {
+      LOG_WARN("pullup relids and level failed", K(ret));
+    } else if (OB_FAIL(add_deduced_expr(new_pred, pred, true, const_param_infos))) {
+      LOG_WARN("push back failed", K(ret));
+    }
+  }
+  return ret;
 }

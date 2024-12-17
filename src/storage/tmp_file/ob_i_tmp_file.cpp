@@ -36,18 +36,29 @@ int ObTmpFileInfo::init(
     const int64_t write_back_data_page_num,
     const int64_t flushed_data_page_num,
     const int64_t ref_cnt,
-    const int64_t write_req_cnt,
-    const int64_t unaligned_write_req_cnt,
-    const int64_t read_req_cnt,
-    const int64_t unaligned_read_req_cnt,
-    const int64_t total_read_size,
-    const int64_t last_access_ts,
-    const int64_t last_modify_ts,
     const int64_t birth_ts,
     const void* const tmp_file_ptr,
-    const char* const label)
+    const char* const label,
+    const int64_t write_req_cnt,
+    const int64_t unaligned_write_req_cnt,
+    const int64_t write_persisted_tail_page_cnt,
+    const int64_t lack_page_cnt,
+    const int64_t last_modify_ts,
+    const int64_t read_req_cnt,
+    const int64_t unaligned_read_req_cnt,
+    const int64_t total_truncated_page_read_cnt,
+    const int64_t total_kv_cache_page_read_cnt,
+    const int64_t total_uncached_page_read_cnt,
+    const int64_t total_wbp_page_read_cnt,
+    const int64_t truncated_page_read_hits,
+    const int64_t kv_cache_page_read_hits,
+    const int64_t uncached_page_read_hits,
+    const int64_t wbp_page_read_hits,
+    const int64_t total_read_size,
+    const int64_t last_access_ts)
 {
   int ret = OB_SUCCESS;
+  // common info
   trace_id_ = trace_id;
   tenant_id_ = tenant_id;
   dir_id_ = dir_id;
@@ -59,23 +70,38 @@ int ObTmpFileInfo::init(
   write_back_data_page_num_ = write_back_data_page_num;
   flushed_data_page_num_ = flushed_data_page_num;
   ref_cnt_ = ref_cnt;
-  write_req_cnt_ = write_req_cnt;
-  unaligned_write_req_cnt_ = unaligned_write_req_cnt;
-  read_req_cnt_ = read_req_cnt;
-  unaligned_read_req_cnt_ = unaligned_read_req_cnt;
-  total_read_size_ = total_read_size;
-  last_access_ts_ = last_access_ts;
-  last_modify_ts_ = last_modify_ts;
   birth_ts_ = birth_ts;
   tmp_file_ptr_ = tmp_file_ptr;
   if (NULL != label) {
     label_.assign_strive(label);
   }
+
+  // write info
+  write_req_cnt_ = write_req_cnt;
+  unaligned_write_req_cnt_ = unaligned_write_req_cnt;
+  write_persisted_tail_page_cnt_ = write_persisted_tail_page_cnt;
+  lack_page_cnt_ = lack_page_cnt;
+  last_modify_ts_ = last_modify_ts;
+
+  // read info
+  read_req_cnt_ = read_req_cnt;
+  unaligned_read_req_cnt_ = unaligned_read_req_cnt;
+  total_truncated_page_read_cnt_ = total_truncated_page_read_cnt;
+  total_kv_cache_page_read_cnt_ = total_kv_cache_page_read_cnt;
+  total_uncached_page_read_cnt_ = total_uncached_page_read_cnt;
+  total_wbp_page_read_cnt_ = total_wbp_page_read_cnt;
+  truncated_page_read_hits_ = truncated_page_read_hits;
+  kv_cache_page_read_hits_ = kv_cache_page_read_hits;
+  uncached_page_read_hits_ = uncached_page_read_hits;
+  wbp_page_read_hits_ = wbp_page_read_hits;
+  total_read_size_ = total_read_size;
+  last_access_ts_ = last_access_ts;
   return ret;
 }
 
 void ObTmpFileInfo::reset()
 {
+  // common info
   trace_id_.reset();
   tenant_id_ = OB_INVALID_TENANT_ID;
   dir_id_ = ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID;
@@ -87,16 +113,28 @@ void ObTmpFileInfo::reset()
   write_back_data_page_num_ = 0;
   flushed_data_page_num_ = 0;
   ref_cnt_ = 0;
-  write_req_cnt_ = 0;
-  unaligned_write_req_cnt_ = 0;
-  read_req_cnt_ = 0;
-  unaligned_read_req_cnt_ = 0;
-  total_read_size_ = 0;
-  last_access_ts_ = -1;
-  last_modify_ts_ = -1;
   birth_ts_ = -1;
   tmp_file_ptr_ = nullptr;
   label_.reset();
+  // write info
+  write_req_cnt_ = 0;
+  unaligned_write_req_cnt_ = 0;
+  write_persisted_tail_page_cnt_ = 0;
+  lack_page_cnt_ = 0;
+  last_modify_ts_ = -1;
+  // read info
+  read_req_cnt_ = 0;
+  unaligned_read_req_cnt_ = 0;
+  total_truncated_page_read_cnt_ = 0;
+  total_kv_cache_page_read_cnt_ = 0;
+  total_uncached_page_read_cnt_ = 0;
+  total_wbp_page_read_cnt_ = 0;
+  truncated_page_read_hits_ = 0;
+  kv_cache_page_read_hits_ = 0;
+  uncached_page_read_hits_ = 0;
+  wbp_page_read_hits_ = 0;
+  total_read_size_ = 0;
+  last_access_ts_ = -1;
 }
 
 ObITmpFileHandle::ObITmpFileHandle(ObITmpFile *tmp_file)
@@ -181,15 +219,25 @@ ObITmpFile::ObITmpFile()
       page_idx_cache_(),
       callback_allocator_(nullptr),
       trace_id_(),
+      birth_ts_(-1),
+      label_(),
       write_req_cnt_(0),
       unaligned_write_req_cnt_(0),
+      write_persisted_tail_page_cnt_(0),
+      lack_page_cnt_(0),
+      last_modify_ts_(-1),
       read_req_cnt_(0),
       unaligned_read_req_cnt_(0),
+      total_truncated_page_read_cnt_(0),
+      total_kv_cache_page_read_cnt_(0),
+      total_uncached_page_read_cnt_(0),
+      total_wbp_page_read_cnt_(0),
+      truncated_page_read_hits_(0),
+      kv_cache_page_read_hits_(0),
+      uncached_page_read_hits_(0),
+      wbp_page_read_hits_(0),
       total_read_size_(0),
-      last_access_ts_(-1),
-      last_modify_ts_(-1),
-      birth_ts_(-1),
-      label_()
+      last_access_ts_(-1)
 {
 }
 
@@ -278,16 +326,29 @@ void ObITmpFile::reset()
     page_idx_cache_.destroy();
     callback_allocator_ = nullptr;
     /******for virtual table begin******/
+    // common info
     trace_id_.reset();
-    write_req_cnt_ = 0;
-    unaligned_write_req_cnt_ = 0;
-    read_req_cnt_ = 0;
-    unaligned_read_req_cnt_ = 0;
-    total_read_size_ = 0;
-    last_access_ts_ = -1;
-    last_modify_ts_ = -1;
     birth_ts_ = -1;
     label_.reset();
+    // write info
+    write_req_cnt_ = 0;
+    unaligned_write_req_cnt_ = 0;
+    write_persisted_tail_page_cnt_ = 0;
+    lack_page_cnt_ = 0;
+    last_modify_ts_ = -1;
+    // read info
+    read_req_cnt_ = 0;
+    unaligned_read_req_cnt_ = 0;
+    total_truncated_page_read_cnt_ = 0;
+    total_kv_cache_page_read_cnt_ = 0;
+    total_uncached_page_read_cnt_ = 0;
+    total_wbp_page_read_cnt_ = 0;
+    truncated_page_read_hits_ = 0;
+    kv_cache_page_read_hits_ = 0;
+    uncached_page_read_hits_ = 0;
+    wbp_page_read_hits_ = 0;
+    total_read_size_ = 0;
+    last_access_ts_ = -1;
     /******for virtual table end******/
   }
 }
@@ -321,7 +382,7 @@ int ObITmpFile::seal()
   } else {
     ObSpinLockGuard write_guard(multi_write_lock_);
     if (OB_UNLIKELY(is_sealed_)) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_TMP_FILE_ALREADY_SEALED;
       LOG_WARN("tmp file has been sealed", KR(ret), KPC(this));
     } else if (OB_FAIL(inner_seal_())) {
       LOG_WARN("fail to seal", KR(ret), KPC(this));
@@ -352,7 +413,7 @@ int ObITmpFile::aio_pread(ObTmpFileIOCtx &io_ctx)
       io_ctx.set_is_unaligned_read(true);
     }
 
-    LOG_DEBUG("start to inner read tmp file", K(fd_), KPC(this));
+    LOG_DEBUG("start to inner read tmp file", K(fd_), K(io_ctx), KPC(this));
     if (OB_UNLIKELY(!io_ctx.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret), K(fd_), K(io_ctx), K(read_offset_));
@@ -392,12 +453,16 @@ int ObITmpFile::aio_pread(ObTmpFileIOCtx &io_ctx)
 
       // Iterate to read memory data (in write buffer pool).
       if (OB_SUCC(ret) && io_ctx.get_todo_size() > 0) {
+        const int64_t aligned_begin_offset = get_page_begin_offset_(io_ctx.get_read_offset_in_file());
         if (OB_UNLIKELY(0 == cached_page_nums_)) {
           ret = OB_ITER_END;
           LOG_WARN("iter end", KR(ret), K(fd_), K(io_ctx));
         } else if (OB_FAIL(inner_read_from_wbp_(io_ctx))) {
           LOG_WARN("fail to read tmp file from wbp", KR(ret), K(fd_), K(io_ctx), KPC(this));
         } else {
+          const int64_t aligned_end_offset = get_page_end_offset_(io_ctx.get_read_offset_in_file());
+          const int64_t total_wbp_page_read_cnt = (aligned_end_offset - aligned_begin_offset) / ObTmpFileGlobal::PAGE_SIZE;
+          io_ctx.update_read_wbp_page_stat(total_wbp_page_read_cnt);
           LOG_DEBUG("finish wbp read", K(fd_), K(io_ctx.get_read_offset_in_file()),
                                        K(io_ctx.get_todo_size()),
                                        K(io_ctx.get_done_size()), K(wbp_begin_offset), KPC(this));
@@ -421,6 +486,8 @@ int ObITmpFile::inner_read_truncated_part_(ObTmpFileIOCtx &io_ctx)
   } else if (OB_UNLIKELY(io_ctx.get_todo_size() == 0)) {
     // do nothing
   } else {
+    int64_t total_truncated_page_read_cnt = 0;
+    const int64_t origin_read_offset = io_ctx.get_read_offset_in_file();
     int64_t read_size = MIN(truncated_offset_ - io_ctx.get_read_offset_in_file(),
                             io_ctx.get_todo_size());
     char *read_buf = io_ctx.get_todo_buffer();
@@ -430,6 +497,10 @@ int ObITmpFile::inner_read_truncated_part_(ObTmpFileIOCtx &io_ctx)
     } else if (FALSE_IT(MEMSET(read_buf, 0, read_size))) {
     } else if (OB_FAIL(io_ctx.update_data_size(read_size))) {
       LOG_WARN("fail to update data size", KR(ret), K(fd_), K(read_size));
+    } else if (FALSE_IT(total_truncated_page_read_cnt = (get_page_end_offset_(io_ctx.get_read_offset_in_file()) -
+                                                         get_page_begin_offset_(origin_read_offset)) /
+                                                        ObTmpFileGlobal::PAGE_SIZE)) {
+    } else if (FALSE_IT(io_ctx.update_read_truncated_stat(total_truncated_page_read_cnt))) {
     } else if (OB_UNLIKELY(io_ctx.get_todo_size() > 0 &&
                            truncated_offset_ == file_size_)) {
       ret = OB_ITER_END;
@@ -527,14 +598,16 @@ int ObITmpFile::aio_write(ObTmpFileIOCtx &io_ctx)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("attempt to write a deleting file", KR(ret), K(fd_));
   } else if (OB_UNLIKELY(is_sealed_)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_TMP_FILE_ALREADY_SEALED;
     LOG_WARN("attempt to write a sealed file", KR(ret), K(fd_));
   } else {
     bool is_unaligned_write = 0 != file_size_ % ObTmpFileGlobal::PAGE_SIZE ||
                               0 != io_ctx.get_todo_size() % ObTmpFileGlobal::PAGE_SIZE;
+    io_ctx.set_is_unaligned_write(is_unaligned_write);
     while (OB_SUCC(ret) && io_ctx.get_todo_size() > 0) {
       if (OB_FAIL(inner_write_(io_ctx))) {
         if (OB_ALLOCATE_TMP_FILE_PAGE_FAILED == ret) {
+          io_ctx.add_lack_page_cnt();
           ret = OB_SUCCESS;
           if (TC_REACH_COUNT_INTERVAL(10)) {
             LOG_INFO("alloc mem failed, try to evict pages", K(fd_), K(file_size_), K(io_ctx), KPC(this));
@@ -547,13 +620,6 @@ int ObITmpFile::aio_write(ObTmpFileIOCtx &io_ctx)
         }
       }
     } // end while
-    if (OB_SUCC(ret)) {
-      write_req_cnt_++;
-      if (is_unaligned_write) {
-        unaligned_write_req_cnt_++;
-      }
-      last_modify_ts_ = ObTimeUtility::current_time();
-    }
   }
 
   if (OB_SUCC(ret)) {
@@ -602,6 +668,8 @@ int ObITmpFile::inner_fill_tail_page_(ObTmpFileIOCtx &io_ctx)
   } else if (is_in_disk) {
     if (OB_FAIL(load_disk_tail_page_and_rewrite_(io_ctx))) {
       LOG_WARN("fail to load disk tail page and rewrite", KR(ret), K(fd_), K(io_ctx));
+    } else {
+      io_ctx.add_write_persisted_tail_page_cnt();
     }
   } else {
     if (OB_FAIL(append_write_memory_tail_page_(io_ctx))) {
@@ -1075,15 +1143,45 @@ int ObITmpFile::insert_or_update_data_flush_node_()
   return ret;
 }
 
-void ObITmpFile::set_read_stats_vars(const bool is_unaligned_read, const int64_t read_size)
+void ObITmpFile::set_read_stats_vars(const ObTmpFileIOCtx &ctx, const int64_t read_size)
 {
   common::TCRWLock::WLockGuard guard(meta_lock_);
+  inner_set_read_stats_vars_(ctx, read_size);
+}
+
+void ObITmpFile::inner_set_read_stats_vars_(const ObTmpFileIOCtx &ctx, const int64_t read_size)
+{
   read_req_cnt_++;
-  if (is_unaligned_read) {
+  if (ctx.is_unaligned_read()) {
     unaligned_read_req_cnt_++;
   }
   total_read_size_ += read_size;
   last_access_ts_ = ObTimeUtility::current_time();
+  total_truncated_page_read_cnt_ += ctx.get_total_truncated_page_read_cnt();
+  total_kv_cache_page_read_cnt_ += ctx.get_total_kv_cache_page_read_cnt();
+  total_uncached_page_read_cnt_ += ctx.get_total_uncached_page_read_cnt();
+  total_wbp_page_read_cnt_ += ctx.get_total_wbp_page_read_cnt();
+  truncated_page_read_hits_ += ctx.get_truncated_page_read_hits();
+  kv_cache_page_read_hits_ += ctx.get_kv_cache_page_read_hits();
+  uncached_page_read_hits_ += ctx.get_uncached_page_read_hits();
+  wbp_page_read_hits_ += ctx.get_wbp_page_read_hits();
+}
+
+void ObITmpFile::set_write_stats_vars(const ObTmpFileIOCtx &ctx)
+{
+  common::TCRWLock::WLockGuard guard(meta_lock_);
+  inner_set_write_stats_vars_(ctx);
+}
+
+void ObITmpFile::inner_set_write_stats_vars_(const ObTmpFileIOCtx &ctx)
+{
+  write_req_cnt_++;
+  if (ctx.is_unaligned_write()) {
+    unaligned_write_req_cnt_++;
+  }
+  write_persisted_tail_page_cnt_ += ctx.get_write_persisted_tail_page_cnt();
+  lack_page_cnt_ += ctx.get_lack_page_cnt();
+  last_modify_ts_ = ObTimeUtility::current_time();
 }
 
 }  // end namespace tmp_file

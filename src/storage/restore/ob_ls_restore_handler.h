@@ -264,6 +264,9 @@ protected:
   int check_replay_to_target_scn_(
       const share::SCN &target_scn,
       bool &replayed) const;
+  bool need_notify_rs_restore_finish_(const ObLSRestoreStatus &ls_restore_status);
+
+  void notify_rs_restore_finish_();
 
 protected:
   bool is_inited_;

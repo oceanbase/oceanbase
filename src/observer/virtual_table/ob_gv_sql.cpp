@@ -506,6 +506,16 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       }
       break;
     }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::PL_EVICT_VERSION: {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (NULL != pl_object) {
+        cells[i].set_int(pl_object->get_stat().pl_evict_version_);
+      } else {
+        cells[i].set_int(0);
+      }
+      break;
+    }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::LAST_ACTIVE_TIME: {
       int64_t last_active_time = 0;
       if (!cache_stat_updated) {
@@ -594,6 +604,10 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         mem_used = cache_obj->get_mem_size();
       }
       cells[i].set_int(mem_used);
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::PL_CG_MEM_HOLD: {
+      cells[i].set_int(0);
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::EXECUTIONS: {
@@ -1043,7 +1057,14 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
           cache_obj->is_sfc() ||
           cache_obj->is_prcr() ||
           cache_obj->is_pkg()) {
-        pl_schema_id = pl_object->get_stat().pl_schema_id_;
+        uint64_t stat_pl_schema_id = pl_object->get_stat().pl_schema_id_;
+        if (ObTriggerInfo::is_trigger_package_id(stat_pl_schema_id)) {
+          pl_schema_id = ObTriggerInfo::get_package_trigger_id(stat_pl_schema_id);
+        } else if (ObUDTObjectType::is_object_id(stat_pl_schema_id)) {
+          pl_schema_id = ObUDTObjectType::clear_object_id_mask(stat_pl_schema_id);
+        } else {
+          pl_schema_id = stat_pl_schema_id;
+        }
       }
       cells[i].set_uint64(pl_schema_id);
       break;

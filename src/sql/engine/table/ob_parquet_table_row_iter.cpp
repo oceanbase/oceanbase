@@ -703,7 +703,9 @@ int ObParquetTableRowIterator::DataLoader::load_decimal_any_col()
     }
   } else if (reader_->descr()->physical_type() == parquet::Type::Type::BYTE_ARRAY) {
     ObArrayWrap<parquet::ByteArray> values;
-    int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(file_col_expr_->datum_meta_.precision_);
+    int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+                                                    (file_col_expr_->datum_meta_.precision_ == -1)
+                                                    ? 38 : file_col_expr_->datum_meta_.precision_);
     ObArrayWrap<char> buffer;
     OZ (buffer.allocate_array(tmp_alloc_g.get_allocator(), int_bytes));
     OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
@@ -962,7 +964,7 @@ int ObParquetTableRowIterator::DataLoader::load_int64_to_int64_vec()
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("repeated data not support");
     } else if (IS_PARQUET_COL_NOT_NULL && values_cnt == row_count_) {
-      MEMCPY(pointer_cast<int64_t*>(int64_vec->get_data()) + row_count_, values.get_data(), sizeof(int64_t) * row_count_);
+      MEMCPY(pointer_cast<int64_t*>(int64_vec->get_data()) + row_offset_, values.get_data(), sizeof(int64_t) * row_count_);
     } else {
       int j = 0;
       for (int i = 0; i < row_count_; i++) {

@@ -260,6 +260,22 @@ int ObParallelMergeCtx::init_parallel_major_merge(compaction::ObBasicTabletMerge
   return ret;
 }
 
+#ifdef ERRSIM
+void errsim_set_prallel_cnt(const int64_t parallel_merge_cnt, int64_t &concurrent_cnt)
+{
+  /* alter system set_tp tp_no = 801, error_code = 3, frequency = 1;
+   * error_code = 3, then the parallel degree of mini merge will be 3
+  */
+  int ret = OB_SUCCESS;
+  ret = OB_E(EventTable::EN_FORCE_PARALLEL_MINI_MERGE) ret;
+  if (OB_FAIL(ret)) {
+    concurrent_cnt = MIN(-ret, parallel_merge_cnt);
+    ret = OB_SUCCESS;
+    STORAGE_LOG(INFO, "ERRSIM EN_FORCE_PARALLEL_MINI_MERGE, force set parallel degree for mini merge", K(concurrent_cnt));
+  }
+}
+#endif
+
 int ObParallelMergeCtx::init_parallel_mini_merge(compaction::ObBasicTabletMergeCtx &merge_ctx)
 {
   int ret = OB_SUCCESS;
@@ -283,6 +299,13 @@ int ObParallelMergeCtx::init_parallel_mini_merge(compaction::ObBasicTabletMergeC
                                   ObCompactionEstimator::MINI_MEM_PER_THREAD,
                                   (total_bytes + ObCompactionEstimator::MINI_PARALLEL_BASE_MEM - 1) / ObCompactionEstimator::MINI_PARALLEL_BASE_MEM,
                                   concurrent_cnt_);
+
+#ifdef ERRSIM
+  if (concurrent_cnt_ <= 1) {
+    (void )errsim_set_prallel_cnt(PARALLEL_MERGE_TARGET_TASK_CNT, concurrent_cnt_);
+  }
+#endif
+
 
     ObArray<ObStoreRange> store_ranges;
     store_ranges.set_attr(lib::ObMemAttr(MTL_ID(), "TmpMiniRanges", ObCtxIds::MERGE_NORMAL_CTX_ID));

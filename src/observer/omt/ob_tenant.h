@@ -284,7 +284,6 @@ public:
   int64_t max_worker_cnt() const;
   ObTenant *get_tenant() { return tenant_; }
   share::ObCgroupCtrl *get_cgroup_ctrl() { return cgroup_ctrl_; }
-  bool is_job_group(int64_t group_id) { return share::OBCG_OLAP_ASYNC_JOB == group_id; }
 
   int init();
   void update_queue_size();
@@ -549,7 +548,6 @@ private:
   int construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantModuleInitCtx *&ctx);
 
   int recv_group_request(rpc::ObRequest &req, int64_t group_id);
-  bool is_job_group(int64_t group_id) { return share::OBCG_OLAP_ASYNC_JOB == group_id; }
 protected:
 
   mutable common::TCRWLock meta_lock_;

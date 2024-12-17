@@ -194,8 +194,9 @@ public:
   int open_parquet_file_writer(ObArrowMemPool &arrow_alloc,
                                const int64_t &row_group_size,
                                const int64_t &compress_type_index,
+                               const int64_t &row_batch_size,
                                common::ObIAllocator &allocator);
-  int create_parquet_row_batch(common::ObIAllocator &allocator);
+  int create_parquet_row_batch(const int64_t &row_batch_size, common::ObIAllocator &allocator);
   bool is_file_writer_null() { return !parquet_file_writer_; }
   bool is_valid_to_write()
   {
@@ -254,11 +255,12 @@ public:
   }
 
   int open_orc_file_writer(const orc::Type &orc_schema,
-                           const orc::WriterOptions &options);
+                           const orc::WriterOptions &options,
+                           const int64_t &row_batch_size);
   bool is_file_writer_null() {return !orc_file_writer_; }
   bool is_valid_to_write(orc::StructVectorBatch* &root)
   {
-    root = dynamic_cast<orc::StructVectorBatch *>(orc_row_batch_.get());
+    root = static_cast<orc::StructVectorBatch *>(orc_row_batch_.get());
     return orc_file_writer_ && orc_row_batch_ && OB_NOT_NULL(root);
   }
   int64_t get_file_size() override

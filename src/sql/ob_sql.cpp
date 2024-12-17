@@ -1469,7 +1469,8 @@ int ObSql::set_timeout_for_pl(ObSQLSessionInfo &session_info, int64_t &abs_timeo
 
 int ObSql::handle_pl_prepare(const ObString &sql,
                              ObSPIService::PLPrepareCtx &pl_prepare_ctx,
-                             ObSPIService::PLPrepareResult &pl_prepare_result)
+                             ObSPIService::PLPrepareResult &pl_prepare_result,
+                             ParamStore *params)
 {
   int ret = OB_SUCCESS;
   ObString cur_query;
@@ -1532,6 +1533,13 @@ int ObSql::handle_pl_prepare(const ObString &sql,
           } else if (FALSE_IT(context.schema_guard_ = &schema_guard)) {
           } else if (OB_FAIL(init_result_set(context, result))) {
             LOG_WARN("failed to init result set", K(ret));
+          } else if (OB_ISNULL(result.get_exec_context().get_physical_plan_ctx())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("physical plan ctx is null", K(ret));
+          } else if (OB_NOT_NULL(params) &&
+                     OB_FAIL(construct_param_store(*params,
+                                                   result.get_exec_context().get_physical_plan_ctx()->get_param_store_for_update()))) {
+            LOG_WARN("construct param store failed", K(ret));
           } else if (OB_FAIL(sess.store_query_string(sql))) {
             LOG_WARN("store query string fail", K(ret));
           } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode,
@@ -2970,6 +2978,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     if (NULL != pc_ctx) {
       resolver_ctx.select_item_param_infos_ = &pc_ctx->select_item_param_infos_;
     }
+    resolver_ctx.is_returning_ = parse_result.is_returning_;
     plan_ctx = result.get_exec_context().get_physical_plan_ctx();
     if (OB_ISNULL(plan_ctx) || OB_ISNULL(result.get_exec_context().get_stmt_factory())) {
       ret = OB_INVALID_ARGUMENT;
@@ -3491,7 +3500,7 @@ int ObSql::generate_plan(ParseResult &parse_result,
       option.with_tree_line_ = false;
       ObSqlPlan sql_plan(logical_plan->get_allocator());
       ObSEArray<common::ObString, 32> plan_strs;
-      if (OB_TMP_FAIL(sql_plan.print_sql_plan(logical_plan,
+      if (OB_TMP_FAIL(sql_plan.print_sql_plan(logical_plan->get_plan_root(),
                                           EXPLAIN_EXTENDED,
                                           option,
                                           plan_strs))) {
@@ -5234,9 +5243,6 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
           // baseline and execute this plan directly.
           need_get_baseline = false;
           spm_ctx.baseline_exists_ = false;
-        } else {
-          // add baseline plan failed, need evict unaccepted baseline in baseline cache.
-          (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
         }
       } else if (plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
         if ((nullptr != spm_ctx.baseline_guard_.get_cache_obj() &&
@@ -5284,7 +5290,9 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
         } else if (!plan_added) {
           // plan not add to plan cache, do not check if need evolution.
           if (spm_ctx.check_execute_status_) {
-            (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
+            // session which add plan succeed need check execute status
+            spm_ctx.check_execute_status_ = false;
+            LOG_TRACE("plan not add, disable check execute status");
           }
         } else if (baseline_enable && !baseline_exists) {
           need_get_baseline = true;

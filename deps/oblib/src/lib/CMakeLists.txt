@@ -423,9 +423,13 @@ add_library(ob_malloc STATIC)
 target_link_libraries(ob_malloc ob_malloc_object)
 
 add_library(malloc_hook STATIC
-  alloc/malloc_hook.cpp
-  alloc/malloc_hook.h
-  alloc/malloc_hook_extended.cpp)
+    alloc/malloc_hook.cpp
+    alloc/malloc_hook.h
+    alloc/malloc_hook_extended.cpp)
+if (BUILD_CDC_ONLY)
+  set_target_properties(malloc_hook PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
+
 target_link_libraries(malloc_hook oblib_base)
 
 if(OB_BUILD_CLOSE_MODULES)
@@ -445,7 +449,7 @@ target_link_libraries(oblib_lib
   ${DEP_DIR}/lib/liblzma.a
 )
 
-if (NOT OB_BUILD_CDC)
+if (NOT BUILD_CDC_ONLY)
 # vsag vector library
 target_link_directories(
   oblib_lib PUBLIC ${DEP_DIR}/lib ${DEP_DIR}/lib/vsag_lib

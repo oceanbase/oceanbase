@@ -4381,11 +4381,11 @@ int ObAggregateProcessor::collect_aggr_result(
       break;
     }
     case T_FUN_GROUPING: {
+      bool null_result = false;
       int64_t new_value = aggr_cell.get_tiny_num_int();
       if (aggr_info.hash_rollup_info_) {
         if (OB_UNLIKELY(!aggr_cell.get_is_evaluated())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("not evaluated", K(ret));
+          null_result = true;
         }
       } else {
         LOG_DEBUG("debug grouping", K(new_value), KP(diff_expr));
@@ -4396,6 +4396,8 @@ int ObAggregateProcessor::collect_aggr_result(
         }
       }
       if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(null_result)) {
+        result.set_null();
       } else if (lib::is_mysql_mode()) {
         result.set_int(new_value);
       } else {
@@ -4413,8 +4415,7 @@ int ObAggregateProcessor::collect_aggr_result(
     case T_FUN_GROUPING_ID: {
       if (aggr_info.hash_rollup_info_) {
         if (OB_UNLIKELY(!aggr_cell.get_is_evaluated())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("not evaluated", K(ret));
+          result.set_null();
         } else if (lib::is_mysql_mode()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected function", K(ret));

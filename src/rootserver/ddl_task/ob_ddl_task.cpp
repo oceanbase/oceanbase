@@ -4456,10 +4456,10 @@ int ObDDLTaskRecordOperator::kill_inner_sql(
 }
 
 int ObDDLTaskRecordOperator::get_partition_split_task_ids(
-      common::ObISQLClient &proxy,
-      const uint64_t tenant_id,
-      const ObIArray<uint64_t> &table_ids,
-      ObIArray<int64_t> &task_ids)
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const ObIArray<uint64_t> &table_ids,
+    ObIArray<int64_t> &task_ids)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_table_ids;
@@ -4477,7 +4477,7 @@ int ObDDLTaskRecordOperator::get_partition_split_task_ids(
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(sql_string.assign_fmt("SELECT task_id FROM %s WHERE object_id in (%.*s) AND ddl_type >= %u AND ddl_type <= %u ",
+        if (OB_FAIL(sql_string.assign_fmt("SELECT task_id FROM %s WHERE object_id in (%.*s) AND ddl_type >= %u AND ddl_type <= %u",
                     OB_ALL_DDL_TASK_STATUS_TNAME, static_cast<int>(sql_table_ids.length()), sql_table_ids.ptr(), ObDDLType::DDL_AUTO_SPLIT_BY_RANGE, ObDDLType::DDL_MANUAL_SPLIT_NON_RANGE))) {
           LOG_WARN("assign sql string failed", K(ret));
         } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
@@ -4487,15 +4487,16 @@ int ObDDLTaskRecordOperator::get_partition_split_task_ids(
           LOG_WARN("fail to get sql result", K(ret));
         } else {
           while (OB_SUCC(ret) && OB_SUCC(result->next())) {
-            uint64_t task_id = OB_INVALID_ID;
-            EXTRACT_INT_FIELD_MYSQL(*result, "task_id", task_id, uint64_t);
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(task_ids.push_back(task_id))) {
-                LOG_WARN("fail to push back task id", K(ret), K(task_id));
-              }
+            int64_t task_id = OB_INVALID_ID;
+            EXTRACT_INT_FIELD_MYSQL(*result, "task_id", task_id, int64_t);
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(task_ids.push_back(task_id))) {
+              LOG_WARN("failed to push bakc into task_ids", K(ret), K(task_ids));
             }
           }
+
           if (OB_ITER_END == ret) {
+            //overwrite ret
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("fail to iter result", K(ret));

@@ -247,6 +247,9 @@ int ObLogGroupBy::est_cost()
   double selectivity = 1.0;
   double group_cost = 0.0;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
+  EstimateCostInfo param;
+  param.need_parallel_ = get_parallel();
+  double child_cost = 0;
   if (OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(child));
@@ -257,9 +260,14 @@ int ObLogGroupBy::est_cost()
                                     child_ndv,
                                     group_cost))) {
     LOG_WARN("failed to est group by cost", K(ret));
+  } else if (need_re_est_child_cost() &&
+             OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+    LOG_WARN("failed to re est child cost", K(ret));
+  } else if (!need_re_est_child_cost() &&
+             OB_FALSE_IT(child_cost=child->get_cost())) {
   } else {
     set_card(child_ndv * selectivity);
-    set_cost(child->get_cost() + group_cost);
+    set_cost(child_cost + group_cost);
     set_op_cost(group_cost);
   }
   return ret;
@@ -964,6 +972,27 @@ int ObLogGroupBy::check_use_child_ordering(bool &used, int64_t &inherit_child_or
   } else if (get_group_by_exprs().empty() &&
              get_rollup_exprs().empty()) {
     used = false;
+  }
+  return ret;
+}
+
+int ObLogGroupBy::compute_op_parallel_and_server_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::compute_op_parallel_and_server_info())) {
+    LOG_WARN("failed to compute parallel and server info", K(ret));
+  } else if (is_partition_wise() && !is_push_down()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
   }
   return ret;
 }

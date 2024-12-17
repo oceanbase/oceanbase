@@ -100,7 +100,7 @@ int ObPLCompiler::init_anonymous_ast(
   func_ast.set_ret_type(pl_type);
 
   for (int64_t i = 0; OB_SUCC(ret) && OB_NOT_NULL(params) && i < params->count(); ++i) {
-    const ObObjParam param = params->at(i);
+    ObObjParam& param = const_cast<ObObjParam&>(params->at(i));
     if (param.is_pl_extend()) {
 #ifdef OB_BUILD_ORACLE_PL
       if (PL_REF_CURSOR_TYPE == param.get_meta().get_extend_type()) {
@@ -109,7 +109,7 @@ int ObPLCompiler::init_anonymous_ast(
         pl_type.set_type_from(pl::PL_TYPE_SYS_REFCURSOR);
       } else
 #endif
-      if (param.get_udt_id() != OB_INVALID_ID) {
+      if (!is_mocked_anonymous_array_id(param.get_udt_id())) {
         const ObUserDefinedType *user_type = NULL;
         OZ (ObResolverUtils::get_user_type(&allocator,
                                            &session_info,
@@ -140,9 +140,10 @@ int ObPLCompiler::init_anonymous_ast(
         }
         OX (nested_type->set_element_type(element_type));
         OX (nested_type->set_user_type_id(
-          func_ast.get_user_type_table().generate_user_type_id(OB_INVALID_ID)));
+          func_ast.get_user_type_table().generate_user_type_id(OB_PL_MOCK_ANONYMOUS_ID)));
         OZ (func_ast.get_user_type_table().add_type(nested_type));
         OZ (func_ast.get_user_type_table().add_external_type(nested_type));
+        OX (param.set_udt_id(nested_type->get_user_type_id()));
         OX (pl_type = *nested_type);
 #endif
       } else {
@@ -403,6 +404,7 @@ int ObPLCompiler::compile(
       ObPLDataType param_type;
       ObSEArray<ObSchemaObjVersion, 1> deps;
       CK (OB_NOT_NULL(param));
+      OX (param_type.set_enum_set_ctx(&func_ast.get_enum_set_ctx()));
       OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                   schema_guard_,
                                                   session_info_,
@@ -414,7 +416,7 @@ int ObPLCompiler::compile(
       } else if (param->is_ret_param()) {
         func_ast.set_ret_type(param_type);
         if (ob_is_enum_or_set_type(param->get_param_type().get_obj_type())) {
-          OZ (func_ast.set_ret_type_info(param->get_extended_type_info()));
+          OZ (func_ast.set_ret_type_info(param->get_extended_type_info(), &func_ast.get_enum_set_ctx()));
          }
       } else {
         OZ (func_ast.add_argument(param->get_param_name(),
@@ -527,14 +529,9 @@ int ObPLCompiler::compile(
       }
 
       if (OB_SUCC(ret)) {
-        int64_t tenant_id = session_info_.get_effective_tenant_id();
-        int64_t tenant_schema_version = OB_INVALID_VERSION;
-        int64_t sys_schema_version = OB_INVALID_VERSION;
-        OZ (schema_guard_.get_schema_version(tenant_id, tenant_schema_version));
-        OZ (schema_guard_.get_schema_version(OB_SYS_TENANT_ID, sys_schema_version));
-        OX (func.set_tenant_schema_version(tenant_schema_version));
-        OX (func.set_sys_schema_version(sys_schema_version));
+        OZ (func.set_tenant_sys_schema_version(schema_guard_, session_info_.get_effective_tenant_id()));
         OX (func.set_ret_type(func_ast.get_ret_type()));
+        OX (func.get_stat_for_update().schema_version_ = routine.get_schema_version());
       }
       OZ (check_dep_schema(schema_guard_, func.get_dependency_table()));
     } // end heap var
@@ -960,6 +957,14 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
 
   int64_t compile_end = ObTimeUtility::current_time();
   OX (package.get_stat_for_update().compile_time_ = compile_end - compile_start);
+  OZ (package.set_tenant_sys_schema_version(schema_guard_, session_info_.get_effective_tenant_id()));
+  if (package_info.is_for_trigger()) {
+    CK (OB_NOT_NULL(trigger_info));
+    OX (package.get_stat_for_update().schema_version_ = trigger_info->get_schema_version());
+  } else {
+    OX (package.get_stat_for_update().schema_version_ = package_info.get_schema_version());
+  }
+  OX (package.get_stat_for_update().name_ = package.get_name());
   if (PL_PACKAGE_BODY == package_ast.get_package_type()) {
     OX (package.get_stat_for_update().type_ = ObPLCacheObjectType::PACKAGE_BODY_TYPE);
   } else {

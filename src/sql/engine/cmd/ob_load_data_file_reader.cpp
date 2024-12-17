@@ -733,6 +733,7 @@ void ObZlibDecompressor::destroy()
   if (OB_NOT_NULL(zlib_stream_ptr_)) {
     z_streamp zstream_ptr = static_cast<z_streamp>(zlib_stream_ptr_);
     inflateEnd(zstream_ptr);
+    allocator_.free(zlib_stream_ptr_);
     zlib_stream_ptr_ = nullptr;
   }
 }

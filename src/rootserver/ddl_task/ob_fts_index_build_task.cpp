@@ -345,24 +345,9 @@ int ObFtsIndexBuildTask::check_health()
                                                       object_id_,
                                                       is_data_table_exist))) {
       LOG_WARN("check data table exist failed", K(ret), K(tenant_id_), K(object_id_));
-    } else if (OB_FAIL(check_aux_table_schemas_exist(is_all_indexes_exist))) {
-      LOG_WARN("check aux index table exist failed", K(ret), K(tenant_id_));
-    } else if (status != ObDDLTaskStatus::FAIL && (!is_data_table_exist || !is_all_indexes_exist)) {
+    } else if (status != ObDDLTaskStatus::FAIL && !is_data_table_exist) {
       ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("data table or index table not exist", K(ret), K(is_data_table_exist),
-          K(is_all_indexes_exist));
-    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_,
-                                                     index_table_id_,
-                                                     index_schema))) {
-      LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(index_table_id_));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("index schema is null, but index table exist", K(ret),
-          K(index_table_id_));
-    } else if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR == index_schema->get_index_status()) {
-      ret = OB_SUCCESS == ret_code_ ? OB_ERR_ADD_INDEX : ret_code_;
-      LOG_WARN("index status error", K(ret), K(index_table_id_), K(index_schema->get_table_name_str()),
-          K(index_schema->get_index_status()));
+      LOG_WARN("data table not exist", K(ret), K(is_data_table_exist));
     }
     #ifdef ERRSIM
       if (OB_SUCC(ret)) {
@@ -382,78 +367,6 @@ int ObFtsIndexBuildTask::check_health()
     }
   }
   check_ddl_task_execute_too_long();
-  return ret;
-}
-
-int ObFtsIndexBuildTask::check_aux_table_schemas_exist(bool &is_all_exist)
-{
-  int ret = OB_SUCCESS;
-  is_all_exist = false;
-  const ObDDLTaskStatus status = static_cast<ObDDLTaskStatus>(task_status_);
-  ObMultiVersionSchemaService &schema_service = root_service_->get_schema_service();
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *index_schema = nullptr;
-  if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
-    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
-  } else {
-    bool rowkey_doc_exist = true;
-    bool doc_rowkey_exist = true;
-    bool domain_index_aux_exist = true;
-    bool fts_doc_word_exist = true;
-    if (status <= ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA) {
-      is_all_exist = true;
-      if (OB_INVALID_ID != rowkey_doc_aux_table_id_) {
-        if (OB_FAIL(schema_guard.check_table_exist(tenant_id_,
-                                                   rowkey_doc_aux_table_id_,
-                                                   rowkey_doc_exist))) {
-          LOG_WARN("check rowkey doc table exist failed", K(ret), K(tenant_id_),
-              K(rowkey_doc_aux_table_id_));
-        } else {
-          is_all_exist &= rowkey_doc_exist;
-        }
-      }
-      if (OB_INVALID_ID != domain_index_aux_table_id_) {
-        if (OB_FAIL(schema_guard.check_table_exist(tenant_id_,
-                                                   domain_index_aux_table_id_,
-                                                   domain_index_aux_exist))) {
-          LOG_WARN("check fts index aux table exist failed", K(ret), K(tenant_id_),
-              K(domain_index_aux_table_id_));
-        } else {
-          is_all_exist &= domain_index_aux_exist;
-        }
-      }
-    } else {
-      if (OB_FAIL(schema_guard.check_table_exist(tenant_id_,
-                                                 rowkey_doc_aux_table_id_,
-                                                 rowkey_doc_exist))) {
-        LOG_WARN("check rowkey doc table exist failed", K(ret), K(tenant_id_),
-            K(rowkey_doc_aux_table_id_));
-      } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_,
-                                                        doc_rowkey_aux_table_id_,
-                                                        doc_rowkey_exist))) {
-        LOG_WARN("check doc rowkey table exist failed", K(ret), K(tenant_id_),
-            K(doc_rowkey_aux_table_id_));
-      } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_,
-                                                        domain_index_aux_table_id_,
-                                                        domain_index_aux_exist))) {
-        LOG_WARN("check fts index aux table exist failed", K(ret), K(tenant_id_),
-            K(domain_index_aux_table_id_));
-      } else if (is_fts_task()
-        && OB_FAIL(schema_guard.check_table_exist(tenant_id_,
-                                                  fts_doc_word_aux_table_id_,
-                                                  fts_doc_word_exist))) {
-        LOG_WARN("check fts doc word table exist failed", K(ret), K(tenant_id_),
-            K(fts_doc_word_aux_table_id_));
-      } else {
-        is_all_exist = (rowkey_doc_exist && doc_rowkey_exist &&
-                        domain_index_aux_exist && fts_doc_word_exist);
-        if (!is_all_exist) {
-          LOG_WARN("fts aux table not exist", K(rowkey_doc_exist),
-              K(doc_rowkey_exist), K(domain_index_aux_exist), K(fts_doc_word_exist));
-        }
-      }
-    }
-  }
   return ret;
 }
 

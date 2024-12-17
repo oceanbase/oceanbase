@@ -67,26 +67,7 @@ static bool is_rollup_expr(const ObAggrInfo &aggr_info, ObExpr *expr, int64_t se
     for (int i = expand_exprs.count() - seq - 1; !found && i >= 0; i--) {
       found = expr == aggr_info.hash_rollup_info_->expand_exprs_.at(i);
     }
-    if (lib::is_mysql_mode() && !found) {
-      // for mysql
-      // group by a, c, c, b with rollup
-      // rollup exprs will rewrite to: a, dup(c), c, b
-      // grouping(c) will be true only if dup(c) & c are all set to null
-      bool all_dup_set_null = true;
-      for (int i = 0; all_dup_set_null && i < aggr_info.hash_rollup_info_->dup_expr_pairs_.count(); i++) {
-        ObExpandVecSpec::DupExprPair &dup_pair = aggr_info.hash_rollup_info_->dup_expr_pairs_.at(i);
-        if (dup_pair.org_expr_ == expr) {
-          for (int j = expand_exprs.count() - seq - 1; all_dup_set_null && j >= 0; j--) {
-            if (expand_exprs.at(j) == dup_pair.dup_expr_) {
-              all_dup_set_null = false;
-            }
-          }
-        }
-      }
-      ret = all_dup_set_null;
-    } else {
-      ret = !found;
-    }
+    ret = !found;
   }
   return ret;
 }

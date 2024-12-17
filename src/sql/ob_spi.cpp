@@ -1802,14 +1802,12 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             if (can_retry) {
               retry_guard.test();
             }
+            int close_ret = spi_result.close_result_set();
+            if (OB_SUCCESS != close_ret) {
+              LOG_WARN("close spi result failed", K(ret), K(close_ret));
+            }
+            ret = OB_SUCCESS == ret ? close_ret : ret;
           }
-
-          int close_ret = spi_result.close_result_set();
-          if (OB_SUCCESS != close_ret) {
-            LOG_WARN("close spi result failed", K(ret), K(close_ret));
-          }
-          ret = OB_SUCCESS == ret ? close_ret : ret;
-
           if (!is_dbms_sql) {
             spi_result.destruct_exec_params(*session);
           }
@@ -2340,17 +2338,53 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                       prepare_result.has_dup_column_name_));
           } else {
             PLPrepareCtx tmp_pl_prepare_ctx(session, secondary_namespace, false, false, false);
-            const ObString &route_sql = pl_prepare_result.result_set_->get_stmt_ps_sql().empty() ?
-                                          pl_prepare_result.result_set_->get_route_sql() :
-                                          pl_prepare_result.result_set_->get_stmt_ps_sql();
-
-            SMART_VAR(PLPrepareResult, tmp_pl_prepare_result) {
+            const ObString &route_sql = pl_prepare_result.result_set_->get_stmt_ps_sql();
+            ParamStore *params = NULL;
+            ObRawExpr *expr = NULL;
+            ObObjParam exec_param;
+            ObExprResType result_type;
+            if (OB_ISNULL(params = reinterpret_cast<ParamStore *>(allocator.alloc(sizeof(ParamStore))))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to alloc memory for exec params", K(ret));
+            }
+            OX (new (params) ParamStore( (ObWrapperAllocator(allocator)) ) );
+            OZ (params->reserve(pl_prepare_result.result_set_->get_external_params().count()));
+            for (int64_t i = 0; OB_SUCC(ret) &&
+                  i < pl_prepare_result.result_set_->get_external_params().count(); ++i) {
+              OX (expr = pl_prepare_result.result_set_->get_external_params().at(i));
+              if (OB_ISNULL(expr)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to copy expr, expr is NULL", K(expr), K(ret));
+              } else {
+                OX (exec_param.reset());
+                OX (exec_param.ObObj::reset());
+                OX (exec_param.set_type(ObNullType));
+                OX (result_type.reset());
+                OX (exec_param.set_param_meta(expr->get_result_meta()));
+                OX (result_type = expr->get_result_type());
+                OX (exec_param.set_accuracy(result_type.get_accuracy()));
+                if (OB_SUCC(ret) && result_type.is_ext()) {
+                  if (ob_is_xml_pl_type(result_type.get_type(), result_type.get_udt_id())) {
+                    const ObDataTypeCastParams dtc_params = sql::ObBasicSessionInfo::create_dtc_params(&session);
+                    ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, ObCharset::get_system_collation());
+                    if (OB_FAIL(ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, exec_param, exec_param))) {
+                      LOG_WARN("failed to cast type of xml type", K(ret), K(exec_param));
+                    }
+                  }
+                }
+                if (OB_SUCC(ret) && OB_FAIL(params->push_back(exec_param))) {
+                  LOG_WARN("failed to push back param", K(ret));
+                }
+              }
+            }
+            if (OB_SUCC(ret)) {
+              SMART_VAR(PLPrepareResult, tmp_pl_prepare_result) {
               CK (OB_NOT_NULL(GCTX.sql_engine_));
               OZ (tmp_pl_prepare_result.init(session));
               CK (OB_NOT_NULL(tmp_pl_prepare_result.result_set_));
               // 如果当前语句含有INTO, 则resultset中没有输出列, 我们使用reconstruct的route_sql来构造recordtype
               CK (!pl_prepare_result.result_set_->get_route_sql().empty());
-              OZ(GCTX.sql_engine_->handle_pl_prepare(route_sql, tmp_pl_prepare_ctx, tmp_pl_prepare_result));
+              OZ(GCTX.sql_engine_->handle_pl_prepare(route_sql, tmp_pl_prepare_ctx, tmp_pl_prepare_result, params));
               CK (OB_NOT_NULL(tmp_pl_prepare_result.result_set_->get_field_columns()));
               OZ (spi_build_record_type(allocator,
                                         session,
@@ -2361,6 +2395,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                         prepare_result.rowid_table_id_,
                                         secondary_namespace,
                                         prepare_result.has_dup_column_name_));
+              }
             }
           }
         }
@@ -2634,7 +2669,7 @@ int ObSPIService::dynamic_out_params(
           && param_store->at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
         OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, param_store->at(i), obj, true));
       } else {
-        OZ (deep_copy_obj(allocator, param_store->at(i), obj));
+        OZ (deep_copy_objparam(allocator, param_store->at(i), obj));
       }
     }
   }
@@ -3548,11 +3583,11 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
         if (!cursor.is_ps_cursor()) {
           retry_guard.test();
         }
-      }
-      if (OB_FAIL(ret)) {
-        int close_ret = spi_result->close_result_set();
-        if (OB_SUCCESS != close_ret) {
-          LOG_WARN("close mysql result set failed", K(ret), K(close_ret));
+        if (OB_FAIL(ret)) {
+          int close_ret = spi_result->close_result_set();
+          if (OB_SUCCESS != close_ret) {
+            LOG_WARN("close mysql result set failed", K(ret), K(close_ret));
+          }
         }
       }
     } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
@@ -3654,12 +3689,12 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
           if (!cursor.is_ps_cursor()) {
             retry_guard.test();
           }
+          int close_ret = spi_result.close_result_set();
+          if (OB_SUCCESS != close_ret) {
+            LOG_WARN("close mysql result failed", K(ret), K(close_ret));
+          }
+          ret = (OB_SUCCESS == ret ? close_ret : ret);
         }
-        int close_ret = spi_result.close_result_set();
-        if (OB_SUCCESS != close_ret) {
-          LOG_WARN("close mysql result failed", K(ret), K(close_ret));
-        }
-        ret = (OB_SUCCESS == ret ? close_ret : ret);
         if (!is_dbms_cursor) {
           spi_result.destruct_exec_params(session_info);
         }
@@ -4172,8 +4207,6 @@ int ObSPIService::spi_cursor_close(ObPLExecCtx *ctx,
   ObPLCursorInfo *cursor = nullptr;
   ObObjParam cur_var;
   ObCusorDeclareLoc loc;
-  uint64_t compat_version = 0;
-  bool null_value_for_closed_cursor = false;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
@@ -4182,23 +4215,8 @@ int ObSPIService::spi_cursor_close(ObPLExecCtx *ctx,
       package_id, routine_id, cursor_index, cur_var);
   OV (ignore || OB_ISNULL(cursor) || !cursor->is_invalid_cursor(), OB_ERR_INVALID_CURSOR, ignore, cur_var);
 
-  if (FAILEDx(ctx->exec_ctx_->get_my_session()->get_compatibility_version(compat_version))) {
-    LOG_WARN("failed to get compatibility version", K(ret));
-  } else if (OB_FAIL(ObCompatControl::check_feature_enable(
-                 compat_version, ObCompatFeatureType::NULL_VALUE_FOR_CLOSED_CURSOR, null_value_for_closed_cursor))) {
-    LOG_WARN("failed to check feature enable", K(ret));
-  } else if (null_value_for_closed_cursor && OB_NOT_NULL(cursor) && cursor->is_session_cursor()) {
-    OZ (ctx->exec_ctx_->get_my_session()->close_cursor(cursor->get_id()));
-    OX (cur_var.set_obj_value(static_cast<uint64_t>(0)));  // return closed refcursor as null
-    if (DECL_SUBPROG == loc) {
-      OZ (spi_set_subprogram_cursor_var(ctx, package_id, routine_id, cursor_index, cur_var));
-    } else if (DECL_LOCAL == loc) {
-      OX (cur_var.copy_value_or_obj(ctx->params_->at(cursor_index), true));
-    }
-  } else {
-    OZ (cursor_close_impl(ctx, cursor, cur_var.is_ref_cursor_type(), package_id, routine_id, ignore),
-        K(package_id), K(routine_id), K(cursor_index), K(cur_var));
-  }
+  OZ (cursor_close_impl(ctx, cursor, cur_var.is_ref_cursor_type(), package_id, routine_id, ignore),
+      package_id, routine_id, cursor_index, cur_var);
   if (OB_SUCC(ret) && DECL_PKG == loc) {
     OZ (spi_update_package_change_info(ctx, package_id, cursor_index));
   }
@@ -7566,7 +7584,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
     } else {
       LOG_DEBUG("column convert", K(i), K(obj.get_meta()), K(result_types[i].get_meta_type()),
                                   K(current_type.at(i)), K(result_types[i].get_accuracy()));
-      const ObIArray<ObString> *type_info = NULL;
+      ObIArray<ObString> *type_info = NULL;
       // only mysql mode will run this logic
       if (ob_is_enum_or_set_type(result_types[i].get_obj_type())) {
         if (OB_ISNULL(result_expr)) {
@@ -7580,7 +7598,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
             ret = OB_ARRAY_OUT_OF_RANGE;
             LOG_WARN("param idx out of range", K(ret), K(param_idx));
           } else {
-            type_info = &(ctx->func_->get_variables().at(param_idx).get_type_info());
+            OZ(ctx->func_->get_variables().at(param_idx).get_type_info(type_info));
           }
         }
       }

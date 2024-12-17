@@ -202,6 +202,15 @@ public:
                 const int64_t auto_split_tablet_size,
                 const int64_t used_disk_space,
                 obrpc::ObAlterTableArg &arg);
+  static int print_identifier(ObIAllocator &allocator,
+                              const bool is_oracle_mode,
+                              const ObString &name,
+                              ObString &ident);
+  static int convert_rowkey_to_sql_literal(const ObRowkey &rowkey,
+                                           const bool is_oracle_mode,
+                                           const ObTimeZoneInfo *tz_info,
+                                           ObIAllocator &allocator,
+                                           ObString &rowkey_str);
 private:
   int acquire_schema_info_of_tablet_(const uint64_t tenant_id,
                                      const ObTabletID tablet_id,
@@ -217,6 +226,12 @@ private:
                  const ObTabletID split_source_tablet_id,
                  const ObArray<ObNewRange> &ranges,
                  obrpc::ObAlterTableArg &arg);
+  int build_ddl_stmt_str_(const share::schema::ObTableSchema &orig_table_schema,
+                          const share::schema::AlterTableSchema &alter_table_schema,
+                          const ObTabletID &src_tablet_id,
+                          const ObTimeZoneInfo *tz_info,
+                          ObIAllocator &allocator,
+                          ObString &ddl_stmt_str);
   int build_alter_table_schema_(const uint64_t tenant_id,
                                 const ObString &db_name,
                                 const share::schema::ObTableSchema &table_schema,

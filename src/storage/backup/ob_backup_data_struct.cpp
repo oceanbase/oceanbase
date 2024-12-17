@@ -830,8 +830,8 @@ int ObBackupSSTableMeta::serialize(char *buf, const int64_t buf_len, int64_t &po
     }
     int64_t serial_size = pos - pos_bak;
     int64_t tmp_pos = 0;
-    CHECK_SERIALIZE_SIZE(ObBackupSSTableMeta, serial_size);
     if (OB_SUCC(ret)) {
+      CHECK_SERIALIZE_SIZE(ObBackupSSTableMeta, serial_size);
       ret = serialization::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes, size_nbytes, tmp_pos, serial_size);
     }
   }

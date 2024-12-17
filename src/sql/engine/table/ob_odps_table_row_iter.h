@@ -37,6 +37,7 @@ public:
       step_(0),
       count_(0),
       is_from_gi_pump_(false),
+      cur_line_number_(0),
       download_handle_(NULL),
       record_reader_handle_(NULL) {}
     int reuse();
@@ -46,6 +47,7 @@ public:
                  K(step_),
                  K(count_),
                  K(is_from_gi_pump_),
+                 K(cur_line_number_),
                  K(ObString(download_id_.c_str())));
     int64_t task_idx_;
     int64_t part_id_;
@@ -53,6 +55,7 @@ public:
     int64_t step_;
     int64_t count_;
     bool is_from_gi_pump_;
+    int64_t cur_line_number_;
     apsara::odps::sdk::IDownloadPtr download_handle_;
     apsara::odps::sdk::IRecordReaderPtr record_reader_handle_;
     std::string download_id_;
@@ -176,6 +179,7 @@ private:
   }
   int fill_partition_list_data(ObExpr &expr, int64_t returned_row_cnt);
   int retry_read_task();
+  int calc_exprs_for_rowid(const int64_t read_count);
 private:
   ObODPSGeneralFormat odps_format_;
   apsara::odps::sdk::Account account_;

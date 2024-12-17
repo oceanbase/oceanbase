@@ -324,6 +324,29 @@ public:
     TO_STRING_KV(K_(need_replace_remote_sstable), K_(param_array));
   };
 
+  struct BatchBuildMinorSSTablesParam final
+  {
+    BatchBuildMinorSSTablesParam();
+    ~BatchBuildMinorSSTablesParam() {}
+    bool is_valid() const;
+    void reset();
+    int assign_sstables(
+        ObTablesHandleArray &mds_tables,
+        ObTablesHandleArray &minor_tables,
+        ObTablesHandleArray &ddl_tables);
+
+    ObLS *ls_;
+    common::ObTabletID tablet_id_;
+    const ObMigrationTabletParam *src_tablet_meta_;
+    ObTablesHandleArray mds_tables_;
+    ObTablesHandleArray minor_tables_;
+    ObTablesHandleArray ddl_tables_;
+    ObTabletRestoreAction::ACTION restore_action_;
+    share::SCN release_mds_scn_;
+    TO_STRING_KV(KP_(ls), K_(tablet_id), KP_(src_tablet_meta), K_(mds_tables),
+        K_(minor_tables), K_(ddl_tables), K_(restore_action), K_(release_mds_scn));
+    DISALLOW_COPY_AND_ASSIGN(BatchBuildMinorSSTablesParam);
+  };
 
 public:
   static int build_tablet_with_major_tables(
@@ -338,13 +361,7 @@ public:
       const ObStorageSchema &storage_schema,
       const BatchBuildTabletTablesExtraParam &extra_param);
   static int build_table_with_minor_tables(
-      ObLS *ls,
-      const common::ObTabletID &tablet_id,
-      const ObMigrationTabletParam *src_tablet_meta,
-      const ObTablesHandleArray &mds_tables,
-      const ObTablesHandleArray &minor_tables,
-      const ObTablesHandleArray &ddl_tables,
-      const ObTabletRestoreAction::ACTION &restore_action);
+      const BatchBuildMinorSSTablesParam &param);
   static int check_remote_logical_sstable_exist(
       ObTablet *tablet,
       bool &is_exist);
@@ -387,10 +404,9 @@ private:
       const int64_t transfer_seq,
       const BuildTabletTableExtraParam &extra_param);
   static int inner_update_tablet_table_store_with_minor_(
-      ObLS *ls,
+      const BatchBuildMinorSSTablesParam &param,
       ObTablet *tablet,
       const bool &need_tablet_meta_merge,
-      const ObMigrationTabletParam *src_tablet_meta,
       const ObTablesHandleArray &tables_handle,
       const bool is_replace_remote);
   static int assemble_column_oriented_sstable_(

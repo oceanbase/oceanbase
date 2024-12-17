@@ -2427,7 +2427,7 @@ public:
   int ddl_wlock();
   int ddl_unlock() { return ddl_lock_.unlock(); }
   template<typename SCHEMA, typename ALTER_SCHEMA>
-  int fill_part_name(
+  static int fill_part_name(
       const SCHEMA &orig_schema,
       ALTER_SCHEMA &alter_schema);
 private:
@@ -2764,7 +2764,7 @@ private:
       const common::ObIArray<share::ObResourcePoolName> &short_pool_name_list,
       common::ObIArray<share::ObResourcePoolName> &diff_pools);
   template<typename SCHEMA, typename ALTER_SCHEMA>
-  int check_partition_name_valid(const SCHEMA &orig_schema,
+  static int check_partition_name_valid(const SCHEMA &orig_schema,
                                  const ALTER_SCHEMA &alter_schema,
                                  const ObString part_name,
                                  bool &valid);

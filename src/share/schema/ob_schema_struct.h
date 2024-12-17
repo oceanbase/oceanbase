@@ -134,6 +134,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_FTS_WORD_SEGMENT_COLUMN_FLAG (INT64_C(1) << 25) // word segment column for full-text search flag
 #define GENERATED_VEC_VID_COLUMN_FLAG (INT64_C(1) << 26)
 #define GENERATED_VEC_VECTOR_COLUMN_FLAG (INT64_C(1) << 27)
+#define GENERATED_VEC_IVF_CENTER_ID_COLUMN_FLAG (INT64_C(1) << 28)
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
@@ -150,6 +151,13 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_VEC_SCN_COLUMN_FLAG (INT64_C(1) << 41)
 #define GENERATED_VEC_KEY_COLUMN_FLAG (INT64_C(1) << 42)
 #define GENERATED_VEC_DATA_COLUMN_FLAG (INT64_C(1) << 43)
+#define GENERATED_VEC_IVF_CENTER_VECTOR_COLUMN_FLAG (INT64_C(1) << 44)
+#define GENERATED_VEC_IVF_DATA_VECTOR_COLUMN_FLAG (INT64_C(1) << 45)
+#define GENERATED_VEC_IVF_META_ID_COLUMN_FLAG (INT64_C(1) << 46)
+#define GENERATED_VEC_IVF_META_VECTOR_COLUMN_FLAG (INT64_C(1) << 47)
+#define GENERATED_VEC_IVF_PQ_CENTER_ID_COLUMN_FLAG (INT64_C(1) << 48)
+#define GENERATED_VEC_IVF_PQ_CENTER_IDS_COLUMN_FLAG (INT64_C(1) << 49)
+
 #define SPATIAL_COLUMN_SRID_MASK (0xffffffffffffffe0L)
 
 #define STORED_COLUMN_FLAGS_MASK 0xFFFFFFFF
@@ -3207,6 +3215,27 @@ public:
       RelatedTableInfo *related_table = NULL);
 
   static bool is_default_list_part(const ObPartition &part);
+
+  static int check_param_valid(
+        const share::schema::ObTableSchema &table_schema,
+        RelatedTableInfo *related_table)
+  {
+    return check_param_valid_(table_schema, related_table);
+  }
+
+  static int fill_tablet_and_object_ids(
+      const bool fill_tablet_id,
+      const int64_t part_idx,
+      const common::ObIArray<PartitionIndex> &partition_indexes,
+      const share::schema::ObTableSchema &table_schema,
+      RelatedTableInfo *related_table,
+      common::ObIArray<common::ObTabletID> &tablet_ids,
+      common::ObIArray<common::ObObjectID> &object_ids)
+  {
+    return fill_tablet_and_object_ids_(fill_tablet_id, part_idx, partition_indexes,
+                                       table_schema, related_table,
+                                       tablet_ids, object_ids);
+  }
 
   /* ----------------------------------------------------------------- */
 

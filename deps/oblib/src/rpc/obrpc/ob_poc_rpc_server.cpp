@@ -89,7 +89,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
       }
       IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", sz, pcode, tenant_id);
       timeguard.click(rpc_timeguard_str);
-      ObRpcMemPool* pool = ObRpcMemPool::create(tenant_id, pcode_label, pool_size);
+      ObRpcMemPool* pool = ObRpcMemPool::create(tenant_id, pcode_label, pool_size, ObRpcMemPool::RPC_CACHE_SIZE);
       void *temp = NULL;
 
   #ifdef ERRSIM
@@ -147,29 +147,59 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
   return ret;
 }
 
+void* ObPocServerHandleContext::alloc(int64_t sz) {
+  resp_ptr_ = pn_resp_pre_alloc(resp_id_, sz);
+  return resp_ptr_;
+}
+
 void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
 {
   int ret = OB_SUCCESS;
   int sys_err = 0;
   char reserve_buf[2048]; // reserve stack memory for response packet buf
-  char* buf = reserve_buf;
-  int64_t sz = 0;
+  char* buff = NULL;
+  int64_t resp_hdr_size = 0;
+  int64_t resp_buf_size = 0;
+  int64_t rpc_header_size = ObRpcPacket::get_header_size();
+  int pkt_hdr_size = sizeof(ObRpcPacket) + OB_NET_HEADER_LENGTH + rpc_header_size;
+  int64_t pos = 0;
+  char* pkt_ptr = reinterpret_cast<char*>(pkt);
   char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
   ObTimeGuard timeguard("rpc_resp", 10 * 1000);
   if (NULL == pkt) {
     // do nothing
-  } else if (OB_FAIL(rpc_encode_ob_packet(pool_, pkt, buf, sz, sizeof(reserve_buf)))) {
-    RPC_LOG(WARN, "rpc_encode_ob_packet fail", KP(pkt), K(sz));
-    buf = NULL;
-    sz = 0;
+  } else if (OB_UNLIKELY(pkt_ptr != resp_ptr_)) {
+    // response error packet using temporary memory
+    int64_t sz = 0;
+    char* tmp_buf = reserve_buf;
+    if (OB_FAIL(rpc_encode_ob_packet(pool_, pkt, tmp_buf, sz, sizeof(reserve_buf)))) {
+      RPC_LOG(WARN, "rpc_encode_ob_packet fail", KP(pkt), K(sz));
+    } else {
+      buff = tmp_buf;
+    }
+    resp_hdr_size = 0;
+    resp_buf_size = sz;
+  } else if (OB_FAIL(pkt->encode_header(pkt_ptr + sizeof(ObRpcPacket) + OB_NET_HEADER_LENGTH, rpc_header_size, pos))) {
+    RPC_LOG(WARN, "encode pkt header fail", K(*pkt), K(rpc_header_size), K(pos));
   } else {
+    /*
+      *                   RPC response packet buffer format
+      *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      *  |  ObRpcPacket  |  easy header |  RPC header  | rcode | RPC response |
+      *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      */
+    // ObRpcPacket is not used in pkt-nio, pn_resp will use this buff to allocate pn_resp_t struct
+    buff = pkt_ptr;
+    resp_hdr_size = sizeof(ObRpcPacket) + OB_NET_HEADER_LENGTH;
+    resp_buf_size = pkt->get_encoded_size();
     IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld",
-                          sz,
-                          pkt->get_pcode(),
-                          pkt->get_tenant_id());
+                      resp_buf_size,
+                      pkt->get_pcode(),
+                      pkt->get_tenant_id());
   }
   timeguard.click(rpc_timeguard_str);
-  if ((sys_err = pn_resp(resp_id_, buf, sz, resp_expired_abs_us_)) != 0) {
+  if ((sys_err = pn_resp(resp_id_, buff, resp_hdr_size, resp_buf_size, resp_expired_abs_us_)) != 0) {
+    ret = tranlate_to_ob_error(sys_err);
     RPC_LOG(WARN, "pn_resp fail", K(resp_id_), K(sys_err));
   }
 }
@@ -250,7 +280,7 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
   if (OB_SUCCESS != tmp_ret) {
     if (OB_TMP_FAIL(ObPocServerHandleContext::resp_error(resp_id, tmp_ret, b, sz))) {
       int sys_err = 0;
-      if ((sys_err = pn_resp(resp_id, NULL, 0, OB_INVALID_TIMESTAMP)) != 0) {
+      if ((sys_err = pn_resp(resp_id, NULL, 0, 0, OB_INVALID_TIMESTAMP)) != 0) {
         RPC_LOG(WARN, "pn_resp fail", K(resp_id), K(sys_err));
       }
     }

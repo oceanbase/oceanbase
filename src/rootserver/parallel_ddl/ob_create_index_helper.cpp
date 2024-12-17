@@ -352,7 +352,7 @@ int ObCreateIndexHelper::is_local_generate_schema_(bool &is_local_generate)
   } else if (INDEX_TYPE_NORMAL_GLOBAL == arg_.index_type_
              || INDEX_TYPE_UNIQUE_GLOBAL == arg_.index_type_
              || INDEX_TYPE_SPATIAL_GLOBAL == arg_.index_type_) {
-    if (!orig_data_table_schema_->is_partitioned_table() && !arg_.index_schema_.is_partitioned_table()) {
+    if (!orig_data_table_schema_->is_partitioned_table() && !arg_.index_schema_.is_partitioned_table() && !orig_data_table_schema_->is_auto_partitioned_table()) {
       is_local_generate = true;
     } else {
       is_local_generate = false;

@@ -29,12 +29,11 @@ enum class CpuFlag { SSE4_2 = 0, AVX, AVX2, AVX512BW, MAX };
 class CpuFlagSet {
   public:
   DISABLE_COPY_ASSIGN(CpuFlagSet);
-  static const CpuFlagSet& get_instance();
   bool have_flag(const CpuFlag flag) const;
-private:
   CpuFlagSet();
-  uint64_t init_from_cpu();
-  uint64_t init_from_os();
+private:
+  void init_from_cpu(uint64_t& flags);
+  int init_from_os(uint64_t& flags);
   int64_t flags_;
 };
 

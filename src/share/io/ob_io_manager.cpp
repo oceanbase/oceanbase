@@ -198,7 +198,7 @@ int ObTrafficControl::ObSharedDeviceControlV2::fill_qsched_req_storage_key(ObIOR
 }
 
 int ObTrafficControl::ObSharedDeviceControlV2::add_group(const ObIOSSGrpKey &grp_key, const int qid) {
-  return group_list_.add_group(grp_key, qid, limit_ids_, ResourceType::ResourceTypeCnt);
+  return transform_ret(group_list_.add_group(grp_key, qid, limit_ids_, ResourceType::ResourceTypeCnt));
 }
 
 
@@ -338,6 +338,31 @@ int ObTrafficControl::calc_usage(ObIORequest &req)
         failed_shared_storage_obw_.inc(io_size);
       }
     }
+  }
+  return ret;
+}
+int ObTrafficControl::transform_ret(int ret)
+{
+  switch (ret) {
+    case 0:
+      ret = OB_SUCCESS;
+      break;
+    case ENOENT:
+      ret = OB_EAGAIN;
+      break;
+    case -ENOENT:
+      ret = OB_EAGAIN;
+      break;
+    case ENOMEM:
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      break;
+    case -ENOMEM:
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      break;
+    default:
+      LOG_WARN("unknow ret", K(ret));
+      ret = OB_ERR_UNEXPECTED;
+      break;
   }
   return ret;
 }
@@ -548,13 +573,17 @@ int ObTrafficControl::register_bucket(ObIORequest &req, const int qid) {
       DRWLock::WRLockGuard guard(rw_lock_);
       int tmp_ret = OB_SUCCESS;
       if (OB_UNLIKELY(OB_SUCCESS == shared_device_map_v2_.get_refactored(key, tc))) {
-      } else if (OB_ISNULL(tc = OB_NEW(ObSharedDeviceControlV2, "SDCtrlV2"))) {
+      } else if (OB_ISNULL(tc = OB_NEW(ObSharedDeviceControlV2, SET_IGNORE_MEM_VERSION("SDCtrlV2")))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (OB_FAIL(tc->set_storage_key(key))) {
       } else if (OB_FAIL(tc->add_shared_device_limits())) {
         LOG_WARN("add shared device limits failed", K(ret), K(req), K(grp_key), K(qid));
       } else if (OB_FAIL(shared_device_map_v2_.set_refactored(key, tc))) {
         LOG_WARN("set map failed", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+        LOG_WARN("register bucket failed", K(ret), K(key), K(tc));
+        ob_delete(tc);
       }
     }
 

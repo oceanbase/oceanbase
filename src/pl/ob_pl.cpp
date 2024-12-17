@@ -1598,6 +1598,27 @@ int ObPL::execute(ObExecContext &ctx,
               ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                 pl.get_params().at(i),
                                                 ctx.get_my_session());
+            } else if (pl.is_top_call()
+                       && pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+              ObObjParam &cursor_param = pl.get_params().at(i);
+              const ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(cursor_param.get_ext());
+              OX (params->at(i) = cursor_param);
+              if (OB_NOT_NULL(cursor)) {
+                uint64_t compat_version = 0;
+                bool null_value_for_closed_cursor = false;
+                CK (OB_NOT_NULL(ctx.get_my_session()));
+                OZ (ctx.get_my_session()->get_compatibility_version(compat_version));
+                OZ (ObCompatControl::check_feature_enable(compat_version,
+                                                          ObCompatFeatureType::NULL_VALUE_FOR_CLOSED_CURSOR,
+                                                          null_value_for_closed_cursor));
+                if (null_value_for_closed_cursor && cursor->is_session_cursor() && !cursor->isopen()) {
+                  OZ (ObSPIService::spi_add_ref_cursor_refcount(&pl.get_exec_ctx(), &cursor_param, -1));
+                  OX (params->at(i).set_obj_value(static_cast<uint64_t>(0)));  // return closed refcursor as null
+                  if (0 == cursor->get_ref_count()) {
+                    OZ (ctx.get_my_session()->close_cursor(cursor->get_id()));
+                  }
+                }
+              }
             } else {
               OX (params->at(i) = pl.get_params().at(i));
             }
@@ -3569,7 +3590,8 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
     } else if (!params->at(i).is_pl_extend()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("real parameter is ext ptr, but extend type not set property", K(ret), K(params->at(i)), K(i));
-    } else if (PL_OPAQUE_TYPE == params->at(i).get_meta().get_extend_type() || params->at(i).get_udt_id() != OB_INVALID_ID) {
+    } else if (PL_OPAQUE_TYPE == params->at(i).get_meta().get_extend_type()
+              || !is_mocked_anonymous_array_id(params->at(i).get_udt_id())) {
       if (params->at(i).get_udt_id() != dest_type.get_user_type_id()) {
         bool is_compatible = false;
         OZ (ObPLResolver::check_composite_compatible(
@@ -3584,7 +3606,8 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
       ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
       CK (OB_NOT_NULL(composite));
       if (OB_FAIL(ret)) {
-      } else if (OB_INVALID_ID == composite->get_id()) { // anonymous collection, should check element composite.
+      } else if (is_mocked_anonymous_array_id(composite->get_id())) {
+        // anonymous collection, should check element composite.
         bool need_cast = false;
         if (!dest_type.is_collection_type()) {
           ret = OB_INVALID_ARGUMENT;
@@ -3813,9 +3836,11 @@ do {                                                                  \
                 && lib::is_oracle_mode()) {
               cast_ctx.cast_mode_ |= CM_ENABLE_BLOB_CAST;
             }
-            if (OB_FAIL(ObExprColumnConv::convert_with_null_check(
-                  tmp, params->at(i), result_type, is_strict, cast_ctx,
-                  &(func_.get_variables().at(i).get_type_info())))) {
+            common::ObIArray<common::ObString>* type_info = NULL;
+            if (OB_FAIL(func_.get_variables().at(i).get_type_info(type_info))) {
+              LOG_WARN("failed to get type info", K(ret));
+            } else if (OB_FAIL(ObExprColumnConv::convert_with_null_check(
+                      tmp, params->at(i), result_type, is_strict, cast_ctx, type_info))) {
               LOG_WARN("Cast result type failed",
                         K(ret), K(params->at(i)), K(result_type), K(is_strict), K(i),
                         K(params->count()), K(func_.get_is_all_sql_stmt()),
@@ -3858,7 +3883,8 @@ do {                                                                  \
               get_params().at(i).set_is_ref_cursor_type(true);  // last assignment statement could clear this flag
               get_params().at(i).set_extend(
                   get_params().at(i).get_ext(), PL_REF_CURSOR_TYPE, get_params().at(i).get_val_len());
-            } else if (pl_type.is_collection_type() && OB_INVALID_ID == params->at(i).get_udt_id()) {
+            } else if (pl_type.is_collection_type()
+                  && (is_mocked_anonymous_array_id(params->at(i).get_udt_id()))) {
               ObPLComposite *composite = NULL;
               get_params().at(i) = params->at(i);
               get_params().at(i).set_udt_id(pl_type.get_user_type_id());
@@ -4683,7 +4709,7 @@ void ObPLCompileUnit::dump_deleted_log_info(const bool is_debug_log /* = true */
 ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
                                  lib::MemoryContext &mem_context)
     : ObPLCacheObject(ns, mem_context), routine_table_(allocator_),
-      type_table_(), helper_(allocator_), di_helper_(allocator_),
+      type_table_(), enum_set_ctx_(allocator_), helper_(allocator_), di_helper_(allocator_),
       can_cached_(true),
       exec_env_(),
       profiler_unit_info_(std::make_pair(OB_INVALID_ID, INVALID_PROC_TYPE))
@@ -4716,7 +4742,7 @@ int ObPLFunction::set_variables(const ObPLSymbolTable &symbol_table)
     if (OB_ISNULL(symbol_table.get_symbol(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("symbol var is NULL", K(i), K(symbol_table.get_symbol(i)), K(ret));
-    } else if (OB_FAIL(type.deep_copy(allocator_, symbol_table.get_symbol(i)->get_type()))) {
+    } else if (OB_FAIL(type.deep_copy(enum_set_ctx_, symbol_table.get_symbol(i)->get_type()))) {
       LOG_WARN("fail to deep copy pl data type", K(symbol_table.get_symbol(i)->get_type()), K(ret));
     } else {
       if (type.get_meta_type() != NULL && type.get_meta_type()->is_lob_storage()) {

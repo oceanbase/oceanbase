@@ -36,6 +36,7 @@ namespace storage
 {
 namespace mds
 {
+ERRSIM_POINT_DEF(EN_SKIP_MDS_MINI_MERGE);
 
 ObMdsTableMergeTask::ObMdsTableMergeTask()
   : ObITask(ObITaskType::TASK_TYPE_MDS_MINI_MERGE),
@@ -78,6 +79,14 @@ int ObMdsTableMergeTask::process()
   ObTabletMergeCtx *ctx_ptr = nullptr;
   DEBUG_SYNC(AFTER_EMPTY_SHELL_TABLET_CREATE);
   bool need_schedule_mds_minor = true;
+
+#ifdef ERRSIM
+  if (OB_SUCCESS != EN_SKIP_MDS_MINI_MERGE) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("[ERRSIM] mds mini merge, skip", KR(ret), KPC_(mds_merge_dag));
+    return ret;
+  }
+#endif
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -125,7 +134,11 @@ int ObMdsTableMergeTask::process()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet is null", K(ret), K(ls_id), K(tablet_id));
     } else if (CLICK_FAIL(tablet->get_mds_table_for_dump(mds_table))) {
-      LOG_WARN("fail to get mds table", K(ret), K(ls_id), K(tablet_id));
+      if (OB_EMPTY_RESULT != ret) {
+        LOG_WARN("fail to get mds table", K(ret), K(ls_id), K(tablet_id));
+      } else {
+        ret = OB_NO_NEED_MERGE;
+      }
     } else if (OB_UNLIKELY(!mds_table.get_mds_table_ptr()->is_construct_sequence_matched(mds_construct_sequence))) {
       ret = OB_NO_NEED_MERGE;
       LOG_WARN("construct sequence does not match current mds table, no need to merge", K(ret), K(ls_id), K(tablet_id), K(mds_construct_sequence));

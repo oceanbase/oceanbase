@@ -1208,4 +1208,5 @@
 #define N_CALC_ODPS_SIZE                  "calc_odps_size"
 #define N_PRIV_ST_GEOHASH                   "_st_geohash"
 #define N_PRIV_ST_MAKEPOINT                 "_st_makepoint"
+#define N_TO_PINYIN                         "to_pinyin"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

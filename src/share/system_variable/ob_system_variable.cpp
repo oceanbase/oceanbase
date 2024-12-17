@@ -2010,6 +2010,12 @@ int ObSysVarOnCheckFuncs::check_and_convert_collation_not_null(ObExecContext &ct
       if (CS_TYPE_INVALID == (coll_type = ObCharset::collation_type(coll_name))) {
         ret = OB_ERR_UNKNOWN_COLLATION;
         LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, coll_name.length(), coll_name.ptr());
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_type)),
+                                                                       session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(static_cast<ObCollationType>(coll_type),
+                                                                          session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check collation data version valid", K(ret));
       } else {
         out_val.set_int(static_cast<int64_t>(coll_type));
       }

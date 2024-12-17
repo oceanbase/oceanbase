@@ -196,31 +196,31 @@ ObConflictChecker::ObConflictChecker(common::ObIAllocator &allocator,
     local_tablet_loc_(nullptr),
     table_loc_(nullptr),
     tmp_mem_ctx_(),
-    se_rowkey_dist_ctx_(nullptr),
-    snapshot_maping_()
+    snapshot_maping_(),
+    conflict_range_dist_ctx_(nullptr)
 {
 }
 
 int ObConflictChecker::create_rowkey_check_hashset(int64_t replace_row_cnt)
 {
   int ret = OB_SUCCESS;
-  SeRowkeyDistCtx *rowkey_dist_ctx = nullptr;
-  if (OB_ISNULL(se_rowkey_dist_ctx_)) {
-    void *buf = allocator_.alloc(sizeof(SeRowkeyDistCtx));
+  ConflictRangeDistCtx *conflict_range_dist_ctx = nullptr;
+  if (OB_ISNULL(conflict_range_dist_ctx_)) {
+    void *buf = allocator_.alloc(sizeof(ConflictRangeDistCtx));
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), "size", sizeof(SeRowkeyDistCtx));
     } else {
-      rowkey_dist_ctx = new (buf) SeRowkeyDistCtx();
+      conflict_range_dist_ctx = new (buf) ConflictRangeDistCtx();
       const int64_t max_bucket_num = replace_row_cnt > MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM ?
           MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM : replace_row_cnt;
-      if (OB_FAIL(rowkey_dist_ctx->create(max_bucket_num,
+      if (OB_FAIL(conflict_range_dist_ctx->create(max_bucket_num,
                                           "DmlConflictDisBu",
                                           "DmlConflictDisNo",
                                           MTL_ID()))) {
         LOG_WARN("create rowkey distinct context failed", K(ret), "rows", replace_row_cnt, K(max_bucket_num));
       } else {
-        se_rowkey_dist_ctx_ = rowkey_dist_ctx;
+        conflict_range_dist_ctx_ = conflict_range_dist_ctx;
       }
     }
   }
@@ -712,10 +712,10 @@ int ObConflictChecker::reuse()
   if (tmp_mem_ctx_ != nullptr) {
     tmp_mem_ctx_->reset_remain_one_page();
   }
-  if (se_rowkey_dist_ctx_ != nullptr) {
-    se_rowkey_dist_ctx_->reuse();
-  }
   snapshot_maping_.reuse();
+  if (conflict_range_dist_ctx_ != nullptr) {
+    conflict_range_dist_ctx_->reuse();
+  }
   return ret;
 }
 
@@ -734,32 +734,36 @@ int ObConflictChecker::destroy()
     DESTROY_CONTEXT(tmp_mem_ctx_);
     tmp_mem_ctx_ = nullptr;
   }
-  if (se_rowkey_dist_ctx_ != nullptr) {
-    se_rowkey_dist_ctx_->destroy();
-    se_rowkey_dist_ctx_ = nullptr;
-  }
   snapshot_maping_.reset();
+  if (conflict_range_dist_ctx_ != nullptr) {
+    conflict_range_dist_ctx_->destroy();
+    conflict_range_dist_ctx_ = nullptr;
+  }
   return ret;
 }
 
-int ObConflictChecker::add_lookup_range_no_dup(storage::ObTableScanParam &scan_param, ObNewRange &lookup_range)
+int ObConflictChecker::add_lookup_range_no_dup(storage::ObTableScanParam &scan_param,
+                                               ObNewRange &lookup_range,
+                                               common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(se_rowkey_dist_ctx_)) {
-    const ObRowkey &tmp_table_rowkey = lookup_range.get_start_key();;
-    ret = se_rowkey_dist_ctx_->exist_refactored(tmp_table_rowkey);
+  if (OB_NOT_NULL(conflict_range_dist_ctx_)) {
+    ObConflictRange conflict_range;
+    conflict_range.init_conflict_range(lookup_range.get_start_key(), tablet_id);
+    ret = conflict_range_dist_ctx_->exist_refactored(conflict_range);
     if (OB_HASH_EXIST == ret) {
       ret = OB_SUCCESS;
+      LOG_TRACE("print find unique", K(lookup_range), K(tablet_id));
     } else if (OB_HASH_NOT_EXIST == ret) {
       //step3: if not exist, deep copy data and add ObRowkey to hash set
       //step3.1: Init the buffer of ObObj Array
       ret = OB_SUCCESS;
-      if (OB_FAIL(se_rowkey_dist_ctx_->set_refactored(tmp_table_rowkey))) {
+      if (OB_FAIL(conflict_range_dist_ctx_->set_refactored(conflict_range))) {
         LOG_WARN("set rowkey item failed", K(ret));
       } else if (OB_FAIL(scan_param.key_ranges_.push_back(lookup_range))) {
         LOG_WARN("push_back lookup_range failed", K(ret), K(lookup_range));
       } else {
-        LOG_TRACE("print add lookup_range succ", K(lookup_range));
+        LOG_TRACE("print add lookup_range succ", K(conflict_range));
       }
     } else {
       LOG_WARN("check if rowkey item exists failed", K(ret));
@@ -788,13 +792,14 @@ int ObConflictChecker::build_primary_table_lookup_das_task()
     LOG_WARN("das_scan_op should be not null", K(ret));
   } else {
     storage::ObTableScanParam &scan_param = das_scan_op->get_scan_param();
-    if (OB_FAIL(build_data_table_range(lookup_range))) {
+    ObRowkey table_rowkey;
+    if (OB_FAIL(build_data_table_range(lookup_range, table_rowkey))) {
       LOG_WARN("build data table range failed", K(ret), KPC(tablet_loc));
-    } else if (OB_FAIL(add_lookup_range_no_dup(scan_param, lookup_range))) {
-      LOG_WARN("store lookup key range failed", K(ret), K(lookup_range), K(scan_param));
+    } else if (OB_FAIL(add_lookup_range_no_dup(scan_param, lookup_range, tablet_loc->tablet_id_))) {
+      LOG_WARN("store lookup key range failed", K(ret), K(table_rowkey), K(scan_param));
     } else {
       LOG_TRACE("after build conflict rowkey", K(scan_param.tablet_id_),
-                K(scan_param.key_ranges_.count()), K(lookup_range));
+                K(scan_param.key_ranges_.count()), K(lookup_range), K(table_rowkey));
     }
   }
   return ret;
@@ -867,7 +872,7 @@ int ObConflictChecker::get_das_scan_op(ObDASTabletLoc *tablet_loc, ObDASScanOp *
   return ret;
 }
 
-int ObConflictChecker::build_data_table_range(ObNewRange &lookup_range)
+int ObConflictChecker::build_data_table_range(ObNewRange &lookup_range, ObRowkey &table_rowkey)
 {
   int ret = OB_SUCCESS;
   ObObj *obj_ptr = nullptr;
@@ -901,10 +906,12 @@ int ObConflictChecker::build_data_table_range(ObNewRange &lookup_range)
     }
   }
   if (OB_SUCC(ret)) {
-    ObRowkey table_rowkey(obj_ptr, rowkey_cnt);
+    table_rowkey.assign(obj_ptr, rowkey_cnt);
     uint64_t ref_table_id = checker_ctdef_.das_scan_ctdef_.ref_table_id_;
     if (OB_FAIL(lookup_range.build_range(ref_table_id, table_rowkey))) {
       LOG_WARN("build lookup range failed", K(ret), K(ref_table_id), K(table_rowkey));
+    } else {
+      LOG_DEBUG("after build range", K(table_rowkey), K(lookup_range));
     }
   }
   return ret;
@@ -1274,6 +1281,19 @@ int ObConflictChecker::set_partition_snapshot_for_das_task(ObDASRef &das_ref)
       }
       ++task_iter;
     }
+  }
+  return ret;
+}
+
+int ObConflictRange::assign(const ObConflictRange &conflict_range)
+{
+  int ret = OB_SUCCESS;
+  if (!conflict_range.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(conflict_range));
+  } else {
+    tablet_id_ = conflict_range.tablet_id_;
+    rowkey_ = conflict_range.rowkey_;
   }
   return ret;
 }

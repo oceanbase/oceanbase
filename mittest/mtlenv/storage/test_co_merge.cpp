@@ -140,10 +140,18 @@ void close_builder_and_prepare_sstable(
   param.nested_offset_ = res.nested_offset_;
   ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
   ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
-  param.nested_size_ = res.nested_size_;
-  param.nested_offset_ = res.nested_offset_;
   param.table_backup_flag_.reset();
   param.table_shared_flag_.reset();
+  param.tx_data_recycle_scn_.set_min();
+  param.sstable_logic_seq_ = 0;
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
+  param.full_column_cnt_ = 0;
+  param.is_co_table_without_cgs_ = false;
+  param.co_base_snapshot_version_ = 0;
+  param.ddl_scn_.set_min();
+  param.filled_tx_scn_ = table_key.is_major_sstable() ? SCN::min_scn() : table_key.get_end_scn();
+
   if (is_major_merge_type(data_store_desc.get_merge_type())) {
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   }

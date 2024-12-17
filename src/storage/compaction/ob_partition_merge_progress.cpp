@@ -431,10 +431,23 @@ int ObCOMajorMergeProgress::finish_merge_progress()
   } else if (OB_UNLIKELY(OB_ISNULL(merge_dag_) || typeid(*merge_dag_) != typeid(ObCOMergeBatchExeDag))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("merge_dag has unexpected type", K(ret), KPC_(merge_dag));
-  } else if (OB_UNLIKELY(OB_ISNULL(ctx_) || typeid(*ctx_) != typeid(ObCOTabletMergeCtx))) {
+  } else if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ctx has unexpected type", K(ret), KPC_(ctx));
-  } else {
+    LOG_WARN("get unexpected null ctx", K(ret), KPC_(ctx));
+  } else if (typeid(*ctx_) != typeid(ObCOTabletMergeCtx)) {
+    if (!GCTX.is_shared_storage_mode()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ctx has unexpected type", K(ret), KPC_(ctx));
+#ifdef OB_BUILD_SHARED_STORAGE
+    } else if (typeid(*ctx_) != typeid(ObCOTabletOutputMergeCtx)
+            && typeid(*ctx_) != typeid(ObCOTabletValidateMergeCtx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ctx has unexpected type", K(ret), KPC_(ctx));
+#endif
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     ObCOMergeBatchExeDag *merge_dag = static_cast<ObCOMergeBatchExeDag*>(merge_dag_);
     ObCOTabletMergeCtx *ctx = static_cast<ObCOTabletMergeCtx*>(ctx_);
     if (OB_FAIL(finish_progress(ctx->get_merge_version(),
