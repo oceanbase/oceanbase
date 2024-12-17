@@ -297,7 +297,7 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
           }
         } else {
           // min_iops of group
-          mclock->reservation_clock_.atom_update(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->reservation_ts_);
+          mclock->reservation_clock_.atom_update_reserve(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->reservation_ts_);
         }
         // iops/bandwidth weight of tenant & group, TODO fengshuo.fs: THIS IS NOT CORRECT
         mclock->proportion_clock_.atom_update(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->proportion_ts_);

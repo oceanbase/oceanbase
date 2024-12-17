@@ -808,6 +808,7 @@ struct ObAtomIOClock final
 {
   ObAtomIOClock() : iops_(0), last_ns_(0)
   {}
+  void atom_update_reserve(const int64_t current_ts, const double iops_scale, int64_t &deadline_ts);
   void atom_update(const int64_t current_ts, const double iops_scale, int64_t &deadline_ts);
   void compare_and_update(const int64_t current_ts, const double iops_scale, int64_t &deadline_ts);
   void reset();

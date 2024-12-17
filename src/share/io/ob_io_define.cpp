@@ -2288,6 +2288,23 @@ int64_t ObTenantIOConfig::to_string(char* buf, const int64_t buf_len) const
 }
 
 /******************             IOClock              **********************/
+void ObAtomIOClock::atom_update_reserve(const int64_t current_ts, const double iops_scale, int64_t &deadline_ts)
+{
+  if (0 == iops_scale * iops_) {
+    deadline_ts = INT64_MAX;
+  } else {
+    const int64_t delta_ns = 1000L * 1000L * 1000L / (iops_scale * iops_);
+    int64_t ov = ATOMIC_LOAD(&last_ns_);
+    int64_t nv = 0;
+    int64_t tv = max(current_ts * 1000L, ov + delta_ns);
+    while (ov != (nv = ATOMIC_VCAS(&last_ns_, ov, tv))) {
+      ov = nv;
+      tv = max(current_ts * 1000L, ov + delta_ns);
+    }
+    deadline_ts = tv / 1000L;
+  }
+}
+
 void ObAtomIOClock::atom_update(const int64_t current_ts, const double iops_scale, int64_t &deadline_ts)
 {
   if (0 == iops_scale * iops_) {
@@ -2309,7 +2326,7 @@ void ObAtomIOClock::compare_and_update(const int64_t current_ts, const double io
 {
   int64_t tmp = 0;
   atom_update(current_ts, iops_scale, tmp);
-  deadline_ts = (INT64_MAX == deadline_ts) ? current_ts : max(deadline_ts, tmp);
+  deadline_ts = (INT64_MAX == deadline_ts) ? tmp : max(deadline_ts, tmp);
 }
 
 void ObAtomIOClock::reset()
