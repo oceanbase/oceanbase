@@ -2314,6 +2314,7 @@ int ObInnerSQLConnection::destroy_inner_session()
   LOG_DEBUG("begin destroying inner session", K(ret), KP(inner_session_), K(free_session_ctx_), K(lbt()));
   if (NULL != inner_session_) {
     if (INNER_SQL_SESS_ID == free_session_ctx_.sessid_) {
+      inner_session_->set_session_sleep();
       inner_session_->~ObSQLSessionInfo();
       ob_free(inner_session_);
     } else {
