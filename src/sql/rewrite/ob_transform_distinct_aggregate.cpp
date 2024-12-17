@@ -79,6 +79,12 @@ int ObTransformDistinctAggregate::check_transform_validity(const ObDMLStmt *stmt
     is_valid = false;
     OPT_TRACE("can not do transform, stmt is not a select stmt");
   } else if (OB_FALSE_IT(select_stmt = static_cast<const ObSelectStmt *>(stmt))) {
+  } else if (select_stmt->get_from_item_size() <= 0) {
+    // If stmt does not have any from item, ObTransformUtils::replace_with_empty_view
+    // will not add new view into stmt. Hence we disable the transform for empty from
+    // item stmt.
+    is_valid = false;
+    OPT_TRACE("can not do transform, stmt does not have from item");
   } else if (select_stmt->is_hierarchical_query()
              || select_stmt->is_contains_assignment()) {
     is_valid = false;
