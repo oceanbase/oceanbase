@@ -123,7 +123,6 @@ void ObMViewPushRefreshScnTask::runTimerTask()
     share::ObGlobalStatProxy stat_proxy(trans, tenant_id_);
     share::SCN major_refresh_mv_merge_scn;
     ObArray<share::ObBackupJobAttr> backup_jobs;
-    uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     if (OB_FAIL(stat_proxy.get_major_refresh_mv_merge_scn(true /*select for update*/,
                                                           major_refresh_mv_merge_scn))) {
       LOG_WARN("fail to get major_refresh_mv_merge_scn", KR(ret), K(tenant_id_));
@@ -131,12 +130,6 @@ void ObMViewPushRefreshScnTask::runTimerTask()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("major_refresh_mv_merge_scn is invalid", KR(ret), K(tenant_id_),
                 K(major_refresh_mv_merge_scn));
-    } else if (OB_FAIL(share::ObBackupJobOperator::get_jobs(
-                   *sql_proxy, meta_tenant_id, false /*select for update*/, backup_jobs))) {
-      LOG_WARN("failed to get backup jobs", K(ret), K(tenant_id_));
-    } else if (!backup_jobs.empty()) {
-      LOG_INFO("[MAJ_REF_MV] backup jobs exist, skip push major refresh mv scn", KR(ret),
-               K(tenant_id_));
     } else if (OB_FAIL(update_major_refresh_mview_scn_(tenant_id_, major_refresh_mv_merge_scn, trans))) {
       LOG_WARN("fail to update major_refresh_mview_scn", KR(ret), K(tenant_id_), K(major_refresh_mv_merge_scn));
     } else {

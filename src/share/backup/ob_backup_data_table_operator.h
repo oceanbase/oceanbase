@@ -63,7 +63,8 @@ public:
   static int get_all_major_compaction_mview_dep_tablet_list(common::ObMySQLProxy &proxy,
                                                             const uint64_t tenant_id,
                                                             const share::SCN &snapshot,
-                                                            common::ObIArray<common::ObTabletID> &tablet_list);
+                                                            common::ObIArray<common::ObTabletID> &tablet_list,
+                                                            common::ObIArray<share::SCN> &tablet_mview_dep_scn_list);
 };
 
 class ObBackupSetFileOperator : public ObBackupBaseTableOperator

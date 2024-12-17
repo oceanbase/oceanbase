@@ -346,9 +346,10 @@ public:
   ObBackupMajorCompactionMViewDepTabletListDesc();
   ~ObBackupMajorCompactionMViewDepTabletListDesc() {}
   bool is_valid() const override;
-  TO_STRING_KV(K_(tablet_id_list));
+  TO_STRING_KV(K_(tablet_id_list), K_(mview_dep_scn_list));
 public:
   ObSArray<common::ObTabletID> tablet_id_list_;
+  ObSArray<share::SCN> mview_dep_scn_list_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupMajorCompactionMViewDepTabletListDesc);
 };

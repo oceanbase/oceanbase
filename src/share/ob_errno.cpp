@@ -27733,6 +27733,20 @@ static const _error _error_OB_TMP_FILE_EXCEED_DISK_QUOTA = {
       .ob_str_error          = "OBE-00600: internal error code, arguments: -9135, tmp file exceeds disk quota",
       .ob_str_user_error     = "OBE-00600: internal error code, arguments: -9135, tmp file exceeds disk quota"
 };
+static const _error _error_OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE = {
+      .error_name            = "OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "Backup missing mview dependent tablet sstable, sstable maybe recycled",
+      .str_user_error        = "Backup missing mview dependent tablet sstable, sstable maybe recycled",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9136, Backup missing mview dependent tablet sstable, sstable maybe recycled",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9136, Backup missing mview dependent tablet sstable, sstable maybe recycled",
+      .ob_str_error          = "OBE-00600: internal error code, arguments: -9136, Backup missing mview dependent tablet sstable, sstable maybe recycled",
+      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -9136, Backup missing mview dependent tablet sstable, sstable maybe recycled"
+};
 static const _error _error_OB_ERR_RESIZE_FILE_TO_SMALLER = {
       .error_name            = "OB_ERR_RESIZE_FILE_TO_SMALLER",
       .error_cause           = "Internal Error",
@@ -35515,6 +35529,7 @@ struct ObStrErrorInit
     _errors[-OB_BACKUP_ZONE_IDC_REGION_INVALID] = &_error_OB_BACKUP_ZONE_IDC_REGION_INVALID;
     _errors[-OB_ERR_TMP_FILE_ALREADY_SEALED] = &_error_OB_ERR_TMP_FILE_ALREADY_SEALED;
     _errors[-OB_TMP_FILE_EXCEED_DISK_QUOTA] = &_error_OB_TMP_FILE_EXCEED_DISK_QUOTA;
+    _errors[-OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE] = &_error_OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE;
     _errors[-OB_ERR_RESIZE_FILE_TO_SMALLER] = &_error_OB_ERR_RESIZE_FILE_TO_SMALLER;
     _errors[-OB_MARK_BLOCK_INFO_TIMEOUT] = &_error_OB_MARK_BLOCK_INFO_TIMEOUT;
     _errors[-OB_NOT_READY_TO_EXTEND_FILE] = &_error_OB_NOT_READY_TO_EXTEND_FILE;

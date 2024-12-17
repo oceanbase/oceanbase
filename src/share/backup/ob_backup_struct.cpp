@@ -2094,6 +2094,7 @@ bool ObBackupUtils::is_need_retry_error(const int err)
     case OB_CHECKSUM_ERROR :
     case OB_VERSION_NOT_MATCH:
     case OB_INVALID_DATA:
+    case OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE:
       bret = false;
       break;
     default:

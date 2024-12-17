@@ -55,7 +55,7 @@ class ObBackupMacroBlockIndexStore;
 class ObBackupUtils {
 public:
   static int get_sstables_by_data_type(const storage::ObTabletHandle &tablet_handle, const share::ObBackupDataType &backup_data_type,
-      const storage::ObTabletTableStore &table_store, const bool is_major_compaction_mview_dep_tablet,
+      const storage::ObTabletTableStore &table_store, const bool is_major_compaction_mview_dep_tablet, const share::SCN &mview_dep_scn,
       common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
   static int check_tablet_with_major_sstable(const storage::ObTabletHandle &tablet_handle, bool &with_major);
   static int fetch_macro_block_logic_id_list(const storage::ObTabletHandle &tablet_handle,
@@ -85,6 +85,16 @@ private:
       const storage::ObTabletTableStore &tablet_table_store, common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
   static int fetch_major_sstables_(const storage::ObTabletHandle &tablet_handle,
       const storage::ObTabletTableStore &tablet_table_store, const bool is_major_compaction_mview_dep_tablet,
+      const share::SCN &mview_dep_scn, common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
+  static int check_and_filter_major_sstables_for_mview_(
+      const share::SCN &mview_dep_scn,
+      const storage::ObSSTableArray *major_sstable_array_ptr,
+      common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
+  static int check_major_sstables_for_mview_(const share::SCN &mview_dep_scn,
+      const storage::ObSSTableArray *major_sstable_array_ptr);
+  static int filter_major_sstables_for_mview_(
+      const share::SCN &mview_dep_scn,
+      const storage::ObSSTableArray *major_sstable_array_ptr,
       common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
 };
 
@@ -381,7 +391,7 @@ private:
   int hold_tablet_handle_(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *tablet_handle);
   int fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const ObTabletTableStore &table_store, const share::ObBackupDataType &backup_data_type,
-      const bool is_major_compaction_mview_dep_tablet, common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
+      const bool is_major_compaction_mview_dep_tablet, const share::SCN &mview_dep_scn, common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
   int prepare_tablet_logic_id_reader_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, const blocksstable::ObSSTable &sstable,
       ObITabletLogicMacroIdReader *&reader);

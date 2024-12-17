@@ -339,21 +339,26 @@ bool ObBackupTableListMetaInfoDesc::is_valid() const
  *-----------------------------ObBackupMajorCompactionMViewDepTabletListDesc-----------------------
  */
 
-OB_SERIALIZE_MEMBER(ObBackupMajorCompactionMViewDepTabletListDesc, tablet_id_list_);
+OB_SERIALIZE_MEMBER(ObBackupMajorCompactionMViewDepTabletListDesc, tablet_id_list_, mview_dep_scn_list_);
 
 ObBackupMajorCompactionMViewDepTabletListDesc::ObBackupMajorCompactionMViewDepTabletListDesc()
   : ObExternBackupDataDesc(ObBackupFileType::BACKUP_MVIEW_DEP_TABLET_LIST_FILE, FILE_VERSION),
-    tablet_id_list_() {}
+    tablet_id_list_(),
+    mview_dep_scn_list_() {}
 
 bool ObBackupMajorCompactionMViewDepTabletListDesc::is_valid() const
 {
   int ret = OB_SUCCESS;
   bool bret = true;
-  ARRAY_FOREACH(tablet_id_list_, i) {
-    const ObTabletID &tablet_id = tablet_id_list_.at(i);
-    if (!tablet_id.is_valid()) {
-      bret = false;
-      break;
+  if (tablet_id_list_.count() != mview_dep_scn_list_.count()) {
+    bret = false;
+  } else {
+    ARRAY_FOREACH(tablet_id_list_, i) {
+      const ObTabletID &tablet_id = tablet_id_list_.at(i);
+      if (!tablet_id.is_valid()) {
+        bret = false;
+        break;
+      }
     }
   }
   return bret;
