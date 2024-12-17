@@ -2904,6 +2904,9 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
     case T_BOOL: {
       val.set_is_boolean(true);
       val.set_bool(node->value_ == 1 ? true : false);
+      if (lib::is_mysql_mode()) {
+        val.meta_.set_int();
+      }
       val.set_scale(0);
       val.set_precision(1);
       val.set_length(1);
