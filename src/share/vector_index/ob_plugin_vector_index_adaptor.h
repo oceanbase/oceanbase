@@ -78,7 +78,7 @@ enum ObVectorIndexDistAlgorithm
 enum ObVectorIndexAlgorithmLib
 {
   VIAL_VSAG = 0,
-  IAL_OB,
+  VIAL_OB,
   VIAL_MAX
 };
 
