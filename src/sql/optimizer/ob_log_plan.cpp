@@ -12200,7 +12200,7 @@ int ObLogPlan::check_das_need_scan_with_domain_id(ObLogicalOperator *op)
     } else if (OB_UNLIKELY(scan->has_func_lookup() && (scan->is_tsc_with_doc_id() || scan->is_tsc_with_vid()))) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("functional lookup with dml on fulltext index / vector index not supported", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "filter that can not imply match_score not equal to 0 in dml");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "functional lookup with dml on fulltext index is");
     }
   }
   for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
