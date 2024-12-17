@@ -283,7 +283,7 @@ int ObUserDefinedType::destruct_objparam(ObIAllocator &alloc, ObObj &src, ObSQLS
       ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(src.get_ext());
       if (direct_use_alloc) {
         ObIAllocator *allocator = nullptr;
-        CK (OB_NOT_NULL(composite));
+        OV (OB_NOT_NULL(composite), OB_ERR_UNEXPECTED, lbt());
         OX (allocator = composite->get_allocator());
         OZ (SMART_CALL(ObUserDefinedType::destruct_obj(src, session)));
         if (OB_SUCC(ret) && OB_NOT_NULL(allocator)) {
@@ -292,8 +292,8 @@ int ObUserDefinedType::destruct_objparam(ObIAllocator &alloc, ObObj &src, ObSQLS
         }
         OX (alloc.free(composite));
       } else {
-        CK (OB_NOT_NULL(composite));
-        CK (OB_NOT_NULL(composite->get_allocator()));
+        OV (OB_NOT_NULL(composite), OB_ERR_UNEXPECTED, lbt());
+        OV (OB_NOT_NULL(composite->get_allocator()), OB_ERR_UNEXPECTED, lbt());
         OX (pl_allocator = dynamic_cast<ObPLAllocator1 *>(composite->get_allocator()));
         CK (OB_NOT_NULL(pl_allocator));
         CK (OB_NOT_NULL(parent_allocator = pl_allocator->get_parent_allocator()));
