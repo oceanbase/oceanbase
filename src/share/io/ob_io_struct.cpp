@@ -2829,26 +2829,26 @@ void ObDeviceChannel::print_status()
   int64_t pos = 0;
   int64_t sync_total = 0;
   int64_t async_total = 0;
-  common::databuff_printf(buf, sizeof(buf), pos, ", sync_cnt=");
+  common::databuff_printf(buf, sizeof(buf), pos, ", async_cnt=");
   for (int i = 0; i < async_channels_.count(); ++i) {
     ObIOChannel *channel = async_channels_.at(i);
     if (OB_NOT_NULL(channel)) {
       int64_t cnt = channel->get_queue_count();
       common::databuff_printf(buf, sizeof(buf), pos, " %ld", cnt);
-      sync_total += cnt;
+      async_total += cnt;
     }
   }
-  common::databuff_printf(buf, sizeof(buf), pos, ", async_cnt=");
+  common::databuff_printf(buf, sizeof(buf), pos, ", sync_cnt=");
   for (int i = 0; i < sync_channels_.count(); ++i) {
     ObIOChannel *channel = sync_channels_.at(i);
     if (OB_NOT_NULL(channel)) {
       int64_t cnt = max(channel->get_queue_count(), 0);
       common::databuff_printf(buf, sizeof(buf), pos, " %ld", cnt);
-      async_total += cnt;
+      sync_total += cnt;
     }
   }
   if (0 != pos) {
-    _LOG_INFO("[IO STATUS CHANNEL] req_in_channel, sync_total=%ld, async_total=%ld%s", sync_total, async_total, buf);
+    _LOG_INFO("[IO STATUS CHANNEL] device_id=%p, req_in_channel, async_total=%ld, sync_total=%ld%s", this, async_total, sync_total, buf);
   }
 }
 
