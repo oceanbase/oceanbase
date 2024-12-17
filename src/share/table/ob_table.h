@@ -1743,7 +1743,7 @@ public:
   OB_INLINE void set_tablet_id(ObTabletID tablet_id) { tablet_id_ = tablet_id; }
   OB_INLINE void set_option_flag(uint64_t option_flag) { option_flag_ = option_flag; }
 
-  OB_INLINE int add_single_op(ObTableSingleOp single_op) { return single_ops_.push_back(single_op); }
+  OB_INLINE int add_single_op(const ObTableSingleOp &single_op) { return single_ops_.push_back(single_op); }
 
   TO_STRING_KV(K_(tablet_id),
                K_(option_flag),
