@@ -862,12 +862,16 @@ int ObTxTableMergeExecutePrepareTask::prepare_compaction_filter()
       FLOG_INFO("success to init compaction filter", K(tmp_ret), K(recycle_scn));
     }
 
-    if (OB_SUCC(ret)) {
+    ctx_->merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
+    ctx_->read_base_version_ = 0;
+    if (OB_SUCCESS == tmp_ret) {
       ctx_->progressive_merge_num_ = 0;
       ctx_->is_full_merge_ = true;
-      ctx_->merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
-      ctx_->read_base_version_ = 0;
     } else if (OB_NOT_NULL(buf)) {
+      if (OB_NOT_NULL(compaction_filter)) {
+        compaction_filter->~ObTransStatusFilter();
+        compaction_filter = nullptr;
+      }
       ctx_->allocator_.free(buf);
       buf = nullptr;
     }
