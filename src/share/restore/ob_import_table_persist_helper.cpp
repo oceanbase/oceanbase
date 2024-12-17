@@ -124,7 +124,7 @@ int ObImportTableJobPersistHelper::advance_status(
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, job.get_tenant_id()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_RESULT, job.get_result().get_result_str()))) {
+  } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_RESULT, job.get_result().get_tables_import_result_str()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(job.get_result().get_comment_str())))) {
     LOG_WARN("failed to add column", K(ret));
