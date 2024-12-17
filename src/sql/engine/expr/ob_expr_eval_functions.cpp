@@ -1346,6 +1346,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArrayPosition::eval_array_position,                  /* 814 */
   NULL, // ObExprURLEncode::eval_url_encode,                          /* 815 */
   NULL, // ObExprURLDecode::eval_url_decode,                          /* 816 */
+  NULL, // ObExprVecIVFPQCenterVector::generate_pq_center_vector,     /* 817 */
 
 };
 
