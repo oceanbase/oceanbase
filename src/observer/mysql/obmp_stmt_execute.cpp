@@ -1320,6 +1320,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
         ctx_.retry_times_ = retry_ctrl_.get_retry_times();
         session.reset_plsql_exec_time();
+        session.reset_plsql_compile_time();
         if (OB_ISNULL(ctx_.schema_guard_)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("newest schema is NULL", K(ret));
@@ -1462,6 +1463,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.params_value_len_ = params_value_len_;
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
       audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+      audit_record.plsql_compile_time_ = session.get_plsql_compile_time();
       if (result.is_pl_stmt(result.get_stmt_type()) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
         audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
       }

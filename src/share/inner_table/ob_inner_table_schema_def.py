@@ -8609,7 +8609,10 @@ def_table_schema(
     ('total_memstore_read_row_count', 'int'),
     ('total_ssstore_read_row_count', 'int'),
     ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
-    ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH')
+    ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+    ('user_client_port', 'int'),
+    ('trans_status', 'varchar:256'),
+    ('plsql_compile_time', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -16800,7 +16803,8 @@ def_table_schema(
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
                          proxy_user as PROXY_USER,
-                         seq_num as SEQ_NUM
+                         seq_num as SEQ_NUM,
+                         plsql_compile_time as PLSQL_COMPILE_TIME
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -17213,7 +17217,8 @@ def_table_schema(
     TOTAL_MEMSTORE_READ_ROW_COUNT,
     TOTAL_SSSTORE_READ_ROW_COUNT,
     PROXY_USER,
-    SEQ_NUM
+    SEQ_NUM,
+    PLSQL_COMPILE_TIME
   FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -56842,7 +56847,8 @@ def_table_schema(
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
                          proxy_user as PROXY_USER,
-                         seq_num as SEQ_NUM
+                         seq_num as SEQ_NUM,
+                         plsql_compile_time as PLSQL_COMPILE_TIME
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -56959,7 +56965,8 @@ STMT_TYPE,
 TOTAL_MEMSTORE_READ_ROW_COUNT,
 TOTAL_SSSTORE_READ_ROW_COUNT,
 PROXY_USER,
-SEQ_NUM FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+SEQ_NUM,
+PLSQL_COMPILE_TIME FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 

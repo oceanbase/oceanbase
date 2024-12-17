@@ -415,6 +415,7 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
   // clear tsi warning buffer
   ob_setup_tsi_warning_buffer(NULL);
   session.reset_plsql_exec_time();
+  session.reset_plsql_compile_time();
   return ret;
 }
 

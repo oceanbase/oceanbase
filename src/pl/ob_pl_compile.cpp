@@ -360,7 +360,7 @@ int ObPLCompiler::compile(
   }
   int64_t compile_end = ObTimeUtility::current_time();
   OX (func.get_stat_for_update().compile_time_ = compile_end - compile_start);
-
+  OX (session_info_.add_plsql_compile_time(compile_end - compile_start));
   LOG_INFO(">>>>>>>>Final Compile Anonymous Block Time: ", K(ret), K(stmt_id), K(block_body), K(compile_end - compile_start));
   return ret;
 }
@@ -604,6 +604,7 @@ int ObPLCompiler::compile(
   LOG_INFO(">>>>>>>>Final Compile Routine Time: ", K(routine.get_routine_id()), K(routine.get_routine_name()), K(final_end - init_start));
 
   OX (func.get_stat_for_update().compile_time_ = final_end - init_start);
+  OX (session_info_.add_plsql_compile_time(final_end - init_start));
 
   return ret;
 }
@@ -1001,6 +1002,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
 
   int64_t compile_end = ObTimeUtility::current_time();
   OX (package.get_stat_for_update().compile_time_ = compile_end - compile_start);
+  OX (session_info_.add_plsql_compile_time(compile_end - compile_start));
   if (PL_PACKAGE_BODY == package_ast.get_package_type()) {
     OX (package.get_stat_for_update().type_ = ObPLCacheObjectType::PACKAGE_BODY_TYPE);
   } else {

@@ -735,6 +735,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
     } else {
       session.set_current_execution_id(GCTX.sql_engine_->get_execution_id());
       session.reset_plsql_exec_time();
+      session.reset_plsql_compile_time();
       session.set_stmt_type(stmt::T_NONE);
       result.get_exec_context().set_need_disconnect(true);
       ctx_.schema_guard_ = schema_guard;
@@ -986,6 +987,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       }
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
       audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+      audit_record.plsql_compile_time_ = session.get_plsql_compile_time();
       if (result.is_pl_stmt(result.get_stmt_type()) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
         audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
       }

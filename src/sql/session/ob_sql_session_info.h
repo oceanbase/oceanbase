@@ -1153,6 +1153,8 @@ public:
 
   void reset_plsql_exec_time() { plsql_exec_time_ = 0; }
   void add_plsql_exec_time(int64_t plsql_exec_time) { plsql_exec_time_ += plsql_exec_time; }
+  void reset_plsql_compile_time() { plsql_compile_time_ = 0; }
+  void add_plsql_compile_time(int64_t plsql_compile_time) { plsql_compile_time_ += plsql_compile_time; }
 
   CursorCache &get_cursor_cache() { return pl_cursor_cache_; }
   pl::ObPLCursorInfo *get_cursor(int64_t cursor_id);
@@ -1597,6 +1599,7 @@ public:
   void set_is_lock_session(bool v) { is_lock_session_ = v; }
   bool is_lock_session() const { return is_lock_session_; }
   int64_t get_plsql_exec_time();
+  int64_t get_plsql_compile_time() { return plsql_compile_time_; }
   void update_pure_sql_exec_time(int64_t elapsed_time);
   const ObServiceNameString& get_service_name() const { return service_name_; }
   bool get_failover_mode() const { return failover_mode_; }
@@ -1773,6 +1776,7 @@ private:
   // if false == pl_can_retry_, we can only retry query in PL blocks locally
   bool pl_can_retry_; //标记当前执行的PL是否可以整体重试
   int64_t plsql_exec_time_;
+  int64_t plsql_compile_time_;
 
 #ifdef OB_BUILD_ORACLE_PL
   pl::debugger::ObPLDebugger *pl_debugger_; // 如果开启了debug, 该字段不为null

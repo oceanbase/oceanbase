@@ -177,6 +177,9 @@ private:
     TOTAL_SSSTORE_READ_ROW_COUNT,
     PROXY_USER_NAME,
     FORMAT_SQL_ID,
+    USER_CLIENT_PORT,
+    TRANS_STATUS,
+    PLSQL_COMPILE_TIME,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;
