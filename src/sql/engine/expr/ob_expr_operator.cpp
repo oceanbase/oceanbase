@@ -2939,14 +2939,25 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
   if (OB_ISNULL(c1) || OB_ISNULL(c2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("compare udt failed due to null udt", K(ret), K(obj1), K(obj2));
-  } else if (pl::PL_NESTED_TABLE_TYPE != c1->get_type()
-             || pl::PL_NESTED_TABLE_TYPE != c2->get_type()) {
+  } else if ((pl::PL_NESTED_TABLE_TYPE != c1->get_type() && pl::PL_VARRAY_TYPE != c1->get_type())
+               || (pl::PL_NESTED_TABLE_TYPE != c2->get_type() && pl::PL_VARRAY_TYPE != c2->get_type())) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "udt compare except nested table");
-    LOG_WARN("not support udt compare except nested table", K(ret), K(c1), K(c2));
-  } else if (c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not support udt compare with different elem type", K(ret), K(c1), K(c2));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "udt compare except nested table or varray");
+    LOG_WARN("not support udt compare except nested table or varray", K(ret), KPC(c1), KPC(c2));
+  } else if (c1->get_type() != c2->get_type()
+               ||c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type()) {
+    ObString op;
+
+    if (CO_EQ == cmp_op) {
+      op = "=";
+    } else if (CO_NE == cmp_op) {
+      op = "!=";
+    }
+
+    ret = OB_ERR_CALL_WRONG_ARG;
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, op.length(), op.ptr());
+    LOG_WARN("not support udt compare with different types or elem types",
+             K(ret), K(obj1), K(obj2), K(cmp_op), KPC(c1), KPC(c2));
   } else if (c1->is_of_composite()) {
     if (c1->is_collection_null() || c2->is_collection_null()) {
       cmp_result = CollectionPredRes::COLL_PRED_NULL;

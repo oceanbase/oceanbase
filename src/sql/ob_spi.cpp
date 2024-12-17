@@ -5334,7 +5334,15 @@ int ObSPIService::spi_new_coll_element(uint64_t collection_id,
   } else if (collection_type->get_element_type().is_collection_type()) {
     pl::ObPLCollection *collection = NULL;
     CK (OB_NOT_NULL(collection = reinterpret_cast<pl::ObPLCollection*>(ptr)));
-    OX (collection->set_count(0));
+
+    if (OB_SUCC(ret)) {
+      if (collection_type->get_element_type().is_associative_array_type()) {
+        collection->set_count(0);
+      } else {
+        // set newly extended collection to NULL, to be compatible with Oracle
+        collection->set_count(OB_INVALID_COUNT);
+      }
+    }
   } else if (collection_type->get_element_type().is_record_type()) {
     ObPLRecord *record = NULL;
     CK (OB_NOT_NULL(record = reinterpret_cast<ObPLRecord*>(ptr)));
