@@ -266,7 +266,7 @@ int ObObjectStorageInfo::register_cluster_version_mgr(ObClusterVersionBaseMgr *c
     LOG_WARN("cluster_version_mgr is null", K(ret));
   } else {
     cluster_version_mgr_ = cluster_version_mgr;
-    LOG_INFO("register_cluster_version_mgr", K(ret), KP_(cluster_version_mgr));
+    LOG_INFO("register cluster_version_mgr successfully", K(ret), KP_(cluster_version_mgr));
   }
   return ret;
 }

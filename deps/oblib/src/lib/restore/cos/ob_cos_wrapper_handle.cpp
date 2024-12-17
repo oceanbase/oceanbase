@@ -159,7 +159,7 @@ int ObCosWrapperHandle::create_tmp_cos_handle(
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "handle is not inited", K(ret));
   } else if (OB_FAIL(qcloud_cos::ObCosWrapper::create_cos_handle(cos_mem, cos_account_,
-                                                                 check_md5, sts_token_.data_, &handle))) {
+                                                                 check_md5, sts_token_.get_data(), &handle))) {
     OB_LOG(WARN, "failed to create tmp cos handle", K(ret));
   } else if (OB_ISNULL(handle)) {
     ret = OB_OBJECT_STORAGE_IO_ERROR;

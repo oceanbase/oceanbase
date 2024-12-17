@@ -329,20 +329,24 @@ int ObAdminIOAdapterBenchmarkExecutor::print_usage_()
   printf(HELP_FMT, "-b, --clean-before-execution", "clean before execution");
   printf(HELP_FMT, "-c, --clean-after-execution", "clean after execution");
   printf(HELP_FMT, "-e,--s3_url_encode_type", "set S3 protocol url encode type");
+  printf(HELP_FMT, "-i, --sts_credential", "set sts credential");
   printf("samples:\n");
   printf("  test nfs device: \n");
-  printf("\tob_admin bench_io_adapter -dfile:///home/admin/backup_info \n");
+  printf("\tob_admin io_adapter_benchmark -dfile:///home/admin/backup_info \n");
   printf("  test object device: \n");
-  printf("\tob_admin bench_io_adapter -d'oss://home/admin/backup_info' "
+  printf("\tob_admin io_adapter_benchmark -d'oss://home/admin/backup_info' "
          "-s'host=xxx.com&access_id=111&access_key=222'\n");
-  printf("\tob_admin bench_io_adapter -d'cos://home/admin/backup_info' "
+  printf("\tob_admin io_adapter_benchmark -d'cos://home/admin/backup_info' "
          "-s'host=xxx.com&access_id=111&access_key=222&appid=333'\n");
-  printf("\tob_admin bench_io_adapter -d's3://home/admin/backup_info' "
+  printf("\tob_admin io_adapter_benchmark -d's3://home/admin/backup_info' "
          "-s'host=xxx.com&access_id=111&access_key=222&region=333'\t"
          "-e'compliantRfc3986Encoding'");
-  printf("\tob_admin bench_io_adapter -d's3://home/admin/backup_info' "
-         "-s'host=xxx.com&role_arn=111&region=333'\t"
-         "-i'sts_url=xxx&sts_ak=xxx&sts_sk=xxx'");
+  printf("\tob_admin io_adapter_benchmark -d'cos://home/admin/backup_info' "
+         "-s'host=xxx.com&role_arn=xxx&appid=333'\n"
+         "-i'sts_url=xxx&sts_ak=aaa&sts_sk=bbb'");
+  printf("\tob_admin io_adapter_benchmark -d'cos://home/admin/backup_info' "
+         "-s'host=xxx.com&role_arn=xxx&external_id=xxx&appid=333'\n"
+         "-i'sts_url=xxx&sts_ak=aaa&sts_sk=bbb'");
   return ret;
 }
 
