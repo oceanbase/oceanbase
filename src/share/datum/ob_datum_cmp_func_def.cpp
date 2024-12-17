@@ -107,6 +107,32 @@ int ObDatumCollectionCmpImpl::cmp(const ObDatum &l, const ObDatum &r, int &cmp_r
   return ret;
 }
 
+int ObDatumRoaringbitmapCmpImpl::cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret, const bool is_lob)
+{
+  int ret = OB_SUCCESS;
+  cmp_ret = 0;
+  ObString l_data;
+  ObString r_data;
+  common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObTextStringIter l_instr_iter(ObRoaringBitmapType, CS_TYPE_BINARY, l.get_string(), is_lob);
+  ObTextStringIter r_instr_iter(ObRoaringBitmapType, CS_TYPE_BINARY, r.get_string(), is_lob);
+  if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+    COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(l));
+  } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+    COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(l_instr_iter));
+  } else if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+    COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
+  } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+    COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(r_instr_iter));
+  } else {
+    // only memcmp supported now
+    cmp_ret = MEMCMP(l_data.ptr(), r_data.ptr(), std::min(l_data.length(), r_data.length()));
+    if (cmp_ret == 0 && l_data.length() != r_data.length()) {
+      cmp_ret = l_data.length() > r_data.length() ? 1 : -1;
+    }
+  }
+  return ret;
+}
 
 int ObDatumTextCmpImpl::cmp_out_row(const ObDatum &l, const ObDatum &r, int &cmp_ret,
                                     const ObCollationType cs, const bool with_end_space)

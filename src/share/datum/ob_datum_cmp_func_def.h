@@ -409,6 +409,20 @@ struct ObDatumCollectionCmp : public ObDefined<>
   }
 };
 
+struct ObDatumRoaringbitmapCmpImpl
+{
+  static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret, const bool is_lob);
+};
+
+template <bool HAS_LOB_HEADER>
+struct ObDatumRoaringbitmapCmp : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
+  {
+    return ObDatumRoaringbitmapCmpImpl::cmp(l, r, cmp_ret, HAS_LOB_HEADER);
+  }
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // begin define string compare functions
 ///////////////////////////////////////////////////////////////////////////////

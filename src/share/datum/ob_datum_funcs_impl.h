@@ -210,6 +210,24 @@ struct ObNullSafeDatumCollectionCmp
   }
 };
 
+template <bool NULL_FIRST, bool HAS_LOB_HEADER>
+struct ObNullSafeDatumRoaringbitmapCmp
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret) {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(l.is_null()) && OB_UNLIKELY(r.is_null())) {
+      cmp_ret = 0;
+    } else if (OB_UNLIKELY(l.is_null())) {
+      cmp_ret = NULL_FIRST ? -1 : 1;
+    } else if (OB_UNLIKELY(r.is_null())) {
+      cmp_ret = NULL_FIRST ? 1 : -1;
+    } else {
+      ret = datum_cmp::ObDatumRoaringbitmapCmp<HAS_LOB_HEADER>::cmp(l, r, cmp_ret);
+    }
+    return ret;
+  }
+};
+
 template<ObDecimalIntWideType width1, ObDecimalIntWideType width2, bool NULL_FIRST>
 struct ObNullSafeDecintCmp
 {
@@ -792,6 +810,7 @@ DEF_DATUM_SPECIAL_HASH_FUNCS(ObDoubleType);
 DEF_DATUM_SPECIAL_HASH_FUNCS(ObUDoubleType);
 DEF_DATUM_SPECIAL_HASH_FUNCS(ObJsonType);
 DEF_DATUM_SPECIAL_HASH_FUNCS(ObGeometryType);
+DEF_DATUM_SPECIAL_HASH_FUNCS(ObRoaringBitmapType);
 
 extern ObDatumCmpFuncType NULLSAFE_JSON_CMP_FUNCS[2][2];
 extern ObDatumCmpFuncType NULLSAFE_STR_CMP_FUNCS[CS_TYPE_MAX][2][2];
@@ -803,6 +822,7 @@ extern ObDatumCmpFuncType NULLSAFE_TC_CMP_FUNCS[ObMaxTC][ObMaxTC][2];
 extern ObDatumCmpFuncType NULLSAFE_GEO_CMP_FUNCS[2][2];
 extern ObDatumCmpFuncType FIXED_DOUBLE_CMP_FUNCS[OB_NOT_FIXED_SCALE][2];
 extern ObDatumCmpFuncType NULLSAFE_COLLECTION_CMP_FUNCS[2][2];
+extern ObDatumCmpFuncType NULLSAFE_ROARINGBITMAP_CMP_FUNCS[2][2];
 extern ObDatumCmpFuncType DECINT_CMP_FUNCS[DECIMAL_INT_MAX][DECIMAL_INT_MAX][2];
 
 extern ObExprBasicFuncs EXPR_BASIC_FUNCS[ObMaxType];
@@ -813,6 +833,7 @@ extern ObExprBasicFuncs FIXED_DOUBLE_BASIC_FUNCS[OB_NOT_FIXED_SCALE];
 extern ObExprBasicFuncs EXPR_BASIC_UDT_FUNCS[1];
 extern ObExprBasicFuncs DECINT_BASIC_FUNCS[DECIMAL_INT_MAX];
 extern ObExprBasicFuncs EXPR_BASIC_COLLECTION_FUNCS[2];
+extern ObExprBasicFuncs EXPR_BASIC_ROARINGBITMAP_FUNCS[2];
 
 struct DummyIniter
 {
@@ -1435,7 +1456,87 @@ struct InitCollectionCmpArray
   }
 };
 
+template <typename T, bool HAS_LOB_HEADER>
+struct DatumRoaringbitmapHashCalculator : public DefHashMethod<T>
+{
+  static int calc_datum_hash(const ObDatum &datum, const uint64_t seed, uint64_t &res)
+  {
+    return datum_lob_locator_hash(datum, CS_TYPE_UTF8MB4_BIN, seed, T::is_varchar_hash ? T::hash : NULL, res);
+  }
 
+  static int calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res)
+  {
+    return datum_lob_locator_hash(datum, CS_TYPE_UTF8MB4_BIN, seed, T::is_varchar_hash ? T::hash : NULL, res);
+  }
+};
+
+template<int IDX>
+struct InitBasicRoaringbitmapFuncArray
+{
+  template <typename T, bool HAS_LOB_HEADER>
+  using Hash = DefHashFunc<DatumRoaringbitmapHashCalculator<T, HAS_LOB_HEADER>>;
+  template <bool NULL_FIRST>
+  using TCCmp = ObNullSafeDatumTCCmp<ObRoaringBitmapTC, ObRoaringBitmapTC, NULL_FIRST>;
+  using TCDef = datum_cmp::ObDatumTCCmp<ObRoaringBitmapTC, ObRoaringBitmapTC>;
+  template <bool NULL_FIRST, bool HAS_LOB_HEADER>
+  using TypeCmp = ObNullSafeDatumRoaringbitmapCmp<NULL_FIRST, HAS_LOB_HEADER>;
+  using TypeDef = datum_cmp::ObDatumRoaringbitmapCmp<false>;
+
+  static void init_array()
+  {
+    auto &basic_funcs = EXPR_BASIC_ROARINGBITMAP_FUNCS;
+    basic_funcs[0].default_hash_ = Hash<ObDefaultHash, false>::hash;
+    basic_funcs[0].default_hash_batch_= Hash<ObDefaultHash, false>::hash_batch;
+    basic_funcs[0].murmur_hash_ = Hash<ObMurmurHash, false>::hash;
+    basic_funcs[0].murmur_hash_batch_ = Hash<ObMurmurHash, false>::hash_batch;
+    // basic_funcs[0].xx_hash_ = Hash<ObXxHash, false>::hash;
+    // basic_funcs[0].xx_hash_batch_ = Hash<ObXxHash, false>::hash_batch;
+    // basic_funcs[0].wy_hash_ = Hash<ObWyHash, false>::hash;
+    // basic_funcs[0].wy_hash_batch_ = Hash<ObWyHash, false>::hash_batch;
+    basic_funcs[0].null_first_cmp_ = TypeDef::defined_
+        ? &TypeCmp<1, 0>::cmp
+        : TCDef::defined_ ? &TCCmp<1>::cmp : NULL;
+    basic_funcs[0].null_last_cmp_ = TypeDef::defined_
+        ? &TypeCmp<0, 0>::cmp
+        : TCDef::defined_ ? &TCCmp<0>::cmp : NULL;
+    basic_funcs[0].murmur_hash_v2_ = Hash<ObMurmurHash, false>::hash_v2;
+    basic_funcs[0].murmur_hash_v2_batch_ = Hash<ObMurmurHash, false>::hash_v2_batch;
+
+    basic_funcs[1].default_hash_ = Hash<ObDefaultHash, true>::hash;
+    basic_funcs[1].default_hash_batch_= Hash<ObDefaultHash, true>::hash_batch;
+    basic_funcs[1].murmur_hash_ = Hash<ObMurmurHash, true>::hash;
+    basic_funcs[1].murmur_hash_batch_ = Hash<ObMurmurHash, true>::hash_batch;
+    basic_funcs[1].xx_hash_ = Hash<ObXxHash, true>::hash;
+    basic_funcs[1].xx_hash_batch_ = Hash<ObXxHash, true>::hash_batch;
+    basic_funcs[1].wy_hash_ = Hash<ObWyHash, true>::hash;
+    basic_funcs[1].wy_hash_batch_ = Hash<ObWyHash, true>::hash_batch;
+    basic_funcs[1].null_first_cmp_ = TypeDef::defined_
+        ? &TypeCmp<1, 1>::cmp
+        : TCDef::defined_ ? &TCCmp<1>::cmp : NULL;
+    basic_funcs[1].null_last_cmp_ = TypeDef::defined_
+        ? &TypeCmp<0, 1>::cmp
+        : TCDef::defined_ ? &TCCmp<0>::cmp : NULL;
+    basic_funcs[1].murmur_hash_v2_ = Hash<ObMurmurHash, true>::hash_v2;
+    basic_funcs[1].murmur_hash_v2_batch_ = Hash<ObMurmurHash, true>::hash_v2_batch;
+  }
+};
+
+template<int IDX>
+struct InitRoaringbitmapCmpArray
+{
+  template <bool... args>
+  using Cmp = ObNullSafeDatumRoaringbitmapCmp<args...>;
+  using Def = datum_cmp::ObDatumRoaringbitmapCmp<false>;
+
+  static void init_array()
+  {
+    auto &funcs = NULLSAFE_ROARINGBITMAP_CMP_FUNCS;
+    funcs[0][0] = Def::defined_ ? &Cmp<0, 0>::cmp : NULL;
+    funcs[0][1] = Def::defined_ ? &Cmp<0, 1>::cmp : NULL;
+    funcs[1][0] = Def::defined_ ? &Cmp<1, 1>::cmp : NULL;
+    funcs[1][1] = Def::defined_ ? &Cmp<1, 1>::cmp : NULL;
+  }
+};
 template<int width>
 struct InitDecintBasicFuncArray
 {

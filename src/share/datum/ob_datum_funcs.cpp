@@ -68,6 +68,10 @@ ObDatumCmpFuncType NULLSAFE_COLLECTION_CMP_FUNCS[2][2];
 
 bool g_collection_cmp_array_inited = ObArrayConstIniter<1, InitCollectionCmpArray>::init();
 
+ObDatumCmpFuncType NULLSAFE_ROARINGBITMAP_CMP_FUNCS[2][2];
+
+bool g_roaringbitmap_cmp_array_inited = ObArrayConstIniter<1, InitRoaringbitmapCmpArray>::init();
+
 ObDatumCmpFuncType FIXED_DOUBLE_CMP_FUNCS[OB_NOT_FIXED_SCALE][2];
 
 bool g_fixed_double_cmp_array_inited =
@@ -112,6 +116,8 @@ ObDatumCmpFuncType ObDatumFuncs::get_nullsafe_cmp_func(
     func_ptr = NULLSAFE_GEO_CMP_FUNCS[null_pos_idx][has_lob_header];
   } else if (is_collection(type1) && is_collection(type2)) {
     func_ptr = NULLSAFE_COLLECTION_CMP_FUNCS[null_pos_idx][has_lob_header];
+  } else if (is_roaringbitmap(type1) && is_roaringbitmap(type2)) {
+    func_ptr = NULLSAFE_ROARINGBITMAP_CMP_FUNCS[null_pos_idx][has_lob_header];
   } else if (ob_is_decimal_int(type1) && ob_is_decimal_int(type2) && prec1 != PRECISION_UNKNOWN_YET
              && prec2 != PRECISION_UNKNOWN_YET) {
     ObDecimalIntWideType lw = get_decimalint_type(prec1);
@@ -143,6 +149,7 @@ ObExprBasicFuncs EXPR_BASIC_JSON_FUNCS[2];
 
 ObExprBasicFuncs EXPR_BASIC_GEO_FUNCS[2];
 ObExprBasicFuncs EXPR_BASIC_COLLECTION_FUNCS[2];
+ObExprBasicFuncs EXPR_BASIC_ROARINGBITMAP_FUNCS[2];
 
 ObExprBasicFuncs FIXED_DOUBLE_BASIC_FUNCS[OB_NOT_FIXED_SCALE];
 ObExprBasicFuncs EXPR_BASIC_UDT_FUNCS[1];
@@ -152,6 +159,7 @@ ObExprBasicFuncs EXPR_BASIC_UDT_FUNCS[1];
 bool g_basic_json_array_inited = ObArrayConstIniter<1, InitBasicJsonFuncArray>::init();
 bool g_basic_geo_array_inited = ObArrayConstIniter<1, InitBasicGeoFuncArray>::init();
 bool g_basic_collection_array_inited = ObArrayConstIniter<1, InitCollectionBasicFuncArray>::init();
+bool g_basic_roaringbitmap_array_inited = ObArrayConstIniter<1, InitBasicRoaringbitmapFuncArray>::init();
 
 bool g_fixed_double_basic_func_array_inited =
   ObArrayConstIniter<OB_NOT_FIXED_SCALE, InitFixedDoubleBasicFuncArray>::init();
@@ -196,7 +204,7 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
         // string is always without lob locator
         res = &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][false];
       }
-    } else if (ob_is_lob_locator(type) || ob_is_roaringbitmap(type)) {
+    } else if (ob_is_lob_locator(type)) {
       OB_ASSERT(cs_type > CS_TYPE_INVALID && cs_type < CS_TYPE_MAX);
       bool calc_end_space = false;
       res = &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][has_lob_locator];
@@ -208,6 +216,8 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
       res = &EXPR_BASIC_UDT_FUNCS[0];
     } else if (ob_is_collection_sql_type(type)) {
       res = &EXPR_BASIC_COLLECTION_FUNCS[has_lob_locator];
+    } else if (ob_is_roaringbitmap(type)) {
+      res = &EXPR_BASIC_ROARINGBITMAP_FUNCS[has_lob_locator];
     } else if (!is_oracle_mode && ob_is_double_type(type) &&
                 scale > SCALE_UNKNOWN_YET && scale < OB_NOT_FIXED_SCALE) {
       res = &FIXED_DOUBLE_BASIC_FUNCS[scale];
@@ -250,6 +260,12 @@ bool ObDatumFuncs::is_geometry(const ObObjType type)
   return (tc == ObGeometryTC);
 }
 
+bool ObDatumFuncs::is_roaringbitmap(const ObObjType type)
+{
+  const ObObjTypeClass tc = OBJ_TYPE_TO_CLASS[type];
+  return (tc == ObRoaringBitmapTC);
+}
+
 /**
  * This function is primarily responsible for handling inconsistent hash computations
  * for null types and the null values of those types, such as string, float, double, etc.
@@ -259,7 +275,7 @@ bool ObDatumFuncs::is_geometry(const ObObjType type)
 bool ObDatumFuncs::is_null_aware_hash_type(const ObObjType type)
 {
   const ObObjTypeClass tc = OBJ_TYPE_TO_CLASS[type];
-  return is_string_type(type) || is_json(type) || is_geometry(type) ||
+  return is_string_type(type) || is_json(type) || is_geometry(type) || is_roaringbitmap(type) ||
             (tc == ObUserDefinedSQLTC) || (tc == ObFloatTC) || (tc == ObDoubleTC);
 }
 
@@ -330,6 +346,11 @@ static_assert(2 * 2 == sizeof(NULLSAFE_COLLECTION_CMP_FUNCS) / sizeof(void *),
 REG_SER_FUNC_ARRAY(OB_SFA_DATUM_NULLSAFE_COLLECTION_CMP,
                    NULLSAFE_COLLECTION_CMP_FUNCS,
                    sizeof(NULLSAFE_COLLECTION_CMP_FUNCS) / sizeof(void*));
+static_assert(2 * 2 == sizeof(NULLSAFE_ROARINGBITMAP_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_DATUM_NULLSAFE_ROARINGBITMAP_CMP,
+                   NULLSAFE_ROARINGBITMAP_CMP_FUNCS,
+                   sizeof(NULLSAFE_ROARINGBITMAP_CMP_FUNCS) / sizeof(void*));
 
 static_assert(OB_NOT_FIXED_SCALE * 2 == sizeof(FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *),
               "unexpected size");
@@ -392,6 +413,8 @@ static ExprBasicFuncSerPart2 EXPR_BASIC_UDT_FUNCS_PART2[1];
 static ExprBasicFuncSerPart1 EXPR_BASIC_COLLECTION_FUNCS_PART1[2];
 static ExprBasicFuncSerPart2 EXPR_BASIC_COLLECTION_FUNCS_PART2[2];
 
+static ExprBasicFuncSerPart1 EXPR_BASIC_ROARINGBITMAP_FUNCS_PART1[2];
+static ExprBasicFuncSerPart2 EXPR_BASIC_ROARINGBITMAP_FUNCS_PART2[2];
 bool split_basic_func_for_ser(void)
 {
   for (int64_t i = 0; i < sizeof(EXPR_BASIC_FUNCS)/sizeof(ObExprBasicFuncs); i++) {
@@ -428,6 +451,10 @@ bool split_basic_func_for_ser(void)
   for (int64_t i = 0; i < sizeof(EXPR_BASIC_COLLECTION_FUNCS)/sizeof(ObExprBasicFuncs); i++) {
     EXPR_BASIC_COLLECTION_FUNCS_PART1[i].from(EXPR_BASIC_COLLECTION_FUNCS[i]);
     EXPR_BASIC_COLLECTION_FUNCS_PART2[i].from(EXPR_BASIC_COLLECTION_FUNCS[i]);
+  }
+  for (int64_t i = 0; i < sizeof(EXPR_BASIC_ROARINGBITMAP_FUNCS)/sizeof(ObExprBasicFuncs); i++) {
+    EXPR_BASIC_ROARINGBITMAP_FUNCS_PART1[i].from(EXPR_BASIC_ROARINGBITMAP_FUNCS[i]);
+    EXPR_BASIC_ROARINGBITMAP_FUNCS_PART2[i].from(EXPR_BASIC_ROARINGBITMAP_FUNCS[i]);
   }
   return true;
 }
@@ -507,6 +534,14 @@ REG_SER_FUNC_ARRAY(OB_SFA_EXPR_COLLECTION_BASIC_PART1,
 REG_SER_FUNC_ARRAY(OB_SFA_EXPR_COLLECTION_BASIC_PART2,
                    EXPR_BASIC_COLLECTION_FUNCS_PART2,
                    sizeof(EXPR_BASIC_COLLECTION_FUNCS_PART2) / sizeof(void *));
+static_assert(2 * EXPR_BASIC_FUNC_MEMBER_CNT == sizeof(EXPR_BASIC_ROARINGBITMAP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_EXPR_ROARINGBITMAP_BASIC_PART1,
+                   EXPR_BASIC_ROARINGBITMAP_FUNCS_PART1,
+                   sizeof(EXPR_BASIC_ROARINGBITMAP_FUNCS_PART1) / sizeof(void *));
+REG_SER_FUNC_ARRAY(OB_SFA_EXPR_ROARINGBITMAP_BASIC_PART2,
+                   EXPR_BASIC_ROARINGBITMAP_FUNCS_PART2,
+                   sizeof(EXPR_BASIC_ROARINGBITMAP_FUNCS_PART2) / sizeof(void *));
 
 } // end namespace sql
 } // end namespace oceanbase
