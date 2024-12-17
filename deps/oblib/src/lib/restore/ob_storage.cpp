@@ -1711,7 +1711,12 @@ int ObStorageAdaptiveReader::pread(char *buf,
     OB_LOG(ERROR, "unkown object type", K(ret), K_(meta));
   }
 
-  // TODO @fangdan: add event
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_READ_FAIL_COUNT);
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_BYTES, read_size);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_READ_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
@@ -2081,6 +2086,14 @@ int ObStorageAppender::pwrite(const char *buf, const int64_t size, const int64_t
     }
   }
 
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
+
   return ret;
 }
 
@@ -2308,9 +2321,14 @@ int ObStorageMultiPartWriter::pwrite(const char *buf, const int64_t size, const 
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "multipart writer not opened", K(ret));
   } else if (OB_FAIL(multipart_writer_->pwrite(buf, size, offset))) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
     STORAGE_LOG(WARN, "failed to write", K(ret));
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
   }
 
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
