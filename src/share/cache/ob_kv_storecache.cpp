@@ -358,8 +358,18 @@ int ObKVGlobalCache::put(
   } else if (NULL == inst_handle.get_inst()) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "The inst is NULL, ", K(ret));
-  } else if (!overwrite && (OB_SUCC(map_.get(cache_id, key, pvalue, mb_handle)))) {
-    ret = OB_ENTRY_EXIST;
+  } else if (!overwrite) {
+    if (OB_FAIL(map_.get(cache_id, key, pvalue, mb_handle))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        COMMON_LOG(WARN, "KVCacheMap::get failed", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+	} else {
+	  ret = OB_ENTRY_EXIST;
+	}
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(store.store(*inst_handle.get_inst(), key, value, kvpair, mb_wrapper))) {
     COMMON_LOG(WARN, "Fail to store kvpair to store, ", K(ret));
   } else {
