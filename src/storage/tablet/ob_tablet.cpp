@@ -7346,6 +7346,14 @@ int ObTablet::build_transfer_tablet_param_current_(
     }
 
     const int64_t transfer_seq = tablet_meta_.transfer_info_.transfer_seq_ + 1;
+    if ((transfer_seq & MacroBlockId::MAX_TRANSFER_SEQ) == MacroBlockId::MAX_TRANSFER_SEQ) {
+      /*
+        For transfer_seq in transfer_info, it is an int64_t;
+        For transfer_seq recorded in MacroBlockID.forth_id, it only has 20 bit.
+      */
+      LOG_ERROR("WARNING: TRANSFER_SEQ has exceed (2^20 - 1)", K(ret), K(transfer_seq), KPC(this));
+    }
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(mig_tablet_param.transfer_info_.init(tablet_meta_.ls_id_, user_data.transfer_scn_, transfer_seq))) {
       LOG_WARN("failed to init transfer info", K(ret), K(tablet_meta_), K(user_data));

@@ -258,7 +258,7 @@ public:
   static const uint64_t SF_BIT_TRANSFER_SEQ = 20;
   static const uint64_t SF_BIT_TENANT_SEQ = 44;
   static constexpr uint64_t SF_BIT_META_VERSION_ID = 44;
-
+  static const uint64_t MAX_TRANSFER_SEQ = (0x1UL << MacroBlockId::SF_BIT_TRANSFER_SEQ) - 1;
   static const uint64_t MAX_WRITE_SEQ = (0x1UL << MacroBlockId::SF_BIT_WRITE_SEQ) - 1;
 
 private:
