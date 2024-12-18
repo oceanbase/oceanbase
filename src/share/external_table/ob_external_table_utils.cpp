@@ -471,12 +471,24 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
       OZ (sqcs.at(sqc_idx++ % sqc_count)->get_access_external_table_files().push_back(files.at(i)));
     }
   } else {
+    /*
+    The main task of this conditional branch is to distribute several ODPS partitions as evenly as possible to SQC,
+    with each SQC performing a secondary even split on the assigned partitions.
+    When splitting partitions for SQC, only large partitions (those with more than 100,000 rows of data,
+    referred to as large partitions) are split;small partitions are directly distributed in a round-robin manner to each SQC.
+
+    step 1. pick up big partitions(alias file), calc row count sum of big partitions(called big_file_row_count),
+            calc avg row count expected assign to per sqc(called avg_row_count_to_sqc).
+    step 2. Assign avg_row_count_to_sqc rows to per sqc, use DROP_FACTOR to avoid a small tail of current partition assigned to next sqc.
+    step 3. Assgin small partitions to per sqc in round robin method.
+    step 4. Divide the partitions assigned to each SQC into smaller tasks, similar to the previous three steps.
+    */
     ObSEArray<share::ObExternalFileInfo, 8> temp_block_files;
     ObSEArray<int64_t, 8> sqc_row_counts;
     int64_t big_file_row_count = 0;
     int64_t small_file_count = 0;
     const int64_t SMALL_FILE_SIZE = 100000;
-    const double DROP_FACTOR = 0.05;
+    const double DROP_FACTOR = 0.2;
     for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
       if (OB_FAIL(sqc_row_counts.push_back(0))) {
         LOG_WARN("failed to init sqc_row_counts", K(i), K(ret));
@@ -518,9 +530,17 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
           if (remaining_row_count_in_file >= row_count_needed_to_sqc) {
             ObExternalFileInfo splited_file_info = files.at(file_idx);
             splited_file_info.row_start_ = file_start;
-            splited_file_info.row_count_ = row_count_needed_to_sqc;
-            row_count_assigned_to_sqc += row_count_needed_to_sqc;
-            file_start += row_count_needed_to_sqc;
+            if (remaining_row_count_in_file <= (1 + DROP_FACTOR) * row_count_needed_to_sqc) {
+              splited_file_info.row_count_ = remaining_row_count_in_file;
+              row_count_assigned_to_sqc += remaining_row_count_in_file;
+              file_start += remaining_row_count_in_file;
+              droped_row_count_on_last_loop = expected_row_count_to_sqc - row_count_assigned_to_sqc;
+              expected_row_count_to_sqc = row_count_assigned_to_sqc;
+            } else {
+              splited_file_info.row_count_ = row_count_needed_to_sqc;
+              row_count_assigned_to_sqc += row_count_needed_to_sqc;
+              file_start += row_count_needed_to_sqc;
+            }
             OZ (sqcs.at(sqc_idx)->get_access_external_table_files().push_back(splited_file_info));
           } else if (remaining_row_count_in_file > 0) {
             ObExternalFileInfo splited_file_info = files.at(file_idx);
@@ -528,23 +548,35 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
             splited_file_info.row_count_ = remaining_row_count_in_file;
             row_count_assigned_to_sqc += remaining_row_count_in_file;
             file_start += remaining_row_count_in_file;
+            if (remaining_row_count_in_file >= (1 - DROP_FACTOR) * row_count_needed_to_sqc) {
+              droped_row_count_on_last_loop = expected_row_count_to_sqc - row_count_assigned_to_sqc;
+              expected_row_count_to_sqc = row_count_assigned_to_sqc;
+            }
             OZ (sqcs.at(sqc_idx)->get_access_external_table_files().push_back(splited_file_info));
           } else { //remaining_row_count_in_file == 0
             ++file_idx;
             file_start = 0;
-            if (expected_row_count_to_sqc - row_count_assigned_to_sqc <= avg_row_count_to_sqc * DROP_FACTOR) {
-              droped_row_count_on_last_loop = expected_row_count_to_sqc - row_count_assigned_to_sqc;
-              expected_row_count_to_sqc = row_count_assigned_to_sqc;
-            }
           }
         }
       }
       sqc_row_counts.at(sqc_idx) = row_count_assigned_to_sqc;
       sqc_idx++;
-      LOG_TRACE("assigned big odps file to sqc", K(ret), K(sqc_row_counts), K(row_count_assigned_to_sqc), K(expected_row_count_to_sqc), K(avg_row_count_to_sqc), K(file_idx), K(sqc_idx), K(remaining_row_count_in_file));
+      LOG_TRACE("assigned big odps file to sqc", K(ret),
+                                                 K(sqc_row_counts),
+                                                 K(row_count_assigned_to_sqc),
+                                                 K(expected_row_count_to_sqc),
+                                                 K(avg_row_count_to_sqc),
+                                                 K(file_idx),
+                                                 K(sqc_idx),
+                                                 K(remaining_row_count_in_file));
     }
     const int64_t block_cnt = parallel / sqcs.count() * 3;
-    LOG_TRACE("split big odps file to sqc, going to split files to block in sqc", K(ret), K(sqc_row_counts), K(sqcs.count()), K(block_cnt), K(parallel), K(small_file_count));
+    LOG_TRACE("split big odps file to sqc, going to split files to block in sqc", K(ret),
+                                                                                  K(sqc_row_counts),
+                                                                                  K(sqcs.count()),
+                                                                                  K(block_cnt),
+                                                                                  K(parallel),
+                                                                                  K(small_file_count));
     for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
       ObIArray<share::ObExternalFileInfo> &sqc_files = sqcs.at(i)->get_access_external_table_files();
       if (sqc_files.empty() || sqc_row_counts.at(i) <= 0) {
@@ -574,16 +606,33 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
         while (OB_SUCC(ret) && row_count_assigned_to_block != expected_row_count_to_block) {
           if (file_idx >= sqc_files.count()) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("files in sqc iter end", K(i), K(block_idx), K(actual_block_cnt), K(row_count_assigned_to_block), K(expected_row_count_to_block), K(avg_row_count_to_block), K(block_row_tail), K(file_start), K(file_idx), K(sqc_files));
+            LOG_WARN("files in sqc iter end", K(i),
+                                              K(block_idx),
+                                              K(actual_block_cnt),
+                                              K(row_count_assigned_to_block),
+                                              K(expected_row_count_to_block),
+                                              K(avg_row_count_to_block),
+                                              K(block_row_tail),
+                                              K(file_start),
+                                              K(file_idx),
+                                              K(sqc_files));
           } else {
             int64_t remaining_row_count_in_file = sqc_files.at(file_idx).row_count_ - (file_start - sqc_files.at(file_idx).row_start_);
             int64_t row_count_needed_to_block = expected_row_count_to_block - row_count_assigned_to_block;
             if (remaining_row_count_in_file >= row_count_needed_to_block) {
               ObExternalFileInfo splited_file_info = sqc_files.at(file_idx);
               splited_file_info.row_start_ = file_start;
-              splited_file_info.row_count_ = row_count_needed_to_block;
-              row_count_assigned_to_block += row_count_needed_to_block;
-              file_start += row_count_needed_to_block;
+              if (remaining_row_count_in_file <= (1 + DROP_FACTOR) * row_count_needed_to_block) {
+                splited_file_info.row_count_ = remaining_row_count_in_file;
+                row_count_assigned_to_block += remaining_row_count_in_file;
+                file_start += remaining_row_count_in_file;
+                droped_row_count_on_last_loop = expected_row_count_to_block - row_count_assigned_to_block;
+                expected_row_count_to_block = row_count_assigned_to_block;
+              } else {
+                splited_file_info.row_count_ = row_count_needed_to_block;
+                row_count_assigned_to_block += row_count_needed_to_block;
+                file_start += row_count_needed_to_block;
+              }
               OZ (temp_block_files.push_back(splited_file_info));
             } else if (remaining_row_count_in_file > 0) {
               ObExternalFileInfo splited_file_info = sqc_files.at(file_idx);
@@ -591,14 +640,14 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
               splited_file_info.row_count_ = remaining_row_count_in_file;
               row_count_assigned_to_block += remaining_row_count_in_file;
               file_start += remaining_row_count_in_file;
+              if (remaining_row_count_in_file >= (1 - DROP_FACTOR) * row_count_needed_to_block) {
+                droped_row_count_on_last_loop = expected_row_count_to_block - row_count_assigned_to_block;
+                expected_row_count_to_block = row_count_assigned_to_block;
+              }
               OZ (temp_block_files.push_back(splited_file_info));
             } else { //remaining_row_count_in_file == 0
               ++file_idx;
               file_start = file_idx >= sqc_files.count() ? 0 : sqc_files.at(file_idx).row_start_;
-              if (expected_row_count_to_block - row_count_assigned_to_block <= avg_row_count_to_block * DROP_FACTOR) {
-                droped_row_count_on_last_loop = expected_row_count_to_block - row_count_assigned_to_block;
-                expected_row_count_to_block = row_count_assigned_to_block;
-              }
             }
           }
         }

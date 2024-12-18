@@ -3339,11 +3339,15 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
       ParseNode *option_node = NULL;
       int32_t num = node->num_child_;
       bool is_format_exist = false;
+      bool have_external_file_format = false;
+      bool have_external_properties = false;
       for (int32_t i = 0; OB_SUCC(ret) && i < num; ++i) {
         option_node = node->children_[i];
         if (OB_NOT_NULL(option_node) && (T_EXTERNAL_FILE_FORMAT == option_node->type_ || T_EXTERNAL_PROPERTIES == option_node->type_)) {
           is_format_exist = true;
           ObExternalFileFormat format;
+          have_external_file_format = T_EXTERNAL_FILE_FORMAT == option_node->type_;
+          have_external_properties = T_EXTERNAL_PROPERTIES == option_node->type_;
           for (int32_t j = 0; OB_SUCC(ret) && j < option_node->num_child_; ++j) {
             if (OB_NOT_NULL(option_node->children_[j])
                 && T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[j]->type_) {
@@ -3355,6 +3359,11 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
             }
           }
         }
+      }
+      if (OB_SUCC(ret) && have_external_file_format && have_external_properties) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("FORMAT and PROPERTIES are mutually exclusive in external table", K(ret));
+        LOG_USER_ERROR(OB_ERR_UNEXPECTED, "FORMAT and PROPERTIES are mutually exclusive in external table");
       }
       if (OB_SUCC(ret) && !is_format_exist) {
         ret = OB_EXTERNAL_TABLE_FORMAT_ERROR;

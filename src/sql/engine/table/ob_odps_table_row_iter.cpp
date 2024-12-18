@@ -189,8 +189,8 @@ int ObODPSTableRowIterator::next_task()
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
-  LOG_TRACE("get a new task start", K(ret), K(batch_size_), K(state_));
   int64_t task_idx = state_.task_idx_;
+  LOG_TRACE("going to get new task", K(ret), K(batch_size_), K(state_), K(total_count_), K(task_idx), K(scan_param_->key_ranges_.count()));
   int64_t start = 0;
   int64_t step = 0;
   if (++task_idx >= scan_param_->key_ranges_.count()) {
@@ -208,13 +208,6 @@ int ObODPSTableRowIterator::next_task()
       try {
         const ObString &part_spec = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
         int64_t part_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
-        std::vector<std::string> column_names;
-        const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
-        for (int64_t column_idx = 0; column_idx < target_column_id_list_.count(); ++column_idx) {
-          if (file_column_exprs.at(column_idx)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
-            column_names.emplace_back(column_list_.at(target_column_id_list_.at(column_idx)).name_);
-          }
-        }
         if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
           ret = OB_ITER_END;
           LOG_WARN("empty file", K(ret));
@@ -247,25 +240,31 @@ int ObODPSTableRowIterator::next_task()
                   ret = OB_ALLOCATE_MEMORY_FAILED;
                   LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader)));
                 } else if (FALSE_IT(new(temp_downloader)ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader())) {
-                } else if (OB_FAIL(temp_downloader->odps_driver_.init_tunnel(odps_format_, false))) {
-                  LOG_WARN("failed to init tunnel", K(ret), K(part_id));
-                } else if (OB_FAIL(temp_downloader->odps_driver_.create_downloader(part_spec, temp_downloader->odps_partition_downloader_))) {
-                  LOG_WARN("failed create odps partition downloader", K(ret), K(part_id));
-                } else if (OB_FAIL(odps_map.set_refactored(part_id, reinterpret_cast<int64_t>(temp_downloader), 0/*flag*/, 0/*broadcast*/, 0/*overwrite_key*/))) {
-                  if (OB_HASH_EXIST == ret) {
-                    ret = OB_SUCCESS;
-                    if (OB_FAIL(sqc->get_sqc_ctx().gi_pump_.get_odps_downloader(part_id, state_.download_handle_))) {
-                      LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
-                    } else {
-                      LOG_TRACE("succ to get downloader handle from GI", K(ret), K(part_id), K(state_.is_from_gi_pump_));
-                    }
-                  } else {
-                    LOG_WARN("fail to set refactored", K(ret));
-                  }
-                  temp_downloader->reset();
+                } else if (OB_FAIL(temp_downloader->tunnel_ready_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+                  LOG_WARN("failed to init tunnel condition variable", K(ret));
                 } else {
-                  state_.download_handle_ = temp_downloader->odps_partition_downloader_;
-                  LOG_TRACE("succ to create downloader handle and set it to GI", K(ret), K(part_id), K(state_.is_from_gi_pump_));
+                  ObThreadCondGuard guard(temp_downloader->tunnel_ready_cond_);
+                  if (OB_FAIL(odps_map.set_refactored(part_id, reinterpret_cast<int64_t>(temp_downloader), 0/*flag*/, 0/*broadcast*/, 0/*overwrite_key*/))) {
+                    if (OB_HASH_EXIST == ret) {
+                      ret = OB_SUCCESS;
+                      if (OB_FAIL(sqc->get_sqc_ctx().gi_pump_.get_odps_downloader(part_id, state_.download_handle_))) {
+                        LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
+                      } else {
+                        LOG_TRACE("succ to get downloader handle from GI", K(ret), K(part_id), K(state_.is_from_gi_pump_));
+                      }
+                    } else {
+                      LOG_WARN("fail to set refactored", K(ret));
+                    }
+                  } else if (OB_FAIL(temp_downloader->odps_driver_.init_tunnel(odps_format_, false))) {
+                    LOG_WARN("failed to init tunnel", K(ret), K(part_id));
+                  } else if (OB_FAIL(temp_downloader->odps_driver_.create_downloader(part_spec, temp_downloader->odps_partition_downloader_))) {
+                    LOG_WARN("failed create odps partition downloader", K(ret), K(part_id));
+                  } else {
+                    state_.download_handle_ = temp_downloader->odps_partition_downloader_;
+                    temp_downloader->downloader_is_ready_ = true;
+                    temp_downloader->tunnel_ready_cond_.broadcast(); // awake other threads, tell them that temp_downloader->odps_partition_downloader_ is ready
+                    LOG_TRACE("succ to create downloader handle and set it to GI", K(ret), K(part_id), K(state_.is_from_gi_pump_), KP(temp_downloader));
+                  }
                 }
               } else {
                 LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
@@ -280,10 +279,10 @@ int ObODPSTableRowIterator::next_task()
         } else if (OB_ISNULL(state_.download_handle_.get())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexcepted null ptr", K(ret), KP(sqc), K(state_.is_from_gi_pump_));
-        } else if (column_names.size() &&
+        } else if (column_names_.size() &&
                    OB_ISNULL((state_.record_reader_handle_ = state_.download_handle_->OpenReader(start,
                                                                                          step,
-                                                                                         column_names,
+                                                                                         column_names_,
                                                                                          true)).get())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexcepted null ptr", K(ret));
@@ -292,10 +291,12 @@ int ObODPSTableRowIterator::next_task()
         } else {
           int64_t real_time_partition_row_count = state_.download_handle_->GetRecordCount();
           if (start >= real_time_partition_row_count) {
-            ret = OB_ITER_END;
-            LOG_WARN("odps iter end", K(ret), K(part_id), K(state_.start_), K(real_time_partition_row_count));
+            start = real_time_partition_row_count;
+            step = 0;
+            LOG_TRACE("start is overflow", K(ret), K(part_id), K(state_.start_), K(task_idx), K(real_time_partition_row_count));
           } else if (INT64_MAX == step || start + step > real_time_partition_row_count) {
             step = real_time_partition_row_count - start;
+            LOG_TRACE("refine odps step", K(real_time_partition_row_count), K(step), K(start), K(part_id));
           }
           if (OB_SUCC(ret)) {
             state_.task_idx_ = task_idx;
@@ -305,9 +306,18 @@ int ObODPSTableRowIterator::next_task()
             state_.count_ = 0;
             state_.download_id_ = state_.download_handle_->GetDownloadId();
             // what if error occur after this line, how to close state_.record_reader_handle_?
-            LOG_TRACE("get a new task", K(ret), K(batch_size_), K(state_), K(real_time_partition_row_count), K(column_names.size()));
+            LOG_TRACE("succ to get a new task", K(ret),
+                                                K(batch_size_),
+                                                K(state_),
+                                                K(real_time_partition_row_count),
+                                                K(column_names_.size()),
+                                                K(state_.part_list_val_),
+                                                K(total_count_),
+                                                K(task_idx),
+                                                K(scan_param_->key_ranges_.count()),
+                                                K(NULL == state_.record_reader_handle_.get()));
           }
-          if (OB_SUCC(ret) && -1 == batch_size_ && column_names.size()) { // exec once only
+          if (OB_SUCC(ret) && -1 == batch_size_ && column_names_.size()) { // exec once only
             batch_size_ = eval_ctx.max_batch_size_;
             if (0 == batch_size_) {
               // even state_.record_reader_handle_ was destroyed, record_/records_ is still valid.
@@ -678,6 +688,26 @@ int ObODPSTableRowIterator::prepare_expr()
         LOG_WARN("odps type map ob type not support", K(ret), K(target_idx));
       }
     }
+    if (OB_SUCC(ret)) {
+      try {
+        const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
+        for (int64_t column_idx = 0; column_idx < target_column_id_list_.count(); ++column_idx) {
+          if (file_column_exprs.at(column_idx)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
+            column_names_.emplace_back(column_list_.at(target_column_id_list_.at(column_idx)).name_);
+          }
+        }
+      } catch (const std::exception &ex) {
+        if (OB_SUCC(ret)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error occur when calling vector emplace_back", K(ret), K(ex.what()));
+        }
+      } catch (...) {
+        if (OB_SUCC(ret)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error occur when calling vector emplace_back", K(ret));
+        }
+      }
+    }
     ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
     void *vec_mem = NULL;
     void *records_mem = NULL;
@@ -913,17 +943,10 @@ int ObODPSTableRowIterator::retry_read_task()
       state_.record_reader_handle_->Close();
       state_.record_reader_handle_.reset();
     }
-    std::vector<std::string> column_names;
-    const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
-    for (int64_t column_idx = 0; column_idx < target_column_id_list_.count(); ++column_idx) {
-      if (file_column_exprs.at(column_idx)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
-        column_names.emplace_back(column_list_.at(target_column_id_list_.at(column_idx)).name_);
-      }
-    }
-    if (column_names.size() &&
+    if (column_names_.size() &&
         OB_ISNULL((state_.record_reader_handle_ = state_.download_handle_->OpenReader(state_.start_ + state_.count_,
                                                                                       state_.step_ - state_.count_,
-                                                                                      column_names,
+                                                                                      column_names_,
                                                                                       true)).get())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexcepted null ptr", K(ret));
@@ -959,12 +982,11 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   int64_t returned_row_cnt = 0;
   ObEvalCtx &ctx = scan_param_->op_->get_eval_ctx();
   const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
-  if (!file_column_exprs.count() ||
-      OB_ISNULL(state_.record_reader_handle_.get())) {
+  if (0 == column_names_.size()) {
     count = std::min(capacity, state_.step_ - state_.count_);
     total_count_ += count;
     state_.count_ += count;
-    for (int64_t column_idx = 0; OB_SUCC(ret) && column_idx < target_column_id_list_.count(); ++column_idx) {
+    for (int64_t column_idx = 0; OB_SUCC(ret) && state_.task_idx_ != -1 && column_idx < target_column_id_list_.count(); ++column_idx) {
       ObExpr &expr = *file_column_exprs.at(column_idx);
       if (OB_FAIL(fill_partition_list_data(expr, count))) {
         LOG_WARN("failed to fill partition list data", K(ret), K(file_column_exprs.count()));
@@ -975,11 +997,15 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         OB_FAIL(next_task())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("get next task failed", K(ret));
+      } else if (0 != count){
+        ret = OB_SUCCESS;
       }
     }
   } else if (state_.count_ >= state_.step_ && OB_FAIL(next_task())) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next task failed", K(ret));
+    } else {
+      LOG_TRACE("get next task end", K(ret), K(state_));
     }
   } else {
     int64_t returned_row_cnt = 0;
@@ -1373,9 +1399,11 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       LOG_WARN("unexpected data length", K(ret),
                                                        K(len),
                                                        K(expr.max_length_),
-                                                       K(column_list_.at(target_idx)),
-                                                       K(type));
-                      print_type_map_user_info(column_list_.at(target_idx).type_info_, &expr);
+                                                       K(target_column_id_list_),
+                                                       K(column_idx),
+                                                       K(type),
+                                                       K(target_idx));
+                      print_type_map_user_info(column_list_.at(target_column_id_list_.at(column_idx)).type_info_, &expr);
                     } else {
                       ObObjType in_type = ObVarcharType;
                       ObObjType out_type = ObVarcharType;
@@ -1409,9 +1437,11 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       LOG_WARN("unexpected data length", K(ret),
                                                        K(len),
                                                        K(expr.max_length_),
-                                                       K(column_list_.at(target_idx)),
-                                                       K(type));
-                      print_type_map_user_info(column_list_.at(target_idx).type_info_, &expr);
+                                                       K(target_column_id_list_),
+                                                       K(column_idx),
+                                                       K(type),
+                                                       K(target_idx));
+                      print_type_map_user_info(column_list_.at(target_column_id_list_.at(column_idx)).type_info_, &expr);
                     } else {
                       ObString in_str(len, v);
                       ObObjType in_type = ObVarcharType;
@@ -2048,9 +2078,11 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   LOG_WARN("unexpected data length", K(ret),
                                                       K(len),
                                                       K(expr.max_length_),
-                                                      K(column_list_.at(target_idx)),
-                                                      K(type));
-                  print_type_map_user_info(column_list_.at(target_idx).type_info_, &expr);
+                                                      K(target_column_id_list_),
+                                                      K(column_idx),
+                                                      K(type),
+                                                      K(target_idx));
+                  print_type_map_user_info(column_list_.at(target_column_id_list_.at(column_idx)).type_info_, &expr);
                 } else {
                   ObObjType in_type = ObVarcharType;
                   ObObjType out_type = ObVarcharType;
@@ -2079,9 +2111,11 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   LOG_WARN("unexpected data length", K(ret),
                                                       K(len),
                                                       K(expr.max_length_),
-                                                      K(column_list_.at(target_idx)),
-                                                      K(type));
-                  print_type_map_user_info(column_list_.at(target_idx).type_info_, &expr);
+                                                      K(target_column_id_list_),
+                                                      K(column_idx),
+                                                      K(type),
+                                                      K(target_idx));
+                  print_type_map_user_info(column_list_.at(target_column_id_list_.at(column_idx)).type_info_, &expr);
                 } else {
                   ObString in_str(len, v);
                   ObObjType in_type = ObVarcharType; // lcqlog todo ObHexStringType ?
@@ -2259,53 +2293,22 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
   return ret;
 }
 
-int ObOdpsPartitionDownloaderMgr::init_downloader(common::ObArray<share::ObExternalFileInfo> &external_table_files, const ObString &properties)
-{
+int ObOdpsPartitionDownloaderMgr::init_downloader(int64_t bucket_size) {
   int ret = OB_SUCCESS;
-  int64_t partition_cnt = external_table_files.count();
-  sql::ObExternalFileFormat external_odps_format;
-  if (inited_) {
+  const char *ODPS_TABLE_READER = "OdpsTableReader";
+  const int64_t ITER_ALLOC_TOTAL_LIMIT = 1024 * 1024 * 1024;
+  if (inited_){
     // do nothing
-  } else if (0 == partition_cnt || properties.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected args", K(partition_cnt), K(properties), K(ret));
-  } else if (!odps_mgr_map_.created() &&
-             OB_FAIL(odps_mgr_map_.create(partition_cnt,
-                                          "OdpsTable",
-                                          "OdpsTableReader"))) {
-    LOG_WARN("create hash table failed", K(ret), K(partition_cnt));
-  } else if (OB_FAIL(external_odps_format.load_from_string(properties, arena_alloc_))) {
-    LOG_WARN("failed to init external_odps_format", K(ret));
+  } else if (!odps_mgr_map_.created() && OB_FAIL(odps_mgr_map_.create(bucket_size, "OdpsTable","OdpsTableReader"))) {
+    LOG_WARN("failed to init odps_mgr_map_", K(ret), K(bucket_size));
+  } else if (OB_FAIL(fifo_alloc_.init(common::OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                         ODPS_TABLE_READER,
+                                         MTL_ID(),
+                                         ITER_ALLOC_TOTAL_LIMIT))) {
+    LOG_WARN("failed to init fifo_alloc_", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
-      share::ObExternalFileInfo &odps_partition = external_table_files.at(i);
-      OdpsPartitionDownloader *downloader = NULL;
-      if (0 != odps_partition.file_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected file id", K(ret), K(i), K(odps_partition.file_id_), K(odps_partition.part_id_));
-      } else if (OB_NOT_NULL(odps_mgr_map_.get(odps_partition.part_id_))) {
-        // do nothing
-      } else if (OB_ISNULL(downloader = static_cast<OdpsPartitionDownloader *>(
-                           arena_alloc_.alloc(sizeof(OdpsPartitionDownloader))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory", K(ret), K(sizeof(OdpsPartitionDownloader)));
-      } else if (FALSE_IT(new(downloader)OdpsPartitionDownloader())) {
-      } else if (OB_FAIL(downloader->odps_driver_.init_tunnel(external_odps_format.odps_format_))) {
-        LOG_WARN("failed to init tunnel", K(ret), K(odps_partition.part_id_), K(properties));
-      //odps_partition.file_url_ is odps partition specification, which is a literal string value
-      } else if (OB_FAIL(downloader->odps_driver_.create_downloader(odps_partition.file_url_,
-                                                                    downloader->odps_partition_downloader_))) {
-        LOG_WARN("failed create odps partition downloader", K(ret), K(i), K(odps_partition.part_id_), K(odps_partition.file_url_));
-      } else if (OB_FAIL(odps_mgr_map_.set_refactored(odps_partition.part_id_,
-                                                      reinterpret_cast<int64_t>(downloader)))) {
-        downloader->reset();
-        LOG_WARN("failed to set refactored", K(ret), K(odps_partition.part_id_));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      inited_ = true;
-      LOG_TRACE("succ to init odps downloader", K(ret));
-    }
+    inited_ = true;
+    is_download_ = true;
   }
   return ret;
 }
@@ -2552,11 +2555,35 @@ int ObOdpsPartitionDownloaderMgr::get_odps_downloader(int64_t part_id, apsara::o
   } else if (OB_ISNULL(odps_downloader = reinterpret_cast<OdpsPartitionDownloader *>(value))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected value", K(ret), K(part_id), K(value));
+  } else { // wait tunnel to be ready
+    int64_t wait_times = 0;
+    //timeout is 60s, the initialization of the downloader typically takes under 5 seconds,
+    // and 60 seconds is sufficient for that.
+    int64_t timeout_ts = ObTimeUtility::current_time() + 60000000;
+    while (!odps_downloader->downloader_is_ready_) {
+      odps_downloader->tunnel_ready_cond_.lock();
+      if (!odps_downloader->downloader_is_ready_) {
+        odps_downloader->tunnel_ready_cond_.wait_us(10000); // wait 10 ms every loop
+      }
+      odps_downloader->tunnel_ready_cond_.unlock();
+      if (0 == wait_times % 100) {
+        LOG_TRACE("waiting odps_downloader to be ready", K(wait_times), K(part_id), KP(odps_downloader), K(ret));
+      }
+      if (timeout_ts < ObTimeUtility::current_time()) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("get odps downloader timeout", K(ret), K(part_id));
+        break;
+      }
+      ++wait_times;
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(odps_downloader->odps_partition_downloader_.get())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected value", K(ret), K(part_id), K(value));
   } else {
     downloader = odps_downloader->odps_partition_downloader_;
+    LOG_TRACE("succ to get odps_downloader from map", K(ret), K(part_id));
   }
   return ret;
 }
@@ -2632,13 +2659,20 @@ int ObOdpsPartitionDownloaderMgr::commit_upload()
 int ObOdpsPartitionDownloaderMgr::reset()
 {
   int ret = OB_SUCCESS;
-  DeleteDownloaderFunc delete_func;
+  DeleteDownloaderFunc delete_func(&fifo_alloc_);
   if (!inited_) {
     // do nothing
   } else if (is_download_ && OB_FAIL(odps_mgr_map_.foreach_refactored(delete_func))) {
     LOG_WARN("failed to do foreach", K(ret));
   } else {
+    if (is_download_) {
+      fifo_alloc_.destroy();
+    }
     odps_mgr_map_.destroy();
+  }
+  if (OB_SUCC(ret) && delete_func.err_occurred()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error occurred in DeleteDownloaderFunc", K(ret), K(delete_func.get_err()));
   }
   inited_ = false;
   is_download_ = true;
@@ -2653,9 +2687,16 @@ int ObOdpsPartitionDownloaderMgr::DeleteDownloaderFunc::operator()(common::hash:
   OdpsPartitionDownloader *downloader = reinterpret_cast<OdpsPartitionDownloader *>(value);
   if (OB_ISNULL(downloader)) {
     // ignore ret
-    LOG_WARN("unexpected null ptr", K(ret), K(value), K(part_id));// ret is still OB_SUCCESS
+    err_ = (err_ == ErrType::SUCCESS) ? ErrType::DOWNLOADER_IS_NULL : err_;
+    LOG_WARN("unexpected error in DeleteDownloaderFunc", K(ret), K(value), K(part_id), K(err_));// ret is still OB_SUCCESS
   } else {
     downloader->reset();
+    if (OB_ISNULL(downloader_alloc_)) {
+      err_ = (err_ == ErrType::SUCCESS) ? ErrType::ALLOC_IS_NULL : err_;
+      LOG_WARN("unexpected error in DeleteDownloaderFunc", K(ret), K(value), K(part_id), K(err_));// ret is still OB_SUCCESS
+    } else {
+      downloader_alloc_->free(downloader);
+    }
   }
   return ret;
 }
@@ -2663,6 +2704,7 @@ int ObOdpsPartitionDownloaderMgr::DeleteDownloaderFunc::operator()(common::hash:
 int ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader::reset()
 {
   int ret = OB_SUCCESS;
+  downloader_is_ready_ = false;
   try {
     if (OB_ISNULL(odps_partition_downloader_.get())) {
       ret = OB_ERR_UNEXPECTED;

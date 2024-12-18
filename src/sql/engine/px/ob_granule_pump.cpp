@@ -688,7 +688,7 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret));
 #ifdef OB_BUILD_CPP_ODPS
-    } else if (OB_FAIL(odps_partition_downloader_mgr_.init_map(args.external_table_files_.count()))) {
+    } else if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(args.external_table_files_.count()))) {
       LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret), K(args.external_table_files_.count()));
     } else {
       LOG_TRACE("succ to init odps table partition downloader", K(ret), K(is_odps_downloader_inited()));
@@ -743,7 +743,12 @@ void ObGranulePump::destroy()
 {
   gi_task_array_map_.reset();
 #ifdef OB_BUILD_CPP_ODPS
-  odps_partition_downloader_mgr_.reset();
+  int ret = 0;
+  if (is_odps_downloader_inited()) {
+    LOG_TRACE("destroy odps_partition_downloader_mgr_", K(ret), KP(this), KP(&odps_partition_downloader_mgr_));
+    odps_partition_downloader_mgr_.reset();
+  }
+
 #endif
   pump_args_.reset();
 }
