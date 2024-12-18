@@ -572,8 +572,7 @@ TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
   macro_id.set_third_id(20); // segment_id
   write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, true/*is_sealed*/, write_buf_);
   read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
-  // because offset is 0 and is_sealed segment file write through object storage, is_meta_exist is false
-  check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
 
   // 3. write one new unsealed segment with offset > 0
   macro_id.set_third_id(30); // segment_id
