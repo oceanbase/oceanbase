@@ -477,6 +477,9 @@ int ObSelectLogPlan::allocate_three_stage_group_by(const ObIArray<ObRawExpr*> &r
                                && (groupby_helper.enable_hash_rollup_ ?
                                     !(group_by_exprs.empty() && rollup_exprs.empty()) : !group_by_exprs.empty());
     bool normal_sort_valid = !groupby_helper.force_part_sort_;
+    if (groupby_helper.enable_hash_rollup_ && !rollup_exprs.empty() && part_sort_valid) {// hash rollup use part sort
+      normal_sort_valid = false;
+    }
     if (OB_FAIL(update_part_sort_method(part_sort_valid, normal_sort_valid))) {
       LOG_WARN("fail to update part sort method", K(ret));
     } else if (OB_FAIL(create_merge_group_plan(reduce_exprs,
@@ -576,6 +579,9 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
     //   Partition Sort (rollup_exprs + grouping_id as hash key)
     //     Expand (duplicate rollup exprs)
     part_sort_valid = !(group_by_exprs.empty() && rollup_exprs.empty()) && part_sort_valid;
+    if (part_sort_valid) {
+      normal_sort_valid = false;
+    }
   } else if (group_by_exprs.empty()) {
     part_sort_valid = false;
     /* if normal_sort_valid set as false by hint, will retry by ignore hint */
@@ -1201,12 +1207,6 @@ int ObSelectLogPlan::create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_
   CandidatePlan part_sort_mgb_plan = candidate_plan;
   bool can_ignore_no_part_sort_plan = can_ignore_merge_plan;
   bool ignore_merge_plan = false;
-  // hash rollup must use part sort.
-  // if hash rollup plan is expected, disable normal sort
-  if (!part_sort_valid && !can_ignore_merge_plan) {
-  } else {
-    normal_sort_valid = !(groupby_helper.enable_hash_rollup_ && rollup_exprs.count() > 0);
-  }
   if (part_sort_valid && OB_FAIL(inner_create_merge_group_plan(reduce_exprs,
                                                               group_by_exprs,
                                                               group_directions,
