@@ -892,7 +892,7 @@ int ObLogJoin::append_used_join_hint(ObIArray<const ObHint*> &used_hints)
       if (OB_ISNULL(join_hint = log_join_hint->dist_method_hints_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL", K(ret), K(join_hint));
-      } else if (get_real_dist_method() != join_hint->get_dist_algo()) {
+      } else if (0 == (get_real_dist_method() & join_hint->get_dist_algo())) {
         /* do nothing */
       } else if (OB_FAIL(used_hints.push_back(join_hint))) {
         LOG_WARN("failed to append pq distribute hint", K(ret));

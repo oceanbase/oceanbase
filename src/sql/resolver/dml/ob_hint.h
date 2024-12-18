@@ -970,7 +970,9 @@ public:
   const ObIArray<ObTableInHint> &get_tables() const { return tables_; }
   ObIArray<ObHint*> &get_aj_table_hints() { return aj_table_hints_; }
   const ObIArray<ObHint*> &get_aj_table_hints() const { return aj_table_hints_; }
-  DistAlgo get_dist_algo() const { return dist_algo_; }
+  uint64_t get_dist_algo() const { return DistAlgo::DIST_PARTITION_WISE == dist_algo_
+                                          ? DistAlgo::DIST_PARTITION_WISE | DistAlgo::DIST_EXT_PARTITION_WISE
+                                          : dist_algo_; }
   void set_dist_algo(DistAlgo dist_algo) { dist_algo_ = dist_algo; }
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables), K_(dist_algo), K_(aj_table_hints));
@@ -1027,14 +1029,14 @@ class ObPQSetHint : public ObOptHint
   virtual ~ObPQSetHint() {}
   virtual int print_hint_desc(PlanText &plan_text) const override;
   static bool is_valid_dist_methods(const ObIArray<ObItemType> &dist_methods);
-  static DistAlgo get_dist_algo(const ObIArray<ObItemType> &dist_methods,
+  static uint64_t get_dist_algo(const ObIArray<ObItemType> &dist_methods,
                                 int64_t &random_none_idx);
   static const char* get_dist_method_str(const ObItemType dist_method);
 
   const ObIArray<ObItemType> &get_dist_methods() const { return dist_methods_; }
   ObIArray<ObItemType> &get_dist_methods() { return dist_methods_; }
   int set_pq_set_hint(const DistAlgo dist_algo, const int64_t child_num, const int64_t random_none_idx);
-  DistAlgo get_dist_algo(int64_t &random_none_idx) const { return get_dist_algo(dist_methods_, random_none_idx); }
+  uint64_t get_dist_algo(int64_t &random_none_idx) const { return get_dist_algo(dist_methods_, random_none_idx); }
   const ObString &get_left_branch() const { return left_branch_; }
   void set_left_branch(const ObString &left_branch) { return left_branch_.assign_ptr(left_branch.ptr(), left_branch.length()); }
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_methods), K_(left_branch));

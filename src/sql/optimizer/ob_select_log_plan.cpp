@@ -2233,7 +2233,7 @@ int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &c
   bool is_partition_wise = false;
   bool is_ext_partition_wise = false;
   bool is_set_partition_wise = false;
-  DistAlgo hint_dist_methods = get_log_plan_hint().get_valid_set_dist_algo(&random_none_idx);
+  uint64_t hint_dist_methods = get_log_plan_hint().get_valid_set_dist_algo(&random_none_idx);
   if (OB_ISNULL(select_stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(select_stmt), K(ret));
@@ -2764,7 +2764,7 @@ int ObSelectLogPlan::create_recursive_union_plan(ObLogicalOperator *left_child,
   left_exch_info.dist_method_ = ObPQDistributeMethod::NONE;
   top = NULL;
   uint64_t set_dist_methods = DistAlgo::DIST_BASIC_METHOD | DistAlgo::DIST_PULL_TO_LOCAL;
-  DistAlgo hint_dist_methods = get_log_plan_hint().get_valid_set_dist_algo();
+  uint64_t hint_dist_methods = get_log_plan_hint().get_valid_set_dist_algo();
   if (!ignore_hint && DistAlgo::DIST_INVALID_METHOD != hint_dist_methods) {
     set_dist_methods &= hint_dist_methods;
   }

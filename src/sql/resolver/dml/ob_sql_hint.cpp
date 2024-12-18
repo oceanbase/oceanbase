@@ -1927,9 +1927,9 @@ SetAlgo ObLogPlanHint::get_valid_set_algo() const
   return set_algo;
 }
 
-DistAlgo ObLogPlanHint::get_valid_set_dist_algo(int64_t *random_none_idx /* default NULL */ ) const
+uint64_t ObLogPlanHint::get_valid_set_dist_algo(int64_t *random_none_idx /* default NULL */ ) const
 {
-  DistAlgo set_dist_algo = DistAlgo::DIST_INVALID_METHOD;
+  uint64_t set_dist_algo = DistAlgo::DIST_INVALID_METHOD;
   const ObPQSetHint *pq_set_hint = static_cast<const ObPQSetHint*>(get_normal_hint(T_PQ_SET));
   if (NULL == pq_set_hint) {
     set_dist_algo = is_outline_data_ ? DistAlgo::DIST_BASIC_METHOD
