@@ -8748,6 +8748,17 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
                                                        pullup_aggr))) {
       LOG_WARN("failed to pullup grouping aggr expr", K(ret));
     }
+  } else if (T_FUN_GROUPING_ID == aggr_type && origin_aggr->get_real_param_count() > 0) {
+    ObRawExpr *param_expr = origin_aggr->get_real_param_exprs().at(0);
+    if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(
+          expr_factory, session_info, T_FUN_GROUPING_ID, param_expr, pullup_aggr))) {
+      LOG_WARN("build aggr expr failed", K(ret));
+    }
+    for (int i = 1; OB_SUCC(ret) && i < origin_aggr->get_real_param_count(); i++) {
+      if (OB_FAIL(pullup_aggr->add_real_param_expr(origin_aggr->get_real_param_exprs().at(i)))) {
+        LOG_WARN("add param expr failed", K(ret));
+      }
+    }
   } else if (T_FUN_TOP_FRE_HIST == aggr_type) {
     if (OB_UNLIKELY(4 != origin_aggr->get_real_param_count())) {
       ret = OB_ERR_UNEXPECTED;

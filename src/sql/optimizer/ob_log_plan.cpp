@@ -5234,14 +5234,14 @@ int ObLogPlan::perform_group_by_pushdown(ObLogicalOperator *op)
           LOG_WARN("failed to push back pushdown aggr", K(ret));
         }
       }
-      if (group_by->is_second_stage()) {
-        for (int64_t i = 0; i < group_by->get_distinct_aggr_batch().count(); ++i) {
+      if (OB_SUCC(ret) && group_by->is_second_stage()) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < group_by->get_distinct_aggr_batch().count(); ++i) {
           const ObDistinctAggrBatch &batch = group_by->get_distinct_aggr_batch().at(i);
-          for (int64_t j = 0; j < batch.mocked_aggrs_.count(); ++j) {
+          for (int64_t j = 0; OB_SUCC(ret) && j < batch.mocked_aggrs_.count(); ++j) {
             ObRawExpr *from = batch.mocked_aggrs_.at(j).first;
             ObRawExpr *to = batch.mocked_aggrs_.at(j).second;
 
-            for (int64_t k = 0; k < group_replaced_exprs_.count(); ++k) {
+            for (int64_t k = 0; OB_SUCC(ret) && k < group_replaced_exprs_.count(); ++k) {
               if (group_replaced_exprs_.at(k).first == from) {
                 group_replaced_exprs_.at(k).second = to;
                 if (OB_FAIL(group_replacer_.add_replace_expr(from, to))) {
