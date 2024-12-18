@@ -46,7 +46,6 @@ ObTableLoadCoordinatorCtx::ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx)
     next_session_id_(0),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
-    enable_heart_beat_(false),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -588,6 +587,31 @@ int ObTableLoadCoordinatorCtx::init_partition_ids(const ObIArray<ObTabletID> &ta
         }
       } else {
         LOG_WARN("fail to search tablet ids set", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadCoordinatorCtx::init_partition_location_and_store_infos()
+{
+  int ret = OB_SUCCESS;
+  store_infos_.reset();
+  ObTableLoadArray<ObAddr> all_addr_array;
+  if (OB_FAIL(ObTableLoadPartitionLocation::init_partition_location(partition_ids_,
+                                                                    target_partition_ids_,
+                                                                    partition_location_,
+                                                                    target_partition_location_))) {
+    LOG_WARN("fail to init partition location", KR(ret));
+  } else if (OB_FAIL(partition_location_.get_all_leader(all_addr_array))) {
+    LOG_WARN("fail to get all leader", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
+      StoreInfo store_info;
+      store_info.addr_ = all_addr_array.at(i);
+      store_info.enable_heart_beat_ = false;
+      if (OB_FAIL(store_infos_.push_back(store_info))) {
+        LOG_WARN("fail to push back store info", KR(ret));
       }
     }
   }

@@ -93,11 +93,6 @@ public:
   int set_status_error(int error_code);
   int set_status_abort();
   int check_status(table::ObTableLoadStatusType status) const;
-  OB_INLINE bool enable_heart_beat() const { return enable_heart_beat_; }
-  OB_INLINE void set_enable_heart_beat(bool enable_heart_beat)
-  {
-    enable_heart_beat_ = enable_heart_beat;
-  }
 private:
   int advance_status(table::ObTableLoadStatusType status);
 public:
@@ -118,6 +113,7 @@ public:
   int check_exist_trans(bool &is_exist) const;
   int check_exist_committed_trans(bool &is_exist) const;
   int init_complete();
+  int init_partition_location_and_store_infos();
 private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadSegmentID &segment_id,
@@ -154,6 +150,15 @@ public:
     share::AutoincParam autoinc_param_;
   };
   SessionContext *session_ctx_array_;
+  struct StoreInfo
+  {
+    StoreInfo() : enable_heart_beat_(false) {}
+    ~StoreInfo() {}
+    ObAddr addr_;
+    bool enable_heart_beat_;
+    TO_STRING_KV(K_(addr), K_(enable_heart_beat));
+  };
+  common::ObArray<StoreInfo> store_infos_;
 private:
   struct SegmentCtx : public common::LinkHashValue<table::ObTableLoadSegmentID>
   {
@@ -186,7 +191,6 @@ private:
   TransCtxMap trans_ctx_map_;
   SegmentCtxMap segment_ctx_map_;
   common::ObArray<ObTableLoadTransCtx *> commited_trans_ctx_array_;
-  bool enable_heart_beat_;
   bool is_inited_;
 };
 
