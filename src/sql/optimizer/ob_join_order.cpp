@@ -4989,7 +4989,8 @@ int ObJoinOrder::compute_join_path_relationship(const JoinPath &first_path,
 {
   int ret = OB_SUCCESS;
   relation = DominateRelation::OBJ_EQUAL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(first_path.right_path_) || OB_ISNULL(second_path.right_path_)) {
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(first_path.right_path_) || OB_ISNULL(second_path.right_path_)
+      || OB_ISNULL(first_path.right_path_->parent_) || OB_ISNULL(second_path.right_path_->parent_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(first_path.right_path_), K(second_path.right_path_));
   }
@@ -5023,7 +5024,8 @@ int ObJoinOrder::compute_join_path_relationship(const JoinPath &first_path,
   }
 
   if (OB_SUCC(ret) && DominateRelation::OBJ_EQUAL == relation
-      && first_path.is_nlj_with_param_down() && second_path.is_nlj_with_param_down()) {
+      && first_path.is_nlj_with_param_down() && second_path.is_nlj_with_param_down()
+      && first_path.right_path_->parent_->get_tables().equal(second_path.right_path_->parent_->get_tables())) {
     int64_t first_right_local_rescan = 0;
     int64_t second_right_local_rescan = 0;
     bool first_can_px_batch_rescan = false;
