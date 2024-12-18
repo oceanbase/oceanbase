@@ -2939,11 +2939,15 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
   if (OB_ISNULL(c1) || OB_ISNULL(c2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("compare udt failed due to null udt", K(ret), K(obj1), K(obj2));
-  } else if ((pl::PL_NESTED_TABLE_TYPE != c1->get_type() && pl::PL_VARRAY_TYPE != c1->get_type())
-               || (pl::PL_NESTED_TABLE_TYPE != c2->get_type() && pl::PL_VARRAY_TYPE != c2->get_type())) {
+  } else if ((pl::PL_NESTED_TABLE_TYPE != obj1.get_meta().get_extend_type() && pl::PL_VARRAY_TYPE != obj1.get_meta().get_extend_type())
+               || (pl::PL_NESTED_TABLE_TYPE != obj2.get_meta().get_extend_type() && pl::PL_VARRAY_TYPE != obj2.get_meta().get_extend_type())
+               || (pl::PL_NESTED_TABLE_TYPE != c1->get_type() && pl::PL_VARRAY_TYPE != c1->get_type())
+               || (pl::PL_NESTED_TABLE_TYPE != c2->get_type() && pl::PL_VARRAY_TYPE != c2->get_type())
+               || (T_OBJ_SDO_ELEMINFO_ARRAY == c1->get_id() || T_OBJ_SDO_ELEMINFO_ARRAY == c2->get_id())
+               || (T_OBJ_SDO_ORDINATE_ARRAY == c1->get_id() || T_OBJ_SDO_ORDINATE_ARRAY == c2->get_id())) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "udt compare except nested table or varray");
-    LOG_WARN("not support udt compare except nested table or varray", K(ret), KPC(c1), KPC(c2));
+    LOG_WARN("not support udt compare except nested table or varray", K(ret), K(obj1), K(obj2));
   } else if (c1->get_type() != c2->get_type()
                ||c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type()) {
     ObString op;
