@@ -117,15 +117,17 @@ private:
   void set_stop() { ATOMIC_STORE(&update_enabled_, false); }
   void set_start() { ATOMIC_STORE(&update_enabled_, true); }
 
+  int64_t get_gc_lock_abs_timeout() const;
+
 public:
   static const int64_t GC_LOCK_TIMEOUT = 100_ms; // 100ms
   obsys::ObRWLock wait_lock_;
-  lib::ObMutex gc_lock_;
 
 private:
   storage::ObLS *ls_;
   uint8_t tablet_persist_trigger_;
   bool update_enabled_;
+  mutable common::RWLock gc_rwlock_;
   bool is_inited_;
 };
 
