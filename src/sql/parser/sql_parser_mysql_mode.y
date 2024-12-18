@@ -2803,21 +2803,28 @@ MOD '(' expr ',' expr ')'
       } else if ($3->num_child_ == 2) {
         ParseNode* expr_param = $3->children_[1];
         ParseNode* expr_name = $3->children_[0];
-        if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
+        if (OB_ISNULL(expr_param) || OB_ISNULL(expr_name)) {
+          yyerror(NULL, result, "Incorrect arguments Using CAST (... AS ... ARRAY)\n");
+          YYABORT_PARSE_SQL_ERROR;
+        } else if ((OB_NOT_NULL(expr_name->str_value_)
+            && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
             && expr_param->num_child_ == 2) {
           path = expr_param->children_[1];
           data = expr_param->children_[0];
-        } else if ((OB_NOT_NULL(expr_name->str_value_)
-                   && strcasecmp(expr_name->str_value_, "JSON_UNQUOTE") == 0)
+        } else if (OB_NOT_NULL(expr_name->str_value_)
+                   && strcasecmp(expr_name->str_value_, "JSON_UNQUOTE") == 0
+                   && expr_param->num_child_ >= 1
                    && OB_NOT_NULL(expr_param->children_[0])) {
           ParseNode* param = expr_param->children_[0];
-          if (param->type_ == T_FUN_SYS_JSON_VALUE) {
+          if (param->type_ == T_FUN_SYS_JSON_VALUE && param->num_child_ == 2) {
             path = param->children_[1];
             data = param->children_[0];
-          } else if (expr_param->children_[0]->num_child_ >= 2) {
-            expr_name = expr_param->children_[0]->children_[0];
-            expr_param = expr_param->children_[0]->children_[1];
-            if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
+          } else if (param->num_child_ >= 2) {
+            expr_name = param->children_[0];
+            expr_param = param->children_[1];
+            if (OB_ISNULL(expr_param) || OB_ISNULL(expr_name)) {
+            } else if (OB_NOT_NULL(expr_name->str_value_)
+              && (strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
               && expr_param->num_child_ == 2) {
               path = expr_param->children_[1];
               data = expr_param->children_[0];
