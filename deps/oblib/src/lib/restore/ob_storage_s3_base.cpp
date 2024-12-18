@@ -237,7 +237,8 @@ bool ObS3Client::is_stopped() const
 bool ObS3Client::try_stop(const int64_t timeout)
 {
   bool is_stopped = true;
-  if (OB_SUCCESS == lock_.wrlock(timeout)) {
+  const int64_t abs_timeout_us = ObTimeUtility::current_time() + timeout;
+  if (OB_SUCCESS == lock_.wrlock(abs_timeout_us)) {
     if (is_inited_) {
       const int64_t cur_time_us = ObTimeUtility::current_time();
       if (ref_cnt_ <= 0
