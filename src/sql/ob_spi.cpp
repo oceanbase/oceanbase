@@ -9075,7 +9075,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
       if (exec_params.at(i).is_pl_extend()) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(exec_params.at(i)))) {
-          LOG_WARN("destruct obj failed", K(ret), K(exec_params.at(i)));
+          LOG_WARN("destruct obj failed", K(ret), K(tmp_ret), K(exec_params.at(i)));
         }
       }
     }
@@ -9083,7 +9083,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
         && ob_is_extend(routine_info->get_ret_type()->get_obj_type())) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(tmp_result))) {
-        LOG_WARN("destruct obj failed", K(ret), K(tmp_result));
+        LOG_WARN("destruct obj failed", K(ret), K(tmp_ret), K(tmp_result));
       }
     }
     if (OB_SUCC(ret) && NULL != result && !result->is_null() && result->is_ext()) {
