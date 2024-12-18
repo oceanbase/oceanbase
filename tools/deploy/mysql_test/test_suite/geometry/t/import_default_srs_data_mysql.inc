@@ -15,7 +15,7 @@ let $c1 = query_get_value(select count(*) as cnt from oceanbase.__all_spatial_re
 
 if ($c1 != 5160)
 {
-  --source mysql_test/test_suite/geometry/t/default_srs_data_mysql.sql
+  alter system load module data module=gis tenant=mysql infile='etc/';
   sleep 30;
 }
 
