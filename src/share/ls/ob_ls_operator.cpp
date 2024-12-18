@@ -36,6 +36,7 @@
 #include "logservice/palf/log_define.h"//SCN
 #include "share/scn.h"//SCN
 #include "share/ls/ob_ls_status_operator.h"
+#include "rootserver/mview/ob_replica_safe_check_task.h" //ObReplicaSafeCheckTask
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -525,6 +526,9 @@ int ObLSAttrOperator::update_ls_status(const ObLSID &id,
       LOG_WARN("failed to start transaction", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(update_ls_status_in_trans(id, old_status, new_status, working_sw_status, trans))) {
       LOG_WARN("failed to update ls status in trans", KR(ret), K(id), K(old_status), K(new_status));
+    } else if ((OB_LS_CREATING == old_status && OB_LS_NORMAL == new_status)
+               && OB_FAIL(ObReplicaSafeCheckTask::create_ls_with_tenant_mv_merge_scn(tenant_id_, id, trans))) {
+      LOG_WARN("failed to udpate ls when get tenant mv merge scn", KR(ret), K(id), K(tenant_id_));
     }
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;

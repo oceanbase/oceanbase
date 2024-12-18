@@ -13195,7 +13195,8 @@ int ObCollectMvMergeInfoResult::init(const ObMajorMVMergeInfo &mv_merge_info, co
   int ret = OB_SUCCESS;
   if (!mv_merge_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", KR(ret), K(mv_merge_info));
+    ret_ = ret;
+    LOG_WARN("invalid arguments", KR(ret), K(mv_merge_info), K(ret_));
   } else {
     mv_merge_info_ = mv_merge_info;
     ret_ = err_ret;

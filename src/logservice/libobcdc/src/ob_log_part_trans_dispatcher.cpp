@@ -209,6 +209,8 @@ int PartTransDispatcher::handle_before_fetcher_dispatch_(PartTransTask &task)
     if (OB_FAIL(handle_dml_trans_before_fetcher_dispatch_(task))) {
       LOG_ERROR("handle_dml_trans_before_fetcher_dispatch_ fail", KR(ret), K(task));
     }
+  } else if (task.is_ls_op_trans()) {
+    task.set_data_ready();
   } else {
     // do nothing
   }

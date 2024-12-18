@@ -422,7 +422,7 @@ int ObLogSysLsTaskHandler::dispatch_task_(
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid tenant", KR(ret), K(is_tenant_served), K(tenant));
   } else {
-    if (task->is_ddl_trans()) {
+    if (task->is_ddl_trans() || task->is_ls_op_trans()) {
       if (OB_FAIL(sequencer_->push(task, stop_flag_))) {
         LOG_ERROR("sequencer_ push fail", KR(ret), KPC(task));
       }

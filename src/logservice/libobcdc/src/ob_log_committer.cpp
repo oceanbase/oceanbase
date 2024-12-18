@@ -265,7 +265,7 @@ int ObLogCommitter::push(PartTransTask *task,
   }
   // DDL tasks
   // Note: The is_ddl_offline_task() task is an offline task and is not specially handled here
-  else if (task->is_ddl_trans()) {
+  else if (task->is_ddl_trans() || task->is_ls_op_trans()) {
    const int64_t seq = task->get_global_trans_seq();
 
    if (OB_FAIL(trans_committer_queue_.set(seq, task))) {
@@ -886,7 +886,8 @@ int ObLogCommitter::handle_ddl_task_(PartTransTask *ddl_task)
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
   } else if (OB_ISNULL(ddl_task)
-      || (OB_UNLIKELY(! ddl_task->is_ddl_trans()))) {
+      || (OB_UNLIKELY(! ddl_task->is_ls_op_trans())
+      && OB_UNLIKELY(! ddl_task->is_ddl_trans()))) {
     LOG_ERROR("invalid ddl task", KPC(ddl_task));
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -1015,7 +1016,7 @@ int ObLogCommitter::handle_task_(PartTransTask *participants)
     ret = OB_NOT_INIT;
   } else if (OB_ISNULL(participants)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (participants->is_ddl_trans()) {
+  } else if (participants->is_ddl_trans() || participants->is_ls_op_trans()) {
     if (OB_FAIL(handle_ddl_task_(participants))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("handle_ddl_task_ fail", KR(ret), KPC(participants));

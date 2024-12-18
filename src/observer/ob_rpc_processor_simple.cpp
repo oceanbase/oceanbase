@@ -3590,6 +3590,7 @@ int ObResourceLimitCalculatorP::process()
 int ObCollectMvMergeInfoP::process()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObMajorMVMergeInfo merge_info;
   const share::ObLSID ls_id = arg_.get_ls_id();
   const uint64_t tenant_id = arg_.get_tenant_id();
@@ -3615,9 +3616,11 @@ int ObCollectMvMergeInfoP::process()
         LOG_WARN("it is not leader, cannot collect merge info", K(ret), K(ls_id), K(role), K(arg_));
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(result_.init(merge_info, ret))) {
-      LOG_WARN("init collect mv merge info result failed", K(ret));
+    if (OB_TMP_FAIL(result_.init(merge_info, ret))) {
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
+      LOG_WARN("init collect mv merge info result failed", K(ret), K(tmp_ret), K(merge_info));
     }
   }
   return ret;

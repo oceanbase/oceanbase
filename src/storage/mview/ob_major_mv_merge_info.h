@@ -51,7 +51,7 @@ public:
   ~ObUpdateMergeScnArg() = default;
   bool is_valid() const;
   void reset();
-
+  int init(const share::ObLSID &ls_id, const share::SCN &merge_scn);
   TO_STRING_KV(K_(ls_id), K_(merge_scn));
 
   share::ObLSID ls_id_;
@@ -104,6 +104,20 @@ struct ObMVUpdateSCNHelper
   {
     return OB_SUCCESS;
   }
+};
+
+struct ObMVMergeSCNHelper
+{
+  static int on_register(
+      const char *buf,
+      const int64_t len,
+      mds::BufferCtx &ctx);
+
+  static int on_replay(
+      const char *buf,
+      const int64_t len,
+      const share::SCN scn,
+      mds::BufferCtx &ctx);
 };
 
 struct ObMVCheckReplicaHelper

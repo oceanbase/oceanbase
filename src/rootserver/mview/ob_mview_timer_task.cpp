@@ -177,17 +177,15 @@ int ObMViewTimerTask::check_mview_last_refresh_scn(const uint64_t tenant_id,
         EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(
         *mysql_result, "MIN_LAST_REFRESH_SCN", min_last_refresh_scn, uint64_t,
         true/*skip null*/, false /*skip column*/, 0/*default value*/);
-        if (OB_SUCC(ret)) {
-          if (0 == min_last_refresh_scn) {
-            last_refresh_scn.set_min();
-          } else {
-            last_refresh_scn.convert_from_ts(min_last_refresh_scn);
-          }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(last_refresh_scn.convert_for_inner_table_field(min_last_refresh_scn))){
+          LOG_WARN("failed to convert for inner table filed", K(ret),
+                    K(min_last_refresh_scn), K(last_refresh_scn));
         }
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (last_refresh_scn.is_min()) {
+    } else if (last_refresh_scn.is_min() || last_refresh_scn.is_base_scn()) {
       // major mv merge scn is zero or one
     } else if (last_refresh_scn == tenant_mv_merge_scn) {
     } else {

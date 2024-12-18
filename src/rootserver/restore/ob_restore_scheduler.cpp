@@ -1871,6 +1871,8 @@ int ObRestoreScheduler::try_collect_ls_mv_merge_scn_(const share::SCN &major_mv_
       const ObLSAttr &ls_attr = ls_attr_array.at(i);
       if (ls_attr.get_ls_id().is_sys_ls()) {
         // skip sys ls
+      } else if (OB_LS_NORMAL != ls_attr.get_ls_status()) {
+        LOG_INFO("skip collect not normal ls", K(ls_attr), K(user_tenant_id));
       } else if (OB_FAIL(ObCollectMvMergeInfoTask::
                          collect_ls_member_merge_info(user_tenant_id, ls_attr.get_ls_id(), merge_scn))) {
         LOG_WARN("fail to collect ls member merge scn", KR(ret), K(ls_attr), K(user_tenant_id));

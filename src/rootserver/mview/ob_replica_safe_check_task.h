@@ -88,6 +88,10 @@ public:
   // for TimerTask
   void runTimerTask() override;
 
+  static int create_ls_with_tenant_mv_merge_scn(const uint64_t tenant_id,
+                                                const share::ObLSID &ls_id,
+                                                common::ObMySQLTransaction &trans);
+
   TO_STRING_KV(K_(status), K_(in_sched), K_(is_stop), K_(is_inited), K_(merge_scn), K_(max_transfer_task_id), K_(ls_cache));
 private:
   static const int64_t CHECK_INTERVAL = 30LL * 1000 * 1000;
@@ -118,6 +122,11 @@ private:
       bool &is_empty);
   static int get_transfer_task_id(
     share::ObTransferTaskID &max_transfer_task_id);
+
+  static int register_mds_in_trans(
+      const transaction::ObTxDataSourceType type,
+      const ObUpdateMergeScnArg &arg,
+      common::ObMySQLTransaction &trans);
 
 private:
   StatusType status_;
