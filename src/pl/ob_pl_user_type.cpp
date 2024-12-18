@@ -323,6 +323,38 @@ int ObUserDefinedType::destruct_objparam(ObIAllocator &alloc, ObObj &src, ObSQLS
   return ret;
 }
 
+int ObUserDefinedType::reset_record(ObObj &src, ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+
+  ObPLRecord *record = reinterpret_cast<ObPLRecord*>(src.get_ext());
+  CK (OB_NOT_NULL(record));
+  if (OB_SUCC(ret) && OB_NOT_NULL(record->get_allocator())) {
+    ObPLAllocator1 *pl_allocator = dynamic_cast<ObPLAllocator1 *>(record->get_allocator());
+    CK (OB_NOT_NULL(pl_allocator));
+    for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
+      ObObj &obj = record->get_element()[i];
+      if (obj.is_pl_extend()) {
+        int8_t extend_type = src.get_meta().get_extend_type();
+        if (PL_RECORD_TYPE == extend_type) {
+          OZ (SMART_CALL(reset_record(obj, session)));
+        } else if (PL_NESTED_TABLE_TYPE == extend_type ||
+                  PL_ASSOCIATIVE_ARRAY_TYPE == extend_type ||
+                  PL_VARRAY_TYPE == extend_type) {
+          OZ (SMART_CALL(destruct_obj(obj, session, true)));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected type", K(ret), K(obj), K(extend_type), KPC(record));
+        }
+      } else {
+        OZ (SMART_CALL(destruct_objparam(*pl_allocator, obj, session, true)));
+      }
+    }
+  }
+
+  return ret;
+}
+
 // keep_composite_attr = true, 保留其allocator属性，对于record而言，保留data域
 // 否则, 所有内存都清理
 int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool keep_composite_attr)
