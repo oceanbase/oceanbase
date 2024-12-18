@@ -2036,6 +2036,8 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
       const int64_t check_count = need_check_tablets.count();
       ObArray<int> ret_codes;
       ObArray<int64_t> tmp_snapshots;
+      int64_t retry_ret_count = 0;
+      int64_t succ_count = 0;
       switch (wait_type_) {
         case WaitTransType::WAIT_SCHEMA_TRANS: {
           if (OB_FAIL(check_schema_trans_end(
@@ -2065,14 +2067,13 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
         LOG_WARN("check count not match", K(ret),
             K(check_count), K(ret_codes.count()), K(tmp_snapshots.count()));
       } else {
-        int64_t succ_count = 0;
         tablet_count = check_count;
         for (int64_t i = 0; OB_SUCC(ret) && i < check_count; ++i) {
           if (OB_SUCCESS == ret_codes.at(i) && tmp_snapshots.at(i) > 0) {
             snapshot_array_.at(tablet_pos_indexes.at(i)) = tmp_snapshots.at(i);
             ++succ_count;
           } else if (ObIDDLTask::in_ddl_retry_white_list(ret_codes.at(i))) {
-            // need retry
+            retry_ret_count += 1;
           } else if (OB_SUCCESS != ret_codes.at(i)) {
             ret = ret_codes.at(i);
             LOG_WARN("failed return code", K(ret), K(i), K(need_check_tablets.at(i)));
@@ -2086,8 +2087,13 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
       } else if (!need_wait_trans_end && !is_trans_end_) {
         // No need to wait trans end at the phase of obtain_snapshot,
         // and meanwhile the snapshot version can be obtained is sured.
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected", K(ret), K(need_check_tablets), K(ret_codes), K(tmp_snapshots));
+        if (check_count == (succ_count + retry_ret_count)) {
+          ret = OB_EAGAIN;
+          LOG_WARN("all failed ret code are in retry white list, task retry again", K(ret), K(ret_codes));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected", K(ret), K(need_check_tablets), K(ret_codes), K(tmp_snapshots));
+        }
       }
     }
   }
