@@ -4444,7 +4444,7 @@ int ObTransformUtils::compute_set_stmt_property(const ObSelectStmt *stmt,
                                               check_helper.session_info_,
                                               stmt, set_exprs, equal_conds))) {
     LOG_WARN("failed to get equal set conditions", K(ret));
-  } else if (FALSE_IT(res_info.equal_sets_.reuse())) {
+  } else if (FALSE_IT(res_info.equal_sets_.reset())) {
   } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(check_helper.alloc_, equal_conds,
                                                         tmp_equal_sets, res_info.equal_sets_))) {
     LOG_WARN("failed to compute compute equal set", K(ret));
@@ -4598,7 +4598,7 @@ void ObTransformUtils::UniqueCheckInfo::reset()
 {
   table_set_.clear_all();
   const_exprs_.reuse();
-  equal_sets_.reuse();
+  equal_sets_.reset();
   fd_sets_.reuse();
   candi_fd_sets_.reuse();
   not_null_.reuse();
@@ -16707,7 +16707,7 @@ int ObTransformUtils::check_const_select(ObTransformerCtx *ctx,
   if (OB_ISNULL(ctx) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(ctx), K(stmt));
-  } else if (OB_FALSE_IT(ctx->equal_sets_.reuse())) {
+  } else if (OB_FALSE_IT(ctx->equal_sets_.reset())) {
   } else if (OB_FAIL(stmt->get_stmt_equal_sets(ctx->equal_sets_, alloc, true, true))) {
     LOG_WARN("failed to get stmt equal sets", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(stmt->get_condition_exprs(),
@@ -16723,7 +16723,7 @@ int ObTransformUtils::check_const_select(ObTransformerCtx *ctx,
     }
   }
   if (OB_SUCC(ret)) {
-    ctx->equal_sets_.reuse();
+    ctx->equal_sets_.reset();
   }
   return ret;
 }
