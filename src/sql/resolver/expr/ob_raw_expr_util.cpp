@@ -5661,8 +5661,10 @@ int ObRawExprUtils::build_const_int_expr(ObRawExprFactory &expr_factory, ObObjTy
     LOG_WARN("failed to extract expr info", K(ret));
   } else {
     ObObj obj;
+    ObAccuracy int_acc = ObAccuracy::DDL_DEFAULT_ACCURACY[type];
     obj.set_int(type, int_value);
     c_expr->set_value(obj);
+    c_expr->set_accuracy(int_acc);
     expr = c_expr;
   }
   return ret;
@@ -5676,8 +5678,10 @@ int ObRawExprUtils::build_const_uint_expr(ObRawExprFactory &expr_factory, ObObjT
     LOG_WARN("fail to create const raw c_expr", K(ret));
   } else {
     ObObj obj;
+    ObAccuracy int_acc = ObAccuracy::DDL_DEFAULT_ACCURACY[type];
     obj.set_uint(type, uint_value);
     c_expr->set_value(obj);
+    c_expr->set_accuracy(int_acc);
     expr = c_expr;
   }
   return ret;
