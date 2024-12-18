@@ -21,7 +21,6 @@ extern void __init_vec_cast_func3();
 extern void __init_vec_cast_func4();
 extern void __init_vec_cast_func5();
 extern void __init_vec_cast_func6();
-extern void __init_vec_cast_func7();
 
 int __init_all_vec_cast_funcs()
 {
@@ -32,7 +31,6 @@ int __init_all_vec_cast_funcs()
   __init_vec_cast_func4();
   __init_vec_cast_func5();
   __init_vec_cast_func6();
-  __init_vec_cast_func7();
   return 0;
 }
 } // end sq

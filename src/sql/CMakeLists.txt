@@ -857,7 +857,6 @@ ob_set_subtarget(ob_sql ALONE
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part4.cpp
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part5.cpp
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part6.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part7.cpp
   engine/expr/vector_cast/vector_cast_compile/vector_cast_all.cpp
   engine/expr/vector_cast/vector_cast.cpp
 )
