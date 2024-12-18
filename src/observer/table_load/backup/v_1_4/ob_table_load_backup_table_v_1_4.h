@@ -40,7 +40,7 @@ public:
   int scan(int64_t part_idx, ObNewRowIterator *&iter, ObIAllocator &allocator,
            int64_t subpart_count = 1, int64_t subpart_idx = 0) override;
   int64_t get_partition_count() const override { return part_list_.count(); }
-  TO_STRING_KV(K(table_id_), K(data_path_), K(meta_path_), K(column_ids_), K(part_list_));
+  TO_STRING_KV(K(backup_table_id_), K(backup_tenant_id_), K(data_path_), K(meta_path_), K(column_ids_), K(part_list_));
 private:
   int parse_path(const ObString &path);
   int get_column_ids();
@@ -49,7 +49,8 @@ private:
   ObArenaAllocator allocator_;
   share::ObBackupStorageInfo storage_info_;
   ObSchemaInfo schema_info_;
-  ObString table_id_;
+  ObString backup_table_id_;
+  ObString backup_tenant_id_;
   ObString data_path_;
   ObString meta_path_;
   ObArray<int64_t> column_ids_;
