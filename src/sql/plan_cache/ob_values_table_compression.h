@@ -43,6 +43,7 @@ public:
                                           const ObBitSet<> &neg_param_index,
                                           const ObBitSet<> &not_param_index,
                                           const ObBitSet<> &must_be_positive_idx,
+                                          const ObBitSet<> &formalize_prec_idx,
                                           ParamStore *&ab_params);
   // for resolve array params after handler_parser
   static int resolve_params_for_values_clause(ObPlanCacheCtx &pc_ctx);

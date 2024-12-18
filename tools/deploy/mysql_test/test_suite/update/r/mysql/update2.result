@@ -2597,7 +2597,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t2: ({t2: (t2.__pk_increment, t2.a, t2.b, t2.c, t2.d)})}]),
       update([t2.d=column_conv(CHAR,utf8mb4_general_ci,length:2,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(10, VARCHAR(1048576))), CHAR(1048576)))])
-  1 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(4, 0))]), rowset=16
+  1 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(20, 0))]), rowset=16
       access([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), partitions(p0)
       limit(5), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
@@ -2620,7 +2620,7 @@ Outputs & filters:
       update([t2.d=column_conv(CHAR,utf8mb4_general_ci,length:2,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(10, VARCHAR(1048576))), CHAR(1048576)))])
   1 - output([t2.__pk_increment], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       sort_keys([t2.a, ASC], [t2.c, ASC]), topn(5)
-  2 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(4, 0))]), rowset=16
+  2 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(20, 0))]), rowset=16
       access([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true

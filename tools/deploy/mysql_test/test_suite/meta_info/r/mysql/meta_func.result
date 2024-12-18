@@ -94,7 +94,7 @@ CEMPNUM
 create table t3(a int, b decimal, c varchar(10));
 select ifnull(0, 0.0);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ifnull(0, 0.0)	246	7	3	Y	32896	1	63
+def					ifnull(0, 0.0)	246	23	3	Y	32896	1	63
 ifnull(0, 0.0)
 0.0
 insert into t3 values(0, 2.4, "123");
@@ -133,7 +133,7 @@ CREATE TABLE t2 (a VARCHAR(32) NOT NULL);
 INSERT INTO t2 VALUES ('a');
 SELECT 1 FROM t2 GROUP BY @a:=UNIX_TIMESTAMP(a);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					1	8	4	1	N	32897	0	63
+def					1	8	20	1	N	32897	0	63
 1
 1
 SELECT a, UNIX_TIMESTAMP(a), UNIX_TIMESTAMP('a') FROM t2;

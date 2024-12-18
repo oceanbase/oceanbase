@@ -403,6 +403,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
                                                   const ObBitSet<> &neg_param_index,
                                                   const ObBitSet<> &not_param_index,
                                                   const ObBitSet<> &must_be_positive_idx,
+                                                  const ObBitSet<> &formalize_prec_idx,
                                                   ParamStore *&ab_params)
 {
   int ret = OB_SUCCESS;
@@ -442,7 +443,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
       for (; OB_SUCC(ret) && raw_idx < array_idx; raw_idx++) {
         if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_param_store, stmt_type,
                     param_charset_type.at(raw_idx), neg_param_index, not_param_index,
-                    must_be_positive_idx, pc_ctx.fp_result_.raw_params_.at(raw_idx), raw_idx,
+                    must_be_positive_idx, formalize_prec_idx, pc_ctx.fp_result_.raw_params_.at(raw_idx), raw_idx,
                     obj_param, is_param, enable_decimal_int))) {
           LOG_WARN("failed to resolver param", K(ret), K(raw_idx));
         } else if (!is_param) {
@@ -468,7 +469,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
           for (int64_t k = 0; OB_SUCC(ret) && k < batch_num; k++) {
             if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_param_store, stmt_type,
                         param_charset_type.at(raw_idx), neg_param_index, not_param_index,
-                        must_be_positive_idx, raw_array_param->at(k), raw_idx,
+                        must_be_positive_idx, formalize_prec_idx, raw_array_param->at(k), raw_idx,
                         array_param_ptr->data_[k], is_param, enable_decimal_int))) {
               LOG_WARN("failed to resolver param", K(ret), K(k), K(raw_idx), K(j));
             } else {
@@ -534,7 +535,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
     for (; OB_SUCC(ret) && raw_idx < raw_param_cnt; raw_idx++) {
       if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_param_store, stmt_type,
                   param_charset_type.at(raw_idx), neg_param_index, not_param_index,
-                  must_be_positive_idx, pc_ctx.fp_result_.raw_params_.at(raw_idx), raw_idx,
+                  must_be_positive_idx, formalize_prec_idx, pc_ctx.fp_result_.raw_params_.at(raw_idx), raw_idx,
                   obj_param, is_param, enable_decimal_int))) {
         LOG_WARN("failed to resolver param", K(ret), K(raw_idx));
       } else if (!is_param) {
@@ -617,7 +618,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
           for (int64_t k = 0; OB_SUCC(ret) && k < batch_num; k++) {
             if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_param_store, stmt::T_SELECT,
                         param_charset_type.at(raw_idx), bit_set_dummy, bit_set_dummy,
-                        bit_set_dummy, raw_array_param->at(k), raw_idx,
+                        bit_set_dummy, bit_set_dummy, raw_array_param->at(k), raw_idx,
                         array_param_ptr->data_[k], is_param, enable_decimal_int))) {
               LOG_WARN("failed to resolver param", K(ret), K(k), K(raw_idx), K(j));
             } else {

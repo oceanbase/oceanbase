@@ -2623,7 +2623,9 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                                    const ObSQLMode sql_mode,
                                    bool enable_decimal_int_type,
                                    const ObCompatType compat_type,
-                                   bool is_from_pl /* false */)
+                                   bool use_plan_cache,
+                                   bool is_from_pl /* false */,
+                                   bool formalize_int_precision /* false */)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ < T_INVALID) || OB_UNLIKELY(node->type_ >= T_MAX_CONST)) {
@@ -2928,19 +2930,23 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
         int16_t min_int_precision = tenant_config.is_valid() ? tenant_config->_min_const_integer_precision : 1;
         int16_t formalized_prec = static_cast<int16_t>(node->str_len_);
         // for constant integers, reset precision to 4/8/16/20
-        if (!is_from_pl && lib::is_mysql_mode() && enable_decimal_int_type
+        if (!is_from_pl && lib::is_mysql_mode() && enable_decimal_int_type && use_plan_cache
             && !(ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type))) {
           int16_t node_prec = static_cast<int16_t>(node->str_len_);
-          if (node_prec <= 4) {
-            formalized_prec = 4;
-          } else if (node_prec <= 8) {
-            formalized_prec = 8;
-          } else if (node_prec <= 16) {
-            formalized_prec = 16;
+          if (formalize_int_precision) {
+            if (node_prec <= 4) {
+              formalized_prec = 4;
+            } else if (node_prec <= 8) {
+              formalized_prec = 8;
+            } else if (node_prec <= 16) {
+              formalized_prec = 16;
+            } else {
+              formalized_prec = 20;
+            }
+            formalized_prec = MAX(min_int_precision, formalized_prec);
           } else {
             formalized_prec = 20;
           }
-          formalized_prec = MAX(min_int_precision, formalized_prec);
         }
         val.set_precision(formalized_prec);
         val.set_length(static_cast<int16_t>(node->str_len_));
@@ -10070,6 +10076,7 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                                     const ObBitSet<> &neg_param_index,
                                     const ObBitSet<> &not_param_index,
                                     const ObBitSet<> &must_be_positive_idx,
+                                    const ObBitSet<> &formalize_prec_idx,
                                     const ObPCParam *pc_param,
                                     const int64_t param_idx,
                                     ObObjParam &obj_param,
@@ -10120,7 +10127,10 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                        static_cast<ObCollationType>(server_collation), NULL,
                        session.get_sql_mode(),
                        enable_decimal_int,
-                       compat_type))) {
+                       compat_type,
+                       session.get_local_ob_enable_plan_cache(),
+                       false, /* is_from_pl */
+                       formalize_prec_idx.has_member(param_idx)))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (FALSE_IT(obj_param.set_raw_text_info(static_cast<int32_t>(raw_param->raw_sql_offset_),
                                                     static_cast<int32_t>(raw_param->text_len_)))) {

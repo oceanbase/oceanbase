@@ -381,7 +381,9 @@ public:
                            const ObSQLMode mode,
                            bool enable_decimal_int_type,
                            const ObCompatType compat_type,
-                           bool is_from_pl = false);
+                           bool use_plan_cache,
+                           bool is_from_pl = false,
+                           bool formalize_int_precision = false);
 
   static int set_string_val_charset(ObIAllocator &allocator,
                                     ObObjParam &val,
@@ -878,6 +880,7 @@ public:
                             const ObBitSet<> &neg_param_index,
                             const ObBitSet<> &not_param_index,
                             const ObBitSet<> &must_be_positive_idx,
+                            const ObBitSet<> &formalize_prec_idx,
                             const ObPCParam *pc_param,
                             const int64_t param_idx,
                             ObObjParam &obj_param,

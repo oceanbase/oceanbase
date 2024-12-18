@@ -233,7 +233,8 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
                                                         static_cast<ObCollationType>(server_collation),
                                                         NULL, session->get_sql_mode(),
                                                         enable_decimal_int,
-                                                        compat_type))) {
+                                                        compat_type,
+                                                        session->get_local_ob_enable_plan_cache()))) {
         LOG_WARN("fail to resolve const", K(ret));
       } else if (OB_FAIL(add_param_to_param_store(value, param_store))) {
         LOG_WARN("failed to add param to param store", K(ret), K(value), K(param_store));

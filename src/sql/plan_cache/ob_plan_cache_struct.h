@@ -548,6 +548,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
 
   bool is_arraybinding_;
   bool exist_local_plan_;
+  common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator, true> formalize_prec_index_;
 };
 
 struct ObPlanCacheStat

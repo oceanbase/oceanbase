@@ -902,7 +902,7 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_MIN(10)])
  11 - output(nil), filter(nil), rowset=256
       access(nil)
- 12 - output([1]), filter([cast(table100_bigint.col_char_20, DECIMAL(-1, -1)) > cast(0, DECIMAL(4, 0))]), rowset=256
+ 12 - output([1]), filter([cast(table100_bigint.col_char_20, DECIMAL(-1, -1)) > cast(0, DECIMAL(20, 0))]), rowset=256
       access([table100_bigint.col_char_20]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([table100_bigint.pk]), range(MIN ; MAX)always true

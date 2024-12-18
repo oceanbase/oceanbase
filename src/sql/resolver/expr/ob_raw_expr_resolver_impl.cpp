@@ -3102,7 +3102,9 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              session_info->get_sql_mode(),
                                              enable_decimal_int, // FIXME: enable decimal int
                                              compat_type,
-                                             nullptr != ctx_.secondary_namespace_))) {
+                                             session_info->get_local_ob_enable_plan_cache(),
+                                             nullptr != ctx_.secondary_namespace_,
+                                             ctx_.formalize_const_int_prec_))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(lib::is_mysql_mode() && node.type_ == T_NCHAR ?
                                                                               T_VARCHAR : node.type_, c_expr))) {
@@ -4054,16 +4056,27 @@ int ObRawExprResolverImpl::process_operator_node(const ParseNode *node, ObRawExp
   ObRawExpr *sub_expr2 = NULL;
   ObOpRawExpr *b_expr = NULL;
   bool happened = false;
+  bool formalize_const_int_prec = false;
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(node));
   } else if (OB_UNLIKELY(2 != node->num_child_) || OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid node children", K(ret), K_(node->num_child), K_(node->children), K_(node->type));
+  } else if (T_OP_DIV == node->type_
+            || T_OP_MINUS == node->type_
+            || T_OP_ADD == node->type_
+            || T_OP_DIV == node->type_) {
+    formalize_const_int_prec = true;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(ctx_.formalize_const_int_prec_ = formalize_const_int_prec)) {
   } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[0], sub_expr1)))) {
     LOG_WARN("resolve left child failed", K(ret));
+  } else if (FALSE_IT(ctx_.formalize_const_int_prec_ = formalize_const_int_prec)) {
   } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], sub_expr2)))) {
     LOG_WARN("resolve right child failed", K(ret));
+  } else if (FALSE_IT(ctx_.formalize_const_int_prec_ = false)) {
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, b_expr))) {
     LOG_WARN("create ObOpRawExpr failed", K(ret));
   } else if (OB_ISNULL(expr = b_expr)) {
