@@ -936,8 +936,10 @@ public :
   {
     int32_t len = 0;
     if (this->data_container_ == NULL) {
-      uint32_t last_idx = this->length_ > 0 ? this->length_ - 1 : 0;
-      len = this->length_ * sizeof(uint8_t) + this->length_ * sizeof(uint32_t) + this->offsets_[last_idx];
+      if (this->length_ > 0) {
+        uint32_t last_idx = this->length_ - 1;
+        len = this->length_ * sizeof(uint8_t) + this->length_ * sizeof(uint32_t) + this->offsets_[last_idx];
+      }
     } else {
       len = sizeof(uint8_t) * data_container_->null_bitmaps_.size()
                                         + sizeof(uint32_t) * data_container_->offsets_.size()

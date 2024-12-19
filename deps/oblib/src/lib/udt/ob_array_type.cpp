@@ -609,12 +609,14 @@ int ObArrayBinary::get_data_binary(char *res_buf, int64_t buf_len)
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "buf len isn't enough", K(ret), K(buf_len));
   } else if (data_container_ == NULL) {
-    uint32_t last_idx = length_ > 0 ? length_ - 1 : 0;
-    MEMCPY(res_buf + pos, reinterpret_cast<char *>(null_bitmaps_), sizeof(uint8_t) * length_);
-    pos += sizeof(uint8_t) * length_;
-    MEMCPY(res_buf + pos, reinterpret_cast<char *>(offsets_), sizeof(uint32_t) * length_);
-    pos += sizeof(uint32_t) * length_;
-    MEMCPY(res_buf + pos, data_, offsets_[last_idx]);
+    if (length_ > 0) {
+      uint32_t last_idx = length_ - 1;
+      MEMCPY(res_buf + pos, reinterpret_cast<char *>(null_bitmaps_), sizeof(uint8_t) * length_);
+      pos += sizeof(uint8_t) * length_;
+      MEMCPY(res_buf + pos, reinterpret_cast<char *>(offsets_), sizeof(uint32_t) * length_);
+      pos += sizeof(uint32_t) * length_;
+      MEMCPY(res_buf + pos, data_, offsets_[last_idx]);
+    }
   } else {
     MEMCPY(res_buf + pos, reinterpret_cast<char *>(data_container_->null_bitmaps_.get_data()), sizeof(uint8_t) * data_container_->null_bitmaps_.size());
     pos += sizeof(uint8_t) * data_container_->null_bitmaps_.size();
