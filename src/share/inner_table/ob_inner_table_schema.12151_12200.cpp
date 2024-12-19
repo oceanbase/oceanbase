@@ -568,7 +568,7 @@ int ObInnerTableSchema::all_virtual_trigger_schema(ObTableSchema &table_schema)
       OB_MAX_TRIGGER_BODY_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -583,7 +583,7 @@ int ObInnerTableSchema::all_virtual_trigger_schema(ObTableSchema &table_schema)
       OB_MAX_TRIGGER_BODY_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -598,7 +598,7 @@ int ObInnerTableSchema::all_virtual_trigger_schema(ObTableSchema &table_schema)
       OB_MAX_TRIGGER_BODY_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -754,6 +754,25 @@ int ObInnerTableSchema::all_virtual_trigger_schema(ObTableSchema &table_schema)
       false, //is_autoincrement
       analyze_flag_default,
       analyze_flag_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj trigger_body_v2_default;
+    trigger_body_v2_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
+    ADD_COLUMN_SCHEMA_T("trigger_body_v2", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObLongTextType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      0, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      trigger_body_v2_default,
+      trigger_body_v2_default); //default_value
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
@@ -1299,6 +1318,25 @@ int ObInnerTableSchema::all_virtual_trigger_history_schema(ObTableSchema &table_
       false, //is_autoincrement
       analyze_flag_default,
       analyze_flag_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj trigger_body_v2_default;
+    trigger_body_v2_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
+    ADD_COLUMN_SCHEMA_T("trigger_body_v2", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObLongTextType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      0, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      trigger_body_v2_default,
+      trigger_body_v2_default); //default_value
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
