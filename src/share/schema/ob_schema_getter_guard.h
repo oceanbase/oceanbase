@@ -1097,7 +1097,6 @@ public:
 private:
   int check_ssl_access(const ObUserInfo &user_info,
                        SSL *ssl_st);
-  int check_ssl_invited_cn(const uint64_t tenant_id, SSL *ssl_st);
 
   int check_db_priv(const ObSessionPrivInfo &session_priv,
                     const common::ObString &db,
