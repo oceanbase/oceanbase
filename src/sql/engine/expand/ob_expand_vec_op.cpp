@@ -551,14 +551,19 @@ void ObExpandVecOp::clear_evaluated_flags()
   // we don't clear evaluated flags of expand exprs and duplicate exprs
   // expand exprs do not need re-calculation, just set null flags
   // duplicate exprs are copied once, and do not changed ever since
-  for (int i = 0; i < MY_SPEC.output_.count(); i++) {
-    ObExpr *expr = MY_SPEC.output_.at(i);
-    bool is_expand_expr = has_exist_in_array(MY_SPEC.expand_exprs_, expr);
-    bool is_dup_expr = false;
-    for (int j = 0; !is_dup_expr && j < MY_SPEC.dup_expr_pairs_.count(); j++) {
-      is_dup_expr = (expr == MY_SPEC.dup_expr_pairs_.at(j).dup_expr_);
+  for (int i = 0; i < eval_infos_.count(); i++) {
+    bool is_expand_eval_info = false;
+    bool is_dup_expr_eval_info = false;
+    for (int j = 0; !is_expand_eval_info && j < MY_SPEC.expand_exprs_.count(); j++) {
+      is_expand_eval_info = eval_infos_.at(i) == &(MY_SPEC.expand_exprs_.at(j)->get_eval_info(eval_ctx_));
     }
-    if (!is_expand_expr && !is_dup_expr) { expr->get_eval_info(eval_ctx_).clear_evaluated_flag(); }
+    for (int j = 0; !is_dup_expr_eval_info && j < MY_SPEC.dup_expr_pairs_.count(); j++) {
+      is_dup_expr_eval_info =
+        (eval_infos_.at(i) == &(MY_SPEC.dup_expr_pairs_.at(j).dup_expr_->get_eval_info(eval_ctx_)));
+    }
+    if (!is_dup_expr_eval_info && !is_expand_eval_info) {
+      eval_infos_.at(i)->clear_evaluated_flag();
+    }
   }
 }
 } // end sql
