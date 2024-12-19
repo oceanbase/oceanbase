@@ -267,7 +267,7 @@ int ObExprResultTypeUtil::get_div_result_type(ObObjType &result_type,
     if (ob_is_decimal_int(result_type) && !can_use_decint_div) {
       result_ob1_type = ObNumberType;
       result_ob2_type = ObNumberType;
-    } else if (can_use_decint_div) {
+    } else if (can_use_decint_div && result_type == ObNumberType) {
       // use decimal int as calc type
       result_ob1_type = ObDecimalIntType;
       result_ob2_type = ObDecimalIntType;
