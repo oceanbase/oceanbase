@@ -6797,10 +6797,10 @@ int ObTransformPreProcess::transform_inner_op_row_cmp_for_decimal_int(
   } else {
     // This vector may have multiple values, such as (C1, C2, C3, ..., C). After conversion,
     // it is (C1, inner(c2), inner(c3), ..., inner(c))
+    trans_happened = true;
     for (int64_t i = 0; OB_SUCC(ret) && trans_happened && i < row_count; ++i) {
       row_expr->get_param_expr(i) = new_params.at(i);
     }
-    trans_happened = true;
   }
   return ret;
 }
