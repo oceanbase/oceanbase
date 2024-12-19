@@ -213,9 +213,9 @@ ObRawExpr::~ObRawExpr()
 //ObUnaryRefExpr(即subquery ref)必须由SubPlanFilter产生
 //PSEUDO_COLUMN一般是由CTE或者层次查询产生
 //SYS_CONNECT_BY_PATH,CONNECT_BY_ROOT由cby nestloop join产生
-bool ObRawExpr::has_generalized_column() const
+bool ObRawExpr::has_generalized_column(bool ignore_column/* = false */) const
 {
-  return has_flag(CNT_COLUMN) || has_flag(CNT_AGG) || has_flag(CNT_SET_OP) || has_flag(CNT_SUB_QUERY)
+  return (!ignore_column && has_flag(CNT_COLUMN)) || has_flag(CNT_AGG) || has_flag(CNT_SET_OP) || has_flag(CNT_SUB_QUERY)
          || has_flag(CNT_WINDOW_FUNC) || has_flag(CNT_ROWNUM) || has_flag(CNT_PSEUDO_COLUMN)
          || has_flag(CNT_SEQ_EXPR) || has_flag(CNT_SYS_CONNECT_BY_PATH) || has_flag(CNT_CONNECT_BY_ROOT)
          || has_flag(CNT_OP_PSEUDO_COLUMN);
@@ -957,6 +957,24 @@ bool ObRawExpr::cnt_not_calculable_expr() const
   // NOTE: When adding rules here, please check whether ObRawExpr::is_vectorize_result()
   // need add the same rules.
   return has_generalized_column()
+         || has_flag(CNT_STATE_FUNC)
+         || has_flag(CNT_DYNAMIC_USER_VARIABLE)
+         || has_flag(CNT_ALIAS)
+         || has_flag(CNT_VALUES)
+         || has_flag(CNT_SEQ_EXPR)
+         || has_flag(CNT_SYS_CONNECT_BY_PATH)
+         || has_flag(CNT_RAND_FUNC)
+         || has_flag(CNT_SO_UDF)
+         || has_flag(CNT_PRIOR)
+         || has_flag(CNT_VOLATILE_CONST)
+         || has_flag(CNT_ASSIGN_EXPR);
+}
+
+bool ObRawExpr::cnt_not_calculable_expr_ignore_column() const
+{
+  // NOTE: When adding rules here, please check whether ObRawExpr::is_vectorize_result()
+  // need add the same rules.
+  return has_generalized_column(true)
          || has_flag(CNT_STATE_FUNC)
          || has_flag(CNT_DYNAMIC_USER_VARIABLE)
          || has_flag(CNT_ALIAS)

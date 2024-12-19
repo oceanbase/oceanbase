@@ -6162,10 +6162,12 @@ int ObTableLocation::get_list_value_node(const ObPartitionLevel part_level,
         LOG_WARN("get null expr");
       } else if (OB_FAIL(expr->has_exec_param(has_exec))) {
         LOG_WARN("failed to check expr has exec param");
-      } else if (has_exec || expr->has_flag(CNT_SUB_QUERY) || !expr->is_op_expr()) {
+      } else if (has_exec || expr->cnt_not_calculable_expr_ignore_column() || !expr->is_op_expr()) {
         // do nothing
       } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, expr_columns))) {
         LOG_WARN("extract column exprs failed", K(ret));
+      } else if (expr_columns.empty()) {
+        // do nothing
       } else if (!ObOptimizerUtil::subset_exprs(expr_columns, part_column_exprs)) {
         // do nothing
       } else if (OB_FAIL(part_filters.push_back(expr))) {

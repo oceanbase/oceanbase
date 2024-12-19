@@ -1805,7 +1805,7 @@ public:
   virtual void reset();
   /// whether is the same expression.
   /// Compare the two expression tree.
-  bool has_generalized_column() const;
+  bool has_generalized_column(bool ignore_column = false) const;
   bool has_enum_set_column() const;
   bool has_specified_pseudocolumn() const;
   bool same_as(const ObRawExpr &expr,
@@ -1893,6 +1893,7 @@ public:
   virtual inline bool is_white_runtime_filter_expr() const { return false; }
   bool is_not_calculable_expr() const;
   bool cnt_not_calculable_expr() const;
+  bool cnt_not_calculable_expr_ignore_column() const;
   int is_const_inherit_expr(bool &is_const_inherit, const bool param_need_replace = false) const;
   bool check_is_deterministic_expr() const;
   int is_non_pure_sys_func_expr(bool &is_non_pure) const;
