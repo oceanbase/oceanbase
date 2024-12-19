@@ -1275,7 +1275,15 @@ int ObTransformSimplifyGroupby::check_aggr_win_can_be_removed(const ObDMLStmt *s
   if (OB_SUCC(ret)) {
     switch (func_type) {
     // aggr func
-    case T_FUN_COUNT: //case when 1 or 0
+    case T_FUN_COUNT: { //case when 1 or 0
+      if (OB_ISNULL(aggr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null aggr", K(ret));
+      } else {
+        can_remove = aggr->get_real_param_count() <= 1; // do not rewrite count with multi params
+      }
+      break;
+    }
     case T_FUN_MAX: //return expr
     case T_FUN_MIN:
       //case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE: //不进行改写
