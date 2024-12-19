@@ -548,6 +548,8 @@ public:
 
   int64_t get_pump_version() const { return pump_version_; }
   bool is_taskset_reset() const { return is_taskset_reset_; }
+  void set_fetch_task_ret(int ret) { ATOMIC_STORE(&fetch_task_ret_, ret); }
+  int get_fetch_task_ret() const { return ATOMIC_LOAD(&fetch_task_ret_); }
   DECLARE_TO_STRING;
 public:
 

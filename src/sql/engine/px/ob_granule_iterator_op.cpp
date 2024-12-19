@@ -1507,6 +1507,7 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_extract_query_range(
         }
       }
       LOG_TRACE("parallel runtime filter extract query range", K(ret), K(has_extrct), K(ranges));
+      pump_->set_fetch_task_ret(ret);
       args.extract_finished_ = true;
     } else {
       while (!args.extract_finished_ && OB_SUCC(ret)) {
@@ -1515,6 +1516,9 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_extract_query_range(
         } else {
           ob_usleep(100);
         }
+      }
+      if (OB_SUCC(ret)) {
+        ret = pump_->get_fetch_task_ret();
       }
     }
   }
