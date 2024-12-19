@@ -157,8 +157,11 @@ public:
            ObGetTableParam &get_table_param,
            const bool is_reverse_scan);
   virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
+  virtual int get_next_rows(int64_t &count, int64_t capacity) override;
 private:
   int open_range(blocksstable::ObDatumRange &range);
+  int inner_get_next_rows(int64_t &count, int64_t capacity);
+  int open_next_range();
 private:
   ObTableAccessContext *access_ctx_;
   const ObITableReadInfo *read_info_;

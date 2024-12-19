@@ -683,26 +683,12 @@ int ObBlockSampleIterator::get_next_row(blocksstable::ObDatumRow *&row)
     STORAGE_LOG(WARN, "block sample iterator is not opened", K(ret));
   } else {
     while (OB_SUCC(ret) && (!has_opened_range_ || OB_FAIL(scan_merge_->get_next_row(row)))) {
-      if (OB_ITER_END == ret || OB_SUCCESS == ret) {
+      if (OB_LIKELY(OB_ITER_END == ret)) {
         ret = OB_SUCCESS;
-        has_opened_range_ = false;
       }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(range_iterator_.get_next_range(range))) {
-          if (OB_ITER_END != ret) {
-            STORAGE_LOG(WARN, "failed to get next range", K(ret), K(block_num_));
-          }
-        } else if (OB_ISNULL(range)) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "range is null", K(ret), K(block_num_));
-        } else if (return_this_sample(block_num_++)) {
-          STORAGE_LOG(DEBUG, "open a range", K(*range), K_(block_num));
-          micro_range_.reset();
-          micro_range_ = *range;
-          if (OB_FAIL(open_range(micro_range_))) {
-            STORAGE_LOG(WARN, "Failed to open range", K(ret), K(micro_range_), K(block_num_));
-          }
+      if (FAILEDx(open_next_range())) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          STORAGE_LOG(WARN, "failed to open next range for block sample", K(ret), K(block_num_));
         }
       }
     }
@@ -734,5 +720,65 @@ int ObBlockSampleIterator::open_range(blocksstable::ObDatumRange &range)
   return ret;
 }
 
+int ObBlockSampleIterator::inner_get_next_rows(int64_t &count, int64_t capacity)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(scan_merge_->get_next_rows(count, capacity))) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      STORAGE_LOG(WARN, "fail to get next rows", K(ret));
+    } else if (count > 0) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObBlockSampleIterator::get_next_rows(int64_t &count, int64_t capacity)
+{
+  int ret = OB_SUCCESS;
+  const blocksstable::ObDatumRange *range = nullptr;
+  if (OB_ISNULL(scan_merge_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "block sample iterator is not opened", K(ret));
+  } else {
+    while (OB_SUCC(ret) && (!has_opened_range_ || OB_FAIL(inner_get_next_rows(count, capacity)))) {
+      if (OB_LIKELY(OB_ITER_END == ret)) {
+        ret = OB_SUCCESS;
+      }
+      if (FAILEDx(open_next_range())) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          STORAGE_LOG(WARN, "failed to open next range for block sample", K(ret), K(block_num_));
+        }
+      }
+    }
+    if (OB_FAIL(ret) && OB_ITER_END != ret)  {
+      STORAGE_LOG(WARN, "failed to get next rows from ObBlockSampleIterator", K(ret), K(block_num_));
+    }
+  }
+
+  return ret;
+}
+
+int ObBlockSampleIterator::open_next_range()
+{
+  int ret = OB_SUCCESS;
+  const blocksstable::ObDatumRange *range = nullptr;
+  if (OB_FAIL(range_iterator_.get_next_range(range))) {
+    if (OB_ITER_END != ret) {
+      STORAGE_LOG(WARN, "failed to get next range", K(ret), K(block_num_));
+    }
+  } else if (OB_ISNULL(range)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "range is null", K(ret), K(block_num_));
+  } else if (return_this_sample(block_num_++)) {
+    STORAGE_LOG(DEBUG, "open a range", K(*range), K_(block_num));
+    micro_range_.reset();
+    micro_range_ = *range;
+    if (OB_FAIL(open_range(micro_range_))) {
+      STORAGE_LOG(WARN, "Failed to open range", K(ret), K(micro_range_), K(block_num_));
+    }
+  }
+  return ret;
+}
 }
 }
