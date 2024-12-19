@@ -372,6 +372,7 @@ public:
       blocksstable::ObMacroDataSeq &next_seq);
 
   virtual int update_max_lob_id(const int64_t lob_id) { UNUSED(lob_id); return common::OB_SUCCESS; }
+  virtual int set_total_slice_cnt(const int64_t slice_cnt) { UNUSED(slice_cnt); return OB_NOT_SUPPORTED;}
 
   // for ref_cnt
   void inc_ref() { ATOMIC_INC(&ref_cnt_); }

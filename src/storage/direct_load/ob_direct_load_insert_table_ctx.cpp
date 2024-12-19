@@ -658,6 +658,7 @@ int ObDirectLoadInsertTabletContext::open_sstable_slice(const ObMacroDataSeq &st
     slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = slice_id;
     slice_info.context_id_ = context_id_;
+    slice_info.total_slice_cnt_ = param_->parallel_; //mock total slice cnt
     if (OB_FAIL(open())) {
       LOG_WARN("fail to open tablet direct load", KR(ret));
     } else if (OB_FAIL(ddl_agent_.open_sstable_slice(start_seq, slice_info))) {
@@ -687,6 +688,7 @@ int ObDirectLoadInsertTabletContext::open_lob_sstable_slice(const ObMacroDataSeq
     slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = slice_id;
     slice_info.context_id_ = context_id_;
+    slice_info.total_slice_cnt_ = param_->parallel_; //mock total slice cnt
     if (OB_FAIL(open())) {
       LOG_WARN("fail to open tablet direct load", KR(ret));
     } else if (OB_FAIL(ddl_agent_.open_sstable_slice(start_seq, slice_info))) {

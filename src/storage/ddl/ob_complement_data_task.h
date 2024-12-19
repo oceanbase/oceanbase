@@ -166,7 +166,7 @@ public:
     is_inited_(false), ddl_agent_(), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
     is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
     lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK), concurrent_cnt_(0),
-    physical_row_count_(0), row_scanned_(0), row_inserted_(0), cg_row_inserted_(0), context_id_(0), lob_cols_cnt_(0)
+    physical_row_count_(0), row_scanned_(0), row_inserted_(0), cg_row_inserted_(0), context_id_(0), lob_cols_cnt_(0), total_slice_cnt_(-1)
   {}
   ~ObComplementDataContext() { destroy(); }
   int init(
@@ -177,7 +177,7 @@ public:
   int add_column_checksum(const ObIArray<int64_t> &report_col_checksums, const ObIArray<int64_t> &report_col_ids);
   int get_column_checksum(ObIArray<int64_t> &report_col_checksums, ObIArray<int64_t> &report_col_ids);
   TO_STRING_KV(K_(is_inited), K_(ddl_agent), K_(direct_load_type), K_(is_major_sstable_exist), K_(complement_data_ret), K_(concurrent_cnt),
-      K_(physical_row_count), K_(row_scanned), K_(row_inserted), K_(cg_row_inserted), K_(context_id), K_(lob_cols_cnt));
+      K_(physical_row_count), K_(row_scanned), K_(row_inserted), K_(cg_row_inserted), K_(context_id), K_(lob_cols_cnt), K_(total_slice_cnt));
 public:
   bool is_inited_;
   ObDirectLoadMgrAgent ddl_agent_;
@@ -194,6 +194,7 @@ public:
   int64_t lob_cols_cnt_;
   ObArray<int64_t> report_col_checksums_;
   ObArray<int64_t> report_col_ids_;
+  int64_t total_slice_cnt_;
 };
 
 class ObComplementPrepareTask;

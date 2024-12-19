@@ -762,6 +762,8 @@ public:
   static int64_t get_default_ddl_rpc_timeout();
   static int64_t get_default_ddl_tx_timeout();
 
+  static int get_task_tablet_slice_count(const int64_t tenant_id, const int64_t task_id, bool &is_partition_table, common::hash::ObHashMap<int64_t, int64_t> &tablet_slice_count_map);
+
   static int get_data_information(
      const uint64_t tenant_id,
      const uint64_t task_id,

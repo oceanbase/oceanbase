@@ -2528,6 +2528,56 @@ int64_t ObDDLUtil::get_default_ddl_tx_timeout()
 }
 
 
+/*
+* return the map between tablet id & slice cnt;
+* note that pair <0, 0> may exist when result is not partition table
+*/
+
+int ObDDLUtil::get_task_tablet_slice_count(const int64_t tenant_id,  const int64_t ddl_task_id, bool &is_partitioned_table, common::hash::ObHashMap<int64_t, int64_t> &tablet_slice_cnt_map)
+{
+  int ret = OB_SUCCESS;
+
+  bool use_idem_mode = false;
+  rootserver::ObDDLSliceInfo ddl_slice_info;
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  ObArenaAllocator arena(ObMemAttr(tenant_id, "get_slice_info"));
+  bool is_use_idem_mode = false;
+  is_partitioned_table = true;
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else if (OB_FAIL(rootserver::ObDDLTaskRecordOperator::get_schedule_info_for_update(
+                    *sql_proxy, tenant_id, ddl_task_id, arena, ddl_slice_info, use_idem_mode))) {
+    LOG_WARN("fail to get schedule info", K(ret), K(tenant_id), K(ddl_task_id));
+  } else {
+    for (int64_t i = 0; i < ddl_slice_info.part_ranges_.count() && OB_SUCC(ret); i++) {
+      int64_t tablet_slice_cnt = 0;
+      const ObPxTabletRange &cur_part_range = ddl_slice_info.part_ranges_.at(i);
+      const int64_t cur_tablet_id = cur_part_range.tablet_id_;
+      if (0 == cur_tablet_id && 1 == ddl_slice_info.part_ranges_.count()) {
+        is_partitioned_table = false;
+      }
+
+      if (OB_FAIL(tablet_slice_cnt_map.get_refactored(cur_tablet_id, tablet_slice_cnt))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          if (OB_FAIL(tablet_slice_cnt_map.set_refactored(cur_tablet_id, 0))) {
+            LOG_WARN("failed to set refactor", K(ret));
+          }
+        } else {
+          LOG_WARN("failed to get  slice cnt", K(ret));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(tablet_slice_cnt_map.set_refactored(cur_tablet_id, tablet_slice_cnt + cur_part_range.range_cut_.count(), 1 /* over write*/))) {
+        LOG_WARN("failed to set slice cnt", K(ret), K(tablet_slice_cnt), K( cur_part_range.range_cut_.count()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLUtil::get_data_information(
     const uint64_t tenant_id,
     const uint64_t task_id,
