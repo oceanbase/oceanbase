@@ -2798,7 +2798,8 @@ public:
         index_cgs_(),
         vidx_refresh_info_(),
         is_rebuild_index_(false),
-        is_index_scope_specified_(false)
+        is_index_scope_specified_(false),
+        is_offline_rebuild_(false)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2833,6 +2834,7 @@ public:
     vidx_refresh_info_.reset();
     is_rebuild_index_ = false;
     is_index_scope_specified_ = false;
+    is_offline_rebuild_ = false;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2873,6 +2875,7 @@ public:
       vidx_refresh_info_ = other.vidx_refresh_info_;
       is_rebuild_index_ = other.is_rebuild_index_;
       is_index_scope_specified_ = other.is_index_scope_specified_;
+      is_offline_rebuild_ = other.is_offline_rebuild_;
     }
     return ret;
   }
@@ -2944,6 +2947,28 @@ public:
   share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;
   bool is_rebuild_index_;
   bool is_index_scope_specified_;
+  bool is_offline_rebuild_;
+};
+
+struct ObIndexOfflineDdlArg : ObDDLArg
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObIndexOfflineDdlArg() {}
+  ObIndexOfflineDdlArg(const ObCreateIndexArg &arg, int64_t task_id, int32_t sub_task_trace_id)
+      : arg_(),
+        task_id_(task_id),
+        sub_task_trace_id_(sub_task_trace_id)
+  {
+    exec_tenant_id_ = arg.tenant_id_;;
+    arg_.assign(arg);
+  }
+  ~ObIndexOfflineDdlArg() {}
+
+public:
+  ObCreateIndexArg arg_;
+  int64_t task_id_;
+  int32_t sub_task_trace_id_;
 };
 
 struct ObCreateAuxIndexArg : public ObDDLArg

@@ -3489,7 +3489,13 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     index_cgs_,
                     vidx_refresh_info_,
                     is_rebuild_index_,
-                    is_index_scope_specified_);
+                    is_index_scope_specified_,
+                    is_offline_rebuild_);
+
+OB_SERIALIZE_MEMBER((ObIndexOfflineDdlArg, ObDDLArg),
+                    arg_,
+                    task_id_,
+                    sub_task_trace_id_);
 
 int ObCreateAuxIndexArg::assign(const ObCreateAuxIndexArg &other)
 {
