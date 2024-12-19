@@ -11,7 +11,9 @@
  */
 
 #include <gtest/gtest.h>
+#define private public
 #include "lib/thread/ob_simple_thread_pool.h"
+#undef private
 #include "lib/coro/testing.h"
 
 using namespace oceanbase::common;
@@ -74,6 +76,21 @@ TEST(DISABLED_TestSimpleThreadPool, Basic)
   });
   pool.destroy();
 
+}
+TEST(TestSimpleThreadPool, test_dynamic_simple_thread_pool_bind)
+{
+  class ObTestSimpleThreadPool : public ObSimpleThreadPool {
+    void handle(void *) {
+    }
+  };
+  int ret = ObSimpleThreadPoolDynamicMgr::get_instance().init();
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ObTestSimpleThreadPool pool;
+  ret = pool.set_adaptive_thread(1, 3);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(pool.has_bind_);
+  pool.stop();
+  ASSERT_FALSE(pool.has_bind_);
 }
 
 TEST(TestSimpleThreadPool, DISABLED_test_dynamic_simple_thread_pool)
