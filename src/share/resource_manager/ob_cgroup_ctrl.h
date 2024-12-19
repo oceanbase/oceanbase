@@ -21,9 +21,14 @@ namespace common
 {
 class ObString;
 }
+namespace omt
+{
+class ObTenant;
+}
 namespace share
 {
 class ObGroupName;
+class ObTenantBase;
 
 typedef enum  : uint64_t {
   DEFAULT = 0,
@@ -141,7 +146,10 @@ public:
   {}
   ~ObCgroupCtrl() {}
   int init();
-  void destroy() { /* 进程退出后tid会自动从cgroup tasks中删除 */ }
+  int regist_observer_to_cgroup(const char * cgroup_dir);
+  bool check_cgroup_status();
+  static int check_cgroup_root_dir();
+  void destroy();
   bool is_valid() { return valid_; }
 
   bool is_valid_group_name(common::ObString &group_name);
@@ -187,15 +195,10 @@ public:
   public:
     DirProcessor() = default;
     ~DirProcessor() = default;
-    virtual int handle_dir(const char *group_path, bool is_top_dir=false) = 0;
+    virtual int handle_dir(const char *group_path, const bool is_top_dir=false) = 0;
   };
 
 private:
-  const char *root_cgroup_  = "cgroup";
-  const char *other_cgroup_ = "cgroup/other";
-  // 10:1, 确保系统满负载场景下 SYS 能有足够资源
-  static const int32_t DEFAULT_SYS_SHARE = 1024;
-  static const int32_t DEFAULT_USER_SHARE = 4096;
   static const int32_t PATH_BUFSIZE = 512;
   static const int32_t VALUE_BUFSIZE = 64;
   static const int32_t GROUP_NAME_BUFSIZE = 129;
@@ -206,7 +209,9 @@ private:
   int64_t last_usage_check_time_;
 
 private:
-  int init_cgroup_root_dir_(const char *cgroup_path);
+  friend class oceanbase::omt::ObTenant;
+  friend class oceanbase::share::ObTenantBase;
+  int add_thread_to_cgroup_(const int64_t tid,const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT, const char *base_path = "");
   static int init_dir_(const char *curr_dir);
   static int init_full_dir_(const char *curr_path);
   static int write_string_to_file_(const char *filename, const char *content);
@@ -214,7 +219,7 @@ private:
 
   enum { NOT_DIR = 0, LEAF_DIR, REGULAR_DIR };
   int which_type_dir_(const char *curr_path, int &result);
-  int recursion_remove_group_(const char *curr_path);
+  int recursion_remove_group_(const char *curr_path, bool if_remove_top = true);
   int recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr, bool is_top_dir = false);
 };
 

@@ -1327,7 +1327,6 @@ ObTenantDagWorker::ObTenantDagWorker()
     check_period_(0),
     last_check_time_(0),
     function_type_(ObFunctionType::DEFAULT_FUNCTION),
-    group_id_(OB_INVALID_GROUP_ID),
     tg_id_(-1),
     is_inited_(false)
 {
@@ -1396,7 +1395,6 @@ void ObTenantDagWorker::reset()
   check_period_ = 0;
   last_check_time_ = 0;
   function_type_ = ObFunctionType::DEFAULT_FUNCTION;
-  group_id_ = OB_INVALID_GROUP_ID;
   self_ = NULL;
   is_inited_ = false;
   TG_DESTROY(tg_id_);
@@ -1412,41 +1410,6 @@ void ObTenantDagWorker::notify(DagWorkerStatus status)
 void ObTenantDagWorker::resume()
 {
   notify(DWS_RUNNABLE);
-}
-
-int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
-{
-  int ret = OB_SUCCESS;
-  uint64_t consumer_group_id = USER_RESOURCE_OTHER_GROUP_ID;
-  if (is_resource_manager_group(group_id)) {
-    //user level
-    consumer_group_id = group_id;
-  } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), static_cast<share::ObFunctionType>(function_type_), consumer_group_id))) {
-    //function level
-    LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(consumer_group_id));
-  } else if (OB_UNLIKELY(function_type_ < 0 || function_type_ >= static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM))){
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("function type is out of range", K(ret), K(function_type_));
-  } else {
-    SET_FUNCTION_TYPE(function_type_);
-  }
-
-  if (OB_SUCC(ret) && consumer_group_id != group_id_) {
-    // for CPU isolation, depend on cgroup
-    if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() &&
-        OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup(
-            MTL_ID(),
-            consumer_group_id,
-            GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP
-                                                              : ""))) {
-      LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
-    } else {
-      // for IOPS isolation, only depend on consumer_group_id
-      ATOMIC_SET(&group_id_, consumer_group_id);
-      THIS_WORKER.set_group_id(static_cast<int32_t>(consumer_group_id));
-    }
-  }
-  return ret;
 }
 
 bool ObTenantDagWorker::need_wake_up() const
@@ -1470,6 +1433,7 @@ void ObTenantDagWorker::run1()
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "dag is null", K(ret), K(task_));
       } else {
+        CONSUMER_GROUP_ID_GUARD(dag->get_consumer_group_id());
         ObCurTraceId::set(dag->get_dag_id());
         lib::set_thread_name(dag->get_dag_type_str(dag->get_type()));
         ObLocalDiagnosticInfo::set_service_action("DAG", dag->get_dag_module_str(dag->get_type()), dag->get_dag_type_str(dag->get_type()));
@@ -1482,9 +1446,8 @@ void ObTenantDagWorker::run1()
           THIS_WORKER.set_module_type(type);
 #endif
           THIS_WORKER.set_compatibility_mode(compat_mode);
-          if (OB_FAIL(set_dag_resource(dag->get_consumer_group_id()))) {
-            LOG_WARN("isolate dag CPU and IOPS failed", K(ret));
-          } else if (OB_FAIL(task_->do_work())) {
+          CONSUMER_GROUP_FUNC_GUARD(function_type_);
+          if (OB_FAIL(task_->do_work())) {
             if (!dag->ignore_warning()) {
               COMMON_LOG(WARN, "failed to do work", K(ret), K(*task_), K(compat_mode));
             }
@@ -3075,7 +3038,7 @@ int ObTenantDagScheduler::schedule_one(const int64_t priority)
     running_workers_.add_last(worker, priority);
     if (task != NULL) {
       COMMON_LOG(INFO, "schedule one task", KP(task), "priority", OB_DAG_PRIOS[priority].dag_prio_str_,
-          "group id", worker->get_group_id(), K_(total_running_task_cnt), K(running_task_cnts_[priority]),
+          K_(total_running_task_cnt), K(running_task_cnts_[priority]),
           K(low_limits_[priority]), K(up_limits_[priority]), KP(task->get_dag()->get_dag_net()));
     }
     worker->resume();

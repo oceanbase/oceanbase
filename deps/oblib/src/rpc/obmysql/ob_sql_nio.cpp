@@ -1258,18 +1258,12 @@ void ObSqlNio::destroy()
   }
 }
 
-int __attribute__((weak)) sql_nio_add_cgroup(const uint64_t tenant_id)
-{
-  return 0;
-}
 void ObSqlNio::run(int64_t idx)
 {
   if (NULL != impl_) {
     common::ObBackGroundSessionGuard backgroud_session_guard(GET_TENANT_ID(), THIS_WORKER.get_group_id());
     lib::set_thread_name("sql_nio", idx);
-    // if (tenant_id_ != common::OB_INVALID_ID) {
-    //   obmysql::sql_nio_add_cgroup(tenant_id_);
-    // }
+    // SET_GROUP_ID(OBCG_SQL_NIO);
     while(!has_set_stop() && !(OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false)) {
       impl_[idx].do_work();
     }

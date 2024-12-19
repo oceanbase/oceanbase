@@ -725,11 +725,9 @@ public:
   void yield();
   void set_task(ObITask *task) { task_ = task; }
   void set_function_type(const ObFunctionType function_type) { function_type_ = function_type; }
-  int set_dag_resource(const uint64_t group_id);
   bool need_wake_up() const;
   ObITask *get_task() const { return task_; }
   static ObTenantDagWorker *self() { return self_; }
-  uint64_t get_group_id() { return group_id_; }
 private:
   void notify(DagWorkerStatus status);
 private:
@@ -742,7 +740,6 @@ private:
   int64_t check_period_;
   int64_t last_check_time_;
   ObFunctionType function_type_;
-  uint64_t group_id_;
   int tg_id_;
   bool is_inited_;
 };

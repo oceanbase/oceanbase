@@ -99,9 +99,6 @@ public:
   int unregister_cb(const char *log_dir);
   int64_t get_align_size() const;
 private:
-  int get_group_id_for_write_(uint64_t &group_id);
-  int get_group_id_for_read_(const LogIOContext &io_ctx, uint64_t &group_id);
-private:
   int64_t tenant_id_;
   share::ObResourceManager *resource_manager_;
   common::ObIOManager *io_manager_;

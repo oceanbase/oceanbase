@@ -376,7 +376,6 @@ private:
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
-  int set_group_id(const uint64_t tenant_id);
   bool continue_mark();
   int do_sweep(MacroBlkIdMap &mark_info);
   int sweep_one_block(const MacroBlockId& macro_id);

@@ -75,11 +75,7 @@ public:
       if (thread_name_ != nullptr) {
         lib::set_thread_name(thread_name_, get_thread_idx());
       }
-      if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
-          tenant_id_ != common::OB_INVALID_ID && nullptr != GCTX.cgroup_ctrl_ &&
-          OB_LIKELY(GCTX.cgroup_ctrl_->is_valid())) {
-        GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_id_, group_id_);
-      }
+      lib::SET_GROUP_ID(group_id_);
       queue_.loop();
     }
 

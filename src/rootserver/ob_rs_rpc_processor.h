@@ -126,6 +126,14 @@ protected:
         ret = OB_OP_NOT_ALLOW;
         RS_LOG(WARN, "ddl operation not allow, can not process this request", K(ret), K(pcode));
       } else {
+        int64_t consumer_group_id = share::OBCG_DEFAULT;
+        if (is_ddl_like_ && OB_NOT_NULL(ddl_arg_)) {
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ddl_arg_->exec_tenant_id_));
+          if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation) {
+            consumer_group_id = share::OBCG_DDL;
+          }
+        }
+        CONSUMER_GROUP_ID_GUARD(consumer_group_id);
         if (is_ddl_like_) {
           if (OB_ISNULL(ddl_arg_)) {
             ret = OB_MISS_ARGUMENT;
@@ -134,12 +142,6 @@ protected:
             ret = OB_INVALID_ARGUMENT;
             RS_LOG(WARN, "exec tenant id is invalid", K(ret), "arg", *ddl_arg_);
           } else {
-            omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ddl_arg_->exec_tenant_id_));
-            if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation) {
-              THIS_WORKER.set_group_id(share::OBCG_DDL);
-            } else {
-              THIS_WORKER.set_group_id(share::OBCG_DEFAULT);
-            }
             // TODO (linqiucen.lqc): check whether the tenant is standby
             //                       it will be done after DDL is executed by the tenant itself rather than sys tenant
             auto *tsi_value = GET_TSI(share::schema::TSIDDLVar);

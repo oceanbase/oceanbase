@@ -2539,12 +2539,19 @@ void ObMultiTenant::run1()
   while (!has_set_stop()) {
     {
       SpinRLockGuard guard(lock_);
+      bool need_regist_cgroup = false;
+      if (OB_NOT_NULL(GCTX.cgroup_ctrl_)) {
+        need_regist_cgroup = GCTX.cgroup_ctrl_->check_cgroup_status();
+      }
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (OB_ISNULL(*it)) {
           LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
         } else if ((*it)->has_stopped()) {
           // skip stopped tenant
         } else {
+          if (need_regist_cgroup) {
+            (*it)->regist_threads_to_cgroup();
+          }
           (*it)->timeup();
         }
       }
@@ -2558,7 +2565,9 @@ void ObMultiTenant::run1()
         if (!OB_ISNULL(*it)) {
           ObTaskController::get().allow_next_syslog();
           LOG_INFO("dump tenant info", "tenant", **it);
-          (*it)->print_throttled_time();
+          if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
+            (*it)->print_throttled_time();
+          }
         }
       }
     }
@@ -2661,17 +2670,6 @@ void ObMultiTenant::recycle_tenant_allocator(int64_t tenant_id)
   if (NULL != share_limiter && !share_limiter->has_child()) {
     del_share_tenant_limiter(share_limiter);
   }
-}
-
-int obmysql::sql_nio_add_cgroup(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
-      nullptr != GCTX.cgroup_ctrl_ &&
-      OB_LIKELY(GCTX.cgroup_ctrl_->is_valid())) {
-    ret = GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_id, OBCG_SQL_NIO);
-  }
-  return ret;
 }
 
 int ObSrvNetworkFrame::reload_tenant_sql_thread_config(const uint64_t tenant_id)

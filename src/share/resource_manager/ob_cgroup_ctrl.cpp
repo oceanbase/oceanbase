@@ -22,29 +22,67 @@
 #include "share/resource_manager/ob_resource_plan_info.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "observer/omt/ob_tenant.h"
+#include "observer/omt/ob_multi_tenant.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
+using namespace oceanbase::omt;
 
 namespace oceanbase
 {
+
+namespace lib
+{
+
+int SET_GROUP_ID(uint64_t group_id, bool is_background)
+{
+  int ret = OB_SUCCESS;
+
+  // to do switch group
+
+  THIS_WORKER.set_group_id(static_cast<int32_t>(group_id));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_NOT_NULL(GCTX.cgroup_ctrl_)
+      && OB_TMP_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup(MTL_ID(), group_id, is_background ? BACKGROUND_CGROUP : ""))) {
+    LOG_WARN("add self to cgroup fail", K(ret), K(MTL_ID()), K(group_id));
+  }
+  return ret;
+}
+
+int CONVERT_FUNCTION_TYPE_TO_GROUP_ID(const uint8_t function_type, uint64_t &group_id)
+{
+  return G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type, group_id);
+}
+
+}  // namespace lib
+
 namespace share
 {
 ObCgSet ObCgSet::instance_;
-}
-}
+}  // namespace share
+}  // namespace oceanbase
+
+// cpu shares base value
+static const int32_t DEFAULT_CPU_SHARES = 1024;
+
+// cgroup directory
+static constexpr const char *const SYS_CGROUP_DIR = "/sys/fs/cgroup";
+static constexpr const char *const OBSERVER_ROOT_CGROUP_DIR = "cgroup";
+static constexpr const char *const OTHER_CGROUP_DIR = "cgroup/other";
 
 // cgroup config name
-static const char *CPU_SHARES_FILE = "cpu.shares";
-static const int32_t DEFAULT_CPU_SHARES = 1024;
-static const char *TASKS_FILE = "tasks";
-static const char *CPU_CFS_QUOTA_FILE = "cpu.cfs_quota_us";
-static const char *CPU_CFS_PERIOD_FILE = "cpu.cfs_period_us";
-static const char *CPUACCT_USAGE_FILE = "cpuacct.usage";
-static const char *CPU_STAT_FILE = "cpu.stat";
+static constexpr const char *const CPU_SHARES_FILE = "cpu.shares";
+static constexpr const char *const TASKS_FILE = "tasks";
+static constexpr const char *const CPU_CFS_QUOTA_FILE = "cpu.cfs_quota_us";
+static constexpr const char *const CPU_CFS_PERIOD_FILE = "cpu.cfs_period_us";
+static constexpr const char *const CPUACCT_USAGE_FILE = "cpuacct.usage";
+static constexpr const char *const CPU_STAT_FILE = "cpu.stat";
+static constexpr const char *const CGROUP_PROCS_FILE = "cgroup.procs";
+static constexpr const char *const CGROUP_CLONE_CHILDREN_FILE = "cgroup.clone_children";
 
 //集成IO参数
 int OBGroupIOInfo::init(int64_t min_percent, int64_t max_percent, int64_t weight_percent)
@@ -75,7 +113,7 @@ bool ObCgroupCtrl::is_valid_group_name(ObString &group_name)
   if (group_name.length() < 0 || group_name.length() > GROUP_NAME_BUFSIZE) {
     bool_ret = false;
   } else {
-    for(int i = 0; i < group_name.length() && bool_ret; i++) {
+    for (int i = 0; i < group_name.length() && bool_ret; i++) {
       // only support [a-zA-Z0-9_]
       if (!((group_name_ptr[i] >= 'a' && group_name_ptr[i] <= 'z') ||
             (group_name_ptr[i] >= 'A' && group_name_ptr[i] <= 'Z') ||
@@ -88,33 +126,97 @@ bool ObCgroupCtrl::is_valid_group_name(ObString &group_name)
   return bool_ret;
 }
 
-// 创建cgroup初始目录结构，将所有线程加入other组
+// init cgroup
 int ObCgroupCtrl::init()
 {
   int ret = OB_SUCCESS;
-  if (GCONF.enable_cgroup == false) {
-    // not init cgroup when config set to false
-  } else if (OB_FAIL(init_cgroup_root_dir_(root_cgroup_))) {
-	  if (OB_FILE_NOT_EXIST == ret) {
-      LOG_WARN("init cgroup dir failed", K(ret), K(root_cgroup_));
-    } else {
-      LOG_ERROR("init cgroup dir failed", K(ret), K(root_cgroup_));
+  (void)check_cgroup_status();
+  return ret;
+}
+
+// regist observer pid to cgroup.procs
+int ObCgroupCtrl::regist_observer_to_cgroup(const char *cgroup_dir)
+{
+  int ret = OB_SUCCESS;
+  char pid_value[VALUE_BUFSIZE];
+  snprintf(pid_value, VALUE_BUFSIZE, "%d", getpid());
+  if (OB_FAIL(set_cgroup_config_(cgroup_dir, CGROUP_PROCS_FILE, pid_value))) {
+    LOG_WARN("add tid to cgroup failed", K(ret), K(cgroup_dir), K(pid_value));
+  }
+  return ret;
+}
+
+// dynamic check cgroup status
+bool ObCgroupCtrl::check_cgroup_status()
+{
+  int tmp_ret = OB_SUCCESS;
+  bool need_regist_cgroup = false;
+  if (GCONF.enable_cgroup == false && is_valid() == false) {
+    // clean remain cgroup dir
+    if (OB_TMP_FAIL(check_cgroup_root_dir())) {
+      LOG_WARN_RET(tmp_ret, "check cgroup root dir failed", K(tmp_ret));
+    } else if (OB_TMP_FAIL(recursion_remove_group_(OBSERVER_ROOT_CGROUP_DIR, false /* if_remove_top */))) {
+      LOG_WARN_RET(tmp_ret, "clean observer root cgroup failed", K(ret));
     }
-  } else if (OB_FAIL(init_dir_(other_cgroup_))) {
-    LOG_WARN("init other cgroup dir failed", K(ret), K_(other_cgroup));
-  } else {
-    char procs_path[PATH_BUFSIZE];
-    char pid_value[VALUE_BUFSIZE];
-    snprintf(procs_path, PATH_BUFSIZE, "%s/cgroup.procs", other_cgroup_);
-    snprintf(pid_value, VALUE_BUFSIZE, "%d", getpid());
-    if(OB_FAIL(write_string_to_file_(procs_path, pid_value))) {
-      LOG_ERROR("add tid to cgroup failed", K(ret), K(procs_path), K(pid_value));
+  } else if ((GCONF.enable_cgroup == true && is_valid() == true)) {
+    // In case symbolic link is deleted
+    if (OB_TMP_FAIL(check_cgroup_root_dir())) {
+      LOG_WARN_RET(tmp_ret, "check cgroup root dir failed", K(tmp_ret));
+      valid_ = false;
+    }
+  } else if (GCONF.enable_cgroup == false && is_valid() == true) {
+    valid_ = false;
+    if (OB_TMP_FAIL(check_cgroup_root_dir())) {
+      LOG_WARN_RET(tmp_ret, "check cgroup root dir failed", K(tmp_ret));
+    } else if (OB_TMP_FAIL(regist_observer_to_cgroup(OBSERVER_ROOT_CGROUP_DIR))) {
+      LOG_WARN_RET(tmp_ret, "regist observer thread to cgroup failed", K(tmp_ret), K(OBSERVER_ROOT_CGROUP_DIR));
+    } else if (OB_TMP_FAIL(recursion_remove_group_(OBSERVER_ROOT_CGROUP_DIR, false /* if_remove_top */))) {
+      LOG_WARN_RET(tmp_ret, "clean observer root cgroup failed", K(ret));
+    }
+  } else if (GCONF.enable_cgroup == true && is_valid() == false) {
+    if (OB_TMP_FAIL(check_cgroup_root_dir())) {
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+        LOG_WARN_RET(tmp_ret, "check cgroup root dir failed", K(tmp_ret));
+      }
+    } else if (OB_TMP_FAIL(recursion_remove_group_(OBSERVER_ROOT_CGROUP_DIR, false /* if_remove_top */))) {
+      LOG_WARN_RET(tmp_ret, "clean observer root cgroup failed", K(ret));
+    } else if (OB_TMP_FAIL(init_dir_(OBSERVER_ROOT_CGROUP_DIR))) {
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+        LOG_WARN_RET(tmp_ret, "init cgroup dir failed", K(tmp_ret));
+      }
+    } else if (OB_TMP_FAIL(regist_observer_to_cgroup(OTHER_CGROUP_DIR))) {
+      LOG_WARN_RET(tmp_ret, "regist observer thread to cgroup failed", K(tmp_ret), K(OTHER_CGROUP_DIR));
     } else {
+      need_regist_cgroup = true;
       valid_ = true;
+      LOG_INFO("init cgroup success");
     }
   }
+  return need_regist_cgroup;
+}
 
+int ObCgroupCtrl::check_cgroup_root_dir()
+{
+  int ret = OB_SUCCESS;
+  bool exist_cgroup = false;
+  int link_len = 0;
+  char real_cgroup_path[PATH_BUFSIZE];
+  if (OB_FAIL(FileDirectoryUtils::is_exists(OBSERVER_ROOT_CGROUP_DIR, exist_cgroup))) {
+    ret = OB_ERR_SYS;
+  } else if (!exist_cgroup) {
+    ret = OB_FILE_NOT_EXIST;
+  } else if (-1 == readlink(OBSERVER_ROOT_CGROUP_DIR, real_cgroup_path, PATH_BUFSIZE)) {
+    ret = OB_ERR_SYS;
+  }
   return ret;
+}
+
+void ObCgroupCtrl::destroy()
+{
+  if (is_valid()) {
+    valid_ = false;
+    recursion_remove_group_(OBSERVER_ROOT_CGROUP_DIR, false /* if_remove_top */);
+  }
 }
 
 int ObCgroupCtrl::which_type_dir_(const char *curr_path, int &type)
@@ -184,19 +286,22 @@ int ObCgroupCtrl::remove_dir_(const char *curr_dir, bool is_delete_group)
   return ret;
 }
 
-class RemoveProccessor : public ObCgroupCtrl::DirProcessor
+int ObCgroupCtrl::recursion_remove_group_(const char *curr_path, bool if_remove_top)
 {
-public:
-  int handle_dir(const char *curr_path, bool is_top_dir)
+  class RemoveProccessor : public ObCgroupCtrl::DirProcessor
   {
-    UNUSED(is_top_dir);
-    return ObCgroupCtrl::remove_dir_(curr_path);
-  }
-};
-int ObCgroupCtrl::recursion_remove_group_(const char *curr_path)
-{
+  public:
+    int handle_dir(const char *curr_path, bool is_top_dir)
+    {
+      int ret = OB_SUCCESS;
+      if (!is_top_dir) {
+        ret = ObCgroupCtrl::remove_dir_(curr_path);
+      }
+      return ret;
+    }
+  };
   RemoveProccessor remove_process;
-  return recursion_process_group_(curr_path, &remove_process, true /* is_top_dir */);
+  return recursion_process_group_(curr_path, &remove_process, !if_remove_top /* is_top_dir */);
 }
 
 int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr, bool is_top_dir)
@@ -233,8 +338,7 @@ int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *
         closedir(dir);
       }
     }
-    if (OB_SUCC(ret) && 0 != strcmp(root_cgroup_, curr_path) &&
-        OB_FAIL(processor_ptr->handle_dir(curr_path, is_top_dir))) {
+    if (OB_SUCC(ret) && OB_FAIL(processor_ptr->handle_dir(curr_path, is_top_dir))) {
       LOG_WARN("process group directory failed", K(ret), K(curr_path));
     }
   }
@@ -285,16 +389,22 @@ int ObCgroupCtrl::get_group_path(
   char user_tenant_path[PATH_BUFSIZE] = "";
   char meta_tenant_path[PATH_BUFSIZE] = "";
   char group_name_path[PATH_BUFSIZE] = "";
-  // gen root_cgroup_path
-  if (is_server_tenant(tenant_id)) {
-    // if tenant_id is 500, return "other"
-    snprintf(root_cgroup_path, path_bufsize, "%s", other_cgroup_);
-  } else {
-    snprintf(root_cgroup_path, path_bufsize, "%s", root_cgroup_);
-
-    if (OB_ISNULL(base_path)) {
-      base_path = "";
+  if (!is_valid()) {
+    ret = OB_INVALID_CONFIG;
+  } else if (!is_valid_tenant_id(tenant_id)) {
+    // gen root_cgroup_path
+    if (OB_NOT_NULL(base_path)) {
+      // background base, return "cgroup/background"
+      snprintf(root_cgroup_path, path_bufsize, "%s", OBSERVER_ROOT_CGROUP_DIR);
+    } else {
+      // if tenant_id is invalid and not background, return "cgroup/other"
+      snprintf(root_cgroup_path, path_bufsize, "%s", OTHER_CGROUP_DIR);
     }
+  } else if (is_server_tenant(tenant_id)) {
+    // if tenant_id is 500, return "cgroup/other"
+    snprintf(root_cgroup_path, path_bufsize, "%s", OTHER_CGROUP_DIR);
+  } else {
+    snprintf(root_cgroup_path, path_bufsize, "%s", OBSERVER_ROOT_CGROUP_DIR);
 
     // gen tenant_path
     if (!is_valid_tenant_id(tenant_id)) {
@@ -319,7 +429,7 @@ int ObCgroupCtrl::get_group_path(
       const char *group_name;
       share::ObGroupName g_name;
       int tmp_ret = OB_SUCCESS;
-      const int WARN_LOG_INTERVAL = 10 * 1000 * 1000L;
+      const int64_t WARN_LOG_INTERVAL = 3600 * 1000 * 1000L;  // 1 hour
       ObCgSet &set = ObCgSet::instance();
 
       if (is_resource_manager_group(group_id)) {
@@ -328,6 +438,7 @@ int ObCgroupCtrl::get_group_path(
           if (REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) {
             LOG_WARN("fail to get group_name", K(tmp_ret), K(tenant_id), K(group_id), K(lbt()));
           }
+          ret = OB_SUCCESS;  // ignore error
         } else {
           group_name = g_name.get_value().ptr();
         }
@@ -355,7 +466,11 @@ int ObCgroupCtrl::get_group_path(
         }
       }
 
-      snprintf(group_name_path, path_bufsize, "%s", group_name);
+      if (OB_SUCCESS == tmp_ret && is_resource_manager_group(group_id)) {
+        snprintf(group_name_path, path_bufsize, "OBRM_%s", group_name);  // resource manager
+      } else {
+        snprintf(group_name_path, path_bufsize, "%s", group_name);
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -371,33 +486,44 @@ int ObCgroupCtrl::get_group_path(
   return ret;
 }
 
-int ObCgroupCtrl::add_self_to_cgroup(const uint64_t tenant_id, uint64_t group_id, const char *base_path)
+int ObCgroupCtrl::add_self_to_cgroup(const uint64_t tenant_id, const uint64_t group_id, const char *base_path)
+{
+  return add_thread_to_cgroup_(GETTID(), tenant_id, group_id, base_path);
+}
+
+int ObCgroupCtrl::add_thread_to_cgroup_(
+    const int64_t tid, const uint64_t tenant_id, const uint64_t group_id, const char *base_path)
 {
   int ret = OB_SUCCESS;
-  char group_path[PATH_BUFSIZE];
-  char tid_value[VALUE_BUFSIZE + 1];
+  if (is_valid()) {
+    char group_path[PATH_BUFSIZE];
+    char tid_value[VALUE_BUFSIZE + 1];
 
-  snprintf(tid_value, VALUE_BUFSIZE, "%ld", gettid());
-  if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id, base_path))) {
-    LOG_WARN("fail get group path", K(tenant_id), K(ret));
-  } else if (OB_FAIL(set_cgroup_config_(group_path, TASKS_FILE, tid_value))) {
-    LOG_WARN("add tid to cgroup failed", K(ret), K(group_path), K(tid_value), K(tenant_id));
-  } else {
-    LOG_INFO("add tid to cgroup success", K(group_path), K(tid_value), K(tenant_id), K(group_id));
+    snprintf(tid_value, VALUE_BUFSIZE, "%ld", tid);
+    if (OB_FAIL(get_group_path(group_path,
+            PATH_BUFSIZE,
+            tenant_id,
+            group_id,
+            base_path))) {
+      LOG_WARN("fail get group path", K(tenant_id), K(ret));
+    } else if (OB_FAIL(set_cgroup_config_(group_path, TASKS_FILE, tid_value))) {
+      LOG_WARN("add tid to cgroup failed", K(ret), K(group_path), K(tid_value), K(tenant_id));
+    } else {
+      LOG_DEBUG("add tid to cgroup success", K(group_path), K(tid_value), K(tenant_id), K(group_id));
+    }
   }
   return ret;
 }
-
-
-// TODO: 查表，通过 group id 找到 group 名字
-int ObCgroupCtrl::get_group_info_by_group_id(const uint64_t tenant_id,
-                                             uint64_t group_id,
-                                             share::ObGroupName &group_name)
+// find group name by group id
+int ObCgroupCtrl::get_group_info_by_group_id(
+    const uint64_t tenant_id, uint64_t group_id, share::ObGroupName &group_name)
 {
   int ret = OB_SUCCESS;
   ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
   if (OB_FAIL(rule_mgr.get_group_name_by_id(tenant_id, group_id, group_name))) {
-    LOG_WARN("fail get group name", K(tenant_id), K(group_id), K(group_name));
+    if (REACH_TIME_INTERVAL(3600 * 1000 * 1000L)) { // 1 hour
+      LOG_WARN("fail get group name", K(tenant_id), K(group_id), K(group_name));
+    }
   }
   return ret;
 }
@@ -408,9 +534,11 @@ int ObCgroupCtrl::get_cgroup_config_(const char *group_path, const char *config_
   char cgroup_config_path[PATH_BUFSIZE];
   snprintf(cgroup_config_path, PATH_BUFSIZE, "%s/%s", group_path, config_name);
   bool exist_cgroup = false;
-  if (OB_FAIL(FileDirectoryUtils::is_exists(group_path, exist_cgroup))) {
+  if (OB_FAIL(check_cgroup_root_dir())) {
+    LOG_WARN("check cgroup root dir failed", K(ret));
+  } else if (OB_FAIL(FileDirectoryUtils::is_exists(group_path, exist_cgroup))) {
     LOG_WARN("fail check file exist", K(group_path), K(ret));
-  } else if (!exist_cgroup && OB_FAIL(init_full_dir_(group_path))) {
+  } else if (!exist_cgroup) {
     LOG_WARN("init tenant cgroup dir failed", K(ret), K(group_path));
   } else if (OB_FAIL(get_string_from_file_(cgroup_config_path, config_value))) {
     LOG_WARN("get cgroup config value failed", K(ret), K(cgroup_config_path), K(config_value));
@@ -423,9 +551,10 @@ int ObCgroupCtrl::set_cgroup_config_(const char *group_path, const char *config_
   int ret = OB_SUCCESS;
   char config_path[PATH_BUFSIZE];
   snprintf(config_path, PATH_BUFSIZE, "%s/%s", group_path, config_name);
-
   bool exist_cgroup = false;
-  if (OB_FAIL(FileDirectoryUtils::is_exists(group_path, exist_cgroup))) {
+  if (OB_FAIL(check_cgroup_root_dir())) {
+    LOG_WARN("check cgroup root dir failed", K(ret));
+  } else if (OB_FAIL(FileDirectoryUtils::is_exists(group_path, exist_cgroup))) {
     LOG_WARN("fail check file exist", K(group_path), K(ret));
   } else if (!exist_cgroup && OB_FAIL(init_full_dir_(group_path))) {
     LOG_WARN("init tenant cgroup dir failed", K(ret), K(group_path));
@@ -492,7 +621,8 @@ int ObCgroupCtrl::get_cpu_shares(const uint64_t tenant_id, double &cpu, const ui
   return ret;
 }
 
-int ObCgroupCtrl::compare_cpu(const double cpu1, const double cpu2, int &compare_ret) {
+int ObCgroupCtrl::compare_cpu(const double cpu1, const double cpu2, int &compare_ret)
+{
   int ret = OB_SUCCESS;
   compare_ret = 0;
   if (cpu1 != cpu2) {
@@ -577,33 +707,32 @@ int ObCgroupCtrl::set_cpu_cfs_quota(const uint64_t tenant_id, const double cpu, 
   return ret;
 }
 
-class DecQuotaProcessor : public ObCgroupCtrl::DirProcessor
-{
-public:
-  DecQuotaProcessor(const double cpu) : cpu_(cpu)
-  {}
-  int handle_dir(const char *curr_path, bool is_top_dir)
-  {
-    int ret = OB_SUCCESS;
-    double current_cpu = -1;
-    int compare_ret = 0;
-    if (OB_FAIL(ObCgroupCtrl::get_cpu_cfs_quota_by_path_(curr_path, current_cpu))) {
-      LOG_WARN("get cpu cfs quota failed", K(ret), K(curr_path));
-    } else if ((!is_top_dir && -1 == current_cpu) ||
-               (OB_SUCC(ObCgroupCtrl::compare_cpu(cpu_, current_cpu, compare_ret)) && compare_ret >= 0)) {
-      // do nothing
-    } else if (OB_FAIL(ObCgroupCtrl::set_cpu_cfs_quota_by_path_(curr_path, cpu_))) {
-      LOG_WARN("set cpu cfs quota failed", K(curr_path), K(cpu_));
-    }
-    return ret;
-  }
-
-private:
-  const double cpu_;
-};
-
 int ObCgroupCtrl::recursion_dec_cpu_cfs_quota_(const char *group_path, const double cpu)
 {
+  class DecQuotaProcessor : public ObCgroupCtrl::DirProcessor
+  {
+  public:
+    DecQuotaProcessor(const double cpu) : cpu_(cpu)
+    {}
+    int handle_dir(const char *curr_path, bool is_top_dir)
+    {
+      int ret = OB_SUCCESS;
+      double current_cpu = -1;
+      int compare_ret = 0;
+      if (OB_FAIL(ObCgroupCtrl::get_cpu_cfs_quota_by_path_(curr_path, current_cpu))) {
+        LOG_WARN("get cpu cfs quota failed", K(ret), K(curr_path));
+      } else if ((!is_top_dir && -1 == current_cpu) ||
+                (OB_SUCC(ObCgroupCtrl::compare_cpu(cpu_, current_cpu, compare_ret)) && compare_ret >= 0)) {
+        // do nothing
+      } else if (OB_FAIL(ObCgroupCtrl::set_cpu_cfs_quota_by_path_(curr_path, cpu_))) {
+        LOG_WARN("set cpu cfs quota failed", K(curr_path), K(cpu_));
+      }
+      return ret;
+    }
+
+  private:
+    const double cpu_;
+  };
   DecQuotaProcessor dec_quota_process(cpu);
   return recursion_process_group_(group_path, &dec_quota_process, true /* is_top_dir */);
 }
@@ -753,37 +882,6 @@ int ObCgroupCtrl::get_throttled_time(const uint64_t tenant_id, int64_t &throttle
   return ret;
 }
 
-int ObCgroupCtrl::init_cgroup_root_dir_(const char *cgroup_path)
-{
-  int ret = OB_SUCCESS;
-  char current_path[PATH_BUFSIZE];
-  char value_buf[VALUE_BUFSIZE];
-  bool exist_cgroup = false;
-  if (OB_ISNULL(cgroup_path)) {
-    ret = OB_INVALID_ARGUMENT;
-    LIB_LOG(WARN, "invalid arguments.", K(cgroup_path), K(ret));
-  } else if (OB_FAIL(FileDirectoryUtils::is_exists(cgroup_path, exist_cgroup))) {
-    LOG_WARN("fail check file exist", K(cgroup_path), K(ret));
-  } else if (!exist_cgroup) {
-    ret = OB_FILE_NOT_EXIST;
-    LOG_WARN("no cgroup directory found. disable cgroup support", K(cgroup_path), K(ret));
-  } else {
-    // 设置 mems 和 cpus
-    //  cpu 可能是不连续的，自己探测很复杂。
-    //  这里总是继承父级的设置，无需自己探测。
-    //  后继 child cgroup 无需再设置 mems 和 cpus
-    recursion_remove_group_(cgroup_path);
-    if (OB_SUCC(ret)) {
-      snprintf(current_path, PATH_BUFSIZE, "%s/cgroup.clone_children", cgroup_path);
-      snprintf(value_buf, VALUE_BUFSIZE, "1");
-      if (OB_FAIL(write_string_to_file_(current_path, value_buf))) {
-        LOG_WARN("fail set value to file", K(current_path), K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObCgroupCtrl::init_dir_(const char *curr_path)
 {
   int ret = OB_SUCCESS;
@@ -792,25 +890,21 @@ int ObCgroupCtrl::init_dir_(const char *curr_path)
   bool exist_cgroup = false;
   if (OB_ISNULL(curr_path)) {
     ret = OB_INVALID_ARGUMENT;
-    LIB_LOG(WARN, "invalid arguments.", K(curr_path), K(ret));
+    LOG_WARN("invalid arguments.", K(curr_path), K(ret));
+  } else if (OB_FAIL(check_cgroup_root_dir())) {
+    LOG_WARN("check cgroup root dir failed", K(ret));
+  } else if (0 == strcmp(OBSERVER_ROOT_CGROUP_DIR, curr_path)) {
+    // do nothing
   } else if (OB_FAIL(FileDirectoryUtils::is_exists(curr_path, exist_cgroup))) {
     LOG_WARN("fail check file exist", K(curr_path), K(ret));
-  } else if (exist_cgroup) {
-    // group dir already exist, do nothing
-  } else if (OB_FAIL(FileDirectoryUtils::create_directory(curr_path))) {
+  } else if (!exist_cgroup && OB_FAIL(FileDirectoryUtils::create_directory(curr_path))) {
     LOG_WARN("create tenant cgroup dir failed", K(ret), K(curr_path));
-  } else {
-    // 设置 mems 和 cpus
-    //  cpu 可能是不连续的，自己探测很复杂。
-    //  这里总是继承父级的设置，无需自己探测。
-   // 后继 child cgroup 无需再设置 mems 和 cpus
-    if (OB_SUCC(ret)) {
-      snprintf(current_path, PATH_BUFSIZE, "%s/cgroup.clone_children", curr_path);
-      snprintf(value_buf, VALUE_BUFSIZE, "1");
-      if (OB_FAIL(write_string_to_file_(current_path, value_buf))) {
-        LOG_WARN("fail set value to file", K(current_path), K(ret));
-      }
-      LOG_DEBUG("debug print clone", K(current_path), K(value_buf));
+  }
+  if (OB_SUCC(ret)) {
+    char cgroup_clone_children_value[VALUE_BUFSIZE + 1];
+    snprintf(cgroup_clone_children_value, VALUE_BUFSIZE, "1");
+    if (OB_FAIL(set_cgroup_config_(curr_path, CGROUP_CLONE_CHILDREN_FILE, cgroup_clone_children_value))) {
+      LOG_WARN("set cgroup_clone_children failed", K(ret), K(curr_path));
     }
   }
   return ret;
