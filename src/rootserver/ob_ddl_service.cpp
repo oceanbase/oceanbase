@@ -4469,7 +4469,10 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
           // check is partition key change type
           bool is_partition_key = false;
           bool is_sub_partition_key = false;
-          if (OB_FAIL(orig_table_schema.is_partition_key(*orig_column_schema, is_partition_key))) {
+          if (OB_ISNULL(orig_column_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid orig column schema", K(ret), K(orig_column_name));
+          } else if (OB_FAIL(orig_table_schema.is_partition_key(*orig_column_schema, is_partition_key))) {
             LOG_WARN("failed to check orig column is partition key", K(ret), K(orig_table_schema), KPC(orig_column_schema));
           } else if (OB_FAIL(orig_table_schema.is_subpartition_key(*orig_column_schema,is_sub_partition_key))) {
             LOG_WARN("failed to check orig column is sub partition key", K(ret), K(orig_table_schema), KPC(orig_column_schema));
@@ -4480,7 +4483,7 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
                       orig_column_schema->get_meta_type().is_number())
                   && alter_column_schema->get_meta_type().is_unsigned()) {
             ret = OB_ERR_PARTITION_CONST_DOMAIN_ERROR;
-            LOG_WARN("cannot drp partition dependent column", K(ret));
+            LOG_WARN("cannot drop partition dependent column", K(ret));
           }
 
           if (OB_FAIL(ret)) {
