@@ -46,6 +46,7 @@ ObTableLoadCoordinatorCtx::ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx)
     next_session_id_(0),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
+    enable_heart_beat_(false),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());

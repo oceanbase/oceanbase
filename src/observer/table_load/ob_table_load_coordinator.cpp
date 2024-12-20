@@ -506,16 +506,18 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
   int ret = OB_SUCCESS;
   ObTableLoadArray<ObTableLoadPartitionLocation::LeaderInfo> all_leader_info_array;
   ObTableLoadArray<ObTableLoadPartitionLocation::LeaderInfo> target_all_leader_info_array;
+  coordinator_ctx_->set_enable_heart_beat(true);
   if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader_info(all_leader_info_array))) {
     LOG_WARN("fail to get all leader info", KR(ret));
   } else if (OB_FAIL(coordinator_ctx_->target_partition_location_.get_all_leader_info(target_all_leader_info_array))) {
     LOG_WARN("fail to get all leader info", KR(ret));
-  } else if (all_leader_info_array.count() != target_all_leader_info_array.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN(
-        "origin table leader count must be qual to target table leader count",
-        K(all_leader_info_array.count()),
-        K(target_all_leader_info_array.count()), KR(ret));
+  } else if (OB_UNLIKELY(coordinator_ctx_->store_infos_.count() != all_leader_info_array.count()
+                         || coordinator_ctx_->store_infos_.count() != target_all_leader_info_array.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("store infos count must equal to leader info array count",
+              KR(ret),
+              K(coordinator_ctx_->store_infos_),
+              K(all_leader_info_array), K(target_all_leader_info_array));
   } else {
     LOG_INFO("route_pre_begin_peer_request begin", K(all_leader_info_array.count()));
     ObDirectLoadControlPreBeginArg arg;
@@ -544,14 +546,18 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
       LOG_WARN("fail to set exec ctx", KR(ret));
     }
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_leader_info_array.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      ObTableLoadCoordinatorCtx::StoreInfo &store_info = coordinator_ctx_->store_infos_.at(i);
+      const ObAddr &addr = store_info.addr_;
       const ObTableLoadPartitionLocation::LeaderInfo &leader_info = all_leader_info_array.at(i);
       const ObTableLoadPartitionLocation::LeaderInfo &target_leader_info =
         target_all_leader_info_array.at(i);
       //目前源表和目标表的分区信息连同每个分区的地址都完全一样
-      const ObAddr &addr = leader_info.addr_;
-      if (OB_UNLIKELY(leader_info.addr_ != target_leader_info.addr_)) {
-        LOG_INFO("addr must be same", K(leader_info.addr_), K(target_leader_info.addr_));
+      if (OB_UNLIKELY(addr != leader_info.addr_ || addr != target_leader_info.addr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("addr must be same", K(addr),
+                                      K(leader_info.addr_),
+                                      K(target_leader_info.addr_));
       }
       if (arg.exe_mode_ == ObTableLoadExeMode::MAX_TYPE) {
         arg.config_.parallel_ = ctx_->param_.session_count_;
@@ -561,7 +567,9 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
       }
       arg.partition_id_array_ = leader_info.partition_id_array_;
       arg.target_partition_id_array_ = target_leader_info.partition_id_array_;
-      if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
+      if (OB_FAIL(ret)) {
+
+      } else if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ctx_->param_.session_count_ = arg.config_.parallel_;
         ctx_->param_.avail_memory_ = arg.avail_memory_;
         if (OB_FAIL(ObTableLoadStore::init_ctx(ctx_, arg.partition_id_array_, arg.target_partition_id_array_))) {
@@ -576,6 +584,9 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
         }
       } else { // 对端, 发送rpc
         TABLE_LOAD_CONTROL_RPC_CALL(pre_begin, addr, arg);
+      }
+      if (OB_SUCC(ret)) {
+        store_info.enable_heart_beat_ = true;
       }
     }
   }
@@ -714,9 +725,6 @@ int ObTableLoadCoordinator::confirm_begin_peers()
         }
       } else { // 对端, 发送rpc
         TABLE_LOAD_CONTROL_RPC_CALL(confirm_begin, addr, arg);
-      }
-      if (OB_SUCC(ret)) {
-        store_info.enable_heart_beat_ = true;
       }
     }
   }

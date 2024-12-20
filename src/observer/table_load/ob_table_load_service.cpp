@@ -69,7 +69,8 @@ void ObTableLoadService::ObHeartBeatTask::runTimerTask()
   }
   for (int64_t i = 0; i < table_ctx_array.count(); ++i) {
     ObTableLoadTableCtx *table_ctx = table_ctx_array.at(i);
-    if (nullptr != table_ctx->coordinator_ctx_) {
+    if (nullptr != table_ctx->coordinator_ctx_
+        && table_ctx->coordinator_ctx_->enable_heart_beat()) {
       ObTableLoadCoordinator coordinator(table_ctx);
       if (OB_FAIL(coordinator.init())) {
         LOG_WARN("fail to init coordinator", KR(ret));

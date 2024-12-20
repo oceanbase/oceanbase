@@ -93,6 +93,11 @@ public:
   int set_status_error(int error_code);
   int set_status_abort();
   int check_status(table::ObTableLoadStatusType status) const;
+  OB_INLINE bool enable_heart_beat() const { return enable_heart_beat_; }
+  OB_INLINE void set_enable_heart_beat(bool enable_heart_beat)
+  {
+    enable_heart_beat_ = enable_heart_beat;
+  }
 private:
   int advance_status(table::ObTableLoadStatusType status);
 public:
@@ -191,6 +196,7 @@ private:
   TransCtxMap trans_ctx_map_;
   SegmentCtxMap segment_ctx_map_;
   common::ObArray<ObTableLoadTransCtx *> commited_trans_ctx_array_;
+  bool enable_heart_beat_;
   bool is_inited_;
 };
 
