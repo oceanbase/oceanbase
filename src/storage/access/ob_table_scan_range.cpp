@@ -309,6 +309,8 @@ int ObTableScanRange::init_ranges(
       datum_range.set_whole_range();
       if (OB_FAIL(ranges_.push_back(datum_range))) {
         STORAGE_LOG(WARN, "Failed to push back datum range", K(ret));
+      } else if (OB_UNLIKELY(is_tablet_spliting)) {
+        STORAGE_LOG(INFO, "whole range with split, maybe bug if partkey is rowkey prefix", K(ret), K(tablet_id), K(ranges), K(common::lbt()));
       }
     } else {
       ObPartitionSplitQuery split_query;
@@ -332,6 +334,7 @@ int ObTableScanRange::init_ranges(
             is_false))) {
           STORAGE_LOG(WARN, "Failed to get split datum range", K(ret), K(tablet_id), K(ls_id));
         } else if (is_false) {
+          STORAGE_LOG(INFO, "Range after split is empty", K(ret), K(range_cnt), K(i), K(tablet_id), K(range));
         } else if (OB_FAIL(ranges_.push_back(datum_range))) {
           STORAGE_LOG(WARN, "Failed to push back datum range", K(ret));
         }

@@ -234,12 +234,29 @@ int ObPartitionSplitQuery::get_tablet_split_ranges(
         } else if (OB_FAIL(get_tablet_split_range(*tablet_handle_.get_obj(), datum_utils, split_info_, allocator, datum_range, is_empty_range))) {
           LOG_WARN("Fail to get tabelt split range", K(ret), K(split_info_));
         } else if (is_empty_range) {
-          LOG_INFO("Range after split is empty", K(ori_ranges.at(i)));
+          LOG_INFO("Range after split is empty", K(ori_ranges.count()), K(i), "tablet_id", tablet_handle_.get_obj()->get_tablet_meta().tablet_id_, K(ori_ranges.at(i)));
         } else if (OB_FAIL(datum_range.to_store_range(col_descs, allocator, tmp_range))) {
           LOG_WARN("fail to transfer to store range", K(ret), K(datum_range));
         } else if (OB_FALSE_IT(tmp_range.set_table_id(ori_ranges.at(i).get_table_id()))) {
         } else if (OB_FAIL(new_ranges.push_back(tmp_range))) {
           LOG_WARN("Fail to push back to new ranges", K(ret), K(tmp_range));
+        }
+      }
+      if (OB_SUCC(ret) && !ori_ranges.empty() && new_ranges.empty()) {
+        // mock an empty range
+        tmp_range.reset();
+        if (OB_FAIL(ori_ranges.at(0).deep_copy(allocator, tmp_range))) {
+          LOG_WARN("Fail to deep copy src range", K(ret), K(ori_ranges.at(0)));
+        } else {
+          tmp_range.get_start_key().set_max();
+          tmp_range.get_end_key().set_min();
+          tmp_range.set_left_open();
+          tmp_range.set_right_open();
+          if (OB_FAIL(new_ranges.push_back(tmp_range))) {
+            LOG_WARN("Fail to push back to new ranges", K(ret), K(tmp_range));
+          } else {
+            LOG_INFO("mock empty range for split", K(ret), "tablet_id", tablet_handle_.get_obj()->get_tablet_meta().tablet_id_, K(new_ranges));
+          }
         }
       }
     }
