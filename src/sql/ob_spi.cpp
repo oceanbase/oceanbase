@@ -2355,7 +2355,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                 OX (exec_param.set_param_meta(expr->get_result_meta()));
                 OX (result_type = expr->get_result_type());
                 OX (exec_param.set_accuracy(result_type.get_accuracy()));
-                if (result_type.is_ext()) {
+                if (OB_SUCC(ret) && result_type.is_ext()) {
                   if (ob_is_xml_pl_type(result_type.get_type(), result_type.get_udt_id())) {
                     const ObDataTypeCastParams dtc_params = sql::ObBasicSessionInfo::create_dtc_params(&session);
                     ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, ObCharset::get_system_collation());
@@ -2364,7 +2364,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                     }
                   }
                 }
-                if (OB_FAIL(params->push_back(exec_param))) {
+                if (OB_SUCC(ret) && OB_FAIL(params->push_back(exec_param))) {
                   LOG_WARN("failed to push back param", K(ret));
                 }
               }

@@ -32867,7 +32867,9 @@ def_table_schema(
            SCHEMA_VERSION,
            PS_STMT_ID,
            DB_ID,
-           PL_CG_MEM_HOLD
+           PL_CG_MEM_HOLD,
+           SYS_VARS,
+           PARAM_INFOS
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true
 """.replace("\n", " "),
     normal_columns = [
@@ -32904,7 +32906,9 @@ def_table_schema(
            SCHEMA_VERSION,
            PS_STMT_ID,
            DB_ID,
-           PL_CG_MEM_HOLD
+           PL_CG_MEM_HOLD,
+           SYS_VARS,
+           PARAM_INFOS
     FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 
@@ -63864,7 +63868,9 @@ def_table_schema(
            SCHEMA_VERSION AS SCHEMA_VERSION,
            PS_STMT_ID AS PS_STMT_ID,
            DB_ID AS DB_ID,
-           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD
+           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD,
+           SYS_VARS AS SYS_VARS,
+           PARAM_INFOS AS PARAM_INFOS
     FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc='1'
 """.replace("\n", " "),
     normal_columns = [
@@ -63903,7 +63909,9 @@ def_table_schema(
            SCHEMA_VERSION AS SCHEMA_VERSION,
            PS_STMT_ID AS PS_STMT_ID,
            DB_ID AS DB_ID,
-           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD
+           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD,
+           SYS_VARS AS SYS_VARS,
+           PARAM_INFOS AS PARAM_INFOS
     FROM SYS.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 
