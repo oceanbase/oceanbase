@@ -213,7 +213,7 @@ public:
     OdpsPartitionDownloader() :
       odps_driver_(),
       odps_partition_downloader_(NULL),
-      downloader_is_ready_(false)
+      downloader_init_status_(0)
     {}
     ~OdpsPartitionDownloader() {
       reset();
@@ -222,7 +222,7 @@ public:
     ObODPSTableRowIterator odps_driver_;
     apsara::odps::sdk::IDownloadPtr odps_partition_downloader_;
     common::ObThreadCond tunnel_ready_cond_;
-    bool downloader_is_ready_;
+    int downloader_init_status_; // 0 is uninitialized, 1 is successfully initialized, -1 is failed to initialize
   };
   class DeleteDownloaderFunc
   {

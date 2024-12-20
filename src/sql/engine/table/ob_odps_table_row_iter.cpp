@@ -242,29 +242,33 @@ int ObODPSTableRowIterator::next_task()
                 } else if (FALSE_IT(new(temp_downloader)ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader())) {
                 } else if (OB_FAIL(temp_downloader->tunnel_ready_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
                   LOG_WARN("failed to init tunnel condition variable", K(ret));
-                } else {
-                  ObThreadCondGuard guard(temp_downloader->tunnel_ready_cond_);
-                  if (OB_FAIL(odps_map.set_refactored(part_id, reinterpret_cast<int64_t>(temp_downloader), 0/*flag*/, 0/*broadcast*/, 0/*overwrite_key*/))) {
-                    if (OB_HASH_EXIST == ret) {
-                      ret = OB_SUCCESS;
-                      if (OB_FAIL(sqc->get_sqc_ctx().gi_pump_.get_odps_downloader(part_id, state_.download_handle_))) {
-                        LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
-                      } else {
-                        LOG_TRACE("succ to get downloader handle from GI", K(ret), K(part_id), K(state_.is_from_gi_pump_));
-                      }
+                } else if (OB_FAIL(odps_map.set_refactored(part_id, reinterpret_cast<int64_t>(temp_downloader), 0/*flag*/, 0/*broadcast*/, 0/*overwrite_key*/))) {
+                  if (OB_HASH_EXIST == ret) {
+                    ret = OB_SUCCESS;
+                    if (OB_FAIL(sqc->get_sqc_ctx().gi_pump_.get_odps_downloader(part_id, state_.download_handle_))) {
+                      LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
                     } else {
-                      LOG_WARN("fail to set refactored", K(ret));
+                      LOG_TRACE("succ to get downloader handle from GI", K(ret), K(part_id), K(state_.is_from_gi_pump_));
                     }
-                  } else if (OB_FAIL(temp_downloader->odps_driver_.init_tunnel(odps_format_, false))) {
+                  } else {
+                    LOG_WARN("fail to set refactored", K(ret));
+                  }
+                } else {
+                  if (OB_FAIL(temp_downloader->odps_driver_.init_tunnel(odps_format_, false))) {
                     LOG_WARN("failed to init tunnel", K(ret), K(part_id));
                   } else if (OB_FAIL(temp_downloader->odps_driver_.create_downloader(part_spec, temp_downloader->odps_partition_downloader_))) {
                     LOG_WARN("failed create odps partition downloader", K(ret), K(part_id));
+                  }
+                  temp_downloader->tunnel_ready_cond_.lock();
+                  if (OB_FAIL(ret)) {
+                    temp_downloader->downloader_init_status_ = -1; // -1 is temp_downloader failed to initialize temp_downloader
                   } else {
                     state_.download_handle_ = temp_downloader->odps_partition_downloader_;
-                    temp_downloader->downloader_is_ready_ = true;
-                    temp_downloader->tunnel_ready_cond_.broadcast(); // awake other threads, tell them that temp_downloader->odps_partition_downloader_ is ready
+                    temp_downloader->downloader_init_status_ = 1; // 1 is temp_downloader was initialized successfully
                     LOG_TRACE("succ to create downloader handle and set it to GI", K(ret), K(part_id), K(state_.is_from_gi_pump_), KP(temp_downloader));
                   }
+                  temp_downloader->tunnel_ready_cond_.unlock();
+                  temp_downloader->tunnel_ready_cond_.broadcast(); // wake other threads that temp_downloader has finished initializing. The initialization result may be failure or success.
                 }
               } else {
                 LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
@@ -2560,21 +2564,26 @@ int ObOdpsPartitionDownloaderMgr::get_odps_downloader(int64_t part_id, apsara::o
     //timeout is 60s, the initialization of the downloader typically takes under 5 seconds,
     // and 60 seconds is sufficient for that.
     int64_t timeout_ts = ObTimeUtility::current_time() + 60000000;
-    while (!odps_downloader->downloader_is_ready_) {
+    while (0 == odps_downloader->downloader_init_status_) { // wait odps_downloader to finish initialization
       odps_downloader->tunnel_ready_cond_.lock();
-      if (!odps_downloader->downloader_is_ready_) {
-        odps_downloader->tunnel_ready_cond_.wait_us(10000); // wait 10 ms every loop
+      if (0 == odps_downloader->downloader_init_status_) {
+        odps_downloader->tunnel_ready_cond_.wait_us(1 * 1000 * 1000); // wait 1s every loop
       }
       odps_downloader->tunnel_ready_cond_.unlock();
       if (0 == wait_times % 100) {
-        LOG_TRACE("waiting odps_downloader to be ready", K(wait_times), K(part_id), KP(odps_downloader), K(ret));
+        LOG_TRACE("waiting odps_downloader to initialize", K(wait_times), K(part_id), KP(odps_downloader), K(ret));
       }
-      if (timeout_ts < ObTimeUtility::current_time()) {
+      int64_t time_now_ts = ObTimeUtility::current_time();
+      if (timeout_ts < time_now_ts) {
         ret = OB_TIMEOUT;
-        LOG_WARN("get odps downloader timeout", K(ret), K(part_id));
+        LOG_WARN("waiting downloader initializing timeout", K(ret), K(part_id), K(time_now_ts), K(timeout_ts));
         break;
       }
       ++wait_times;
+    }
+    if (OB_SUCC(ret) && odps_downloader->downloader_init_status_ < 0) { // odps_downloader failed to initialize
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("odps_downloader was failed to initialize", K(ret), K(part_id), K(value), KP(odps_downloader));
     }
   }
   if (OB_FAIL(ret)) {
@@ -2704,7 +2713,7 @@ int ObOdpsPartitionDownloaderMgr::DeleteDownloaderFunc::operator()(common::hash:
 int ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader::reset()
 {
   int ret = OB_SUCCESS;
-  downloader_is_ready_ = false;
+  downloader_init_status_ = 0; // reset to uninitialized status
   try {
     if (OB_ISNULL(odps_partition_downloader_.get())) {
       ret = OB_ERR_UNEXPECTED;
