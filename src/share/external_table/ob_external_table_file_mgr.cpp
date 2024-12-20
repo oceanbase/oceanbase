@@ -1280,8 +1280,8 @@ int ObExternalTableFileManager::fill_cache_from_inner_table(
   int64_t total_wait_secs = 0;
 
   while (OB_FAIL(fill_cache_locks_[bucket_id].lock(LOCK_TIMEOUT))
-         && OB_TIMEOUT == ret && !THIS_WORKER.is_timeout()) {
-    total_wait_secs += LOAD_CACHE_LOCK_CNT;
+         && OB_TIMEOUT == ret && OB_SUCC(THIS_WORKER.check_status())) {
+    total_wait_secs += (LOCK_TIMEOUT / 1000000);
     LOG_WARN("fill external table cache wait", K(total_wait_secs));
   }
   if (OB_SUCC(ret)) {
