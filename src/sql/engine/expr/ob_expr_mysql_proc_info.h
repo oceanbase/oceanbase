@@ -37,10 +37,10 @@ public:
   ObExprMysqlProcInfo();
   explicit ObExprMysqlProcInfo(common::ObIAllocator& alloc);
   virtual ~ObExprMysqlProcInfo();
-  virtual int calc_result_typeN(ObExprResType &type,
-                                ObExprResType *types_stack,
-                                int64_t param_num,
-                                ObExprTypeCtx &type_ctx) const;
+  virtual int calc_result_type2(ObExprResType& type,
+                                ObExprResType& type1,
+                                ObExprResType& type2,
+                                common::ObExprTypeCtx& type_ctx) const override;
 
   static int eval_mysql_proc_info(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   virtual int cg_expr(ObExprCGCtx &ctx, const ObRawExpr &raw_expr,
@@ -49,27 +49,20 @@ private:
   static int get_param_list_info(const ObExpr &expr,
                                  ObEvalCtx &ctx,
                                  ObDatum &expr_datum,
-                                 ObString &routine_body,
-                                 ObString &exec_env_str,
                                  uint64_t routine_id);
   static int get_returns_info(const ObExpr &expr,
                               ObEvalCtx &ctx,
                               ObDatum &expr_datum,
-                              int64_t param_type,
-                              int64_t param_length,
-                              int64_t param_precision,
-                              int64_t param_scale,
-                              int64_t param_coll_type);
+                              uint64_t routine_id);
   static int get_body_info(const ObExpr &expr,
                            ObEvalCtx &ctx,
                            ObDatum &expr_datum,
-                           ObString &routine_body,
-                           ObString &exec_env_str);
+                           uint64_t routine_id);
 
   static int get_info_by_field_id(const ObExpr &expr,
                                   ObEvalCtx &ctx,
                                   ObDatum &expr_datum,
-                                  ObString &routine_body,
+                                  uint64_t routine_id,
                                   uint64_t field_id);
   static int get_routine_info(ObSQLSessionInfo *session,
                               uint64_t routine_id,
@@ -79,7 +72,7 @@ private:
                                ObDatum &expr_datum,
                                ObString &value_str);
   static int extract_create_node_from_routine_info(ObIAllocator &alloc,
-                                                   const ObString &routine_body,
+                                                   const ObRoutineInfo &routine_info,
                                                    const sql::ObExecEnv &exec_env,
                                                    ParseNode *&create_node);
 private:
