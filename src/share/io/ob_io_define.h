@@ -619,6 +619,7 @@ public:
   int prepare(char *next_buffer = nullptr, int64_t next_size = 0, int64_t next_offset = 0);
   int recycle_buffer();
   int re_prepare();
+  int retry_io();
   int try_alloc_buf_until_timeout(char *&io_buf);
   bool can_callback() const;
   void free_io_buffer();

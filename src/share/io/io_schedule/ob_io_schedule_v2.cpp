@@ -66,7 +66,17 @@ int QSchedCallback::handle(TCRequest* tc_req)
     LOG_INFO("submit_request cost too much time", K(ret), K(time_guard), K(req));
   }
   if (OB_FAIL(ret)) {
-    io_req_finish(req, ObIORetCode(ret));
+    if (ret == OB_EAGAIN) {
+      if (REACH_TIME_INTERVAL(1 * 1000L * 1000L)) {
+        LOG_INFO("device channel eagain", K(ret));
+      }
+      if (OB_FAIL(req.retry_io())) {
+        LOG_WARN("retry io failed", K(ret), K(req));
+        io_req_finish(req, ObIORetCode(ret));
+      }
+    } else {
+      io_req_finish(req, ObIORetCode(ret));
+    }
   }
   req.dec_ref("phyqueue_dec"); // ref for io queue
   return ret;

@@ -2134,7 +2134,9 @@ int ObAsyncIOChannel::submit(ObIORequest &req)
   } else if (OB_UNLIKELY(device_handle_ != req.fd_.device_handle_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(req), KP(device_handle_));
-  } else if (submit_count_ >= MAX_AIO_EVENT_CNT) {
+  } else if (OB_ISNULL(req.io_result_)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if ((!req.get_flag().is_detect()) && (submit_count_ >= MAX_AIO_EVENT_CNT - MAX_DETECT_DISK_HUNG_IO_CNT)) {
     ret = OB_EAGAIN;
     if (REACH_TIME_INTERVAL(1000000L)) {
       LOG_WARN("too many io requests", K(ret), K(submit_count_));
@@ -2142,7 +2144,7 @@ int ObAsyncIOChannel::submit(ObIORequest &req)
   } else if (OB_UNLIKELY(current_ts > req.timeout_ts())) {
     ret = OB_TIMEOUT;
     LOG_WARN("io timeout because current time is larger than timeout timestamp", K(ret), K(current_ts), K(req));
-  } else if (device_channel_->used_io_depth_ > device_channel_->max_io_depth_) {
+  } else if ((!req.get_flag().is_detect()) && (device_channel_->used_io_depth_ > device_channel_->max_io_depth_ - MAX_DETECT_DISK_HUNG_IO_CNT)) {
     ret = OB_EAGAIN;
     FLOG_INFO("reach max io depth", K(ret), K(device_channel_->used_io_depth_), K(device_channel_->max_io_depth_));
   } else {
