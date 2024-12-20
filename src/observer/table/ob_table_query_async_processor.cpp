@@ -666,18 +666,17 @@ int ObTableQueryAsyncP::generate_merge_result_iterator()
   ObTableMergeFilterCompare *compare = nullptr;
   ObQueryFlag::ScanOrder scan_order = query_session_->get_query().get_scan_order();
   if (OB_ISNULL(merge_result_iter = OB_NEWx(ResultMergeIterator,
-                                              &allocator_,
-                                              allocator_,
+                                              query_session_->get_allocator(),
                                               query_session_->get_query(),
                                               result_ /* Response serlize row*/))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to create merge_result_iter", K(ret));
-  } else if (OB_FAIL(generate_multi_result_iterator(merge_result_iter->get_inner_result_iterators()))) {
+  } else if (OB_FAIL(generate_multi_result_iterator(merge_result_iter))) {
     LOG_WARN("fail to generate multi result inner iterator", K(ret));
-  } else if (scan_order == ObQueryFlag::Reverse && OB_ISNULL(compare = OB_NEWx(ObTableHbaseRowKeyReverseCompare, &allocator_))) {
+  } else if (scan_order == ObQueryFlag::Reverse && OB_ISNULL(compare = OB_NEWx(ObTableHbaseRowKeyReverseCompare, &merge_result_iter->get_allocator()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create compare, alloc memory fail", K(ret));
-  } else if (scan_order == ObQueryFlag::Forward && OB_ISNULL(compare = OB_NEWx(ObTableHbaseRowKeyDefaultCompare, &allocator_))) {
+  } else if (scan_order == ObQueryFlag::Forward && OB_ISNULL(compare = OB_NEWx(ObTableHbaseRowKeyDefaultCompare, &merge_result_iter->get_allocator()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create compare, alloc memory fail", K(ret));
   } else if (OB_FAIL(merge_result_iter->init(compare))) {
@@ -688,7 +687,8 @@ int ObTableQueryAsyncP::generate_merge_result_iterator()
 
   if (OB_FAIL(ret) && OB_NOT_NULL(merge_result_iter)) {
     merge_result_iter->~ResultMergeIterator();
-    allocator_.free(merge_result_iter);
+    query_session_->get_allocator()->free(merge_result_iter);
+    merge_result_iter = nullptr;
   }
   return ret;
 }
@@ -776,13 +776,14 @@ int ObTableQueryAsyncP::process_table_info(ObTableSingleQueryInfo* table_info,
   return ret;
 }
 
-int ObTableQueryAsyncP::generate_multi_result_iterator(ObIArray<ObTableQueryResultIterator*>& inner_result_iterator_list) {
+int ObTableQueryAsyncP::generate_multi_result_iterator(ResultMergeIterator *merge_result_iter) {
   int ret = OB_SUCCESS;
   ObIAllocator *allocator = query_session_->get_allocator();
   ObTableQueryAsyncCtx &query_ctx = query_session_->get_query_ctx();
   ObTableQuery &query = query_session_->get_query();
   ObTableApiExecutor *executor = nullptr;
   ObTableApiSpec *spec = nullptr;
+  ObIArray<ObTableQueryResultIterator*>& inner_result_iterator_list = merge_result_iter->get_inner_result_iterators();
 
   const ObIArray<ObString>& columns = query.htable_filter().get_columns();
   ObArray<std::pair<ObString, bool>> family_addfamily_flag_pairs;
@@ -827,7 +828,7 @@ int ObTableQueryAsyncP::generate_multi_result_iterator(ObIArray<ObTableQueryResu
       table_info->executor_ = static_cast<ObTableApiScanExecutor*>(executor);
       table_info->spec_ = spec;
       ObTableQueryResultIterator *result_iter = nullptr;
-      if (OB_FAIL(ObTableQueryUtils::generate_htable_result_iterator(*allocator,
+      if (OB_FAIL(ObTableQueryUtils::generate_htable_result_iterator(merge_result_iter->get_allocator(),
                                                                     table_info->query_,
                                                                     table_info->result_,
                                                                     table_info->tb_ctx_,
@@ -846,7 +847,9 @@ int ObTableQueryAsyncP::generate_multi_result_iterator(ObIArray<ObTableQueryResu
       }
 
       if (OB_FAIL(ret) && OB_NOT_NULL(result_iter)) {
-        ObTableQueryUtils::destroy_result_iterator(result_iter);
+        result_iter->~ObTableQueryResultIterator();
+        merge_result_iter->get_allocator().free(result_iter);
+        result_iter = nullptr;
       }
     }
   }
@@ -1146,7 +1149,7 @@ int ObTableQueryAsyncP::init_multi_cf_query_ctx(const ObString &arg_tablegroup_n
               && arg_.tablet_id_.is_valid() // Get partidx only when it's a partitioned table
               && OB_FAIL(table_schema->get_part_idx_by_tablet(arg_.tablet_id_, part_idx, subpart_idx))) {
             LOG_WARN("fail to get_part_idx_by_tablet", K(ret));
-          } else if (OB_FAIL(arg_.query_.deep_copy(allocator_, query_info->query_))) {
+          } else if (OB_FAIL(arg_.query_.deep_copy(*query_session_->get_allocator(), query_info->query_))) {
             LOG_WARN("fail to copy query to query_info", K(ret));
           } else {
             if (part_idx != OB_INVALID_INDEX) {
@@ -1274,6 +1277,10 @@ int ObTableQueryAsyncP::query_scan_multi_cf_with_init() {
       LOG_WARN("fail to generate_merge_result_iterator", K(ret));
     } else if (OB_FAIL(execute_multi_cf_query())) {
       LOG_WARN("fail to execute query", K(ret));
+    } else {
+      stat_row_count_ = result_.get_row_count();
+      result_.query_session_id_ = query_session_id_;
+      is_full_table_scan_ = query_infos.at(0)->tb_ctx_.is_full_table_scan();
     }
   }
   return ret;
