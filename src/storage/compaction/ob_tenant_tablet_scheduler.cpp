@@ -296,7 +296,7 @@ int ObCSReplicaChecksumHelper::check_column_type(
       if (OB_ISNULL(col_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null col schema", K(ret));
-      } else if (ob_is_large_text(col_schema->get_data_type())) {
+      } else if (is_lob_storage(col_schema->get_data_type())) {
         LOG_DEBUG("check column type for cs replica", K(cur_col_idx), KPC(col_schema),
                   "rowkey_cnt", table_schema->get_rowkey_column_num(), KPC(table_schema));
       } else {

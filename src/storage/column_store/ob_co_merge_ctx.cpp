@@ -817,7 +817,7 @@ int ObCOTabletMergeCtx::validate_column_checksums(
       if (OB_UNLIKELY(col_seq_idx >= all_column_cnt || col_seq_idx < 0)) {
         ret = OB_CHECKSUM_ERROR;
         LOG_WARN("get unexpected col seq idx", K(ret), K(col_seq_idx), K(all_column_cnt));
-      } else if (ob_is_large_text(column_descs.at(col_seq_idx).col_type_.get_type())) {//temp code
+      } else if (is_lob_storage(column_descs.at(col_seq_idx).col_type_.get_type())) {//temp code
         continue;
       } else if (cur_col_cksums[col_idx] != all_column_cksums[col_seq_idx]) {
         ret = OB_CHECKSUM_ERROR;

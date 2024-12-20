@@ -1634,7 +1634,7 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       col_schema.meta_type_ = meta_type;
       if (OB_FAIL(datum.from_obj_enhance(col->get_orig_default_value()))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
-      } else if (ob_is_large_text(col->get_data_type()) && !datum.has_lob_header()
+      } else if (is_lob_storage(col->get_data_type()) && !datum.has_lob_header()
               && OB_FAIL(ObLobManager::fill_lob_header(*allocator_, datum))) {
         STORAGE_LOG(WARN, "failed to fill lob header", K(ret), K(datum));
       } else {
@@ -1642,7 +1642,7 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
 #ifdef ERRSIM
         int64_t error_code = OB_E(EventTable::EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM) OB_SUCCESS;
         int64_t errsim_data_version = static_cast<int>(DATA_VERSION_4_3_4_0);
-        if (-errsim_data_version == error_code && ob_is_large_text(col->get_data_type())) {
+        if (-errsim_data_version == error_code && is_lob_storage(col->get_data_type())) {
           col_schema.default_checksum_ = 0;
           STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM set zero default checksum", K(error_code), K(col_schema));
         }
