@@ -876,18 +876,20 @@ int ObArrayExprUtils::get_collection_payload(ObIAllocator &allocator, ObEvalCtx 
           MEMCPY(tmp_buf + pos, payload, payload_len);
           pos += payload_len;
         } else {
-            for (uint32_t i = 0; i < expr.attrs_cnt_; ++i) {
+          uint32_t array_len = 0;
+          for (uint32_t i = 0; i < expr.attrs_cnt_; ++i) {
             ObIVector *vec = expr.attrs_[i]->get_vector(ctx);
             const char *payload = NULL;
             ObLength payload_len = 0;
             if (i == 0) {
-              len_vec_type *ids = static_cast<len_vec_type *>(vec);
-              ids->get_payload(row_idx, payload, payload_len);
+              array_len = vec->get_int(row_idx);
+              MEMCPY(tmp_buf + pos, reinterpret_cast<char *>(&array_len), sizeof(array_len));
+              pos += sizeof(array_len);
             } else {
               vec->get_payload(row_idx, payload, payload_len);
+              MEMCPY(tmp_buf + pos, payload, payload_len);
+              pos += payload_len;
             }
-            MEMCPY(tmp_buf + pos, payload, payload_len);
-            pos += payload_len;
           }
         }
         ObString arr_obj(total_len, tmp_buf);
