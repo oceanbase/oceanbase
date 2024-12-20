@@ -88,7 +88,8 @@ public:
       uint64_t is_access_vidx_as_master_table_  : 1;
       uint64_t is_update_partition_key_         : 1;
       uint64_t is_update_uk_                    : 1;
-      uint64_t reserved_                        : 55;
+      uint64_t is_update_pk_with_dop_           : 1; // update primary_table PK
+      uint64_t reserved_                        : 54;
     };
   };
 protected:

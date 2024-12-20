@@ -3297,7 +3297,9 @@ int ObLSTabletService::insert_row(
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
       row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-      const bool check_exist = !data_table.is_storage_index_table() || data_table.is_unique_index();
+      const bool check_exist = !data_table.is_storage_index_table() ||
+        data_table.is_unique_index() ||
+        ctx.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
       if (OB_FAIL(insert_row_to_tablet(check_exist,
                                        tablet_handle,
                                        run_ctx,
@@ -4469,9 +4471,14 @@ int ObLSTabletService::insert_tablet_rows(
   int ret = OB_SUCCESS;
   ObRelativeTable &table = run_ctx.relative_table_;
 #ifdef OB_BUILD_PACKAGE
-  const bool check_exists = !table.is_storage_index_table() || table.is_unique_index();
+  const bool check_exists = !table.is_storage_index_table() ||
+    table.is_unique_index() ||
+    run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
 #else
-  const bool check_exists = !table.is_storage_index_table() || table.is_unique_index() || table.is_fts_index();
+  const bool check_exists = !table.is_storage_index_table() ||
+    table.is_unique_index() ||
+    table.is_fts_index() ||
+    run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
 #endif
   // 1. Defensive checking of new rows.
   if (GCONF.enable_defensive_check()) {
@@ -5294,7 +5301,9 @@ int ObLSTabletService::process_data_table_row(
         }
       }
     } else {
-      const bool check_exist = !relative_table.is_storage_index_table() || relative_table.is_unique_index();
+      const bool check_exist = !relative_table.is_storage_index_table() ||
+        relative_table.is_unique_index() ||
+        ctx.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
       if (OB_FAIL(insert_row_without_rowkey_check_wrap(data_tablet,
                                                        run_ctx.dml_param_.data_row_for_lob_,
                                                        relative_table,

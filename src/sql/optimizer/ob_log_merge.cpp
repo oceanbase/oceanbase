@@ -474,3 +474,19 @@ int ObLogMerge::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   }
   return ret;
 }
+
+int ObLogMerge::op_is_update_pk_with_dop(bool &is_update)
+{
+  int ret = OB_SUCCESS;
+  is_update = false;
+  if (!index_upd_infos_.empty()) {
+    IndexDMLInfo *index_dml_info = index_upd_infos_.at(0);
+    if (OB_ISNULL(index_dml_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K(index_upd_infos_));
+    } else if (index_dml_info->is_update_primary_key_ && (is_pdml() || get_das_dop() > 1)) {
+      is_update = true;
+    }
+  }
+  return ret;
+}

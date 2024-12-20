@@ -339,6 +339,12 @@ public:
   virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
   void set_das_dop(int64_t dop) { das_dop_ = dop; }
   int64_t get_das_dop() { return das_dop_; }
+  virtual int op_is_update_pk_with_dop(bool &is_update)
+  {
+    is_update = false;
+    return OB_SUCCESS;
+  }
+
 protected:
   virtual int generate_rowid_expr_for_trigger() = 0;
   virtual int generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs) = 0;

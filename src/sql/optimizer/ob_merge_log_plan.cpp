@@ -869,6 +869,8 @@ int ObMergeLogPlan::prepare_table_dml_info_update(const ObMergeTableInfo& merge_
   } else if (!merge_info.is_link_table_ &&
              OB_FAIL(check_update_part_key(index_schema, table_dml_info))) {
     LOG_WARN("failed to check update part key", K(ret));
+  } else if (OB_FAIL(check_update_primary_key(index_schema, table_dml_info))) {
+    LOG_WARN("fail to check update primary key", K(ret), KPC(table_dml_info));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_dml_info->ck_cst_exprs_.count(); ++i) {
       if (OB_FAIL(ObDMLResolver::copy_schema_expr(optimizer_context_.get_expr_factory(),

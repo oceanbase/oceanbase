@@ -1235,6 +1235,9 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   if (base_ctdef.is_update_uk_) {
     dml_param.write_flag_.set_update_uk();
   }
+  if (base_ctdef.is_update_pk_with_dop_) {
+    dml_param.write_flag_.set_update_pk_dop();
+  }
   return ret;
 }
 

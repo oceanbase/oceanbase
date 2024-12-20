@@ -246,3 +246,19 @@ int ObLogUpdate::generate_multi_part_partition_id_expr()
   }
   return ret;
 }
+
+int ObLogUpdate::op_is_update_pk_with_dop(bool &is_update)
+{
+  int ret = OB_SUCCESS;
+  is_update = false;
+  if (!index_dml_infos_.empty()) {
+    IndexDMLInfo *index_dml_info = index_dml_infos_.at(0);
+    if (OB_ISNULL(index_dml_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K(index_dml_infos_));
+    } else if (index_dml_info->is_update_primary_key_ && (is_pdml() || get_das_dop() > 1)) {
+      is_update = true;
+    }
+  }
+  return ret;
+}
