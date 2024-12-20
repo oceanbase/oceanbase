@@ -664,4 +664,19 @@ select cast(a as double) from t1;
 |                       0 |
 |                      -0 |
 +-------------------------+
+select cast('+-4' as double) from dual;
++-----------------------+
+| cast('+-4' as double) |
++-----------------------+
+|                     0 |
++-----------------------+
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '+-4'
+select cast('+4' as double) from dual;
++----------------------+
+| cast('+4' as double) |
++----------------------+
+|                    4 |
++----------------------+
+
 drop table t1;

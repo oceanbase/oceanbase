@@ -178,4 +178,7 @@ select cast(a as float) from t1;
 select cast(a as double) from t1;
 --enable_warnings
 
+select cast('+-4' as double) from dual;
+select cast('+4' as double) from dual;
+
 drop table t1;
