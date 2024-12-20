@@ -60,6 +60,8 @@ public:
   static int remove_zone_info(common::ObISQLClient &sql_client, const common::ObZone &zone);
   static int get_region_list(
       common::ObISQLClient &sql_client, common::ObIArray<common::ObRegion> &region_list);
+  static int get_idc_list(
+      common::ObISQLClient &sql_client, common::ObIArray<common::ObIDC> &idc_list);
   static int check_encryption_zone(
       common::ObISQLClient &sql_client,
       const common::ObZone &zone,

@@ -129,8 +129,9 @@ TEST(ObBackupDest, oss_encrypt)
   const char *endpoint = "host=xxx.com";
   const char *authorization = "access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
   const char *extension = "";
+  const int64_t dest_id = 1001;
   ObBackupDest dest1;
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
+  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension, dest_id));
   ASSERT_TRUE(dest == dest1);
   ObString backup_test_str(backup_test);
   ObBackupDest dest2;
@@ -144,7 +145,7 @@ TEST(ObBackupDest, oss_encrypt)
   ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=xxx.com"));
 
   dest1.reset();
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
+  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension, dest_id));
   ASSERT_TRUE(dest == dest1);
   ObMasterKeyGetter::instance().stop();
   ObMasterKeyGetter::instance().wait();
@@ -199,8 +200,9 @@ TEST(ObBackupDest, cos_encrypt)
   const char *endpoint = "host=xxx.com";
   const char *authorization = "access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
   const char *extension = "appid=333";
+  const int64_t dest_id = 1001;
   ObBackupDest dest1;
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
+  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension, dest_id));
   ASSERT_TRUE(dest == dest1);
   ObString backup_test_str(backup_test);
   ObBackupDest dest2;
@@ -214,7 +216,7 @@ TEST(ObBackupDest, cos_encrypt)
   ASSERT_EQ(0, strcmp(backup_path_str, "cos://backup_dir?host=xxx.com"));
 
   dest1.reset();
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
+  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension, dest_id));
   ASSERT_TRUE(dest == dest1);
   ObMasterKeyGetter::instance().stop();
   ObMasterKeyGetter::instance().wait();

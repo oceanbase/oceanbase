@@ -26,6 +26,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
 {
   {"access", ACCESS},
   {"accessible", ACCESSIBLE},
+  {"access_info", ACCESS_INFO},
   {"account", ACCOUNT},
   {"action", ACTION},
   {"activate", ACTIVATE},
@@ -56,6 +57,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"asensitive", ASENSITIVE},
   {"ascii", ASCII},
   {"at", AT},
+  {"attribute", ATTRIBUTE},
   {"authors", AUTHORS},
   {"auto", AUTO},
   {"auto_increment", AUTO_INCREMENT},
@@ -1020,7 +1022,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"_st_asmvt", _ST_ASMVT},
   {"optimizer_costs", OPTIMIZER_COSTS},
   {"tenant_sts_credential", TENANT_STS_CREDENTIAL},
-  {"tablets", TABLETS}
+  {"tablets", TABLETS},
+  {"external_storage_dest", EXTERNAL_STORAGE_DEST}
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

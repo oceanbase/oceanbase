@@ -279,6 +279,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_KILL_CLIENT_SESSION, ObKillClientSessionP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CLIENT_SESSION_CONNECT_TIME, ObClientSessionConnectTimeP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_KILL_QUERY_CLIENT_SESSION, ObKillQueryClientSessionP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_DATA_DICT_TRIGGER_DUMP, ObRPcTriggerDumpDataDictP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CHANGE_EXTERNAL_STORAGE_DEST, ObRpcChangeExternalStorageDestP);
 } // end of namespace observer
 } // end of namespace oceanbase
 

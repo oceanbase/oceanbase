@@ -814,6 +814,13 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);
     }
+  } else if (OB_BACKUP_IO_PROHIBITED == ret_code) {
+    // archive dest io prohibited
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
+      LOG_DBA_ERROR(OB_BACKUP_IO_PROHIBITED, "msg", "archive dest io prohibited", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
   } else if (OB_ERR_AES_DECRYPT == ret_code) {
     // archive desc decrypt failed
     if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
@@ -840,7 +847,8 @@ bool ObArchiveSender::is_retry_ret_code_(const int ret_code) const
     || OB_IO_LIMIT == ret_code
     || OB_BACKUP_PERMISSION_DENIED == ret_code
     || OB_ERR_AES_ENCRYPT == ret_code
-    || OB_ERR_AES_DECRYPT == ret_code;
+    || OB_ERR_AES_DECRYPT == ret_code
+    || OB_BACKUP_IO_PROHIBITED == ret_code;
 }
 
 bool ObArchiveSender::is_ignore_ret_code_(const int ret_code) const

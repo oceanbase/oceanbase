@@ -158,6 +158,7 @@
 #include "observer/table/ob_table_query_async_processor.h"
 #include "observer/mysql/ob_query_response_time.h" //ObTenantQueryRespTimeCollector
 #include "lib/stat/ob_diagnostic_info_container.h"
+#include "share/backup/ob_backup_connectivity.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -463,6 +464,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObTenantDagScheduler::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantFreezeInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTxLoopWorker::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default); // ObTxLoopWorker
+    MTL_BIND2(share::ObBackupDestIOPermissionMgr::mtl_new, share::ObBackupDestIOPermissionMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, compaction::ObTenantCompactionProgressMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, compaction::ObServerCompactionEventHistory::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, storage::ObTenantTabletStatMgr::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);

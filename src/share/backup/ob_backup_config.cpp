@@ -445,12 +445,28 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       LOG_WARN("fail to assign backup dest", K(ret), K_(tenant_id), K_(config_items));
     } else if (OB_FAIL(ObIBackupConfigItemParser::set_default_checksum_type(backup_dest))) {
       LOG_WARN("fail to check dest checksum type", K(ret), K(backup_dest));
-    } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest, trans))) {
-      LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id), K(backup_dest));
-    } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
-      LOG_WARN("fail to check dest validity", K(ret), K_(tenant_id), K(backup_dest));
+    } else if (OB_FAIL(dest.set(backup_dest))) {
+      LOG_WARN("fail to set backup dest", K(ret));
     } else {
-      LOG_INFO("succ to check data dest config", K_(tenant_id), K(backup_dest)); 
+      const char *extension = dest.get_storage_info()->get_extension();
+      char src_locality[OB_MAX_BACKUP_SRC_INFO_LENGTH] = { 0 };
+      ObBackupSrcType src_type = ObBackupSrcType::EMPTY;
+      if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(ObString(extension),
+                                                    src_locality, sizeof(src_locality), src_type))) {
+        LOG_WARN("failed to get src info from extension", K(ret), K(extension));
+      } else if (ObBackupSrcType::EMPTY != src_type) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("set backup zone/region/idc is not supported ", K(ret));
+      } else if (ObBackupSrcType::EMPTY != src_type &&
+                    OB_FAIL(ObBackupDestIOPermissionMgr::check_backup_src_info_valid(src_locality, src_type))) {
+        LOG_WARN("please check backup src info valid", K(src_locality), K(src_type));
+      } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest, trans))) {
+        LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id), K(backup_dest));
+      } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
+        LOG_WARN("fail to check dest validity", K(ret), K_(tenant_id), K(backup_dest));
+      } else {
+        LOG_INFO("succ to check data dest config", K_(tenant_id), K(backup_dest));
+      }
     }
   }
   return ret;
@@ -662,7 +678,19 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
   } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
     const int64_t lag_target = tenant_config.is_valid() ? tenant_config->archive_lag_target : 0L;
-    if (backup_dest.is_storage_type_s3() && MIN_LAG_TARGET_FOR_S3 > lag_target) {
+    const char *extension = backup_dest.get_storage_info()->get_extension();
+    char src_locality[OB_MAX_BACKUP_SRC_INFO_LENGTH] = { 0 };
+    ObBackupSrcType src_type = ObBackupSrcType::EMPTY;
+    if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(ObString(extension),
+                                                    src_locality, sizeof(src_locality), src_type))) {
+      LOG_WARN("failed to get src info from extension", K(ret), K(extension));
+    } else if (ObBackupSrcType::EMPTY != src_type) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("set backup zone/region/idc is not supported", K(ret));
+    } else if (ObBackupSrcType::EMPTY != src_type &&
+                  OB_FAIL(ObBackupDestIOPermissionMgr::check_backup_src_info_valid(src_locality, src_type))) {
+      LOG_WARN("please check backup src info valid", K(src_locality), K(src_type));
+    } else if (backup_dest.is_storage_type_s3() && MIN_LAG_TARGET_FOR_S3 > lag_target) {
       ret = OB_OP_NOT_ALLOW;
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "archive_lag_target is smaller than 60s, set log_archive_dest to S3 is");
     } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {

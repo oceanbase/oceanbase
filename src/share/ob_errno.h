@@ -3835,6 +3835,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_OBJECT_STORAGE_ENDPOINT__USER_ERROR_MSG "object storage endpoint is invalid"
 #define OB_RESTORE_SOURCE_NOT_ENOUGH__USER_ERROR_MSG "%s"
 #define OB_OBJECT_STORAGE_CHECKSUM_ERROR__USER_ERROR_MSG "object storage data checksum error"
+#define OB_BACKUP_ZONE_IDC_REGION_INVALID__USER_ERROR_MSG "%s"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -6110,6 +6111,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_OBJECT_STORAGE_ENDPOINT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9118, object storage endpoint is invalid"
 #define OB_RESTORE_SOURCE_NOT_ENOUGH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9119, %s"
 #define OB_OBJECT_STORAGE_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9132, object storage data checksum error"
+#define OB_BACKUP_ZONE_IDC_REGION_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9133, %s"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9202, Auto extend param is not ready to start extending file"
@@ -6452,7 +6454,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2271];
+extern int g_all_ob_errnos[2272];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

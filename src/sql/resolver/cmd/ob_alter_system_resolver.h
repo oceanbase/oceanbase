@@ -350,8 +350,6 @@ private:
   share::ObRebuildTabletLocation dest_;
   share::ObRebuildTabletLocation src_;
 };
-
-
 #undef DEF_SIMPLE_CMD_RESOLVER
 
 } // end namespace sql

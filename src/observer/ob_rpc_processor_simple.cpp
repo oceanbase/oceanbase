@@ -84,6 +84,8 @@
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "rootserver/ob_alter_ls_command.h"
 #include "logservice/data_dictionary/ob_data_dict_service.h" // for ObDataDictService
+#include "share/backup/ob_backup_connectivity.h"
+
 
 namespace oceanbase
 {
@@ -3001,6 +3003,15 @@ int ObKillQueryClientSessionP::process()
   }
   if (NULL != session) {
     gctx_.session_mgr_->revert_session(session);
+  }
+  return ret;
+}
+
+int ObRpcChangeExternalStorageDestP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(share::ObBackupChangeExternalStorageDestUtil::change_external_storage_dest(arg_))) {
+    COMMON_LOG(WARN, "failed to change external storage dest", KR(ret), K(arg_));
   }
   return ret;
 }

@@ -212,6 +212,7 @@ class ObIndexUsageInfoMgr;
 class ObSharedMemAllocMgr;
 class ObResourceLimitCalculator;
 class ObWorkloadRepositoryContext;
+class ObBackupDestIOPermissionMgr;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -362,7 +363,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObTableClientInfoMgr*,                 \
       share::ObWorkloadRepositoryContext*,          \
       observer::ObTableQueryASyncMgr*,              \
-      observer::ObTenantQueryRespTimeCollector*     \
+      observer::ObTenantQueryRespTimeCollector*,     \
+      share::ObBackupDestIOPermissionMgr*          \
   )
 
 

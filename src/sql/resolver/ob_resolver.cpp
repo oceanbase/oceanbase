@@ -140,6 +140,7 @@
 #include "sql/resolver/cmd/ob_alter_ls_resolver.h"
 #include "sql/resolver/cmd/ob_service_name_resolver.h"
 #include "sql/resolver/cmd/ob_transfer_partition_resolver.h"
+#include "sql/resolver/backup/ob_backup_change_external_storage_dest_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
 #include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"
@@ -508,6 +509,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_ALTER_SYSTEM_SET_PARAMETER: {
         REGISTER_STMT_RESOLVER(SetConfig);
+        break;
+      }
+      case T_CHANGE_EXTERNAL_STORAGE_DEST: {
+        REGISTER_STMT_RESOLVER(ChangeExternalStorageDest);
         break;
       }
       case T_ALTER_SYSTEM_SETTP: {

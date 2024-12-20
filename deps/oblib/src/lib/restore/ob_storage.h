@@ -68,7 +68,7 @@ private:
   ObExternalIOCounter io_counter_;
 };
 
-
+//TODO(xingzhi) delete invalid backup zone code from 32x
 class ObStorageGlobalIns
 {
 public:

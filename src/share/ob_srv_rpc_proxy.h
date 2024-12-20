@@ -267,7 +267,7 @@ public:
   RPC_AP(PR5 kill_query_client_session, OB_KILL_QUERY_CLIENT_SESSION, (ObKillQueryClientSessionArg), obrpc::Int64);
   RPC_S(PR5 ha_rebuild_tablet, OB_HA_REBUILD_TABLET, (obrpc::ObRebuildTabletArg));
   RPC_S(PR5 trigger_dump_data_dict, OB_DATA_DICT_TRIGGER_DUMP, (ObTriggerDumpDataDictArg));
-
+  RPC_S(PR5 change_external_storage_dest, obrpc::OB_CHANGE_EXTERNAL_STORAGE_DEST, (ObAdminSetConfigArg));
 }; // end of class ObSrvRpcProxy
 
 } // end of namespace rpc

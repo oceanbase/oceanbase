@@ -371,6 +371,19 @@ private:
   obrpc::ObAdminSetConfigArg rpc_arg_;
 };
 
+class ObChangeExternalStorageDestStmt : public ObSystemCmdStmt
+{
+public:
+  ObChangeExternalStorageDestStmt() : ObSystemCmdStmt(stmt::T_CHANGE_EXTERNAL_STORAGE_DEST) {}
+  virtual ~ObChangeExternalStorageDestStmt() {}
+
+  obrpc::ObAdminSetConfigArg &get_rpc_arg() { return rpc_arg_; }
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+private:
+  obrpc::ObAdminSetConfigArg rpc_arg_;
+};
+
 class ObSetTPStmt : public ObSystemCmdStmt
 {
 public:
