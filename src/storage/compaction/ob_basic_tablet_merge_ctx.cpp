@@ -1269,7 +1269,7 @@ int ObBasicTabletMergeCtx::cal_major_merge_param(
     // full merge, no need to check whether schema changes or not
   } else if (!progressive_merge_mgr_.need_calc_progressive_merge() && static_param_.data_version_ >= DATA_VERSION_4_3_3_0) {
     bool is_schema_changed = false;
-    if (OB_FAIL(ObMediumCompactionScheduleFunc::check_if_schema_changed(*get_tablet(), *get_schema(), is_schema_changed))) {
+    if (OB_FAIL(ObMediumCompactionScheduleFunc::check_if_schema_changed(*get_tablet(), *get_schema(), static_param_.data_version_, is_schema_changed))) {
       LOG_WARN("failed to check is schema changed", KR(ret), K_(static_param), KPC(get_schema()));
     } else if (is_schema_changed && !static_param_.is_schema_changed_) {
       ret = OB_ERR_UNEXPECTED;

@@ -94,6 +94,7 @@ public:
   static int check_if_schema_changed(
     const ObTablet &tablet,
     const ObStorageSchema &storage_schema,
+    const uint64_t data_version,
     bool &is_schema_changed);
 #ifdef OB_BUILD_SHARED_STORAGE
   // medium compaction is not considered
