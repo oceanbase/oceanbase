@@ -27,7 +27,7 @@ using namespace oceanbase::common;
 int ObRedisGroupOpProcessor::is_valid()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(group_ctx_) || OB_ISNULL(ops_)) {
+  if (OB_ISNULL(group_ctx_) || OB_ISNULL(ops_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null group ctx or ops", K(ret), KP(group_ctx_), KP(ops_));
   } else if (ops_->empty() || OB_ISNULL(ops_->at(0))) {
@@ -58,7 +58,7 @@ int ObRedisGroupOpProcessor::set_group_need_dist_das(ObRedisBatchCtx &batch_ctx)
     }
 
     if (OB_SUCC(ret)) {
-      batch_ctx.tb_ctx_.set_need_dist_das(!in_same_ls);
+      batch_ctx.need_dist_das_ = !in_same_ls;
     }
   }
   return ret;
@@ -72,16 +72,17 @@ int ObRedisGroupOpProcessor::init_batch_ctx(ObRedisBatchCtx &batch_ctx)
   } else if (OB_FAIL(set_group_need_dist_das(batch_ctx))) {
     LOG_WARN("fail to init cmd ctx", K(ret));
   } else {
+    batch_ctx.entity_factory_ = &processor_entity_factory_;
     batch_ctx.timeout_ts_ = group_ctx_->timeout_ts_;
     batch_ctx.credential_ = &group_ctx_->credential_;
     batch_ctx.trans_param_ = group_ctx_->trans_param_;
     batch_ctx.ls_id_ = static_cast<ObRedisOp*>(ops_->at(0))->ls_id_;
-    batch_ctx.tb_ctx_.set_schema_guard(group_ctx_->schema_guard_);
-    batch_ctx.tb_ctx_.set_schema_cache_guard(group_ctx_->schema_cache_guard_);
-    batch_ctx.tb_ctx_.set_simple_table_schema(group_ctx_->simple_schema_);
-    batch_ctx.tb_ctx_.set_sess_guard(group_ctx_->sess_guard_);
-    batch_ctx.tb_ctx_.set_audit_ctx(&group_ctx_->audit_ctx_);
-    batch_ctx.tablet_id_ = ops_->at(0)->tablet_id_;
+    batch_ctx.redis_guard_.schema_guard_ = group_ctx_->schema_guard_;
+    batch_ctx.redis_guard_.schema_cache_guard_ = group_ctx_->schema_cache_guard_;
+    batch_ctx.redis_guard_.simple_table_schema_ = group_ctx_->simple_schema_;
+    batch_ctx.redis_guard_.sess_guard_ = group_ctx_->sess_guard_;
+    batch_ctx.audit_ctx_ = &group_ctx_->audit_ctx_;
+    batch_ctx.tablet_id_ = ops_->at(0)->tablet_id();
     batch_ctx.consistency_level_ = ObTableConsistencyLevel::STRONG;
   }
 
@@ -119,9 +120,19 @@ int ObRedisGroupOpProcessor::end_trans(ObRedisBatchCtx &redis_ctx,
 int ObRedisGroupOpProcessor::init(ObTableGroupCtx &group_ctx, ObIArray<ObITableOp*> *ops)
 {
   int ret = OB_SUCCESS;
+  ObRedisOp *op = static_cast<ObRedisOp*>(ops->at(0));
+
   if (OB_FAIL(ObITableOpProcessor::init(group_ctx, ops))) {
     LOG_WARN("fail to init processor", K(ret));
   } else {
+    allocator_ = &group_ctx.allocator_;
+    if (OB_NOT_NULL(op) && ObRedisHelper::is_read_only_command(op->cmd()->cmd_type())) {
+      for (int64_t i = 0; i < ops->count(); i++) {
+        op = static_cast<ObRedisOp*>(ops->at(i));
+        op->update_outer_allocator(&group_ctx.allocator_);
+      }
+    }
+
     is_inited_ = true;
   }
   return ret;
@@ -133,13 +144,12 @@ int ObRedisGroupOpProcessor::process()
   ObRedisBatchCtx *batch_ctx_ptr = nullptr;
   if (OB_FAIL(is_valid())) {
     LOG_WARN("invalid processor", K(ret));
-  } else if (OB_ISNULL(batch_ctx_ptr = OB_NEWx(ObRedisBatchCtx, (&processor_alloc_), processor_alloc_, *ops_))) {
+  } else if (OB_ISNULL(
+      batch_ctx_ptr = OB_NEWx(ObRedisBatchCtx, (allocator_), *allocator_, &processor_entity_factory_, *ops_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc ObRedisBatchCtx", K(ret));
   } else {
-    int32_t stat_event_type = observer::ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
     ObRedisBatchCtx &batch_ctx = *batch_ctx_ptr;
-    batch_ctx.stat_event_type_ = &stat_event_type;
     const ObRedisOp &op = *reinterpret_cast<const ObRedisOp*>(ops_->at(0));
     const RedisCommand *redis_cmd = op.cmd();
     if (OB_ISNULL(redis_cmd)) {

@@ -41,7 +41,9 @@ int ObTableMultiBatchService::execute(ObTableMultiBatchCtx &ctx,
       ctx.tablet_ids_.reset();
       if (OB_FAIL(ctx.tablet_ids_.push_back(request.get_tablet_ids().at(i)))) {
         LOG_WARN("fail to push back tablet id", K(ret), K(ctx));
-      } else if (OB_FAIL(ObTableBatchService::prepare_results(ops, ctx.entity_factory_, results))) {
+      } else if (results.empty() && OB_FAIL(ObTableBatchService::prepare_results(ops,
+                                                                                 ctx.entity_factory_,
+                                                                                 results))) {
         LOG_WARN("fail to prepare results", K(ret), K(ops));
       } else if (OB_FAIL(ObTableBatchService::execute(ctx, ops, results))) {
         LOG_WARN("fail to execute batch operation", K(ret), K(ctx));

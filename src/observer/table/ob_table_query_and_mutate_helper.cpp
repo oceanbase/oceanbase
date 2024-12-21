@@ -1010,6 +1010,7 @@ int QueryAndMutateHelper::check_and_execute(ObTableQueryResultIterator *result_i
   const ObITableEntity &mutate_entity = mutations.at(0).entity();
   ObTableQueryResult *one_result = nullptr;
   bool check_exists = query_and_mutate_.is_check_exists();
+  bool rollback_when_check_failed = query_and_mutate_.rollback_when_check_failed();
   bool check_passed = false;
   int64_t affected_rows = 0;
   OB_TABLE_START_AUDIT(credential_,
@@ -1043,16 +1044,27 @@ int QueryAndMutateHelper::check_and_execute(ObTableQueryResultIterator *result_i
     // do nothing
   }
 
-  if (OB_SUCC(ret) && check_passed) {
-    switch (mutations.at(0).type()) {
-      case ObTableOperationType::INSERT_OR_UPDATE: {
-        ret = process_insert_up(mutate_entity, affected_rows);
-        break;
+  if (OB_SUCC(ret)) {
+    if (!check_passed) { // check failed
+      if (rollback_when_check_failed) {
+        ObString op = ObString::make_string("CheckAndInsUp");
+        ret = OB_KV_CHECK_FAILED;
+        LOG_WARN("check failed and rollback", K(ret));
+        LOG_USER_ERROR(OB_KV_CHECK_FAILED, op.length(), op.ptr());
+      } else {
+        // do nothing
       }
-      default: {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported mutation type", K(ret), "type", mutations.at(0).type());
-        break;
+    } else { // check passed
+      switch (mutations.at(0).type()) {
+        case ObTableOperationType::INSERT_OR_UPDATE: {
+          ret = process_insert_up(mutate_entity, affected_rows);
+          break;
+        }
+        default: {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not supported mutation type", K(ret), "type", mutations.at(0).type());
+          break;
+        }
       }
     }
   }

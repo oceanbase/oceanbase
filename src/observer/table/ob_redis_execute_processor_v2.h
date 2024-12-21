@@ -26,15 +26,15 @@ namespace oceanbase
 {
 namespace observer
 {
-/// @see RPC_S(PR5 redis_execute, obrpc::OB_REDIS_EXECUTE, (table::ObTableOperationRequest),
-/// table::ObTableOperationResult);
-class ObRedisExecuteP : public ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_REDIS_EXECUTE> >
+/// @see RPC_S(PR5 redis_execute_v2, obrpc::OB_REDIS_EXECUTE_V2, (table::ObRedisRpcRequest),
+/// table::ObRedisResult);
+class ObRedisExecuteV2P : public ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_REDIS_EXECUTE_V2> >
 {
-  typedef ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_REDIS_EXECUTE>> ParentType;
+  typedef ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_REDIS_EXECUTE_V2>> ParentType;
 
 public:
-  explicit ObRedisExecuteP(const ObGlobalContext &gctx);
-  virtual ~ObRedisExecuteP() = default;
+  explicit ObRedisExecuteV2P(const ObGlobalContext &gctx);
+  virtual ~ObRedisExecuteV2P() = default;
   virtual int deserialize() override;
   virtual int before_process();
   virtual int try_process() override;
@@ -51,16 +51,12 @@ protected:
 private:
   int init_redis_ctx();
   void init_redis_common(table::ObRedisCtx &ctx);
-  int check_tenant_version();
 
 private:
   common::ObArenaAllocator allocator_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
-  table::ObTableEntity request_entity_;
-  table::ObTableEntity result_entity_;
-  table::ObRedisResult redis_result_;
   table::ObRedisSingleCtx redis_ctx_;
-  DISALLOW_COPY_AND_ASSIGN(ObRedisExecuteP);
+  DISALLOW_COPY_AND_ASSIGN(ObRedisExecuteV2P);
 };
 
 }  // end namespace observer

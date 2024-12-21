@@ -998,7 +998,7 @@ int ZSetCommandOperator::do_zunion_store(int64_t db, const ObString &dest,
   }
 
   // 2. clear dest zset and store ms_map to dest zset
-  redis_ctx_.tb_ctx_.set_need_dist_das(false);
+  redis_ctx_.need_dist_das_ = false;
   bool is_exists = false; // unused
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(del_complex_key(ObRedisModel::ZSET, db, dest, false/*del_meta*/, is_exists))) {
@@ -1160,7 +1160,7 @@ int ZSetCommandOperator::do_zinter_store(int64_t db, const ObString &dest,
   }
 
   // 2. store ms_map to dest zset
-  redis_ctx_.tb_ctx_.set_need_dist_das(false);
+  redis_ctx_.need_dist_das_ = false;
   bool is_exists = false; // unused
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(del_complex_key(ObRedisModel::ZSET, db, dest, false/*del_meta*/, is_exists))) {
@@ -1197,26 +1197,28 @@ int ZSetCommandOperator::fill_set_batch_op(const ObRedisOp &op,
   if (OB_ISNULL(zadd)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null zadd op", K(ret));
-  } else if (OB_FAIL(tablet_ids.push_back(op.tablet_id_))) {
+  } else if (OB_FAIL(tablet_ids.push_back(op.tablet_id()))) {
     LOG_WARN("fail to push back tablet id", K(ret));
   }
   int64_t cur_ts = ObTimeUtility::fast_current_time();
   const ZAdd::MemberScoreMap &mem_score_map = zadd->member_score_map();
   ObITableEntity *value_entity = nullptr;
   ObString key;
+  ObObj insert_obj;
+  ObObj expire_obj;
   for (ZSetCommand::MemberScoreMap::const_iterator iter = mem_score_map.begin();
       OB_SUCC(ret) && iter != mem_score_map.end(); ++iter) {
-    ObObj insert_obj;
     insert_obj.set_timestamp(cur_ts);
-    ObObj expire_obj;
     expire_obj.set_null();
     if (OB_FAIL(op.get_key(key))) {
       LOG_WARN("fail to get key", K(ret), K(op));
     } else if (OB_FAIL(build_score_entity(op.db(), key, iter->first, iter->second, cur_ts, value_entity))) {
       LOG_WARN(
           "fail to build score entity", K(ret), K(iter->first), K(iter->second), K(op.db()), K(key));
-    } else if (OB_FAIL(batch_op.insert_or_update(*value_entity))) {
-      LOG_WARN("fail to push back insert or update op", K(ret), KPC(value_entity));
+    } else {
+      if (OB_FAIL(batch_op.insert_or_update(*value_entity))) {
+        LOG_WARN("fail to push back insert or update op", K(ret), KPC(value_entity));
+      }
     }
   }
   return ret;

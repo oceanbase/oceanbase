@@ -61,6 +61,24 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRedisCmdCtx);
 };
 
+struct ObRedisGuard {
+  ObRedisGuard() { reset(); }
+  ~ObRedisGuard() { reset(); }
+
+  void reset() {
+    schema_cache_guard_ = nullptr;
+    schema_guard_ = nullptr;
+    simple_table_schema_ = nullptr;
+    sess_guard_ = nullptr;
+  }
+
+  TO_STRING_KV(KP(schema_cache_guard_), KP(schema_guard_), KP(simple_table_schema_), KP(sess_guard_));
+  ObKvSchemaCacheGuard *schema_cache_guard_;
+  ObSchemaGetterGuard *schema_guard_;
+  const ObSimpleTableSchemaV2 *simple_table_schema_;
+  ObTableApiSessGuard *sess_guard_;
+};
+
 // The context of the redis service, including the server information required for table_ctx and redis command
 // execution
 class ObRedisCtx
@@ -68,11 +86,9 @@ class ObRedisCtx
 public:
   static const int64_t INVALID_TABLE_INDEX = -1;
 protected:
-  explicit ObRedisCtx(common::ObIAllocator &allocator)
+  explicit ObRedisCtx(common::ObIAllocator &allocator, ObITableEntityFactory *entity_factory)
       : allocator_(allocator),
-        tb_ctx_(allocator_),
         retry_count_(0),
-        audit_ctx_(retry_count_, user_client_addr_, false /* need_audit */),
         cur_table_idx_(INVALID_TABLE_INDEX),
         cur_rowkey_idx_(0),
         is_cmd_support_group_(false),
@@ -84,7 +100,7 @@ protected:
 public:
   virtual ~ObRedisCtx()
   {}
-  TO_STRING_KV(K_(tb_ctx),
+  TO_STRING_KV(K_(redis_guard),
               K_(table_id),
               K_(tablet_id),
               K_(ls_id),
@@ -95,28 +111,30 @@ public:
               K_(cur_rowkey_idx),
               K_(is_cmd_support_group),
               K_(is_enable_group_op),
-              K_(did_async_commit));
+              K_(did_async_commit),
+              K_(need_dist_das));
   bool valid() const;
 
   void reset()
   {
-    stat_event_type_ = nullptr;
+    audit_ctx_ = nullptr;
+    cmd_type_ = RedisCommandType::REDIS_COMMAND_INVALID;
     trans_param_ = nullptr;
     credential_ = nullptr;
-    entity_factory_ = nullptr;
     consistency_level_ = ObTableConsistencyLevel::EVENTUAL;
     table_id_ = common::OB_INVALID_ID;
     tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
     ls_id_ = share::ObLSID::INVALID_LS_ID;
     timeout_ts_ = 0;
     timeout_ = 0;
-    tb_ctx_.reset();
+    redis_guard_.reset();
     retry_count_ = 0;
     cur_table_idx_ = INVALID_TABLE_INDEX;
     cur_rowkey_idx_ = 0;
     is_cmd_support_group_ = false;
     is_enable_group_op_ = false;
     did_async_commit_ = false;
+    need_dist_das_ = false;
   }
   int init_cmd_ctx(ObRowkey &cur_rowkey, const ObIArray<ObString> &keys);
   int init_cmd_ctx(int db, const ObString &table_name, const ObIArray<ObString> &keys);
@@ -143,11 +161,11 @@ private:
                    ObLSID &last_ls_id);
 
 public:
-  common::ObIAllocator &allocator_;
+  common::ObIAllocator &allocator_; // refer to rpc processor
   ObITableEntityFactory *entity_factory_;
-  int32_t *stat_event_type_;
+  RedisCommandType cmd_type_;
   // for init tb_ctx, save schema_guard/simple_table_schema/sess_guard/schema_cache_guard
-  ObTableCtx tb_ctx_;
+  ObRedisGuard redis_guard_;
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
@@ -161,7 +179,7 @@ public:
   int32_t retry_count_;
   common::ObAddr user_client_addr_;
   // for sql audit end
-  ObTableAuditCtx audit_ctx_;
+  ObTableAuditCtx *audit_ctx_;
   // for commands that may visit multi tables and multi rowkeys
   ObRedisCmdCtx *cmd_ctx_;
   int64_t cur_table_idx_;
@@ -170,6 +188,7 @@ public:
   bool is_cmd_support_group_;
   bool is_enable_group_op_;
   bool did_async_commit_;
+  bool need_dist_das_;
 
 
 private:
@@ -181,11 +200,12 @@ class ObRedisSingleCtx : public ObRedisCtx {
 public:
   explicit ObRedisSingleCtx(
       common::ObIAllocator &allocator,
-      const ObTableOperationRequest &table_request,
-      ObTableOperationResult &table_result)
-      : ObRedisCtx(allocator),
-        request_(allocator_, table_request),
-        response_(allocator_, table_result)
+      ObITableEntityFactory *entity_factory,
+      const ObITableRequest &table_request,
+      ObRedisResult &table_result)
+      : ObRedisCtx(allocator, entity_factory),
+        request_(allocator, table_request),
+        response_(allocator, table_result, table_request.get_type())
   {
     reset();
   }
@@ -201,11 +221,6 @@ public:
   TO_STRING_KV(K_(request), K_(response));
 
   int decode_request();
-
-  OB_INLINE const ObITableEntity &get_entity() const
-  {
-    return request_.get_entity();
-  }
 
   OB_INLINE int64_t get_request_db() const
   {
@@ -228,8 +243,9 @@ class ObRedisBatchCtx : public ObRedisCtx
 public:
   explicit ObRedisBatchCtx(
     common::ObIAllocator &allocator,
+    ObITableEntityFactory *entity_factory,
     ObIArray<ObITableOp *> &ops)
-      : ObRedisCtx(allocator), ops_(ops) {}
+      : ObRedisCtx(allocator, entity_factory), ops_(ops) {}
   virtual ~ObRedisBatchCtx() {}
   OB_INLINE ObIArray<ObITableOp *> &ops() { return ops_; }
 

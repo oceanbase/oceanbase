@@ -15,6 +15,7 @@
 #include "share/datum/ob_datum_util.h"
 #include "ob_redis_command_reg.h"
 #include "share/table/redis/ob_redis_common.h"
+#include "observer/table/group/ob_table_tenant_group.h"
 
 using namespace oceanbase::table;
 using namespace oceanbase::common;
@@ -70,7 +71,32 @@ int ObRedisCommandFactory::gen_command(ObIAllocator &alloc,
   } else if (!is_registered(cmd_type)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("redis command is not supported", K(ret), K(cmd_type));
-  } else if (OB_FAIL(G_REDIS_COMMAND_GEN_FUNCS_[cmd_type](alloc, cmd_type, cmd_name, args, fmt_err_msg, cmd))) {
+  } else if (OB_FAIL(G_REDIS_COMMAND_GEN_FUNCS_[cmd_type](alloc, cmd_type, cmd_name, args, fmt_err_msg, nullptr, cmd))) {
+    LOG_WARN("fail to alloc redis command", K(ret), K(cmd_type));
+  } else if (OB_ISNULL(cmd)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to gen redis command", K(ret), K(cmd_type));
+  }
+
+  return ret;
+}
+
+int ObRedisCommandFactory::gen_group_command(ObRedisOp &redis_op,
+                                            const ObString &cmd_name,
+                                            const ObIArray<ObString> &args,
+                                            ObString& fmt_err_msg,
+                                            RedisCommand *&cmd)
+
+{
+  int ret = OB_SUCCESS;
+  RedisCommandType cmd_type = RedisCommandType::REDIS_COMMAND_INVALID;
+  if (OB_FAIL(cmd_to_type(cmd_name, cmd_type))) {
+    LOG_WARN("fail to get redis command type", K(ret), K(cmd_name));
+  } else if (!is_registered(cmd_type)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("redis command is not supported", K(ret), K(cmd_type));
+  } else if (OB_FAIL(G_REDIS_COMMAND_GEN_FUNCS_[cmd_type](
+      TABLEAPI_GROUP_COMMIT_MGR->get_op_allocator(), cmd_type, cmd_name, args, fmt_err_msg, &redis_op, cmd))) {
     LOG_WARN("fail to alloc redis command", K(ret), K(cmd_type));
   } else if (OB_ISNULL(cmd)) {
     ret = OB_ERR_UNEXPECTED;

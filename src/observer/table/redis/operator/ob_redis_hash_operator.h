@@ -23,7 +23,7 @@ namespace table
 class HashCommandOperator : public CommandOperator
 {
 public:
-  using RedisKeySet = hash::ObHashSet<RedisKeyNode>;
+  using RedisKeySet = hash::ObHashSet<RedisKeyNode, common::hash::NoPthreadDefendMode>;
   explicit HashCommandOperator(ObRedisCtx &redis_ctx) : CommandOperator(redis_ctx)
   {
     model_ = ObRedisModel::HASH;

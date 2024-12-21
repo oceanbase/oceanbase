@@ -18,6 +18,7 @@
 #include "ob_table_rpc_processor.h"
 #include "ob_table_context.h"
 #include "ob_table_batch_service.h"
+#include "group/ob_table_group_service.h"
 
 
 namespace oceanbase
@@ -101,10 +102,10 @@ private:
   int execute_ls_op(table::ObTableLSOpResult &ls_result);
 
   int execute_ls_op_tablegroup(table::ObTableLSOpResult& ls_result);
-  // void record_aft_rtn_rows(const table::ObTableLSOpResult &ls_result);
-
+  int create_cb_result(table::ObTableLSOpResult *&cb_result);
+  int process_group_commit();
+  int init_group_ctx(table::ObTableGroupCtx &ctx, share::ObLSID ls_id);
 private:
-
   int find_and_add_op(ObIArray<std::pair<uint64_t, table::ObTableTabletOp>>& tablet_ops,
                         uint64_t real_table_id,
                         const table::ObTableSingleOp& single_op,
@@ -119,13 +120,13 @@ private:
   int construct_delete_family_op(const table::ObTableSingleOp &single_op,
                                   const ObTableHbaseMutationInfo &mutation_info,
                                   table::ObTableTabletOp &tablet_op);
-
 private:
   common::ObArenaAllocator allocator_;
   ObArray<ObTableHbaseMutationInfo*> hbase_infos_;
   table::ObTableEntityFactory<table::ObTableSingleOpEntity> *default_entity_factory_;
   table::ObTableLSExecuteCreateCbFunctor cb_functor_;
   table::ObTableLSExecuteEndTransCb *cb_;
+  bool is_group_commit_;
 };
 
 } // end namespace observer

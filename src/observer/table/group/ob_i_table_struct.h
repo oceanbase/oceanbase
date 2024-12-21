@@ -36,8 +36,6 @@ public:
   ObITableOp()
     : type_(ObTableGroupType::TYPE_INVALID),
       req_(nullptr),
-      result_(),
-      tablet_id_(ObTabletID::INVALID_TABLET_ID),
       timeout_ts_(0),
       timeout_(0)
   {}
@@ -45,37 +43,33 @@ public:
   ObITableOp(ObTableGroupType op_type)
     : type_(op_type),
       req_(nullptr),
-      result_(),
-      tablet_id_(ObTabletID::INVALID_TABLET_ID),
       timeout_ts_(0),
       timeout_(0)
   {}
 
   VIRTUAL_TO_STRING_KV(K_(type),
                        KPC_(req),
-                       K_(result),
-                       K_(tablet_id),
                        K_(timeout_ts),
                        K_(timeout));
 
   virtual ~ObITableOp() {}
   OB_INLINE virtual ObTableGroupType type() { return type_; }
+  OB_INLINE virtual ObTabletID tablet_id() const = 0;
+  OB_INLINE virtual int get_result(ObITableResult *&result) = 0;
+  virtual void set_failed_result(int ret_code,
+                                 ObTableEntity &result_entity,
+                                 ObTableOperationType::Type op_type) = 0;
   OB_INLINE virtual bool is_valid() const { return OB_NOT_NULL(req_) && timeout_ts_ != 0 && timeout_ != 0; }
   virtual int check_legality() const { return OB_SUCCESS; }
   virtual void reset()
   {
     req_ = nullptr;
-    result_.set_entity(nullptr);
-    result_.reset();
-    tablet_id_.reset();
     timeout_ts_ = 0;
     timeout_ = 0;
   }
 public:
   ObTableGroupType type_;
   rpc::ObRequest *req_; // rpc request
-  ObTableOperationResult result_;
-  ObTabletID tablet_id_;
   int64_t timeout_ts_;
   int64_t timeout_;
 };

@@ -370,9 +370,8 @@ int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
   } else if (OB_ISNULL(sess_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sess guard is NULL", K(ret));
-  } else if (OB_FAIL(sess_guard_->get_sess_info().get_binlog_row_image(binlog_row_image_type_))) {
-    LOG_WARN("fail to get binlog row image", K(ret));
   } else {
+    binlog_row_image_type_ = TABLEAPI_SESS_POOL_MGR->get_binlog_row_image();
     table_name_ = table_name;
     ref_table_id_ = simple_table_schema_->get_table_id();
     index_table_id_ = ref_table_id_;

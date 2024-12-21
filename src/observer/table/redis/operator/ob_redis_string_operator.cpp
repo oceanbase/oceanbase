@@ -35,17 +35,16 @@ int StringCommandOperator::build_rowkey_entity(int64_t db, const ObString &key, 
   } else if (OB_ISNULL(entity = redis_ctx_.entity_factory_->alloc())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null entity_factory_", K(ret));
-  } else if (FALSE_IT(entity->set_allocator(&op_temp_allocator_))) {
   } else if (OB_ISNULL(
-                 obj_ptr = static_cast<ObObj *>(redis_ctx_.allocator_.alloc(sizeof(ObObj) * STRING_ROWKEY_SIZE)))) {
+                 obj_ptr = static_cast<ObObj *>(redis_ctx_.allocator_.alloc(sizeof(ObObj) * ObRedisUtil::STRING_ROWKEY_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
-  } else if (OB_FAIL(ObRedisCtx::reset_objects(obj_ptr, STRING_ROWKEY_SIZE))) {
+  } else if (OB_FAIL(ObRedisCtx::reset_objects(obj_ptr, ObRedisUtil::STRING_ROWKEY_SIZE))) {
     LOG_WARN("fail to init object", K(ret));
   } else {
     obj_ptr[0].set_int(db);
     obj_ptr[1].set_varbinary(key);
-    rowkey.assign(obj_ptr, STRING_ROWKEY_SIZE);
+    rowkey.assign(obj_ptr, ObRedisUtil::STRING_ROWKEY_SIZE);
     if (OB_FAIL(entity->set_rowkey(rowkey))) {
       LOG_WARN("fail to set rowkey", K(ret));
     }
@@ -201,7 +200,7 @@ int StringCommandOperator::do_get_set(int64_t db, const ObString &key, const ObS
   } else if (OB_FAIL(build_key_value_expire_entity(db, key, new_value, reset_expire_ts, entity))) {
     LOG_WARN("fail to build rowkey entity", K(ret), K(db), K(key));
   } else {
-    ObTableOperation op = ObTableOperation::insert_or_update(*entity);
+    ObTableOperation op = put_or_insup(*entity);
     ObTableOperationResult result;
     if (OB_FAIL(process_table_single_op(op, result))) {
       LOG_WARN("fail to process table put", K(ret));
@@ -274,7 +273,7 @@ int StringCommandOperator::do_set_bit(int64_t db, const ObString &key, int32_t o
   } else if (OB_FAIL(build_key_value_expire_entity(db, key, old_value, expire_ts, entity))) {
     LOG_WARN("fail to build rowkey entity", K(ret), K(db), K(key));
   } else {
-    ObTableOperation op = ObTableOperation::insert_or_update(*entity);
+    ObTableOperation op = put_or_insup(*entity);
     ObTableOperationResult result;
     if (OB_FAIL(process_table_single_op(op, result))) {
       LOG_WARN("fail to process table put", K(ret));
@@ -642,30 +641,17 @@ int StringCommandOperator::do_incr_by_float(int64_t db, const common::ObString &
   long double incr = 0.0;
   long double old_val = 0.0;
   ObITableEntity *entity = nullptr;
+  int64_t expire_ts = OB_INVALID_TIMESTAMP;
+  ObString old_val_str;
+  bool is_exist = true;
   if (OB_FAIL(ObRedisHelper::string_to_long_double(incr_str, incr))) {
     RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR);
     LOG_WARN("incr_str is not a float", K(ret), K(incr_str));
-  } else if (OB_FAIL(build_rowkey_entity(db, key, entity))) {
-    LOG_WARN("fail to build rowkey entity", K(ret), K(db), K(key));
-  } else {
-    ObTableOperation op = ObTableOperation::retrieve(*entity);
-    ObTableOperationResult result;
-    ObITableEntity *res_entity = nullptr;
-    ObString old_val_str;
-    if (OB_FAIL(process_table_single_op(op, result, nullptr/*meta*/, RedisOpFlags::RETURN_AFFECTED_ROWS))) {
-      if (ret != OB_ITER_END) {
-        LOG_WARN("fail to process table increment", K(ret));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    } else if (OB_FAIL(result.get_entity(res_entity))) {
-      LOG_WARN("fail to get entity", K(ret), K(result));
-    } else if (OB_FAIL(get_value_from_entity(*res_entity, old_val_str))) {
-      LOG_WARN("fail to get old value from result entity", K(ret), KPC(res_entity));
-    } else if (OB_FAIL(ObRedisHelper::string_to_long_double(old_val_str, old_val))) {
-      RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR);
-      LOG_WARN("old_val_str is not a float", K(ret), K(old_val_str));
-    }
+  } else if (OB_FAIL(get_value(db, key, old_val_str, expire_ts, is_exist))) {
+    LOG_WARN("fail to get old value", K(ret), K(db), K(key));
+  } else if (OB_FAIL(ObRedisHelper::string_to_long_double(old_val_str, old_val))) {
+    RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR);
+    LOG_WARN("old_val_str is not a float", K(ret), K(old_val_str));
   }
 
   if (OB_SUCC(ret)) {
@@ -673,10 +659,10 @@ int StringCommandOperator::do_incr_by_float(int64_t db, const common::ObString &
     if (OB_FAIL(ObRedisHelper::long_double_to_string(op_temp_allocator_, new_val, res_val))) {
       RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR);
       LOG_WARN("new_val_str is not a float", K(ret), K(res_val));
-    } else if (OB_FAIL(build_key_value_entity(db, key, res_val, entity))) {
+    } else if (OB_FAIL(build_key_value_expire_entity(db, key, res_val, expire_ts, entity))) {
       LOG_WARN("fail to build rowkey entity", K(ret), K(db), K(key));
     } else {
-      ObTableOperation op = ObTableOperation::insert_or_update(*entity);
+      ObTableOperation op = put_or_insup(*entity);
       ObTableOperationResult result;
       ObITableEntity *res_entity = nullptr;
       if (OB_FAIL(process_table_single_op(op, result, nullptr/*meta*/, RedisOpFlags::RETURN_AFFECTED_ROWS))) {
@@ -783,7 +769,7 @@ int StringCommandOperator::do_mset(int64_t db, const RedisCommand::FieldValMap &
     ObITableEntity *entity = nullptr;
     if (OB_FAIL(build_key_value_expire_entity(db, iter->first, iter->second, expire_ts, entity))) {
       LOG_WARN("fail to build rowkey entity", K(ret), K(db), K(iter->first), K(iter->second));
-    } else if (OB_FAIL(batch_op.insert_or_update(*entity))) {
+    } else if (OB_FAIL(put_or_insup(*entity, batch_op))) {
       LOG_WARN("fail to add insup op", K(ret), KPC(entity));
     }
   }
@@ -816,11 +802,13 @@ int StringCommandOperator::do_set(int64_t db, const common::ObString &key, const
       RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::INTEGER_ERR);
       LOG_WARN("invalid expire time", K(ret), K(set_arg.expire_str_));
     } else if (expire_tm <= 0) {
+      const ObString &cmd_name = reinterpret_cast<ObRedisSingleCtx &>(redis_ctx_).request_.get_cmd_name();
       SPRINTF_REDIS_ERROR(
           redis_ctx_.allocator_,
           fmt_redis_msg_,
           ObRedisErr::EXPIRE_TIME_CMD_ERR,
-          reinterpret_cast<ObRedisSingleCtx &>(redis_ctx_).request_.get_lower_cmd_name_ctr());
+          cmd_name.length(),
+          cmd_name.ptr());
       LOG_WARN("invalid expire time", K(ret), K(set_arg.expire_str_));
     } else if (set_arg.is_ms_) {
       // ms to us
@@ -840,7 +828,7 @@ int StringCommandOperator::do_set(int64_t db, const common::ObString &key, const
       if (set_arg.nx_) {
         op = ObTableOperation::insert(*entity);
       } else {
-        op = ObTableOperation::insert_or_update(*entity);
+        op = put_or_insup(*entity);
       }
       ObTableOperationResult result;
       if (OB_FAIL(process_table_single_op(op, result))) {
@@ -931,7 +919,7 @@ int StringCommandOperator::do_setrange(
       if (OB_FAIL(build_key_value_expire_entity(db, key, new_val, expire_tm, entity))) {
         LOG_WARN("fail to build rowkey entity", K(ret), K(db), K(key), K(new_val), K(expire_tm));
       } else {
-        ObTableOperation op = ObTableOperation::insert_or_update(*entity);
+        ObTableOperation op = put_or_insup(*entity);
         ObTableOperationResult result;
         if (OB_FAIL(process_table_single_op(op, result))) {
           LOG_WARN("fail to process table put", K(ret));
@@ -985,11 +973,15 @@ int StringCommandOperator::inner_do_group_get(const ObString &prop_name, ResultF
     } else {
       RedisCommand *cmd = reinterpret_cast<RedisCommand*>(op->cmd());
       ObITableEntity *entity = nullptr;
+      redis_ctx_.entity_factory_ = &op->default_entity_factory_;
       if (OB_FAIL(build_string_rowkey_entity(op->db(), cmd->key(), entity))) {
         LOG_WARN("fail to build rowkey entity", K(ret), K(op->db()), K(cmd->key()));
-      } else if(OB_FAIL(entity->add_retrieve_property(prop_name))) {
-        LOG_WARN("fail to add retrive property", K(ret), KPC(entity));
-      } else if (OB_FAIL(batch_op.retrieve(*entity))) {
+      } else if (!prop_name.empty()) {
+        if(OB_FAIL(entity->add_retrieve_property(prop_name))) {
+          LOG_WARN("fail to add retrive property", K(ret), KPC(entity));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(batch_op.retrieve(*entity))) {
         LOG_WARN("fail to add get op", K(ret), KPC(entity));
       }
     }
@@ -997,11 +989,10 @@ int StringCommandOperator::inner_do_group_get(const ObString &prop_name, ResultF
 
   if (OB_SUCC(ret)) {
     ObRedisBatchCtx &group_ctx = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_);
-    ObArray<ObTabletID> *tablet_ids = nullptr;
-    if (OB_FAIL(init_tablet_ids_by_ops(group_ctx.ops(), tablet_ids))) {
+    if (OB_FAIL(init_tablet_ids_by_ops(group_ctx.ops()))) {
       LOG_WARN("fail to init tablet ids by ops", K(ret));
     } else if (OB_FAIL(process_table_batch_op(
-            batch_op, batch_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, tablet_ids))) {
+            batch_op, batch_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids_))) {
       LOG_WARN("fail to process table batch op", K(ret));
     }
   }
@@ -1027,21 +1018,25 @@ int StringCommandOperator::do_group_set()
   ObRedisBatchCtx &group_ctx = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_);
   ObTableBatchOperation batch_op;
   group_ctx.entity_factory_ = &op_entity_factory_;
-  ObTabletIDArray tablet_ids;
+  tablet_ids_.reuse();
+  if (OB_FAIL(tablet_ids_.reserve(group_ctx.ops().count()))) {
+    LOG_WARN("fail to reserve tablet ids", K(ret));
+  }
   for (int i = 0; OB_SUCC(ret) && i < group_ctx.ops().count(); ++i) {
     ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
     if (OB_ISNULL(op) || OB_ISNULL(op->cmd())) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("invalid null op", K(ret), KP(op), KP(op->cmd()));
     } else {
+      redis_ctx_.entity_factory_ = &op->default_entity_factory_;
       Set *set = reinterpret_cast<Set*>(op->cmd());
       ObITableEntity *entity = nullptr;
       if (OB_FAIL(build_key_value_expire_entity(op->db(), set->key(), set->value(), expire_tm, entity))) {
         LOG_WARN("fail to build rowkey entity", K(ret), K(op->db()), K(set->key()), K(set->value()));
-      } else if (OB_FAIL(batch_op.insert_or_update(*entity))) {
+      } else if (OB_FAIL(put_or_insup(*entity, batch_op))) {
         LOG_WARN("fail to add get op", K(ret), KPC(entity));
-      } else if (OB_FAIL(tablet_ids.push_back(op->tablet_id_))) {
-        LOG_WARN("fail to push back tablet_id", K(ret), K(op->tablet_id_));
+      } else if (OB_FAIL(tablet_ids_.push_back(op->tablet_id()))) {
+        LOG_WARN("fail to push back tablet_id", K(ret), K(op->tablet_id()));
       }
     }
   }
@@ -1049,7 +1044,7 @@ int StringCommandOperator::do_group_set()
   if (OB_SUCC(ret)) {
     ResultFixedArray batch_res(op_temp_allocator_);
     if (OB_FAIL(process_table_batch_op(
-          batch_op, batch_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids))) {
+          batch_op, batch_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids_))) {
       LOG_WARN("fail to process table batch op", K(ret));
     }
   }
@@ -1068,12 +1063,13 @@ int StringCommandOperator::do_group_incr()
   int ret = OB_SUCCESS;
   // 0. init
   ObRedisBatchCtx &group_ctx = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_);
-  using KVMap = hash::ObHashMap<RedisKeyNode, int64_t>;
+  using ValExpPair = std::pair<int64_t, int64_t>; // <string value, string expire ts>
+  using KVMap = hash::ObHashMap<RedisKeyNode, ValExpPair, common::hash::NoPthreadDefendMode>;
   KVMap kv_map;
   ResultFixedArray batch_res(op_temp_allocator_);
   if (OB_FAIL(kv_map.create(group_ctx.ops().count(), "RedisGpIncr"))) {
     LOG_WARN("failed to create fd hash map", K(ret));
-  } else if (OB_FAIL(inner_do_group_get(ObRedisUtil::VALUE_PROPERTY_NAME, batch_res))) {
+  } else if (OB_FAIL(inner_do_group_get("", batch_res))) {
     LOG_WARN("fail to do inner group get", K(ret));
   } else if (batch_res.count() != group_ctx.ops().count()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1084,6 +1080,8 @@ int StringCommandOperator::do_group_incr()
   // 1. calc new_val and reply
   ObString old_str;
   int64_t old_value = 0;
+  int64_t expire_ts = OB_INVALID_TIMESTAMP;
+  ValExpPair old_pair;
   for (int i = 0; OB_SUCC(ret) && i < group_ctx.ops().count(); ++i) {
     old_value = 0;
     ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
@@ -1092,9 +1090,10 @@ int StringCommandOperator::do_group_incr()
       LOG_WARN("invalid null op", K(ret), KP(op), KP(op->cmd()));
     } else {
       IncrBy *cmd = reinterpret_cast<IncrBy*>(op->cmd());
-      RedisKeyNode node(op->db(), cmd->key(), op->tablet_id_);
+      RedisKeyNode node(op->db(), cmd->key(), op->tablet_id());
       // 1.1 get old val
-      int tmp_ret = kv_map.get_refactored(node, old_value);
+      int tmp_ret = kv_map.get_refactored(node, old_pair);
+      old_value = old_pair.first;
       if (tmp_ret == OB_HASH_NOT_EXIST) {
         if (batch_res[i].get_return_rows() == 0) {
           // not exists, old_value = 0
@@ -1106,6 +1105,8 @@ int StringCommandOperator::do_group_incr()
           } else if (OB_FAIL(get_varbinary_from_entity(
                         *res_entity, ObRedisUtil::VALUE_PROPERTY_NAME, old_str))) {
             LOG_WARN("fail to get value from entity", K(ret), KPC(res_entity));
+          } else if (OB_FAIL(get_expire_from_entity(*res_entity, expire_ts))) {
+            LOG_WARN("fail to get old value from result entity", K(ret), KPC(res_entity));
           } else if (OB_FAIL(ObRedisHelper::get_int_from_str<int64_t>(old_str, old_value))) {
             RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::INTEGER_ERR);
             LOG_WARN("invalid int from str", K(ret), K(old_str));
@@ -1132,7 +1133,8 @@ int StringCommandOperator::do_group_incr()
 
       // 1.3 set new_val
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(kv_map.set_refactored(node, new_val, 1 /*conver exists key*/))) {
+        ValExpPair new_pair(new_val, expire_ts);
+        if (OB_FAIL(kv_map.set_refactored(node, new_pair, 1 /*conver exists key*/))) {
           LOG_WARN("fail to do set refactored", K(ret), K(cmd->key()));
         } else if (OB_FAIL(op->response().set_res_int(new_val))) {
           LOG_WARN("fail to set bulk string", K(ret), K(new_val));
@@ -1146,7 +1148,7 @@ int StringCommandOperator::do_group_incr()
 
   // 2. do batch insup
   ObTableBatchOperation batch_op;
-  ObTabletIDArray tablet_ids;
+  tablet_ids_.reuse();
   char *ptr = nullptr;
   int64_t size = ObFastFormatInt::MAX_DIGITS10_STR_SIZE * group_ctx.ops().count();
   if (OB_FAIL(ret)) {
@@ -1160,13 +1162,13 @@ int StringCommandOperator::do_group_incr()
     RedisKeyNode node = i->first;
     ObITableEntity *entity = nullptr;
     char *addr = ptr + idx * ObFastFormatInt::MAX_DIGITS10_STR_SIZE;
-    int64_t len = ObFastFormatInt::format_signed(i->second, addr);
+    int64_t len = ObFastFormatInt::format_signed(i->second.first, addr);
     ObString val_str(len, addr);
-    if (OB_FAIL(build_key_value_entity(node.db_, node.key_, val_str, entity))) {
+    if (OB_FAIL(build_key_value_expire_entity(node.db_, node.key_, val_str, i->second.second, entity))) {
       LOG_WARN("fail to build rowkey entity", K(ret), K(node), K(val_str));
-    } else if (OB_FAIL(batch_op.insert_or_update(*entity))) {
+    } else if (OB_FAIL(put_or_insup(*entity, batch_op))) {
       LOG_WARN("fail to add get op", K(ret), KPC(entity));
-    } else if (OB_FAIL(tablet_ids.push_back(node.tablet_id_))) {
+    } else if (OB_FAIL(tablet_ids_.push_back(node.tablet_id_))) {
       LOG_WARN("fail to push back tablet_id", K(ret), K(node.tablet_id_));
     }
   }
@@ -1174,7 +1176,7 @@ int StringCommandOperator::do_group_incr()
   if (OB_SUCC(ret)) {
     ResultFixedArray batch_res(op_temp_allocator_);
     if (OB_FAIL(process_table_batch_op(
-          batch_op, batch_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids))) {
+          batch_op, batch_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids_))) {
       LOG_WARN("fail to process table batch op", K(ret));
     }
   }
@@ -1186,12 +1188,13 @@ int StringCommandOperator::do_group_incrbyfloat()
   int ret = OB_SUCCESS;
   // 0. init
   ObRedisBatchCtx &group_ctx = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_);
-  using KVMap = hash::ObHashMap<RedisKeyNode, long double>;
+  using ValExpPair = std::pair<long double, int64_t>; // <string value, string expire ts>
+  using KVMap = hash::ObHashMap<RedisKeyNode, ValExpPair, common::hash::NoPthreadDefendMode>;
   KVMap kv_map;
   ResultFixedArray batch_res(op_temp_allocator_);
   if (OB_FAIL(kv_map.create(group_ctx.ops().count(), "RedisGpIncr"))) {
     LOG_WARN("failed to create fd hash map", K(ret));
-  } else if (OB_FAIL(inner_do_group_get(ObRedisUtil::VALUE_PROPERTY_NAME, batch_res))) {
+  } else if (OB_FAIL(inner_do_group_get("", batch_res))) {
     LOG_WARN("fail to do inner group get", K(ret));
   } else if (batch_res.count() != group_ctx.ops().count()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1202,6 +1205,8 @@ int StringCommandOperator::do_group_incrbyfloat()
   // 1. calc new_val and reply
   ObString old_str;
   long double old_value = 0;
+  int64_t expire_ts = OB_INVALID_TIMESTAMP;
+  ValExpPair old_pair;
   for (int i = 0; OB_SUCC(ret) && i < group_ctx.ops().count(); ++i) {
     old_value = 0;
     ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
@@ -1212,7 +1217,8 @@ int StringCommandOperator::do_group_incrbyfloat()
       IncrBy *cmd = reinterpret_cast<IncrBy*>(op->cmd());
       RedisKeyNode node(op->db(), cmd->key(), op->tablet_id_);
       // 1.1 get old val
-      int tmp_ret = kv_map.get_refactored(node, old_value);
+      int tmp_ret = kv_map.get_refactored(node, old_pair);
+      old_value = old_pair.first;
       if (tmp_ret == OB_HASH_NOT_EXIST) {
         if (batch_res[i].get_return_rows() == 0) {
           // not exists, old_value = 0
@@ -1224,6 +1230,8 @@ int StringCommandOperator::do_group_incrbyfloat()
           } else if (OB_FAIL(get_varbinary_from_entity(
                         *res_entity, ObRedisUtil::VALUE_PROPERTY_NAME, old_str))) {
             LOG_WARN("fail to get value from entity", K(ret), KPC(res_entity));
+          } else if (OB_FAIL(get_expire_from_entity(*res_entity, expire_ts))) {
+            LOG_WARN("fail to get old value from result entity", K(ret), KPC(res_entity));
           } else if (OB_FAIL(ObRedisHelper::string_to_long_double(old_str, old_value))) {
             RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR);
             LOG_WARN("invalid int from str", K(ret), K(old_str));
@@ -1251,7 +1259,8 @@ int StringCommandOperator::do_group_incrbyfloat()
       // 1.3 set new_val
       if (OB_SUCC(ret)) {
         ObString reply_str;
-        if (OB_FAIL(kv_map.set_refactored(node, new_val, 1 /*conver exists key*/))) {
+        ValExpPair new_pair(new_val, expire_ts);
+        if (OB_FAIL(kv_map.set_refactored(node, new_pair, 1 /*conver exists key*/))) {
           LOG_WARN("fail to do set refactored", K(ret), K(cmd->key()));
         } else if (OB_FAIL(ObRedisHelper::long_double_to_string(op_temp_allocator_, new_val, reply_str))) {
           RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR);
@@ -1268,20 +1277,24 @@ int StringCommandOperator::do_group_incrbyfloat()
 
   // 2. do batch insup
   ObTableBatchOperation batch_op;
-  ObTabletIDArray tablet_ids;
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(tablet_ids_.reuse())) {
+  } else if (OB_FAIL(tablet_ids_.reserve(group_ctx.ops().count()))) {
+    LOG_WARN("fail to reserve tablet ids", K(ret));
+  }
   int64_t idx = 0;
   for (KVMap::const_iterator i = kv_map.begin(); OB_SUCC(ret) && i != kv_map.end(); ++i, ++idx) {
     RedisKeyNode node = i->first;
     ObITableEntity *entity = nullptr;
     ObString val_str;
-    if (OB_FAIL(ObRedisHelper::long_double_to_string(op_temp_allocator_, i->second, val_str))) {
+    if (OB_FAIL(ObRedisHelper::long_double_to_string(op_temp_allocator_, i->second.first, val_str))) {
       RECORD_REDIS_ERROR(fmt_redis_msg_, ObRedisErr::FLOAT_ERR);
       LOG_WARN("new_val_str is not a float", K(ret), K(val_str));
-    } else if (OB_FAIL(build_key_value_entity(node.db_, node.key_, val_str, entity))) {
+    } else if (OB_FAIL(build_key_value_expire_entity(node.db_, node.key_, val_str, i->second.second, entity))) {
       LOG_WARN("fail to build rowkey entity", K(ret), K(node), K(val_str));
-    } else if (OB_FAIL(batch_op.insert_or_update(*entity))) {
+    } else if (OB_FAIL(put_or_insup(*entity, batch_op))) {
       LOG_WARN("fail to add get op", K(ret), KPC(entity));
-    } else if (OB_FAIL(tablet_ids.push_back(node.tablet_id_))) {
+    } else if (OB_FAIL(tablet_ids_.push_back(node.tablet_id_))) {
       LOG_WARN("fail to push back tablet_id", K(ret), K(node.tablet_id_));
     }
   }
@@ -1289,7 +1302,7 @@ int StringCommandOperator::do_group_incrbyfloat()
   if (OB_SUCC(ret)) {
     ResultFixedArray batch_res(op_temp_allocator_);
     if (OB_FAIL(process_table_batch_op(
-          batch_op, batch_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids))) {
+          batch_op, batch_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids_))) {
       LOG_WARN("fail to process table batch op", K(ret));
     }
   }
@@ -1321,9 +1334,8 @@ int StringCommandOperator::do_group_setnx()
   }
 
   if (OB_SUCC(ret)) {
-    ObArray<ObTabletID> *tablet_ids = nullptr;
     ResultFixedArray batch_res(op_temp_allocator_);
-    if (OB_FAIL(init_tablet_ids_by_ops(group_ctx.ops(), tablet_ids))) {
+    if (OB_FAIL(init_tablet_ids_by_ops(group_ctx.ops()))) {
       LOG_WARN("fail to init tablet ids by ops", K(ret));
     } else if (OB_FAIL(process_table_batch_op(
             batch_op,
@@ -1332,7 +1344,7 @@ int StringCommandOperator::do_group_setnx()
             RedisOpFlags::BATCH_NOT_ATOMIC,
             &op_temp_allocator_,
             &op_entity_factory_,
-            tablet_ids))) {
+            &tablet_ids_))) {
       LOG_WARN("fail to process table batch op", K(ret));
     }
     for (int i = 0; OB_SUCC(ret) && i < group_ctx.ops().count(); ++i) {
@@ -1361,7 +1373,10 @@ int StringCommandOperator::do_group_append()
   ObRedisBatchCtx &group_ctx = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_);
   ObTableBatchOperation batch_op;
   group_ctx.entity_factory_ = &op_entity_factory_;
-  ObTabletIDArray tablet_ids;
+  tablet_ids_.reuse();
+  if (OB_FAIL(tablet_ids_.reserve(group_ctx.ops().count()))) {
+    LOG_WARN("fail to reserve tablet ids", K(ret));
+  }
   for (int i = 0; OB_SUCC(ret) && i < group_ctx.ops().count(); ++i) {
     ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
     if (OB_ISNULL(op) || OB_ISNULL(op->cmd())) {
@@ -1374,7 +1389,7 @@ int StringCommandOperator::do_group_append()
         LOG_WARN("fail to build rowkey entity", K(ret), K(op->db()), K(cmd->key()), K(cmd->val_));
       } else if (OB_FAIL(batch_op.append(*entity))) {
         LOG_WARN("fail to add get op", K(ret), KPC(entity));
-      } else if (OB_FAIL(tablet_ids.push_back(op->tablet_id_))) {
+      } else if (OB_FAIL(tablet_ids_.push_back(op->tablet_id_))) {
         LOG_WARN("fail to push back tablet_id", K(ret), K(op->tablet_id_));
       }
     }
@@ -1383,7 +1398,7 @@ int StringCommandOperator::do_group_append()
   if (OB_SUCC(ret)) {
     ResultFixedArray batch_res(op_temp_allocator_);
     if (OB_FAIL(process_table_batch_op(
-          batch_op, batch_res, nullptr, RedisOpFlags::RETURN_AFFECTED_ENTITY, &op_temp_allocator_, &op_entity_factory_, &tablet_ids))) {
+          batch_op, batch_res, nullptr, RedisOpFlags::RETURN_AFFECTED_ENTITY, &op_temp_allocator_, &op_entity_factory_, &tablet_ids_))) {
       LOG_WARN("fail to process table batch op", K(ret));
     }
     for (int i = 0; OB_SUCC(ret) && i < group_ctx.ops().count(); ++i) {

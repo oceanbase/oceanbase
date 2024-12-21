@@ -23,7 +23,8 @@ class ObRedisGroupOpProcessor : public ObITableOpProcessor
 public:
   ObRedisGroupOpProcessor()
     : ObITableOpProcessor(),
-      processor_alloc_("RedisPror", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+      allocator_(nullptr),
+      processor_entity_factory_("RedisProrEntFac", MTL_ID())
   {}
 
   ObRedisGroupOpProcessor(
@@ -32,7 +33,8 @@ public:
       ObIArray<ObITableOp *> *ops,
       ObTableCreateCbFunctor *functor)
       : ObITableOpProcessor(op_type, group_ctx, ops, functor),
-        processor_alloc_("RedisPror", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+        allocator_(nullptr),
+        processor_entity_factory_("RedisProrEntFac", MTL_ID())
   {}
   virtual ~ObRedisGroupOpProcessor() {}
   virtual int init(ObTableGroupCtx &group_ctx, ObIArray<ObITableOp*> *ops) override;
@@ -43,8 +45,9 @@ private:
   int init_batch_ctx(ObRedisBatchCtx &batch_ctx);
   int set_group_need_dist_das(ObRedisBatchCtx &batch_ctx);
   int end_trans( ObRedisBatchCtx &redis_ctx, bool need_snapshot, bool is_rollback);
-
-  ObArenaAllocator processor_alloc_;
+private:
+  common::ObIAllocator *allocator_;
+  table::ObTableEntityFactory<table::ObTableEntity> processor_entity_factory_;
 };
 
 }  // namespace table

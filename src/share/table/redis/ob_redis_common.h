@@ -40,6 +40,8 @@ public:
   static const int COMPLEX_ROWKEY_NUM = 2;    // (db, rkey)
   static const int LIST_ROWKEY_NUM = 4;    // (db, key, is_data, idx)
   static const int64_t STRING_ROWKEY_SIZE = 2;
+  static const int64_t STRING_SET_PROPERTY_SIZE = 2;
+  static const int64_t HASH_ZSET_PROPERTY_SIZE = 3;
   static const ObString REDIS_DB_NAME;
   static const ObString REDIS_INDEX_NAME;
   static const ObString VALUE_PROPERTY_NAME;
@@ -51,6 +53,10 @@ public:
   static const ObString IS_DATA_PROPERTY_NAME;
   static const ObString SCORE_PROPERTY_NAME;
   static const ObString STRING_TTL_DEFINITION;
+  static const ObString INCRBY_CMD_NAME;
+  static const ObString DECRBY_CMD_NAME;
+  static const ObString INCR_CMD_NAME;
+  static const ObString DECR_CMD_NAME;
   static const int64_t COL_IDX_DB = 0;
   static const int64_t COL_IDX_RKEY = 1;
   static const int64_t COL_IDX_EXPIRE_TS = 2;

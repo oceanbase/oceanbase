@@ -30,8 +30,9 @@ typedef common::ObFixedArray<ObTableOperationResult, common::ObIAllocator> Resul
 struct ObTableGroupCtx
 {
 public:
-  ObTableGroupCtx()
-      : retry_count_(0),
+  ObTableGroupCtx(common::ObIAllocator &allocator)
+      : allocator_(allocator),
+        retry_count_(0),
         audit_ctx_(retry_count_, user_client_addr_, false/* need_audit */)
   {
     reset();
@@ -71,6 +72,7 @@ public:
                K_(user_client_addr),
                K_(audit_ctx));
 public:
+  common::ObIAllocator &allocator_; // refer to rpc allocator or tmp allocator in backgroup group task
   ObITableGroupKey *key_;
   ObTableGroupType group_type_;
   ObTableOperationType::Type type_;
@@ -170,38 +172,61 @@ struct ObTableOp : public ObITableOp
 public:
   ObTableOp()
       : ObITableOp(ObTableGroupType::TYPE_TABLE_GROUP),
+        result_(),
         op_(),
         request_entity_(),
         result_entity_(),
         ls_id_(ObLSID::INVALID_LS_ID),
+        tablet_id_(ObTabletID::INVALID_TABLET_ID),
         is_insup_use_put_(false)
   {}
   virtual ~ObTableOp() {}
-  VIRTUAL_TO_STRING_KV(K_(op),
+  VIRTUAL_TO_STRING_KV(K_(result),
+                       K_(op),
                        K_(request_entity),
                        K_(result_entity),
-                       K_(is_insup_use_put));
+                       K_(tablet_id),
+                       K_(is_insup_use_put),
+                       K_(result));
 public:
+  OB_INLINE virtual int get_result(ObITableResult *&result) override
+  {
+    result = &result_;
+    return common::OB_SUCCESS;
+  }
+  OB_INLINE virtual ObTabletID tablet_id() const override { return tablet_id_; }
+  virtual void set_failed_result(int ret_code,
+                                 ObTableEntity &result_entity,
+                                 ObTableOperationType::Type op_type) override
+  {
+    result_.generate_failed_result(ret_code, result_entity, op_type);
+  }
   OB_INLINE bool is_get() const { return op_.type() == ObTableOperationType::Type::GET; }
   OB_INLINE bool is_insup_use_put() const { return is_insup_use_put_; }
   virtual void reset()
   {
     ObITableOp::reset();
+    result_.reset();
     op_.reset();
     request_entity_.reset();
     result_entity_.reset();
     ls_id_ = ObLSID::INVALID_LS_ID;
+    tablet_id_.reset();
     is_insup_use_put_ = false;
+    result_.set_entity(nullptr);
+    result_.reset();
   }
   void reuse()
   {
     reset();
   }
 public:
+  ObTableOperationResult result_;
   ObTableOperation op_; // single operation
   ObTableEntity request_entity_;
   ObTableEntity result_entity_; // used to be add result
   ObLSID ls_id_;
+  ObTabletID tablet_id_;
   bool is_insup_use_put_;
 };
 
@@ -296,9 +321,7 @@ public:
                             bool add_failed_group);
   static int response(ObTableGroup &group,
                       ObTableGroupFactory<ObTableGroup> &group_factory,
-                      ObTableGroupOpFactory &op_factory,
-                      bool need_deep_copy = false,
-                      ObIAllocator *deep_copy_alloc = nullptr);
+                      ObTableGroupOpFactory &op_factory);
   static int response_failed_results(int ret_code,
                                      ObTableGroup &group,
                                      ObTableGroupFactory<ObTableGroup> &group_factory,

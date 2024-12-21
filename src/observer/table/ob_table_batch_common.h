@@ -52,7 +52,6 @@ public:
   int check_legality();
   void reset()
   {
-    stat_event_type_ = nullptr;
     trans_param_ = nullptr;
     is_atomic_ = true;
     is_readonly_ = false;
@@ -69,7 +68,6 @@ public:
 public:
   common::ObIAllocator &allocator_;
   ObTableCtx tb_ctx_;
-  int32_t *stat_event_type_;
   ObTableTransParam *trans_param_;
   bool is_atomic_;
   bool is_readonly_;

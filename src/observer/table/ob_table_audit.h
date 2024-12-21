@@ -253,7 +253,7 @@ public:
 
       if (OB_SUCC(ret)) {
         const bool enable_stats = false; // stats has been recorded in record_stat
-        const int64_t record_limit = sess_guard_.get_sess_info().get_tenant_query_record_size_limit();
+        const int64_t record_limit = TABLEAPI_SESS_POOL_MGR->get_query_record_size_limit();
         MTL_SWITCH(record_.tenant_id_) {
           obmysql::ObMySQLRequestManager *req_manager = MTL(obmysql::ObMySQLRequestManager*);
           if (OB_ISNULL(req_manager)) {

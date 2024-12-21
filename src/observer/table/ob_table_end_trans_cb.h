@@ -135,7 +135,7 @@ private:
   ObTableEntity result_entity_;
   common::ObArenaAllocator allocator_;
   ObTableOperationResult result_;
-  obrpc::ObTableRpcResponseSender<ObTableOperationResult> response_sender_;
+  obrpc::ObTableRpcResponseSender response_sender_;
 };
 
 class ObTableBatchExecuteEndTransCb: public ObTableAPITransCb
@@ -163,7 +163,7 @@ private:
   common::ObArenaAllocator allocator_;
   ObTableEntityFactory<ObTableEntity> entity_factory_;
   ObTableBatchOperationResult result_;
-  obrpc::ObTableRpcResponseSender<ObTableBatchOperationResult> response_sender_;
+  obrpc::ObTableRpcResponseSender response_sender_;
   ObTableOperationType::Type table_operation_type_;
 };
 
@@ -194,7 +194,7 @@ private:
   ObTableSingleOpEntity result_entity_;
   ObTableEntityFactory<ObTableSingleOpEntity> entity_factory_;
   ObTableLSOpResult result_;
-  obrpc::ObTableRpcResponseSender<ObTableLSOpResult> response_sender_;
+  obrpc::ObTableRpcResponseSender response_sender_;
 };
 
 } // end namespace table

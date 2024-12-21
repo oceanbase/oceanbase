@@ -24,10 +24,10 @@ bool ObRedisCtx::valid() const
 {
   bool valid = true;
 
-  if (OB_ISNULL(stat_event_type_) || OB_ISNULL(trans_param_) || OB_ISNULL(entity_factory_) || OB_ISNULL(credential_)) {
+  if (OB_ISNULL(trans_param_) || OB_ISNULL(entity_factory_) || OB_ISNULL(credential_)) {
     valid = false;
     int ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("redis ctx is not valid", KP_(stat_event_type), KP_(trans_param), KP_(entity_factory), KP_(credential));
+    LOG_WARN("redis ctx is not valid", KP_(trans_param), KP_(entity_factory), KP_(credential));
   }
   return valid;
 }
@@ -163,8 +163,8 @@ int ObRedisCtx::init_cmd_ctx(int db, const ObString &table_name, const ObIArray<
 {
   int ret = OB_SUCCESS;
   ObRedisCmdCtx *ret_ctx = nullptr;
-  ObSchemaGetterGuard *schema_guard = tb_ctx_.get_schema_guard();
-  ObTableApiSessGuard *sess_guard = tb_ctx_.get_sess_guard();
+  ObSchemaGetterGuard *schema_guard = redis_guard_.schema_guard_;
+  ObTableApiSessGuard *sess_guard = redis_guard_.sess_guard_;
   ObArenaAllocator tmp_allocator;
   ObObj *obj_ptr = nullptr;
   if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(credential_) || OB_ISNULL(schema_guard) || OB_ISNULL(sess_guard)) {
@@ -209,8 +209,8 @@ int ObRedisCtx::init_cmd_ctx(ObRowkey &cur_rowkey, const ObIArray<ObString> &key
 {
   int ret = OB_SUCCESS;
   ObRedisCmdCtx *ret_ctx = nullptr;
-  ObSchemaGetterGuard *schema_guard = tb_ctx_.get_schema_guard();
-  ObTableApiSessGuard *sess_guard = tb_ctx_.get_sess_guard();
+  ObSchemaGetterGuard *schema_guard = redis_guard_.schema_guard_;
+  ObTableApiSessGuard *sess_guard = redis_guard_.sess_guard_;
   if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(credential_) || OB_ISNULL(schema_guard) || OB_ISNULL(sess_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid schema service, credential, schema guard or sess guard",

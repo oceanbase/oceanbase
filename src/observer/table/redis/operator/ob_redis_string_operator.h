@@ -24,7 +24,8 @@ namespace table
 class StringCommandOperator : public CommandOperator
 {
 public:
-  explicit StringCommandOperator(ObRedisCtx &redis_ctx) : CommandOperator(redis_ctx)
+  explicit StringCommandOperator(ObRedisCtx &redis_ctx) :
+    CommandOperator(redis_ctx)
   {
     model_ = ObRedisModel::STRING;
   }
@@ -104,8 +105,6 @@ private:
 
 private:
   const static int64_t MAX_RANGE = (2 << 9) - 1;  // 1M -1
-  const int64_t STRING_ROWKEY_SIZE = 2;
-
   DISALLOW_COPY_AND_ASSIGN(StringCommandOperator);
 };
 

@@ -15,6 +15,7 @@
 #include "ob_table_tenant_group.h"
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "observer/table/ob_table_session_pool.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -432,25 +433,21 @@ int ObTableGroupUtils::trigger(const ObTableGroupTriggerRequest &request)
 
 bool ObTableGroupUtils::is_group_commit_config_enable()
 {
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  return tenant_config.is_valid() && (tenant_config->kv_group_commit_batch_size > 1);
+  return TABLEAPI_SESS_POOL_MGR->get_kv_group_commit_batch_size() > 1;
 }
 
 bool ObTableGroupUtils::is_group_commit_config_enable(ObTableOperationType::Type op_type)
 {
   bool bret = false;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  if (tenant_config.is_valid()) {
-    int64_t batch_size = tenant_config->kv_group_commit_batch_size;
-    ObString group_rw_mode = tenant_config->kv_group_commit_rw_mode.get_value_string();
-    if (batch_size > 1) {
-      if (group_rw_mode.case_compare("all") == 0) { // 'ALL'
-        bret = true;
-      } else if (group_rw_mode.case_compare("read") == 0 && is_read_op(op_type)) {
-        bret = true;
-      } else if (group_rw_mode.case_compare("write") == 0 && is_write_op(op_type)) {
-        bret = true;
-      }
+  int64_t batch_size = TABLEAPI_SESS_POOL_MGR->get_kv_group_commit_batch_size();
+  ObTableGroupRwMode mode = TABLEAPI_SESS_POOL_MGR->get_group_rw_mode();
+  if (batch_size > 1) {
+    if (mode == ObTableGroupRwMode::ALL) { // 'ALL'
+      bret = true;
+    } else if (mode == ObTableGroupRwMode::READ && is_read_op(op_type)) {
+      bret = true;
+    } else if (mode == ObTableGroupRwMode::WRITE == 0 && is_write_op(op_type)) {
+      bret = true;
     }
   }
   return bret;

@@ -219,3 +219,12 @@ ObTableTabletOpResult::ObTableTabletOpResult(const ObTableTabletOpResult& other)
 {
   reserved_ = other.reserved_;
 }
+
+OB_SERIALIZE_MEMBER(ObRedisRpcRequest,
+                    credential_,
+                    redis_db_,
+                    ls_id_,
+                    tablet_id_,
+                    table_id_,
+                    reserved_,
+                    resp_str_);

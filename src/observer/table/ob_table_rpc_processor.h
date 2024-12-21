@@ -56,6 +56,7 @@ private:
                       const ObString &pass_scramble, const ObString &database, uint64_t &user_token);
   int generate_credential(uint64_t tenant_id, uint64_t user_id, uint64_t database,
                           int64_t ttl_us, uint64_t user_token, ObString &credential);
+  bool can_use_redis_v2();
 private:
   const ObGlobalContext &gctx_;
   table::ObTableApiCredential credential_;
@@ -115,7 +116,7 @@ public:
 public:
   static int init_session();
   int check_user_access(const ObString &credential_str);
-  int check_mode(const sql::ObSQLSessionInfo &sess_info);
+  int check_mode();
   // transaction control
   int start_trans(bool is_readonly,
                   const table::ObTableConsistencyLevel consistency_level,
@@ -157,6 +158,10 @@ protected:
                     const ObTabletID &arg_tablet_id,
                     const uint64_t table_id,
                     ObTabletID &tablet_id);
+  ObTableProccessType get_stat_process_type(bool is_readonly,
+                                            bool is_same_type,
+                                            bool is_same_properties_names,
+                                            table::ObTableOperationType::Type op_type);
 protected:
   const ObGlobalContext &gctx_;
   ObTableService *table_service_;
@@ -168,7 +173,7 @@ protected:
   const share::schema::ObSimpleTableSchemaV2 *simple_table_schema_;
   observer::ObReqTimeGuard req_timeinfo_guard_; // 引用cache资源必须加ObReqTimeGuard
   table::ObKvSchemaCacheGuard schema_cache_guard_;
-  int32_t stat_event_type_;
+  int32_t stat_process_type_;
   bool enable_query_response_time_stats_;
   int64_t stat_row_count_;
   ObTableRetryPolicy retry_policy_;
@@ -181,7 +186,7 @@ protected:
   // trans control
   table::ObTableTransParam trans_param_;
   transaction::ObTxReadSnapshot tx_snapshot_;
-  ObAddr user_client_addr_;
+  common::ObAddr user_client_addr_;
   table::ObTableAuditCtx audit_ctx_;
 };
 

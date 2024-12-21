@@ -53,7 +53,7 @@ private:
     {
     }
     virtual ~FillScanner(){}
-    int operator()(common::hash::HashMapPair<common::ObAddr, table::ObTableConnection> &entry);
+    int operator()(common::hash::HashMapPair<common::ObAddr, table::ObTableConnection*> &entry);
     int init(ObIAllocator *allocator,
              common::ObScanner *scanner,
              common::ObNewRow *cur_row,

@@ -22,10 +22,9 @@ int ObTableBatchCtx::check_legality()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(stat_event_type_) || OB_ISNULL(trans_param_) || OB_ISNULL(credential_)) {
+  if (OB_ISNULL(trans_param_) || OB_ISNULL(credential_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null input", K(ret), KP_(stat_event_type),
-      KP_(trans_param), KP_(credential));
+    LOG_WARN("unexpected null input", K(ret), KP_(trans_param), KP_(credential));
   } else if (tablet_ids_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet ids is empty", K(ret));

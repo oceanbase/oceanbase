@@ -87,6 +87,7 @@ enum RedisOpFlags {
   DEL_SKIP_SCAN = 1 << 3,
   BATCH_NOT_ATOMIC = 1 << 4, // for batch
   RETURN_AFFECTED_ENTITY = 1 << 5, // for append, increment
+  USE_PUT =  1 << 6 // use put replace insup when mode = minimal
 };
 
 typedef common::ObFixedArray<ObTableOperationResult, common::ObIAllocator> ResultFixedArray;
@@ -96,26 +97,30 @@ class CommandOperator
 public:
   explicit CommandOperator(ObRedisCtx &redis_ctx)
       : redis_ctx_(redis_ctx),
-        op_temp_allocator_(ObMemAttr(MTL_ID(), "RedisCmdOp")),
-        op_entity_factory_("RedisCmdEntFac", MTL_ID()),
-        model_(ObRedisModel::INVALID)
+        op_temp_allocator_(redis_ctx.allocator_),
+        op_entity_factory_(*redis_ctx.entity_factory_),
+        model_(ObRedisModel::INVALID),
+        tablet_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE,
+                    ModulePageAllocator(op_temp_allocator_, "RedisCmd")),
+        binlog_row_image_type_(TABLEAPI_SESS_POOL_MGR->get_binlog_row_image())
   {}
   virtual ~CommandOperator() {}
 
   int process_table_batch_op(const ObTableBatchOperation &req_ops,
                              ResultFixedArray &results,
                              ObRedisMeta *meta = nullptr,
-                             RedisOpFlags flags = RedisOpFlags::NONE,
+                             uint8_t flags = RedisOpFlags::NONE,
                              common::ObIAllocator *allocator = nullptr,
                              ObITableEntityFactory* entity_factory = nullptr,
                              ObIArray<ObTabletID> *tablet_ids = nullptr);
   int process_table_multi_batch_op(const ObTableMultiBatchRequest &req,
-                                   ObTableMultiBatchResult &result);
+                                   ObTableMultiBatchResult &result,
+                                   uint8_t flags = RedisOpFlags::NONE);
 
   int process_table_single_op(const table::ObTableOperation &op,
                               ObTableOperationResult &op_res,
                               ObRedisMeta *meta = nullptr,
-                              RedisOpFlags flags = RedisOpFlags::NONE,
+                              uint8_t flags = RedisOpFlags::NONE,
                               common::ObIAllocator *allocator = nullptr,
                               ObITableEntityFactory* entity_factory = nullptr);
 
@@ -154,15 +159,13 @@ protected:
                   bool inclusive_end = true);
   int init_table_ctx(const ObTableOperation &op, ObTableCtx &tb_ctx,
                      ObRedisMeta *meta = nullptr,
-                     RedisOpFlags flags = RedisOpFlags::NONE,
+                     uint8_t flags = RedisOpFlags::NONE,
                      bool is_batch_ctx = false);
   int init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard,
                        const ObTableQuery &query,
                        const ObRedisMeta *meta,
                        ObTableCtx &tb_ctx);
-  int init_batch_ctx(const ObTableBatchOperation &req_ops, RedisOpFlags flags, ObTableBatchCtx &batch_ctx);
-  int hashset_to_array(const common::hash::ObHashSet<ObString> &hash_set,
-                       ObIArray<ObString> &ret_arr);
+  int init_batch_ctx(const ObTableBatchOperation &req_ops, uint8_t flags, ObTableBatchCtx &batch_ctx);
 
   int do_get_meta_entity(ObITableEntity &req_meta_entity, ObITableEntity *&res_meta_entity);
 
@@ -216,7 +219,7 @@ protected:
                               const ObString &key,
                               ObRedisMeta *meta_info = nullptr);
   int get_tablet_id_by_rowkey(ObTableCtx &tb_ctx, const ObRowkey &rowkey, ObTabletID &tablet_id);
-  int init_tablet_ids_by_ops(const ObIArray<ObITableOp *> &ops, ObArray<ObTabletID> *&tablet_ids);
+  int init_tablet_ids_by_ops(const ObIArray<ObITableOp *> &ops);
   int is_row_expire(const ObNewRow *old_row, const ObRedisMeta *meta, bool &is_old_row_expire);
   // for batch
   int reply_batch_res(const ResultFixedArray &batch_res);
@@ -226,14 +229,20 @@ protected:
                                 ObIArray<ObTabletID> &tablet_ids,
                                 ObTableBatchOperation &batch_op);
   int group_get_complex_type_data(const ObString &property_name, ResultFixedArray &batch_res);
+  ObTableOperation put_or_insup(const ObITableEntity &entity);
+  int put_or_insup(const ObITableEntity &entity, ObTableBatchOperation& batch_op);
+  bool can_use_put(const ObITableEntity &entity);
 
 protected:
   static const ObString COUNT_STAR_PROPERTY;  // count(*)
   ObRedisCtx &redis_ctx_;
-  common::ObArenaAllocator op_temp_allocator_;
-  table::ObTableEntityFactory<table::ObTableEntity> op_entity_factory_;
+  common::ObIAllocator &op_temp_allocator_;
+  ObITableEntityFactory &op_entity_factory_;
   ObRedisModel model_; // to init tb ctx
   ObString fmt_redis_msg_;
+  // remember call tablet_ids_.reuse() before use it
+  common::ObSEArray<ObTabletID, 16> tablet_ids_;
+  int64_t binlog_row_image_type_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(CommandOperator);

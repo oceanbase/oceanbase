@@ -213,7 +213,7 @@ int ObTableGroupService::process(ObTableGroupCtx &ctx, ObITableOp *op, bool is_d
       // get group, create if not exist
       ObITableGroupValue *group = nullptr;
       if (OB_FAIL(TABLEAPI_GROUP_COMMIT_MGR->get_or_create_group(ctx, group))) {
-        LOG_WARN("fail to b get group", K(ret));
+        LOG_WARN("fail to get group", K(ret));
       } else if (OB_FAIL(add_and_try_to_get_batch(op, group, ops))) {
         LOG_WARN("fail to add and try to get executable batch", K(ret));
       } else if (ops.count() > 0) {
@@ -287,7 +287,7 @@ int ObTableGroupService::execute_batch(ObTableGroupCtx &ctx,
               &failed_groups, &group_factory, &op_factory))) {
     LOG_WARN("fail to init group commit callback functor", K(ret));
   } else if (OB_FAIL(op_processor->init(ctx, &group->ops_))) {
-    LOG_WARN("fail to init pp processor", K(ret));
+    LOG_WARN("fail to init op processor", K(ret));
   } else if (OB_FAIL(op_processor->process())) {
     LOG_WARN("fail to process op", K(ret));
   }

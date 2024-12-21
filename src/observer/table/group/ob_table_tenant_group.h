@@ -125,6 +125,7 @@ public:
   OB_INLINE ObTableGroupFactory<ObTableGroup>& get_group_factory() { return group_factory_; }
   OB_INLINE ObTableGroupOpFactory& get_op_factory() { return op_factory_; }
   OB_INLINE void free_op(ObITableOp *op) { op_factory_.free(op); }
+  OB_INLINE ObIAllocator &get_op_allocator() { return op_allocator_; }
   int64_t get_group_size() const;
   int get_all_group_info(ObGetAllGroupInfoOp &get_op);
   int alloc_op(ObTableGroupType op_type, ObITableOp *&op) { return op_factory_.alloc(op_type, op); }

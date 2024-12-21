@@ -15,6 +15,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "ob_table_group_service.h"
 #include "ob_table_tenant_group.h"
+#include "observer/table/ob_table_session_pool.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::omt;
@@ -244,6 +245,7 @@ void ObTableGroupCommitMgr::ObTableGroupUpdateTask::clean_expired_group_task()
   while (clean_count--) { // ignore ret
     ObITableGroupValue *group = nullptr;
     if (OB_FAIL(group_mgr_.expired_groups_.pop_clean_group(group))) {
+      // overwrite ret
       if (ret != OB_ENTRY_NOT_EXIST) {
         LOG_WARN("fail to get clean group", K(ret));
       }
@@ -527,12 +529,8 @@ void ObTableGroupCommitMgr::destroy()
 int64_t ObTableGroupCommitMgr::get_group_size() const
 {
   int64_t batch_size = 1;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  if (tenant_config.is_valid()) {
-    batch_size = tenant_config->kv_group_commit_batch_size;
-    batch_size = batch_size > 1 ? batch_size : 1;
-  }
-  return batch_size;
+  batch_size = TABLEAPI_SESS_POOL_MGR->get_kv_group_commit_batch_size();
+  return batch_size > 1 ? batch_size : 1;
 }
 
 int ObTableGroupCommitMgr::create_and_add_group(const ObTableGroupCtx &ctx)

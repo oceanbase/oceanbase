@@ -446,7 +446,7 @@ int GenericCommandOperator::do_del(int64_t db, const common::ObIArray<common::Ob
   int ret = OB_SUCCESS;
   int del_cnt = 0;
   ObRedisCmdCtx *cmd_ctx = redis_ctx_.cmd_ctx_;
-  hash::ObHashSet<ObString> key_set;
+  hash::ObHashSet<ObString, hash::NoPthreadDefendMode> key_set;
   if (OB_ISNULL(cmd_ctx)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null ObRedisCmdCtx", K(ret));

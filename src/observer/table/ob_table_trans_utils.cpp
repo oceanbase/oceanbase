@@ -244,6 +244,7 @@ int ObTableTransUtils::sync_end_trans(ObTableTransParam &trans_param)
 
   int tmp_ret = ret;
   if (OB_FAIL(txs->release_tx(*trans_param.trans_desc_))) {
+    // overwrite ret
     LOG_ERROR("release tx failed", K(ret), K(trans_param));
   }
   if (trans_param.lock_handle_ != nullptr) {

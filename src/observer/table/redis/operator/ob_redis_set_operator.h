@@ -92,7 +92,7 @@ protected:
   int do_srem_inner(
       int64_t db,
       const common::ObString &key,
-      const hash::ObHashSet<ObString> &members,
+      const SetCommand::MemberSet &members,
       int64_t &del_num);
 
   int do_srem_inner(
@@ -118,6 +118,8 @@ protected:
       const common::ObString &key,
       const ObArray<ObString> &members,
       const ObArray<int64_t> &res_insert_ts);
+  int hashset_to_array(const SetCommand::MemberSet &hash_set,
+                       ObIArray<ObString> &ret_arr);
 
 protected:
   bool is_zset_;

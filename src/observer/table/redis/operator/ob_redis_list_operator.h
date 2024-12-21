@@ -184,7 +184,7 @@ private:
       bool need_push_meta = true);
   int do_same_keys_push(
       ObTableBatchOperation &batch_op,
-      ObTabletIDArray &tablet_ids,
+      ObIArray<ObTabletID> &tablet_ids,
       ObIArray<ObITableOp *> &ops,
       const ObIArray<ObRedisMeta *> &metas,
       const ObString &key,
@@ -193,8 +193,8 @@ private:
   int do_same_keys_pop(
       ObTableBatchOperation &batch_op_insup,
       ObTableBatchOperation &batch_op_del,
-      ObTabletIDArray &tablet_insup_ids,
-      ObTabletIDArray &tablet_del_ids,
+      ObIArray<ObTabletID> &tablet_insup_ids,
+      ObIArray<ObTabletID> &tablet_del_ids,
       const ObIArray<ObRedisMeta *> &metas,
       const ObString &key,
       int64_t same_key_start_pos,
@@ -204,8 +204,8 @@ private:
       const ResultFixedArray &batch_res,
       ObTableBatchOperation &batch_op_insup,
       ObTableBatchOperation &batch_op_del,
-      ObTabletIDArray &tablet_insup_ids,
-      ObTabletIDArray &tablet_del_ids,
+      ObIArray<ObTabletID> &tablet_insup_ids,
+      ObIArray<ObTabletID> &tablet_del_ids,
       const ObIArray<ObRedisMeta *> &metas,
       const ObString &key,
       int64_t same_key_start_pos,
@@ -363,8 +363,8 @@ private:
       int64_t same_key_end_pos,
       ObTableBatchOperation &batch_op_insup,
       ObTableBatchOperation &batch_op_del,
-      ObTabletIDArray &tablet_insup_ids,
-      ObTabletIDArray &tablet_del_ids);
+      ObIArray<ObTabletID> &tablet_insup_ids,
+      ObIArray<ObTabletID> &tablet_del_ids);
 
   int gen_same_key_batch_get_op(
       const ObRedisListMeta &meta,
@@ -373,39 +373,39 @@ private:
       int64_t same_key_start_pos,
       int64_t same_key_end_pos,
       ObTableBatchOperation &batch_op_get,
-      ObTabletIDArray &tablet_get_ids);
+      ObIArray<ObTabletID> &tablet_get_ids);
 
   int check_can_use_multi_get(
       const ObArray<ObRedisMeta *> &metas,
       ObIArray<ObITableOp *> &ops,
       ObTableBatchOperation &batch_op_get,
-      ObTabletIDArray &tablet_get_ids,
+      ObIArray<ObTabletID> &tablet_get_ids,
       bool &can_use_multi_get);
 
   int do_group_pop_use_multi_get(
       const ObArray<ObRedisMeta *> &metas,
       const ObTableBatchOperation &batch_op_get,
-      ObTabletIDArray &tablet_get_ids,
+      ObIArray<ObTabletID> &tablet_get_ids,
       ObTableBatchOperation &batch_op_insup,
-      ObTabletIDArray &tablet_insup_ids,
+      ObIArray<ObTabletID> &tablet_insup_ids,
       ObTableBatchOperation &batch_op_del,
-      ObTabletIDArray &tablet_del_ids);
+      ObIArray<ObTabletID> &tablet_del_ids);
 
   int do_group_pop_use_query(
       const ObArray<ObRedisMeta *> &metas,
       const ObTableBatchOperation &batch_op_get,
-      ObTabletIDArray &tablet_get_ids,
+      ObIArray<ObTabletID> &tablet_get_ids,
       ObTableBatchOperation &batch_op_insup,
-      ObTabletIDArray &tablet_insup_ids,
+      ObIArray<ObTabletID> &tablet_insup_ids,
       ObTableBatchOperation &batch_op_del,
-      ObTabletIDArray &tablet_del_ids);
+      ObIArray<ObTabletID> &tablet_del_ids);
 
   int update_meta_after_multi_pop(
       ObRedisListMeta *list_meta,
       ObTableBatchOperation &batch_op_insup,
       ObTableBatchOperation &batch_op_del,
-      ObTabletIDArray &tablet_insup_ids,
-      ObTabletIDArray &tablet_del_ids,
+      ObIArray<ObTabletID> &tablet_insup_ids,
+      ObIArray<ObTabletID> &tablet_del_ids,
       int64_t same_key_start_pos,
       int64_t same_key_end_pos);
 

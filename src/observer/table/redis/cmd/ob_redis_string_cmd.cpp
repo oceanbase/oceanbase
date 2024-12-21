@@ -505,11 +505,11 @@ int IncrBy::init(const common::ObIArray<common::ObString> &args, ObString& fmt_e
   if (OB_FAIL(init_common(args))) {
     RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
     LOG_WARN("fail to init IncrBy", K(ret));
-  } else if (attr_.cmd_name_ == "INCRBY" || attr_.cmd_name_ == "DECRBY") {
+  } else if (attr_.cmd_name_ == ObRedisUtil::INCRBY_CMD_NAME || attr_.cmd_name_ == ObRedisUtil::DECRBY_CMD_NAME) {
     if (OB_FAIL(args.at(1, incr_))) {
       LOG_WARN("fail to get increment", K(ret), K(attr_.cmd_name_));
     }
-  } else if (attr_.cmd_name_ == "INCR" || attr_.cmd_name_ == "DECR") {
+  } else if (attr_.cmd_name_ == ObRedisUtil::INCR_CMD_NAME || attr_.cmd_name_ == ObRedisUtil::DECR_CMD_NAME) {
     incr_ = "1";
   } else {
     RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);

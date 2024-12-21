@@ -57,7 +57,7 @@ int CommandOperator::process_table_query_count(ObIAllocator &allocator, const Ob
 int CommandOperator::process_table_batch_op(const ObTableBatchOperation &req_ops,
                                             ResultFixedArray &results,
                                             ObRedisMeta *meta /* = nullptr*/,
-                                            RedisOpFlags flags /* = RedisOpFlags::NONE*/,
+                                            uint8_t flags /* = RedisOpFlags::NONE*/,
                                             common::ObIAllocator *allocator /* = nullptr*/,
                                             ObITableEntityFactory* entity_factory /* = nullptr*/,
                                             ObIArray<ObTabletID> *tablet_ids /* = nullptr*/)
@@ -68,7 +68,7 @@ int CommandOperator::process_table_batch_op(const ObTableBatchOperation &req_ops
   } else {
     ObTableEntity result_entity;
     common::ObIAllocator *batch_alloc = allocator != nullptr ? allocator : &redis_ctx_.allocator_;
-    SMART_VAR(ObTableBatchCtx, batch_ctx, *batch_alloc, redis_ctx_.audit_ctx_) {
+    SMART_VAR(ObTableBatchCtx, batch_ctx, *batch_alloc, *redis_ctx_.audit_ctx_) {
       if (OB_FAIL(results.init(req_ops.count()))) {
         LOG_WARN("fail to init results", K(ret), K(req_ops.count()));
       } else {
@@ -95,7 +95,8 @@ int CommandOperator::process_table_batch_op(const ObTableBatchOperation &req_ops
 }
 
 int CommandOperator::process_table_multi_batch_op(const ObTableMultiBatchRequest &req,
-                                                  ObTableMultiBatchResult &result)
+                                                  ObTableMultiBatchResult &result,
+                                                  uint8_t flags /* = RedisOpFlags::NONE*/)
 {
   int ret = OB_SUCCESS;
   ObTableEntity result_entity;
@@ -106,14 +107,14 @@ int CommandOperator::process_table_multi_batch_op(const ObTableMultiBatchRequest
     LOG_WARN("batch operations is empty", KR(ret));
   }
 
-  SMART_VAR(ObTableMultiBatchCtx, ctx, redis_ctx_.allocator_, redis_ctx_.audit_ctx_, *redis_ctx_.entity_factory_) {
+  SMART_VAR(ObTableMultiBatchCtx, ctx, redis_ctx_.allocator_, *redis_ctx_.audit_ctx_, *redis_ctx_.entity_factory_) {
     if (OB_FAIL(init_table_ctx(batch_ops.at(0).get_table_operations().at(0),
                                ctx.tb_ctx_,
                                nullptr/*ObRedisMeta*/,
-                               RedisOpFlags::NONE,
+                               flags,
                                true/*is_batch_ctx*/))) {
       LOG_WARN("fail to init table ctx", K(ret), K(redis_ctx_));
-    } else if (OB_FAIL(init_batch_ctx(batch_ops.at(0), RedisOpFlags::NONE, ctx))) {
+    } else if (OB_FAIL(init_batch_ctx(batch_ops.at(0), flags, ctx))) {
       LOG_WARN("fail to init batch ctx", K(ret), K(redis_ctx_));
     } else if (OB_FAIL(ctx.tb_ctx_.init_trans(redis_ctx_.trans_param_->trans_desc_,
                                               redis_ctx_.trans_param_->tx_snapshot_))) {
@@ -130,7 +131,7 @@ int CommandOperator::process_table_multi_batch_op(const ObTableMultiBatchRequest
 int CommandOperator::process_table_single_op(const table::ObTableOperation &op,
                                              ObTableOperationResult &op_res,
                                              ObRedisMeta *meta /* = nullptr*/,
-                                             RedisOpFlags flags /* = RedisOpFlags::NONE*/,
+                                             uint8_t flags /* = RedisOpFlags::NONE*/,
                                              common::ObIAllocator *allocator /* = nullptr*/,
                                              ObITableEntityFactory *entity_factory /* = nullptr*/)
 {
@@ -196,13 +197,12 @@ int CommandOperator::process_table_single_op(const table::ObTableOperation &op,
 }
 
 int CommandOperator::init_batch_ctx(const ObTableBatchOperation &req_ops,
-                                    RedisOpFlags flags,
+                                    uint8_t flags,
                                     ObTableBatchCtx &batch_ctx)
 {
   int ret = OB_SUCCESS;
   ObTableCtx &tb_ctx = batch_ctx.tb_ctx_;
   batch_ctx.trans_param_ = redis_ctx_.trans_param_;
-  batch_ctx.stat_event_type_ = redis_ctx_.stat_event_type_;
   batch_ctx.is_atomic_ = !(flags & RedisOpFlags::BATCH_NOT_ATOMIC);
   batch_ctx.is_readonly_ = req_ops.is_readonly();
   batch_ctx.is_same_type_ = req_ops.is_same_type();
@@ -211,6 +211,7 @@ int CommandOperator::init_batch_ctx(const ObTableBatchOperation &req_ops,
   batch_ctx.credential_ = redis_ctx_.credential_;
   batch_ctx.returning_affected_entity_ = flags & RedisOpFlags::RETURN_AFFECTED_ENTITY;
   batch_ctx.returning_rowkey_ = flags & RedisOpFlags::RETURN_ROWKEY;
+  batch_ctx.use_put_ = flags & RedisOpFlags::USE_PUT;
   if (batch_ctx.tablet_ids_.empty()) {
     if (tb_ctx.need_dist_das()) {
       for (int i = 0; OB_SUCC(ret) && i < req_ops.count(); ++i) {
@@ -241,7 +242,6 @@ int CommandOperator::build_complex_type_rowkey_entity(int64_t db, const ObString
   } else if (OB_ISNULL(entity = redis_ctx_.entity_factory_->alloc())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null entity_factory_", K(ret));
-  } else if (FALSE_IT(entity->set_allocator(&op_temp_allocator_))) {
   } else if (OB_FAIL(build_complex_type_rowkey(redis_ctx_.allocator_, db, key, is_data, member, rowkey))) {
     LOG_WARN("fail to build start key", K(ret), K(db), K(key));
   } else if (OB_FAIL(entity->set_rowkey(rowkey))) {
@@ -324,18 +324,18 @@ int CommandOperator::get_tablet_id_by_rowkey(ObTableCtx &tb_ctx, const ObRowkey 
 int CommandOperator::init_table_ctx(const ObTableOperation &op,
                                     ObTableCtx &tb_ctx,
                                     ObRedisMeta *meta /* = nullptr*/,
-                                    RedisOpFlags flags /* = RedisOpFlags::NONE*/,
+                                    uint8_t flags /* = RedisOpFlags::NONE*/,
                                     bool is_batch_ctx /* = false */)
 {
   int ret = OB_SUCCESS;
   ObTableOperationType::Type op_type = op.type();
-  tb_ctx.set_schema_guard(redis_ctx_.tb_ctx_.get_schema_guard());
-  tb_ctx.set_sess_guard(redis_ctx_.tb_ctx_.get_sess_guard());
-  tb_ctx.set_audit_ctx(&redis_ctx_.audit_ctx_);
+  tb_ctx.set_schema_guard(redis_ctx_.redis_guard_.schema_guard_);
+  tb_ctx.set_sess_guard(redis_ctx_.redis_guard_.sess_guard_);
+  tb_ctx.set_audit_ctx(redis_ctx_.audit_ctx_);
   tb_ctx.set_entity(&op.entity());
   tb_ctx.set_entity_type(ObTableEntityType::ET_KV);
   tb_ctx.set_operation_type(op_type);
-  tb_ctx.set_need_dist_das(redis_ctx_.tb_ctx_.need_dist_das());
+  tb_ctx.set_need_dist_das(redis_ctx_.need_dist_das_);
   bool is_redis_ttl = false;
   ObRedisTTLCtx *ttl_ctx = nullptr;
   ObTabletID tablet_id = redis_ctx_.tablet_id_;
@@ -349,9 +349,9 @@ int CommandOperator::init_table_ctx(const ObTableOperation &op,
       LOG_WARN("fail to get tablet id", K(ret), K(redis_ctx_.cur_rowkey_idx_), K(tb_info->tablet_ids_.count()));
     }
   } else {
-    tb_ctx.set_schema_cache_guard(redis_ctx_.tb_ctx_.get_schema_cache_guard());
-    tb_ctx.set_simple_table_schema(redis_ctx_.tb_ctx_.get_simple_table_schema());
-    if (redis_ctx_.tb_ctx_.need_dist_das() && !is_batch_ctx) {
+    tb_ctx.set_schema_cache_guard(redis_ctx_.redis_guard_.schema_cache_guard_);
+    tb_ctx.set_simple_table_schema(redis_ctx_.redis_guard_.simple_table_schema_);
+    if (redis_ctx_.need_dist_das_ && !is_batch_ctx) {
       if (OB_FAIL(get_tablet_id_by_rowkey(tb_ctx, op.entity().get_rowkey(), tablet_id))) {
         LOG_WARN("fail to get tablet id by rowkey", K(ret), K(op.entity().get_rowkey()));
       }
@@ -409,7 +409,7 @@ int CommandOperator::init_table_ctx(const ObTableOperation &op,
         break;
       }
       case ObTableOperationType::INSERT_OR_UPDATE: {
-        if (OB_FAIL(tb_ctx.init_insert_up(false/*use put*/))) {
+        if (OB_FAIL(tb_ctx.init_insert_up(flags & RedisOpFlags::USE_PUT))) {
           LOG_WARN("fail to init insert up tb_ctx", K(ret), K(tb_ctx));
         }
         break;
@@ -459,7 +459,7 @@ int CommandOperator::build_range(const common::ObRowkey &start_key, const common
   range = nullptr;
   if (OB_ISNULL(range = OB_NEWx(ObNewRange, &op_temp_allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("ArgNodeContent cast to string invalid value", K(ret));
+    LOG_WARN("alloc memory for ObNewRange failed", K(ret));
   } else {
     range->start_key_ = start_key;
     range->end_key_ = end_key;
@@ -468,24 +468,6 @@ int CommandOperator::build_range(const common::ObRowkey &start_key, const common
     }
     if (inclusive_end) {
       range->border_flag_.set_inclusive_end();
-    }
-  }
-  return ret;
-}
-
-int CommandOperator::hashset_to_array(const common::hash::ObHashSet<ObString> &hash_set,
-                                      ObIArray<ObString> &ret_arr)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ret_arr.reserve(hash_set.size()))) {
-    LOG_WARN("fail to reserve space", K(ret), K(hash_set.size()));
-  }
-
-  for (hash::ObHashSet<ObString>::const_iterator iter = hash_set.begin();
-       OB_SUCC(ret) && iter != hash_set.end();
-       iter++) {
-    if (OB_FAIL(ret_arr.push_back(iter->first))) {
-      LOG_WARN("fail to push back string", K(ret), K(iter->first));
     }
   }
   return ret;
@@ -613,10 +595,10 @@ int CommandOperator::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard, const O
   bool is_weak_read = (redis_ctx_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL);
   tb_ctx.set_scan(true);
   tb_ctx.set_entity_type(ObTableEntityType::ET_KV);
-  tb_ctx.set_schema_guard(redis_ctx_.tb_ctx_.get_schema_guard());
-  tb_ctx.set_sess_guard(redis_ctx_.tb_ctx_.get_sess_guard());
-  tb_ctx.set_need_dist_das(redis_ctx_.tb_ctx_.need_dist_das());
-  tb_ctx.set_audit_ctx(redis_ctx_.tb_ctx_.get_audit_ctx());
+  tb_ctx.set_schema_guard(redis_ctx_.redis_guard_.schema_guard_);
+  tb_ctx.set_sess_guard(redis_ctx_.redis_guard_.sess_guard_);
+  tb_ctx.set_need_dist_das(redis_ctx_.need_dist_das_);
+  tb_ctx.set_audit_ctx(redis_ctx_.audit_ctx_);
   ObTabletID tablet_id = redis_ctx_.tablet_id_;
   // shallow copy
   ObTableQuery real_query = query;
@@ -633,12 +615,12 @@ int CommandOperator::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard, const O
       LOG_WARN("fail to get tablet id", K(ret), K(redis_ctx_.cur_rowkey_idx_), K(tb_info->tablet_ids_.count()));
     }
   } else {
-    tb_ctx.set_schema_cache_guard(redis_ctx_.tb_ctx_.get_schema_cache_guard());
-    tb_ctx.set_simple_table_schema(redis_ctx_.tb_ctx_.get_simple_table_schema());
+    tb_ctx.set_schema_cache_guard(redis_ctx_.redis_guard_.schema_cache_guard_);
+    tb_ctx.set_simple_table_schema(redis_ctx_.redis_guard_.simple_table_schema_);
     ObNewRange range;
     if (OB_FAIL(query.get_scan_ranges().at(0, range))) {
       LOG_WARN("fail to get first range", K(ret), K(query));
-    } else if (redis_ctx_.tb_ctx_.need_dist_das()) {
+    } else if (redis_ctx_.need_dist_das_) {
       if (OB_FAIL(get_tablet_id_by_rowkey(tb_ctx, range.start_key_, tablet_id))) {
         LOG_WARN("fail to get tablet id by rowkey", K(ret), K(range.start_key_));
       }
@@ -790,7 +772,6 @@ int CommandOperator::build_string_rowkey_entity(int64_t db, const ObString &key,
   } else if (OB_ISNULL(entity = redis_ctx_.entity_factory_->alloc())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null entity_factory_", K(ret));
-  } else if (FALSE_IT(entity->set_allocator(&op_temp_allocator_))) {
   } else if (OB_ISNULL(obj_ptr = static_cast<ObObj *>(redis_ctx_.allocator_.alloc(
                            sizeof(ObObj) * ObRedisUtil::STRING_ROWKEY_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1139,17 +1120,11 @@ int CommandOperator::fake_del_empty_key_meta(
   return ret;
 }
 
-int CommandOperator::init_tablet_ids_by_ops(
-    const ObIArray<ObITableOp *> &ops, ObArray<ObTabletID> *&tablet_ids)
+int CommandOperator::init_tablet_ids_by_ops(const ObIArray<ObITableOp *> &ops)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(tablet_ids = OB_NEWx(ObArray<ObTabletID>,
-                                      &op_temp_allocator_,
-                                      OB_MALLOC_NORMAL_BLOCK_SIZE,
-                                      ModulePageAllocator(op_temp_allocator_, "RedisCmd")))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc ObArray<ObTabletID>", K(ret));
-  } else if (OB_FAIL(tablet_ids->reserve(ops.count()))) {
+  tablet_ids_.reuse();
+  if (OB_FAIL(tablet_ids_.reserve(ops.count()))) {
     LOG_WARN("fail to reserve tablet id", K(ret), K(ops.count()));
   }
   for (int i = 0; OB_SUCC(ret) && i < ops.count(); ++i) {
@@ -1157,7 +1132,7 @@ int CommandOperator::init_tablet_ids_by_ops(
     if (OB_ISNULL(op)) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("invalid null op", K(ret), KP(op));
-    } else if (OB_FAIL(tablet_ids->push_back(op->tablet_id_))) {
+    } else if (OB_FAIL(tablet_ids_.push_back(op->tablet_id()))) {
       LOG_WARN("fail to push back tablet id", K(ret));
     }
   }
@@ -1229,7 +1204,7 @@ int CommandOperator::get_group_metas(ObIAllocator &allocator,
         LOG_WARN("fail to add get op", K(ret), KPC(entity));
       } else if (OB_FAIL(metas.push_back(meta_info))) {
         LOG_WARN("fail to push back meta info", K(ret), KPC(meta_info));
-      } else if (OB_FAIL(tablet_ids.push_back(op->tablet_id_))) {
+      } else if (OB_FAIL(tablet_ids.push_back(op->tablet_id()))) {
         LOG_WARN("fail to push back tablet id", K(ret));
       }
     }
@@ -1438,12 +1413,50 @@ int CommandOperator::group_get_complex_type_data(const ObString &property_name, 
   }
 
   if (OB_SUCC(ret)) {
-    ObArray<ObTabletID> *tablet_ids = nullptr;
-    if (OB_FAIL(init_tablet_ids_by_ops(group_ctx.ops(), tablet_ids))) {
+    if (OB_FAIL(init_tablet_ids_by_ops(group_ctx.ops()))) {
       LOG_WARN("fail to init tablet ids by ops", K(ret));
     } else if (OB_FAIL(process_table_batch_op(
-            batch_op, batch_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, tablet_ids))) {
+            batch_op, batch_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids_))) {
       LOG_WARN("fail to process table batch op", K(ret));
+    }
+  }
+  return ret;
+}
+
+ObTableOperation CommandOperator::put_or_insup(const ObITableEntity &entity)
+{
+  ObTableOperation op;
+  if (can_use_put(entity)) {
+    op.set_type(ObTableOperationType::PUT);
+  } else {
+    op.set_type(ObTableOperationType::INSERT_OR_UPDATE);
+  }
+  op.set_entity(&entity);
+  return op;
+}
+
+bool CommandOperator::can_use_put(const ObITableEntity &entity)
+{
+  int64_t expect_property_num = 0;
+  if (model_ == ObRedisModel::STRING || model_ == ObRedisModel::SET) {
+    expect_property_num = ObRedisUtil::STRING_SET_PROPERTY_SIZE;
+  } else if (model_ == ObRedisModel::HASH) {
+    expect_property_num = ObRedisUtil::HASH_ZSET_PROPERTY_SIZE;
+  }
+  return model_ != ObRedisModel::ZSET && binlog_row_image_type_ == ObBinlogRowImage::MINIMAL
+        && entity.get_properties_count() == expect_property_num;
+}
+
+int CommandOperator::put_or_insup(const ObITableEntity &entity, ObTableBatchOperation& batch_op)
+{
+  int ret = OB_SUCCESS;
+  if (can_use_put(entity)) {
+    if (OB_FAIL(batch_op.put(entity))) {
+      LOG_WARN("fail to put entity", K(ret), K(entity));
+    }
+  } else {
+    if (OB_FAIL(batch_op.insert_or_update(entity))) {
+      LOG_WARN("fail to put entity", K(ret), K(entity));
     }
   }
   return ret;

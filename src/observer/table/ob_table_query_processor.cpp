@@ -206,9 +206,9 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
 
   // record events
   if (is_hkv) {
-    stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY; // hbase query
+    stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY; // hbase query
   } else {
-    stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
+    stat_process_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
   }
   stat_row_count_ = result_row_count_;
 

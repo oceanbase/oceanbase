@@ -15,7 +15,7 @@
 
 #include "src/share/table/redis/ob_redis_common.h"
 #include "lib/string/ob_string.h"
-#include "lib/container/ob_array.h"
+#include "lib/container/ob_se_array.h"
 #include "lib/string/ob_string_buffer.h"
 
 namespace oceanbase
@@ -33,10 +33,9 @@ public:
    * @return int Returns 0 for success and any other value for failure
    */
   static int decode(
-      ObIAllocator &allocator,
       const ObString &redis_msg,
       ObString &cmd_name,
-      ObArray<ObString> &args);
+      ObIArray<ObString> &args);
 
   /**
    * @brief encodes the error message
@@ -87,32 +86,31 @@ private:
 class ObRedisDecoder
 {
 public:
-  ObRedisDecoder(ObIAllocator &allocator, const ObString &redis_msg)
+  const int64_t OB_REDIS_BLOCK_SIZE = 1LL << 10;                 // 512B, 32 args
+  ObRedisDecoder(const ObString &redis_msg)
       : redis_msg_(redis_msg.ptr()),
         length_(redis_msg.length()),
-        cur_pos_(0),
-        args_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisDecode")),
-        allocator_(&allocator)
+        cur_pos_(0)
   {}
   ~ObRedisDecoder() {}
 
-  int decode();
-
-  inline int get_result(ObString &cmd_name, ObArray<ObString> &args);
+  int decode(ObString &cmd_name, ObIArray<ObString> &args);
 
   TO_STRING_KV(K(length_), K(cur_pos_));
 
 private:
   int read_until_crlf(ObString &splited);
+  int ob_sub_str_shallow(const ObString &src, int32_t start_index, int32_t end_index, ObString &dst);
   int decode_bulk_string(ObString &bulk_str);
-  int decode_array(const ObString &header);
+  int decode_array(const ObString &header, ObIArray<ObString> &args);
+  void up_to_low_shallow(ObString &str);
+  // Ensure that dst.size >= src.size()
+  void obstr_lower_assign(const ObString &src, ObString &dst);
 
   const char *redis_msg_;
   int32_t length_;
   int32_t cur_pos_;
   ObString cmd_name_;
-  ObArray<ObString> args_;
-  ObIAllocator *allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObRedisDecoder);
 };
 

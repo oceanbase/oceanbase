@@ -14,6 +14,7 @@
 #ifdef GROUP_OBJ_DEF
 GROUP_OBJ_DEF(TYPE_TABLE_GROUP, "TABLE_GROUP", ObTableOp, ObTableGroupKey, ObTableGroupValue, ObTableGroupMeta, ObTableOpProcessor)
 GROUP_OBJ_DEF(TYPE_REDIS_GROUP, "REDIS_GROUP", ObRedisOp, ObRedisCmdKey, ObTableGroupValue, ObTableGroupMeta, ObRedisGroupOpProcessor)
+GROUP_OBJ_DEF(TYPE_HBASE_GROUP, "HBASE_GROUP", ObHbaseOp, ObHbaseGroupKey, ObTableGroupValue, ObTableGroupMeta, ObHbaseOpProcessor)
 #endif
 
 #ifndef OCEANBASE_OBSERVER_OB_TABLE_GROUP_REGISTER_H_

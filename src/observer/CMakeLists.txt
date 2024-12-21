@@ -142,6 +142,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_query_and_mutate_processor.cpp
   table/ob_table_query_processor.cpp
   table/ob_table_rpc_processor.cpp
+  table/ob_table_rpc_response_sender.cpp
   table/ob_table_query_async_processor.cpp
   table/ob_table_service.cpp
   table/ob_htable_lock_mgr.cpp
@@ -211,9 +212,12 @@ ob_set_subtarget(ob_server table
   table/group/ob_table_group_factory.cpp
   table/group/ob_table_group_register.cpp
   table/redis/group/ob_redis_group_processor.cpp
+  table/hbase/ob_hbase_group_processor.cpp
+  table/hbase/ob_hbase_group_struct.cpp
   table/ob_table_batch_common.cpp
   table/ob_table_multi_batch_common.cpp
   table/ob_table_multi_batch_service.cpp
+  table/ob_redis_execute_processor_v2.cpp
 )
 
 ob_set_subtarget(ob_server table_load

@@ -33,18 +33,6 @@ class ObRedisHelper
 public:
   static const uint64_t MAX_BULK_LEN = 1 * 1024 * 1024; // 1M, not compatible with redis (512M)
 
-  // static const int64_t MAX_DBL_STR_LEN = 5 * 1024; // compatible with redis
-  /**
-   * Get the decoded message from the entity
-   * @param entity Entity object
-   * @param decode_msgs The decoded array of messages
-   * @return retcode
-   */
-  static int get_decoded_msg_from_entity(ObIAllocator &allocator,
-                                         const ObITableEntity &entity,
-                                         ObString &cmd_name,
-                                         ObArray<ObString> &args);
-
   static int get_lock_key(ObIAllocator &allocator, const ObRedisRequest &redis_req, ObString &lock_key);
   static int get_table_name_by_model(ObRedisModel model, ObString &table_name);
   static int model_to_string(ObRedisModel model, ObString &str);
@@ -58,7 +46,7 @@ public:
   static int gen_meta_scan_range(ObIAllocator &allocator, const ObTableCtx &tb_ctx, ObIArray<ObNewRange> &scan_ranges);
   static int check_string_length(int64_t old_len, int64_t append_len);
   static int str_to_lower(ObIAllocator &allocator, const ObString &src, ObString &dst);
-
+  static bool is_read_only_command(RedisCommandType type);
 private:
   static int init_str2d(ObIAllocator &allocator, double d, char *&buf, size_t &length);
 };
@@ -67,16 +55,20 @@ private:
 class ObRedisRequest
 {
 public:
-  explicit ObRedisRequest(common::ObIAllocator &allocator, const ObTableOperationRequest &request)
-      : allocator_(allocator),
-        request_(request),
+  const int64_t OB_REDIS_BLOCK_SIZE = 1LL << 10;                 // 512B, 32 args
+  explicit ObRedisRequest(common::ObIAllocator &allocator, const ObITableRequest &request)
+      : request_(request),
+        table_name_(),
+        allocator_(allocator),
         cmd_name_(),
-        args_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisArgs")),
+        args_(OB_REDIS_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisArgs")),
         db_(-1)
-  {}
+  {
+    cmd_name_.assign_buffer(cmd_name_buf_, sizeof(cmd_name_buf_));
+  }
   ~ObRedisRequest()
   {}
-  TO_STRING_KV(K_(request), K_(cmd_name), K_(args), K_(db));
+  TO_STRING_KV(K_(cmd_name), K_(args));
   // Parse request_ as cmd_name_, args_
   int decode();
 
@@ -85,26 +77,9 @@ public:
     return cmd_name_;
   }
 
-  OB_INLINE const char* get_lower_cmd_name_ctr() const
-  {
-    ObString lower_cmd_name;
-    ObRedisHelper::str_to_lower(allocator_, cmd_name_, lower_cmd_name);
-    return lower_cmd_name.ptr();
-  }
-
-  OB_INLINE const ObArray<ObString> &get_args() const
+  OB_INLINE const ObIArray<ObString> &get_args() const
   {
     return args_;
-  }
-
-  OB_INLINE const ObTableOperationRequest &get_request() const
-  {
-    return request_;
-  }
-
-  OB_INLINE const ObITableEntity &get_entity() const
-  {
-    return request_.table_operation_.entity();
   }
 
   OB_INLINE int64_t get_db() const
@@ -114,14 +89,24 @@ public:
 
   OB_INLINE const ObString &get_table_name() const
   {
-    return request_.table_name_;
+    return table_name_;
   }
 
+  OB_INLINE ObTableRequsetType get_req_type() const
+  {
+    return request_.get_type();
+  }
+
+  OB_INLINE void set_table_name(const ObString &table_name) { table_name_ = table_name; }
+
 private:
-  common::ObIAllocator &allocator_;
-  const ObTableOperationRequest &request_;
+  const ObITableRequest &request_;
+  ObString table_name_;
+  ObIAllocator &allocator_;
+  // The longest English word character is 45 bytes, here 64 bytes are reserved.
+  char cmd_name_buf_[64] = {}; // All elements are initialized to '\0'
   ObString cmd_name_;
-  ObArray<ObString> args_;
+  ObSEArray<ObString, 4> args_;
   // all redis command include db info
   int64_t db_;
 
@@ -132,21 +117,20 @@ private:
 class ObRedisResponse
 {
 public:
-  ObRedisResponse(common::ObIAllocator &allocator, ObTableOperationResult &result)
-      : allocator_(allocator),
-        result_(result)
+  ObRedisResponse(common::ObIAllocator &allocator, ObRedisResult &result, ObTableRequsetType req_type)
+      : allocator_(&allocator),
+        result_(result),
+        req_type_(req_type)
   {}
   ~ObRedisResponse()
   {}
-  TO_STRING_KV(K_(result));
+  TO_STRING_KV(KP(allocator_), K_(req_type), K_(result));
   void reset() {
     result_.reset();
-    allocator_.reset();
+    allocator_ = nullptr;
+    req_type_ = ObTableRequsetType::TABLE_REQUEST_INVALID;
   }
-  OB_INLINE ObTableOperationResult &get_result()
-  {
-    return result_;
-  }
+  int get_result(ObITableResult *&result) const;
   // set res to redis fmt
   int set_res_int(int64_t res);
   int set_res_simple_string(const ObString &res);
@@ -158,11 +142,15 @@ public:
   void return_table_error(int ret);
   // Some common hard-coded redis protocol return values, directly returned
   int set_fmt_res(const ObString &fmt_res);
-  OB_INLINE common::ObIAllocator& get_allocator() { return allocator_; }
+  OB_INLINE void set_allocator(common::ObIAllocator *alloc) { allocator_ = alloc; }
+  OB_INLINE common::ObIAllocator& get_allocator() { return *allocator_; }
+  OB_INLINE void set_req_type(ObTableRequsetType req_type) { req_type_ = req_type; }
+  OB_INLINE ObTableRequsetType get_req_type() { return req_type_; }
 
 private:
-  common::ObIAllocator &allocator_;
-  ObTableOperationResult &result_;
+  common::ObIAllocator *allocator_;
+  ObRedisResult &result_;
+  ObTableRequsetType req_type_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRedisResponse);

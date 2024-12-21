@@ -104,9 +104,7 @@ int ObTableGroupCommitEndTransCb::response()
     LOG_WARN("factory is NULL", KP(group_factory_), KP(op_factory_));
   } else if (OB_FAIL(ObTableGroupExecuteService::response(group_,
                                                           *group_factory_,
-                                                          *op_factory_,
-                                                          true /* need deep copy */,
-                                                          &allocator_ /* deep copy alloc */))) {
+                                                          *op_factory_))) {
     LOG_WARN("fail to response", K(ret), K(group_));
   }
 
@@ -264,7 +262,6 @@ int ObTableOpProcessor::process()
 int ObTableOpProcessor::execute_dml()
 {
   int ret = OB_SUCCESS;
-  int32_t stat_event_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   OpFixedArray batch_ops(allocator_);
   ResultFixedArray batch_result(allocator_);
   int64_t ops_count = ops_->count();
@@ -274,7 +271,6 @@ int ObTableOpProcessor::execute_dml()
     LOG_WARN("fail to init result array", K(ret), K(ops_count));
   } else {
     ObTableBatchCtx &batch_ctx = *batch_ctx_;
-    batch_ctx.stat_event_type_ = &stat_event_type;
     if (OB_FAIL(init_batch_params(batch_ctx, batch_ops, batch_result))) {
       LOG_WARN("fail to init batch ctx", K(ret));
     } else if (OB_FAIL(init_table_ctx(batch_ctx))) {
@@ -302,7 +298,6 @@ int ObTableOpProcessor::execute_read()
   int ret = OB_SUCCESS;
   bool had_do_response = false;
   ObArenaAllocator tmp_allocator("TbGroupRead", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  int32_t stat_event_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   OpFixedArray batch_ops(allocator_);
   ResultFixedArray batch_result(allocator_);
   int64_t ops_count = ops_->count();
@@ -312,22 +307,21 @@ int ObTableOpProcessor::execute_read()
     LOG_WARN("fail to init result array", K(ret), K(ops_count));
   } else {
     ObTableBatchCtx &batch_ctx = *batch_ctx_;
-    batch_ctx.stat_event_type_ = &stat_event_type;
     if (OB_FAIL(init_batch_params(batch_ctx, batch_ops, batch_result))) {
       LOG_WARN("fail to init batch ctx", K(ret));
     } else if (OB_FAIL(init_table_ctx(batch_ctx))) {
       LOG_WARN("fail to init table ctx", K(ret));
     } else if (OB_FAIL(ObTableGroupExecuteService::start_trans(batch_ctx))) {
-      LOG_WARN("fail to start trans", K(batch_ctx));
+      LOG_WARN("fail to start trans", K(ret));
     } else if (OB_FAIL(ObTableBatchService::execute(batch_ctx, batch_ops, batch_result))) {
-      LOG_WARN("fail to execute batch operation", K(batch_ctx));
+      LOG_WARN("fail to execute batch operation", K(ret));
     } else if (OB_FAIL(dispatch_batch_result(batch_result))) {
       LOG_WARN("fail to dispatch batch result", K(ret));
     }
 
     // end trans
     int tmp_ret = OB_SUCCESS;
-    bool is_rollback = ret == OB_SUCCESS;
+    bool is_rollback = ret != OB_SUCCESS;
     if (OB_TMP_FAIL(ObTableGroupExecuteService::end_trans(batch_ctx, nullptr, is_rollback))) {
       LOG_WARN("fail to end trans", K(ret), K(tmp_ret));
     }
@@ -356,8 +350,8 @@ int ObTableOpProcessor::init_batch_params(ObTableBatchCtx &batch_ctx,
       ObTableOp *single_op = static_cast<ObTableOp *>(ops_->at(i));
       if (OB_FAIL(batch_ops.push_back(single_op->op_))) {
         LOG_WARN("fail to push back table operation", K(single_op->op_), K(i));
-      } else if (OB_FAIL(batch_ctx.tablet_ids_.push_back(single_op->tablet_id_))) {
-        LOG_WARN("fail to push back tablet id", K(ret), K(single_op->tablet_id_), K(i));
+      } else if (OB_FAIL(batch_ctx.tablet_ids_.push_back(single_op->tablet_id()))) {
+        LOG_WARN("fail to push back tablet id", K(ret), K(single_op->tablet_id()), K(i));
       } else if (OB_FAIL(batch_result.push_back(single_op->result_))) {
         LOG_WARN("fail to push back table operation result", K(single_op->result_), K(i));
       }
@@ -398,7 +392,7 @@ int ObTableOpProcessor::init_table_ctx(ObTableBatchCtx &batch_ctx)
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(tb_ctx.init_common(*batch_ctx.credential_,
-                                        single_op->tablet_id_,
+                                        single_op->tablet_id(),
                                         group_ctx_->timeout_ts_))) {
     LOG_WARN("fail to init table tb_ctx common part", K(ret),
               KPC(batch_ctx.credential_), K(group_ctx_->timeout_ts_));
@@ -544,9 +538,7 @@ int ObTableGroupExecuteService::end_trans(const ObTableBatchCtx &batch_ctx,
 
 int ObTableGroupExecuteService::response(ObTableGroup &group,
                                          ObTableGroupFactory<ObTableGroup> &group_factory,
-                                         ObTableGroupOpFactory &op_factory,
-                                         bool need_deep_copy /* = false */,
-                                         ObIAllocator *deep_copy_alloc /* = nullptr */)
+                                         ObTableGroupOpFactory &op_factory)
 {
   int ret = OB_SUCCESS;
 
@@ -556,61 +548,46 @@ int ObTableGroupExecuteService::response(ObTableGroup &group,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid operation size", K(ret));
   } else {
-    ObTableRpcResponseSender<ObTableOperationResult> sender;
+    ObTableRpcResponseSender sender;
     ObITableOp *op = nullptr;
-    ObTableOperationResult *result = nullptr;
+    ObITableResult *res = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < ops.count(); i++) {
       op = ops.at(i);
       rpc::ObRequest *req = nullptr;
-      ObTableEntity dst_entity;
        if (OB_ISNULL(op)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("op is null", K(ret), K(i));
       } else if (OB_ISNULL(req = op->req_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("request is null", K(ret), K(i));
-      } else if (OB_ISNULL(result = &op->result_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", K(ret), K(i));
-      } else if (need_deep_copy) {
-        const ObITableEntity *src_entity = NULL;
-        if (OB_ISNULL(deep_copy_alloc)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("deep_copy_alloc is null", K(ret));
-        } else if (OB_FAIL(result->get_entity(src_entity))) {
-          LOG_WARN("failed to get entity", K(ret));
-        } else if (OB_FAIL(dst_entity.deep_copy(*deep_copy_alloc, *src_entity))) {
-          LOG_WARN("failed to copy entity", K(ret));
-        } else {
-          result->set_entity(dst_entity);
-        }
-      }
-      if (OB_SUCC(ret)) {
-        int ret_code = result->get_errno();
+      } else if (OB_FAIL(op->get_result(res))) {
+        LOG_WARN("fail to get result", K(ret));
+      } else {
+        int ret_code = res->get_errno();
         const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(req->get_packet());
         if (observer::ObTableRpcProcessorUtil::need_do_move_response(ret_code, *rpc_pkt)) { // rerouting pkg
           observer::ObTableMoveResponseSender move_sender(req, ret_code);
           if (OB_ISNULL(GCTX.schema_service_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("gctx schema_service is null", K(ret), K(i));
-          } else if (OB_FAIL(move_sender.init(group_meta.table_id_, op->tablet_id_, *GCTX.schema_service_))) {
-            LOG_WARN("fail to init move response sender", K(ret), K_(op->tablet_id), K_(group_meta.table_id));
+          } else if (OB_FAIL(move_sender.init(group_meta.table_id_, op->tablet_id(), *GCTX.schema_service_))) {
+            LOG_WARN("fail to init move response sender", K(ret), K(op->tablet_id()), K_(group_meta.table_id));
           } else if (OB_FAIL(move_sender.response())) {
             LOG_WARN("fail to do move response", K(ret), K(i));
           }
           // if response rerouting fail, response the common failure packet
           if (OB_FAIL(ret)) {
             sender.set_req(req);
-            sender.set_result(&op->result_);
+            sender.set_result(res);
             if (OB_FAIL(sender.response(ret_code))) {
-              LOG_WARN("fail to send response", K(ret), KPC(op), K_(op->result), K(i), K(ret_code));
+              LOG_WARN("fail to send response", K(ret), KPC(op), K(i), K(ret_code));
             }
           }
         } else {
           sender.set_req(req);
-          sender.set_result(&op->result_);
+          sender.set_result(res);
           if (OB_FAIL(sender.response(ret_code))) {
-            LOG_WARN("fail to send response", K(ret), KPC(op), K_(op->result), K(i), K(ret_code));
+            LOG_WARN("fail to send response", K(ret), KPC(op), K(i), K(ret_code));
           }
         }
       }
@@ -640,10 +617,7 @@ int ObTableGroupExecuteService::response_failed_results(int ret_code,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table op is NULL", K(ret), K(i));
     } else {
-      ObTableOperationResult &result = ops.at(i)->result_;
-      result.set_entity(&result_entity);
-      result.set_type(group_meta.op_type_);
-      result.set_errno(ret_code);
+      ops.at(i)->set_failed_result(ret_code, result_entity, group_meta.op_type_);
     }
   }
   // 2. response fail result
@@ -697,14 +671,14 @@ int ObTableGroupExecuteService::process_result(int ret_code,
 int ObTableGroupExecuteService::execute(ObTableGroup &group, bool add_fail_group)
 {
   int ret = OB_SUCCESS;
-  ObTableGroupCtx group_ctx;
+  ObArenaAllocator tmp_allocator("TbGroupExec", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObTableGroupCtx group_ctx(tmp_allocator);
   ObSchemaGetterGuard schema_guard;
   observer::ObReqTimeGuard req_timeinfo_guard_; // use for clear schema_cache_guard
   ObKvSchemaCacheGuard schema_cache_guard;
   ObTableApiSessGuard sess_guard;
   ObTableTransParam trans_param;
   ObITableOpProcessor *op_processor = nullptr;
-  ObArenaAllocator tmp_allocator("TbGroupExec", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   const schema::ObSimpleTableSchemaV2 *simple_schema = nullptr;
   if (!group.is_inited_) {
     ret = OB_ERR_UNEXPECTED;
@@ -738,7 +712,7 @@ int ObTableGroupExecuteService::execute(ObTableGroup &group, bool add_fail_group
     } else if (OB_FAIL(functor.init(&group, add_fail_group, &failed_groups, &group_factory, &op_factory))) {
       LOG_WARN("fail to init group commit callback functor", K(ret));
     } else if (OB_FAIL(op_processor->init(group_ctx, &group.ops_))) {
-      LOG_WARN("fail to init pp processor", K(ret));
+      LOG_WARN("fail to init op processor", K(ret));
     } else if (OB_FAIL(op_processor->process())) {
       LOG_WARN("fail to process op", K(ret));
     }
@@ -748,8 +722,11 @@ int ObTableGroupExecuteService::execute(ObTableGroup &group, bool add_fail_group
   request_finish_callback();
 
   int tmp_ret = ret;
-  if (!trans_param.had_do_response_ && OB_FAIL(process_result(tmp_ret, group,
-                                                false /* is_direct_execute */, add_fail_group))) {
+  if (!trans_param.had_do_response_ && OB_FAIL(process_result(tmp_ret,
+                                                              group,
+                                                              false /* is_direct_execute */,
+                                                              add_fail_group))) {
+    // overwrite ret
     LOG_WARN("fail to process result", K(ret), K(tmp_ret));
   } else {
     LOG_DEBUG("[group commit debug] process result", K(ret), K(tmp_ret),

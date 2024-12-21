@@ -37,6 +37,11 @@ const ObString ObRedisUtil::IS_DATA_PROPERTY_NAME = "is_data";
 const ObString ObRedisUtil::SCORE_PROPERTY_NAME = ObString::make_string("score");
 const ObString ObRedisUtil::STRING_TTL_DEFINITION = ObString::make_string("expire_ts + INTERVAL 0 SECOND");
 
+const ObString ObRedisUtil::INCRBY_CMD_NAME = ObString::make_string("incrby");
+const ObString ObRedisUtil::DECRBY_CMD_NAME = ObString::make_string("decrby");
+const ObString ObRedisUtil::INCR_CMD_NAME = ObString::make_string("incr");
+const ObString ObRedisUtil::DECR_CMD_NAME = ObString::make_string("decr");
+
 ////////////////////////////////////////////////////////////////////////////////////
 const char *ObRedisFmt::MINUS_ONE = ":-1\r\n";
 const char *ObRedisFmt::OK = "+OK\r\n";

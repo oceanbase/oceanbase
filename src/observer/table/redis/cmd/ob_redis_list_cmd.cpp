@@ -100,7 +100,11 @@ int Pop::init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_common(args))) {
-    RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::SYNTAX_ERR);
+    if (is_pop_left_) {
+      RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::WRONG_ARGS_LPOP_ERR);
+    } else {
+      RECORD_REDIS_ERROR(fmt_err_msg, ObRedisErr::WRONG_ARGS_RPOP_ERR);
+    }
     LOG_WARN("fail to init cmd", K(ret));
   } else {
     is_inited_ = true;

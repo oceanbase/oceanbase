@@ -56,26 +56,25 @@ int ObTableBatchService::prepare_results(const ObIArray<ObTableOperation> &ops,
   const int64_t count = ops.count();
 
   if (!results.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("results is not empty", K(ret), K(results));
+    // do nothing
   } else if (ops.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ops is empty", K(ret));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
-    const ObTableOperation &op = ops.at(i);
-    ObTableOperationResult op_result;
-    ObITableEntity *result_entity = entity_factory.alloc();
-    if (OB_ISNULL(result_entity)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc entity", K(ret));
-    } else {
-      op_result.set_err(OB_SUCCESS);
-      op_result.set_type(op.type());
-      op_result.set_entity(result_entity);
-      if (OB_FAIL(results.push_back(op_result))) {
-        LOG_WARN("fail to push back result", K(ret), K(results));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+      const ObTableOperation &op = ops.at(i);
+      ObTableOperationResult op_result;
+      ObITableEntity *result_entity = entity_factory.alloc();
+      if (OB_ISNULL(result_entity)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc entity", K(ret));
+      } else {
+        op_result.set_err(OB_SUCCESS);
+        op_result.set_type(op.type());
+        op_result.set_entity(result_entity);
+        if (OB_FAIL(results.push_back(op_result))) {
+          LOG_WARN("fail to push back result", K(ret), K(results));
+        }
       }
     }
   }
@@ -117,70 +116,56 @@ int ObTableBatchService::execute(ObTableBatchCtx &ctx,
     LOG_WARN("fail to check legality", K(ret), K(ret), K(results));
   } else if (ctx.is_readonly_) {
     if (ctx.is_same_properties_names_) {
-      *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_GET;
       ret = multi_get(ctx, ops, results);
     } else {
-      *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_BATCH_RETRIVE;
       ret = batch_execute(ctx, ops, results);
     }
   } else if (ctx.is_same_type_) {
     ObTableOperationType::Type op_type = ops.at(0).type();
     switch(op_type) {
       case ObTableOperationType::INSERT:
-        *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_INSERT;
         ret = multi_insert(ctx, ops, results);
         break;
       case ObTableOperationType::DEL:
         if (ObTableEntityType::ET_HKV == ctx.tb_ctx_.get_entity_type()) {
-          *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_DELETE;
           ret = htable_delete(ctx, ops, results);
         } else {
-          *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_DELETE;
           ret = multi_delete(ctx, ops, results);
         }
         break;
       case ObTableOperationType::UPDATE:
-        *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_UPDATE;
         ret = batch_execute(ctx, ops, results);
         break;
       case ObTableOperationType::INSERT_OR_UPDATE:
         if (ObTableEntityType::ET_HKV == ctx.tb_ctx_.get_entity_type()) {
-          *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_PUT;
           ret = htable_put(ctx, ops, results);
         } else {
-          *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_INSERT_OR_UPDATE;
           ret = batch_execute(ctx, ops, results);
         }
         break;
       case ObTableOperationType::REPLACE:
-        *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_REPLACE;
         ret = multi_replace(ctx, ops, results);
         break;
       case ObTableOperationType::PUT:
-          *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_PUT;
           ret = multi_put(ctx, ops, results);
           break;
       case ObTableOperationType::APPEND:
-        *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_APPEND;
         ret = batch_execute(ctx, ops, results);
         break;
       case ObTableOperationType::INCREMENT:
-        *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_INCREMENT;
         ret = batch_execute(ctx, ops, results);
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("unexpected operation type", "type", op_type, K(ctx.stat_event_type_));
+        LOG_ERROR("unexpected operation type", "type", op_type);
         break;
     }
   } else {
     if (ObTableEntityType::ET_HKV == ctx.tb_ctx_.get_entity_type()) {
       // HTable mutate_row(RowMutations)
-      *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_HYBRID;
       ret = htable_mutate_row(ctx, ops, results);
     } else {
       // complex batch hybrid operation
-      *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_BATCH_HYBRID;
       ret = batch_execute(ctx, ops, results);
     }
   }
@@ -684,6 +669,7 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx,
   } else if (OB_FAIL(tb_ctx.check_insert_up_can_use_put(can_use_put))) {
     LOG_WARN("fail to check htable put can use table api put", K(ret));
   } else if (can_use_put) {
+    ObTableOperationType::Type origin_type = tb_ctx.get_opertion_type();
     tb_ctx.set_operation_type(ObTableOperationType::INSERT);
     tb_ctx.set_client_use_put(true);
     if (OB_FAIL(ObTableOpWrapper::get_insert_spec(tb_ctx, cache_guard, spec))) {
@@ -698,6 +684,7 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx,
         }
       }
     }
+    tb_ctx.set_operation_type(origin_type); // reset to origin type
   } else {
     if (OB_FAIL(ObTableOpWrapper::get_insert_up_spec(tb_ctx, cache_guard, spec))) {
       LOG_WARN("fail to get insert up spec", K(ret));

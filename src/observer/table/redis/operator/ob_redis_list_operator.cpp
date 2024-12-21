@@ -64,7 +64,6 @@ int ListCommandOperator::gen_entity_with_rowkey(
   } else if (OB_ISNULL(entity = entity_factory->alloc())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("fail to allocate entity", K(ret));
-  } else if (FALSE_IT(entity->set_allocator(&op_temp_allocator_))) {
   } else if (OB_FAIL(build_list_type_rowkey(redis_ctx_.allocator_, db, key, is_data, idx, rowkey))) {
     LOG_WARN("fail to build list type rowkey", K(ret));
   } else if (OB_FAIL(entity->set_rowkey(rowkey))) {
@@ -520,7 +519,7 @@ int ListCommandOperator::build_rowkey(
   if (OB_ISNULL(
           obj_ptr = static_cast<ObObj *>(op_temp_allocator_.alloc(sizeof(ObObj) * ObRedisUtil::LIST_ROWKEY_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("ArgNodeContent cast to string invalid value", K(ret));
+    LOG_WARN("alloc memory for ObObj failed", K(ret));
   } else if (OB_FAIL(ObRedisCtx::reset_objects(obj_ptr, ObRedisUtil::LIST_ROWKEY_NUM))) {
     LOG_WARN("fail to init object", K(ret));
   } else {
@@ -2358,7 +2357,7 @@ int ListCommandOperator::do_del(int64_t db, const ObString &key, bool &is_exist)
 
 int ListCommandOperator::do_same_keys_push(
     ObTableBatchOperation &batch_op,
-    ObTabletIDArray& tablet_ids,
+    ObIArray<ObTabletID>& tablet_ids,
     ObIArray<ObITableOp *> &ops,
     const ObIArray<ObRedisMeta *> &metas,
     const ObString &key,
@@ -2403,8 +2402,8 @@ int ListCommandOperator::do_same_keys_push(
         LOG_WARN("fail to set res int", K(ret), KPC(redis_op));
       } else {
         for (int64_t i = 0; i < push_size && OB_SUCC(ret); i++) {
-          if (OB_FAIL(tablet_ids.push_back(redis_op->tablet_id_))) {
-            LOG_WARN("fail to push back tablet_id", K(ret), K(redis_op->tablet_id_));
+          if (OB_FAIL(tablet_ids.push_back(redis_op->tablet_id()))) {
+            LOG_WARN("fail to push back tablet_id", K(ret), K(redis_op->tablet_id()));
           }
         }  // end for
       }
@@ -2439,7 +2438,6 @@ int ListCommandOperator::do_group_push()
   // Sort ops by key to find the same key
   sort_group_ops();
   ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
-  ObTabletIDArray tablet_ids;
   // Get all op's meta
   ObArray<ObRedisMeta *> metas(OB_MALLOC_NORMAL_BLOCK_SIZE,
                               ModulePageAllocator(op_temp_allocator_, "RedisGPush"));
@@ -2460,7 +2458,7 @@ int ListCommandOperator::do_group_push()
         same_key_end_pos = pos - 1;
         // do (same_key_start_pos, same_key_end_pos)
         if (OB_FAIL(
-                do_same_keys_push(batch_op, tablet_ids, ops, metas, last_key, same_key_start_pos, same_key_end_pos))) {
+                do_same_keys_push(batch_op, tablet_ids_, ops, metas, last_key, same_key_start_pos, same_key_end_pos))) {
           LOG_WARN("fail to do same keys push", K(ret), KPC(redis_op));
         } else {
           same_key_start_pos = pos;
@@ -2471,13 +2469,13 @@ int ListCommandOperator::do_group_push()
     // do (same_key_start_pos, end_pos - 1)
     if (OB_SUCC(ret)) {
       same_key_end_pos = pos - 1;
-      if (OB_FAIL(do_same_keys_push(batch_op, tablet_ids, ops, metas, last_key, same_key_start_pos, same_key_end_pos))) {
+      if (OB_FAIL(do_same_keys_push(batch_op, tablet_ids_, ops, metas, last_key, same_key_start_pos, same_key_end_pos))) {
         LOG_WARN("fail to do same keys push", K(ret), K(ops));
       }
     }
     ResultFixedArray results(op_temp_allocator_);
     if (OB_SUCC(ret) && OB_FAIL(process_table_batch_op(
-                            batch_op, results, nullptr, RedisOpFlags::NONE, nullptr, nullptr, &tablet_ids))) {
+                            batch_op, results, nullptr, RedisOpFlags::NONE, nullptr, nullptr, &tablet_ids_))) {
       LOG_WARN("fail to process table batch op", K(ret), K(batch_op));
     }
   }
@@ -2556,8 +2554,8 @@ int ListCommandOperator::gen_group_pop_res(
     int64_t same_key_end_pos,
     ObTableBatchOperation &batch_op_insup,
     ObTableBatchOperation &batch_op_del,
-    ObTabletIDArray &tablet_insup_ids,
-    ObTabletIDArray &tablet_del_ids)
+    ObIArray<ObTabletID> &tablet_insup_ids,
+    ObIArray<ObTabletID> &tablet_del_ids)
 {
   int ret = OB_SUCCESS;
   ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
@@ -2639,8 +2637,8 @@ int ListCommandOperator::gen_group_pop_res(
 int ListCommandOperator::do_same_keys_pop(
     ObTableBatchOperation &batch_op_insup,
     ObTableBatchOperation &batch_op_del,
-    ObTabletIDArray &tablet_insup_ids,
-    ObTabletIDArray &tablet_del_ids,
+    ObIArray<ObTabletID> &tablet_insup_ids,
+    ObIArray<ObTabletID> &tablet_del_ids,
     const ObIArray<ObRedisMeta *> &metas,
     const ObString &key,
     int64_t same_key_start_pos,
@@ -2751,7 +2749,7 @@ int ListCommandOperator::gen_same_key_batch_get_op(
     int64_t same_key_start_pos,
     int64_t same_key_end_pos,
     ObTableBatchOperation &batch_op_get,
-    ObTabletIDArray &tablet_get_ids)
+    ObIArray<ObTabletID> &tablet_get_ids)
 {
   int ret = OB_SUCCESS;
 
@@ -2794,7 +2792,7 @@ int ListCommandOperator::check_can_use_multi_get(
     const ObArray<ObRedisMeta *> &metas,
     ObIArray<ObITableOp *> &ops,
     ObTableBatchOperation &batch_op_get,
-    ObTabletIDArray &tablet_get_ids,
+    ObIArray<ObTabletID> &tablet_get_ids,
     bool &can_use_multi_get)
 {
   int ret = OB_SUCCESS;
@@ -2842,8 +2840,8 @@ int ListCommandOperator::update_meta_after_multi_pop(
     ObRedisListMeta *list_meta,
     ObTableBatchOperation &batch_op_insup,
     ObTableBatchOperation &batch_op_del,
-    ObTabletIDArray &tablet_insup_ids,
-    ObTabletIDArray &tablet_del_ids,
+    ObIArray<ObTabletID> &tablet_insup_ids,
+    ObIArray<ObTabletID> &tablet_del_ids,
     int64_t same_key_start_pos,
     int64_t same_key_end_pos)
 {
@@ -2889,8 +2887,8 @@ int ListCommandOperator::do_same_keys_multi_pop(
     const ResultFixedArray& batch_res,
     ObTableBatchOperation &batch_op_insup,
     ObTableBatchOperation &batch_op_del,
-    ObTabletIDArray &tablet_insup_ids,
-    ObTabletIDArray &tablet_del_ids,
+    ObIArray<ObTabletID> &tablet_insup_ids,
+    ObIArray<ObTabletID> &tablet_del_ids,
     const ObIArray<ObRedisMeta *> &metas,
     const ObString &key,
     int64_t same_key_start_pos,
@@ -2944,11 +2942,11 @@ int ListCommandOperator::do_same_keys_multi_pop(
 int ListCommandOperator::do_group_pop_use_multi_get(
     const ObArray<ObRedisMeta *> &metas,
     const ObTableBatchOperation &batch_op_get,
-    ObTabletIDArray &tablet_get_ids,
+    ObIArray<ObTabletID> &tablet_get_ids,
     ObTableBatchOperation &batch_op_insup,
-    ObTabletIDArray &tablet_insup_ids,
+    ObIArray<ObTabletID> &tablet_insup_ids,
     ObTableBatchOperation &batch_op_del,
-    ObTabletIDArray &tablet_del_ids)
+    ObIArray<ObTabletID> &tablet_del_ids)
 {
   int ret = OB_SUCCESS;
   ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
@@ -3027,11 +3025,11 @@ int ListCommandOperator::do_group_pop_use_multi_get(
 int ListCommandOperator::do_group_pop_use_query(
     const ObArray<ObRedisMeta *> &metas,
     const ObTableBatchOperation &batch_op_get,
-    ObTabletIDArray &tablet_get_ids,
+    ObIArray<ObTabletID> &tablet_get_ids,
     ObTableBatchOperation &batch_op_insup,
-    ObTabletIDArray &tablet_insup_ids,
+    ObIArray<ObTabletID> &tablet_insup_ids,
     ObTableBatchOperation &batch_op_del,
-    ObTabletIDArray &tablet_del_ids)
+    ObIArray<ObTabletID> &tablet_del_ids)
 {
   int ret = OB_SUCCESS;
   ObIArray<ObITableOp *> &ops = reinterpret_cast<ObRedisBatchCtx &>(redis_ctx_).ops();
@@ -3105,11 +3103,11 @@ int ListCommandOperator::do_group_pop()
     LOG_WARN("fail to get group metas", K(ret));
   } else {
     ObTableBatchOperation batch_op_get;
-    ObTabletIDArray tablet_get_ids;
+    ObSEArray<ObTabletID, 16> tablet_get_ids;
     ObTableBatchOperation batch_op_insup;
     ObTableBatchOperation batch_op_del;
-    ObTabletIDArray tablet_insup_ids;
-    ObTabletIDArray tablet_del_ids;
+    ObSEArray<ObTabletID, 16> tablet_insup_ids;
+    ObSEArray<ObTabletID, 16> tablet_del_ids;
     bool can_use_multi_get = true;
     if (OB_FAIL(check_can_use_multi_get(metas, ops, batch_op_get, tablet_get_ids, can_use_multi_get))) {
       LOG_WARN("fail to check can use multi", K(ret));

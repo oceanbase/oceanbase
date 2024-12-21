@@ -437,7 +437,7 @@ int ObTableEntity::get_property(const ObString &prop_name, ObObj &prop_value) co
       prop_value = properties_values_.at(idx);
     } else {
       ret = OB_SEARCH_NOT_FOUND;
-      LOG_WARN("property name not exists in properties", K(ret), K(prop_name));
+      LOG_DEBUG("property name not exists in properties", K(ret), K(prop_name));
     }
   }
   return ret;
@@ -3392,5 +3392,84 @@ int ObKVParams::init_ob_params_for_hfilter(const ObHBaseParams*& params) const
       LOG_WARN("unexpected nullptr after static_cast");
     }
   }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+OB_SERIALIZE_MEMBER(ObRedisResult, ret_, msg_);
+
+int ObRedisResult::assign(const ObRedisResult &other)
+{
+  int ret = OB_SUCCESS;
+  ret_ = other.ret_;
+  if (OB_FAIL(ob_write_string(*allocator_, other.msg_, msg_))) {
+    LOG_WARN("fail to copy redis msg", K(other.msg_), K(msg_));
+  }
+  return ret;
+}
+
+int ObRedisResult::set_ret(int arg_ret, const ObString &redis_msg, bool need_deep_copy /* = false*/)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("invalid null allocator", K(ret));
+  } else if (need_deep_copy) {
+    if (OB_FAIL(ob_write_string(*allocator_, redis_msg, msg_))) {
+      LOG_WARN("fail to copy redis msg", K(ret), K(redis_msg));
+    }
+  }
+  ret_ = (arg_ret == OB_SUCCESS) ? ret : arg_ret;
+
+  if (OB_FAIL(ret_)) {
+    set_err(ret_);
+  }
+  return ret;
+}
+
+int ObRedisResult::set_err(int err)
+{
+  int ret = OB_SUCCESS;
+  ret_ = err;
+  common::ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null allocator", K(ret));
+  } else if (OB_NOT_NULL(wb)) {
+    char *err_msg = nullptr;
+    if (OB_ISNULL(err_msg = reinterpret_cast<char*>(allocator_->alloc(common::OB_MAX_ERROR_MSG_LEN)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret), K(common::OB_MAX_ERROR_MSG_LEN));
+    } else {
+      int n = snprintf(err_msg, common::OB_MAX_ERROR_MSG_LEN, "%s", wb->get_err_msg());
+      if (n < 0 || n > common::OB_MAX_ERROR_MSG_LEN) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_WARN("snprintf error or buf not enough", KR(ret), K(n));
+      } else {
+        msg_.assign(err_msg, n);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRedisResult::convert_to_table_op_result(ObTableOperationResult &result)
+{
+  int ret = OB_SUCCESS;
+  if (ret_ == OB_SUCCESS) {
+    ObTableEntity *res_entity = static_cast<ObTableEntity *>(result.get_entity());
+    ObObj obj;
+    if (OB_ISNULL(res_entity)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("res_entity is null", K(ret));
+    } else if (OB_FALSE_IT(obj.set_varchar(msg_))) {
+    } else if (OB_FAIL(res_entity->set_property(ObRedisUtil::REDIS_PROPERTY_NAME, obj))) {
+      LOG_WARN("fail to set property", K(ret), K(msg_));
+    }
+  }
+
+  result.set_err(ret == OB_SUCCESS ? ret_ : ret);
+  result.set_type(ObTableOperationType::REDIS);
+
   return ret;
 }

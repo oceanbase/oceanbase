@@ -74,6 +74,8 @@ public:
   static const char *BIT_INTEGER_ERR;
   static const char *BIT_OFFSET_INTEGER_ERR;
   static const char *MAXIMUM_ERR;
+  static const char *WRONG_ARGS_LPOP_ERR;
+  static const char *WRONG_ARGS_RPOP_ERR;
   static const char *WRONG_ARGS_ERR;
   static const char *EXPIRE_TIME_CMD_ERR;
   static const char *INCR_OVERLOAD;

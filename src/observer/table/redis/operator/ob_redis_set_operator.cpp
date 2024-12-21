@@ -684,7 +684,7 @@ int SetCommandOperator::do_srand_mem_inner(
     ObRandom random;
     ObArray<int64_t> target_idxs(
         OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(op_temp_allocator_, "RedisSRandMem"));
-    hash::ObHashMap<int64_t, int64_t> idx_seq;
+    hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> idx_seq;
     if (OB_FAIL(idx_seq.create(count, ObMemAttr(MTL_ID(), "RedisSRandMem")))) {
       LOG_WARN("fail to create hash set", K(ret));
     } else if (OB_FAIL(target_idxs.reserve(count))) {
@@ -931,7 +931,7 @@ int SetCommandOperator::do_smove(int64_t db,
 int SetCommandOperator::do_srem_inner(
     int64_t db,
     const common::ObString &key,
-    const hash::ObHashSet<ObString> &members,
+    const SetCommand::MemberSet &members,
     int64_t &del_num)
 {
   int ret = OB_SUCCESS;
@@ -941,7 +941,7 @@ int SetCommandOperator::do_srem_inner(
   if (OB_FAIL(rowkeys.reserve(members.size()))) {
     LOG_WARN("fail to reserve count", K(ret), K(members.size()));
   }
-  for (hash::ObHashSet<ObString>::const_iterator iter = members.begin();
+  for (SetCommand::MemberSet::const_iterator iter = members.begin();
       OB_SUCC(ret) && iter != members.end();
       ++iter) {
     ObITableEntity *value_entity = nullptr;
@@ -1047,18 +1047,18 @@ int SetCommandOperator::fill_set_batch_op(const ObRedisOp &op,
   if (OB_ISNULL(sadd)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null sadd op", K(ret));
-  } else if (OB_FAIL(tablet_ids.push_back(op.tablet_id_))) {
+  } else if (OB_FAIL(tablet_ids.push_back(op.tablet_id()))) {
     LOG_WARN("fail to push back tablet id", K(ret));
   }
   int64_t cur_ts = ObTimeUtility::fast_current_time();
   const SAdd::MemberSet &mem_set = sadd->members();
   ObITableEntity *value_entity = nullptr;
   ObString key;
+  ObObj insert_obj;
+  ObObj expire_obj;
   for (SAdd::MemberSet::const_iterator iter = mem_set.begin();
       OB_SUCC(ret) && iter != mem_set.end(); ++iter) {
-    ObObj insert_obj;
     insert_obj.set_timestamp(cur_ts);
-    ObObj expire_obj;
     expire_obj.set_null();
     if (OB_FAIL(op.get_key(key))) {
       LOG_WARN("fail to get key", K(ret), K(op));
@@ -1068,8 +1068,28 @@ int SetCommandOperator::fill_set_batch_op(const ObRedisOp &op,
       LOG_WARN("fail to set member property", K(ret), K(insert_obj));
     } else if (OB_FAIL(value_entity->set_property(ObRedisUtil::EXPIRE_TS_PROPERTY_NAME, expire_obj))) {
       LOG_WARN("fail to set expire ts property", K(ret), K(expire_obj));
-    } else if (OB_FAIL(batch_op.insert_or_update(*value_entity))) {
-      LOG_WARN("fail to push back insert or update op", K(ret), KPC(value_entity));
+    } else {
+      if (OB_FAIL(batch_op.insert_or_update(*value_entity))) {
+        LOG_WARN("fail to push back insert or update op", K(ret), KPC(value_entity));
+      }
+    }
+  }
+  return ret;
+}
+
+int SetCommandOperator::hashset_to_array(const SetCommand::MemberSet &hash_set,
+                                      ObIArray<ObString> &ret_arr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ret_arr.reserve(hash_set.size()))) {
+    LOG_WARN("fail to reserve space", K(ret), K(hash_set.size()));
+  }
+
+  for (SetCommand::MemberSet::const_iterator iter = hash_set.begin();
+       OB_SUCC(ret) && iter != hash_set.end();
+       iter++) {
+    if (OB_FAIL(ret_arr.push_back(iter->first))) {
+      LOG_WARN("fail to push back string", K(ret), K(iter->first));
     }
   }
   return ret;

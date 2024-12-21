@@ -445,7 +445,6 @@ int HashCommandOperator::do_hdel(int64_t db, const ObString &key,
 
   int64_t hlen = 0;
   if (is_meta_exists) {
-    const ObITableEntity &req_entity = reinterpret_cast<ObRedisSingleCtx &>(redis_ctx_).get_entity();
     ObTableBatchOperation ops;
     ops.set_entity_factory(redis_ctx_.entity_factory_);
     ObArray<ObRowkey> rowkeys(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(op_temp_allocator_, "RedisHDel"));
@@ -634,7 +633,7 @@ int HashCommandOperator::fill_set_batch_op(const ObRedisOp &op,
   if (OB_ISNULL(hset)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null hset op", K(ret));
-  } else if (OB_FAIL(tablet_ids.push_back(op.tablet_id_))) {
+  } else if (OB_FAIL(tablet_ids.push_back(op.tablet_id()))) {
     LOG_WARN("fail to push back tablet id", K(ret));
   }
   int64_t cur_ts = ObTimeUtility::fast_current_time();
@@ -647,8 +646,10 @@ int HashCommandOperator::fill_set_batch_op(const ObRedisOp &op,
       LOG_WARN("fail to get key", K(ret), K(op));
     } else if (OB_FAIL(build_value_entity(op.db(), key, iter->first, iter->second, cur_ts, value_entity))) {
       LOG_WARN("fail to build score entity", K(ret), K(iter->first), K(iter->second), K(op.db()), K(key));
-    } else if (OB_FAIL(batch_op.insert_or_update(*value_entity))) {
-      LOG_WARN("fail to push back insert or update op", K(ret), KPC(value_entity));
+    } else {
+      if (OB_FAIL(batch_op.insert_or_update(*value_entity))) {
+        LOG_WARN("fail to push back insert or update op", K(ret), KPC(value_entity));
+      }
     }
   }
   return ret;
@@ -674,19 +675,13 @@ int HashCommandOperator::do_group_hsetnx()
   // 1. get metas
   ObArray<ObRedisMeta *> metas(OB_MALLOC_NORMAL_BLOCK_SIZE,
                               ModulePageAllocator(op_temp_allocator_, "RedisGHstNX"));
-  ObArray<ObTabletID> *tablet_ids = nullptr;
   if (OB_FAIL(get_group_metas(op_temp_allocator_, model_, metas))) {
     LOG_WARN("fail to get group metas", K(ret));
-  } else if (OB_ISNULL(tablet_ids = OB_NEWx(ObArray<ObTabletID>,
-                                      &op_temp_allocator_,
-                                      OB_MALLOC_NORMAL_BLOCK_SIZE,
-                                      ModulePageAllocator(op_temp_allocator_, "RedisCmd")))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc ObArray<ObTabletID>", K(ret));
   }
 
   // 2. try get data if meta exists
   ObTableBatchOperation batch_ops;
+  tablet_ids_.reuse();
   for (int i = 0; i < metas.count() && OB_SUCC(ret); ++i) {
     ObRedisOp *op = reinterpret_cast<ObRedisOp*>(group_ctx.ops().at(i));
     if (OB_ISNULL(op) || OB_ISNULL(op->cmd())) {
@@ -702,7 +697,7 @@ int HashCommandOperator::do_group_hsetnx()
         LOG_WARN("fail to add retrive property", K(ret), KPC(entity));
       } else if (OB_FAIL(batch_ops.retrieve(*entity))) {
         LOG_WARN("fail to add get op", K(ret), KPC(entity));
-      } else if (OB_FAIL(tablet_ids->push_back(op->tablet_id_))) {
+      } else if (OB_FAIL(tablet_ids_.push_back(op->tablet_id_))) {
         LOG_WARN("fail to push back tablet id", K(ret), K(op->tablet_id_));
       }
     }
@@ -710,7 +705,7 @@ int HashCommandOperator::do_group_hsetnx()
   ResultFixedArray batch_get_res(op_temp_allocator_);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(process_table_batch_op(
-          batch_ops, batch_get_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, tablet_ids))) {
+          batch_ops, batch_get_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids_))) {
     LOG_WARN("fail to process table batch op", K(ret));
   }
 
@@ -721,7 +716,7 @@ int HashCommandOperator::do_group_hsetnx()
   } else if (OB_FAIL(kv_set.create(group_ctx.ops().count(), ObMemAttr(MTL_ID(), "RedisGpHSet")))) {
     LOG_WARN("failed to create fd hash map", K(ret));
   } else {
-    tablet_ids->reuse();
+    tablet_ids_.reuse();
     batch_ops.reset();
   }
   int64_t cur_ts = ObTimeUtility::fast_current_time();
@@ -749,7 +744,7 @@ int HashCommandOperator::do_group_hsetnx()
         LOG_WARN("fail to encode meta value", K(ret), KPC(meta));
       } else if (OB_FAIL(batch_ops.insert_or_update(*meta_entity))) {
         LOG_WARN("fail to add insert or update to batch", K(ret), KPC(meta_entity));
-      } else if (OB_FAIL(tablet_ids->push_back(op->tablet_id_))) {
+      } else if (OB_FAIL(tablet_ids_.push_back(op->tablet_id_))) {
         LOG_WARN("fail to push back tablet id", K(ret), K(op->tablet_id_));
       }
     } else if (batch_get_res.at(batch_get_pos).get_return_rows() > 0) {
@@ -767,7 +762,7 @@ int HashCommandOperator::do_group_hsetnx()
         LOG_WARN("fail to build score entity", K(ret), K(cmd->field_), K(cmd->new_value_), K(op->db()), K(cmd->key()));
       } else if (OB_FAIL(batch_ops.insert_or_update(*value_entity))) {
         LOG_WARN("fail to push back insert or update op", K(ret), KPC(value_entity));
-      } else if (OB_FAIL(tablet_ids->push_back(op->tablet_id_))) {
+      } else if (OB_FAIL(tablet_ids_.push_back(op->tablet_id_))) {
         LOG_WARN("fail to push back tablet id", K(ret), K(op->tablet_id_));
       }
     }
@@ -781,7 +776,7 @@ int HashCommandOperator::do_group_hsetnx()
   ResultFixedArray batch_insup_res(op_temp_allocator_);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(process_table_batch_op(
-          batch_ops, batch_insup_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, tablet_ids))) {
+          batch_ops, batch_insup_res, nullptr, RedisOpFlags::NONE, &op_temp_allocator_, &op_entity_factory_, &tablet_ids_))) {
     LOG_WARN("fail to process table batch op", K(ret));
   }
 

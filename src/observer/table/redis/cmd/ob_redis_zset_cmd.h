@@ -64,7 +64,8 @@ public:
 class ZSetCommand : public SetCommand
 {
 public:
-  using MemberScoreMap = common::hash::ObHashMap<ObString, double>;
+  using MemberScoreMap = common::hash::ObHashMap<ObString, double, common::hash::NoPthreadDefendMode>;
+  using MemberSet = common::hash::ObHashSet<ObString, common::hash::NoPthreadDefendMode>;
   ZSetCommand()
   {
     attr_.cmd_group_ = ObRedisCmdGroup::ZSET_CMD;
@@ -142,7 +143,7 @@ public:
   int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
-  hash::ObHashSet<ObString> members_;
+  MemberSet members_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ZRem);

@@ -46,24 +46,24 @@ int ObRedisOp::init(ObRedisSingleCtx &redis_ctx, RedisCommand *redis_cmd, ObTabl
 {
   int ret = OB_SUCCESS;
   redis_cmd_ = redis_cmd;
-  ObITableEntity *entity = nullptr;
-  if (OB_ISNULL(entity = default_entity_factory_.alloc())) {
-    ret = OB_ERR_NULL_VALUE;
+
+  if (ObRedisHelper::is_read_only_command(redis_cmd->cmd_type())) {
+    outer_allocator_ = &redis_ctx.allocator_; // refer to rpc allocator
+    response_.set_allocator(outer_allocator_);
   } else {
-    result_.set_entity(entity);
-    // ObITableOp init
-    type_ = type;
-    req_ = redis_ctx.rpc_req_;
-    timeout_ts_ = redis_ctx.timeout_ts_;
-    timeout_ = redis_ctx.timeout_;
-    tablet_id_ = redis_ctx.tablet_id_;
-    ls_id_ = redis_ctx.ls_id_;
-    // ObRedisOp init
-    db_ = redis_ctx.get_request_db();
-    if (OB_FAIL(ob_write_string(allocator_, redis_ctx.request_.get_table_name(), table_name_))) {
-      LOG_WARN("fail to write string", K(ret), K(table_name_));
-    }
+    response_.set_allocator(&allocator_);
   }
+  response_.set_req_type(redis_ctx.request_.get_req_type());
+
+  // ObITableOp init
+  type_ = type;
+  req_ = redis_ctx.rpc_req_;
+  timeout_ts_ = redis_ctx.timeout_ts_;
+  timeout_ = redis_ctx.timeout_;
+  tablet_id_ = redis_ctx.tablet_id_;
+  ls_id_ = redis_ctx.ls_id_;
+  // ObRedisOp init
+  db_ = redis_ctx.get_request_db();
 
   return ret;
 }
@@ -83,6 +83,7 @@ int ObRedisOp::get_key(ObString &key) const
 void ObRedisOp::reset()
 {
   ObITableOp::reset();
+  result_.reset();
   if (OB_NOT_NULL(redis_cmd_)) {
     redis_cmd_->~RedisCommand();
   } else {
@@ -90,12 +91,21 @@ void ObRedisOp::reset()
     LOG_WARN("redis cmd is NULL", K(lbt()));
   }
   redis_cmd_ = nullptr;
-  table_name_.reset();
   db_= 0;
-  allocator_.reset();
-  default_entity_factory_.reset();
+  if (allocator_.used() > 0) {
+    allocator_.reset();
+  }
+  default_entity_factory_.free_and_reuse();
   ls_id_ = ObLSID::INVALID_LS_ID;
+  outer_allocator_ = nullptr;
+  response_.reset();
+  tablet_id_.reset();
+  result_.reset();
 }
 
+int ObRedisOp::get_result(ObITableResult *&result)
+{
+  return response_.get_result(result);
+}
 }  // namespace table
 }  // namespace oceanbase

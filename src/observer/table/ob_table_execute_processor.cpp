@@ -209,11 +209,20 @@ int ObTableApiExecuteP::init_tb_ctx()
   return ret;
 }
 
+bool ObTableApiExecuteP::is_group_commit_enable(ObTableOperationType::Type op_type) const
+{
+  bool bret = false;
+  if (arg_.returning_rowkey() || arg_.returning_affected_entity()) {
+    bret = false;
+  } else {
+    bret = ObTableGroupUtils::is_group_commit_enable(op_type);
+  }
+  return bret;
+}
+
 int ObTableApiExecuteP::before_process()
 {
   int ret = OB_SUCCESS;
-  bool is_group_config_enable = false;
-  bool is_group_commit_enable = false;
   ObTableOperationType::Type op_type = arg_.table_operation_.type();
 
   if (op_type == ObTableOperationType::Type::TRIGGER) {
@@ -221,7 +230,7 @@ int ObTableApiExecuteP::before_process()
     audit_ctx_.need_audit_ = false; // no need audit when packet is group commit trigger packet
   } else {
     ObITableOp *op = nullptr;
-    if (ObTableGroupUtils::is_group_commit_enable(op_type)) {
+    if (is_group_commit_enable(op_type)) {
       if (OB_FAIL(TABLEAPI_GROUP_COMMIT_MGR->alloc_op(ObTableGroupType::TYPE_TABLE_GROUP, op))) {
         LOG_WARN("fail to alloc group single op", K(ret));
       } else {
@@ -318,14 +327,12 @@ int ObTableApiExecuteP::process_group_commit()
     LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K_(table_id));
   } else {
     ObTableGroupKey key(ls_id, table_id_, schema_version, op.type());
-    ObTableGroupCtx ctx;
+    ObTableGroupCtx ctx(allocator_);
     bool is_insup_use_put = false;
-    int64_t binlog_row_image_type = ObBinlogRowImage::FULL;
+    int64_t binlog_row_image_type = TABLEAPI_SESS_POOL_MGR->get_binlog_row_image();
     ctx.key_ = &key;
     if (arg_.table_operation_.type() == ObTableOperationType::Type::INSERT_OR_UPDATE) {
-      if (OB_FAIL(sess_guard_.get_sess_info().get_binlog_row_image(binlog_row_image_type))) {
-        LOG_WARN("fail to get binlog row image", K(ret));
-      } else if (OB_FAIL(ObTableCtx::check_insert_up_can_use_put(schema_cache_guard_,
+      if (OB_FAIL(ObTableCtx::check_insert_up_can_use_put(schema_cache_guard_,
                                                                 &arg_.table_operation_.entity(),
                                                                 arg_.use_put(),
                                                                 arg_.entity_type_ == ObTableEntityType::ET_HKV,
@@ -353,7 +360,7 @@ int ObTableApiExecuteP::process_group_commit()
   return ret;
 }
 
-ObTableProccessType ObTableApiExecuteP::get_stat_event_type()
+ObTableProccessType ObTableApiExecuteP::get_stat_process_type()
 {
   ObTableProccessType event_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   const ObTableOperation &table_operation = arg_.table_operation_;
@@ -399,7 +406,7 @@ int ObTableApiExecuteP::try_process()
 {
   int ret = OB_SUCCESS;
   const ObTableOperation &table_operation = arg_.table_operation_;
-  stat_event_type_ = get_stat_event_type();
+  stat_process_type_ = get_stat_process_type();
   table_id_ = arg_.table_id_; // init move response need
   tablet_id_ = arg_.tablet_id_;
   OB_TABLE_START_AUDIT(credential_,

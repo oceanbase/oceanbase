@@ -47,10 +47,11 @@ void ObTableRedisEndTransCb::callback(int cb_param)
   CHECK_BALANCE("[table redis async callback]");
   if (OB_FAIL(cb_param)) {
     // commit failed
-    result_.set_err(cb_param);
-    result_.set_affected_rows(0);
-    result_entity_.reset();
+    if (OB_NOT_NULL(result_)) {
+      result_->reset();
+    }
   }
+  response_sender_.set_result(result_);
   if (OB_FAIL(response_sender_.response(cb_param))) {
     // overwrite ret
     LOG_WARN("failed to send redis response", K(ret), K(cb_param));
@@ -61,22 +62,49 @@ void ObTableRedisEndTransCb::callback(int cb_param)
   this->destroy_cb_if_no_ref();
 }
 
-int ObTableRedisEndTransCb::assign_execute_result(const ObTableOperationResult &result)
+int ObTableRedisEndTransCb::assign_execute_result(const ObITableResult &result)
 {
   int ret = OB_SUCCESS;
-  const ObITableEntity *src_entity = NULL;
-  if (OB_FAIL(result.get_entity(src_entity))) {
-    LOG_WARN("failed to get entity", K(ret));
-  } else if (OB_FAIL(result_entity_.deep_copy(allocator_, *src_entity))) {
-    LOG_WARN("failed to copy entity", K(ret));
+  if (result.get_type() == ObTableResultType::REDIS_RESULT) {
+    ObRedisResult *tmp_res = nullptr;
+    if (OB_ISNULL(tmp_res = OB_NEWx(ObRedisResult, &allocator_, &allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret), K(result.get_type()));
+    } else if (OB_FAIL(tmp_res->assign(reinterpret_cast<const ObRedisResult &>(result)))) {
+      LOG_WARN("fail to assign redis result");
+    } else {
+      result_ = tmp_res;
+    }
+  } else if (result.get_type() == ObTableResultType::TABLE_OPERATION_RESULT) {
+    ObTableOperationResult *tmp_res = nullptr;
+    ObITableEntity *dest_entity = nullptr;
+    if (OB_ISNULL(tmp_res = OB_NEWx(ObTableOperationResult, &allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret), K(result.get_type()));
+    } else if (OB_ISNULL(dest_entity = OB_NEWx(ObTableEntity, &allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret), K(result.get_type()));
+    } else {
+      const ObITableEntity *src_entity = NULL;
+      const ObTableOperationResult &op_res = reinterpret_cast<const ObTableOperationResult &>(result);
+      if (OB_FAIL(op_res.get_entity(src_entity))) {
+        LOG_WARN("failed to get entity", K(ret));
+      } else if (OB_FAIL(dest_entity->deep_copy(allocator_, *src_entity))) {
+        LOG_WARN("failed to copy entity", K(ret));
+      } else {
+        *tmp_res = reinterpret_cast<const ObTableOperationResult &>(result);
+        tmp_res->set_entity(dest_entity);
+        result_ = tmp_res;
+      }
+    }
   } else {
-    result_ = result;
-    result_.set_entity(result_entity_);
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid result type", K(ret), K(result.get_type()));
   }
   return ret;
 }
 
-int ObTableRedisCbFunctor::init(ObRequest *req, const ObTableOperationResult *result)
+int ObTableRedisCbFunctor::init(ObRequest *req, const ObRedisResponse *response)
 {
   int ret = OB_SUCCESS;
 
@@ -84,12 +112,12 @@ int ObTableRedisCbFunctor::init(ObRequest *req, const ObTableOperationResult *re
     if (OB_ISNULL(req)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("request is null", K(ret));
-    } else if (OB_ISNULL(result)) {
+    } else if (OB_ISNULL(response)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("result is null", K(ret));
     } else {
       req_ = req;
-      result_ = result;
+      response_ = response;
       is_inited_ = true;
     }
   }
@@ -104,10 +132,13 @@ ObTableAPITransCb *ObTableRedisCbFunctor::new_callback()
     cb = OB_NEW(ObTableRedisEndTransCb, ObMemAttr(MTL_ID(), "RedisTnCb"), req_);
     if (NULL != cb) {
       int ret = OB_SUCCESS;
-      if (OB_ISNULL(result_)) {
+      ObITableResult *result = nullptr;
+      if (OB_ISNULL(response_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret));
-      } else if (OB_FAIL(cb->assign_execute_result(*result_))) {
+      } else if (OB_FAIL(response_->get_result(result))) {
+        LOG_WARN("fail to get result", K(ret), KPC(response_));
+      } else if (OB_FAIL(cb->assign_execute_result(*result))) {
         LOG_WARN("fail to assign result", K(ret));
         cb->~ObTableRedisEndTransCb();
         cb = NULL;
@@ -131,21 +162,21 @@ int ObRedisService::init_group_ctx(ObTableGroupCtx &group_ctx,
   group_ctx.credential_ = *redis_ctx.credential_;
   group_ctx.timeout_ts_ = redis_ctx.timeout_ts_;
   group_ctx.trans_param_ = redis_ctx.trans_param_;
-  group_ctx.schema_cache_guard_ = redis_ctx.tb_ctx_.get_schema_cache_guard();
-  group_ctx.schema_guard_ = redis_ctx.tb_ctx_.get_schema_guard();
-  group_ctx.simple_schema_ = redis_ctx.tb_ctx_.get_simple_table_schema();
-  group_ctx.sess_guard_ = redis_ctx.tb_ctx_.get_sess_guard();
+  group_ctx.schema_cache_guard_ = redis_ctx.redis_guard_.schema_cache_guard_;
+  group_ctx.schema_guard_ = redis_ctx.redis_guard_.schema_guard_;
+  group_ctx.simple_schema_ = redis_ctx.redis_guard_.simple_table_schema_;
+  group_ctx.sess_guard_ = redis_ctx.redis_guard_.sess_guard_;
   group_ctx.retry_count_ = redis_ctx.retry_count_;
   group_ctx.user_client_addr_ = redis_ctx.user_client_addr_;
-  group_ctx.audit_ctx_.exec_timestamp_ = redis_ctx.audit_ctx_.exec_timestamp_;
+  group_ctx.audit_ctx_.exec_timestamp_ = redis_ctx.audit_ctx_->exec_timestamp_;
   group_ctx.ls_id_ = redis_ctx.ls_id_;
   group_ctx.table_id_ = group_ctx.simple_schema_->get_table_id();
   group_ctx.schema_version_ = group_ctx.simple_schema_->get_schema_version();
 
   if (!redis_ctx.is_enable_group_op()) {
     ObTableRedisCbFunctor* functor = nullptr;
-    functor = OB_NEWx(ObTableRedisCbFunctor, &redis_op.allocator_);
-    if (OB_FAIL(functor->init(redis_op.req_, &redis_op.result_))) {
+    functor = OB_NEWx(ObTableRedisCbFunctor, &redis_op.get_allocator());
+    if (OB_FAIL(functor->init(redis_op.req_, &redis_op.response_))) {
       LOG_WARN("fail to init create batch execute callback functor", K(ret));
     }
     group_ctx.create_cb_functor_ = functor;
@@ -181,7 +212,6 @@ int ObRedisService::execute_cmd_single(ObRedisSingleCtx &ctx)
   ObString lock_key;
   REDIS_LOCK_MODE lock_mode;
   ObString fmt_err_msg;
-  observer::ObTableProccessType process_type = observer::ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   // process cmd in the old way
   if (OB_FAIL(ObRedisCommandFactory::gen_command(
           ctx.allocator_, ctx.request_.get_cmd_name(), ctx.request_.get_args(), fmt_err_msg, cmd))) {
@@ -193,20 +223,24 @@ int ObRedisService::execute_cmd_single(ObRedisSingleCtx &ctx)
         K(ret),
         K(ctx.request_.get_cmd_name()),
         K(ctx.request_.get_args()));
-  } else if (OB_ISNULL(ctx.stat_event_type_)) {
-    ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("invalid null stat event type", K(ret));
-  } else if (OB_FAIL(redis_cmd_to_proccess_type(cmd->cmd_type(), process_type))) {
-    LOG_WARN("fail to convert redis cmd to process type", K(ret));
+  } else if (FALSE_IT(ctx.cmd_type_ = cmd->cmd_type())) {
   } else if (cmd->cmd_group() == ObRedisCmdGroup::GENERIC_CMD) {
-    ObRowkey cur_rowkey = ctx.request_.get_entity().get_rowkey();
-    if (OB_FAIL(ctx.init_cmd_ctx(cur_rowkey, ctx.request_.get_args()))) {
-      LOG_WARN("fail to init cmd ctx", K(ret));
+    if (ctx.request_.get_args().empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected empty args", K(ret), K(ctx.request_.get_cmd_name()));
     } else {
-      ctx.tb_ctx_.set_need_dist_das(!ctx.cmd_ctx_->get_in_same_ls());
+      ObObj objs[ObRedisUtil::COMPLEX_ROWKEY_NUM];
+      objs[ObRedisUtil::COL_IDX_DB].set_int(ctx.request_.get_db());
+      objs[ObRedisUtil::COL_IDX_RKEY].set_varbinary(ctx.request_.get_args().at(0));
+      ObRowkey cur_rowkey(objs, ObRedisUtil::COMPLEX_ROWKEY_NUM);
+      if (OB_FAIL(ctx.init_cmd_ctx(cur_rowkey, ctx.request_.get_args()))) {
+        LOG_WARN("fail to init cmd ctx", K(ret));
+      } else {
+        ctx.need_dist_das_ = !ctx.cmd_ctx_->get_in_same_ls();
+      }
     }
   } else {
-    ctx.tb_ctx_.set_need_dist_das(cmd->use_dist_das());
+    ctx.need_dist_das_ = cmd->use_dist_das();
   }
 
   if (OB_FAIL(ret)) {
@@ -233,8 +267,7 @@ int ObRedisService::execute_cmd_single(ObRedisSingleCtx &ctx)
         "command apply failed",
         K(ret),
         K(ctx.request_.get_cmd_name()),
-        K(ctx.request_.get_args()),
-        KPC(ctx.response_.get_result().get_entity()));
+        K(ctx.request_.get_args()));
   }
   // NOTE: must be called after cmd->apply(), redis err_code cover to success
   ret = COVER_REDIS_ERROR(ret);
@@ -242,7 +275,6 @@ int ObRedisService::execute_cmd_single(ObRedisSingleCtx &ctx)
   bool is_rollback = (OB_SUCCESS != ret);
   if (OB_NOT_NULL(cmd)) {
     int tmp_ret = OB_SUCCESS;
-    *ctx.stat_event_type_ = process_type; // set event_type after apply
     // cmd pointer need manual destruction
     cmd->~RedisCommand();
     // exec end_trans regardless of whether ret is OB_SUCCESS
@@ -255,48 +287,21 @@ int ObRedisService::execute_cmd_single(ObRedisSingleCtx &ctx)
   return ret;
 }
 
-int deep_copy_redis_args(ObIAllocator &allocator,
-                        const ObString &cmd_name,
-                        const ObIArray<ObString> &args,
-                        ObString &cpy_cmd_name,
-                        ObIArray<ObString> &cpy_args)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ob_write_string(allocator, cmd_name, cpy_cmd_name))) {
-    LOG_WARN("fail to copy cmd name", K(ret));
-  } else {
-    for (int64_t i = 0; i < args.count() && OB_SUCC(ret); i++) {
-      ObString tmp_args;
-      if (OB_FAIL(ob_write_string(allocator, args.at(i), tmp_args))) {
-        LOG_WARN("fail to copy cmd name", K(ret));
-      } else if (OB_FAIL(cpy_args.push_back(tmp_args))) {
-        LOG_WARN("fail to push back args", K(ret), K(i), K(args.at(i)));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObRedisService::execute_cmd_group(ObRedisSingleCtx &ctx)
 {
   int ret = OB_SUCCESS;
 
   RedisCommand *cmd = nullptr;
   // process cmd with group
-  ObTableGroupCtx group_ctx;
+  ObTableGroupCtx group_ctx(ctx.allocator_);
   ObRedisOp *redis_op = nullptr;
-  ObRedisCmdKey *key = nullptr;
-  ObString cmd_name;
-  ObSEArray<ObString, 8> redis_args;
+  ObRedisCmdKey key;
   ObString fmt_err_msg;
-  ObTableID table_id = ctx.tb_ctx_.get_simple_table_schema()->get_table_id();
-  observer::ObTableProccessType process_type = observer::ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
+  ObTableID table_id = ctx.redis_guard_.simple_table_schema_->get_table_id();
   if (OB_FAIL(alloc_group_op(redis_op))) {
     LOG_WARN("fail to alloc group op", K(ret));
-  } else if (OB_FAIL(deep_copy_redis_args(redis_op->allocator_, ctx.request_.get_cmd_name(), ctx.request_.get_args(),
-                  cmd_name, redis_args))) {
-    LOG_WARN("fail to deep copy redis args", K(ret), K(ctx.request_.get_cmd_name()), K(ctx.request_.get_args()));
-  } else if (OB_FAIL(ObRedisCommandFactory::gen_command(redis_op->allocator_, cmd_name, redis_args, fmt_err_msg, cmd))) {
+  } else if (OB_FAIL(ObRedisCommandFactory::gen_group_command(
+      *redis_op, ctx.request_.get_cmd_name(), ctx.request_.get_args(), fmt_err_msg, cmd))) {
     if (ret == OB_KV_REDIS_ERROR) {
       RESPONSE_REDIS_ERROR(ctx.response_, fmt_err_msg.ptr());
     }
@@ -305,20 +310,12 @@ int ObRedisService::execute_cmd_group(ObRedisSingleCtx &ctx)
         K(ret),
         K(ctx.request_.get_cmd_name()),
         K(ctx.request_.get_args()));
-  } else if (OB_ISNULL(ctx.stat_event_type_)) {
-    ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("invalid null stat event type", K(ret));
-  } else if (OB_FAIL(redis_cmd_to_proccess_type(cmd->cmd_type(), process_type))) {
-    LOG_WARN("fail to convert redis cmd to process type", K(ret));
+  } else if (FALSE_IT(key.cmd_type_ = cmd->cmd_type())) {
+  } else if (FALSE_IT(key.table_id_ = table_id)) {
+  } else if (FALSE_IT(ctx.cmd_type_ = cmd->cmd_type())) {
   } else if (OB_FAIL(redis_op->init(ctx, cmd, ObTableGroupType::TYPE_REDIS_GROUP))) {
     LOG_WARN("fail to init redis op", K(ret));
-  } else if (OB_ISNULL(key = OB_NEWx(ObRedisCmdKey,
-                                     &redis_op->allocator_,
-                                     redis_op->cmd()->cmd_type(),
-                                     table_id))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc ObRedisCmdKey", K(ret), K(table_id));
-  } else if (OB_FAIL(init_group_ctx(group_ctx, ctx, *redis_op, key))) {
+  } else if (OB_FAIL(init_group_ctx(group_ctx, ctx, *redis_op, &key))) {
     LOG_WARN("fail to init group ctx", K(ret));
   } else if (OB_FAIL(ObTableGroupService::process(group_ctx, redis_op, !ctx.is_enable_group_op()))) {
     LOG_WARN(
@@ -338,7 +335,6 @@ int ObRedisService::execute_cmd_group(ObRedisSingleCtx &ctx)
   }
   // NOTE: Must be called to turn redis_err into success
   ret = COVER_REDIS_ERROR(ret);
-  *ctx.stat_event_type_ = process_type; // set event_type after process
 
   return ret;
 }
@@ -372,7 +368,7 @@ int ObRedisService::start_trans(ObRedisCtx &redis_ctx, bool need_snapshot)
                                   redis_ctx.consistency_level_,
                                   redis_ctx.ls_id_,
                                   redis_ctx.timeout_ts_,
-                                  redis_ctx.tb_ctx_.need_dist_das()))) {
+                                  redis_ctx.need_dist_das_))) {
       LOG_WARN("fail to init trans param", K(ret));
     } else if (OB_FAIL(ObTableTransUtils::init_read_trans(*trans_param))) {
       LOG_WARN("fail to init read trans", K(ret), KPC(trans_param));
@@ -382,7 +378,7 @@ int ObRedisService::start_trans(ObRedisCtx &redis_ctx, bool need_snapshot)
                                   redis_ctx.consistency_level_,
                                   redis_ctx.ls_id_,
                                   redis_ctx.timeout_ts_,
-                                  redis_ctx.tb_ctx_.need_dist_das()))) {
+                                  redis_ctx.need_dist_das_))) {
       LOG_WARN("fail to init trans param", K(ret));
     } else if (OB_FAIL(ObTableTransUtils::start_trans(*trans_param))) {
       LOG_WARN("fail to start trans", K(ret), KPC(trans_param));
@@ -407,7 +403,7 @@ int ObRedisService::end_trans(ObRedisSingleCtx &redis_ctx, bool need_snapshot, b
     ObTableTransUtils::release_read_trans(trans_param->trans_desc_);
   } else {
     ObTableRedisCbFunctor functor;
-    if (OB_FAIL(functor.init(redis_ctx.rpc_req_, &redis_ctx.response_.get_result()))) {
+    if (OB_FAIL(functor.init(redis_ctx.rpc_req_, &redis_ctx.response_))) {
       LOG_WARN("fail to init create batch execute callback functor", K(ret));
     } else {
       trans_param->is_rollback_ = is_rollback;
@@ -428,19 +424,18 @@ int ObRedisService::end_trans(ObRedisSingleCtx &redis_ctx, bool need_snapshot, b
 
   return ret;
 }
-
-int ObRedisService::redis_cmd_to_proccess_type(const RedisCommandType &cmd_type, observer::ObTableProccessType& ret_type)
+ObTableProccessType ObRedisService::get_stat_process_type(const RedisCommandType &cmd_type)
 {
   int ret = OB_SUCCESS;
+  ObTableProccessType type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   int iret = static_cast<int>(cmd_type + observer::ObTableProccessType::TABLE_API_REDIS_TYPE_OFFSET);
   if (iret <= observer::ObTableProccessType::TABLE_API_REDIS_TYPE_OFFSET
       || iret >= observer::ObTableProccessType::TABLE_API_REDIS_TYPE_MAX) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid redis type", K(ret), K(cmd_type), K(iret), "max type", TABLE_API_REDIS_TYPE_MAX);
+    LOG_WARN("invalid redis type", K(cmd_type), K(iret), "max type", TABLE_API_REDIS_TYPE_MAX);
   } else {
-    ret_type = static_cast<observer::ObTableProccessType>(iret);
+    type = static_cast<observer::ObTableProccessType>(iret);
   }
-  return ret;
+  return type;
 }
 
 }

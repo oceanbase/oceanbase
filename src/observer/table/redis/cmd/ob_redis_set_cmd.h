@@ -21,7 +21,7 @@ namespace table
 class SetCommand : public RedisCommand
 {
 public:
-  using MemberSet = common::hash::ObHashSet<ObString>;
+  using MemberSet = common::hash::ObHashSet<ObString, common::hash::NoPthreadDefendMode>;
   enum class AggFunc {
     DIFF,
     UNION,

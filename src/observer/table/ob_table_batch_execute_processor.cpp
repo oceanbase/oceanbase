@@ -66,7 +66,6 @@ int ObTableBatchExecuteP::init_batch_ctx()
   if (OB_FAIL(batch_ctx_.tablet_ids_.push_back(arg_.tablet_id_))) {
     LOG_WARN("fail to push back tablet id", K(ret));
   } else {
-    batch_ctx_.stat_event_type_ = &stat_event_type_;
     batch_ctx_.trans_param_ = &trans_param_;
     batch_ctx_.is_atomic_ = arg_.batch_operation_as_atomic_;
     batch_ctx_.is_readonly_ = arg_.batch_operation_.is_readonly();
@@ -225,6 +224,10 @@ int ObTableBatchExecuteP::try_process()
   int ret = OB_SUCCESS;
   table_id_ = arg_.table_id_; // init move response need
   const common::ObIArray<ObTableOperation> &ops = arg_.batch_operation_.get_table_operations();
+  stat_process_type_ = get_stat_process_type(arg_.batch_operation_.is_readonly(),
+                                             arg_.batch_operation_.is_same_type(),
+                                             arg_.batch_operation_.is_same_properties_names(),
+                                             ops.at(0).type());
 
   if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));

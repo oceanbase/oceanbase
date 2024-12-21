@@ -252,8 +252,8 @@ public:
     if (!is_inited_) {
       ret = OB_NOT_INIT;
       COMMON_LOG(WARN, "ObTableExpiredGroups not inited", K(ret));
-    } else if (OB_FAIL(expired_groups_.pop_front(group))) {
-      COMMON_LOG(WARN, "fail to pop front group", K(ret));
+    } else {
+      ret = expired_groups_.pop_front(group);
     }
     return ret;
   }

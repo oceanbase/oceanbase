@@ -1475,9 +1475,9 @@ int ObTableQueryAsyncP::try_process()
   #endif
   bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
   if (is_hkv) {
-    stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY_ASYNC;
+    stat_process_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY_ASYNC;
   } else {
-    stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY_ASYNC;
+    stat_process_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY_ASYNC;
   }
   return ret;
 }

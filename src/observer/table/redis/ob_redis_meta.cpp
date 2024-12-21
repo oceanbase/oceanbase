@@ -192,6 +192,21 @@ int ObRedisSetMeta::build_meta_rowkey(int64_t db, const ObString &key, ObRedisCt
 int ObRedisZSetMeta::put_meta_into_entity(ObIAllocator &allocator, ObITableEntity &meta_entity) const
 {
   int ret = OB_SUCCESS;
+  ObObj score_obj;
+  score_obj.set_null();
+  if (OB_FAIL(ObRedisMeta::put_meta_into_entity(allocator, meta_entity))) {
+    LOG_WARN("fail to put meta into entity", K(ret));
+  } else if (OB_FAIL(meta_entity.set_property(ObRedisUtil::SCORE_PROPERTY_NAME, score_obj))) {
+    LOG_WARN("fail to set meta value", K(ret), K(score_obj));
+  }
+  return ret;
+}
+
+int ObRedisHashMeta::put_meta_into_entity(ObIAllocator &allocator, ObITableEntity &meta_entity) const
+{
+  int ret = OB_SUCCESS;
+  ObObj value_obj;
+  value_obj.set_null();
   if (OB_FAIL(ObRedisMeta::put_meta_into_entity(allocator, meta_entity))) {
     LOG_WARN("fail to put meta into entity", K(ret));
   }

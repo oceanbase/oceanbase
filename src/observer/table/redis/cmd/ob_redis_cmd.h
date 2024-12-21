@@ -81,8 +81,8 @@ struct ObRedisAttr
 class RedisCommand
 {
 public:
-  using FieldValMap = common::hash::ObHashMap<ObString, ObString>;
-  using FieldSet = common::hash::ObHashSet<ObString>;
+  using FieldValMap = common::hash::ObHashMap<ObString, ObString, common::hash::NoPthreadDefendMode>;
+  using FieldSet = common::hash::ObHashSet<ObString, common::hash::NoPthreadDefendMode>;
   static constexpr int32_t DEFAULT_BUCKET_NUM = 1024;
 
   RedisCommand()
@@ -147,36 +147,76 @@ private:
   DISALLOW_COPY_AND_ASSIGN(RedisCommand);
 };
 
-struct ObRedisOp : public ObITableOp {
+struct ObRedisOp : public ObITableOp
+{
   ObRedisOp()
-      : allocator_("ObRedisOp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      : outer_allocator_(nullptr),
+        allocator_("ObRedisOp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+        result_(&allocator_),
         default_entity_factory_("ObRedisOpFac", MTL_ID()),
-        table_name_(),
         db_(0),
         redis_cmd_(nullptr),
-        response_(allocator_ ,result_),
-        ls_id_(ObLSID::INVALID_LS_ID)
+        ls_id_(ObLSID::INVALID_LS_ID),
+        tablet_id_(ObTabletID::INVALID_TABLET_ID),
+        response_(allocator_, result_, ObTableRequsetType::TABLE_REQUEST_INVALID)
   {}
-
+public:
+  OB_INLINE virtual ObTabletID tablet_id() const override { return tablet_id_; }
+  virtual int get_result(ObITableResult *&result) override;
+  virtual void set_failed_result(int ret_code,
+                                 ObTableEntity &result_entity,
+                                 ObTableOperationType::Type op_type) override
+  {
+    result_.generate_failed_result(ret_code, result_entity, op_type);
+  }
   int init(ObRedisSingleCtx &redis_ctx, RedisCommand *redis_cmd, ObTableGroupType type);
 
-  virtual void reset() override;
+  void update_outer_allocator(common::ObIAllocator *allocator)
+  {
+    outer_allocator_ = allocator;
+    response_.set_allocator(allocator);
+  }
 
+  virtual void reset() override;
   OB_INLINE int64_t db() const { return db_; }
   OB_INLINE ObRedisResponse& response() { return response_; }
   OB_INLINE RedisCommand* cmd() { return redis_cmd_; }
   OB_INLINE const RedisCommand* cmd() const { return redis_cmd_; }
-  OB_INLINE const ObString& table_name() const { return table_name_; }
   int get_key(ObString &key) const;
 
+  VIRTUAL_TO_STRING_KV(K_(result),
+                       K_(db),
+                       K_(response),
+                       KP(redis_cmd_),
+                       K_(ls_id));
+
+public:
+  static const int64_t FIX_BUF_SIZE = 256;
+
+public:
+  OB_INLINE common::ObIAllocator& get_allocator()
+  {
+    return OB_NOT_NULL(outer_allocator_) ? *outer_allocator_ : allocator_;
+  }
+  OB_INLINE common::ObIAllocator& get_inner_allocator()
+  {
+    return allocator_;
+  }
+private:
+  common::ObIAllocator *outer_allocator_; // refer to rpc allocator in read only operation
   common::ObArenaAllocator allocator_;
+  // result_ must be accessed externally through the response_ member
+  ObRedisResult result_;
+public:
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
-  ObString table_name_;
   int64_t db_;
   RedisCommand *redis_cmd_;
-  ObRedisResponse response_;
   ObLSID ls_id_;
+  ObTabletID tablet_id_;
+  char fix_buf_[FIX_BUF_SIZE]; // for RedisCommand
+  ObRedisResponse response_;
 
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRedisOp);
 };
 

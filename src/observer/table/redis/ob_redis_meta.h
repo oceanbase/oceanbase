@@ -204,6 +204,7 @@ public:
   ~ObRedisHashMeta()
   {}
   int build_meta_rowkey(int64_t db, const ObString &key, ObRedisCtx &redis_ctx, ObITableEntity *&entity) const override;
+  int put_meta_into_entity(ObIAllocator &allocator, ObITableEntity &meta_entity) const override;
 };
 
 class ObRedisSetMeta : public ObRedisMeta
