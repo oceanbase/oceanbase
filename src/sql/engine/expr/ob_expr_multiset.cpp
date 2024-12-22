@@ -422,6 +422,44 @@ int ObExprMultiSet::calc_ms_all_impl(common::ObIAllocator *coll_allocator,
   return ret;
 }
 
+int ObExprMultiSet::append_collection(ObObj *buffer, int64_t buffer_size, int64_t &pos, pl::ObPLCollection *c, ObIAllocator &coll_alloc)
+{
+  int ret = OB_SUCCESS;
+
+  CK (OB_NOT_NULL(buffer));
+  CK (OB_NOT_NULL(c));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (buffer_size - pos < c->get_count()) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("buffer size not enough", K(ret), K(buffer_size), K(pos), KPC(c));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < c->get_count(); ++i) {
+      ObObj *curr = c->get_data() + i;
+      buffer[pos].reset();
+
+      CK (OB_NOT_NULL(curr));
+
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (curr->is_pl_extend() && pl::PL_REF_CURSOR_TYPE != curr->get_meta().get_extend_type()) {
+        if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(coll_alloc, *curr, buffer[pos], true))) {
+          LOG_WARN("failed to deep_copy_obj", K(ret), K(i), KPC(c));
+        }
+      } else if (OB_FAIL(deep_copy_obj(coll_alloc, *curr, buffer[pos]))) {
+        LOG_WARN("failed to deep_copy_obj", K(ret), K(i), KPC(c));
+      }
+
+      if (OB_SUCC(ret)) {
+        pos += 1;
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObExprMultiSet::calc_ms_union(common::ObIAllocator *coll_allocator,
                                   pl::ObPLCollection *c1,
                                   pl::ObPLCollection *c2,
@@ -431,7 +469,7 @@ int ObExprMultiSet::calc_ms_union(common::ObIAllocator *coll_allocator,
                                   ObMultiSetModifier ms_modifier)
 {
   int ret = OB_SUCCESS;
-  int64_t count = c1->get_actual_count() + c2->get_actual_count();
+  int64_t count = c1->get_count() + c2->get_count();
   int64_t alloc_size = 0;
   LocalNTSHashMap distinct_map;
   if (0 == count) {
@@ -449,10 +487,15 @@ int ObExprMultiSet::calc_ms_union(common::ObIAllocator *coll_allocator,
       }
       if (OB_SUCC(ret)) {
         if (MULTISET_MODIFIER_ALL == ms_modifier) {
-          FILL_ELEM(c1, tmp_res, 0, *coll_allocator);
-          FILL_ELEM(c2, tmp_res, c1->get_actual_count(), *coll_allocator);
-          OX (data_arr = tmp_res);
-          OX (elem_count = count);
+          elem_count = 0;
+
+          if (OB_FAIL(append_collection(tmp_res, count, elem_count, c1, *coll_allocator))) {
+            LOG_WARN("failed append_collection to c1", K(ret), K(count), K(elem_count), KPC(c1));
+          } else if (OB_FAIL(append_collection(tmp_res, count, elem_count, c2, *coll_allocator))) {
+            LOG_WARN("failed append_collection to c2", K(ret), K(count), K(elem_count), KPC(c2));
+          } else {
+            data_arr = tmp_res;
+          }
         } else if (MULTISET_MODIFIER_DISTINCT == ms_modifier) {
           ObArenaAllocator tmp_alloc;
           FILL_ELEM(c1, tmp_res, 0, tmp_alloc);
@@ -518,21 +561,29 @@ int ObExprMultiSet::eval_multiset_composite(ObExecContext &exec_ctx,
       "rhs_count pls_integer := :rhs.count;\n"
       "buffer_count pls_integer := :buffer.count;\n"
       "result_count pls_integer := :result.count;\n"
+      "cmp boolean;\n"
+      "cmp1 boolean;\n"
+      "cmp2 boolean;\n"
       "begin\n"
       "if lhs_count > 0 then\n"
       "  if rhs_count > 0 then\n"
       "    for i in :rhs.first..:rhs.last loop\n"
       "      if not :rhs.exists(i) then continue; end if;\n"
+      "      cmp1 := (:rhs(i) = :rhs(i));\n"
       "        for j in :lhs.first..:lhs.last loop\n"
       "          if not :lhs.exists(j) then continue; end if;\n"
-      "          if (:rhs(i) is NULL) or (:lhs(j) is NULL) then\n"
-      "            if (:rhs(i) is NULL) and (:lhs(j) is NULL) then\n"
-      "              :lhs.delete(j);\n"
-      "              exit;\n"
-      "            end if;\n"
-      "          elsif :rhs(i) = :lhs(j) or (:rhs(i) = :lhs(j)) is NULL then\n"
+      "          cmp := (:rhs(i) = :lhs(j));\n"
+      "          if cmp then\n"
       "            :lhs.delete(j);\n"
       "            exit;\n"
+      "          elsif cmp is NULL then\n"
+      "            cmp2 := (:lhs(j) = :lhs(j));\n"
+      "            if (cmp1 is NULL) or (cmp2 is NULL) then\n"
+      "              if (cmp1 is NULL) and (cmp2 is NULL) then\n"
+      "                :lhs.delete(j);\n"
+      "                exit;\n"
+      "              end if;\n"
+      "            end if;\n"
       "          end if;\n"
       "      end loop;\n"
       "    end loop;\n"
@@ -624,17 +675,17 @@ int ObExprMultiSet::eval_multiset_composite(ObExecContext &exec_ctx,
       "if :coll.count = 0 then return; end if;\n"
       "for idx in :coll.first..:coll.last loop\n"
       "  if not :coll.exists(idx) then continue; end if;\n"
-      "  if :coll(idx) is null then\n"
-      "    if not null_element then\n"
-      "      null_element := TRUE;\n"
-      "      :result.extend(1);\n"
-      "      :result(:result.count) := :coll(idx);\n"
-      "    end if;\n"
-      "  else\n"
-      "    cmp := :coll(idx) member of :result;\n"
+      "  cmp := :coll(idx) member of :result;\n"
+      "  if cmp is not NULL then\n"
       "    if cmp then\n"
       "      null;\n"
       "    else\n"
+      "      :result.extend(1);\n"
+      "      :result(:result.count) := :coll(idx);\n"
+      "    end if;\n"
+      "  elsif (:coll(idx) = :coll(idx)) is null then\n"
+      "    if not null_element then\n"
+      "      null_element := TRUE;\n"
       "      :result.extend(1);\n"
       "      :result(:result.count) := :coll(idx);\n"
       "    end if;\n"

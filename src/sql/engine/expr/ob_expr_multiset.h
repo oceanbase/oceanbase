@@ -144,6 +144,8 @@ private:
                                      ObMultiSetType ms_type,
                                      ObMultiSetModifier ms_modifier);
 
+  static int append_collection(ObObj *buffer, int64_t buffer_size, int64_t &pos, pl::ObPLCollection *c, ObIAllocator &coll_alloc);
+
   DISALLOW_COPY_AND_ASSIGN(ObExprMultiSet);
 private:
   ObMultiSetType ms_type_;
