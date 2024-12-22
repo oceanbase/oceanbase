@@ -1,3 +1,29 @@
+%code requires {
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+}
+%code top {
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+}
 /* Location tracking.  */
 %locations
 /* Pure yylex.  */
@@ -27,12 +53,16 @@ using namespace oceanbase::common;
     oceanbase::table::hfilter::CompareOperator cmp_op;
     oceanbase::table::ObHTableFilterParser::SimpleString sval;
     oceanbase::table::hfilter::Filter *fval;
+    oceanbase::table::KeyRange *rval;
+    oceanbase::common::ObSEArray<oceanbase::ObString, 8> *sarray;
     oceanbase::common::ObSEArray<int64_t, 8> *array;
+    oceanbase::common::ObSEArray<oceanbase::table::KeyRange*, 8> *range_array;
+    oceanbase::common::ObSEArray<oceanbase::table::hfilter::ObPair<oceanbase::ObString, oceanbase::ObString>*, 8> *fuzzy_array;
 };
 
-%token RowFilter ValueFilter QualifierFilter SingleColumnValueFilter PageFilter ColumnCountGetFilter ColumnPrefixFilter ColumnPaginationFilter
-%token CheckAndMutateFilter PrefixFilter FirstKeyOnlyFilter KeyOnlyFilter TimestampsFilter
-%token TableCompareFilter RandomRowFilter
+%token RowFilter ValueFilter QualifierFilter SingleColumnValueFilter PageFilter ColumnCountGetFilter ColumnPrefixFilter ColumnPaginationFilter FirstKeyValueMatchingQualifiersFilter
+%token CheckAndMutateFilter PrefixFilter FirstKeyOnlyFilter KeyOnlyFilter TimestampsFilter MultiRowRangeFilter InclusiveStopFilter FuzzyRowFilter ColumnValueFilter
+%token TableCompareFilter RandomRowFilter DependentColumnFilter SingleColumnValueExcludeFilter ColumnRangeFilter MultipleColumnPrefixFilter FamilyFilter
 %token LESS LESS_OR_EQUAL EQUAL NOT_EQUAL GREATER GREATER_OR_EQUAL NO_OP IS IS_NOT
 %token  <ival>          BOOL_VALUE
 %token  <sval>          STRING_VALUE
@@ -50,6 +80,10 @@ using namespace oceanbase::common;
 %type   <sval>          family qualifier comparator
 %type   <cmp_op>        compare_op
 %type   <array>         timestamp_list
+%type   <range_array>   range_list prefix_list
+%type   <rval>          range
+%type   <sarray>        param_list
+%type   <fuzzy_array>   fuzzy_list
 
 %start result_filter
 %%
@@ -328,6 +362,75 @@ simple_filter:
                         YYABORT;
                     }
                 }
+        |       SingleColumnValueExcludeFilter '(' family ',' qualifier ',' compare_op ',' comparator ',' BOOL_VALUE ',' BOOL_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator($9, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        ObString family($3.len_, $3.str_);
+                        ObString qualifier($5.len_, $5.str_);
+                        bool filter_if_missing = ($11 == 1);
+                        bool latest_version_only = ($13 == 1);
+                        hfilter::SingleColumnValueExcludeFilter *filter = NULL;
+                        $$ = filter = OB_NEWx(hfilter::SingleColumnValueExcludeFilter, parse_ctx->allocator(), family, qualifier, $7, comparable);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        } else {
+                            filter->set_filter_if_missing(filter_if_missing);
+                            filter->set_latest_version_only(latest_version_only);
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse SingleColumnValueExcludeFilter");
+                        YYABORT;
+                    }
+                }
+        |       DependentColumnFilter '(' family ',' qualifier ',' BOOL_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    ObString family($3.len_, $3.str_);
+                    ObString qualifier($5.len_, $5.str_);
+                    bool drop_dependent_column = ($7 == 1);
+                    $$ = OB_NEWx(hfilter::DependentColumnFilter, parse_ctx->allocator(), family, qualifier, drop_dependent_column);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse DependentColumnFilter");
+                        YYABORT;
+                    }
+                }
+        |       DependentColumnFilter '(' family ',' qualifier ',' BOOL_VALUE ',' compare_op ',' comparator ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator($11, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        ObString family($3.len_, $3.str_);
+                        ObString qualifier($5.len_, $5.str_);
+                        bool drop_dependent_column = ($7 == 1);
+                        $$ = OB_NEWx(hfilter::DependentColumnFilter, parse_ctx->allocator(), family, qualifier, drop_dependent_column, $9, comparable);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse DependentColumnFilter");
+                        YYABORT;
+                    }
+                }
         |       PageFilter '(' INT_VALUE ')'
                 {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
@@ -440,6 +543,25 @@ simple_filter:
                         YYABORT;
                     }
                 }
+        |       FuzzyRowFilter '(' fuzzy_list ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    if (nullptr != parse_ctx->allocator() && nullptr != $3) {
+                        $$ = OB_NEWx(hfilter::FuzzyRowFilter, parse_ctx->allocator(), (*parse_ctx->allocator()), *$3);
+                    } else {
+                        $$ = nullptr;
+                    }
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse FuzzyRowFilter");
+                        YYABORT;
+                    }
+                }
         |       TimestampsFilter '(' timestamp_list ',' BOOL_VALUE ')'
                 {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
@@ -455,6 +577,126 @@ simple_filter:
                         YYABORT;
                     }
                 }
+        |       ColumnValueFilter '(' family ',' qualifier ',' compare_op ',' comparator ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator($9, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        ObString family($3.len_, $3.str_);
+                        ObString qualifier($5.len_, $5.str_);
+                        hfilter::ColumnValueFilter *filter = NULL;
+                        $$ = filter = OB_NEWx(hfilter::ColumnValueFilter, parse_ctx->allocator(), family, qualifier, $7, comparable);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse ColumnValueFilter");
+                        YYABORT;
+                    }
+                }
+        |       MultiRowRangeFilter '(' range_list ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::MultiRowRangeFilter, parse_ctx->allocator(), $3);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse MultiRowRangeFilter");
+                        YYABORT;
+                    }
+                }
+        |       InclusiveStopFilter '(' STRING_VALUE ')'
+                {
+                    typedef ObSEArray<KeyRange*, 8> RangeArray;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    RangeArray* arr = OB_NEWx(RangeArray, parse_ctx->allocator());
+                    KeyRange* range = OB_NEWx(KeyRange, parse_ctx->allocator());
+                    if (nullptr == arr || nullptr == range) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else {
+                        range->set_max(parse_ctx->create_ob_string($3));
+                        range->set_max_inclusive(true);
+                        if (OB_FAIL(arr->push_back(range))) {
+                            LOG_WARN("failed to push back", K(ret));
+                        } else {
+                            $$ = OB_NEWx(hfilter::InclusiveStopFilter, parse_ctx->allocator(), arr, parse_ctx->create_ob_string($3));
+                        }
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse InclusiveStopFilter");
+                        YYABORT;
+                    }
+                }
+        |       ColumnRangeFilter '(' range_list ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::ColumnRangeFilter, parse_ctx->allocator(), $3);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse ColumnRangeFilter");
+                        YYABORT;
+                    }
+                }
+        |       MultipleColumnPrefixFilter '(' prefix_list ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::MultipleColumnPrefixFilter, parse_ctx->allocator(), $3);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse MultipleColumnPrefixFilter");
+                        YYABORT;
+                    }
+                }
+        |       FamilyFilter '(' compare_op ',' comparator ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator($5, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        $$ = OB_NEWx(hfilter::FamilyFilter, parse_ctx->allocator(), $3, comparable);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(static_cast<hfilter::FamilyFilter*>($$)->check_arguments())) {
+                            LOG_WARN("failed to check arguments", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse FamilyFilter");
+                        YYABORT;
+                    }
+                }
         |       ColumnCountGetFilter '(' INT_VALUE ')'
                 {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
@@ -467,6 +709,21 @@ simple_filter:
                     }
                     if (OB_SUCCESS != ret) {
                         ob_hfilter_error(&(@$), parse_ctx, "failed to parse ColumnCountGetFilter");
+                        YYABORT;
+                    }
+                }
+        |       FirstKeyValueMatchingQualifiersFilter '(' param_list ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::FirstKeyValueMatchingQualifiersFilter, parse_ctx->allocator(), $3);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse FirstKeyValueMatchingQualifiersFilter");
                         YYABORT;
                     }
                 }
@@ -536,6 +793,73 @@ comparator:
                 STRING_VALUE
                 { $$ = $1; }
         ;
+param_list:
+                STRING_VALUE
+                {
+                    typedef ObSEArray<ObString, 8> param_array;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(param_array, parse_ctx->allocator());
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL($$->push_back(parse_ctx->create_ob_string($1)))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse param list");
+                        YYABORT;
+                    }
+                }
+        |       param_list ',' STRING_VALUE
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    if (OB_FAIL($1->push_back(parse_ctx->create_ob_string($3)))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    $$ = $1;
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse param list");
+                        YYABORT;
+                    }
+                }
+        ;
+fuzzy_list:
+                STRING_VALUE ',' STRING_VALUE
+                {
+                    typedef oceanbase::table::hfilter::ObPair<oceanbase::ObString, oceanbase::ObString> FuzzyKey;
+                    typedef ObSEArray<FuzzyKey*, 8> ParamArray;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(ParamArray, parse_ctx->allocator());
+                    FuzzyKey *pair = OB_NEWx(FuzzyKey, parse_ctx->allocator(), parse_ctx->create_ob_string($1), parse_ctx->create_ob_string($3));
+                    if (nullptr == $$ || nullptr == pair) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL($$->push_back(pair))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse param list");
+                        YYABORT;
+                    }
+                }
+        |       fuzzy_list ',' STRING_VALUE ',' STRING_VALUE
+                {
+                    typedef oceanbase::table::hfilter::ObPair<oceanbase::ObString, oceanbase::ObString> FuzzyKey;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    FuzzyKey *pair = OB_NEWx(FuzzyKey, parse_ctx->allocator(), parse_ctx->create_ob_string($3), parse_ctx->create_ob_string($5));
+                    if (nullptr == pair) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL($1->push_back(pair))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    $$ = $1;
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse param list");
+                        YYABORT;
+                    }
+                }
+        ;
 timestamp_list:
                 INT_VALUE
                 {
@@ -562,6 +886,118 @@ timestamp_list:
                     $$ = $1;
                     if (OB_SUCCESS != ret) {
                         ob_hfilter_error(&(@$), parse_ctx, "failed to parse timestamp list");
+                        YYABORT;
+                    }
+                }
+        ;
+range:
+                STRING_VALUE ',' BOOL_VALUE ',' STRING_VALUE ',' BOOL_VALUE
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(KeyRange, parse_ctx->allocator(), parse_ctx->create_ob_string($1), $3, parse_ctx->create_ob_string($5), $7);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse range");
+                        YYABORT;
+                    }
+                }
+        ;
+
+range_list:
+                range
+                {
+                    typedef ObSEArray<KeyRange*, 8> RangeArray;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(RangeArray, parse_ctx->allocator());
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL($$->push_back($1))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse range list");
+                        YYABORT;
+                    }
+                }
+        |       range_list ',' range
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    if (OB_FAIL($1->push_back($3))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    $$ = $1;
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse range list");
+                        YYABORT;
+                    }
+                }
+        ;
+prefix_list:
+                STRING_VALUE
+                {
+                    typedef ObSEArray<KeyRange*, 8> RangeArray;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    ObString prefix = parse_ctx->create_ob_string($1);
+                    KeyRange *range = OB_NEWx(KeyRange, parse_ctx->allocator());
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else {
+                        range->set_min(prefix);
+                        range->set_min_inclusive(true);
+                        $$ = OB_NEWx(RangeArray, parse_ctx->allocator());
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(ObHTableUtils::get_prefix_key_range(*parse_ctx->allocator(), prefix, range))) {
+                            LOG_WARN("failed to create key range", K(ret));
+                        } else if (OB_FAIL($$->push_back(range))) {
+                            LOG_WARN("failed to push back", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse prefix list");
+                        YYABORT;
+                    }
+                }
+        |       prefix_list ',' STRING_VALUE
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    ObString prefix = parse_ctx->create_ob_string($3);
+                    KeyRange *range = OB_NEWx(KeyRange, parse_ctx->allocator());
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else {
+                        range->set_min(prefix);
+                        range->set_min_inclusive(true);
+                        if (OB_FAIL(ObHTableUtils::get_prefix_key_range(*parse_ctx->allocator(), prefix, range))) {
+                            LOG_WARN("failed to create key range", K(ret));
+                        } else if (OB_FAIL($1->push_back(range))) {
+                            LOG_WARN("failed to push back", K(ret));
+                        }
+                        $$ = $1;
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse prefix list");
+                        YYABORT;
+                    }
+                }
+        |       /*EMPTY*/
+                {
+                    typedef ObSEArray<KeyRange*, 8> RangeArray;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(RangeArray, parse_ctx->allocator());
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse prefix list");
                         YYABORT;
                     }
                 }

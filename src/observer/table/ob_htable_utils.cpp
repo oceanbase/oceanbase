@@ -93,6 +93,15 @@ ObString ObHTableCellEntity::get_value() const
 {
   return ob_row_->get_cell(ObHTableConstants::COL_IDX_V).get_varchar();
 }
+
+ObString ObHTableCellEntity::get_family() const
+{
+  return family_;
+}
+
+void ObHTableCellEntity::set_family(const ObString family) {
+  family_ = family;
+}
 ////////////////////////////////////////////////////////////////
 ObString ObHTableCellEntity2::get_rowkey() const
 {
@@ -227,8 +236,9 @@ ObString ObHTableCellEntity3::get_value() const
 }
 
 ////////////////////////////////////////////////////////////////
-int ObHTableUtils::create_last_cell_on_row_col(
-    common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+int ObHTableUtils::create_last_cell_on_row_col(common::ObIAllocator &allocator,
+                                               const ObHTableCell &cell,
+                                               ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
@@ -257,8 +267,10 @@ int ObHTableUtils::create_last_cell_on_row_col(
   return ret;
 }
 
-int ObHTableUtils::create_first_cell_on_row_col(common::ObIAllocator &allocator, const ObHTableCell &cell,
-    const common::ObString &qualifier, ObHTableCell *&new_cell)
+int ObHTableUtils::create_first_cell_on_row_col(common::ObIAllocator &allocator,
+                                                const ObHTableCell &cell,
+                                                const common::ObString &qualifier,
+                                                ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
@@ -287,8 +299,9 @@ int ObHTableUtils::create_first_cell_on_row_col(common::ObIAllocator &allocator,
   return ret;
 }
 
-int ObHTableUtils::create_last_cell_on_row(
-    common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+int ObHTableUtils::create_last_cell_on_row(common::ObIAllocator &allocator,
+                                           const ObHTableCell &cell,
+                                           ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
@@ -315,9 +328,9 @@ int ObHTableUtils::create_last_cell_on_row(
 }
 
 int ObHTableUtils::create_first_cell_on_row_col_ts(common::ObIAllocator &allocator,
-                                                const ObHTableCell &cell,
-                                                const int64_t timestamp,
-                                                ObHTableCell *&new_cell)
+                                                   const ObHTableCell &cell,
+                                                   const int64_t timestamp,
+                                                   ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
@@ -346,14 +359,22 @@ int ObHTableUtils::create_first_cell_on_row_col_ts(common::ObIAllocator &allocat
   return ret;
 }
 
-int ObHTableUtils::create_first_cell_on_row(
-    common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell)
+int ObHTableUtils::create_first_cell_on_row(common::ObIAllocator &allocator,
+                                            const ObHTableCell &cell,
+                                            ObHTableCell *&new_cell)
+{
+  return create_first_cell_on_row(allocator, cell.get_rowkey(), new_cell);
+}
+
+int ObHTableUtils::create_first_cell_on_row(common::ObIAllocator &allocator,
+                                            const ObString &row_key,
+                                            ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
   ObObj *first_cell = nullptr;
   ObNewRow *ob_row = nullptr;
-  if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
+  if (OB_FAIL(ob_write_string(allocator, row_key, rowkey_clone))) {
     LOG_WARN("failed to clone rowkey", K(ret));
   } else if (OB_ISNULL(first_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -607,5 +628,97 @@ int ObHTableUtils::generate_hbase_bytes(ObIAllocator& allocator, int32_t len, ch
       len >>= sizeof(char) * 8;
     }
   }
+  return ret;
+}
+
+int ObHTableUtils::get_prefix_key_range(common::ObIAllocator &allocator, ObString prefix, KeyRange *range)
+{
+  int ret = OB_SUCCESS;
+  bool is_max = true;
+  ObString prefix_end;
+  if (OB_FAIL(ob_write_string(allocator, prefix, prefix_end))) {
+    LOG_WARN("failed to clone prefix", K(ret), K(prefix));
+  } else if (!prefix_end.empty()) {
+    char* ptr = prefix_end.ptr();
+    bool loop = true;
+    for (int i = prefix_end.length() - 1; i >= 0 && loop; i--) {
+      if (ptr[i] != -1) {
+        is_max = false;
+        ptr[i] += 1;
+        loop = false;
+        prefix_end.set_length(i + 1);
+      }
+    }
+    if (is_max) {
+      prefix_end.reset();
+    }
+    range->set_max(prefix_end);
+    range->set_max_inclusive(false);
+  }
+  return ret;
+}
+
+int ObHTableUtils::merge_key_range(ObKeyRangeTree& tree)
+{
+  int ret = OB_SUCCESS;
+  ObKeyRangeNode* curr_range = tree.get_first();
+  ObKeyRangeNode* merge_range = nullptr;
+  if (nullptr == curr_range) {
+  } else if (!curr_range->get_value()->valid()) {
+    ret = common::OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid key range", KR(ret), KPC(curr_range));
+  } else if (OB_FAIL(tree.get_next(curr_range, merge_range))) {
+    LOG_WARN("fail to get next node from tree", KR(ret), KPC(merge_range));
+  }
+
+  bool loop = true;
+  while (OB_SUCC(ret) && merge_range != nullptr && loop) {
+    if (!merge_range->get_value()->valid()) {
+      ret = common::OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid row range", KR(ret), KPC(merge_range));
+    } else if (curr_range->get_value()->max().empty()) {
+      loop = false;
+    } else {
+      KeyRange* l_val = curr_range->get_value();
+      KeyRange* r_val = merge_range->get_value();
+      // With overlap in the ranges
+      if (l_val->max().compare(r_val->min()) > 0
+      || (l_val->max().compare(r_val->min()) == 0 &&
+      (l_val->max_inclusive() || r_val->min_inclusive()) )) {
+        if (r_val->max().empty()) {
+          l_val->set_max(ObString());
+          tree.remove(merge_range);
+          loop = false;
+        } else {
+          int cmp = l_val->max().compare(r_val->max());
+          if (cmp < 0) {
+            l_val->set_max(r_val->max());
+            l_val->set_max_inclusive(r_val->max_inclusive());
+          } else if (cmp == 0) {
+            l_val->set_max_inclusive(l_val->max_inclusive() | r_val->max_inclusive());
+          }
+          tree.remove(merge_range);
+        }
+      } else {
+        curr_range = merge_range;
+      }
+
+      if (loop && OB_FAIL(tree.get_next(curr_range, merge_range))) {
+        LOG_WARN("fail to get next node from tree", KR(ret), KPC(merge_range));
+      }
+    }
+  }
+
+  loop = (nullptr != curr_range);
+  while (OB_SUCC(ret) && loop) {
+    if (OB_FAIL(tree.get_next(curr_range, merge_range))) {
+      LOG_WARN("fail to get next node from tree", KR(ret), KPC(merge_range));
+    } else if (merge_range == NULL) {
+      loop = false;
+    } else {
+      tree.remove(merge_range);
+    }
+  }
+
   return ret;
 }

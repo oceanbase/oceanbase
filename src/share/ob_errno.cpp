@@ -26944,10 +26944,10 @@ static const _error _error_OB_KV_FILTER_PARSE_ERROR = {
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
       .str_error             = "OBKV filter parse error",
-      .str_user_error        = "Filter parse errror, the input filter string is: '%.*s'",
+      .str_user_error        = "Filter parse error, the input filter string is: '%.*s'",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -10514, OBKV filter parse error",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -10514, Filter parse errror, the input filter string is: '%.*s'"
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -10514, Filter parse error, the input filter string is: '%.*s'"
 };
 static const _error _error_OB_KV_REDIS_PARSE_ERROR = {
       .error_name            = "OB_KV_REDIS_PARSE_ERROR",

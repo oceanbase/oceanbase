@@ -27,8 +27,9 @@ class ObMergeTableQueryResultIterator : public ObTableQueryResultIterator
 {
 public:
   ObMergeTableQueryResultIterator(const ObTableQuery& query, table::ObTableQueryResult &one_result);
-  TO_STRING_KV(KP_(one_result), K_(binary_heap));
-  ~ObMergeTableQueryResultIterator()
+  ObMergeTableQueryResultIterator(const ObTableQuery& query, table::ObTableQueryIterableResult &one_result);
+  TO_STRING_KV(KP_(serlize_result), KP_(iterable_result), K_(binary_heap));
+  virtual ~ObMergeTableQueryResultIterator()
   {
     for (int i = 0; i < binary_heap_.count(); i++) {
       if (OB_NOT_NULL(binary_heap_.at(i))) {
@@ -40,14 +41,13 @@ public:
   }
 
   int init(Compare* compare);
-
   virtual int get_next_result(ObTableQueryResult *&one_result) override;
-
-  virtual bool has_more_result() const override { return binary_heap_.count() == 0; }
+  virtual int get_next_result(ObTableQueryIterableResult *&one_result) override;
+  virtual bool has_more_result() const override { return binary_heap_.count() != 0; }
 
   virtual void set_query(const ObTableQuery *query) override { query_ = query; };
 
-  virtual void set_one_result(ObTableQueryResult *result) { one_result_ = result; }
+  virtual void set_one_result(ObTableQueryResult *result) { serlize_result_ = result; }
 
   int seek(const ObString& key);
   common::ObIArray<ObTableQueryResultIterator *>& get_inner_result_iterators() { return inner_result_iters_; }
@@ -55,15 +55,11 @@ public:
   ObIAllocator& get_allocator() { return allocator_; }
 
 private:
-
   virtual void set_scan_result(table::ObTableApiScanRowIterator* scan_result) override { UNUSED(scan_result); }
-  virtual int get_next_result(table::ObTableQueryIterableResult *&one_result) override { return OB_SUCCESS; }
-
   virtual ObTableQueryResult *get_one_result() { return nullptr; }
   virtual void set_query_async() override { /* is_query_async_ = true; */ }
   virtual void set_filter(hfilter::Filter *filter) override { UNUSED(filter); }
   virtual hfilter::Filter *get_filter() const override { return nullptr; }
-
 private:
   int build_heap(const common::ObIArray<ObTableQueryResultIterator*>& result_iters);
 
@@ -111,12 +107,15 @@ private:
   ObArenaAllocator allocator_;
   HeapCompare compare_;
 
-  table::ObTableQueryResult* one_result_;
+  table::ObTableQueryResult* serlize_result_;
+  table::ObTableQueryIterableResult* iterable_result_;
+
 
   common::ObBinaryHeap<ObRowCacheIterator*, HeapCompare, 64> binary_heap_;
   common::ObSEArray<ObTableQueryResultIterator *, 8> inner_result_iters_;
 
   bool is_inited_;
+  int64_t row_count_;
 };
 
 template <typename Row, typename Compare>
@@ -124,13 +123,27 @@ ObMergeTableQueryResultIterator<Row, Compare>::ObMergeTableQueryResultIterator(c
                                                                               table::ObTableQueryResult &one_result)
   : ObTableQueryResultIterator(&query),
     allocator_("TableMrgFltAlc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    one_result_(&one_result),
+    serlize_result_(&one_result),
+    iterable_result_(nullptr),
     binary_heap_(compare_),
     is_inited_(false)
 {
   inner_result_iters_.set_attr(ObMemAttr(MTL_ID(), "MergeInnerIters"));
 }
 
+template <typename Row, typename Compare>
+ObMergeTableQueryResultIterator<Row, Compare>::ObMergeTableQueryResultIterator(const ObTableQuery& query,
+                                                                              table::ObTableQueryIterableResult &one_result)
+  : ObTableQueryResultIterator(&query),
+    allocator_("TableMrgFltAlc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    serlize_result_(nullptr),
+    iterable_result_(&one_result),
+    binary_heap_(compare_),
+    is_inited_(false),
+    row_count_(0)
+{
+  inner_result_iters_.set_attr(ObMemAttr(MTL_ID(), "MergeInnerIters"));
+}
 
 template <typename Row, typename Compare>
 bool ObMergeTableQueryResultIterator<Row, Compare>::HeapCompare::operator()(const ObRowCacheIterator *lhs,
@@ -207,20 +220,76 @@ template <typename Row, typename Compare>
 int ObMergeTableQueryResultIterator<Row, Compare>::get_next_result(ObTableQueryResult *&one_result)
 {
   int ret = OB_SUCCESS;
+  one_result = serlize_result_;
   if (binary_heap_.empty()) {
     ret = OB_ITER_END;
   } else {
-    one_result = one_result_;
     int limit = query_->get_batch() <= 0 ?
                 static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024)
                 : query_->get_batch();
-    while (!binary_heap_.empty() && one_result_->get_row_count() < limit) {
+    while (!binary_heap_.empty() && serlize_result_->get_row_count() < limit) {
       ObRowCacheIterator* cache_iterator = binary_heap_.top();
       if (OB_FAIL(binary_heap_.pop())) {
         SERVER_LOG(WARN, "fail to pop items", K(ret));
       } else if (OB_FAIL(compare_.get_error_code())) {
         SERVER_LOG(WARN, "fail to compare items", K(ret));
-      } else if (OB_FAIL(one_result_->add_row(cache_iterator->row_))) {
+      } else if (OB_FAIL(serlize_result_->add_row(cache_iterator->row_))) {
+        SERVER_LOG(WARN, "fail to add row", K(ret));
+      } else {
+        // Clean up rows that have already been serialized to response
+        cache_iterator->allocator_.reuse();
+        Row row;
+        bool is_iter_valid = false;
+        if (OB_FAIL(cache_iterator->get_next_row(row))) {
+          if (ret != OB_ITER_END) {
+            SERVER_LOG(WARN, "fail to get next row from ObRowCacheIterator");
+          } else if (row.is_valid()) {
+            if (OB_FAIL(ob_write_row(cache_iterator->allocator_, row, cache_iterator->row_))) {
+              SERVER_LOG(WARN, "fail to copy row", K(ret));
+            } else if (OB_FAIL(binary_heap_.push(cache_iterator))) {
+              SERVER_LOG(WARN, "fail to push items", K(ret));
+            } else if (FALSE_IT(is_iter_valid = true)) {
+            } else if (OB_FAIL(compare_.get_error_code())) {
+              SERVER_LOG(WARN, "fail to compare items", K(ret));
+            }
+          }
+        } else {
+          if (OB_FAIL(ob_write_row(cache_iterator->allocator_, row, cache_iterator->row_))) {
+            SERVER_LOG(WARN, "fail to copy row", K(ret));
+          } else if (OB_FAIL(binary_heap_.push(cache_iterator))) {
+            SERVER_LOG(WARN, "fail to push items", K(ret));
+          } else if (FALSE_IT(is_iter_valid = true)) {
+          } else if (OB_FAIL(compare_.get_error_code())) {
+            SERVER_LOG(WARN, "fail to compare items", K(ret));
+          }
+        }
+        if (!is_iter_valid) {
+          cache_iterator->~ObRowCacheIterator();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename Row, typename Compare>
+int ObMergeTableQueryResultIterator<Row, Compare>::get_next_result(ObTableQueryIterableResult *&one_result)
+{
+  int ret = OB_SUCCESS;
+  one_result = iterable_result_;
+  if (binary_heap_.empty()) {
+    ret = OB_ITER_END;
+  } else {
+    int limit = query_->get_batch() <= 0 ?
+                static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024)
+                : query_->get_batch();
+    while (!binary_heap_.empty() && iterable_result_->get_row_count() < limit) {
+      ObRowCacheIterator* cache_iterator = binary_heap_.top();
+      if (OB_FAIL(binary_heap_.pop())) {
+        SERVER_LOG(WARN, "fail to pop items", K(ret));
+      } else if (OB_FAIL(compare_.get_error_code())) {
+        SERVER_LOG(WARN, "fail to compare items", K(ret));
+      } else if (OB_FAIL(iterable_result_->add_row(cache_iterator->row_))) {
         SERVER_LOG(WARN, "fail to add row", K(ret));
       } else {
         // Clean up rows that have already been serialized to response

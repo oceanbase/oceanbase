@@ -416,6 +416,7 @@ public:
     return user_name;
   }
 private:
+  DISALLOW_COPY_AND_ASSIGN(ObTableApiSessGuard);
   ObTableApiSessNodeVal *sess_node_val_;
 };
 

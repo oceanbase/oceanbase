@@ -25,11 +25,30 @@
 #include "ob_table_cg_service.h"
 #include <utility>
 #include "share/schema/ob_table_schema.h"
+#include "ob_table_query_async_processor.h"
 
 namespace oceanbase
 {
 namespace table
 {
+class ObTableHbaseRowKeyDefaultCompare final : public observer::ObTableMergeFilterCompare {
+public:
+  ObTableHbaseRowKeyDefaultCompare() = default;
+  ~ObTableHbaseRowKeyDefaultCompare() override = default;
+
+  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
+  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
+};
+
+class ObTableHbaseRowKeyReverseCompare final : public observer::ObTableMergeFilterCompare {
+public:
+  ObTableHbaseRowKeyReverseCompare() = default;
+  ~ObTableHbaseRowKeyReverseCompare() override = default;
+
+  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
+  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
+};
+
 class ObHColumnDescriptor final
 {
 public:
@@ -268,7 +287,7 @@ public:
   const ObHTableCell* get_curr_row() const;
   void clear_curr_row() { curr_row_.set_ob_row(NULL); }
   int set_to_new_row(const ObHTableCell &curr_row);
-  int get_next_cell_hint(common::ObIAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&new_cell);
+  int get_next_cell_hint(const ObHTableCell &cell, ObHTableCell *&new_cell);
   bool is_curr_row_empty() const { return NULL == curr_row_.get_ob_row(); }
   ObHTableMatchCode merge_filter_return_code(const ObHTableCell &cell,
                                              const ObHTableMatchCode match_code,
@@ -295,13 +314,14 @@ public:
   };
   /// Fetch next row
   virtual int get_next_result(ObTableQueryResult *&one_row) override;
-  virtual int get_next_result(ObTableQueryIterableResult *&one_row) override;
-  int seek(ObHTableCell &key, int32_t &skipped_count);
+  int get_next_result(ObTableQueryDListResult *&one_result);
+  virtual int seek(ObHTableCell &key, int32_t &skipped_count);
   virtual void set_scan_result(table::ObTableApiScanRowIterator *scan_result) override
   {
     child_op_ = scan_result;
   }
   bool has_more_result() const { return has_more_cells_; }
+  void no_more_result() { has_more_cells_ = false; }
   void set_hfilter(table::hfilter::Filter *hfilter);
   void set_ttl(int32_t ttl_value);
   virtual int init()
@@ -322,6 +342,7 @@ private:
   template <typename ResultType>
   int get_next_result_internal(ResultType*& result);
 
+  virtual int get_next_result(ObTableQueryIterableResult *&one_result) override { return OB_NOT_SUPPORTED; }
 protected:
   virtual int rescan_and_get_next_row(table::ObTableApiScanRowIterator *tb_op, ObNewRow *&ob_next_row);
   int seek_first_cell_on_hint(const ObNewRow *ob_row);
@@ -334,7 +355,7 @@ protected:
   int get_next_cell_hint();
   virtual int add_new_row(const ObNewRow &row, ObTableQueryResult *&out_result);
 
-  int add_new_row(const ObNewRow &row, ObTableQueryIterableResult *&out_result);
+  int add_new_row(const ObNewRow &row, ObTableQueryDListResult *&out_result);
 
 protected:
   // try record expired rowkey accord cell's timestamp
@@ -346,6 +367,7 @@ protected:
 
 protected:
   common::ObArenaAllocator allocator_;  // used for deep copy of curr_cell_
+  common::ObArenaAllocator forward_range_alloc_;  // used for forward range
   table::ObTableApiScanRowIterator *child_op_;
   ObHTableCellEntity curr_cell_;
   common::ObQueryFlag::ScanOrder scan_order_;
@@ -366,7 +388,7 @@ private:
   int32_t max_version_; // Column family max_version
 
   table::ObTableQueryResult one_hbase_row_;
-  table::ObTableQueryIterableResult one_iterable_hbase_row_;
+  table::ObTableQueryDListResult one_iterable_hbase_row_;
   ObHTableColumnTracker *column_tracker_;
   ObHTableWildcardColumnTracker column_tracker_wildcard_;
   ObHTableExplicitColumnTracker column_tracker_explicit_;
@@ -391,16 +413,21 @@ public:
 
 private:
   virtual int next_cell() override;
+  int seek(ObHTableCell &key, int32_t &skipped_count) override;
   virtual int seek_or_skip_to_next_row(const ObHTableCell &cell) override;
+  int seek_or_skip_to_next_row(const ObString &rowkey);
+  int seek_or_skip_to_next_row_inner(const ObString &rowkey);
   virtual int seek_or_skip_to_next_col(const ObHTableCell &cell) override;
-  int seek_first_cell_on_row(const ObNewRow *ob_row);
+  int seek_or_skip_to_next_col(const ObString &rowkey, const ObString &qualifier);
+  int seek_or_skip_to_next_col_inner(const ObString &rowkey, const ObString &qualifier);
   int init_forward_tb_ctx();
   int init_async_forward_tb_ctx();
   virtual table::ObTableApiScanRowIterator* get_forward_child_op() { return forward_child_op_; }
   int create_forward_child_op();
-  int seek_to_max_row();
 
 private:
+  common::ObArenaAllocator iter_allocator_;  // used for forward iter
+  common::ObArenaAllocator reversed_range_alloc_;  // used for reversed range
   table::ObTableApiScanRowIterator *forward_child_op_;
   ObTableApiCacheGuard cache_guard_;
   ObTableApiSpec *spec_;
@@ -416,6 +443,7 @@ public:
   ObHTableFilterOperator(const ObTableQuery &query, table::ObTableQueryIterableResult &one_result);
   virtual ~ObHTableFilterOperator();
   /// Fetch next batch result
+  bool reach_limit();
   bool reach_caching_limit(int num_of_row);
   virtual int get_next_result(ObTableQueryResult *&one_result) override;
   virtual int get_next_result(ObTableQueryIterableResult *&one_result) override;
@@ -452,6 +480,7 @@ private:
   ObHTableRowIterator *row_iterator_;
   table::ObTableQueryResult *one_result_;
   table::ObTableQueryIterableResult *iterable_result_;
+
   table::ObHTableFilterParser filter_parser_;
   int32_t batch_size_;
   const ObKVParams& ob_kv_params_;
@@ -463,6 +492,7 @@ private:
   bool check_existence_only_;
   ScannerContext scanner_context_;
   bool is_inited_;
+  int32_t row_count_;
 };
 
 } // end namespace table

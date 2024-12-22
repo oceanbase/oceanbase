@@ -233,18 +233,60 @@ int64_t ObTableRpcProcessor<T>::get_timeout() const
 
 struct ObTableInfoBase {
   explicit ObTableInfoBase()
-                          :table_id_(OB_INVALID_ID),
-                          simple_schema_(nullptr),
-                          schema_cache_guard_(),
-                          schema_version_(OB_INVALID_VERSION){}
+                          : table_id_(OB_INVALID_ID),
+                            simple_schema_(nullptr),
+                            schema_cache_guard_(),
+                            schema_version_(OB_INVALID_VERSION) {}
 
   virtual ~ObTableInfoBase() {}
 
+  int64_t get_table_id() const {
+    return table_id_;
+  }
+
+  void set_table_id(int64_t table_id) {
+    table_id_ = table_id;
+  }
+
+  const ObString& get_real_table_name() const {
+    return real_table_name_;
+  }
+
+  void set_real_table_name(const ObString& real_table_name) {
+    real_table_name_ = real_table_name;
+  }
+
+  const share::schema::ObSimpleTableSchemaV2* get_simple_schema() {
+    return simple_schema_;
+  }
+
+  void set_simple_schema(const share::schema::ObSimpleTableSchemaV2* simple_schema) {
+    simple_schema_ = simple_schema;
+  }
+
+  table::ObKvSchemaCacheGuard& get_schema_cache_guard() {
+    return schema_cache_guard_;
+  }
+
+  void set_schema_cache_guard(const table::ObKvSchemaCacheGuard& schema_cache_guard) {
+    schema_cache_guard_ = schema_cache_guard;
+  }
+
+  int64_t get_schema_version() const {
+    return schema_version_;
+  }
+
+  void set_schema_version(int64_t schema_version) {
+    schema_version_ = schema_version;
+  }
+
   TO_STRING_KV(K(table_id_),
-              KP(simple_schema_),
-              K(schema_cache_guard_),
-              K(schema_version_));
+               KP(simple_schema_),
+               K(schema_cache_guard_),
+               K(schema_version_));
+
   int64_t table_id_;
+  ObString real_table_name_;
   const share::schema::ObSimpleTableSchemaV2* simple_schema_;
   table::ObKvSchemaCacheGuard schema_cache_guard_;
   int64_t schema_version_;

@@ -376,6 +376,7 @@ public:
   OB_INLINE common::ObTableID get_ref_table_id() const { return ref_table_id_; }
   OB_INLINE common::ObTableID get_index_table_id() const { return index_table_id_; }
   OB_INLINE common::ObTabletID get_tablet_id() const { return tablet_id_; }
+  OB_INLINE common::ObTabletID get_index_tablet_id() const { return index_tablet_id_; }
   OB_INLINE common::ObString &get_table_name() { return table_name_; }
   OB_INLINE const share::ObLSID& get_ls_id() const { return ls_id_; }
   OB_INLINE int64_t get_timeout_ts() const { return timeout_ts_; }
@@ -535,7 +536,8 @@ public:
   OB_INLINE void set_schema_cache_guard(ObKvSchemaCacheGuard *schema_cache_guard) { schema_cache_guard_ = schema_cache_guard; }
   OB_INLINE void set_ls_id(share::ObLSID &ls_id) { ls_id_ = ls_id; }
   OB_INLINE void set_audit_ctx(ObTableAuditCtx *ctx) { audit_ctx_ = ctx; }
-  OB_INLINE void set_tablet_id(common::ObTabletID tablet_id) { tablet_id_ = tablet_id; }
+  OB_INLINE void set_tablet_id(common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
+  OB_INLINE void set_index_tablet_id(common::ObTabletID &tablet_id) { index_tablet_id_ = tablet_id; }
   // for scan
   OB_INLINE void set_scan(const bool &is_scan) { is_scan_ = is_scan; }
   OB_INLINE void set_scan_order(const common::ObQueryFlag::ScanOrder scan_order) {  scan_order_ = scan_order; }

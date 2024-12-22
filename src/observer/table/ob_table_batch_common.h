@@ -24,12 +24,25 @@ namespace oceanbase
 namespace table
 {
 
-struct ObTableBatchCtx
+
+struct ObTableQueryBatchCtx
+{
+  explicit ObTableQueryBatchCtx(common::ObIAllocator &allocator)
+      : table_id_(OB_INVALID_ID),
+        tb_ctx_(allocator)
+  {}
+  virtual ~ObTableQueryBatchCtx() {}
+
+  uint64_t table_id_;
+  table::ObTableCtx tb_ctx_;
+};
+
+struct ObTableBatchCtx : public ObTableQueryBatchCtx
 {
 public:
   explicit ObTableBatchCtx(common::ObIAllocator &allocator, ObTableAuditCtx &audit_ctx)
-      : allocator_(allocator),
-        tb_ctx_(allocator_),
+      : ObTableQueryBatchCtx(allocator),
+        allocator_(allocator),
         audit_ctx_(audit_ctx)
   {
     reset();
@@ -37,6 +50,7 @@ public:
   }
   virtual ~ObTableBatchCtx() {}
   TO_STRING_KV(K_(tb_ctx),
+               K_(table_id),
                KPC_(trans_param),
                K_(is_atomic),
                K_(is_readonly),
@@ -59,6 +73,7 @@ public:
     is_same_properties_names_ = false;
     use_put_ = false;
     returning_affected_entity_ = false;
+    table_id_ = common::OB_INVALID_ID;
     tablet_ids_.reset();
     returning_rowkey_ = false;
     consistency_level_ = ObTableConsistencyLevel::EVENTUAL;
@@ -67,7 +82,6 @@ public:
   }
 public:
   common::ObIAllocator &allocator_;
-  ObTableCtx tb_ctx_;
   ObTableTransParam *trans_param_;
   bool is_atomic_;
   bool is_readonly_;

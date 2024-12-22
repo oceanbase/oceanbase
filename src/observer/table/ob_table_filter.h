@@ -200,8 +200,7 @@ public:
   inline void set_limit(int32_t limit) { limit_ = limit; }
   inline void set_offset(int32_t offset) { offset_ = offset; }
 private:
-  virtual int get_next_result(ObTableQueryIterableResult*& one_result) override { return OB_NOT_SUPPORTED; }
-
+  virtual int get_next_result(ObTableQueryIterableResult *& one_result) override { return OB_NOT_SUPPORTED; }
 private:
   table::ObTableQueryResult *one_result_;
   common::ObNewRow *last_row_;
