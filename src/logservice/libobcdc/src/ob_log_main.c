@@ -15,8 +15,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef ARC_X86
 const char my_interp[] __attribute__((section(".interp")))
     = "/lib64/ld-linux-x86-64.so.2";
+#else
+const char my_interp[] __attribute__((section(".interp")))
+    = "/lib64/ld-linux-aarch64.so.1";
+#endif
 
 const char* build_version();
 const char* build_date();

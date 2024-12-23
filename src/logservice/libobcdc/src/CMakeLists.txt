@@ -20,6 +20,10 @@ target_link_libraries(obcdc_base
   obcdc_msg rocksdb
   ${OB_RELRO_FLAG} -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
 
+if( ${ARCHITECTURE} STREQUAL "x86_64" )
+  add_definitions(-DARC_X86)
+endif()
+
 ob_set_subtarget(obcdc_object_list common
   libobcdc.cpp
   ob_cdc_auto_config_mgr.cpp
