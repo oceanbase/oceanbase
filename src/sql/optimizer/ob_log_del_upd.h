@@ -339,6 +339,12 @@ public:
         const ObIArray<IndexDMLInfo *> &index_dml_infos);
   virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
+  virtual int op_is_update_pk_with_dop(bool &is_update)
+  {
+    is_update = false;
+    return OB_SUCCESS;
+  }
+
 protected:
   virtual int generate_rowid_expr_for_trigger() = 0;
   virtual int generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs) = 0;

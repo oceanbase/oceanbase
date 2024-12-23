@@ -2979,7 +2979,9 @@ int ObLSTabletService::insert_row(
     } else {
       tbl_row.flag_.set_flag(ObDmlFlag::DF_INSERT);
       tbl_row.row_val_ = row;
-      const bool check_exist = !data_table.is_storage_index_table() || data_table.is_unique_index();
+      const bool check_exist = !data_table.is_storage_index_table() ||
+        data_table.is_unique_index() ||
+        ctx.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
       if (OB_FAIL(insert_row_to_tablet(check_exist,
                                        tablet_handle,
                                        run_ctx,
@@ -4181,7 +4183,9 @@ int ObLSTabletService::insert_tablet_rows(
 {
   int ret = OB_SUCCESS;
   ObRelativeTable &table = run_ctx.relative_table_;
-  const bool check_exists = !table.is_storage_index_table() || table.is_unique_index();
+  const bool check_exists = !table.is_storage_index_table() ||
+          table.is_unique_index() ||
+          run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
   const int64_t row_count = rows_info.get_rowkey_cnt();
 
   // 1. Defensive checking of new rows.
@@ -5228,7 +5232,10 @@ int ObLSTabletService::process_new_rows(
           new_rows_info.rows_[i].flag_.set_flag(ObDmlFlag::DF_INSERT);
         }
       }
-      const bool check_exist = rowkey_change && (!relative_table.is_storage_index_table() || relative_table.is_unique_index());
+      const bool check_exist = rowkey_change &&
+        (!relative_table.is_storage_index_table() ||
+         relative_table.is_unique_index() ||
+         run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop());
       if (OB_FAIL(tablet_handle.get_obj()->insert_rows(relative_table,
                                                        run_ctx.store_ctx_,
                                                        check_exist,
@@ -5302,7 +5309,10 @@ int ObLSTabletService::process_new_row(
         }
       }
     } else {
-      const bool check_exist = rowkey_change && (!relative_table.is_storage_index_table() || relative_table.is_unique_index());
+      const bool check_exist = rowkey_change &&
+        (!relative_table.is_storage_index_table() ||
+         relative_table.is_unique_index() ||
+         run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop());
       if (OB_FAIL(tablet_handle.get_obj()->insert_row(relative_table,
                                                       run_ctx.store_ctx_,
                                                       check_exist,
