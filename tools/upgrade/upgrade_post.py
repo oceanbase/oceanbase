@@ -1346,9 +1346,10 @@
 ##这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
 #  current_version = actions.fetch_observer_version(cur)
 #  target_version = actions.get_current_cluster_version()
-#  # when upgrade across version, disable enable_ddl/major_freeze
+#  # when upgrade across version, disable enable_ddl/major_freeze/direct_load
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
+#    actions.set_parameter(cur, '_ob_enable_direct_load', 'False', timeout)
 #  # When upgrading from a version prior to 4.2 to version 4.2, the bloom_filter should be disabled.
 #  # The param _bloom_filter_enabled is no longer in use as of version 4.2, there is no need to enable it again.
 #  if actions.get_version(current_version) < actions.get_version('4.2.0.0')\
@@ -2300,6 +2301,15 @@
 #            fail_list.append('{0} tenant standby_replication not exist, please check'.format(tenant_id[0]))
 #  if check_success:
 #    logging.info('check oracle standby_replication privs success')
+#
+##21 检查 direct_load 是否已经结束，开启升级之前需要确保没有 direct_load 任务，且升级期间尽量禁止 direct_load 任务
+#def check_direct_load_job_exist(cur, query_cur):
+#  sql = """select count(1) from __all_virtual_load_data_stat"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if 0 != results[0][0]:
+#    fail_list.append("There are direct load task in progress")
+#  logging.info('check direct load task execut status success')
+#
 ## last check of do_check, make sure no function execute after check_fail_list
 #def check_fail_list():
 #  if len(fail_list) != 0 :
@@ -2346,6 +2356,7 @@
 #      check_log_transport_compress_func(query_cur)
 #      check_table_compress_func(query_cur)
 #      check_table_api_transport_compress_func(query_cur)
+#      check_direct_load_job_exist(cur, query_cur)
 #      # all check func should execute before check_fail_list
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)
@@ -2973,6 +2984,9 @@
 #def disable_sys_table_ddl(cur, timeout):
 #  actions.set_parameter(cur, 'enable_sys_table_ddl', 'False', timeout)
 #
+#def enable_direct_load(cur, timeout):
+#  actions.set_parameter(cur, '_ob_enable_direct_load', 'True', timeout)
+#
 ## 开始升级后的检查
 #def do_check(conn, cur, query_cur, timeout):
 #  try:
@@ -2983,6 +2997,7 @@
 #    enable_rebalance(cur, timeout)
 #    enable_rereplication(cur, timeout)
 #    disable_sys_table_ddl(cur, timeout)
+#    enable_direct_load(cur, timeout)
 #  except Exception as e:
 #    logging.exception('run error')
 #    raise

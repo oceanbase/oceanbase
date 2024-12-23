@@ -659,6 +659,15 @@ def check_oracle_standby_replication_exist(query_cur):
             fail_list.append('{0} tenant standby_replication not exist, please check'.format(tenant_id[0]))
   if check_success:
     logging.info('check oracle standby_replication privs success')
+
+#21 检查 direct_load 是否已经结束，开启升级之前需要确保没有 direct_load 任务，且升级期间尽量禁止 direct_load 任务
+def check_direct_load_job_exist(cur, query_cur):
+  sql = """select count(1) from __all_virtual_load_data_stat"""
+  (desc, results) = query_cur.exec_query(sql)
+  if 0 != results[0][0]:
+    fail_list.append("There are direct load task in progress")
+  logging.info('check direct load task execut status success')
+
 # last check of do_check, make sure no function execute after check_fail_list
 def check_fail_list():
   if len(fail_list) != 0 :
@@ -705,6 +714,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_log_transport_compress_func(query_cur)
       check_table_compress_func(query_cur)
       check_table_api_transport_compress_func(query_cur)
+      check_direct_load_job_exist(cur, query_cur)
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)
