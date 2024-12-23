@@ -3126,21 +3126,48 @@ ObPieceCache* ObSQLSessionInfo::get_piece_cache(bool need_init) {
   return piece_cache_;
 }
 
+template <typename AllocatorT>
+static int write_str_reuse_buf(AllocatorT &allocator, const ObString &src, ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  const ObString::obstr_size_t src_len = src.length();
+  char *ptr = NULL;
+  if (src_len <= dst.size()) {
+    MEMCPY(dst.ptr(), src.ptr(), src_len);
+    dst.set_length(src_len);
+  } else {
+    allocator.free(dst.ptr());
+    if (OB_ISNULL(src.ptr()) || OB_UNLIKELY(0 >= src_len)) {
+      dst.assign(NULL, 0);
+    } else if (NULL ==
+                (ptr = static_cast<char *>(allocator.alloc(src_len)))) {
+      dst.assign(NULL, 0);
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), "size", src_len);
+    } else {
+      MEMCPY(ptr, src.ptr(), src_len);
+      dst.assign_buffer(ptr, src_len);
+      dst.set_length(src_len);
+    }
+  }
+  return ret;
+}
+
 int ObSQLSessionInfo::set_login_info(const share::schema::ObUserLoginInfo &login_info)
 {
   int ret = OB_SUCCESS;
-  OZ (ob_write_string(get_session_allocator(), login_info.tenant_name_, login_info_.tenant_name_));
-  OZ (ob_write_string(get_session_allocator(), login_info.user_name_, login_info_.user_name_));
-  OZ (ob_write_string(get_session_allocator(), login_info.client_ip_, login_info_.client_ip_));
-  OZ (ob_write_string(get_session_allocator(), login_info.passwd_, login_info_.passwd_));
-  OZ (ob_write_string(get_session_allocator(), login_info.db_, login_info_.db_));
-  OZ (ob_write_string(get_session_allocator(), login_info.scramble_str_, login_info_.scramble_str_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.tenant_name_, login_info_.tenant_name_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.user_name_, login_info_.user_name_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.client_ip_, login_info_.client_ip_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.passwd_, login_info_.passwd_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.db_, login_info_.db_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.scramble_str_, login_info_.scramble_str_));
   return ret;
 }
 
 int ObSQLSessionInfo::set_login_auth_data(const ObString &auth_data) {
   int ret = OB_SUCCESS;
-  OZ (ob_write_string(get_session_allocator(), auth_data, login_info_.passwd_));
+  OZ (write_str_reuse_buf(get_session_allocator(), auth_data, login_info_.passwd_));
   return ret;
 }
 
