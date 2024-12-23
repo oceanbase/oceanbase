@@ -27802,11 +27802,13 @@ int ObDDLService::clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &a
   ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
   int64_t refreshed_schema_version = 0;
   ObSEArray<ObTabletID, 1> src_data_tablet_id;
-
+  ObSchemaGetterGuard schema_guard;
   if (check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check_inner_stat error", K(is_inited()), KR(ret));
-  } else if (OB_FAIL(generate_splitted_schema_array(arg, allocator,
+  } else if (OB_FAIL(generate_splitted_schema_array(arg,
+                                                    schema_guard,
+                                                    allocator,
                                                     splitting_table_schemas,
                                                     del_table_schemas,
                                                     refreshed_schema_version))) {
@@ -27892,6 +27894,7 @@ int ObDDLService::clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &a
 // "del_table_schemas" records the deleting partition of table_schemas.
 int ObDDLService::generate_splitted_schema_array(
                                        const obrpc::ObCleanSplittedTabletArg &arg,
+                                       ObSchemaGetterGuard &schema_guard,
                                        ObArenaAllocator& allocator,
                                        common::ObIArray<const share::schema::ObTableSchema*> &splitting_table_schemas,
                                        common::ObIArray<share::schema::ObTableSchema*> &del_table_schemas,
@@ -27900,7 +27903,6 @@ int ObDDLService::generate_splitted_schema_array(
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.tenant_id_;
   uint64_t table_id = arg.table_id_;
-  ObSchemaGetterGuard schema_guard;
   const ObTableSchema *splitting_table_schema = NULL;
   bool is_db_in_recyclebin = false;
   bool is_index = false;
