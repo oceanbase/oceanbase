@@ -178,21 +178,15 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
           }
         }
         if (OB_SUCC(ret)) {
-          table_id_ = table_id;
-          dup_action_ = insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE ?
-              ObLoadDupActionType::LOAD_REPLACE : ObLoadDupActionType::LOAD_STOP_ON_DUP;
-          ObIArray<ObTablePartitionInfo *> & table_partition_infos = optimizer_ctx.get_table_partition_info();
-          for (int64_t i = 0; OB_SUCC(ret) && i < table_partition_infos.count(); ++i) {
-            const ObTablePartitionInfo *info = table_partition_infos.at(i);
-            if (OB_ISNULL(info)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpect null table partition info", K(ret));
-            } else if (info->get_ref_table_id() == table_id) {
-              load_level_ = info->get_table_location().get_part_hint_ids().empty()
-                                                       ? ObDirectLoadLevel::TABLE
-                                                       : ObDirectLoadLevel::PARTITION;
-              break;
-            }
+          const TableItem *table_item = stmt.get_table_item(0);
+          if (OB_ISNULL(table_item)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table item is nullptr", KR(ret));
+          } else {
+            table_id_ = table_item->ref_id_;
+            load_level_ = table_item->part_ids_.empty() ? ObDirectLoadLevel::TABLE : ObDirectLoadLevel::PARTITION;
+            dup_action_ = insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE ?
+                ObLoadDupActionType::LOAD_REPLACE : ObLoadDupActionType::LOAD_STOP_ON_DUP;
           }
         }
         if (OB_SUCC(ret)) {
