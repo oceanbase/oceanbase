@@ -2080,6 +2080,10 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
   }
   audit_record_.flt_trace_id_[pos] = '\0';
   audit_record_.stmt_type_ = get_stmt_type();
+  bool ac = false;
+  get_autocommit(ac);
+  audit_record_.trans_status_ = is_in_transaction() == false ? TRANS_NOT_OPENED :
+                (ac == false ? IMPLICIT_TRANS : COMMIT_TRANS);
   return audit_record_;
 }
 
@@ -3069,6 +3073,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
       // 8. _enable_enhanced_cursor_validation
       ATOMIC_STORE(&enable_enhanced_cursor_validation_, tenant_config->_enable_enhanced_cursor_validation);
+      // 9. enable_ps_parameterize
+      ATOMIC_STORE(&enable_ps_parameterize_, tenant_config->enable_ps_parameterize);
     }
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);
     session_->update_tenant_config_version(

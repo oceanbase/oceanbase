@@ -874,6 +874,8 @@ public:
   int set_session_active();
   const common::ObString get_current_query_string() const;
   const common::ObString get_top_query_string() const;
+  void set_sql_mem_used(int64_t mem_used) { ATOMIC_STORE(&sql_mem_used_, mem_used); }
+  int64_t get_sql_mem_used() const { return ATOMIC_LOAD(&sql_mem_used_); }
   uint64_t get_current_statement_id() const { return thread_data_.cur_statement_id_; }
   int update_session_timeout();
   int is_timeout(bool &is_timeout);
@@ -2450,6 +2452,7 @@ private:
   // In addition, in situations such as PL execution, the external session will be passed to the inner sql Connection. In this case, it is not considered an inner session.
   // There are differences between the two in terms of ASH statistics and so on, so they should be distinguished.
   uint64_t sys_var_config_hash_val_;
+  int64_t sql_mem_used_;
 };
 
 

@@ -2610,6 +2610,7 @@ typedef enum ObItemType
   T_LS_ATTR_LIST = 4757,
   T_ALTER_LS = 4758,
   T_UNIT_GROUP = 4759,
+  T_LOAD_TIME_ZONE_INFO = 4764,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

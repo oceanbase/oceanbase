@@ -24,16 +24,21 @@ class MemoryContext;
 struct ObMemTracker
 {
   ObMemTracker() :
+    cur_mem_used_(0), peek_mem_used_(0),
     cache_mem_limit_(0), check_status_times_(0), try_check_tick_(0), mem_context_(nullptr)
   {}
   void reset()
   {
+    cur_mem_used_ = 0;
+    peek_mem_used_ = 0;
     cache_mem_limit_ = 0;
     check_status_times_ = 0;
     try_check_tick_ = 0;
     mem_context_ = nullptr;
   }
 
+  int64_t cur_mem_used_;
+  int64_t peek_mem_used_;
   int64_t cache_mem_limit_;
   uint16_t check_status_times_;
   uint16_t try_check_tick_;

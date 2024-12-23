@@ -39201,6 +39201,8 @@ int ObDDLService::add_extra_tenant_init_config_(
   ObString config_value_ddl_thread_isolution("true");
   ObString config_name_mysql_compatible_dates("_enable_mysql_compatible_dates");
   ObString config_value_mysql_compatible_dates("true");
+  ObString config_name_enable_ps_paramterize("enable_ps_parameterize");
+  ObString config_value_enable_ps_paramterize("false");
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
   }
@@ -39216,6 +39218,8 @@ int ObDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_ddl_thread_isolution), K(config_value_ddl_thread_isolution));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_mysql_compatible_dates, config_value_mysql_compatible_dates))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_mysql_compatible_dates), K(config_value_mysql_compatible_dates));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_enable_ps_paramterize, config_value_enable_ps_paramterize))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_enable_ps_paramterize), K(config_value_enable_ps_paramterize));
       }
     }
   }

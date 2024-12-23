@@ -2628,7 +2628,6 @@ int get_sys_tenant_super_priv(
     LOG_WARN("Basic stmt should be not be NULL", K(ret));
   } else if (OB_SYS_TENANT_ID != session_priv.tenant_id_ &&
              stmt::T_ALTER_SYSTEM_SET_PARAMETER != basic_stmt->get_stmt_type() &&
-             stmt::T_REFRESH_TIME_ZONE_INFO != basic_stmt->get_stmt_type() &&
              stmt::T_SWITCHOVER != basic_stmt->get_stmt_type()) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("Only sys tenant can do this operation",
@@ -2667,6 +2666,7 @@ int get_sys_tenant_alter_system_priv(
              stmt::T_TABLE_TTL != basic_stmt->get_stmt_type() &&
              stmt::T_TRANSFER_PARTITION != basic_stmt->get_stmt_type() &&
              stmt::T_ALTER_LS_REPLICA != basic_stmt->get_stmt_type() &&
+             stmt::T_LOAD_TIME_ZONE_INFO != basic_stmt->get_stmt_type() &&
              stmt::T_SERVICE_NAME != basic_stmt->get_stmt_type() &&
              stmt::T_ALTER_LS != basic_stmt->get_stmt_type()) {
     ret = OB_ERR_NO_PRIVILEGE;
@@ -3969,8 +3969,7 @@ int ObPrivilegeCheck::one_level_stmt_need_priv(const ObSessionPrivInfo &session_
       LOG_WARN("Stmt type is error", K(ret), K(stmt_type));
     } else if (session_priv.is_tenant_changed()
                && !ObStmt::check_change_tenant_stmt(stmt_type)
-               && stmt_type != stmt::T_SYSTEM_GRANT
-               && stmt_type != stmt::T_REFRESH_TIME_ZONE_INFO) {
+               && stmt_type != stmt::T_SYSTEM_GRANT) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("stmt invalid", K(ret), K(stmt_type), K(session_priv));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant changed, statement");

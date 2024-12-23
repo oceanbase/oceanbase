@@ -37,6 +37,8 @@ then
   libtool --mode=install cp $SOURCE_DIR/src/share/inner_table/sys_package/*.sql $ADMIN_DIR
   libtool --mode=install cp $SOURCE_DIR/tools/spatial_reference_systems.data $ETC_DIR
 
+  libtool --mode=install cp $SOURCE_DIR/tools/timezone*.data $ETC_DIR
+
   libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libclntsh.so.12.1 $LIB_DIR
   libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libclntsh.so.12.1 $LIB_DIR/libclntsh.so
   libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libclntshcore.so.12.1 $LIB_DIR
@@ -45,6 +47,7 @@ then
   libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libociei.so $LIB_DIR
   libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libmql1.so $LIB_DIR
   libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libipc1.so $LIB_DIR
+
 
   libtool --mode=install cp $SOURCE_DIR/deps/3rd/usr/local/oceanbase/devtools/bin/llvm-symbolizer $TOOL_DIR/
 
