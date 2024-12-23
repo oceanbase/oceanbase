@@ -232,11 +232,12 @@ int ObODPSTableRowIterator::next_task()
               if (OB_HASH_NOT_EXIST == ret) {
                 ret = OB_SUCCESS;
                 ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader *temp_downloader = NULL;
+                ObIAllocator &allocator = sqc->get_sqc_ctx().gi_pump_.get_odps_mgr().get_allocator();
                 if (sqc->get_sqc_ctx().gi_pump_.get_pump_args().empty()) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("unexpected empty gi pump args", K(ret));
                 } else if (OB_ISNULL(temp_downloader = static_cast<ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader *>(
-                              sqc->get_sqc_ctx().gi_pump_.get_odps_mgr().get_allocator().alloc(sizeof(ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader))))) {
+                              allocator.alloc(sizeof(ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader))))) {
                   ret = OB_ALLOCATE_MEMORY_FAILED;
                   LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader)));
                 } else if (FALSE_IT(new(temp_downloader)ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader())) {
@@ -253,6 +254,9 @@ int ObODPSTableRowIterator::next_task()
                   } else {
                     LOG_WARN("fail to set refactored", K(ret));
                   }
+                  // other thread has create downloader, free current downloader
+                  allocator.free(temp_downloader);
+                  temp_downloader = NULL;
                 } else {
                   if (OB_FAIL(temp_downloader->odps_driver_.init_tunnel(odps_format_, false))) {
                     LOG_WARN("failed to init tunnel", K(ret), K(part_id));
@@ -269,6 +273,10 @@ int ObODPSTableRowIterator::next_task()
                   }
                   temp_downloader->tunnel_ready_cond_.unlock();
                   temp_downloader->tunnel_ready_cond_.broadcast(); // wake other threads that temp_downloader has finished initializing. The initialization result may be failure or success.
+                }
+                if (OB_FAIL(ret) && OB_NOT_NULL(temp_downloader)) {
+                  allocator.free(temp_downloader);
+                  temp_downloader = NULL;
                 }
               } else {
                 LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
