@@ -4465,29 +4465,7 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
         case OB_DDL_MODIFY_COLUMN: {
           bool is_offline = false;
           bool add_pk = false;
-
-          // check is partition key change type
-          bool is_partition_key = false;
-          bool is_sub_partition_key = false;
-          if (OB_ISNULL(orig_column_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid orig column schema", K(ret), K(orig_column_name));
-          } else if (OB_FAIL(orig_table_schema.is_partition_key(*orig_column_schema, is_partition_key))) {
-            LOG_WARN("failed to check orig column is partition key", K(ret), K(orig_table_schema), KPC(orig_column_schema));
-          } else if (OB_FAIL(orig_table_schema.is_subpartition_key(*orig_column_schema,is_sub_partition_key))) {
-            LOG_WARN("failed to check orig column is sub partition key", K(ret), K(orig_table_schema), KPC(orig_column_schema));
-          } else if (!is_partition_key && !is_sub_partition_key) {
-          } else if ((orig_column_schema->get_meta_type().is_signed_integer()||
-                      orig_column_schema->get_meta_type().is_float()||
-                      orig_column_schema->get_meta_type().is_double()||
-                      orig_column_schema->get_meta_type().is_number())
-                  && alter_column_schema->get_meta_type().is_unsigned()) {
-            ret = OB_ERR_PARTITION_CONST_DOMAIN_ERROR;
-            LOG_WARN("cannot drop partition dependent column", K(ret));
-          }
-
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(fill_column_collation(alter_table_schema.get_sql_mode(),
+          if (OB_FAIL(fill_column_collation(alter_table_schema.get_sql_mode(),
                                             is_oracle_mode,
                                             orig_table_schema,
                                             allocator,
