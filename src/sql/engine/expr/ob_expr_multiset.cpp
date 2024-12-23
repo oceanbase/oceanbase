@@ -422,7 +422,10 @@ int ObExprMultiSet::calc_ms_all_impl(common::ObIAllocator *coll_allocator,
   return ret;
 }
 
-int ObExprMultiSet::append_collection(ObObj *buffer, int64_t buffer_size, int64_t &pos, pl::ObPLCollection *c, ObIAllocator &coll_alloc)
+int ObExprMultiSet::append_collection(ObObj *buffer, int64_t buffer_size, int64_t &pos,
+                                      pl::ObPLCollection *c,
+                                      ObIAllocator &coll_alloc,
+                                      bool keep_deleted_elem)
 {
   int ret = OB_SUCCESS;
 
@@ -441,18 +444,22 @@ int ObExprMultiSet::append_collection(ObObj *buffer, int64_t buffer_size, int64_
 
       CK (OB_NOT_NULL(curr));
 
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (curr->is_pl_extend() && pl::PL_REF_CURSOR_TYPE != curr->get_meta().get_extend_type()) {
-        if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(coll_alloc, *curr, buffer[pos], true))) {
-          LOG_WARN("failed to deep_copy_obj", K(ret), K(i), KPC(c));
-        }
-      } else if (OB_FAIL(deep_copy_obj(coll_alloc, *curr, buffer[pos]))) {
-        LOG_WARN("failed to deep_copy_obj", K(ret), K(i), KPC(c));
-      }
-
       if (OB_SUCC(ret)) {
-        pos += 1;
+        if (ObMaxType == curr->get_type() && !keep_deleted_elem) {
+          // do nothing
+        } else {
+          if (curr->is_pl_extend() && pl::PL_REF_CURSOR_TYPE != curr->get_meta().get_extend_type()) {
+            if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(coll_alloc, *curr, buffer[pos], true))) {
+              LOG_WARN("failed to deep_copy_obj", K(ret), K(i), KPC(c));
+            }
+          } else if (OB_FAIL(deep_copy_obj(coll_alloc, *curr, buffer[pos]))) {
+            LOG_WARN("failed to deep_copy_obj", K(ret), K(i), KPC(c));
+          }
+
+          if (OB_SUCC(ret)) {
+            pos += 1;
+          }
+        }
       }
     }
   }
@@ -489,9 +496,9 @@ int ObExprMultiSet::calc_ms_union(common::ObIAllocator *coll_allocator,
         if (MULTISET_MODIFIER_ALL == ms_modifier) {
           elem_count = 0;
 
-          if (OB_FAIL(append_collection(tmp_res, count, elem_count, c1, *coll_allocator))) {
+          if (OB_FAIL(append_collection(tmp_res, count, elem_count, c1, *coll_allocator, true))) {
             LOG_WARN("failed append_collection to c1", K(ret), K(count), K(elem_count), KPC(c1));
-          } else if (OB_FAIL(append_collection(tmp_res, count, elem_count, c2, *coll_allocator))) {
+          } else if (OB_FAIL(append_collection(tmp_res, count, elem_count, c2, *coll_allocator, false))) {
             LOG_WARN("failed append_collection to c2", K(ret), K(count), K(elem_count), KPC(c2));
           } else {
             data_arr = tmp_res;
