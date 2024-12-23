@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX PL_CACHE
+#define LONG_COMPILE_TIME 10000000
 #include "ob_pl_cache.h"
 #include "lib/oblog/ob_log_module.h"
 #include "share/rc/ob_tenant_base.h"     //MTL
@@ -477,7 +478,8 @@ int ObPLObjectValue::check_value_version(share::schema::ObSchemaGetterGuard *sch
           is_old_version = true;
         }
         if (OB_SUCC(ret) && is_old_version) {
-          LOG_WARN("mismatched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
+          copy_obj_schema_version(pl_routine_obj_->get_stat_for_update().out_of_date_dependcy_version_, schema_obj1);
+          LOG_WARN("mismatched schema objs", K(ret) ,K(*schema_obj1), K(schema_obj2), K(i));
         }
       }
     }
@@ -657,6 +659,7 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
         }
         if (OB_INVALID_VERSION == new_version) {
           ret = OB_OLD_SCHEMA_VERSION;
+          copy_obj_schema_version(pl_routine_obj_->get_stat_for_update().out_of_date_dependcy_version_, pcv_schema);
           LOG_WARN("can not get newer schema version", K(ret));
         } else if (OB_SUCC(ret)) {
           tmp_schema_obj.schema_id_ = pcv_schema->schema_id_; // same id
@@ -691,6 +694,7 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
         tmp_schema_obj.reset();
       } else if (nullptr == table_schema) {
         ret = OB_OLD_SCHEMA_VERSION;
+        copy_obj_schema_version(pl_routine_obj_->get_stat_for_update().out_of_date_dependcy_version_, pcv_schema);
         LOG_WARN("table not exist", K(ret), K(*pcv_schema), K(table_schema));
       } else if (OB_FAIL(tmp_schema_obj.init_without_copy_name(table_schema))) {
         LOG_WARN("failed to init pcv schema obj", K(ret));
@@ -731,6 +735,7 @@ int ObPLObjectValue::match_dep_schema(const ObPLCacheCtx &pc_ctx,
                  && !stored_schema_objs_.at(i)->match_compare(schema_array.at(i))) {
         // check whether common table name is same as system table in oracle mode
         is_same = false;
+        copy_obj_schema_version(pl_routine_obj_->get_stat_for_update().out_of_date_dependcy_version_, stored_schema_objs_.at(i));
         LOG_WARN("mismatched schema objs", K(*stored_schema_objs_.at(i)), K(stored_schema_objs_.at(i)), K(i));
       } else {
         // do nothing
@@ -1073,6 +1078,42 @@ int ObPLObjectSet::create_new_pl_object_value(ObPLObjectValue *&pl_object_value)
     pl_object_value = nullptr;
   }
 
+  return ret;
+}
+
+int ObPLObjectSet::before_cache_evicted()
+{
+  int ret = OB_SUCCESS;
+  ObPlanCache *plan_cache = get_lib_cache();
+  ObSEArray<PLCacheObjStat, 4> stat_array;
+  bool has_out_of_date_obj = false;
+  int64_t compile_time = 0;
+  CK (OB_NOT_NULL(plan_cache));
+  if (OB_SUCC(ret)) {
+    DLIST_FOREACH(pl_object_value, object_value_sets_) {
+      const PLCacheObjStat& cache_obj_stat = pl_object_value->pl_routine_obj_->get_stat();
+      compile_time += cache_obj_stat.compile_time_;
+      OZ (stat_array.push_back(cache_obj_stat));
+      if (OB_SUCC(ret) && cache_obj_stat.out_of_date_dependcy_version_.is_valid()) {
+          has_out_of_date_obj = true;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (plan_cache->get_mem_hold() > plan_cache->get_mem_high()) {
+    if (compile_time >= LONG_COMPILE_TIME) {
+      LOG_WARN("Plan cache size reached upper limit and evict obj which need long time to re-compile",
+                  K(ret), K(plan_cache->get_tenant_id()), K(stat_array), K(compile_time),
+                  K(plan_cache->get_mem_hold()), K(plan_cache->get_mem_high()));
+    } else {
+      LOG_TRACE("Plan cache size reached upper limit need check plan cache mem conf",
+                  K(ret), K(plan_cache->get_tenant_id()), K(stat_array),
+                  K(plan_cache->get_mem_hold()), K(plan_cache->get_mem_high()));
+    }
+  } else if (has_out_of_date_obj) {
+    LOG_TRACE("Remove out_of_dated pl cache obj which has mismatched dep schema version",
+            K(ret), K(plan_cache->get_tenant_id()), K(stat_array));
+  }
   return ret;
 }
 

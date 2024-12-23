@@ -43,6 +43,7 @@ void ObPLCacheObject::reset()
   expressions_.reset();
 }
 
+
 int ObPLCacheObject::set_params_info(const ParamStore &params, bool is_anonymous)
 {
   int ret = OB_SUCCESS;
