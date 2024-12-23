@@ -45,7 +45,7 @@ struct Int128Key {
     data_1_ = *(reinterpret_cast<const int64_t *>(row->get_cell_payload(row_meta, key_proj->at(1))));
   }
   inline bool operator==(const Int128Key &other) const {
-    return data_0_ == other.data_0_ && data_1_ == data_1_;
+    return data_0_ == other.data_0_ && data_1_ == other.data_1_;
   }
   TO_STRING_KV(K_(data_0), K_(data_1));
 
