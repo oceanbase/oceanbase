@@ -1079,7 +1079,8 @@ int ObTransformSimplifyExpr::adjust_dummy_expr(const ObIArray<int64_t> &true_exp
 {
   int ret = OB_SUCCESS;
   transed_expr = NULL;
-  const bool remove_all = is_and_op ? !false_exprs.empty() : !true_exprs.empty();
+  const bool remove_all = is_and_op ? !false_exprs.empty() // false and ... -> false
+                                    : !true_exprs.empty(); // true or ... -> true
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ctx_), K(ret));
@@ -1112,9 +1113,11 @@ int ObTransformSimplifyExpr::adjust_dummy_expr(const ObIArray<int64_t> &true_exp
         }
       }
     } else if (adjust_exprs.count() - op_params.count() == 0) {
-      const bool b_value = is_and_op ? false_exprs.empty() : !true_exprs.empty();
-      if (b_value != true) {
-      } else if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, transed_expr, b_value))) {
+      if (is_and_op && false_exprs.empty() // and(all true) -> true
+          && OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, transed_expr, true))) {
+        LOG_WARN("create const bool expr failed", K(ret));
+      } else if (!is_and_op && true_exprs.empty() // or(all false) -> false
+                 && OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, transed_expr, false))) {
         LOG_WARN("create const bool expr failed", K(ret));
       }
     }
