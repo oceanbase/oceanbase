@@ -890,6 +890,7 @@ protected:
   int check_ttl_definition(const ParseNode *node);
 
   int add_new_indexkey_for_oracle_temp_table();
+  int formalize_part_str(ObIArray<ObRawExpr*> &part_exprs, ObString &part_str);
 
   void reset();
   static int trim_space_for_default_value(
