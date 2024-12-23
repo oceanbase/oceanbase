@@ -28,6 +28,22 @@ enum ObVecAuxTableIdx {
   COM_AUX_TBL_IDX = 4
 };
 
+// temporary solution
+enum ObVecScanType : uint8_t
+{
+  VEC_SCAN_INVALID = 0,
+  VEC_SCAN_POST = 1,
+  VEC_SCAN_PRE = 2
+};
+
+// temporary solution, need to be refactored
+enum ObVecIndexType : uint8_t
+{
+  VEC_INDEX_INVALID = 0,
+  VEC_INDEX_POST = 1,
+  VEC_INDEX_PRE = 2
+};
+
 struct ObDASVecAuxScanCtDef : ObDASAttachCtDef
 {
   OB_UNIS_VERSION(1);
@@ -110,6 +126,10 @@ public:
   ObExpr *inv_scan_vec_id_col_;
   ObString vec_index_param_;
   int64_t dim_;
+  ObVecIndexType vec_type_;
+  ObVectorIndexAlgorithmType algorithm_type_;
+  double selectivity_;
+  double row_count_;
 };
 
 struct ObDASVecAuxScanRtDef : ObDASAttachRtDef
