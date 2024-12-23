@@ -1063,10 +1063,10 @@ OB_INLINE int ObExprDateFormat::get_from_format_v(FORMAT_FUNC_ARG_DECL)
 OB_INLINE int ObExprDateFormat::get_from_format_f(FORMAT_FUNC_ARG_DECL) {
   int ret = OB_SUCCESS;
   int32_t fusec = static_cast<int32_t>(usec % USECS_PER_SEC);
-  memcpy(res_buf, &ObFastFormatInt::DIGITS[(fusec % 100) * 2], 2);
-  fusec /= 100;
-  memcpy(res_buf + 2, &ObFastFormatInt::DIGITS[(fusec % 100) * 2], 2);
-  fusec /= 100;
+  memcpy(res_buf, &ObFastFormatInt::DIGITS[(fusec / 10000) * 2], 2);
+  fusec %= 10000;
+  memcpy(res_buf + 2, &ObFastFormatInt::DIGITS[(fusec / 100) * 2], 2);
+  fusec %= 100;
   memcpy(res_buf + 4, &ObFastFormatInt::DIGITS[(fusec) * 2], 2);
   len += 6;
   return ret;
