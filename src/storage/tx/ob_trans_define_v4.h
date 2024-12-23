@@ -860,8 +860,8 @@ public:
       && state_ <= State::SUB_ROLLBACKED;
   }
   bool is_aborted() const { return state_ == State::ABORTED; }
-  bool is_tx_timeout() { return ObClockGenerator::getClock() > expire_ts_; }
-  bool is_tx_commit_timeout() { return ObClockGenerator::getClock() > commit_expire_ts_;}
+  bool is_tx_timeout() { return expire_ts_ > 0 && ObClockGenerator::getClock() > expire_ts_; }
+  bool is_tx_commit_timeout() { return commit_expire_ts_ > 0 && ObClockGenerator::getClock() > commit_expire_ts_;}
   void set_xa_ctx(ObXACtx *xa_ctx);
   ObXACtx *get_xa_ctx() { return xa_ctx_; }
   void set_xid(const ObXATransID &xid) { xid_ = xid; }
