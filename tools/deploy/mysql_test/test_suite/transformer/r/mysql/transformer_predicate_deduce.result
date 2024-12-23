@@ -2791,7 +2791,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR                        |NAME |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN CARTESIAN |     |0       |8           |
+|0 |NESTED-LOOP ANTI JOIN CARTESIAN |     |1       |8           |
 |1 |├─TABLE FULL SCAN               |a    |1       |4           |
 |2 |└─MATERIAL                      |     |1       |4           |
 |3 |  └─SUBPLAN SCAN                |VIEW1|1       |4           |
@@ -2825,8 +2825,8 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                          |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |UPDATE                            |     |0       |32          |
-|1 |└─NESTED-LOOP ANTI JOIN CARTESIAN |     |0       |8           |
+|0 |UPDATE                            |     |1       |40          |
+|1 |└─NESTED-LOOP ANTI JOIN CARTESIAN |     |1       |8           |
 |2 |  ├─TABLE FULL SCAN               |a    |1       |4           |
 |3 |  └─MATERIAL                      |     |1       |4           |
 |4 |    └─SUBPLAN SCAN                |VIEW1|1       |4           |
@@ -2858,8 +2858,8 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                          |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |DELETE                            |     |0       |15          |
-|1 |└─NESTED-LOOP ANTI JOIN CARTESIAN |     |0       |8           |
+|0 |DELETE                            |     |1       |20          |
+|1 |└─NESTED-LOOP ANTI JOIN CARTESIAN |     |1       |8           |
 |2 |  ├─TABLE FULL SCAN               |a    |1       |4           |
 |3 |  └─MATERIAL                      |     |1       |4           |
 |4 |    └─SUBPLAN SCAN                |VIEW1|1       |4           |
@@ -2890,9 +2890,9 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR                            |NAME           |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |INSERT                              |               |0       |15          |
-|1 |└─SUBPLAN SCAN                      |ANONYMOUS_VIEW1|0       |8           |
-|2 |  └─NESTED-LOOP ANTI JOIN CARTESIAN |               |0       |8           |
+|0 |INSERT                              |               |1       |21          |
+|1 |└─SUBPLAN SCAN                      |ANONYMOUS_VIEW1|1       |8           |
+|2 |  └─NESTED-LOOP ANTI JOIN CARTESIAN |               |1       |8           |
 |3 |    ├─TABLE FULL SCAN               |a              |1       |4           |
 |4 |    └─MATERIAL                      |               |1       |4           |
 |5 |      └─SUBPLAN SCAN                |VIEW1          |1       |4           |
