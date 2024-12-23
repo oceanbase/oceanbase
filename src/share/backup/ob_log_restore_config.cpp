@@ -95,8 +95,6 @@ int ObLogRestoreSourceLocationConfigParser::check_before_update_inner_config(
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set standby itself as log restore source");
     }
   }
-  //TODO (wenjinyu.wjy) need support access permission check
-  //
   return ret;
 }
 

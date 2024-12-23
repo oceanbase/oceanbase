@@ -81,7 +81,7 @@ int ObParallelMergeCtx::init(compaction::ObTabletMergeCtx &merge_ctx)
     int64_t tablet_size = merge_ctx.get_schema()->get_tablet_size();
     bool enable_parallel_minor_merge = false;
     if (!merge_ctx.need_parallel_minor_merge_) {
-      //TODO(jinyu) backfill need using same code with minor merge in 4.2 RC3.
+      //backfill use same code with minor merge in 4.3
       enable_parallel_minor_merge = false;
     } else {
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
