@@ -432,6 +432,7 @@ int ObVectorIndexLookupOp::set_lookup_vid_key()
   int ret = OB_SUCCESS;
   ObNewRange doc_id_range;
   ObRowkey doc_id_rowkey(&doc_id_key_obj_, 1);
+  doc_id_scan_param_.key_ranges_.reuse();
   uint64_t ref_table_id = doc_id_lookup_ctdef_->ref_table_id_;
   if (OB_FAIL(doc_id_range.build_range(ref_table_id, doc_id_rowkey))) {
     LOG_WARN("build vid lookup range failed", K(ret));
@@ -534,6 +535,7 @@ int ObVectorIndexLookupOp::set_lookup_vid_keys(ObNewRow *row, int64_t size)
   } else {
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*vec_eval_ctx_);
     batch_info_guard.set_batch_size(size);
+    doc_id_scan_param_.key_ranges_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
       batch_info_guard.set_batch_idx(i);
       ObRowkey doc_id_rowkey(&(row->get_cell(i)), 1);
