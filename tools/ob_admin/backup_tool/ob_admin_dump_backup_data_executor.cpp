@@ -460,7 +460,7 @@ int ObAdminDumpBackupDataUtil::parse_from_index_index_blocks(blocksstable::ObBuf
       if (OB_FAIL(buffer_reader.advance(data_zlength + common_header->align_length_))) {
         STORAGE_LOG(WARN, "buffer reader buf not enough", K(ret), KPC(common_header));
       } else {
-        STORAGE_LOG(WARN, "failed to advance", KPC(common_header));
+        STORAGE_LOG(INFO, "success to advance", KPC(common_header));
       }
     }
   }
