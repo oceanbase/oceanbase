@@ -2272,7 +2272,7 @@ private:
   int64_t count_;
 };
 
-    ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+    SET_LOG_CHECK_MODE();
     CK(OB_NOT_NULL(ctx_.secondary_namespace_->get_external_ns()));
     if (OB_SUCC(ret)) {
       ObArray<ObQualifiedName> fake_columns;
@@ -2316,6 +2316,7 @@ private:
         }
       } else { /*do nothing*/ }
     }
+    CANCLE_LOG_CHECK_MODE();
   }
   return ret;
 }
@@ -2381,7 +2382,7 @@ int ObRawExprResolverImpl::check_name_type(
 {
   int ret = OB_SUCCESS;
 
-  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+  SET_LOG_CHECK_MODE();
 
   type = UNKNOWN;
   bool check_success = false;
@@ -2427,6 +2428,7 @@ int ObRawExprResolverImpl::check_name_type(
     }
   }
 
+  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 

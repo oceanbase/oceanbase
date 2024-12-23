@@ -136,6 +136,11 @@ public:
     UNUSED(handler);
     return common::OB_NOT_SUPPORTED;
   }
+  virtual int set_adaptive_strategy(const common::ObAdaptiveStrategy &strategy)
+  {
+    UNUSED(strategy);
+    return common::OB_NOT_SUPPORTED;
+  }
   virtual int push_task(void *task)
   {
     UNUSED(task);
@@ -500,6 +505,16 @@ public:
       ret = common::OB_ERR_UNEXPECTED;
     } else {
       ret = qth_->push(task);
+    }
+    return ret;
+  }
+  int set_adaptive_strategy(const common::ObAdaptiveStrategy &strategy) override
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_ISNULL(qth_)) {
+      ret = common::OB_ERR_UNEXPECTED;
+    } else {
+      ret = qth_->set_adaptive_strategy(strategy);
     }
     return ret;
   }
@@ -1096,6 +1111,7 @@ public:
     int ret = TG_INVOKE(tg_id, start);                     \
     ret;                                                   \
   })
+#define TG_SET_ADAPTIVE_STRATEGY(tg_id, args...) TG_INVOKE(tg_id, set_adaptive_strategy, args)
 #define TG_PUSH_TASK(tg_id, args...) TG_INVOKE(tg_id, push_task, args)
 #define TG_GET_QUEUE_NUM(tg_id, args...) TG_INVOKE(tg_id, get_queue_num, args)
 #define TG_GET_THREAD_CNT(tg_id) TG_INVOKE(tg_id, thread_cnt)

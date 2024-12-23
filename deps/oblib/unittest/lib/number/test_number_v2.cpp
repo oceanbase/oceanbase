@@ -2460,11 +2460,9 @@ TEST(ObNumber, format_number_format_cmp)
       for (int64_t m = 0; m < j; ++m) {
         ObFastFormatInt ffi(i * (1 == i%2 ? 1 : -1));
         *const_cast<char *>(ffi.ptr() + m) = '.';
-
-        {
-          ObLogger::ObTraceLogGuard trace_log_guard; // prevent printing log
-          num1.from_v1(ffi.ptr(), ffi.length(), allocator);
-        }
+        SET_OB_LOG_TRACE_MODE();    // prevent printing log
+        num1.from_v1(ffi.ptr(), ffi.length(), allocator);
+        CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
 
         pos_v1 = 0;
         pos_v2 = 0;
@@ -2479,11 +2477,9 @@ TEST(ObNumber, format_number_format_cmp)
 
       char tmp_buf[MAX_BUF_SIZE];
       snprintf(tmp_buf, MAX_BUF_SIZE, "%.17lf", (i * (1 == i%2 ? 1 : -1)) * pow(10, 20));
-
-      {
-        ObLogger::ObTraceLogGuard trace_log_guard; // prevent printing log
-        num1.from_v1(tmp_buf, strlen(tmp_buf), allocator);
-      }
+      SET_OB_LOG_TRACE_MODE();    // prevent printing log
+      num1.from_v1(tmp_buf, strlen(tmp_buf), allocator);
+      CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
 
       pos_v1 = 0;
       pos_v2 = 0;
@@ -2509,11 +2505,9 @@ TEST(ObNumber, format_number_format_cmp)
     number::ObNumber num1, num2, value_old,value_new;
     for (int64_t i = 0; i < 11; ++i) {
       allocator.free();
-
-      {
-        ObLogger::ObTraceLogGuard trace_log_guard; // prevent printing log
-        num1.from_v1(const_number_str + i, j, allocator);
-      }
+      SET_OB_LOG_TRACE_MODE();    // prevent printing log
+      num1.from_v1(const_number_str + i, j, allocator);
+      CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
 
       pos_v1 = 0;
       pos_v2 = 0;
@@ -3096,12 +3090,10 @@ TEST(ObNumber, format_number_round_cmp)
       for (int64_t m = 0; m < j; ++m) {
         ObFastFormatInt ffi(i * (1 == i%2 ? 1 : -1));
         *const_cast<char *>(ffi.ptr() + m) = '.';
-
-        {
-          ObLogger::ObTraceLogGuard trace_log_guard; // prevent printing log
-          num1.from_v1(ffi.ptr(), ffi.length(), allocator);
-          num2.from_v1(ffi.ptr(), ffi.length(), allocator);
-        }
+        SET_OB_LOG_TRACE_MODE();    // prevent printing log
+        num1.from_v1(ffi.ptr(), ffi.length(), allocator);
+        num2.from_v1(ffi.ptr(), ffi.length(), allocator);
+        CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
 
         _OB_LOG(INFO, "debug jianhua decimal, j=%ld, i=%ld, k=%ld, ffi=%.*s", j, i, k, static_cast<int>(ffi.length()), ffi.ptr());
         for (int64_t z = -(j+2); z < j + 2; z++) {
@@ -3136,12 +3128,10 @@ TEST(ObNumber, format_number_round_cmp)
     for (int64_t i = begin_value, k = 0; k < MAX_TEST_COUNT && i < end_value - begin_value; i += add_step, ++k) {
       char tmp_buf[MAX_BUF_SIZE];
       snprintf(tmp_buf, MAX_BUF_SIZE, "%.17lf", (i * (1 == i%2 ? 1 : -1)) * pow(10, 20));
-
-      {
-        ObLogger::ObTraceLogGuard trace_log_guard;
-        num1.from(tmp_buf, allocator);
-        num2.from(tmp_buf, allocator);
-      }
+      SET_OB_LOG_TRACE_MODE();    // prevent printing log
+      num1.from(tmp_buf, allocator);
+      num2.from(tmp_buf, allocator);
+      CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
 
       _OB_LOG(INFO, "debug jianhua decimal, j=%ld, i=%ld, k=%ld, str=%s", j, i, k, tmp_buf);
       for (int64_t z = -(j+2); z < j + 2; z++) {
@@ -3169,12 +3159,10 @@ TEST(ObNumber, format_number_round_cmp)
       _OB_LOG(INFO, "debug jianhua decimal, j=%ld, i=%ld, ffi=%.*s", j, i, static_cast<int>(j), const_number_str + i);
 
       allocator.free();
-
-      {
-        ObLogger::ObTraceLogGuard trace_log_guard;
-        num1.from_v1(const_number_str + i, j, allocator);
-        num2.from_v1(const_number_str + i, j, allocator);
-      }
+      SET_OB_LOG_TRACE_MODE();    // prevent printing log
+      num1.from_v1(const_number_str + i, j, allocator);
+      num2.from_v1(const_number_str + i, j, allocator);
+      CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
 
       for (int64_t z = -(j+2); z < j + 2; z++) {
         num1.set_zero();
@@ -4144,11 +4132,9 @@ TEST(ObNumber, arithmetic_cmp)
       for (int64_t m = 0; m < j; ++m) {
         ObFastFormatInt ffi(i * (1 == i%2 ? 1 : -1));
         *const_cast<char *>(ffi.ptr() + m) = '.';
-
-        {
-          ObLogger::ObTraceLogGuard trace_log_guard;
-          num1.from_v1(ffi.ptr(), ffi.length(), allocator);
-        }
+        SET_OB_LOG_TRACE_MODE();    // prevent printing log
+        num1.from_v1(ffi.ptr(), ffi.length(), allocator);
+        CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
 
         _OB_LOG(INFO, "debug jianhua decimal, j=%ld, i=%ld, k=%ld, ffi=%.*s", j, i, k, static_cast<int>(ffi.length()), ffi.ptr());
         for (int d = 0; d < MAX_TEST2_COUNT; d++) {
@@ -4214,12 +4200,10 @@ TEST(ObNumber, arithmetic_cmp)
 
       for (int64_t m = 0; m < 11; ++m) {
         allocator.free();
-
-        {
-          ObLogger::ObTraceLogGuard trace_log_guard;
-          num1.from_v1(const_number_str + i, j, allocator);
-          num2.from_v1(const_number_str + m, j, allocator);
-        }
+        SET_OB_LOG_TRACE_MODE();    // prevent printing log
+        num1.from_v1(const_number_str + i, j, allocator);
+        num2.from_v1(const_number_str + m, j, allocator);
+        CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
 
         value_old.set_zero();
         value_new.set_zero();

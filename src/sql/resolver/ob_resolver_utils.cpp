@@ -1322,7 +1322,7 @@ int ObResolverUtils::match_vacancy_parameters(
   const ObIRoutineInfo &routine_info, ObRoutineMatchInfo &match_info)
 {
   int ret = OB_SUCCESS;
-  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+  SET_LOG_CHECK_MODE();
   // 处理空缺参数, 如果有默认值填充默认值, 否则报错
   for (int64_t i = 0; OB_SUCC(ret) && i < match_info.match_info_.count(); ++i) {
     ObIRoutineParam *routine_param = NULL;
@@ -1345,6 +1345,7 @@ int ObResolverUtils::match_vacancy_parameters(
       }
     }
   }
+  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 

@@ -2050,7 +2050,7 @@ int ObPLResolver::resolve_sp_composite_type(const ParseNode *sp_data_type_node,
   ObArray<ObObjAccessIdx> access_idxs;
   const ObUserDefinedType *user_type = NULL;
   ObArray<ObRawExpr*> params;
-  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+  SET_LOG_CHECK_MODE();
   CK (OB_NOT_NULL(sp_data_type_node));
   CK (OB_NOT_NULL(current_block_));
   CK (T_SP_OBJ_ACCESS_REF == sp_data_type_node->type_);
@@ -2145,6 +2145,7 @@ int ObPLResolver::resolve_sp_composite_type(const ParseNode *sp_data_type_node,
       OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
     }
   }
+  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -2721,7 +2722,7 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &schema_guard,
                                            ObPLExternTypeInfo *extern_type_info)
 {
   int ret = OB_SUCCESS;
-  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+  SET_LOG_CHECK_MODE();
   CK (OB_NOT_NULL(extern_type_info));
   CK (access_idents.count() > 0 && access_idents.count() <= 3);
   if (OB_FAIL(ret)) {
@@ -2747,6 +2748,7 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &schema_guard,
     OZ (session_info.get_database_id(extern_type_info->type_owner_));
   }
   OX (extern_type_info->type_name_ = access_idents.at(access_idents.count() - 1).access_name_);
+  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -3048,7 +3050,7 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
   int ret = OB_SUCCESS;
 
   ObArray<ObObjAccessIdent> obj_access_idents;
-  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+  SET_LOG_CHECK_MODE();
   CK (OB_NOT_NULL(sp_data_type_node),
       OB_LIKELY(T_SP_TYPE == sp_data_type_node->type_
                 || T_SP_ROWTYPE == sp_data_type_node->type_),
@@ -3267,6 +3269,7 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
                                      T_SP_ROWTYPE == sp_data_type_node->type_));
     OX (func.set_can_cached(false));
   }
+  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -3611,7 +3614,7 @@ int ObPLResolver::resolve_sp_data_type(const ParseNode *sp_data_type_node,
 {
   int ret = OB_SUCCESS;
 
-  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+  SET_LOG_CHECK_MODE();
 
   bool need_adjust_type = false;
   CK (OB_NOT_NULL(sp_data_type_node));
@@ -3666,6 +3669,8 @@ int ObPLResolver::resolve_sp_data_type(const ParseNode *sp_data_type_node,
       OZ (adjust_routine_param_type(data_type));
     }
   }
+
+  CANCLE_LOG_CHECK_MODE();
 
   return ret;
 }
@@ -5100,7 +5105,7 @@ int ObPLResolver::modify_raw_expr_in_forall(ObPLForAllStmt &stmt,
                                             int64_t table_idx)
 {
   int ret = OB_SUCCESS;
-  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+  SET_LOG_CHECK_MODE();
   hash::ObHashMap<int64_t, int64_t> &tab_to_subtab = stmt.get_tab_to_subtab_map();
   int64_t sub_table_idx = OB_INVALID_INDEX;
   if (OB_FAIL(tab_to_subtab.get_refactored(table_idx, sub_table_idx))) {
@@ -5138,6 +5143,7 @@ int ObPLResolver::modify_raw_expr_in_forall(ObPLForAllStmt &stmt,
       sql_stmt.get_array_binding_params().at(modify_expr_id) = func.get_expr_count() - 1;
     }
   }
+  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -12210,7 +12216,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
 {
   int ret = OB_SUCCESS;
 
-  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+  SET_LOG_CHECK_MODE();
 
   OZ (replace_udf_param_expr(q_name, columns, real_exprs));
   if (OB_FAIL(ret)) {
@@ -12319,6 +12325,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
                                               transformed));
   }
 
+  CANCLE_LOG_CHECK_MODE();
   return ret;
 }
 
@@ -14019,7 +14026,7 @@ int ObPLResolver::resolve_access_ident(const ObObjAccessIdent &access_ident,
 {
   int ret = OB_SUCCESS;
 
-  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+  SET_LOG_CHECK_MODE();
 
   ObObjAccessIdx access_idx;
   uint64_t parent_id = OB_INVALID_INDEX;
@@ -14064,6 +14071,8 @@ int ObPLResolver::resolve_access_ident(const ObObjAccessIdent &access_ident,
              K(ret), K(cnt), K(access_idxs.at(cnt - 1).access_type_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "access type");
   }
+
+  CANCLE_LOG_CHECK_MODE();
 
   return ret;
 }
@@ -14895,7 +14904,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
 {
   int ret = OB_SUCCESS;
 
-  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+  SET_LOG_CHECK_MODE();
 
   ObObjAccessIdx access_idx;
   uint64_t parent_id = OB_INVALID_INDEX;
@@ -15056,6 +15065,8 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
     // not top node and parent not a namespace, it must be composite access. handle it here.
     OZ (resolve_composite_access(access_ident, access_idxs, ns, func), K(access_ident), K(access_idxs));
   }
+
+  CANCLE_LOG_CHECK_MODE();
 
   return ret;
 }
@@ -18041,7 +18052,7 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
 {
   int ret = OB_SUCCESS;
 
-  ObLogger::ObTraceLogPrintGuard trace_log_guard(ret, MOD_NAME_FOR_TRACE_LOG(PL));
+  SET_LOG_CHECK_MODE();
 
   ObIAllocator *alloc = allocator != nullptr ? allocator : &allocator_;
 
@@ -18109,6 +18120,7 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
       OZ (const_cast<ObPLResolveCtx *>(this)->type_buffer_.push_back(user_type));
     }
   }
+  CANCLE_LOG_CHECK_MODE();
 
   return ret;
 }
