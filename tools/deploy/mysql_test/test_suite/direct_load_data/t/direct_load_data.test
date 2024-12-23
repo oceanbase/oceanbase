@@ -16,6 +16,8 @@ connection default;
 --enable_query_log
 use test;
 
+--source mysql_test/test_suite/direct_load_data/include/set_direct_load_allow_fallback_false.inc
+
 # Create table
 --disable_warnings
 drop table if exists lineitem;
@@ -75,3 +77,5 @@ disconnect conn_query;
 
 # Clean Up
 drop table lineitem;
+
+--source mysql_test/test_suite/direct_load_data/include/set_direct_load_allow_fallback_true.inc

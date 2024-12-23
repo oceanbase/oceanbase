@@ -2285,7 +2285,7 @@ DEF_STR_WITH_CHECKER(default_load_mode, OB_TENANT_PARAMETER, "DISABLED",
                      "\"INC_DIRECT_WRITE\" represent load data in inc direct load path with insert semantics."
                      "\"INC_REPLACE_DIRECT_WRITE\" represent load data in inc direct load path with replace semantics.",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(direct_load_allow_fallback, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(direct_load_allow_fallback, OB_TENANT_PARAMETER, "True",
         "Control whether an error is reported when direct load of the derivative operation scenario is not supported.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_TIME(errsim_delay_gc_interval, OB_CLUSTER_PARAMETER, "30m", "[0,)",

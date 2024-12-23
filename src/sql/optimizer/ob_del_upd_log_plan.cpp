@@ -159,7 +159,13 @@ int ObDelUpdLogPlan::check_use_direct_load()
       }
     } else if (direct_load_opt_ctx.can_use_direct_load()) {
       if (OB_UNLIKELY(!use_pdml_)) {
-        LOG_USER_WARN(OB_NOT_SUPPORTED, "PDML is disabled, direct load is");
+        bool allow_fallback = false;
+        if (OB_FAIL(ObDirectLoadOptimizerCtx::check_direct_load_allow_fallback(direct_load_opt_ctx, exec_ctx, allow_fallback))) {
+          LOG_WARN("fail to check support direct load allow fallback", K(ret));
+        } else if (!allow_fallback) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "PDML is disabled, direct load is");
+        }
       } else {
         use_direct_load = true;
       }

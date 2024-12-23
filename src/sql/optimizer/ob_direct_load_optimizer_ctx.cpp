@@ -107,7 +107,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(ObExecContext *exec_ctx, ObLo
         if (ret == OB_NOT_SUPPORTED) {
           bool allow_fallback = false;
           int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(check_direct_load_allow_fallback(exec_ctx, allow_fallback))) {
+          if (OB_TMP_FAIL(check_direct_load_allow_fallback(*this, exec_ctx, allow_fallback))) {
             LOG_WARN("fail to check support direct load allow fallback", K(tmp_ret));
           } else if (allow_fallback) {
             LOG_INFO("direct load has been allowed fallback");
@@ -120,8 +120,9 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(ObExecContext *exec_ctx, ObLo
         }
       }
     }
-    LOG_INFO("init direct load ctx result", K(ret), K(direct_load_hint), K(table_id_), K(load_method_), K(insert_mode_), K(load_mode_), K(load_level_), K(dup_action_),
-        K(max_error_row_count_), K(need_sort_), K(can_use_direct_load_), K(use_direct_load_), K(is_optimized_by_default_load_mode_));
+    LOG_INFO("init direct load ctx result", K(ret), K(direct_load_hint), K(append), K(table_id_), K(load_method_),
+        K(insert_mode_), K(load_mode_), K(load_level_), K(dup_action_), K(max_error_row_count_), K(need_sort_),
+        K(can_use_direct_load_), K(use_direct_load_), K(is_optimized_by_default_load_mode_));
   }
   return ret;
 }
@@ -195,7 +196,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
             bool allow_fallback = false;
             if (ret == OB_NOT_SUPPORTED && stmt.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_4) {
               int tmp_ret = OB_SUCCESS;
-              if (OB_TMP_FAIL(check_direct_load_allow_fallback(exec_ctx, allow_fallback))) {
+              if (OB_TMP_FAIL(check_direct_load_allow_fallback(*this, exec_ctx, allow_fallback))) {
                 LOG_WARN("fail to check support direct load allow fallback", K(tmp_ret));
               } else if (allow_fallback) {
                 LOG_INFO("direct load has been allowed fallback");
@@ -225,7 +226,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
         }
       }
     }
-    LOG_INFO("init direct load ctx result", K(ret), K(direct_load_hint), K(table_id_), K(load_method_), K(insert_mode_), K(load_mode_), K(load_level_), K(dup_action_),
+    LOG_INFO("init direct load ctx result", K(ret), K(direct_load_hint), K(global_hint.has_append()), K(table_id_), K(load_method_), K(insert_mode_), K(load_mode_), K(load_level_), K(dup_action_),
         K(max_error_row_count_), K(need_sort_), K(can_use_direct_load_), K(use_direct_load_), K(is_optimized_by_default_load_mode_));
   }
   return ret;
@@ -377,6 +378,7 @@ int ObDirectLoadOptimizerCtx::check_support_direct_load(ObExecContext *exec_ctx)
 }
 
 int ObDirectLoadOptimizerCtx::check_direct_load_allow_fallback(
+    const ObDirectLoadOptimizerCtx &optimize_ctx,
     ObExecContext *exec_ctx,
     bool &allow_fallback)
 {
@@ -389,7 +391,7 @@ int ObDirectLoadOptimizerCtx::check_direct_load_allow_fallback(
     LOG_WARN("unexpected session info is null", K(ret));
   } else if (session_info->get_ddl_info().is_mview_complete_refresh()) {
     allow_fallback = false;
-  } else if (is_insert_overwrite()) {
+  } else if (optimize_ctx.is_insert_overwrite()) {
     allow_fallback = false;
   } else if (tenant_config.is_valid()) {
     allow_fallback = tenant_config->direct_load_allow_fallback;

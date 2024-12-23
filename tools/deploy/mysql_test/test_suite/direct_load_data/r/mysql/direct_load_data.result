@@ -1,4 +1,5 @@
 use test;
+alter system set direct_load_allow_fallback=False;
 drop table if exists lineitem;
 create table lineitem(
 l_orderkey           bigint NOT NULL ,
@@ -34,3 +35,4 @@ select count(*) from lineitem;
 count(*)
 100000
 drop table lineitem;
+alter system set direct_load_allow_fallback=True;
