@@ -349,6 +349,7 @@
 # 525: __wr_sql_plan
 # 527: __all_kv_redis_table
 # 528: __all_ncomp_dll_v2
+# 529: __all_object_balance_weight
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1110,6 +1111,8 @@
 # 12506: __all_ncomp_dll_v2  # BASE_TABLE_NAME
 # 12507: __all_virtual_logstore_service_status
 # 12508: __all_virtual_logstore_service_info
+# 12509: __all_virtual_object_balance_weight
+# 12509: __all_object_balance_weight  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1747,6 +1750,8 @@
 # 15488: __all_virtual_logstore_service_info  # BASE_TABLE_NAME
 # 15489: ALL_VIRTUAL_TABLET_POINTER_STATUS
 # 15489: __all_virtual_tablet_pointer_status  # BASE_TABLE_NAME
+# 15490: ALL_VIRTUAL_OBJECT_BALANCE_WEIGHT_REAL_AGENT
+# 15490: __all_object_balance_weight  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2226,6 +2231,8 @@
 # 21626: GV$OB_LOGSTORE_SERVICE_INFO
 # 21627: V$OB_LOGSTORE_SERVICE_INFO
 # 21628: proc
+# 21629: DBA_OB_OBJECT_BALANCE_WEIGHT
+# 21630: CDB_OB_OBJECT_BALANCE_WEIGHT
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -2492,6 +2499,7 @@
 # 25279: DBA_OB_LS_REPLICA_TASK_HISTORY
 # 25301: PROXY_USERS
 # 25302: DBA_OB_SERVICES
+# 25304: DBA_OB_OBJECT_BALANCE_WEIGHT
 # 25305: USER_SCHEDULER_JOBS
 # 28002: GV$OB_SQL_AUDIT
 # 28003: V$OB_SQL_AUDIT

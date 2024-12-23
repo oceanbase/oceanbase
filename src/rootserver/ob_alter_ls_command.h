@@ -34,9 +34,18 @@ private:
       const common::ObZone &ls_primary_zone,
       ObTenantLSInfo &tenant_ls_info,
       ObLSStatusInfo &ls_status_info);
+  static int create_ls_(const ObAlterLSArg &arg);
+  static int check_create_ls_(
+      const uint64_t tenant_id,
+      const uint64_t unit_group_id,
+      const common::ObZone &ls_primary_zone,
+      ObTenantLSInfo &tenant_ls_info);
   static bool is_ls_primary_zone_ok_(
       const ObIArray<common::ObZone> &tenant_primary_zone_arr,
       const common::ObZone &ls_primary_zone);
+  static bool is_unit_group_ok_(
+      ObUnitGroupInfoArray &tenant_unit_group_arr,
+      const uint64_t unit_group_id);
   static bool is_unit_group_ok_(
       ObUnitGroupInfoArray &tenant_unit_group_arr,
       const uint64_t unit_group_id,
@@ -52,6 +61,7 @@ private:
       const uint64_t old_unit_group_id,
       const uint64_t new_unit_group_id,
       const uint64_t old_ls_group_id,
+      uint64_t &new_ls_group_id,
       ObLSGroupInfoArray &ls_group_info_arr);
   static int update_ls_group_id_in_all_ls_(
       const uint64_t &tenant_id,
@@ -64,6 +74,19 @@ private:
       const common::ObZone &old_ls_primary_zone,
       const common::ObZone &new_ls_primary_zone,
       share::schema::ObTenantSchema *tenant_schema);
+  static int gen_ls_primary_zone_(
+      const uint64_t &ls_group_id,
+      ObTenantLSInfo &tenant_ls_info,
+      ObZone &ls_primary_zone);
+  static int insert_ls_(
+      const uint64_t tenant_id,
+      const uint64_t unit_group_id,
+      const uint64_t ls_group_id,
+      const ObZone& ls_primary_zone,
+      ObTenantLSInfo &tenant_ls_info,
+      ObLSID &new_ls_id);
+  static int print_insert_ls_error(const uint64_t tenant_id, const ObLSID &ls, const int orig_ret);
+
   DISALLOW_COPY_AND_ASSIGN(ObAlterLSCommand);
 };
 

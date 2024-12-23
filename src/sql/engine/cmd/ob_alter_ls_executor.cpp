@@ -23,6 +23,7 @@ namespace sql {
 int ObAlterLSExecutor::execute(ObExecContext& ctx, ObAlterLSStmt& stmt)
 {
   int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
   const share::ObAlterLSArg &arg = stmt.get_arg();
   share::ObAlterLSRes result;
   const uint64_t tenant_id = arg.get_tenant_id();
@@ -50,11 +51,10 @@ int ObAlterLSExecutor::execute(ObExecContext& ctx, ObAlterLSStmt& stmt)
     } else if (OB_FAIL(rpc_proxy->to(leader).timeout(timeout)
           .by(tenant_id).admin_alter_ls(arg, result))) {
       LOG_WARN("failed to alter ls", KR(ret), K(arg), K(leader), K(timeout));
-    } else {
-      LOG_INFO("alter ls success", K(result));
-      //TODO check ls create success
     }
   }
+  int64_t end_ts = ObTimeUtility::current_time();
+  LOG_INFO("[ALTER LS] execution end", KR(ret), K(result), "cost_time", end_ts - begin_ts);
   return ret;
 }
 }

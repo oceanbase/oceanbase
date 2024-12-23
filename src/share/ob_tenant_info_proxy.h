@@ -52,6 +52,7 @@ struct ObAllTenantInfo
 {
   OB_UNIS_VERSION(1);
 public:
+ static const int64_t INITIAL_SWITCHOVER_EPOCH = 0;
  ObAllTenantInfo() {reset();};
  virtual ~ObAllTenantInfo() {}
  /**
@@ -69,7 +70,7 @@ public:
  int init(const uint64_t tenant_id,
           const ObTenantRole &tenant_role,
           const ObTenantSwitchoverStatus &switchover_status = NORMAL_SWITCHOVER_STATUS ,
-          const int64_t switchover_epoch = 0,
+          const int64_t switchover_epoch = INITIAL_SWITCHOVER_EPOCH,
           const SCN &sync_scn = SCN::base_scn(),
           const SCN &replayable_scn = SCN::base_scn(),
           const SCN &readable_scn = SCN::base_scn(),

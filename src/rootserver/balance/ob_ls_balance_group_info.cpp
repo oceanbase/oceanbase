@@ -56,21 +56,23 @@ void ObLSBalanceGroupInfo::destroy()
   inited_ = false;
 }
 
-int ObLSBalanceGroupInfo::append_part_into_balance_group(const ObBalanceGroupID &bg_id,
+int ObLSBalanceGroupInfo::append_part_into_balance_group(
+    const ObBalanceGroupID &bg_id,
     share::ObTransferPartInfo &part,
     const int64_t data_size,
-    const uint64_t part_group_uid)
+    const uint64_t part_group_uid,
+    const int64_t balance_weight)
 {
   int ret = OB_SUCCESS;
   ObBalanceGroupInfo *bg = NULL;
   int64_t part_group_cnt = 0;
 
-  if (OB_UNLIKELY(! inited_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
-  } else if (OB_UNLIKELY(! bg_id.is_valid() || !is_valid_id(part_group_uid))) {
+  } else if (OB_UNLIKELY(!bg_id.is_valid() || !is_valid_id(part_group_uid) || balance_weight < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(bg_id), K(part), K(data_size), K(part_group_uid));
+    LOG_WARN("invalid argument", KR(ret), K(bg_id), K(part), K(data_size), K(part_group_uid), K(balance_weight));
   } else if (OB_FAIL(bg_map_.get_refactored(bg_id, bg))) {
     if (OB_HASH_NOT_EXIST == ret) {
       if (OB_FAIL(create_new_balance_group_(bg_id, bg))) {
@@ -85,8 +87,9 @@ int ObLSBalanceGroupInfo::append_part_into_balance_group(const ObBalanceGroupID 
   } else if (OB_ISNULL(bg)) {
     ret = OB_INVALID_DATA;
     LOG_WARN("balance group is invalid", KR(ret), KPC(bg), K(bg_id));
-  } else if (OB_FAIL(bg->append_part(part, data_size, part_group_uid))) {
-    LOG_WARN("append part info balance group fail", KR(ret), K(part), K(data_size), K(part_group_uid));
+  } else if (OB_FAIL(bg->append_part(part, data_size, part_group_uid, balance_weight))) {
+    LOG_WARN("append part info balance group fail", KR(ret), K(part),
+        K(data_size), K(part_group_uid), K(balance_weight));
   } else if (FALSE_IT(part_group_cnt = bg->get_part_group_count())) {
   } else if (OB_FAIL(orig_part_group_cnt_map_.set_refactored(bg_id, part_group_cnt, 1/*overwrite*/))) {
     LOG_WARN("overwrite partition group count map fail", KR(ret), K(bg_id), K(part_group_cnt));

@@ -87,7 +87,8 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
     const share::ObLSID &dest_ls_id,
     const int64_t tablet_size,
     const bool in_new_partition_group,
-    const uint64_t part_group_uid)
+    const uint64_t part_group_uid,
+    const int64_t balance_weight)
 {
   UNUSEDx(tablet_id, dest_ls_id, in_new_partition_group);
   int ret = OB_SUCCESS;
@@ -111,9 +112,14 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
   } else if (OB_ISNULL(ls_bg_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid ls balance group info", KR(ret), K(ls_bg_info), K(src_ls_id));
-  } else if (OB_FAIL(ls_bg_info->append_part_into_balance_group(bg.id(), part_info, tablet_size, part_group_uid))) {
+  } else if (OB_FAIL(ls_bg_info->append_part_into_balance_group(
+      bg.id(),
+      part_info,
+      tablet_size,
+      part_group_uid,
+      balance_weight))) {
     LOG_WARN("append part into balance group for LS balance group info fail", KR(ret), K(bg),
-        K(part_info), K(tablet_size), K(part_group_uid));
+        K(part_info), K(tablet_size), K(part_group_uid), K(balance_weight));
   }
   return ret;
 }

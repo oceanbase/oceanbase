@@ -73,6 +73,8 @@
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "rootserver/ob_admin_drtask_util.h"  // ObAdminDRTaskUtil
 #include "rootserver/ob_primary_ls_service.h" // for ObPrimaryLSService
+#include "rootserver/ob_tenant_balance_service.h"//for ObTenantBalanceService
+#include "rootserver/ob_balance_task_execute_service.h"//ObBalanceTaskExecuteService
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sess_info_verify.h"
 #include "observer/table/ttl/ob_ttl_service.h"
@@ -2933,6 +2935,16 @@ int ObRpcNotifyTenantThreadP::process()
           LOG_WARN("ls service is null", KR(ret), K(arg_));
         } else {
           ls_service->wakeup();
+        }
+      } else if (obrpc::ObNotifyTenantThreadArg::BALANCE_TASK_EXECUTE == arg_.get_thread_type()) {
+        rootserver::ObTenantBalanceService *tbalance_service = MTL(rootserver::ObTenantBalanceService*);
+        rootserver::ObBalanceTaskExecuteService *balance_exe_ser = MTL(rootserver::ObBalanceTaskExecuteService*);
+        if (OB_ISNULL(tbalance_service) || OB_ISNULL(balance_exe_ser)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("service is null", KR(ret), K(arg_), KP(tbalance_service), KP(balance_exe_ser));
+        } else {
+          balance_exe_ser->wakeup();
+          tbalance_service->wakeup();
         }
       } else {
         ret = OB_ERR_UNEXPECTED;

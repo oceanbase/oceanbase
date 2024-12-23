@@ -30,9 +30,10 @@ using namespace oceanbase::share;
 // 4. x是当前LTS && x > CURRENT_LTS_ENTRY: 所有版本增加 {x, true}
 // 5. x是当前LTS && 修改CURRENT_LTS_ENTRY为x: 所有last_lts中的版本升级路径里current_lts中的版本设置为false，增加{x, true}
 
-#ifndef DATA_VERSION_4_2_5_2
-#define DATA_VERSION_4_2_5_2 (cal_version(4, 2, 5, 2))
+#ifdef DATA_VERSION_4_2_5_2
+#undef DATA_VERSION_4_2_5_2
 #endif
+#define DATA_VERSION_4_2_5_2 (cal_version(4, 2, 5, 2))
 
 #ifndef DATA_VERSION_4_2_1_10
 #define DATA_VERSION_4_2_1_10 (cal_version(4, 2, 1, 10))

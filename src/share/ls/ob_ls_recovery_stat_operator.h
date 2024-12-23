@@ -129,7 +129,7 @@ public:
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
                             const SCN &create_ls_scn,
                             const common::ObString &zone_priority,
-                            const share::ObTenantSwitchoverStatus &working_sw_status,
+                            const int64_t switchover_epoch,
                             ObMySQLTransaction &trans) override;
   /*
    * description: override of ObLSLifeIAgent

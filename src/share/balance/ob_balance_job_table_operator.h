@@ -45,7 +45,8 @@ public:
   static const int64_t BALANCE_JOB_STATUS_CANCELING = 1;
   static const int64_t BALANCE_JOB_STATUS_COMPLETED = 2;
   static const int64_t BALANCE_JOB_STATUS_CANCELED = 3;
-  static const int64_t BALANCE_JOB_STATUS_MAX = 4;
+  static const int64_t BALANCE_JOB_STATUS_SUSPEND = 4;
+  static const int64_t BALANCE_JOB_STATUS_MAX = 5;
   ObBalanceJobStatus(const int64_t value = BALANCE_JOB_STATUS_INVALID) : val_(value) {}
   ObBalanceJobStatus(const ObString &str);
   ~ObBalanceJobStatus() {reset(); }
@@ -67,6 +68,7 @@ public:
   bool is_canceling() const { return BALANCE_JOB_STATUS_CANCELING == val_; }
   bool is_success() const { return BALANCE_JOB_STATUS_COMPLETED == val_; }
   bool is_canceled() const { return BALANCE_JOB_STATUS_CANCELED == val_; }
+  bool is_suspend() const { return BALANCE_JOB_STATUS_SUSPEND == val_; }
 
   TO_STRING_KV(K_(val), "job_status", to_str());
 private:

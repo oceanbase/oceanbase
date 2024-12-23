@@ -31,27 +31,43 @@ class ObTransferPartGroup
 public:
   ObTransferPartGroup() :
       data_size_(0),
+      weight_(0),
       part_list_("PartGroup") {}
 
   ObTransferPartGroup(common::ObIAllocator &alloc) :
       data_size_(0),
+      weight_(0),
       part_list_(alloc, "PartGroup") {}
 
   ~ObTransferPartGroup() {
     data_size_ = 0;
+    weight_ = 0;
     part_list_.reset();
   }
 
   int64_t get_data_size() const { return data_size_; }
+  int64_t get_weight() const { return weight_; }
   const share::ObTransferPartList &get_part_list() const { return part_list_; }
   int64_t count() const { return part_list_.count(); }
+  int assign(const ObTransferPartGroup &other);
 
   // add new partition into partition group
-  int add_part(const share::ObTransferPartInfo &part, int64_t data_size);
-
-  TO_STRING_KV(K_(data_size), K_(part_list));
+  int add_part(const share::ObTransferPartInfo &part, const int64_t data_size, const int64_t balance_weight);
+  // less by weight
+  static bool weight_cmp(const ObTransferPartGroup *left, const ObTransferPartGroup *right)
+  {
+    bool bret = false;
+    if (OB_NOT_NULL(left) && OB_NOT_NULL(right)) {
+      if (left->get_weight() < right->get_weight()) {
+        bret = true;
+      }
+    }
+    return bret;
+  }
+  TO_STRING_KV(K_(data_size), K_(weight), K_(part_list));
 private:
   int64_t data_size_;
+  int64_t weight_;
   share::ObTransferPartList part_list_;
 };
 
@@ -81,13 +97,16 @@ public:
   // @param [in] part                         target partition info which will be added
   // @param [in] data_size                    partition data size
   // @param [in] part_group_uid               partition group unique id
+  // @param [in] balance_weight               balance weight of the partition
   //
   // @return OB_SUCCESS         success
   // @return OB_ENTRY_EXIST     no partition group found
   // @return other              fail
-  int append_part(share::ObTransferPartInfo &part,
+  int append_part(
+      share::ObTransferPartInfo &part,
       const int64_t data_size,
-      const uint64_t part_group_uid);
+      const uint64_t part_group_uid,
+      const int64_t balance_weight);
 
   // pop partition groups from back of array, and push back into part list
   //

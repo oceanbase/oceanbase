@@ -1230,7 +1230,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(TransferPartition);
         break;
       }
-      case T_CANCEL_BALANCE_JOB: {
+      case T_BALANCE_JOB_OP: {
         REGISTER_STMT_RESOLVER(TransferPartition);
         break;
       }

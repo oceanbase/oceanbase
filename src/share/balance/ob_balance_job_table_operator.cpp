@@ -28,7 +28,7 @@ namespace share
 {
 static const char* BALANCE_JOB_STATUS_ARRAY[] =
 {
-  "DOING", "CANCELING", "COMPLETED", "CANCELED"
+  "DOING", "CANCELING", "COMPLETED", "CANCELED", "SUSPEND"
 };
 static const char *BALANCE_JOB_TYPE[] =
 {

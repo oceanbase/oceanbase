@@ -1473,7 +1473,7 @@ int ObBootstrap::insert_sys_ls_(const share::schema::ObTenantSchema &tenant_sche
             share::OB_LS_NORMAL, unit_group_id, primary_zone, flag))) {
       LOG_WARN("failed to init ls info", KR(ret), K(primary_zone), K(flag));
     } else if (OB_FAIL(life_agent.create_new_ls(status_info, SCN::base_scn(), primary_zone_str.string(),
-                                                share::NORMAL_SWITCHOVER_STATUS))) {
+        ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH))) {
       LOG_WARN("failed to get init member list", KR(ret), K(status_info), K(primary_zone_str));
     }
   }

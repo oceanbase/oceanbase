@@ -62,7 +62,8 @@ public:
       const share::ObLSID &dest_ls_id,
       const int64_t tablet_size,
       const bool in_new_partition_group,
-      const uint64_t part_group_uid);
+      const uint64_t part_group_uid,
+      const int64_t balance_weight);
 
   TO_STRING_KV(K_(inited), K_(tenant_id), "valid_ls_count", ls_bg_map_.size());
 

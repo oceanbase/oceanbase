@@ -81,38 +81,40 @@ int ObAlterLSResolver::resolve(const ParseNode &parse_tree)
 
 int ObAlterLSResolver::resolve_create_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt)
 {
-  int ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "currently CREATE LS is");
-  // uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
-  // uint64_t ug_id = OB_INVALID_ID;
-  // ObZone primary_zone;
-  // if (OB_ISNULL(stmt) || OB_ISNULL(session_info_)) {
-  //   ret = OB_ERR_UNEXPECTED;
-  //   LOG_WARN("stmt or session_info_ is null", KR(ret), KP(stmt), KP(session_info_));
-  // } else {
-  //   if (3 != parse_tree.num_child_ || OB_ISNULL(parse_tree.children_[0])
-  //         || OB_ISNULL(parse_tree.children_[1])) {
-  //     ret = OB_INVALID_ARGUMENT;
-  //     LOG_WARN("invalid parse tree or session info", KR(ret),
-  //         "num_child", parse_tree.num_child_);
-  //   } else if (1 != parse_tree.children_[0]->value_) {
-  //     ret = OB_INVALID_ARGUMENT;
-  //     LOG_WARN("operation type is invalid", KR(ret),
-  //         "value", parse_tree.children_[1]->value_);
-  //   } else if (OB_FAIL(resolve_ls_attr_(*parse_tree.children_[1], ug_id, primary_zone))) {
-  //     LOG_WARN("failed to resolve ls attr", KR(ret));
-  //   } else if (OB_INVALID_ID == ug_id) {
-  //     ret = OB_INVALID_ARGUMENT;
-  //     LOG_WARN("create ls must specify unit group", KR(ret));
-  //     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "unit_group");
-  //   } else if (OB_FAIL(get_and_verify_tenant_name(parse_tree.children_[2],
-  //           session_info_->get_effective_tenant_id(), target_tenant_id, "Create LS"))) {
-  //     LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
-  //         K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[2]));
-  //   } else if (OB_FAIL(stmt->get_arg().init_create_ls(target_tenant_id, ug_id, primary_zone))) {
-  //     LOG_WARN("failed to init create ls", KR(ret), K(target_tenant_id), K(ug_id), K(primary_zone));
-  //   }
-  // }
+  int ret = OB_SUCCESS;
+  uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
+  uint64_t ug_id = OB_INVALID_ID;
+  ObZone primary_zone;
+  if (OB_ISNULL(stmt) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt or session_info_ is null", KR(ret), KP(stmt), KP(session_info_));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_2) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("CLUSTER_VERSION < 4.2.5.2", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "CLUSTER_VERSION < 4.2.5.2, CREATE LS is");
+  } else {
+    if (3 != parse_tree.num_child_ || OB_ISNULL(parse_tree.children_[0]) || OB_ISNULL(parse_tree.children_[1])) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid parse tree or session info", KR(ret),
+          "num_child", parse_tree.num_child_);
+    } else if (1 != parse_tree.children_[0]->value_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("operation type is invalid", KR(ret),
+          "value", parse_tree.children_[1]->value_);
+    } else if (OB_FAIL(resolve_ls_attr_(*parse_tree.children_[1], ug_id, primary_zone))) {
+      LOG_WARN("failed to resolve ls attr", KR(ret));
+    } else if (OB_INVALID_ID == ug_id) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("create ls must specify unit group", KR(ret));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "UNIT_GROUP is not specified, CREATE LS is");
+    } else if (OB_FAIL(Util::get_and_verify_tenant_name(parse_tree.children_[2], false, /* allow_sys_meta_tenant */
+            session_info_->get_effective_tenant_id(), target_tenant_id, "CREATE LS"))) {
+      LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
+          K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[2]));
+    } else if (OB_FAIL(stmt->get_arg().init_create_ls(target_tenant_id, ug_id, primary_zone))) {
+      LOG_WARN("failed to init create ls", KR(ret), K(target_tenant_id), K(ug_id), K(primary_zone));
+    }
+  }
   return ret;
 
 }

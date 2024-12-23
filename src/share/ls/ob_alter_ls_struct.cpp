@@ -47,7 +47,18 @@ int ObAlterLSArg::init_create_ls(
     const uint64_t unit_group_id,
     const common::ObZone &ls_primary_zone)
 {
-  int ret = OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_user_tenant(tenant_id)
+      || OB_INVALID_ID == unit_group_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id or unit_group_id", KR(ret), K(tenant_id), K(unit_group_id));
+  } else if (!ls_primary_zone.is_empty() && OB_FAIL(ls_primary_zone_.assign(ls_primary_zone))) {
+    LOG_WARN("fail to assign ls_primary_zone", KR(ret), K(ls_primary_zone));
+  } else {
+    tenant_id_ = tenant_id;
+    unit_group_id_ = unit_group_id;
+    op_ = CREATE_LS;
+  }
   return ret;
 }
 
@@ -84,6 +95,10 @@ bool ObAlterLSArg::is_valid() const
     // either unit_group_id or ls_primary_zone can be invalid
     // they cannot be invalid at the same time
     bret = ls_id_.is_valid_with_tenant(tenant_id_) && !(OB_INVALID_ID == unit_group_id_ && ls_primary_zone_.is_empty());
+  } else if (bret && CREATE_LS == op_) {
+    bret = is_user_tenant(tenant_id_) && (OB_INVALID_ID != unit_group_id_);
+  } else {
+    bret = false;
   }
   return bret;
 }

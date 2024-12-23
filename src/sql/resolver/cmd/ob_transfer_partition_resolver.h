@@ -30,7 +30,7 @@ public:
 private:
   int resolve_transfer_partition_(const ParseNode &parse_tree);
   int resolve_cancel_transfer_partition_(const ParseNode &parse_tree);
-  int resolve_cancel_balance_job_(const ParseNode &parse_tree);
+  int resolve_balance_job_op_(const ParseNode &parse_tree);
   int resolve_part_info_(const ParseNode &parse_node, uint64_t &table_id, ObObjectID &object_id);
   int resolve_transfer_partition_to_ls_(
     const ParseNode &parse_node,

@@ -294,6 +294,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 525	__wr_sql_plan	0	201001	1
 527	__all_kv_redis_table	0	201001	1
 528	__all_ncomp_dll_v2	0	201001	1
+529	__all_object_balance_weight	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -748,6 +749,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12506	__all_virtual_ncomp_dll_v2	2	201001	1
 12507	__all_virtual_logstore_service_status	2	201001	1
 12508	__all_virtual_logstore_service_info	2	201001	1
+12509	__all_virtual_object_balance_weight	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1227,6 +1229,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21626	GV$OB_LOGSTORE_SERVICE_INFO	1	201001	1
 21627	V$OB_LOGSTORE_SERVICE_INFO	1	201001	1
 21628	proc	1	201003	1
+21629	DBA_OB_OBJECT_BALANCE_WEIGHT	1	201001	1
+21630	CDB_OB_OBJECT_BALANCE_WEIGHT	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

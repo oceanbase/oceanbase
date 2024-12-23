@@ -44,6 +44,7 @@ public:
                          bg_builder_(), cur_part_group_(nullptr),
                          ls_desc_array_(), ls_desc_map_(),
                          bg_map_(),
+                         weighted_bg_map_(),
                          bg_ls_stat_operator_(),
                          task_mode_(GEN_BG_STAT),
                          job_generator_()
@@ -77,7 +78,8 @@ public:
       const ObLSID &dest_ls_id,
       const int64_t tablet_size,
       const bool in_new_partition_group,
-      const uint64_t part_group_uid);
+      const uint64_t part_group_uid,
+      const int64_t balance_weight);
 
   class ObLSPartGroupDesc
   {
@@ -99,19 +101,78 @@ public:
     }
     ObLSID get_ls_id() const { return ls_id_; }
     ObArray<ObTransferPartGroup *> &get_part_groups() { return part_groups_; }
+    int64_t get_part_groups_cnt() const { return part_groups_.count(); }
+    int64_t get_part_groups_weight() const
+    {
+      int64_t weight = 0;
+      ARRAY_FOREACH_NORET(part_groups_, idx) {
+        if (OB_NOT_NULL(part_groups_.at(idx))) {
+          weight += part_groups_.at(idx)->get_weight();
+        }
+      }
+      return weight;
+    }
+    int64_t get_unweighted_part_groups_cnt() const
+    {
+      int64_t count = 0;
+      ARRAY_FOREACH_NORET(part_groups_, idx) {
+        if (OB_NOT_NULL(part_groups_.at(idx))) {
+          if (part_groups_.at(idx)->get_weight() == 0) {
+            ++count;
+          }
+        }
+      }
+      return count;
+    }
     int add_new_part_group(ObTransferPartGroup *&part_gourp);
+    int remove_part_group(const int64_t idx);
+
+    // less by weight
+    static bool weight_cmp(const ObLSPartGroupDesc *left, const ObLSPartGroupDesc *right)
+    {
+      bool bret = false;
+      if (OB_NOT_NULL(left) && OB_NOT_NULL(right)) {
+        if (left->get_part_groups_weight() < right->get_part_groups_weight()) {
+          bret = true;
+        } else if (left->get_part_groups_weight() == right->get_part_groups_weight()) {
+          if (left->get_ls_id() > right->get_ls_id()) {
+            bret = true;
+          }
+        }
+      }
+      return bret;
+    }
+    // less by count
+    static bool cnt_cmp(const ObLSPartGroupDesc *left, const ObLSPartGroupDesc *right)
+    {
+      bool bret = false;
+      if (OB_NOT_NULL(left) && OB_NOT_NULL(right)) {
+        if (left->get_part_groups_cnt() < right->get_part_groups_cnt()) {
+          bret = true;
+        } else if (left->get_part_groups_cnt() == right->get_part_groups_cnt()) {
+          if (left->get_ls_id() > right->get_ls_id()) {
+            bret = true;
+          }
+        }
+      }
+      return bret;
+    }
+
     TO_STRING_KV(K_(ls_id), K_(part_groups));
   private:
     ObLSID ls_id_;
     ObIAllocator &alloc_;
     ObArray<ObTransferPartGroup *> part_groups_;
   };
+  typedef hash::ObHashMap<ObBalanceGroup, ObArray<ObLSPartGroupDesc *>> ObBalanceGroupMap;
 
   static const int64_t PART_BALANCE_THRESHOLD_SIZE =  50 * 1024L * 1024L * 1024L; // 50GB
 
 private:
   int prepare_balance_group_();
+  int split_out_weighted_bg_map_();
   int save_balance_group_stat_();
+  int process_weight_balance_intragroup_();
   // balance group inner balance
   int process_balance_partition_inner_();
   // balance group extend balance
@@ -120,14 +181,54 @@ private:
   int process_balance_partition_disk_();
 
   int prepare_ls_();
-  int add_new_pg_to_bg_map_(const ObLSID &ls_id, ObBalanceGroup &bg, ObTransferPartGroup *&part_group);
-  int add_transfer_task_(const ObLSID &src_ls_id, const ObLSID &dest_ls_id, ObTransferPartGroup *part_group, bool modify_ls_desc = true);
-  int update_ls_desc_(const ObLSID &ls_id, int64_t cnt, int64_t size);
+  int add_new_pg_to_bg_map_(
+      const ObLSID &ls_id,
+      ObBalanceGroup &bg,
+      ObTransferPartGroup *&part_group,
+      ObBalanceGroupMap &bg_map);
+  int add_transfer_task_(
+      const ObLSID &src_ls_id,
+      const ObLSID &dest_ls_id,
+      ObTransferPartGroup *part_group,
+      bool modify_ls_desc = true);
+  int update_ls_desc_(
+      const ObLSID &ls_id,
+      const int64_t cnt,
+      const int64_t size,
+      const int64_t balance_weight);
   int try_swap_part_group_(ObLSDesc &src_ls, ObLSDesc &dest_ls, int64_t part_group_min_size ,int64_t &swap_cnt);
+  int try_swap_part_group_in_bg_(
+      ObBalanceGroupMap::iterator &iter,
+      ObLSDesc &src_ls,
+      ObLSDesc &dest_ls,
+      int64_t part_group_min_size,
+      int64_t &swap_cnt);
   int get_table_schemas_in_tablegroup_(int64_t tablegroup_id,
                                       ObArray<const schema::ObSimpleTableSchemaV2*> &table_schemas,
                                       int &max_part_level);
   bool check_ls_need_swap_(uint64_t ls_more_size, uint64_t ls_less_size);
+  bool is_bg_with_balance_weight_(const ObArray<ObLSPartGroupDesc *> &ls_pg_desc_arr);
+  int get_ls_balance_weight_avg_(
+      const ObArray<ObLSPartGroupDesc *> &ls_pg_desc_arr,
+      const int64_t begin_idx,
+      const int64_t end_idx,
+      double &weight_avg);
+  int try_move_weighted_part_group_(
+      ObArray<ObLSPartGroupDesc *> &sorted_ls_pg_desc_arr,
+      int64_t &transfer_cnt);
+  int try_move_weighted_pg_to_dest_ls_(
+      const double avg,
+      ObLSPartGroupDesc *src_ls,
+      ObLSPartGroupDesc *dest_ls,
+      int64_t &transfer_cnt);
+  int try_swap_weighted_part_group_(
+      ObArray<ObLSPartGroupDesc *> &sorted_ls_pg_desc_arr,
+      int64_t &transfer_cnt);
+  int try_swap_weighted_pg_between_ls_(
+      const double avg,
+      ObLSPartGroupDesc *src_ls,
+      ObLSPartGroupDesc *dest_ls,
+      int64_t &transfer_cnt);
 
 private:
   bool inited_;
@@ -144,7 +245,9 @@ private:
   ObLSDescMap ls_desc_map_;
 
   // partition distribute in balance group and ls
-  hash::ObHashMap<ObBalanceGroup, ObArray<ObLSPartGroupDesc *>> bg_map_;
+  // record all balance group in bg_map when building and then split the weighted balance group out
+  ObBalanceGroupMap bg_map_;
+  ObBalanceGroupMap weighted_bg_map_;
 
   ObBalanceGroupLSStatOperator bg_ls_stat_operator_;
   TaskMode task_mode_;

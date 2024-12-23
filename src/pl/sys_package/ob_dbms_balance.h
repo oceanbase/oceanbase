@@ -25,6 +25,21 @@ public:
   virtual ~ObDBMSBalance() {}
 
   static int trigger_partition_balance(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+  static int set_balance_weight(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+  static int clear_balance_weight(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+
+private:
+  static int pre_check_for_balance_weight_(const uint64_t tenant_id, const char *op_str);
+  static int get_id_by_name_(
+      const uint64_t tenant_id,
+      const common::ObString &database_name,
+      const common::ObString &table_name,
+      const common::ObString &partition_name,
+      const common::ObString &subpartition_name,
+      ObObjectID &table_id,
+      ObObjectID &part_id,
+      ObObjectID &subpart_id);
+
 };
 } // end of pl
 } // end of oceanbase

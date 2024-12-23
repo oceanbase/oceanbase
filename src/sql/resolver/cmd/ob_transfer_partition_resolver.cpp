@@ -38,8 +38,8 @@ int ObTransferPartitionResolver::resolve(const ParseNode &parse_tree)
     if (OB_FAIL(resolve_cancel_transfer_partition_(parse_tree))) {
       LOG_WARN("failed to resolve cancel transfer partition", KR(ret));
     }
-  } else if (T_CANCEL_BALANCE_JOB == parse_tree.type_) {
-    if (OB_FAIL(resolve_cancel_balance_job_(parse_tree))) {
+  } else if (T_BALANCE_JOB_OP == parse_tree.type_) {
+    if (OB_FAIL(resolve_balance_job_op_(parse_tree))) {
       LOG_WARN("failed to resolve cancel balance job", KR(ret));
     }
   } else  {
@@ -170,33 +170,46 @@ int ObTransferPartitionResolver::resolve_cancel_transfer_partition_(const ParseN
   return ret;
 }
 
-int ObTransferPartitionResolver::resolve_cancel_balance_job_(const ParseNode &parse_tree)
+int ObTransferPartitionResolver::resolve_balance_job_op_(const ParseNode &parse_tree)
 {
-int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   ObTransferPartitionStmt *stmt = create_stmt<ObTransferPartitionStmt>();
   uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
-  if (OB_UNLIKELY(T_CANCEL_BALANCE_JOB != parse_tree.type_)) {
+  rootserver::ObTransferPartitionArg::ObTransferPartitionType balance_job_type;
+  if (OB_UNLIKELY(T_BALANCE_JOB_OP != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid parse node, type is not T_TRANSFER_PARTITION", KR(ret), "type",
+    LOG_WARN("invalid parse node, type is not T_BALANCE_JOB_OP", KR(ret), "type",
         get_type_name(parse_tree.type_));
   } else if (OB_ISNULL(stmt)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("create stmt fail", KR(ret));
-  } else if (1 != parse_tree.num_child_
-        || OB_ISNULL(session_info_)) {
+  } else if (2 != parse_tree.num_child_
+        || OB_ISNULL(session_info_)
+        || OB_ISNULL(parse_tree.children_[0])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parse tree or session info", KR(ret), "num_child", parse_tree.num_child_,
         KP(session_info_));
   } else if (OB_FAIL(Util::get_and_verify_tenant_name(
-      parse_tree.children_[0],
+      parse_tree.children_[1],
       false, /* allow_sys_meta_tenant */
       session_info_->get_effective_tenant_id(),
       target_tenant_id, "Cancel balance job"))) {
     LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
         K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[0]));
-  } else if (OB_FAIL(stmt->get_arg().init_for_cancel_balance_job(
-            target_tenant_id))) {
-      LOG_WARN("fail to init stmt rpc arg", KR(ret), K(target_tenant_id));
+  } else if (OB_ISNULL(parse_tree.children_[0])
+      || OB_UNLIKELY(T_INT != parse_tree.children_[0]->type_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("balance_job_op is invalid", KR(ret), KP(parse_tree.children_[0]));
+  } else if (1 == parse_tree.children_[0]->value_) {
+    balance_job_type = rootserver::ObTransferPartitionArg::CANCEL_BALANCE_JOB;
+  } else if (2 == parse_tree.children_[0]->value_) {
+    balance_job_type = rootserver::ObTransferPartitionArg::SUSPEND_BALANCE_JOB;
+  } else if (3 == parse_tree.children_[0]->value_) {
+    balance_job_type = rootserver::ObTransferPartitionArg::RESUME_BALANCE_JOB;
+  }
+  if (FAILEDx(stmt->get_arg().init_for_balance_job_op(
+            target_tenant_id, balance_job_type))) {
+      LOG_WARN("fail to init stmt rpc arg", KR(ret), K(target_tenant_id), K(balance_job_type));
   } else {
     stmt_ = stmt;
   }

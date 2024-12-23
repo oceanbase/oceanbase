@@ -20,7 +20,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"   // share::schema
 #include "share/schema/ob_schema_getter_guard.h"            // ObSchemaGetterGuard
 #include "share/tablet/ob_tenant_tablet_to_ls_map.h"        // ObTenantTabletToLSMap
-
+#include "rootserver/balance/ob_object_balance_weight_mgr.h" // ObObjectBalanceWeightMgr
 #include "ob_balance_group_define.h"                         //ObBalanceGroupID, ObBalanceGroup
 
 namespace oceanbase
@@ -128,6 +128,7 @@ public:
     // @param [in]  tablet_size               tablet data size
     // @param [in]  in_new_partition_group    is this partition in new partition group
     // @param [in]  part_group_uid            partition group unique id
+    // @param [in]  balance_weight            balance weight of the partition
     virtual int on_new_partition(
         const ObBalanceGroup &bg,
         const common::ObObjectID table_id,
@@ -137,7 +138,8 @@ public:
         const share::ObLSID &dest_ls_id,
         const int64_t tablet_size,
         const bool in_new_partition_group,
-        const uint64_t part_group_uid) = 0;
+        const uint64_t part_group_uid,
+        const int64_t balance_weight) = 0;
   };
 
 private:
@@ -180,7 +182,8 @@ private:
       const share::schema::ObSimpleTableSchemaV2 &table_schema,
       const common::ObObjectID part_object_id,
       const common::ObTabletID tablet_id,
-      const uint64_t part_group_uid);
+      const uint64_t part_group_uid,
+      const int64_t balance_weight);
   int prepare_tablet_data_size_();
   int prepare_related_tablets_map_();
   int add_to_related_tablets_map_(
@@ -223,6 +226,7 @@ private:
   ObArenaAllocator allocator_;
   hash::ObHashMap<ObTabletID, common::ObIArray<ObTabletID> *> related_tablets_map_;
   hash::ObHashSet<uint64_t> sharding_none_tg_global_indexes_; // global indexes of the primary table in tablegroup sharding none
+  ObObjectBalanceWeightMgr obj_weight_mgr_;
 };
 
 }

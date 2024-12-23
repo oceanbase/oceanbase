@@ -125,6 +125,49 @@
                 TARGET_SERVERS_LIST,
                 SUCCESS_SERVERS_LIST);
   };
+
+  class DBMS_BALANCE {
+    public:
+      DEF_MODULE(DBMS_BALANCE, "DBMS_BALANCE");
+
+      DEF_EVENT(DBMS_BALANCE, TRIGGER_PARTITION_BALANCE, "TRIGGER PARTITION BALANCE",
+                BALANCE_TIMEOUT_S);
+
+      DEF_EVENT(DBMS_BALANCE, SET_BALANCE_WEIGHT, "SET BALANCE WEIGHT",
+                WEIGHT,
+                DATABASE_NAME,
+                TABLE_NAME,
+                PARTITION_NAME,
+                SUBPARTITION_NAME);
+
+      DEF_EVENT(DBMS_BALANCE, CLEAR_BALANCE_WEIGHT, "CLEAR BALANCE WEIGHT",
+                DATABASE_NAME,
+                TABLE_NAME,
+                PARTITION_NAME,
+                SUBPARTITION_NAME);
+
+      DEF_EVENT(DBMS_BALANCE, CLEAR_EXPIRED_BALANCE_WEIGHT, "CLEAR EXPIRED BALANCE WEIGHT",
+                TABLE_ID,
+                PARTITION_ID,
+                SUBPARTITION_ID);
+  };
+  class LS_COMMAND {
+    public:
+      DEF_MODULE(LS_COMMAND, "LS COMMAND");
+
+      DEF_EVENT(LS_COMMAND, CREATE_LS, "CREATE LS",
+                ARGS,
+                LS_ID,
+                LS_GROUP_ID,
+                UNIT_GROUP_ID,
+                PRIMARY_ZONE);
+      DEF_EVENT(LS_COMMAND, MODIFY_LS, "MODIFY LS",
+                ARGS,
+                LS_ID,
+                LS_GROUP_ID,
+                UNIT_GROUP_ID,
+                PRIMARY_ZONE);
+  };
 #endif
 #endif
 ////////////////////////////////////////////////////////////////

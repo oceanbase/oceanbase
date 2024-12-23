@@ -50,14 +50,17 @@ public:
   // @param [in] part                         target partition info which will be added
   // @param [in] data_size                    partition data size
   // @param [in] part_group_uid               target partition group unique id
+  // @param [in] balance_weight               balance weight of the partition
   //
   // @return OB_SUCCESS         success
   // @return OB_ENTRY_EXIST     no partition group found
   // @return other              fail
-  int append_part_into_balance_group(const ObBalanceGroupID &bg_id,
+  int append_part_into_balance_group(
+      const ObBalanceGroupID &bg_id,
       share::ObTransferPartInfo &part,
       const int64_t data_size,
-      const uint64_t part_group_uid);
+      const uint64_t part_group_uid,
+      const int64_t balance_weight);
 
   ////////////////////////////////////////////////
   // Transfer out partition groups by specified factor

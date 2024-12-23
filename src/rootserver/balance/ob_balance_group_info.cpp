@@ -18,16 +18,32 @@ namespace oceanbase
 using namespace share;
 namespace rootserver
 {
-int ObTransferPartGroup::add_part(const ObTransferPartInfo &part, int64_t data_size)
+int ObTransferPartGroup::add_part(
+    const ObTransferPartInfo &part,
+    const int64_t data_size,
+    const int64_t balance_weight)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! part.is_valid() || data_size < 0)) {
+  if (OB_UNLIKELY(! part.is_valid() || data_size < 0 || balance_weight < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(part), K(data_size));
+    LOG_WARN("invalid argument", KR(ret), K(part), K(data_size), K(balance_weight));
   } else if (OB_FAIL(part_list_.push_back(part))) {
     LOG_WARN("push back part into part info fail", KR(ret), K(part), K(part_list_));
   } else {
     data_size_ += data_size;
+    weight_ += balance_weight;
+  }
+  return ret;
+}
+
+int ObTransferPartGroup::assign(const ObTransferPartGroup &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(part_list_.assign(other.part_list_))) {
+    LOG_WARN("assign failed", KR(ret), K(other));
+  } else {
+    data_size_ = other.data_size_;
+    weight_ = other.weight_;
   }
   return ret;
 }
@@ -50,14 +66,16 @@ ObBalanceGroupInfo::~ObBalanceGroupInfo()
 }
 
 
-int ObBalanceGroupInfo::append_part(ObTransferPartInfo &part,
+int ObBalanceGroupInfo::append_part(
+    ObTransferPartInfo &part,
     const int64_t data_size,
-    const uint64_t part_group_uid)
+    const uint64_t part_group_uid,
+    const int64_t balance_weight)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! part.is_valid() || data_size < 0 || !is_valid_id(part_group_uid))) {
+  if (OB_UNLIKELY(!part.is_valid() || data_size < 0 || !is_valid_id(part_group_uid) || balance_weight < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(part), K(data_size));
+    LOG_WARN("invalid argument", KR(ret), K(part), K(data_size), K(balance_weight));
   } else if (OB_FAIL(create_new_part_group_if_needed_(part_group_uid))) {
     LOG_WARN("create new part group if needed failed", KR(ret), K(part_group_uid), K_(last_part_group_uid));
   } else if (OB_UNLIKELY(part_groups_.count() <= 0)) {
@@ -69,12 +87,12 @@ int ObBalanceGroupInfo::append_part(ObTransferPartInfo &part,
     if (OB_ISNULL(part_group)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid data", KR(ret), KPC(part_group), KPC(this));
-    } else if (OB_FAIL(part_group->add_part(part, data_size))) {
+    } else if (OB_FAIL(part_group->add_part(part, data_size, balance_weight))) {
       LOG_WARN("add part into partition group fail", KR(ret),
-          KPC(part_group), K(part), K(data_size), K(part_group_uid), KPC(this));
+          KPC(part_group), K(part), K(data_size), K(balance_weight), K(part_group_uid), KPC(this));
     }
 
-    LOG_TRACE("[ObBalanceGroupInfo] append part", K(part), K(data_size), K(part_group_uid),
+    LOG_TRACE("[ObBalanceGroupInfo] append part", K(part), K(data_size), K(part_group_uid), K(balance_weight),
         "part_group_count", part_groups_.count(), KPC(part_group));
   }
   return ret;

@@ -94,7 +94,7 @@ private:
   //load current unit group and primary zone
   int gather_stat_();
   //process current job
-  int try_process_current_job(int64_t &job_cnt);
+  int try_process_current_job(int64_t &job_cnt, bool &job_is_suspend);
   //according to primary_zone and unit group
   int ls_balance_(int64_t &job_cnt);
   // according balance group strategy
@@ -141,6 +141,7 @@ private:
   int init_partition_balance_for_trigger_(
       const uint64_t tenant_id,
       ObPartitionBalance &partition_balance);
+  void wakeup_balance_task_execute_();
 private:
   bool inited_;
   bool loaded_;

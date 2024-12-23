@@ -16,12 +16,16 @@
 #include "share/ob_common_rpc_proxy.h"
 #include "observer/ob_server_struct.h" // GCTX
 #include "common/ob_timeout_ctx.h" // ObTimeoutCtx
+#include "share/ob_balance_define.h"
+#include "share/balance/ob_object_balance_weight_operator.h" // ObObjectBalanceWeightOperator
+#include "rootserver/ob_tenant_event_def.h" // TENANT_EVENT
 
 namespace oceanbase
 {
 using namespace common;
 using namespace share;
 using namespace observer;
+using namespace tenant_event;
 
 namespace pl
 {
@@ -32,9 +36,7 @@ int ObDBMSBalance::trigger_partition_balance(
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
-  int64_t affected_rows = 0;
-  int64_t job_id = OB_INVALID_ID;
-  int64_t tenant_id = OB_INVALID_TENANT_ID;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
   int32_t balance_timeout_s = 0;
   int64_t balance_timeout_us = 0;
   ObAddr leader;
@@ -42,6 +44,7 @@ int ObDBMSBalance::trigger_partition_balance(
   ObTriggerPartitionBalanceArg arg;
   UNUSED(result);
   uint64_t data_version = 0;
+  const int64_t begin_ts = ObTimeUtil::current_time();
   if (OB_ISNULL(GCTX.srv_rpc_proxy_)
       || OB_ISNULL(GCTX.location_service_)
       || OB_ISNULL(ctx.get_my_session())) {
@@ -91,7 +94,265 @@ int ObDBMSBalance::trigger_partition_balance(
         LOG_WARN("trigger partition balance failed", KR(ret), K(arg));
       }
     } while (OB_NOT_MASTER == ret && ++retry_cnt <= RETRY_CNT_LIMIT);
+
+    const int64_t end_ts = ObTimeUtil::current_time();
+    TENANT_EVENT(tenant_id, DBMS_BALANCE, TRIGGER_PARTITION_BALANCE, end_ts, ret, end_ts - begin_ts, balance_timeout_s);
   }
+  return ret;
+}
+
+int ObDBMSBalance::set_balance_weight(
+    sql::ObExecContext &ctx,
+    sql::ParamStore &params,
+    common::ObObj &result)
+{
+  UNUSED(result);
+  int ret = OB_SUCCESS;
+  ObString database_name;
+  ObString table_name;
+  ObString partition_name;
+  ObString subpartition_name;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  int32_t weight = 0;
+  ObObjectID table_id = OB_INVALID_ID;
+  ObObjectID part_id = OB_INVALID_ID;
+  ObObjectID subpart_id = OB_INVALID_ID;
+  schema::ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = NULL;
+  ObObjectBalanceWeight obj_weight;
+  const int64_t begin_ts = ObTimeUtil::current_time();
+  const char *op_str = "set_balance_weight";
+
+  if (OB_ISNULL(GCTX.sql_proxy_)
+      || OB_ISNULL(GCTX.schema_service_)
+      || OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", KR(ret), K(GCTX.sql_proxy_), K(GCTX.schema_service_), K(ctx.get_my_session()));
+  } else if (FALSE_IT(tenant_id = ctx.get_my_session()->get_effective_tenant_id())) {
+  } else if (OB_FAIL(pre_check_for_balance_weight_(tenant_id, op_str))) {
+    LOG_WARN("pre check for balance weight failed", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(5 != params.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid params", KR(ret), K(params));
+  } else if (!params.at(0).is_null() && OB_FAIL(params.at(0).get_int32(weight))) {
+    LOG_WARN("get weight failed", KR(ret), K(params.at(0)));
+  } else if (!params.at(1).is_null() && OB_FAIL(params.at(1).get_varchar(database_name))) {
+    LOG_WARN("get database_name failed", KR(ret), K(params.at(1)));
+  } else if (!params.at(2).is_null() && OB_FAIL(params.at(2).get_varchar(table_name))) {
+    LOG_WARN("get table_name failed", KR(ret), K(params.at(2)));
+  } else if (!params.at(3).is_null() && OB_FAIL(params.at(3).get_varchar(partition_name))) {
+    LOG_WARN("get partition_name failed", KR(ret), K(params.at(3)));
+  } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_varchar(subpartition_name))) {
+    LOG_WARN("get partition_name failed", KR(ret), K(params.at(4)));
+  } else if (OB_FAIL(get_id_by_name_(
+      tenant_id,
+      database_name,
+      table_name,
+      partition_name,
+      subpartition_name,
+      table_id,
+      part_id,
+      subpart_id))) {
+    LOG_WARN("get id by name failed", KR(ret), K(tenant_id),
+        K(database_name), K(table_name), K(partition_name), K(subpartition_name));
+  } else if (OB_FAIL(obj_weight.init(tenant_id, table_id, part_id, subpart_id, weight))) {
+    LOG_WARN("init failed", KR(ret), K(tenant_id),
+        K(table_id), K(part_id), K(subpart_id), K(weight));
+  } else if (OB_FAIL(ObObjectBalanceWeightOperator::update(*GCTX.sql_proxy_, obj_weight))) {
+    LOG_WARN("update failed", KR(ret), K(obj_weight));
+  }
+  const int64_t end_ts = ObTimeUtil::current_time();
+  TENANT_EVENT(tenant_id, DBMS_BALANCE, SET_BALANCE_WEIGHT, end_ts, ret, end_ts - begin_ts,
+      weight, database_name, table_name, partition_name, subpartition_name);
+
+  return ret;
+}
+
+int ObDBMSBalance::clear_balance_weight(
+    sql::ObExecContext &ctx,
+    sql::ParamStore &params,
+    common::ObObj &result)
+{
+  UNUSED(result);
+  int ret = OB_SUCCESS;
+  ObString database_name;
+  ObString table_name;
+  ObString partition_name;
+  ObString subpartition_name;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  ObObjectID table_id = OB_INVALID_ID;
+  ObObjectID part_id = OB_INVALID_ID;
+  ObObjectID subpart_id = OB_INVALID_ID;
+  schema::ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = NULL;
+  ObObjectBalanceWeightKey obj_key;
+  const int64_t begin_ts = ObTimeUtil::current_time();
+  const char *op_str = "clear_balance_weight";
+
+  if (OB_ISNULL(GCTX.sql_proxy_)
+      || OB_ISNULL(GCTX.schema_service_)
+      || OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", KR(ret), K(GCTX.sql_proxy_), K(GCTX.schema_service_), K(ctx.get_my_session()));
+  } else if (FALSE_IT(tenant_id = ctx.get_my_session()->get_effective_tenant_id())) {
+  } else if (OB_FAIL(pre_check_for_balance_weight_(tenant_id, op_str))) {
+    LOG_WARN("pre check for balance weight failed", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(4 != params.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid params", KR(ret), K(params));
+  } else if (!params.at(0).is_null() && OB_FAIL(params.at(0).get_varchar(database_name))) {
+    LOG_WARN("get database_name failed", KR(ret), K(params.at(0)));
+  } else if (!params.at(1).is_null() && OB_FAIL(params.at(1).get_varchar(table_name))) {
+    LOG_WARN("get table_name failed", KR(ret), K(params.at(1)));
+  } else if (!params.at(2).is_null() && OB_FAIL(params.at(2).get_varchar(partition_name))) {
+    LOG_WARN("get partition_name failed", KR(ret), K(params.at(2)));
+  } else if (!params.at(3).is_null() && OB_FAIL(params.at(3).get_varchar(subpartition_name))) {
+    LOG_WARN("get partition_name failed", KR(ret), K(params.at(3)));
+  } else if (OB_FAIL(get_id_by_name_(
+      tenant_id,
+      database_name,
+      table_name,
+      partition_name,
+      subpartition_name,
+      table_id,
+      part_id,
+      subpart_id))) {
+    LOG_WARN("get id by name failed", KR(ret), K(tenant_id),
+        K(database_name), K(table_name), K(partition_name), K(subpartition_name));
+  } else if (OB_FAIL(obj_key.init(tenant_id, table_id, part_id, subpart_id))) {
+    LOG_WARN("init failed", KR(ret), K(tenant_id), K(table_id), K(part_id), K(subpart_id));
+  } else if (OB_FAIL(ObObjectBalanceWeightOperator::remove(*GCTX.sql_proxy_, obj_key))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("object balance weight not exist", K(obj_key));
+    } else {
+      LOG_WARN("update failed", KR(ret), K(obj_key));
+    }
+  }
+  const int64_t end_ts = ObTimeUtil::current_time();
+  TENANT_EVENT(tenant_id, DBMS_BALANCE, CLEAR_BALANCE_WEIGHT, end_ts, ret, end_ts - begin_ts,
+      database_name, table_name, partition_name, subpartition_name);
+
+  return ret;
+}
+
+int ObDBMSBalance::pre_check_for_balance_weight_(const uint64_t tenant_id, const char *op_str)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id), K(data_version));
+  } else if (data_version < DATA_VERSION_4_2_5_2) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support version", KR(ret), K(tenant_id), K(data_version), K(op_str));
+    (void)snprintf(err_msg, sizeof(err_msg), "%s is", op_str);
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("not user tenant, not allowed", KR(ret), K(tenant_id), K(op_str));
+    (void)snprintf(err_msg, sizeof(err_msg), "not user tenant, %s is", op_str);
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+  }
+  return ret;
+}
+
+int ObDBMSBalance::get_id_by_name_(
+    const uint64_t tenant_id,
+    const common::ObString &database_name,
+    const common::ObString &table_name,
+    const common::ObString &partition_name,
+    const common::ObString &subpartition_name,
+    ObObjectID &table_id,
+    ObObjectID &part_id,
+    ObObjectID &subpart_id)
+{
+  int ret = OB_SUCCESS;
+  table_id = OB_INVALID_ID;
+  part_id = OB_INVALID_ID;
+  subpart_id = OB_INVALID_ID;
+  schema::ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = NULL;
+  const char* table_type_str = NULL;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", KR(ret), K(GCTX.schema_service_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || database_name.empty()
+      || table_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(database_name),
+        K(table_name), K(partition_name), K(subpartition_name));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(
+      tenant_id,
+      database_name,
+      table_name,
+      false/*is_index*/,
+      table_schema))) {
+    LOG_WARN("get table schema failed", KR(ret), K(tenant_id),
+        K(database_name), K(table_name), K(partition_name), K(subpartition_name));
+  } else if (OB_ISNULL(table_schema)
+      && OB_FAIL(schema_guard.get_table_schema(
+          tenant_id,
+          database_name,
+          table_name,
+          true/*is_index*/,
+          table_schema))) { // support global index
+    LOG_WARN("get table schema failed", KR(ret), K(tenant_id),
+        K(database_name), K(table_name), K(partition_name), K(subpartition_name));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    ObCStringHelper helper;
+    LOG_WARN("table not exist", KR(ret), K(tenant_id),
+        K(database_name), K(table_name), K(partition_name), K(subpartition_name));
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name), helper.convert(table_name));
+  } else if (FALSE_IT(table_id = table_schema->get_table_id())) {
+  } else if (!check_if_need_balance_table(*table_schema, table_type_str)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not need balance table", KR(ret), KPC(table_schema));
+    char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
+    (void)snprintf(err_msg, sizeof(err_msg), "%s is", table_type_str);
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+  } else if (PARTITION_LEVEL_TWO == table_schema->get_part_level()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("subpartition is not support", KR(ret), KPC(table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "subpartition table is");
+  } else if (partition_name.empty()) {
+    if (OB_UNLIKELY(!subpartition_name.empty())) {
+      ret = OB_UNKNOWN_PARTITION;
+      LOG_WARN("partition not exist", KR(ret), K(tenant_id),
+        K(database_name), K(table_name), K(partition_name), K(subpartition_name));
+      LOG_USER_ERROR(OB_UNKNOWN_PARTITION, partition_name.length(), partition_name.ptr(),
+          table_name.length(), table_name.ptr());
+    } else {
+      // both partition_name and subpartition_name are empty, do nothing
+    }
+  } else {
+    ObPartGetter part_getter(*table_schema);
+    if (subpartition_name.empty()) {
+      if (OB_FAIL(part_getter.get_part_id(partition_name, part_id))) {
+        LOG_WARN("get part id failed", KR(ret), K(database_name),
+            K(table_name), K(partition_name), K(subpartition_name));
+        if (OB_UNKNOWN_PARTITION == ret) {
+          LOG_USER_ERROR(OB_UNKNOWN_PARTITION, partition_name.length(), partition_name.ptr(),
+              table_name.length(), table_name.ptr());
+        }
+      }
+    } else if (OB_FAIL(part_getter.get_part_id_and_subpart_id(
+        partition_name,
+        subpartition_name,
+        part_id,
+        subpart_id))) {
+      LOG_WARN("get part id failed", KR(ret), K(database_name),
+          K(table_name), K(partition_name), K(subpartition_name));
+      if (OB_UNKNOWN_SUBPARTITION == ret) {
+        LOG_USER_ERROR(OB_UNKNOWN_SUBPARTITION);
+      }
+    }
+  }
+
   return ret;
 }
 

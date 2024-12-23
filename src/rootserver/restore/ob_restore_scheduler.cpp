@@ -20,6 +20,7 @@
 #include "rootserver/ob_ls_service_helper.h"//create_new_ls_in_trans
 #include "rootserver/ob_common_ls_service.h"//do_create_user_ls
 #include "rootserver/standby/ob_tenant_role_transition_service.h"
+#include "rootserver/ob_tenant_info_loader.h"
 #include "share/ob_schema_status_proxy.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/schema/ob_schema_mgr.h"
@@ -1204,6 +1205,7 @@ int ObRestoreScheduler::create_all_ls_(
   int ret = OB_SUCCESS;
   ObLSStatusOperator status_op;
   ObLSStatusInfo status_info;
+  ObAllTenantInfo tenant_info;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
@@ -1211,15 +1213,19 @@ int ObRestoreScheduler::create_all_ls_(
     LOG_WARN("restore scheduler stopped", KR(ret));
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy is null", KR(ret), KP(sql_proxy_));
+    LOG_WARN("sql_proxy is null", KR(ret), KP(sql_proxy_));
   } else if (OB_UNLIKELY(!tenant_schema.is_valid()
         || 0 >= ls_attr_array.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_schema), K(ls_attr_array));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, sql_proxy_, false, tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id_));
+  } else if (OB_UNLIKELY(!tenant_info.is_normal_status())) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("the tenant's switchover status should be NORMAL", KR(ret), K(tenant_info));
   } else {
     common::ObMySQLTransaction trans;
     const int64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id_);
-
     if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
       LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
     } else {
@@ -1239,8 +1245,8 @@ int ObRestoreScheduler::create_all_ls_(
           LOG_WARN("failed to get ls status info", KR(ret), K(tenant_id_), K(ls_info));
         } else if (OB_FAIL(ObLSServiceHelper::create_new_ls_in_trans(
                    ls_info.get_ls_id(), ls_info.get_ls_group_id(), ls_info.get_create_scn(),
-                   share::NORMAL_SWITCHOVER_STATUS, tenant_stat, trans, ls_flag))) {
-          LOG_WARN("failed to add new ls status info", KR(ret), K(ls_info));
+                   tenant_info.get_switchover_epoch(), tenant_stat, trans, ls_flag))) {
+          LOG_WARN("failed to add new ls status info", KR(ret), K(ls_info), K(tenant_info));
         }
         LOG_INFO("create init ls", KR(ret), K(ls_info));
       }

@@ -154,6 +154,7 @@ void ObBalanceTaskExecuteService::do_work()
   } else {
     int64_t idle_time_us = 100 * 1000L;
     int tmp_ret = OB_SUCCESS;
+    bool task_need_process = false;
     while (!has_set_stop()) {
       idle_time_us = 1 * 1000 * 1000L;
       ObCurTraceId::init(GCONF.self_addr_);
@@ -163,11 +164,14 @@ void ObBalanceTaskExecuteService::do_work()
       if (OB_FAIL(ObBalanceTaskTableOperator::load_can_execute_task(
              tenant_id_, task_array_, *sql_proxy_))) {
         LOG_WARN("failed to load all balance task", KR(ret), K(tenant_id_));
-      } else if (OB_FAIL(execute_task_())) {
+      } else if (OB_FAIL(execute_task_(task_need_process))) {
         LOG_WARN("failed to execute balance task", KR(ret));
       }
       if (OB_FAIL(ret)) {
         idle_time_us = 100 * 1000;
+      } else if (!task_need_process || task_array_.empty()) {
+        idle_time_us = 30 * 1000 * 1000L;
+        ISTAT("job is suspend", K(idle_time_us));
       }
       ISTAT("finish one round", KR(ret), K(task_array_), K(idle_time_us), K(task_comment_));
       task_comment_.reset();
@@ -321,9 +325,10 @@ int ObBalanceTaskExecuteService::process_current_task_status_(
   return ret;
 }
 ERRSIM_POINT_DEF(EN_SET_TASK_EXECUTE_TIMEOUT);
-int ObBalanceTaskExecuteService::execute_task_()
+int ObBalanceTaskExecuteService::execute_task_(bool &task_need_process)
 {
   int ret = OB_SUCCESS;
+  task_need_process = false;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -353,6 +358,12 @@ int ObBalanceTaskExecuteService::execute_task_()
         LOG_WARN("failed to start trans", KR(ret), K(tenant_id_));
       } else if (OB_FAIL(get_balance_job_task_for_update_(task, job, task_in_trans, trans))) {
         LOG_WARN("failed to get job", KR(ret), K(task));
+      } else if (!job.get_job_status().is_suspend()) {
+        task_need_process = true;
+      } else {
+        task_need_process = false;
+      }
+      if (OB_FAIL(ret)) {
       } else if (task_in_trans.get_task_status().is_finish_status()) {
       } else {
         if (job.get_job_status().is_doing()) {
@@ -362,6 +373,12 @@ int ObBalanceTaskExecuteService::execute_task_()
         } else if (job.get_job_status().is_canceling()) {
           if (OB_FAIL(cancel_current_task_status_(task_in_trans, job, trans, skip_next_status))) {
             LOG_WARN("failed to cancel current task", KR(ret), K(task_in_trans));
+          }
+        } else if (job.get_job_status().is_suspend()) {
+          //suspend不可以修改任何状态
+          skip_next_status = true;
+          if (OB_FAIL(suspend_current_task_(task, job, trans))) {
+            LOG_WARN("failed to suspend current task", KR(ret), K(task));
           }
         } else {
           ret = OB_ERR_UNEXPECTED;
@@ -393,7 +410,10 @@ int ObBalanceTaskExecuteService::execute_task_()
       if (task_in_trans.get_task_status().is_set_merge_ls()) {
         DEBUG_SYNC(AFTER_BLOCK_TABLET_IN_WHEN_LS_MERGE);
       }
-      ISTAT("process task", KR(ret), K(task_in_trans), K(job), K(task_comment_));
+      if (OB_FAIL(ret) && !task_need_process) {
+        task_need_process = true;
+      }
+      ISTAT("process task", KR(ret), K(task_in_trans), K(job), K(task_comment_), K(task_need_process));
       //isolate error of each task
       ret = OB_SUCCESS;
     }
@@ -448,35 +468,8 @@ int ObBalanceTaskExecuteService::cancel_current_task_status_(
     if (task.get_task_status().is_transfer()) {
       if (!task.get_current_transfer_task_id().is_valid()) {
         //no transfer, no need to todo
-      } else {
-        //try to wait transfer end
-        ObTenantTransferService *transfer_service =
-            MTL(ObTenantTransferService *);
-        if (OB_ISNULL(transfer_service)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("transfer service is null", KR(ret));
-        } else if (OB_FAIL(transfer_service->try_cancel_transfer_task(
-                       task.get_current_transfer_task_id()))) {
-          LOG_WARN("failed to cancel transfer task", KR(ret), K(task));
-          skip_next_status = true;
-          int tmp_ret = ret;
-          ret = OB_SUCCESS;
-          if (OB_FAIL(task_comment_.assign_fmt("Fail to cancel transfer task %ld, result is %d",
-                task.get_current_transfer_task_id().id(), tmp_ret))) {
-            LOG_WARN("failed to assign fmt", KR(ret), KR(tmp_ret), K(task));
-          }
-        } else if (job.get_job_type().is_transfer_partition()) {
-          ObTransferTask transfer_task;
-          int64_t create_time = 0, finish_time = 0;//no use
-          if (OB_FAIL(ObTransferTaskOperator::get_history_task(trans, tenant_id_,
-                  task.get_current_transfer_task_id(), transfer_task,
-                  create_time, finish_time))) {
-            LOG_WARN("failed to get history task", KR(ret), K(tenant_id_), K(task));
-          } else if (OB_FAIL(finish_transfer_partition_task_(transfer_task, job, trans))) {
-            LOG_WARN("failed to finish transfer partition task", KR(ret),
-               K(transfer_task), K(job));
-          }
-        }
+      } else if (OB_FAIL(cancel_transfer_task_(task, job, trans, skip_next_status))) {
+        LOG_WARN("failed to cancel transfer task", KR(ret), K(task), K(job));
       }
     } else {
       //init, create ls, alter_ls, drop ls, set_ls_merge
@@ -516,6 +509,84 @@ int ObBalanceTaskExecuteService::cancel_current_task_status_(
       LOG_WARN("failed to assign fmt", KR(ret), K(task));
     } else if (OB_FAIL(cancel_other_init_task_(task, trans))) {
       LOG_WARN("failed to cancel other init task", KR(ret), K(task));
+    }
+  }
+  return ret;
+}
+
+int ObBalanceTaskExecuteService::suspend_current_task_(const share::ObBalanceTask &task,
+   const share::ObBalanceJob &job, ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!task.is_valid()
+        || !job.get_job_status().is_suspend())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("task or job is invalid", KR(ret), K(task), K(job));
+  } else if (!task.get_task_status().is_transfer()) {
+    //nothing todo
+  } else if (!task.get_current_transfer_task_id().is_valid()) {
+    //no transfer, no need to todo
+  } else {
+    ObTenantTransferService *transfer_service =
+      MTL(ObTenantTransferService *);
+    if (OB_ISNULL(transfer_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("transfer service is null", KR(ret));
+    } else if (OB_FAIL(transfer_service->try_cancel_transfer_task(
+            task.get_current_transfer_task_id()))) {
+      LOG_WARN("failed to cancel transfer task", KR(ret), K(task));
+    }
+  }
+  return ret;
+}
+
+//skip_next_status代表transfer_task没有清理成功
+int ObBalanceTaskExecuteService::cancel_transfer_task_(const share::ObBalanceTask &task,
+    const share::ObBalanceJob &job, ObMySQLTransaction &trans, bool &skip_next_status)
+{
+  int ret = OB_SUCCESS;
+  skip_next_status = false;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!task.is_valid()
+        || !task.get_task_status().is_transfer()
+        || !task.get_current_transfer_task_id().is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("task is invalid", KR(ret), K(task));
+  } else {
+    //try to wait transfer end
+    ObTenantTransferService *transfer_service =
+      MTL(ObTenantTransferService *);
+    if (OB_ISNULL(transfer_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("transfer service is null", KR(ret));
+    } else if (OB_FAIL(transfer_service->try_cancel_transfer_task(
+            task.get_current_transfer_task_id()))) {
+      LOG_WARN("failed to cancel transfer task", KR(ret), K(task));
+      skip_next_status = true;
+      int tmp_ret = ret;
+      ret = OB_SUCCESS;
+      if (OB_FAIL(task_comment_.assign_fmt("Fail to cancel transfer task %ld, result is %d",
+              task.get_current_transfer_task_id().id(), tmp_ret))) {
+        LOG_WARN("failed to assign fmt", KR(ret), KR(tmp_ret), K(task));
+      }
+    } else if (job.get_job_type().is_transfer_partition()) {
+      //可以cancel成功，要么处于init或者canceled状态，要么表里没有任务
+      //任务可能是成功的，需要清理transfer_partition_task内部表
+      ObTransferTask transfer_task;
+      int64_t create_time = 0, finish_time = 0;//no use
+      if (OB_FAIL(ObTransferTaskOperator::get_history_task(trans, tenant_id_,
+              task.get_current_transfer_task_id(), transfer_task,
+              create_time, finish_time))) {
+        LOG_WARN("failed to get history task", KR(ret), K(tenant_id_), K(task));
+      } else if (OB_FAIL(finish_transfer_partition_task_(transfer_task, job, trans))) {
+        LOG_WARN("failed to finish transfer partition task", KR(ret),
+            K(transfer_task), K(job));
+      }
     }
   }
   return ret;

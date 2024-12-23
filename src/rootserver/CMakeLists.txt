@@ -114,6 +114,7 @@ ob_set_subtarget(ob_rootserver balance
   balance/ob_tenant_ls_balance_group_info.cpp
   balance/ob_ls_all_part_builder.cpp
   balance/ob_partition_balance_helper.cpp
+  balance/ob_object_balance_weight_mgr.cpp
 )
 
 ob_set_subtarget(ob_rootserver ddl_task

@@ -58,6 +58,7 @@ const char* ObBalanceStrategy::BALANCE_STRATEGY_STR_ARRAY[MAX_STRATEGY + 1] =
   "manual transfer partition",
   "partition balance", // compatible with old versions
   "partition attribution alignment",
+  "intragroup partition weight balance",
   "intragroup partition count balance",
   "intergroup partition count balance",
   "partition disk balance",
@@ -95,6 +96,7 @@ int ObBalanceStrategy::parse_from_str(const ObString &str)
   return ret;
 }
 
+// PB_ATTR_ALIGN -> PB_INTRA_GROUP_WEIGHT -> PB_INTRA_GROUP -> PB_INTER_GROUP -> PB_PART_DISK
 bool ObBalanceStrategy::can_be_next_partition_balance_strategy(const ObBalanceStrategy &old_strategy) const
 {
   return is_partition_balance_strategy()

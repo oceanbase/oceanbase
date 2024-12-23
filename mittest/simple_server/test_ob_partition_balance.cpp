@@ -51,12 +51,16 @@ int ObPartitionBalance::process(const ObBalanceJobID &job_id, const int64_t time
     LOG_WARN("prepare_balance_group fail", KR(ret));
   } else if (OB_FAIL(save_balance_group_stat_())) {
     LOG_WARN("save_balance_group_stat fail", KR(ret));
+  } else if (OB_FAIL(process_weight_balance_intragroup_())) {
+    LOG_WARN("process_weight_balance_intragroup failed", KR(ret));
   } else if (OB_FAIL(process_balance_partition_inner_())) {
     LOG_WARN("process_balance_partition_inner fail", KR(ret));
   } else if (OB_FAIL(process_balance_partition_extend_())) {
     LOG_WARN("process_balance_partition_extend fail", KR(ret));
   } else if (OB_FAIL(process_balance_partition_disk_())) {
     LOG_WARN("process_balance_partition_disk fail", KR(ret));
+  } else if (!job_generator_.need_gen_job()) {
+    LOG_INFO("no need gen job");
   } else if (OB_FAIL(job_generator_.gen_balance_job_and_tasks(job_type, balance_strategy))) {
     LOG_WARN("gen_balance_job_and_tasks fail", KR(ret));
   }
@@ -109,7 +113,7 @@ public:
     ObCurTraceId::get_trace_id()->set(std::string(std::to_string(ObTimeUtility::current_time()%10000)).c_str());
     ObTenantSwitchGuard guard;
     ObLSStatusOperator status_op;
-    TEST_INFO("balance_part_job start>>>>>>>>>>>>>>>>>");
+    TEST_INFO("balance_part_job start>>>>>>>>>>>>>>>>>", K(ls_cnt));
 
     if (OB_FAIL(guard.switch_to(OB_SYS_TENANT_ID))) {
       LOG_WARN("switch tenant", KR(ret));
@@ -119,7 +123,7 @@ public:
       LOG_WARN("balance_part_job process fail", KR(ret));
     } else {
       std::sort(balance_part_job.ls_desc_array_.begin(), balance_part_job.ls_desc_array_.end(), [] (const ObLSDesc* left, const ObLSDesc* right) {
-        return left->partgroup_cnt_ < right->partgroup_cnt_;
+        return left->get_partgroup_cnt() < right->get_partgroup_cnt();
       });
       TEST_INFO("balance_part_job bg_map size", K(balance_part_job.bg_map_.size()));
       for (auto iter = balance_part_job.bg_map_.begin(); iter != balance_part_job.bg_map_.end(); iter++) {
@@ -131,9 +135,9 @@ public:
       print_part_map(balance_part_job.job_generator_.normal_to_dup_part_map_, "normal_to_dup");
       print_part_map(balance_part_job.job_generator_.dup_to_dup_part_map_, "dup_to_dup");
       print_part_map(balance_part_job.job_generator_.normal_to_normal_part_map_, "normal_to_normal");
-      if (balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count()-1)->partgroup_cnt_ - balance_part_job.ls_desc_array_.at(0)->partgroup_cnt_ > 1) {
+      if (balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count()-1)->get_partgroup_cnt() - balance_part_job.ls_desc_array_.at(0)->get_partgroup_cnt() > 1) {
         ret = -1;
-        LOG_WARN("partition not balance", KR(ret), K(balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count()-1)), K(balance_part_job.ls_desc_array_.at(0)));
+        LOG_WARN("partition not balance", KR(ret), K(ls_cnt), KPC(balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count()-1)), KPC(balance_part_job.ls_desc_array_.at(0)));
       }
     }
     return ret;

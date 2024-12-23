@@ -24,8 +24,10 @@
 #include "rootserver/ob_ls_service_helper.h"//ObLSServiceHelper
 #include "rootserver/ob_transfer_partition_task.h"//ObTransferPartitionHelper
 #include "rootserver/ob_balance_ls_primary_zone.h"//ObBalanceLSPrimaryZone
+#include "rootserver/ob_balance_task_execute_service.h"//ObBalanceTaskExecuteService
 #include "observer/ob_server_struct.h"//GCTX
 #include "rootserver/ob_partition_balance.h" // partition balance
+#include "rootserver/balance/ob_object_balance_weight_mgr.h" // ObObjectBalanceWeightMgr
 #include "storage/tablelock/ob_lock_utils.h" // ObInnerTableLockUtil
 #include "share/ob_cluster_version.h"
 #include "share/ob_share_util.h" // ObShareUtil
@@ -85,6 +87,8 @@ void ObTenantBalanceService::do_work()
     int64_t idle_time_us = 10 * 1000 * 1000L;
     int tmp_ret = OB_SUCCESS;
     int64_t job_cnt = 0;
+    //控制线程idle时间，如果处于suspend状态，可以多idle一段时间
+    bool job_is_suspend = false;
     int64_t last_partition_balance_time = ObTimeUtility::current_time();
     int64_t last_statistic_bg_stat_time = OB_INVALID_TIMESTAMP; // statistic once when thread starts
     int64_t last_statistic_schema_version = OB_INVALID_VERSION;
@@ -95,7 +99,7 @@ void ObTenantBalanceService::do_work()
       DEBUG_SYNC(BEFORE_TENANT_BALANCE_SERVICE);
       if (OB_FAIL(gather_stat_())) {
         LOG_WARN("failed to gather stat", KR(ret));
-      } else if (OB_FAIL(try_process_current_job(job_cnt))) {
+      } else if (OB_FAIL(try_process_current_job(job_cnt, job_is_suspend))) {
         LOG_WARN("failed to process current job", KR(ret));
       } else if (0 == job_cnt) {
         if (OB_FAIL(transfer_partition_(job_cnt))) {
@@ -127,6 +131,9 @@ void ObTenantBalanceService::do_work()
         LOG_WARN("try statistic balance group status failed", KR(tmp_ret), K(last_statistic_bg_stat_time),
             K(last_statistic_schema_version), K(last_statistic_max_transfer_task_id));
       }
+      if (OB_SUCC(ret) && 1 == job_cnt && !job_is_suspend) {
+        wakeup_balance_task_execute_();
+      }
 
       if (OB_FAIL(ret) && OB_NEED_WAIT != ret) {
         idle_time_us = 100 * 1000;
@@ -138,8 +145,12 @@ void ObTenantBalanceService::do_work()
         }
         idle_time_us = tenant_config.is_valid() ? tenant_config->balancer_idle_time : 10 * 1000 * 1000L;
         if (idle_time_us <= 0) {
+          //防御性报错
           LOG_ERROR("balancer idle time is not valid", K(idle_time_us), K(tmp_time));
           idle_time_us = 10 * 1000 * 1000L;
+        } else if (job_is_suspend) {
+          idle_time_us = 5 * idle_time_us;
+          ISTAT("job is suspend", K(idle_time_us));
         }
       }
       ISTAT("finish one round", KR(ret), KR(tmp_ret), K_(tenant_id), K(job_cnt),
@@ -154,6 +165,18 @@ void ObTenantBalanceService::do_work()
   }
 }
 
+void ObTenantBalanceService::wakeup_balance_task_execute_()
+{
+  int ret = OB_SUCCESS;
+  ObBalanceTaskExecuteService *exe_service = MTL(ObBalanceTaskExecuteService*);
+  if (OB_ISNULL(exe_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("balance task execute service is null", KR(ret));
+  } else {
+    exe_service->wakeup();
+    LOG_INFO("wake balance task execute service");
+  }
+}
 int ObTenantBalanceService::gather_stat_primary_zone_num_and_units(
     const uint64_t &tenant_id,
     int64_t &primary_zone_num,
@@ -388,10 +411,11 @@ int ObTenantBalanceService::is_standby_tenant_ls_balance_finished_(
   return ret;
 }
 
-int ObTenantBalanceService::try_process_current_job(int64_t &job_cnt)
+int ObTenantBalanceService::try_process_current_job(int64_t &job_cnt, bool &job_is_suspend)
 {
   int ret = OB_SUCCESS;
   job_cnt = 0;
+  job_is_suspend = false;
   int64_t start_time = OB_INVALID_TIMESTAMP, finish_time = OB_INVALID_TIMESTAMP;
   ObBalanceJob job;
   bool job_need_cancel = false;
@@ -418,6 +442,9 @@ int ObTenantBalanceService::try_process_current_job(int64_t &job_cnt)
     //decide whether you want to continue generating tasks
   } else if (job.get_job_status().is_canceling()) {
     //job already abort, no need to do
+  } else if (job.get_job_status().is_suspend()) {
+    job_is_suspend = true;
+    //in suspend, can not calcel, only doing need check cancel
   } else if (OB_FAIL(check_ls_job_need_cancel_(job, job_need_cancel, comment))) {
     LOG_WARN("failed to check exist job need continue", KR(ret), K(job));
   } else if (job_need_cancel) {
@@ -521,6 +548,12 @@ int ObTenantBalanceService::try_finish_current_job_(const share::ObBalanceJob &j
     LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (job.get_job_status().is_canceled() || job.get_job_status().is_success()) {
     can_clean_job = true;
+  } else if (job.get_job_status().is_suspend()) {
+    can_clean_job = false;
+    if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
+      //10s
+      ISTAT("job is suspend, cannot finish", K(job));
+    }
   } else if (OB_FAIL(ObBalanceTaskTableOperator::get_job_task_cnt(tenant_id_, job.get_job_id(),
                                           task_cnt, *GCTX.sql_proxy_))) {
     LOG_WARN("failed to get job task cnt", KR(ret), K(job), K(tenant_id_));
@@ -982,6 +1015,8 @@ int ObTenantBalanceService::try_statistic_balance_group_status_(
   } else if (latest_tenant_schema_version <= last_statistic_schema_version
       && latest_max_transfer_task_id <= last_statistic_max_transfer_task_id) {
     // no need to statistics because distribution of tablets is not changed
+  } else if (OB_FAIL(ObObjectBalanceWeightMgr::try_clear_tenant_expired_obj_weight(tenant_id_))) {
+    LOG_WARN("try clear tenant expired obj weight failed", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(partition_balance_(false/*need_balance*/))) { // just statistic balance group status
     LOG_WARN("failed to save balance group status",
         KR(ret), K(curr_time), K(last_statistic_bg_stat_time));
