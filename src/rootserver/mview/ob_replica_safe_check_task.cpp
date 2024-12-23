@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX STORAGE
+#define USING_LOG_PREFIX RS
 
 #include "share/ob_errno.h"
 #include "ob_replica_safe_check_task.h"
@@ -173,6 +173,7 @@ void ObReplicaSafeCheckTask::runTimerTask()
         LOG_WARN("unexpected status", KR(ret), KPC(this));
         break;
     }
+    LOG_INFO("timer task finish", KR(ret), KPC(this));
   }
 }
 
@@ -318,7 +319,7 @@ int ObReplicaSafeCheckTask::publish_scn()
     }
     if (OB_SUCC(ret)) {
       if (0 == publish_cnt) {
-        need_publish = false;
+        LOG_INFO("there no log publish", KR(ret), KPC(this));
       } else if (OB_FAIL(ls_cache_.clear_deleted_ls_info(merge_scn_))) {
         LOG_WARN("failed to clear_deleted_ls_info", KR(ret), K(publish_cnt), K(this));
       }
@@ -334,6 +335,7 @@ int ObReplicaSafeCheckTask::publish_scn()
     switch_status(StatusType::PUBLISH_SCN, CHECK_INTERVAL);
   } else if (OB_FAIL(get_transfer_task_id(max_transfer_task_id_))) {
     LOG_WARN("failed to get_transfer_task_id", KR(ret), KPC(this));
+    switch_status(StatusType::PUBLISH_SCN, ERROR_RETRY_INTERVAL);
   } else {
     switch_status(StatusType::CHECK_END);
   }
