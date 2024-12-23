@@ -335,7 +335,7 @@ int ObUserDefinedType::reset_record(ObObj &src, ObSQLSessionInfo *session)
     for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
       ObObj &obj = record->get_element()[i];
       if (obj.is_pl_extend()) {
-        int8_t extend_type = src.get_meta().get_extend_type();
+        int8_t extend_type = obj.get_meta().get_extend_type();
         if (PL_RECORD_TYPE == extend_type) {
           OZ (SMART_CALL(reset_record(obj, session)));
         } else if (PL_NESTED_TABLE_TYPE == extend_type ||
