@@ -5032,9 +5032,10 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     }
     if (OB_FAIL(ret) && need_construct && OB_NOT_NULL(record->get_allocator())) {
       ObObj tmp;
+      ObIAllocator *alloc = record->get_allocator();
       tmp.set_extend(reinterpret_cast<int64_t>(ptr), user_type->get_type(), init_size);
       ObUserDefinedType::destruct_obj(tmp, nullptr);
-      allocator.free(record->get_allocator());
+      allocator.free(alloc);
     }
     // f(self object_type, p1 out object_type), p1 will be init here, we have to set it null
     // but self can't be set to null.
@@ -5097,9 +5098,10 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     OX (coll->set_element_desc(elem_desc));
     if (OB_FAIL(ret) && need_construct && OB_NOT_NULL(coll->get_allocator())) {
       ObObj tmp;
+      ObIAllocator *alloc = coll->get_allocator();
       tmp.set_extend(reinterpret_cast<int64_t>(ptr), user_type->get_type(), init_size);
       ObUserDefinedType::destruct_obj(tmp, nullptr);
-      allocator.free(coll->get_allocator());
+      allocator.free(alloc);
     }
   }
 #endif
