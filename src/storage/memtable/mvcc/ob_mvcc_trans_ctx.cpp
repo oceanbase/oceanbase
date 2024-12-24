@@ -1762,6 +1762,19 @@ void ObTransCallbackMgr::elr_trans_preparing()
   }
 }
 
+void ObTransCallbackMgr::elr_trans_revoke()
+{
+  if (ATOMIC_LOAD(&need_merge_)) {
+    callback_list_.tx_elr_revoke();
+  } else {
+    int ret = OB_SUCCESS;
+    CALLBACK_LISTS_FOREACH(idx, list) {
+      list->tx_elr_revoke();
+    }
+  }
+}
+
+
 void ObTransCallbackMgr::trans_start()
 {
   reset();
@@ -1944,6 +1957,13 @@ int ObMvccRowCallback::elr_trans_preparing()
                is_non_unique_local_index_cb_);
   }
   return OB_SUCCESS;
+}
+
+void ObMvccRowCallback::elr_trans_revoke()
+{
+  if (OB_NOT_NULL(tnode_)) {
+    tnode_->clear_elr();
+  }
 }
 
 int ObMvccRowCallback::get_trans_id(ObTransID &trans_id) const

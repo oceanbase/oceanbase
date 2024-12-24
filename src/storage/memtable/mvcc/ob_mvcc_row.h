@@ -93,6 +93,7 @@ struct ObMvccTransNode
     void set_committed() { add_flag_(F_COMMITTED); }
     bool is_committed() const { return (ATOMIC_LOAD(&flag_status_) & F_COMMITTED); }
     void set_elr() { add_flag_(F_ELR); }
+    void clear_elr() { clear_flag_(F_ELR); }
     bool is_elr() const { return (ATOMIC_LOAD(&flag_status_) & F_ELR); }
     void set_aborted() { add_flag_(F_ABORTED); }
     void clear_aborted() { clear_flag_(F_ABORTED); }
@@ -222,6 +223,7 @@ public:
     }
     flag_.set_elr();
   }
+  void clear_elr() { flag_.clear_elr(); }
   template <typename Fn>
   void set_delayed_cleanout(Fn &change_hash_holder_op) {
     change_hash_holder_op();

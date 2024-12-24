@@ -152,6 +152,11 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   const SCN scn = iter->get_scn();
   const bool is_incomplete = iter->is_incomplete();
 
+  // only read elr committed data if reader has created TxCtx
+  // the reason is if the elr committed Tx finally aborted
+  // the reader can be promised also aborted
+  const bool read_elr = OB_NOT_NULL(ctx_->tx_ctx_) && is_elr;
+
   // Opt0: data is incomplete, so we need skip
   if (is_incomplete) {
     // After the success of ObMvccRow::mvcc_write_, the trans_node still cannot
@@ -161,10 +166,12 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     // from being erroneously visible.
     iter = iter->prev_;
   // Opt1: data is decided
-  } else if ((is_committed || is_aborted || (is_elr && !is_delayed_cleanout))
+  } else if ((is_committed || is_aborted || (read_elr && !is_delayed_cleanout))
       // Opt2: data is not decided while we donot need cleanout
       || (!is_delayed_cleanout
+          // read the memtable not during transfer-in
           && (!ctx_->get_tx_table_guards().src_tx_table_guard_.is_valid() ||
+              // read the transfer dest's memtable
               (memtable_ls_id_.is_valid() &&
                ctx_->get_tx_table_guards().src_tx_table_guard_.get_tx_table()->
                get_ls_id() != memtable_ls_id_))
@@ -174,7 +181,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
             (read_latest && data_tx_id == ctx_->tx_id_)))) {
     // Case 1: Cleanout can be skipped
     //         because inner tx read only care whether tx node rollbacked
-    if (is_committed || is_elr) {
+    if (is_committed || read_elr) {
       // Case 2: Data is committed, so the state is decided
       const SCN data_version = iter->trans_version_.atomic_load();
       if (read_uncommitted) {

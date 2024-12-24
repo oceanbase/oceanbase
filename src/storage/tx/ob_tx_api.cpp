@@ -1621,7 +1621,8 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
       share::SCN commit_version;
       if (OB_FAIL(get_tx_state_from_tx_table_(ls, tx_id, tx_state, commit_version))) {
         if (OB_TRANS_CTX_NOT_EXIST == ret) {
-          if (OB_FAIL(create_tx_ctx_(ls, *tx, ctx))) {
+          bool ctx_exist = false;
+          if (OB_FAIL(create_tx_ctx_(ls, *tx, ctx, ctx_exist))) {
             if ((OB_PARTITION_IS_BLOCKED == ret || OB_PARTITION_IS_STOPPED == ret) && is_ls_dropped_(ls)) {
               ctx_born_epoch = ObTxPart::EPOCH_DEAD;
               ret = OB_SUCCESS;

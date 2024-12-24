@@ -268,6 +268,9 @@ int ObDASScanOp::init_scan_param()
   }
   if (OB_NOT_NULL(snapshot_)) {
     scan_param_.snapshot_ = *snapshot_;
+    if (snapshot_->read_elr() && !scan_param_.trans_desc_) {
+      scan_param_.trans_desc_ = trans_desc_;
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("snapshot is null", K(ret), KPC(this));
