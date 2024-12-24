@@ -14419,9 +14419,12 @@ int ObDMLResolver::check_insert_into_select_use_fast_column_convert(const ObColu
           } else if (source_base_table_schema->is_external_table()) {
             ObArenaAllocator alloc;
             ObExternalFileFormat format;
-            if (OB_FAIL(format.load_from_string(source_base_table_schema->get_external_file_format(), alloc))) {
-              LOG_WARN("load from string failed", K(ret));
-            } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT) {
+            const ObString &format_or_properties = source_base_table_schema->get_external_file_format().empty() ?
+                                            source_base_table_schema->get_external_properties() :
+                                            source_base_table_schema->get_external_file_format();
+            if (OB_FAIL(format.load_from_string(format_or_properties, alloc))) {
+              LOG_WARN("load from string failed", K(ret), K(format_or_properties.length()), K(format_or_properties));
+            } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT || format.format_type_ == ObExternalFileFormat::ODPS_FORMAT) {
               fast_calc = true;
             }
           }
