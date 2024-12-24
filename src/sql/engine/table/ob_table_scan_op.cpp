@@ -1783,14 +1783,19 @@ int ObTableScanOp::close_and_reopen()
     MY_INPUT.ss_key_ranges_.reuse();
     MY_INPUT.mbr_filters_.reuse();
 
-    // replace stmt allocator of lookup and attached table scan to index table scan
-    // at each rescan to avoid memory expansion.
-    if (nullptr != tsc_rtdef_.lookup_rtdef_) {
-      tsc_rtdef_.lookup_rtdef_->stmt_allocator_.set_alloc(scan_iter_->get_das_alloc());
-    }
-    if (nullptr != tsc_rtdef_.attach_rtinfo_) {
-      if (OB_FAIL(set_stmt_allocator(tsc_rtdef_.attach_rtinfo_->attach_rtdef_, scan_iter_->get_das_alloc()))) {
-        LOG_WARN("failed to set stmt allocator", K(ret));
+    // when not use global index, replace stmt allocator of lookup and attached table scan to index table scan
+    // at each rescan to avoid memory expansion. The stmt allocator of index table scan is actually the das
+    // ref reuse alloc when rescan.
+    // NOTE: global index lookup task will be handled in a different das ref, thus we can not replace its stmt
+    // allocator.
+    if (!MY_SPEC.is_index_global_) {
+      if (nullptr != tsc_rtdef_.lookup_rtdef_) {
+        tsc_rtdef_.lookup_rtdef_->stmt_allocator_.set_alloc(scan_iter_->get_das_alloc());
+      }
+      if (nullptr != tsc_rtdef_.attach_rtinfo_) {
+        if (OB_FAIL(set_stmt_allocator(tsc_rtdef_.attach_rtinfo_->attach_rtdef_, scan_iter_->get_das_alloc()))) {
+          LOG_WARN("failed to set stmt allocator", K(ret));
+        }
       }
     }
   }
