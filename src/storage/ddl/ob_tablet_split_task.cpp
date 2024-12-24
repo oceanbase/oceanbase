@@ -1451,9 +1451,9 @@ int ObTabletSplitMergeTask::create_sstable(
         }
         if (OB_SUCC(ret) && !is_major_merge_type(merge_type)) {
           // build lost mds sstable after minor merge.
-          ObTableHandleV2 table_handle;
-          batch_sstables_handle.reset();
           common::ObArenaAllocator build_mds_arena("SplitBuildMds", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+	  ObTableHandleV2 table_handle;
+          batch_sstables_handle.reset();
           if (OB_FAIL(ObTabletSplitUtil::build_lost_medium_mds_sstable(
                 build_mds_arena,
                 context_->ls_handle_,
