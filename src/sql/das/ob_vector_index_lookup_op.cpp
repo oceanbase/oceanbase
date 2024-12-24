@@ -683,7 +683,7 @@ int ObVectorIndexLookupOp::prepare_state(const ObVidAdaLookupStatus& cur_state,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get vectors.", K(ret));
       }
-
+      doc_id_scan_param_.key_ranges_.reuse();
       for (int i = 0; OB_SUCC(ret) && i < vec_cnt; i++) {
         ObRowkey vid_id_rowkey(&(vids[i + ada_ctx.get_curr_idx()]), 1);
         if (OB_FAIL(set_lookup_vid_key(vid_id_rowkey))) {
