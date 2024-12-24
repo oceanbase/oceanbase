@@ -16,6 +16,7 @@
 #include "lib/stat/ob_diagnostic_info_util.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "common/ob_smart_var.h"
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 
 namespace oceanbase
 {
@@ -77,6 +78,7 @@ int ObDiagnosticInfoCollector::init(int cpu_cnt, int64_t tenant_id, int64_t grou
   if (is_inited_) {
     ret = OB_INIT_TWICE;
   } else {
+    DISABLE_SQL_MEMLEAK_GUARD;
     tenant_id_ = tenant_id;
     group_id_ = group_id;
     // slot num is power of 2
