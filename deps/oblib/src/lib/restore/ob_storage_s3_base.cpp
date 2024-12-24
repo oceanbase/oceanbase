@@ -1505,20 +1505,21 @@ int ObStorageS3Reader::pread_(char *buf,
         OB_LOG(WARN, "failed to read object from s3",
             K(ret), K_(bucket), K_(object), K(range_read));
       } else {
-        // For nohead reads, the returned size may be larger than buf_size,
-        // which may cause buffer overflow. Use the min function to prevent that.
-        read_size = MIN(outcome.GetResult().GetContentLength(), get_data_size);
-        outcome.GetResult().GetBody().read(buf, read_size);
+        if (OB_UNLIKELY(read_size <= buf_size)) {
+          outcome.GetResult().GetBody().read(buf, read_size);
 
-        // read size <= get_data_size <= buf_size
-        // For nohead read, file_length_ is always -1, so the logic below will not be executed
-        if (read_size == file_length_) {
-          if (OB_FAIL(validate_response_checksum(buf, read_size, outcome.GetResult()))) {
-            OB_LOG(WARN, "fail to validate_response_checksum",
-                K(ret), K(read_size), K(get_data_size), K(buf_size));
+          // read size <= get_data_size <= buf_size
+          if (read_size == file_length_) {
+            if (OB_FAIL(validate_response_checksum(buf, read_size, outcome.GetResult()))) {
+              OB_LOG(WARN, "fail to validate_response_checksum",
+                  K(ret), K(read_size), K(get_data_size), K(buf_size));
+            }
           }
+        } else {
+          ret = OB_S3_ERROR;
+          OB_LOG(WARN, "read size out of range from s3",
+              K(ret), K(read_size), K(get_data_size), K(buf_size));
         }
-
       }
     }
   }
