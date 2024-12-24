@@ -165,7 +165,7 @@ int ObExpandVecOp::do_dup_partial()
   //
   // if rollup expr is a const expr, just cp current batch (both mysql & oracle)
   //
-  // in oracle,  `group by c1, c2, rollup (c1, c2)`, result of rollup(c1) is same as group by (c1, NULL)
+  // `group by c1, c2, rollup (c1, c2)`, result of rollup(c1) is same as group by (c1, NULL)
   //
   // in oracle group by roll(c1, c1, c2), rollup result of last c1 is same as group by (c1, c1, NULL)
   // rollup result of first c1 is same as group by (NULL, NULL, NULL)
@@ -174,8 +174,7 @@ int ObExpandVecOp::do_dup_partial()
     && MY_SPEC.expand_exprs_.at(expr_iter_idx_)->args_[0]->is_static_const_;
   if ((lib::is_oracle_mode() && is_real_static_const)
       || MY_SPEC.expand_exprs_.at(expr_iter_idx_)->is_const_expr()
-      || (lib::is_oracle_mode()
-          && has_exist_in_array(MY_SPEC.gby_exprs_, MY_SPEC.expand_exprs_.at(expr_iter_idx_)))
+      || has_exist_in_array(MY_SPEC.gby_exprs_, MY_SPEC.expand_exprs_.at(expr_iter_idx_))
       || exists_dup_expr(expr_iter_idx_)) {
     // do nothing
   } else if (MY_SPEC.use_rich_format_) {
