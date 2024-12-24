@@ -3343,6 +3343,17 @@ int ObStaticEngineCG::generate_spec(ObLogForUpdate &op,
   return ret;
 }
 
+int ObStaticEngineCG::get_all_auto_inc_cids(const ObIArray<share::AutoincParam> &autoinc_params, ObIArray<uint64_t> &cids)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < autoinc_params.count(); i++) {
+    if (OB_FAIL(cids.push_back(autoinc_params.at(i).autoinc_col_id_))) {
+      LOG_WARN("fail to push auto_inc_cid", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, const bool)
 {
   int ret = OB_SUCCESS;
@@ -3434,6 +3445,39 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
         }
       }
     }
+
+    if (OB_SUCC(ret)) {
+      const ObDMLStmt *stmt = nullptr;
+      ObSEArray<uint64_t, 2> auto_inc_cids;
+      const ObInsertUpCtDef *insert_up_ctdef = spec.insert_up_ctdefs_.at(0);
+      if (OB_ISNULL(stmt = op.get_stmt())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (!stmt->is_insert_stmt()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (stmt->get_autoinc_params().empty()) {
+        // do nothing
+      } else if (OB_FAIL(get_all_auto_inc_cids(stmt->get_autoinc_params(), auto_inc_cids))) {
+        LOG_WARN("fail to get all auto_inc column ids", K(ret));
+      } else {
+        bool founded = false;
+        for (int64_t i = 0; !founded && OB_SUCC(ret) && i < ins_pri_dml_info->rowkey_cnt_; i++) {
+          ObColumnRefRawExpr *col_expr = ins_pri_dml_info->column_exprs_.at(i);
+          ObRawExpr *new_auto_inc_expr = ins_pri_dml_info->column_convert_exprs_.at(i);
+          uint64_t base_cid = OB_INVALID_ID;
+          if (OB_FAIL(dml_cg_service_.get_column_ref_base_cid(op, col_expr, base_cid))) {
+            LOG_WARN("fail to get base cid", K(ret));
+          } else if (!has_exist_in_array(auto_inc_cids, base_cid)) {
+            // do nothing
+          } else if (OB_FAIL(generate_rt_expr(*new_auto_inc_expr, spec.auto_inc_expr_))) {
+            LOG_WARN("fail to cg auto_inc_expr", K(ret));
+          } else {
+            founded = true;
+          }
+        }
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -3459,6 +3503,7 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
       }
     }
   }
+
   return ret;
 }
 
