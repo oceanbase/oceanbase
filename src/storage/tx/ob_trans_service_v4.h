@@ -416,6 +416,9 @@ int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
 void tx_post_terminate_(ObTxDesc &tx);
 int start_epoch_(ObTxDesc &tx);
 int tx_sanity_check_(ObTxDesc &tx);
+int get_tx_table_(ObLS *ls,
+                  const share::ObLSID &ls_id,
+                  ObTxTable* &tx_table);
 int get_tx_table_guard_(ObLS *ls,
                         const share::ObLSID &ls_id,
                         ObTxTableGuard &guard);

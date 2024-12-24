@@ -136,7 +136,7 @@ protected:
                                   ls_id_,
                                   &ls_.tx_table_,
                                   ls_.get_lock_table(),
-                                  (ObITsMgr *)(0x01),
+                                  (ObTsMgr *)(0x01),
                                   MTL(transaction::ObTransService*),
                                   &palf_param,
                                   nullptr));
@@ -145,7 +145,7 @@ protected:
                                   ls_id_,
                                   &ls_.tx_table_,
                                   ls_.get_lock_table(),
-                                  (ObITsMgr *)(0x01),
+                                  (ObTsMgr *)(0x01),
                                   MTL(transaction::ObTransService*),
                                   &palf_param,
                                   nullptr));
@@ -325,7 +325,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
                                           TestTxCtxTable::ls_id_,
                                           &ls_.tx_table_,
                                           &ls_.lock_table_,
-                                          (ObITsMgr *)(0x01),
+                                          (ObTsMgr *)(0x01),
                                           MTL(transaction::ObTransService*),
                                           &palf_param,
                                           nullptr));
@@ -405,7 +405,7 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
                        const ObLSID &ls_id,
                        ObTxTable *tx_table,
                        ObLockTable *lock_table,
-                       ObITsMgr *ts_mgr,
+                       ObTsMgr *ts_mgr,
                        ObTransService *txs,
                        ObITxLogParam *param,
                        ObITxLogAdapter *log_adapter)

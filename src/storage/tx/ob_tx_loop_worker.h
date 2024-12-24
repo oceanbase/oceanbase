@@ -62,11 +62,13 @@ private:
   void update_max_commit_ts_();
   void do_retain_ctx_gc_(ObLS * ls);  // 15s
   void do_log_cb_pool_adjust_(ObLS *ls, const common::ObRole role);
+  void refresh_tenant_config_();
 
 private:
   int64_t last_tx_gc_ts_;
   int64_t last_retain_ctx_gc_ts_;
   int64_t last_log_cb_pool_adjust_ts_;
+  int64_t last_tenant_config_refresh_ts_;
 };
 
 

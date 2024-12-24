@@ -555,11 +555,10 @@ int ObAccessService::construct_store_ctx_other_variables_(
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = ls.get_ls_id();
   ObLSTabletService *tablet_service = ls.get_tablet_svr();
-  ObLSTabletService::AllowToReadMgr::AllowToReadInfo read_info;
   if (OB_ISNULL(tablet_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet service should not be null.", K(ret), K(ls_id));
-  } else if (OB_FAIL(tablet_service->check_allow_to_read(read_info))) {
+  } else if (OB_FAIL(tablet_service->check_allow_to_read())) {
     if (OB_REPLICA_NOT_READABLE == ret) {
       LOG_WARN("replica unreadable", K(ret), K(ls_id), K(tablet_id));
     } else {
@@ -1072,9 +1071,6 @@ int ObAccessService::insert_row(
 
 int ObAccessService::revert_insert_iter(common::ObNewRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   if (OB_LIKELY(nullptr != iter)) {
     ObQueryIteratorFactory::free_insert_dup_iter(iter);
@@ -1350,9 +1346,6 @@ int ObAccessService::get_multi_ranges_cost(
 
 int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1375,9 +1368,6 @@ int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *
 
 int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   NG_TRACE(S_revert_iter_begin);
   if (IS_NOT_INIT) {

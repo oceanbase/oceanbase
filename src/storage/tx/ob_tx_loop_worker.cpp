@@ -83,6 +83,7 @@ void ObTxLoopWorker::reset()
   last_tx_gc_ts_ = false;
   last_retain_ctx_gc_ts_ = 0;
   last_log_cb_pool_adjust_ts_ = 0;
+  last_tenant_config_refresh_ts_ = 0;
 }
 
 void ObTxLoopWorker::run1()
@@ -116,6 +117,13 @@ void ObTxLoopWorker::run1()
       TRANS_LOG(INFO, "try gc retain ctx");
       last_retain_ctx_gc_ts_ = common::ObClockGenerator::getClock();
       can_gc_retain_ctx = true;
+    }
+
+    // refresh tx tenant config
+    if (common::ObClockGenerator::getClock() -
+          last_tenant_config_refresh_ts_ > LOOP_INTERVAL * 50 /*5s*/) {
+      refresh_tenant_config_();
+      last_tenant_config_refresh_ts_ = common::ObClockGenerator::getClock();
     }
 
     if (common::ObClockGenerator::getClock() - last_log_cb_pool_adjust_ts_
@@ -277,6 +285,18 @@ void ObTxLoopWorker::do_tx_gc_(ObLS *ls_ptr, SCN &min_start_scn, MinStartScnStat
   }
 
   UNUSED(ret);
+}
+
+void ObTxLoopWorker::refresh_tenant_config_()
+{
+  int ret = OB_SUCCESS;
+  ObTransService *txs = NULL;
+  if (OB_ISNULL(txs = MTL(ObTransService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected transaction service", K(ret), KP(txs));
+  } else {
+    txs->get_tx_elr_util().check_and_update_tx_elr_info();
+  }
 }
 
 void ObTxLoopWorker::update_max_commit_ts_()

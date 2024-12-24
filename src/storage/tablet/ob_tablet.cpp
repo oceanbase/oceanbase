@@ -2450,7 +2450,6 @@ int ObTablet::get_src_tablet_read_tables_(
   succ_get_src_tables = false;
   ObTabletCreateDeleteMdsUserData user_data;
   ObLSTabletService *tablet_service = nullptr;
-  ObLSTabletService::AllowToReadMgr::AllowToReadInfo read_info;
   SCN max_decided_scn;
   mds::MdsWriter unused_writer;// will be removed later
   mds::TwoPhaseCommitState unused_trans_stat;// will be removed later
@@ -2478,7 +2477,7 @@ int ObTablet::get_src_tablet_read_tables_(
   } else if (OB_ISNULL(tablet_service = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls tablet service should not be NULL", K(ret), KP(ls));
-  } else if (OB_FAIL(tablet_service->check_allow_to_read(read_info))) {
+  } else if (OB_FAIL(tablet_service->check_allow_to_read())) {
     if (OB_REPLICA_NOT_READABLE == ret) {
       LOG_WARN("replica unreadable", K(ret), "ls_id", ls->get_ls_id(), "tablet_id", tablet_meta_.tablet_id_, K(user_data));
     } else {
@@ -2515,8 +2514,6 @@ int ObTablet::get_src_tablet_read_tables_(
         *(iter.table_store_iter_.transfer_src_table_store_handle_),
         allow_no_ready_read))) {
       LOG_WARN("failed to get read tables from table store", K(ret), KPC(tablet));
-    } else if (OB_FAIL(tablet_service->check_read_info_same(read_info))) {
-      LOG_WARN("failed to check read info same", K(ret), KPC(tablet));
     } else {
       succ_get_src_tables = true;
     }

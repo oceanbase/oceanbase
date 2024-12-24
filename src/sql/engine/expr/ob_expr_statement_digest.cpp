@@ -45,61 +45,67 @@ int calc_digest_text(ObIAllocator &allocator,
     exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
     exec_ctx.set_my_session(session);
     exec_ctx.set_mem_attr(ObMemAttr(tenant_id, ObModIds::OB_SQL_EXEC_CONTEXT, ObCtxIds::EXECUTE_CTX_ID));
-    ObSqlCtx sql_ctx;
-    sql_ctx.session_info_ = session;
-    sql_ctx.schema_guard_ = schema_guard;
-    ObPlanCacheCtx pc_ctx(sql_str, PC_TEXT_MODE, allocator, sql_ctx, exec_ctx,
-                          session->get_effective_tenant_id());
-    ObCharsets4Parser charsets4parser = session->get_charsets4parser();
-    charsets4parser.string_collation_ = cs_type;
-    ObParser parser(allocator, session->get_sql_mode(), charsets4parser);
-    ObSEArray<ObString, 1> queries;
-    ObMPParseStat parse_stat;
-    if (OB_FAIL(parser.split_multiple_stmt(sql_str, queries, parse_stat))) {
-      LOG_WARN("failed to split multiple stmt", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < queries.count(); ++i) {
-      ParseResult parse_result;
-      ParamStore tmp_params((ObWrapperAllocator(allocator)));
-      stmt::StmtType stmt_type = stmt::T_NONE;
-      ObItemType item_type = T_NULL;
-      if (OB_FAIL(parser.parse(queries.at(i), parse_result))) {
-        LOG_WARN("fail to parse sql str", K(sql_str), K(ret));
-      } else if (OB_ISNULL(parse_result.result_tree_)
-                || OB_ISNULL(parse_result.result_tree_->children_[0])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected parse result", K(ret));
-      } else if (FALSE_IT(item_type = parse_result.result_tree_->children_[0]->type_)) {
-      } else if (i > 0) {
-        if (OB_UNLIKELY(T_EMPTY_QUERY != item_type)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("invalid stmt type", K(item_type), K(ret));
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
-        }
-      } else if (OB_UNLIKELY(T_EMPTY_QUERY == item_type)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid empty query", K(item_type), K(ret));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
-      } else if (OB_FAIL(ObResolverUtils::resolve_stmt_type(parse_result, stmt_type))) {
-        LOG_WARN("failed to resolve stmt type", K(ret));
-      } else if (ObStmt::is_dml_stmt(stmt_type) && !ObStmt::is_show_stmt(stmt_type)) {
-        if (OB_UNLIKELY(parse_result.result_tree_->children_[0]->value_ > 0)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("query contains questionmark", K(queries.at(i)), K(ret));
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
-        } else if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(allocator,
-                                                                    true,
-                                                                    pc_ctx,
-                                                                    parse_result.result_tree_,
-                                                                    tmp_params,
-                                                                    charsets4parser))) {
-          LOG_WARN("fail to parameterize syntax tree", K(sql_str), K(ret));
-        } else {
-          digest_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_;
-        }
-      } else {
-        digest_str = queries.at(i);
+    ObSqlCtx *sql_ctx = NULL;
+    if (OB_ISNULL(sql_ctx = op_alloc(ObSqlCtx))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("fail to alloc sql ctx memory", K(ret));
+    } else {
+      sql_ctx->session_info_ = session;
+      sql_ctx->schema_guard_ = schema_guard;
+      ObPlanCacheCtx pc_ctx(sql_str, PC_TEXT_MODE, allocator, *sql_ctx, exec_ctx,
+                            session->get_effective_tenant_id());
+      ObCharsets4Parser charsets4parser = session->get_charsets4parser();
+      charsets4parser.string_collation_ = cs_type;
+      ObParser parser(allocator, session->get_sql_mode(), charsets4parser);
+      ObSEArray<ObString, 1> queries;
+      ObMPParseStat parse_stat;
+      if (OB_FAIL(parser.split_multiple_stmt(sql_str, queries, parse_stat))) {
+        LOG_WARN("failed to split multiple stmt", K(ret));
       }
+      for (int64_t i = 0; OB_SUCC(ret) && i < queries.count(); ++i) {
+        ParseResult parse_result;
+        ParamStore tmp_params((ObWrapperAllocator(allocator)));
+        stmt::StmtType stmt_type = stmt::T_NONE;
+        ObItemType item_type = T_NULL;
+        if (OB_FAIL(parser.parse(queries.at(i), parse_result))) {
+          LOG_WARN("fail to parse sql str", K(sql_str), K(ret));
+        } else if (OB_ISNULL(parse_result.result_tree_)
+                  || OB_ISNULL(parse_result.result_tree_->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected parse result", K(ret));
+        } else if (FALSE_IT(item_type = parse_result.result_tree_->children_[0]->type_)) {
+        } else if (i > 0) {
+          if (OB_UNLIKELY(T_EMPTY_QUERY != item_type)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid stmt type", K(item_type), K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
+          }
+        } else if (OB_UNLIKELY(T_EMPTY_QUERY == item_type)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid empty query", K(item_type), K(ret));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
+        } else if (OB_FAIL(ObResolverUtils::resolve_stmt_type(parse_result, stmt_type))) {
+          LOG_WARN("failed to resolve stmt type", K(ret));
+        } else if (ObStmt::is_dml_stmt(stmt_type) && !ObStmt::is_show_stmt(stmt_type)) {
+          if (OB_UNLIKELY(parse_result.result_tree_->children_[0]->value_ > 0)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("query contains questionmark", K(queries.at(i)), K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "digest function");
+          } else if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(allocator,
+                                                                      true,
+                                                                      pc_ctx,
+                                                                      parse_result.result_tree_,
+                                                                      tmp_params,
+                                                                      charsets4parser))) {
+            LOG_WARN("fail to parameterize syntax tree", K(sql_str), K(ret));
+          } else {
+            digest_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_;
+          }
+        } else {
+          digest_str = queries.at(i);
+        }
+      }
+      op_free(sql_ctx);
     }
     exec_ctx.set_physical_plan_ctx(NULL);
   }

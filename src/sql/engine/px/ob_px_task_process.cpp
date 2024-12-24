@@ -164,7 +164,6 @@ int ObPxTaskProcess::process()
     session->set_peer_addr(arg_.task_.get_sqc_addr());
     session->set_cur_phy_plan(arg_.des_phy_plan_);
     session->set_thread_id(GETTID());
-    session->set_thread_name(GETTNAME());
     arg_.exec_ctx_->reference_my_plan(arg_.des_phy_plan_);
     arg_.exec_ctx_->set_sqc_handler(arg_.sqc_handler_);
     arg_.exec_ctx_->set_px_task_id(arg_.task_.get_task_id());

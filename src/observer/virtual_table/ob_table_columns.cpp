@@ -90,6 +90,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
         ObStmtNeedPrivs stmt_need_privs;
         stmt_need_privs.need_privs_.set_allocator(allocator_);
         ObSessionPrivInfo session_priv;
+        const common::ObIArray<uint64_t> &enable_role_id_array = session_->get_enable_role_array();
         session_->get_session_priv_info(session_priv);
         const ObSimpleDatabaseSchema *db_schema = NULL;
         if (OB_UNLIKELY(!session_priv.is_valid())) {
@@ -132,12 +133,12 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             }
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(schema_guard_->check_priv_or(session_priv, stmt_need_privs))) {
+          } else if (OB_FAIL(schema_guard_->check_priv_or(session_priv, enable_role_id_array, stmt_need_privs))) {
             if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
               ret = OB_SUCCESS;
               bool pass = false;
               if (OB_FAIL(schema_guard_->check_priv_any_column_priv(
-                            session_priv, db_schema->get_database_name_str(),
+                            session_priv, enable_role_id_array, db_schema->get_database_name_str(),
                             table_schema->get_table_name_str(), pass))) {
                 LOG_WARN("fail to collect privs in roles", K(ret));
               } else if (!pass) {
@@ -305,7 +306,8 @@ int ObTableColumns::get_type_str(
 }
 
 int ObTableColumns::fill_col_privs(
-    ObSessionPrivInfo &session_priv,
+    const ObSessionPrivInfo &session_priv,
+    const common::ObIArray<uint64_t> &enable_role_id_array,
     ObNeedPriv &need_priv, 
     ObPrivSet priv_set, 
     const char *priv_str,
@@ -316,7 +318,7 @@ int ObTableColumns::fill_col_privs(
   int ret = OB_SUCCESS;
 
   need_priv.priv_set_ = priv_set;
-  if (OB_SUCC(schema_guard_->check_single_table_priv(session_priv, need_priv))) {
+  if (OB_SUCC(schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv))) {
     ret = databuff_printf(buf, buf_len, pos, "%s", priv_str);
   } else if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
     ret = OB_SUCCESS;
@@ -373,8 +375,10 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
         K(session_->get_effective_tenant_id()), K(table_schema.get_database_id()));
     }
   }
+  const common::ObIArray<uint64_t> &enable_role_id_array = session_->get_enable_role_array();
   if (OB_SUCC(ret) && !is_oracle_mode) {
     if (OB_FAIL(schema_guard_->collect_all_priv_for_column(session_priv,
+                                                           enable_role_id_array,
                                                            db_schema->get_database_name_str(),
                                                            table_schema.get_table_name_str(),
                                                            column_schema.get_column_name_str(),
@@ -586,15 +590,15 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
           ObNeedPriv need_priv(db_schema->get_database_name(), 
                                table_schema.get_table_name(),
                                OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
-          OZ (fill_col_privs(session_priv, need_priv, OB_PRIV_SELECT, "SELECT,",
+          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_SELECT, "SELECT,",
                              buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, need_priv, OB_PRIV_INSERT, "INSERT,",
+          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_INSERT, "INSERT,",
                              buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, need_priv, OB_PRIV_UPDATE, "UPDATE,",
+          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_UPDATE, "UPDATE,",
                              buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, need_priv, OB_PRIV_DELETE, "DELETE,",
+          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_DELETE, "DELETE,",
                              buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, need_priv, OB_PRIV_REFERENCES, "REFERENCES,",
+          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_REFERENCES, "REFERENCES,",
                              buf, buf_len, pos));
           
         } else {
@@ -604,25 +608,25 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
 
           need_priv.priv_set_ = OB_PRIV_SELECT;
           if (0 != (col_priv_set & OB_PRIV_SELECT)
-              || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, need_priv)) {
+              || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             ret = databuff_printf(buf, buf_len, pos, "SELECT,");
           }
           need_priv.priv_set_ = OB_PRIV_INSERT;
           if (OB_FAIL(ret)) {
           } else if (0 != (col_priv_set & OB_PRIV_INSERT)
-                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, need_priv)) {
+                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             ret = databuff_printf(buf, buf_len, pos, "INSERT,");
           }
           need_priv.priv_set_ = OB_PRIV_UPDATE;
           if (OB_FAIL(ret)) {
           } else if (0 != (col_priv_set & OB_PRIV_UPDATE)
-                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, need_priv)) {
+                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             ret = databuff_printf(buf, buf_len, pos, "UPDATE,");
           }
           need_priv.priv_set_ = OB_PRIV_REFERENCES;
           if (OB_FAIL(ret)) {
           } else if (0 != (col_priv_set & OB_PRIV_REFERENCES)
-                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, need_priv)) {
+                    || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             ret = databuff_printf(buf, buf_len, pos, "REFERENCES,");
           }
         }
@@ -931,6 +935,7 @@ int ObTableColumns::deduce_column_attributes(
   if (OB_SUCC(ret)) {
     if (!is_oracle_mode) {
       ObSessionPrivInfo session_priv;
+      const common::ObIArray<uint64_t> &enable_role_id_array = session->get_enable_role_array();
       session->get_session_priv_info(session_priv);
       const ObSimpleDatabaseSchema *db_schema = NULL;
       const ObColumnPriv *column_priv = NULL;
@@ -961,7 +966,7 @@ int ObTableColumns::deduce_column_attributes(
           col_priv_set = column_priv->get_priv_set();
         }
         if (0 != (col_priv_set & OB_PRIV_SELECT)
-            || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, need_priv)) {
+            || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
           if (OB_FAIL(priv.append("SELECT,"))) {
             LOG_WARN("append failed", K(ret));
           }
@@ -969,7 +974,7 @@ int ObTableColumns::deduce_column_attributes(
         need_priv.priv_set_ = OB_PRIV_INSERT;
         if (OB_SUCC(ret)) {
           if (0 != (col_priv_set & OB_PRIV_INSERT)
-              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, need_priv)) {
+              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             if (OB_FAIL(priv.append("INSERT,"))) {
               LOG_WARN("append failed", K(ret));
             }
@@ -978,7 +983,7 @@ int ObTableColumns::deduce_column_attributes(
         need_priv.priv_set_ = OB_PRIV_UPDATE;
         if (OB_SUCC(ret)) {
           if (0 != (col_priv_set & OB_PRIV_UPDATE)
-              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, need_priv)) {
+              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             if (OB_FAIL(priv.append("UPDATE,"))) {
               LOG_WARN("append failed", K(ret));
             }
@@ -987,7 +992,7 @@ int ObTableColumns::deduce_column_attributes(
         need_priv.priv_set_ = OB_PRIV_REFERENCES;
         if (OB_SUCC(ret)) {
           if (0 != (col_priv_set & OB_PRIV_REFERENCES)
-              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, need_priv)) {
+              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             if (OB_FAIL(priv.append("REFERENCES,"))) {
               LOG_WARN("append failed", K(ret));
             }

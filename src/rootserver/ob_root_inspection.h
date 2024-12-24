@@ -110,7 +110,7 @@ private:
 class ObInspector: public common::ObAsyncTimerTask
 {
 public:
-  const static int64_t INSPECT_INTERVAL = 1000L * 1000L * 1000L;  //1000s
+  const static int64_t INSPECT_INTERVAL = 1500L * 1000L * 1000L;  //1500s
   explicit ObInspector(ObRootService &rs);
   virtual ~ObInspector() {}
 

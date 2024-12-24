@@ -1039,6 +1039,7 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
                                                                  table_id,
 								             query_range_provider,
                                                                  index_id,
+                                                                 index_schema,
                                                                  out_index_prefix))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if (is_geo_index && OB_FAIL(extract_geo_preliminary_query_range(range_columns,
@@ -3438,6 +3439,7 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
                                                  int64_t table_id,
                                                  ObQueryRangeProvider *&query_range,
                                                  int64_t index_id,
+                                                 const ObTableSchema *index_schema,
                                                  int64_t &out_index_prefix)
 {
   int ret = OB_SUCCESS;
@@ -3488,7 +3490,8 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
                                                                           opt_ctx->get_query_ctx(),
                                                                           &expr_constraints,
                                                                           params, false, true,
-                                                                          out_index_prefix))) {
+                                                                          out_index_prefix,
+                                                                          index_schema))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       } else if (FALSE_IT(log_table_hint = get_plan()->get_log_plan_hint().get_index_hint(table_id))) {
       } else if (NULL != log_table_hint && log_table_hint->is_use_index_hint()) {
@@ -3512,7 +3515,8 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
                                                                           opt_ctx->get_query_ctx(),
                                                                           &expr_constraints,
                                                                           params, false, true,
-                                                                          out_index_prefix))) {
+                                                                          out_index_prefix,
+                                                                          index_schema))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }
     }
@@ -3632,7 +3636,7 @@ int ObJoinOrder::extract_geo_preliminary_query_range(const ObIArray<ColumnItem> 
                                                                    opt_ctx->get_query_ctx(),
                                                                    nullptr,
                                                                    params, false, true,
-                                                                   -1, &column_schema_info))) {
+                                                                   -1, NULL, &column_schema_info))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }
     }

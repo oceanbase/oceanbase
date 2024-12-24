@@ -108,7 +108,8 @@ private:
   virtual int resolve_column_ref_expr(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_show_create_user(const ParseNode &parse_tree,
                                ObShowResolverContext &show_resv_ctx,
-                               ObSessionPrivInfo &session_priv,
+                               const ObSessionPrivInfo &session_priv,
+                               const common::ObIArray<uint64_t> &enable_role_id_array,
                                ObStmtNeedPrivs &stmt_need_privs,
                                ObString &select_sql,
                                ObSqlStrGenerator &sql_gen);
@@ -117,7 +118,8 @@ private:
                                ObString &select_sql);
   int check_show_create_user_privilege(const bool show_current_user,
                                        ObStmtNeedPrivs &stmt_need_privs,
-                                       ObSessionPrivInfo &session_priv,
+                                       const ObSessionPrivInfo &session_priv,
+                                       const common::ObIArray<uint64_t> &enable_role_id_array,
                                        int &ret_code,
                                        bool &has_select_privilege);
 private:

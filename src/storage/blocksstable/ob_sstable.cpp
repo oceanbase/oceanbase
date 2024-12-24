@@ -750,7 +750,6 @@ int ObSSTable::check_row_locked(
   const ObDatumRowkey *sstable_endkey = nullptr;
   const blocksstable::ObStorageDatumUtils &datum_utils = param.get_read_info()->get_datum_utils();
   int cmp_ret = 0;
-  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_LOCK_CHECKER));
   lock_state.trans_version_ = SCN::min_scn();
   lock_state.is_locked_ = false;
   lock_state.lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
@@ -773,19 +772,15 @@ int ObSSTable::check_row_locked(
     if (OB_FAIL(lock_state.trans_version_.convert_for_tx(get_upper_trans_version()))) {
       LOG_WARN("Fail to convert_for_tx", K(get_upper_trans_version()), K_(meta), K(ret));
     }
-  } else if (NULL == (buf = allocator.alloc(sizeof(ObSSTableRowLockChecker)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to allocate memory", K(ret));
   } else {
-    row_checker = new (buf) ObSSTableRowLockChecker();
-    row_checker->set_iter_type(check_exist);
+    ObSSTableRowLockChecker row_checker;
+    row_checker.set_iter_type(check_exist);
     share::SCN snapshot_version = context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
-    if (OB_FAIL(row_checker->init(param, context, this, &rowkey))) {
+    if (OB_FAIL(row_checker.init(param, context, this, &rowkey))) {
       LOG_WARN("failed to open row locker", K(ret), K(param), K(context), K(rowkey));
-    } else if (OB_FAIL(row_checker->check_row_locked(check_exist, snapshot_version, lock_state))) {
+    } else if (OB_FAIL(row_checker.check_row_locked(check_exist, snapshot_version, lock_state))) {
       LOG_WARN("failed to check row lock checker");
     }
-    row_checker->~ObSSTableRowLockChecker();
   }
   return ret;
 }

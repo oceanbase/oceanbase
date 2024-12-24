@@ -62,7 +62,8 @@ namespace sql
   public:
     static int init_flt_info(obmysql::Ob20ExtraInfo extra_info,
                               sql::ObSQLSessionInfo &session,
-                              bool is_client_support_flt);
+                              bool is_client_support_flt,
+                              bool enable_flt);
     static int append_flt_extra_info(common::ObIAllocator &allocator,
                                       ObIArray<obmysql::ObObjKV> *extra_info,
                                       ObIArray<obmysql::Obp20Encoder*> *extra_info_ecds,

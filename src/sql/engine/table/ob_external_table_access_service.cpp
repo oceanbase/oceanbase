@@ -342,9 +342,6 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
 
 int ObExternalTableAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
-  ObActiveSessionGuard::get_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   UNUSED(switch_param);
   iter->reset();
   return OB_SUCCESS;
@@ -352,9 +349,6 @@ int ObExternalTableAccessService::reuse_scan_iter(const bool switch_param, ObNew
 
 int ObExternalTableAccessService::revert_scan_iter(ObNewRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
-  ObActiveSessionGuard::get_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   if (OB_ISNULL(iter)) {
     ret = OB_ERR_UNEXPECTED;

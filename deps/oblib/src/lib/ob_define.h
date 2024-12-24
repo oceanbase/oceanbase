@@ -1748,7 +1748,7 @@ const int64_t OB_CAST_TO_VARCHAR_MAX_LENGTH = 256;
 const int64_t OB_CAST_TO_JSON_SCALAR_LENGTH = 256;
 const int64_t OB_CAST_BUFFER_LENGTH = 256;
 const int64_t OB_PREALLOCATED_NUM = 21;  // half of 42
-const int64_t OB_PREALLOCATED_COL_ID_NUM = 4;
+const int64_t OB_PREALLOCATED_COL_ID_NUM = 8;
 const int64_t OB_MAX_DATE_PRECISION = 0;
 const int64_t OB_MAX_DATETIME_PRECISION = 6;
 const int64_t OB_MAX_TIMESTAMP_TZ_PRECISION = 9;
@@ -1824,7 +1824,7 @@ const int64_t OB_MAX_THREAD_NUM = 4096;
 const int64_t OB_RESERVED_THREAD_NUM = 128; // Naked threads created with pthread_create, such as easy
 const int32_t OB_MAX_SYS_BKGD_THREAD_NUM = 64;
 #if __x86_64__
-const int64_t OB_MAX_CPU_NUM = 64;
+const int64_t OB_MAX_CPU_NUM = 4;
 #elif __aarch64__
 const int64_t OB_MAX_CPU_NUM = 128;
 #elif defined(__powerpc64__)

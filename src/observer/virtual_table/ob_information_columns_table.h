@@ -109,7 +109,8 @@ private:
       const int16_t default_length_semantics, int64_t &pos,
       const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOMETRY));
   int fill_col_privs(
-      ObSessionPrivInfo &session_priv,
+      const ObSessionPrivInfo &session_priv,
+      const common::ObIArray<uint64_t> &enable_role_id_array,
       ObNeedPriv &need_priv, 
       ObPrivSet priv_set, 
       const char *priv_str,

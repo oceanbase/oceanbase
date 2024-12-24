@@ -57,6 +57,7 @@ if (OB_NOT_NULL(span)) {                                        \
 #define FLUSH_TRACE() ::oceanbase::trace::flush_trace();
 
 #define FLTSpanGuard(span_type) ::oceanbase::trace::__ObFLTSpanGuard __##span_type##__LINE__(::oceanbase::trace::ObSpanType::flt_##span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::flt_##span_type))
+#define FLTSpanGuardIfEnable(span_type, enable_flt) ::oceanbase::trace::__ObFLTSpanGuard __##span_type##__LINE__(::oceanbase::trace::ObSpanType::flt_##span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::flt_##span_type), enable_flt)
 
 #define OBTRACE ::oceanbase::trace::ObTrace::get_instance()
 
@@ -380,6 +381,19 @@ public:
       FLT_SET_TAG(span_back_trace, lbt());
     }
 #endif
+  }
+  __ObFLTSpanGuard(uint32_t span_type, uint8_t level, bool enable_flt)
+  {
+    if (enable_flt) {
+      span_ = OBTRACE->begin_span(span_type, level, false);
+#ifndef NDEBUG
+      if (OB_NOT_NULL(span_) && span_->is_inited()) {
+        FLT_SET_TAG(span_back_trace, lbt());
+      }
+#endif
+    } else {
+      span_ = nullptr;
+    }
   }
   ~__ObFLTSpanGuard() { FLT_END_SPAN(span_); }
 private:

@@ -1057,12 +1057,13 @@ int ObMultipleMerge::fill_virtual_columns(ObDatumRow &row)
 
 int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   // check if timeout or if transaction status every 10000 rows, which should be within 10ms
-  if (0 == (++scan_cnt_ % 10000) && !access_ctx_->query_flag_.is_daily_merge()) {
-    if (OB_FAIL(THIS_WORKER.check_status())) {
-      STORAGE_LOG(WARN, "query interrupt, ", K(ret));
+  if (0 == (++scan_cnt_ % 10000)) {
+    if (!access_ctx_->query_flag_.is_daily_merge()) {
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        STORAGE_LOG(WARN, "query interrupt, ", K(ret));
+      }
     }
   }
   if (OB_SUCC(ret)
@@ -1070,6 +1071,7 @@ int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
       && !access_param_->op_filters_->empty()) {
     // Execute filter in sql static typing engine.
     // %row is already projected to output expressions for main table scan.
+    ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
     if (OB_FAIL(access_param_->get_op()->filter_row_outside(*access_param_->op_filters_, filtered))) {
       LOG_WARN("filter row failed", K(ret));
     }

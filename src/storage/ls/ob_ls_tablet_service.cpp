@@ -632,26 +632,19 @@ int ObLSTabletService::table_scan(ObTabletHandle &tablet_handle, ObTableScanIter
 {
   int ret = OB_SUCCESS;
   NG_TRACE(S_table_scan_begin);
-  AllowToReadMgr::AllowToReadInfo read_info;
+  bool allow_to_read = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (FALSE_IT(allow_to_read_mgr_.load_allow_to_read_info(read_info))) {
-  } else if (!read_info.allow_to_read()) {
+  } else if (FALSE_IT(allow_to_read_mgr_.load_allow_to_read_info(allow_to_read))) {
+  } else if (!allow_to_read) {
     ret = OB_REPLICA_NOT_READABLE;
     LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
   } else if (OB_FAIL(prepare_scan_table_param(param, *(MTL(ObTenantSchemaService*)->get_schema_service())))) {
     LOG_WARN("failed to prepare scan table param", K(ret), K(param));
   } else if (OB_FAIL(inner_table_scan(tablet_handle, iter, param))) {
     LOG_WARN("failed to do table scan", K(ret), KP(&iter), K(param));
-  } else {
-    bool is_same = false;
-    allow_to_read_mgr_.check_read_info_same(read_info, is_same);
-    if (!is_same) {
-      ret = OB_REPLICA_NOT_READABLE;
-      LOG_WARN("ls is not allow to read", K(ret), KPC(ls_), KP(&iter));
-    }
   }
   NG_TRACE(S_table_scan_end);
 
@@ -662,7 +655,7 @@ int ObLSTabletService::table_rescan(ObTabletHandle &tablet_handle, ObTableScanPa
 {
   int ret = OB_SUCCESS;
   NG_TRACE(S_table_rescan_begin);
-  AllowToReadMgr::AllowToReadInfo read_info;
+  bool allow_to_read = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -670,8 +663,8 @@ int ObLSTabletService::table_rescan(ObTabletHandle &tablet_handle, ObTableScanPa
   } else if (OB_ISNULL(result)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
-  } else if (FALSE_IT(allow_to_read_mgr_.load_allow_to_read_info(read_info))) {
-  } else if (!read_info.allow_to_read()) {
+  } else if (FALSE_IT(allow_to_read_mgr_.load_allow_to_read_info(allow_to_read))) {
+  } else if (!allow_to_read) {
     ret = OB_REPLICA_NOT_READABLE;
     LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
   } else if (OB_FAIL(prepare_scan_table_param(param, *(MTL(ObTenantSchemaService*)->get_schema_service())))) {
@@ -680,15 +673,6 @@ int ObLSTabletService::table_rescan(ObTabletHandle &tablet_handle, ObTableScanPa
     ObTableScanIterator *iter = static_cast<ObTableScanIterator*>(result);
     if (OB_FAIL(inner_table_scan(tablet_handle, *iter, param))) {
       LOG_WARN("failed to do table scan", K(ret), K(result), K(param));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    bool is_same = false;
-    allow_to_read_mgr_.check_read_info_same(read_info, is_same);
-    if (!is_same) {
-      ret = OB_REPLICA_NOT_READABLE;
-      LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
     }
   }
   NG_TRACE(S_table_rescan_end);
@@ -2351,29 +2335,15 @@ int ObLSTabletService::create_memtable(
   return ret;
 }
 
-int ObLSTabletService::check_allow_to_read(AllowToReadMgr::AllowToReadInfo &read_info)
+int ObLSTabletService::check_allow_to_read()
 {
   int ret = OB_SUCCESS;
-  allow_to_read_mgr_.load_allow_to_read_info(read_info);
+  bool allow_to_read = false;
+  allow_to_read_mgr_.load_allow_to_read_info(allow_to_read);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (!read_info.allow_to_read()) {
-    ret = OB_REPLICA_NOT_READABLE;
-    LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
-  }
-  return ret;
-}
-
-int ObLSTabletService::check_read_info_same(const AllowToReadMgr::AllowToReadInfo &read_info)
-{
-  int ret = OB_SUCCESS;
-  bool is_same = false;
-  allow_to_read_mgr_.check_read_info_same(read_info, is_same);
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (!is_same) {
+  } else if (!allow_to_read) {
     ret = OB_REPLICA_NOT_READABLE;
     LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
   }
@@ -2397,7 +2367,7 @@ int ObLSTabletService::get_read_tables(
   int ret = OB_SUCCESS;
   ObTabletHandle &handle = iter.tablet_handle_;
   iter.reset();
-  AllowToReadMgr::AllowToReadInfo read_info;
+  bool allow_to_read = false;
   ObTabletMapKey key;
   key.tablet_id_ = tablet_id;
 
@@ -2410,8 +2380,8 @@ int ObLSTabletService::get_read_tables(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(snapshot_version_for_tablet),
              K(snapshot_version_for_tables));
-  } else if (FALSE_IT(allow_to_read_mgr_.load_allow_to_read_info(read_info))) {
-  } else if (!read_info.allow_to_read()) {
+  } else if (FALSE_IT(allow_to_read_mgr_.load_allow_to_read_info(allow_to_read))) {
+  } else if (!allow_to_read) {
     ret = OB_REPLICA_NOT_READABLE;
     LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
   } else if (FALSE_IT(key.ls_id_ = ls_->get_ls_id())) {
@@ -2430,13 +2400,6 @@ int ObLSTabletService::get_read_tables(
     LOG_WARN("fail to get read tables", K(ret), K(handle), K(tablet_id),
              K(snapshot_version_for_tablet), K(snapshot_version_for_tables),
              K(iter), K(allow_no_ready_read));
-  } else {
-    bool is_same = false;
-    allow_to_read_mgr_.check_read_info_same(read_info, is_same);
-    if (!is_same) {
-      ret = OB_REPLICA_NOT_READABLE;
-      LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
-    }
   }
   return ret;
 }
@@ -6813,46 +6776,32 @@ int ObLSTabletService::SetMemtableFrozenOperator::operator()(const common::ObTab
 
 void ObLSTabletService::AllowToReadMgr::disable_to_read()
 {
-  AllowToReadInfo read_info;
-  AllowToReadInfo next_read_info;
+  bool old_v = false;
+  bool new_v = false;
   do {
-    LOAD128(read_info, &read_info_);
-    if (!read_info.allow_to_read()) {
+    old_v = ATOMIC_LOAD(&allow_to_read_);
+    if (old_v == new_v) {
       break;
-    } else {
-      next_read_info.info_.allow_to_read_ = 0;
-      next_read_info.info_.seq_ = read_info.info_.seq_ + 1;
     }
-  } while (!CAS128(&read_info_, read_info, next_read_info));
+  } while (ATOMIC_CAS(&allow_to_read_, old_v, new_v) != old_v);
 }
 
 void ObLSTabletService::AllowToReadMgr::enable_to_read()
 {
-  AllowToReadInfo read_info;
-  AllowToReadInfo next_read_info;
+  bool old_v = false;
+  bool new_v = true;
   do {
-    LOAD128(read_info, &read_info_);
-    if (read_info.allow_to_read()) {
+    old_v = ATOMIC_LOAD(&allow_to_read_);
+    if (old_v == new_v) {
       break;
-    } else {
-      next_read_info.info_.allow_to_read_ = 1;
-      next_read_info.info_.seq_ = read_info.info_.seq_;
     }
-  } while (!CAS128(&read_info_, read_info, next_read_info));
+  } while (ATOMIC_CAS(&allow_to_read_, old_v, new_v) != old_v);
 }
 
 void ObLSTabletService::AllowToReadMgr::load_allow_to_read_info(
-    AllowToReadInfo &read_info)
+    bool &allow_to_read)
 {
-  LOAD128(read_info, &read_info_);
-}
-
-void ObLSTabletService::AllowToReadMgr::check_read_info_same(
-    const AllowToReadInfo &read_info, bool &is_same)
-{
-  AllowToReadInfo current_read_info;
-  LOAD128(current_read_info, &read_info_);
-  is_same = read_info == current_read_info;
+  allow_to_read = ATOMIC_LOAD(&allow_to_read_);
 }
 
 int ObLSTabletService::get_all_tablet_ids(
