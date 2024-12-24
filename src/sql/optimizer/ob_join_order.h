@@ -2887,8 +2887,9 @@ struct NullAwareAntiJoinInfo {
     int check_simple_gen_col_cmp_expr(ObRawExpr *expr,
                                       ObColumnRefRawExpr *gen_col_expr,
                                       ObIArray<ObPCConstParamInfo> &param_infos,
-                                      int64_t &matched_param_idx,
-                                      bool &is_match);
+                                      ObRawExpr *&matched_expr,
+                                      bool &is_match,
+                                      bool &is_precise_deduced);
 
     int check_simple_prefix_cmp_expr(ObRawExpr *expr,
                                       ObColumnRefRawExpr *&column_expr,
@@ -2904,14 +2905,6 @@ struct NullAwareAntiJoinInfo {
                                   ObRawExpr *&new_pred,
                                   PathHelper &helper);
 
-    int try_get_json_generated_col_index_expr(ObRawExpr *depend_expr,
-                                              ObColumnRefRawExpr *col_expr,
-                                              ObRawExprCopier& copier,
-                                              ObRawExprFactory& expr_factory,
-                                              ObSQLSessionInfo *session_info,
-                                              ObRawExpr *&qual,
-                                              int64_t qual_pos,
-                                              ObRawExpr *&new_qual);
     int get_range_params(const Path *path,
                          ObIArray<ObRawExpr*> &range_exprs,
                          ObIArray<ObRawExpr*> &all_table_filters);

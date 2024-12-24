@@ -697,13 +697,17 @@ bool ObRawExpr::is_domain_json_expr() const
 bool ObRawExpr::is_multivalue_define_json_expr() const
 {
   bool b_ret = false;
-  const ObRawExpr *sub_expr = nullptr;
+  const ObRawExpr *asis_expr = nullptr;
+  const ObRawExpr *multi_expr = nullptr;
   if (type_ == T_FUN_SYS_JSON_QUERY &&
       get_param_count() >= 13 &&
-      OB_NOT_NULL(sub_expr = get_param_expr(12)) &&
-      sub_expr->is_const_expr()) {
-    const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(sub_expr);
-    b_ret = const_expr->get_value().get_int() == 0;
+      OB_NOT_NULL(asis_expr = get_param_expr(8)) &&
+      asis_expr->is_const_expr() &&
+      OB_NOT_NULL(multi_expr = get_param_expr(12)) &&
+      multi_expr->is_const_expr()) {
+    const ObConstRawExpr *const_expr1 = static_cast<const ObConstRawExpr*>(asis_expr);
+    const ObConstRawExpr *const_expr2 = static_cast<const ObConstRawExpr*>(multi_expr);
+    b_ret = (const_expr1->get_value().get_int() == 1 && const_expr2->get_value().get_int() == 0);
   }
 
   return b_ret;

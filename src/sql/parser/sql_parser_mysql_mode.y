@@ -2816,9 +2816,11 @@ MOD '(' expr ',' expr ')'
                    && expr_param->num_child_ >= 1
                    && OB_NOT_NULL(expr_param->children_[0])) {
           ParseNode* param = expr_param->children_[0];
-          if (param->type_ == T_FUN_SYS_JSON_VALUE && param->num_child_ == 2) {
-            path = param->children_[1];
-            data = param->children_[0];
+          if (param->type_ == T_FUN_SYS_JSON_VALUE) {
+            if (OB_NOT_NULL(param->children_)) {
+              path = param->children_[1];
+              data = param->children_[0];
+            }
           } else if (param->num_child_ >= 2) {
             expr_name = param->children_[0];
             expr_param = param->children_[1];

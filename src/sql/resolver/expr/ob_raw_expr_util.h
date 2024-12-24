@@ -595,24 +595,12 @@ public:
                              const ObLocalSessionVar *local_vars = NULL,
                              int64_t local_var_id = OB_INVALID_INDEX_INT64);
 
-  static bool is_domain_expr_need_special_replace(ObRawExpr* qual_expr,
-                                                  ObRawExpr *depend_expr);
-  static int replace_domain_wrapper_expr(ObRawExpr *depend_expr,
-                                         ObColumnRefRawExpr *col_expr,
-                                         ObRawExprCopier& copier,
-                                         ObRawExprFactory& factory,
-                                         ObSQLSessionInfo *session_info,
-                                         ObRawExpr *&qual,
-                                         int64_t qual_idx,
-                                         ObRawExpr *&new_qual);
   static int replace_json_wrapper_expr_if_need(ObRawExpr* qual,
                                          int64_t qual_idx,
                                          ObRawExpr *depend_expr,
                                          ObRawExprFactory &expr_factory,
                                          ObSQLSessionInfo *session_info,
                                          bool& is_done_replace);
-
-  static int replace_qual_param_if_need(ObRawExpr* qual, int64_t qual_idx, ObColumnRefRawExpr *col_expr);
 
   static int build_pad_expr(ObRawExprFactory &expr_factory,
                             bool is_char,
