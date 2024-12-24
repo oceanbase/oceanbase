@@ -53,11 +53,11 @@ public:
     int set_macro_data(const blocksstable::ObBufferReader& macro_data, const bool &is_reuse_macro_block);
     void set_macro_block_id(const blocksstable::MacroBlockId &macro_block_id);
     bool is_reuse_macro_block() const { return is_reuse_macro_block_; }
-    bool is_macro_data() const { return data_type_ == ObCopyMacroBlockHeader::DataType::MACRO_DATA; }
-    bool is_macro_meta() const { return data_type_ == ObCopyMacroBlockHeader::DataType::MACRO_META_ROW; }
+    bool is_macro_data() const { return data_type_ == ObCopyMacroBlockDataType::MACRO_DATA; }
+    bool is_macro_meta() const { return data_type_ == ObCopyMacroBlockDataType::MACRO_META_ROW; }
   public:
     TO_STRING_KV(K_(data_type), K_(is_reuse_macro_block), K_(macro_data), KPC_(macro_meta));
-    ObCopyMacroBlockHeader::DataType data_type_;
+    ObCopyMacroBlockDataType data_type_;
     bool is_reuse_macro_block_;
     blocksstable::ObBufferReader macro_data_;
     blocksstable::ObDataMacroBlockMeta *macro_meta_;

@@ -82,6 +82,12 @@ public:
   common::ObSArray<ObCopyMacroBlockArg> arg_list_;
 };
 
+enum ObCopyMacroBlockDataType {
+  MACRO_DATA = 0,
+  MACRO_META_ROW = 1,
+  MAX
+};
+
 struct ObCopyMacroBlockRangeArg final
 {
   OB_UNIS_VERSION(2);
@@ -109,12 +115,6 @@ struct ObCopyMacroBlockHeader
 {
   OB_UNIS_VERSION(2);
 public:
-  enum DataType
-  {
-    MACRO_DATA = 0,
-    MACRO_META_ROW = 1,
-    MAX,
-  };
   ObCopyMacroBlockHeader();
   virtual ~ObCopyMacroBlockHeader() {}
   void reset();
@@ -123,7 +123,7 @@ public:
   TO_STRING_KV(K_(is_reuse_macro_block), K_(occupy_size), K_(data_type));
   bool is_reuse_macro_block_;
   int64_t occupy_size_;
-  DataType data_type_;
+  ObCopyMacroBlockDataType data_type_; // FARM COMPAT WHITELIST FOR data_type_: renamed
 };
 
 struct ObCopyTabletInfoArg
