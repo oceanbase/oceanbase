@@ -209,16 +209,18 @@ int RowHolderMapper::init() {
   if (OB_ISNULL(bucket_head_ = (RowHolderBucketHead *)HashHolderAllocator::alloc(sizeof(RowHolderBucketHead) * bucket_cnt_, "HHBucket"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     DETECT_LOG(WARN, "init bucket head failed", KR(ret));
-  } else if (OB_FAIL(factory_.init())) {
-    DETECT_LOG(WARN, "init factory failed", KR(ret));
   } else {
     for (int64_t idx = 0; idx < bucket_cnt_; ++idx) {
       new (&bucket_head_[idx]) RowHolderBucketHead(this);
     }
+    if (OB_FAIL(factory_.init())) {
+      DETECT_LOG(WARN, "init factory failed", KR(ret));
+    }
+    if (OB_FAIL(ret)) {
+      this->~RowHolderMapper();
+    }
   }
-  if (OB_FAIL(ret)) {
-    this->~RowHolderMapper();
-  } else {
+  if (OB_SUCC(ret)) {
     DETECT_LOG(INFO, "RowHolderMapper init success", K(bucket_cnt_));
   }
   return ret;
