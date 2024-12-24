@@ -5634,6 +5634,7 @@ int ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_A
     LOG_WARN("unsupported bit operator", K(ret), K(op), K(BIT_AND));
   } else {
     ObBitVector &tmp_skip = expr.get_pvt_skip(ctx);
+    bool skip_flag = false;
     if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
       LOG_WARN("failed to eval vector result", K(ret), K(0));
     } else {
@@ -5645,12 +5646,14 @@ int ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_A
         ObBitmapNullVectorBase &cur_vec = *static_cast<ObBitmapNullVectorBase *>(param_vec);
         if (cur_vec.has_null()) {
           tmp_skip.bit_or(*cur_vec.get_nulls(), bound);
+          skip_flag = true;
         }
       } else if (left_format == VEC_UNIFORM) {
         ObUniformFormat<false> &cur_vec = *static_cast<ObUniformFormat<false> *>(param_vec);
         for (int i = bound.start(); i < bound.end(); i++) {
           if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
             tmp_skip.set(i);
+            skip_flag = true;
           }
         }
       } else if (left_format == VEC_UNIFORM_CONST) {
@@ -5658,6 +5661,7 @@ int ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_A
         for (int i = bound.start(); i < bound.end(); i++) {
           if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
             tmp_skip.set(i);
+            skip_flag = true;
           }
         }
       } else {
@@ -5666,7 +5670,12 @@ int ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_A
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
+      if (!skip_flag && OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
+        LOG_WARN("failed to eval vector result", K(ret), K(1));
+      } else if (skip_flag
+                 && OB_FAIL(expr.args_[1]->eval_vector(
+                      ctx, tmp_skip,
+                      EvalBound(bound.batch_size(), bound.start(), bound.end(), false)))) {
         LOG_WARN("failed to eval vector result", K(ret), K(1));
       } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, ctx.exec_ctx_.get_my_session(),
                                                            cast_mode))) {
@@ -5700,6 +5709,7 @@ int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_AR
     ObSQLUtils::get_default_cast_mode(false, 0, session->get_stmt_type(), session->is_ignore_stmt(),
                                       sql_mode, cast_mode);
     ObBitVector &tmp_skip = expr.get_pvt_skip(ctx);
+    bool skip_flag = false;
     if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
       LOG_WARN("failed to eval vector result", K(ret), K(0));
     } else {
@@ -5711,12 +5721,14 @@ int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_AR
         ObBitmapNullVectorBase &cur_vec = *static_cast<ObBitmapNullVectorBase *>(param_vec);
         if (cur_vec.has_null()) {
           tmp_skip.bit_or(*cur_vec.get_nulls(), bound);
+          skip_flag = true;
         }
       } else if (left_format == VEC_UNIFORM) {
         ObUniformFormat<false> &cur_vec = *static_cast<ObUniformFormat<false> *>(param_vec);
         for (int i = bound.start(); i < bound.end(); i++) {
           if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
             tmp_skip.set(i);
+            skip_flag = true;
           }
         }
       } else if (left_format == VEC_UNIFORM_CONST) {
@@ -5724,6 +5736,7 @@ int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_AR
         for (int i = bound.start(); i < bound.end(); i++) {
           if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
             tmp_skip.set(i);
+            skip_flag = true;
           }
         }
       } else {
@@ -5732,7 +5745,12 @@ int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_AR
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
+      if (!skip_flag && OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
+        LOG_WARN("failed to eval vector result", K(ret), K(1));
+      } else if (skip_flag
+                 && OB_FAIL(expr.args_[1]->eval_vector(
+                      ctx, tmp_skip,
+                      EvalBound(bound.batch_size(), bound.start(), bound.end(), false)))) {
         LOG_WARN("failed to eval vector result", K(ret), K(1));
       } else if (OB_FAIL(dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode))) {
         LOG_WARN("failed to dispatch eval vector and", K(ret), K(expr), K(ctx), K(bound));
