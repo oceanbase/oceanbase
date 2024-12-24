@@ -82,7 +82,8 @@ enum ObVectorIndexAlgorithmLib
   VIAL_MAX
 };
 
-enum ObVectorIndexAlgorithmType
+
+enum ObVectorIndexAlgorithmType : uint16_t
 {
   VIAT_HNSW = 0,
   VIAT_HNSW_SQ,

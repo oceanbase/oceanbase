@@ -14,35 +14,12 @@
 #define OB_DAS_VEC_DEFINE_H_
 
 #include "ob_das_attach_define.h"
+#include "src/share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
 namespace sql
 {
-
-enum ObVecAuxTableIdx {
-  INV_SCAN_IDX = 0,
-  DELTA_BUFFER_TBL_IDX = 1,
-  INDEX_ID_TBL_IDX = 2,
-  SNAPSHOT_TBL_IDX = 3,
-  COM_AUX_TBL_IDX = 4
-};
-
-// temporary solution
-enum ObVecScanType : uint8_t
-{
-  VEC_SCAN_INVALID = 0,
-  VEC_SCAN_POST = 1,
-  VEC_SCAN_PRE = 2
-};
-
-// temporary solution, need to be refactored
-enum ObVecIndexType : uint8_t
-{
-  VEC_INDEX_INVALID = 0,
-  VEC_INDEX_POST = 1,
-  VEC_INDEX_PRE = 2
-};
 
 struct ObDASVecAuxScanCtDef : ObDASAttachCtDef
 {
