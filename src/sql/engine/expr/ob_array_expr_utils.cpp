@@ -780,7 +780,7 @@ int ObArrayExprUtils::batch_dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, i
         if (vec->is_null(idx)) {
           for (uint32_t i = 0; i < expr.attrs_cnt_; i++) {
             ObIVector *attr_vec = expr.attrs_[i]->get_vector(ctx);
-            attr_vec->set_null(row_idx);
+            attr_vec->set_null(idx);
           }
         } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(is_shadow ? &tmp_allocator : allocator,
                                                               ObLongTextType,
