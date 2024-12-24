@@ -118,6 +118,7 @@ protected:
 
   int build_encode_param_(obmysql::ObProtoEncodeParam &param,
                           obmysql::ObMySQLPacket *pkt, const bool is_last);
+  void set_request_expect_group_id(sql::ObSQLSessionInfo *session);
   // 计算并设置当前用户所属 cgroup，用于资源隔离。如未设置，默认 cgroup id 为 0
   int setup_user_resource_group(
       ObSMConnection &conn,

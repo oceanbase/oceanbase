@@ -438,14 +438,8 @@ int ObMPBase::record_flt_trace(sql::ObSQLSessionInfo &session) const
   return ret;
 }
 
-int ObMPBase::setup_user_resource_group(
-    ObSMConnection &conn,
-    const uint64_t tenant_id,
-    sql::ObSQLSessionInfo *session)
+void ObMPBase::set_request_expect_group_id(sql::ObSQLSessionInfo *session)
 {
-  int ret = OB_SUCCESS;
-  uint64_t group_id = 0;
-  uint64_t user_id = session->get_user_id();
   if (OB_INVALID_ID != session->get_expect_group_id()) {
     // Session->expected_group_id_ is set when hit plan cache or resolve a query, and find that
     // expcted group is consistent with current group.
@@ -457,6 +451,19 @@ int ObMPBase::setup_user_resource_group(
     // conn.group_id_ = session->get_expect_group_id();
     // reset to invalid because session.expected_group_id is single_use.
     session->set_expect_group_id(OB_INVALID_ID);
+  }
+}
+
+int ObMPBase::setup_user_resource_group(
+    ObSMConnection &conn,
+    const uint64_t tenant_id,
+    sql::ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  uint64_t group_id = 0;
+  uint64_t user_id = session->get_user_id();
+  if (OB_INVALID_ID != session->get_expect_group_id()) {
+    set_request_expect_group_id(session);
   } else if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid tenant", K(tenant_id), K(ret));
