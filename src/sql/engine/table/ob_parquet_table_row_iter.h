@@ -26,6 +26,7 @@
 #include "common/storage/ob_io_device.h"
 #include "share/backup/ob_backup_struct.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
+#include "sql/engine/table/ob_file_prefetch_buffer.h"
 
 namespace oceanbase {
 namespace sql {
@@ -58,8 +59,10 @@ private:
 
 class ObArrowFile : public arrow::io::RandomAccessFile {
 public:
-  ObArrowFile(ObExternalDataAccessDriver &file_reader, const char*file_name, arrow::MemoryPool *pool)
-    : file_reader_(file_reader), file_name_(file_name), pool_(pool)
+  ObArrowFile(ObExternalDataAccessDriver &file_reader, const char *file_name,
+              arrow::MemoryPool *pool, ObFilePrefetchBuffer &file_prefetch_buffer) :
+    file_reader_(file_reader),
+    file_name_(file_name), pool_(pool), file_prefetch_buffer_(file_prefetch_buffer)
   {}
   ~ObArrowFile() override {
     file_reader_.close();
@@ -85,6 +88,7 @@ private:
   const char* file_name_;
   arrow::MemoryPool *pool_;
   int64_t position_;
+  ObFilePrefetchBuffer &file_prefetch_buffer_;
 };
 
 class ObParquetTableRowIterator : public ObExternalTableRowIterator {
@@ -135,7 +139,8 @@ public:
     read_props_(&arrow_alloc_),
     file_column_exprs_(allocator_),
     file_meta_column_exprs_(allocator_),
-    bit_vector_cache_(NULL) {}
+    bit_vector_cache_(NULL),
+    file_prefetch_buffer_(data_access_driver_) {}
   virtual ~ObParquetTableRowIterator();
 
   int init(const storage::ObTableScanParam *scan_param) override;
@@ -217,6 +222,7 @@ private:
   int next_row_group();
   int calc_exprs_for_rowid(const int64_t read_count);
   int calc_pseudo_exprs(const int64_t read_count);
+  int prefetch_parquet_row_group(std::unique_ptr<parquet::RowGroupMetaData> row_group_meta);
 private:
   StateValues state_;
   lib::ObMemAttr mem_attr_;
@@ -238,6 +244,7 @@ private:
   common::ObArrayWrap<int16_t> rep_levels_buf_;
   common::ObArrayWrap<char *> file_url_ptrs_; //for file url expr
   common::ObArrayWrap<ObLength> file_url_lens_; //for file url expr
+  ObFilePrefetchBuffer file_prefetch_buffer_;
 };
 
 }
