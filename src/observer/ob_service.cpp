@@ -3445,9 +3445,9 @@ int ObService::get_ls_replayed_scn(
       LOG_WARN("log stream is null", KR(ret), K(arg), K(ls_handle));
     } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
       LOG_WARN("failed to get migration status", K(ret), KPC(ls));
-    } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+    } else if (!ObMigrationStatusHelper::check_can_report_readable_scn(migration_status)) {
       cur_readable_scn = SCN::base_scn();
-      LOG_INFO("ls migration status is not none, report base scn as readable scn", K(migration_status), "ls_id", ls->get_ls_id());
+      LOG_INFO("ls migration status cannot report reablase scn, report base scn as readable scn", K(migration_status), "ls_id", ls->get_ls_id());
       if (arg.is_all_replica()) {
         ret = OB_EAGAIN;
         LOG_WARN("leader get all replica min readable scn, but leader migration status is not none, need retry",
@@ -3468,10 +3468,10 @@ int ObService::get_ls_replayed_scn(
 
       if (FAILEDx(ls->get_migration_status(migration_status))) {
         LOG_WARN("failed to get migration status", K(ret), KPC(ls));
-      } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+      } else if (!ObMigrationStatusHelper::check_can_report_readable_scn(migration_status)) {
         const SCN original_readable_scn = cur_readable_scn;
         cur_readable_scn = SCN::base_scn();
-        LOG_INFO("ls migration status is not none, report base scn as readable scn", K(migration_status),
+        LOG_INFO("ls migration status cannot report reablase scn, report base scn as readable scn", K(migration_status),
             "ls_id", ls->get_ls_id(), K(original_readable_scn));
         if (arg.is_all_replica()) {
           ret = OB_EAGAIN;

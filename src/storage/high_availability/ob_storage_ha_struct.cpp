@@ -1077,6 +1077,19 @@ bool ObMigrationStatusHelper::can_gc_ls_without_check_dependency(
   return allow_gc;
 }
 
+bool ObMigrationStatusHelper::check_can_report_readable_scn(
+    const ObMigrationStatus &cur_status)
+{
+  bool can_report = false;
+  if (ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == cur_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_NONE == cur_status) {
+    can_report = true;
+  } else {
+    can_report = false;
+  }
+  return can_report;
+}
+
 /******************ObMigrationOpArg*********************/
 ObMigrationOpArg::ObMigrationOpArg()
   : ls_id_(),
