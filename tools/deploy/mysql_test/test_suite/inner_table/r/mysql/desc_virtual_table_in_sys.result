@@ -6374,6 +6374,7 @@ interval_ts	bigint(20)	YES		NULL
 user_id	bigint(20)	YES		-1	
 database_id	bigint(20)	YES		-1	
 max_failures	bigint(20)	YES		0	
+func_type	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_scheduler_job;
 IF(count(*) >= 0, 1, 0)
 1
