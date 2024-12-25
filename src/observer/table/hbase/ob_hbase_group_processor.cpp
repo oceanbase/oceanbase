@@ -162,7 +162,7 @@ int ObHbaseOpProcessor::init_result(const int64_t total_tablet_count, ObTableMul
         ObTableTabletOpResult &tablet_result = op->result_.at(j);
         ObTableBatchOperationResult &batch_result = result.get_results().at(batch_result_idx);
         int64_t single_op_count = tablet_result.count();
-        for (int64_t k = 0; OB_SUCC(ret) && k < tablet_count; k++) { // loop single op
+        for (int64_t k = 0; OB_SUCC(ret) && k < single_op_count; k++) { // loop single op
           if (OB_FAIL(batch_result.push_back(tablet_result.at(k)))) {
             LOG_WARN("fail to push back ObTableOperationResult", K(ret));
           }

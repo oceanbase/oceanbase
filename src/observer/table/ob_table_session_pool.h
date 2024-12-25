@@ -115,8 +115,10 @@ public:
   {}
   virtual ~ObTableRelatedSysVars() {}
   int update_sys_vars(bool only_update_dynamic_vars);
+  int init();
 public:
   bool is_inited_;
+  ObSpinLock lock_; // Avoid repeated initialization
   StaticSysVars static_vars_;
   DynamicSysVars dynamic_vars_;
 };

@@ -27,6 +27,22 @@ namespace oceanbase
 namespace table
 {
 
+int ObTableRelatedSysVars::init()
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ObLockGuard<ObSpinLock> guard(lock_);
+    if (!is_inited_) { // double check
+      if (OB_FAIL(update_sys_vars(false/*only_update_dynamic_vars*/))) {
+        LOG_WARN("fail to init sys vars", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObTableRelatedSysVars::update_sys_vars(bool only_update_dynamic_vars)
 {
   int ret = OB_SUCCESS;
@@ -90,10 +106,6 @@ int ObTableRelatedSysVars::update_sys_vars(bool only_update_dynamic_vars)
           }
         }
       }
-    }
-
-    if (OB_SUCC(ret) && !only_update_dynamic_vars) {
-      is_inited_ = true;
     }
   }
 
@@ -222,7 +234,8 @@ int ObTableApiSessPoolMgr::init()
   - 1. the user should access the current tenant, so we check tenant id.
   - 2. ObTableApiSessGuard holds the reference count of session.
   - 3. pool_ have been created when login normally,
-    but some inner operation did not login, such as ttl operation, so we create a new pool for ttl.
+    But some inner operation did not login, such as ttl operation, so we create a new pool for ttl.
+    In the upgrade scenario, the odp does not login again. so we init system vars.
 */
 int ObTableApiSessPoolMgr::get_sess_info(ObTableApiCredential &credential, ObTableApiSessGuard &guard)
 {
@@ -239,6 +252,8 @@ int ObTableApiSessPoolMgr::get_sess_info(ObTableApiCredential &credential, ObTab
     LOG_WARN("session pool is null", K(ret), K(credential));
   } else if (OB_FAIL(pool_->get_sess_info(credential, guard))) {
     LOG_WARN("fail to get session info", K(ret), K(credential));
+  } else if (!sys_vars_.is_inited_ && OB_FAIL(sys_vars_.init())) {
+    LOG_WARN("fail to init sys vars", K(ret));
   }
 
   return ret;
@@ -302,8 +317,8 @@ int ObTableApiSessPoolMgr::update_sess(ObTableApiCredential &credential)
     LOG_WARN("fail to create session pool", K(ret), K(credential));
   } else if (OB_FAIL(pool_->update_sess(credential))) {
     LOG_WARN("fail to update sess pool", K(ret), K(credential));
-  } else if (!sys_vars_.is_inited_ && sys_vars_.update_sys_vars(false/*only_update_dynamic_vars*/)) {
-    LOG_WARN("fail to update sys var", K(ret));
+  } else if (!sys_vars_.is_inited_ && OB_FAIL(sys_vars_.init())) {
+    LOG_WARN("fail to init sys vars", K(ret));
   }
 
   return ret;

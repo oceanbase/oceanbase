@@ -177,6 +177,7 @@ TEST_F(TestTableSessPool, mgr_get_session)
   ASSERT_EQ(OB_SUCCESS, node->sess_queue_.push(val));
 
   ObTableApiSessGuard guard;
+  mgr->sys_vars_.is_inited_ = true;
   ASSERT_EQ(OB_SUCCESS, mgr->get_sess_info(*mock_cred_, guard));
   ASSERT_NE(nullptr, guard.sess_node_val_);
   ASSERT_NE(nullptr, guard.get_sess_node_val());
@@ -219,6 +220,7 @@ TEST_F(TestTableSessPool, mgr_sess_recycle)
   ASSERT_EQ(OB_SUCCESS, node->sess_queue_.push(val));
 
   ObTableApiSessGuard guard;
+  mgr->sys_vars_.is_inited_ = true;
   ASSERT_EQ(OB_SUCCESS, mgr->get_sess_info(*mock_cred_, guard));
   mgr->elimination_task_.runTimerTask();
   ASSERT_EQ(1, mgr->pool_->key_node_map_.size());
