@@ -2435,13 +2435,12 @@ int ObPxTransmitOp::update_tabletid_batch(const ObExpr *expr,ObRepartSliceIdxCal
   } else if (OB_FAIL(expr->init_vector_for_write(eval_ctx_, VectorFormat::VEC_FIXED, brs_.size_))) {
     LOG_WARN("init_vector failed", K(ret));
   } else {
-    ObIVector *src_vec = slice_calc.get_calc_part_id_expr()->get_vector(eval_ctx_);
     ObIVector *dst_vec = expr->get_vector(eval_ctx_);
     for (int i = 0; i < brs_.size_; i++) {
       if (brs_.skip_->at(i)) {
         continue;
       }
-      dst_vec->set_int(i, src_vec->get_int(i));
+      dst_vec->set_int(i, tablet_ids[i]);
     }
   }
   return ret;
