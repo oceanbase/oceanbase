@@ -31,6 +31,8 @@
 #include "sql/optimizer/ob_fd_item.h"
 #include "sql/monitor/ob_sql_plan.h"
 #include "sql/monitor/ob_plan_info_manager.h"
+#include "sql/optimizer/ob_px_resource_analyzer.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -39,6 +41,7 @@ struct JoinFilterInfo;
 struct EstimateCostInfo;
 struct ObSqlPlanItem;
 struct PlanText;
+class ObPxResourceAnalyzer;
 struct partition_location
 {
   int64_t partition_id;
@@ -1685,6 +1688,17 @@ public:
   int check_contain_false_startup_filter(bool &contain_false);
 
   inline ObIArray<double> &get_ambient_card() { return ambient_card_; }
+  // Make the operator in state of output data.
+  // 1. If this operator is single-child and non-block, then open its child.
+  // 2. If this operator is single-child and block, then open and close its child.
+  // 3. If this operator has multiple children, open all children by default and
+  //    operators should override this function according to their unique execution logic.
+  // append_map = false means it's in the progress of LogSet searching for child
+  //   with max running thread/group count, and we will not modify max_count or max_map.
+  virtual int open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG);
+  // Make the operator in state that all data has been outputted already.
+  virtual int close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG);
+  int find_max_px_resource_child(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG, int64_t start_idx);
 
   int pre_check_can_px_batch_rescan(bool &find_nested_rescan,
                                     bool &find_rescan_px,
@@ -1907,6 +1921,8 @@ protected:
   int64_t inherit_sharding_index_;
   // wether has allocated a osg_gather.
   bool need_osg_merge_;
+  int64_t max_px_thread_branch_;
+  int64_t max_px_group_branch_;
 };
 
 template <typename Allocator>

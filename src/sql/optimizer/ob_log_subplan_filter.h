@@ -137,6 +137,8 @@ public:
   int compute_spf_batch_rescan_compat(bool &can_batch);
   int check_right_is_local_scan(int64_t &local_scan_type) const;
   int pre_check_spf_can_px_batch_rescan(bool &can_px_batch_rescan, bool &rescan_contain_match_all) const;
+  virtual int open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG) override;
+  virtual int close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG) override;
 private:
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,
                                          ObIArray<ObRawExpr*> &exist_style_exprs);

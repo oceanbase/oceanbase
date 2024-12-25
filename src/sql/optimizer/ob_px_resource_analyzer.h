@@ -21,6 +21,36 @@ using namespace common::hash;
 namespace sql
 {
 
+#define OPEN_PX_RESOURCE_ANALYZE_ARG  \
+        cur_parallel_thread_count, cur_parallel_group_count,              \
+        cur_parallel_thread_map, cur_parallel_group_map,                  \
+        max_parallel_thread_count, max_parallel_group_count,              \
+        max_parallel_thread_map, max_parallel_group_map,                  \
+        px_res_analyzer, append_map
+
+#define OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG  \
+          int64_t &cur_parallel_thread_count,                             \
+          int64_t &cur_parallel_group_count,                              \
+          hash::ObHashMap<ObAddr, int64_t> &cur_parallel_thread_map,      \
+          hash::ObHashMap<ObAddr, int64_t> &cur_parallel_group_map,       \
+          int64_t &max_parallel_thread_count,                             \
+          int64_t &max_parallel_group_count,                              \
+          hash::ObHashMap<ObAddr, int64_t> &max_parallel_thread_map,      \
+          hash::ObHashMap<ObAddr, int64_t> &max_parallel_group_map,       \
+          ObPxResourceAnalyzer &px_res_analyzer, bool append_map
+
+#define CLOSE_PX_RESOURCE_ANALYZE_ARG  \
+        cur_parallel_thread_count, cur_parallel_group_count,              \
+        cur_parallel_thread_map, cur_parallel_group_map,                  \
+        px_res_analyzer, append_map
+
+#define CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG  \
+          int64_t &cur_parallel_thread_count,                             \
+          int64_t &cur_parallel_group_count,                              \
+          hash::ObHashMap<ObAddr, int64_t> &cur_parallel_thread_map,      \
+          hash::ObHashMap<ObAddr, int64_t> &cur_parallel_group_map,       \
+          ObPxResourceAnalyzer &px_res_analyzer, bool append_map
+
 enum DfoStatus {
   INIT,  // 未调度，不占用线程资源
   SCHED, // 执行中，占用线程资源
@@ -44,7 +74,10 @@ struct DfoInfo {
     dop_(0),
     location_addr_(),
     force_bushy_(false),
-    root_op_(nullptr)
+    root_op_(nullptr),
+    has_nested_px_(false),
+    nested_px_thread_cnt_(0),
+    nested_px_group_cnt_(0)
   {}
   DfoInfo *parent_;
   DfoInfo *depend_sibling_;
@@ -54,14 +87,21 @@ struct DfoInfo {
   ObHashSet<ObAddr> location_addr_;
   bool force_bushy_;
   ObLogicalOperator *root_op_;
+  bool has_nested_px_;
+  int64_t nested_px_thread_cnt_;
+  int64_t nested_px_group_cnt_;
+  ObHashMap<ObAddr, int64_t> nested_px_thread_map_;
+  ObHashMap<ObAddr, int64_t> nested_px_group_map_;
 
-  void reset()
+  void destroy()
   {
     for (int64_t i = 0; i < child_dfos_.count(); i++) {
-      child_dfos_.at(i)->reset();
+      child_dfos_.at(i)->destroy();
     }
     child_dfos_.reset();
     location_addr_.destroy();
+    nested_px_thread_map_.destroy();
+    nested_px_group_map_.destroy();
   }
 
   inline void set_root_op(ObLogicalOperator *root_op) { root_op_ = root_op;}
@@ -99,7 +139,7 @@ struct DfoInfo {
     }
     return f;
   }
-  TO_STRING_KV(K_(status), K_(dop));
+  TO_STRING_KV(K_(status), K_(dop), K_(has_nested_px));
 };
 
 struct LogRuntimeFilterDependencyInfo
@@ -107,10 +147,6 @@ struct LogRuntimeFilterDependencyInfo
 public:
   LogRuntimeFilterDependencyInfo() : rf_create_ops_() {}
   ~LogRuntimeFilterDependencyInfo() = default;
-  void destroy()
-  {
-    rf_create_ops_.reset();
-  }
   inline bool is_empty() const {
     return rf_create_ops_.empty();
   }
@@ -120,36 +156,43 @@ public:
 };
 
 class ObLogExchange;
-struct PxInfo {
-  PxInfo() : root_op_(nullptr), root_dfo_(nullptr), threads_(0),
-             acc_threads_(0), rf_dpd_info_() {}
-  PxInfo(ObLogExchange *root_op, DfoInfo *root_dfo)
-      : root_op_(root_op), root_dfo_(root_dfo), threads_(0), acc_threads_(0), rf_dpd_info_()
-  {}
-  void reset_dfo()
-  {
-    if (OB_NOT_NULL(root_dfo_)) {
-      root_dfo_->reset();
-      root_dfo_ = NULL;
-    }
-  }
-  ObLogExchange *root_op_;
-  DfoInfo *root_dfo_;
-  int64_t threads_; // 记录当前 PX 需要的线程组数
-  int64_t acc_threads_; // 记录当前 PX 计划以及它下面的嵌套 PX 计划线程组数之和
-  LogRuntimeFilterDependencyInfo rf_dpd_info_;
-  TO_STRING_KV(K_(threads), K_(acc_threads));
-};
-
-
-
-
 
 /*
  * 计算逻辑计划需要预约多少组线程才能调度成功
  */
 class ObPxResourceAnalyzer
 {
+public:
+struct PxInfo {
+  PxInfo() : inited_(false), root_op_(nullptr), root_dfo_(nullptr), threads_cnt_(0), group_cnt_(0),
+             rf_dpd_info_() {}
+  PxInfo(ObLogExchange *root_op, DfoInfo *root_dfo)
+      : inited_(false), root_op_(root_op), root_dfo_(root_dfo),
+        threads_cnt_(0), group_cnt_(0), rf_dpd_info_()
+  {}
+  ~PxInfo() {
+    destroy();
+  }
+  void destroy()
+  {
+    if (OB_NOT_NULL(root_dfo_)) {
+      root_dfo_->destroy();
+      root_dfo_ = NULL;
+    }
+    thread_map_.destroy();
+    group_map_.destroy();
+  }
+  bool inited_;
+  ObLogExchange *root_op_;
+  DfoInfo *root_dfo_;
+  // count of required threads for scheduling this px.
+  int64_t threads_cnt_;
+  int64_t group_cnt_;
+  ObHashMap<ObAddr, int64_t> thread_map_;
+  ObHashMap<ObAddr, int64_t> group_map_;
+  LogRuntimeFilterDependencyInfo rf_dpd_info_;
+  TO_STRING_KV(K_(threads_cnt), K_(group_cnt));
+};
 public:
   ObPxResourceAnalyzer();
   ~ObPxResourceAnalyzer() = default;
@@ -159,24 +202,23 @@ public:
       int64_t &max_parallel_group_count,
       ObHashMap<ObAddr, int64_t> &max_parallel_thread_map,
       ObHashMap<ObAddr, int64_t> &max_parallel_group_map);
+  int append_px(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG, PxInfo &px_info);
+  int remove_px(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG, PxInfo &px_info);
+  int recursive_walk_through_px_tree(PxInfo &px_tree);
+
 private:
-  int convert_log_plan_to_nested_px_tree(
-      common::ObIArray<PxInfo> &px_trees,
-      ObLogicalOperator &root_op);
-  int create_dfo_tree(
-      ObIArray<PxInfo> &px_trees,
-      ObLogExchange &root_op);
+  int convert_log_plan_to_nested_px_tree(ObLogicalOperator &root_op);
+  int create_dfo_tree(ObLogExchange &root_op);
   int do_split(
-      common::ObIArray<PxInfo> &px_trees,
       PxInfo &px_info,
       ObLogicalOperator &root_op,
       DfoInfo *parent_dfo);
-  int walk_through_px_trees(
-      common::ObIArray<PxInfo> &px_trees,
-      int64_t &max_parallel_thread_count,
-      int64_t &max_parallel_group_count,
-      ObHashMap<ObAddr, int64_t> &max_parallel_thread_map,
-      ObHashMap<ObAddr, int64_t> &max_parallel_group_map);
+  int walk_through_logical_plan(
+    ObLogicalOperator &root_op,
+    int64_t &max_parallel_thread_count,
+    int64_t &max_parallel_group_count,
+    ObHashMap<ObAddr, int64_t> &max_parallel_thread_map,
+    ObHashMap<ObAddr, int64_t> &max_parallel_group_map);
   int walk_through_dfo_tree(
       PxInfo &px_root,
       int64_t &max_parallel_thread_count,
@@ -186,6 +228,7 @@ private:
   int create_dfo(DfoInfo *&dfo, int64_t dop);
   int create_dfo(DfoInfo *&dfo, ObLogicalOperator &root_op);
   int get_dfo_addr_set(const ObLogicalOperator &root_op, ObHashSet<ObAddr> &addr_set);
+  template <bool append>
   int px_tree_append(ObHashMap<ObAddr, int64_t> &max_parallel_count,
                      ObHashMap<ObAddr, int64_t> &parallel_count);
 int schedule_dfo(
@@ -219,10 +262,11 @@ int update_max_thead_group_info(
     ObHashMap<ObAddr, int64_t> &max_parallel_thread_map,
     ObHashMap<ObAddr, int64_t> &max_parallel_group_map);
 private:
-  void reset_px_tree(ObIArray<PxInfo> &px_trees);
+  void print_px_usage(const ObHashMap<ObAddr, int64_t> &max_map);
 private:
   /* variables */
-  common::ObArenaAllocator dfo_allocator_;
+  common::ObArenaAllocator allocator_;
+  ObArray<PxInfo *> px_trees_;
   DISALLOW_COPY_AND_ASSIGN(ObPxResourceAnalyzer);
 };
 
@@ -297,9 +341,9 @@ int DfoTreeNormalizer<T>::normalize(T &root)
     ARRAY_FOREACH_X(root.child_dfos_, idx, cnt, OB_SUCC(ret)) {
       if (OB_ISNULL(root.child_dfos_.at(idx))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL ptr", K(idx), K(cnt), K(ret));
+        SQL_LOG(WARN, "NULL ptr", K(idx), K(cnt), K(ret));
       } else if (OB_FAIL(normalize(*root.child_dfos_.at(idx)))) {
-        LOG_WARN("fail normalize dfo", K(idx), K(cnt), K(ret));
+        SQL_LOG(WARN, "fail normalize dfo", K(idx), K(cnt), K(ret));
       }
     }
   }
