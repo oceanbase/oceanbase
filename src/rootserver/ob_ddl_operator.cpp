@@ -80,6 +80,9 @@
 #include "pl/ob_pl_persistent.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/ob_pl_package_type.h"
+#endif
 
 namespace oceanbase
 {
@@ -9205,6 +9208,12 @@ int ObDDLOperator::drop_package(const ObPackageInfo &package_info,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(error_info.handle_error_info(trans, &package_info))) {
       LOG_WARN("delete drop package error info failed", K(ret), K(error_info));
+#ifdef OB_BUILD_ORACLE_PL
+    } else if (OB_FAIL(pl::ObPLPackageType::delete_all_package_type(trans,
+                                                                    package_info.get_tenant_id(),
+                                                                    package_info.get_package_id()))) {
+      LOG_WARN("delete all package type failed", K(package_info), K(ret));
+#endif
     }
   }
 
