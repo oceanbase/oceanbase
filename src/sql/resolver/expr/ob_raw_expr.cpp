@@ -290,8 +290,6 @@ int ObRawExpr::assign(const ObRawExpr &other)
         LOG_WARN("failed to assign enum set values", K(ret));
       } else if (OB_FAIL(local_session_var_.assign(other.local_session_var_))) {
         LOG_WARN("fail to assign local session vars", K(ret));
-      } else if (OB_FAIL(attr_exprs_.assign(other.attr_exprs_))) {
-        LOG_WARN("failed to assign exprs", K(ret));
       }
     }
   }
