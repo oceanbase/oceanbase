@@ -36,6 +36,8 @@ int ObTableRelatedSysVars::init()
     if (!is_inited_) { // double check
       if (OB_FAIL(update_sys_vars(false/*only_update_dynamic_vars*/))) {
         LOG_WARN("fail to init sys vars", K(ret));
+      } else {
+        is_inited_ = true;
       }
     }
   }
