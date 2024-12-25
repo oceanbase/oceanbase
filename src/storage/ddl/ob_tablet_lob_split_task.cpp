@@ -1509,6 +1509,7 @@ int ObTabletLobWriteDataTask::create_sstables(
   batch_sstables_handle.set_allocator(&allocator_);
   const compaction::ObMergeType merge_type = share::ObSplitSSTableType::SPLIT_MINOR == split_sstable_type ?
         compaction::ObMergeType::MINOR_MERGE : compaction::ObMergeType::MAJOR_MERGE;
+  common::ObArenaAllocator build_mds_arena("SplitBuildMds", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   if (OB_FAIL(batch_sstables_handle.prepare_allocate(ctx_->new_lob_tablet_ids_.count()))) {
     LOG_WARN("init failed", K(ret), K(ctx_->new_lob_tablet_ids_));
   }
@@ -1591,7 +1592,6 @@ int ObTabletLobWriteDataTask::create_sstables(
       // build lost mds sstable into tablet.
       ObTableHandleV2 mds_table_handle;
       ObTablesHandleArray mds_sstables_handle;
-      common::ObArenaAllocator build_mds_arena("SplitBuildMds", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       if (OB_FAIL(ObTabletSplitUtil::build_lost_medium_mds_sstable(
             build_mds_arena,
             ctx_->ls_handle_,

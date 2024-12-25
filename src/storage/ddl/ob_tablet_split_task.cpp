@@ -1362,6 +1362,7 @@ int ObTabletSplitMergeTask::create_sstable(
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> participants;
+  common::ObArenaAllocator build_mds_arena("SplitBuildMds", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1451,8 +1452,7 @@ int ObTabletSplitMergeTask::create_sstable(
         }
         if (OB_SUCC(ret) && !is_major_merge_type(merge_type)) {
           // build lost mds sstable after minor merge.
-          common::ObArenaAllocator build_mds_arena("SplitBuildMds", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-	  ObTableHandleV2 table_handle;
+          ObTableHandleV2 table_handle;
           batch_sstables_handle.reset();
           if (OB_FAIL(ObTabletSplitUtil::build_lost_medium_mds_sstable(
                 build_mds_arena,
