@@ -84,6 +84,8 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "ENCRYPT";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DECRYPT_SHIFT] =
                                                    "DECRYPT";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_EVENT_SHIFT] =
+                                                   "EVENT";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()

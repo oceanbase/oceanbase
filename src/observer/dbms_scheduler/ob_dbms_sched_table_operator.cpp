@@ -486,8 +486,16 @@ int ObDBMSSchedTableOperator::extract_info(
   job_info_local.tenant_id_ = tenant_id;
   job_info_local.is_oracle_tenant_ = is_oracle_tenant;
   EXTRACT_INT_FIELD_MYSQL(result, "job", job_info_local.job_, uint64_t);
-  EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "user_id", job_info_local.user_id_, uint64_t);
-  EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "database_id", job_info_local.database_id_, uint64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, "user_id", job_info_local.user_id_, uint64_t);
+  if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
+    ret = OB_SUCCESS;
+    job_info_local.user_id_ = OB_INVALID_ID;
+  }
+  EXTRACT_INT_FIELD_MYSQL(result, "database_id", job_info_local.database_id_, uint64_t);
+  if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
+    ret = OB_SUCCESS;
+    job_info_local.database_id_ = OB_INVALID_ID;
+  }
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "lowner", job_info_local.lowner_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "powner", job_info_local.powner_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "cowner", job_info_local.cowner_);

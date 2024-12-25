@@ -72,6 +72,7 @@
 #include "pl/ob_pl_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/resolver/cmd/ob_event_stmt.h"
 
 namespace oceanbase {
 using namespace share;
@@ -2461,6 +2462,52 @@ int get_trigger_stmt_need_privs(
         need_priv.priv_set_ = OB_PRIV_TRIGGER;
         ADD_NEED_PRIV(need_priv);
       }
+    }
+  }
+  return ret;
+}
+
+int get_event_stmt_need_privs(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  bool need_check = false;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (OB_UNLIKELY(stmt::T_EVENT_JOB_CREATE != basic_stmt->get_stmt_type()
+                        && stmt::T_EVENT_JOB_ALTER != basic_stmt->get_stmt_type()
+                        && stmt::T_EVENT_JOB_DROP != basic_stmt->get_stmt_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Stmt type should be event stmt",
+             K(ret), "stmt type", basic_stmt->get_stmt_type());
+  } else if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(session_priv,
+                     ObCompatFeatureType::MYSQL_EVENT_PRIV_CHECK, need_check))) {
+    LOG_WARN("failed to get priv need check", K(ret));
+  } else if (lib::is_mysql_mode() && need_check) {
+    if (stmt::T_EVENT_JOB_CREATE == basic_stmt->get_stmt_type()) {
+      const ObCreateEventStmt *stmt = static_cast<const ObCreateEventStmt*>(basic_stmt);
+      ObNeedPriv need_priv;
+      need_priv.db_ = stmt->get_event_info().get_event_database();
+      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+      need_priv.priv_set_ = OB_PRIV_EVENT;
+      ADD_NEED_PRIV(need_priv);
+    } else if (stmt::T_EVENT_JOB_ALTER == basic_stmt->get_stmt_type()) {
+      const ObAlterEventStmt *stmt = static_cast<const ObAlterEventStmt*>(basic_stmt);
+      ObNeedPriv need_priv;
+      need_priv.db_ = stmt->get_event_info().get_event_database();
+      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+      need_priv.priv_set_ = OB_PRIV_EVENT;
+      ADD_NEED_PRIV(need_priv);
+    } else if (stmt::T_EVENT_JOB_DROP == basic_stmt->get_stmt_type()) {
+      const ObDropEventStmt *stmt = static_cast<const ObDropEventStmt*>(basic_stmt);
+      ObNeedPriv need_priv;
+      need_priv.db_ = stmt->get_event_info().get_event_database();
+      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+      need_priv.priv_set_ = OB_PRIV_EVENT;
+      ADD_NEED_PRIV(need_priv);
     }
   }
   return ret;

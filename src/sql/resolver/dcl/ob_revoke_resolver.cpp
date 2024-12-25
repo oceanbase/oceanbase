@@ -474,6 +474,13 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_1", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant encrypt/decrypt privilege");
+          } else if (compat_version < DATA_VERSION_4_2_5_2
+                     && ((priv_set & OB_PRIV_EVENT) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_2", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke event");
+          }
+          if (OB_FAIL(ret)) {
           } else {
             revoke_stmt->set_priv_set(priv_set);
           }

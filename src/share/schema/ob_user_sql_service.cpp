@@ -1082,6 +1082,7 @@ int ObUserSqlService::gen_user_dml(
     if ((user.get_priv_set() & OB_PRIV_LOCK_TABLE) != 0) { priv_others |= OB_PRIV_OTHERS_LOCK_TABLE; }
     if ((user.get_priv_set() & OB_PRIV_ENCRYPT) != 0) { priv_others |= OB_PRIV_OTHERS_ENCRYPT; }
     if ((user.get_priv_set() & OB_PRIV_DECRYPT) != 0) { priv_others |= OB_PRIV_OTHERS_DECRYPT; }
+    if ((user.get_priv_set() & OB_PRIV_EVENT) != 0) { priv_others |= OB_PRIV_OTHERS_EVENT; }
   }
   if (OB_FAIL(ret)) {
   } else if (compat_version < DATA_VERSION_4_2_2_0) {
@@ -1093,6 +1094,11 @@ int ObUserSqlService::gen_user_dml(
     if ((priv_others & OB_PRIV_OTHERS_ENCRYPT) != 0 || (priv_others & OB_PRIV_OTHERS_DECRYPT) != 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_1", K(ret), K(user.get_priv(OB_PRIV_ENCRYPT)), K(user.get_priv(OB_PRIV_DECRYPT)));
+    }
+  } else if (compat_version < DATA_VERSION_4_2_5_2) {
+    if ((priv_others & OB_PRIV_EVENT) != 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_5_2", K(ret), K(user.get_priv(OB_PRIV_EVENT)));
     }
   } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
     LOG_WARN("add PRIV_OTHERS column failed", K(priv_others), K(ret));

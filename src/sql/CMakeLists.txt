@@ -1034,12 +1034,6 @@ ob_set_subtarget(ob_sql resolver
 
 ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_switch_tenant_resolver.cpp
-  resolver/cmd/ob_alter_event_stmt.cpp
-  resolver/cmd/ob_alter_event_resolver.cpp
-  resolver/cmd/ob_create_event_stmt.cpp
-  resolver/cmd/ob_create_event_resolver.cpp
-  resolver/cmd/ob_drop_event_stmt.cpp
-  resolver/cmd/ob_drop_event_resolver.cpp
   resolver/cmd/ob_alter_system_resolver.cpp
   resolver/cmd/ob_alter_system_stmt.cpp
   resolver/cmd/ob_anonymous_block_resolver.cpp
@@ -1068,6 +1062,8 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_alter_ls_resolver.cpp
   resolver/cmd/ob_service_name_resolver.cpp
   resolver/cmd/ob_transfer_partition_resolver.cpp
+  resolver/cmd/ob_event_resolver.cpp
+  resolver/cmd/ob_event_stmt.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dcl

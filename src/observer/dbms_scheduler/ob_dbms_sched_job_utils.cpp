@@ -72,7 +72,7 @@ int ObDBMSSchedJobUtils::check_is_valid_job_style(const ObString &str)
 int ObDBMSSchedJobUtils::check_is_valid_argument_num(const int64_t num)
 {
   int ret = OB_SUCCESS;
-  if (0 != num) {
+  if (0 > num) {
     ret = OB_NOT_SUPPORTED;
   }
   return ret;
@@ -123,7 +123,7 @@ int ObDBMSSchedJobUtils::check_is_valid_end_date(const int64_t start_date, const
   return ret;
 }
 
-int ObDBMSSchedJobUtils::check_is_valid_repeat_interval(const ObString &str) {
+int ObDBMSSchedJobUtils::check_is_valid_repeat_interval(const ObString &str, bool is_limit_interval_num) {
   int ret = OB_SUCCESS;
   if (!str.empty() && 0 != str.case_compare("null")) {
     ObString repeat_expr(str);
@@ -131,17 +131,25 @@ int ObDBMSSchedJobUtils::check_is_valid_repeat_interval(const ObString &str) {
     ObString repeat_type_str = repeat_expr.split_on(';').trim_space_only();
     ObString interval_str = repeat_expr.split_on('=').trim_space_only();
     ObString repeat_num_str = repeat_expr.trim_space_only();
+    const int MAX_REPTAT_NUM_LEN = 16;
     if (!repeat_num_str.is_numeric()) {
       ret = OB_NOT_SUPPORTED;
-    } else if (0 >= atoi(repeat_num_str.ptr())) {
-      ret = OB_NOT_SUPPORTED;
-    } else if (0 != freq_str.case_compare("FREQ") || 0 != interval_str.case_compare("INTERVAL") ||
-              (0 != repeat_type_str.case_compare("SECONDLY") && 0 != repeat_type_str.case_compare("MINUTELY") &&
-               0 != repeat_type_str.case_compare("HOURLY") &&
-               0 != repeat_type_str.case_compare("DAILY") && 0 != repeat_type_str.case_compare("DAYLY") &&
-               0 != repeat_type_str.case_compare("WEEKLY") && 0 != repeat_type_str.case_compare("MONTHLY") &&
-               0 != repeat_type_str.case_compare("YEARLY"))) {
-      ret = OB_NOT_SUPPORTED;
+    } else {
+      char repeat_num_buf[MAX_REPTAT_NUM_LEN];
+      int64_t pos = repeat_num_str.to_string(repeat_num_buf, MAX_REPTAT_NUM_LEN);
+      int64_t repeat_num = atoll(repeat_num_buf);
+      if (0 >= repeat_num) {
+        ret = OB_NOT_SUPPORTED;
+      } else if (pos < repeat_num_str.length() || (is_limit_interval_num && 8000 <= repeat_num)) {
+        ret = OB_INVALID_ARGUMENT_NUM;
+      } else if (0 != freq_str.case_compare("FREQ") || 0 != interval_str.case_compare("INTERVAL") ||
+                (0 != repeat_type_str.case_compare("SECONDLY") && 0 != repeat_type_str.case_compare("MINUTELY") &&
+                0 != repeat_type_str.case_compare("HOURLY") &&
+                0 != repeat_type_str.case_compare("DAILY") && 0 != repeat_type_str.case_compare("DAYLY") &&
+                0 != repeat_type_str.case_compare("WEEKLY") && 0 != repeat_type_str.case_compare("MONTHLY") &&
+                0 != repeat_type_str.case_compare("YEARLY"))) {
+        ret = OB_NOT_SUPPORTED;
+      }
     }
   }
   return ret;
@@ -307,7 +315,12 @@ int ObDBMSSchedJobUtils::stop_dbms_sched_job(
               }
             } while (OB_SUCC(ret));
             if (OB_ITER_END == ret) {
+              if (result_empty) {
+                ret = OB_ENTRY_NOT_EXIST;
+                LOG_WARN("no running job", K(ret), K(tenant_id), K(job_info.job_name_));
+              } else {
                 ret = OB_SUCCESS;
+              }
             }
           }
         }
@@ -361,7 +374,7 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
   int ret = OB_SUCCESS;
   bool is_oracle_tenant =  lib::is_oracle_mode();
   //chcek job name
-  if (job_info.job_name_.empty() || OB_FAIL(check_is_valid_name(job_info.job_name_))) {
+  if (job_info.job_name_.empty() || OB_FAIL(check_is_valid_name(job_info.job_name_)) || 0 == (job_info.job_name_.case_compare("__dummy_guard"))) {
     ret = OB_INVALID_ARGUMENT;
   //check job style
   } else if (job_info.job_style_.empty() || OB_FAIL(check_is_valid_job_style(job_info.job_style_))) {
@@ -371,9 +384,6 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
     ret = OB_INVALID_ARGUMENT;
   //check job owner
   } else if (job_info.powner_.empty() || job_info.lowner_.empty() || job_info.cowner_.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-  //check job action
-  } else if (job_info.job_action_.empty()) { //oracle 可以为空
     ret = OB_INVALID_ARGUMENT;
   //check job class
   } else if (job_info.job_class_.empty() || OB_FAIL(check_is_valid_name(job_info.job_class_))) {
@@ -434,11 +444,7 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
           OZ (dml.add_column("cowner", ObHexEscapeSqlStr(job_info.cowner_)));
           OZ (dml.add_raw_time_column("next_date", job_info.start_date_));
           OZ (dml.add_column("total", 0));
-          if (job_info.repeat_interval_.empty()) {
-            OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(ObString("null"))));
-          } else {
-            OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(job_info.repeat_interval_)));
-          }
+          OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(ObString("null"))));
           OZ (dml.add_column("flag", 0));
           OZ (dml.add_column("job_name", ObHexEscapeSqlStr(job_info.job_name_)));
           OZ (dml.add_column("job_style", ObHexEscapeSqlStr(job_info.job_style_)));
@@ -457,6 +463,7 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
           OZ (dml.add_column("exec_env", job_info.exec_env_));
           OZ (dml.add_column("comments", ObHexEscapeSqlStr(job_info.comments_)));
           OZ (dml.add_column("program_name", ObHexEscapeSqlStr(job_info.program_name_)));
+          OZ (dml.add_column("max_failures", job_info.max_failures_));
           OZ (dml.finish_row());
         }
         OZ(dml.splice_batch_insert_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
@@ -493,33 +500,79 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
         "tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
         || OB_FAIL(dml.add_pk_column("job_name", job_info.job_name_)) || OB_FAIL(dml.add_gmt_modified(now))) {
       LOG_WARN("add column failed", KR(ret));
+  } else if (0 == job_attribute_name.case_compare("job_name")) {
+    if (OB_FAIL(dml.add_column("job_name", job_attribute_value.get_string()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
+    }
+  } else if (0 == job_attribute_name.case_compare("powner")) {
+    if (OB_FAIL(dml.add_column("powner", job_attribute_value.get_string()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
+    }
+  } else if (0 == job_attribute_name.case_compare("user_id")) {
+    if (OB_FAIL(dml.add_column("user_id", job_attribute_value.get_int()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_int()));
+    }
   } else if (0 == job_attribute_name.case_compare("state")) {
     if (OB_FAIL(check_is_valid_state(job_attribute_value.get_string()))) {
       LOG_WARN("invalid state", KR(ret), K(job_attribute_value.get_string()));
     } else if (OB_FAIL(dml.add_column("state", job_attribute_value.get_string()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
     }
+  } else if (0 == job_attribute_name.case_compare("auto_drop")) {
+    if (OB_FAIL(dml.add_column("auto_drop", job_attribute_value.get_bool()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_bool()));
+    }
   } else if (0 == job_attribute_name.case_compare("enabled")) {
     if (OB_FAIL(dml.add_column("enabled", job_attribute_value.get_bool()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_bool()));
+    } else if (job_attribute_value.get_bool() && job_info.state_.case_compare("BROKEN")) {
+      if (OB_FAIL(dml.add_column("state", "SCHEDULED"))) {
+        LOG_WARN("add state column failed", KR(ret), K(job_info.state_));
+      } else if (OB_FAIL(dml.add_column("failures", 0))) {
+        LOG_WARN("add failures column failed", KR(ret), K(job_info.failures_));
+      }
     }
   } else if (0 == job_attribute_name.case_compare("repeat_interval")) {
     int64_t next_date = 0;
+    ObDBMSSchedJobInfo calc_job_info;
+    calc_job_info.start_date_ = job_info.start_date_;
+    calc_job_info.repeat_interval_ = job_attribute_value.get_string();
+    calc_job_info.interval_ts_ = 0;
     if (OB_FAIL(check_is_valid_repeat_interval(job_attribute_value.get_string()))) {
       LOG_WARN("invalid repeat_interval", KR(ret), K(job_attribute_value.get_string()));
-    } else if (OB_FAIL(calc_dbms_sched_repeat_expr(job_info, next_date))) {
+    } else if (OB_FAIL(calc_dbms_sched_repeat_expr(calc_job_info, next_date))) {
       LOG_WARN("invalid next_date", KR(ret), K(job_attribute_value.get_string()));
     } else if (OB_FAIL(dml.add_column("repeat_interval", job_attribute_value.get_string()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
-    } else if (OB_FAIL(dml.add_column("`interval#`", job_attribute_value.get_string()))) {
+    } else if (OB_FAIL(dml.add_column("`interval#`", "null"))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
     } else if (OB_FAIL(dml.add_raw_time_column("next_date", next_date))) {
       LOG_WARN("add next_date column failed", KR(ret), K(next_date));
+    } else if (OB_FAIL(dml.add_column("interval_ts", 0))) {
+      LOG_WARN("add interval_ts column failed", KR(ret), K(job_info.interval_ts_));
     }
   } else if (0 == job_attribute_name.case_compare("job_action")) {
     if (OB_FAIL(dml.add_column("job_action", job_attribute_value.get_string()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
     } else if (OB_FAIL(dml.add_column("what", job_attribute_value.get_string()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
+    }
+  } else if (0 == job_attribute_name.case_compare("max_run_duration")) {
+    if (OB_FAIL(dml.add_column("max_run_duration", job_attribute_value.get_int()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_int()));
+    }
+  } else if (0 == job_attribute_name.case_compare("start_date")) {
+    if (OB_FAIL(dml.add_raw_time_column("start_date", job_attribute_value.get_time()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_time()));
+    } else if (OB_FAIL(dml.add_raw_time_column("next_date", job_attribute_value.get_time()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_time()));
+    }
+  } else if (0 == job_attribute_name.case_compare("end_date")) {
+    if (OB_FAIL(dml.add_raw_time_column("end_date", job_attribute_value.get_time()))) {
+      LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_time()));
+    }
+  } else if (0 == job_attribute_name.case_compare("comments")) {
+    if (OB_FAIL(dml.add_column("comments", job_attribute_value.get_string()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
     }
   } else {
@@ -639,7 +692,11 @@ int ObDBMSSchedJobUtils::calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &j
     int64_t N = (now - job_info.start_date_) / job_info.interval_ts_;
     next_run_time = job_info.start_date_ + (N + 1) * job_info.interval_ts_;
   } else if (job_info.repeat_interval_.empty() || 0 == job_info.repeat_interval_.case_compare("null")) {
-    next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+    if (now < job_info.start_date_) { //job 未开始
+      next_run_time = job_info.start_date_;
+    } else {
+      next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+    }
   } else {
     ObString repeat_expr(job_info.repeat_interval_);
     ObString freq_str = repeat_expr.split_on('=').trim_space_only();
@@ -647,38 +704,56 @@ int ObDBMSSchedJobUtils::calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &j
     ObString interval_str = repeat_expr.split_on('=').trim_space_only();
     ObString repeat_num_str = repeat_expr.trim_space_only();
 
-    if (!repeat_num_str.is_numeric() || 0 >= atoi(repeat_num_str.ptr())) { //未加参数检查前的 job 可能会有这种错误
-      next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+    const int MAX_REPTAT_NUM_LEN = 16;
+    if (!repeat_num_str.is_numeric() || MAX_REPTAT_NUM_LEN <= repeat_num_str.length()) {
+      next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE; //非数字/数字太大
     } else {
-      if (0 != freq_str.case_compare("FREQ")) {
-        ret = OB_NOT_SUPPORTED;
-      } else if (0 != interval_str.case_compare("INTERVAL")) {
-        ret = OB_NOT_SUPPORTED;
-      } else if (0 == repeat_type_str.case_compare("SECONDLY")) {
-        freq_num = 1;
-      } else if (0 == repeat_type_str.case_compare("MINUTELY")) {
-        freq_num = 60;
-      } else if (0 == repeat_type_str.case_compare("HOURLY")) {
-        freq_num = 60 * 60;
-      } else if (0 == repeat_type_str.case_compare("DAILY") || 0 == repeat_type_str.case_compare("DAYLY")) {
-        freq_num = 24 * 60 * 60;
-      } else if (0 == repeat_type_str.case_compare("WEEKLY")) {
-        freq_num = 7 * 24 * 60 * 60;
-      } else if (0 == repeat_type_str.case_compare("MONTHLY")) {
-        freq_num = 30 * 24 * 60 * 60;
-      } else if (0 == repeat_type_str.case_compare("YEARLY")) {
-        freq_num = 12 * 30 * 24 * 60 * 60;
+      char repeat_num_buf[MAX_REPTAT_NUM_LEN];
+      int64_t pos = repeat_num_str.to_string(repeat_num_buf, MAX_REPTAT_NUM_LEN);
+      repeat_num = atoll(repeat_num_buf);
+      if (0 >= repeat_num) { //未加参数检查前的 job 可能会有这种错误
+        next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
       } else {
-        ret = OB_NOT_SUPPORTED;
-      }
+        if (0 != freq_str.case_compare("FREQ")) {
+          ret = OB_NOT_SUPPORTED;
+        } else if (0 != interval_str.case_compare("INTERVAL")) {
+          ret = OB_NOT_SUPPORTED;
+        } else if (0 == repeat_type_str.case_compare("SECONDLY")) {
+          freq_num = 1;
+        } else if (0 == repeat_type_str.case_compare("MINUTELY")) {
+          freq_num = 60;
+        } else if (0 == repeat_type_str.case_compare("HOURLY")) {
+          freq_num = 60 * 60;
+        } else if (0 == repeat_type_str.case_compare("DAILY") || 0 == repeat_type_str.case_compare("DAYLY")) {
+          freq_num = 24 * 60 * 60;
+        } else if (0 == repeat_type_str.case_compare("WEEKLY")) {
+          freq_num = 7 * 24 * 60 * 60;
+        } else if (0 == repeat_type_str.case_compare("MONTHLY")) {
+          freq_num = 30 * 24 * 60 * 60;
+        } else if (0 == repeat_type_str.case_compare("YEARLY")) {
+          freq_num = 12 * 30 * 24 * 60 * 60;
+        } else {
+          ret = OB_NOT_SUPPORTED;
+        }
 
-      if (OB_SUCC(ret)) {
-        repeat_num = atoi(repeat_num_str.ptr());
-        int64_t repeat_interval_ts = freq_num * repeat_num * 1000000LL;
-        int64_t N = (now - job_info.start_date_) / repeat_interval_ts;
-        next_run_time = job_info.start_date_ + (N + 1) * repeat_interval_ts;
-        //未开始执行时，重新计算下次执行时间应该还是 start_date
-        next_run_time = max(next_run_time, job_info.start_date_);
+        if (OB_SUCC(ret)) {
+          if (INT64_MAX / repeat_num < freq_num * 1000000LL) { //乘法溢出处理
+            next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+          } else {
+            int64_t repeat_interval_ts = repeat_num * freq_num * 1000000LL;
+            int64_t N = (now - job_info.start_date_) / repeat_interval_ts;
+            int64_t increment = (N + 1) * repeat_interval_ts;
+            next_run_time = increment + job_info.start_date_;
+            if (next_run_time < increment ||  next_run_time < job_info.start_date_) { //加法溢出处理
+              next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+            } else if (ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE <= next_run_time) {
+                next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+            } else {
+              //未开始执行时，重新计算下次执行时间应该还是 start_date
+              next_run_time = max(next_run_time, job_info.start_date_);
+            }
+          }
+        }
       }
     }
   }
@@ -704,117 +779,6 @@ int ObDBMSSchedJobUtils::reserve_user_with_minimun_id(ObIArray<const ObUserInfo 
       user_infos.reset();
       if (OB_FAIL(user_infos.push_back(minimum_user_info))) {
         LOG_WARN("failed to push back", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDBMSSchedJobUtils::update_dbms_sched_job(
-    common::ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const ObString &job_name,
-    int is_auto_drop,
-    int is_enable,
-    int64_t start_date,
-    int64_t end_date,
-    int64_t repeat_ts,
-    const ObString &repeat_interval,
-    const ObString &definer,
-    const ObString &job_rename,
-    const ObString &comments,
-    const ObString &job_action)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_name));
-  } else {
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-    ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_pk_column(
-        "tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
-        || OB_FAIL(dml.add_pk_column("job_name", job_name))) {
-      LOG_WARN("add column failed", KR(ret));
-    } else if (!definer.empty() && OB_FAIL(dml.add_column("powner", definer))) {
-      LOG_WARN("add column failed", KR(ret), K(definer));
-    } else if (!job_rename.empty() && OB_FAIL(dml.add_column("job_name", job_rename))) {
-      LOG_WARN("add column failed", KR(ret), K(job_rename));
-    } else if (-1 != is_auto_drop && OB_FAIL(dml.add_column("auto_drop", is_auto_drop))) {
-      LOG_WARN("add column failed", KR(ret), K(is_auto_drop));
-    } else if (-1 != is_enable && OB_FAIL(dml.add_column("enabled", is_enable))) {
-      LOG_WARN("add column failed", KR(ret), K(is_enable));
-    } else if (OB_INVALID_TIMESTAMP != start_date && (OB_FAIL(dml.add_raw_time_column("start_date", start_date)
-      || OB_FAIL(dml.add_raw_time_column("next_date", start_date))
-      || OB_FAIL(dml.add_raw_time_column("end_date", end_date))
-      || OB_FAIL(dml.add_column("repeat_interval", repeat_interval))
-      || OB_FAIL(dml.add_column("interval_ts", repeat_ts))))) {
-      LOG_WARN("add column failed", KR(ret), K(start_date), K(end_date), K(repeat_interval), K(repeat_ts));
-    } else if (!comments.empty() && OB_FAIL(dml.add_column("comments", ObHexEscapeSqlStr(comments)))) {
-      LOG_WARN("add column failed", KR(ret), K(comments));
-    } else if (!job_action.empty() && (OB_FAIL(dml.add_column("job_action", job_action))
-      || OB_FAIL(dml.add_column("what", job_action)))) {
-      LOG_WARN("add column failed", KR(ret), K(job_action));
-    } else {
-      ObDMLExecHelper exec(sql_client, exec_tenant_id);
-      int64_t affected_rows = 0;
-      if (OB_FAIL(exec.exec_update(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, dml, affected_rows))) {
-        LOG_WARN("execute update failed", KR(ret));
-      } else if (is_zero_row(affected_rows)) {
-        ret = OB_SUCCESS;
-        LOG_WARN("not change", KR(ret), K(affected_rows));
-      } else if (!is_double_row(affected_rows)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("affected_rows unexpected to be two", KR(ret), K(affected_rows));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDBMSSchedJobUtils::check_dbms_sched_job_exist_and_start_time_on_past(common::ObISQLClient &sql_client,
-                                        const uint64_t tenant_id,
-                                        const ObString &job_name,
-                                        bool &exist,
-                                        bool &start_time_on_past)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  exist = false;
-  start_time_on_past = false;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_name));
-  } else {
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-    if (OB_FAIL(sql.append_fmt("select TIME_TO_USEC (start_date) as time from %s where tenant_id = %ld and job_name = \'%.*s\' and job > 0",
-                                                     OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
-                                                     ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-                                                     job_name.length(), job_name.ptr()))) {
-        LOG_WARN("failed to assign sql", K(ret));
-    } else {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
-          LOG_WARN("execute query failed", K(ret), K(sql));
-        } else {
-          if (res.get_result() != NULL && OB_SUCCESS == (ret = res.get_result()->next())) {
-            exist = true;
-            int64_t time_us = OB_INVALID_TIMESTAMP;
-            sqlclient::ObMySQLResult &result = *res.get_result();
-            EXTRACT_INT_FIELD_MYSQL(result, "time", time_us, uint64_t);
-            if (time_us < ObTimeUtility::current_time()) {
-              start_time_on_past = true;
-            }
-          }
-          if (OB_FAIL(ret)) {
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-              exist = false;
-            } else {
-              LOG_WARN("next failed", K(ret));
-            }
-          }
-        }
       }
     }
   }

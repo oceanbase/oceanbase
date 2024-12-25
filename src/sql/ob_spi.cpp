@@ -7355,13 +7355,13 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
         ObSQLSessionInfo *session_info = NULL;
         ObSyncCmdDriver  *query_sender = NULL;
         CK (OB_NOT_NULL(session_info = exec_ctx->get_my_session()));
-        CK (OB_NOT_NULL(
-          query_sender = static_cast<ObSyncCmdDriver *>(session_info->get_pl_query_sender())));
-        OZ (query_sender->response_query_result(*ob_result_set,
-                                                session_info->is_ps_protocol(),
-                                                true,
-                                                can_retry));
-        OZ (query_sender->send_eof_packet(true));
+        if (OB_SUCC(ret) && OB_NOT_NULL(query_sender = static_cast<ObSyncCmdDriver *>(session_info->get_pl_query_sender()))) {
+          OZ (query_sender->response_query_result(*ob_result_set,
+                                                  session_info->is_ps_protocol(),
+                                                  true,
+                                                  can_retry));
+          OZ (query_sender->send_eof_packet(true));
+        }
 
         OX(implicit_cursor->set_rowcount(into_count > 0 ? 1 : 0));
       }

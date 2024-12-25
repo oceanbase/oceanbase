@@ -127,6 +127,8 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "ENCRYPT"; break;
     case OB_PRIV_DECRYPT:
       name = "DECRYPT"; break;
+    case OB_PRIV_EVENT:
+      name = "EVENT"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));

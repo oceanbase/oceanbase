@@ -488,7 +488,7 @@ ObParser::State ObParser::transform_normal(
     case S_ALTER: {
       State token = transform_normal(normal);
       if (S_PROCEDURE == token || S_FUNCTION == token
-          || S_PACKAGE == token || S_TRIGGER == token ||  S_EVENT == token || S_TYPE == token) {
+          || S_PACKAGE == token || S_TRIGGER == token ||  S_EVENT == token || S_TYPE == token || S_DEFINER == token) {
         is_pl = true;
       } else {
         is_not_pl = true;

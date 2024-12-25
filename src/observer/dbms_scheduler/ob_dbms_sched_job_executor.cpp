@@ -130,6 +130,9 @@ int ObDBMSSchedJobExecutor::init_env(ObDBMSSchedJobInfo &job_info, ObSQLSessionI
         job_info.get_tenant_id(), job_info.get_powner(), user_infos));
       OV (1 == user_infos.count(), 0 == user_infos.count() ? OB_USER_NOT_EXIST : OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
       CK (OB_NOT_NULL(user_info = user_infos.at(0)));
+    } else if (job_info.get_user_id() != OB_INVALID_ID) {
+      OZ (schema_guard.get_user_info(
+        job_info.get_tenant_id(), job_info.get_user_id(), user_info));
     } else {
       ObString user = job_info.get_powner();
       if (OB_SUCC(ret)) {
@@ -153,7 +156,7 @@ int ObDBMSSchedJobExecutor::init_env(ObDBMSSchedJobInfo &job_info, ObSQLSessionI
       }
     }
   }
-  CK (OB_NOT_NULL(user_info));
+  OV (OB_NOT_NULL(user_info), OB_ERR_USER_NOT_EXIST, K(job_info.get_tenant_id()), K(job_info.get_powner()));
   CK (OB_NOT_NULL(tenant_info));
   CK (OB_NOT_NULL(database_schema));
   OZ (exec_env.init(job_info.get_exec_env()));

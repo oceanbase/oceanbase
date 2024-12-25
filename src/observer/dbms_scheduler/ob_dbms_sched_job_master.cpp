@@ -235,7 +235,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
 
     const int64_t now = ObTimeUtility::current_time();
     int64_t next_check_date = now + MIN_SCHEDULER_INTERVAL;
-    if (OB_FAIL(ret) || !job_info.valid() || mysql_event_scheduler_is_off(job_info)) {
+    if (OB_FAIL(ret) || !job_info.valid()) {
       free_job_key(job_key);
       job_key = NULL;
       LOG_INFO("free invalid job", K(job_info));
@@ -248,7 +248,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
           LOG_WARN("job is timeout, force update for end", K(job_info), K(now));
         }
       }
-    } else if (job_info.is_disabled() || job_info.is_broken()) {
+    } else if (job_info.is_disabled() || job_info.is_broken() || mysql_event_scheduler_is_off(job_info)) {
       free_job_key(job_key);
       job_key = NULL;
       LOG_INFO("free disable/broken job", K(job_info));

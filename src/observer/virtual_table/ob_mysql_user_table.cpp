@@ -145,7 +145,7 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   EXIST_PRIV_CASE(CREATE_ROUTINE);
                   EXIST_PRIV_CASE(ALTER_ROUTINE);
                   EXIST_PRIV_CASE(CREATE_USER);
-                  NO_EXIST_PRIV_CASE(EVENT);
+                  EXIST_PRIV_CASE(EVENT);
                   EXIST_PRIV_CASE(TRIGGER);
                   EXIST_PRIV_CASE(CREATE_TABLESPACE);
                   EXIST_PRIV_CASE(CREATE_ROLE);

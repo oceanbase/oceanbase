@@ -932,6 +932,9 @@ int ObShowGrants::print_privs_to_buff(
           ret = BUF_PRINTF(" DECRYPT,");
         }
 #endif
+        if ((priv_set & OB_PRIV_EVENT) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" EVENT,");
+        }
         if (OB_SUCCESS == ret && pos > 0) {
           pos--; //Delete last ','
         }

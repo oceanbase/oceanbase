@@ -276,7 +276,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> create_trigger_stmt drop_trigger_stmt plsql_trigger_source
 %type <node> trigger_definition trigger_event trigger_body pl_obj_access_ref
 %type <ival> trigger_time
-%type <node> create_event_stmt event_schedule opt_event_time_range event_start_time event_end_time opt_event_interval event_on_completion opt_event_on_completion opt_event_status opt_event_comment event_body_stmts event_body
+%type <node> create_event_stmt event_schedule event_time_expr opt_event_time_range event_start_time event_end_time event_on_completion opt_event_on_completion opt_event_status opt_event_comment event_body_stmts event_body
 %type <node> alter_event_stmt opt_event_alter_on_schedule_completion opt_event_rename opt_event_body
 %type <node> drop_event_stmt
 /*SQL data type*/
@@ -2061,9 +2061,9 @@ CREATE opt_sp_definer EVENT opt_if_not_exists sp_name ON SCHEDULE event_schedule
 ;
 
 event_schedule:
-AT STRING opt_event_interval
+AT event_time_expr
 {
-  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_EVENT_JOB_WITH_ON, 2, $2, $3);
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_EVENT_JOB_WITH_ON, 1, $2);
   $$->value_ = 1;
 }
 | EVERY INTNUM date_unit opt_event_time_range
@@ -2073,16 +2073,10 @@ AT STRING opt_event_interval
 }
 ;
 
-opt_event_interval:
-/* empty */
+event_time_expr:
 {
-  $$ = NULL;
+  do_parse_sql_expr_rule($$, parse_ctx, 9, ',', ';', ON, ENABLE, DISABLE, COMMENT, DO, ENDS, RENAME);
 }
-| '+' INTERVAL INTNUM date_unit
-{
-  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, $3, $4);
-}
-;
 
 opt_event_time_range:
 {
@@ -2103,16 +2097,16 @@ opt_event_time_range:
 ;
 
 event_start_time:
-STARTS STRING opt_event_interval
+STARTS event_time_expr
 {
-  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, $2, $3);
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 1, $2);
 }
 ;
 
 event_end_time:
-ENDS STRING opt_event_interval
+ENDS event_time_expr
 {
-  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, $2, $3);
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 1, $2);
 }
 ;
 
@@ -2198,6 +2192,16 @@ sql_stmt ';'
 
 event_body:
 sql_stmt
+{
+  check_ptr($1);
+  const char *stmt_str = parse_ctx->stmt_str_ + @1.first_column;
+  int32_t str_len = @1.last_column - @1.first_column + 1;
+  $1->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
+  check_ptr($1->str_value_);
+  $1->str_len_ = str_len;
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_STMT_LIST, 1, $1);
+}
+| call_sp_stmt
 {
   check_ptr($1);
   const char *stmt_str = parse_ctx->stmt_str_ + @1.first_column;

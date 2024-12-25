@@ -8319,6 +8319,9 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_DECRYPT) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" DECRYPT,");
   }
+  if ((priv_set_ & OB_PRIV_EVENT) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" EVENT,");
+  }
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
   }

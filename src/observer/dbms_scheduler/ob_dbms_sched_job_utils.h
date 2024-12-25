@@ -428,12 +428,13 @@ public:
    * @retval OB_SUCCESS execute success
    * @retval OB_NOT_SUPPORTED 不支持
   */
-  static int check_is_valid_repeat_interval(const ObString &str);
+  static int check_is_valid_repeat_interval(const ObString &str, bool is_limit_interval_num = false);
   /**
    * @brief  检查是否有效的 max_run_duration
    * @param [in] max_run_duration
    * @retval OB_SUCCESS execute success
-   * @retval OB_NOT_SUPPORTED 不支持
+   * @retval OB_INVALID_ARGUMENT_NUM interval_num 超出范围
+   * @retval OB_NOT_SUPPORTED 语法不支持
   */
   static int check_is_valid_max_run_duration(const int64_t max_run_duration);
 
@@ -448,6 +449,7 @@ public:
    * @retval OB_ERR_UNEXPECTED 未知错误
    * @retval OB_INVALID_ARGUMENT 当前 JOB 不存在
    * @retval OB_ERR_NO_PRIVILEGE 当前 JOB 传入的用户没有权限修改
+   * @retval OB_ERR_PRIMARY_KEY_DUPLICATE job_name 已经存在
    */
   static int create_dbms_sched_job(common::ObISQLClient &sql_client,
                                    const uint64_t tenant_id,
@@ -490,6 +492,7 @@ public:
    * @retval OB_ERR_UNEXPECTED 未知错误
    * @retval OB_INVALID_ARGUMENT 无效参数
    * @retval OB_ENTRY_NOT_EXIST JOB 不存在/没做更改
+   * @retval OB_ERR_PRIMARY_KEY_DUPLICATE job_name 已经存在
    */
   static int update_dbms_sched_job_info(common::ObISQLClient &sql_client,
                                         const ObDBMSSchedJobInfo &job_info,
@@ -532,24 +535,6 @@ public:
    * @retval OB_INVALID_ARGUMENT 无效参数
    */
   static int calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &job_info, int64_t &next_run_time);
-  static int check_dbms_sched_job_exist_and_start_time_on_past(common::ObISQLClient &sql_client,
-                                        const uint64_t tenant_id,
-                                        const ObString &job_name,
-                                        bool &exist,
-                                        bool &start_time_on_past);
-  static int update_dbms_sched_job(common::ObISQLClient &sql_client,
-                                   const uint64_t tenant_id,
-                                   const ObString &job_name,
-                                   int is_auto_drop,
-                                   int is_enable,
-                                   int64_t start_date,
-                                   int64_t end_date,
-                                   int64_t repeat_ts,
-                                   const ObString &repeat_interval,
-                                   const ObString &definer,
-                                   const ObString &job_rename,
-                                   const ObString &comments,
-                                   const ObString &job_action);
   static int reserve_user_with_minimun_id(ObIArray<const ObUserInfo *> &user_infos); //TO DO 连雨 delete
 };
 }
