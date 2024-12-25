@@ -25,7 +25,7 @@ namespace oceanbase
 {
 namespace share
 {
-enum ObVecAuxTableIdx {
+enum ObVecAuxTableIdx { //FARM COMPAT WHITELIST
   INV_SCAN_IDX = 0,
   DELTA_BUFFER_TBL_IDX = 1,
   INDEX_ID_TBL_IDX = 2,
@@ -36,7 +36,7 @@ enum ObVecAuxTableIdx {
 
 // temporary solution, need to be refactored
 enum ObVecIndexType : uint8_t
-{
+{//FARM COMPAT WHITELIST
   VEC_INDEX_INVALID = 0,
   VEC_INDEX_POST = 1,
   VEC_INDEX_PRE = 2
