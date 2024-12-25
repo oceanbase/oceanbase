@@ -448,6 +448,8 @@ public:
   // ------------------------------------------------------------------------
   // Test mode, used only in obtest and other test tool scenarios
   T_DEF_BOOL(test_mode_on, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+  // Test mode fail while init
+  T_DEF_BOOL(test_mode_init_fail, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
   // if force fetch archive is on, cdc service will seek archive for all rpc request unconditionally
   T_DEF_BOOL(test_mode_force_fetch_archive, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
