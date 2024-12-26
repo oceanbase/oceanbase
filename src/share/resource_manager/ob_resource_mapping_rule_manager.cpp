@@ -114,7 +114,7 @@ int ObResourceMappingRuleManager::clear_deleted_group(
           uint64_t deleted_group_id = group_id_keys.at(i).group_id_;
           ObGroupName deleted_group_name = group_names.at(i);
           LOG_INFO("group_id need to be cleared", K(tenant_id), K(deleted_group_id), K(deleted_group_name));
-          if (OB_FAIL(GCTX.cgroup_ctrl_->remove_both_cgroup(tenant_id, deleted_group_id))) {
+          if (OB_FAIL(GCTX.cgroup_ctrl_->remove_cgroup(tenant_id, deleted_group_id))) {
             LOG_WARN("failed to remove cgroup", K(ret), K(tenant_id), K(deleted_group_id));
           } else if (OB_FAIL(tenant_holder.get_ptr()->delete_consumer_group_config(deleted_group_id))) {
             LOG_WARN("delete consumer group config failed", K(ret), K(tenant_id), K(deleted_group_id));

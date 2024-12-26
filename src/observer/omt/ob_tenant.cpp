@@ -624,10 +624,7 @@ int ObResourceGroup::get_throttled_time(int64_t &throttled_time)
   int64_t current_throttled_time_us = -1;
   if (OB_ISNULL(GCTX.cgroup_ctrl_) || !GCTX.cgroup_ctrl_->is_valid()) {
     // do nothing
-  } else if (OB_FAIL(GCTX.cgroup_ctrl_->get_throttled_time(tenant_->id(),
-                 current_throttled_time_us,
-                 group_id_,
-                 GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+  } else if (OB_FAIL(GCTX.cgroup_ctrl_->get_throttled_time(tenant_->id(), current_throttled_time_us, group_id_))) {
     LOG_WARN("get throttled time failed", K(ret), K(tenant_->id()), K(group_id_));
   } else if (current_throttled_time_us > 0) {
     throttled_time = current_throttled_time_us - throttled_time_us_;
@@ -1189,9 +1186,10 @@ void ObTenant::destroy()
     common::ob_delete(mtl_init_ctx_);
     mtl_init_ctx_ = nullptr;
   }
-  if (cgroup_ctrl_.is_valid() &&
-      OB_TMP_FAIL(cgroup_ctrl_.remove_both_cgroup(
-          id_, OB_INVALID_GROUP_ID, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+
+  if (!cgroup_ctrl_.is_valid()) {
+    // do nothing
+  } else if (OB_TMP_FAIL(cgroup_ctrl_.remove_cgroup(id_))) {
     LOG_WARN_RET(tmp_ret, "remove tenant cgroup failed", K(tmp_ret), K_(id));
   }
 }
@@ -1202,11 +1200,7 @@ void ObTenant::set_unit_max_cpu(double cpu)
   unit_max_cpu_ = cpu;
   if (!cgroup_ctrl_.is_valid() || is_meta_tenant(id_)) {
     // do nothing
-  } else if (OB_TMP_FAIL(cgroup_ctrl_.set_both_cpu_cfs_quota(
-                 id_,
-                 is_sys_tenant(id_) ? -1 : cpu,
-                 OB_INVALID_GROUP_ID,
-                 GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+  } else if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_cfs_quota(id_, is_sys_tenant(id_) ? -1 : cpu))) {
     _LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed, tenant_id=%lu, cpu=%.2f", id_, cpu);
   }
 }
@@ -1215,12 +1209,9 @@ void ObTenant::set_unit_min_cpu(double cpu)
 {
   int tmp_ret = OB_SUCCESS;
   unit_min_cpu_ = cpu;
-  if (cgroup_ctrl_.is_valid() &&
-      OB_TMP_FAIL(cgroup_ctrl_.set_both_cpu_shares(
-          id_,
-          cpu,
-          OB_INVALID_GROUP_ID,
-          GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+  if (!cgroup_ctrl_.is_valid()) {
+    // do nothing
+  } else if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_shares(id_, cpu))) {
     _LOG_WARN_RET(tmp_ret, "set tenant cpu shares failed, tenant_id=%lu, cpu=%.2f", id_, cpu);
   }
 }
@@ -1698,17 +1689,15 @@ void ObTenant::regist_threads_to_cgroup()
   int tmp_ret = OB_SUCCESS;
 
   // set cgroup configs
-  if (OB_TMP_FAIL(cgroup_ctrl_.set_both_cpu_shares(id_,
+  if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_shares(id_,
           unit_min_cpu_,
-          OB_INVALID_GROUP_ID,
-          GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+          OB_INVALID_GROUP_ID))) {
     LOG_WARN_RET(tmp_ret, "set tenant cpu shares failed", K(tmp_ret), K_(id), K_(unit_min_cpu));
   } else if (is_meta_tenant(id_)) {
     // do nothing
-  } else if (OB_TMP_FAIL(cgroup_ctrl_.set_both_cpu_cfs_quota(id_,
+  } else if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_cfs_quota(id_,
                  is_sys_tenant(id_) ? -1 : unit_max_cpu_,
-                 OB_INVALID_GROUP_ID,
-                 GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+                 OB_INVALID_GROUP_ID))) {
     LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K_(id), K_(unit_max_cpu));
   }
 

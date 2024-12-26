@@ -72,28 +72,27 @@ int ObResourcePlanManager::switch_resource_plan(const uint64_t tenant_id, ObStri
 int ObResourcePlanManager::refresh_global_background_cpu()
 {
   int ret = OB_SUCCESS;
-  int32_t cfs_period_us = 0;
   if (GCONF.enable_global_background_resource_isolation) {
     double cpu = static_cast<double>(GCONF.global_background_cpu_quota);
     if (cpu <= 0) {
       cpu = -1;
     }
     if (cpu >= 0 && OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_shares(  // set cgroup/background/cpu.shares
-                    OB_INVALID_TENANT_ID,
-                    cpu,
-                    OB_INVALID_GROUP_ID,
-                    BACKGROUND_CGROUP))) {
-        LOG_WARN("fail to set background cpu shares", K(ret));
+                        OB_INVALID_TENANT_ID,
+                        cpu,
+                        OB_INVALID_GROUP_ID,
+                        true /* is_background */))) {
+      LOG_WARN("fail to set background cpu shares", K(ret));
     }
     int compare_ret = 0;
     if (OB_SUCC(ret) && OB_SUCC(GCTX.cgroup_ctrl_->compare_cpu(background_quota_, cpu, compare_ret))) {
       if (0 == compare_ret) {
         // do nothing
       } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(  // set cgroup/background/cpu.cfs_quota_us
-                    OB_INVALID_TENANT_ID,
-                    cpu,
-                    OB_INVALID_GROUP_ID,
-                    BACKGROUND_CGROUP))) {
+                     OB_INVALID_TENANT_ID,
+                     cpu,
+                     OB_INVALID_GROUP_ID,
+                     true /* is_background */))) {
         LOG_WARN("fail to set background cpu cfs quota", K(ret));
       } else {
         if (compare_ret < 0) {
@@ -114,18 +113,16 @@ int ObResourcePlanManager::refresh_global_background_cpu()
             } else if (compare_ret > 0) {
               target_cpu = cpu;
             }
-            if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(tenant_id,
-                            target_cpu,
-                            OB_INVALID_GROUP_ID,
-                            BACKGROUND_CGROUP))) {
+            if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(
+                    tenant_id, target_cpu, OB_INVALID_GROUP_ID, true /* is_background */))) {
               LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K(tenant_id));
             } else if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(
-                    tenant_id, target_cpu, USER_RESOURCE_OTHER_GROUP_ID, BACKGROUND_CGROUP))) {
+                           tenant_id, target_cpu, USER_RESOURCE_OTHER_GROUP_ID, true /* is_background */))) {
               LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(ret), K(tenant_id));
             } else if (is_user_tenant(tenant_id)) {
               uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
               if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(
-                      meta_tenant_id, target_cpu, OB_INVALID_GROUP_ID, BACKGROUND_CGROUP))) {
+                      meta_tenant_id, target_cpu, OB_INVALID_GROUP_ID, true /* is_background */))) {
                 LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K(meta_tenant_id));
               }
             }
@@ -300,29 +297,28 @@ int ObResourcePlanManager::flush_directive_to_cgroup_fs(ObPlanDirectiveSet &dire
   int ret = OB_SUCCESS;
   for (int64_t i = 0; i < directives.count(); ++i) {
     const ObPlanDirective &d = directives.at(i);
-    if (OB_FAIL(GCTX.cgroup_ctrl_->set_both_cpu_shares(d.tenant_id_,
-            d.mgmt_p1_ / 100,
-            d.group_id_,
-            GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+    if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_shares(d.tenant_id_, d.mgmt_p1_ / 100, d.group_id_))) {
       LOG_ERROR("fail set cpu shares. tenant isolation function may not functional!!", K(d), K(ret));
     } else {
       double tenant_cpu_quota = 0;
       if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_cfs_quota(d.tenant_id_, tenant_cpu_quota, OB_INVALID_GROUP_ID))) {
         LOG_WARN("fail get cpu quota", K(d), K(ret));
       } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(d.tenant_id_,
-                      -1 == tenant_cpu_quota ? -1 : tenant_cpu_quota * d.utilization_limit_ / 100,
-                      d.group_id_))) {
-        LOG_ERROR("fail set cpu quota. tenant isolation function may not functional!!", K(ret), K(d), K(tenant_cpu_quota));
+                     -1 == tenant_cpu_quota ? -1 : tenant_cpu_quota * d.utilization_limit_ / 100,
+                     d.group_id_))) {
+        LOG_ERROR(
+            "fail set cpu quota. tenant isolation function may not functional!!", K(ret), K(d), K(tenant_cpu_quota));
       }
       if (OB_SUCC(ret) && GCONF.enable_global_background_resource_isolation) {
         if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_cfs_quota(
-                d.tenant_id_, tenant_cpu_quota, OB_INVALID_GROUP_ID, BACKGROUND_CGROUP))) {
+                d.tenant_id_, tenant_cpu_quota, OB_INVALID_GROUP_ID, true /* is_background */))) {
           LOG_WARN("fail get cpu quota", K(d), K(ret));
         } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(d.tenant_id_,
-                        -1 == tenant_cpu_quota ? -1 : tenant_cpu_quota * d.utilization_limit_ / 100,
-                        d.group_id_,
-                        BACKGROUND_CGROUP))) {
-          LOG_ERROR("fail set cpu quota. tenant isolation function may not functional!!", K(ret), K(d), K(tenant_cpu_quota));
+                       -1 == tenant_cpu_quota ? -1 : tenant_cpu_quota * d.utilization_limit_ / 100,
+                       d.group_id_,
+                       true /* is_background */))) {
+          LOG_ERROR(
+              "fail set cpu quota. tenant isolation function may not functional!!", K(ret), K(d), K(tenant_cpu_quota));
         }
       }
     }
@@ -413,17 +409,11 @@ int ObResourcePlanManager::clear_deleted_directives(const uint64_t tenant_id,
           const uint64_t deleted_group_id = group_id_keys.at(i).group_id_;
           if (OB_FAIL(tenant_holder.get_ptr()->reset_consumer_group_config(deleted_group_id))) {
             LOG_WARN("reset consumer group config failed", K(ret), K(deleted_group_id));
-          } else if (GCTX.cgroup_ctrl_->is_valid() &&
-                     OB_FAIL(GCTX.cgroup_ctrl_->set_both_cpu_shares(tenant_id,
-                         1,
-                         deleted_group_id,
-                         GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+          } else if (!GCTX.cgroup_ctrl_->is_valid()) {
+            // do nothing
+          } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_shares(tenant_id, 1, deleted_group_id))) {
             LOG_WARN("fail to set cpu share", K(ret), K(tenant_id), K(deleted_group_id));
-          } else if (GCTX.cgroup_ctrl_->is_valid() &&
-                     OB_FAIL(GCTX.cgroup_ctrl_->set_both_cpu_cfs_quota(tenant_id,
-                         -1,
-                         deleted_group_id,
-                         GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+          } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(tenant_id, -1, deleted_group_id))) {
             LOG_WARN("fail to set cpu quota", K(ret), K(tenant_id), K(deleted_group_id));
           } else {
             LOG_INFO("directive cleared", K(tenant_id), K(deleted_group_id));
