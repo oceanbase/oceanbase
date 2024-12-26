@@ -3494,6 +3494,7 @@ int ObDRWorker::do_single_replica_permanent_offline_(
 {
   int ret = OB_SUCCESS;
   bool is_offline = false;
+  ObServerInfoInTable server_info;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -3502,8 +3503,22 @@ int ObDRWorker::do_single_replica_permanent_offline_(
                          || !ls_id.is_valid_with_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(member_to_remove), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(SVR_TRACER.check_server_permanent_offline(member_to_remove.get_server(), is_offline))) {
-    LOG_WARN("fail to check server permanent offline", KR(ret), K(member_to_remove));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, member_to_remove.get_server(), server_info))) {
+    // remove the member not in __all_server table
+    if (OB_SERVER_NOT_IN_WHITE_LIST == ret) {
+      is_offline = true;
+      ret = OB_SUCCESS;
+      LOG_INFO("found not in __all_server replica", K(tenant_id), K(ls_id), K(member_to_remove));
+    } else {
+      LOG_WARN("fail to get server info", KR(ret), K(member_to_remove));
+    }
+  } else {
+    is_offline = server_info.is_permanent_offline();
+  }
+  if (OB_FAIL(ret)) {
   } else if (is_offline) {
     FLOG_INFO("found ls replica need to permanent offline", K(tenant_id), K(ls_id), K(member_to_remove), K(replica_type), K(dr_ls_info));
     share::ObTaskId task_id;

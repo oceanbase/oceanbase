@@ -197,9 +197,13 @@ int build_execute_result(
   const int64_t now = ObTimeUtility::current_time();
   const int64_t elapsed = now - start_time;
   execute_result.reset();
-  if (OB_UNLIKELY(ObDRTaskRetComment::MAX == ret_comment || start_time <= 0)) {
+  if (OB_UNLIKELY(start_time <= 0)) {
+    // not validate ret_comment, it may be an invalid value
+    // for example :
+    //   see ERRSIM_DISASTER_RECOVERY_EXECUTE_TASK_ERROR in ObDRTaskExecutor::execute,
+    //   it will cause the task execution failed, but no valid ret_comment is constructed.
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ret_comment), K(start_time));
+    LOG_WARN("invalid argument", KR(ret), K(start_time));
   } else if (OB_FAIL(execute_result.append_fmt(
               "ret:%d, %s; elapsed:%ld;", ret_code, common::ob_error_name(ret_code), elapsed))) {
     LOG_WARN("fail to append to execute_result", KR(ret), K(ret_code), K(elapsed));
