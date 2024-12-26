@@ -2770,7 +2770,10 @@ int ObLSBackupDataTask::do_wait_index_builder_ready_(const common::ObTabletID &t
   bool exist = false;
   static const int64_t DEFAULT_SLEEP_US = 10_ms;
   while (OB_SUCC(ret)) {
-    if (OB_ISNULL(ls_backup_ctx_)) {
+    if (GCTX.is_shared_storage_mode() && table_key.is_ddl_dump_sstable()) {
+      // ddl sstable in shared storage mode has no index builder
+      break;
+    } else if (OB_ISNULL(ls_backup_ctx_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls back ctx should not be null", K(ret));
     } else if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
