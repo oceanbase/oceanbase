@@ -448,7 +448,7 @@ int ObDMLService::check_row_whether_changed(const ObUpdCtDef &upd_ctdef,
   if (OB_SUCC(ret) &&
       upd_rtdef.is_row_changed_ &&
       upd_ctdef.is_primary_index_ &&
-      upd_ctdef.dupd_ctdef_.is_batch_stmt_) {
+      upd_ctdef.dupd_ctdef_.is_batch_stmt()) {
     //check predicate column whether changed in batch stmt execution
     const ObExprPtrIArray &old_row = upd_ctdef.old_row_;
     const ObExprPtrIArray &new_row = upd_ctdef.new_row_;
@@ -635,7 +635,7 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
                                       dml_op.get_eval_ctx(),
                                       ins_rtdef.cur_row_num_,
                                       ins_ctdef.column_infos_,
-                                      ins_ctdef.das_ctdef_.is_ignore_,
+                                      ins_ctdef.das_ctdef_.is_ignore(),
                                       ins_ctdef.is_single_value_,
                                       dml_op))) {
       LOG_WARN("check row null failed", K(ret));
@@ -651,7 +651,7 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
       //check column constraint expr
       LOG_WARN("filter row for check cst failed", K(ret));
     } else if (OB_UNLIKELY(is_filtered)) {
-      if (is_mysql_mode() && ins_ctdef.das_ctdef_.is_ignore_) {
+      if (is_mysql_mode() && ins_ctdef.das_ctdef_.is_ignore()) {
         is_skipped = true;
         LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
         LOG_WARN("check constraint violated, skip this row", K(ret));
@@ -851,7 +851,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
                                         dml_op.get_eval_ctx(),
                                         upd_rtdef.cur_row_num_,
                                         upd_ctdef.assign_columns_,
-                                        upd_ctdef.dupd_ctdef_.is_ignore_,
+                                        upd_ctdef.dupd_ctdef_.is_ignore(),
                                         false,
                                         dml_op))) {
         LOG_WARN("check row null failed", K(ret), K(upd_ctdef), K(upd_rtdef));
@@ -867,7 +867,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
       } else if (OB_FAIL(filter_row_for_check_cst(upd_ctdef.check_cst_exprs_, dml_op.get_eval_ctx(), is_filtered))) {
         LOG_WARN("filter row for check cst failed", K(ret));
       } else if (OB_UNLIKELY(is_filtered)) {
-        if (is_mysql_mode() && upd_ctdef.dupd_ctdef_.is_ignore_) {
+        if (is_mysql_mode() && upd_ctdef.dupd_ctdef_.is_ignore()) {
           is_skipped = true;
           LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
           LOG_WARN("check constraint violated, skip this row", K(ret));
@@ -1071,8 +1071,8 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
         new_row = old_row;
       }
     }
-  } else if (OB_LIKELY(!upd_ctdef.das_base_ctdef_.is_update_partition_key_ ||
-                      (upd_ctdef.dupd_ctdef_.is_ignore_ && old_tablet_loc == new_tablet_loc))) {
+  } else if (OB_LIKELY(!upd_ctdef.das_base_ctdef_.is_update_partition_key() ||
+                      (upd_ctdef.dupd_ctdef_.is_ignore() && old_tablet_loc == new_tablet_loc))) {
     // For the current ignore semantics, update ignore without cross-partitioning is supported,
     // but update ignore with cross-partitioning is not supported for the time being.
     // Since update ignore is only supported without cross-partitioning, update ignore does not have
@@ -1097,13 +1097,13 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                 "old row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.old_row_),
                 "new row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.new_row_));
     }
-  } else if (OB_UNLIKELY(upd_ctdef.das_base_ctdef_.is_update_partition_key_)) {
+  } else if (OB_UNLIKELY(upd_ctdef.das_base_ctdef_.is_update_partition_key())) {
     //the updated row may be moved across partitions
     if (dml_rtctx.das_ref_.get_parallel_type() == DAS_STREAMING_PARALLEL) {
       dml_rtctx.das_ref_.get_das_parallel_ctx().set_das_parallel_type(DAS_BLOCKING_PARALLEL);
     }
     // update ignore with cross-partitioning is not supported
-    if (upd_ctdef.dupd_ctdef_.is_ignore_) {
+    if (upd_ctdef.dupd_ctdef_.is_ignore()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cross-partition update ignore");
       LOG_WARN("update ignore is not supported in across partition update, it will induce lost data error", K(ret));
@@ -1196,24 +1196,24 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   int ret = OB_SUCCESS;
   dml_param.timeout_ = base_rtdef.timeout_ts_;
   dml_param.schema_version_ = base_ctdef.schema_version_;
-  dml_param.is_total_quantity_log_ = base_ctdef.is_total_quantity_log_;
+  dml_param.is_total_quantity_log_ = base_ctdef.is_total_quantity_log();
   dml_param.tz_info_ = &base_ctdef.tz_info_;
   dml_param.sql_mode_ = base_rtdef.sql_mode_;
   dml_param.table_param_ = &base_ctdef.table_param_;
   dml_param.tenant_schema_version_ = base_rtdef.tenant_schema_version_;
   dml_param.encrypt_meta_ = &base_ctdef.encrypt_meta_;
   dml_param.prelock_ = base_rtdef.prelock_;
-  dml_param.is_batch_stmt_ = base_ctdef.is_batch_stmt_;
+  dml_param.is_batch_stmt_ = base_ctdef.is_batch_stmt();
   dml_param.dml_allocator_ = &das_alloc;
   dml_param.snapshot_ = snapshot;
   dml_param.store_ctx_guard_ = &store_ctx_gurad;
-  if (base_ctdef.is_batch_stmt_) {
+  if (base_ctdef.is_batch_stmt()) {
     dml_param.write_flag_.set_is_dml_batch_opt();
   }
-  if (base_ctdef.is_insert_up_) {
+  if (base_ctdef.is_insert_up()) {
     dml_param.write_flag_.set_is_insert_up();
   }
-  if (base_ctdef.is_table_api_) {
+  if (base_ctdef.is_table_api()) {
     dml_param.write_flag_.set_is_table_api();
   }
   if (dml_param.table_param_->get_data_table().is_storage_index_table()
@@ -1223,10 +1223,10 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   if (base_rtdef.is_for_foreign_key_check_) {
     dml_param.write_flag_.set_check_row_locked();
   }
-  if (base_ctdef.is_update_uk_) {
+  if (base_ctdef.is_update_uk()) {
     dml_param.write_flag_.set_update_uk();
   }
-  if (base_ctdef.is_update_pk_with_dop_) {
+  if (base_ctdef.is_update_pk_with_dop()) {
     dml_param.write_flag_.set_update_pk_dop();
   }
   return ret;

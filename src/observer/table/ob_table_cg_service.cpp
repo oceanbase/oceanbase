@@ -2722,9 +2722,9 @@ int ObTableDmlCgService::generate_das_base_ctdef(uint64_t index_tid,
 {
   int ret = OB_SUCCESS;
   base_ctdef.index_tid_ = index_tid;  // index_table_id, include local_index
-  base_ctdef.is_ignore_ = false; // insert ignore
-  base_ctdef.is_batch_stmt_ = false;
-  base_ctdef.is_table_api_ = true;
+  base_ctdef.set_is_ignore(false); // insert ignore
+  base_ctdef.set_is_batch_stmt(false);
+  base_ctdef.set_is_table_api(true);
   ObSQLSessionInfo &session = ctx.get_session_info();
   base_ctdef.table_id_ = ctx.get_ref_table_id();  // loc_table_id
   ObSchemaGetterGuard *schema_guard = ctx.get_schema_guard();
@@ -2743,7 +2743,7 @@ int ObTableDmlCgService::generate_das_base_ctdef(uint64_t index_tid,
     LOG_WARN("fail to convert table dml param", K(ret));
   } else {
     base_ctdef.tz_info_ = *session.get_tz_info_wrap().get_time_zone_info();
-    base_ctdef.is_total_quantity_log_ = ctx.is_total_quantity_log();
+    base_ctdef.set_is_total_quantity_log(ctx.is_total_quantity_log());
     base_ctdef.encrypt_meta_.reset();
   }
 

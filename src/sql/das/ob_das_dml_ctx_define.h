@@ -47,11 +47,11 @@ public:
                        K_(column_accuracys),
                        K_(old_row_projector),
                        K_(new_row_projector),
-                       K_(is_total_quantity_log),
-                       K_(is_ignore),
-                       K_(is_batch_stmt),
-                       K_(is_insert_up),
-                       K_(is_table_api),
+                       K(is_total_quantity_log()),
+                       K(is_ignore()),
+                       K(is_batch_stmt()),
+                       K(is_insert_up()),
+                       K(is_table_api()),
                        K_(tz_info),
                        K_(table_param),
                        K_(encrypt_meta));
@@ -70,6 +70,25 @@ public:
   common::ObFixedArray<transaction::ObEncryptMetaCache, common::ObIAllocator> encrypt_meta_;
   union {
     uint64_t flags_;
+    //@notice: this struct is used for serialization compatibility between versions 4.2.5.1 and earlier.
+    //New features introduced in version 4.2.5.2 and later cannot modify this struct.
+    struct {
+      uint64_t is_total_quantity_log_old_           : 1;
+      uint64_t is_ignore_old_                       : 1;
+      uint64_t is_batch_stmt_old_                   : 1;
+      uint64_t is_insert_up_old_                    : 1;
+      uint64_t is_table_api_old_                    : 1;
+      uint64_t is_access_mlog_as_master_table_old_  : 1;
+      uint64_t is_update_partition_key_old_         : 1;
+      uint64_t is_update_uk_old_                    : 1;
+      uint64_t is_update_pk_with_dop_old_           : 1; // update primary_table PK
+      uint64_t reserved_old_                        : 51; //add new flag before reserved_old_
+      uint64_t compat_version_old_                  : 4; //prohibited to insert new flags between compat_version_old_ and reserved_old_
+    };
+    //@notice: this struct is used for serialization compatibility between versions 4.2.5.2 and 4.3.x.
+    //If new flags need to be patched back to version 4.2.1,
+    //corresponding flags must be added to both the old struct and the new struct,
+    //and the decision of which flag to use should be based on the minimum cluster version.
     struct {
       uint64_t is_total_quantity_log_           : 1;
       uint64_t is_ignore_                       : 1;
@@ -77,12 +96,52 @@ public:
       uint64_t is_insert_up_                    : 1;
       uint64_t is_table_api_                    : 1;
       uint64_t is_access_mlog_as_master_table_  : 1;
+      uint64_t is_access_vidx_as_master_table_  : 1;
       uint64_t is_update_partition_key_         : 1;
       uint64_t is_update_uk_                    : 1;
       uint64_t is_update_pk_with_dop_           : 1; // update primary_table PK
-      uint64_t reserved_                        : 55;
+      uint64_t reserved_                        : 50; //add new flag before reserved_
+      uint64_t compat_version_                  : 4; //prohibited to insert new flags between compat_version_ and reserved_
     };
   };
+public:
+#define DECLAR_DML_CTDEF_FLAG_SETTER(flag_name)                 \
+  void set_##flag_name(bool flag)                               \
+  {                                                             \
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_2) {  \
+      flag_name##_##old_ = flag;                                \
+    } else {                                                    \
+      flag_name##_ = flag;                                      \
+      compat_version_ = 1;                                      \
+    }                                                           \
+  }
+  DECLAR_DML_CTDEF_FLAG_SETTER(is_total_quantity_log);
+  DECLAR_DML_CTDEF_FLAG_SETTER(is_ignore);
+  DECLAR_DML_CTDEF_FLAG_SETTER(is_batch_stmt);
+  DECLAR_DML_CTDEF_FLAG_SETTER(is_insert_up);
+  DECLAR_DML_CTDEF_FLAG_SETTER(is_table_api);
+  DECLAR_DML_CTDEF_FLAG_SETTER(is_access_mlog_as_master_table);
+  DECLAR_DML_CTDEF_FLAG_SETTER(is_update_partition_key);
+  DECLAR_DML_CTDEF_FLAG_SETTER(is_update_uk);
+  DECLAR_DML_CTDEF_FLAG_SETTER(is_update_pk_with_dop);
+#undef DECLAR_DML_CTDEF_FLAG_SETTER
+
+#define DECLAR_DML_CTDEF_FLAG_GETTER(flag_name)                       \
+  bool flag_name() const                                              \
+  {                                                                   \
+    return (0 == compat_version_) ?                                   \
+        flag_name##_##old_ : flag_name##_;                            \
+  }
+  DECLAR_DML_CTDEF_FLAG_GETTER(is_total_quantity_log);
+  DECLAR_DML_CTDEF_FLAG_GETTER(is_ignore);
+  DECLAR_DML_CTDEF_FLAG_GETTER(is_batch_stmt);
+  DECLAR_DML_CTDEF_FLAG_GETTER(is_insert_up);
+  DECLAR_DML_CTDEF_FLAG_GETTER(is_table_api);
+  DECLAR_DML_CTDEF_FLAG_GETTER(is_access_mlog_as_master_table);
+  DECLAR_DML_CTDEF_FLAG_GETTER(is_update_partition_key);
+  DECLAR_DML_CTDEF_FLAG_GETTER(is_update_uk);
+  DECLAR_DML_CTDEF_FLAG_GETTER(is_update_pk_with_dop);
+#undef DECLAR_DML_CTDEF_FLAG_GETTER
 protected:
   ObDASDMLBaseCtDef(common::ObIAllocator &alloc, ObDASOpType op_type)
     : ObDASBaseCtDef(op_type),

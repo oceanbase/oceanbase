@@ -392,7 +392,7 @@ int ObDmlCgService::check_is_update_uk(ObLogDelUpd &op,
   }
 
   if (OB_SUCC(ret)) {
-    das_upd_ctdef.is_update_uk_ = is_update_uk;
+    das_upd_ctdef.set_is_update_uk(is_update_uk);
   }
 
   return ret;
@@ -432,7 +432,7 @@ int ObDmlCgService::check_is_update_local_unique_index(ObLogDelUpd &op,
   }
 
   if (OB_SUCC(ret)) {
-    das_upd_ctdef.is_update_uk_ = is_update_uk;
+    das_upd_ctdef.set_is_update_uk(is_update_uk);
   }
   return ret;
 }
@@ -1403,8 +1403,8 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
   int ret = OB_SUCCESS;
   das_dml_ctdef.table_id_ = index_dml_info.loc_table_id_;
   das_dml_ctdef.index_tid_ = index_tid;
-  das_dml_ctdef.is_ignore_ = op.is_ignore();
-  das_dml_ctdef.is_batch_stmt_ = op.get_plan()->get_optimizer_context().is_batched_multi_stmt();
+  das_dml_ctdef.set_is_ignore(op.is_ignore());
+  das_dml_ctdef.set_is_batch_stmt(op.get_plan()->get_optimizer_context().is_batched_multi_stmt());
   ObSQLSessionInfo *session = nullptr;
   bool is_update_uk_parallel = false;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
@@ -1424,9 +1424,9 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
     LOG_WARN("fail to check is update pk parallel", K(ret));
   } else {
     das_dml_ctdef.tz_info_ = *session->get_tz_info_wrap().get_time_zone_info();
-    das_dml_ctdef.is_total_quantity_log_ = (ObBinlogRowImage::FULL == binlog_row_image);
-    das_dml_ctdef.is_update_partition_key_ = index_dml_info.is_update_part_key_;
-    das_dml_ctdef.is_update_pk_with_dop_ = is_update_uk_parallel;
+    das_dml_ctdef.set_is_total_quantity_log(ObBinlogRowImage::FULL == binlog_row_image);
+    das_dml_ctdef.set_is_update_partition_key(index_dml_info.is_update_part_key_);
+    das_dml_ctdef.set_is_update_pk_with_dop(is_update_uk_parallel);
   }
 #ifdef OB_BUILD_TDE_SECURITY
   // generate encrypt_meta for table
@@ -1665,7 +1665,7 @@ int ObDmlCgService::generate_das_lock_ctdef(ObLogicalOperator &op,
     LOG_WARN("get binlog row image failed", K(ret));
   } else {
     das_lock_ctdef.tz_info_ = *session->get_tz_info_wrap().get_time_zone_info();
-    das_lock_ctdef.is_total_quantity_log_ = (ObBinlogRowImage::FULL == binlog_row_image);
+    das_lock_ctdef.set_is_total_quantity_log(ObBinlogRowImage::FULL == binlog_row_image);
   }
   return ret;
 }
@@ -1785,7 +1785,7 @@ int ObDmlCgService::generate_dml_base_ctdef(ObLogicalOperator &op,
       log_op_def::LOG_INSERT == op.get_type()) {
     ObLogInsert &log_ins_op = static_cast<ObLogInsert &>(op);
     if (log_ins_op.get_insert_up()) {
-      dml_base_ctdef.das_base_ctdef_.is_insert_up_ = true;
+      dml_base_ctdef.das_base_ctdef_.set_is_insert_up(true);
     }
   }
   return ret;
