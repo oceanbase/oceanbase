@@ -761,7 +761,9 @@ int ObInitialRebuildTabletTask::build_tablet_group_ctx_()
     LOG_WARN("initial rebuild tablet task do not init", K(ret));
   } else {
     ctx_->tablet_group_ctx_.reuse();
-    if (OB_FAIL(ctx_->tablet_group_ctx_.init(tablet_id_array_))) {
+    if (tablet_id_array_.empty()) {
+      //do nothing
+    } else if (OB_FAIL(ctx_->tablet_group_ctx_.init(tablet_id_array_))) {
       LOG_WARN("failed to init tablet group ctx", K(ret), KPC(ctx_), K(tablet_id_array_));
     }
   }
