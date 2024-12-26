@@ -103,7 +103,6 @@ public:
   bool is_valid() const;
   void set_mode(ObIOMode mode);
   ObIOMode get_mode() const;
-  void set_resource_group_id(const uint64_t group_id);
   void set_wait_event(int64_t wait_event_id);
   uint64_t get_resource_group_id() const;
   void set_sys_module_id(const uint64_t sys_module_id);
@@ -129,6 +128,7 @@ public:
 private:
   friend struct ObIORequest;
   void set_func_type(const uint8_t func_type);
+  void set_resource_group_id(const uint64_t group_id);
   static constexpr int64_t IO_MODE_BIT = 4; // read, write, append
   static constexpr int64_t IO_WAIT_EVENT_BIT = 32; // for performance monitor
   static constexpr int64_t IO_SYNC_FLAG_BIT = 1; // indicate if the caller is waiting io finished

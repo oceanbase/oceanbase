@@ -74,7 +74,6 @@ int LogIOAdapter::pwrite(const ObIOFd &io_fd,
     io_info.offset_ = offset;
     io_info.size_ = count;
     io_info.flag_.set_mode(ObIOMode::WRITE);
-    io_info.flag_.set_resource_group_id(GET_GROUP_ID());
     io_info.flag_.set_sys_module_id(ObIOModule::CLOG_IO);
     io_info.flag_.set_wait_event(ObWaitEventIds::PALF_WRITE);
     io_info.buf_ = buf;
@@ -116,7 +115,6 @@ int LogIOAdapter::pread(const ObIOFd &io_fd,
     io_info.offset_ = offset;
     io_info.size_ = count;
     io_info.flag_.set_mode(ObIOMode::READ);
-    io_info.flag_.set_resource_group_id(GET_GROUP_ID());
     io_info.flag_.set_sys_module_id(ObIOModule::CLOG_IO);
     io_info.flag_.set_wait_event(ObWaitEventIds::PALF_READ);
     io_info.buf_ = buf;

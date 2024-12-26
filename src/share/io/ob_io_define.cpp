@@ -483,6 +483,7 @@ int ObIORequest::init(const ObIOInfo &info)
     time_log_.begin_ts_ = ObTimeUtility::fast_current_time();
     io_info_ = info;
     io_info_.flag_.set_func_type(GET_FUNC_TYPE());
+    io_info_.flag_.set_resource_group_id(GET_GROUP_ID());
     if (nullptr == io_info_.fd_.device_handle_) {
       io_info_.fd_.device_handle_ = THE_IO_DEVICE; // for test
     }

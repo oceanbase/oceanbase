@@ -59,7 +59,6 @@ int ObLinkedMacroBlockReader::get_meta_blocks(const MacroBlockId &entry_block)
   read_info.size_ = sizeof(ObMacroBlockCommonHeader) + sizeof(ObLinkedMacroBlockHeader);
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
   if (entry_block.second_id() >= 0) {
     read_info.macro_block_id_ = entry_block;
@@ -111,7 +110,6 @@ int ObLinkedMacroBlockReader::prefetch_block()
     read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
     read_info.macro_block_id_ = macros_handle_.at(prefetch_macro_block_idx_);
     handles_[handle_pos_].reset();
@@ -156,7 +154,6 @@ int ObLinkedMacroBlockReader::pread_block(const ObMetaDiskAddr &addr, ObMacroBlo
   handler.reset();
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
   if (OB_FAIL(addr.get_block_addr(read_info.macro_block_id_, read_info.offset_, read_info.size_))) {
     LOG_WARN("fail to get block address", K(ret), K(addr));
@@ -178,7 +175,6 @@ int ObLinkedMacroBlockReader::read_block_by_id(
   read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
   read_info.macro_block_id_ = block_id;
   handler.reset();

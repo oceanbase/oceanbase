@@ -3184,7 +3184,6 @@ int ObIOFaultDetector::record_timing_task(const int64_t first_id, const int64_t 
     //todo qilu: after column store merge, add allocator for user_data_buf
     retry_task->io_info_.buf_ = nullptr;
     retry_task->io_info_.flag_.set_mode(ObIOMode::READ);
-    retry_task->io_info_.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
     retry_task->io_info_.flag_.set_sys_module_id(OB_INVALID_ID);
     retry_task->io_info_.flag_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     retry_task->io_info_.flag_.set_time_detect();
@@ -3238,7 +3237,6 @@ int ObIOFaultDetector::record_read_failure(const ObIORequest &req)
     LOG_WARN("alloc RetryTask failed", K(ret));
   } else {
     retry_task->io_info_ = req.io_info_;
-    retry_task->io_info_.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     retry_task->io_info_.flag_.set_sys_module_id(ObIOModule::DETECT_IO);
     // fix bug2024101100104667912, detect io failure asynchronously
     retry_task->io_info_.flag_.set_async();
