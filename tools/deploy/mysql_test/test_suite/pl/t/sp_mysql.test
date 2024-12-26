@@ -7331,7 +7331,7 @@ call proc_25411_a();
 
 --source mysql_test/include/show_create_table_old_version_replica2.inc
 show create procedure proc_25411_b;
-select name, param_list, body from mysql.proc where name like "%25411%";
+select name, param_list, body from mysql.proc where name like "%25411%" order by name;
 --error 1318
 call proc_25411_b(10, 20);
 
