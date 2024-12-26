@@ -2621,7 +2621,7 @@ int ObTransferHandler::offline()
     ret = OB_NOT_INIT;
     LOG_WARN("ls transfer handler do not init", K(ret));
   } else {
-    const int64_t timeout_us = 1 * 1000 * 1000; //1s;
+    const int64_t timeout_us = ObTimeUtil::current_time() + 1 * 1000 * 1000; //1s;
     bool lock_succ = false;
     if (OB_FAIL(transfer_handler_lock_.wrlock(timeout_us))) {
       if (ret == OB_TIMEOUT) {
