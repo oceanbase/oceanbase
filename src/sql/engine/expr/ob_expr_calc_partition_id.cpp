@@ -1505,5 +1505,25 @@ int ObExprCalcPartitionBase::set_first_part_id(ObExecContext &ctx, const ObExpr 
   return ret;
 }
 
+int ObExprCalcPartitionBase::update_part_id_calc_type_for_upgrade(
+    ObExecContext &ctx,
+    const ObExpr &expr,
+    PartitionIdCalcType calc_type)
+{
+  int ret = OB_SUCCESS;
+  uint64_t expr_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+  if (ObExpr::INVALID_EXP_CTX_ID == expr_ctx_id) {
+    // 混跑要动态改partition_id_calc_type，434以下不会设置这个expr_ctx_id_
+    CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
+    if (OB_ISNULL(calc_part_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("extra info is null", K(ret));
+    } else {
+      calc_part_info->partition_id_calc_type_ = calc_type;
+    }
+  }
+  return ret;
+}
+
 }
 }

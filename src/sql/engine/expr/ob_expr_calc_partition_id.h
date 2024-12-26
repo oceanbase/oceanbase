@@ -223,6 +223,8 @@ public:
   virtual bool need_rt_ctx() const override { return true; }
   static int get_first_part_id(ObExecContext &ctx, const ObExpr &expr, int64_t &first_part_id);
   static int set_first_part_id(ObExecContext &ctx, const ObExpr &expr, const int64_t first_part_id);
+  static int update_part_id_calc_type_for_upgrade(ObExecContext &ctx, const ObExpr &expr,
+                                            PartitionIdCalcType calc_type);
 private:
  int init_calc_part_info(common::ObIAllocator *allocator,
                          const share::schema::ObTableSchema &table_schema,
