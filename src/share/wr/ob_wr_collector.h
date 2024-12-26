@@ -422,6 +422,7 @@ private:
   int get_cur_snapshot_id_for_ahead_snapshot(int64_t &snap_id);
   int get_begin_interval_time(int64_t &begin_interval_time);
   int update_last_snapshot_end_time();
+  int check_if_ignore_errorcode(int error_code);
   int64_t snap_id_;
   int64_t snapshot_begin_time_;
   int64_t snapshot_end_time_;
