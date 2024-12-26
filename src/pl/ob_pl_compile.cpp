@@ -181,8 +181,16 @@ int ObPLCompiler::init_anonymous_ast(
         OX (new(nested_type)ObNestedTableType());
         OX (element_type.reset());
         OX (element_type.set_data_type(coll->get_element_type()));
-        if (OB_SUCC(ret) && element_type.is_obj_type()) {
+        if (OB_FAIL(ret)) {
+        } else if (coll->get_element_desc().is_obj_type()) {
           OZ (ObPLResolver::adjust_routine_param_type(element_type));
+        } else {
+          const ObUserDefinedType *user_type = nullptr;
+          OZ (resolve_ctx.get_user_type(coll->get_element_type().get_udt_id(), user_type, &allocator));
+          CK (OB_NOT_NULL(user_type));
+          OZ (func_ast.get_user_type_table().add_external_type(user_type));
+          OZ (SMART_CALL(func_ast.add_dependency_object(resolve_ctx, *user_type)));
+          OX (element_type = *user_type);
         }
         OX (nested_type->set_element_type(element_type));
         OX (nested_type->set_user_type_id(
