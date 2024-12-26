@@ -960,6 +960,7 @@ int ObSubPlanFilterOp::handle_next_batch_with_group_rescan(const int64_t op_max_
     left_rows_iter_.reset();
     (void) brs_holder_.restore();
     current_group_ = 0;
+    last_store_row_mem_->get_arena_allocator().reset();
     if(OB_FAIL(init_das_batch_params())) {
       LOG_WARN("Failed to init das batch params", K(ret));
     }
