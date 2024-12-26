@@ -58,10 +58,10 @@ DEF_STR(leak_mod_to_check, OB_CLUSTER_PARAMETER, "NONE", "the name of the module
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(rpc_port, OB_CLUSTER_PARAMETER, "2882", "(1024,65536)",
         "the port number for RPC protocol. Range: (1024, 65536) in integer",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
 DEF_INT(mysql_port, OB_CLUSTER_PARAMETER, "2881", "(1024,65536)",
         "port number for mysql connection. Range: (1024, 65536) in integer",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
 DEF_STR(devname, OB_CLUSTER_PARAMETER, "bond0", "name of network adapter",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
 DEF_STR(zone, OB_CLUSTER_PARAMETER, "", "specifies the zone name",
@@ -170,7 +170,7 @@ DEF_STR_LIST(rootservice_list, OB_CLUSTER_PARAMETER, "",
              "a list of servers against which election candidate is checked for validation",
              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(cluster, OB_CLUSTER_PARAMETER, "obcluster", "Name of the cluster",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
 // drc复制的时候,使用的ob_org_cluster_id的范围是[0xffff0000,0xffffffff],
 // 而用户的sql写入到clog中的cluster_id的范围必须不能在[0xffff0000,0xffffffff]之内,
 // 用户的sql写入到clog中的cluster_id就是由系统配置项中的cluster_id决定的,
@@ -178,7 +178,7 @@ DEF_STR(cluster, OB_CLUSTER_PARAMETER, "obcluster", "Name of the cluster",
 // cluser_id的默认值为0,不在它的值域[1,4294901759]之内,也就是说,
 // 在检查ObServerConfig对象的合法性之前必须要为cluster_id赋一个[1,4294901759]范围内的值。
 DEF_INT(cluster_id, OB_CLUSTER_PARAMETER, "0", "[1,4294901759]", "ID of the cluster",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
 DEF_STR(obconfig_url, OB_CLUSTER_PARAMETER, "", "URL for OBConfig service",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_LOG_LEVEL(syslog_level, OB_CLUSTER_PARAMETER, "WDIAG", "specifies the current level of logging. There are DEBUG, TRACE, WDIAG, EDIAG, INFO, WARN, ERROR, seven different log levels.",
