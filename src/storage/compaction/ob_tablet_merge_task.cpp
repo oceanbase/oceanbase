@@ -821,6 +821,8 @@ int ObTabletMergeExecutePrepareTask::get_result_by_table_key()
       if (result_.handle_.get_count() != table_key_array_.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected tables from current tablet", K(ret), K(table_key_array_), K(ctx_->tables_handle_));
+      } else if (is_meta_major_merge(ctx_->param_.get_merge_type())) {
+        // skip check
       } else if (max_filled_tx_scn > result_.scn_range_.end_scn_) {
         ret = OB_NO_NEED_MERGE;
         LOG_WARN("max filled tx scn is bigger than merge scn, no need merge", K(ret) ,K(max_filled_tx_scn), K(result_));
