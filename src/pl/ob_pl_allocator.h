@@ -126,6 +126,7 @@ public:
     }
     return total;
   }
+  const ObMemAttr &get_attr() { return memattr_; }
 
   TO_STRING_KV(K_(is_inited), K_(memattr));
 

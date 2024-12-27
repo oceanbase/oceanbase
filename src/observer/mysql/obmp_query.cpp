@@ -1663,22 +1663,34 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
       ret = drv.response_result(result);
     }
   } else {
-    if (need_trans_cb) {
-      ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
-      ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this);
-      if (OB_FAIL(sql_end_cb.init(packet_sender_, &session))) {
-        LOG_WARN("failed to init sql end callback", K(ret));
-      } else if (OB_FAIL(drv.response_result(result))) {
-        LOG_WARN("fail response async result", K(ret));
-      }
-      async_resp_used = result.is_async_end_trans_submitted();
-    } else {
-      ObSyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this);
-      session.set_pl_query_sender(&drv);
-      session.set_ps_protocol(result.is_ps_protocol());
-      ret = drv.response_result(result);
-      session.set_pl_query_sender(NULL);
+
+#define CMD_EXEC \
+    if (need_trans_cb) {\
+      ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb(); \
+      ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this); \
+      if (OB_FAIL(sql_end_cb.init(packet_sender_, &session))) { \
+        LOG_WARN("failed to init sql end callback", K(ret)); \
+      } else if (OB_FAIL(drv.response_result(result))) { \
+        LOG_WARN("fail response async result", K(ret)); \
+      } \
+      async_resp_used = result.is_async_end_trans_submitted(); \
+    } else { \
+      ObSyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this); \
+      session.set_pl_query_sender(&drv); \
+      session.set_ps_protocol(result.is_ps_protocol()); \
+      ret = drv.response_result(result); \
+      session.set_pl_query_sender(NULL); \
     }
+
+    if (result.is_pl_stmt(result.get_stmt_type())) {
+      ENABLE_SQL_MEMLEAK_GUARD;
+      CMD_EXEC;
+    } else {
+      CMD_EXEC;
+    }
+
+#undef CMD_EXEC
+
   }
 
   return ret;
