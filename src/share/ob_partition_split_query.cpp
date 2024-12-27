@@ -242,23 +242,6 @@ int ObPartitionSplitQuery::get_tablet_split_ranges(
           LOG_WARN("Fail to push back to new ranges", K(ret), K(tmp_range));
         }
       }
-      if (OB_SUCC(ret) && !ori_ranges.empty() && new_ranges.empty()) {
-        // mock an empty range
-        tmp_range.reset();
-        if (OB_FAIL(ori_ranges.at(0).deep_copy(allocator, tmp_range))) {
-          LOG_WARN("Fail to deep copy src range", K(ret), K(ori_ranges.at(0)));
-        } else {
-          tmp_range.get_start_key().set_max();
-          tmp_range.get_end_key().set_min();
-          tmp_range.set_left_open();
-          tmp_range.set_right_open();
-          if (OB_FAIL(new_ranges.push_back(tmp_range))) {
-            LOG_WARN("Fail to push back to new ranges", K(ret), K(tmp_range));
-          } else {
-            LOG_INFO("mock empty range for split", K(ret), "tablet_id", tablet_handle_.get_obj()->get_tablet_meta().tablet_id_, K(new_ranges));
-          }
-        }
-      }
     }
   }
   return ret;
