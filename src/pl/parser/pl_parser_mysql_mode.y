@@ -3039,6 +3039,7 @@ YEAR
   const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
   int32_t str_len = @1.last_column - @1.first_column + 1;
   $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  check_ptr($$->str_value_);
   $$->str_len_ = str_len;
 }
 | MONTH
@@ -3050,6 +3051,7 @@ YEAR
   const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
   int32_t str_len = @1.last_column - @1.first_column + 1;
   $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  check_ptr($$->str_value_);
   $$->str_len_ = str_len;
 }
 | DAY
@@ -3061,6 +3063,7 @@ YEAR
   const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
   int32_t str_len = @1.last_column - @1.first_column + 1;
   $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  check_ptr($$->str_value_);
   $$->str_len_ = str_len;
 }
 | HOUR
@@ -3072,6 +3075,7 @@ YEAR
   const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
   int32_t str_len = @1.last_column - @1.first_column + 1;
   $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  check_ptr($$->str_value_);
   $$->str_len_ = str_len;
 }
 | MINUTE
@@ -3083,6 +3087,7 @@ YEAR
   const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
   int32_t str_len = @1.last_column - @1.first_column + 1;
   $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  check_ptr($$->str_value_);
   $$->str_len_ = str_len;
 }
 | SECOND
@@ -3094,6 +3099,7 @@ YEAR
   const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
   int32_t str_len = @1.last_column - @1.first_column + 1;
   $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  check_ptr($$->str_value_);
   $$->str_len_ = str_len;
 }
 ;
