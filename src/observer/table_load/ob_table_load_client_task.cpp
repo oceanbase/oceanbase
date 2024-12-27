@@ -595,8 +595,15 @@ int ObTableLoadClientTask::init_exec_ctx()
     exec_ctx_.set_sql_ctx(&sql_ctx_);
     exec_ctx_.set_physical_plan_ctx(&plan_ctx_);
     exec_ctx_.set_my_session(session_info_);
-    client_exec_ctx_.exec_ctx_ = &exec_ctx_;
-    client_exec_ctx_.init_heart_beat(param_.get_heartbeat_timeout_us());
+    if (OB_FAIL(session_info_->set_cur_phy_plan(&plan_))) {
+      LOG_WARN("fail to set cur phy plan", KR(ret));
+    } else if (FALSE_IT(exec_ctx_.reference_my_plan(&plan_))) {
+    } else if (OB_FAIL(exec_ctx_.init_phy_op(1))) {
+      LOG_WARN("fail to init phy op", KR(ret));
+    } else {
+      client_exec_ctx_.exec_ctx_ = &exec_ctx_;
+      client_exec_ctx_.init_heart_beat(param_.get_heartbeat_timeout_us());
+    }
   }
   return ret;
 }
