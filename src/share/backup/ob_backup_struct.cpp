@@ -1207,7 +1207,6 @@ int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has
 {
   int ret = OB_SUCCESS;
   bool has_set_src_info = false;
-  ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
   if (OB_ISNULL(storage_info)) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("storage info is invalid", K(ret));
@@ -1246,11 +1245,6 @@ int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         if (OB_UNLIKELY(has_set_src_info)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("can not set multi type src info", K(ret), K(token));
-        } else if (OB_ISNULL(dest_io_permission_mgr = MTL(ObBackupDestIOPermissionMgr*))) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("tenant has not been established, can not set zone for backup/archive path", K(ret));
-        } else if (OB_FAIL(dest_io_permission_mgr->check_backup_src_info_valid(zone_list, ObBackupSrcType::ZONE))) {
-          LOG_WARN("failed to check zone type src info", K(ret), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set zone range", K(ret), K(token));
         } else {
@@ -1261,11 +1255,6 @@ int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         if (OB_UNLIKELY(has_set_src_info)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("can not set multi type src info", K(ret), K(token));
-        } else if (OB_ISNULL(dest_io_permission_mgr = MTL(ObBackupDestIOPermissionMgr*))) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("tenant has not been established, can not set region for backup/archive path", K(ret));
-        } else if (OB_FAIL(dest_io_permission_mgr->check_backup_src_info_valid(region_list, ObBackupSrcType::REGION))) {
-          LOG_WARN("failed to check zone type src info", K(ret), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set region range", K(ret), K(token));
         } else {
@@ -1276,11 +1265,6 @@ int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         if (OB_UNLIKELY(has_set_src_info)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("can not set multi type src info", K(ret), K(token));
-        } else if (OB_ISNULL(dest_io_permission_mgr = MTL(ObBackupDestIOPermissionMgr*))) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("tenant has not been established, can not set idc for backup/archive path", K(ret));
-        } else if (OB_FAIL(dest_io_permission_mgr->check_backup_src_info_valid(idc_list, ObBackupSrcType::IDC))) {
-          LOG_WARN("failed to check zone type src info", K(ret), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set idc range", K(ret), K(token));
         } else {
