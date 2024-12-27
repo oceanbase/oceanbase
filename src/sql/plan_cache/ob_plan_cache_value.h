@@ -445,6 +445,7 @@ private:
    */
   TplSqlConstCons tpl_sql_const_cons_;
   //***********  end user-defined rules **************
+  int64_t switchover_epoch_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheValue);
 };

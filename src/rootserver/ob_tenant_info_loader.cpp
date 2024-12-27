@@ -687,6 +687,7 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
     if (ora_rowscn >= ora_rowscn_) {
       if (ora_rowscn > ora_rowscn_) {
         MTL_SET_TENANT_ROLE_CACHE(new_tenant_info.get_tenant_role().value());
+        MTL_SET_SWITCHOVER_EPOCH(new_tenant_info.get_switchover_epoch());
         (void)tenant_info_.assign(new_tenant_info);
         ora_rowscn_ = ora_rowscn;
         content_changed = true;
@@ -726,6 +727,7 @@ int ObAllTenantInfoCache::update_tenant_info_cache(
       LOG_WARN("my tenant_info is invalid, don't refresh", KR(ret), K_(tenant_info), K_(ora_rowscn));
     } else if (new_ora_rowscn > ora_rowscn_) {
       MTL_SET_TENANT_ROLE_CACHE(new_tenant_info.get_tenant_role().value());
+      MTL_SET_SWITCHOVER_EPOCH(new_tenant_info.get_switchover_epoch());
       (void)tenant_info_.assign(new_tenant_info);
       ora_rowscn_ = new_ora_rowscn;
       refreshed = true;

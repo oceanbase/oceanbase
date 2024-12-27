@@ -370,6 +370,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 
 // 获取租户ID
 #define MTL_ID() share::ObTenantEnv::get_tenant_local()->id()
+// 租户switchover epoch
+#define MTL_GET_SWITCHOVER_EPOCH() share::ObTenantEnv::get_tenant()->get_switchover_epoch()
+#define MTL_SET_SWITCHOVER_EPOCH(switchover_epoch) share::ObTenantEnv::get_tenant()->set_switchover_epoch(switchover_epoch)
 // 获取是否为主租户
 #define MTL_TENANT_ROLE_CACHE_IS_PRIMARY() share::ObTenantEnv::get_tenant()->is_primary_tenant()
 //由于之前租户默认为主库，兼容性写法
@@ -600,6 +603,20 @@ public:
     return share::is_invalid_tenant(ATOMIC_LOAD(&tenant_role_value_));
   }
 
+  void set_switchover_epoch(const int64_t switchover_epoch)
+  {
+    int64_t cached_switchover_epoch = get_switchover_epoch();
+    if (OB_INVALID_VERSION != switchover_epoch && cached_switchover_epoch < switchover_epoch) {
+      SHARE_LOG(INFO, "try set switchover_epoch", K(switchover_epoch), K(cached_switchover_epoch));
+      ATOMIC_BCAS(&switchover_epoch_, cached_switchover_epoch, switchover_epoch);
+    }
+  }
+
+  int64_t get_switchover_epoch() const
+  {
+    return ATOMIC_LOAD(&switchover_epoch_);
+  }
+
   template<class T>
   T get() { return inner_get(Identity<T>()); }
 
@@ -675,6 +692,7 @@ protected:
   double unit_max_cpu_;
   double unit_min_cpu_;
   int64_t unit_memory_size_;
+  int64_t switchover_epoch_;
 
 private:
   common::hash::ObHashSet<int64_t> tg_set_;

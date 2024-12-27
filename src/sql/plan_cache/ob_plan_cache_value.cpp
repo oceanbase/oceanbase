@@ -177,7 +177,8 @@ ObPlanCacheValue::ObPlanCacheValue()
     is_batch_execute_(false),
     has_dynamic_values_table_(false),
     stored_schema_objs_(pc_alloc_),
-    stmt_type_(stmt::T_MAX)
+    stmt_type_(stmt::T_MAX),
+    switchover_epoch_(OB_INVALID_VERSION)
 {
   MEMSET(sql_id_, 0, sizeof(sql_id_));
   MEMSET(format_sql_id_, 0, sizeof(format_sql_id_));
@@ -255,6 +256,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
   }
 
   if (OB_SUCC(ret)) {
+    switchover_epoch_ = MTL_GET_SWITCHOVER_EPOCH();
     pcv_set_ = pcv_set;
     //use_global_location_cache_ = !cache_obj->is_contain_virtual_table();
     outline_state_ = plan->get_outline_state();
@@ -481,6 +483,7 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   //TODO shengle 此处拷贝需要想办法处理掉
   int64_t spm_mode = 0;
   bool need_check_schema = (schema_array.count() != 0);
+  int64_t new_switchover_epoch = MTL_GET_SWITCHOVER_EPOCH();
   if (schema_array.count() == 0 && stored_schema_objs_.count() == 0) {
     need_check_schema = true;
   }
@@ -511,6 +514,10 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   } else if (OB_INVALID_ID == (tenant_id = session->get_effective_tenant_id())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(ERROR, "got effective tenant id is invalid", K(ret));
+  } else if (OB_UNLIKELY(switchover_epoch_ != new_switchover_epoch)) {
+    ret = OB_OLD_SCHEMA_VERSION;
+    switchover_epoch_ = new_switchover_epoch;
+    SQL_PC_LOG(TRACE, "switchover_epoch changed, view or table is old version", KR(ret));
   } else if (OB_FAIL(check_value_version_for_get(pc_ctx.sql_ctx_.schema_guard_,
                                                  need_check_schema,
                                                  schema_array,
