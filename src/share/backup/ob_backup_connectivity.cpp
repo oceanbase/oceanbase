@@ -2141,7 +2141,7 @@ int ObBackupChangeExternalStorageDestUtil::change_external_storage_dest(const ob
         char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
         if (OB_SUCC(ret) && '\0' != attribute_option.src_info_[0]) {
           if (OB_FAIL(change_src_info(trans, gen_user_tenant_id(tenant_id), attribute_option, backup_dest))) {
-              LOG_WARN("failed to change src info", K(ret), K(tenant_id));
+            LOG_WARN("failed to change src info", K(ret), K(tenant_id));
           } else {
             LOG_INFO("admin change external storage dest", K(arg));
           }
@@ -2168,6 +2168,7 @@ int ObBackupChangeExternalStorageDestUtil::change_src_info(
     const ObBackupDest &backup_dest)
 {
   int ret = OB_SUCCESS;
+  bool do_not_need_update = false;
 
   if (OB_INVALID_ID == tenant_id || !backup_dest.is_valid() || OB_ISNULL(option.src_info_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2178,26 +2179,35 @@ int ObBackupChangeExternalStorageDestUtil::change_src_info(
     if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(
               proxy, tenant_id, backup_dest, extension, sizeof(extension)))) {
       LOG_WARN("failed to get backup dest extension", K(ret), K(tenant_id), K(backup_dest));
-    } else if (OB_FAIL(update_src_info_in_extension(src_info, extension, sizeof(extension)))) {
+    } else if (OB_FAIL(process_src_info_in_extension_before_update(src_info,
+                          extension, sizeof(extension), do_not_need_update))) {
       LOG_WARN("failed to update src info in extension", K(ret), K(src_info), KP(extension));
-    } else if (OB_FAIL(ObBackupStorageInfoOperator::update_backup_dest_extension(proxy,
-                                                        gen_user_tenant_id(tenant_id), backup_dest, extension))) {
-      LOG_WARN("failed to update backup dest extension", K(ret), K(tenant_id), K(backup_dest));
-    } else {
-      LOG_INFO("success change src info", K(src_info));
+    } else if (!do_not_need_update) {
+      if (OB_FAIL(ObBackupStorageInfoOperator::update_backup_dest_extension(proxy,
+                                                    gen_user_tenant_id(tenant_id), backup_dest, extension))) {
+        LOG_WARN("failed to update backup dest extension", K(ret), K(tenant_id), K(backup_dest));
+      } else {
+        LOG_INFO("success change src info", K(src_info));
+      }
     }
   }
 
   return ret;
 }
 
-int ObBackupChangeExternalStorageDestUtil::update_src_info_in_extension(
+//find locality info in extension
+//update extension with new locality info
+//compare new locality info with old locality info
+//if new locality info is same with old locality info, set do_not_need_update to true
+int ObBackupChangeExternalStorageDestUtil::process_src_info_in_extension_before_update(
     const char *src_info,
     char *extension,
-    const int64_t extension_length)
+    const int64_t extension_length,
+    bool &do_not_need_update)
 {
   int ret = OB_SUCCESS;
 
+  do_not_need_update = false;
   if (OB_ISNULL(src_info) || OB_ISNULL(extension)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(src_info), KP(extension));
@@ -2226,6 +2236,9 @@ int ObBackupChangeExternalStorageDestUtil::update_src_info_in_extension(
                       || 0 == strncmp(BACKUP_IDC, token, strlen(BACKUP_IDC))
                       || 0 == strncmp(BACKUP_REGION, token, strlen(BACKUP_REGION))) {
             has_found_src_info = true;
+            if (0 == strncmp(token, src_info, strlen(token))) {
+              do_not_need_update = true;
+            }
           } else {
             if (pos > 0 && OB_FAIL(databuff_printf(extension, extension_length, pos, "&"))) {
               LOG_WARN("failed to add delimiter to extension", K(ret), K(pos), K(extension_length), KP(extension));

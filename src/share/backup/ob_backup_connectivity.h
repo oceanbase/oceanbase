@@ -290,7 +290,11 @@ private:
       const uint64_t tenant_id,
       share::ObBackupDestAttribute &option,
       const share::ObBackupDest &backup_dest);
-  static int update_src_info_in_extension(const char *src_info, char *extension, const int64_t extension_length);
+  static int process_src_info_in_extension_before_update(
+      const char *src_info,
+      char *extension,
+      const int64_t extension_length,
+      bool &do_not_need_update);
 };
 
 }//share
