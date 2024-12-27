@@ -669,6 +669,9 @@ int ret = OB_SUCCESS;
     for (int i = 0; i < regist_dest_count; i++) {
       ObTimeGuard timeguard_clent_send("net_keepalive_client_send", 100 * 1000);
       struct DestKeepAliveState *rs = ATOMIC_LOAD(&regist_dests_[i]);
+      if (NULL == rs) {
+        continue;
+      }
       if (now - rs->last_access_ts_ > SERVER_EXPIRED_TIME) {
         if (rs->last_write_ts_ > 0) {
           char addr_buf[OB_IP_PORT_STR_BUFF] = {'\0'};
