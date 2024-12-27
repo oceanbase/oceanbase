@@ -41,7 +41,7 @@ desc information_schema.tables;
 | ROW_FORMAT             | varchar(10)         | NO   |     |         |       |
 | TABLE_ROWS             | bigint(20) unsigned | NO   |     |         |       |
 | AVG_ROW_LENGTH         | bigint(21) unsigned | NO   |     |         |       |
-| DATA_LENGTH            | bigint(21) unsigned | NO   |     |         |       |
+| DATA_LENGTH            | bigint(20) unsigned | NO   |     |         |       |
 | MAX_DATA_LENGTH        | bigint(0) unsigned  | NO   |     |         |       |
 | INDEX_LENGTH           | bigint(21) unsigned | NO   |     |         |       |
 | DATA_FREE              | bigint(0) unsigned  | NO   |     |         |       |
