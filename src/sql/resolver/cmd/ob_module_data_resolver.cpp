@@ -90,7 +90,9 @@ int ObModuleDataResolver::resolve_target_tenant_id(const ParseNode *node, const 
     LOG_WARN("operation from meta tenant not allowed", K(ret), K(target_tenant_id), K(login_tenant_id));
   } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(target_tenant_id, mode))) {
     LOG_WARN("fail to get tenant mode", K(ret), K(target_tenant_id));
-  } else if (lib::Worker::CompatMode::ORACLE == mode && mod != table::ObModuleDataArg::ObExecModule::GIS) {
+  } else if (lib::Worker::CompatMode::ORACLE == mode &&
+             mod == table::ObModuleDataArg::ObExecModule::GIS &&
+             mod == table::ObModuleDataArg::ObExecModule::TIMEZONE) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation from oracle tenant");
     LOG_WARN("operation from oracle tenant not allowed", K(ret), K(target_tenant_id), K(login_tenant_id));
@@ -105,13 +107,17 @@ int ObModuleDataResolver::resolve_target_tenant_id(const ParseNode *node, const 
   return ret;
 }
 
-int ObModuleDataResolver::resolve_file_path(const ParseNode *node, ObString &abs_path)
+int ObModuleDataResolver::resolve_file_path(const ParseNode *node, table::ObModuleDataArg &arg)
 {
   int ret = OB_SUCCESS;
   // reference ObLoadDataResolver::resolve_filename
   if (OB_ISNULL(node)) {
-    abs_path.reset();
-  } else if (OB_FAIL(Util::resolve_string(node,abs_path))) {
+    arg.file_path_.reset();
+    if (ObModuleDataArg::GIS == arg.module_ || ObModuleDataArg::TIMEZONE == arg.module_) {
+      // default path of GIS and TIMEZONE is etc/
+      arg.file_path_ = ObString::make_string("etc/");
+    }
+  } else if (OB_FAIL(Util::resolve_string(node, arg.file_path_))) {
     LOG_WARN("resolve string failed", K(ret));
   }
   return ret;
@@ -159,7 +165,7 @@ int ObModuleDataResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("fail to resolve module", K(ret));
     } else if (OB_FAIL(resolve_target_tenant_id(parse_tree.children_[TENANT_IDX], arg.module_, arg.target_tenant_id_))) {
       LOG_WARN("fail to resolve target tenant id", K(ret));
-    } else if (OB_FAIL(resolve_file_path(parse_tree.children_[FILE_IDX], arg.file_path_))) {
+    } else if (OB_FAIL(resolve_file_path(parse_tree.children_[FILE_IDX], arg))) {
       LOG_WARN("fail to resolve file path", K(ret));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.target_tenant_id_, compat_version))) {
       LOG_WARN("fail to get data version", KR(ret), K(arg));

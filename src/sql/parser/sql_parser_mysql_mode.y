@@ -17344,13 +17344,6 @@ alter_with_opt_hint SYSTEM upgrade_action ROLLING UPGRADE
   malloc_non_terminal_node($$, result->malloc_pool_, T_ADMIN_ROLLING_UPGRADE_CMD, 1, $3);
 }
 |
-alter_with_opt_hint SYSTEM LOAD TIME_ZONE_INFO PATH opt_equal_mark STRING_VALUE
-{
-  (void)($1);
-  (void)($6);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_TIME_ZONE_INFO, 1, $7);
-}
-|
 alter_with_opt_hint SYSTEM ENABLE SQL THROTTLE opt_sql_throttle_for_priority opt_sql_throttle_using_cond
 {
   (void)($1);
