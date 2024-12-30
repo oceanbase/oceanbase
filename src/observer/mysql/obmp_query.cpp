@@ -795,7 +795,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
 
       // exec cmd
       FLTSpanGuard(sql_execute);
-      bool is_rollback = (sql.length() == 8);
+      bool is_rollback = (0 == sql.case_compare("rollback"));
       if (OB_FAIL(process_trans_ctrl_cmd(session,
                                          need_disconnect,
                                          async_resp_used,
