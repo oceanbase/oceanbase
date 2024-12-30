@@ -254,6 +254,11 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
                                               is_cover_by_error))) {
                        // get clause param value, set into param_ctx
     LOG_WARN("fail to parse clause value", K(ret));
+  } else if (OB_ISNULL(param_ctx->json_param_.json_path_) && param_ctx->json_param_.is_asis_) {
+    is_null_result = false;
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObJsonUtil::get_json_doc(expr.args_[JSN_QUE_DOC], ctx, temp_allocator,
                                               j_base, is_null_result,
                                               is_cover_by_error,  true))) { // parse json doc
