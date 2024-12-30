@@ -108,16 +108,24 @@ int ObPLParser::fast_parse(const ObString &query,
         LOG_WARN("failed to parse pl stmt", K(ret));
       }
     } else {
-      memmove(parse_ctx.no_param_sql_ + parse_ctx.no_param_sql_len_,
+      int64_t buf_remain_len = parse_ctx.no_param_sql_buf_len_ - parse_ctx.no_param_sql_len_;
+      int64_t copy_len = parse_ctx.stmt_len_ - parse_ctx.copied_pos_;
+      if (buf_remain_len < copy_len) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Can not memmove due to remain buf len less than copy len",
+                K(ret), K(buf_remain_len), K(copy_len));
+      } else {
+        memmove(parse_ctx.no_param_sql_ + parse_ctx.no_param_sql_len_,
                       parse_ctx.stmt_str_ + parse_ctx.copied_pos_,
-                      parse_ctx.stmt_len_ - parse_ctx.copied_pos_);
-      parse_ctx.no_param_sql_len_ += parse_ctx.stmt_len_ - parse_ctx.copied_pos_;
-      parse_result.no_param_sql_ = parse_ctx.no_param_sql_;
-      parse_result.no_param_sql_len_ = parse_ctx.no_param_sql_len_;
-      parse_result.no_param_sql_buf_len_ = parse_ctx.no_param_sql_buf_len_;
-      parse_result.param_node_num_ = parse_ctx.param_node_num_;
-      parse_result.param_nodes_ = parse_ctx.param_nodes_;
-      parse_result.tail_param_node_ = parse_ctx.tail_param_node_;
+                      copy_len);
+        parse_ctx.no_param_sql_len_ += copy_len;
+        parse_result.no_param_sql_ = parse_ctx.no_param_sql_;
+        parse_result.no_param_sql_len_ = parse_ctx.no_param_sql_len_;
+        parse_result.no_param_sql_buf_len_ = parse_ctx.no_param_sql_buf_len_;
+        parse_result.param_node_num_ = parse_ctx.param_node_num_;
+        parse_result.param_nodes_ = parse_ctx.param_nodes_;
+        parse_result.tail_param_node_ = parse_ctx.tail_param_node_;
+      }
     }
   }
   return ret;
