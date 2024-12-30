@@ -1457,6 +1457,20 @@ int ObSQLUtils::is_external_odps_table(const ObString &properties, ObIAllocator 
   return ret;
 }
 
+int ObSQLUtils::get_external_table_type(const ObString &table_format_or_properties,
+                                        ObExternalFileFormat::FormatType &type) {
+  int ret = OB_SUCCESS;
+  ObExternalFileFormat format;
+  ObArenaAllocator allocator;
+  if (table_format_or_properties.empty()) {
+  } else if (OB_FAIL(format.load_from_string(table_format_or_properties, allocator))) {
+    LOG_WARN("fail to load from properties string", K(ret), K(table_format_or_properties));
+  } else {
+    type = format.format_type_;
+  }
+  return ret;
+}
+
 int ObSQLUtils::check_ident_name(const ObCollationType cs_type, ObString &name,
                                  const bool check_for_path_char, const int64_t max_ident_len)
 {
