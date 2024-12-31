@@ -186,14 +186,11 @@ class ObBackupDestIOPermissionMgr final
 {
 public:
   ~ObBackupDestIOPermissionMgr();
-private:
-  explicit ObBackupDestIOPermissionMgr(const uint64_t tenant_id);
+  ObBackupDestIOPermissionMgr();
 
 public:
-  static int mtl_new(ObBackupDestIOPermissionMgr* &backup_dest_io_permission_mgr);
   static int mtl_init(ObBackupDestIOPermissionMgr* &backup_dest_io_permission_mgr);
-  static void mtl_destroy(ObBackupDestIOPermissionMgr* &backup_dest_io_permission_mgr);
-  int init();
+  int init(const uint64_t tenant_id);
   int start();
   void stop();
   void wait();
@@ -203,11 +200,17 @@ public:
   static int check_zone_valid(const char *src_info);
   static int check_region_valid(const char *src_info);
   static int check_idc_valid(const char *src_info);
+  static int delete_locality_info_in_backup_dest_str(char *backup_dest_str);
   static int get_src_info_from_extension(
       const ObString &extension,
       char *src_locality,
       const int64_t src_locality_length,
       share::ObBackupSrcType &src_type);
+  static int separate_locality_info_from_dest_string(
+      char *dest_string,
+      const int64_t dest_string_length,
+      char *locality_info,
+      const int64_t localit_info_max_length);
 public:
   int refresh_io_permission();
   int is_io_prohibited(const share::ObBackupStorageInfo *storage_info, bool &is_io_prohibited);
@@ -268,7 +271,7 @@ private:
   static const int64_t PERMISSION_EXPIRED_TIME = 24_hour;
   bool is_inited_;
   TCRWLock lock_;
-  const uint64_t tenant_id_;
+  uint64_t tenant_id_;
   ObDestIOPermissionMap dest_io_permission_map_;
   int64_t last_refresh_time_;
   ObZone zone_;

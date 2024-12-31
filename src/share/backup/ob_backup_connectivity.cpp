@@ -1315,10 +1315,10 @@ void ObBackupDestIOPermissionMgr::ObRefreshIOPermissionTask::runTimerTask()
   }
 }
 
-ObBackupDestIOPermissionMgr::ObBackupDestIOPermissionMgr(const uint64_t tenant_id)
+ObBackupDestIOPermissionMgr::ObBackupDestIOPermissionMgr()
   : is_inited_(false),
     lock_(),
-    tenant_id_(tenant_id),
+    tenant_id_(OB_INVALID_ID),
     dest_io_permission_map_(),
     last_refresh_time_(0),
     zone_(),
@@ -1333,20 +1333,6 @@ ObBackupDestIOPermissionMgr::~ObBackupDestIOPermissionMgr()
   destroy();
 }
 
-int ObBackupDestIOPermissionMgr::mtl_new(ObBackupDestIOPermissionMgr* &backup_dest_io_permission_mgr)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  backup_dest_io_permission_mgr = OB_NEW(ObBackupDestIOPermissionMgr, ObMemAttr(tenant_id, "BackupIOPerMgr"), tenant_id);
-
-  if (nullptr == backup_dest_io_permission_mgr) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    OB_LOG(WARN, "fail to new ObBackupDestIOPermissionMgr", K(ret));
-  }
-
-  return ret;
-}
-
 int ObBackupDestIOPermissionMgr::mtl_init(ObBackupDestIOPermissionMgr* &backup_dest_io_permission_mgr)
 {
   int ret = OB_SUCCESS;
@@ -1354,27 +1340,31 @@ int ObBackupDestIOPermissionMgr::mtl_init(ObBackupDestIOPermissionMgr* &backup_d
   if (OB_ISNULL(backup_dest_io_permission_mgr)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "backup_dest_io_permission_mgr is null", K(ret));
-  } else if (OB_FAIL(backup_dest_io_permission_mgr->init())) {
+  } else if (OB_FAIL(backup_dest_io_permission_mgr->init(MTL_ID()))) {
     OB_LOG(WARN, "failed to init backup dest io permission mgr", K(ret));
   }
 
   return ret;
 }
 
-int ObBackupDestIOPermissionMgr::init()
+int ObBackupDestIOPermissionMgr::init(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     OB_LOG(WARN, "ObBackupDestIOPermissionMgr has been inited", K(ret));
+  } else if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), K(tenant_id));
   } else if (OB_FAIL(dest_io_permission_map_.create(OB_BACKUP_IO_PERMISSION_MAP_BUCKET_NUM,
-                                                      lib::ObMemAttr(tenant_id_, ObModIds::BACKUP)))) {
+                                                      lib::ObMemAttr(tenant_id, "IOPermissionMap")))) {
     OB_LOG(WARN, "fail to create dest io permission map", K(ret));
-  } else if (OB_FAIL(refresh_io_permission_task_.init(tenant_id_))) {
+  } else if (OB_FAIL(refresh_io_permission_task_.init(tenant_id))) {
     OB_LOG(WARN, "failed to init refresh io permission task", K(ret));
   } else {
     is_inited_= true;
+    tenant_id_ = tenant_id;
   }
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1411,10 +1401,6 @@ void ObBackupDestIOPermissionMgr::wait()
   if (OB_LIKELY(refresh_io_permission_task_.is_inited_)) {
     TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), refresh_io_permission_task_);
   }
-}
-
-void ObBackupDestIOPermissionMgr::mtl_destroy(ObBackupDestIOPermissionMgr* &backup_dest_io_permission_mgr)
-{
 }
 
 void ObBackupDestIOPermissionMgr::destroy()
@@ -1491,6 +1477,9 @@ int ObBackupDestIOPermissionMgr::get_server_locality_info_(
   const ObAddr addr = GCTX.self_addr();
   ObLocalityManager * locality_manager = GCTX.locality_manager_;
   const ObAddr &self_addr = GCTX.self_addr();
+  zone.reset();
+  idc.reset();
+  region.reset();
 
   if (OB_ISNULL(locality_manager)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1707,11 +1696,15 @@ int ObBackupDestIOPermissionMgr::refresh_io_permission()
             LOG_WARN("failed to get dest io permissiom info from map", K(ret), K(dest_id));
           } else {
             ret = OB_SUCCESS;
+            LOG_WARN("dest not exist in map", K(ret), K(dest_id));
           }
-        }
-        prohibited_info.io_prohibited_ = io_prohibited;
-        if (FAILEDx(dest_io_permission_map_.set_refactored(dest_id, prohibited_info, true /*conver exists key*/))) {
-          LOG_WARN("failed to update dest io permission map", K(ret), K(dest_id));
+        } else {
+          prohibited_info.io_prohibited_ = io_prohibited;
+          if (FAILEDx(dest_io_permission_map_.set_refactored(dest_id, prohibited_info, true /*conver exists key*/))) {
+            LOG_WARN("failed to update dest io permission map", K(ret), K(dest_id));
+          } else {
+            LOG_INFO("success update dest io permission map", K(ret), K(dest_id), K(io_prohibited));
+          }
         }
       }
     }
@@ -1823,7 +1816,8 @@ int ObBackupDestIOPermissionMgr::is_io_prohibited(const share::ObBackupStorageIn
     }
   }
 
-  if (OB_START_DEST_ID <= dest_id && OB_SUCC(ret) ) {
+  if (OB_START_DEST_ID <= dest_id && OB_SUCC(ret) &&
+          now_time - io_prohibited_info.last_access_time_ > PERMISSION_UPDATE_INTERVAL) {
     if (OB_FAIL(update_last_access_time_(dest_id, is_io_prohibited))) {
       LOG_WARN("failed to add after remove oldest dest id", K(ret), K(dest_id), K(is_io_prohibited));
     }
@@ -2117,7 +2111,6 @@ int ObBackupChangeExternalStorageDestUtil::change_external_storage_dest(const ob
     ObBackupDestAttribute access_info_option;
     ObBackupDestAttribute attribute_option;
     ObMySQLTransaction trans;
-
     if (OB_FAIL(backup_dest.set(path.str()))) {
       LOG_WARN("failed to set backup dest", K(ret));
     }
@@ -2126,8 +2119,6 @@ int ObBackupChangeExternalStorageDestUtil::change_external_storage_dest(const ob
       LOG_WARN("not support reset access info", K(ret));
     }
     if (OB_SUCC(ret) && has_attribute) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support reset attribute", K(ret));
       if (FAILEDx(ObBackupDestAttributeParser::parse(attribute.str(), attribute_option))) {
         LOG_WARN("failed to parse attribute", K(ret), K(attribute));
       }
@@ -2236,8 +2227,9 @@ int ObBackupChangeExternalStorageDestUtil::process_src_info_in_extension_before_
                       || 0 == strncmp(BACKUP_IDC, token, strlen(BACKUP_IDC))
                       || 0 == strncmp(BACKUP_REGION, token, strlen(BACKUP_REGION))) {
             has_found_src_info = true;
-            if (0 == strncmp(token, src_info, strlen(token))) {
+            if (0 == strcmp(token, src_info)) {
               do_not_need_update = true;
+              LOG_INFO("src info is same with old src info", K(src_info), K(extension));
             }
           } else {
             if (pos > 0 && OB_FAIL(databuff_printf(extension, extension_length, pos, "&"))) {
@@ -2275,6 +2267,81 @@ int ObBackupChangeExternalStorageDestUtil::process_src_info_in_extension_before_
     }
   }
 
+  return ret;
+}
+
+int ObBackupDestIOPermissionMgr::delete_locality_info_in_backup_dest_str(char *backup_dest_str)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  char locality_info[OB_MAX_BACKUP_SRC_INFO_LENGTH] = { 0 };
+  if (OB_ISNULL(backup_dest_str)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    while (backup_dest_str[pos] != '\0') {
+      if ('?' == backup_dest_str[pos]) {
+        ++pos;
+        break;
+      }
+      ++pos;
+    }
+    if (backup_dest_str[pos] != '\0' && OB_FAIL(separate_locality_info_from_dest_string(
+                                                    backup_dest_str + pos, strlen(backup_dest_str + pos) + 1,
+                                                    locality_info, OB_MAX_BACKUP_SRC_INFO_LENGTH))) {
+      LOG_WARN("fail to delete locality info in path info", K(ret), K(backup_dest_str + pos));
+    } else if(pos > 0 && '\0' == backup_dest_str[pos--] && '?' == backup_dest_str[pos]) {
+      backup_dest_str[pos] = '\0';
+    }
+  }
+  return ret;
+}
+
+//input:dest_attribute="host=xxxx&access_key=adsd&access_id=dsfdf&zone=z1,z2&checksum_type=md5"
+//output:dest_attribute="host=xxxx&access_key=adsd&access_id=dsfdf&checksum_type=md5" locality_info="zone=z1,z2"
+int ObBackupDestIOPermissionMgr::separate_locality_info_from_dest_string(
+    char *dest_string,
+    const int64_t dest_string_length,
+    char *locality_info,
+    const int64_t locality_info_max_length)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(dest_string) || OB_ISNULL(locality_info) || 0 == dest_string_length || 0 == locality_info_max_length) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(dest_string), KP(locality_info),
+                K(dest_string_length), K(locality_info_max_length));
+  } else {
+    char tmp[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+    char *token = NULL;
+    char *saved_ptr = NULL;
+    if (OB_FAIL(databuff_printf(tmp, sizeof(tmp), "%s", dest_string))) {
+        LOG_WARN("failed to copy storage info", K(ret), K(dest_string));
+    } else {
+      dest_string[0] = '\0';
+      locality_info[0] = '\0';
+      int64_t pos = 0;
+      token = tmp;
+      for (char *str = token; OB_SUCC(ret); str = NULL) {
+        token = ::strtok_r(str, "&", &saved_ptr);
+        if (NULL == token) {
+          break;
+        } else if (0 == strncmp(BACKUP_ZONE, token, strlen(BACKUP_ZONE))
+                      || 0 == strncmp(BACKUP_IDC, token, strlen(BACKUP_IDC))
+                      || 0 == strncmp(BACKUP_REGION, token, strlen(BACKUP_REGION))) {
+          if (OB_FAIL(databuff_printf(locality_info, locality_info_max_length, "%s", token))) {
+            LOG_WARN("failed to add token to locality info buf", K(ret), K(locality_info_max_length), KP(locality_info));
+          }
+        } else {
+          if (pos > 0 && OB_FAIL(databuff_printf(dest_string, dest_string_length, pos, "&"))) {
+            LOG_WARN("failed to add delimiter to buff", K(ret), K(pos), K(dest_string_length), KP(dest_string));
+          } else if (OB_FAIL(databuff_printf(dest_string, dest_string_length, pos, "%s", token))) {
+            LOG_WARN("failed to add token to buff", K(ret), K(pos),
+                K(dest_string_length), K(token), KP(dest_string));
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 

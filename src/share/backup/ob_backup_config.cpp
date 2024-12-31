@@ -454,9 +454,6 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(ObString(extension),
                                                     src_locality, sizeof(src_locality), src_type))) {
         LOG_WARN("failed to get src info from extension", K(ret), K(extension));
-      } else if (ObBackupSrcType::EMPTY != src_type) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("set backup zone/region/idc is not supported ", K(ret));
       } else if (ObBackupSrcType::EMPTY != src_type &&
                     OB_FAIL(ObBackupDestIOPermissionMgr::check_backup_src_info_valid(src_locality, src_type))) {
         LOG_WARN("please check backup src info valid", K(src_locality), K(src_type));
@@ -477,6 +474,7 @@ int ObDataBackupDestConfigParser::update_data_backup_dest_config_(common::ObISQL
   int ret = OB_SUCCESS;
   share::ObBackupHelper helper;
   share::ObBackupDest dest;
+  ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   if (!type_.is_valid() || 1 != config_items_.count() ) {
     ret = OB_INVALID_ARGUMENT;
@@ -488,8 +486,14 @@ int ObDataBackupDestConfigParser::update_data_backup_dest_config_(common::ObISQL
       LOG_WARN("fail to get_backup_dest_str", K(ret), K(dest));
     } 
   }
-  
+  //Locality info is only displayed in the __all_backup_storage_info table.
+  //Delete locality info in backup dest str before updating the __all_backup_dest_parameter table.
   if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(dest_io_permission_mgr = MTL(ObBackupDestIOPermissionMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("MTL ObBackupDestIOPermissionMgr is null", K(ret));
+  } else if (OB_FAIL(dest_io_permission_mgr->delete_locality_info_in_backup_dest_str(backup_dest_str))) {
+    LOG_WARN("failed to delete locality info in backup dest str", K(ret), K(backup_dest_str));
   } else if (OB_FAIL(helper.init(tenant_id_, trans))) {
     LOG_WARN("fail to init backup help", K(ret), K(tenant_id_), K(dest));
   } else if (OB_FAIL(helper.set_backup_dest(backup_dest_str))) {
@@ -684,9 +688,6 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
     if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(ObString(extension),
                                                     src_locality, sizeof(src_locality), src_type))) {
       LOG_WARN("failed to get src info from extension", K(ret), K(extension));
-    } else if (ObBackupSrcType::EMPTY != src_type) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("set backup zone/region/idc is not supported", K(ret));
     } else if (ObBackupSrcType::EMPTY != src_type &&
                   OB_FAIL(ObBackupDestIOPermissionMgr::check_backup_src_info_valid(src_locality, src_type))) {
       LOG_WARN("please check backup src info valid", K(src_locality), K(src_type));
