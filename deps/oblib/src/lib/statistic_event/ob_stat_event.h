@@ -549,6 +549,13 @@ STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_COUNT, "multi put execute count", ObStatCl
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_TIME, "multi put execute time", ObStatClassIds::TABLEAPI, 191304, true, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_ROW, "multi put rows", ObStatClassIds::TABLEAPI, 191305, true, true, true)
 
+// -- table checkAndInsertUp
+STAT_EVENT_ADD_DEF(TABLEAPI_CHECK_AND_INSERT_UP_COUNT, "single check and insertUp execute count", ObStatClassIds::TABLEAPI, 191306, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_CHECK_AND_INSERT_UP_TIME, "single check and insertUp execute time", ObStatClassIds::TABLEAPI, 191307, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_CHECK_AND_INSERT_UP_COUNT, "multi check and insertUp execute count", ObStatClassIds::TABLEAPI, 191308, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_CHECK_AND_INSERT_UP_TIME, "multi check and insertUp execute time", ObStatClassIds::TABLEAPI, 191309, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_CHECK_AND_INSERT_UP_ROW, "multi check and insertUp rows", ObStatClassIds::TABLEAPI, 191310, true, true, true)
+
 // -- table trigger 1914xx
 STAT_EVENT_ADD_DEF(TABLEAPI_GROUP_TRIGGER_COUNT, "group commit trigger execute count", ObStatClassIds::TABLEAPI, 191401, true, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_GROUP_TRIGGER_TIME, "group commit trigger execute execute time", ObStatClassIds::TABLEAPI, 191402, true, true, true)
