@@ -69,7 +69,7 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
     LOG_WARN("failed to transform right join as left", K(ret));
   } else if (parent_stmts.empty() && lib::is_oracle_mode() &&
               OB_FAIL(formalize_limit_expr(*stmt))) {
-    LOG_WARN("formalize stmt fialed", K(ret));
+    LOG_WARN("formalize stmt failed", K(ret));
   } else if (OB_FAIL(stmt->adjust_duplicated_table_names(*ctx_->allocator_, is_happened))) {
     LOG_WARN("failed to adjust duplicated table names", K(ret));
   } else {
@@ -777,7 +777,7 @@ int ObTransformPreProcess::create_cte_for_groupby_items(ObSelectStmt &stmt)
   bool is_correlated = false;
   ObSelectStmt *view_stmt = NULL;
   if (OB_FAIL(check_pre_aggregate(stmt, can_pre_aggregate))) {
-    LOG_WARN("fialed to check pre aggregate", K(ret));
+    LOG_WARN("failed to check pre aggregate", K(ret));
   } else if (!can_pre_aggregate) {
     if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, &stmt, view_stmt))) {
       LOG_WARN("failed to create simple view", K(ret), K(stmt));
@@ -9870,12 +9870,16 @@ int ObTransformPreProcess::expand_correlated_cte(ObDMLStmt *stmt, bool& trans_ha
     bool is_correlated = false;
     bool can_expand = true;
     ObSEArray<ObSelectStmt *, 4> dummy;
-    if (OB_FAIL(check_is_correlated_cte(temp_table_infos.at(i).temp_table_query_, dummy, is_correlated))) {
+    ObSelectStmt *temp_query = temp_table_infos.at(i).temp_table_query_;
+    if (OB_ISNULL(temp_query)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("got unexpected null ptr", K(ret));
+    } else if (OB_FAIL(check_is_correlated_cte(temp_query, dummy, is_correlated))) {
       LOG_WARN("failed to check is correlated cte", K(ret));
     } else if (!is_correlated) {
       //do nothing
-    } else if (OB_FAIL(ObTransformUtils::check_inline_temp_table_valid(temp_table_infos.at(i).temp_table_query_, can_expand))) {
-      LOG_WARN("failed to check expand temp table valid", K(ret));
+    } else if (OB_FAIL(temp_query->is_query_deterministic(can_expand))) {
+      LOG_WARN("failed to check stmt is deterministic", K(ret));
     } else if (!can_expand) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("Correlated CTE Not Supported", K(ret));

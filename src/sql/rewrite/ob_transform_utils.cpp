@@ -14184,41 +14184,6 @@ int ObTransformUtils::get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
   return ret;
 }
 
-int ObTransformUtils::check_inline_temp_table_valid(ObSelectStmt *stmt, bool &is_valid)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 16> exprs;
-  is_valid = true;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null stmt", K(ret));
-  } else if (OB_FAIL(stmt->get_relation_exprs(exprs))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < exprs.count(); i++) {
-    if (OB_ISNULL(exprs.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (exprs.at(i)->has_flag(CNT_RAND_FUNC) ||
-               exprs.at(i)->has_flag(CNT_STATE_FUNC) ||
-               exprs.at(i)->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
-      is_valid = false;
-    }
-  }
-  if (OB_SUCC(ret) && is_valid) {
-    ObSEArray<ObSelectStmt *, 4> child_stmts;
-    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
-      LOG_WARN("failed to get child stmts", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < child_stmts.count(); i++) {
-      if (OB_FAIL(SMART_CALL(check_inline_temp_table_valid(child_stmts.at(i), is_valid)))) {
-        LOG_WARN("failed to check expand temp table valid", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTransformUtils::inline_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info)
 {
   int ret = OB_SUCCESS;
@@ -15318,33 +15283,13 @@ int ObTransformUtils::check_contain_correlated_json_table(const ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::check_contain_cannot_duplicate_expr(const ObIArray<ObRawExpr*> &exprs, bool &is_contain) {
+int ObTransformUtils::check_contain_lost_deterministic_expr(const ObIArray<ObRawExpr*> &exprs,
+                                                            bool &is_contain) {
   int ret = OB_SUCCESS;
   is_contain = false;
   for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < exprs.count(); ++i) {
-    if (OB_FAIL(recursive_check_cannot_duplicate_expr(exprs.at(i), is_contain))) {
-      LOG_WARN("fail to check cannot duplicate expr", K(ret), K(i), K(exprs));
-    }
-  }
-  return ret;
-}
-
-int ObTransformUtils::recursive_check_cannot_duplicate_expr(const ObRawExpr *expr, bool &is_contain) {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else if (expr->has_flag(CNT_DYNAMIC_USER_VARIABLE)
-             || expr->has_flag(CNT_STATE_FUNC)
-             || expr->has_flag(CNT_RAND_FUNC)) {
-    is_contain = true;
-  } else if (!expr->is_deterministic()) {
-    is_contain = true;
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(recursive_check_cannot_duplicate_expr(expr->get_param_expr(i), is_contain)))) {
-        LOG_WARN("fail to check cannot duplicate expr", K(ret), K(i), KPC(expr));
-      }
+    if (!exprs.at(i)->is_deterministic()) {
+      is_contain = true;
     }
   }
   return ret;

@@ -1853,8 +1853,6 @@ public:
                                   ObIArray<ObRawExpr *> &common_exprs);
   static int check_is_index_part_key(ObTransformerCtx &ctx, ObDMLStmt &stmt, ObRawExpr *check_expr, bool &is_valid);
 
-  static int check_inline_temp_table_valid(ObSelectStmt *stmt, bool &is_valid);
-
   static int inline_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info);
 
   static int get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
@@ -1954,7 +1952,7 @@ public:
                             UnionFind &uf);
   static int check_contain_correlated_function_table(const ObDMLStmt *stmt, bool &is_contain);
   static int check_contain_correlated_json_table(const ObDMLStmt *stmt, bool &is_contain);
-  static int check_contain_cannot_duplicate_expr(const ObIArray<ObRawExpr*> &exprs, bool &is_contain);
+  static int check_contain_lost_deterministic_expr(const ObIArray<ObRawExpr*> &exprs, bool &is_contain);
   // check if a constant or parameterized constant is NULL.
   static bool is_const_null(ObRawExpr &expr);
   static bool is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode);

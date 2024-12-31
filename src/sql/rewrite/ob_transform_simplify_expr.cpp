@@ -1897,14 +1897,14 @@ int ObTransformSimplifyExpr::is_valid_for_remove_subquery(const ObSelectStmt* st
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-  bool has_rand = false;
+  bool is_deterministic = false;
   bool has_rownum = false;
   if (stmt->is_contains_assignment() || stmt->has_subquery() || 0 != stmt->get_window_func_count() ||
       stmt->is_hierarchical_query() || stmt->is_set_stmt() || 0 != stmt->get_pseudo_column_like_exprs().count()) {
     /* do nothing */
-  } else if (OB_FAIL(stmt->has_rand(has_rand))) {
+  } else if (OB_FAIL(stmt->is_query_deterministic(is_deterministic))) {
     LOG_WARN("failed to check if stmt has rand", K(ret));
-  } else if (has_rand) {
+  } else if (!is_deterministic) {
     /* do nothing */
   } else if (OB_FAIL(stmt->has_rownum(has_rownum))) {
     LOG_WARN("failed to check if stmt has rownum", K(ret));

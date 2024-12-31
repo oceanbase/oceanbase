@@ -545,7 +545,7 @@ int ObTransformSimplifyGroupby::check_stmt_group_by_can_be_removed(ObSelectStmt 
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL pointer error", K(ret));
       } else if (OB_FAIL(check_aggr_win_can_be_removed(select_stmt, expr, can_be))) {
-        LOG_WARN("fialed to check aggr can be removed", K(ret), K(*expr));
+        LOG_WARN("failed to check aggr can be removed", K(ret), K(*expr));
       }
     }
   } else {

@@ -12849,7 +12849,7 @@ int ObPLResolver::resolve_udf_info(
       CK (OB_NOT_NULL(udf_raw_expr = udf_info.ref_expr_));
       OX (udf_raw_expr->set_is_udt_cons(udf_info.is_udf_udt_cons()));
       OX (udf_raw_expr->set_is_udt_udf(routine_info->is_udt_routine()));
-      OX (udf_raw_expr->set_is_deterministic(routine_info->is_deterministic()));
+      OX (udf_raw_expr->set_udf_deterministic(routine_info->is_deterministic()));
     }
   }
   return ret;

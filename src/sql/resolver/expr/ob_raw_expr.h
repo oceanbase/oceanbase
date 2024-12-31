@@ -1841,6 +1841,7 @@ public:
   bool is_not_calculable_expr() const;
   bool cnt_not_calculable_expr() const;
   int is_const_inherit_expr(bool &is_const_inherit, const bool param_need_replace = false) const;
+  bool check_is_deterministic_expr() const;
   int is_non_pure_sys_func_expr(bool &is_non_pure) const;
   bool is_specified_pseudocolumn_expr() const;
   void set_alias_column_name(const common::ObString &alias_name) { alias_column_name_ = alias_name; }
@@ -3898,7 +3899,7 @@ public:
       params_type_(),
       database_name_(),
       package_name_(),
-      is_deterministic_(false),
+      has_deterministic_attribute_(false),
       is_parallel_enable_(false),
       is_udt_udf_(false),
       is_pkg_body_udf_(false),
@@ -3911,6 +3912,7 @@ public:
       params_name_(),
       params_desc_v2_() {
     set_expr_class(ObIRawExpr::EXPR_UDF);
+    is_deterministic_ = false;
   }
 
   ObUDFRawExpr()
@@ -3925,7 +3927,7 @@ public:
       params_type_(),
       database_name_(),
       package_name_(),
-      is_deterministic_(false),
+      has_deterministic_attribute_(false),
       is_parallel_enable_(false),
       is_udt_udf_(false),
       is_pkg_body_udf_(false),
@@ -3938,6 +3940,7 @@ public:
       params_name_(),
       params_desc_v2_() {
     set_expr_class(ObIRawExpr::EXPR_UDF);
+    is_deterministic_ = false;
   }
 
   virtual ~ObUDFRawExpr() {}
@@ -4073,6 +4076,8 @@ public:
   {
     return common::OB_INVALID_ID == pkg_id_ && common::OB_INVALID_ID == type_id_;
   }
+  inline bool is_udf_deterministic() const { return has_deterministic_attribute_; }
+  void set_udf_deterministic(bool is_deterministic);
 
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
@@ -4085,6 +4090,7 @@ public:
                                             K_(pkg_id),
                                             K_(type_id),
                                             K_(subprogram_path),
+                                            K_(has_deterministic_attribute),
                                             K_(is_deterministic),
                                             K_(is_udt_udf),
                                             K_(is_return_sys_cursor),
@@ -4112,7 +4118,7 @@ private:
   common::ObSEArray<ObExprResType, 5, common::ModulePageAllocator, true> params_type_;
   common::ObString database_name_;
   common::ObString package_name_;
-  bool is_deterministic_;
+  bool has_deterministic_attribute_;  // udf deterministic attribute
   bool is_parallel_enable_;
   bool is_udt_udf_;
   bool is_pkg_body_udf_;

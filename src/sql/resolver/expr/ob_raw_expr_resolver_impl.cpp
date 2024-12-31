@@ -6928,16 +6928,6 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
       }
     }
   }
-
-  //mark expr is deterministic or not(default deterministic)
-  if (OB_SUCC(ret)) {
-    //bug:
-    //maybe have more exprs, can be added below in the future.
-    if (lib::is_oracle_mode() && expr->get_expr_type() == T_FUN_SYS_REGEXP_REPLACE) {
-      expr->set_is_deterministic(false);
-    }
-  }
-
   return ret;
 }
 

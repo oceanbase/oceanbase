@@ -655,6 +655,7 @@ public:
   inline common::ObIArray<ForUpdateDMLInfo*>& get_for_update_dml_infos() { return for_update_dml_info_; }
   void set_select_straight_join(bool flag) { is_select_straight_join_ = flag; }
   bool is_select_straight_join() const { return is_select_straight_join_; }
+  int is_query_deterministic(bool &is_deterministic) const;
 
 private:
   SetOperator set_op_;
