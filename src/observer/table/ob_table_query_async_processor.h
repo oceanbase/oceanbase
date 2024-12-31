@@ -86,7 +86,7 @@ protected:
 struct ObTableQueryAsyncCtx : public table::ObTableQueryBatchCtx
 {
   explicit ObTableQueryAsyncCtx(common::ObIAllocator &allocator)
-      : table::ObTableQueryBatchCtx(allocator),
+      : table::ObTableQueryBatchCtx(),
         part_idx_(OB_INVALID_ID),
         subpart_idx_(OB_INVALID_ID),
         schema_version_(OB_INVALID_SCHEMA_VERSION),
@@ -395,7 +395,6 @@ private:
   int process_query_next();
   int process_query_end();
   int destory_query_session(bool need_rollback_trans);
-  int init_schema_cache_guard();
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryAsyncP);
 
 private:

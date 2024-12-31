@@ -1344,34 +1344,6 @@ int ObTableQueryAsyncP::process_query_start()
   return ret;
 }
 
-/*
-  use for query_next:
-    no need to get the table schema in query_next and use kv schema cache instead
-*/
-int ObTableQueryAsyncP::init_schema_cache_guard()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(query_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("query session is NULL", K(ret));
-  } else {
-    ObTableQueryAsyncCtx &query_ctx = query_session_->get_query_ctx();
-    if (schema_cache_guard_.is_inited()) {
-      // do nothing
-    } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(query_session_->get_tenant_id(), schema_guard_))) {
-      LOG_WARN("fail to get schema guard", K(ret), K(query_session_->get_tenant_id()));
-    } else if (OB_FAIL(schema_cache_guard_.init(query_session_->get_tenant_id(),
-                                                query_ctx.table_id_,
-                                                query_ctx.schema_version_,
-                                                schema_guard_))) {
-      LOG_WARN("fail to init schema cache guard", K(ret));
-    } else {
-      query_ctx.tb_ctx_.set_schema_cache_guard(&schema_cache_guard_);
-    }
-  }
-  return ret;
-}
-
 int ObTableQueryAsyncP::process_query_next()
 {
   int ret = OB_SUCCESS;

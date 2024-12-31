@@ -27,22 +27,21 @@ namespace table
 
 struct ObTableQueryBatchCtx
 {
-  explicit ObTableQueryBatchCtx(common::ObIAllocator &allocator)
-      : table_id_(OB_INVALID_ID),
-        tb_ctx_(allocator)
+  explicit ObTableQueryBatchCtx()
+      : table_id_(OB_INVALID_ID)
   {}
   virtual ~ObTableQueryBatchCtx() {}
 
   uint64_t table_id_;
-  table::ObTableCtx tb_ctx_;
 };
 
 struct ObTableBatchCtx : public ObTableQueryBatchCtx
 {
 public:
   explicit ObTableBatchCtx(common::ObIAllocator &allocator, ObTableAuditCtx &audit_ctx)
-      : ObTableQueryBatchCtx(allocator),
+      : ObTableQueryBatchCtx(),
         allocator_(allocator),
+        tb_ctx_(allocator),
         audit_ctx_(audit_ctx)
   {
     reset();
@@ -82,6 +81,7 @@ public:
   }
 public:
   common::ObIAllocator &allocator_;
+  table::ObTableCtx tb_ctx_;
   ObTableTransParam *trans_param_;
   bool is_atomic_;
   bool is_readonly_;

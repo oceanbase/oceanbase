@@ -30,15 +30,8 @@ namespace observer
 
 struct ObTableHbaseMutationInfo : public ObTableInfoBase
 {
-  ObTableHbaseMutationInfo(common::ObIAllocator &allocator)
-      : ctx_(allocator)
-  {}
-
+  ObTableHbaseMutationInfo() {}
   int init(const schema::ObSimpleTableSchemaV2 *simple_table_schema, share::schema::ObSchemaGetterGuard &schema_guard);
-  TO_STRING_KV(K(ctx_));
-
-private:
-  table::ObTableCtx ctx_;
 };
 
 
@@ -151,17 +144,17 @@ private:
     virtual ~LSExecuteIter();
 
     virtual int init();
-    virtual void reset() {};
+    virtual void reuse() {};
     virtual int get_next_ctx(ObIArray<table::ObTableOperation> &table_operations,
                              table::ObTableTabletOpResult &tablet_result,
                              table::ObTableQueryBatchCtx *&ctx) = 0;
     virtual int set_tablet_ops(table::ObTableTabletOp &tablet_ops)
     {
-      tablet_ops_(tablet_ops);
+      tablet_ops_ = &tablet_ops;
       return OB_SUCCESS;
     }
 
-    virtual table::ObTableTabletOp &get_tablet_ops() { return tablet_ops_; }
+    virtual table::ObTableTabletOp *get_tablet_ops() { return tablet_ops_; }
 
     common::ObIAllocator &get_allocator() { return allocator_; }
 
@@ -178,10 +171,10 @@ private:
                     table::ObTableCtx &tb_ctx);
 
   protected:
-    ObTableLSExecuteP &outer_exectute_process_;
-    table::ObTableTabletOp tablet_ops_;
-    common::ObTabletID tablet_id_;
     common::ObArenaAllocator allocator_;
+    ObTableLSExecuteP &outer_exectute_process_;
+    table::ObTableTabletOp *tablet_ops_;
+    common::ObTabletID tablet_id_;
     ObArray<std::pair<std::pair<table::ObTableOperationType::Type, uint64_t>, table::ObTableBatchCtx *>> batch_ctxs_;
     ObTableQueryAsyncCtx *query_ctx_;
     uint64_t ops_timestamp_;
@@ -189,7 +182,8 @@ private:
     DISALLOW_COPY_AND_ASSIGN(LSExecuteIter);
   };
 
-  class ObTableLSExecuteIter : public LSExecuteIter {
+  class ObTableLSExecuteIter : public LSExecuteIter
+  {
   public:
     ObTableLSExecuteIter(ObTableLSExecuteP &outer_exectute_process);
     virtual ~ObTableLSExecuteIter() {};
@@ -201,13 +195,14 @@ private:
     DISALLOW_COPY_AND_ASSIGN(ObTableLSExecuteIter);
   };
 
-  class HTableLSExecuteIter : public LSExecuteIter {
+  class HTableLSExecuteIter : public LSExecuteIter
+  {
   public:
     explicit HTableLSExecuteIter(ObTableLSExecuteP &outer_exectute_process);
     virtual ~HTableLSExecuteIter() {};
     int init();
     int set_tablet_ops(table::ObTableTabletOp &tablet_ops) override;
-    void reset() override;
+    void reuse() override;
     table::ObTableTabletOp &get_same_ctx_ops() { return same_ctx_ops_; }
 
     virtual int get_next_ctx(ObIArray<table::ObTableOperation> &table_operations,
