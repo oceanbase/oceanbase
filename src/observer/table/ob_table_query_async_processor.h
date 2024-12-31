@@ -118,6 +118,11 @@ struct ObTableQueryAsyncCtx : public table::ObTableQueryBatchCtx
   table::ObTableApiScanExecutor *executor_;
   table::ObTableApiScanRowIterator row_iter_;
   common::ObArray<ObTableSingleQueryInfo*> multi_cf_infos_;
+  // record table_id and tablet_id pass by client, especially for global index:
+  // - index_table_id is the id of index table
+  // - index_tablet_id is the query index tablet
+  uint64_t index_table_id_;
+  ObTabletID index_tablet_id_;
 };
 
 /**

@@ -525,23 +525,29 @@ int ObTableQueryAsyncP::init_tb_ctx(ObIAllocator* allocator,
   ObObjectID tmp_object_id = OB_INVALID_ID;
   ObObjectID tmp_first_level_part_id = OB_INVALID_ID;
   ObTabletID real_tablet_id;
-  if (query_ctx.part_idx_ == OB_INVALID_INDEX && query_ctx.subpart_idx_ == OB_INVALID_INDEX) { // 非分区表
-    real_tablet_id = query_info.simple_schema_->get_tablet_id();
-  } else if (OB_FAIL(query_info.simple_schema_->get_part_id_and_tablet_id_by_idx(query_ctx.part_idx_,
-                                                                                  query_ctx.subpart_idx_,
-                                                                                  tmp_object_id,
-                                                                                  tmp_first_level_part_id,
-                                                                                  real_tablet_id))) {
-    LOG_WARN("fail to get_part_id_and_tablet_id_by_idx", K(ret));
+  if (tablegroup_req) {
+    if (query_ctx.part_idx_ == OB_INVALID_INDEX && query_ctx.subpart_idx_ == OB_INVALID_INDEX) { // 非分区表
+      real_tablet_id = query_info.simple_schema_->get_tablet_id();
+    } else if (OB_FAIL(query_info.simple_schema_->get_part_id_and_tablet_id_by_idx(query_ctx.part_idx_,
+                                                                                   query_ctx.subpart_idx_,
+                                                                                   tmp_object_id,
+                                                                                   tmp_first_level_part_id,
+                                                                                   real_tablet_id))) {
+      LOG_WARN("fail to get_part_id_and_tablet_id_by_idx", K(ret));
+    }
+  } else {
+    // for table and hbase single cf：
+    // use tablet_id pass by client as query tablet and
+    // especially for global index query: its tablet is global index tablet
+    real_tablet_id = query_ctx.index_tablet_id_;
   }
-
   if (OB_FAIL(ret)) {
   } else if (ctx.is_init()) {
     ret = OB_INIT_TWICE;
     LOG_INFO("tb ctx has been inited", K(ctx));
   } else if (OB_FAIL(ctx.init_common(credential, real_tablet_id, timeout_ts))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(query_info.simple_schema_->get_table_name()), K(ret));
-  } else if (OB_FAIL(ctx.init_scan(query_info.query_, is_weak_read, query_info.table_id_))) {
+  } else if (OB_FAIL(ctx.init_scan(query_info.query_, is_weak_read, query_ctx.index_table_id_))) {
     LOG_WARN("fail to init table ctx scan part", K(ret), K(query_info.simple_schema_->get_table_name()), K(query_info.table_id_));
   } else if (OB_FAIL(ctx.cons_column_items_for_cg())) {
     LOG_WARN("fail to construct column items", K(ret));
@@ -1171,6 +1177,8 @@ int ObTableQueryAsyncP::init_query_async_ctx(ObIAllocator *allocator,
 {
   int ret = OB_SUCCESS;
   auto& infos = query_ctx->multi_cf_infos_;
+  query_ctx->index_table_id_ = arg_table_id;
+  query_ctx->index_tablet_id_ = arg_tablet_id;
   for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
     const schema::ObSimpleTableSchemaV2* table_schema = table_schemas.at(i);
     ObTableSingleQueryInfo* query_info = nullptr;
