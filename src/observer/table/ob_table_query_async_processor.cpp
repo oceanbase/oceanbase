@@ -91,6 +91,16 @@ int ObTableQueryAsyncSession::deep_copy_select_columns(const common::ObIArray<co
   return ret;
 }
 
+int ObTableQueryAsyncSession::alloc_req_timeinfo()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(req_timeinfo_ = OB_NEWx(ObReqTimeInfo, &allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate req time info", K(ret));
+  }
+  return ret;
+}
+
 /**
  * ----------------------------------- ObTableQueryASyncMgr -------------------------------------
  */
@@ -541,6 +551,7 @@ int ObTableQueryAsyncP::init_tb_ctx(ObIAllocator* allocator,
     // especially for global index query: its tablet is global index tablet
     real_tablet_id = query_ctx.index_tablet_id_;
   }
+  ObExprFrameInfo *expr_frame_info = nullptr;
   if (OB_FAIL(ret)) {
   } else if (ctx.is_init()) {
     ret = OB_INIT_TWICE;
@@ -549,23 +560,17 @@ int ObTableQueryAsyncP::init_tb_ctx(ObIAllocator* allocator,
     LOG_WARN("fail to init table ctx common part", K(ret), K(query_info.simple_schema_->get_table_name()), K(ret));
   } else if (OB_FAIL(ctx.init_scan(query_info.query_, is_weak_read, query_ctx.index_table_id_))) {
     LOG_WARN("fail to init table ctx scan part", K(ret), K(query_info.simple_schema_->get_table_name()), K(query_info.table_id_));
-  } else if (OB_FAIL(ctx.cons_column_items_for_cg())) {
-    LOG_WARN("fail to construct column items", K(ret));
-  } else if (OB_FAIL(ctx.generate_table_schema_for_cg())) {
-    LOG_WARN("fail to generate table schema", K(ret));
-  } else if (OB_FAIL(ObTableExprCgService::generate_exprs(ctx,
-                                                          *allocator,
-                                                          query_info.expr_frame_info_))) {
-    LOG_WARN("fail to generate exprs", K(ret), K(ctx));
-  } else if (OB_FAIL(ObTableExprCgService::alloc_exprs_memory(ctx, query_info.expr_frame_info_))) {
+  } else if (OB_FAIL(query_info.table_cache_guard_.init(&ctx))) {
+    LOG_WARN("fail to init table cache guard", K(ret));
+  } else if (OB_FAIL(query_info.table_cache_guard_.get_expr_info(&ctx, expr_frame_info))) {
+    LOG_WARN("fail to get expr frame info from cache", K(ret));
+  } else if (OB_FAIL(ObTableExprCgService::alloc_exprs_memory(ctx, *expr_frame_info))) {
     LOG_WARN("fail to alloc expr memory", K(ret));
-  } else if (OB_FAIL(ctx.classify_scan_exprs())) {
-    LOG_WARN("fail to classify scan exprs", K(ret));
   } else if (OB_FAIL(ctx.init_exec_ctx())) {
     LOG_WARN("fail to init exec ctx", K(ret), K(ctx));
   } else {
     ctx.set_init_flag(true);
-    ctx.set_expr_info(&query_info.expr_frame_info_);
+    ctx.set_expr_info(expr_frame_info);
   }
 
   return ret;
@@ -754,20 +759,18 @@ int ObTableQueryAsyncP::get_table_result_iterator(ObIAllocator *allocator,
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(tb_ctx.init_trans(txn_desc, tx_snapshot))) {
       LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
-    } else if (OB_FAIL(ObTableSpecCgService::generate<TABLE_API_EXEC_SCAN>(*allocator, tb_ctx, spec))) {
-      LOG_WARN("fail to generate scan spec", K(ret));
+    } else if (OB_FAIL(table_info->table_cache_guard_.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx, spec))) {
+      LOG_WARN("fail to get spec from cache", K(ret));
     } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {
       LOG_WARN("fail to generate executor", K(ret));
+    } else if (OB_FAIL(table_info->row_iter_.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
+      LOG_WARN("fail to open scan row iterator", K(ret));
     } else {
-      table_info->executor_ = static_cast<ObTableApiScanExecutor*>(executor);
-      table_info->spec_ = spec;
       if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(*allocator, query, false, result, tb_ctx, tmp_result_iter))) {
         LOG_WARN("fail to generate table query result iterator", K(ret));
       } else if (OB_ISNULL(tmp_result_iter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to create result iterable iter", K(ret));
-      } else if (OB_FAIL(table_info->iter_open())) {
-        LOG_WARN("fail to open scan row iterator", K(ret));
       } else {
         tmp_result_iter->set_scan_result(&table_info->row_iter_);
       }
@@ -812,15 +815,14 @@ int ObTableQueryAsyncP::get_inner_htable_result_iterator(ObIAllocator *allocator
       LOG_WARN("table info is NULL", K(ret));
     } else if (!family_addfamily_flag_pairs.empty()) { // Only when there is a qualifier parameter
       std::pair<ObString, bool> is_add_family;
-      bool exist = false;
       if (OB_FAIL(check_family_existence_with_base_name(table_info->schema_cache_guard_.get_table_name_str(),
                                                       arg_table_name,
                                                       entity_type,
                                                       family_addfamily_flag_pairs,
                                                       is_add_family,
-                                                      exist))) {
+                                                      is_found))) {
         LOG_WARN("fail to check family exist", K(ret));
-      } else if (exist && OB_FAIL(process_table_info(table_info,
+      } else if (is_found && OB_FAIL(process_table_info(table_info,
                                                 family_addfamily_flag_pairs,
                                                 real_columns,
                                                 is_add_family))) {
@@ -835,13 +837,13 @@ int ObTableQueryAsyncP::get_inner_htable_result_iterator(ObIAllocator *allocator
       // ignore this table
     } else if (OB_FAIL(tb_ctx.init_trans(txn_desc, tx_snapshot))) {
       LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
-    } else if (OB_FAIL(ObTableSpecCgService::generate<TABLE_API_EXEC_SCAN>(*allocator, tb_ctx, spec))) {
-      LOG_WARN("fail to generate scan spec", K(ret));
+    } else if (OB_FAIL(table_info->table_cache_guard_.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx, spec))) {
+      LOG_WARN("fail to get spec from cache", K(ret));
     } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {
-      LOG_WARN("fail to generate executor", K(ret));
+      LOG_WARN("fail to create executor", K(ret));
+    } else if (OB_FAIL(table_info->row_iter_.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
+      LOG_WARN("fail to open scan row iterator", K(ret));
     } else {
-      table_info->executor_ = static_cast<ObTableApiScanExecutor*>(executor);
-      table_info->spec_ = spec;
       ObTableQueryResultIterator *result_iter = nullptr;
       // If it is a multi-CF scenario, the arg_table_name here must be the table group name
       // In the case of multiple column families (multi-CF), we need to use
@@ -868,8 +870,6 @@ int ObTableQueryAsyncP::get_inner_htable_result_iterator(ObIAllocator *allocator
       } else if (OB_ISNULL(result_iter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to create result iterable iter");
-      } else if (OB_FAIL(table_info->iter_open())) {
-        LOG_WARN("fail to open scan row iterator", K(ret));
       } else {
         result_iter->set_scan_result(&table_info->row_iter_);
         if (OB_FAIL(iterator_array.push_back(result_iter))) {
@@ -1047,6 +1047,7 @@ int ObTableQueryAsyncP::query_scan_with_init(ObIAllocator *allocator, ObTableQue
   } else if (OB_FAIL(arg_.query_.deep_copy(*allocator, query))) {  // 存储的 key range 是引用，所以这里需要深拷贝
     LOG_WARN("fail to deep copy query", K(ret), K(arg_.query_));
   } else {
+    query_session_->set_req_start_time(common::ObTimeUtility::current_monotonic_time());
     common::ObArray<ObTableSingleQueryInfo*>& query_infos = query_ctx.multi_cf_infos_;
     for (int i = 0; OB_SUCC(ret) && i < query_infos.count(); ++i) {
       ObTableSingleQueryInfo* info = query_infos.at(i);
@@ -1413,6 +1414,14 @@ int ObTableQueryAsyncP::try_process()
           LOG_WARN("fail to destory query session", K(ret), K(query_session_id_));
         }
       } else {
+        if (ObQueryOperationType::QUERY_START == arg_.query_type_) {
+          if (OB_FAIL(query_session_->alloc_req_timeinfo())) {
+            LOG_WARN("fail to allocate req time info", K(ret));
+          } else {
+            // start time > end time, end time == 0, reentrant cnt == 1
+            query_session_->update_req_timeinfo_start_time();
+          }
+        }
         query_session_->set_in_use(false);
         query_session_->set_timout_ts();
       }

@@ -17,6 +17,7 @@
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor.h"
 #include "ob_table_context.h"
+#include "ob_table_cache.h"
 #include "ob_table_scan_executor.h"
 #include "ob_table_query_common.h"
 #include "ob_table_merge_filter.h"
@@ -36,34 +37,22 @@ struct ObTableSingleQueryInfo : public ObTableInfoBase {
   explicit ObTableSingleQueryInfo(common::ObIAllocator &allocator):
     tb_ctx_(allocator),
     row_iter_(),
-    executor_(nullptr),
-    spec_(nullptr),
-    expr_frame_info_(allocator),
     result_(),
-    query_() {}
+    query_(),
+    table_cache_guard_() {}
 
   ~ObTableSingleQueryInfo() {
     row_iter_.close();
-    if (OB_NOT_NULL(spec_) && OB_NOT_NULL(executor_)) {
-      spec_->destroy_executor(executor_);
-      spec_->~ObTableApiSpec();
-    }
   }
 
   int64_t to_string(char *buf, const int64_t len) const {
     return OB_SUCCESS;
   }
-
-  OB_INLINE int iter_open() {
-    return row_iter_.open(executor_);
-  }
   table::ObTableCtx tb_ctx_;
   table::ObTableApiScanRowIterator row_iter_;
-  table::ObTableApiScanExecutor *executor_;
-  table::ObTableApiSpec *spec_;
-  ObExprFrameInfo expr_frame_info_;
   table::ObTableQueryIterableResult result_;
   table::ObTableQuery query_;
+  table::ObTableApiCacheGuard table_cache_guard_;
 };
 
 class ObTableMergeFilterCompare {
@@ -188,12 +177,22 @@ public:
       result_iterator_(nullptr),
       query_ctx_(allocator_),
       lease_timeout_period_(60 * 1000 * 1000),
-      row_count_(0)
+      row_count_(0),
+      req_timeinfo_(nullptr)
   {}
   ~ObTableQueryAsyncSession() {
     if (OB_NOT_NULL(query_ctx_.sess_guard_)) {
       query_ctx_.sess_guard_->~ObTableApiSessGuard();
       query_ctx_.sess_guard_ = nullptr;
+    }
+    if (OB_NOT_NULL(req_timeinfo_)) {
+      // before update_end_time:
+      //  start time > end time, end time == 0, reentrant cnt == 1
+      // after update_end_time:
+      //  start time < end time, end time != 0, reentrant cnt == 0
+      req_timeinfo_->update_end_time();
+      req_timeinfo_->~ObReqTimeInfo();
+      req_timeinfo_ = nullptr;
     }
   }
 
@@ -222,6 +221,9 @@ public:
   transaction::ObTxDesc* get_trans_desc() {return trans_desc_;}
   int64_t &get_row_count() { return row_count_; }
   void set_trans_desc(transaction::ObTxDesc *trans_desc) { trans_desc_ = trans_desc; }
+  void set_req_start_time(int64_t start_time) { start_time_ = start_time; }
+  void update_req_timeinfo_start_time() const { req_timeinfo_->start_time_ = start_time_; req_timeinfo_->reentrant_cnt_++; }
+  int alloc_req_timeinfo();
 private:
   bool in_use_;
   uint64_t timeout_ts_;
@@ -241,6 +243,11 @@ private:
   uint64_t lease_timeout_period_;
   transaction::ObTxDesc *trans_desc_;
   int64_t row_count_;
+
+  // start time for req_timeinfo_
+  int64_t start_time_;
+  // req time info
+  ObReqTimeInfo *req_timeinfo_;
 };
 
 /**
