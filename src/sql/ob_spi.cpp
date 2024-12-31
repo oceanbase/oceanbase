@@ -9099,6 +9099,12 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
       OX (param_value.set_param_meta());
       OX (param_value.set_accuracy(params.at(i).get_accuracy()));
       OZ (exec_params.push_back(param_value));
+      if (OB_FAIL(ret) && param_value.is_pl_extend()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(param_value))) {
+          LOG_WARN("destruct obj failed", K(ret), K(tmp_ret), K(param_value));
+        }
+      }
     }
     OZ (ObPLDblinkUtil::print_dblink_ps_call_stmt(allocator, dblink_info,
                                                   call_stmt, params, routine_info,
