@@ -32,9 +32,8 @@ int ObBackupIoAdapter::is_io_prohibited(const share::ObBackupStorageInfo *storag
   share::ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
   if (OB_ISNULL(dest_io_permission_mgr = MTL(share::ObBackupDestIOPermissionMgr*))) {
     //do nothing
-    //When restoring the tenant, first create a temporary tenant.
-    //At this point, there is no MTL module, and  backup zone  does not restrict the access traffic for restoration.
-    //For tenants that have already been created, the MTL module does not need to check for null pointers.
+    //Currently, threads without tenant resources do not support the backup zone feature.
+    //For example, when restoring a tenant, filling in the backup path is performed in the system tenant.
   } else if (OB_FAIL(dest_io_permission_mgr->is_io_prohibited(storage_info, is_io_prohibited))) {
     OB_LOG(WARN, "fail to check io prohibited!", K(ret), K(storage_info));
   } else {
@@ -65,7 +64,11 @@ int ObBackupIoAdapter::open_with_access_type(ObIODevice*& device_handle, ObIOFd 
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid access type!", K(access_type));
   } else if (OB_FAIL(is_io_prohibited(storage_info))) {
-    OB_LOG(WARN, "fail to check io prohibited!", K(ret), K(storage_info));
+    if (OB_BACKUP_IO_PROHIBITED == ret) {
+      OB_LOG(WARN, "io prohibited, please check!", K(ret), K(storage_info));
+    } else {
+      OB_LOG(WARN, "fail to check io prohibited!", K(ret), K(storage_info));
+    }
   } else {
     iod_opts.opts_[0].set("AccessType", OB_STORAGE_ACCESS_TYPES_STR[access_type]);
     if (access_type == OB_STORAGE_ACCESS_RANDOMWRITER) 
