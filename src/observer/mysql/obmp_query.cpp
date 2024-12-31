@@ -768,7 +768,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
     LOG_WARN("update transmisson checksum flag failed", K(ret));
   } else {
     session.reset_plsql_exec_time();
-    session.set_stmt_type(stmt::T_NONE);
+    session.set_stmt_type(stmt_type);
   }
 
   ObWaitEventStat total_wait_desc;
@@ -787,6 +787,10 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
     if (OB_FAIL(set_session_active(sql, session, single_process_timestamp_))) {
       LOG_WARN("fail to set session active", K(ret));
     } else {
+      // generate sql_id with sql cmd
+      (void)ObSQLUtils::md5(sql, ctx_.sql_id_, (int32_t)sizeof(ctx_.sql_id_));
+      session.set_cur_sql_id(ctx_.sql_id_);
+
       //监控项统计开始
       exec_start_timestamp_ = ObTimeUtility::current_time();
       need_response_error = false;
@@ -892,11 +896,12 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
       // if `start-stmt` hasn't run, set trans_id from session if an active txn exist
       audit_record.trans_id_ = session.get_tx_id();
     }
+    // for begin/commit/rollback, the following values are 0
     audit_record.affected_rows_ = 0;
     audit_record.return_rows_ = 0;
     audit_record.partition_cnt_ = 0;
-    audit_record.expected_worker_cnt_ = 1;
-    audit_record.used_worker_cnt_ = 1;
+    audit_record.expected_worker_cnt_ = 0;
+    audit_record.used_worker_cnt_ = 0;
 
     audit_record.is_executor_rpc_ = false;
     audit_record.is_inner_sql_ = false;
