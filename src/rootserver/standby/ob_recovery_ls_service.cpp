@@ -190,7 +190,7 @@ int ObRecoveryLSService::process_thread0_(const ObAllTenantInfo &tenant_info)
 
   return ret;
 }
-
+ERRSIM_POINT_DEF(ERRSIM_RECOVERY_LS_THREAD1);
 int ObRecoveryLSService::process_thread1_(const ObAllTenantInfo &tenant_info,
      share::SCN &start_scn,
      palf::PalfBufferIterator &iterator)
@@ -203,6 +203,9 @@ int ObRecoveryLSService::process_thread1_(const ObAllTenantInfo &tenant_info,
   } else if (OB_UNLIKELY(!inited_) || OB_ISNULL(proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(inited_), KP(proxy_));
+  } else if (OB_UNLIKELY(ERRSIM_RECOVERY_LS_THREAD1 == -tenant_id_)) {
+    // do nothing
+    LOG_WARN("ERRSIM_RECOVERY_LS_THREAD1 opened", KR(ret), K(tenant_id_));
   } else {
     ObLSRecoveryStat ls_recovery_stat;
     ObLSRecoveryStatOperator ls_recovery;
