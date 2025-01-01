@@ -179,12 +179,13 @@ int ObLSMemberListService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
   ObHALSTabletIDIterator iter(ls_->get_ls_id(), need_initial_state, need_sorted_tablet_id);
   share::SCN max_transfer_scn = share::SCN::min_scn();
   static const int64_t LOCK_TIMEOUT = 100_ms; // 100ms
+  const int64_t abs_timeout_us = ObTimeUtility::current_time() + LOCK_TIMEOUT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(ls_->build_tablet_iter(iter))) {
     STORAGE_LOG(WARN, "failed to build tablet iter", K(ret));
-  } else if (OB_FAIL(transfer_scn_iter_lock_.lock(LOCK_TIMEOUT))) {
+  } else if (OB_FAIL(transfer_scn_iter_lock_.lock(abs_timeout_us))) {
     STORAGE_LOG(WARN, "failed to lock transfer scn iter lock", K(ret));
   } else {
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
