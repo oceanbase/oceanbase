@@ -1511,7 +1511,6 @@ int ObTablet::init_with_mds_sstable(
   ObTabletMemberWrapper<ObTabletTableStore> old_table_store_wrapper;
   const ObTabletTableStore *old_table_store = nullptr;
   ObStorageSchema *old_storage_schema = nullptr;
-  ObLinkedMacroBlockItemWriter linked_writer;
   const share::SCN &mds_checkpoint_scn = is_mds_minor_merge(param.compaction_info_.merge_type_) ? old_tablet.tablet_meta_.mds_checkpoint_scn_ : flush_scn;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
