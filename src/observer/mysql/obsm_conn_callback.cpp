@@ -266,7 +266,7 @@ int ObSMConnectionCallback::on_disconnect(observer::ObSMConnection& conn)
                 "proxy_sessid", conn.proxy_sessid_);
     } else {
       sess_info->set_session_state(sql::SESSION_KILLED);
-      sess_info->set_shadow(true);
+      sess_info->set_mark_killed(true);
     }
   }
   LOG_INFO("kill and revert session", K(conn.sessid_), "proxy_sessid", conn.proxy_sessid_, K(ret));

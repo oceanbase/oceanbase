@@ -163,7 +163,7 @@ int ObSMHandler::on_disconnect(easy_connection_t *c)
                  "proxy_sessid", conn->proxy_sessid_);
       } else {
         sess_info->set_session_state(sql::SESSION_KILLED);
-        sess_info->set_shadow(true);
+        sess_info->set_mark_killed(true);
         conn->has_service_name_ = false;
       }
     }
