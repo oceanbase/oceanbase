@@ -1789,8 +1789,6 @@ int ObMacroBlockWriter::wait_io_finish(ObStorageObjectHandle &macro_handle, ObMa
     macro_handle.reset();
   } else {
     if (!macro_handle.is_empty()) {
-      FLOG_INFO("wait io finish", K(macro_handle.get_macro_id()), K(data_store_desc_->get_table_cg_idx()),
-                K(is_normal_cg), KP(macro_block));
       int64_t block_io_us;
       if (OB_SUCCESS == macro_handle.get_io_time_us(block_io_us)) {
         merge_block_info_.block_io_us_ += block_io_us;
