@@ -232,22 +232,6 @@ int ObTableLoadResourceService::check_inner_stat()
   return ret;
 }
 
-int ObTableLoadResourceService::check_tenant()
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  ObTenant *tenant = nullptr;
-  if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
-    LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
-                         tenant->get_unit_status())) {
-    ret = OB_ERR_UNEXPECTED_UNIT_STATUS;
-    LOG_WARN("unit status not normal", KR(ret), K(tenant->get_unit_status()));
-  }
-
-  return ret;
-}
-
 int ObTableLoadResourceService::get_leader_addr(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,

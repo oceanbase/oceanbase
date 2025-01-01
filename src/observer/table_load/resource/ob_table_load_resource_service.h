@@ -72,7 +72,6 @@ public:
 	int switch_to_follower_gracefully();
 	void switch_to_follower_forcedly();
 
-  static int check_tenant();
   static int get_leader_addr(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader);
   static int local_apply_resource(ObDirectLoadResourceApplyArg &arg, ObDirectLoadResourceOpRes &res);
   static int local_release_resource(ObDirectLoadResourceReleaseArg &arg);
