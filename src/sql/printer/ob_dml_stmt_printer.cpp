@@ -599,9 +599,10 @@ int ObDMLStmtPrinter::print_values_table_to_union_all(const TableItem &table_ite
   } else {
     int64_t column_cnt = table_def->column_cnt_;
     int64_t row_cnt = table_def->row_cnt_;
-    if (OB_UNLIKELY(column_cnt <= 0) || OB_UNLIKELY(row_cnt <= 0)) {
+    if (OB_UNLIKELY(column_cnt <= 0 || row_cnt <= 0
+                    || column_cnt != table_def->column_types_.count())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(column_cnt), K(row_cnt));
+      LOG_WARN("get unexpected column or row info in values table", K(ret), K(column_cnt), K(row_cnt), K(table_def->column_types_));
     } else if (ObValuesTableDef::ACCESS_EXPR == table_def->access_type_ ||
                ObValuesTableDef::FOLD_ACCESS_EXPR == table_def->access_type_) {
       const ObIArray<ObRawExpr *> &values = table_def->access_exprs_;
