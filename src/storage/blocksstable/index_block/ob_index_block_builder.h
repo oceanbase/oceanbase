@@ -417,8 +417,8 @@ private:
 
 private:
   ObSSTableIndexBuilder *sstable_builder_;
-  common::ObArenaAllocator task_allocator_;  // Used to apply for memory whose lifetime is task
-  common::ObArenaAllocator meta_row_allocator_; // Used to apply for memory whose lifetime is row
+  compaction::ObLocalArena task_allocator_;  // Used to apply for memory whose lifetime is task
+  compaction::ObLocalArena meta_row_allocator_; // Used to apply for memory whose lifetime is row
   ObBaseIndexBlockDumper macro_meta_dumper_;
   ObMicroBlockBufferHelper micro_helper_;
   ObIndexBlockRowDesc macro_row_desc_;

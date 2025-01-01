@@ -168,8 +168,8 @@ int ObMicroBlockBufferHelper::check_micro_block(
           decomp_buf, real_decomp_size))) {
     STORAGE_LOG(WARN, "failed to decompress data", K(ret));
   } else if (uncompressed_size != real_decomp_size) {
-    ret = OB_CHECKSUM_ERROR;
-    LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "decompressed size is not equal to original size", K(ret),
+    ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
+    LOG_DBA_ERROR(OB_ERR_COMPRESS_DECOMPRESS_DATA, "msg", "decompressed size is not equal to original size", K(ret),
         K(uncompressed_size), K(real_decomp_size));
   }
   if (OB_SUCC(ret)) {
@@ -219,16 +219,16 @@ int ObMicroBlockBufferHelper::check_micro_block_checksum(
     if (OB_SUCC(ret)) {
       const int64_t new_checksum = checksum_helper_.get_row_checksum();
       if (checksum != new_checksum) {
-        ret = OB_CHECKSUM_ERROR; // ignore print error code
-        LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "micro block checksum is not equal", K(new_checksum),
-            K(checksum), K(ret), KPC(data_store_desc_), K(checksum_helper_));
+        ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
+        LOG_DBA_ERROR(OB_ERR_COMPRESS_DECOMPRESS_DATA, "msg", "micro block write check failed",
+            K(new_checksum), K(checksum), K(ret), KPC(data_store_desc_), K(checksum_helper_));
       }
 #ifdef ERRSIM
   if (data_store_desc_->encoding_enabled()) {
     ret = OB_E(EventTable::EN_BUILD_DATA_MICRO_BLOCK) ret;
   }
 #endif
-      if (OB_UNLIKELY(OB_CHECKSUM_ERROR == ret)) {
+      if (OB_UNLIKELY(OB_ERR_COMPRESS_DECOMPRESS_DATA == ret)) {
         print_micro_block_row(micro_reader);
       }
     }
