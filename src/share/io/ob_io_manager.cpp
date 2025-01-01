@@ -2267,17 +2267,14 @@ int ObTenantIOManager::modify_io_config(const uint64_t group_id,
         if (index < 0 || (index >= io_config_.group_configs_.count())) {
           ret = OB_INVALID_CONFIG;
           LOG_WARN("invalid index", K(ret), K(index), K(io_config_.group_configs_.count()));
+        } else if (io_config_.group_configs_.at(index).cleared_) {
+          io_config_.group_configs_.at(index).cleared_ = false;
         } else if (io_config_.group_configs_.at(index).min_percent_ == min &&
                    io_config_.group_configs_.at(index).max_percent_ == max &&
                    io_config_.group_configs_.at(index).weight_percent_ == weight) {
           //config did not change, do nothing
-        } else {
-          if (io_config_.group_configs_.at(index).cleared_) {
-            //并发状态可能先被clear
-            io_config_.group_configs_.at(index).cleared_ = false;
-          } else if (OB_FAIL(modify_group_io_config(index, min, max, weight))) {
-            LOG_WARN("modify group io config failed", K(ret), K(tenant_id_), K(min), K(max), K(weight));
-          }
+        } else if (OB_FAIL(modify_group_io_config(index, min, max, weight))) {
+          LOG_WARN("modify group io config failed", K(ret), K(tenant_id_), K(min), K(max), K(weight));
         }
       }
     }
