@@ -72,7 +72,7 @@ bool ObBasicMergeScheduler::could_start_loop_task()
   bool can_start = true;
   if (!SERVER_STORAGE_META_SERVICE.is_started()) {
     can_start = false;
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_SLOG_REPLAY_INVERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_SLOG_REPLAY_INVERVAL)) {
       LOG_INFO("slog replay hasn't finished, cannot start loop task");
     }
   }

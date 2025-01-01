@@ -309,7 +309,7 @@ int ObLSRecoveryReportor::update_ls_recovery(
   } else if (OB_FAIL(guard.init(tenant_id_, ls->get_ls_id()))) {
     if (OB_EAGAIN != ret) {
       LOG_WARN("failed to init ls recovery guard", KR(ret), K(tenant_id_), "ls_id", ls->get_ls_id());
-    } else if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000)) {
+    } else if (REACH_THREAD_TIME_INTERVAL(1 * 1000 * 1000)) {
       //Reduce Exception Throwing
       LOG_WARN("can not report recovery stat, maybe member_list change", KR(ret), K(tenant_id_),
           "ls_id", ls->get_ls_id());

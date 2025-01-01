@@ -1138,7 +1138,7 @@ void ObLooper::log_loop_()
     }
     ob_usleep(sleep_ts);
 
-    if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000)) {
+    if (REACH_THREAD_TIME_INTERVAL(5 * 1000 * 1000)) {
       PALF_LOG(INFO, "ObLooper round_cost_time(us)", K(round_cost_time));
     }
   }

@@ -689,7 +689,7 @@ void ObTenantMetaMemMgr::batch_gc_memtable_()
     }
   }
 
-  if (REACH_TENANT_TIME_INTERVAL(1_hour)) {
+  if (REACH_THREAD_TIME_INTERVAL(1_hour)) {
     for (common::hash::ObHashMap<share::ObLSID, memtable::ObMemtableSet*>::iterator iter = gc_memtable_map_.begin();
          iter != gc_memtable_map_.end(); ++iter) {
       memtable::ObMemtableSet *memtable_set = iter->second;

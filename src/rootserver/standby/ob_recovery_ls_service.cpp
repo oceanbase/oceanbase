@@ -1442,7 +1442,8 @@ KR(ret), K(tenant_id_), K(tenant_info), K(ls_balance_task));
             K(ls_balance_task), K(transfer_scn));
       } else if (can_remove) {
         FLOG_INFO("ls all replica replay to newest, can remove", K(ls_balance_task));
-      } else if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
+      } else if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000)) {
+        // ignore ret
         // 10s
         LOG_WARN("can not remove ls balance task helper", K(ls_balance_task), K(tenant_info));
       }

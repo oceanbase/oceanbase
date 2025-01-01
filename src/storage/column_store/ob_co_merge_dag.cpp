@@ -630,7 +630,7 @@ bool ObCOMergeBatchExeDag::check_can_schedule()
   } else if (start_cg_idx_ <= dag_net->get_merge_ctx()->base_rowkey_cg_idx_ && dag_net->get_merge_ctx()->base_rowkey_cg_idx_ < end_cg_idx_) {
     if ((end_cg_idx_ - start_cg_idx_) == dag_net->get_merge_ctx()->get_unfinished_cg_cnt()) {
       bret = true;
-    } else if (REACH_TENANT_TIME_INTERVAL(20 * 60 * 1000 * 1000L /*20 min*/)) {
+    } else if (REACH_THREAD_TIME_INTERVAL(20 * 60 * 1000 * 1000L /*20 min*/)) {
       LOG_INFO("waiting other batch exe dag finished", KPC(this));
     }
   } else {

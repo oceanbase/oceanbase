@@ -146,7 +146,7 @@ int ObStandbySchemaRefreshTrigger::submit_tenant_refresh_schema_task_()
       } else if (OB_FAIL(GCTX.ob_service_->submit_async_refresh_schema_task(tenant_id_, version_in_inner_table))) {
         LOG_WARN("failed to submit_async_refresh_schema_task", KR(ret), K_(tenant_id));
       }
-    } else if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000)) {
+    } else if (REACH_THREAD_TIME_INTERVAL(1 * 1000 * 1000)) {
       LOG_INFO("standby tenant can not refresh schema", K(schema_status));
     }
   }

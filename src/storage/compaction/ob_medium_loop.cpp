@@ -166,7 +166,7 @@ void ObMediumLoop::add_event_and_diagnose(const ObScheduleTabletFunc &func)
 
     if (ls_tablet_iter_.is_scan_finish()) {
       loop_cnt_++;
-      if (REACH_TENANT_TIME_INTERVAL(ADD_LOOP_EVENT_INTERVAL)) {
+      if (REACH_THREAD_TIME_INTERVAL(ADD_LOOP_EVENT_INTERVAL)) {
         ADD_COMPACTION_EVENT(
           merge_version_,
           ObServerCompactionEvent::SCHEDULER_LOOP,

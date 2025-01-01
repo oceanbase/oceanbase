@@ -118,7 +118,7 @@ int ObFastFreezeChecker::check_need_fast_freeze(
   } else if (!memtable->is_data_memtable()) {
     // do nothing
   } else if (ObTimeUtility::current_time() < memtable->get_timestamp() + memtable_alive_threshold) {
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
       LOG_INFO("[FastFreeze] memtable is just created, no need to check", K(memtable_alive_threshold), K(ls_id), K(tablet_id), KPC(memtable));
     }
   } else {
@@ -749,7 +749,7 @@ int ObProhibitScheduleMediumMap::add_flag(const ObTabletID &tablet_id, const Pro
       }
     } else if (tmp_flag != input_flag) {
       ret = OB_EAGAIN;
-      if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
+      if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
         LOG_INFO("flag in conflict", K(ret), K(tablet_id), K(tmp_flag), K(input_flag));
       }
     } else { // tmp_flag == input_flag
@@ -1350,7 +1350,7 @@ int ObTenantTabletScheduler::schedule_tablet_ddl_major_merge(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_handle));
   } else if (tablet_handle.get_obj()->get_tablet_meta().has_transfer_table()) {
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
       LOG_INFO("The tablet in the transfer process does not do ddl major_merge", K(tablet_handle));
     }
   } else if (OB_ISNULL(tenant_direct_load_mgr)) {
@@ -1508,7 +1508,7 @@ int ObTenantTabletScheduler::schedule_tablet_minor(
   const ObTablet &tablet = *tablet_handle.get_obj();
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   if (tablet.is_empty_shell()) {
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
       LOG_INFO("can't schedule minor for empty shell tablet", K(ret), K(ls_id), K(tablet_id));
     }
   } else if (schedule_minor_flag
@@ -1599,7 +1599,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
         LOG_WARN("failed to medium loop", K(ret));
       }
     }
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INTERVAL) &&
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INTERVAL) &&
         (prohibit_medium_map_.get_transfer_flag_cnt() > 0 || prohibit_medium_map_.get_split_flag_cnt() > 0)) {
       LOG_INFO("tenant is blocking schedule medium", KR(ret), K_(prohibit_medium_map));
     }

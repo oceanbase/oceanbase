@@ -1231,7 +1231,7 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
             break;
           } else {
             const int64_t current_ts = ObTimeUtility::current_time();
-            if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+            if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
               LOG_INFO("tablet not ready, retry next loop", "tablet_id", tablet_info_,
                   "wait_tablet_start_ts", wait_memtable_start_ts,
                   "current_ts", current_ts);

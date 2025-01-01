@@ -243,7 +243,7 @@ int ObCompactionScheduleIterator::build_iter(const int64_t schedule_batch_size)
     LOG_WARN("failed to inner build iter", K(ret));
   } else if (need_reset_report_scn) {
     report_scn_flag_ = false;
-    if (REACH_TENANT_TIME_INTERVAL(CHECK_REPORT_SCN_INTERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(CHECK_REPORT_SCN_INTERVAL)) {
       report_scn_flag_ = true;
     }
 #ifdef ERRSIM

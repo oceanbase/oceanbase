@@ -69,7 +69,7 @@ void ObBasicScheduleTabletFunc::update_tenant_cached_status()
     // can only schedule new round on ls leader
     ls_could_schedule_new_round_ = ls_could_schedule_merge_ && ls_status_.is_leader_;
 
-    if (!ls_status_.can_merge() && REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+    if (!ls_status_.can_merge() && REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("should not schedule major merge for ls", K_(ls_status),
         "tenant_status", scheduler->get_tenant_status());
       ADD_COMMON_SUSPECT_INFO(
@@ -155,7 +155,7 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
     }
   }
 #endif
-  if (OB_SUCC(ret) && need_merge && !can_merge && REACH_TENANT_TIME_INTERVAL(60L * 1000L * 1000L)) {
+  if (OB_SUCC(ret) && need_merge && !can_merge && REACH_THREAD_TIME_INTERVAL(60L * 1000L * 1000L)) {
     LOG_INFO("tablet can't schedule dag", K(ret), K(tablet_id),
              K(need_merge), K(can_merge), K(schedule_scn), K(need_force_freeze),
              K(weak_read_ts_ready), K_(ls_status), K(tablet_status));

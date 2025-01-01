@@ -203,7 +203,7 @@ int ObDDLEmptyShellChecker::check_split_src_deleted_tablet(
     STORAGE_LOG(WARN, "failed to get max decided scn", K(ret), K(user_data));
   } else if (decided_scn < user_data.delete_commit_scn_) {
     need_retry = true;
-    if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000/*1s*/)) {
+    if (REACH_THREAD_TIME_INTERVAL(1 * 1000 * 1000/*1s*/)) {
       STORAGE_LOG(INFO, "decided_scn is smaller than tablet delete commit scn",
         K(ls_id), K(tablet_id), K(user_data), K(decided_scn));
     }

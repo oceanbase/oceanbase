@@ -1596,7 +1596,7 @@ int ObAdaptiveMergePolicy::find_adaptive_merge_tables(
       if (cfg.is_queuing_mode() && scanty_inc_row_cnt && !scanty_tx_determ_table) {
       } else {
         ret = OB_NO_NEED_MERGE;
-        if (REACH_TENANT_TIME_INTERVAL(30_s) || cfg.is_queuing_mode()) {
+        if (REACH_THREAD_TIME_INTERVAL(30_s) || cfg.is_queuing_mode()) {
           LOG_INFO("no enough table or no enough rows for meta merge", K(ret),
               K(scanty_tx_determ_table), K(scanty_inc_row_cnt),  K(inc_row_cnt), K(base_inc_row_cnt), K(result), K(PRINT_TS_WRAPPER(table_store_wrapper)));
         }
@@ -1611,7 +1611,7 @@ int ObAdaptiveMergePolicy::find_adaptive_merge_tables(
     } else if (result.version_range_.snapshot_version_ < tablet.get_multi_version_start()
             || result.version_range_.snapshot_version_ <= base_table->get_snapshot_version()) {
       ret = OB_NO_NEED_MERGE;
-      if (REACH_TENANT_TIME_INTERVAL(30_s)) {
+      if (REACH_THREAD_TIME_INTERVAL(30_s)) {
         LOG_INFO("chosen snapshot is abandoned", K(ret), K(result), K(tablet.get_multi_version_start()), KPC(base_table));
       }
     }
@@ -1715,7 +1715,7 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
   }
 #endif
 
-  if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000 /*10s*/)) {
+  if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000 /*10s*/)) {
     LOG_INFO("Check tablet adaptive merge reason", K(ret), K(ls_id), K(tablet_id),  K(reason), K(tablet_analyzer), K(crazy_medium_flag));
   }
   return ret;

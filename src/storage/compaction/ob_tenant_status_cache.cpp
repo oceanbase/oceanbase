@@ -35,7 +35,7 @@ int ObTenantStatusCache::during_restore(bool &during_restore) const
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    if (REACH_TENANT_TIME_INTERVAL(30_s)) {
+    if (REACH_THREAD_TIME_INTERVAL(30_s)) {
       LOG_INFO("not refresh valid tenant status", KR(ret), KPC(this));
     }
   } else {
@@ -104,7 +104,7 @@ int ObTenantStatusCache::inner_refresh_remote_tenant()
 int ObTenantStatusCache::inner_refresh_restore_status()
 {
   int ret = OB_SUCCESS;
-  if (REACH_TENANT_TIME_INTERVAL(REFRESH_TENANT_STATUS_INTERVAL)) {
+  if (REACH_THREAD_TIME_INTERVAL(REFRESH_TENANT_STATUS_INTERVAL)) {
     ObSchemaGetterGuard schema_guard;
     const ObSimpleTenantSchema *tenant_schema = nullptr;
     const uint64_t tenant_id = MTL_ID();
@@ -180,7 +180,7 @@ bool ObTenantStatusCache::enable_adaptive_compaction_with_cpu_load() const
 #endif
   } else if (MTL(ObTenantTabletStatMgr *)->is_high_tenant_cpu_load()) {
     bret = false;
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       FLOG_INFO("disable adaptive compaction due to the high load CPU", K(bret));
     }
   }

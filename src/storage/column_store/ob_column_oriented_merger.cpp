@@ -479,7 +479,7 @@ int ObCOMerger::merge_partition(ObBasicTabletMergeCtx &ctx, const int64_t idx)
       if (OB_SUCC(ret)) {
         ret = OB_E(EventTable::EN_COMPACTION_CO_MERGE_PARTITION_LONG_TIME) ret;
         if (OB_FAIL(ret)) {
-          if (REACH_TENANT_TIME_INTERVAL(ObPartitionMergeProgress::UPDATE_INTERVAL)) {
+          if (REACH_THREAD_TIME_INTERVAL(ObPartitionMergeProgress::UPDATE_INTERVAL)) {
             LOG_INFO("ERRSIM EN_COMPACTION_CO_MERGE_PARTITION_LONG_TIME", K(ret));
           }
           ret = OB_SUCCESS;
@@ -526,7 +526,7 @@ int ObCOMerger::merge_partition(ObBasicTabletMergeCtx &ctx, const int64_t idx)
         }
       }
       // updating merge progress should not have effect on normal merge process
-      if (REACH_TENANT_TIME_INTERVAL(ObPartitionMergeProgress::UPDATE_INTERVAL)) {
+      if (REACH_THREAD_TIME_INTERVAL(ObPartitionMergeProgress::UPDATE_INTERVAL)) {
         if (OB_NOT_NULL(merge_progress_) && (OB_SUCC(ret) || ret == OB_ITER_END)) {
           int tmp_ret = OB_SUCCESS;
           int64_t scanned_row_cnt = merge_helper_->get_iters_row_count();

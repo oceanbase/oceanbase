@@ -415,7 +415,8 @@ int ObFreezeInfoManager::get_neighbour_frozen_status(
         found = true;
         if (0 == i) {
           ret = OB_ENTRY_NOT_EXIST;
-          if (REACH_TENANT_TIME_INTERVAL(60L * 1000L * 1000L)) {
+          if (REACH_THREAD_TIME_INTERVAL(60L * 1000L * 1000L)) {
+            // ignore ret
             LOG_WARN("cannot get neighbour major freeze before bootstrap", K(ret),
               K(snapshot_version), K(next_info));
           }

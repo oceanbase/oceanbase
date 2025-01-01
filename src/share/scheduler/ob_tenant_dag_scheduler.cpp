@@ -723,7 +723,7 @@ int ObIDag::get_next_ready_task(ObITask *&task)
   ObMutexGuard guard(lock_);
   if (is_stop_ || ObIDag::DAG_STATUS_NODE_RUNNING != dag_status_) {
   } else if (OB_UNLIKELY(max_concurrent_task_cnt_ >= 1 && running_task_cnt_ >= max_concurrent_task_cnt_)) {
-    if (REACH_TENANT_TIME_INTERVAL(DUMP_STATUS_INTERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(DUMP_STATUS_INTERVAL)) {
       COMMON_LOG(INFO, "delay scheduling since concurrent running task cnts reach limit", KPC(this));
     }
   } else {
@@ -2369,7 +2369,7 @@ int ObDagPrioScheduler::rank_compaction_dags_()
 
     // Time Statistics
     int64_t cost_time = common::ObTimeUtility::fast_current_time() - cur_time;
-    if (REACH_TENANT_TIME_INTERVAL(DUMP_STATUS_INTERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(DUMP_STATUS_INTERVAL)) {
       COMMON_LOG(INFO, "[ADAPTIVE_SCHED] Ranking compaction dags costs: ", K(cost_time), K_(priority), K(ret), K(tmp_ret));
     }
   }
@@ -3444,7 +3444,7 @@ bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
       const int64_t load_shedding_limit = MAX(2, adaptive_task_limit_ / load_shedding_factor);
       if (running_task_cnts_ > load_shedding_limit + extra_limit) {
         need_shedding = true;
-        if (REACH_TENANT_TIME_INTERVAL(30_s)) {
+        if (REACH_THREAD_TIME_INTERVAL(30_s)) {
           FLOG_INFO("[ADAPTIVE_SCHED] DagScheduler needs to load shedding", K(load_shedding_factor), K(for_schedule),
               K(extra_limit), K_(adaptive_task_limit), K_(running_task_cnts), K_(priority));
         }
@@ -3728,7 +3728,7 @@ bool ObDagNetScheduler::is_dag_map_full()
   } else {
     if (((double)scheduler_->get_cur_dag_cnt() / DEFAULT_MAX_DAG_MAP_CNT) >= ((double)STOP_ADD_DAG_PERCENT / 100)) {
       bret = true;
-      if (REACH_TENANT_TIME_INTERVAL(LOOP_PRINT_LOG_INTERVAL))  {
+      if (REACH_THREAD_TIME_INTERVAL(LOOP_PRINT_LOG_INTERVAL))  {
         ObMutexGuard guard(dag_net_map_lock_);
         COMMON_LOG(INFO, "dag map is almost full, stop loop blocking dag_net_map",
             "dag_map_size", scheduler_->get_cur_dag_cnt(), "dag_net_map_size", dag_net_map_.size(),
@@ -3773,7 +3773,7 @@ int ObDagNetScheduler::loop_running_dag_net_list()
       }
     } else if (dag_net->get_start_time() + PRINT_SLOW_DAG_NET_THREASHOLD < ObTimeUtility::fast_current_time()) {
       ++slow_dag_net_cnt;
-      if (REACH_TENANT_TIME_INTERVAL(LOOP_PRINT_LOG_INTERVAL)) {
+      if (REACH_THREAD_TIME_INTERVAL(LOOP_PRINT_LOG_INTERVAL)) {
         LOG_INFO("slow dag net", K(ret), KP(dag_net), "dag_net_start_time", dag_net->get_start_time());
       }
     }
@@ -4277,7 +4277,7 @@ void ObTenantDagScheduler::inner_get_suggestion_reason(const ObDagType::ObDagTyp
 void ObTenantDagScheduler::diagnose_for_suggestion()
 {
   int tmp_ret = OB_SUCCESS;
-  if (REACH_TENANT_TIME_INTERVAL(DUMP_DAG_STATUS_INTERVAL)) {
+  if (REACH_THREAD_TIME_INTERVAL(DUMP_DAG_STATUS_INTERVAL)) {
     ObSEArray<int64_t, ObIDag::MergeDagPrioCnt> reasons;
     ObSEArray<int64_t, ObIDag::MergeDagPrioCnt> thread_limits;
     ObSEArray<int64_t, ObIDag::MergeDagPrioCnt> running_cnts;
@@ -4313,7 +4313,7 @@ void ObTenantDagScheduler::diagnose_for_suggestion()
 void ObTenantDagScheduler::dump_dag_status(const bool force_dump/*false*/)
 {
   int tmp_ret = OB_SUCCESS;
-  if (force_dump || REACH_TENANT_TIME_INTERVAL(DUMP_DAG_STATUS_INTERVAL)) {
+  if (force_dump || REACH_THREAD_TIME_INTERVAL(DUMP_DAG_STATUS_INTERVAL)) {
     int64_t total_worker_cnt = 0;
     int64_t work_thread_num = 0;
 
@@ -4673,7 +4673,7 @@ int64_t ObReclaimUtil::compute_expected_reclaim_worker_cnt(
   ADAPTIVE_RECLAIM_ERRSIM(EN_FAST_RECLAIM_THREAD);
   #undef ADAPTIVE_RECLAIM_ERRSIM
 #endif
-    if (REACH_TENANT_TIME_INTERVAL(CHECK_USING_WOKRER_INTERVAL) || is_always_triggered) {
+    if (REACH_THREAD_TIME_INTERVAL(CHECK_USING_WOKRER_INTERVAL) || is_always_triggered) {
       const int64_t avg_periodic_running_worker_cnt = total_periodic_running_worker_cnt_ / check_worker_loop_times_;
       if (total_running_task_cnt < avg_periodic_running_worker_cnt) {
         // reclaim one fifth of the workers each time
@@ -4804,7 +4804,7 @@ int ObTenantDagScheduler::schedule()
   int tmp_ret = OB_SUCCESS;
   ret = loop_ready_dag_lists(); // loop ready dag lists
 
-  if (REACH_TENANT_TIME_INTERVAL(loop_waiting_dag_list_period_))  {
+  if (REACH_THREAD_TIME_INTERVAL(loop_waiting_dag_list_period_))  {
     for (int i = 0; i < ObDagPrio::DAG_PRIO_MAX; ++i) {
       if (OB_TMP_FAIL(prio_sche_[i].loop_waiting_dag_list())) {
         COMMON_LOG(WARN, "failed to loop waiting task list", K(tmp_ret), K(i));
@@ -4826,7 +4826,7 @@ void ObTenantDagScheduler::loop_dag_net()
     need_loop_running_dag_net = true;
     clear_fast_schedule_dag_net();
   }
-  if (need_loop_running_dag_net || REACH_TENANT_TIME_INTERVAL(LOOP_RUNNING_DAG_NET_MAP_INTERVAL))  {
+  if (need_loop_running_dag_net || REACH_THREAD_TIME_INTERVAL(LOOP_RUNNING_DAG_NET_MAP_INTERVAL))  {
     if (OB_TMP_FAIL(dag_net_sche_.loop_running_dag_net_list())) {
       COMMON_LOG_RET(WARN, tmp_ret, "failed to loop running_dag_net_list");
     }

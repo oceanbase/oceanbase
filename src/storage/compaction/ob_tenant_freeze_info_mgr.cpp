@@ -624,7 +624,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
           if (is_primary_tenant(role) || is_standby_tenant(role)) {
             check_tenant_status_ = false;
             LOG_INFO("finish check tenant restore", K(tenant_id), K(role));
-          } else if (REACH_TENANT_TIME_INTERVAL(10L * 1000L * 1000L)) {
+          } else if (REACH_THREAD_TIME_INTERVAL(10L * 1000L * 1000L)) {
             LOG_INFO("skip restoring tenant to schedule major merge", K(tenant_id), K(role));
           }
         }
@@ -700,7 +700,8 @@ int ObTenantFreezeInfoMgr::inner_update_info(
     const int64_t last_not_change_interval_us = ObTimeUtility::current_time() - last_change_ts_;
     if (MAX_GC_SNAPSHOT_TS_REFRESH_TS <= last_not_change_interval_us &&
         (0 != snapshot_gc_ts && 1 != snapshot_gc_ts)) {
-      if (REACH_TENANT_TIME_INTERVAL(60L * 1000L * 1000L)) {
+      if (REACH_THREAD_TIME_INTERVAL(60L * 1000L * 1000L)) {
+        // ignore ret
         STORAGE_LOG(WARN, "snapshot_gc_ts not refresh too long",
                     K(snapshot_gc_ts), K(new_snapshots), K(last_change_ts_),
                     K(last_not_change_interval_us));
@@ -714,7 +715,7 @@ int ObTenantFreezeInfoMgr::inner_update_info(
   STORAGE_LOG(DEBUG, "reload freeze info and snapshots", K(snapshot_gc_ts), K(new_snapshots));
 
   if (OB_SUCC(ret)) {
-    if (REACH_TENANT_TIME_INTERVAL(20 * 1000 * 1000 /*20s*/)) {
+    if (REACH_THREAD_TIME_INTERVAL(20 * 1000 * 1000 /*20s*/)) {
       STORAGE_LOG(INFO, "ObTenantFreezeInfoMgr success to update infos",
           K(new_snapshot_gc_scn), K(new_freeze_infos), K(new_snapshots), K(freeze_info_mgr_));
     }

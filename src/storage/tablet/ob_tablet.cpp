@@ -5983,7 +5983,7 @@ int ObTablet::get_kept_snapshot_info(
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_ON_TABLET, get_snapshot_version());
     const int64_t current_time = common::ObTimeUtility::fast_current_time();
     if (current_time - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 2_hour) {
-      if (REACH_TENANT_TIME_INTERVAL(10_s)) {
+      if (REACH_THREAD_TIME_INTERVAL(10_s)) {
         LOG_INFO("tablet multi version start not advance for a long time", K(ret),
                  "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
                  K(snapshot_info), K(old_snapshot_info), K(min_medium_snapshot),
@@ -7850,7 +7850,7 @@ int ObTablet::get_mds_table_handle_(mds::MdsTableHandle &handle,
   } else if (OB_FAIL(inner_get_mds_table(handle, create_if_not_exist))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("inner get mds table failed", KR(ret), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_);
-    } else if (REACH_TENANT_TIME_INTERVAL(10_s)) {
+    } else if (REACH_THREAD_TIME_INTERVAL(10_s)) {
       LOG_TRACE("inner get mds table failed", KR(ret), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_);
     }
   }

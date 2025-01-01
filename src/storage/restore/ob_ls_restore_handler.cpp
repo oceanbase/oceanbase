@@ -1312,7 +1312,7 @@ int ObILSRestoreState::check_restore_concurrency_limit_(bool &reach_limit)
 
     if (restore_dag_net_count >= restore_concurrency) {
       reach_limit = true;
-      if (REACH_TENANT_TIME_INTERVAL(1000 * 1000 * 60 * 5)) {
+      if (REACH_THREAD_TIME_INTERVAL(1000 * 1000 * 60 * 5)) {
         LOG_INFO("ls restore reach limit", K(ret), K(restore_concurrency), K(restore_dag_net_count));
       }
     }

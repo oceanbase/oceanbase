@@ -3670,7 +3670,7 @@ int ObTransferHandler::inner_do_with_abort_status_(
 
     if (can_retry_(task_info, ret)) {
       LOG_INFO("transfer task can retry", K(ret), K(task_info));
-      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
+      if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000)) {
         if (OB_SUCCESS != (tmp_ret = record_server_event_(ret, tmp_round, task_info))) {
           LOG_WARN("failed to record server event", K(tmp_ret), K(ret), K(retry_count_), K(task_info));
         }
@@ -3764,7 +3764,7 @@ int ObTransferHandler::inner_do_with_abort_status_before_4230_(
   if (OB_FAIL(ret)) {
     if (can_retry_(task_info, ret)) {
       LOG_INFO("transfer task can retry", K(ret), K(task_info));
-      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
+      if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000)) {
         if (OB_SUCCESS != (tmp_ret = record_server_event_(ret, tmp_round, task_info))) {
           LOG_WARN("failed to record server event", K(tmp_ret), K(ret), K(retry_count_), K(task_info));
         }

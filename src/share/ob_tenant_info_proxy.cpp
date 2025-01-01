@@ -484,7 +484,7 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status_in_trans(
     } else {
       const int64_t MAX_GAP = tenant_config->_standby_max_replay_gap_time * 1000;
       SCN new_readable_scn_plus_gap = SCN::plus(new_readable_scn, MAX_GAP);
-      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
+      if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
         const int64_t REAL_GAP = new_replayable_scn.get_val_for_gts() - new_readable_scn.get_val_for_gts();
         const bool IS_MAX_GAP_REACHED = REAL_GAP > MAX_GAP ? true : false;
         LOG_INFO("tenant scn gap info", K(IS_MAX_GAP_REACHED), K(REAL_GAP), K(MAX_GAP), K(new_sync_scn),

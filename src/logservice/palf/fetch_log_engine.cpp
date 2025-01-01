@@ -225,7 +225,7 @@ int FetchLogEngine::push_task_into_cache_(FetchLogTask *fetch_log_task)
   SpinLockGuard lock_guard(cache_lock_);
   int64_t count = fetch_task_cache_.count();
   if (count >= MAX_CACHED_FETCH_TASK_NUM) {
-    if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000)) {
+    if (REACH_THREAD_TIME_INTERVAL(5 * 1000 * 1000)) {
       PALF_LOG(INFO, "fetch_task_cache_ is full", K(ret), K_(fetch_task_cache));
     }
   } else {
