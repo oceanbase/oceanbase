@@ -106,6 +106,7 @@ public:
 private:
   static int fill_min_max_datums(const int64_t datum_cnt, ObIAllocator &allocator, blocksstable::ObDatumRowkey &partkey);
   void print_ref_tablets_split_data(ObLS &ls) const;
+  static int get_valid_timeout(const int64_t abs_timeout_us, int64_t &valid_timeout_us);
 
 private:
   ObArenaAllocator allocator_;
