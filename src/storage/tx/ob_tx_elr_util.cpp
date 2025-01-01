@@ -24,10 +24,6 @@ int ObTxELRUtil::check_and_update_tx_elr_info(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
   if (OB_SYS_TENANT_ID != MTL_ID() && MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
-    if (can_tenant_elr_) {  // tenant config enable elr
-      tx.set_can_elr(true);
-      TX_STAT_ELR_ENABLE_TRANS_INC(MTL_ID());
-    }
     refresh_elr_tenant_config_();
   }
   return ret;

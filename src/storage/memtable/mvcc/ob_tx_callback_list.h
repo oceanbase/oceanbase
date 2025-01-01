@@ -105,6 +105,9 @@ public:
   // successfully synced for single ls txn.
   int tx_elr_preparing();
 
+  // tx_elr_revoke will clear elr flag on TransNode
+  int tx_elr_revoke();
+
   // tx_print_callback will simply print all calbacks.
   int tx_print_callback();
 

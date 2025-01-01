@@ -125,6 +125,8 @@ public:
   // the lock after proposing the commit log and even before the commit log
   // successfully synced for single ls txn.
   virtual int elr_trans_preparing() { return OB_SUCCESS; }
+  // elr_trans_revoke is used to revoke elr after commit failed
+  virtual void elr_trans_revoke() { }
 
   // print_callback is used for debug only, and it is implemented to display
   // your callback.

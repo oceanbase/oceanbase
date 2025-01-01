@@ -54,6 +54,7 @@ public:
       tx_scn_(),
       write_flag_(),
       handle_start_time_(OB_INVALID_TIMESTAMP),
+      has_create_tx_ctx_(false),
       is_standby_read_(false),
       lock_wait_start_ts_(0)
   {}
@@ -88,6 +89,7 @@ public:
     write_flag_.reset();
     handle_start_time_ = OB_INVALID_TIMESTAMP;
     is_standby_read_ = false;
+    has_create_tx_ctx_ = false;
   }
   bool is_valid() const {
     switch(type_) {
@@ -124,7 +126,9 @@ public:
                  const transaction::ObTxSnapshot &snapshot,
                  const int64_t abs_lock_timeout,
                  const int64_t tx_lock_timeout,
-                 const bool is_weak_read)
+                 const bool is_weak_read,
+                 const bool has_create_tx_ctx,
+                 transaction::ObTxDesc *tx_desc)
   {
     reset();
     type_ = is_weak_read ? T::WEAK_READ : T::STRONG_READ;
@@ -134,6 +138,8 @@ public:
     snapshot_ = snapshot;
     abs_lock_timeout_ts_ = abs_lock_timeout;
     tx_lock_timeout_us_ = tx_lock_timeout;
+    has_create_tx_ctx_ = has_create_tx_ctx;
+    tx_desc_ = tx_desc;
   }
   // light read, used by storage background merge/compaction routine
   void init_read(const storage::ObTxTableGuard &tx_table_guard,
@@ -143,7 +149,7 @@ public:
   {
     transaction::ObTxSnapshot snapshot;
     snapshot.version_ = snapshot_version;
-    init_read(NULL, NULL, tx_table_guard, snapshot, timeout, tx_lock_timeout, false);
+    init_read(NULL, NULL, tx_table_guard, snapshot, timeout, tx_lock_timeout, false, false, NULL);
   }
   void init_write(transaction::ObPartTransCtx &tx_ctx,
                   ObMemtableCtx &mem_ctx,
@@ -278,7 +284,7 @@ public: // NOTE: those field should only be accessed by txn relative routine
 
   // this was used for runtime metric
   int64_t handle_start_time_;
-
+  bool has_create_tx_ctx_;
   bool is_standby_read_;
 protected:
   int64_t lock_wait_start_ts_;

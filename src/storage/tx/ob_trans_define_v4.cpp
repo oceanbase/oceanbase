@@ -466,7 +466,6 @@ ObTxDesc::ObTxDesc()
     commit_times_(0),
     commit_start_scn_(),
     abort_cause_(0),
-    can_elr_(false),
     lock_(common::ObLatchIds::TX_DESC_LOCK),
     commit_cb_lock_(common::ObLatchIds::TX_DESC_COMMIT_LOCK),
     commit_cb_(NULL),
@@ -514,7 +513,6 @@ int ObTxDesc::switch_to_idle()
   commit_times_ = 0;
   commit_start_scn_.set_min();
   abort_cause_ = 0;
-  can_elr_ = false;
   commit_cb_ = NULL;
   cb_tid_ = -1;
   exec_info_reap_ts_ = 0;
@@ -622,7 +620,6 @@ void ObTxDesc::reset()
   commit_times_ = 0;
   commit_start_scn_.set_min();
   abort_cause_ = 0;
-  can_elr_ = false;
 
   commit_cb_ = NULL;
   cb_tid_ = -1;
@@ -755,10 +752,13 @@ bool ObTxDesc::contain_savepoint(const ObString &sp)
   return hit;
 }
 
-int ObTxDesc::update_part_(ObTxPart &a, const bool append)
+int ObTxDesc::update_part_(ObTxPart &a, const bool append, const bool check_only_if_exist)
 {
   int ret = OB_SUCCESS;
   bool hit = false;
+  if (exec_info_reap_ts_ == 0) {
+    exec_info_reap_ts_ = ObSequence::get_max_seq_no();
+  }
   ARRAY_FOREACH_NORET(parts_, i) {
     ObTxPart &p = parts_[i];
     if (p.id_ == a.id_) {
@@ -776,7 +776,7 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
         ret = OB_TRANS_NEED_ROLLBACK;
         TRANS_LOG(WARN, "tx-part epoch changed", K(ret), K(a), K(p));
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && !check_only_if_exist) {
         if (a.addr_.is_valid()) { p.addr_ = a.addr_; }
         p.first_scn_ = MIN(a.first_scn_, p.first_scn_);
         p.last_scn_ = p.last_scn_.is_max() ? a.last_scn_ : MAX(a.last_scn_, p.last_scn_);
@@ -830,6 +830,25 @@ int ObTxDesc::update_clean_part(const share::ObLSID &id,
   p.first_scn_ = ObTxSEQ::MAX_VAL();
   p.last_scn_ = get_tx_seq();
   return update_part_(p, false);
+}
+
+int ObTxDesc::add_clean_part_if_absent(const share::ObLSID &id,
+                                          const int64_t epoch,
+                                          const ObAddr &addr,
+                                          const bool is_dup)
+{
+  int ret = OB_SUCCESS;
+  ObTxSEQ cur_seq = get_tx_seq();
+  ObTxPart p;
+  p.id_ = id;
+  p.epoch_ = epoch;
+  p.addr_ = addr;
+  p.first_scn_ = cur_seq;
+  p.last_scn_ = cur_seq;
+  if (is_dup) {
+    p.flag_.set_dup_ls();
+  }
+  return update_part_(p, true, true);
 }
 
 /*
@@ -1353,6 +1372,12 @@ void ObTxReadSnapshot::specify_snapshot_scn(const share::SCN snapshot)
 {
   core_.version_ = snapshot;
   source_ = SRC::SPECIAL;
+}
+
+void ObTxReadSnapshot::try_set_read_elr()
+{
+  const bool can_read_elr = (source_ == SRC::LS && snapshot_ls_role_ == common::ObRole::LEADER);
+  core_.set_elr(can_read_elr);
 }
 
 void ObTxReadSnapshot::wait_consistency()

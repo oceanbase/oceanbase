@@ -1528,7 +1528,7 @@ public:
                                                     tx_desc,
                                                     copy_savepoints,
                                                     tx_desc->abort_cause_,
-                                                    tx_desc->can_elr_))) {
+                                                    false))) {
         TRANS_LOG_RET(WARN, tmp_ret, "ObTxSchedulerStat init error", K(tmp_ret), KPC(tx_desc));
       } else if (OB_TMP_FAIL(tx_scheduler_stat_iter_.push(tx_scheduler_stat))) {
         TRANS_LOG_RET(WARN, tmp_ret, "ObTxSchedulerStatIterator push trans scheduler error", K(tmp_ret));

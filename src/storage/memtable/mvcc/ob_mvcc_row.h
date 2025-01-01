@@ -146,6 +146,10 @@ public:
   {
     return ATOMIC_LOAD(&flag_) & F_ELR;
   }
+  OB_INLINE void clear_elr()
+  {
+    ATOMIC_SUB_TAG(F_ELR);
+  }
   OB_INLINE void set_aborted()
   {
     ATOMIC_ADD_TAG(F_ABORTED);
