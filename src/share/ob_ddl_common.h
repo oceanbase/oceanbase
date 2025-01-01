@@ -209,6 +209,7 @@ enum ObDDLTaskStatus {
   WAIT_CENTROID_TABLE_COMPLEMENT = 43,
   GENERATE_PQ_CENTROID_TABLE_SCHEMA = 44,
   WAIT_PQ_CENTROID_TABLE_COMPLEMENT = 45,
+  LOAD_DICTIONARY = 46,
 
   FAIL = 99,
   SUCCESS = 100
@@ -322,6 +323,9 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA:
       str = "GENERATE_DOC_AUX_SCHEMA";
+      break;
+    case ObDDLTaskStatus::LOAD_DICTIONARY:
+      str = "LOAD_DICTIONARY";
       break;
     case ObDDLTaskStatus::WAIT_ROWKEY_DOC_TABLE_COMPLEMENT:
       str = "WAIT_ROWKEY_DOC_TABLE_COMPLEMENT";
