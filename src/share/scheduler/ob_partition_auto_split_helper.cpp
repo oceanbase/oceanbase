@@ -1483,6 +1483,24 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(rootserver::ObDDLService::fill_part_name(table_schema, alter_table_schema))) {
       LOG_WARN("failed to fill part name", K(ret));
+    } else {
+      const int64_t part_num = alter_table_schema.get_partition_num();
+      share::schema::ObPartition **part_array = alter_table_schema.get_part_array();
+      if (OB_ISNULL(part_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid part array", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_num; i++) {
+        if (OB_ISNULL(part_array[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("part is null", K(ret), K(part_array[i]));
+        } else if (OB_UNLIKELY(part_array[i]->get_part_name().empty())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("part name is empty after fill", K(ret), KPC(part_array[i]));
+        } else {
+          part_array[i]->set_is_empty_partition_name(false); // so that rs won't generated part name again
+        }
+      }
     }
   }
   return ret;
