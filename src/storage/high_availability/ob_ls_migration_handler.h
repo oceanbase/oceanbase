@@ -101,6 +101,11 @@ private:
   int check_task_exist_(
       const ObLSMigrationHandlerStatus &status,
       bool &is_exist);
+  int handle_failed_task_(
+      const ObLSMigrationHandlerStatus &status,
+      bool &need_generate_dag_net);
+  // only use this function when task exist
+  int cancel_current_task_();
 
   int do_init_status_();
   int do_prepare_ls_status_();

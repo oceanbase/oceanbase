@@ -872,6 +872,12 @@ int ObStartPrepareMigrationTask::wait_transfer_tablets_ready_()
   } else if (OB_FAIL(ls->build_tablet_iter(tablet_iterator))) {
     LOG_WARN("failed to build ls tablet iter", K(ret), KPC(ctx_));
   } else {
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("storage_ha", "before_wait_transfer_out_tablet_ready",
+                          "tenant_id", ctx_->tenant_id_,
+                          "ls_id", ctx_->arg_.ls_id_.id(),
+                          "ret", ret);
+#endif
     DEBUG_SYNC(BEFORE_WAIT_TRANSFER_OUT_TABLET_READY);
     ObIDagNet *dag_net = nullptr;
     while (OB_SUCC(ret)) {
@@ -887,6 +893,12 @@ int ObStartPrepareMigrationTask::wait_transfer_tablets_ready_()
       } else if (dag_net->is_cancel()) {
         ret = OB_CANCELED;
         LOG_WARN("task is cancelled", K(ret), K(*this));
+#ifdef ERRSIM
+        SERVER_EVENT_SYNC_ADD("storage_ha", "start_prepare_migration_task_cancel",
+                              "tenant_id", ctx_->tenant_id_,
+                              "ls_id", ctx_->arg_.ls_id_.id(),
+                              "ret", ret);
+#endif
       } else if (OB_FAIL(tablet_iterator.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;

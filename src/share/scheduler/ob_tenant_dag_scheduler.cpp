@@ -65,6 +65,7 @@ namespace lib
 
 namespace share
 {
+ERRSIM_POINT_DEF(EN_SKIP_LOOP_BLOCKING_DAG);
 
 #define DEFINE_TASK_ADD_KV(n)                                                               \
   template <LOG_TYPENAME_TN##n>                                                                  \
@@ -3813,6 +3814,11 @@ int ObDagNetScheduler::loop_blocking_dag_net_list()
   if (OB_ISNULL(scheduler_)) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "scheduler is null", KP(scheduler_));
+#ifdef ERRSIM
+  } else if (EN_SKIP_LOOP_BLOCKING_DAG != OB_SUCCESS) {
+    ret = EN_SKIP_LOOP_BLOCKING_DAG;
+    COMMON_LOG(WARN, "[ERRSIM] skip loop blocking dag net list", K(ret));
+#endif
   } else {
     ObMutexGuard guard(dag_net_map_lock_);
     ObIDagNet *head = dag_net_list_[BLOCKING_DAG_NET_LIST].get_header();
@@ -3823,16 +3829,13 @@ int ObDagNetScheduler::loop_blocking_dag_net_list()
       LOG_DEBUG("loop blocking dag net list", K(ret), KPC(cur), K(rest_cnt));
       tmp = cur;
       cur = cur->get_next();
-      if (tmp->is_cancel()) {
-        (void) finish_dag_net_without_lock(*tmp);
-        (void) erase_dag_net_list_or_abort(BLOCKING_DAG_NET_LIST, tmp);
-        (void) scheduler_->free_dag_net(tmp); // set tmp nullptr
-      } else if (OB_TMP_FAIL(tmp->start_running())) {
-        // If start running failed, need call clear_dag_net_ctx() to release some resources.
+      if (tmp->is_cancel() || OB_TMP_FAIL(tmp->start_running())) {
+        // If dag net has been cancelled or failed to start running, move dag net to finished list.
+        // Function clear_dag_net_ctx() will be called to release some resources after being scheduled at finish list.
         // Move this dag net from blocking to finished list to avoid dead lock.
         (void) erase_dag_net_list_or_abort(BLOCKING_DAG_NET_LIST, tmp);
         (void) add_dag_net_list_or_abort(FINISHED_DAG_NET_LIST, tmp);
-        COMMON_LOG(WARN, "failed to start running, move to finished list", K(tmp_ret), KPC(tmp));
+        COMMON_LOG(WARN, "dag net has been cancelled or failed to start running, move to finished list", K(tmp_ret), KPC(tmp));
       } else {
         tmp->set_start_time();
         --rest_cnt;

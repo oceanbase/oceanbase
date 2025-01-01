@@ -2238,6 +2238,12 @@ int ObWaitDataReadyTask::check_ls_and_task_status_(
   } else if (ctx_->is_failed()) {
     ret = OB_CANCELED;
     STORAGE_LOG(WARN, "ls migration task is failed", K(ret), KPC(ctx_));
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("storage_ha", "wait_data_ready_task_cancel",
+                          "tenant_id", ctx_->tenant_id_,
+                          "ls_id", ctx_->arg_.ls_id_.id(),
+                          "ret", ret);
+#endif
   } else if (ls->is_stopped()) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls is not running, stop migration dag net", K(ret), KPC(ctx_));
