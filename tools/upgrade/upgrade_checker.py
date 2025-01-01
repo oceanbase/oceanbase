@@ -897,11 +897,7 @@ def is_x86_arch():
   return bret
 
 # 检查 direct_load 是否已经结束，开启升级之前需要确保没有 direct_load 任务，且升级期间尽量禁止 direct_load 任务
-def disable_and_check_direct_load_task(cur, query_cur):
-  # 通过配置项关闭 direct_load
-  set_parameter(cur, '_ob_enable_direct_load', 'False')
-  # 等待 5s，确保没有导入任务
-  time.sleep(5)
+def check_direct_load_job_exist(cur, query_cur):
   sql = """select count(1) from __all_virtual_load_data_stat"""
   (desc, results) = query_cur.exec_query(sql)
   if 0 != results[0][0]:
@@ -1019,7 +1015,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_
       check_disk_space_for_mds_sstable_compat(query_cur)
       check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch)
       # all check func should execute before check_fail_list
-      disable_and_check_direct_load_task(cur, query_cur)
+      check_direct_load_job_exist(cur, query_cur)
       check_fail_list()
       modify_server_permanent_offline_time(cur)
     except Exception as e:
