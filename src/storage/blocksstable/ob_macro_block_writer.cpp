@@ -360,7 +360,6 @@ int ObMicroBlockAdaptiveSplitter::check_need_split(const int64_t micro_size,
       is_split = true;
     }
   }
-
   return ret;
 }
 

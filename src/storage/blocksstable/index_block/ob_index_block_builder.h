@@ -644,7 +644,6 @@ public:
   TO_STRING_KV(K(roots_.count()));
 
 public:
-  static bool check_version_for_small_sstable(const ObDataStoreDesc &index_desc);
   static int load_single_macro_block(
       const ObDataMacroBlockMeta &macro_meta,
       const int64_t nested_size,
