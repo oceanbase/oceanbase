@@ -45,6 +45,7 @@ public:
       conflict_checker_ctdef_(alloc),
       all_saved_exprs_(alloc),
       has_global_unique_index_(false),
+      auto_inc_expr_(nullptr),
       alloc_(alloc)
   {
   }
@@ -68,6 +69,7 @@ public:
   // insert_row + child_->output_
   ExprFixedArray all_saved_exprs_;
   bool has_global_unique_index_;
+  ObExpr *auto_inc_expr_;
 protected:
   common::ObIAllocator &alloc_;
 };
@@ -86,7 +88,9 @@ public:
                         MY_SPEC.conflict_checker_ctdef_),
       insert_up_row_store_("InsertUpRow"),
       is_ignore_(false),
-      gts_state_(WITHOUT_GTS_OPT_STATE)
+      gts_state_(WITHOUT_GTS_OPT_STATE),
+      record_last_insert_id_try_ins_(false),
+      has_guarantee_last_insert_id_(false)
   {
   }
 
@@ -119,7 +123,7 @@ public:
 protected:
 
   // 物化所有要被replace into的行到replace_row_store_
-  int load_batch_insert_up_rows(bool &is_iter_end, int64_t &insert_rows);
+  int load_batch_insert_up_rows(bool &is_iter_end, int64_t &insert_rows, int64_t &last_insert_id);
 
   int get_next_row_from_child();
 
@@ -215,6 +219,8 @@ protected:
   int deal_hint_part_selection(ObObjectID partition_id);
   virtual int check_need_exec_single_row() override;
   virtual ObDasParallelType check_das_parallel_type() override;
+  int get_last_insert_id_in_try_ins(int64_t &last_insert_id);
+  int guarantee_last_insert_id();
 private:
   int check_insert_up_ctdefs_valid() const;
 
@@ -244,6 +250,8 @@ protected:
   ObChunkDatumStore insert_up_row_store_; //所有的insert_up的行的集合
   bool is_ignore_; // 暂时记录一下是否是ignore的insert_up SQL语句
   ObDmlGTSOptState gts_state_;
+  bool record_last_insert_id_try_ins_;
+  bool has_guarantee_last_insert_id_;
 };
 } // end namespace sql
 } // end namespace oceanbase

@@ -413,6 +413,8 @@ private:
 
   int generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, const bool in_root_job);
 
+  int get_all_auto_inc_cids(const ObIArray<share::AutoincParam> &autoinc_params, ObIArray<uint64_t> &cids);
+
   int generate_spec(ObLogDelete &op, ObTableDeleteSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, const bool in_root_job);
