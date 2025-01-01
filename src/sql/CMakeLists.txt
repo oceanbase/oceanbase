@@ -997,6 +997,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_orc_table_row_iter.cpp
   engine/table/ob_parquet_table_row_iter.cpp
   engine/table/ob_odps_table_row_iter.cpp
+  engine/table/ob_file_prefetch_buffer.cpp
 )
 
 ob_set_subtarget(ob_sql executor

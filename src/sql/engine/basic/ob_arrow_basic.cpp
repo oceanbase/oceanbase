@@ -121,7 +121,6 @@ int64_t ObArrowMemPool::bytes_allocated() const {
   return total_alloc_size_;
 }
 
-
 /* ObArrowFile */
 int ObArrowFile::open()
 {
@@ -138,9 +137,14 @@ arrow::Result<int64_t> ObArrowFile::Read(int64_t nbytes, void *out)
   int ret = OB_SUCCESS;
   arrow::Result<int64_t> ret_code;
   int64_t read_size = -1;
-  if (OB_FAIL(file_reader_.pread(out, nbytes, position_, read_size))) {
+  if (file_prefetch_buffer_.in_prebuffer_range(position_, nbytes)) {
+    file_prefetch_buffer_.fetch(position_, nbytes, out);
+    position_ += nbytes;
+    ret_code = nbytes;
+  } else if (OB_FAIL(file_reader_.pread(out, nbytes, position_, read_size))) {
     LOG_WARN("fail to read file", K(ret), K(nbytes));
-    ret_code = arrow::Result<int64_t>(arrow::Status(arrow::StatusCode::IOError, "read file failed"));
+    ret_code =
+      arrow::Result<int64_t>(arrow::Status(arrow::StatusCode::IOError, "read file failed"));
   } else {
     position_ += read_size;
     ret_code = read_size;
@@ -166,10 +170,14 @@ arrow::Result<int64_t> ObArrowFile::ReadAt(int64_t position, int64_t nbytes, voi
   int ret = OB_SUCCESS;
   arrow::Result<int64_t> ret_code;
   int64_t read_size = -1;
-
-  if (OB_FAIL(file_reader_.pread(out, nbytes, position, read_size))) {
+  if (file_prefetch_buffer_.in_prebuffer_range(position, nbytes)) {
+    file_prefetch_buffer_.fetch(position, nbytes, out);
+    position_ = position + nbytes;
+    ret_code = nbytes;
+  } else if (OB_FAIL(file_reader_.pread(out, nbytes, position, read_size))) {
     LOG_WARN("fail to read file", K(ret), K(position), K(nbytes));
-    ret_code = arrow::Result<int64_t>(arrow::Status(arrow::StatusCode::IOError, "read at file failed"));
+    ret_code =
+      arrow::Result<int64_t>(arrow::Status(arrow::StatusCode::IOError, "read at file failed"));
   } else {
     position_ = position + read_size;
     ret_code = read_size;

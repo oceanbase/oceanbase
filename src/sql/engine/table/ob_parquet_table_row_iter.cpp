@@ -42,6 +42,7 @@ ObParquetTableRowIterator::~ObParquetTableRowIterator()
   for (int i = 0; i < column_readers_.count(); i++) {
     column_readers_.at(i) = NULL;
   }
+  file_prefetch_buffer_.destroy();
 }
 int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
 {
@@ -168,8 +169,8 @@ int ObParquetTableRowIterator::next_file()
     try {
       file_meta_.reset();
       file_reader_.reset();
-      std::shared_ptr<ObArrowFile> cur_file =
-          std::make_shared<ObArrowFile>(data_access_driver_, url_.ptr(), &arrow_alloc_);
+      std::shared_ptr<ObArrowFile> cur_file = std::make_shared<ObArrowFile>(
+        data_access_driver_, url_.ptr(), &arrow_alloc_, file_prefetch_buffer_);
       OZ (cur_file.get()->open());
       if (OB_SUCC(ret)) {
         file_reader_ = parquet::ParquetFileReader::Open(cur_file, read_props_);
@@ -264,19 +265,23 @@ int ObParquetTableRowIterator::next_row_group()
   }
   if (OB_SUCC(ret)) {
     int64_t cur_row_group = (state_.cur_row_group_idx_++) - 1;
-    try {
-      std::shared_ptr<parquet::RowGroupReader> rg_reader = file_reader_->RowGroup(cur_row_group);
-      state_.cur_row_group_read_row_count_ = 0;
-      state_.cur_row_group_row_count_ = file_meta_->RowGroup(cur_row_group)->num_rows();
-      for (int i = 0; OB_SUCC(ret) && i < column_indexs_.count(); i++) {
-        column_readers_.at(i) = rg_reader->Column(column_indexs_.at(i));
+    if (OB_FAIL(prefetch_parquet_row_group(file_meta_->RowGroup(cur_row_group)))) {
+      LOG_WARN("failed to prefetch parquet row group", K(ret));
+    } else {
+      try {
+        std::shared_ptr<parquet::RowGroupReader> rg_reader = file_reader_->RowGroup(cur_row_group);
+        state_.cur_row_group_read_row_count_ = 0;
+        state_.cur_row_group_row_count_ = file_meta_->RowGroup(cur_row_group)->num_rows();
+        for (int i = 0; OB_SUCC(ret) && i < column_indexs_.count(); i++) {
+          column_readers_.at(i) = rg_reader->Column(column_indexs_.at(i));
+        }
+      } catch(const std::exception& e) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected index", K(ret), "Info", e.what(), K(cur_row_group), K(column_indexs_));
+      } catch(...) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected index", K(ret), K(cur_row_group), K(column_indexs_));
       }
-    } catch(const std::exception& e) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected index", K(ret), "Info", e.what(), K(cur_row_group), K(column_indexs_));
-    } catch(...) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected index", K(ret), K(cur_row_group), K(column_indexs_));
     }
   }
   return ret;
@@ -1452,6 +1457,24 @@ int ObParquetTableRowIterator::get_next_row()
 void ObParquetTableRowIterator::reset() {
   // reset state_ to initial values for rescan
   state_.reuse();
+  file_prefetch_buffer_.destroy();
+}
+
+int ObParquetTableRowIterator::prefetch_parquet_row_group(
+  std::unique_ptr<parquet::RowGroupMetaData> row_group_meta)
+{
+  int ret = OB_SUCCESS;
+  int64_t select_col_cnt = column_exprs_.count();
+  const double MIN_SELECTION_RATE_THRESHOLD = 0.8;
+  file_prefetch_buffer_.clear();
+  if (select_col_cnt / row_group_meta->num_columns() >= MIN_SELECTION_RATE_THRESHOLD) {
+    if (OB_FAIL(file_prefetch_buffer_.prefetch(row_group_meta->file_offset(),
+                                               row_group_meta->total_compressed_size()))) {
+      LOG_WARN("failed to prefetch from parquet file", K(row_group_meta->file_offset()),
+               K(row_group_meta->total_compressed_size()));
+    }
+  }
+  return ret;
 }
 
 DEF_TO_STRING(ObParquetIteratorState)

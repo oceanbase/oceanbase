@@ -63,7 +63,8 @@ public:
     read_props_(&arrow_alloc_),
     file_column_exprs_(allocator_),
     file_meta_column_exprs_(allocator_),
-    bit_vector_cache_(NULL) {}
+    bit_vector_cache_(NULL),
+    file_prefetch_buffer_(data_access_driver_) {}
   virtual ~ObParquetTableRowIterator();
 
   int init(const storage::ObTableScanParam *scan_param) override;
@@ -147,6 +148,7 @@ private:
   int next_file();
   int next_row_group();
   int calc_pseudo_exprs(const int64_t read_count);
+  int prefetch_parquet_row_group(std::unique_ptr<parquet::RowGroupMetaData> row_group_meta);
 private:
   ObParquetIteratorState state_;
   lib::ObMemAttr mem_attr_;
@@ -168,6 +170,7 @@ private:
   common::ObArrayWrap<int16_t> rep_levels_buf_;
   common::ObArrayWrap<char *> file_url_ptrs_; //for file url expr
   common::ObArrayWrap<ObLength> file_url_lens_; //for file url expr
+  ObFilePrefetchBuffer file_prefetch_buffer_;
 };
 
 }
