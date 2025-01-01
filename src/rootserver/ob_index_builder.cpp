@@ -443,8 +443,21 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
         }
         if (OB_SUCC(ret) && !has_other_domain_index) {
           bool has_exist = false;
+          const ObTableSchema *data_table_schema = nullptr;
           const ObTableSchema &new_index_schema = new_index_schemas.at(new_index_schemas.count() - 1);
-          if (OB_FAIL(submit_drop_index_task(trans, *table_schema, new_index_schemas, arg, nullptr/*inc_data_tablet_ids*/,
+          if (is_mlog && table_schema->is_materialized_view() && table_schema->get_table_id() != new_index_schema.get_data_table_id()) {
+            // drop mlog on mview
+            if (OB_FAIL(schema_guard.get_table_schema(tenant_id, new_index_schema.get_data_table_id(), data_table_schema))) {
+              LOG_WARN("fail to get index table schema", K(ret), K(tenant_id), K(arg.index_table_id_));
+            } else if (OB_ISNULL(data_table_schema)) {
+              ret = OB_TABLE_NOT_EXIST;
+              LOG_WARN("table not found", K(ret), K(arg));
+            }
+          } else {
+            data_table_schema = table_schema;
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(submit_drop_index_task(trans, *data_table_schema, new_index_schemas, arg, nullptr/*inc_data_tablet_ids*/,
                                              nullptr/*del_data_tablet_ids*/, allocator, has_exist, task_record))) {
             LOG_WARN("submit drop index task failed", K(ret), K(task_record));
           } else if (has_exist) {
