@@ -1378,6 +1378,7 @@ constexpr int OB_TRANS_LIVE_TOO_MUCH_TIME = -6280;
 constexpr int OB_TRANS_COMMIT_TOO_MUCH_TIME = -6281;
 constexpr int OB_TRANS_TOO_MANY_PARTICIPANTS = -6282;
 constexpr int OB_LOG_ALREADY_SPLIT = -6283;
+constexpr int INCORRECT_ARGUMENTS_TO_URL_DECODE = -6286;
 constexpr int OB_TX_PENDING_LOG_OVERFLOW = -6288;
 constexpr int OB_LOG_ID_NOT_FOUND = -6301;
 constexpr int OB_LSR_THREAD_STOPPED = -6302;
@@ -3325,6 +3326,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_UNKNOWN_SUBPARTITION__USER_ERROR_MSG "Unknown subpartition"
 #define OB_ERR_INVALID_SQL_ROW_LIMITING__USER_ERROR_MSG "Invalid SQL ROW LIMITING expression was specified."
 #define INCORRECT_ARGUMENTS_TO_ESCAPE__USER_ERROR_MSG "Incorrect arguments to ESCAPE"
+#define INCORRECT_ARGUMENTS_TO_URL_DECODE__USER_ERROR_MSG "Incorrect arguments to URL_DECODE, %s: %%%c%c"
 #define STATIC_ENG_NOT_IMPLEMENT__USER_ERROR_MSG "not implemented in SQL static typing engine, will try the old engine automatically"
 #define OB_OBJ_ALREADY_EXIST__USER_ERROR_MSG "name is already used by an existing object"
 #define OB_DBLINK_NOT_EXIST_TO_ACCESS__USER_ERROR_MSG "connection description for remote database not found"
@@ -3581,6 +3583,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LOG_ALREADY_SPLIT__USER_ERROR_MSG "The big log entry has been split into multiple part"
 #define OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA__USER_ERROR_MSG "This version doesn't yet support 'references in JSON Schema."
 #define OB_ERR_TYPE_OF_JSON_SCHEMA__USER_ERROR_MSG "Invalid JSON type in argument, should be object."
+#define INCORRECT_ARGUMENTS_TO_URL_DECODE__USER_ERROR_MSG "Incorrect arguments to URL_DECODE, %s: %%%c%c"
 #define OB_TX_PENDING_LOG_OVERFLOW__USER_ERROR_MSG "too many pending log in the trx"
 #define OB_LOG_ID_NOT_FOUND__USER_ERROR_MSG "log id not found"
 #define OB_LSR_THREAD_STOPPED__USER_ERROR_MSG "log scan runnable thread stop"
@@ -7589,6 +7592,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA__OBE_USER_ERROR_MSG "OBE-40441: This version doesn't yet support 'references in JSON Schema."
 #define OB_ERR_TYPE_OF_JSON_SCHEMA__ORA_USER_ERROR_MSG "ORA-40876: invalid JSON schema document"
 #define OB_ERR_TYPE_OF_JSON_SCHEMA__OBE_USER_ERROR_MSG "OBE-40876: invalid JSON schema document"
+#define INCORRECT_ARGUMENTS_TO_URL_DECODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6286, Incorrect arguments to URL_DECODE, %s: %%%c%c"
+#define INCORRECT_ARGUMENTS_TO_URL_DECODE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6286, Incorrect arguments to URL_DECODE, %s: %%%c%c"
 #define OB_TX_PENDING_LOG_OVERFLOW__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6288, too many pending log in the trx"
 #define OB_TX_PENDING_LOG_OVERFLOW__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6288, too many pending log in the trx"
 #define OB_LOG_ID_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6301, log id not found"
@@ -9158,7 +9163,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2392];
+extern int g_all_ob_errnos[2393];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

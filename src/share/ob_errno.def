@@ -1833,6 +1833,9 @@ DEFINE_ERROR(OB_LOG_ALREADY_SPLIT, -6283, -1, "HY000", "The big log entry has be
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA, -6284, ER_NOT_SUPPORTED_YET, "42000", "This version doesn't yet support 'references in JSON Schema.", "This version doesn't yet support 'references in JSON Schema.", 40441, "This version doesn't yet support 'references in JSON Schema.", "This version doesn't yet support 'references in JSON Schema.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_TYPE_OF_JSON_SCHEMA, -6285, ER_INVALID_JSON_TYPE, "22032", "Invalid JSON type in argument, should be object.", "Invalid JSON type in argument, should be object.", 40876, "invalid JSON schema document", "invalid JSON schema document");
 
+// for url_decode
+DEFINE_ERROR(INCORRECT_ARGUMENTS_TO_URL_DECODE, -6286, ER_WRONG_ARGUMENTS, "HY000", "Incorrect arguments to URL_DECODE, %s: %%%c%c");
+
 // for tx pending log
 DEFINE_ERROR(OB_TX_PENDING_LOG_OVERFLOW, -6288, -1, "HY000", "too many pending log in the trx");
 
