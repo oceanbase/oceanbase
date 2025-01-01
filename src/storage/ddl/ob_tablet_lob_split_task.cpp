@@ -1649,94 +1649,27 @@ int ObTabletLobWriteDataTask::create_sstable(ObSSTableIndexBuilder *sstable_inde
   const int64_t dst_major_snapshot_version = write_sstable_ctx.dst_major_snapshot_version_;
   new_table_handle.reset();
   SMART_VARS_2((ObSSTableMergeRes, res), (ObTabletCreateSSTableParam, create_sstable_param)) {
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(sstable_index_builder)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg, index builder is null", K(ret));
-  } else if (!basic_meta.is_valid() || !table_key.is_valid() || !new_tablet_id.is_valid()
-      || tablet_idx < 0 || (is_minor_merge(write_sstable_ctx.merge_type_) && tablet_idx >= write_sstable_ctx.dst_uncommitted_tx_id_arr_.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(tablet_idx), K(write_sstable_ctx));
-  } else if (OB_FAIL(sstable_index_builder->close(res))) {
-    LOG_WARN("close sstable index builder failed", K(ret));
-  } else {
-    const int64_t uncommitted_tx_id = is_minor_merge(merge_type) ? write_sstable_ctx.dst_uncommitted_tx_id_arr_.at(tablet_idx) : 0;
-    create_sstable_param.table_key_ = table_key;
-    create_sstable_param.table_key_.tablet_id_ = new_tablet_id;
-    if (is_major_merge(merge_type)) {
-      create_sstable_param.table_key_.version_range_.snapshot_version_ = dst_major_snapshot_version;
-    }
-    create_sstable_param.uncommitted_tx_id_ = uncommitted_tx_id;
-    create_sstable_param.schema_version_ = param_->schema_version_;
-
-    // init from basic_meta
-    create_sstable_param.table_mode_ = basic_meta.table_mode_;
-    create_sstable_param.index_type_ = static_cast<share::schema::ObIndexType>(basic_meta.index_type_);
-    create_sstable_param.rowkey_column_cnt_ = basic_meta.rowkey_column_count_;
-
-    create_sstable_param.create_snapshot_version_ = is_major_merge(merge_type) ? dst_major_snapshot_version : basic_meta.create_snapshot_version_;
-
-    create_sstable_param.sstable_logic_seq_ = write_sstable_ctx.data_seq_;
-    create_sstable_param.filled_tx_scn_ = basic_meta.filled_tx_scn_;
-    create_sstable_param.latest_row_store_type_ = basic_meta.latest_row_store_type_;
-    create_sstable_param.recycle_version_ = basic_meta.recycle_version_;
-    create_sstable_param.ddl_scn_ = basic_meta.ddl_scn_;
-    create_sstable_param.progressive_merge_round_ = basic_meta.progressive_merge_round_;
-    create_sstable_param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
-    create_sstable_param.co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
-
-    create_sstable_param.ddl_scn_.set_min();
-    create_sstable_param.full_column_cnt_ = 0;
-    create_sstable_param.tx_data_recycle_scn_.set_min();
-    create_sstable_param.column_group_cnt_ = 1;
-
-    // init from merge_res
-    create_sstable_param.column_cnt_ = res.data_column_cnt_;
-    create_sstable_param.max_merged_trans_version_ = res.max_merged_trans_version_;
-    create_sstable_param.nested_size_ = res.nested_size_;
-    create_sstable_param.nested_offset_ = res.nested_offset_;
-    create_sstable_param.root_macro_seq_ = res.root_macro_seq_;
-
-    // ObTabletCreateSSTableParam::inner_init_with_merge_res
-    ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
-        create_sstable_param.root_block_addr_, create_sstable_param.root_block_data_);
-    ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
-        create_sstable_param.data_block_macro_meta_addr_, create_sstable_param.data_block_macro_meta_);
-    create_sstable_param.root_row_store_type_ = res.root_row_store_type_;
-    create_sstable_param.data_index_tree_height_ = res.root_desc_.height_;
-    create_sstable_param.index_blocks_cnt_ = res.index_blocks_cnt_;
-    create_sstable_param.data_blocks_cnt_ = res.data_blocks_cnt_;
-    create_sstable_param.micro_block_cnt_ = res.micro_block_cnt_;
-    create_sstable_param.use_old_macro_block_count_ = res.use_old_macro_block_count_;
-    create_sstable_param.row_count_ = res.row_count_;
-    create_sstable_param.data_checksum_ = res.data_checksum_;
-    create_sstable_param.occupy_size_ = res.occupy_size_;
-    create_sstable_param.original_size_ = res.original_size_;
-    create_sstable_param.contain_uncommitted_row_ = res.contain_uncommitted_row_;
-    create_sstable_param.compressor_type_ = res.compressor_type_;
-    create_sstable_param.encrypt_id_ = res.encrypt_id_;
-    create_sstable_param.master_key_id_ = res.master_key_id_;
-    create_sstable_param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
-    MEMCPY(create_sstable_param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-    if (OB_FAIL(create_sstable_param.data_block_ids_.assign(res.data_block_ids_))) {
-      LOG_WARN("fail to fill data block ids", K(ret), K(res.data_block_ids_));
-    } else if (OB_FAIL(create_sstable_param.other_block_ids_.assign(res.other_block_ids_))) {
-      LOG_WARN("fail to fill other block ids", K(ret), K(res.other_block_ids_));
-    }
-
-    if (OB_SUCC(ret) && table_key.is_major_sstable()) {
-      if (OB_FAIL(create_sstable_param.column_checksums_.assign(res.data_column_checksums_))) {
-        LOG_WARN("fill column checksum failed", K(ret), K(res));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(create_sstable_param, ctx_->allocator_, new_table_handle))) {
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", K(ret));
+    } else if (OB_ISNULL(sstable_index_builder)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arg, index builder is null", K(ret));
+    } else if (!basic_meta.is_valid() || !table_key.is_valid() || !new_tablet_id.is_valid()
+        || tablet_idx < 0 || (is_minor_merge(write_sstable_ctx.merge_type_) && tablet_idx >= write_sstable_ctx.dst_uncommitted_tx_id_arr_.count())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arg", K(ret), K(tablet_idx), K(write_sstable_ctx));
+    } else if (OB_FAIL(sstable_index_builder->close(res))) {
+      LOG_WARN("close sstable index builder failed", K(ret));
+    } else {
+      const int64_t uncommitted_tx_id = is_minor_merge(merge_type) ? write_sstable_ctx.dst_uncommitted_tx_id_arr_.at(tablet_idx) : 0;
+      if (OB_FAIL(create_sstable_param.init_for_lob_split(new_tablet_id, table_key, basic_meta, merge_type,
+          param_->schema_version_, dst_major_snapshot_version, uncommitted_tx_id, write_sstable_ctx.data_seq_, res))) {
+        LOG_WARN("init sstable param failed", K(ret), K(new_tablet_id), K(table_key), K(basic_meta), K(merge_type), K(res));
+      } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(create_sstable_param, ctx_->allocator_, new_table_handle))) {
         LOG_WARN("create sstable failed", K(ret), K(create_sstable_param));
       }
     }
-  }
   }
   return ret;
 }

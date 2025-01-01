@@ -109,7 +109,7 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObBasicTabletMergeC
 {
   int ret = OB_SUCCESS;
   // set INT64_MAX for invalid check
-  param.filled_tx_scn_.set_max();
+  param.set_filled_tx_scn(SCN::max_scn());
   const ObTablesHandleArray &tables_handle = ctx.get_tables_handle();
   if (is_mini_merge(ctx.get_merge_type())) {
     // when this merge is MINI_MERGE, use the start_scn of the oldest tx data memtable as start_tx_scn
@@ -121,7 +121,7 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObBasicTabletMergeC
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table ptr is unexpected nullptr", KR(ret), K(ctx));
     } else {
-      param.filled_tx_scn_ = tx_data_memtable->get_start_scn();
+      param.set_filled_tx_scn(tx_data_memtable->get_start_scn());
     }
   } else if (is_minor_merge(ctx.get_merge_type())) {
     // when this merge is MINOR_MERGE, use max_filtered_end_scn in filter if filtered some tx data
@@ -134,7 +134,7 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObBasicTabletMergeC
     } else if (OB_FAIL(oldest_tx_data_sstable->get_meta(sstable_meta_hdl))) {
       LOG_WARN("fail to get sstable meta handle", K(ret));
     } else {
-      param.filled_tx_scn_ = sstable_meta_hdl.get_sstable_meta().get_filled_tx_scn();
+      param.set_filled_tx_scn(sstable_meta_hdl.get_sstable_meta().get_filled_tx_scn());
 
       if (OB_NOT_NULL(compaction_filter_)) {
         // if compaction_filter is valid, update filled_tx_log_ts if recycled some tx data
@@ -144,8 +144,8 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObBasicTabletMergeC
         } else {
           recycled_scn = compaction_filter_->get_recycle_scn();
         }
-        if (recycled_scn > param.filled_tx_scn_) {
-          param.filled_tx_scn_ = recycled_scn;
+        if (recycled_scn > param.filled_tx_scn()) {
+          param.set_filled_tx_scn(recycled_scn);
         }
       }
     }
@@ -222,7 +222,7 @@ int ObTabletMergeInfo::create_sstable(
           LOG_WARN("fail to create sstable", K(ret), K(param));
           CTX_SET_DIAGNOSE_LOCATION(ctx);
         }
-      } else if (NULL != cg_schema && 0 == param.data_blocks_cnt_) { // skip to create normal cg sstable that is empty
+      } else if (NULL != cg_schema && 0 == param.data_blocks_cnt()) { // skip to create normal cg sstable that is empty
         skip_to_create_empty_cg = true;
         FLOG_INFO("skip to create empty cg sstable!", K(ret), K(param), KPC(cg_schema));
       } else { // use tmp allocator to create normal cg sstable due to the concurrent problem

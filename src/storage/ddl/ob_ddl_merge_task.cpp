@@ -920,7 +920,6 @@ int ObTabletDDLUtil::create_ddl_sstable(
         LOG_WARN("create sstable failed", K(ret), K(param));
       }
     } else {
-      param.uncommitted_tx_id_ = ddl_param.trans_id_.get_id();
       if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObSSTable>(param, allocator, sstable_handle))) {
         LOG_WARN("create sstable failed", K(ret), K(param));
       }

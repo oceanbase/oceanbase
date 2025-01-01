@@ -107,8 +107,6 @@ public:
 
 protected:
   virtual int check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const = 0;
-
-  int init_param_for_co_sstable_(ObTabletCreateSSTableParam &param) const;
   int init_create_sstable_param_(ObTabletCreateSSTableParam &param) const;
   int init_create_sstable_param_(
       const blocksstable::ObSSTableMergeRes &res,

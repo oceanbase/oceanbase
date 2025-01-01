@@ -21,6 +21,7 @@
 #include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_reader.h"
+#include "storage/tablet/ob_tablet_create_sstable_param.h"
 
 namespace oceanbase
 {

@@ -155,39 +155,12 @@ int ObCopiedSSTableCreatorImpl::init(
   return ret;
 }
 
-int ObCopiedSSTableCreatorImpl::init_param_for_co_sstable_(ObTabletCreateSSTableParam &param) const
-{
-  int ret = OB_SUCCESS;
-  if (src_sstable_param_->table_key_.is_co_sstable()) {
-    if (!src_sstable_param_->is_empty_sstable()
-        && (src_sstable_param_->co_base_type_ <= ObCOSSTableBaseType::INVALID_TYPE
-            || src_sstable_param_->co_base_type_ >= ObCOSSTableBaseType::MAX_TYPE
-            || src_sstable_param_->column_group_cnt_ <= 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("co sstable with invalid co sstable param", K(ret), KPC(src_sstable_param_));
-    } else {
-      param.column_group_cnt_ = src_sstable_param_->column_group_cnt_;
-      param.full_column_cnt_ = src_sstable_param_->full_column_cnt_;
-      param.co_base_type_ = src_sstable_param_->co_base_type_;
-      if (src_sstable_param_->is_empty_sstable()) {
-        param.is_co_table_without_cgs_ = !src_sstable_param_->table_key_.is_ddl_sstable();
-      } else {
-        param.is_co_table_without_cgs_ = src_sstable_param_->is_empty_cg_sstables_;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObCopiedSSTableCreatorImpl::init_create_sstable_param_(ObTabletCreateSSTableParam &param) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(param.init_for_ha(*src_sstable_param_))) {
     LOG_WARN("fail to init create sstable param", K(ret), KPC(src_sstable_param_));
-  } else if (OB_FAIL(init_param_for_co_sstable_(param))) {
-    LOG_WARN("fail to init co sstable param", K(ret), KPC(src_sstable_param_));
   }
-
   return ret;
 }
 
@@ -198,10 +171,7 @@ int ObCopiedSSTableCreatorImpl::init_create_sstable_param_(
   int ret = OB_SUCCESS;
   if (OB_FAIL(param.init_for_ha(*src_sstable_param_, res))) {
     LOG_WARN("fail to init create sstable param", K(ret), KPC(src_sstable_param_));
-  } else if (OB_FAIL(init_param_for_co_sstable_(param))) {
-    LOG_WARN("fail to init co sstable param", K(ret), KPC(src_sstable_param_));
   }
-
   return ret;
 }
 
@@ -210,7 +180,7 @@ int ObCopiedSSTableCreatorImpl::do_create_sstable_(
     ObTableHandleV2 &table_handle) const
 {
   int ret = OB_SUCCESS;
-  if (param.table_key_.is_co_sstable()) {
+  if (param.table_key().is_co_sstable()) {
     if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param,
                                                                           *allocator_,
                                                                           table_handle))) {
@@ -292,9 +262,6 @@ int ObBackupSSTableCreator::create_sstable()
     SMART_VAR(ObTabletCreateSSTableParam, param) {
       if (OB_FAIL(param.init_for_remote(*src_sstable_param_))) {
         LOG_WARN("failed to init for remote", K(ret));
-      } else {
-        param.table_backup_flag_.set_has_backup();
-        param.table_backup_flag_.set_no_local();
       }
 
       if (FAILEDx(do_create_sstable_(param, table_handle))) {

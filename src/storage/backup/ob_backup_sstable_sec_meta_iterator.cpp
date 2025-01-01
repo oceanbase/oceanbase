@@ -339,7 +339,7 @@ int ObBackupSSTableSecMetaIterator::create_tmp_sstable_(
     const ObTabletCreateSSTableParam &param)
 {
   int ret = OB_SUCCESS;
-  if (!param.table_key_.is_co_sstable()) {
+  if (!param.table_key().is_co_sstable()) {
     if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(
         param, allocator_, table_handle_))) {
       LOG_WARN("failed to create sstable for migrate", K(ret));

@@ -819,8 +819,8 @@ int ObTabletCreateDeleteHelper::create_empty_sstable(
     if (OB_FAIL(create_empty_co_sstable(allocator, storage_schema, tablet_id, snapshot_version, table_handle))) {
       LOG_WARN("failed to create co sstable", K(ret), K(storage_schema));
     }
-  } else if (OB_FAIL(build_create_sstable_param(storage_schema, tablet_id, snapshot_version, param))) {
-    LOG_WARN("failed to build sstable param", K(ret), K(tablet_id), K(storage_schema), K(snapshot_version), K(param));
+  } else if (OB_FAIL(param.init_for_empty_major_sstable(tablet_id, storage_schema, snapshot_version, -1/*cg idx*/, false/*has all cg*/))) {
+    LOG_WARN("failed to build sstable param", K(ret), K(tablet_id), K(storage_schema), K(snapshot_version));
   } else if (OB_FAIL(create_sstable(param, allocator, table_handle))) {
     LOG_WARN("failed to create sstable", K(ret), K(param));
   }
@@ -860,9 +860,8 @@ int ObTabletCreateDeleteHelper::create_empty_co_sstable(
       ObCOSSTableV2 *co_sstable = nullptr;
       ObSSTable *sstable = nullptr;
 
-      if (OB_FAIL(build_create_cs_sstable_param(storage_schema, tablet_id, snapshot_version, idx, has_all_cg, cs_param))) {
+      if (OB_FAIL(cs_param.init_for_empty_major_sstable(tablet_id, storage_schema, snapshot_version, idx, has_all_cg))) {
         LOG_WARN("failed to build table cs param for column store", K(ret), K(tablet_id), K(cg_schema));
-      } else if (FALSE_IT(cs_param.is_co_table_without_cgs_ = true)) {
       } else if (OB_FAIL(create_sstable<ObCOSSTableV2>(cs_param, allocator, co_handle))) {
         LOG_WARN("failed to create all cg sstable", K(ret), K(cs_param));
       } else if (OB_FAIL(co_handle.get_sstable(sstable))) {
@@ -910,128 +909,6 @@ bool ObTabletCreateDeleteHelper::is_pure_hidden_tablets(const ObCreateTabletInfo
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
   const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() >= 1 && !is_contain(tablet_ids, data_tablet_id) && info.is_create_bind_hidden_tablets_;
-}
-
-int ObTabletCreateDeleteHelper::build_create_sstable_param(
-    const ObStorageSchema &storage_schema,
-    const ObTabletID &tablet_id,
-    const int64_t snapshot_version,
-    ObTabletCreateSSTableParam &param)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!storage_schema.is_valid()
-      || !tablet_id.is_valid()
-      || OB_INVALID_VERSION == snapshot_version)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(storage_schema), K(snapshot_version));
-  } else if (OB_FAIL(storage_schema.get_encryption_id(param.encrypt_id_))) {
-    LOG_WARN("fail to get_encryption_id", K(ret), K(storage_schema));
-  } else {
-    param.master_key_id_ = storage_schema.get_master_key_id();
-    MEMCPY(param.encrypt_key_, storage_schema.get_encrypt_key_str(), storage_schema.get_encrypt_key_len());
-
-    const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    param.table_key_.table_type_ = 1 < storage_schema.get_column_group_count()
-                                 ? ObITable::TableType::COLUMN_ORIENTED_SSTABLE
-                                 : ObITable::TableType::MAJOR_SSTABLE;
-
-    param.table_key_.tablet_id_ = tablet_id;
-    param.table_key_.version_range_.snapshot_version_ = snapshot_version;
-    param.max_merged_trans_version_ = snapshot_version;
-
-    param.schema_version_ = storage_schema.get_schema_version();
-    param.create_snapshot_version_ = 0;
-    param.progressive_merge_round_ = storage_schema.get_progressive_merge_round();
-    param.progressive_merge_step_ = 0;
-
-    param.table_mode_ = storage_schema.get_table_mode_struct();
-    param.index_type_ = storage_schema.get_index_type();
-    param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num()
-            + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    param.root_block_addr_.set_none_addr();
-    param.data_block_macro_meta_addr_.set_none_addr();
-    param.root_row_store_type_ = (ObRowStoreType::ENCODING_ROW_STORE == storage_schema.get_row_store_type()
-        ? ObRowStoreType::SELECTIVE_ENCODING_ROW_STORE : storage_schema.get_row_store_type());
-    param.latest_row_store_type_ = storage_schema.get_row_store_type();
-    param.data_index_tree_height_ = 0;
-    param.index_blocks_cnt_ = 0;
-    param.data_blocks_cnt_ = 0;
-    param.micro_block_cnt_ = 0;
-    param.use_old_macro_block_count_ = 0;
-    param.data_checksum_ = 0;
-    param.occupy_size_ = 0;
-    param.ddl_scn_.set_min();
-    param.filled_tx_scn_.set_min();
-    param.tx_data_recycle_scn_.set_min();
-    param.original_size_ = 0;
-    param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
-    param.table_backup_flag_.reset();
-    param.table_shared_flag_.reset();
-    param.sstable_logic_seq_ = 0;
-    param.row_count_ = 0;
-    param.recycle_version_ = 0;
-    param.root_macro_seq_ = 0;
-    param.nested_size_ = 0;
-    param.nested_offset_ = 0;
-    param.column_group_cnt_ = 1;
-    param.co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
-    param.full_column_cnt_ = 0;
-    param.is_co_table_without_cgs_ = false;
-    param.co_base_snapshot_version_ = 0;
-    if (OB_FAIL(storage_schema.get_store_column_count(param.column_cnt_, true/*is_full*/))) {
-      LOG_WARN("fail to get stored col cnt of table schema", K(ret), K(storage_schema));
-    } else if (FALSE_IT(param.column_cnt_ += multi_version_col_cnt)) {
-    } else if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_,
-        param.column_checksums_))) {
-      LOG_WARN("fail to fill column checksum for empty major", K(ret), K(param));
-    }
-  }
-  return ret;
-}
-
-int ObTabletCreateDeleteHelper::build_create_cs_sstable_param(
-    const ObStorageSchema &storage_schema,
-    const ObTabletID &tablet_id,
-    const int64_t snapshot_version,
-    const int64_t column_group_idx,
-    const bool has_all_column_group,
-    ObTabletCreateSSTableParam &cs_param)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(build_create_sstable_param(storage_schema, tablet_id, snapshot_version, cs_param))) {
-    LOG_WARN("failed to build sstable cs_param", K(ret));
-  } else if (FALSE_IT(cs_param.table_key_.column_group_idx_ = column_group_idx)) {
-  } else if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(cs_param.full_column_cnt_))) {
-    LOG_WARN("failed to get_stored_column_count_in_sstable", K(ret));
-  } else {
-    const ObStorageColumnGroupSchema &cg_schema = storage_schema.get_column_groups().at(column_group_idx);
-
-    if (cg_schema.is_all_column_group()) {
-      cs_param.table_key_.table_type_ = ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
-      cs_param.co_base_type_ = ObCOSSTableBaseType::ALL_CG_TYPE;
-    } else if (cg_schema.is_rowkey_column_group()) {
-      cs_param.table_key_.table_type_ = has_all_column_group
-                                      ? ObITable::TableType::ROWKEY_COLUMN_GROUP_SSTABLE
-                                      : ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
-
-      cs_param.co_base_type_ = has_all_column_group
-                             ? ObCOSSTableBaseType::ALL_CG_TYPE
-                             : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
-
-      cs_param.rowkey_column_cnt_ = cg_schema.column_cnt_;
-      cs_param.column_cnt_ = cg_schema.column_cnt_;
-    } else {
-      cs_param.table_key_.table_type_ = ObITable::TableType::NORMAL_COLUMN_GROUP_SSTABLE;
-      cs_param.rowkey_column_cnt_ = 0;
-      cs_param.column_cnt_ = cg_schema.column_cnt_;
-    }
-
-    if (ObITable::TableType::COLUMN_ORIENTED_SSTABLE == cs_param.table_key_.table_type_) {
-      cs_param.column_group_cnt_ = storage_schema.get_column_group_count();
-    }
-  }
-  return ret;
 }
 } // namespace storage
 } // namespace oceanbase

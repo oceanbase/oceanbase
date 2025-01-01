@@ -1505,58 +1505,9 @@ int ObTabletSplitMergeTask::build_create_sstable_param(
     LOG_WARN("get sstable meta failed", K(ret));
   } else {
     const ObSSTableBasicMeta &basic_meta = meta_handle.get_sstable_meta().get_basic_meta();
-    create_sstable_param.table_key_ = src_table.get_key();
-    create_sstable_param.table_key_.tablet_id_ = dst_tablet_id;
-    create_sstable_param.sstable_logic_seq_ = basic_meta.sstable_logic_seq_;
-    create_sstable_param.filled_tx_scn_ = basic_meta.filled_tx_scn_;
-    create_sstable_param.table_mode_ = basic_meta.table_mode_;
-    create_sstable_param.index_type_ = static_cast<share::schema::ObIndexType> (basic_meta.index_type_);
-    create_sstable_param.rowkey_column_cnt_ = basic_meta.rowkey_column_count_;
-    create_sstable_param.latest_row_store_type_ = basic_meta.latest_row_store_type_;
-    create_sstable_param.recycle_version_ = basic_meta.recycle_version_;
-    create_sstable_param.schema_version_ = param_->schema_version_; // use new schema version.
-    create_sstable_param.create_snapshot_version_ = basic_meta.create_snapshot_version_;
-    create_sstable_param.ddl_scn_ = basic_meta.ddl_scn_;
-    create_sstable_param.progressive_merge_round_ = basic_meta.progressive_merge_round_;
-    create_sstable_param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
-    create_sstable_param.co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
-
-    ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
-        create_sstable_param.root_block_addr_, create_sstable_param.root_block_data_);
-    ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
-        create_sstable_param.data_block_macro_meta_addr_, create_sstable_param.data_block_macro_meta_);
-    create_sstable_param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
-    create_sstable_param.root_row_store_type_ = res.root_row_store_type_;
-    create_sstable_param.data_index_tree_height_ = res.root_desc_.height_;
-    create_sstable_param.index_blocks_cnt_ = res.index_blocks_cnt_;
-    create_sstable_param.data_blocks_cnt_ = res.data_blocks_cnt_;
-    create_sstable_param.micro_block_cnt_ = res.micro_block_cnt_;
-    create_sstable_param.use_old_macro_block_count_ = res.use_old_macro_block_count_;
-    create_sstable_param.row_count_ = res.row_count_;
-    create_sstable_param.column_cnt_ = res.data_column_cnt_;
-    create_sstable_param.data_checksum_ = res.data_checksum_;
-    create_sstable_param.occupy_size_ = res.occupy_size_;
-    create_sstable_param.original_size_ = res.original_size_;
-    create_sstable_param.max_merged_trans_version_ = res.max_merged_trans_version_;
-    create_sstable_param.contain_uncommitted_row_ = res.contain_uncommitted_row_;
-    create_sstable_param.compressor_type_ = res.compressor_type_;
-    create_sstable_param.encrypt_id_ = res.encrypt_id_;
-    create_sstable_param.master_key_id_ = res.master_key_id_;
-    create_sstable_param.nested_size_ = res.nested_size_;
-    create_sstable_param.nested_offset_ = res.nested_offset_;
-    create_sstable_param.data_block_ids_ = res.data_block_ids_;
-    create_sstable_param.other_block_ids_ = res.other_block_ids_;
-    create_sstable_param.root_macro_seq_ = res.root_macro_seq_;
-    create_sstable_param.ddl_scn_.set_min();
-    create_sstable_param.table_backup_flag_ = res.table_backup_flag_; // to tag whether there is any remote macro block.
-    create_sstable_param.full_column_cnt_ = 0;
-    create_sstable_param.tx_data_recycle_scn_.set_min();
-    create_sstable_param.column_group_cnt_ = 1;
-    MEMCPY(create_sstable_param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-    if (src_table.is_major_sstable()) {
-      if (OB_FAIL(create_sstable_param.column_checksums_.assign(res.data_column_checksums_))) {
-        LOG_WARN("fill column checksum failed", K(ret), K(res));
-      }
+    if (OB_FAIL(create_sstable_param.init_for_split(dst_tablet_id, src_table.get_key(), basic_meta,
+                                      param_->schema_version_, res))) {
+      LOG_WARN("init sstable param fail", K(ret), K(dst_tablet_id), K(src_table.get_key()), K(basic_meta), K(res));
     }
   }
   return ret;
@@ -1605,57 +1556,9 @@ int ObTabletSplitMergeTask::build_create_empty_sstable_param(
   if (OB_UNLIKELY(!meta.is_valid() || !table_key.is_valid() || !dst_tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(meta), K(table_key), K(dst_tablet_id));
-  } else {
-    const ObSSTableBasicMeta &basic_meta = meta;
-
-    create_sstable_param.table_key_.table_type_ = ObITable::TableType::MINOR_SSTABLE;
-    create_sstable_param.table_key_.tablet_id_ = dst_tablet_id;
-    create_sstable_param.table_key_.scn_range_.start_scn_ = table_key.get_end_scn();
-    create_sstable_param.table_key_.scn_range_.end_scn_ = end_scn;
-    create_sstable_param.max_merged_trans_version_ = 0;
-
-    create_sstable_param.schema_version_ = basic_meta.schema_version_;
-    create_sstable_param.progressive_merge_round_ = basic_meta.progressive_merge_round_;
-    create_sstable_param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
-    create_sstable_param.sstable_logic_seq_ = basic_meta.sstable_logic_seq_;
-    create_sstable_param.filled_tx_scn_ = basic_meta.filled_tx_scn_;
-    create_sstable_param.table_mode_ = basic_meta.table_mode_;
-    create_sstable_param.index_type_ = static_cast<share::schema::ObIndexType> (basic_meta.index_type_);
-    create_sstable_param.rowkey_column_cnt_ = basic_meta.rowkey_column_count_;
-    create_sstable_param.latest_row_store_type_ = basic_meta.latest_row_store_type_;
-    create_sstable_param.recycle_version_ = basic_meta.recycle_version_;
-    create_sstable_param.schema_version_ = basic_meta.schema_version_;
-    create_sstable_param.create_snapshot_version_ = basic_meta.create_snapshot_version_;
-    create_sstable_param.ddl_scn_ = basic_meta.ddl_scn_;
-    create_sstable_param.progressive_merge_round_ = basic_meta.progressive_merge_round_;
-    create_sstable_param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
-    create_sstable_param.column_cnt_ = basic_meta.column_cnt_;
-    create_sstable_param.master_key_id_ = basic_meta.master_key_id_;
-    create_sstable_param.co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
-    MEMCPY(create_sstable_param.encrypt_key_, basic_meta.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-
-    create_sstable_param.root_block_addr_.set_none_addr();
-    create_sstable_param.data_block_macro_meta_addr_.set_none_addr();
-    create_sstable_param.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-    create_sstable_param.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-    create_sstable_param.data_index_tree_height_ = 0;
-    create_sstable_param.index_blocks_cnt_ = 0;
-    create_sstable_param.data_blocks_cnt_ = 0;
-    create_sstable_param.micro_block_cnt_ = 0;
-    create_sstable_param.use_old_macro_block_count_ = 0;
-    create_sstable_param.row_count_ = 0;
-    create_sstable_param.data_checksum_ = 0;
-    create_sstable_param.occupy_size_ = 0;
-    create_sstable_param.ddl_scn_.set_min();
-    create_sstable_param.filled_tx_scn_ = end_scn;
-    create_sstable_param.tx_data_recycle_scn_.set_min();
-    create_sstable_param.original_size_ = 0;
-    create_sstable_param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
-    create_sstable_param.nested_offset_ = 0;
-    create_sstable_param.nested_size_ = 0;
-    create_sstable_param.root_macro_seq_ = 0;
-    create_sstable_param.full_column_cnt_ = 0;
-    create_sstable_param.column_group_cnt_ = 1;
+  } else if (OB_FAIL(create_sstable_param.init_for_split_empty_minor_sstable(dst_tablet_id,
+                     table_key.get_end_scn()/*start_scn*/, end_scn, meta))) {
+    LOG_WARN("init sstable param fail", K(ret), K(meta), K(table_key), K(dst_tablet_id), K(end_scn));
   }
   return ret;
 }

@@ -149,7 +149,7 @@ public:
   typedef common::ObSEArray<ObTableHandleV2, BASIC_MEMSTORE_CNT> ObTableHandleArray;
   typedef common::ObFixedArray<share::schema::ObColDesc, common::ObIAllocator> ColDescArray;
 public:
-  ObTablet(const bool is_external_tablet = false);
+  explicit ObTablet(const bool is_external_tablet = false);
   ObTablet(const ObTablet&) = delete;
   ObTablet &operator=(const ObTablet&) = delete;
   virtual ~ObTablet();

@@ -3071,55 +3071,6 @@ int ObLSTabletService::replay_set_ddl_info(
   return ret;
 }
 
-int ObLSTabletService::build_create_sstable_param_for_migration(
-    const blocksstable::ObMigrationSSTableParam &mig_param,
-    ObTabletCreateSSTableParam &param)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!mig_param.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(mig_param));
-  } else {
-    param.table_key_                     = mig_param.table_key_;
-    param.schema_version_                = mig_param.basic_meta_.schema_version_;
-    param.create_snapshot_version_       = mig_param.basic_meta_.create_snapshot_version_;
-    param.progressive_merge_round_       = mig_param.basic_meta_.progressive_merge_round_;
-    param.progressive_merge_step_        = mig_param.basic_meta_.progressive_merge_step_;
-    param.is_ready_for_read_             = false;
-    param.table_mode_                    = mig_param.basic_meta_.table_mode_;
-    param.index_type_                    = static_cast<share::schema::ObIndexType>(mig_param.basic_meta_.index_type_);
-    param.rowkey_column_cnt_             = mig_param.basic_meta_.rowkey_column_count_;
-    param.root_row_store_type_           = mig_param.basic_meta_.root_row_store_type_;
-    param.latest_row_store_type_         = mig_param.basic_meta_.latest_row_store_type_;
-    param.index_blocks_cnt_              = mig_param.basic_meta_.index_macro_block_count_;
-    param.data_blocks_cnt_               = mig_param.basic_meta_.data_macro_block_count_;
-    param.micro_block_cnt_               = mig_param.basic_meta_.data_micro_block_count_;
-    param.use_old_macro_block_count_     = mig_param.basic_meta_.use_old_macro_block_count_;
-    param.row_count_                     = mig_param.basic_meta_.row_count_;
-    param.column_cnt_                    = mig_param.basic_meta_.column_cnt_;
-    param.data_checksum_                 = mig_param.basic_meta_.data_checksum_;
-    param.occupy_size_                   = mig_param.basic_meta_.occupy_size_;
-    param.original_size_                 = mig_param.basic_meta_.original_size_;
-    param.max_merged_trans_version_      = mig_param.basic_meta_.max_merged_trans_version_;
-    param.ddl_scn_                       = mig_param.basic_meta_.ddl_scn_;
-    param.filled_tx_scn_                 = mig_param.basic_meta_.filled_tx_scn_;
-    param.contain_uncommitted_row_       = mig_param.basic_meta_.contain_uncommitted_row_;
-    param.compressor_type_               = mig_param.basic_meta_.compressor_type_;
-    param.encrypt_id_                    = mig_param.basic_meta_.encrypt_id_;
-    param.master_key_id_                 = mig_param.basic_meta_.master_key_id_;
-    MEMCPY(param.encrypt_key_, mig_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-    param.root_block_addr_.set_none_addr();
-    param.data_block_macro_meta_addr_.set_none_addr();;
-    param.table_backup_flag_             = mig_param.basic_meta_.table_backup_flag_;
-    param.table_shared_flag_             = mig_param.basic_meta_.table_shared_flag_;
-    param.co_base_snapshot_version_      = mig_param.basic_meta_.co_base_snapshot_version_;
-    if (OB_FAIL(param.column_checksums_.assign(mig_param.column_checksums_))) {
-      LOG_WARN("fail to assign column checksums", K(ret), K(mig_param));
-    }
-  }
-  return ret;
-}
-
 int ObLSTabletService::insert_rows(
     ObTabletHandle &tablet_handle,
     ObStoreCtx &ctx,

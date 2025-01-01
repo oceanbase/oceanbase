@@ -183,18 +183,6 @@ public:
   static bool is_pure_aux_tablets(const obrpc::ObCreateTabletInfo &info);
   static bool is_pure_hidden_tablets(const obrpc::ObCreateTabletInfo &info);
 
-  static int build_create_sstable_param(
-      const ObStorageSchema &storage_schema,
-      const common::ObTabletID &tablet_id,
-      const int64_t snapshot_version,
-      ObTabletCreateSSTableParam &param);
-  static int build_create_cs_sstable_param(
-      const ObStorageSchema &storage_schema,
-      const ObTabletID &tablet_id,
-      const int64_t snapshot_version,
-      const int64_t column_group_idx,
-      const bool has_all_column_group,
-      ObTabletCreateSSTableParam &cs_param);
   template<typename Arg, typename Helper>
   static int process_for_old_mds(
              const char *buf,

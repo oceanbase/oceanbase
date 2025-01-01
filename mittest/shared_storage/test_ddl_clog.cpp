@@ -157,7 +157,7 @@ void TestDDLClogCase::mock_sstable(ObTableHandleV2 &table_handle)
   table_key.version_range_.snapshot_version_ = mock_snapshot_version;
 
   ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL));
-  ASSERT_EQ(OB_SUCCESS, ObTabletCreateDeleteHelper::build_create_sstable_param(storage_schema, ObTabletID(tablet_id_), 100, param));
+  ASSERT_EQ(OB_SUCCESS, param.init_for_empty_major_sstable(ObTabletID(tablet_id_), storage_schema, 100, -1, false));
   ASSERT_NE(nullptr, buf = allocator_.alloc(sizeof(ObSSTable)));
   ASSERT_NE(nullptr, sstable = new(buf)ObSSTable());
   ASSERT_EQ(OB_SUCCESS, sstable->init(param, &allocator_));
