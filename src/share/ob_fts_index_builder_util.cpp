@@ -748,8 +748,9 @@ int ObFtsIndexBuilderUtil::check_ft_cols(
       ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
       LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
                      column_name.ptr());
-    } else if (!col_schema->is_string_type() ||
-               col_schema->get_meta_type().is_blob()) {
+    } else if (!col_schema->is_string_type()
+            || col_schema->get_meta_type().is_varbinary_or_binary()
+            || col_schema->get_meta_type().is_blob()) {
       ret = OB_ERR_BAD_FT_COLUMN;
       LOG_USER_ERROR(OB_ERR_BAD_FT_COLUMN, column_name.length(), column_name.ptr());
     } else {
