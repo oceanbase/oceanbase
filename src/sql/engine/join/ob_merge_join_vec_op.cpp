@@ -1280,10 +1280,9 @@ int ObMergeJoinVecOp::inner_open() {
                                       right_match_cursor_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc ObSemiAntiJoinTracker failed", K(ret));
+      } else if (OB_FALSE_IT(tracker_ = tracker)) {
       } else if (OB_FAIL(tracker->init(tenant_id, MY_SPEC.max_batch_size_))) {
         LOG_WARN("ObSemiAntiJoinTracker init failed", K(ret));
-      } else {
-        tracker_ = tracker;
       }
     } else {
       bool need_trace = join_type != INNER_JOIN && MY_SPEC.other_join_conds_.count() != 0;
@@ -1295,10 +1294,9 @@ int ObMergeJoinVecOp::inner_open() {
                                       right_match_cursor_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc ObCommonJoinTracker failed", K(ret));
+      } else if (OB_FALSE_IT(tracker_ = tracker)) {
       } else if (OB_FAIL(tracker->init(MY_SPEC.max_batch_size_))) {
         LOG_WARN("ObCommonJoinTracker init failed", K(ret));
-      } else {
-        tracker_ = tracker;
       }
     }
     LOG_TRACE("trace init sql mem mgr for merge join",
