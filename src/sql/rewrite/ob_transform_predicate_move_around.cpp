@@ -2133,7 +2133,8 @@ int ObTransformPredicateMoveAround::pushdown_into_where(ObDMLStmt &stmt,
   ObSqlBitSet<> table_set;
   bool is_needed = false;
   OPT_TRACE("try to transform where condition");
-  ObIArray<ObRawExpr *> &conditions = (stmt.is_insert_stmt() || stmt.is_merge_stmt())
+  bool is_insert_stmt = stmt.is_insert_stmt() || stmt.is_merge_stmt();
+  ObIArray<ObRawExpr *> &conditions = is_insert_stmt
                                       ? static_cast<ObInsertStmt &>(stmt).get_sharding_conditions()
                                       : stmt.get_condition_exprs();
   if (conditions.empty() && predicates.empty()) {
@@ -2160,7 +2161,8 @@ int ObTransformPredicateMoveAround::pushdown_into_where(ObDMLStmt &stmt,
   } else if (OB_FAIL(accept_predicates(stmt,
                                        conditions,
                                        pullup_preds,
-                                       new_conds))) {
+                                       new_conds,
+                                       is_insert_stmt))) {
     LOG_WARN("failed to accept predicate", K(ret));
   }
   return ret;
@@ -3374,7 +3376,8 @@ int ObTransformPredicateMoveAround::check_need_transform_predicates(ObIArray<ObR
 int ObTransformPredicateMoveAround::accept_predicates(ObDMLStmt &stmt,
                                                       ObIArray<ObRawExpr *> &conds,
                                                       ObIArray<ObRawExpr *> &properties,
-                                                      ObIArray<ObRawExpr *> &new_conds)
+                                                      ObIArray<ObRawExpr *> &new_conds,
+                                                      const bool preserve_conds)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> chosen_preds;
@@ -3386,6 +3389,8 @@ int ObTransformPredicateMoveAround::accept_predicates(ObDMLStmt &stmt,
   } else if (OB_FAIL(equal_param_constraints.assign(stmt.get_query_ctx()->all_equal_param_constraints_))
              || OB_FAIL(append(equal_param_constraints, ctx_->equal_param_constraints_))) {
     LOG_WARN("failed to fill equal param constraints", K(ret));
+  } else if (preserve_conds && OB_FAIL(chosen_preds.assign(conds))) {
+    LOG_WARN("failed to assign conditions", K(ret));
   } else {
     context.init(&stmt.get_query_ctx()->calculable_items_, &equal_param_constraints);
   }
