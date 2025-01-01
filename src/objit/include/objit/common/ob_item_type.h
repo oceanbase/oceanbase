@@ -900,7 +900,7 @@ typedef enum ObItemType
   T_FUNC_SYS_ARRAY_SORTBY = 1773,
   T_FUNC_SYS_ARRAY_FILTER = 1774,
   T_FUNC_SYS_ARRAY_LENGTH = 1775,
-  T_FUNC_SYS_RANGE = 1776,
+  T_FUNC_SYS_ARRAY_RANGE = 1776,
   T_FUNC_SYS_ARRAY_POSITION = 1777,
   ///< @note add new oracle only function type before this line
 
