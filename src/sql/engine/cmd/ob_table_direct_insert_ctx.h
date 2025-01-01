@@ -82,16 +82,9 @@ public:
   }
 
 private:
-  int get_direct_load_level(const sql::ObPhysicalPlan &phy_plan,
-                            const uint64_t table_id,
-                            storage::ObDirectLoadLevel::Type &load_level);
-  int get_tablet_ids(const sql::ObSqlCtx &sql_ctx,
-                     const uint64_t table_id,
-                     common::ObIArray<common::ObTabletID> &tablet_ids);
-  int get_is_heap_table(share::schema::ObSchemaGetterGuard &schema_guard,
-                        const uint64_t tenant_id,
-                        const uint64_t table_id,
-                        bool &is_heap_table);
+  int get_partition_level_tablet_ids(const sql::ObPhysicalPlan &phy_plan,
+                                     const share::schema::ObTableSchema *table_schema,
+                                     common::ObIArray<common::ObTabletID> &tablet_ids);
 private:
   observer::ObTableLoadExecCtx *load_exec_ctx_;
   observer::ObTableLoadInstance *table_load_instance_;
