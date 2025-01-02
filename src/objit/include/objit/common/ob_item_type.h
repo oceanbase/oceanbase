@@ -991,6 +991,8 @@ typedef enum ObItemType
   T_FUN_SYS_CALC_ODPS_SIZE = 2056,
   T_FUN_URL_ENCODE = 2057,
   T_FUN_URL_DECODE = 2058,
+  T_FUN_SYS_DEMOTE_CAST = 2059,
+  T_FUN_SYS_RANGE_PLACEMENT = 2060,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
