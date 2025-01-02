@@ -101,9 +101,7 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
     if (OB_SUCCESS != (tmp_ret = ctx->store_ctx_->set_status_abort())) {
       LOG_WARN("fail to set store status abort", KR(tmp_ret));
     }
-    // 2. disable heart beat check
-    ctx->store_ctx_->set_enable_heart_beat_check(false);
-    // 3. mark all active trans abort
+    // 2. mark all active trans abort
     if (OB_SUCCESS != (tmp_ret = abort_active_trans(ctx))) {
       LOG_WARN("fail to abort active trans", KR(tmp_ret));
     }
@@ -191,7 +189,6 @@ int ObTableLoadStore::confirm_begin()
   } else {
     LOG_INFO("store confirm begin");
     store_ctx_->heart_beat(); // init heart beat
-    store_ctx_->set_enable_heart_beat_check(true);
     if (ObDirectLoadMethod::is_incremental(param_.method_)) {
       if (OB_FAIL(open_insert_table_ctx())) {
         LOG_WARN("fail to open insert_table_ctx", KR(ret));
@@ -505,7 +502,6 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
         }
         ctx_->reset_assigned_memory();
       }
-      store_ctx_->set_enable_heart_beat_check(false);
       result_info = store_ctx_->result_info_;
     }
   }
