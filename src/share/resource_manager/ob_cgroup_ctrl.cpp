@@ -405,6 +405,9 @@ int ObCgroupCtrl::get_group_path(
   if (!is_valid()) {
     ret = OB_INVALID_CONFIG;
   } else if (!is_valid_tenant_id(tenant_id)) {
+    // if tenant_id is invalid, return "root_cgroup_path/[background_path]"
+    // if tenant_id is invalid, group_id should be invalid.
+    group_id = OB_INVALID_GROUP_ID;
     // gen root_cgroup_path
     if (is_background) {
       // background base, return "cgroup/background"
@@ -420,12 +423,7 @@ int ObCgroupCtrl::get_group_path(
     snprintf(root_cgroup_path, path_bufsize, "%s", OBSERVER_ROOT_CGROUP_DIR);
 
     // gen tenant_path
-    if (!is_valid_tenant_id(tenant_id)) {
-      // do nothing
-      // if tenant_id is invalid, return "root_cgroup_path/[base_path]"
-      // if tenant_id is invalid, group_id should be invalid.
-      group_id = OB_INVALID_GROUP_ID;
-    } else if (is_meta_tenant(tenant_id)) {
+    if (is_meta_tenant(tenant_id)) {
       // tenant is meta tenant
       snprintf(user_tenant_path, PATH_BUFSIZE, "tenant_%04lu", gen_user_tenant_id(tenant_id));
       snprintf(meta_tenant_path, PATH_BUFSIZE, "tenant_%04lu", tenant_id);
@@ -451,7 +449,6 @@ int ObCgroupCtrl::get_group_path(
           if (REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) {
             LOG_WARN("fail to get group_name", K(tmp_ret), K(tenant_id), K(group_id), K(lbt()));
           }
-          ret = OB_SUCCESS;  // ignore error
         } else {
           group_name = g_name.get_value().ptr();
         }
@@ -522,7 +519,7 @@ int ObCgroupCtrl::add_thread_to_cgroup_(
     } else if (OB_FAIL(set_cgroup_config_(group_path, TASKS_FILE, tid_value))) {
       LOG_WARN("add tid to cgroup failed", K(ret), K(group_path), K(tid_value), K(tenant_id));
     } else {
-      LOG_DEBUG("add tid to cgroup success", K(group_path), K(tid_value), K(tenant_id), K(group_id));
+      LOG_INFO("add tid to cgroup success", K(group_path), K(tid_value), K(tenant_id), K(group_id));
     }
   }
   return ret;
@@ -664,28 +661,30 @@ int ObCgroupCtrl::set_cpu_cfs_quota_(
   double target_cpu = cpu;
   double base_cpu = -1;
 
-  // background quota limit
-  if (is_valid_tenant_id(tenant_id) && is_background) {
-    int compare_ret = 0;
-    if (OB_FAIL(get_cpu_cfs_quota(OB_INVALID_TENANT_ID, base_cpu, OB_INVALID_GROUP_ID, is_background))) {
-      LOG_WARN("get background cpu cfs quota failed", K(ret), K(tenant_id));
-    } else if (OB_FAIL(compare_cpu(target_cpu, base_cpu, compare_ret))) {
-      LOG_WARN("compare cpu failed", K(ret), K(target_cpu), K(base_cpu));
-    } else if (compare_ret > 0) {
-      target_cpu = base_cpu;
+  if (-1 != target_cpu) {
+    // background quota limit
+    if (is_valid_tenant_id(tenant_id) && is_background) {
+      int compare_ret = 0;
+      if (OB_FAIL(get_cpu_cfs_quota(OB_INVALID_TENANT_ID, base_cpu, OB_INVALID_GROUP_ID, is_background))) {
+        LOG_WARN("get background cpu cfs quota failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(compare_cpu(target_cpu, base_cpu, compare_ret))) {
+        LOG_WARN("compare cpu failed", K(ret), K(target_cpu), K(base_cpu));
+      } else if (compare_ret > 0) {
+        target_cpu = base_cpu;
+      }
     }
-  }
 
-  // tenant quota limit
-  double tenant_cpu = -1;
-  if (OB_SUCC(ret) && is_valid_group(group_id)) {
-    int compare_ret = 0;
-    if (OB_FAIL(get_cpu_cfs_quota(tenant_id, tenant_cpu, OB_INVALID_GROUP_ID, is_background))) {
-      LOG_WARN("get tenant cpu cfs quota failed", K(ret), K(tenant_id));
-    } else if (OB_FAIL(compare_cpu(target_cpu, tenant_cpu, compare_ret))) {
-      LOG_WARN("compare cpu failed", K(ret), K(target_cpu), K(tenant_cpu));
-    } else if (compare_ret > 0) {
-      target_cpu = tenant_cpu;
+    // tenant quota limit
+    double tenant_cpu = -1;
+    if (OB_SUCC(ret) && is_valid_group(group_id)) {
+      int compare_ret = 0;
+      if (OB_FAIL(get_cpu_cfs_quota(tenant_id, tenant_cpu, OB_INVALID_GROUP_ID, is_background))) {
+        LOG_WARN("get tenant cpu cfs quota failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(compare_cpu(target_cpu, tenant_cpu, compare_ret))) {
+        LOG_WARN("compare cpu failed", K(ret), K(target_cpu), K(tenant_cpu));
+      } else if (compare_ret > 0) {
+        target_cpu = tenant_cpu;
+      }
     }
   }
 
@@ -742,7 +741,7 @@ int ObCgroupCtrl::recursion_dec_cpu_cfs_quota_(const char *group_path, const dou
       if (OB_FAIL(ObCgroupCtrl::get_cpu_cfs_quota_by_path_(curr_path, current_cpu))) {
         LOG_WARN("get cpu cfs quota failed", K(ret), K(curr_path));
       } else if ((!is_top_dir && -1 == current_cpu) ||
-                (OB_SUCC(ObCgroupCtrl::compare_cpu(cpu_, current_cpu, compare_ret)) && compare_ret >= 0)) {
+                (OB_SUCC(ObCgroupCtrl::compare_cpu(cpu_, current_cpu, compare_ret)) && compare_ret > 0)) {
         // do nothing
       } else if (OB_FAIL(ObCgroupCtrl::set_cpu_cfs_quota_by_path_(curr_path, cpu_))) {
         LOG_WARN("set cpu cfs quota failed", K(curr_path), K(cpu_));
