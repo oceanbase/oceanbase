@@ -190,7 +190,7 @@ int ObPersistentLobApator::fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_i
   } else {
     uint64_t tenant_id = param.tenant_id_;
     share::ObTabletAutoincrementService &auto_inc = share::ObTabletAutoincrementService::get_instance();
-    if (OB_FAIL(auto_inc.get_autoinc_seq(tenant_id, param.lob_meta_tablet_id_, lob_id))) {
+    if (OB_FAIL(auto_inc.get_autoinc_seq(tenant_id, param.lob_meta_tablet_id_, lob_id, share::ObTabletAutoincrementService::LOB_CACHE_SIZE))) {
       LOG_WARN("get lob_id fail", K(ret), K(tenant_id), K(param));
     } else {
       LOG_DEBUG("get lob_id succ", K(lob_id), K(tenant_id), K(param));
@@ -229,7 +229,7 @@ int ObPersistentLobApator::fetch_lob_id_for_split_src(const ObLobAccessParam& pa
     LOG_WARN("fail to get tablet handle", K(ret), K(lob_tablet_id), K(param));
   } else if (OB_FAIL(ObTabletSplitMdsHelper::calc_split_dst_lob(*ls_handle.get_ls(), *tablet_handle.get_obj(), *param.data_row_, param.timeout_, dst_tablet_id))) {
     LOG_WARN("failed to calc split dst tablet", K(ret));
-  } else if (OB_FAIL(auto_inc.get_autoinc_seq(tenant_id, dst_tablet_id, lob_id))) {
+  } else if (OB_FAIL(auto_inc.get_autoinc_seq(tenant_id, dst_tablet_id, lob_id, share::ObTabletAutoincrementService::LOB_CACHE_SIZE))) {
     LOG_WARN("get lob_id fail", K(ret), K(tenant_id), K(dst_tablet_id));
   }
   return ret;
