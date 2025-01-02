@@ -888,6 +888,9 @@ ObTableProccessType ObTableApiProcessorBase::get_stat_process_type(bool is_reado
       case ObTableOperationType::INCREMENT:
         process_type = ObTableProccessType::TABLE_API_MULTI_INCREMENT;
         break;
+      case ObTableOperationType::CHECK_AND_INSERT_UP:
+        process_type = ObTableProccessType::TABLE_API_MULTI_CHECK_AND_INSERT_UP;
+        break;
       default:
         process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
         break;

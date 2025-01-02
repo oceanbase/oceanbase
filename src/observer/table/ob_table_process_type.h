@@ -64,6 +64,8 @@ enum ObTableProccessType
 
   // query_and_mutate
   TABLE_API_QUERY_AND_MUTATE,
+  TABLE_API_CHECK_AND_INSERT_UP,
+  TABLE_API_MULTI_CHECK_AND_INSERT_UP,
 
   // redis
   // The sequence of redis ObTableProccessType is associated with that of RedisCommandType.
