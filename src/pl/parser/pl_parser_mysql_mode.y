@@ -224,6 +224,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
       MESSAGE_TEXT MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES RECORD RETURNS ROW ROWTYPE
       SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME USER TYPE VALUE DATETIME TIMESTAMP TIME DATE YEAR
       TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED ROLE SUBMIT CANCEL JOB XA RECOVER
+      GEOMETRY POINT LINESTRING POLYGON MULTIPOINT MULTILINESTRING MULTIPOLYGON GEOMETRYCOLLECTION GEOMCOLLECTION
 //-----------------------------non_reserved keyword end---------------------------------------------
 %right END_KEY
 %left ELSE IF ELSEIF
@@ -286,6 +287,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <ival> int_type_i float_type_i datetime_type_i date_year_type_i text_type_i blob_type_i
 %type <ival> nchar_type_i nvarchar_type_i
 %type <node> variable number_type
+%type <node> geometry_collection
 %%
 /*****************************************************************************
  *
@@ -816,6 +818,15 @@ unreserved_keyword:
   | SIGNED
   | XA
   | RECOVER
+  | GEOMETRY
+  | POINT
+  | LINESTRING
+  | POLYGON
+  | MULTIPOINT
+  | MULTILINESTRING
+  | MULTIPOLYGON
+  | GEOMETRYCOLLECTION
+  | GEOMCOLLECTION
 ;
 
 /*****************************************************************************
@@ -2004,6 +2015,11 @@ opt_if_not_exists:
   | IF NOT EXISTS { $$ = 1; }
 ;
 
+geometry_collection:
+GEOMETRYCOLLECTION { $$ = NULL; }
+| GEOMCOLLECTION { $$ = NULL; }
+;
+
 scalar_data_type:
     int_type_i opt_int_length_i %prec LOWER_PARENS
     {
@@ -2334,6 +2350,55 @@ scalar_data_type:
 	{
     malloc_terminal_node($$, parse_ctx->mem_pool_, T_JSON);
     $$->int32_values_[0] = 0;
+  }
+  | GEOMETRY
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_GEOMETRY);
+    $$->int32_values_[0] = 0; /* length */
+    $$->int32_values_[1] = 0; /* geometry, geometry uses collation type value convey sub geometry type. */
+  }
+  | POINT
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_GEOMETRY);
+    $$->int32_values_[0] = 0; /* length */
+    $$->int32_values_[1] = 1; /* point, geometry uses collation type value convey sub geometry type. */
+  }
+  | LINESTRING
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_GEOMETRY);
+    $$->int32_values_[0] = 0; /* length */
+    $$->int32_values_[1] = 2; /* linestring, geometry uses collation type value convey sub geometry type. */
+  }
+  | POLYGON
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_GEOMETRY);
+    $$->int32_values_[0] = 0; /* length */
+    $$->int32_values_[1] = 3; /* polygon, geometry uses collation type value convey sub geometry type. */
+  }
+  | MULTIPOINT
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_GEOMETRY);
+    $$->int32_values_[0] = 0; /* length */
+    $$->int32_values_[1] = 4; /* mutipoint, geometry uses collation type value convey sub geometry type. */
+  }
+  | MULTILINESTRING
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_GEOMETRY);
+    $$->int32_values_[0] = 0; /* length */
+    $$->int32_values_[1] = 5; /* multilinestring, geometry uses collation type value convey sub geometry type. */
+  }
+  | MULTIPOLYGON
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_GEOMETRY);
+    $$->int32_values_[0] = 0; /* length */
+    $$->int32_values_[1] = 6; /* multipolygon, geometry uses collation type value convey sub geometry type. */
+  }
+  | geometry_collection
+  {
+    UNUSED($1);
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_GEOMETRY);
+    $$->int32_values_[0] = 0; /* length */
+    $$->int32_values_[1] = 7; /* geometrycollection, geometry uses collation type value convey sub geometry type. */
   }
   | pl_obj_access_ref '%' ROWTYPE
   {
