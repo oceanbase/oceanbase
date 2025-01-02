@@ -415,7 +415,8 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
         } else if (i < 10) {
           PAUSE();
         } else {
-          ob_usleep((i < MAX_SLEEP_US ? i : MAX_SLEEP_US));
+          ob_usleep<ObWaitEventIds::LOCK_FOR_READ_WAIT>(
+            (i < MAX_SLEEP_US ? i : MAX_SLEEP_US));
         }
         if (retry_cnt == MAX_RETRY_CNT) {
           int tmp_ret = OB_SUCCESS;
