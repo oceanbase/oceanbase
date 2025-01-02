@@ -110,10 +110,6 @@ void ObMviewUpdateCacheTask::runTimerTask()
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   rootserver::ObMViewMaintenanceService *mview_maintenance_service =
                                       MTL(rootserver::ObMViewMaintenanceService*);
-  int64_t current_ts = ObTimeUtility::fast_current_time();
-  int64_t last_request_ts;
-  const int64_t NeedUpdateCacheInterval = 10 * 60 * 1000 * 1000; // 10min
-  // check request time;
   if (OB_ISNULL(sql_proxy) || OB_ISNULL(mview_maintenance_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null or ObMViewMaintenanceService is null",
@@ -121,16 +117,8 @@ void ObMviewUpdateCacheTask::runTimerTask()
   } else if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant id is invalid", KR(ret), K(tenant_id));
-  } else if (OB_FALSE_IT(last_request_ts = mview_maintenance_service->get_last_request_ts())) {
-  } else if (last_request_ts < current_ts &&
-             current_ts - last_request_ts > NeedUpdateCacheInterval) {
-    // clear cache
-    if (!mview_maintenance_service->get_mview_refresh_info_map().empty()) {
-      mview_maintenance_service->get_mview_refresh_info_map().clear();
-    }
   } else {
     const int64_t refresh_mode = (int64_t)ObMVRefreshMode::MAJOR_COMPACTION;
-    ObMviewRefreshInfoMap &mview_refresh_info_map = mview_maintenance_service->get_mview_refresh_info_map();
     ObSEArray<uint64_t, 2> mview_ids;
     ObSEArray<uint64_t, 2> mview_refresh_scns;
     ObSEArray<uint64_t, 2> mview_refresh_modes;
@@ -143,8 +131,7 @@ void ObMviewUpdateCacheTask::runTimerTask()
                                          tenant_id,
                                          sql.ptr()))) {
         LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
-      } else if (OB_FAIL(ObMViewMaintenanceService::
-                         extract_sql_result(res.get_result(),
+      } else if (OB_FAIL(extract_sql_result(res.get_result(),
                                             mview_ids,
                                             mview_refresh_scns,
                                             mview_refresh_modes))) {
@@ -152,18 +139,55 @@ void ObMviewUpdateCacheTask::runTimerTask()
       }
     }
     if (OB_FAIL(ret)) {
-      //do nothing
-    } else if (mview_ids.empty()) {
       // do nothing
-    } else if (OB_FAIL(ObMViewMaintenanceService::
-               update_mview_refresh_info_cache(mview_ids,
-                                               mview_refresh_scns,
-                                               mview_refresh_modes,
-                                               mview_refresh_info_map))){
+    } else if (OB_FAIL(mview_maintenance_service->update_mview_refresh_info_cache(mview_ids,
+                                                                                  mview_refresh_scns,
+                                                                                  mview_refresh_modes))){
       LOG_WARN("fail to update mview refresh info cache", K(ret),
                K(mview_ids), K(mview_refresh_scns), K(mview_refresh_modes), K(tenant_id));
     }
   }
+}
+
+int ObMviewUpdateCacheTask::extract_sql_result(sqlclient::ObMySQLResult *mysql_result,
+                                               ObIArray<uint64_t> &mview_ids,
+                                               ObIArray<uint64_t> &last_refresh_scns,
+                                               ObIArray<uint64_t> &mview_refresh_modes)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mysql_result)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mysql result is null", K(ret), KP(mysql_result));
+  } else {
+    ObSEArray<uint64_t, 2> res_ids;
+    ObSEArray<uint64_t, 2> res_scns;
+    ObSEArray<uint64_t, 2> refresh_modes;
+    const int64_t col_idx0 = 0;
+    const int64_t col_idx1 = 1;
+    const int64_t col_idx2 = 2;
+    while (OB_SUCC(ret) && OB_SUCC(mysql_result->next())) {
+      uint64_t mview_id = OB_INVALID_ID;
+      uint64_t last_refresh_scn = OB_INVALID_SCN_VAL;
+      uint64_t refresh_mode = (uint64_t)ObMVRefreshMode::MAX;
+      if (OB_FAIL(mysql_result->get_uint(col_idx0, mview_id))
+          || OB_FAIL(mysql_result->get_uint(col_idx1, last_refresh_scn))
+          || OB_FAIL(mysql_result->get_uint(col_idx2, refresh_mode))) {
+        LOG_WARN("fail to get int/uint value", K(ret));
+      } else if (OB_FAIL(res_ids.push_back(mview_id))
+                  || OB_FAIL(res_scns.push_back(last_refresh_scn))
+                  || OB_FAIL(refresh_modes.push_back(refresh_mode))) {
+        LOG_WARN("fail to push back array", K(ret));
+      }
+    }
+    if (OB_LIKELY(OB_SUCCESS == ret || OB_ITER_END == ret)) {
+      if((OB_FAIL(mview_ids.assign(res_ids)) ||
+          OB_FAIL(last_refresh_scns.assign(res_scns)) ||
+          OB_FAIL(mview_refresh_modes.assign(refresh_modes)))) {
+        LOG_WARN("fail to assign array", K(ret));
+      }
+    }
+  }
+  return ret;
 }
 
 }

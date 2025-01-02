@@ -38,12 +38,13 @@ public:
                          tablet_id_(0),
                          svr_addr_(),
                          ls_id_(),
-                         has_learner_(false),
-                         end_log_scn_(0)
+                         end_log_scn_(0),
+                         is_member_(false),
+                         is_learner_(false)
                          {}
   ~ObMajorMVMergeInfo() {}
   TO_STRING_KV(K_(mview_id), K_(data_table_id), K_(last_refresh_scn), K_(tablet_id),
-      K_(svr_addr), K_(ls_id), K_(has_learner), K_(end_log_scn));
+      K_(svr_addr), K_(ls_id), K_(end_log_scn), K_(is_member), K_(is_learner));
   bool is_valid() {
     return mview_id_ > 0 && data_table_id_ > 0 && last_refresh_scn_ > 0
       && svr_addr_.is_valid() && ls_id_.is_valid() && tablet_id_ > 0;
@@ -60,8 +61,9 @@ public:
   int64_t tablet_id_;
   ObAddr svr_addr_;
   share::ObLSID ls_id_;
-  bool has_learner_;
   uint64_t end_log_scn_;
+  bool is_member_;
+  bool is_learner_;
 };
 
 class ObMViewPushRefreshScnTask : public ObMViewTimerTask

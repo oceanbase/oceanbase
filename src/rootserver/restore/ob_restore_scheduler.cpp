@@ -1928,9 +1928,6 @@ int ObRestoreScheduler::wait_restore_safe_mview_merge_info_()
     } else if (OB_FAIL(global_proxy.get_major_refresh_mv_merge_scn(false, /*for update*/
                                                                    major_mv_merge_scn))) {
       LOG_WARN("fail to get major_refresh_mv_merge_scn", K(ret), K(tenant_id_));
-    } else if (OB_FAIL(ObMViewTimerTask::check_mview_last_refresh_scn(tenant_id_,
-                                                                      major_mv_merge_scn))) {
-      LOG_WARN("fail to check mview last refesh scn", K(ret), K(tenant_id_), K(major_mv_merge_scn));
     }
     if (OB_SUCC(ret)) {
       if (mv_lastest_merge_scn < major_mv_merge_scn) {
