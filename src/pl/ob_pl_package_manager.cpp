@@ -1569,6 +1569,7 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
   } else if (!package_state->check_version(state_version)) {
     OZ (resolve_ctx.session_info_.del_package_state(package_id));
     if (OB_SUCC(ret)) {
+      LOG_INFO("pakcage state expired, reconstruct package state", KPC(package_state), K(state_version));
       package_state->reset(&(resolve_ctx.session_info_));
       package_state->~ObPLPackageState();
       session_allocator.free(package_state);

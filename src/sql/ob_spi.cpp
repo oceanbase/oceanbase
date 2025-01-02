@@ -7221,8 +7221,24 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             }
           }
         }
+        // fetch row阶段可能会触发udf/trigger, udf/trigger内部触发package var的内存变化了, 导致bulk table记录的table地址异常
+        // 因此这里重新计算一次package var table地址
         for (int64_t i = 0; OB_SUCC(ret) && i < bulk_tables.count(); ++i) {
-          ObPLCollection *table = bulk_tables.at(i);
+          ObPLCollection *table = nullptr;
+          if (OB_NOT_NULL(into_exprs[i]) &&
+              into_exprs[i]->get_expr_items().count() > 1 &&
+              T_OP_GET_PACKAGE_VAR == into_exprs[i]->get_expr_items().at(1).get_item_type()) {
+            ObObjParam result_address;
+            ObPlCompiteWrite *composite_write = nullptr;
+            CK (is_obj_access_expression(*into_exprs[i]));
+            OZ (spi_calc_expr(ctx, into_exprs[i], OB_INVALID_INDEX, &result_address));
+            OX (composite_write = reinterpret_cast<ObPlCompiteWrite *>(result_address.get_ext()));
+            CK (OB_NOT_NULL(composite_write));
+            CK (OB_NOT_NULL(table = reinterpret_cast<ObPLCollection*>(composite_write->value_addr_)));
+            OX (bulk_tables.at(i) = table);
+          } else {
+            table = bulk_tables.at(i);
+          }
           CK (OB_NOT_NULL(table));
 #ifdef OB_BUILD_ORACLE_PL
           if (OB_SUCC(ret) && table->is_varray()) {
