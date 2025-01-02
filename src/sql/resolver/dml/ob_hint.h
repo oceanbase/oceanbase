@@ -192,7 +192,8 @@ struct ObOptParamHint
     DEF(USE_HASH_ROLLUP,)                           \
     DEF(ENABLE_PX_ORDERED_COORD,)                   \
     DEF(LOB_ROWSETS_MAX_ROWS,)                      \
-    DEF(ENABLE_ENUM_SET_SUBSCHEMA,)       \
+    DEF(ENABLE_ENUM_SET_SUBSCHEMA,)                 \
+    DEF(ENABLE_OPTIMIZER_ROWGOAL,)                  \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

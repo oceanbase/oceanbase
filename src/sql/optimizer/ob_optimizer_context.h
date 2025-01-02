@@ -57,6 +57,13 @@ enum class ObTableAccessPolicy {
   MAX
 };
 
+enum class ObEnableOptRowGoal {
+  OFF,
+  AUTO,
+  ON,
+  MAX
+};
+
 typedef common::ObArray<common::ObString, common::ObIAllocator &> ObPlanNotes;
 //table location local index id related info
 //tablet_loc_id and ref_table_id_ are used to uniquely determine
@@ -263,7 +270,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     table_access_policy_(ObTableAccessPolicy::AUTO),
     enable_new_query_range_(false),
     partition_wise_plan_enabled_(true),
-    enable_px_ordered_coord_(false)
+    enable_px_ordered_coord_(false),
+    enable_opt_row_goal_(ObEnableOptRowGoal::MAX)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -690,6 +698,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline ObTableAccessPolicy get_table_acces_policy() const { return table_access_policy_; }
   inline void set_enable_new_query_range(bool v) { enable_new_query_range_ = v; }
   inline bool enable_new_query_range() const { return enable_new_query_range_; }
+  inline void set_enable_opt_row_goal(int64_t type) { enable_opt_row_goal_ = static_cast<ObEnableOptRowGoal>(type); }
+  inline ObEnableOptRowGoal get_enable_opt_row_goal() const { return enable_opt_row_goal_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -796,6 +806,7 @@ private:
   bool enable_new_query_range_;
   bool partition_wise_plan_enabled_;
   bool enable_px_ordered_coord_;
+  ObEnableOptRowGoal enable_opt_row_goal_;
 };
 }
 }
