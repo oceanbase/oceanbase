@@ -1779,7 +1779,7 @@ int ObWaitDataReadyTask::check_need_wait_(
     LOG_WARN("check need wait log sync get invalid argument", K(ret), KP(ls));
   } else if (OB_FAIL(ls->get_restore_status(ls_restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ctx_));
-  } else if (ls_restore_status.is_in_restoring_or_failed()) {
+  } else if (ls_restore_status.is_in_restore_and_before_quick_restore_finish() || ls_restore_status.is_failed()) {
     need_wait = false;
   } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
     need_wait = false;

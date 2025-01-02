@@ -183,6 +183,11 @@ public:
   {
     return NONE == status_ || QUICK_RESTORE_FINISH == status_;
   }
+  bool is_in_restore_and_before_quick_restore_finish() const
+  {
+    return status_ >= RESTORE_START && status_ < QUICK_RESTORE_FINISH;
+  }
+
   Status get_status() const { return status_; }
   int set_status(int32_t status);
 
