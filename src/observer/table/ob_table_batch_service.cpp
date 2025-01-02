@@ -222,11 +222,17 @@ int ObTableBatchService::adjust_entities(ObTableBatchCtx &ctx, const ObIArray<Ob
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
 
   // first entity has beed adjusted when create tb_ctx
-  for (int64_t i = 1; OB_SUCC(ret) && i < ops.count(); ++i) {
-    const ObTableOperation &op = ops.at(i);
-    tb_ctx.set_entity(&op.entity());
-    if (OB_FAIL(tb_ctx.adjust_entity())) {
-      LOG_WARN("fail to adjust entity", K(ret));
+  // but in hbase, the tb_ctx maybe reused and first entity
+  // also need to be adjusted
+  for (int64_t i = 0; OB_SUCC(ret) && i < ops.count(); ++i) {
+    if (i == 0 && tb_ctx.get_entity_type() != ObTableEntityType::ET_HKV) {
+      // do noting
+    } else {
+      const ObTableOperation &op = ops.at(i);
+      tb_ctx.set_entity(&op.entity());
+      if (OB_FAIL(tb_ctx.adjust_entity())) {
+        LOG_WARN("fail to adjust entity", K(ret));
+      }
     }
   }
 
@@ -693,7 +699,7 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx,
         const ObTableOperation &op = ops.at(i);
         ObTableOperationResult single_op_result;
         tb_ctx.set_entity(&op.entity());
-        if (i > 0 && OB_FAIL(tb_ctx.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
+        if (OB_FAIL(tb_ctx.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
           LOG_WARN("fail to adjust entity", K(ret));
         } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx, spec, single_op_result))) {
           LOG_WARN("fail to process op with spec", K(ret));
