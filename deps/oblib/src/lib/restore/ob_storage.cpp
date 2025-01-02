@@ -583,7 +583,6 @@ int ObStorageUtil::head_object_meta_(const ObString &uri, ObStorageObjectMetaBas
   EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
   return ret;
 }
-
 /*---------------------------------- NEW ADAPTIVE INTERFACE ----------------------------------*/
 int ObStorageUtil::detect_storage_obj_meta(
     const common::ObString &uri,
@@ -831,10 +830,9 @@ int ObStorageUtil::del_file(const common::ObString &uri, const bool is_adaptive)
     if (OB_FAIL(util_->del_file(uri))) {
       EVENT_INC(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT);
       OB_LOG(WARN, "fail to delete file", K(ret), K(uri));
-    } else {
-      EVENT_INC(ObStatEventIds::BACKUP_DELETE_COUNT);
-      EVENT_ADD(ObStatEventIds::BACKUP_DELETE_DELAY, ObTimeUtility::current_time() - start_ts);
     }
+    EVENT_INC(ObStatEventIds::BACKUP_DELETE_COUNT);
+    EVENT_ADD(ObStatEventIds::BACKUP_DELETE_DELAY, ObTimeUtility::current_time() - start_ts);
   }
 
   if (OB_SUCC(ret)) {
@@ -1005,6 +1003,13 @@ int ObStorageUtil::list_adaptive_files(
       }
     } while (OB_SUCC(ret) && list_ctx->has_next_ && !list_ctx->has_reached_list_limit());
   }
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_LS_FAIL_COUNT);
+  }
+
+  EVENT_INC(ObStatEventIds::BACKUP_IO_LS_COUNT);
+
   return ret;
 }
 
@@ -2015,9 +2020,6 @@ int ObStorageReader::pread(char *buf, const int64_t buf_size, int64_t offset, in
     EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_BYTES, read_size);
   }
 
-  if (OB_FAIL(ret)) {
-    EVENT_INC(ObStatEventIds::BACKUP_IO_READ_FAIL_COUNT);
-  }
   EVENT_INC(ObStatEventIds::BACKUP_IO_READ_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_DELAY, ObTimeUtility::current_time() - start_ts);
 
@@ -2411,9 +2413,6 @@ int ObStorageWriter::write(const char *buf,const int64_t size)
     EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
   }
 
-  if (OB_FAIL(ret)) {
-    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
-  }
   EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
 
@@ -2816,12 +2815,6 @@ int ObStorageMultiPartWriter::open(
     }
   }
 
-  // for init complete
-  if (OB_FAIL(ret)) {
-    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
-  }
-  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
-  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts_);
   return ret;
 }
 
@@ -2869,16 +2862,13 @@ int ObStorageMultiPartWriter::pwrite(const char *buf, const int64_t size, const 
     OB_LOG(WARN, "call pwrite in an unexpected order",
         K(ret), K(offset), K(size), K_(cur_max_offset));
   } else if (OB_FAIL(multipart_writer_->pwrite(buf, size, offset))) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
     STORAGE_LOG(WARN, "failed to write", K(ret));
   } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
     cur_max_offset_ = offset + size;
   }
 
-  if (OB_FAIL(ret)) {
-    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
-  } else {
-    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
-  }
   EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
@@ -3047,12 +3037,6 @@ int ObStorageParallelMultiPartWriterBase::open(
     }
   }
 
-  // for init complete
-  if (OB_FAIL(ret)) {
-    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
-  }
-  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
-  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts_);
   return ret;
 }
 
