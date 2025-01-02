@@ -449,6 +449,7 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
         LOG_WARN("Fail to submit async io for prefetch", K(ret), K(index_block_info), K(micro_block_handle));
       } else {
         REALTIME_MONITOR_ADD_IO_READ_BYTES(access_ctx, size);
+        LOG_DEBUG("debug async io", K(ret), K(index_block_info), K(micro_block_handle));
       }
     } else {
       // get data / index block cache from cache

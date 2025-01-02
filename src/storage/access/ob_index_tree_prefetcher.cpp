@@ -400,7 +400,7 @@ int ObIndexTreePrefetcher::prefetch_block_data(
     const bool need_submit_io)
 {
   int ret = OB_SUCCESS;
-  if (is_rescan() && last_handle_hit(index_block_info, is_data, micro_handle)) {
+  if (need_cache_last_block() && last_handle_hit(index_block_info, is_data, micro_handle)) {
     ++access_ctx_->table_store_stat_.block_cache_hit_cnt_;
     LOG_DEBUG("last micro block handle hits", K(is_data), K(index_block_info),
                                               K(last_micro_block_handle_), K(micro_handle));
@@ -417,7 +417,7 @@ int ObIndexTreePrefetcher::prefetch_block_data(
     } else {
       LOG_WARN("Fail to get micro block handle from handle mgr", K(ret));
     }
-  } else if (is_rescan() && is_data && micro_handle.in_block_state()) {
+  } else if (need_cache_last_block() && is_data && micro_handle.in_block_state()) {
     last_micro_block_handle_ = micro_handle;
   }
   return ret;
