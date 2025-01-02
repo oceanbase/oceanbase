@@ -40,9 +40,7 @@ int ObDirectLoadResourceApplyExecutor::check_args()
 int ObDirectLoadResourceApplyExecutor::process()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTableLoadResourceService::check_tenant())) {
-    LOG_WARN("fail to check tenant", KR(ret));
-  } else if (OB_FAIL(ObTableLoadResourceService::local_apply_resource(arg_, res_))) {
+  if (OB_FAIL(ObTableLoadResourceService::local_apply_resource(arg_, res_))) {
     LOG_WARN("fail to apply resource", KR(ret));
   }
 
@@ -67,9 +65,7 @@ int ObDirectLoadResourceReleaseExecutor::check_args()
 int ObDirectLoadResourceReleaseExecutor::process()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTableLoadResourceService::check_tenant())) {
-    LOG_WARN("fail to check tenant", KR(ret));
-  } else if (OB_FAIL(ObTableLoadResourceService::local_release_resource(arg_))) {
+  if (OB_FAIL(ObTableLoadResourceService::local_release_resource(arg_))) {
     LOG_WARN("fail to release resource", KR(ret));
   }
 
@@ -94,9 +90,7 @@ int ObDirectLoadResourceUpdateExecutor::check_args()
 int ObDirectLoadResourceUpdateExecutor::process()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTableLoadResourceService::check_tenant())) {
-    LOG_WARN("fail to check tenant", KR(ret));
-  } else if (OB_FAIL(ObTableLoadResourceService::local_update_resource(arg_))) {
+  if (OB_FAIL(ObTableLoadResourceService::local_update_resource(arg_))) {
     LOG_WARN("fail to update resource", KR(ret));
   }
 
@@ -121,9 +115,7 @@ int ObDirectLoadResourceCheckExecutor::check_args()
 int ObDirectLoadResourceCheckExecutor::process()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTableLoadResourceService::check_tenant())) {
-    LOG_WARN("fail to check tenant", KR(ret));
-  } else if (OB_FAIL(ObTableLoadService::refresh_and_check_resource(arg_, res_))) {
+  if (OB_FAIL(ObTableLoadService::refresh_and_check_resource(arg_, res_))) {
     LOG_WARN("fail to refresh_and_check_resource", KR(ret));
   }
 
