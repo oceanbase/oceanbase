@@ -277,7 +277,9 @@ int ObTenantFreezeInfoMgr::get_freeze_info_behind_snapshot_version(
   if (OB_FAIL(ret)) {
     STORAGE_LOG(WARN, "get_lock failed", KR(ret));
   } else if (OB_FAIL(get_freeze_info_compare_with_snapshot_version_(snapshot_version, share::ObFreezeInfoManager::CmpType::GREATER_THAN, freeze_info))) {
-    STORAGE_LOG(WARN, "failed to get freeze info behind snapshot version", KR(ret), K(snapshot_version));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      STORAGE_LOG(WARN, "failed to get freeze info behind snapshot version", KR(ret), K(snapshot_version));
+    }
   }
   return ret;
 }

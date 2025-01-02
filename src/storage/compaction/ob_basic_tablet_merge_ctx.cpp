@@ -417,7 +417,7 @@ int ObBasicTabletMergeCtx::prepare_merge_progress(
     progress->reset();
     LOG_WARN("failed to init merge progress", K(ret));
   } else {
-    LOG_INFO("succeed to init merge progress", K(ret), KPC(progress));
+    LOG_TRACE("succeed to init merge progress", K(ret), KPC(progress));
   }
   if (OB_FAIL(ret) && nullptr != progress) {
     progress->~ObPartitionMergeProgress();
@@ -750,7 +750,6 @@ int ObBasicTabletMergeCtx::generate_macro_id_list(char *buf, const int64_t buf_l
     if (macro_count < 40) {
       MacroBlockId macro_id;
       for (int64_t i = 0; OB_SUCC(ret) && OB_SUCC(iter.get_next_macro_id(macro_id)); ++i) {
-        LOG_INFO("print macro id", K(macro_id));
         const int64_t block_seq = is_local_exec_mode(get_exec_mode())
                                 ? (GCTX.is_shared_storage_mode() ? macro_id.tenant_seq() : macro_id.second_id())
                                 : macro_id.third_id();
@@ -880,7 +879,7 @@ int ObBasicTabletMergeCtx::init_static_param_and_desc()
                                 static_param_.encoding_granularity_))) {
     LOG_WARN("failed to init static desc", KR(ret), KPC(this));
   } else {
-    LOG_INFO("[SharedStorage] success to set exec mode", KR(ret), "exec_mode", exec_mode_to_str(static_desc_.exec_mode_));
+    LOG_TRACE("[SharedStorage] success to set exec mode", KR(ret), "exec_mode", exec_mode_to_str(static_desc_.exec_mode_));
   }
   return ret;
 }

@@ -232,7 +232,7 @@ int ObPartitionMergeProgress::inner_init_estimated_vals()
   } else {
     avg_row_length_ = estimated_total_size_ * 1.0 / estimated_total_row_cnt_;
     update_estimated_finish_time(0/*cur scanned row cnt*/);
-    LOG_INFO("success to estimate initial vals", K(ret), "param", ctx_->static_param_, KPC(this));
+    LOG_TRACE("success to estimate initial vals", K(ret), "param", ctx_->static_param_, KPC(this));
   }
   return ret;
 }

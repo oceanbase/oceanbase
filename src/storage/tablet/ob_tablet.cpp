@@ -455,6 +455,7 @@ int ObTablet::init_for_merge(
   ObStorageSchema *old_storage_schema = nullptr;
   const bool need_report_major = param.need_report_major();
   const bool is_convert_co_merge = is_convert_co_major_merge(param.compaction_info_.merge_type_);
+  const bool is_mini = is_mini_merge(param.compaction_info_.merge_type_);
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -467,6 +468,9 @@ int ObTablet::init_for_merge(
       || OB_ISNULL(log_handler_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(log_handler));
+  } else if (is_mini && param.get_clog_checkpoint_scn() <= old_tablet.tablet_meta_.clog_checkpoint_scn_) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_WARN("no need merge due to new tablet meta", KR(ret), K(param), K(old_tablet));
   } else if (param.get_need_check_transfer_seq() && OB_FAIL(check_transfer_seq_equal(old_tablet, param.get_transfer_seq()))) {
     LOG_WARN("failed to check transfer seq eq", K(ret), K(old_tablet), K(param));
   } else if (OB_FAIL(old_tablet.get_max_sync_storage_schema_version(max_sync_schema_version))) {

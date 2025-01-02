@@ -1759,7 +1759,7 @@ void ObTenantDagWorker::run1()
       } else if (ObDagType::DAG_TYPE_MINI_MERGE == dag->get_type()
               && static_cast<compaction::ObTabletMergeDag *>(dag)->is_reserve_mode()) {
         is_reserve_mode_ = true;
-        COMMON_LOG(INFO, "Mini compaction enter reserve mode", KPC(dag));
+        COMMON_LOG(TRACE, "Mini compaction enter reserve mode", KPC(dag));
       }
 
       if (OB_SUCC(ret)) {
