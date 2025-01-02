@@ -109,7 +109,7 @@ common::ObIODevice *TestOpEngine::get_device_inner()
 // copy from mittest/mtlenv/mock_tenant_module_env.h and unittest/storage/blocksstable/ob_data_file_prepare.h
 // refine some code
 // call prepare_io() for testing operators that needs to dump intermediate data
-int TestOpEngine::prepare_io(const string & test_data_name_suffix)
+int TestOpEngine::prepare_io(const std::string & test_data_name_suffix)
 {
   int ret = OB_SUCCESS;
 
@@ -557,7 +557,7 @@ int TestOpEngine::print_and_cmp_final_output(const ObBatchRows *brs, ObOperator 
     if (!brs->skip_->exist(i)) {
       for (int j = 0; j < root->get_spec().output_.count(); j++) {
         ObExpr *output_expr = root->get_spec().output_.at(j);
-        string result_str = get_data_by_datum_type(root, output_expr, root->eval_ctx_, i);
+        std::string result_str = get_data_by_datum_type(root, output_expr, root->eval_ctx_, i);
         output_line += result_str + " ";
 
         // compare whether is the same output
@@ -592,7 +592,7 @@ int TestOpEngine::print_to_file(const ObBatchRows *brs, ObOperator *root, const 
     if (!brs->skip_->exist(i)) {
       for (int j = 0; j < exprs.count(); j++) {
         ObExpr *expr = exprs.at(j);
-        string result_str = get_data_by_datum_type(root, expr, root->eval_ctx_, i);
+        std::string result_str = get_data_by_datum_type(root, expr, root->eval_ctx_, i);
         output_line += result_str;
         if (j != exprs.count() - 1) { output_line += ", "; }
       }

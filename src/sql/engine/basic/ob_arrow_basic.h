@@ -71,7 +71,7 @@ class ObOrcOutputStream : public orc::OutputStream {
     ObFileAppender *file_appender_;
     ObStorageAppender *storage_appender_;
     IntoFileLocation file_location_;
-    string url_;
+    std::string url_;
     int64_t pos_;
 };
 
