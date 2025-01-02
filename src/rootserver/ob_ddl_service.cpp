@@ -15534,12 +15534,23 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObTableSchema new_table_schema;
     const ObTableSchema *orig_table_schema = NULL;
+
     if (OB_FAIL(get_and_check_table_schema(alter_table_arg,
                                            schema_guard,
                                            alter_table_schema,
                                            orig_table_schema))) {
       LOG_WARN("fail to get and check table schema", K(ret));
-    } else if (OB_FAIL(new_table_schema.assign(*orig_table_schema))) {
+    } else if (GCTX.is_shared_storage_mode()) {
+      bool is_column_store = false;
+      if (OB_FAIL(orig_table_schema->get_is_column_store(is_column_store))) {
+        LOG_WARN("failed to get is column store", K(ret));
+      } else if (is_column_store) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported for column store in shared storage mode", K(ret));
+      }
+    }
+
+    if (FAILEDx(new_table_schema.assign(*orig_table_schema))) {
       LOG_WARN("fail to assign schema", K(ret));
     } else if (OB_FAIL(ObSchemaUtils::mock_default_cg(orig_table_schema->get_tenant_id(), new_table_schema))) {
       LOG_WARN("fail to mock default cg", K(ret), K(orig_table_schema), K(new_table_schema));

@@ -1032,7 +1032,6 @@ protected:
       const ObCreateIndexArg &index_arg,
       bool &is_prefix);
   bool is_support_split_index_key(const INDEX_KEYNAME index_keyname);
-  bool is_column_group_supported() const;
   int64_t block_size_;
   int64_t consistency_level_;
   INDEX_TYPE index_scope_;
