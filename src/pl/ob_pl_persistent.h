@@ -80,12 +80,14 @@ public:
 #else
     arch_type_(ARCH_TYPE_DEF[ObPLArchType::OB_X86_ARCH_TYPE]),
 #endif
-    allocator_(ObMemAttr(MTL_ID() == OB_INVALID_TENANT_ID ? OB_SYS_TENANT_ID : MTL_ID(), GET_PL_MOD_STRING(OB_PL_JIT)))
+    allocator_(ObMemAttr(MTL_ID() == OB_INVALID_TENANT_ID ? OB_SYS_TENANT_ID : MTL_ID(), GET_PL_MOD_STRING(OB_PL_JIT))),
+    tenant_id_belongs_(OB_INVALID_ID)
   {}
   ObRoutinePersistentInfo(uint64_t tenant_id,
                       uint64_t database_id,
                       uint64_t compile_db_id,
-                      uint64_t key_id)
+                      uint64_t key_id,
+                      uint64_t tenant_id_belongs)
   : tenant_id_(tenant_id),
     database_id_(database_id),
     compile_db_id_(compile_db_id),
@@ -95,7 +97,8 @@ public:
 #else
     arch_type_(ARCH_TYPE_DEF[ObPLArchType::OB_X86_ARCH_TYPE]),
 #endif
-    allocator_(ObMemAttr(tenant_id_, GET_PL_MOD_STRING(OB_PL_JIT)))
+    allocator_(ObMemAttr(tenant_id_, GET_PL_MOD_STRING(OB_PL_JIT))),
+    tenant_id_belongs_(tenant_id_belongs)
   {}
 
   int64_t get_head_size() { return 1 + 1 + 2 + 2;/* 8bit flags + 8bit level + 8bit id + 8bit nums*/ }
@@ -166,6 +169,7 @@ private:
   ObString arch_type_;
 
   ObArenaAllocator allocator_;
+  uint64_t tenant_id_belongs_;
 };
 
 }

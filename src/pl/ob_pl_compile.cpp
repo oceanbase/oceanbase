@@ -499,7 +499,7 @@ int ObPLCompiler::compile(
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
       ObRoutinePersistentInfo routine_storage(
-        MTL_ID(), routine.get_database_id(), session_info_.get_database_id(), func_ast.get_id());
+        MTL_ID(), routine.get_database_id(), session_info_.get_database_id(), func_ast.get_id(), routine.get_tenant_id());
       bool exist_same_name_obj_with_public_synonym = false;
       OZ (ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(schema_guard_,
                                                                             func_ast.get_dependency_table(),
@@ -776,7 +776,8 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
       ObRoutinePersistentInfo routine_storage(MTL_ID(),
                                         session_info_.get_database_id(),
                                         session_info_.get_database_id(),
-                                        package.get_id());
+                                        package.get_id(),
+                                        get_tenant_id_by_object_id(package.get_id()));
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
       bool exist_same_name_obj_with_public_synonym = false;
       OZ (ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(schema_guard_,
