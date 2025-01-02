@@ -229,7 +229,7 @@ int ObVectorRefreshIndexExecutor::generate_vector_aux_index_name(
   } else {
     int64_t pos = 0;
     ObString suffix_index_name;
-    if (VectorIndexAuxType::DELTA_BUF_INDEX == index_type) {
+    if (VectorIndexAuxType::DOMAIN_INDEX == index_type) {
       if (OB_FAIL(databuff_printf(name_buf, OB_MAX_TABLE_NAME_LENGTH, pos,
                                   "%.*s%s",
                                   index_name.length(), index_name.ptr(),
@@ -536,7 +536,7 @@ int ObVectorRefreshIndexExecutor::resolve_and_check_table_valid(
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "base table name");
     } else if (FALSE_IT(base_table_id = base_table_schema->get_table_id())) {
     } else if (OB_FAIL(generate_vector_aux_index_name(
-                  VectorIndexAuxType::DELTA_BUF_INDEX, base_table_id, index_name,
+                  VectorIndexAuxType::DOMAIN_INDEX, base_table_id, index_name,
                   delta_buf_table_name))) {
       LOG_WARN("fail to generate delta buf index table name", KR(ret),
               K(base_table_id), K(index_name));
