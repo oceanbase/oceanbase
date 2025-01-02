@@ -8399,7 +8399,10 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
               LOG_WARN("failed to copy pl extend", K(ret));
             } else {
               obj = tmp;
-              cursor->complex_objs_.push_back(tmp);
+              if (OB_FAIL(cursor->complex_objs_.push_back(tmp))) {
+                int tmp_ret = ObUserDefinedType::destruct_obj(tmp, cursor->session_info_);
+                LOG_WARN("fail to push back", K(ret), K(tmp_ret));
+              }
             }
           }
         }
