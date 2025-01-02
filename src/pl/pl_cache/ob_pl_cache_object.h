@@ -55,6 +55,7 @@ struct ObPlParamInfo : public sql::ObParamInfo
 
   uint8_t pl_type_;
   uint64_t udt_id_;
+  static const int64_t MAX_STR_DES_LEN_PL = 96;
 
   OB_UNIS_VERSION_V(1);
 };
@@ -90,7 +91,9 @@ struct PLCacheObjStat
   int64_t pl_evict_version_;
   int64_t schema_version_;
   int64_t ps_stmt_id_;//prepare stmt id
+  int64_t pl_cg_mem_hold_;
   common::ObString sys_vars_str_;
+  common::ObString param_infos_;
 
   PLCacheObjStat()
     : pl_schema_id_(OB_INVALID_ID),
@@ -110,7 +113,9 @@ struct PLCacheObjStat
       pl_evict_version_(OB_INVALID_ID),
       schema_version_(OB_INVALID_ID),
       ps_stmt_id_(OB_INVALID_ID),
-      sys_vars_str_()
+      pl_cg_mem_hold_(0),
+      sys_vars_str_(),
+      param_infos_()
   {
     sql_id_[0] = '\0';
   }
@@ -139,7 +144,9 @@ struct PLCacheObjStat
     pl_evict_version_ = OB_INVALID_ID;
     schema_version_ = OB_INVALID_ID;
     ps_stmt_id_ = OB_INVALID_ID;
+    pl_cg_mem_hold_ = 0;
     sys_vars_str_.reset();
+    param_infos_.reset();
   }
 
   TO_STRING_KV(K_(pl_schema_id),
@@ -153,7 +160,9 @@ struct PLCacheObjStat
                K_(type),
                K_(pl_evict_version),
                K_(schema_version),
-               K_(sys_vars_str));
+               K_(pl_cg_mem_hold),
+               K_(sys_vars_str),
+               K_(param_infos));
 };
 
 class ObPLCacheObject : public sql::ObILibCacheObject
@@ -206,7 +215,9 @@ public:
   inline PLCacheObjStat &get_stat_for_update() { return stat_; }
 
   virtual int update_cache_obj_stat(sql::ObILibCacheCtx &ctx);
+  int init_params_info_str();
   int update_execute_time(int64_t exec_time);
+  static int get_times(const ObPLCacheObject *pl_object, int64_t& execute_times, int64_t& elapsed_time);
 
   TO_STRING_KV(K_(expr_op_size),
                K_(tenant_schema_version),

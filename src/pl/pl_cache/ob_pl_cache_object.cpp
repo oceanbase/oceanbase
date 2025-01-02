@@ -15,6 +15,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "pl/pl_cache/ob_pl_cache.h"
 #include "src/share/ob_truncated_string.h"
+#include "pl/ob_pl_package.h"
 
 namespace oceanbase
 {
@@ -128,6 +129,53 @@ int ObPLCacheObject::set_params_info(const ParamStore &params, bool is_anonymous
   return ret;
 }
 
+int ObPLCacheObject::init_params_info_str()
+{
+  int ret = OB_SUCCESS;
+  int64_t N = params_info_.count();
+  int64_t buf_len = N * ObPlParamInfo::MAX_STR_DES_LEN_PL + 1;
+  int64_t pos = 0;
+  char *buf = (char *)allocator_.alloc(buf_len);
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory for param info", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+      if (N - 1 != i) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "{%d,%d,%d,%d,%d,%d,%ju},",
+                                    params_info_.at(i).flag_.need_to_check_type_,
+                                    params_info_.at(i).flag_.need_to_check_bool_value_,
+                                    params_info_.at(i).flag_.expected_bool_value_,
+                                    params_info_.at(i).scale_,
+                                    params_info_.at(i).type_,
+                                    params_info_.at(i).pl_type_,
+                                    params_info_.at(i).udt_id_
+                                    ))) {
+          LOG_WARN("fail to buff_print param info", K(ret));
+        }
+      } else {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "{%d,%d,%d,%d,%d,%d,%ju}",
+                                    params_info_.at(i).flag_.need_to_check_type_,
+                                    params_info_.at(i).flag_.need_to_check_bool_value_,
+                                    params_info_.at(i).flag_.expected_bool_value_,
+                                    params_info_.at(i).scale_,
+                                    params_info_.at(i).type_,
+                                    params_info_.at(i).pl_type_,
+                                    params_info_.at(i).udt_id_
+                                    ))) {
+          LOG_WARN("fail to buff_print param info", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ob_write_string(allocator_, ObString(pos, buf), stat_.param_infos_))) {
+      LOG_WARN("fail to deep copy param infos", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObPLCacheObject::update_cache_obj_stat(sql::ObILibCacheCtx &ctx)
 {
   int ret = OB_SUCCESS;
@@ -166,6 +214,10 @@ int ObPLCacheObject::update_cache_obj_stat(sql::ObILibCacheCtx &ctx)
       }
     }
   }
+  if (OB_SUCC(ret) && OB_FAIL(init_params_info_str())) {
+    // init param info str
+    LOG_WARN("fail to init param info str", K(ret));
+  }
   if (OB_SUCC(ret)) {
     if (ObLibCacheNameSpace::NS_ANON == get_ns() && OB_INVALID_ID != pc_ctx.key_.key_id_) {
       stat.ps_stmt_id_ = pc_ctx.key_.key_id_;
@@ -188,6 +240,30 @@ int ObPLCacheObject::update_execute_time(int64_t exec_time)
   if (slowest_usec < exec_time) {
     ATOMIC_STORE(&(stat_.slowest_exec_usec_), exec_time);
     ATOMIC_STORE(&(stat_.slowest_exec_time_), ObClockGenerator::getClock());
+  }
+  return ret;
+}
+
+int ObPLCacheObject::get_times(const ObPLCacheObject *pl_object, int64_t& execute_times, int64_t& elapsed_time)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(pl_object));
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(execute_times = pl_object->get_stat().execute_times_)) {
+  } else if (FALSE_IT(elapsed_time = pl_object->get_stat().elapsed_time_)) {
+  } else if (ObLibCacheNameSpace::NS_PKG == pl_object->get_ns()) {
+    const ObPLPackage *package = static_cast<const ObPLPackage*>(pl_object);
+    if (NULL == package) {
+      LOG_WARN("failed to static cast ObPLPackage", K(ret), K(*pl_object));
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < package->get_routine_table().count(); ++i) {
+        if (OB_NOT_NULL(package->get_routine_table().at(i))) {
+            execute_times += package->get_routine_table().at(i)->get_stat().execute_times_;
+            elapsed_time += package->get_routine_table().at(i)->get_stat().elapsed_time_;
+        }
+      }
+    }
   }
   return ret;
 }

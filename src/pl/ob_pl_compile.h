@@ -17,6 +17,7 @@
 #include "ob_pl_stmt.h"
 #include "ob_pl_persistent.h"
 #include "lib/hash/ob_hashmap.h"
+#include "lib/alloc/ob_malloc_callback.h"
 
 namespace oceanbase
 {
@@ -36,6 +37,25 @@ class ObPLPackageGuard;
 class ObPLResolver;
 class ObPLVarDebugInfo;
 class ObRoutinePersistentInfo;
+
+class ObPLCGMallocCallback final : public lib::ObMallocCallback
+{
+public:
+  ObPLCGMallocCallback(int64_t &mem_used)
+    : mem_used_(mem_used) {}
+  virtual ~ObPLCGMallocCallback() {}
+  virtual void operator()(const ObMemAttr &attr, int64_t add_size) override
+  {
+    if ((ObLabel(GET_PL_MOD_STRING(pl::OB_PL_JIT)) == attr.label_
+        || ObLabel(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)) == attr.label_)
+        && attr.ctx_id_ == ObCtxIds::GLIBC) {
+      mem_used_ += add_size;
+    }
+  }
+private:
+  int64_t &mem_used_;
+}; // end of class ObPLCGMallocCallback
+
 class ObPLCompiler
 {
 public:

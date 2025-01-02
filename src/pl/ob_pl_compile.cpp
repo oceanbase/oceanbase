@@ -252,6 +252,9 @@ int ObPLCompiler::compile(
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
+        int64_t cg_jit_mem = 0;
+        ObPLCGMallocCallback pmcb(cg_jit_mem);
+        lib::ObMallocCallbackGuard memory_guard(pmcb);
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
         uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : block_hash;
 
@@ -298,6 +301,7 @@ int ObPLCompiler::compile(
               || OB_FAIL(schema_guard_.get_schema_version(OB_SYS_TENANT_ID, sys_schema_version))) {
             LOG_WARN("fail to get schema version", K(ret), K(tenant_id));
           } else {
+            func.get_stat_for_update().pl_cg_mem_hold_ = cg_jit_mem;
             func.set_tenant_schema_version(tenant_schema_version);
             func.set_sys_schema_version(sys_schema_version);
           }
@@ -496,6 +500,9 @@ int ObPLCompiler::compile(
              func.get_di_helper(),
              lib::is_oracle_mode()) {
 #endif
+      int64_t cg_jit_mem = 0;
+      ObPLCGMallocCallback pmcb(cg_jit_mem);
+      lib::ObMallocCallbackGuard memory_guard(pmcb);
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
       ObRoutinePersistentInfo routine_storage(
@@ -532,6 +539,7 @@ int ObPLCompiler::compile(
         OZ (func.set_tenant_sys_schema_version(schema_guard_, session_info_.get_effective_tenant_id()));
         OX (func.set_ret_type(func_ast.get_ret_type()));
         OX (func.get_stat_for_update().schema_version_ = routine.get_schema_version());
+        OX (func.get_stat_for_update().pl_cg_mem_hold_ = cg_jit_mem);
       }
       OZ (check_dep_schema(schema_guard_, func.get_dependency_table()));
     } // end heap var
@@ -897,6 +905,9 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                 package.get_di_helper(),
                 lib::is_oracle_mode()) {
 #endif
+        int64_t cg_jit_mem = 0;
+        ObPLCGMallocCallback pmcb(cg_jit_mem);
+        lib::ObMallocCallbackGuard memory_guard(pmcb);
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
 
         // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
@@ -908,6 +919,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
 
         OZ (cg.init());
         OZ (cg.generate(package));
+        OX (package.get_stat_for_update().pl_cg_mem_hold_ = cg_jit_mem);
       }
     }
 
