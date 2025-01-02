@@ -210,13 +210,10 @@ int ObExprConcatWs::calc_text(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res);
   const ObExpr *sep_expr = expr.args_[0];
   const ObDatum &sep_datum = expr.locate_param_datum(ctx, 0);
   ObString sep_str;
-  ObSEArray<int64_t, 32> words;
-  int64_t res_len = 0;
-  int64_t word_cnt = 0;
+  ObSEArray<ObExpr*, 32> words;
 
   if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, sep_datum, sep_expr->datum_meta_, sep_expr->obj_meta_.has_lob_header(), sep_str))) {
     LOG_WARN("fail to get real data.", K(ret), K(sep_datum));
@@ -224,16 +221,34 @@ int ObExprConcatWs::calc_text(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 
   for (int64_t i = 1; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
     const ObDatum &dat = expr.locate_param_datum(ctx, i);
-    if (!dat.is_null() && OB_FAIL(words.push_back(i))) {
+    if (!dat.is_null() && OB_FAIL(words.push_back(expr.args_[i]))) {
       LOG_WARN("push back string failed", K(ret), K(i));
     }
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(calc_text(expr, ctx, sep_str, words, temp_allocator, res))) {
+    LOG_WARN("calc_text fail", K(ret), K(expr), K(words), K(sep_str));
+  }
+  return ret;
+}
+
+int ObExprConcatWs::calc_text(
+    const ObExpr &expr,
+    ObEvalCtx &ctx,
+    const ObString &sep_str,
+    const ObIArray<ObExpr *> &words,
+    ObIAllocator &temp_allocator,
+    ObDatum &res)
+{
+  int ret = OB_SUCCESS;
+  int64_t res_len = 0;
+  int64_t word_cnt = 0;
+  ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res);
   // calc total len of all words
   for (int64_t i = 0; OB_SUCC(ret) && i < words.count(); i++) {
-    int64_t word_idx = words.at(i);
-    const ObExpr *word_expr = expr.args_[word_idx];
-    ObDatum &v = expr.locate_param_datum(ctx, word_idx);
+    const ObExpr *word_expr = words.at(i);;
+    ObDatum &v = word_expr->locate_expr_datum(ctx);
     if (! ob_is_text_tc(word_expr->datum_meta_.type_)) {
       res_len += v.len_;
     } else {
@@ -261,9 +276,8 @@ int ObExprConcatWs::calc_text(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
   } else {
     int64_t append_data_len = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < words.count(); i++) {
-      int64_t word_idx = words.at(i);
-      const ObExpr *word_expr = expr.args_[word_idx];
-      ObDatum &word_datum = expr.locate_param_datum(ctx, word_idx);
+      const ObExpr *word_expr = words.at(i);;
+      ObDatum &word_datum = word_expr->locate_expr_datum(ctx);
       ObDatumMeta word_meta = word_expr->datum_meta_;
       bool has_lob_header = word_expr->obj_meta_.has_lob_header();
 
