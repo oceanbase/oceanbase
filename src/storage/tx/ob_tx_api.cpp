@@ -680,8 +680,7 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
     }
     if (tx.state_ != ObTxDesc::State::IDLE) {
       ARRAY_FOREACH(tx.parts_, i) {
-        if (!tx.parts_[i].is_clean() &&
-            OB_FAIL(snapshot.parts_.push_back(ObTxLSEpochPair(tx.parts_[i].id_, tx.parts_[i].epoch_)))) {
+        if (OB_FAIL(snapshot.parts_.push_back(ObTxLSEpochPair(tx.parts_[i].id_, tx.parts_[i].epoch_)))) {
           TRANS_LOG(WARN, "push snapshot parts fail", K(ret), K(tx), K(snapshot));
         }
       }
@@ -746,7 +745,7 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
       }
       if (tx.state_ != ObTxDesc::State::IDLE) {
         ARRAY_FOREACH(tx.parts_, i) {
-          if (tx.parts_[i].id_ == lsid && !tx.parts_[i].is_clean()) {
+          if (tx.parts_[i].id_ == lsid) {
             if (OB_FAIL(snapshot.parts_.push_back(ObTxLSEpochPair(lsid, tx.parts_[i].epoch_)))) {
               TRANS_LOG(WARN, "push lsid to snapshot.parts fail", K(ret), K(lsid), K(tx));
             }
