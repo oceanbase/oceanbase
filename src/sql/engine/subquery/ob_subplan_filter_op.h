@@ -223,7 +223,6 @@ public:
   int handle_next_batch_with_px_rescan(const int64_t op_max_batch_size);
   int handle_next_batch_with_group_rescan(const int64_t op_max_batch_size);
   const GroupParamArray *get_rescan_params_info() const { return &rescan_params_info_; }
-  bool need_reset_onetime_expr() const { return need_reset_onetime_expr_; }
 private:
   void set_param_null() { set_pushdown_param_null(MY_SPEC.rescan_params_); };
   void destroy_subplan_iters();
@@ -280,23 +279,7 @@ private:
   common::ObSEArray<Iterator*, 8> subplan_iters_to_check_;
   lib::MemoryContext last_store_row_mem_;
   ObBatchResultHolder brs_holder_;
-  bool need_reset_onetime_expr_;
 
-  class ResetOneTimeExprGuard
-  {
-  public:
-    explicit ResetOneTimeExprGuard(ObSubPlanFilterOp &op)
-      : op_(op),
-        need_reset_onetime_expr_(op.need_reset_onetime_expr_)
-    { op.need_reset_onetime_expr_ = true; }
-
-    ~ResetOneTimeExprGuard()
-    { op_.need_reset_onetime_expr_ = need_reset_onetime_expr_; }
-
-  private:
-    ObSubPlanFilterOp &op_;
-    bool need_reset_onetime_expr_;
-  };
 public:
   static const int64_t MAX_PX_RESCAN_PARAMS_SIZE = 4 << 20; // 4M
   static const int64_t MAX_DUMP_SIZE = 16 << 20; // 16M
