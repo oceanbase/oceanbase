@@ -3392,7 +3392,7 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
 
       // for consistent with mysql, if const cast as json, should regard as scalar, don't need parse
       if (ObStringTC == ori_tc && ObJsonTC == expect_tc
-          && IS_BASIC_CMP_OP(parent.get_expr_type())) {
+          && IS_JSON_COMPATIBLE_OP(parent.get_expr_type())) {
         uint64_t extra = new_expr->get_extra();
         new_expr->set_extra(CM_SET_SQL_AS_JSON_SCALAR(extra));
       }
