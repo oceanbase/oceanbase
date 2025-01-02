@@ -521,6 +521,7 @@ const int64_t OB20_PROTOCOL_EXTRA_INFO_LENGTH = 4;  // for the length of extra i
 const int16_t OB20_PROTOCOL_VERSION_VALUE = 20;
 
 const int OB_THREAD_NAME_BUF_LEN = 16;
+const int OB_EXTENED_THREAD_NAME_BUF_LEN = 32;
 
 enum ObCSProtocolType
 {
@@ -2615,6 +2616,21 @@ OB_INLINE char* ob_get_origin_thread_name()
   return ori_tname;
 }
 
+OB_INLINE char* ob_get_extended_thread_name()
+{
+  thread_local char ext_tname[oceanbase::OB_EXTENED_THREAD_NAME_BUF_LEN] = {0};
+  return ext_tname;
+}
+
+OB_INLINE char* ob_get_tname_v2()
+{
+  char *ret_tname = ob_get_extended_thread_name();
+  if ('\0' == ret_tname[0]) {
+    ret_tname = ob_get_tname();
+  }
+  return ret_tname;
+}
+
 static const char* PARALLEL_DDL_THREAD_NAME = "DDLPQueueTh";
 static const char* REPLAY_SERVICE_THREAD_NAME = "ReplaySrv";
 
@@ -2642,6 +2658,7 @@ OB_INLINE uint64_t ob_set_thread_tenant_id(uint64_t tenant_id)
 
 #define GETTID() ob_gettid()
 #define GETTNAME() ob_get_tname()
+#define GETTNAME_V2() ob_get_tname_v2()
 #define GET_TENANT_ID() ob_get_tenant_id()
 #define gettid GETTID
 #define GET_CLUSTER_ID() ob_get_cluster_id()

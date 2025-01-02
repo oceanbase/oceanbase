@@ -57,12 +57,14 @@ TaskToken::TaskToken(
     const int64_t dt)
   : timer_(timer), task_(task), scheduled_time_(st), delay_(dt)
 {
-  char *buf = task_type_;
-  int buf_len = sizeof(task_type_);
-  if (task != NULL) {
-    strncpy(buf, typeid(*task).name(), buf_len);
+  task_type_[0] = '\0';
+  timer_name_[0] = '\0';
+  if (nullptr != task) {
+    ObTimerUtil::copy_buff(task_type_, sizeof(task_type_), typeid(*task).name());
   }
-  buf[buf_len - 1] = '\0';
+  if (nullptr != timer) {
+    ObTimerUtil::copy_buff(timer_name_, sizeof(timer_name_), timer->timer_name_);
+  }
 }
 
 TaskToken::TaskToken(const ObTimer *timer, ObTimerTask *task)
@@ -97,9 +99,11 @@ void ObTimerTaskThreadPool::handle(void *task_token)
       thread_id = GETTID();
       ObTimerMonitor::get_instance().start_task(thread_id, start_time, token->delay_, token->task_);
     }
-    token->task_->runTimerTask();
     THIS_WORKER.set_timeout_ts(INT64_MAX); // reset timeout to INT64_MAX
     ObCurTraceId::reset(); // reset trace_id
+    set_ext_tname(token);
+    token->task_->runTimerTask();
+    clear_ext_tname(); // reset ext_tname
     const int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time();
     const int64_t elapsed_time = end_time - start_time;
     if (do_timeout_check) {
@@ -110,6 +114,26 @@ void ObTimerTaskThreadPool::handle(void *task_token)
           KP(token), KPC(token), KPC(token->task_), K(ret));
     }
     IGNORE_RETURN service_.schedule_task(token);
+  }
+}
+
+void ObTimerTaskThreadPool::set_ext_tname(const TaskToken *token)
+{
+  if (nullptr != token) {
+    char *ext_tname = ob_get_extended_thread_name();
+    const char *tname = ob_get_tname();
+    if (nullptr != ext_tname && nullptr != tname) {
+      IGNORE_RETURN databuff_printf(ext_tname, OB_EXTENED_THREAD_NAME_BUF_LEN,
+          "%s_%s", tname, token->timer_name_);
+    }
+  }
+}
+
+void ObTimerTaskThreadPool::clear_ext_tname()
+{
+  char *ext_tname = ob_get_extended_thread_name();
+  if (nullptr != ext_tname) {
+    ext_tname[0] = '\0';
   }
 }
 

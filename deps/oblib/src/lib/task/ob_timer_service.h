@@ -34,6 +34,19 @@ namespace common
 {
 
 extern uint64_t mtl_get_id();
+
+class ObTimerUtil
+{
+public:
+    static void copy_buff(char *buf, int64_t buf_len, const char *value)
+    {
+      if (nullptr != buf && nullptr != value && '\0' != value[0] && buf_len > 0) {
+        strncpy(buf, value, buf_len);
+        buf[buf_len - 1] = '\0';
+      }
+    }
+};
+
 class ObTimerTask
 {
 public:
@@ -72,6 +85,7 @@ public:
   TO_STRING_KV(KP(this), KP_(timer), KP_(task), K_(task_type), K_(scheduled_time), K_(delay));
 public:
   char task_type_[128];
+  char timer_name_[OB_THREAD_NAME_BUF_LEN];
   const ObTimer *timer_;
   ObTimerTask *task_;
   int64_t scheduled_time_;
@@ -87,6 +101,9 @@ public:
   virtual void handle(void *task_token) override;
   ObTimerTaskThreadPool(const ObTimerTaskThreadPool &) = delete;
   ObTimerTaskThreadPool &operator=(const ObTimerTaskThreadPool &) = delete;
+private:
+  static void set_ext_tname(const TaskToken *token);
+  static void clear_ext_tname();
 private:
   ObTimerService &service_;
 private:
