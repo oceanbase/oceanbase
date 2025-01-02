@@ -84,7 +84,6 @@ int ObParallelMergeCtx::init(compaction::ObBasicTabletMergeCtx &merge_ctx)
     STORAGE_LOG(WARN, "Invalid argument to init parallel merge", K(ret), K(merge_ctx));
   } else if (FALSE_IT(tablet_size = merge_ctx.get_schema()->get_tablet_size())) {
   } else if (!merge_ctx.get_need_parallel_minor_merge()) {
-    //TODO(jinyu) backfill need using same code with minor merge in 4.2 RC3.
     enable_parallel_minor_merge = false;
   } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));

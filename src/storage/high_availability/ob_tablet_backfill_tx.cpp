@@ -1973,6 +1973,7 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_table_merge_ctx_(
     static_param.version_range_.multi_version_start_ = tablet_handle_.get_obj()->get_multi_version_start();
     static_param.merge_scn_ = backfill_tx_ctx_->backfill_scn_;
     static_param.create_snapshot_version_ = 0;
+    //TODO(muwei): backfill need using same code with minor merge in 4.4.
     static_param.need_parallel_minor_merge_ = false;
     // double set insurance
     static_param.tablet_transfer_seq_ = dest_transfer_seq_;

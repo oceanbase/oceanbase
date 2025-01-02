@@ -4000,7 +4000,7 @@ int ObTablet::get_read_tables(
   return ret;
 }
 
-// TODO (wenjinyu.wjy) need to be moved to ObLSTableService in 4.3
+// TODO (mwuei): need to be moved to ObLSTableService in 4.4
 int ObTablet::get_src_tablet_read_tables_(
     const int64_t snapshot_version,
     const bool allow_no_ready_read,

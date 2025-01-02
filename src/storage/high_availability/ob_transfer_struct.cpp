@@ -530,7 +530,6 @@ int ObTXTransferUtils::get_tablet_status_(
   return ret;
 }
 
-// TODO(wenjinyu.wjy) (4.3)It needs to be added to trigger the tablet freezing operation
 int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *tablet)
 {
   MDS_TG(10_ms);

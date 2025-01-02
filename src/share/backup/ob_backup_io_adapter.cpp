@@ -1218,8 +1218,7 @@ int ObCheckDirEmptOp::func(const dirent *entry)
   file_cnt_++;
   return OB_ERR_EXIST_OBJECT;
 }
-  // TODO(wenjinyu.wjy) need to be refactored 4.3
-  // can be optimized, object storage no need do extra list_dir
+
 int ObBackupIoAdapter::is_empty_directory(const common::ObString &uri, 
                                         const share::ObBackupStorageInfo *storage_info, 
                                         bool &is_empty_directory)
