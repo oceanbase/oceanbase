@@ -692,7 +692,10 @@ int ObTableApiSessNode::init()
       const uint64_t tenant_id = credential_.tenant_id_;
       const uint64_t user_id = credential_.user_id_;
       const uint64_t database_id = credential_.database_id_;
-      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      if (!GCTX.schema_service_->is_tenant_refreshed(tenant_id)) {
+        ret = OB_SERVER_IS_INIT;
+        LOG_WARN("tenant schema not refreshed yet", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
         LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
       } else {
         const ObSimpleTenantSchema *tenant_info = nullptr;
