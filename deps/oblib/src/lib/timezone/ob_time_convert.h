@@ -871,8 +871,6 @@ public:
 ///   3. To eliminate the discrepancy between floor rounding and division,
 ///      the algorithm use two linear function to approximate the formula.
 ///      Here x = f(d) is the first one, y = g(d + f(d) - f(d)/4) is the second one.
-///   4. For detailed formula derivation, please refer to the documentation :
-///
 /// @param [in]  days days to 1970-1-1, say 1970-1-1 is 0, 1960-12-31 is -1.
 /// @param [out] year the year corresponding to the given date.
 OB_INLINE void ObTimeConverter::days_to_year(DateType days, YearType &year)
