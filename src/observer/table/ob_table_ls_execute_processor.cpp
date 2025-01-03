@@ -846,6 +846,14 @@ int ObTableLSExecuteP::HTableLSExecuteIter::init_table_batch_ctx(ObIArray<table:
   return ret;
 }
 
+ObTableLSExecuteP::HTableLSExecuteIter::~HTableLSExecuteIter()
+{
+  if (outer_exectute_process_.is_tablegroup_req_ && OB_NOT_NULL(tablet_ops_)) {
+    tablet_ops_->~ObTableTabletOp();
+    tablet_ops_ = nullptr;
+  }
+}
+
 /**
  * ---------------------------------------- ObTableLSExecuteP ----------------------------------------
  */

@@ -41,8 +41,15 @@ struct ObTableSingleQueryInfo : public ObTableInfoBase {
     query_(),
     table_cache_guard_() {}
 
-  ~ObTableSingleQueryInfo() {
+  ~ObTableSingleQueryInfo()
+  {
+    // TODO: It's unsuitable to get and destruct executor row iter and destruct
+    // the scan executor should be released after row iter destructed
+    table::ObTableApiScanExecutor *scan_exexcutor = row_iter_.get_scan_executor();
     row_iter_.close();
+    if (OB_NOT_NULL(scan_exexcutor)) {
+      scan_exexcutor->~ObTableApiScanExecutor();
+    }
   }
 
   int64_t to_string(char *buf, const int64_t len) const {

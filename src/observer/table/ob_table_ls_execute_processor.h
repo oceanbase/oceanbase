@@ -199,7 +199,7 @@ private:
   {
   public:
     explicit HTableLSExecuteIter(ObTableLSExecuteP &outer_exectute_process);
-    virtual ~HTableLSExecuteIter() {};
+    virtual ~HTableLSExecuteIter();
     int init();
     int set_tablet_ops(table::ObTableTabletOp &tablet_ops) override;
     void reuse() override;
