@@ -1978,6 +1978,7 @@ public:
   int extract_local_session_vars_recursively(ObIArray<const share::schema::ObSessionSysVar *> &var_array);
   void set_local_session_var_id(int64_t idx) { local_session_var_id_ = idx; }
   int64_t get_local_session_var_id() { return local_session_var_id_; }
+  int fast_check_status(uint64_t n = 0xFFFF) const;
 
 private:
   const ObRawExpr *get_same_identify(const ObRawExpr *e,
@@ -4813,12 +4814,15 @@ public:
       expr_store_(alloc),
       is_called_sql_(true),
       proxy_(nullptr),
-      try_check_tick_(0)
+      try_check_tick_(0),
+      worker_check_status_times_(0)
   {
   }
   ObRawExprFactory(ObRawExprFactory &expr_factory) : allocator_(expr_factory.allocator_),
                                                      expr_store_(allocator_),
-                                                     proxy_(&expr_factory)
+                                                     proxy_(&expr_factory),
+                                                     try_check_tick_(0),
+                                                     worker_check_status_times_(0)
   {
   }
   ~ObRawExprFactory() {
@@ -4916,6 +4920,7 @@ public:
   inline common::ObIAllocator &get_allocator() { return allocator_; }
   common::ObObjStore<ObRawExpr*, common::ObIAllocator&, true> &get_expr_store() { return expr_store_; }
   void set_is_called_sql(const bool is_called_sql) { is_called_sql_ = is_called_sql; }
+  inline uint64_t inc_worker_check_status_times() { return ++worker_check_status_times_; }
   TO_STRING_KV("", "");
 private:
   common::ObIAllocator &allocator_;
@@ -4924,6 +4929,7 @@ private:
   //if not null, raw_expr is create by pl resolver
   ObRawExprFactory *proxy_;
   int64_t try_check_tick_;
+  mutable uint64_t worker_check_status_times_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprFactory);
 };
