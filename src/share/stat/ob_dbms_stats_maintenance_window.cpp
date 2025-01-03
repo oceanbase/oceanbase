@@ -228,7 +228,7 @@ int ObDbmsStatsMaintenanceWindow::get_stat_window_job_sql(const bool is_oracle_m
   int ret = OB_SUCCESS;
   int64_t interval_ts = DEFAULT_WEEK_INTERVAL_USEC;
   int64_t end_date = 64060560000000000;//4000-01-01 00:00:00.000000
-  int64_t default_duration_sec = is_work_day(job_id) ? DEFAULT_WORKING_DAY_DURATION_SEC : DEFAULT_NON_WORKING_DAY_DURATION_SEC;
+  int64_t default_duration_sec = DEFAULT_WORKING_DAY_DURATION_SEC;
   share::ObDMLSqlSplicer dml;
   OZ (dml.add_pk_column("tenant_id", share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
   OZ (dml.add_column("job_name", ObHexEscapeSqlStr(ObString(job_name))));
@@ -480,9 +480,9 @@ int ObDbmsStatsMaintenanceWindow::get_window_job_info(const int64_t current_time
     LOG_WARN("get unexpected error", K(ret), K(ob_time.parts_[DT_WDAY]));
   } else {
     //work day set default start time is 22:00 and non-work day set default start time is 6:00
-    int64_t default_start_hour = is_work_day(nth_window) ? DEFAULT_WORKING_DAY_START_HOHR : DEFAULT_NON_WORKING_DAY_START_HOHR;
+    int64_t default_start_hour = DEFAULT_WORKING_DAY_START_HOHR;
     //work day set default duration time is 4 hours and non-work day set default duration time is 20 hours
-    int64_t default_duration_usec = is_work_day(nth_window) ? DEFAULT_WORKING_DAY_DURATION_USEC : DEFAULT_NON_WORKING_DAY_DURATION_USEC;
+    int64_t default_duration_usec = DEFAULT_WORKING_DAY_DURATION_USEC;
     int64_t total_hour_with_trunc = current_time / USEC_OF_HOUR;
     int64_t current_hour = ob_time.parts_[DT_HOUR];
     int64_t current_wday = ob_time.parts_[DT_WDAY];
