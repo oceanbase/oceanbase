@@ -775,16 +775,16 @@ int ObTableApiSessNodeVal::init_sess_info()
 }
 
 /*
-  move node val to free list from used list.
-  - remove from used list.
-  - add to free list.
+  push session back to queue
 */
-void ObTableApiSessNodeVal::push_back_to_queue()
+int ObTableApiSessNodeVal::push_back_to_queue()
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(owner_node_) && OB_FAIL(owner_node_->push_back_sess_to_queue(this))) {
-    LOG_WARN("fail to push back session to queue", K(ret));
+    LOG_WARN("fail to push back session to queue",
+        K(ret), K(owner_node_->sess_queue_.capacity()), K(owner_node_->sess_queue_.get_curr_total()));
   }
+  return ret;
 }
 
 int ObTableApiSessNode::init()
@@ -807,7 +807,10 @@ int ObTableApiSessNode::init()
       const uint64_t tenant_id = credential_.tenant_id_;
       const uint64_t user_id = credential_.user_id_;
       const uint64_t database_id = credential_.database_id_;
-      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      if (!GCTX.schema_service_->is_tenant_refreshed(tenant_id)) {
+        ret = OB_SERVER_IS_INIT;
+        LOG_WARN("tenant schema not refreshed yet", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
         LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
       } else {
         const ObSimpleTenantSchema *tenant_info = nullptr;
@@ -842,7 +845,7 @@ int ObTableApiSessNode::init()
           if (OB_ISNULL(tenant_base)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get tenant is null", K(ret));
-          } else if (FALSE_IT(max_sess_num = tenant->max_worker_cnt())) {
+          } else if (FALSE_IT(max_sess_num = tenant->max_worker_cnt() * 2)) { // TTL task need session as well
           } else if (OB_FAIL(sess_queue_.init(max_sess_num, &queue_allocator_, attr))) {
             LOG_WARN("fail to init queues", K(ret), K(max_sess_num));
           } else {

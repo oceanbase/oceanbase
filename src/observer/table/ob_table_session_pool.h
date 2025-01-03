@@ -291,7 +291,7 @@ public:
     sql::ObSQLSessionInfo::LockGuard guard(sess_info_.get_thread_data_lock());
     sess_info_.get_tx_desc() = nullptr;
   }
-  void push_back_to_queue();
+  int push_back_to_queue();
 private:
   bool is_inited_;
   uint64_t tenant_id_;
@@ -330,7 +330,9 @@ public:
   OB_INLINE int push_back_sess_to_queue(ObTableApiSessNodeVal *val)
   {
     int ret = sess_queue_.push(val);
-    ATOMIC_DEC(&sess_ref_cnt_);
+    if (OB_SUCC(ret)) {
+      ATOMIC_DEC(&sess_ref_cnt_);
+    }
     return ret;
   }
   OB_INLINE const ObTableApiCredential& get_credential() const { return credential_; }
@@ -339,6 +341,13 @@ public:
   OB_INLINE const ObString& get_tenant_name() const { return tenant_name_; }
   OB_INLINE const ObString& get_database_name() const { return db_name_; }
   OB_INLINE const ObString& get_user_name() const { return user_name_; }
+  OB_INLINE void free_sess_val(ObTableApiSessNodeVal *val)
+  {
+    if (OB_NOT_NULL(mem_ctx_) && OB_NOT_NULL(val)) {
+      mem_ctx_->free(val);
+    }
+  }
+  OB_INLINE void dec_ref_cnt() { ATOMIC_DEC(&sess_ref_cnt_); }
 private:
   int extend_and_get_sess_val(ObTableApiSessGuard &guard);
 private:
@@ -366,13 +375,21 @@ public:
   {}
   // 析构需要做的两件事：
   // 1. reset事务描述符，避免session析构时，回滚事务
-  // 2. 将session从used list移到free list
+  // 2. 将session归还到队列，归还失败直接释放
   ~ObTableApiSessGuard()
   {
     if (OB_NOT_NULL(sess_node_val_)) {
+      int ret = OB_SUCCESS;
       sess_node_val_->get_sess_info().get_trans_result().reset();
       sess_node_val_->reset_tx_desc();
-      sess_node_val_->push_back_to_queue();
+      if (OB_FAIL(sess_node_val_->push_back_to_queue())) {
+        COMMON_LOG(WARN, "fail to push back session to queue", K(ret));
+        sess_node_val_->destroy();
+        if (OB_NOT_NULL(sess_node_val_->owner_node_)) {
+          sess_node_val_->owner_node_->free_sess_val(sess_node_val_);
+          sess_node_val_->owner_node_->dec_ref_cnt();
+        }
+      }
       sess_node_val_ = nullptr;
     }
   }
