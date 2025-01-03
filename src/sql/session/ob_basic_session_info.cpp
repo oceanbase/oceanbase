@@ -2582,7 +2582,7 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
         LOG_WARN("fail to get int from value", K(val), K(ret));
       } else if (OB_UNLIKELY(false == ObCharset::is_valid_collation(coll_int64))) {
         // 这里不设置错误码
-        LOG_WARN("invalid collation", K(coll_int64), K(val));
+        LOG_DEBUG("invalid collation", K(coll_int64), K(val));
         OX (sys_vars_cache_.set_ncharacter_set_connection(CHARSET_INVALID));
       } else {
         OX (sys_vars_cache_.set_ncharacter_set_connection(
