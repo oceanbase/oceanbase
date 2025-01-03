@@ -252,7 +252,7 @@ int ObTableApiModifyExecutor::calc_tablet_loc(ObExpr *calc_part_id_expr,
     bool is_ls_snapshot = snapshot.is_ls_snapshot();
     if (is_ls_snapshot) {
       if (tablet_loc->ls_id_ != snapshot.snapshot_lsid_) {
-        ret = OB_SNAPSHOT_DISCARDED;
+        ret = OB_TABLET_NOT_EXIST;
         LOG_WARN("snapshot_ls_id is not equal tablet_loc ls_id", K(snapshot.snapshot_lsid_), KPC(tablet_loc));
       }
     }

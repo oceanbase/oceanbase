@@ -177,6 +177,7 @@ public:
       result_iterator_(nullptr),
       query_ctx_(allocator_),
       lease_timeout_period_(60 * 1000 * 1000),
+      trans_desc_(nullptr),
       row_count_(0),
       req_timeinfo_(nullptr)
   {}
@@ -413,12 +414,11 @@ private:
 private:
   int check_query_type();
   int execute_query();
-  int start_trans(bool is_readonly,
-                  const table::ObTableConsistencyLevel consistency_level,
-                  const share::ObLSID &ls_id,
-                  int64_t timeout_ts,
-                  bool need_global_snapshot,
-                  sql::TransState *trans_state);
+  int init_read_trans(const table::ObTableConsistencyLevel consistency_level,
+                      const share::ObLSID &ls_id,
+                      int64_t timeout_ts,
+                      bool need_global_snapshot,
+                      sql::TransState *trans_state);
 
   static int process_columns(const ObIArray<ObString>& columns,
                       ObArray<std::pair<ObString, bool>>& familys,

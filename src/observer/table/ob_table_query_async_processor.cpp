@@ -262,9 +262,8 @@ void ObTableQueryASyncMgr::destroy_all_query_session()
           (void)query_session_map_.erase_refactored(sess_id);
           LOG_WARN("unexpected null query sesion", K(ret));
         } else {
-          if (OB_FAIL(rollback_trans(*query_session))) {
-            LOG_WARN("failed to rollback trans for query session", K(ret), K(sess_id));
-          }
+          transaction::ObTxDesc* tx_desc = query_session->get_trans_desc();
+          ObTableTransUtils::release_read_trans(tx_desc);
           (void)query_session_map_.erase_refactored(sess_id);
           ObTableQueryUtils::destroy_result_iterator(query_session->get_result_iter());
           free_query_session(query_session);
@@ -303,9 +302,8 @@ void ObTableQueryASyncMgr::clean_timeout_query_session()
         } else if (query_session->timeout_ts_ >= now) {
           min_timeout_period = OB_MIN(query_session->timeout_ts_ - now, min_timeout_period);
         } else {
-          if (OB_FAIL(rollback_trans(*query_session))) {
-            LOG_WARN("failed to rollback trans for query session", K(ret), K(sess_id));
-          }
+          transaction::ObTxDesc* tx_desc = query_session->get_trans_desc();
+          ObTableTransUtils::release_read_trans(tx_desc);
           (void)query_session_map_.erase_refactored(sess_id);
           ObTableQueryUtils::destroy_result_iterator(query_session->get_result_iter());
           free_query_session(query_session);
@@ -324,34 +322,6 @@ void ObTableQueryASyncMgr::clean_timeout_query_session()
       LOG_TRACE("schedule timer task for refresh next time", K(refresh_period_ms));
     }
   }
-}
-
-int ObTableQueryASyncMgr::rollback_trans(ObTableQueryAsyncSession &query_session)
-{
-  int ret = OB_SUCCESS;
-  sql::TransState &trans_state = query_session.trans_state_;
-  if (trans_state.is_start_trans_executed() && trans_state.is_start_trans_success()) {
-    transaction::ObTxDesc *trans_desc = query_session.trans_desc_;
-    if (OB_ISNULL(trans_desc)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null trans_desc", K(ret));
-    } else {
-      transaction::ObTransService *txs = MTL(transaction::ObTransService*);
-      // sync rollback tx
-      NG_TRACE(T_end_trans_begin);
-      if (OB_FAIL(txs->rollback_tx(*trans_desc))) {
-        LOG_WARN("fail to rollback trans", KR(ret), KPC(trans_desc));
-      } else {
-        txs->release_tx(*trans_desc);
-      }
-      trans_state.clear_start_trans_executed();
-      NG_TRACE(T_end_trans_end);
-    }
-  }
-  LOG_DEBUG("ObTableQueryASyncMgr::rollback_trans", KR(ret));
-  query_session.trans_desc_ = NULL;
-  trans_state.reset();
-  return ret;
 }
 
 ObTableQueryASyncMgr::ObQueryHashMap *ObTableQueryASyncMgr::get_query_session_map()
@@ -531,6 +501,7 @@ int ObTableQueryAsyncP::init_tb_ctx(ObIAllocator* allocator,
   ctx.set_simple_table_schema(query_info.simple_schema_);
   ctx.set_sess_guard(query_ctx.sess_guard_);
   ctx.set_is_tablegroup_req(tablegroup_req);
+  ctx.set_read_latest(false);
 
   ObObjectID tmp_object_id = OB_INVALID_ID;
   ObObjectID tmp_first_level_part_id = OB_INVALID_ID;
@@ -988,8 +959,6 @@ int ObTableQueryAsyncP::execute_query() {
     }
   } else if (query_session_->get_result_iterator()->has_more_result()) {
     result_.is_end_ = false;
-    // save processor's trans_desc_ to query session
-    query_session_->set_trans_desc(trans_param_.trans_desc_);
   } else {
     // no more result
     result_.is_end_ = true;
@@ -1009,12 +978,11 @@ int ObTableQueryAsyncP::execute_query() {
   return ret;
 }
 
-int ObTableQueryAsyncP::start_trans(bool is_readonly,
-                                    const ObTableConsistencyLevel consistency_level,
-                                    const ObLSID &ls_id,
-                                    int64_t timeout_ts,
-                                    bool need_global_snapshot,
-                                    TransState *trans_state)
+int ObTableQueryAsyncP::init_read_trans(const ObTableConsistencyLevel consistency_level,
+                                        const ObLSID &ls_id,
+                                        int64_t timeout_ts,
+                                        bool need_global_snapshot,
+                                        TransState *trans_state)
 {
   int ret = OB_SUCCESS;
 
@@ -1022,20 +990,17 @@ int ObTableQueryAsyncP::start_trans(bool is_readonly,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("trans_state is null", K(ret));
   } else if (FALSE_IT(trans_param_.trans_state_ptr_ = trans_state)) {
-  } else if (OB_FAIL(trans_param_.init(is_readonly,
+  } else if (OB_FAIL(trans_param_.init(true,
                                        consistency_level,
                                        ls_id,
                                        timeout_ts,
                                        need_global_snapshot))) {
     LOG_WARN("fail to init trans param", K(ret));
-  } else if (OB_FAIL(ObTableTransUtils::start_trans(trans_param_))) {
+  } else if (OB_FAIL(ObTableTransUtils::init_read_trans(trans_param_))) {
     LOG_WARN("fail to start trans", K(ret), K_(trans_param));
   }
   return ret;
 }
-
-
-
 
 int ObTableQueryAsyncP::query_scan_with_init(ObIAllocator *allocator, ObTableQueryAsyncCtx &query_ctx, table::ObTableQuery &query)
 {
@@ -1080,13 +1045,14 @@ int ObTableQueryAsyncP::query_scan_with_init(ObIAllocator *allocator, ObTableQue
           query.get_select_columns(),
           info->tb_ctx_.get_query_col_names()))) {
         LOG_WARN("fail to deep copy select columns from table ctx", K(ret));
-      } else if (OB_FAIL(start_trans(true,
-                                      arg_.consistency_level_,
-                                      info->tb_ctx_.get_ls_id(),
-                                      info->tb_ctx_.get_timeout_ts(),
-                                      info->tb_ctx_.need_dist_das(),
-                                      query_session_->get_trans_state()))) {
+      } else if (OB_FAIL(init_read_trans(arg_.consistency_level_,
+                                         info->tb_ctx_.get_ls_id(),
+                                         info->tb_ctx_.get_timeout_ts(),
+                                         info->tb_ctx_.need_dist_das(),
+                                         query_session_->get_trans_state()))) { // use session trans_state_
         LOG_WARN("fail to start readonly transaction", K(ret), K(info->tb_ctx_));
+      } else if (OB_FAIL(info->tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
+        LOG_WARN("fail to init trans", K(ret), K(info->tb_ctx_));
       } else {
         ObTableQueryResultIterator* result_iterator = nullptr;
         bool is_hkv = (arg_.entity_type_ == ObTableEntityType::ET_HKV);
@@ -1098,6 +1064,8 @@ int ObTableQueryAsyncP::query_scan_with_init(ObIAllocator *allocator, ObTableQue
           LOG_WARN("fail to get result iterator", K(ret));
         } else {
           query_session_->set_result_iterator(result_iterator);
+          // save processor's trans_desc_ to query session
+          query_session_->set_trans_desc(trans_param_.trans_desc_);
           if (OB_FAIL(execute_query())) {
             LOG_WARN("fail to execute query", K(ret));
           } else {
@@ -1450,10 +1418,8 @@ int ObTableQueryAsyncP::try_process()
 int ObTableQueryAsyncP::destory_query_session(bool need_rollback_trans)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(end_trans(need_rollback_trans, req_, nullptr/* ObTableCreateCbFunctor */))) {
-    LOG_WARN("failed to end trans", K(ret), K(need_rollback_trans));
-  }
-  int tmp_ret = ret;
+  transaction::ObTxDesc* tx_desc = query_session_->get_trans_desc();
+  ObTableTransUtils::release_read_trans(tx_desc);
 
   MTL(ObTableQueryASyncMgr*)->get_locker(query_session_id_).lock();
   if (OB_ISNULL(query_session_)) {
@@ -1468,7 +1434,6 @@ int ObTableQueryAsyncP::destory_query_session(bool need_rollback_trans)
   }
   MTL(ObTableQueryASyncMgr*)->get_locker(query_session_id_).unlock();
 
-  ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
   return ret;
 }
 

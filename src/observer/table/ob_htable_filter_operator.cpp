@@ -1519,6 +1519,7 @@ int ObHTableReversedRowIterator::create_forward_child_op()
   forward_tb_ctx_.set_simple_table_schema(reversed_tb_ctx.get_simple_table_schema());
   forward_tb_ctx_.set_sess_guard(reversed_tb_ctx.get_sess_guard());
   forward_tb_ctx_.set_is_tablegroup_req(reversed_tb_ctx.is_tablegroup_req());
+  forward_tb_ctx_.set_read_latest(reversed_tb_ctx.is_read_latest());
 
   if (forward_tb_ctx_.is_init()) {
     LOG_INFO("forward_tb_ctx_ has been inited", K_(forward_tb_ctx));

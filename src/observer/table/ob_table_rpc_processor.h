@@ -127,6 +127,10 @@ public:
                 rpc::ObRequest *req,
                 table::ObTableCreateCbFunctor *functor,
                 bool use_sync = false);
+  int init_read_trans(const ObTableConsistencyLevel consistency_level,
+                      const ObLSID &ls_id,
+                      int64_t timeout_ts,
+                      bool need_global_snapshot);
 
   // for get
   inline transaction::ObTxDesc *get_trans_desc() { return trans_param_.trans_desc_; }
