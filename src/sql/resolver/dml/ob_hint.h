@@ -39,6 +39,14 @@ enum ObPlanCachePolicy
   OB_USE_PLAN_CACHE_DEFAULT,//use plan cache
 };
 
+enum class ObPxNodePolicy
+{
+  INVALID,
+  DATA,
+  ZONE,
+  CLUSTER
+};
+
 struct ObAllocOpHint
 {
   ObAllocOpHint() : id_(0), flags_(0), alloc_level_(INVALID_LEVEL) {}
@@ -298,6 +306,7 @@ struct ObGlobalHint {
   static const int64_t SET_ENABLE_AUTO_DOP = -1;
   static const int64_t SET_ENABLE_MANUAL_DOP = -2;
   static const int64_t UNSET_DYNAMIC_SAMPLING = -1;
+  static const int64_t UNSET_PX_NODE_COUNT = -1;
 
   int merge_global_hint(const ObGlobalHint &other);
   int merge_dop_hint(uint64_t dfo, uint64_t dop);

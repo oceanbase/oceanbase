@@ -2699,6 +2699,9 @@ typedef enum ObItemType
   // optimizer hint
   T_INDEX_ASC_HINT = 4772,
   T_INDEX_DESC_HINT = 4773,
+  T_PX_NODE_POLICY = 4774,
+  T_PX_NODE_ADDRS = 4775,
+  T_PX_NODE_COUNT = 4776,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
