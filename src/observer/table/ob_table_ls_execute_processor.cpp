@@ -1573,6 +1573,8 @@ int ObTableLSExecuteP::execute_tablet_query_and_mutate(const uint64_t table_id,
         LOG_WARN("fail to construct_names_bitmap", KR(ret), KPC(result_entity));
       } else if (OB_FAIL(tablet_result.push_back(single_op_result))) {
         LOG_WARN("fail to push back", K(ret));
+      } else {
+        stat_row_count_ += single_op_result.get_affected_rows() != 0 ? 1 : 0;
       }
     }
   }
