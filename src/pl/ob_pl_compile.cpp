@@ -36,6 +36,8 @@ using namespace schema;
 using namespace sql;
 namespace pl {
 
+ObMutex ObPLCompiler::package_dep_info_lock_;
+
 int ObPLCompiler::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                                    const DependenyTableStore &dep_schema_objs)
 {
@@ -775,10 +777,11 @@ int ObPLCompiler::analyze_package(const ObString &source,
   return ret;
 }
 
-int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &package_ast, ObPLPackage &package)
+int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &package_ast, ObPLPackage &package, bool &is_from_disk)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(session_info_.get_pl_engine()));
+  OX (is_from_disk = false);
   if (OB_SUCC(ret)) {
     WITH_CONTEXT(package.get_mem_context()) {
       ObRoutinePersistentInfo routine_storage(MTL_ID(),
@@ -808,7 +811,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
         OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, env, package_ast, package, op));
       }
       if (op == ObRoutinePersistentInfo::ObPLOperation::SUCC) {
-        //do nothing
+        OX (is_from_disk = true);
       } else {
         // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
         ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, package.get_id() * 8);
@@ -822,7 +825,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
             OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, env, package_ast, package, op));
           }
           if (op == ObRoutinePersistentInfo::ObPLOperation::SUCC) {
-            //do nothing
+            OX (is_from_disk = true);
           } else {
             OZ (generate_package_routines(exec_env, package_ast.get_routine_table(), package));
             if (enable_persistent) {
@@ -891,6 +894,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
     OZ (ObPLPackageType::update_package_type_info(package_info, package_ast));
   }
 #endif
+  bool is_from_disk = false;
   {
     if (OB_SUCC(ret)) {
 #ifdef USE_MCJIT
@@ -923,19 +927,24 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
       }
     }
 
-    OZ (generate_package(package_info.get_exec_env(), package_ast, package));
+    OZ (generate_package(package_info.get_exec_env(), package_ast, package, is_from_disk));
   }
 
   OX (package.set_can_cached(package_ast.get_can_cached()));
   OX (package_ast.get_serially_reusable() ? package.set_serially_reusable() : void(NULL));
   session_info_.set_for_trigger_package(saved_trigger_flag);
   OZ (check_dep_schema(schema_guard_, package.get_dependency_table()));
-  OZ (update_schema_object_dep_info(package_ast.get_dependency_table(),
-                                    package_info.get_tenant_id(),
-                                    package_info.get_owner_id(),
-                                    package_info.get_package_id(),
-                                    package_info.get_schema_version(),
-                                    package_info.get_object_type()));
+
+  if (OB_SUCC(ret) && !is_from_disk) {
+    ObMutexGuard guard(package_dep_info_lock_);
+    OZ (update_schema_object_dep_info(package_ast.get_dependency_table(),
+                                      package_info.get_tenant_id(),
+                                      package_info.get_owner_id(),
+                                      package_info.get_package_id(),
+                                      package_info.get_schema_version(),
+                                      package_info.get_object_type()));
+  }
+
   ObErrorInfo error_info;
   error_info.set_tenant_id(package_info.get_tenant_id());
   if (OB_SUCC(ret)) {
