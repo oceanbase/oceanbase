@@ -39,6 +39,7 @@ enum ObDASIterType : uint32_t
   DAS_ITER_MVI_LOOKUP,
   DAS_ITER_HNSW_SCAN,
   DAS_ITER_DOMAIN_ID_MERGE,
+  DAS_ITER_IVF_SCAN,
   // append DASIterType before me
   DAS_ITER_MAX
 };
