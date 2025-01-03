@@ -3326,7 +3326,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_UNKNOWN_SUBPARTITION__USER_ERROR_MSG "Unknown subpartition"
 #define OB_ERR_INVALID_SQL_ROW_LIMITING__USER_ERROR_MSG "Invalid SQL ROW LIMITING expression was specified."
 #define INCORRECT_ARGUMENTS_TO_ESCAPE__USER_ERROR_MSG "Incorrect arguments to ESCAPE"
-#define INCORRECT_ARGUMENTS_TO_URL_DECODE__USER_ERROR_MSG "Incorrect arguments to URL_DECODE, %s: %%%c%c"
 #define STATIC_ENG_NOT_IMPLEMENT__USER_ERROR_MSG "not implemented in SQL static typing engine, will try the old engine automatically"
 #define OB_OBJ_ALREADY_EXIST__USER_ERROR_MSG "name is already used by an existing object"
 #define OB_DBLINK_NOT_EXIST_TO_ACCESS__USER_ERROR_MSG "connection description for remote database not found"
@@ -3952,6 +3951,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TMP_FILE_ALREADY_SEALED__USER_ERROR_MSG "tmp file has already sealed"
 #define OB_TMP_FILE_EXCEED_DISK_QUOTA__USER_ERROR_MSG "tmp file exceeds disk quota"
 #define OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE__USER_ERROR_MSG "Backup missing mview dependent tablet sstable, sstable maybe recycled"
+#define OB_ERR_DUPLICATE_INDEX__USER_ERROR_MSG "Duplicate index \'%s\' defined on the table \'%s.%s\'"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -8330,6 +8330,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TMP_FILE_EXCEED_DISK_QUOTA__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9135, tmp file exceeds disk quota"
 #define OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9136, Backup missing mview dependent tablet sstable, sstable maybe recycled"
 #define OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9136, Backup missing mview dependent tablet sstable, sstable maybe recycled"
+#define OB_ERR_DUPLICATE_INDEX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9137, Duplicate index \'%s\' defined on the table \'%s.%s\'"
+#define OB_ERR_DUPLICATE_INDEX__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9137, Duplicate index \'%s\' defined on the table \'%s.%s\'"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9163,7 +9165,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2393];
+extern int g_all_ob_errnos[2395];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

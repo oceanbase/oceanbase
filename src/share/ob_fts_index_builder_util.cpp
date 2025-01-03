@@ -334,6 +334,10 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
     ObColumnSchemaV2 *generated_word_col = nullptr;
     ObColumnSchemaV2 *generated_doc_len_col = nullptr;
     ObColumnSchemaV2 *generated_word_count_col = nullptr;
+    if (existing_word_col && is_fts_index_aux(index_arg.index_type_)) {
+      LOG_USER_WARN(OB_ERR_DUPLICATE_INDEX, index_arg.index_name_.ptr(),
+          index_arg.database_name_.ptr(), data_schema.get_table_name());
+    }
     if (OB_ISNULL(existing_doc_id_col)) { // need to generate doc id col
       doc_id_col_id = available_col_id++;
       if (OB_FAIL(ret)) {
