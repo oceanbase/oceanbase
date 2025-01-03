@@ -3945,6 +3945,11 @@ int ObBasicSessionInfo::get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search) const
   return get_uint64_sys_var(SYS_VAR_OB_HNSW_EF_SEARCH, ob_hnsw_ef_search);
 }
 
+int ObBasicSessionInfo::get_ob_ivf_nprobes(uint64_t &ob_ivf_nprobes) const
+{
+  return get_uint64_sys_var(SYS_VAR_OB_IVF_NPROBES, ob_ivf_nprobes);
+}
+
 int ObBasicSessionInfo::get_sql_quote_show_create(bool &sql_quote_show_create) const
 {
   return get_bool_sys_var(SYS_VAR_SQL_QUOTE_SHOW_CREATE, sql_quote_show_create);

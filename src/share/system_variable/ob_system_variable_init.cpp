@@ -8552,13 +8552,28 @@ static struct VarsInit{
     ObSysVars[613].alias_ = "OB_SV_ENABLE_OPTIMIZER_ROWGOAL" ;
     }();
 
+    [&] (){
+      ObSysVars[614].default_value_ = "8" ;
+      ObSysVars[614].info_ = "The number of nearest cluster centers from the IVF vector index searched during this session." ;
+      ObSysVars[614].name_ = "ob_ivf_nprobes" ;
+      ObSysVars[614].data_type_ = ObUInt64Type ;
+      ObSysVars[614].min_val_ = "1" ;
+      ObSysVars[614].max_val_ = "65536" ;
+      ObSysVars[614].flags_ = ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[614].id_ = SYS_VAR_OB_IVF_NPROBES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_IVF_NPROBES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_IVF_NPROBES] = 614 ;
+      ObSysVars[614].base_value_ = "8" ;
+    ObSysVars[614].alias_ = "OB_SV_IVF_NPROBES" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 614;
+static int64_t var_amount = 615;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

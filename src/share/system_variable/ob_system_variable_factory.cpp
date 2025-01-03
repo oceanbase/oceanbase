@@ -931,6 +931,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_global_debug_sync",
   "ob_hnsw_ef_search",
   "ob_interm_result_mem_limit",
+  "ob_ivf_nprobes",
   "ob_kv_mode",
   "ob_last_schema_version",
   "ob_log_level",
@@ -1548,6 +1549,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_GLOBAL_DEBUG_SYNC,
   SYS_VAR_OB_HNSW_EF_SEARCH,
   SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT,
+  SYS_VAR_OB_IVF_NPROBES,
   SYS_VAR_OB_KV_MODE,
   SYS_VAR_OB_LAST_SCHEMA_VERSION,
   SYS_VAR_OB_LOG_LEVEL,
@@ -2369,7 +2371,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "range_index_dive_limit",
   "partition_index_dive_limit",
   "ob_table_access_policy",
-  "enable_optimizer_rowgoal"
+  "enable_optimizer_rowgoal",
+  "ob_ivf_nprobes"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -3188,6 +3191,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarPartitionIndexDiveLimit)
         + sizeof(ObSysVarObTableAccessPolicy)
         + sizeof(ObSysVarEnableOptimizerRowgoal)
+        + sizeof(ObSysVarObIvfNprobes)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -8720,6 +8724,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableOptimizerRowgoal));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObIvfNprobes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObIvfNprobes", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_IVF_NPROBES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObIvfNprobes));
       }
     }
 
@@ -15483,6 +15496,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableOptimizerRowgoal())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarEnableOptimizerRowgoal", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_IVF_NPROBES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObIvfNprobes)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObIvfNprobes)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObIvfNprobes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObIvfNprobes", K(ret));
       }
       break;
     }
