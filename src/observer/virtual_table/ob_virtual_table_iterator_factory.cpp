@@ -244,6 +244,7 @@
 #include "observer/virtual_table/ob_all_virtual_log_transport_dest_stat.h"
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
 #include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
+#include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
 
 namespace oceanbase
 {
@@ -2458,6 +2459,28 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
                 SERVER_LOG(WARN, "fail to init ddl sim point stat iterator, ", K(ret));
               } else {
                 vt_iter = static_cast<ObVirtualTableIterator *>(ddl_sim_point_stat);
+              }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_DDL_DIAGNOSE_INFO_TID: {
+            ObAllVirtualDDLDiagnoseInfo *ddl_diagnose_info = nullptr;
+            bool is_index = false;
+            if (OB_FAIL(check_is_index(*index_schema, "i1", is_index))) {
+              LOG_WARN("check is index failed", K(ret));
+            } else if (is_index) {
+              if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualDDLDiagnoseInfoI1, ddl_diagnose_info))) {
+                LOG_WARN("new virtual table failed", K(ret));
+              }
+            } else {
+              OZ(NEW_VIRTUAL_TABLE(ObAllVirtualDDLDiagnoseInfo, ddl_diagnose_info));
+            }
+
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(ddl_diagnose_info->init())) {
+                SERVER_LOG(WARN, "fail to init ddl diagnose info iterator, ", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(ddl_diagnose_info);
               }
             }
             break;

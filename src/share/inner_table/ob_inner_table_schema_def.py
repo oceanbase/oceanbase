@@ -15737,7 +15737,29 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12511: __all_virtual_wr_sql_plan_aux_key2snapshot
 # 12512: __all_virtual_tablet_mds_info
 # 12513: __all_virtual_cs_replica_tablet_stats
-# 12514: __all_virtual_ddl_diagnose_info
+
+def_table_schema(
+  owner = 'buming.lj',
+  table_name    = '__all_virtual_ddl_diagnose_info',
+  table_id      = '12514',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('ddl_task_id','int'),
+    ('object_table_id','int'),
+    ('opname', 'varchar:OB_MAX_DDL_ID_STR_LENGTH'),
+    ('create_time', 'timestamp'),
+    ('finish_time', 'timestamp'),
+    ('diagnose_info', 'varchar:OB_DIAGNOSE_INFO_LENGTH'),
+  ],
+  vtable_route_policy = 'only_rs',
+  index = {'all_virtual_ddl_diagnose_info_i1' : { 'index_columns' : ['ddl_task_id'],
+                    'index_using_type' : 'USING_HASH'}},
+)
+
 # 12515: __all_virtual_plugin_info
 
 # 余留位置（此行之前占位）

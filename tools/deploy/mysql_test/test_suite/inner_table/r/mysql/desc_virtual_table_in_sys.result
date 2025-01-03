@@ -10942,3 +10942,16 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ncomp_dll_v2 limit 1;
+desc oceanbase.__all_virtual_ddl_diagnose_info;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+ddl_task_id	bigint(20)	NO	MUL	NULL	
+object_table_id	bigint(20)	NO		NULL	
+opname	varchar(64)	NO		NULL	
+create_time	timestamp(6)	NO		NULL	
+finish_time	timestamp(6)	NO		NULL	
+diagnose_info	varchar(1024)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ddl_diagnose_info;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ddl_diagnose_info limit 1;
