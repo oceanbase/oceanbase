@@ -2857,7 +2857,12 @@ int ObCollectionType::deserialize(
     CK (OB_NOT_NULL(table->get_allocator()));
     if (OB_FAIL(ret)) {
     } else if (count <= 0) {
-      table->set_count(count);
+      if (table->get_count() > 0) {
+        ObObj tmp;
+        tmp.set_extend(reinterpret_cast<int64_t>(table), table->get_type());
+        OZ (ObUserDefinedType::destruct_obj(tmp, &resolve_ctx.session_info_, true));
+      }
+      OX (table->set_count(count));
     } else if (is_associative_array_type()) {
       ObPLAssocArray *assoc_table = static_cast<ObPLAssocArray *>(table);
       CK (OB_NOT_NULL(assoc_table));
