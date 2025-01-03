@@ -49,7 +49,7 @@ public:
       const int cg_iter_type,
       const bool project_single_row)
   {
-    return project_single_row ? (OB_CG_SINGLE_ROW_SCANNER || OB_CG_DEFAULT_SCANNER) : (OB_CG_ROW_SCANNER <= cg_iter_type && cg_iter_type < OB_CG_TILE_SCANNER);
+    return project_single_row ? (OB_CG_SINGLE_ROW_SCANNER == cg_iter_type || OB_CG_DEFAULT_SCANNER == cg_iter_type) : (OB_CG_ROW_SCANNER <= cg_iter_type && cg_iter_type < OB_CG_TILE_SCANNER);
   }
   static bool is_valid_cg_row_scanner(const int cg_iter_type)
   {
