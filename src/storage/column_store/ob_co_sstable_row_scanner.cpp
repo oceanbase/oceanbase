@@ -608,9 +608,7 @@ int ObCOSSTableRowScanner::filter_rows(BlockScanState &blockscan_state)
   if (iter_param_->has_lob_column_out()) {
     access_ctx_->reuse_lob_locator_helper();
   }
-  if (OB_FAIL(THIS_WORKER.check_status())) {
-    LOG_WARN("query interrupt", K(ret));
-  } else if (nullptr != group_by_cell_) {
+  if (nullptr != group_by_cell_) {
     ret = filter_group_by_rows();
   } else if (nullptr != access_ctx_->limit_param_) {
     ret = filter_rows_with_limit(blockscan_state);
@@ -634,7 +632,9 @@ int ObCOSSTableRowScanner::filter_rows_with_limit(BlockScanState &blockscan_stat
   while (OB_SUCC(ret) && !is_limit_end_) {
     ObCSRowId begin = current_;
     const ObCGBitmap* result_bitmap = nullptr;
-    if (OB_FAIL(inner_filter(begin, group_size_, result_bitmap, blockscan_state))) {
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("query interrupt", K(ret));
+    } else if (OB_FAIL(inner_filter(begin, group_size_, result_bitmap, blockscan_state))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Fail to inner filter", K(ret));
       }
@@ -699,6 +699,8 @@ int ObCOSSTableRowScanner::filter_rows_without_limit(BlockScanState &blockscan_s
       pending_end_row_id_ = OB_INVALID_CS_ROW_ID;
     }
     if (OB_FAIL(ret) || !need_do_filter) {
+    } else if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("query interrupt", K(ret));
     } else if (OB_FAIL(inner_filter(current_start_row_id, current_group_size, result_bitmap, blockscan_state))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Fail to inner filter", K(ret));

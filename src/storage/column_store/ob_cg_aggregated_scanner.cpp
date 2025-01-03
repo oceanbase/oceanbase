@@ -129,7 +129,9 @@ int ObCGAggregatedScanner::get_next_rows(uint64_t &count, const uint64_t capacit
     }
   } else {
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(ObCGRowScanner::get_next_rows(count, capacity, 0/*datum_offset*/))) {
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("query interrupt", K(ret));
+      } else if (OB_FAIL(ObCGRowScanner::get_next_rows(count, capacity, 0/*datum_offset*/))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to get next rows", K(ret));
         }
