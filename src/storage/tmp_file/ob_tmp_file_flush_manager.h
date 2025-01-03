@@ -79,12 +79,14 @@ public:
   int flush(ObSpLinkQueue &flushing_queue,
             ObTmpFileFlushMonitor &flush_monitor,
             const int64_t expect_flush_size,
+            const int64_t current_flush_cnt,
             const bool is_flush_meta_tree);
   int retry(ObTmpFileFlushTask &flush_task);
   int io_finished(ObTmpFileFlushTask &flush_task);
   int update_file_meta_after_flush(ObTmpFileFlushTask &flush_task);
   void try_remove_unused_file_flush_ctx();
 private:
+  int check_tmp_file_disk_usage_limit_(const int64_t current_flushing_cnt);
   int fill_block_buf_(ObTmpFileFlushTask &flush_task);
   int fast_fill_block_buf_with_meta_(ObTmpFileFlushTask &flush_task);
   int inner_fill_block_buf_(ObTmpFileFlushTask &flush_task,
@@ -110,7 +112,9 @@ private:
   int handle_wait_(ObTmpFileFlushTask &flush_task, FlushState &next_state);
   int handle_finish_(ObTmpFileFlushTask &flush_task);
 private:
-  int flush_by_watermark_(ObSpLinkQueue &flushing_queue, const bool is_flush_meta_tree);
+  int flush_by_watermark_(ObSpLinkQueue &flushing_queue,
+                          const int64_t current_flush_cnt,
+                          const bool is_flush_meta_tree);
   int update_meta_data_after_flush_for_files_(ObTmpFileFlushTask &flush_task);
   int reset_flush_ctx_for_file_(const ObSharedNothingTmpFile *file, const bool is_meta);
   int get_or_create_file_in_ctx_(const int64_t fd, ObTmpFileSingleFlushContext &file_flush_ctx);

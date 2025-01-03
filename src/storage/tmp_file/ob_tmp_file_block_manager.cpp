@@ -823,7 +823,7 @@ void ObTmpFileBlockManager::print_block_usage()
     int64_t occupied_page_num = block_num * ObTmpFileGlobal::BLOCK_PAGE_NUMS;
     double disk_fragment_ratio = static_cast<double>(used_page_num) / static_cast<double>(occupied_page_num);
     LOG_INFO("the block usage for temporary files",
-             K(used_page_num), K(occupied_page_num), K(disk_fragment_ratio));
+             K(used_page_num), K(occupied_page_num), K(block_num), K(disk_fragment_ratio));
   }
 }
 

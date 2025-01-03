@@ -26,6 +26,7 @@ public:
   ObTmpFilePageCacheController(ObTmpFileBlockManager &tmp_file_block_manager)
     : is_inited_(false),
       flush_all_data_(false),
+      disk_usage_limit_(0),
       tmp_file_block_manager_(tmp_file_block_manager),
       task_allocator_(),
       write_buffer_pool_(),
@@ -42,6 +43,8 @@ public:
   static const int64_t FLUSH_INTERVAL = 1000;       // 1s
   static const int64_t SWAP_FAST_INTERVAL = 5;      // 5ms
   static const int64_t SWAP_INTERVAL = 1000;        // 1s
+  static const int64_t REFRESH_CONFIG_INTERVAL = 10 * 1000 * 1000;  // 10s
+  static const int64_t ACCESS_TENANT_CONFIG_TIMEOUT_US = 10 * 1000; // 10ms
   virtual int init();
   int start();
   void stop();
@@ -55,7 +58,9 @@ public:
   ObTmpFileBlockManager &get_tmp_file_block_manager() { return tmp_file_block_manager_; }
   OB_INLINE bool is_flush_all_data() { return ATOMIC_LOAD(&flush_all_data_); }
   OB_INLINE void set_flush_all_data(bool flush_all_data) { ATOMIC_STORE(&flush_all_data_, flush_all_data); }
+  OB_INLINE int64_t get_disk_usage_limit() const { return ATOMIC_LOAD(&disk_usage_limit_); }
   virtual int invoke_swap_and_wait(int64_t expect_swap_size, int64_t timeout_ms = ObTmpFileSwapJob::DEFAULT_TIMEOUT_MS);
+  void refresh_disk_usage_limit();
 private:
   int swap_job_enqueue_(ObTmpFileSwapJob *swap_job);
   int free_swap_job_(ObTmpFileSwapJob *swap_job);
@@ -63,6 +68,7 @@ private:
 private:
   bool is_inited_;
   bool flush_all_data_;                   // set to true to flush all pages when shrinking write buffer pool
+  int64_t disk_usage_limit_;              // periodically read disk usage limit from tenant config
   ObTmpFileBlockManager &tmp_file_block_manager_;    // ref to ObTmpFileBlockManager
   ObFIFOAllocator task_allocator_;        // used by flush_mgr_ to allocate flush tasks
   ObTmpWriteBufferPool write_buffer_pool_;

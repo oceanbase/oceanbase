@@ -381,7 +381,7 @@ int ObITenantTmpFileManager::aio_write(const uint64_t tenant_id,
     LOG_WARN("ObITenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
   } else if (OB_UNLIKELY(!io_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("fail to aio read, invalid argument", KR(ret), K(io_info));
+    LOG_WARN("fail to aio write, invalid argument", KR(ret), K(io_info));
   } else if (OB_UNLIKELY(MTL_ID() != tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id not match", KR(ret), K(tenant_id), K(MTL_ID()));

@@ -278,6 +278,7 @@ tcp_keepcnt
 tcp_keepidle
 tcp_keepintvl
 tde_method
+temporary_file_max_disk_size
 tenant_sql_login_thread_count
 tenant_sql_net_thread_count
 tenant_task_queue_size
@@ -523,7 +524,6 @@ _storage_meta_memory_limit_percentage
 _stream_rpc_max_wait_timeout
 _system_tenant_limit_mode
 _temporary_file_io_area_size
-_temporary_file_meta_memory_limit_percentage
 _trace_control_info
 _transfer_finish_trans_timeout
 _transfer_process_lock_tx_timeout
