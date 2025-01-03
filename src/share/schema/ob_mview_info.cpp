@@ -53,6 +53,7 @@ ObMViewInfo &ObMViewInfo::operator=(const ObMViewInfo &src_schema)
     last_refresh_date_ = src_schema.last_refresh_date_;
     last_refresh_time_ = src_schema.last_refresh_time_;
     schema_version_ = src_schema.schema_version_;
+    refresh_dop_ = src_schema.refresh_dop_;
     if (OB_FAIL(deep_copy_str(src_schema.refresh_next_, refresh_next_))) {
       LOG_WARN("deep copy refresh next failed", KR(ret), K(src_schema.refresh_next_));
     } else if (OB_FAIL(deep_copy_str(src_schema.refresh_job_, refresh_job_))) {
@@ -100,6 +101,7 @@ void ObMViewInfo::reset()
   last_refresh_time_ = OB_INVALID_COUNT;
   reset_string(last_refresh_trace_id_);
   schema_version_ = OB_INVALID_VERSION;
+  refresh_dop_ = 0;
   ObSchema::reset();
 }
 
@@ -127,7 +129,8 @@ OB_SERIALIZE_MEMBER(ObMViewInfo,
                     last_refresh_date_,
                     last_refresh_time_,
                     last_refresh_trace_id_,
-                    schema_version_);
+                    schema_version_,
+                    refresh_dop_);
 
 int ObMViewInfo::gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSplicer &dml) const
 {

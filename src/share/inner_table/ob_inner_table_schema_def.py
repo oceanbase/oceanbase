@@ -6289,7 +6289,8 @@ def_table_schema(
     ('last_refresh_date', 'timestamp', 'true'),
     ('last_refresh_time', 'int', 'true'),
     ('last_refresh_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
-    ('schema_version', 'int')
+    ('schema_version', 'int'),
+    ('refresh_dop', 'int', 'false', '0')
   ]
 )
 

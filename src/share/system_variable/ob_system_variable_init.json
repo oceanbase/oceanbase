@@ -11910,9 +11910,9 @@
     "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
     "placeholder": true
   },
-  "materialized_view_parallelism": {
+  "mview_refresh_dop": {
     "id": 10746,
-    "name": "materialized_view_parallelism",
+    "name": "mview_refresh_dop",
     "default_value": "0",
     "base_value": "0",
     "data_type": "int",

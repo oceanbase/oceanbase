@@ -3664,6 +3664,7 @@ public:
   ObString next_time_expr_;
   ObString exec_env_;
   int64_t parallel_;
+  int64_t refresh_dop_;
 
   ObMVRefreshInfo() :
   refresh_method_(ObMVRefreshMethod::NEVER),
@@ -3671,7 +3672,8 @@ public:
   start_time_(),
   next_time_expr_(),
   exec_env_(),
-  parallel_(OB_INVALID_COUNT) {}
+  parallel_(OB_INVALID_COUNT),
+  refresh_dop_(0) {}
 
   void reset() {
     refresh_method_ = ObMVRefreshMethod::NEVER;
@@ -3680,6 +3682,7 @@ public:
     next_time_expr_.reset();
     exec_env_.reset();
     parallel_ = OB_INVALID_COUNT;
+    refresh_dop_ = 0;
   }
 
   bool operator == (const ObMVRefreshInfo &other) const {
@@ -3688,7 +3691,8 @@ public:
       && start_time_ == other.start_time_
       && next_time_expr_ == other.next_time_expr_
       && exec_env_ == other.exec_env_
-      && parallel_ == other.parallel_;
+      && parallel_ == other.parallel_
+      && refresh_dop_ == other.refresh_dop_;
   }
 
 
@@ -3697,7 +3701,8 @@ public:
       K_(start_time),
       K_(next_time_expr),
       K_(exec_env),
-      K_(parallel));
+      K_(parallel),
+      K_(refresh_dop));
 };
 
 class ObViewSchema : public ObSchema
