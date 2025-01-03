@@ -908,9 +908,9 @@ TEST_F(TestCharset, basic_collation_handler_test)
         if (OB_NOT_NULL(cs->coll->like_range)) {
           char temp1[100];
           char temp2[100];
-          size_t len1, len2;
+          size_t len1, len2, prefix_len;
           fprintf(stdout, ">> like_range = %d for text = \"%s\", min = %.*s, max = %.*s\n",
-                    cs->coll->like_range(cs, str, end-str, '\\', '_', '%', 100, temp1, temp2, &len1, &len2), utf8_str,
+                    cs->coll->like_range(cs, str, end-str, '\\', '_', '%', 100, temp1, temp2, &len1, &len2, &prefix_len), utf8_str,
                     (int)len1, temp1, (int)len2, temp2);
         }
         if (OB_NOT_NULL(cs->coll->wildcmp)) {

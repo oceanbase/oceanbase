@@ -60,13 +60,15 @@ bool ob_like_range_mb_help(const ObCharsetInfo *cs,
        size_t res_length,
        char **min_str_,char **max_str_,
        char **min_org_, char **min_end_,
-       size_t *min_length,size_t *max_length, char **max_end_)
+       size_t *min_length,size_t *max_length,
+       char **max_end_, size_t *prefix_length)
 {
   char *min_str = *min_str_;
   char *max_str = *max_str_;
   char *min_end = *min_end_;
   char *max_end = *max_end_;
   char *min_org = *min_org_;
+  *prefix_length = (size_t) (min_str - min_org);
   *min_length = ((!!(cs->state & OB_CS_BINSORT) || cs->pad_attribute == NO_PAD) ? (size_t) (min_str - min_org) : res_length);
   *max_length = res_length;
   do {
@@ -87,7 +89,8 @@ bool ob_like_range_mb(const ObCharsetInfo *cs,
                       pbool escape_char, pbool w_one, pbool w_many,
                       size_t res_length,
                       char *min_str,char *max_str,
-                      size_t *min_length,size_t *max_length)
+                      size_t *min_length,size_t *max_length,
+                      size_t *prefix_length)
 {
   unsigned int mb_len;
   const char *end= ptr + ptr_length;
@@ -101,7 +104,7 @@ bool ob_like_range_mb(const ObCharsetInfo *cs,
     if (*ptr == escape_char && ptr+1 != end) {
       ptr++;                                      
     } else if (*ptr == w_one ||  *ptr == w_many) {
-      return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end);
+      return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end, prefix_length);
     }
     mb_len= ob_ismbchar(cs, ptr, end);
     if ( mb_len > 1) {
@@ -116,11 +119,11 @@ bool ob_like_range_mb(const ObCharsetInfo *cs,
       if (contractions && ptr + 1 < end &&
           ob_uca_can_be_contraction_head(contractions, (unsigned char) *ptr)) {
         if (ptr[1] == w_one || ptr[1] == w_many) {
-          return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end);
+          return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end, prefix_length);
         } else if (ob_uca_can_be_contraction_tail(contractions, (unsigned char) ptr[1]) &&
                    ob_uca_contraction2_weight(contractions, (unsigned char) ptr[0], ptr[1])) {
           if (max_char_len == 1 || min_str + 1 >= min_end) {
-            return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end);
+            return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end, prefix_length);
           }
           max_char_len--;
           *min_str++= *max_str++= *ptr++;
@@ -130,7 +133,7 @@ bool ob_like_range_mb(const ObCharsetInfo *cs,
     }
   }
 
-  *min_length= *max_length = (size_t) (min_str - min_org);
+  *min_length= *max_length = *prefix_length = (size_t) (min_str - min_org);
   while (min_end != min_str) {
     *min_str++= *max_str++= ' ';
   }             
