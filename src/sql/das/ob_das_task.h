@@ -14,6 +14,7 @@
 #define OBDEV_SRC_SQL_DAS_OB_DAS_TASK_H_
 #include "share/ob_define.h"
 #include "share/ob_encryption_struct.h"
+#include "share/detect/ob_detectable_id.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
@@ -101,6 +102,7 @@ public:
       session_id_(0),
       plan_id_(0),
       plan_hash_(0),
+      detectable_id_(),
       tsc_monitor_info_(nullptr)
   {
     sql_id_[0] = '\0';
@@ -136,6 +138,7 @@ public:
   uint64_t session_id_;
   uint64_t plan_id_;
   uint64_t plan_hash_;
+  ObDetectableId detectable_id_;
   ObTSCMonitorInfo *tsc_monitor_info_;
 };
 
