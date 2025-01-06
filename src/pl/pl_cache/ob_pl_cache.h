@@ -380,6 +380,7 @@ struct ObPLCacheCtx : public ObILibCacheCtx
   ParamStore *cache_params_;
   ObString raw_sql_;
   int64_t compile_time_; // pl object cost time of compile
+  int adjust_definer_database_id();
 };
 
 
