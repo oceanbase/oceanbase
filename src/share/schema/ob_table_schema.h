@@ -211,6 +211,36 @@ enum ObViewColumnFilledFlag
   FILLED = 1,
 };
 
+enum ObMVContainerTableFlag
+{
+  IS_NOT_MV_CONTAINER_TABLE = 0,
+  IS_MV_CONTAINER_TABLE = 1,
+};
+
+enum ObMVAvailableFlag
+{
+  IS_MV_UNAVAILABLE = 0,
+  IS_MV_AVAILABLE = 1,
+};
+
+enum ObTableReferencedByMVFlag
+{
+  IS_NOT_REFERENCED_BY_MV = 0,
+  IS_REFERENCED_BY_MV = 1,
+};
+
+enum ObMVEnableQueryRewriteFlag
+{
+  IS_MV_DISABLE_QUERY_REWRITE = 0,
+  IS_MV_ENABLE_QUERY_REWRITE = 1,
+};
+
+enum ObMVOnQueryComputationFlag
+{
+  IS_NOT_MV_ON_QUERY_COMPUTATION = 0,
+  IS_MV_ON_QUERY_COMPUTATION = 1,
+};
+
 enum ObDDLIgnoreSyncCdcFlag
 {
   DO_SYNC_LOG_FOR_CDC = 0,
@@ -236,9 +266,19 @@ private:
   static const int32_t TM_TABLE_ROWID_MODE_BITS = 1;
   static const int32_t TM_VIEW_COLUMN_FILLED_OFFSET = 23;
   static const int32_t TM_VIEW_COLUMN_FILLED_BITS = 1;
+  static const int32_t TM_MV_CONTAINER_TABLE_OFFSET = 24;
+  static const int32_t TM_MV_CONTAINER_TABLE_BITS = 1;
+  static const int32_t TM_MV_AVAILABLE_OFFSET = 25;
+  static const int32_t TM_MV_AVAILABLE_BITS = 1;
+  static const int32_t TM_TABLE_REFERENCED_BY_MV_OFFSET = 26;
+  static const int32_t TM_TABLE_REFERENCED_BY_MV_BITS = 1;
+  static const int32_t TM_MV_ENABLE_QUERY_REWRITE_OFFSET = 27;
+  static const int32_t TM_MV_ENABLE_QUERY_REWRITE_BITS = 1;
+  static const int32_t TM_MV_ON_QUERY_COMPUTATION_OFFSET = 28;
+  static const int32_t TM_MV_ON_QUERY_COMPUTATION_BITS = 1;
   static const int32_t TM_DDL_IGNORE_SYNC_CDC_OFFSET = 29;
   static const int32_t TM_DDL_IGNORE_SYNC_CDC_BITS = 1;
-  static const int32_t TM_RESERVED = 7;
+  static const int32_t TM_RESERVED = 2;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
@@ -248,6 +288,11 @@ private:
   static const uint32_t AUTO_INCREMENT_MODE_MASK = (1U << TM_TABLE_AUTO_INCREMENT_MODE_BITS) - 1;
   static const uint32_t ROWID_MODE_MASK = (1U << TM_TABLE_ROWID_MODE_BITS) - 1;
   static const uint32_t VIEW_COLUMN_FILLED_MASK = (1U << TM_VIEW_COLUMN_FILLED_BITS) - 1;
+  static const uint32_t MV_CONTAINER_TABLE_MASK = (1U << TM_MV_CONTAINER_TABLE_BITS) - 1;
+  static const uint32_t MV_AVAILABLE_MASK = (1U << TM_MV_AVAILABLE_BITS) - 1;
+  static const uint32_t TABLE_REFERENCED_BY_MV_MASK = (1U << TM_TABLE_REFERENCED_BY_MV_BITS) - 1;
+  static const uint32_t MV_ENABLE_QUERY_REWRITE_MASK = (1U << TM_MV_ENABLE_QUERY_REWRITE_BITS) - 1;
+  static const uint32_t MV_ON_QUERY_COMPUTATION_MASK = (1U << TM_MV_ON_QUERY_COMPUTATION_BITS) - 1;
   static const uint32_t DDL_IGNORE_SYNC_CDC_MASK = (1U << TM_DDL_IGNORE_SYNC_CDC_BITS) - 1;
 public:
   ObTableMode() { reset(); }
@@ -293,6 +338,30 @@ public:
   {
     return (ObViewColumnFilledFlag)((table_mode >> TM_VIEW_COLUMN_FILLED_OFFSET) & VIEW_COLUMN_FILLED_MASK);
   }
+  static ObMVContainerTableFlag get_mv_container_table_flag(int32_t table_mode)
+  {
+    return (ObMVContainerTableFlag)((table_mode >> TM_MV_CONTAINER_TABLE_OFFSET) & MV_CONTAINER_TABLE_MASK);
+  }
+  static ObMVAvailableFlag get_mv_available_flag(int32_t table_mode)
+  {
+    return (ObMVAvailableFlag)((table_mode >> TM_MV_AVAILABLE_OFFSET) & MV_AVAILABLE_MASK);
+  }
+  static ObTableReferencedByMVFlag get_table_referenced_by_mv_flag(int32_t table_mode)
+  {
+      return (ObTableReferencedByMVFlag)((table_mode >> TM_TABLE_REFERENCED_BY_MV_OFFSET) & TABLE_REFERENCED_BY_MV_MASK);
+  }
+  static ObMVEnableQueryRewriteFlag get_mv_enable_query_rewrite_flag(int32_t table_mode)
+  {
+      return (ObMVEnableQueryRewriteFlag)((table_mode >> TM_MV_ENABLE_QUERY_REWRITE_OFFSET) & MV_ENABLE_QUERY_REWRITE_MASK);
+  }
+  static ObMVOnQueryComputationFlag get_mv_on_query_computation_flag(int32_t table_mode)
+  {
+      return (ObMVOnQueryComputationFlag)((table_mode >> TM_MV_ON_QUERY_COMPUTATION_OFFSET) & MV_ON_QUERY_COMPUTATION_MASK);
+  }
+  static ObDDLIgnoreSyncCdcFlag get_ddl_ignore_sync_cdc_falg(int32_t table_mode)
+  {
+      return (ObDDLIgnoreSyncCdcFlag) ((table_mode >> TM_DDL_IGNORE_SYNC_CDC_OFFSET) & DDL_IGNORE_SYNC_CDC_MASK);
+  }
   inline bool is_user_hidden_table() const
   { return TABLE_STATE_IS_HIDDEN_MASK & state_flag_; }
   TO_STRING_KV("table_mode_flag", mode_flag_,
@@ -303,6 +372,11 @@ public:
                "auto_increment_mode", auto_increment_mode_,
                "rowid_mode", rowid_mode_,
                "view_column_filled_flag", view_column_filled_flag_,
+               "mv_container_table_flag", mv_container_table_flag_,
+               "mv_available_flag", mv_available_flag_,
+               "table_referenced_by_mv_flag", table_referenced_by_mv_flag_,
+               "mv_enable_query_rewrite_flag", mv_enable_query_rewrite_flag_,
+               "mv_on_query_computation_flag", mv_on_query_computation_flag_,
                "ddl_table_ignore_sync_cdc_flag", ddl_table_ignore_sync_cdc_flag_);
   union {
     int32_t mode_;
@@ -315,6 +389,11 @@ public:
       uint32_t auto_increment_mode_: TM_TABLE_AUTO_INCREMENT_MODE_BITS;
       uint32_t rowid_mode_: TM_TABLE_ROWID_MODE_BITS;
       uint32_t view_column_filled_flag_ : TM_VIEW_COLUMN_FILLED_BITS;
+      uint32_t mv_container_table_flag_ : TM_MV_CONTAINER_TABLE_BITS;
+      uint32_t mv_available_flag_ : TM_MV_AVAILABLE_BITS;
+      uint32_t table_referenced_by_mv_flag_ : TM_TABLE_REFERENCED_BY_MV_BITS;
+      uint32_t mv_enable_query_rewrite_flag_ : TM_MV_ENABLE_QUERY_REWRITE_BITS;
+      uint32_t mv_on_query_computation_flag_ : TM_MV_ON_QUERY_COMPUTATION_BITS;
       uint32_t ddl_table_ignore_sync_cdc_flag_ : TM_DDL_IGNORE_SYNC_CDC_BITS;
       uint32_t reserved_ :TM_RESERVED;
     };
@@ -646,6 +725,26 @@ public:
   { return FILLED == (enum ObViewColumnFilledFlag)table_mode_.view_column_filled_flag_; }
   inline void set_view_column_filled_flag(const ObViewColumnFilledFlag flag)
   { table_mode_.view_column_filled_flag_ = flag; }
+  inline bool mv_container_table() const
+  { return IS_MV_CONTAINER_TABLE == (enum ObMVContainerTableFlag)table_mode_.mv_container_table_flag_; }
+  inline void set_mv_container_table(const ObMVContainerTableFlag flag)
+  { table_mode_.mv_container_table_flag_ = flag; }
+  inline bool mv_available() const
+  { return IS_MV_AVAILABLE == (enum ObMVAvailableFlag)table_mode_.mv_available_flag_; }
+  inline void set_mv_available(const ObMVAvailableFlag flag)
+  { table_mode_.mv_available_flag_ = flag; }
+  inline bool table_referenced_by_mv() const
+  { return IS_REFERENCED_BY_MV == (enum ObTableReferencedByMVFlag)table_mode_.table_referenced_by_mv_flag_; }
+  inline void set_table_referenced_by_mv(const ObTableReferencedByMVFlag flag)
+  { table_mode_.table_referenced_by_mv_flag_ = flag; }
+  inline bool mv_enable_query_rewrite() const
+  { return IS_MV_ENABLE_QUERY_REWRITE == (enum ObMVEnableQueryRewriteFlag)table_mode_.mv_enable_query_rewrite_flag_; }
+  inline void set_mv_enable_query_rewrite(const ObMVEnableQueryRewriteFlag flag)
+  { table_mode_.mv_enable_query_rewrite_flag_ = flag; }
+  inline bool mv_on_query_computation() const
+  { return IS_MV_ON_QUERY_COMPUTATION == (enum ObMVOnQueryComputationFlag)table_mode_.mv_on_query_computation_flag_; }
+  inline void set_mv_on_query_computation(const ObMVOnQueryComputationFlag flag)
+  { table_mode_.mv_on_query_computation_flag_ = flag; }
   inline void set_ddl_ignore_sync_cdc_flag(const ObDDLIgnoreSyncCdcFlag flag)
   { table_mode_.ddl_table_ignore_sync_cdc_flag_ = flag; }
   inline bool is_ddl_table_ignored_to_sync_cdc() const

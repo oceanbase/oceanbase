@@ -458,6 +458,10 @@ public:
   {
     return share::schema::DONT_SYNC_LOG_FOR_CDC == table_mode_.ddl_table_ignore_sync_cdc_flag_;
   }
+  OB_INLINE bool is_mv_container_table() const
+  {
+    return share::schema::IS_MV_CONTAINER_TABLE == table_mode_.mv_container_table_flag_;
+  }
   OB_INLINE uint64_t get_data_table_id() const { return data_table_id_; }
   OB_INLINE int64_t get_index_tid_count() const { return unique_index_tid_arr_.count(); } // NOTICE: only return unique_index_table count.
   OB_INLINE const ObIArray<uint64_t> &get_unique_index_table_id_arr() const { return unique_index_tid_arr_; }
