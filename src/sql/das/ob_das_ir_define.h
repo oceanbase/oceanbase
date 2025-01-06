@@ -33,6 +33,7 @@ public:
       relevance_expr_(nullptr),
       relevance_proj_col_(nullptr),
       estimated_total_doc_cnt_(0),
+      mode_flag_(NATURAL_LANGUAGE_MODE),
       flags_(0) {}
   bool need_calc_relevance() const { return nullptr != relevance_expr_; }
   bool need_proj_relevance_score() const { return nullptr != relevance_proj_col_; }
@@ -105,6 +106,7 @@ public:
   ObExpr *relevance_expr_;
   ObExpr *relevance_proj_col_;
   int64_t estimated_total_doc_cnt_;
+  ObMatchAgainstMode mode_flag_; // for MySQL search mode flag
   union
   {
     uint8_t flags_;
