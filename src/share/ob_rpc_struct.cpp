@@ -3491,7 +3491,8 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     vidx_refresh_info_,
                     is_rebuild_index_,
                     is_index_scope_specified_,
-                    is_offline_rebuild_);
+                    is_offline_rebuild_,
+                    index_key_);
 
 OB_SERIALIZE_MEMBER((ObIndexOfflineDdlArg, ObDDLArg),
                     arg_,

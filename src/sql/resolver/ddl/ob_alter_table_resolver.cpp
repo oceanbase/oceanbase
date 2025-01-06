@@ -2030,6 +2030,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                   }
                 }
                 if (OB_SUCC(ret)) {
+                  create_index_arg->index_key_ = static_cast<int64_t>(index_keyname_);
                   if (OB_FAIL(resolve_results.push_back(resolve_result))) {
                     LOG_WARN("fail to push back index_stmt_list", K(ret),
                         K(resolve_result));

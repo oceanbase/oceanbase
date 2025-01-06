@@ -453,7 +453,7 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
       }
     }
   }
-  FLOG_INFO("adjust fts arg finished", K(index_arg));
+  FLOG_INFO("adjust fts arg finished", K(ret), K(index_arg));
   return ret;
 }
 
@@ -1820,9 +1820,8 @@ int ObFtsIndexBuilderUtil::check_fulltext_index_allowed(
   if (OB_ISNULL(index_arg) || !data_schema.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(index_arg), K(data_schema));
-  } else if (!share::schema::is_fts_index_aux(index_arg->index_type_)
-    && !share::schema::is_fts_doc_word_aux(index_arg->index_type_)) {
-  } else {
+  } else if (static_cast<int64_t>(ObDDLResolver::INDEX_KEYNAME::FTS_KEY) == index_arg->index_key_) {
+    ObCollationType collation_type = CS_TYPE_INVALID;
     for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
       const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
       const ObColumnSchemaV2 *col_schema = nullptr;
@@ -1836,6 +1835,11 @@ int ObFtsIndexBuilderUtil::check_fulltext_index_allowed(
       } else if (OB_UNLIKELY(col_schema->is_virtual_generated_column())) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Fulltext index on virtual generated column is");
+      } else if (CS_TYPE_INVALID == collation_type) {
+        collation_type = col_schema->get_collation_type();
+      } else if (collation_type != col_schema->get_collation_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext index on columns with different collation");
       }
     }
   }

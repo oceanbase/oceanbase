@@ -883,6 +883,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id
       } else {
         // set type to fts_index_aux first, append other fts arg later
         index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
+        index_arg.index_key_ = static_cast<int64_t>(index_keyname_);
       }
     } else if (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_) {
       uint64_t tenant_data_version = 0;

@@ -2802,7 +2802,8 @@ public:
         vidx_refresh_info_(),
         is_rebuild_index_(false),
         is_index_scope_specified_(false),
-        is_offline_rebuild_(false)
+        is_offline_rebuild_(false),
+        index_key_(-1)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2838,6 +2839,7 @@ public:
     is_rebuild_index_ = false;
     is_index_scope_specified_ = false;
     is_offline_rebuild_ = false;
+    index_key_ = -1;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2879,6 +2881,7 @@ public:
       is_rebuild_index_ = other.is_rebuild_index_;
       is_index_scope_specified_ = other.is_index_scope_specified_;
       is_offline_rebuild_ = other.is_offline_rebuild_;
+      index_key_ = other.index_key_;
     }
     return ret;
   }
@@ -2951,6 +2954,7 @@ public:
   bool is_rebuild_index_;
   bool is_index_scope_specified_;
   bool is_offline_rebuild_;
+  int64_t index_key_;
 };
 
 struct ObIndexOfflineDdlArg : ObDDLArg

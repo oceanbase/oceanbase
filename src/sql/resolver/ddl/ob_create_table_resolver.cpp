@@ -3182,6 +3182,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         ObCreateIndexArg &create_index_arg = create_index_stmt.get_create_index_arg();
         ObSArray<ObPartitionResolveResult> &resolve_results = create_table_stmt->get_index_partition_resolve_results();
         ObSArray<obrpc::ObCreateIndexArg> &index_arg_list = create_table_stmt->get_index_arg_list();
+        index_arg_.index_key_ = static_cast<int64_t>(index_keyname_);
         if (OB_FAIL(create_index_arg.assign(index_arg_))) {
           LOG_WARN("fail to assign create index arg", K(ret));
         } else if (is_index_part_specified) {
