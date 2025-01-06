@@ -313,6 +313,7 @@ _disable_record_outrow_lob_in_clog
 _display_mysql_version
 _enable_active_txn_transfer
 _enable_adaptive_compaction
+_enable_auth_switch
 _enable_backtrace_function
 _enable_balance_kill_transaction
 _enable_block_file_punch_hole

@@ -207,6 +207,11 @@ int ObMPChangeUser::process()
   bool need_disconnect = true;
   bool need_response_error = true;
   const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
+  bool need_send_auth_switch =
+      get_conn()->is_support_plugin_auth() &&
+      get_conn()->client_type_ == common::OB_CLIENT_NON_STANDARD &&
+      GCONF._enable_auth_switch &&
+      (!is_proxy_mod || get_proxy_version() >= PROXY_VERSION_4_2_3_0);
   if (OB_FAIL(get_session(session))) {
     LOG_ERROR("get session  fail", K(ret));
   } else if (OB_ISNULL(session)) {
@@ -228,8 +233,7 @@ int ObMPChangeUser::process()
       session->clean_status();
       if (OB_FAIL(load_login_info(session))) {
         OB_LOG(WARN,"load log info failed", K(ret),K(session->get_sessid()));
-      } else if (get_conn()->is_support_plugin_auth()
-                && get_conn()->client_type_ == common::OB_CLIENT_NON_STANDARD) {
+      } else if (need_send_auth_switch) {
         // do nothing
       } else if (OB_FAIL(load_privilege_info_for_change_user(session))) {
         OB_LOG(WARN,"load privilige info failed", K(ret),K(session->get_sessid()));
@@ -265,8 +269,7 @@ int ObMPChangeUser::process()
      by just reading the cached data that are placed there by change user's
      passwd field.
      * */
-    if (get_conn()->is_support_plugin_auth()
-        && get_conn()->client_type_ == common::OB_CLIENT_NON_STANDARD) {
+    if (need_send_auth_switch) {
       // send auth switch request
       OMPKAuthSwitch auth_switch;
       auth_switch.set_plugin_name(ObString(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD));
