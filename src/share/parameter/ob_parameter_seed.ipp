@@ -2381,3 +2381,15 @@ DEF_INT(package_state_sync_max_size, OB_TENANT_PARAMETER, "8192", "[0, 16777216]
 DEF_CAP(_parquet_row_group_prebuffer_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
         "the parquet prefetch maximum row group size. Range: [0, +∞)",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_pc_adaptive_min_exec_time_threshold, OB_TENANT_PARAMETER, "1s", "[0, )",
+        "minimum execution time threshold for enabling adaptive plan cache. Range: [0, +∞]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_pc_adaptive_effectiveness_ratio_threshold, OB_TENANT_PARAMETER, "5", "[0, )",
+        "minimum effectiveness ratio threshold for enabling adaptive plan cache. Range:[0, +∞]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_adaptive_plan_cache, OB_TENANT_PARAMETER, "False",
+         "enable/disable adaptive plan cache",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_force_enable_plan_tracing, OB_TENANT_PARAMETER, "True",
+         "controls whether plan tracking is enabled when plan cache is disabled",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

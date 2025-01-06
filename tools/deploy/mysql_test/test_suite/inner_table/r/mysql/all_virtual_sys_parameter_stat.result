@@ -93,6 +93,7 @@ direct_load_allow_fallback
 disk_io_thread_count
 dtl_buffer_size
 dump_data_dictionary_to_log_interval
+enable_adaptive_plan_cache
 enable_async_syslog
 enable_auto_split
 enable_cgroup
@@ -397,6 +398,7 @@ _faststack_min_interval
 _faststack_req_queue_size_threshold
 _fast_commit_callback_count
 _follower_snapshot_read_retry_duration
+_force_enable_plan_tracing
 _force_explict_500_malloc
 _force_hash_groupby_dump
 _force_hash_join_spill
@@ -477,6 +479,8 @@ _parallel_redo_logging_trigger
 _parallel_server_sleep_time
 _parquet_row_group_prebuffer_size
 _partition_wise_plan_enabled
+_pc_adaptive_effectiveness_ratio_threshold
+_pc_adaptive_min_exec_time_threshold
 _pdml_thread_cache_size
 _pipelined_table_function_memory_limit
 _preserve_order_for_pagination
