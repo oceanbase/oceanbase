@@ -1349,7 +1349,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVecIVFPQCenterVector::generate_pq_center_vector,     /* 817 */
   NULL, // ObExprDemoteCast::eval_demoted_val,                        /* 818 */
   NULL, // ObExprRangePlacement::eval_range_placement,                /* 819 */
-
+  NULL, // ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset,      /* 820 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
