@@ -59,11 +59,11 @@ int ObDBMSDataDict::trigger_dump_data_dict(
       && FALSE_IT(data_dict_dump_history_retention_sec = data_dict_dump_history_retention_day * SECONDS_OF_DAY)) {
   } else if (OB_UNLIKELY(errsim_code != OB_SUCCESS) // errsim mode for test
       && FALSE_IT(data_dict_dump_history_retention_sec = data_dict_dump_history_retention_day)) {
-  } else if (OB_FAIL(get_tenant_gts_(tenant_id, base_scn))) {
+  } else if (OB_FAIL(get_tenant_gts_(ctx, tenant_id, base_scn))) {
     LOG_WARN("get_tenant_gts failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(trigger_dump_data_dict_arg.init(base_scn, data_dict_dump_history_retention_sec))) {
     LOG_WARN("init trigger_dump_data_dict_arg failed", KR(ret), K(base_scn), K(data_dict_dump_history_retention_sec), K(params));
-  } else if (OB_FAIL(send_trigger_dump_dict_rpc_(tenant_id, trigger_dump_data_dict_arg))) {
+  } else if (OB_FAIL(send_trigger_dump_dict_rpc_(ctx, tenant_id, trigger_dump_data_dict_arg))) {
     LOG_WARN("send_trigger_dump_dict_rpc_ failed", KR(ret), K(tenant_id), K(trigger_dump_data_dict_arg));
   }
 
@@ -250,12 +250,12 @@ int ObDBMSDataDict::modify_retention(
   } else if (FALSE_IT(data_dict_dump_history_retention_sec = data_dict_dump_history_retention_day * SECONDS_OF_DAY)) {
   } else if (OB_UNLIKELY(errsim_code != OB_SUCCESS) // errsim mode for test
       && FALSE_IT(data_dict_dump_history_retention_sec = data_dict_dump_history_retention_day)) {
-  } else if (OB_FAIL(get_tenant_gts_(tenant_id, base_scn))) {
+  } else if (OB_FAIL(get_tenant_gts_(ctx, tenant_id, base_scn))) {
     LOG_WARN("get_tenant_gts_ failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(trigger_dump_data_dict_arg.init(base_scn, data_dict_dump_history_retention_sec))) {
     LOG_WARN("init trigger_dump_data_dict_arg failed", KR(ret), K(tenant_id), K(trigger_dump_data_dict_arg),
         K(base_scn), K(data_dict_dump_history_retention_sec));
-  } else if (OB_FAIL(send_trigger_dump_dict_rpc_(tenant_id, trigger_dump_data_dict_arg))) {
+  } else if (OB_FAIL(send_trigger_dump_dict_rpc_(ctx, tenant_id, trigger_dump_data_dict_arg))) {
     LOG_WARN("send_trigger_dump_dict_rpc_ failed", KR(ret), K(tenant_id), K(trigger_dump_data_dict_arg));
   }
 
@@ -293,6 +293,20 @@ int ObDBMSDataDict::check_op_allowed_(const sql::ObExecContext &ctx, uint64_t &t
   return ret;
 }
 
+int ObDBMSDataDict::check_session_status_(const sql::ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null session info", KR(ret));
+  } else {
+    ret = ctx.get_my_session()->check_session_status();
+  }
+
+  return ret;
+}
+
 int ObDBMSDataDict::check_scheduled_job_enabled_(const uint64_t tenant_id, bool &is_enabled)
 {
   int ret = OB_SUCCESS;
@@ -320,7 +334,10 @@ int ObDBMSDataDict::check_scheduled_job_enabled_(const uint64_t tenant_id, bool 
   return ret;
 }
 
-int ObDBMSDataDict::get_tenant_gts_(const uint64_t tenant_id, share::SCN &gts)
+int ObDBMSDataDict::get_tenant_gts_(
+    const sql::ObExecContext &ctx,
+    const uint64_t tenant_id,
+    share::SCN &gts)
 {
   int ret = OB_SUCCESS;
   const transaction::MonotonicTs stc = transaction::MonotonicTs::current_time();
@@ -329,12 +346,15 @@ int ObDBMSDataDict::get_tenant_gts_(const uint64_t tenant_id, share::SCN &gts)
   const static int64_t PRINT_INTERVAL = 10;
 
   do{
-    if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id, stc, NULL, gts, tmp_receive_gts_ts))) {
+    if (OB_FAIL(check_session_status_(ctx))) {
+      LOG_INFO("session status not as expect", KR(ret));
+    } else if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id, stc, NULL, gts, tmp_receive_gts_ts))) {
       if (OB_EAGAIN == ret) {
         ob_usleep(100_ms);
         if (++retry_cnt % PRINT_INTERVAL == 0) {
           LOG_WARN("retry get_gts for data_dict_service failed", KR(ret), K(retry_cnt));
         }
+        ret = OB_SUCCESS;
       } else {
         LOG_WARN("get_gts for data_dict_service failed", KR(ret));
       }
@@ -344,11 +364,14 @@ int ObDBMSDataDict::get_tenant_gts_(const uint64_t tenant_id, share::SCN &gts)
     } else {
       LOG_TRACE("get gts", K(tenant_id), K(gts));
     }
-  } while (OB_EAGAIN == ret && THIS_WORKER.get_timeout_remain() > 0);
+  } while (OB_SUCC(ret) && THIS_WORKER.get_timeout_remain() > 0);
   return ret;
 }
 
-int ObDBMSDataDict::send_trigger_dump_dict_rpc_(const uint64_t tenant_id, const obrpc::ObTriggerDumpDataDictArg &trigger_dump_data_dict_arg)
+int ObDBMSDataDict::send_trigger_dump_dict_rpc_(
+    const sql::ObExecContext &ctx,
+    const uint64_t tenant_id,
+    const obrpc::ObTriggerDumpDataDictArg &trigger_dump_data_dict_arg)
 {
   int ret = OB_SUCCESS;
   ObAddr leader;
@@ -359,11 +382,9 @@ int ObDBMSDataDict::send_trigger_dump_dict_rpc_(const uint64_t tenant_id, const 
     do {
       leader.reset();
       // get ls_leader of SYS_LS
-      if (OB_NOT_MASTER == ret || OB_EAGAIN == ret || OB_NEED_RETRY == ret) {
-        ret = OB_SUCCESS;
-        ob_usleep(1_s);
-      }
-      if (0 >= THIS_WORKER.get_timeout_remain()) {
+      if (OB_FAIL(check_session_status_(ctx))) {
+        LOG_INFO("session status not as expect", KR(ret));
+      } else if (0 >= THIS_WORKER.get_timeout_remain()) {
         ret = OB_TIMEOUT;
         LOG_WARN("query timeout is reached", KR(ret), "timeout_ts", THIS_WORKER.get_timeout_ts());
       } else if (OB_ISNULL(GCTX.location_service_)) {
@@ -387,7 +408,12 @@ int ObDBMSDataDict::send_trigger_dump_dict_rpc_(const uint64_t tenant_id, const 
       } else {
         LOG_TRACE("trigger_dump_data_dict rpc success", KR(ret), K(tenant_id), K(leader), K(trigger_dump_data_dict_arg));
       }
-    } while (OB_NOT_MASTER == ret || OB_EAGAIN == ret || OB_NEED_RETRY == ret);
+
+      if (OB_NOT_MASTER == ret || OB_EAGAIN == ret || OB_NEED_RETRY == ret) {
+        ret = OB_SUCCESS;
+        ob_usleep(1_s);
+      }
+    } while (OB_SUCC(ret));
   }
   return ret;
 }
