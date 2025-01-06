@@ -11448,7 +11448,7 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
       if (stmt->is_select_stmt()) {
         ObRawExpr *empty_rowid_expr = NULL;
         if (OB_FAIL(ObRawExprUtils::build_empty_rowid_expr(*params_.expr_factory_,
-                                                           table_item.table_id_,
+                                                           table_item,
                                                            empty_rowid_expr))) {
           LOG_WARN("build empty rowid expr failed", K(ret));
         } else if (OB_ISNULL(empty_rowid_expr) ||
@@ -14001,7 +14001,7 @@ int ObDMLResolver::resolve_rowid_pseudo_column(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr factory is null", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_empty_rowid_expr(*params_.expr_factory_,
-                                                              table_item->table_id_,
+                                                              *table_item,
                                                               real_ref_expr))) {
       LOG_WARN("build empty rowid expr failed", K(ret));
     }

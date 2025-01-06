@@ -1110,7 +1110,7 @@ public:
                               ObRawExpr *subpart_expr,
                               ObSysFunRawExpr *&rowid_expr);
   static int build_empty_rowid_expr(ObRawExprFactory &expr_factory,
-                                    uint64_t table_id,
+                                    const TableItem &table_item,
                                     ObRawExpr *&rowid_expr);
   static int build_to_outfile_expr(ObRawExprFactory &expr_factory,
                                    const ObSQLSessionInfo *session_info,
