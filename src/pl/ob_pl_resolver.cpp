@@ -15389,6 +15389,9 @@ int ObPLResolver::resolve_into(const ParseNode *into_node, ObPLInto &into, ObPLF
   CK (OB_LIKELY(T_SP_INTO_LIST == into_node->children_[0]->type_));
   if (OB_SUCC(ret)) {
     const ParseNode *into_list = into_node->children_[0];
+    if (1 == into_node->value_) {
+      into.set_bulk();
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < into_list->num_child_; ++i) {
       ObQualifiedName q_name;
       ObRawExpr* expr = NULL;
@@ -15396,6 +15399,17 @@ int ObPLResolver::resolve_into(const ParseNode *into_node, ObPLInto &into, ObPLF
       if (OB_FAIL(ret)) {
       } else if (T_SP_OBJ_ACCESS_REF == into_list->children_[i]->type_/*Oracle mode*/) {
         OZ (resolve_obj_access_idents(*into_list->children_[i], q_name.access_idents_, func));
+      } else if (lib::is_oracle_mode() && into.is_bulk()
+                  && T_QUESTIONMARK == into_list->children_[i]->type_) {
+        if (OB_FAIL(into.replace_questionmark_variable_type(func, current_block_, &resolve_ctx_.allocator_,
+                into_list->children_[i]->value_, into_list->num_child_, i))) {
+          LOG_WARN("Failed to convert questionmark var type from cursor ret type!", K(into), K(ret));
+        } else {
+          // build access_ident
+          ObObjAccessIdent access_ident(ObString(""), into_list->children_[i]->value_);
+          OX (access_ident.set_pl_var());
+          OZ (q_name.access_idents_.push_back(access_ident));
+        }
       } else if (T_QUESTIONMARK == into_list->children_[i]->type_ /*Oracle mode*/) {
         OZ (resolve_question_mark_node(into_list->children_[i], expr));
         CK (OB_NOT_NULL(expr));
@@ -15411,9 +15425,6 @@ int ObPLResolver::resolve_into(const ParseNode *into_node, ObPLInto &into, ObPLF
         LOG_USER_ERROR(OB_ERR_EXP_NOT_INTO_TARGET,
                        static_cast<int>(into_list->children_[i]->str_len_),
                        into_list->children_[i]->str_value_);
-      }
-      if (OB_SUCC(ret) && 1 == into_node->value_) {
-        into.set_bulk();
       }
       CK (OB_NOT_NULL(expr));
       OZ (func.add_expr(expr));

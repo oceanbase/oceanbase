@@ -7156,6 +7156,9 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
           CK (OB_NOT_NULL(result_expr = into_exprs[i]));
           CK (is_obj_access_expression(*result_expr));
           OZ (spi_calc_expr(ctx, result_expr, OB_INVALID_INDEX, &result_address));
+          CK (result_address.is_pl_extend());
+          CK (result_address.get_meta().get_extend_type()>=PL_NESTED_TABLE_TYPE
+            && result_address.get_meta().get_extend_type()<= PL_VARRAY_TYPE);
           OX (composite_write = reinterpret_cast<ObPlCompiteWrite *>(result_address.get_ext()));
           CK (OB_NOT_NULL(composite_write));
           CK (OB_NOT_NULL(table = reinterpret_cast<ObPLCollection*>(composite_write->value_addr_)));
