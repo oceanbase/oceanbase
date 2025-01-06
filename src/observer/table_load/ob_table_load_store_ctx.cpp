@@ -63,7 +63,7 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     enable_pre_sort_(false),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
-    last_heart_beat_ts_(0),
+    last_heart_beat_ts_(ObTimeUtil::current_time()),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
