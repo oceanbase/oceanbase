@@ -362,6 +362,12 @@ int ObPrivSqlService::gen_delete_routine_priv_sql(
         EXTRACT_VARCHAR_FIELD_MYSQL(*res, "routine_name", routine_name);
       }
 
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(dml.add_pk_column("routine_name", ObHexEscapeSqlStr(routine_name)))) {
+        LOG_WARN("failed to add_pk_column", K(ret), K(routine_name));
+      }
+
       // only one row is expected
       if (OB_FAIL(ret)) {
         // do nothing
@@ -374,12 +380,6 @@ int ObPrivSqlService::gen_delete_routine_priv_sql(
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected multiple rows", K(ret), K(sql));
-      }
-
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_FAIL(dml.add_pk_column("routine_name", ObHexEscapeSqlStr(routine_name)))) {
-        LOG_WARN("failed to add_pk_column", K(ret), K(routine_name));
       }
     }
   }
