@@ -62,6 +62,8 @@ namespace core
 
 DenseMap<StringRef, JITTargetAddress> ObJitGlobalSymbolGenerator::symbol_table;
 
+std::pair<lib::ObMutex, ObNotifyLoaded::KeyEntryMap> ObNotifyLoaded::AllGdbReg;
+
 ObOrcJit::ObOrcJit(common::ObIAllocator &Allocator)
   : DebugBuf(nullptr),
     DebugLen(0),
@@ -86,10 +88,6 @@ int ObOrcJit::init()
               return std::make_unique<ObJitMemoryManager>(JITAllocator);
           });
 
-#ifndef NDEBUG
-      ObjLinkingLayer->registerJITEventListener(
-          *JITEventListener::createGDBRegistrationListener());
-#endif // NDEBUG
       ObjLinkingLayer->registerJITEventListener(NotifyLoaded);
       return ObjLinkingLayer;
     });
@@ -197,11 +195,7 @@ int ObOrcJit::get_function_address(const std::string &name, uint64_t &addr)
 }
 
 void ObNotifyLoaded::notifyObjectLoaded(
-#ifdef CPP_STANDARD_20
-  ObJitEventListener::ObjectKey Key,
-#else
-  ObVModuleKey Key,
-#endif
+  ObObjectKey Key,
   const object::ObjectFile &Obj,
   const RuntimeDyld::LoadedObjectInfo &Info)
 {
@@ -210,20 +204,105 @@ void ObNotifyLoaded::notifyObjectLoaded(
     MEMCPY(obj_buf, Obj.getData().data(), Obj.getData().size());
     SoObject.assign_ptr(obj_buf, Obj.getData().size());
   }
-  // object::ObjectFile *ObjBinary = Obj.getBinary();
-  // if (ObjBinary != nullptr) {
-    object::OwningBinary<object::ObjectFile> DebugObj = Info.getObjectForDebug(Obj);
-    if (DebugObj.getBinary() != nullptr) {
-      const char* TmpDebugBuf
-        = DebugObj.getBinary()->getMemoryBufferRef().getBufferStart();
-      DebugLen
-        = DebugObj.getBinary()->getMemoryBufferRef().getBufferSize();
-      if (OB_NOT_NULL(
-        DebugBuf = static_cast<char*>(Allocator.alloc(DebugLen)))) {
-        std::memcpy(DebugBuf, TmpDebugBuf, DebugLen);
-      }
+
+  object::OwningBinary<object::ObjectFile> DebugObj = Info.getObjectForDebug(Obj);
+  if (DebugObj.getBinary() != nullptr) {
+    const char* TmpDebugBuf
+      = DebugObj.getBinary()->getMemoryBufferRef().getBufferStart();
+    DebugLen
+      = DebugObj.getBinary()->getMemoryBufferRef().getBufferSize();
+    if (OB_NOT_NULL(
+      DebugBuf = static_cast<char*>(Allocator.alloc(DebugLen)))) {
+      std::memcpy(DebugBuf, TmpDebugBuf, DebugLen);
     }
-  // }
+
+    registerDebugInfoToGdb(Key);
+  }
+}
+
+void ObNotifyLoaded::notifyFreeingObject(ObObjectKey Key)
+{
+  if (OB_NOT_NULL(DebugBuf)) {
+    deregisterDebugInfoFromGdb(Key);
+  }
+}
+
+int ObNotifyLoaded::initGdbHelper()
+{
+  int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(AllGdbReg.first);
+
+  if (OB_FAIL(AllGdbReg.second.create(1024, ObMemAttr(OB_SYS_TENANT_ID, "PlGdbHelper")))) {
+    LOG_WARN("failed to create AllGdbReg map", K(ret));
+  }
+
+  return ret;
+}
+
+void ObNotifyLoaded::registerDebugInfoToGdb(ObObjectKey Key)
+{
+  int ret = OB_SUCCESS;
+
+  lib::ObMutexGuard guard(AllGdbReg.first);
+  jit_code_entry buffer = {nullptr, nullptr, DebugBuf, static_cast<uint64_t>(DebugLen)};
+  jit_code_entry *entry = nullptr;
+
+  if (OB_FAIL(AllGdbReg.second.set_refactored(Key, buffer))) {
+    LOG_WARN("failed to set_refactored to AllGdbReg", K(ret));
+  } else if (OB_ISNULL(entry = AllGdbReg.second.get(Key))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL entry after set_refactored", K(ret));
+  } else {
+    jit_code_entry *next = __jit_debug_descriptor.first_entry;
+    if (OB_NOT_NULL(next)) {
+      next->prev_entry = entry;
+    }
+
+    entry->prev_entry = nullptr;
+    entry->next_entry = next;
+
+    __jit_debug_descriptor.first_entry = entry;
+
+    __jit_debug_descriptor.relevant_entry = entry;
+    __jit_debug_descriptor.action_flag = JIT_REGISTER_FN;
+    __jit_debug_register_code();
+  }
+
+  LOG_DEBUG("finished registerDebugInfoToGdb", K(ret), K(Key), K(AllGdbReg.second.size()));
+}
+
+void ObNotifyLoaded::deregisterDebugInfoFromGdb(ObObjectKey Key)
+{
+  int ret = OB_SUCCESS;
+
+  lib::ObMutexGuard guard(AllGdbReg.first);
+
+  jit_code_entry *entry = AllGdbReg.second.get(Key);
+
+  if (OB_NOT_NULL(entry)) {
+    jit_code_entry *prev = entry->prev_entry;
+    jit_code_entry *next = entry->next_entry;
+
+    if (OB_NOT_NULL(prev)) {
+      prev->next_entry = next;
+    } else {
+      __jit_debug_descriptor.first_entry = next;
+    }
+
+    if (OB_NOT_NULL(next)) {
+      next->prev_entry = prev;
+    }
+
+    __jit_debug_descriptor.relevant_entry = entry;
+    __jit_debug_descriptor.action_flag = JIT_UNREGISTER_FN;
+    __jit_debug_register_code();
+
+    if (OB_FAIL(AllGdbReg.second.erase_refactored(Key))) {
+      LOG_WARN("failed to erase jit entry from hashmap", K(ret));
+    }
+  }
+
+  LOG_DEBUG("finished deregisterDebugInfoFromGdb", K(ret), K(Key), K(entry), K(AllGdbReg.second.size()));
 }
 
 int ObOrcJit::add_compiled_object(size_t length, const char *ptr)
