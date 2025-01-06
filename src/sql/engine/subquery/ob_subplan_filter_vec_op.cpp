@@ -245,6 +245,7 @@ int ObSubPlanFilterVecOp::inner_get_next_batch(const int64_t max_row_cnt)
   }
 
   clear_evaluated_flag();
+  DASGroupScanMarkGuard mark_guard(ctx_.get_das_ctx(), MY_SPEC.enable_das_group_rescan_);
   while (OB_SUCC(ret) && !iter_end_) {
     const ObBatchRows *child_brs = NULL;
     set_param_null();
