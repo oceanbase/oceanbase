@@ -509,6 +509,7 @@ public:
             char *buf,
             const int64_t buf_len,
             const int64_t row_count) override;
+  int do_write_io() override;
   int wait();
 private:
   bool is_inited_;
@@ -517,6 +518,8 @@ private:
   ObDDLRedoLogWriter *ddl_writer_;
   int64_t task_id_;
   uint64_t data_format_version_;
+  ObArenaAllocator arena_allocator_;
+  ObDDLFinishLog finish_log_;
 };
 #endif
 }  // end namespace storage

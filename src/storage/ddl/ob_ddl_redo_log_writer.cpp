@@ -2478,14 +2478,30 @@ int ObDDLFinishLogWriterCallback::write(const blocksstable::ObStorageObjectHandl
     }
   }
   if (OB_SUCC(ret)) {
+    finish_log_.reset();
     bool is_remote_write = false;
-    ObDDLFinishLog finish_log;
     blocksstable::MacroBlockId macro_block_id = macro_handle.get_macro_id();
-    if (OB_FAIL(finish_log.init(MTL_ID(), ls_id_, table_key_, buf, buf_len, macro_block_id, data_format_version_))) {
+
+    char *buffer = nullptr; //buffer allocate by arena allocator, not set as class member
+    if (OB_ISNULL(buffer = static_cast<char*>(arena_allocator_.alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate buffer", K(ret), K(buf_len));
+    } else if (FALSE_IT(MEMCPY(buffer, buf, buf_len))) {
+    } else if (OB_FAIL(finish_log_.init(MTL_ID(), ls_id_, table_key_, buffer, buf_len, macro_block_id, data_format_version_))) {
       LOG_WARN("failed to init table key", K(ret));
-    } else if (OB_FAIL(ddl_writer_->write_finish_log_with_retry(true, /*allow remote write */ finish_log, is_remote_write))) {
-      LOG_WARN("failed to write finish log", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObDDLFinishLogWriterCallback::do_write_io()
+{
+  int ret = OB_SUCCESS;
+  bool is_remote_write = false;
+  if (!is_inited_) {
+    LOG_WARN("callback has not been init", K(ret));
+  } else if (OB_FAIL(ddl_writer_->write_finish_log_with_retry(true, /*allow remote write */ finish_log_, is_remote_write))) {
+      LOG_WARN("failed to write finish log", K(ret));
   }
   return ret;
 }
