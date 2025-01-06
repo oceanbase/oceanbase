@@ -15,6 +15,7 @@
 #include "storage/access/ob_table_read_info.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/ls/ob_ls_tablet_service.h"
+#include "storage/tablet/ob_tablet_split_mds_helper.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -136,7 +137,7 @@ int ObTabletSplitMdsUserData::calc_split_dst(ObLS &ls, const ObDatumRowkey &rowk
       int64_t timeout_us = 0;
       if (OB_FAIL(ls.get_tablet_with_timeout(tablet_id, tablet_handle, abs_timeout_us))) {
         LOG_WARN("failed to get split dst tablet", K(ret));
-      } else if (OB_FAIL(get_valid_timeout(abs_timeout_us, timeout_us))) {
+      } else if (OB_FAIL(ObTabletSplitMdsHelper::get_valid_timeout(abs_timeout_us, timeout_us))) {
         LOG_WARN("failed to get valid timeout", K(ret), K(abs_timeout_us));
       } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::split_partkey_compare(
               rowkey, tablet_handle.get_obj()->get_rowkey_read_info(), partkey_projector_, cmp_ret, timeout_us))) {
@@ -340,7 +341,7 @@ int ObTabletSplitMdsUserData::get_tsc_split_info(
     int64_t timeout_us = 0;
     if (OB_FAIL(get_split_src_tablet(ls, split_info.src_tablet_handle_))) {
       LOG_WARN("failed to get src tablet handle", K(ret));
-    } else if (OB_FAIL(get_valid_timeout(abs_timeout_us, timeout_us))) {
+    } else if (OB_FAIL(ObTabletSplitMdsHelper::get_valid_timeout(abs_timeout_us, timeout_us))) {
       LOG_WARN("failed to get valid timeout", K(ret), K(abs_timeout_us));
     } else if (OB_FAIL(split_info.src_tablet_handle_.get_obj()->ObITabletMdsInterface::get_split_data(src_data, timeout_us))) {
       LOG_WARN("failed to get split data", K(ret));
@@ -365,7 +366,7 @@ int ObTabletSplitMdsUserData::get_tsc_split_info(
             } else if (OB_ISNULL(prev_dst_tablet_handle.get_obj())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("invalid tablet", K(ret));
-            } else if (OB_FAIL(get_valid_timeout(abs_timeout_us, timeout_us))) {
+            } else if (OB_FAIL(ObTabletSplitMdsHelper::get_valid_timeout(abs_timeout_us, timeout_us))) {
               LOG_WARN("failed to get valid timeout", K(ret), K(abs_timeout_us));
             } else if (OB_FAIL(prev_dst_tablet_handle.get_obj()->ObITabletMdsInterface::get_split_data(prev_dst_data, timeout_us))) {
               LOG_WARN("failed to get split data", K(ret));
@@ -459,19 +460,6 @@ void ObTabletSplitMdsUserData::print_ref_tablets_split_data(ObLS &ls) const
     }
   }
   return;
-}
-
-int ObTabletSplitMdsUserData::get_valid_timeout(const int64_t abs_timeout_us, int64_t &timeout_us)
-{
-  int ret = OB_SUCCESS;
-  const int64_t cur_time = ObTimeUtility::current_time();
-  if (OB_UNLIKELY(abs_timeout_us <= cur_time)) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("timed out", K(ret), K(abs_timeout_us), K(cur_time));
-  } else {
-    timeout_us = abs_timeout_us - cur_time;
-  }
-  return ret;
 }
 
 OB_DEF_SERIALIZE(ObTabletSplitMdsUserData)

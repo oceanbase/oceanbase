@@ -205,6 +205,8 @@ public:
     const int64_t abs_timeout_us,
     ObIArray<ObTabletSplitMdsUserData> &datas);
 
+  static int get_valid_timeout(const int64_t abs_timeout_us, int64_t &valid_timeout_us);
+  static int get_split_data_with_timeout(ObTablet &tablet, ObTabletSplitMdsUserData &split_data, const int64_t abs_timeout_us);
   static int get_is_spliting(ObTablet &tablet, bool &is_split_dst);
   static int get_split_info(ObTablet &tablet, common::ObIAllocator &allocator, ObTabletSplitTscInfo &split_info);
   static int prepare_calc_split_dst(ObLS &ls, ObTablet &tablet, const int64_t abs_timeout_us, ObTabletSplitMdsUserData &src_split_data, ObIArray<ObTabletSplitMdsUserData> &dst_split_datas);
