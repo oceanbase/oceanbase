@@ -326,7 +326,8 @@ private:
   int accept_predicates(ObDMLStmt &stmt,
                         ObIArray<ObRawExpr *> &conds,
                         ObIArray<ObRawExpr *> &properties,
-                        ObIArray<ObRawExpr *> &new_conds);
+                        ObIArray<ObRawExpr *> &new_conds,
+                        const bool preserve_conds = false);
   int accept_outjoin_predicates(ObDMLStmt &stmt,
                                 ObIArray<ObRawExpr *> &conds,
                                 ObSqlBitSet <> &filter_table_set,
