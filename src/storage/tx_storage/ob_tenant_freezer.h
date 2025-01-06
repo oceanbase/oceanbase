@@ -220,8 +220,7 @@ public:
   int print_tenant_usage(char *print_buf,
                          int64_t buf_len,
                          int64_t &pos);
-
-                                // if major freeze is failed and need retry, set the major freeze into at retry_major_info_.
+  // if major freeze is failed and need retry, set the major freeze into at retry_major_info_.
   const ObRetryMajorInfo &get_retry_major_info() const { return retry_major_info_; }
   void record_freeze_failed_tablet(const ObTabletID &tablet_id);
   void erase_freeze_failed_tablet(const ObTabletID &tablet_id);
@@ -243,6 +242,9 @@ public:
   void get_freezer_stat_history_snapshot(int64_t &length);
 
   void get_freezer_stat_from_history(int64_t pos, ObTenantFreezerStat& stat);
+
+  // record major frozen scn and reset freeze cnt
+  int update_frozen_scn(const int64_t frozen_scn);
 
 private:
   int get_tenant_memstore_cond_(int64_t &active_memstore_used,

@@ -35,8 +35,10 @@
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
+
 namespace oceanbase
 {
 
@@ -639,6 +641,8 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
             zone_merge_info.broadcast_scn_, K(cur_broadcast_version));
           if (OB_FAIL(MERGE_SCHEDULER_PTR->schedule_merge(zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx()))) {
             LOG_WARN("fail to schedule merge", K(ret), K(zone_merge_info));
+          } else if (OB_FAIL(MTL(ObTenantFreezer*)->update_frozen_scn(zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx()))) {
+            LOG_WARN("update frozen scn failed", K(ret), K(zone_merge_info.broadcast_scn_.get_scn()));
           }
         }
       }
