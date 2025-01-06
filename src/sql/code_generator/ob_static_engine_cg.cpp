@@ -7652,45 +7652,26 @@ int ObStaticEngineCG::fill_aggr_infos(ObLogGroupBy &op,
   }
   //6.calc for implicit_aggr, if aggr_info.expr_ only in third stage, not in second stage,
   // must be calc in third stage.Normally caused by implicit aggr in filter.
-  if (spec.aggr_stage_ == ObThreeStageAggrStage::THIRD_STAGE) {
+  if (all_non_aggr_exprs.count() > 0 && spec.aggr_stage_ == ObThreeStageAggrStage::THIRD_STAGE) {
     ObOpSpec *child_spec = &spec;
-    bool find_second_spec = false;
-    while (!find_second_spec && child_spec->get_children() != NULL
+    bool find_first_spec = false;
+    while (!find_first_spec && child_spec->get_children() != NULL
             && child_spec->get_child_cnt() > 0) {
       if ((child_spec->type_ == PHY_VEC_HASH_GROUP_BY ||
            child_spec->type_ == PHY_HASH_GROUP_BY ||
            child_spec->type_ == PHY_VEC_MERGE_GROUP_BY ||
            child_spec->type_ == PHY_MERGE_GROUP_BY) &&
-           ((ObGroupBySpec*)child_spec)->aggr_stage_ == ObThreeStageAggrStage::SECOND_STAGE) {
-        find_second_spec = true;
+           ((ObGroupBySpec*)child_spec)->aggr_stage_ == ObThreeStageAggrStage::FIRST_STAGE) {
+        find_first_spec = true;
       } else {
         child_spec = child_spec->get_children()[0];
       }
     }
-    if (find_second_spec) {
-      if (OB_FAIL(spec.implicit_aggr_in_3stage_indexes_.prepare_allocate_and_keep_count(
-          spec.aggr_infos_.count()))) {
-        OB_LOG(WARN, "fail to prepare_allocate implicit_aggr_in_3stage_indexes_", K(ret));
-      } else {
-        ObGroupBySpec *second_stage_spec = (ObGroupBySpec*)child_spec;
-        for (int i = 0; i < spec.aggr_infos_.count(); i++) {
-          if (spec.aggr_infos_.at(i).is_implicit_first_aggr()) {
-            bool exist_in_second_stage = false;
-            for (int j = 0; !exist_in_second_stage && j < second_stage_spec->aggr_infos_.count(); j++) {
-              if (spec.aggr_infos_.at(i).expr_ == second_stage_spec->aggr_infos_.at(j).expr_) {
-                exist_in_second_stage = true;
-              }
-            }
-            if (!exist_in_second_stage) {
-              spec.implicit_aggr_in_3stage_indexes_.push_back(i);
-              LOG_TRACE("find implicit aggr need calc in 3stage", K(i));
-            }
-          }
-        }
-      }
+    if (find_first_spec) {
+      ((ObGroupBySpec*)child_spec)->need_last_group_in_3stage_ = true;
     } else {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot find second stage hashgroupby op", K(ret), K(find_second_spec));
+      LOG_WARN("cannot find first stage hashgroupby op", K(ret), K(find_first_spec));
     }
   }
   return ret;

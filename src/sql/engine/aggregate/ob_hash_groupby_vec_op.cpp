@@ -309,7 +309,7 @@ int ObHashGroupByVecOp::inner_open()
 
   if (OB_SUCC(ret)) {
     if (ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_) {
-      no_non_distinct_aggr_ = (0 == MY_SPEC.aggr_infos_.count());
+      can_skip_last_group_ = (0 == MY_SPEC.aggr_infos_.count() && !MY_SPEC.need_last_group_in_3stage_);
     } else if (ObThreeStageAggrStage::SECOND_STAGE == MY_SPEC.aggr_stage_) {
       if (OB_FAIL(append(distinct_origin_exprs_, MY_SPEC.group_exprs_))) {
         LOG_WARN("failed to append distinct_origin_exprs", K(ret));
@@ -515,7 +515,7 @@ int ObHashGroupByVecOp::next_duplicate_data_permutation(
       }
     }
     LOG_DEBUG("debug write aggr code", K(ret), K(last_group), K(nth_group), K(first_idx),
-      K(no_non_distinct_aggr_), K(start_idx), K(end_idx), K(dup_groupby_exprs_));
+      K(can_skip_last_group_), K(start_idx), K(end_idx), K(dup_groupby_exprs_));
   } else if (ObThreeStageAggrStage::SECOND_STAGE == MY_SPEC.aggr_stage_) {
     if (!use_distinct_data_) {
       //get the aggr_code and then insert group hash-table or insert duplicate hash-table
@@ -1347,7 +1347,7 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
                                              loop_cnt, *child_brs, part_cnt, parts, est_part_cnt,
                                              bloom_filter))) {
           LOG_WARN("fail to group child batch rows", K(ret), K(start_dump));
-        } else if (no_non_distinct_aggr_) {
+        } else if (can_skip_last_group_) {
         } else if (OB_FAIL(aggr_processor_.eval_aggr_param_batch(*child_brs))) {
           LOG_WARN("fail to eval aggr param batch", K(ret), K(*child_brs));
         }
@@ -1398,8 +1398,7 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(aggr_processor_.add_one_row(start_agg_id, end_agg_id,
                                                          batch_new_rows_[i], i,
-                                                         child_brs->size_, aggr_vectors_,
-                                                         MY_SPEC.implicit_aggr_in_3stage_indexes_))) {
+                                                         child_brs->size_, aggr_vectors_))) {
 
             LOG_WARN("fail to process row", K(ret));
           }
@@ -1435,8 +1434,7 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
             if (OB_SUCC(ret)) {
               if (OB_FAIL(aggr_processor_.add_one_row(start_agg_id, end_agg_id,
                                                       batch_old_rows_[i], i,
-                                                      child_brs->size_, aggr_vectors_,
-                                                      MY_SPEC.implicit_aggr_in_3stage_indexes_))) {
+                                                      child_brs->size_, aggr_vectors_))) {
                 LOG_WARN("fail to process row", K(ret));
               }
             }
@@ -2064,7 +2062,7 @@ int ObHashGroupByVecOp::group_child_batch_rows(const ObCompactRow **store_rows,
       part_shift, loop_cnt, child_brs, part_cnt, parts, est_part_cnt, bloom_filter,
       process_check_dump))) {
     LOG_WARN("failed to batch process duplicate data", K(ret));
-  } else if (no_non_distinct_aggr_) {
+  } else if (can_skip_last_group_) {
     LOG_TRACE("no distinct aggr");
     // no groupby exprs, don't calculate the last duplicate data for non-distinct aggregate
   } else if ((ObThreeStageAggrStage::SECOND_STAGE == MY_SPEC.aggr_stage_ && !use_distinct_data_)
@@ -2305,8 +2303,8 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
       LOG_WARN("failed to add llc map batch", K(ret));
     }
   }
-  if (last_group && no_non_distinct_aggr_) {
-    // in last group and no_non_distinct_aggr_, the hash val will not be calc because skip are all true,
+  if (last_group && can_skip_last_group_) {
+    // in last group and can_skip_last_group_, the hash val will not be calc because skip are all true,
     // hash_val is wrong, dont do popular_process
   } else if (OB_SUCC(ret) && skew_detection_enabled_) {
     memset(static_cast<void *>(batch_old_rows_), 0,
@@ -2359,8 +2357,7 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(aggr_processor_.add_one_row(start_agg_id, end_agg_id,
                                                       batch_old_rows_[i], i,
-                                                      brs_.size_, aggr_vectors_,
-                                                      MY_SPEC.implicit_aggr_in_3stage_indexes_))) {
+                                                      brs_.size_, aggr_vectors_))) {
         LOG_WARN("fail to process row", K(ret));
       } else {
         brs_.set_skip(i);
@@ -2368,9 +2365,9 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
       }
     }
   }
-  if (OB_FAIL(ret) || no_non_distinct_aggr_) {
-    if ((last_group && no_non_distinct_aggr_) || has_by_pass_agg_row) {
-      // in bypass && last_group && no_non_distinct_aggr_, brs_.skip_ will be set_all (all skip)
+  if (OB_FAIL(ret) || can_skip_last_group_) {
+    if ((last_group && can_skip_last_group_) || has_by_pass_agg_row) {
+      // in bypass && last_group && can_skip_last_group_, brs_.skip_ will be set_all (all skip)
       brs_.all_rows_active_ = false;
     } else {
       brs_.all_rows_active_ = by_pass_child_brs_->all_rows_active_;
@@ -2414,7 +2411,7 @@ int ObHashGroupByVecOp::by_pass_get_next_permutation_batch(int64_t &nth_group, b
   } else if (OB_FAIL(next_duplicate_data_permutation(nth_group, last_group, child_brs,
                                                      insert_group_ht))) {
     LOG_WARN("failed to get next permutation", K(ret));
-  } else if (no_non_distinct_aggr_ && last_group) {
+  } else if (can_skip_last_group_ && last_group) {
     my_brs.skip_->set_all(child_brs->size_);
   } else {
     CK (dup_groupby_exprs_.count() == all_groupby_exprs_.count());
