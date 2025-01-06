@@ -2755,6 +2755,7 @@ public:
   ObIndexOption() :
     ObTableOption(),
     parser_name_(),
+    parser_properties_(),
     index_attributes_set_(common::OB_DEFAULT_INDEX_ATTRIBUTES_SET)
   { }
 
@@ -2763,10 +2764,12 @@ public:
   {
     ObTableOption::reset();
     parser_name_.reset();
+    parser_properties_.reset();
   }
   DECLARE_TO_STRING;
 
   common::ObString parser_name_;
+  common::ObString parser_properties_;
   uint64_t index_attributes_set_;//flags, one bit for one attribute
 };
 

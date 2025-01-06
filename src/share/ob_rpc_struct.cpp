@@ -3362,6 +3362,7 @@ DEF_TO_STRING(ObIndexOption)
        K_(progressive_merge_num),
        K_(primary_zone),
        K_(parser_name),
+       K_(parser_properties),
        K_(index_attributes_set),
        K_(row_store_type),
        K_(store_format));
@@ -3369,7 +3370,7 @@ DEF_TO_STRING(ObIndexOption)
   return pos;
 }
 
-OB_SERIALIZE_MEMBER((ObIndexOption, ObTableOption), parser_name_, index_attributes_set_);
+OB_SERIALIZE_MEMBER((ObIndexOption, ObTableOption), parser_name_, index_attributes_set_, parser_properties_);
 
 bool ObIndexArg::is_valid() const
 {

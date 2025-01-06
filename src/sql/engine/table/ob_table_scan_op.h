@@ -470,6 +470,7 @@ public:
   int64_t partition_id_calc_type_;
 
   common::ObString parser_name_; // word segment for ddl.
+  common::ObString parser_properties_;
   ObCostTableScanSimpleInfo est_cost_simple_info_;
 };
 

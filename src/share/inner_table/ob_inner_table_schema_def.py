@@ -320,7 +320,8 @@ all_table_def = dict(
       ('duplicate_read_consistency', 'int', 'false', '0'),
       ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', ''),
       ('micro_index_clustered', 'bool', 'false', 'false'),
-      ('mv_mode', 'int', 'false', '0')
+      ('mv_mode', 'int', 'false', '0'),
+      ('parser_properties', 'longtext', 'false', '')
     ],
 )
 
