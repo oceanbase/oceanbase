@@ -4196,7 +4196,7 @@ int ObSplitUtil::deserializ_parallel_datum_rowkey(
   }
   return ret;
 }
-OB_SERIALIZE_MEMBER(ObSplitTabletInfo, split_info_);
+OB_SERIALIZE_MEMBER(ObSplitTabletInfo, split_info_, split_src_tablet_id_);
 
 //record trace_id
 ObDDLEventInfo::ObDDLEventInfo()
