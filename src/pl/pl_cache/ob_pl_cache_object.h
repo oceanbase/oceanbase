@@ -94,6 +94,7 @@ struct PLCacheObjStat
   int64_t pl_cg_mem_hold_;
   common::ObString sys_vars_str_;
   common::ObString param_infos_;
+  ObSchemaObjVersion out_of_date_dependcy_version_; // out_of_date dependcy version
 
   PLCacheObjStat()
     : pl_schema_id_(OB_INVALID_ID),
@@ -115,7 +116,8 @@ struct PLCacheObjStat
       ps_stmt_id_(OB_INVALID_ID),
       pl_cg_mem_hold_(0),
       sys_vars_str_(),
-      param_infos_()
+      param_infos_(),
+      out_of_date_dependcy_version_()
   {
     sql_id_[0] = '\0';
   }
@@ -147,6 +149,7 @@ struct PLCacheObjStat
     pl_cg_mem_hold_ = 0;
     sys_vars_str_.reset();
     param_infos_.reset();
+    out_of_date_dependcy_version_.reset();
   }
 
   TO_STRING_KV(K_(pl_schema_id),
@@ -162,7 +165,8 @@ struct PLCacheObjStat
                K_(schema_version),
                K_(pl_cg_mem_hold),
                K_(sys_vars_str),
-               K_(param_infos));
+               K_(param_infos),
+               K_(out_of_date_dependcy_version));
 };
 
 class ObPLCacheObject : public sql::ObILibCacheObject
@@ -222,7 +226,8 @@ public:
   TO_STRING_KV(K_(expr_op_size),
                K_(tenant_schema_version),
                K_(sys_schema_version),
-               K_(dependency_tables));
+               K_(dependency_tables),
+               K_(stat));
 
 protected:
   int64_t tenant_schema_version_;

@@ -18,6 +18,7 @@
 #include "sql/plan_cache/ob_i_lib_cache_object.h"
 #include "sql/plan_cache/ob_i_lib_cache_node.h"
 #include "sql/plan_cache/ob_i_lib_cache_context.h"
+#include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "sql/plan_cache/ob_lib_cache_register.h"
 #include "pl/ob_pl.h"
@@ -318,6 +319,12 @@ public:
   int match_params_info(const ParamStore *params,
                                  bool &is_same);
 
+  OB_INLINE void copy_obj_schema_version(ObSchemaObjVersion& dest, const PCVPlSchemaObj *src)
+  {
+    dest.object_id_ = src->schema_id_;
+    dest.version_ = src->schema_version_;
+  }
+
   void reset();
   int64_t get_mem_size();
 
@@ -405,6 +412,7 @@ public:
                                   ObILibCacheKey *key,
                                   ObILibCacheObject *cache_obj) override;
 
+  virtual int before_cache_evicted();
   void destroy();
 
   common::ObString &get_sql_id() { return sql_id_; }

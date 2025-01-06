@@ -2470,7 +2470,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
         // use stmt id as key
         pc_ctx.key_.key_id_ = stmt_id;
         if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
-          LOG_INFO("get pl function from plan cache failed",
+          LOG_INFO("get pl function by stmt id from plan cache failed",
                     K(ret), K(pc_ctx.key_), K(stmt_id), K(sql), K(params));
           ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
         } else if (FALSE_IT(routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()))) {
@@ -2701,17 +2701,17 @@ int ObPL::add_pl_lib_cache(ObPLFunction *pl_func, ObPLCacheCtx &pc_ctx)
   } else if (OB_FAIL(ObPLCacheMgr::add_pl_cache(plan_cache, pl_func, pc_ctx))) {
     if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
       ret = OB_SUCCESS;
-      LOG_DEBUG("this plan has been added by others, need not add again", KPC(pl_func));
+      LOG_WARN("this plan has been added by others, need not add again", KPC(pl_func));
     } else if (OB_REACH_MEMORY_LIMIT == ret || OB_SQL_PC_PLAN_SIZE_LIMIT == ret) {
       if (REACH_TIME_INTERVAL(1000000)) { //1s, 当内存达到上限时, 该日志打印会比较频繁, 所以以1s为间隔打印
-        LOG_DEBUG("can't add plan to plan cache",
+        LOG_WARN("can't add plan to plan cache",
                  K(ret), K(pl_func->get_mem_size()), K(pc_ctx.key_),
                  K(plan_cache->get_mem_used()));
       }
       ret = OB_SUCCESS;
     } else if (is_not_supported_err(ret)) {
       ret = OB_SUCCESS;
-      LOG_DEBUG("plan cache don't support add this kind of plan now",  KPC(pl_func));
+      LOG_WARN("plan cache don't support add this kind of plan now",  KPC(pl_func));
     } else {
       if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
         ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
@@ -2719,7 +2719,7 @@ int ObPL::add_pl_lib_cache(ObPLFunction *pl_func, ObPLCacheCtx &pc_ctx)
       }
     }
   } else {
-    LOG_DEBUG("add pl function to plan cache success", K(pc_ctx.key_));
+    LOG_INFO("add pl function to plan cache success", K(pc_ctx.key_));
   }
   return ret;
 }
