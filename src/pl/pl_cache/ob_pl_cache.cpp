@@ -660,7 +660,7 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
         if (OB_INVALID_VERSION == new_version) {
           ret = OB_OLD_SCHEMA_VERSION;
           copy_obj_schema_version(pl_routine_obj_->get_stat_for_update().out_of_date_dependcy_version_, pcv_schema);
-          LOG_WARN("can not get newer schema version", K(ret));
+          LOG_WARN("can not get newer schema version", K(ret), KPC(pcv_schema));
         } else if (OB_SUCC(ret)) {
           tmp_schema_obj.schema_id_ = pcv_schema->schema_id_; // same id
           tmp_schema_obj.schema_type_ = pcv_schema->schema_type_; // same type
@@ -1161,6 +1161,8 @@ int ObPLObjectSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
   ObPLCacheCtx& pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
   pc_ctx.schema_guard_->set_session_id(pc_ctx.session_info_->get_sessid_for_table());
   ObSEArray<PCVPlSchemaObj, 4> schema_array;
+  bool has_old_version_err = false;
+  ObSEArray<ObSchemaObjVersion, 4> out_of_date_objs;
   DLIST_FOREACH(pl_object_value, object_value_sets_) {
     schema_array.reset();
     int64_t new_tenant_schema_version = OB_INVALID_VERSION;
@@ -1168,14 +1170,17 @@ int ObPLObjectSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
     bool is_old_version = false;
     bool is_same = true;
     bool match_params = true;
-
-    if (OB_FAIL(pl_object_value->get_all_dep_schema(pc_ctx,
+    if (OB_FAIL(pl_object_value->match_params_info(pc_ctx.cache_params_, match_params))) {
+      LOG_WARN("failed to match params info", K(ret));
+    } else if (!match_params) {
+      // do nothing
+    } else if (OB_FAIL(pl_object_value->get_all_dep_schema(pc_ctx,
                                         pc_ctx.session_info_->get_database_id(),
                                         new_tenant_schema_version,
                                         need_check_schema,
                                         schema_array))) {
       if (OB_OLD_SCHEMA_VERSION == ret) {
-        LOG_WARN("old schema version, to be delete", K(ret), K(schema_array), KPC(pl_object_value));
+        has_old_version_err = true;
       } else {
         LOG_WARN("failed to get all table schema", K(ret));
       }
@@ -1183,7 +1188,7 @@ int ObPLObjectSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
       LOG_WARN("failed to match_dep_schema", K(ret));
     } else if (!is_same) {
       ret = OB_OLD_SCHEMA_VERSION;
-      LOG_WARN("old schema version, to be delete", K(ret), K(schema_array), KPC(pl_object_value));
+      has_old_version_err = true;
     } else if (OB_FAIL(pl_object_value->check_value_version(pc_ctx.schema_guard_,
                                                             need_check_schema,
                                                             schema_array,
@@ -1191,11 +1196,7 @@ int ObPLObjectSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
       LOG_WARN("fail to check table version", K(ret));
     } else if (true == is_old_version) {
       ret = OB_OLD_SCHEMA_VERSION;
-      LOG_WARN("old schema version, to be delete", K(ret), K(schema_array), KPC(pl_object_value));
-    } else if (OB_FAIL(pl_object_value->match_params_info(pc_ctx.cache_params_, match_params))) {
-      LOG_WARN("failed to match params info", K(ret));
-    } else if (!match_params) {
-      // do nothing
+      has_old_version_err = true;
     } else {
       cache_obj = pl_object_value->pl_routine_obj_;
       cache_obj->set_dynamic_ref_handle(pc_ctx.handle_id_);
@@ -1204,10 +1205,20 @@ int ObPLObjectSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
       }
       break;
     }
+    if (OB_OLD_SCHEMA_VERSION == ret) {
+      // Here rewrite err code to traverse all items in the linked list until the end.
+      // And if whole linked list has no valid cache obj, then remove the cache node
+      if (OB_FAIL(out_of_date_objs.push_back(
+          pl_object_value->pl_routine_obj_->get_stat().out_of_date_dependcy_version_))) {
+          LOG_WARN("Failed to push back out_of_date_dependcy_version!", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
   }
   if (OB_SUCC(ret) && nullptr == cache_obj) {
-    ret = OB_SQL_PC_NOT_EXIST;
-    LOG_WARN("failed to get cache obj in pl cache", K(ret));
+    ret = has_old_version_err ? OB_OLD_SCHEMA_VERSION : OB_SQL_PC_NOT_EXIST;
+    LOG_WARN("failed to get cache obj in pl cache", K(ret), K(pc_ctx.key_), K(out_of_date_objs));
   }
   return ret;
 }
@@ -1238,27 +1249,23 @@ int ObPLObjectSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
     LOG_WARN("failed to get all dep schema", K(ret));
   } else {
     DLIST_FOREACH(pl_object_value, object_value_sets_) {
-      bool is_same = true;
-      bool is_old_version = false;
-      if (schema_array.count() != 0) {
-        if (OB_FAIL(pl_object_value->match_dep_schema(pc_ctx, schema_array, is_same))) {
-          LOG_WARN("failed to match_dep_schema", K(ret));
-        } else if (!is_same) {
-          ret = OB_OLD_SCHEMA_VERSION;
-          LOG_WARN("old schema version, to be delete", K(ret), K(pl_object_value->pl_routine_obj_->get_object_id()));
-        } else if (pl_object_value->check_value_version(pc_ctx.schema_guard_,
-                                                true,
-                                                schema_array,
-                                                is_old_version)) {
-          LOG_WARN("fail to check table version", K(ret));
-        } else if (true == is_old_version) {
-          ret = OB_OLD_SCHEMA_VERSION;
-          LOG_WARN("old schema version, to be delete", K(ret), K(pl_object_value->pl_routine_obj_->get_object_id()));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (true == pl_object_value->match_params_info(cache_object->get_params_info())) {
-          ret = OB_SQL_PC_PLAN_DUPLICATE;
+      if (true == pl_object_value->match_params_info(cache_object->get_params_info())) {
+        // check if already have same cache obj
+        bool is_same = true;
+        bool is_old_version = false;
+        if (schema_array.count() != 0) {
+          if (OB_FAIL(pl_object_value->match_dep_schema(pc_ctx, schema_array, is_same))) {
+            LOG_WARN("failed to match_dep_schema", K(ret));
+          } else if (!is_same) {
+          } else if (pl_object_value->check_value_version(pc_ctx.schema_guard_,
+                                                  true,
+                                                  schema_array,
+                                                  is_old_version)) {
+            LOG_WARN("fail to check table version", K(ret));
+          } else if (true == is_old_version) {
+          } else {
+            ret = OB_SQL_PC_PLAN_DUPLICATE;
+          }
         }
       }
     }
