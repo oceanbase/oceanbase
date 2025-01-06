@@ -1063,6 +1063,13 @@ static int add_content_md5(oss_request_options_t *options, const char *buf, cons
     } else {
       int b64_len = aos_base64_encode(md5, in_len, b64_value);
       b64_value[b64_len] = '\0';
+#ifdef ERRSIM
+      // Test checksum by deliberately modifying the md5 value
+      if (OB_FAIL(EventTable::EN_OBJECT_STORAGE_CHECKSUM_ERROR)) {
+        ret = OB_SUCCESS;
+        b64_value[b64_len - 1] = '\0';
+      }
+#endif
       apr_table_set(headers, OSS_CONTENT_MD5, b64_value);
     }
   }

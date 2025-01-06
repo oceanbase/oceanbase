@@ -1381,6 +1381,10 @@ int ObStorageS3Writer::write_obj_(const char *obj_name, const char *buf, const i
     Aws::S3::Model::PutObjectOutcome outcome;
     if (OB_FAIL(s3_client_->put_object(request, outcome))) {
       OB_LOG(WARN, "failed to put s3 object", K(ret));
+#ifdef ERRSIM
+    } else if (OB_FAIL(EventTable::EN_OBJECT_STORAGE_CHECKSUM_ERROR)) {
+      ret = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
+#endif
     } else if (!outcome.IsSuccess()) {
       handle_s3_outcome(outcome, ret);
       OB_LOG(WARN, "failed to write object into s3",
