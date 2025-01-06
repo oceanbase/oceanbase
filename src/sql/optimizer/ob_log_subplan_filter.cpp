@@ -462,10 +462,10 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan()
     /* subplan filter group rescan is disabled */
   } else if (get_plan()->get_disable_child_batch_rescan()) {
     /* do nothing */
-  } else if (get_plan()->get_optimizer_context().enable_experimental_batch_rescan()
+  } else if (get_plan()->get_optimizer_context().enable_425_exec_batch_rescan()
              && OB_FAIL(compute_spf_batch_rescan(can_batch))) {
     LOG_WARN("failed to compute group rescan", K(ret));
-  } else if (!get_plan()->get_optimizer_context().enable_experimental_batch_rescan()
+  } else if (!get_plan()->get_optimizer_context().enable_425_exec_batch_rescan()
              && OB_FAIL(compute_spf_batch_rescan_compat(can_batch))) {
     LOG_WARN("failed to compute group rescan compat", K(ret));
   } else {
@@ -482,19 +482,34 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan(bool &can_batch)
   const ObShardingInfo *sharding = NULL;
   const ObLogicalOperator *child = NULL;
   const ObDMLStmt *stmt = NULL;
+  const ObLogPlan *plan = NULL;
   bool has_ref_assign_user_var = false;
   bool left_allocated_exchange = false;
   bool right_allocated_exchange = false;
   bool has_rescan_subquery = false;
-  // check if exec params contain rownum
+  if (OB_ISNULL(plan = get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(plan));
+  } else if ((!init_plan_idxs_.is_empty() || !one_time_idxs_.is_empty()) &&
+      !plan->get_optimizer_context().enable_onetime_initplan_batch()) {
+    /* spf contains onetime expr or init plan, enabled after 4.2.5 */
+    can_batch = false;
+  }
+
+  // check if exec params contain sub_query/rownum
   for (int64_t i = 0; OB_SUCC(ret) && can_batch && i < exec_params_.count(); i++) {
     if (OB_ISNULL(exec_params_.at(i)) || OB_ISNULL(ref_expr = exec_params_.at(i)->get_ref_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), K(i), K(ref_expr), KPC(exec_params_.at(i)));
     } else {
-      can_batch = !ref_expr->has_flag(CNT_ROWNUM);
+      can_batch &= !ref_expr->has_flag(CNT_ROWNUM);
+      if (can_batch && !plan->get_optimizer_context().enable_contains_subquery_batch()) {
+        can_batch &= !ref_expr->has_flag(CNT_SUB_QUERY);
+      }
     }
   }
+
+  // check if child can batch rescan
   for (int64_t i = 0; OB_SUCC(ret) && can_batch && i < get_num_of_child(); i++) {
     if (OB_ISNULL(child = get_child(i)) || OB_ISNULL(sharding = child->get_sharding())
         || OB_ISNULL(stmt= child->get_stmt())) {
@@ -504,7 +519,7 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan(bool &can_batch)
       left_allocated_exchange = child->is_exchange_allocated();
     } else if (init_plan_idxs_.has_member(i) || one_time_idxs_.has_member(i)) {
       can_batch = sharding->is_single();
-    } else if (OB_FAIL(ObOptimizerUtil::check_can_batch_rescan(child, true, can_batch))) {
+    } else if (OB_FAIL(ObOptimizerUtil::check_can_batch_rescan(child, exec_params_, false, can_batch))) {
       LOG_WARN("failed to check plan can batch rescan", K(ret));
     } else if (OB_FAIL(stmt->has_ref_assign_user_var(has_ref_assign_user_var))) {
       LOG_WARN("faield to check stmt has assignment ref user var", K(ret));

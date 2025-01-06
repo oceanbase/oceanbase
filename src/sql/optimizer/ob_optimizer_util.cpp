@@ -10295,27 +10295,67 @@ int ObOptimizerUtil::get_has_global_index_filters(const ObIArray<ObRawExpr*> &fi
   return ret;
 }
 
-//  check batch rescan for nlj / subplan filter
+// check batch rescan for nlj / subplan filter
 int ObOptimizerUtil::check_can_batch_rescan(const ObLogicalOperator *op,
-                                            const bool allow_normal_scan,
+                                            const ObIArray<ObExecParamRawExpr*> &rescan_params,
+                                            bool for_nlj,
                                             bool &can_batch_rescan)
 {
   int ret = OB_SUCCESS;
   can_batch_rescan = false;
-  if (OB_ISNULL(op)) {
+  bool has_exec_param = false;
+  const ObLogPlan *plan = nullptr;
+  if (OB_ISNULL(op) || OB_ISNULL(plan = op->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(op));
+    LOG_WARN("get unexpected null", K(ret), K(op), K(plan));
+  } else if (OB_FAIL(check_exec_param_filter_exprs(op->get_startup_exprs(), has_exec_param))) {
+    LOG_WARN("failed to check exec param filter exprs", K(ret));
+  } else if (has_exec_param && !plan->get_optimizer_context().enable_startup_filter_batch()) {
+    /* startup filter contains exec param, enabled after 4.2.5 */
+  } else if ((log_op_def::LOG_LIMIT == op->get_type()
+             || (op->is_table_scan() && NULL != static_cast<const ObLogTableScan*>(op)->get_limit_expr()))
+             && !plan->get_optimizer_context().enable_limit_pushdown_batch()) {
+    /* contains limit pushdown, enabled after 4.2.5 */
   } else if (op->is_table_scan()) {
     const ObLogTableScan *table_scan = static_cast<const ObLogTableScan*>(op);
-    can_batch_rescan = (allow_normal_scan || table_scan->use_das()) && table_scan->can_batch_rescan();
-  } else if (1 == op->get_num_of_child() || log_op_def::LOG_SET == op->get_type()) {
-    can_batch_rescan = true;
-    for (int64_t i = 0; OB_SUCC(ret) && can_batch_rescan && i < op->get_num_of_child(); ++i) {
-      if (OB_FAIL(SMART_CALL(check_can_batch_rescan(op->get_child(i), false, can_batch_rescan)))) {
-        LOG_WARN("failed to check batch nlj", K(ret));
+    if (OB_ISNULL(table_scan->get_est_cost_info())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null est cost info", K(ret));
+    } else if (!table_scan->can_batch_rescan()) {
+      can_batch_rescan = false;
+    } else if (!table_scan->use_das() && !plan->get_optimizer_context().enable_normal_scan_batch()) {
+      /* normal table scan, enabled after 4.2.5 */
+      can_batch_rescan = false;
+    } else if (!plan->get_optimizer_context().enable_non_prefix_exec_param_batch()) {
+      if (OB_FAIL(check_exec_param_filter_exprs(table_scan->get_est_cost_info()->pushdown_prefix_filters_,
+                                                rescan_params,
+                                                can_batch_rescan))) {
+        LOG_WARN("failed to check exec param filter exprs", K(ret));
       }
+    } else {
+      can_batch_rescan = true;
     }
-  } else {  // other multi child op use batch is disabled, multi level nlj use batch is disabled
+  } else if (log_op_def::LOG_SUBPLAN_SCAN == op->get_type()) {
+    if (OB_FAIL(SMART_CALL(check_can_batch_rescan(op->get_child(0), rescan_params, for_nlj, can_batch_rescan)))) {
+      LOG_WARN("failed to check can batch rescan for op child", K(ret));
+    }
+  } else if (!for_nlj && !plan->get_optimizer_context().enable_non_basic_scan_batch()) {
+    /* non table scan/subplan scan for subplan filter, enabled after 4.2.5 */
+  } else if (1 == op->get_num_of_child()) {
+    if (OB_FAIL(SMART_CALL(check_can_batch_rescan(op->get_child(0), rescan_params, for_nlj, can_batch_rescan)))) {
+      LOG_WARN("failed to check can batch rescan for op child", K(ret));
+    }
+  } else if (log_op_def::LOG_SET == op->get_type()) {
+    can_batch_rescan = ObSelectStmt::UNION == static_cast<const ObLogSet*>(op)->get_set_op()
+                      || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
+    for (int64_t i = 0; OB_SUCC(ret) && can_batch_rescan && i < op->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_can_batch_rescan(op->get_child(i), rescan_params, for_nlj, can_batch_rescan)))) {
+        LOG_WARN("failed to check batch rescan", K(ret));
+      } else {/* do nothing */}
+    }
+  } else {
+    // other multi child op use batch is disabled
+    // multi level nlj use batch is disabled
     can_batch_rescan = false;
   }
   return ret;

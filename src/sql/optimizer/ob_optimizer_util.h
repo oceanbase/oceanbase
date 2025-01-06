@@ -1633,10 +1633,11 @@ public:
                                           const ObIArray<uint64_t> &index_columns,
                                           bool &has_index_scan_filter,
                                           bool &has_index_lookup_filter);
+
   static int check_can_batch_rescan(const ObLogicalOperator *op,
-                                    const bool allow_normal_scan,
+                                    const ObIArray<ObExecParamRawExpr*> &rescan_params,
+                                    bool for_nlj,
                                     bool &can_batch_rescan);
-  static int check_can_batch_rescan_compat(const AccessPath &access_path, bool &can_batch_rescan);
   static int check_can_batch_rescan_compat(ObLogicalOperator *op,
                                            const ObIArray<ObExecParamRawExpr*> &rescan_params,
                                            bool for_nlj,

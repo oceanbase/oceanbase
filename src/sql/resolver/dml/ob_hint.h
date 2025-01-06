@@ -202,6 +202,7 @@ struct ObOptParamHint
     DEF(LOB_ROWSETS_MAX_ROWS,)                      \
     DEF(ENABLE_ENUM_SET_SUBSCHEMA,)                 \
     DEF(ENABLE_OPTIMIZER_ROWGOAL,)                  \
+    DEF(DAS_BATCH_RESCAN_FLAG,)          \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
