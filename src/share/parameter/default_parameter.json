@@ -86,7 +86,7 @@
         },
         {
           "name": "large_query_threshold",
-          "value": "0ms",
+          "value": "24h",
           "comment": "disable large query detection for KV mode"
         },
         {
