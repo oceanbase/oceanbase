@@ -22,6 +22,7 @@ fi
 
 cat ../../../src/sql/parser/sql_parser_mysql_mode.y >> $TEMP_FILE
 cat ../../../src/sql/parser/sql_parser_mysql_mode.l >> $TEMP_FILE
+cat ../../../src/objit/include/objit/common/ob_item_type.h >> $TEMP_FILE
 if [ -d "../../../close_modules/oracle_pl/pl/parser/" ]; then
   cat ../../../close_modules/oracle_parser/sql/parser/sql_parser_oracle_mode.y >> $TEMP_FILE
   cat ../../../close_modules/oracle_parser/sql/parser/sql_parser_oracle_mode.l >> $TEMP_FILE
@@ -282,7 +283,7 @@ echo "$md5sum_value" > $CACHE_MD5_FILE
 }
 
 if [[ -n "$NEED_PARSER_CACHE" && "$NEED_PARSER_CACHE" == "ON" ]]; then
-    echo "generate pl parser with cache"
+    echo "generate sql parser with cache"
     origin_md5sum_value=$(<$CACHE_MD5_FILE)
     if [[ "$md5sum_value" == "$origin_md5sum_value" ]]; then
       echo "hit the md5 cache"
@@ -290,7 +291,7 @@ if [[ -n "$NEED_PARSER_CACHE" && "$NEED_PARSER_CACHE" == "ON" ]]; then
       generate_parser
     fi
 else
-    echo "generate pl parser without cache"
+    echo "generate sql parser without cache"
     generate_parser
 fi
 
