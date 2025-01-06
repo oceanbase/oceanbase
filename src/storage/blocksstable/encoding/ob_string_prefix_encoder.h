@@ -132,6 +132,8 @@ public:
   virtual int64_t calc_size() const override;
   virtual ObColumnHeader::Type get_type() const override { return type_; }
   virtual int store_fix_data(ObBufferWriter &buf_writer) override;
+  INHERIT_TO_STRING_KV("ObIColumnEncoder", ObIColumnEncoder, KPC_(meta_header), K_(prefix_count),
+      K_(prefix_index_byte), K_(prefix_length), K_(calc_size));
 private:
   ObStringPrefixMetaHeader *meta_header_;
   int64_t prefix_count_;

@@ -366,7 +366,17 @@ int ObStringDiffEncoder::get_var_length(const int64_t row_id, int64_t &length)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(row_id));
   } else {
-    length = row_store_size_;
+    const int64_t &data_version = ctx_->encoding_ctx_->major_working_cluster_version_;
+    // For version 4.x, fix string diff var-length encoding overflow on versions:
+    // from 4.2.5 bp2 to 4.3.0, and all versions after 4.3.5
+    const bool enable_var_length_fix = (data_version > DATA_VERSION_4_3_5_0)
+        || (data_version >= MOCK_DATA_VERSION_4_2_5_2 && data_version < DATA_VERSION_4_3_0_0);
+    const ObDatum &datum = rows_->at(row_id).get_datum(column_index_);
+    if (enable_var_length_fix && (datum.is_null() || datum.is_nop())) {
+      length = 0;
+    } else {
+      length = row_store_size_;
+    }
   }
   return ret;
 }

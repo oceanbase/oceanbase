@@ -342,7 +342,8 @@ void ObMicroBlockEncoder::print_micro_block_encoder_status() const
 {
   FLOG_INFO("Build micro block failed, print encoder status: ", K_(ctx),
     K_(estimate_size), K_(estimate_size_limit), K_(header_size),
-      K_(expand_pct), K_(string_col_cnt), K_(estimate_base_store_size), K_(length));
+      K_(expand_pct), K_(string_col_cnt), K_(estimate_base_store_size), K_(length),
+      K(get_row_count()));
   int64_t idx = 0;
   FOREACH(e, encoders_) {
     FLOG_INFO("Print column encoder: ", K(idx), KPC(*e));

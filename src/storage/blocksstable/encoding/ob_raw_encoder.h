@@ -64,6 +64,8 @@ public:
   virtual ObColumnHeader::Type get_type() const override { return type_; }
 
   virtual int store_fix_data(ObBufferWriter &buf_writer) override;
+  INHERIT_TO_STRING_KV("ObIColumnEncoder", ObIColumnEncoder, K_(type_store_size), K_(null_cnt),
+      K_(nope_cnt), K_(fix_data_size), K_(max_integer), K_(var_data_size));
 
 private:
   struct DatumDataSetter;

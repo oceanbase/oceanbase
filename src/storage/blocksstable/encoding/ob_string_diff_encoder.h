@@ -130,6 +130,8 @@ public:
   virtual int64_t calc_size() const override;
   virtual ObColumnHeader::Type get_type() const override { return type_; }
   virtual int store_fix_data(ObBufferWriter &buf_writer) override;
+  INHERIT_TO_STRING_KV("ObIColumnEncoder", ObIColumnEncoder, K_(string_size), K_(common_size), K_(row_store_size),
+      K_(null_cnt), K_(nope_cnt), KPC_(header), K_(last_change_diff_row_id));
 private:
   int traverse_cell(
       char *&data,

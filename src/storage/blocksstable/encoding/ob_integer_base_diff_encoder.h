@@ -63,6 +63,7 @@ public:
   virtual int64_t calc_size() const override;
   virtual ObColumnHeader::Type get_type() const { return type_; }
   virtual int store_fix_data(ObBufferWriter &buf_writer) override;
+  INHERIT_TO_STRING_KV("ObIColumnEncoder", ObIColumnEncoder, K_(type_store_size), KPC_(header));
 private:
   class ObIIntegerData
   {

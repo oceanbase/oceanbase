@@ -72,6 +72,7 @@ public:
     UNUSED(buf_writer);
     return common::OB_NOT_SUPPORTED;
   }
+  INHERIT_TO_STRING_KV("ObIColumnEncoder", ObIColumnEncoder, K_(ref_col_idx));
 private:
   OB_INLINE int is_datum_equal(
       const common::ObDatum &left,

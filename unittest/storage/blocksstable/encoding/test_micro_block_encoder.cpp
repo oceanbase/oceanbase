@@ -332,6 +332,95 @@ TEST_F(TestColumnEqualExceptionList, test_column_equal_ext_offset_overflow)
 
 }
 
+static ObObjType test_string_diff[2] = {ObIntType, ObVarcharType};
+class TestStringDiffNullLength : public TestIColumnEncoder
+{
+public:
+  TestStringDiffNullLength() {}
+  virtual ~TestStringDiffNullLength() {}
+  virtual void SetUp();
+  virtual void TearDown();
+};
+
+void TestStringDiffNullLength::SetUp()
+{
+  rowkey_cnt_ = 1;
+  column_cnt_ = 2;
+  col_types_ = reinterpret_cast<ObObjType *>(allocator_.alloc(sizeof(ObObjType) * column_cnt_));
+  ASSERT_NE(nullptr, col_types_);
+  for (int64_t i = 0; i < column_cnt_; ++i) {
+    col_types_[i] = test_string_diff[i];
+  }
+  TestIColumnEncoder::SetUp();
+}
+
+void TestStringDiffNullLength::TearDown()
+{
+  TestIColumnEncoder::TearDown();
+  allocator_.free(col_types_);
+}
+
+TEST_F(TestStringDiffNullLength, test_string_diff_null_length)
+{
+  int64_t column_encoding_array[2] =
+      {ObColumnHeader::Type::RAW,
+       ObColumnHeader::Type::STRING_DIFF};
+  ctx_.column_encodings_ = column_encoding_array;
+  ctx_.micro_block_size_ = 1 << 20; // 1M
+  ctx_.major_working_cluster_version_ = DATA_VERSION_4_3_5_1;
+  ObMicroBlockEncoder encoder;
+  encoder.data_buffer_.allocator_.set_tenant_id(500);
+  encoder.row_buf_holder_.allocator_.set_tenant_id(500);
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, 2));
+  const char *str1 = "this is a meaningless string for a test case to verify fixed string diff encoding";
+  const char *str2 = "this is 7777777777777777777777777777777777777777777777777777777777777777 encoding";
+  const char *str3 = "this is 8888888888888888888888888888888888888888888888888888888888888888 encoding";
+  row.storage_datums_[0].set_int(0);
+  row.storage_datums_[1].set_string(ObString(str1));
+  const int64_t single_str_len = row.storage_datums_[1].len_;
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  row.storage_datums_[0].set_int(1);
+  row.storage_datums_[1].set_string(ObString(str2));
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  row.storage_datums_[0].set_int(2);
+  row.storage_datums_[1].set_string(ObString(str3));
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  for (int64_t i = 0; i < 52400; ++i) {
+    row.storage_datums_[0].set_int(i + 3);
+    row.storage_datums_[1].set_null();
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+
+  char *buf = nullptr;
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, size));
+
+  LOG_INFO("show sizes", K(encoder.length_), K(size));
+
+  ObMicroBlockData micro_data(buf, size);
+  ObMicroBlockDecoder decoder;
+  ObDatumRow read_row;
+  ASSERT_EQ(OB_SUCCESS, read_row.init(2));
+  ASSERT_EQ(OB_SUCCESS, decoder.init(micro_data, nullptr));
+  ASSERT_EQ(OB_SUCCESS, decoder.get_row(0, read_row));
+  const ObString &read_string1 = read_row.storage_datums_[1].get_string();
+  ASSERT_EQ(0, MEMCMP(str1, read_string1.ptr(), read_string1.length()));
+  ASSERT_EQ(OB_SUCCESS, decoder.get_row(1, read_row));
+  const ObString &read_string2 = read_row.storage_datums_[1].get_string();
+  ASSERT_EQ(0, MEMCMP(str2, read_string2.ptr(), read_string2.length()));
+  ASSERT_EQ(OB_SUCCESS, decoder.get_row(2, read_row));
+  const ObString &read_string3 = read_row.storage_datums_[1].get_string();
+  ASSERT_EQ(0, MEMCMP(str3, read_string3.ptr(), read_string3.length()));
+  for (int64_t i = 0; i < 52400; ++i) {
+    ASSERT_EQ(OB_SUCCESS, decoder.get_row(i + 3, read_row));
+    ASSERT_TRUE(read_row.storage_datums_[1].is_null());
+  }
+
+}
+
 class TestEncodingRowBufHolder : public ::testing::Test
 {
 public:
