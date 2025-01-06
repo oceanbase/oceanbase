@@ -2702,6 +2702,7 @@ typedef enum ObItemType
   T_PX_NODE_POLICY = 4774,
   T_PX_NODE_ADDRS = 4775,
   T_PX_NODE_COUNT = 4776,
+  T_LOAD_DATA_URL = 4777,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

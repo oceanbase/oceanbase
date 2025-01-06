@@ -19,6 +19,7 @@
 #include "sql/das/ob_group_scan_iter.h"
 #include "sql/das/iter/ob_das_iter.h"
 #include "sql/rewrite/ob_query_range.h"
+#include "share/external_table/ob_partition_id_row_pair.h"
 
 namespace oceanbase
 {
@@ -91,6 +92,7 @@ public:
       external_file_location_(alloc),
       external_files_(alloc),
       external_file_format_str_(alloc),
+      partition_infos_(alloc),
       trans_info_expr_(nullptr),
       ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN),
       rowkey_exprs_(alloc),
@@ -161,6 +163,7 @@ public:
   ObExternalFileFormat::StringData external_file_location_;
   ExternalFileNameArray external_files_; //for external table scan TODO jim.wjh remove
   ObExternalFileFormat::StringData external_file_format_str_;
+  share::ObPartitionIdRowPairArray partition_infos_;
   ObExpr *trans_info_expr_; // transaction information pseudo-column
   ObTSCIRScanType ir_scan_type_; // specify retrieval scan type
   sql::ExprFixedArray rowkey_exprs_; // store rowkey exprs for index lookup

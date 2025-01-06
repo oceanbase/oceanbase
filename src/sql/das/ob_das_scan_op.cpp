@@ -47,7 +47,7 @@ namespace sql
 {
 
 OB_SERIALIZE_MEMBER(ObDASTCBMemProfileKey, fake_unique_id_, timestamp_);
-OB_SERIALIZE_MEMBER(ObDASScanCtDef, // FARM COMPAT WHITELIST
+OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     ref_table_id_,
                     access_column_ids_,
                     schema_version_,
@@ -71,8 +71,9 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef, // FARM COMPAT WHITELIST
                     vec_vid_idx_,
                     multivalue_idx_,
                     multivalue_type_,
-                    index_merge_idx_, // FARM COMPAT WHITELIST
-                    flags_);          // FARM COMPAT WHITELIST
+                    index_merge_idx_,
+                    flags_,
+                    partition_infos_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
