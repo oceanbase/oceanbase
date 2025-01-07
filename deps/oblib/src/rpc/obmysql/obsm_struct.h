@@ -88,7 +88,9 @@ public:
   obmysql::ObCompressType get_compress_type() {
     obmysql::ObCompressType type_ret = obmysql::ObCompressType::NO_COMPRESS;
     //unauthed connection, treat it do not use compress
-    if (is_in_authed_phase() && (1 == cap_flags_.cap_flags_.OB_CLIENT_COMPRESS
+    //if during change user(is logined) and need compress, need return COMPRESS here
+    if ((is_in_authed_phase() || (is_in_auth_switch_phase() && is_logined())) &&
+        (1 == cap_flags_.cap_flags_.OB_CLIENT_COMPRESS
         || proxy_cap_flags_.is_ob_protocol_v2_compress())) {
       if (is_proxy_) {
         if (1 == proxy_cap_flags_.cap_flags_.OB_CAP_CHECKSUM) {
