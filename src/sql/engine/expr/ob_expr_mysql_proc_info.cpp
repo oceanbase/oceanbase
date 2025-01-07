@@ -879,7 +879,12 @@ int ObExprMysqlProcInfo::cg_expr(ObExprCGCtx &op_cg_ctx,
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
-  rt_expr.eval_func_ = ObExprMysqlProcInfo::eval_mysql_proc_info;
+
+  if (op_cg_ctx.cur_cluster_version_ >= CLUSTER_VERSION_4_2_5_2) {
+    rt_expr.eval_func_ = ObExprMysqlProcInfo::eval_mysql_proc_info;
+  } else {
+    rt_expr.eval_func_ = ObExprMysqlProcInfo::eval_mysql_proc_info_wrap;
+  }
   return OB_SUCCESS;
 }
 

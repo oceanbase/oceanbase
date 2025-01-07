@@ -29,6 +29,12 @@ public:
                                 ObExprResType &type2,
                                 common::ObExprTypeCtx &type_ctx) const;
   static int get_mysql_routine_parameter_type_str(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int get_mysql_routine_parameter_type_str_wrap(const ObExpr &expr,
+                                                       ObEvalCtx &ctx,
+                                                       ObDatum &expr_datum)
+  {
+    return get_mysql_routine_parameter_type_str(expr, ctx, expr_datum);
+  }
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprGetMySQLRoutineParameterTypeStr);

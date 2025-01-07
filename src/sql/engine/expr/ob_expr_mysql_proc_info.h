@@ -39,6 +39,10 @@ public:
   virtual ~ObExprMysqlProcInfo();
 
   static int eval_mysql_proc_info(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int eval_mysql_proc_info_wrap(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+  {
+    return eval_mysql_proc_info(expr, ctx, expr_datum);
+  }
   virtual int calc_result_typeN(ObExprResType &type,
                                 ObExprResType *types_stack,
                                 int64_t param_num,

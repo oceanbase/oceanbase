@@ -1209,11 +1209,11 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprSm3::eval_sm3,                                                /* 730 */
   ObExprSm4Encrypt::eval_sm4_encrypt,                                 /* 731 */
   ObExprSm4Decrypt::eval_sm4_decrypt,                                 /* 732 */
-  NULL, // ObExprAdd::add_vec_vec,                                    /* 733 */
-  NULL, // ObExprMinus::minus_vec_vec,                                /* 734 */
-  NULL, // ObExprMul::mul_vec_vec,                                     /* 735 */
-  NULL, // ObExprDiv::div_vec,                                         /* 736 */
-  NULL, // ObExprVecKey::generate_vec_key,                             /* 737 */
+  ObExprEnhancedAesEncrypt::eval_aes_encrypt_wrap,                    /* 733 */ // FARM COMPAT WHITELIST
+  ObExprEnhancedAesDecrypt::eval_aes_decrypt_wrap,                    /* 734 */ // FARM COMPAT WHITELIST
+  ObExprMysqlProcInfo::eval_mysql_proc_info_wrap,                     /* 735 */ // FARM COMPAT WHITELIST
+  ObExprGetMySQLRoutineParameterTypeStr::get_mysql_routine_parameter_type_str_wrap, /* 736 */ // FARM COMPAT WHITELIST
+  ObExprOraLoginUser::eval_ora_login_user_wrap,                       /* 737 */ // FARM COMPAT WHITELIST
   NULL, // ObExprVecScn::generate_vec_scn,                             /* 738 */
   NULL, // ObExprVecVid::generate_vec_id,                              /* 739 */
   NULL, // ObExprVecData::generate_vec_data,                           /* 740 */

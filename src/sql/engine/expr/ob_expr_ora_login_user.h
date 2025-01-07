@@ -27,6 +27,10 @@ public:
   virtual int calc_result_type0(ObExprResType &type,
                                 common::ObExprTypeCtx &type_ctx) const override;
   static int eval_ora_login_user(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int eval_ora_login_user_wrap(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+  {
+    return eval_ora_login_user(expr, ctx, expr_datum);
+  }
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
 private:
   static const int DEFAULT_LENGTH = 4000;

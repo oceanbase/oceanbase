@@ -49,6 +49,10 @@ public:
   explicit ObExprEnhancedAesEncrypt(common::ObIAllocator &alloc);
   virtual ~ObExprEnhancedAesEncrypt() {}
   static int eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  static int eval_aes_encrypt_wrap(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+  {
+    return eval_aes_encrypt(expr, ctx, res);
+  };
   virtual int calc_result_typeN(ObExprResType &type,
                                 ObExprResType *types,
                                 int64_t param_num,
@@ -66,6 +70,10 @@ public:
   explicit ObExprEnhancedAesDecrypt(common::ObIAllocator &alloc);
   virtual ~ObExprEnhancedAesDecrypt() {}
   static int eval_aes_decrypt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  static int eval_aes_decrypt_wrap(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+  {
+    return eval_aes_decrypt(expr, ctx, res);
+  }
   virtual int calc_result_typeN(ObExprResType &type,
                                 ObExprResType *types,
                                 int64_t param_num,

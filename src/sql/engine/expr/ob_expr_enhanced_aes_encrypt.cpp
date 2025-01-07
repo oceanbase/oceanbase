@@ -201,7 +201,11 @@ int ObExprEnhancedAesEncrypt::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   int ret = OB_SUCCESS;
-  rt_expr.eval_func_ = eval_aes_encrypt;
+  if (expr_cg_ctx.cur_cluster_version_ >= CLUSTER_VERSION_4_2_5_2) {
+    rt_expr.eval_func_ = eval_aes_encrypt;
+  } else {
+    rt_expr.eval_func_ = eval_aes_encrypt_wrap;
+  }
   return ret;
 }
 
@@ -310,7 +314,11 @@ int ObExprEnhancedAesDecrypt::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   int ret = OB_SUCCESS;
-  rt_expr.eval_func_ = eval_aes_decrypt;
+  if (expr_cg_ctx.cur_cluster_version_ >= CLUSTER_VERSION_4_2_5_2) {
+    rt_expr.eval_func_ = eval_aes_decrypt;
+  } else {
+    rt_expr.eval_func_ = eval_aes_decrypt_wrap;
+  }
   return ret;
 }
 

@@ -81,7 +81,12 @@ int ObExprOraLoginUser::cg_expr(ObExprCGCtx &op_cg_ctx,
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
-  rt_expr.eval_func_ = ObExprOraLoginUser::eval_ora_login_user;
+
+  if (op_cg_ctx.cur_cluster_version_ >= CLUSTER_VERSION_4_2_5_2) {
+    rt_expr.eval_func_ = ObExprOraLoginUser::eval_ora_login_user;
+  } else {
+    rt_expr.eval_func_ = ObExprOraLoginUser::eval_ora_login_user_wrap;
+  }
   return OB_SUCCESS;
 }
 
