@@ -34,11 +34,9 @@ public:
 
 private:
   static int check_op_allowed_(const sql::ObExecContext &ctx, uint64_t &tenant_id);
-  static int check_session_status_(const sql::ObExecContext &ctx);
   static int check_scheduled_job_enabled_(const uint64_t tenant_id, bool &is_enabled);
-  static int get_tenant_gts_(const sql::ObExecContext &ctx, const uint64_t tenant_id, share::SCN &gts);
+  static int get_tenant_gts_(const uint64_t tenant_id, share::SCN &gts);
   static int send_trigger_dump_dict_rpc_(
-      const sql::ObExecContext &ctx,
       const uint64_t tenant_id,
       const obrpc::ObTriggerDumpDataDictArg &trigger_dump_data_dict_arg);
   static int modify_schedule_job_(
