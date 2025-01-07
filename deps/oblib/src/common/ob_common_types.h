@@ -91,9 +91,9 @@ struct ObQueryFlag
   static const uint64_t OBSF_MASK_IS_DIRECT_SCAN = (0x1UL << OBSF_BIT_IS_BARE_ROW_SCAN) - 1;
 
 
-  enum ScanOrder
+  enum ScanOrder //FARM COMPAT WHITELIST
   {
-    ImplementedOrder = 0,
+    NoOrder = 0,
     Forward = 1,
     Reverse = 2,
     KeepOrder = 3,
