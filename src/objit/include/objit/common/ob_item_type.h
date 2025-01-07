@@ -2712,6 +2712,8 @@ typedef enum ObItemType
   T_PARSER_STOPWORD_TABLE = 4782,
   T_PARSER_DICT_TABLE = 4783,
   T_PARSER_QUANTIFIER_TABLE = 4784,
+
+  T_ALTER_MLOG_OPTIONS = 4785,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
