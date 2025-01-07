@@ -883,7 +883,7 @@ int ObArrayBinary::flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &at
     attrs[attr_idx].length_ = sizeof(uint32_t) * length_;
     attr_idx++;
     attrs[attr_idx].ptr_ = data_;
-    attrs[attr_idx].length_ = offsets_[length_ - 1];
+    attrs[attr_idx].length_ = length_ > 0 ? offsets_[length_ - 1] : 0;
     attr_idx++;
   }
   return ret;
