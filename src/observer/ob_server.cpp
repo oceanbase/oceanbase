@@ -334,11 +334,13 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     }
 
     if (OB_SUCC(ret)) {
-      ::oceanbase::sql::init_sql_factories();
-      ::oceanbase::sql::init_sql_executor_singletons();
-      ::oceanbase::sql::init_sql_expr_static_var();
-
-      if (OB_FAIL(ObPreProcessSysVars::init_sys_var())) {
+      if (OB_FAIL(sql::init_sql_factories())) {
+        LOG_ERROR("init sql factories !", KR(ret));
+      } else if (OB_FAIL(sql::init_sql_executor_singletons())) {
+        LOG_ERROR("init sql executor singletons !", KR(ret));
+      } else if (OB_FAIL(sql::init_sql_expr_static_var())) {
+        LOG_ERROR("init sql expr static var !", KR(ret));
+      } else if (OB_FAIL(ObPreProcessSysVars::init_sys_var())) {
         LOG_ERROR("init PreProcessing system variable failed !", KR(ret));
       } else if (OB_FAIL(ObBasicSessionInfo::init_sys_vars_cache_base_values())) {
         LOG_ERROR("init session base values failed", KR(ret));
