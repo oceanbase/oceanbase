@@ -61,6 +61,8 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
   // 监控项统计开始
   record_.time_record_.set_send_timestamp(ObTimeUtility::current_time());
   session_info_.get_raw_audit_record().sql_memory_used_ = &sql_used_memory_size_;
+  plsql_compile_time_ = session_info_.get_plsql_compile_time();
+  session_info_.reset_plsql_compile_time();
 }
 
 ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
@@ -122,6 +124,7 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
   if(nullptr != session_info_.get_raw_audit_record().sql_memory_used_) {
     session_info_.get_raw_audit_record().sql_memory_used_ = nullptr;
   }
+  session_info_.add_plsql_compile_time(plsql_compile_time_);
 }
 
 } // namespace pl

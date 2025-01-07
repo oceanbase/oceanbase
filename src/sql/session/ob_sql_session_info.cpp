@@ -159,6 +159,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       pl_context_(NULL),
       pl_can_retry_(true),
       plsql_exec_time_(0),
+      plsql_compile_time_(0),
 #ifdef OB_BUILD_ORACLE_PL
       pl_debugger_(NULL),
       pl_profiler_(NULL),
@@ -339,6 +340,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     pl_context_ = NULL;
     pl_can_retry_ = true;
     plsql_exec_time_ = 0;
+    plsql_compile_time_ = 0;
 #ifdef OB_BUILD_ORACLE_PL
     pl_debugger_ = NULL;
     pl_profiler_ = NULL;

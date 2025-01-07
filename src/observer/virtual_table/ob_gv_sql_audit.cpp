@@ -1125,7 +1125,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
                                               ObCharset::get_default_charset()));
         } break;
         case PLSQL_COMPILE_TIME: {
-          cells[cell_idx].set_int(0);
+          cells[cell_idx].set_int(record.data_.plsql_compile_time_);
         } break;
         default: {
           ret = OB_ERR_UNEXPECTED;

@@ -131,6 +131,7 @@ private:
   int64_t sql_used_memory_size_;
   observer::ObProcessMallocCallback pmcb_;
   lib::ObMallocCallbackGuard memory_guard_;
+  int64_t plsql_compile_time_;
 };
 
 }

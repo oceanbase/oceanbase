@@ -17860,7 +17860,8 @@ def_table_schema(
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
                          proxy_user as PROXY_USER,
                          seq_num as SEQ_NUM,
-                         network_wait_time as NETWORK_WAIT_TIME
+                         network_wait_time as NETWORK_WAIT_TIME,
+                         plsql_compile_time as PLSQL_COMPILE_TIME
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -18273,7 +18274,8 @@ def_table_schema(
     TOTAL_SSSTORE_READ_ROW_COUNT,
     PROXY_USER,
     SEQ_NUM,
-    NETWORK_WAIT_TIME
+    NETWORK_WAIT_TIME,
+    PLSQL_COMPILE_TIME
   FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -60921,7 +60923,8 @@ def_table_schema(
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
                          proxy_user as PROXY_USER,
                          seq_num as SEQ_NUM,
-                         network_wait_time as  NETWORK_WAIT_TIME
+                         network_wait_time as  NETWORK_WAIT_TIME,
+                         plsql_compile_time as PLSQL_COMPILE_TIME
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -61038,7 +61041,8 @@ TOTAL_MEMSTORE_READ_ROW_COUNT,
 TOTAL_SSSTORE_READ_ROW_COUNT,
 PROXY_USER,
 SEQ_NUM,
-NETWORK_WAIT_TIME FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+NETWORK_WAIT_TIME,
+PLSQL_COMPILE_TIME FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
