@@ -113,6 +113,7 @@ public:
 
   int is_plain_insert(bool &is_plain_insert);
   int is_insertup_or_replace_values(bool &is);
+  virtual int op_is_update_pk_with_dop(bool &is_update) override;
 protected:
   int get_constraint_info_exprs(ObIArray<ObRawExpr*> &all_exprs);
   virtual int generate_rowid_expr_for_trigger() override;

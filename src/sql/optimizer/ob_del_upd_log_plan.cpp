@@ -2315,8 +2315,6 @@ int ObDelUpdLogPlan::check_update_primary_key(const ObTableSchema* index_schema,
   if (OB_ISNULL(stmt) || OB_ISNULL(index_schema) || OB_ISNULL(index_dml_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(index_schema), K(index_dml_info));
-  } else if (!index_dml_info->is_primary_index_) {
-    // do nothing
   } else if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(pk_ids))) {
     LOG_WARN("failed to get rowkey column ids", K(ret));
   } else {
