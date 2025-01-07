@@ -529,19 +529,6 @@ int ObArrayExprUtils::deduce_nested_array_subschema_id(ObExecContext *exec_ctx, 
   return ret;
 }
 
-int ObArrayExprUtils::set_null_collection_type(ObExecContext *exec_ctx, ObExprResType& type)
-{
-  int ret = OB_SUCCESS;
-  uint16_t subschema_id = 0;
-  ObString type_def("ARRAY(NULL");
-  if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(type_def, subschema_id))) {
-    LOG_WARN("failed to get subschema id by type string", K(ret), K(DEFAULT_CAST_TYPE_STR));
-  } else {
-    type.set_collection(subschema_id);
-  }
-  return ret;
-}
-
 int ObVectorVectorArithFunc::operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx, ArithType type) const
 {
   int ret = OB_SUCCESS;
@@ -1474,14 +1461,13 @@ int ObNestedVectorFunc::construct_params(ObIAllocator &alloc, ObEvalCtx &ctx, co
 int ObArrayExprUtils::get_basic_elem_obj(ObIArrayType *src, ObCollectionTypeBase *elem_type, uint32_t idx, ObObj &elem_obj, bool &is_null)
 {
   int ret = OB_SUCCESS;
+  is_null = false;
   if (elem_type->type_id_ == ObNestedType::OB_BASIC_TYPE) {
     const ObCollectionBasicType *basic_type = static_cast<const ObCollectionBasicType *>(elem_type);
     if (src->get_format() != ArrayFormat::Vector && src->is_null(idx)) {
       is_null = true;
     } else if (OB_FAIL(ObArrayCastUtils::cast_get_element(src, basic_type, idx, elem_obj))) {
       LOG_WARN("failed to cast get element", K(ret));
-    } else {
-      is_null = false;
     }
   } else if (elem_type->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
     ObArrayNested *arr_nested = static_cast<ObArrayNested *>(src);

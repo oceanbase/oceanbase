@@ -149,9 +149,7 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
 
   if (OB_FAIL(ret)) {
   } else if (is_null_res) {
-    if (OB_FAIL(ObArrayExprUtils::set_null_collection_type(exec_ctx, type))) {
-      LOG_WARN("failed to set null collection", K(ret));
-    }
+    type.set_null();
   } else {
     if (types_stack[0].get_type() == ObDecimalIntType || types_stack[0].get_type() == ObNumberType ||
         types_stack[0].get_type() == ObUNumberType) {
@@ -206,6 +204,9 @@ int ObExprArrayMap::eval_array_map(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   bool bret = false;
   ObSubSchemaValue value;
 
+  if (ob_is_null(expr.obj_meta_.get_type())) {
+    is_null_res = true;
+  }
   for (int64_t i = 1; i < expr.arg_cnt_ && OB_SUCC(ret) && !is_null_res; i++) {
     const uint16_t meta_id = expr.args_[i]->obj_meta_.get_subschema_id();
     arr_obj[i - 1] = NULL;

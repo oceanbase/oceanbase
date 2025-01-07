@@ -165,8 +165,6 @@ public :
     return ret;
   }
 
-  static int get_basic_elem_obj(ObIArrayType *src, ObCollectionTypeBase *elem_type, uint32_t idx, ObObj &elem_obj);
-
 };
 
 #undef FIXED_ARRAY_OBJ_CLONE_EXCEPT

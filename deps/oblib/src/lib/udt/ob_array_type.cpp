@@ -1295,16 +1295,10 @@ int ObArrayNested::print_element(const ObCollectionTypeBase *elem_type, ObString
     }
     uint64_t last_length = format_str.length();
     for (int i = begin; i < begin + print_size && OB_SUCC(ret); i++) {
-      if (format_str.length() > last_length && OB_FAIL(format_str.append(delimiter))) {
+      if (this->null_bitmaps_[i]) {
+        // do nothing
+      } else if (format_str.length() > last_length && OB_FAIL(format_str.append(delimiter))) {
         OB_LOG(WARN, "fail to append delimiter to buffer", K(ret), K(delimiter));
-      } else if (this->null_bitmaps_[i]) {
-        // value is null
-        last_length = format_str.length();
-        if (!has_null_str) {
-          // do nothing
-        } else if (OB_FAIL(format_str.append(null_str))) {
-          OB_LOG(WARN, "fail to append null string to buffer", K(ret), K(null_str));
-        }
       } else {
         last_length = format_str.length();
         uint32_t start = offset_at(i, offsets_);
