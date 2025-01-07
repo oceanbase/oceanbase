@@ -1350,7 +1350,7 @@ target_link_libraries(ob_sql_static
   PUBLIC ob_sql ob_sql_server_parser_static)
 
 execute_process(
-  COMMAND bash gen_parser.sh
+  COMMAND env NEED_PARSER_CACHE=${NEED_PARSER_CACHE} bash gen_parser.sh
   RESULT_VARIABLE RET
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/sql/parser
   OUTPUT_FILE _gen_parser.output

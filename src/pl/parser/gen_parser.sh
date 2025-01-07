@@ -9,6 +9,8 @@ CURDIR="$(dirname $(readlink -f "$0"))"
 #export PATH=/usr/local/bin:$PATH
 export PATH=$CURDIR/../../../deps/3rd/usr/local/oceanbase/devtools/bin/:$PATH
 export BISON_PKGDATADIR=$CURDIR/../../../deps/3rd/usr/local/oceanbase/devtools/share/bison
+CACHE_MD5_FILE=$CURDIR/_MD5
+TEMP_FILE=$(mktemp)
 
 BISON_VERSION=`bison -V| grep 'bison (GNU Bison)'|awk '{ print  $4;}'`
 NEED_VERSION='2.4.1'
@@ -34,17 +36,43 @@ then
 fi
 }
 
-# generate pl_parser
-bison_parser ../../../src/pl/parser/pl_parser_mysql_mode.y ../../../src/pl/parser/pl_parser_mysql_mode_tab.c
-flex -o ../../../src/pl/parser/pl_parser_mysql_mode_lex.c ../../../src/pl/parser/pl_parser_mysql_mode.l ../../../src/pl/parser/pl_parser_mysql_mode_tab.h
-
-# TODO  delete the following line at 9.30
-rm -rf ../../../src/pl/parser/pl_parser_oracle_mode_lex.c ../../../src/pl/parser/pl_parser_oracle_mode_tab.c ../../../src/pl/parser/pl_parser_oracle_mode_tab.h
-
+cat ../../../src/pl/parser/pl_parser_mysql_mode.y >> $TEMP_FILE
+cat ../../../src/pl/parser/pl_parser_mysql_mode.l >> $TEMP_FILE
 if [ -d "../../../close_modules/oracle_pl/pl/parser/" ]; then
-  bison_parser ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode.y ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.c
-  flex -o ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_lex.c ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode.l ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.h
+  cat ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode.y >> $TEMP_FILE
+  cat ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode.l >> $TEMP_FILE
 fi
 
-#./gen_type_name.sh ob_item_type.h >type_name.c
+md5sum_value=$(md5sum "$TEMP_FILE" | awk '{ print $1 }')
 
+function generate_parser {
+# generate pl_parser
+  bison_parser ../../../src/pl/parser/pl_parser_mysql_mode.y ../../../src/pl/parser/pl_parser_mysql_mode_tab.c
+  flex -o ../../../src/pl/parser/pl_parser_mysql_mode_lex.c ../../../src/pl/parser/pl_parser_mysql_mode.l ../../../src/pl/parser/pl_parser_mysql_mode_tab.h
+
+  # TODO  delete the following line at 9.30
+  rm -rf ../../../src/pl/parser/pl_parser_oracle_mode_lex.c ../../../src/pl/parser/pl_parser_oracle_mode_tab.c ../../../src/pl/parser/pl_parser_oracle_mode_tab.h
+
+  if [ -d "../../../close_modules/oracle_pl/pl/parser/" ]; then
+    bison_parser ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode.y ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.c
+    flex -o ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_lex.c ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode.l ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.h
+  fi
+
+  #./gen_type_name.sh ob_item_type.h >type_name.c
+  echo "$md5sum_value" > $CACHE_MD5_FILE
+}
+
+if [[ -n "$NEED_PARSER_CACHE" && "$NEED_PARSER_CACHE" == "ON" ]]; then
+    echo "generate pl parser with cache"
+    origin_md5sum_value=$(<$CACHE_MD5_FILE)
+    if [[ "$md5sum_value" == "$origin_md5sum_value" ]]; then
+      echo "hit the md5 cache"
+    else
+      generate_parser
+    fi
+else
+    echo "generate pl parser without cache"
+    generate_parser
+fi
+
+rm -rf $TEMP_FILE
