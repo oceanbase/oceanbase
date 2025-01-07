@@ -127,6 +127,9 @@ protected:
 };
 
 
+// Create empty SSTable whose index does not need to be rebuilt. Empty SSTable
+// is the SSTable with data_macro_block_count 0, except for only shared macro
+// blocks SSTable, whose data_macro_block_count is 0 but is not empty.
 class ObCopiedEmptySSTableCreator final : public ObCopiedSSTableCreatorImpl
 {
 public:
@@ -140,21 +143,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCopiedEmptySSTableCreator);
 };
 
-class ObBackupSSTableCreator final : public ObCopiedSSTableCreatorImpl
-{
-public:
-  ObBackupSSTableCreator() : ObCopiedSSTableCreatorImpl() {}
 
-  virtual int create_sstable() override;
-
-private:
-  virtual int check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const override;
-
-  DISALLOW_COPY_AND_ASSIGN(ObBackupSSTableCreator);
-};
-
-
-// create sstable with index builder
+// Create non-shared-macro-blocks SSTable which is not empty and its index needs to be rebuilt.
 class ObCopiedSSTableCreator final : public ObCopiedSSTableCreatorImpl
 {
 public:
@@ -170,7 +160,7 @@ private:
 
 
 #ifdef OB_BUILD_SHARED_STORAGE
-// Now, only for restore major sstable in shared storage.
+// Create non empty shared SSTable in shared storage mode, only during leader restore.
 class ObRestoredSharedSSTableCreator final : public ObCopiedSSTableCreatorImpl
 {
 public:
@@ -184,7 +174,10 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRestoredSharedSSTableCreator);
 };
 
-// Now, only for ddl dump sstable in shared storage.
+
+// Create shared-only-macro-blocks SSTable, currently only ddl sstable in shared storage mode. This kind of SSTable
+// does not own an index, but should record the macro ids on meta. Macro blocks are required to copy only during
+// leader restore, otherwise, are not.
 class ObCopiedSharedMacroBlocksSSTableCreator final : public ObCopiedSSTableCreatorImpl
 {
 public:
@@ -201,7 +194,11 @@ private:
 };
 #endif
 
-// For major sstable in shared storage or sstable in quick restore.
+
+// Create shared SSTable which is not empty. Shared SSTable is the SSTable whose macro blocks, including data and
+// index blocks, are all in shared or backup storage. Macro blocks need not copy and index does not need to be
+// rebuilt, just put the ObMigrationSSTableParam from source into local table store. This is happen during migration
+// or follower restore, when source SSTable is shared.
 class ObCopiedSharedSSTableCreator final : public ObCopiedSSTableCreatorImpl
 {
 public:

@@ -249,49 +249,6 @@ int ObCopiedEmptySSTableCreator::check_sstable_param_for_init_(const ObMigration
 }
 
 
-// ObBackupSSTableCreator
-int ObBackupSSTableCreator::create_sstable()
-{
-  int ret = OB_SUCCESS;
-  ObTableHandleV2 table_handle;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObCopiedSSTableCreator not init", K(ret));
-  } else {
-    SMART_VAR(ObTabletCreateSSTableParam, param) {
-      if (OB_FAIL(param.init_for_remote(*src_sstable_param_))) {
-        LOG_WARN("failed to init for remote", K(ret));
-      }
-
-      if (FAILEDx(do_create_sstable_(param, table_handle))) {
-        LOG_WARN("failed to create sstable", K(ret), K(param));
-      } else if (OB_FAIL(finish_task_->add_sstable(table_handle))) {
-        LOG_WARN("fail to add sstable", K(ret), K(table_handle));
-      }
-    }
-  }
-
-  LOG_INFO("create backup sstable", K(ret), K(table_handle));
-
-  return ret;
-}
-
-int ObBackupSSTableCreator::check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const
-{
-  int ret = OB_SUCCESS;
-  if (src_sstable_param->is_empty_sstable()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sstable is empty", K(ret), KPC(src_sstable_param));
-  } else if (src_sstable_param->is_shared_macro_blocks_sstable()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sstable has shared macro blocks", K(ret), KPC(src_sstable_param));
-  }
-
-  return ret;
-}
-
-
 // ObCopiedSSTableCreator
 int ObCopiedSSTableCreator::create_sstable()
 {
@@ -931,12 +888,17 @@ int ObSSTableCopyFinishTask::get_cluster_version_(
 
 bool ObSSTableCopyFinishTask::is_sstable_should_rebuild_index_(const ObMigrationSSTableParam *sstable_param) const
 {
+  // Non-empty SSTable whose macro blocks should be copied needs rebuild index after
+  // macros are copied.
   return !sstable_param->is_empty_sstable()
          && !is_shared_sstable_without_copy_(sstable_param);
 }
 
 bool ObSSTableCopyFinishTask::is_shared_sstable_without_copy_(const ObMigrationSSTableParam *sstable_param) const
 {
+  // Shared SSTable is the SSTable whose macro blocks, including data and index blocks,
+  // are all in shared storage or backup storage. During migration or follower restore,
+  // macro blocks are no need to be copied.
   return !copy_ctx_.is_leader_restore_ && sstable_param->is_shared_sstable();
 }
 

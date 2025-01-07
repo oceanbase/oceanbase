@@ -1185,7 +1185,7 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
   data_block_macro_meta_addr_.set_none_addr();
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
-    is_co_table_without_cgs_ = table_key_.is_ddl_sstable() ? false : true;
+    is_co_table_without_cgs_ = sstable_param.is_empty_cg_sstables_;
     full_column_cnt_ = sstable_param.full_column_cnt_;
     co_base_type_ = sstable_param.co_base_type_;
   }

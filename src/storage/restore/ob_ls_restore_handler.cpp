@@ -2761,7 +2761,9 @@ int ObLSRestoreMajorState::do_restore()
   }
 #endif
 
-  DEBUG_SYNC(BEFORE_RESTORE_MAJOR);
+  if (!ls_->is_sys_ls()) {
+    DEBUG_SYNC(BEFORE_RESTORE_MAJOR);
+  }
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
