@@ -29,9 +29,8 @@ public:
     : ObDASAttachCtDef(alloc, DAS_OP_VEC_SCAN),
       inv_scan_vec_id_col_(nullptr),
       vec_index_param_(),
-      dim_(0)
-  {
-  }
+      dim_(0),
+      access_pk_(false) {}
   const ObDASScanCtDef *get_inv_idx_scan_ctdef() const
   {
     const  ObDASScanCtDef *idx_scan_ctdef = nullptr;
@@ -107,6 +106,7 @@ public:
   ObVectorIndexAlgorithmType algorithm_type_;
   double selectivity_;
   double row_count_;
+  bool access_pk_;
 };
 
 struct ObDASVecAuxScanRtDef : ObDASAttachRtDef
