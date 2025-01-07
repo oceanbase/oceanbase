@@ -471,7 +471,7 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
     const share::ObLSID &ls_id = ctx_->get_ls_id();
     const common::ObTabletID &tablet_id = ctx_->get_tablet_id();
     const blocksstable::ObSSTable *sstable = static_cast<blocksstable::ObSSTable*>(table_handle.get_table());
-    FLOG_INFO("succeed to generate mds mini sstable", K(ret), K(ls_id), K(tablet_id), KPC(sstable));
+    LOG_TRACE("succeed to generate mds mini sstable", K(ret), K(ls_id), K(tablet_id), KPC(sstable));
   }
   return ret;
 }

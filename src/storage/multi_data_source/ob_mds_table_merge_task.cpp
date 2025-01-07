@@ -227,7 +227,7 @@ void ObMdsTableMergeTask::try_schedule_compaction_after_mds_mini(compaction::ObT
             K(ret), K(ls_id), K(tablet_id), KPC(mds_merge_dag_));
       }
     } else {
-      LOG_INFO("succeed to try schedule mds minor after mds", K(ls_id), K(tablet_id), KPC(mds_merge_dag_));
+      LOG_TRACE("succeed to try schedule mds minor after mds", K(ls_id), K(tablet_id), KPC(mds_merge_dag_));
     }
   }
 }
