@@ -235,7 +235,7 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("restore scheduler stopped", K(ret));
   } else if (OB_INVALID_TENANT_ID != job_info.get_tenant_id()) {
     // restore_tenant can only be executed once.
-    // only update job status 
+    // only update job status
   } else if (OB_FAIL(pool_list.assign(job_info.get_pool_list()))) {
     LOG_WARN("failed to assign pool list", KR(ret), K(job_info));
   } else if (OB_FAIL(fill_create_tenant_arg(job_info, pool_list, arg))) {
@@ -797,7 +797,7 @@ int ObRestoreScheduler::try_get_tenant_restore_history_(
 {
   int ret = OB_SUCCESS;
   restore_tenant_exist = true;
-  ObHisRestoreJobPersistInfo user_history_info; 
+  ObHisRestoreJobPersistInfo user_history_info;
   const uint64_t restore_tenant_id = job_info.get_tenant_id();
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -836,7 +836,7 @@ int ObRestoreScheduler::try_recycle_job(const ObPhysicalRestoreJob &job)
   bool is_dropped = false;
   int failed_ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_RECYCLE_PHYSICAL_RESTORE_JOB);
-  
+
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
@@ -1012,7 +1012,7 @@ int ObRestoreScheduler::restore_init_ls(const share::ObPhysicalRestoreJob &job_i
   DEBUG_SYNC(BEFORE_PHYSICAL_RESTORE_INIT_LS);
   ObSchemaGetterGuard schema_guard;
   const share::schema::ObTenantSchema *tenant_schema = NULL;
-  const common::ObSArray<share::ObBackupSetPath> &backup_set_path_array = 
+  const common::ObSArray<share::ObBackupSetPath> &backup_set_path_array =
     job_info.get_multi_restore_path_list().get_backup_set_path_list();
   const common::ObSArray<share::ObBackupPathString> &log_path_array = job_info.get_multi_restore_path_list().get_log_path_list();
   if (OB_UNLIKELY(!inited_)) {
@@ -1064,7 +1064,7 @@ int ObRestoreScheduler::restore_init_ls(const share::ObPhysicalRestoreJob &job_i
       LOG_WARN("failed to finish create ls", KR(ret), KPC(tenant_schema));
     } else if (OB_FAIL(restore_source_mgr.init(tenant_id_, sql_proxy_))) {
       LOG_WARN("failed to init restore_source_mgr", KR(ret));
-    } else if (1 == log_path_array.count() 
+    } else if (1 == log_path_array.count()
       && OB_FAIL(restore_source_mgr.add_location_source(job_info.get_restore_scn(), log_path_array.at(0).str()))) {
       LOG_WARN("failed to add log restore source", KR(ret), K(job_info), K(log_path_array));
     } else if (0 == log_path_array.count()) /*add restore source*/ {
@@ -1182,7 +1182,7 @@ int ObRestoreScheduler::wait_all_ls_created_(const share::schema::ObTenantSchema
     palf::PalfBaseInfo palf_base_info;
     ObLSRecoveryStat recovery_stat;
     ObLSRecoveryStatOperator ls_recovery_operator;
-    
+
     if (OB_FAIL(status_op.get_all_ls_status_by_order(tenant_id, ls_array,
                                                      *sql_proxy_))) {
       LOG_WARN("failed to get all ls status", KR(ret), K(tenant_id));
@@ -1356,7 +1356,7 @@ int ObRestoreScheduler::restore_wait_ls_finish(const share::ObPhysicalRestoreJob
     int tenant_restore_result = OB_LS_RESTORE_FAILED;
     if (tenant_restore_status.is_success()) {
       tenant_restore_result = OB_SUCCESS;
-    } 
+    }
     if (OB_SUCCESS != (tmp_ret = try_update_job_status(*sql_proxy_, tenant_restore_result, job_info))) {
       LOG_WARN("fail to update job status", KR(ret), KR(tmp_ret), KR(tenant_restore_result), K(job_info));
     }
@@ -1914,37 +1914,37 @@ int ObRestoreScheduler::wait_restore_safe_mview_merge_info_()
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error! sql proxy is null!", K(ret), K(sql_proxy_));
-  } else if (OB_FAIL(ObMViewTimerTask::
-             need_schedule_major_refresh_mv_task(tenant_id_, need_schedule))) {
+  } else if (OB_FAIL(ObMViewTimerTask::need_schedule_major_refresh_mv_task(tenant_id_, need_schedule))) {
     LOG_WARN("failed to check need schedule", KR(ret), K(tenant_id_));
   } else if (!need_schedule) {
     // do nothing
   } else {
     share::SCN major_mv_merge_scn(share::SCN::min_scn());
     ObGlobalStatProxy global_proxy(*sql_proxy_, tenant_id_);
-    if (OB_FAIL(OB_FAIL(ObCollectMvMergeInfoTask::
-                        get_min_mv_tablet_major_compaction_scn(mv_lastest_merge_scn)))) {
-      LOG_WARN("fail to mv tablet merge scn", K(ret), K(tenant_id_));
+    if (OB_FAIL(ObCollectMvMergeInfoTask::get_min_mv_tablet_major_compaction_scn(mv_lastest_merge_scn))) {
+      LOG_WARN("fail to mv tablet merge scn", KR(ret), K(tenant_id_));
+      // when create mv/remove mv, get tablet major scn is null
+      if (OB_ERR_NULL_VALUE == ret) {
+        ret = OB_SUCCESS;
+      }
     } else if (OB_FAIL(global_proxy.get_major_refresh_mv_merge_scn(false, /*for update*/
                                                                    major_mv_merge_scn))) {
-      LOG_WARN("fail to get major_refresh_mv_merge_scn", K(ret), K(tenant_id_));
-    }
-    if (OB_SUCC(ret)) {
-      if (mv_lastest_merge_scn < major_mv_merge_scn) {
-        ret = OB_EAGAIN;
-        LOG_INFO("major_refresh_mv_merge_scn is not greater than tenant mv merge scn",
-                 K(ret), K(tenant_id_), K(mv_lastest_merge_scn), K(major_mv_merge_scn));
-      } else {
-        LOG_INFO("major_merge_scn is greater than tenant_mv_merge_scn, pass check",
-                 K(ret), K(tenant_id_), K(mv_lastest_merge_scn), K(major_mv_merge_scn));
+      LOG_WARN("fail to get major_refresh_mv_merge_scn", KR(ret), K(tenant_id_));
+      if (OB_ERR_NULL_VALUE == ret) {
+        ret = OB_SUCCESS;
       }
+    } else if (mv_lastest_merge_scn < major_mv_merge_scn) {
+      ret = OB_EAGAIN;
+      LOG_INFO("major_refresh_mv_merge_scn is not greater than tenant mv merge scn",
+                 K(ret), K(tenant_id_), K(mv_lastest_merge_scn), K(major_mv_merge_scn));
+    } else {
+      LOG_INFO("major_merge_scn is greater than tenant_mv_merge_scn, pass check",
+                 K(ret), K(tenant_id_), K(mv_lastest_merge_scn), K(major_mv_merge_scn));
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(try_collect_ls_mv_merge_scn_(major_mv_merge_scn))) {
-        LOG_WARN("fail to collect ls mv merge scn", K(ret), K(major_mv_merge_scn));
-      } else if (FALSE_IT(void(ObMViewPushRefreshScnTask::
-                               check_major_mv_refresh_scn_safety(tenant_id_)))) {
-      }
+    if (OB_FAIL(ret)) {
+    } else if (!major_mv_merge_scn.is_min() && OB_FAIL(try_collect_ls_mv_merge_scn_(major_mv_merge_scn))) {
+      LOG_WARN("fail to collect ls mv merge scn", K(ret), K(major_mv_merge_scn));
+    } else if (FALSE_IT(void(ObMViewPushRefreshScnTask::check_major_mv_refresh_scn_safety(tenant_id_)))) {
     }
   }
   return ret;
