@@ -501,7 +501,6 @@ int ObTableQueryAsyncP::init_tb_ctx(ObIAllocator* allocator,
   ctx.set_simple_table_schema(query_info.simple_schema_);
   ctx.set_sess_guard(query_ctx.sess_guard_);
   ctx.set_is_tablegroup_req(tablegroup_req);
-  ctx.set_read_latest(false);
 
   ObObjectID tmp_object_id = OB_INVALID_ID;
   ObObjectID tmp_first_level_part_id = OB_INVALID_ID;
@@ -1030,6 +1029,11 @@ int ObTableQueryAsyncP::query_scan_with_init(ObIAllocator *allocator, ObTableQue
                                     get_timeout_ts(),
                                     info->tb_ctx_))) {
         LOG_WARN("fail to init tb_ctx", K(ret));
+      } else {
+        // async query wouldn't start_trans and read_lastest will be false
+        // and ls_op will start_trans and it will reuse init_tb_ctx, we cannot set read_lastest to false when has dml operation,
+        // otherwise, the modify will be invisible
+        info->tb_ctx_.set_read_latest(false);
       }
     }
 
