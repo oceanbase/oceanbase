@@ -54,6 +54,7 @@ ObDirectLoadInsertTableParam::ObDirectLoadInsertTableParam()
     is_column_store_(false),
     online_opt_stat_gather_(false),
     is_incremental_(false),
+    reuse_pk_(true),
     datum_utils_(nullptr),
     col_descs_(nullptr),
     cmp_funcs_(nullptr),
@@ -306,7 +307,7 @@ int ObDirectLoadInsertTabletContext::get_pk_interval(uint64_t count,
     if (OB_UNLIKELY(OB_EAGAIN != ret)) {
       LOG_WARN("fail to fetch from pk cache", KR(ret));
     } else {
-      if (OB_FAIL(refresh_pk_cache(origin_tablet_id_, pk_cache_))) {
+      if (OB_FAIL(refresh_pk_cache((param_->reuse_pk_ ? origin_tablet_id_ : tablet_id_), pk_cache_))) {
         LOG_WARN("fail to refresh pk cache", KR(ret));
       } else if (OB_FAIL(pk_cache_.fetch(count, pk_interval))) {
         LOG_WARN("fail to fetch from pk cache", KR(ret));
