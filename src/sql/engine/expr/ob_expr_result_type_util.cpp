@@ -877,7 +877,7 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
     ObDataType coll_elem2_type;
     bool l_is_vec = false;
     bool r_is_vec = false;
-    ObObjType element_type;
+    ObObjMeta element_meta;
     if (OB_FAIL(ObArrayExprUtils::check_array_type_compatibility(exec_ctx, type1.get_subschema_id(),
                                                                   type2.get_subschema_id(), is_compatiable))) {
       LOG_WARN("failed to check array compatibilty", K(ret));
@@ -900,7 +900,7 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
         calc_type.set_collection(type2.get_subschema_id());
       }
     } else if (OB_FAIL(get_array_calc_type(exec_ctx, coll_elem1_type, coll_elem2_type,
-                                           depth, calc_type, element_type))) {
+                                           depth, calc_type, element_meta))) {
       LOG_WARN("failed to get array calc type", K(ret));
     }
   }
@@ -912,13 +912,14 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
                                               const ObDataType &coll_elem2_type,
                                               uint32_t depth,
                                               ObExprResType &calc_type,
-                                              ObObjType &element_type)
+                                              ObObjMeta &element_meta)
 {
   int ret = OB_SUCCESS;
   const ObObjType type1 = coll_elem1_type.get_obj_type();
   const ObObjType type2 = coll_elem2_type.get_obj_type();
   ObDataType elem_data;
   ObObjType coll_calc_type = ARITH_RESULT_TYPE[type1][type2];
+  ObCollationType calc_collection_type = CS_TYPE_INVALID;
   if (ob_is_int_uint(ob_obj_type_class(type1), ob_obj_type_class(type2))) {
     coll_calc_type = ObIntType;
   } else if (ob_is_float_tc(type1) &&  ob_is_float_tc(type2)) {
@@ -934,22 +935,26 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
   }
   elem_data.meta_.set_type(coll_calc_type);
   elem_data.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[coll_calc_type]);
-  if (type1 == ObVarcharType || type2 == ObVarcharType
-      || type1 == ObCharType || type2 == ObCharType) {
+  if (type1 == ObVarcharType || type2 == ObVarcharType) {
     coll_calc_type = ObVarcharType;
     ObLength len1 = 0;
     ObLength len2 = 0;
     if (ob_is_string_tc(type1)) {
       len1 = coll_elem1_type.get_length();
+      calc_collection_type = coll_elem1_type.get_collation_type();
     } else {
       len1 = ObAccuracy::MAX_ACCURACY[type1].get_precision();
     }
     if (ob_is_string_tc(type2)) {
       len2 = coll_elem2_type.get_length();
+      if (calc_collection_type == CS_TYPE_INVALID) {
+        calc_collection_type = coll_elem2_type.get_collation_type();
+      }
     } else {
       len2 = ObAccuracy::MAX_ACCURACY[type2].get_precision();
     }
     elem_data.meta_.set_type(coll_calc_type);
+    elem_data.meta_.set_collation_type(calc_collection_type);
     elem_data.set_length(MAX(len1, len2));
   }
   uint16_t subschema_id;
@@ -966,7 +971,7 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
     LOG_WARN("failed get subschema id", K(ret), K(type_info));
   } else {
     calc_type.set_collection(subschema_id);
-    element_type = coll_calc_type;
+    element_meta = elem_data.meta_;
   }
   return ret;
 }

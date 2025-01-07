@@ -1329,34 +1329,40 @@ int ObArrayExprUtils::deduce_array_type(ObExecContext *exec_ctx, ObExprResType &
     if (!ob_is_array_supported_type(type2.get_type())) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("unexpected type for operation", K(ret), K(type2.get_type()));
+    } else if (ob_is_varbinary_or_binary(type2.get_type(), type2.get_collation_type())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("array element in binary type isn't supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "array element in binary type");
     } else if (elem_type->type_id_ == ObNestedType::OB_BASIC_TYPE) {
       if (type2.get_type() != static_cast<ObCollectionBasicType *>(elem_type)->basic_meta_.get_obj_type()) {
-        ObObjType calc_type = type2.get_type();
+        ObObjMeta calc_meta = type2.get_obj_meta();
+        // ObObjType calc_type = type2.get_type();
         if (type2.get_type() == ObDecimalIntType || type2.get_type() == ObNumberType || type2.get_type() == ObUNumberType) {
-          calc_type = ObDoubleType;
+          calc_meta.set_type(ObDoubleType);
           if (get_decimalint_type(type2.get_precision()) == DECIMAL_INT_32) {
-            calc_type = ObFloatType;
+            calc_meta.set_type(ObFloatType);
           }
         }
-        if (calc_type == static_cast<ObCollectionBasicType *>(elem_type)->basic_meta_.get_obj_type()) {
-          type2.set_calc_type(calc_type);
+        if (calc_meta.get_type() == static_cast<ObCollectionBasicType *>(elem_type)->basic_meta_.get_obj_type()) {
+          type2.set_calc_meta(calc_meta);
         } else {
           uint32_t depth = 0;
           ObDataType coll_elem1_type;
           ObDataType coll_calc_type;
           ObExprResType deduce_type;
-          coll_calc_type.set_obj_type(calc_type);
+          coll_calc_type.set_meta_type(calc_meta);
           coll_calc_type.set_accuracy(type2.get_accuracy());
           bool is_vec = false;
+          ObCollationType calc_collection_type = CS_TYPE_INVALID;
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ObArrayExprUtils::get_array_element_type(exec_ctx, type1.get_subschema_id(), coll_elem1_type, depth, is_vec))) {
             LOG_WARN("failed to get array element type", K(ret));
           } else if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, coll_elem1_type, coll_calc_type,
-                                                                       depth, deduce_type, calc_type))) {
+                                                                       depth, deduce_type, calc_meta))) {
             LOG_WARN("failed to get array calc type", K(ret));
           } else {
             type1.set_calc_meta(deduce_type);
-            type2.set_calc_type(calc_type);
+            type2.set_calc_meta(calc_meta);
             subschema_id = deduce_type.get_subschema_id();
           }
         }

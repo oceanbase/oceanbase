@@ -49,7 +49,7 @@ int ObExprArrayAppendCommon::calc_result_type2(ObExprResType &type,
                                                ObExprResType &type1,
                                                ObExprResType &type2,
                                                common::ObExprTypeCtx &type_ctx) const
-      {
+{
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
   ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();

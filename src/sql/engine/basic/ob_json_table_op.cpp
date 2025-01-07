@@ -1082,12 +1082,14 @@ int RegularCol::eval_unnest_col(ObRegCol &col_node, void* in, JtScanCtx* ctx, Ob
         res_datum.set_string((*arr)[idx]);
         break;
       }
-      case ObDoubleType: {
+      case ObDoubleType:
+      case ObUDoubleType: {
         ObArrayFixedSize<double> *arr = static_cast<ObArrayFixedSize<double> *>(arr_obj);
         res_datum.set_double((*arr)[idx]);
         break;
       }
-      case ObFloatType: {
+      case ObFloatType:
+      case ObUFloatType: {
         ObArrayFixedSize<float> *arr = static_cast<ObArrayFixedSize<float> *>(arr_obj);
         res_datum.set_float((*arr)[idx]);
         break;
