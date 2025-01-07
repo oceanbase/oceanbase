@@ -3180,7 +3180,7 @@ int ObServer::get_network_speed_from_sysfs(int64_t &network_speed)
   int tmp_ret = OB_SUCCESS;
   if (OB_FAIL(get_ethernet_speed(config_.devname.str(), network_speed))) {
     LOG_WARN("cannot get Ethernet speed, use default", K(tmp_ret), "devname", config_.devname.str());
-  } else if (network_speed < 0) {
+  } else if (network_speed <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid Ethernet speed, use default", "devname", config_.devname.str());
   }
