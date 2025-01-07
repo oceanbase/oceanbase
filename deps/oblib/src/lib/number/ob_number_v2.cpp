@@ -813,6 +813,8 @@ int ObNumber::from_v3_(const char *str, const int64_t length, IAllocator &alloca
         if (OB_DECIMAL_PRECISION_OVERFLOW == ret) {
           set_zero();
           ret = OB_SUCCESS;
+        } else if (OB_INTEGER_PRECISION_OVERFLOW == ret) {
+          ret = OB_SUCCESS;
         }
       }
     }
