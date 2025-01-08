@@ -973,10 +973,23 @@ int ObURowIDData::set_heap_organized_table_rowid_content(const ObIArray<ObObj> &
     COMMON_LOG(WARN, "invalid argument type", K(ret), K(args));
   } else if (OB_FALSE_IT(auto_inc = args.at(0).get_uint64())) {
   } else if (OB_FALSE_IT(tablet_id = static_cast<uint64_t>(args.at(1).get_int()))) {
-  } else if (OB_UNLIKELY(static_cast<uint64_t>(OB_MAX_AUTOINC_SEQ_VALUE) < auto_inc)
-          || OB_UNLIKELY(ObTabletID::MAX_USER_NORMAL_ROWID_TABLE_TABLET_ID < tablet_id)) {
+  } else if (OB_UNLIKELY(ObTabletID::MAX_USER_NORMAL_ROWID_TABLE_TABLET_ID < tablet_id)) {
     ret = OB_ERR_UNEXPECTED;
-    COMMON_LOG(WARN, "invalid tablet id or auto inc value", K(ret), K(tablet_id), K(auto_inc));
+    COMMON_LOG(WARN, "invalid tablet id", K(ret), K(tablet_id), K(auto_inc));
+  } else if (OB_UNLIKELY(static_cast<uint64_t>(OB_MAX_AUTOINC_SEQ_VALUE) < auto_inc)) {
+    ret = OB_HEAP_TABLE_EXAUSTED;
+    COMMON_LOG(WARN, "invalid auto inc value", K(ret), K(tablet_id), K(auto_inc));
+    LOG_DBA_ERROR_V2(OB_SHARE_PRIMARY_KEY_SEQUENCE_EXHAUSTED, OB_HEAP_TABLE_EXAUSTED,
+                           "The hidden primary key sequence has exhausted. ",
+                           "tablet_id is ", tablet_id, " and current_seq is ", auto_inc, ". ",
+                           "[suggestion] If you need a larger key range, ",
+                           "you can connect cluster by current tenant and execute sql command: ",
+                           "alter table {database_name}.{table_name} set enable_extended_rowid = true; ",
+                           "If you don't know the {database_name} or {table_name}, you can get them by executing sql command: ",
+                           "(Mysql mode): ",
+                           "select distinct database_name, table_name from oceanbase.DBA_OB_TABLE_LOCATIONS where tablet_id = ", tablet_id, "; ",
+                           "(Oracle mode): ",
+                           "select distinct database_name, table_name from sys.DBA_OB_TABLE_LOCATIONS where tablet_id = ", tablet_id, "; ");
   } else {
     STATIC_ASSERT((HEAP_TABLE_ROWID_VERSION & 0x1F) == 0, "invalid version");
     STATIC_ASSERT(ObTabletID::MAX_USER_NORMAL_ROWID_TABLE_TABLET_ID < 1ULL << 37,
