@@ -305,7 +305,7 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
     info.micro_block_count_ = macro_meta->val_.micro_block_count_;
     info.data_checksum_ = macro_meta->val_.data_checksum_;
     info.compressor_type_ = macro_meta->val_.compressor_type_;
-    info.row_store_type_ = static_cast<ObRowStoreType>(macro_desc.row_store_type_);
+    info.row_store_type_ = macro_meta->val_.row_store_type_;
     ObStoreRowkey &start_key = info.store_range_.get_start_key();
     ObStoreRowkey &end_key = info.store_range_.get_end_key();
     const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();

@@ -2389,7 +2389,16 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
       row_desc.block_offset_ = macro_meta.val_.block_offset_;
       row_desc.block_size_ = macro_meta.val_.block_size_;
       // Row store type, compress type, encrypt info, and schema version.
-      data_desc->row_store_type_ = macro_meta.val_.row_store_type_;
+      if (index_store_desc.get_major_working_cluster_version() >= CLUSTER_VERSION_4_3_5_1) {
+        const ObRowStoreType data_row_store_type = macro_meta.val_.row_store_type_;
+        if (ObRowStoreType::ENCODING_ROW_STORE == data_row_store_type) {
+          data_desc->row_store_type_ = ObRowStoreType::SELECTIVE_ENCODING_ROW_STORE;
+        } else {
+          data_desc->row_store_type_ = macro_meta.val_.row_store_type_;
+        }
+      } else {
+        data_desc->row_store_type_ = macro_meta.val_.row_store_type_;
+      }
       static_desc->compressor_type_ = macro_meta.val_.compressor_type_;
       static_desc->master_key_id_ = macro_meta.val_.master_key_id_;
       static_desc->encrypt_id_ = macro_meta.val_.encrypt_id_;
