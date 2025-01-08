@@ -299,7 +299,11 @@ int ObCOMergePrepareTask::schedule_minor_exec_dag(
 int ObCOMergePrepareTask::process()
 {
   int ret = OB_SUCCESS;
-
+#ifdef ERRSIM
+  if (OB_NOT_NULL(dag_net_) && dag_net_->get_dag_param().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
+    DEBUG_SYNC(MAJOR_MERGE_PREPARE_TASK_PROCESS);
+  }
+#endif
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("task is not inited", K(ret), K_(is_inited));
@@ -1095,7 +1099,8 @@ ObCOMergeDagNet::ObCOMergeDagNet()
     tmp_allocator_("CoDagNet", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::MERGE_NORMAL_CTX_ID),
     co_merge_ctx_(nullptr),
     finish_dag_(nullptr),
-    time_guard_()
+    time_guard_(),
+    min_sstable_end_scn_(-1)
 {
 }
 
@@ -1711,6 +1716,8 @@ int ObCOMergeDagNet::prepare_co_merge_ctx()
     ret = OB_NO_NEED_MERGE;
   } else if (OB_FAIL(co_merge_ctx_->check_merge_ctx_valid())) {
     LOG_WARN("invalid merge ctx", KR(ret), KPC_(co_merge_ctx));
+  } else if (OB_FAIL(init_min_sstable_end_scn())) {
+    LOG_WARN("failed to init min sstable end scn", KR(ret), KPC_(co_merge_ctx));
   } else {
     update_merge_status(COMergeStatus::CTX_PREPARED);
   }
@@ -1760,6 +1767,38 @@ int ObCOMergeDagNet::fill_comment(char *buf, const int64_t buf_len) const
   if (OB_FAIL(databuff_printf(buf, buf_len, "COMergeDagNet: ls_id=%ld tablet_id=%ld",
           ls_id_.id(), tablet_id_.id()))) {
     LOG_WARN("failed to fill comment", K(ret));
+  }
+  return ret;
+}
+
+int ObCOMergeDagNet::get_min_sstable_end_scn(SCN &min_end_scn)
+{
+  int ret = OB_SUCCESS;
+  if (min_sstable_end_scn_ > 0) {
+    if (OB_FAIL(min_end_scn.convert_for_tx(min_sstable_end_scn_))) {
+      LOG_WARN("failed to convert for tx", K(ret), K(min_sstable_end_scn_));
+    }
+  }
+  return ret;
+}
+
+int ObCOMergeDagNet::init_min_sstable_end_scn()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(co_merge_ctx_)) {
+    // if table_array is empty, means have not get tablet yet
+    const ObTablesHandleArray &table_array = co_merge_ctx_->static_param_.tables_handle_;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < table_array.get_count(); ++idx) {
+      ObSSTable *sstable = nullptr;
+      if (OB_UNLIKELY(nullptr == table_array.get_table(idx)
+        || nullptr == (sstable = static_cast<ObSSTable *>(table_array.get_table(idx))))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("nullptr in sstable array", KR(ret));
+      } else if (sstable->is_multi_version_minor_sstable()) {
+        min_sstable_end_scn_ = sstable->get_end_scn().get_val_for_tx();
+        break;
+      }
+    } // for
   }
   return ret;
 }

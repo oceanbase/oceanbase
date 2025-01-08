@@ -1072,7 +1072,7 @@ int ObTenantTabletScheduler::schedule_merge_dag(
         LOG_WARN("failed to schedule tablet merge dag", K(ret));
       }
     }
-    FLOG_INFO("chaser debug schedule co merge dag", K(ret), K(param), K(tablet.is_row_store()));
+    FLOG_INFO("schedule co merge dag", K(ret), K(param), K(tablet.is_row_store()));
   } else {
     ObTabletMergeDagParam param;
     if (OB_FAIL(ObDagParamFunc::fill_param(
@@ -1418,7 +1418,7 @@ int ObTenantTabletScheduler::schedule_merge_execute_dag(
       LOG_WARN("failed to add dag", K(ret), KPC(merge_exe_dag));
     }
   } else {
-    LOG_INFO("success to scheudle tablet minor execute dag", K(ret), KP(merge_exe_dag), K(emergency));
+    LOG_INFO("success to scheudle merge execute dag", K(ret), KP(merge_exe_dag), K(emergency));
   }
   if (OB_FAIL(ret) && nullptr != merge_exe_dag) {
     MTL(share::ObTenantDagScheduler *)->free_dag(*merge_exe_dag);

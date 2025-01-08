@@ -41,6 +41,7 @@
 #include <algorithm>
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "share/compaction/ob_batch_exec_dag.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_tablet_refresh_dag.h"
 #include "storage/compaction/ob_verify_ckm_dag.h"
@@ -185,7 +186,7 @@ int ObINodeWithChild::remove_parent_for_children()
     if (OB_FAIL(children_.at(i)->erase_node(this, true/*node_is_parent*/))) {
       COMMON_LOG(WARN, "fail to erase parent for children", K(ret), K(this), K(i), K(children_.at(i)));
     } else {
-      COMMON_LOG(DEBUG, "remove_parent_for_children", K(ret), K(this), K(i), K(children_.at(i)),
+      COMMON_LOG(DEBUG, "remove_parent_for_children", K(ret), K(this), K(i), KP(children_.at(i)),
           K(children_.at(i)->get_indegree()));
     }
   }
@@ -204,7 +205,7 @@ int ObINodeWithChild::remove_child_for_parents()
       COMMON_LOG(WARN, "fail to erase children for parents", K(ret), K(this), K(i), K(parent_.at(i)));
     } else {
       dec_indegree();
-      COMMON_LOG(DEBUG, "remove_child_for_parents", K(ret), K(this), K(i));
+      COMMON_LOG(DEBUG, "remove_child_for_parents", K(ret), K(this), K(i), KP(parent_.at(i)));
     }
   }
   return ret;
@@ -3067,6 +3068,40 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
   return OB_SUCCESS;
 }
 
+int ObDagPrioScheduler::get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn)
+{
+  int ret = OB_SUCCESS;
+  ObDagListIndex loop_list[2] = { READY_DAG_LIST, RANK_DAG_LIST };
+  SCN dag_min_end_scn = SCN::max_scn();
+
+  ObMutexGuard guard(prio_lock_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < 2; ++i) {
+    ObDagListIndex list_idx = loop_list[i];
+    ObIDag *head = dag_list_[list_idx].get_header();
+    ObIDag *cur = head->get_next();
+    while (OB_SUCC(ret) && nullptr != cur && head != cur) {
+      SCN tmp_min_end_scn = SCN::max_scn();
+      if (ObDagType::DAG_TYPE_MAJOR_MERGE == cur->get_type()) {
+        compaction::ObTabletMergeDag * dag = static_cast<compaction::ObTabletMergeDag *>(cur);
+        if (ls_id == dag->get_ls_id()
+          && cur->get_dag_status() != ObIDag::DAG_STATUS_READY) {
+          if (OB_FAIL(dag->get_min_sstable_end_scn(tmp_min_end_scn))) {
+            LOG_WARN("failed to get min end scn from dag", KR(ret), KPC(cur));
+          } else {
+            dag_min_end_scn = std::min(dag_min_end_scn, tmp_min_end_scn);
+          }
+        }
+      }
+      cur = cur->get_next();
+    } // while
+  } // for
+  if (OB_SUCC(ret)) {
+    min_end_scn = dag_min_end_scn;
+    LOG_INFO("[MIN_END_SCN]success to get min end scn from major dag", KR(ret), K(ls_id), K(dag_min_end_scn));
+  }
+  return ret;
+}
+
 int ObDagPrioScheduler::get_compaction_dag_count(int64_t dag_count)
 {
   int ret = OB_SUCCESS;
@@ -3638,8 +3673,10 @@ void ObDagNetScheduler::dump_dag_status()
   }
   COMMON_LOG(INFO, "dump_dag_status[DAG_NET]", K(running_dag_net_map_size), K(blocking_dag_net_list_size), K(running_dag_net_list_size));
   for (int64_t i = 0; i < ObDagNetType::DAG_NET_TYPE_MAX; ++i) {
-    COMMON_LOG(INFO, "dump_dag_status[DAG_NET]", "type", OB_DAG_NET_TYPES[i].dag_net_type_str_,
+    if (0 != dag_net_count[i]) {
+      COMMON_LOG(INFO, "dump_dag_status[DAG_NET]", "type", OB_DAG_NET_TYPES[i].dag_net_type_str_,
         "dag_count", dag_net_count[i]);
+    }
   }
 }
 
@@ -3951,6 +3988,42 @@ int ObDagNetScheduler::check_ls_compaction_dag_exist_with_cancel(const ObLSID &l
   }
   return ret;
 }
+
+int ObDagNetScheduler::get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn)
+{
+  int ret = OB_SUCCESS;
+  SCN dag_net_min_end_scn = SCN::max_scn();
+  ObMutexGuard dag_net_guard(dag_net_map_lock_);
+  ObIDagNet *head = nullptr;
+  ObIDagNet *cur = nullptr;
+
+  for (int i = BLOCKING_DAG_NET_LIST; i <= RUNNING_DAG_NET_LIST; i++) {
+    head = dag_net_list_[i].get_header();
+    cur = head->get_next();
+
+    while (OB_SUCC(ret) && NULL != cur && head != cur) {
+      SCN tmp_min_end_scn = SCN::max_scn();
+      if (cur->is_co_dag_net()) {
+        compaction::ObCOMergeDagNet *co_dag_net = static_cast<compaction::ObCOMergeDagNet*>(cur);
+        if (ls_id == co_dag_net->get_dag_param().ls_id_) {
+          if (OB_FAIL(co_dag_net->get_min_sstable_end_scn(tmp_min_end_scn))) {
+            LOG_WARN("failed to get min end scn from sstable", KR(ret), KPC(co_dag_net));
+          } else {
+            dag_net_min_end_scn = std::min(dag_net_min_end_scn, tmp_min_end_scn);
+          }
+        }
+      }
+      cur = cur->get_next();
+    } // while
+  }
+
+  if (OB_SUCC(ret)) {
+    min_end_scn = dag_net_min_end_scn;
+    LOG_INFO("[MIN_END_SCN]success to get min end scn from dag net", KR(ret), K(ls_id), K(dag_net_min_end_scn));
+  }
+  return ret;
+}
+
 /***************************************ObTenantDagScheduler impl********************************************/
 int ObTenantDagScheduler::mtl_init(ObTenantDagScheduler* &scheduler)
 {
@@ -4325,13 +4398,15 @@ void ObTenantDagScheduler::dump_dag_status(const bool force_dump/*false*/)
     }
 
     for (int64_t i = 0; i < ObDagType::DAG_TYPE_MAX; ++i) {
-      COMMON_LOG(INFO, "dump_dag_status", "type", OB_DAG_TYPES[i],
+      if (0 != get_type_dag_cnt(i) || 0 != get_added_dag_cnts(i) || 0 != get_scheduled_task_cnts(i)) {
+        COMMON_LOG(INFO, "dump_dag_status", "type", OB_DAG_TYPES[i],
           "dag_count", get_type_dag_cnt(i),
           "running_dag_count", get_running_dag_cnts(i),
           "added_dag_count", get_added_dag_cnts(i),
           "scheduled_dag_count", get_scheduled_dag_cnts(i),
           "scheduled_task_count", get_scheduled_task_cnts(i),
           "scheduled_data_size", get_scheduled_data_size(i));
+      }
       clear_added_dag_cnts(i);
       clear_scheduled_dag_cnts(i);
       clear_scheduled_task_cnts(i);
@@ -4500,7 +4575,7 @@ int ObTenantDagScheduler::check_ls_compaction_dag_exist_with_cancel(const ObLSID
   } else if (tmp_exist) {
     exist = true;
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || exist) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ObIDag::MergeDagPrioCnt; ++i) {
       tmp_exist = false;
@@ -4510,6 +4585,28 @@ int ObTenantDagScheduler::check_ls_compaction_dag_exist_with_cancel(const ObLSID
         exist = true;
       }
     }
+  }
+  return ret;
+}
+
+int ObTenantDagScheduler::get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn)
+{
+  int ret = OB_SUCCESS;
+  SCN min_end_scn_from_dag_net = SCN::max_scn();
+  SCN min_end_scn_from_dag = SCN::max_scn();
+  if (OB_FAIL(dag_net_sche_.get_min_end_scn_from_major_dag(ls_id, min_end_scn_from_dag_net))) {
+    LOG_WARN("failed to check ls compaction dag exist", K(ret), K(ls_id));
+  } else if (OB_FAIL(prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_LOW].get_min_end_scn_from_major_dag(ls_id, min_end_scn_from_dag))) {
+    LOG_WARN("failed to check ls compaction dag exist", K(ret), K(ls_id));
+  } else {
+    min_end_scn = std::min(min_end_scn_from_dag, min_end_scn_from_dag_net);
+#ifdef ERRSIM
+    if (!min_end_scn.is_max()) {
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "get_min_end_scn",
+                          "ls_id", ls_id.id(),
+                          "min_end_scn", min_end_scn.get_val_for_tx());
+    }
+#endif
   }
   return ret;
 }

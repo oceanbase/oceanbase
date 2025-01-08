@@ -309,8 +309,6 @@ protected:
   int get_convert_compaction_info(); // for convert co major merge
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
-  static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD_FOR_CS = 300L * 1000L; // 30w
-  static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD_FOR_CS = 100L;
 public:
   ObCompactionMemoryContext mem_ctx_;
   ObStaticMergeParam static_param_;

@@ -648,9 +648,7 @@ bool ObBasicTabletMergeCtx::need_swap_tablet(
       bret = (row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD
       || macro_count >= LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD);
     } else { // col_store
-      bret = cg_count > ALL_CG_IN_ONE_BATCH_CNT
-        || row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD_FOR_CS
-        || macro_count >= LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD_FOR_CS;
+      bret = true;
     }
   }
 #ifdef ERRSIM

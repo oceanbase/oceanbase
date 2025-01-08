@@ -118,6 +118,7 @@ public:
   int64_t get_indegree() const;
   int add_parent_node(ObINodeWithChild &parent);
   const common::ObIArray<ObINodeWithChild*> &get_child_nodes() const { return children_; }
+  const common::ObIArray<ObINodeWithChild*> &get_parent_nodes() const { return parent_; }
   int remove_parent_for_children();
   int remove_child_for_parents();
   int deep_copy_children(const common::ObIArray<ObINodeWithChild*> &other);
@@ -128,7 +129,7 @@ public:
       const ObINodeWithChild *child,
       bool &is_exist);
 
-  TO_STRING_KV(K_(indegree));
+  TO_STRING_KV(KP(this), K_(indegree));
 
 protected:
   virtual int add_child_without_lock(ObINodeWithChild &child);
@@ -841,6 +842,7 @@ public:
   int cancel_dag_net(const ObDagId &dag_id);
   int get_first_dag_net(ObIDagNet *&dag_net);
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
+  int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
 private:
   typedef common::ObDList<ObIDagNet> DagNetList;
   typedef common::hash::ObHashMap<const ObIDagNet*,
@@ -954,6 +956,7 @@ public:
   // 1. check ls compaction exist
   // 2. cancel ls compaction waiting dag
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
+  int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
   int get_compaction_dag_count(int64_t dag_count);
   int get_max_major_finish_time(const int64_t version, int64_t &estimated_finish_time);
   int diagnose_dag(
@@ -1215,6 +1218,7 @@ public:
   // 1. check ls compaction exist
   // 2. cancel ls compaction waiting dag
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
+  int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
   int check_dag_net_exist(
       const ObDagId &dag_id, bool &exist);
   int cancel_dag_net(const ObDagId &dag_id);

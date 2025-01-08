@@ -362,7 +362,7 @@ int ObTabletStatusCache::check_medium_list(
           tablet_id, ls_id, medium_list_->get_wait_check_medium_scn()))) {
         LOG_WARN("failed to add tablet", K(tmp_ret), K(ls_id), K(tablet_id));
       } else {
-        LOG_INFO("success to add tablet into checker", KR(ret), K(ls_id), K(tablet_id));
+        LOG_TRACE("success to add tablet into checker", KR(ret), K(ls_id), K(tablet_id));
       }
     }
   } else if (!medium_list_->could_schedule_next_round(tablet.get_last_major_snapshot_version())) {

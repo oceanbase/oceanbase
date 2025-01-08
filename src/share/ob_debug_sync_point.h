@@ -56,6 +56,8 @@ class ObString;
     ACT(DELAY_PARTITION_SERVICE_FREEZE_LOG_TASK,)                  \
     ACT(MINOR_MERGE_TIMER_TASK,)                                   \
     ACT(MERGE_TASK_PROCESS,)                                       \
+    ACT(MAJOR_MERGE_TASK_PROCESS,)                                 \
+    ACT(MAJOR_MERGE_PREPARE_TASK_PROCESS,)                         \
     ACT(COMPACTION_REPORT_PROCESS,)                                \
     ACT(MINOR_MERGE_SCHEDULE,)                                     \
     ACT(DELAY_INDEX_WRITE,)                                        \

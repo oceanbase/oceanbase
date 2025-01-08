@@ -660,7 +660,7 @@ public:
     }
     return common::OB_SUCCESS;
   }
-  INHERIT_TO_STRING_KV("BasicDag", ObBasicDag, K_(is_inited), K_(type), K_(id), K(task_list_.get_size()));
+  INHERIT_TO_STRING_KV("ObFatherPrepareDag", ObBasicDag, K_(is_inited), K_(type), K_(id), K(task_list_.get_size()));
 
 private:
   ObOperator *op_;
@@ -704,7 +704,7 @@ public:
     }
     return common::OB_SUCCESS;
   }
-  INHERIT_TO_STRING_KV("BasicDag", ObBasicDag, K_(is_inited), K_(type), K_(id), K(task_list_.get_size()));
+  INHERIT_TO_STRING_KV("ObFatherFinishDag", ObBasicDag, K_(is_inited), K_(type), K_(id), K(task_list_.get_size()));
 
 private:
   ObOperator *op_;

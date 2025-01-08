@@ -74,7 +74,9 @@ int ObScheduleTabletFunc::schedule_tablet(
     } else if (ls_could_schedule_merge_
         && OB_TMP_FAIL(schedule_tablet_execute(*tablet))) {
       need_diagnose = true;
-      LOG_WARN("failed to schedule tablet execute", KR(tmp_ret), K_(ls_status), K(tablet_id));
+      if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
+        LOG_WARN("failed to schedule tablet execute", KR(tmp_ret), K_(ls_status), K(tablet_id));
+      }
     } else {
       LOG_DEBUG("success to schedule tablet execute", KR(tmp_ret), K_(ls_status), K(tablet_status_), K_(ls_could_schedule_merge));
     }

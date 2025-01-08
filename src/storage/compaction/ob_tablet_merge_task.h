@@ -231,6 +231,8 @@ public:
   int generate_merge_task(ObBasicTabletMergeCtx &ctx, share::ObITask *prepare_task);
   virtual bool is_ha_dag() const override { return false; }
   int alloc_merge_ctx();
+  int get_min_sstable_end_scn(share::SCN &min_end_scn);
+  int init_min_sstable_end_scn();
 protected:
   int inner_init(const ObTabletMergeDagParam *param);
   int collect_compaction_param(const ObTabletHandle &tablet_handle);
@@ -247,6 +249,7 @@ protected:
   ObBasicTabletMergeCtx *ctx_;
   ObTabletMergeDagParam param_;
   common::ObArenaAllocator allocator_;
+  int64_t min_sstable_end_scn_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeDag);
 };
