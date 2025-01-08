@@ -19,6 +19,7 @@ cd ${TOP_DIR}
     rpm                     \
     -DOB_RELEASEID=$RELEASE \
     -DBUILD_NUMBER=$RELEASE \
+    -DUSE_LTO_CACHE=ON	    \
     ${OB_DISABLE_LSE_OPTION}\
     --init                  \
     --make rpm || exit 1

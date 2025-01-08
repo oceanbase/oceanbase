@@ -114,18 +114,14 @@ set(ob_extra_sql_parser_object_list
 )
 
 # ob_sql_proxy_parser_objects is the static library for proxy, it does not link against observer
+add_library(ob_sql_proxy_parser_objects OBJECT
+            ${ob_inner_sql_parser_object_list}
+            ${ob_sql_parser_hash_object_list}
+            ${ob_sql_parser_charset_object_list}
+            )
+
 if (BUILD_CDC_ONLY)
-  add_library(ob_sql_proxy_parser_objects OBJECT EXCLUDE_FROM_ALL
-              ${ob_inner_sql_parser_object_list}
-              ${ob_sql_parser_hash_object_list}
-              ${ob_sql_parser_charset_object_list}
-              )
-else()
-  add_library(ob_sql_proxy_parser_objects OBJECT
-              ${ob_inner_sql_parser_object_list}
-              ${ob_sql_parser_hash_object_list}
-              ${ob_sql_parser_charset_object_list}
-              )
+  set_target_properties(ob_sql_proxy_parser_objects PROPERTIES EXCLUDE_FROM_ALL TRUE)
 endif()
 
 # ob_sql_server_parser_object is the static library for observer
