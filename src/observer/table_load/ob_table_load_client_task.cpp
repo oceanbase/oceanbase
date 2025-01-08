@@ -286,6 +286,19 @@ public:
     } else if (OB_FAIL(resolve_part_names(table_schema, task_param.get_part_names(), tablet_ids))) {
       LOG_WARN("fail to resolve part name", KR(ret));
     }
+    if (OB_SUCC(ret) && ObDirectLoadMethod::INCREMENTAL == method) {
+      if (ObDirectLoadInsertMode::NORMAL == insert_mode
+          && ObLoadDupActionType::LOAD_REPLACE == task_param.get_dup_action()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace for inc load method in direct load is");
+        LOG_WARN("replace for inc load method in direct load is not supported", KR(ret));
+      } else if (ObDirectLoadInsertMode::INC_REPLACE == insert_mode
+                 && ObLoadDupActionType::LOAD_STOP_ON_DUP != task_param.get_dup_action()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace or ignore for inc_replace load method in direct load is");
+        LOG_WARN("replace or ignore for inc_replace load method in direct load is not supported", KR(ret));
+      }
+    }
     if (OB_SUCC(ret)) {
       load_param.tenant_id_ = tenant_id;
       load_param.table_id_ = table_schema->get_table_id();
