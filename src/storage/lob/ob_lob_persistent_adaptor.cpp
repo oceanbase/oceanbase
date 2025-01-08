@@ -124,7 +124,7 @@ int ObPersistentLobApator::init_table_param()
     } else if (OB_ISNULL(meta_table_param_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc meta_table_param fail", KR(ret), "size", sizeof(ObTableParam));
-    } else if (OB_FAIL(meta_table_param_->convert(meta_schema, meta_column_ids, ObStoragePushdownFlag()))) {
+    } else if (OB_FAIL(meta_table_param_->convert(meta_schema, meta_column_ids, sql::ObStoragePushdownFlag()))) {
       LOG_ERROR("Fail to convert table param", KR(ret), K(meta_schema));
     } else if (OB_FALSE_IT(ATOMIC_STORE(&meta_table_dml_param_, OB_NEWx(ObTableDMLParam, &allocator_, allocator_)))) {
     } else if (OB_ISNULL(meta_table_dml_param_)) {

@@ -15,6 +15,7 @@
 #include "log_cache.h"
 #include "palf_handle_impl.h"
 #include "palf_handle_impl_guard.h"
+#include "palf_env_impl.h"
 
 namespace oceanbase
 {

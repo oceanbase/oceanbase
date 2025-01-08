@@ -18,6 +18,7 @@
 #include "rpc/obrpc/ob_rpc_result_code.h"
 #include "lib/compress/ob_compressor_pool.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {

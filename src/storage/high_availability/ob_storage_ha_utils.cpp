@@ -41,6 +41,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/access/ob_table_read_info.h"
+#include "share/ob_io_device_helper.h"
 
 using namespace oceanbase::share;
 

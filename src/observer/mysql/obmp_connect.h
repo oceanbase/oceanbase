@@ -15,6 +15,7 @@
 
 #include "rpc/obmysql/packet/ompk_handshake_response.h"
 #include "observer/mysql/obmp_base.h"
+#include "rpc/obmysql/ob_i_cs_mem_pool.h"
 
 namespace oceanbase
 {

@@ -15,6 +15,7 @@
 #include "sql/engine/dml/ob_fk_checker.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
+#include "src/sql/engine/ob_exec_context.h"
 namespace oceanbase
 {
 namespace sql

@@ -9,12 +9,12 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SQL_OPT
 
 #include "sql/ob_sql_temp_table.h"
 #include "sql/rewrite/ob_predicate_deduce.h"
 #include "sql/ob_sql_context.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#define USING_LOG_PREFIX SQL_OPT
 
 using namespace oceanbase::sql;
 

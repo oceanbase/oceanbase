@@ -27,6 +27,7 @@
 #include "lib/rc/ob_rc.h"
 #include "observer/ob_server.h"
 #include "pl/sys_package/ob_dbms_stats.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase
 {

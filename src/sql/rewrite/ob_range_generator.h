@@ -14,6 +14,7 @@
 
 #include "sql/rewrite/ob_query_range_define.h"
 #include "sql/rewrite/ob_expr_range_converter.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

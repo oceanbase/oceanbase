@@ -71,7 +71,7 @@ int ObAllVirtualSessionEvent::set_ip(common::ObAddr *addr)
 int ObAllVirtualSessionEvent::get_all_diag_info()
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCCESS != (ret = ObDiagnosticInfoUtil::get_all_diag_info(session_status_, effective_tenant_id_))) {
+  if (OB_SUCCESS != (ret = share::ObDiagnosticInfoUtil::get_all_diag_info(session_status_, effective_tenant_id_))) {
     SERVER_LOG(WARN, "Fail to get session status, ", K(ret));
   }
   return ret;

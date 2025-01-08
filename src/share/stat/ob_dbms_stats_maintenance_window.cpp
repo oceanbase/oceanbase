@@ -21,6 +21,7 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "lib/timezone/ob_timezone_info.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
+#include "observer/ob_sql_client_decorator.h"
 
 #define ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME  "tenant_id, " \
                                               "job_name, " \
@@ -748,7 +749,7 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(common:
                          exec_env.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(job_id), K(exec_env));
-  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
+  } else if (OB_FAIL(share::ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
     LOG_WARN("failed to get tenant compat mode", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_async_gather_stats_job_sql(lib::Worker::CompatMode::ORACLE == compat_mode,
                                                     tenant_id, job_id, exec_env, values_list))) {

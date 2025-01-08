@@ -27,7 +27,7 @@
 #include "ob_storage_ha_struct.h"
 #include "ob_storage_restore_struct.h"
 #include "ob_storage_ha_dag.h"
-#include "ob_physical_copy_ctx.h"
+#include "src/storage/high_availability/ob_physical_copy_ctx.h"
 
 namespace oceanbase
 {
@@ -36,7 +36,6 @@ namespace storage
 
 class ObTabletCopyFinishTask;
 class ObSSTableCopyFinishTask;
-
 struct ObPhysicalCopyTaskInitParam final
 {
   ObPhysicalCopyTaskInitParam();

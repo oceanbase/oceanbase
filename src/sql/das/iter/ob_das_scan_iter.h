@@ -14,6 +14,7 @@
 #define OBDEV_SRC_SQL_DAS_ITER_OB_DAS_SCAN_ITER_H_
 
 #include "sql/das/iter/ob_das_iter.h"
+#include "sql/das/ob_das_scan_op.h"
 namespace oceanbase
 {
 namespace common {

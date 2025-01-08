@@ -15,6 +15,7 @@
 #include "storage/access/ob_table_read_info.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/ls/ob_ls_tablet_service.h"
+#include "storage/ls/ob_ls.h"
 #include "storage/tablet/ob_tablet_split_mds_helper.h"
 
 #define USING_LOG_PREFIX STORAGE

@@ -14,6 +14,8 @@
 #define OCEANBASE_STORAGE_OB_LOB_HANDLER_H_
 
 #include "storage/lob/ob_lob_access_param.h"
+#include "storage/lob/ob_lob_meta.h"
+#include "storage/lob/ob_lob_meta_manager.h"
 
 namespace oceanbase
 {

@@ -453,7 +453,7 @@ int ObResourceGroup::acquire_more_worker(int64_t num, int64_t &succ_num, bool fo
 
 inline bool is_dbms_job_group(int64_t group_id)
 {
-  return share::OBCG_DBMS_SCHED_JOB == group_id || share::OBCG_OLAP_ASYNC_JOB == group_id;
+  return oceanbase::share::OBCG_DBMS_SCHED_JOB == group_id || oceanbase::share::OBCG_OLAP_ASYNC_JOB == group_id;
 }
 
 void ObResourceGroup::check_worker_count()

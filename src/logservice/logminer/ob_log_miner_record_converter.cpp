@@ -18,6 +18,7 @@
 #include "logservice/common_util/ob_log_time_utils.h"
 #include "ob_log_miner_logger.h"
 #include "ob_log_miner_utils.h"
+#include "src/logservice/logminer/ob_log_miner_timezone_getter.h"
 
 #define APPEND_STR(buf, args...) \
   do {\

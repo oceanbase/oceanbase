@@ -15,6 +15,7 @@
 
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/scn.h"
+#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {

@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_index_merge_iter.h"
+#include "src/sql/das/ob_das_attach_define.h"
 namespace oceanbase
 {
 using namespace common;

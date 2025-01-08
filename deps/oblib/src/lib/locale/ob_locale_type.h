@@ -74,6 +74,11 @@ class OB_LOCALE {
 
 OB_LOCALE *ob_locale_by_name(const ObString &cs_name);
 bool is_valid_ob_locale(const ObString &in_locale_name, ObString &valid_locale_name);
+extern OB_LOCALE ob_locale_en_US;
+extern OB_LOCALE ob_locale_ja_JP;
+extern OB_LOCALE ob_locale_ko_KR;
+extern OB_LOCALE ob_locale_zh_CN;
+extern OB_LOCALE ob_locale_zh_TW;
 
 } // common
 } // oceanbase

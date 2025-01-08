@@ -21,6 +21,8 @@
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #endif

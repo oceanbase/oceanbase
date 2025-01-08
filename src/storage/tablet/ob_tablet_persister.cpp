@@ -28,6 +28,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_refresh_tablet_util.h" // for ObRefreshTabletUtil::get_shared_tablet_meta
 #include "storage/shared_storage/ob_file_manager.h"
+#include "share/compaction/ob_shared_storage_compaction_util.h"
 #endif
 
 using namespace std::placeholders;

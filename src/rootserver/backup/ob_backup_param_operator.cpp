@@ -12,9 +12,11 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "ob_backup_param_operator.h"
 #include "common/ob_smart_var.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_sql_string.h"
+#include "storage/backup/ob_backup_data_store.h"
 
 
 using namespace oceanbase::common;

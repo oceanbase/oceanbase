@@ -32,6 +32,7 @@
 #include "share/system_variable/ob_sys_var_class_type.h"
 #include "share/stat/ob_stat_define.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;

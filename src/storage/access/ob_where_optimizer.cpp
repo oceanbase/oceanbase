@@ -11,6 +11,7 @@
  */
 #define USING_LOG_PREFIX STORAGE
 #include "ob_where_optimizer.h"
+#include "storage/access/ob_table_access_param.h"
 
 namespace oceanbase
 {

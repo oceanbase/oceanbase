@@ -22,6 +22,7 @@
 #include "storage/direct_load/ob_direct_load_i_table.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
+#include "src/observer/table_load/ob_table_load_error_row_handler.h"
 
 namespace oceanbase
 {

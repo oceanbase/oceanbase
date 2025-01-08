@@ -14,6 +14,7 @@
 #define OCEANBASE_TRANSACTION_OB_GTI_SOURCE_
 
 #include "lib/net/ob_addr.h"
+#include "lib/lock/ob_latch.h"
 
 namespace oceanbase
 {

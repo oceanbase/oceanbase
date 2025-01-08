@@ -15,6 +15,7 @@
 #include "sql/optimizer/ob_log_values_table_access.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "src/sql/optimizer/ob_join_order.h"
 
 using namespace oceanbase::common;
 

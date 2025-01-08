@@ -615,7 +615,7 @@ int ObRpcFreezeSplitSrcTabletP::process()
     LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
   } else {
     const int64_t abs_timeout_us = nullptr == rpc_pkt_ ? 0 : get_receive_timestamp() + rpc_pkt_->get_timeout();
-    ret = ObSplitPartitionHelper::freeze_split_src_tablet(arg_, result_, abs_timeout_us);
+    ret = rootserver::ObSplitPartitionHelper::freeze_split_src_tablet(arg_, result_, abs_timeout_us);
   }
   return ret;
 }

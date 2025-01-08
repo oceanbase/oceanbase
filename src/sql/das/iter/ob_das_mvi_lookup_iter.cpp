@@ -12,9 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_mvi_lookup_iter.h"
+#include "sql/das/iter/ob_das_lookup_iter.h"
 #include "sql/das/iter/ob_das_scan_iter.h"
 #include "sql/das/ob_das_scan_op.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -35,7 +37,7 @@ int ObDASMVILookupIter::inner_get_next_row()
           bool has_rowkey = check_has_rowkey();
           if (has_rowkey) {
             lookup_rowkey_cnt_++;
-            state_ = OUTPUT_ROWS;
+            state_ = LookupState::OUTPUT_ROWS;
           } else {
             state_ = DO_LOOKUP;
           }
@@ -50,11 +52,11 @@ int ObDASMVILookupIter::inner_get_next_row()
         if (OB_FAIL(do_index_lookup())) {
           LOG_WARN("failed to do index lookup", K(ret));
         } else {
-          state_ = OUTPUT_ROWS;
+          state_ = LookupState::OUTPUT_ROWS;
         }
         break;
       }
-      case OUTPUT_ROWS: {
+      case LookupState::OUTPUT_ROWS: {
         if (lookup_rowkey_cnt_ != 0) {
           lookup_rowkey_cnt_ = 0;
         } else {

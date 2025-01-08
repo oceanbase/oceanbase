@@ -27,6 +27,7 @@ using namespace common;
 using namespace palf;
 using namespace share::schema;
 using namespace transaction::tablelock;
+using namespace share::schema;
 
 namespace share
 {

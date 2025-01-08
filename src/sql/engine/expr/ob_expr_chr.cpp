@@ -18,6 +18,7 @@
 #include <string.h>
 #include "lib/oblog/ob_log.h"
 #include "objit/common/ob_item_type.h"
+#include "src/sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
 

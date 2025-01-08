@@ -13,6 +13,7 @@
 #include "lib/wait_event/ob_wait_event.h"
 #include "lib/stat/ob_latch_define.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/stat/ob_latch_define.h"
 
 namespace oceanbase
 {

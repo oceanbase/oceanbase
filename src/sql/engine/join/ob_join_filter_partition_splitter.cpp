@@ -20,6 +20,7 @@
 #include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 #include "sql/engine/join/ob_join_filter_store_row.h"
 #include "sql/engine/join/ob_join_filter_op.h"
+#include "src/sql/engine/ob_sql_mem_mgr_processor.h"
 
 
 namespace oceanbase

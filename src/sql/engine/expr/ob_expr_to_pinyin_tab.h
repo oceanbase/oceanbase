@@ -12,6 +12,13 @@
 #ifndef OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_TO_PINYIN_TABLE_
 #define OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_TO_PINYIN_TABLE_
 
+#include <cstdint>
+#include "lib/string/ob_string.h"
+
+namespace oceanbase
+{
+namespace sql
+{
 // The content of `begin` and `end` in `PINYIN_TABLE` comes from the file `cldr-common-33.0.zip:common/collation/zh.xml:35~1558`;
 # define PINYIN_COUNT 1502
 struct PinyinPair{
@@ -20,4 +27,6 @@ struct PinyinPair{
   ObString pinyin;
 };
 extern PinyinPair PINYIN_TABLE[PINYIN_COUNT];
+} // end namespace sql
+} // end namespace oceanbase
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_TO_PINYIN_ */

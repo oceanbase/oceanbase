@@ -18,6 +18,8 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
 #include "observer/omt/ob_tenant.h"
+#include "storage/tx_storage/ob_tablet_gc_service.h"
+#include "storage/ls/ob_ls.h"
 #ifdef OB_BUILD_SHARED_STORAGE
   #include "meta_store/ob_shared_storage_obj_meta.h"
   #include "storage/compaction/ob_major_task_checkpoint_mgr.h"

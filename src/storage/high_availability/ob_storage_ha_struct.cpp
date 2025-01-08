@@ -22,6 +22,7 @@
 #include "logservice/ob_log_service.h"
 #include "share/transfer/ob_transfer_task_operator.h"
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {

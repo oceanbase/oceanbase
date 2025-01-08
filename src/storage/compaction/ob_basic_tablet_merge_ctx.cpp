@@ -27,6 +27,7 @@
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_mds_scan_param_helper.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/compaction/ob_sstable_merge_info_mgr.h"
 
 namespace oceanbase
 {

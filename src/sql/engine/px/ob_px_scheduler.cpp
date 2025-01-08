@@ -41,6 +41,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include "sql/engine/join/ob_join_filter_op.h"
+#include "src/sql/engine/px/datahub/components/ob_dh_join_filter_count_row.h"
 
 namespace oceanbase
 {

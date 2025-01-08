@@ -143,7 +143,7 @@ public:
   ObTabletSplitMdsArgPrepareSrcOp(ObIArray<ObTabletID> &src_tablet_ids, ObIArray<ObArray<ObTabletID>> &dst_tablet_ids)
     : src_tablet_ids_(src_tablet_ids), dst_tablet_ids_(dst_tablet_ids) {}
   ~ObTabletSplitMdsArgPrepareSrcOp() = default;
-  int operator()(const int64_t part_idx, ObBasePartition &part);
+  int operator()(const int64_t part_idx, share::schema::ObBasePartition &part);
 private:
   ObIArray<ObTabletID> &src_tablet_ids_;
   ObIArray<ObArray<ObTabletID>> &dst_tablet_ids_;
@@ -157,7 +157,7 @@ public:
   ObTabletSplitMdsArgPrepareDstOp(const bool is_data_table, ObIArray<ObTabletID> &dst_tablet_ids, ObIArray<ObRowkey> &dst_high_bound_vals)
     : is_data_table_(is_data_table), dst_tablet_ids_(dst_tablet_ids), dst_high_bound_vals_(dst_high_bound_vals) {}
   ~ObTabletSplitMdsArgPrepareDstOp() = default;
-  int operator()(const int64_t part_idx, ObBasePartition &part);
+  int operator()(const int64_t part_idx, share::schema::ObBasePartition &part);
 private:
   bool is_data_table_;
   ObIArray<ObTabletID> &dst_tablet_ids_;

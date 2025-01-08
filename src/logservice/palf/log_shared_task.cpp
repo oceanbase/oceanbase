@@ -13,6 +13,7 @@
 #include "log_shared_task.h"
 #include "palf_env_impl.h"                    // PalfEnvImpl
 #include "share/ob_errno.h"                   // errno...
+#include "logservice/palf/palf_handle_impl_guard.h"
 
 namespace oceanbase
 {

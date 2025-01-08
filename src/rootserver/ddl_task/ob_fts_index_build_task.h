@@ -14,6 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_FTS_INDEX_BUILD_TASK_H_
 
 #include "share/ob_domain_index_builder_util.h"
+#include "src/share/ob_ddl_checksum.h"
 
 namespace oceanbase
 {
@@ -86,7 +87,7 @@ public:
   int update_task_message(common::ObISQLClient &proxy);
 
 private:
-  bool is_fts_task() const { return task_type_ == DDL_CREATE_FTS_INDEX; }
+  bool is_fts_task() const { return task_type_ == share::DDL_CREATE_FTS_INDEX; }
   int get_next_status(share::ObDDLTaskStatus &next_status);
   int prepare_aux_table(
       const ObIndexType index_type,

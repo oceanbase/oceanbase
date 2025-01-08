@@ -13067,7 +13067,7 @@ int ObDDLOperator::get_target_auto_inc_sequence_value(const uint64_t tenant_id,
       LOG_WARN("failed to assign sql", K(ret), K(tenant_id), K(table_id), K(column_id));
     } else {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        ObMySQLResult *result = NULL;
+        common::sqlclient::ObMySQLResult *result = NULL;
         uint64_t sequence_table_id = OB_ALL_AUTO_INCREMENT_TID;
         if (OB_FAIL(trans.read(res, exec_tenant_id, sql.ptr()))) {
           LOG_WARN("failed to read data", K(ret));

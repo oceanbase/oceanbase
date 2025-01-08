@@ -27,6 +27,7 @@ namespace oceanbase
 using namespace share;
 using namespace blocksstable;
 using namespace palf;
+using namespace transaction;
 namespace storage
 {
 const SCN ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN = SCN::base_scn();

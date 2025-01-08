@@ -34,7 +34,6 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
-const int64_t CHECK_STATUS_INTERVAL = 10000;
 OB_SERIALIZE_MEMBER(WinFuncInfo::ExtBound,
                     is_preceding_,
                     is_unbounded_,

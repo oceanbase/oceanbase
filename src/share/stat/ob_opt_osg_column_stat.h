@@ -20,7 +20,8 @@
 #include "share/datum/ob_datum.h"
 #include "share/datum/ob_datum_funcs.h"
 #include "share/rc/ob_tenant_base.h"
-
+#include "common/ob_version_def.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase {
 namespace common {

@@ -38,6 +38,7 @@
 #include "share/backup/ob_backup_server_mgr.h"
 #include "rootserver/backup/ob_backup_table_list_mgr.h"
 #include "rootserver/backup/ob_backup_param_operator.h"
+#include "share/backup/ob_archive_persist_helper.h"
 
 using namespace oceanbase;
 using namespace omt;

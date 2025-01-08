@@ -948,7 +948,7 @@ int ObTenantCloneTableOperator::insert_clone_job_history(const ObCloneJob &job)
     LOG_WARN("assign select_sql failed", KR(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(proxy_->read(res, gen_meta_tenant_id(job.get_tenant_id()), select_sql.ptr()))) {
         LOG_WARN("failed to execute select_sql", KR(ret), K(select_sql), K(job));
       } else if (NULL == (result = res.get_result())) {
@@ -1072,7 +1072,7 @@ int ObTenantCloneTableOperator::get_job_failed_message(
         LOG_WARN("assign sql failed", KR(ret), K(job_id));
       } else {
         SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-          ObMySQLResult *result = NULL;
+          common::sqlclient::ObMySQLResult *result = NULL;
           if (OB_FAIL(proxy_->read(res, gen_meta_tenant_id(tenant_id_), sql.ptr()))) {
             LOG_WARN("failed to execute sql", KR(ret), K(gen_meta_tenant_id(tenant_id_)), K(sql));
           } else if (NULL == (result = res.get_result())) {
@@ -1149,7 +1149,7 @@ int ObTenantCloneTableOperator::read_jobs_(
     LOG_WARN("invalid argument", KR(ret), K(sql), KP(proxy_));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(proxy_->read(res, gen_meta_tenant_id(tenant_id_), sql.ptr()))) {
         LOG_WARN("failed to execute sql", KR(ret), K(gen_meta_tenant_id(tenant_id_)), K(sql));
       } else if (NULL == (result = res.get_result())) {
@@ -1231,7 +1231,7 @@ int ObTenantCloneTableOperator::build_insert_dml_(
   return ret;
 }
 
-int ObTenantCloneTableOperator::fill_job_from_result_(const ObMySQLResult *result,
+int ObTenantCloneTableOperator::fill_job_from_result_(const common::sqlclient::ObMySQLResult *result,
                                                       ObCloneJob &job)
 {
   int ret = OB_SUCCESS;

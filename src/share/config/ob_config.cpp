@@ -17,6 +17,8 @@
 #include "common/ob_smart_var.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_task_define.h"
+#include "lib/lock/ob_drw_lock.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::share;
 namespace oceanbase

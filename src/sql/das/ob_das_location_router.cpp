@@ -24,6 +24,7 @@
 #include "storage/tx/wrs/ob_black_list.h"
 #include "storage/tx/ob_trans_service.h"
 #include "lib/rc/context.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

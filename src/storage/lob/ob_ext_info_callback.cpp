@@ -16,6 +16,7 @@
 #include "lib/utility/ob_fast_convert.h"
 #include "storage/memtable/ob_memtable_mutator.h"
 #include "storage/blocksstable/ob_row_writer.h"
+#include "storage/lob/ob_lob_manager.h"
 
 namespace oceanbase
 {

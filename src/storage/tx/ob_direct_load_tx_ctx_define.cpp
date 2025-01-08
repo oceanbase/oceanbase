@@ -11,6 +11,7 @@
  */
 
 #include "storage/tx/ob_direct_load_tx_ctx_define.h"
+#include "share/rc/ob_tenant_base.h"
 
 #define USING_LOG_PREFIX STORAGE
 

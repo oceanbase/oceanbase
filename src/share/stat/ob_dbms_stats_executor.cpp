@@ -28,6 +28,7 @@
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "observer/ob_inner_sql_connection.h"
 #include "src/observer/ob_server.h"
+#include "share/stat/ob_opt_stat_monitor_manager.h"
 #include "lib/random/ob_random.h"
 namespace oceanbase {
 using namespace pl;

@@ -18,6 +18,8 @@
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/access/ob_index_sstable_estimator.h"
+#include "storage/memtable/mvcc/ob_mvcc_iterator.h"
+#include "storage/memtable/mvcc/ob_multi_version_iterator.h"
 
 namespace oceanbase
 {

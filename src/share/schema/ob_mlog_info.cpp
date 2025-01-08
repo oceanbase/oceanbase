@@ -354,7 +354,7 @@ int ObMLogInfo::fetch_mlog_info(ObISQLClient &sql_client, uint64_t tenant_id, ui
   }
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
-    ObMySQLResult *result = nullptr;
+    common::sqlclient::ObMySQLResult *result = nullptr;
     ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE tenant_id = 0 AND mlog_id = %ld",
                                OB_ALL_MLOG_TNAME, mlog_id))) {
@@ -405,7 +405,7 @@ int ObMLogInfo::batch_fetch_mlog_ids(ObISQLClient &sql_client, uint64_t tenant_i
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
-    ObMySQLResult *result = nullptr;
+    common::sqlclient::ObMySQLResult *result = nullptr;
     ObSqlString sql;
     uint64_t mlog_id = OB_INVALID_ID;
     if (OB_FAIL(sql.assign_fmt("SELECT mlog_id FROM %s WHERE tenant_id = 0", OB_ALL_MLOG_TNAME))) {

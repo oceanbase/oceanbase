@@ -17,6 +17,7 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "share/scn.h"
 #include "lib/container/ob_array_serialization.h"
+#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {

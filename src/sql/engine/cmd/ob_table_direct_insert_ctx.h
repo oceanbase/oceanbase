@@ -14,9 +14,18 @@
 
 #include "lib/container/ob_iarray.h"
 #include "lib/compress/ob_compress_util.h"
+#include "src/storage/direct_load/ob_direct_load_struct.h"
 
 namespace oceanbase
 {
+namespace share
+{
+namespace schema
+{
+class ObSchemaGetterGuard;
+class ObTableSchema;
+}
+}
 namespace observer
 {
 class ObTableLoadExecCtx;

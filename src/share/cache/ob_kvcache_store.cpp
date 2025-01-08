@@ -15,6 +15,7 @@
 #include "ob_kvcache_store.h"
 #include "lib/trace/ob_trace_event.h"
 #include "lib/stat/ob_diagnose_info.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {

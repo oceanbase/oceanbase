@@ -16,6 +16,8 @@
 #include "lib/hash/ob_hashset.h"
 #include "storage/direct_load/ob_direct_load_batch_row_buffer.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
+#include "observer/table_load/ob_table_load_pre_sort_writer.h"
+#include "src/share/table/ob_table_load_row_array.h"
 
 namespace oceanbase
 {

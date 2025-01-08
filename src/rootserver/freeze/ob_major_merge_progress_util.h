@@ -13,6 +13,7 @@
 #include "share/ob_delegate.h"
 #include "share/ob_ls_id.h"
 #include "share/ob_balance_define.h"
+#include "share/tablet/ob_tablet_info.h"
 namespace oceanbase
 {
 namespace share

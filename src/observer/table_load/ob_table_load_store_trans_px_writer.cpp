@@ -20,6 +20,7 @@
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
+#include "storage/direct_load/ob_direct_load_i_table.h"
 
 namespace oceanbase
 {

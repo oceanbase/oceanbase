@@ -39,6 +39,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/blocksstable/index_block/ob_sstable_meta_info.h"
 #include "storage/ob_storage_schema_util.h"
+#include "storage/compaction/ob_schedule_dag_func.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::share::schema;

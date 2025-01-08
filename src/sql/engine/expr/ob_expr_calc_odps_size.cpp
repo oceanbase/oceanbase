@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/table/ob_odps_table_row_iter.h"
 #include "sql/engine/expr/ob_expr_calc_odps_size.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

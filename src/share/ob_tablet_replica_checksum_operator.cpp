@@ -1466,7 +1466,7 @@ int ObTabletReplicaChecksumOperator::get_min_compaction_scn(
     } else {
       ObSqlString sql;
       SMART_VAR(ObISQLClient::ReadResult, res) {
-        ObMySQLResult *result = NULL;
+        sqlclient::ObMySQLResult *result = NULL;
         if (OB_FAIL(sql.assign_fmt("SELECT MIN(compaction_scn) as value FROM %s WHERE tenant_id ="
                                    " '%ld' ", OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id))) {
           LOG_WARN("failed to append fmt", K(ret), K(tenant_id));

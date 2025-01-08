@@ -11,6 +11,7 @@
 #define OB_SHARE_STORAGE_I_PRE_WARMER_H_
 #include "/usr/include/stdint.h"
 #include "deps/oblib/src/lib/utility/ob_print_utils.h"
+#include "share/schema/ob_table_param.h"
 namespace oceanbase
 {
 namespace storage

@@ -523,7 +523,7 @@ public:
    * @retval OB_INVALID_ARGUMENT 无效参数/ user_info 为 NULL
    * @retval OB_ERR_NO_PRIVILEGE 传入用户没有权限
    */
-  static int check_dbms_sched_job_priv(const ObUserInfo *user_info,
+  static int check_dbms_sched_job_priv(const share::schema::ObUserInfo *user_info,
                                        const ObDBMSSchedJobInfo &job_info);
   /**
    * @brief  计算 job 保存的时间表达式得到下一次执行的时间
@@ -534,7 +534,7 @@ public:
    * @retval OB_INVALID_ARGUMENT 无效参数
    */
   static int calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &job_info, int64_t &next_run_time);
-  static int reserve_user_with_minimun_id(ObIArray<const ObUserInfo *> &user_infos); //TO DO 连雨 delete
+  static int reserve_user_with_minimun_id(ObIArray<const share::schema::ObUserInfo *> &user_infos); //TO DO 连雨 delete
 };
 }
 }

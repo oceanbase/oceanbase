@@ -9,9 +9,10 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
 #include "ob_empty_shell_object_checker.h"
+#include "storage/ls/ob_ls.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
+#include "share/ob_io_device_helper.h"
 
 namespace oceanbase
 {

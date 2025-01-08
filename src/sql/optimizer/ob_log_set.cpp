@@ -18,6 +18,7 @@
 #include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "sql/optimizer/ob_log_distinct.h"
 
 using namespace oceanbase;
 using namespace sql;

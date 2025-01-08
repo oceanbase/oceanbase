@@ -14,6 +14,7 @@
 #include "observer/ob_server_struct.h"
 #include "share/transfer/ob_transfer_task_operator.h"
 #include "share/compaction/ob_schedule_batch_size_mgr.h"
+#include "src/share/ob_tablet_replica_checksum_operator.h"
 
 namespace oceanbase
 {

@@ -101,7 +101,7 @@ int ObMViewRefreshStatsParams::read_stats_params(ObISQLClient &sql_client, uint6
   int ret = OB_SUCCESS;
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
-    ObMySQLResult *result = nullptr;
+    common::sqlclient::ObMySQLResult *result = nullptr;
     if (OB_FAIL(sql_client.read(res, exec_tenant_id, sql.ptr()))) {
       LOG_WARN("execute sql failed", KR(ret), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {

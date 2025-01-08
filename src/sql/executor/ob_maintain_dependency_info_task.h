@@ -18,9 +18,14 @@
 #include "lib/hash/ob_hashset.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_struct.h"
+#include "src/share/schema/ob_dependency_info.h"
+
 namespace oceanbase
 {
-
+namespace share
+{
+struct ObGlobalContext;
+}
 namespace sql
 {
 class ObMaintainObjDepInfoTask : public share::ObAsyncTask
@@ -69,7 +74,7 @@ public:
 
 private:
   uint64_t tenant_id_;
-  const observer::ObGlobalContext &gctx_;
+  const share::ObGlobalContext &gctx_;
   obrpc::ObCommonRpcProxy &rs_rpc_proxy_;
   DepObjKeyItemList insert_dep_objs_;
   DepObjKeyItemList update_dep_objs_;

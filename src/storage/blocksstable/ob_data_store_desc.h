@@ -14,10 +14,12 @@
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/blocksstable/ob_sstable_macro_block_header.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/compaction/ob_compaction_memory_context.h"
 #include "common/ob_tablet_id.h"
 #include "common/ob_store_format.h"
 #include "share/ob_ls_id.h"
 #include "share/scn.h"
+
 namespace oceanbase
 {
 namespace storage {

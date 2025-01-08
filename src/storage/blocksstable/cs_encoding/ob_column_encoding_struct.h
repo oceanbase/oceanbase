@@ -19,6 +19,7 @@
 #include "common/ob_store_format.h"
 #include "storage/blocksstable/encoding/ob_encoding_util.h"
 #include "storage/blocksstable/ob_imicro_block_writer.h"
+#include "storage/blocksstable/ob_micro_block_header.h"
 #include "ob_stream_encoding_struct.h"
 
 
@@ -26,6 +27,7 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+class ObMicroBufferWriter;
 struct ObCSColumnHeader
 {
   static const uint8_t OB_COLUMN_HEADER_V1 = 0;

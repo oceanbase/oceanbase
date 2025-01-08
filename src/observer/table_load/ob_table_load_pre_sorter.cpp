@@ -25,6 +25,7 @@
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_table_compactor.h"
 #include "observer/table_load/ob_table_load_merger.h"
+#include "src/observer/table_load/ob_table_load_store_table_ctx.h"
 namespace oceanbase
 {
 namespace observer

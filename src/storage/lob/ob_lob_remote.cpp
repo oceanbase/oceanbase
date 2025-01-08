@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_remote.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {

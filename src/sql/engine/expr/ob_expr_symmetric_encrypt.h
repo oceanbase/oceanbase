@@ -30,7 +30,7 @@ public:
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int eval_encrypt(const ObExpr &expr,
                           ObEvalCtx &ctx,
-                          const ObCipherOpMode op_mode,
+                          const share::ObCipherOpMode op_mode,
                           const ObString &func_name,
                           ObDatum &res);
 };
@@ -47,7 +47,7 @@ public:
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int eval_decrypt(const ObExpr &expr,
                           ObEvalCtx &ctx,
-                          const ObCipherOpMode op_mode,
+                          const share::ObCipherOpMode op_mode,
                           const ObString &func_name,
                           ObDatum &res);
 };

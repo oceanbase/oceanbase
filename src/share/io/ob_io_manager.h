@@ -16,6 +16,9 @@
 #include "common/storage/ob_io_device.h"
 #include "share/io/io_schedule/ob_io_schedule_v2.h"
 #include "share/io/ob_io_struct.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/io/ob_ss_io_request.h"
+#endif
 
 namespace oceanbase
 {

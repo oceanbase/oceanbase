@@ -26,6 +26,8 @@
 #include "storage/tablelock/ob_lock_utils.h" //ObInnerTableLockUtil
 #include "storage/tablelock/ob_lock_inner_connection_util.h" // for ObInnerConnectionLockUtil
 #include "observer/ob_inner_sql_connection.h"
+#include "src/share/restore/ob_tenant_clone_table_operator.h"
+#include "src/rootserver/restore/ob_tenant_clone_util.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::share;

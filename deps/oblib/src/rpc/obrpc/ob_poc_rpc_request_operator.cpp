@@ -12,6 +12,7 @@
 
 #include "rpc/obrpc/ob_poc_rpc_request_operator.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
+#include "rpc/obmysql/ob_mysql_request_utils.h"
 
 using namespace oceanbase::rpc;
 namespace oceanbase

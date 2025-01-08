@@ -135,7 +135,7 @@ int MdsDumpKVStorageAdapter::convert_to_mds_row(
       MDS_LOG(WARN, "unexpected pos with serialize size", K(ret), K(pos), K(meta_info_size));
     } else {
       // DmlFlag: can use MdsNodeStatus to set correct dmlflag in future. @xuwang.txw
-      row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+      row.row_flag_.set_flag(blocksstable::ObDmlFlag::DF_INSERT);
       row.trans_id_.reset(); // commited row not set
       row.snapshot_version_ = meta_info_.trans_version_.get_val_for_gts();
 

@@ -20,6 +20,7 @@
 #include "log_net_service.h"                           // LogNetService
 #include "log_meta.h"                                  // LogMeta
 #include "log_define.h"
+#include "log_shared_queue_thread.h"
 
 namespace oceanbase
 {

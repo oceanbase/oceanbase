@@ -22,6 +22,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/coro/co_var.h"
 #include "common/ob_common_utility.h"
+#include "lib/utility/utility.h"
 
 namespace oceanbase
 {

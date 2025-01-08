@@ -14,6 +14,7 @@
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
 #include "lib/mysqlclient/ob_server_connection_pool.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
+#include "lib/mysqlclient/ob_dblink_error_trans.h"
 
 namespace oceanbase
 {

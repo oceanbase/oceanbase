@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_mv_rewrite_prepare.h"
+#include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/rewrite/ob_transform_pre_process.h"
 
 namespace oceanbase
 {

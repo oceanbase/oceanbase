@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/allocator/ob_mod_define.h"
+#include "lib/alloc/memory_dump.h"
 
 namespace oceanbase
 {
@@ -119,6 +120,22 @@ char *alloc_failed_msg()
     }
   }
   return msg;
+}
+
+void print_alloc_failed_msg()
+{
+  if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+#ifdef FATAL_ERROR_HANG
+    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+      ObMemoryDump::get_instance().generate_mod_stat_task();
+      sleep(1);
+    }
+#endif
+    const char *msg = alloc_failed_msg();
+    LOG_DBA_WARN_V2(OB_LIB_ALLOCATE_MEMORY_FAIL, OB_ALLOCATE_MEMORY_FAILED, "[OOPS]: alloc failed reason is that ", msg);
+    // 49 is the user defined signal to dump memory
+    raise(49);
+  }
 }
 
 } // end of namespace lib

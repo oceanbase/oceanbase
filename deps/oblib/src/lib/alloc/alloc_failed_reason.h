@@ -70,6 +70,7 @@ public:
 char *alloc_failed_msg();
 
 AllocFailedCtx &g_alloc_failed_ctx();
+void print_alloc_failed_msg();
 
 } // end of namespace lib
 } // end of namespace oceanbase

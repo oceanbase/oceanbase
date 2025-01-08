@@ -20,6 +20,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace sql
 {
 

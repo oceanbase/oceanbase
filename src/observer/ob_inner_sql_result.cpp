@@ -15,7 +15,6 @@
 #include "ob_inner_sql_result.h"
 
 #include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/hash/ob_hashmap.h"
 #include "lib/rc/context.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "share/rc/ob_tenant_base.h"

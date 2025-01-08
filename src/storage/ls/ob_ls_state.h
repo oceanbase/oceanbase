@@ -12,6 +12,10 @@
 
 #ifndef OCEABASE_STORAGE_LS_STATE_
 #define OCEABASE_STORAGE_LS_STATE_
+
+#include <cstdint>
+#include"lib/utility/ob_print_utils.h"
+
 namespace oceanbase
 {
 namespace share

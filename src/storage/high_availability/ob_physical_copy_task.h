@@ -38,6 +38,7 @@ namespace storage
 {
 
 class ObSSTableCopyFinishTask;
+class ObStorageHAMacroBlockWriter;
 class ObPhysicalCopyTask : public share::ObITask
 {
 public:

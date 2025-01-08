@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
+#include <cstdint>
 #include "ob_table_object.h"
 #include "lib/utility/ob_unify_serialize.h"
 #include "common/object/ob_obj_funcs.h"
@@ -971,7 +972,7 @@ int ObTableSerialUtil::deserialize(const char *buf, const int64_t data_len, int6
     const int64_t presrv_obj_cnt = rowkey.get_obj_cnt();
     if (NULL == obj_ptr) {
       if (OB_ISNULL(obj_ptr = static_cast<ObObj *>
-          (this_worker().get_sql_arena_allocator().alloc(sizeof(ObObj) * obj_cnt)))) {
+          (lib::this_worker().get_sql_arena_allocator().alloc(sizeof(ObObj) * obj_cnt)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for decode ObRowKey", K(ret), K(obj_cnt), K(sizeof(ObObj)));
       }

@@ -19,6 +19,7 @@
 #include "share/ob_cluster_role.h"              // ObClusterRole
 #include "share/ob_rpc_struct.h"
 #include "share/ob_server_status.h"
+#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {

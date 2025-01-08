@@ -15,6 +15,8 @@
 #include "sql/das/iter/ob_das_func_data_iter.h"
 #include "sql/das/iter/ob_das_iter_define.h"
 #include "sql/das/ob_das_scan_op.h"
+#include "sql/engine/ob_exec_context.h"
+#include "sql/das/iter/ob_das_text_retrieval_iter.h"
 
 using namespace oceanbase::common;
 

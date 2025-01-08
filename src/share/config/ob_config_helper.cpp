@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SHARE
 
 #include "share/config/ob_config_helper.h"
 #include "share/config/ob_config.h"

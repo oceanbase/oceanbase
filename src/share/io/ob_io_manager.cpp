@@ -23,6 +23,7 @@
 #include "observer/ob_server.h"
 #include "src/share/io/io_schedule/ob_io_schedule_v2.h"
 #include "share/ob_io_device_helper.h"
+#include "lib/restore/ob_object_device.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/io/ob_ss_io_request.h"
 #endif

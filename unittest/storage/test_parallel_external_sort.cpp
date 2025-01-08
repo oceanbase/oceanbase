@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 #define private public
+#define protected public
 #include "storage/ob_parallel_external_sort.h"
 #undef private
 #include <algorithm>

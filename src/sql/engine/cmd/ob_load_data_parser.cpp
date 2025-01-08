@@ -19,6 +19,8 @@
 #include "lib/string/ob_hex_utils_base.h"
 #include "deps/oblib/src/lib/list/ob_dlist.h"
 #include "share/schema/ob_column_schema.h"
+#include "src/share/ob_encryption_util.h"
+#include "src/sql/engine/ob_exec_context.h"
 #ifdef OB_BUILD_CPP_ODPS
 #include "share/ob_encryption_util.h"
 #endif
@@ -128,7 +130,7 @@ int ObODPSGeneralFormat::decrypt_str(common::ObString &src, common::ObString &ds
                             encrypted_password_not_hex,
                             common::OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH))) {
       LOG_WARN("failed to hex to cstr", K(src.length()), K(ret));
-    } else if (OB_FAIL(ObEncryptionUtil::decrypt_sys_data(tenant_id,
+    } else if (OB_FAIL(share::ObEncryptionUtil::decrypt_sys_data(tenant_id,
                                                           encrypted_password_not_hex,
 
                                                           src.length() / 2,

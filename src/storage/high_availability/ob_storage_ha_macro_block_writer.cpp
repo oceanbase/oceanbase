@@ -14,6 +14,7 @@
 #include "ob_storage_ha_macro_block_writer.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {

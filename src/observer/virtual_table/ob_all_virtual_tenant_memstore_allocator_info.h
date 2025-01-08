@@ -15,6 +15,7 @@
 
 #include "share/ob_virtual_table_iterator.h"
 #include "share/ob_table_range.h"
+#include "src/storage/memtable/ob_memtable.h"
 
 namespace oceanbase
 {

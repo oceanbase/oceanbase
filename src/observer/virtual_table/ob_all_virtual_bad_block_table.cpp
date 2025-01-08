@@ -13,6 +13,7 @@
 #include "ob_all_virtual_bad_block_table.h"
 
 #include "storage/blocksstable/ob_block_manager.h"
+#include "src/share/ob_server_struct.h"
 
 namespace oceanbase
 {

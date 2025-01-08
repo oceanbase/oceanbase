@@ -18,7 +18,6 @@
 #include "common/rowkey/ob_rowkey_info.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "sql/engine/ob_operator.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/das/ob_das_location_router.h"

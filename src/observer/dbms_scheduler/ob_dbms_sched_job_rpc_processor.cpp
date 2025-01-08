@@ -23,6 +23,7 @@
 using namespace oceanbase::common;
 using namespace oceanbase::dbms_scheduler;
 using namespace oceanbase::share::schema;
+using namespace oceanbase::sql;
 
 namespace oceanbase
 {
@@ -76,7 +77,7 @@ int ObRpcStopDBMSSchedJobP::process()
 {
   int ret = OB_SUCCESS;
   const ObDBMSSchedStopJobArg &arg = arg_;
-  sql::ObSQLSessionInfo *session = NULL;
+  ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(GCTX.session_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_mgr_ is null", K(ret));

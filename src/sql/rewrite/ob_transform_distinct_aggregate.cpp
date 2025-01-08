@@ -15,6 +15,7 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/rewrite/ob_expand_aggregate_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

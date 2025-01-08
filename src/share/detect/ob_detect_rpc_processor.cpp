@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SHARE
 
 #include "share/detect/ob_detect_rpc_processor.h"
 #include "share/detect/ob_detect_manager.h"

@@ -25,6 +25,7 @@
 #include "src/storage/ddl/ob_tablet_split_task.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_split_mds_helper.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -39,6 +40,7 @@ using namespace omt;
 using namespace name;
 using namespace transaction;
 using namespace blocksstable;
+using namespace compaction;
 
 namespace storage
 {

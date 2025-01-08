@@ -13,12 +13,17 @@
 #ifndef OCEANBASE_STORAGE_OB_LOB_ACCESS_PARAM_H_
 #define OCEANBASE_STORAGE_OB_LOB_ACCESS_PARAM_H_
 
+#include "storage/tx/ob_trans_define_v4.h"
 
 namespace oceanbase
 {
 
 namespace share {
 class ObTabletCacheInterval;
+}
+
+namespace blocksstable {
+class ObDatumRow;
 }
 
 namespace storage

@@ -14,6 +14,7 @@
 #define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_INFORMATION_SESSION_STATUS_TABLE_
 
 #include "share/ob_virtual_table_scanner_iterator.h"
+#include "src/share/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -47,7 +48,7 @@ public:
   {
     cur_session_ = session;
   }
-  inline void set_global_ctx(const ObGlobalContext *global_ctx)
+  inline void set_global_ctx(const share::ObGlobalContext *global_ctx)
   {
     global_ctx_ = global_ctx;
   }
@@ -56,7 +57,7 @@ private:
   int fetch_all_session_status(AllStatus &all_status);
 private:
   sql::ObSQLSessionInfo *cur_session_;
-  const observer::ObGlobalContext *global_ctx_;
+  const share::ObGlobalContext *global_ctx_;
   static const char *const variables_name[];
 };
 } // namespace observer

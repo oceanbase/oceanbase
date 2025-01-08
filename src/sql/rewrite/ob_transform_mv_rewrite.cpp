@@ -20,6 +20,7 @@
 #include "sql/resolver/expr/ob_raw_expr_wrap_enum_set.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "share/schema/ob_table_schema.h"
+#include "src/sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {

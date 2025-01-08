@@ -15,6 +15,7 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/join/ob_partition_store.h"
 #include "sql/engine/join/ob_join_filter_store_row.h"
+#include "src/sql/engine/ob_sql_mem_mgr_processor.h"
 
 namespace oceanbase
 {

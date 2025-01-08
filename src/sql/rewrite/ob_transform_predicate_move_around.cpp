@@ -18,6 +18,8 @@
 #include "sql/rewrite/ob_predicate_deduce.h"
 #include "share/schema/ob_table_schema.h"
 #include "common/ob_smart_call.h"
+#include "sql/resolver/expr/ob_shared_expr_resolver.h"
+
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 

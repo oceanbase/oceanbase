@@ -196,7 +196,7 @@ public:
     const ObStorageColumnGroupSchema *cg_schema,
     const bool is_main_table) const;
 
-  OB_INLINE void collect_tnode_dml_stat(const ObTransNodeDMLStat tnode_stat);
+  void collect_tnode_dml_stat(const ObTransNodeDMLStat tnode_stat);
   void add_sstable_merge_info(ObSSTableMergeHistory &merge_history,
                               const share::ObDagId &dag_id,
                               const int64_t hash,

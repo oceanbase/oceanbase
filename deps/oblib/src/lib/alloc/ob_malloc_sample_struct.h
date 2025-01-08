@@ -179,6 +179,7 @@ inline bool ObMallocSampleKey::operator==(const ObMallocSampleKey &other) const
   return ret;
 }
 
+bool malloc_sample_allowed(const int64_t size, const ObMemAttr &attr);
 } // end of namespace lib
 } // end of namespace oceanbase
 

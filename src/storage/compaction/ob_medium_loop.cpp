@@ -14,6 +14,7 @@
 #include "storage/compaction/ob_server_compaction_event_history.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {

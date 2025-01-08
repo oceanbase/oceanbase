@@ -19,7 +19,7 @@ namespace oceanbase
 {
 namespace storage
 {
-
+struct ObDMLRunningCtx;
 struct ObLobDataInsertTask
 {
 

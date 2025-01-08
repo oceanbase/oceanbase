@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_expr_res_type_map.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "src/sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

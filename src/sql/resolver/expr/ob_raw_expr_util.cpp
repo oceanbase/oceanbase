@@ -4362,30 +4362,6 @@ int ObRawExprUtils::implict_cast_sql_udt_to_pl_udt(ObRawExprFactory *expr_factor
   return ret;
 }
 
-template<typename RawExprType>
-int ObRawExprUtils::create_attr_expr(ObRawExprFactory *expr_factory,
-                                    const ObSQLSessionInfo *session,
-                                    ObItemType expr_type,
-                                    ArrayAttr attr_type,
-                                    RawExprType* &attr_expr)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(expr_factory->create_raw_expr(expr_type, attr_expr))) {
-    LOG_WARN("create raw expr failed", K(ret));
-  } else if (OB_ISNULL(attr_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("attr expr is null");
-  } else if (OB_FAIL(attr_expr->add_flag(IS_ATTR_EXPR))) {
-    LOG_WARN("attr expr add flag failed");
-  } else if (attr_type == ArrayAttr::ATTR_LENGTH && FALSE_IT(attr_expr->set_data_type(ObUInt32Type))) {
-  } else if ((attr_type == ArrayAttr::ATTR_NULL_BITMAP || attr_type == ArrayAttr::ATTR_OFFSETS ||attr_type == ArrayAttr::ATTR_DATA) &&
-             FALSE_IT(attr_expr->set_data_type(ObVarcharType))) {
-  } else if (OB_FAIL(attr_expr->formalize(session))) {
-    LOG_WARN("failed to formalize expr", K(ret));
-  }
-  return ret;
-}
-
 int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
                                      ObRawExpr *src_expr,
                                      const ObExprResType &dst_type,

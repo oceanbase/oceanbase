@@ -15,6 +15,7 @@
 
 #include <gtest/gtest.h>
 #define private public
+#define protected public
 #include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 #include "storage/blocksstable/ob_macro_block.h"
 #include "mtlenv/mock_tenant_module_env.h"

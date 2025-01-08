@@ -22,10 +22,14 @@
 #endif
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "observer/omt/ob_tenant_config_mgr.h" // ObTenantConfigGuard
+#include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
 using namespace common;
+using namespace common::sqlclient;
+using namespace share::schema;
 namespace share
 {
 

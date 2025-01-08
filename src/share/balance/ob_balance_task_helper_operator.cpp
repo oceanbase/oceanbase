@@ -19,6 +19,7 @@
 #include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTrans
 #include "share/inner_table/ob_inner_table_schema.h"//ALL_LS_BALANCE_TASK_HELPER_TNAME
 #include "share/ob_dml_sql_splicer.h"//ObDMLSqlSplicer
+#include "share/ob_debug_sync.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

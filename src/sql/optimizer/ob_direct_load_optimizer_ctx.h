@@ -18,7 +18,8 @@ namespace oceanbase
 {
 namespace sql
 {
-
+class ObInsertStmt;
+class ObOptimizerContext;
 struct ObDefaultLoadMode
 {
 #define OB_DEFAULT_LOAD_MODE_DEF(DEF)      \

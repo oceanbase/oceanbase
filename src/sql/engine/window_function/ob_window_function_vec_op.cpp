@@ -18,6 +18,7 @@
 #include "share/aggregate/processor.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/datahub/components/ob_dh_winbuf.h"
+#include "src/sql/engine/window_function/ob_window_function_op.h"
 
 #define SWAP_STORES(left, right)                                                                   \
   do {                                                                                             \

@@ -18,6 +18,7 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "common/ob_clock_generator.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "lib/allocator/ob_malloc.h"
 
 namespace oceanbase
 {

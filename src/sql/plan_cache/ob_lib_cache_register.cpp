@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SQL_PC
 
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_lib_cache_node_factory.h"
@@ -19,8 +20,6 @@
 #include "pl/ob_pl_package.h"
 #include "observer/table/ob_table_cache.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
-
-#define USING_LOG_PREFIX SQL_PC
 
 using namespace oceanbase::common;
 namespace oceanbase

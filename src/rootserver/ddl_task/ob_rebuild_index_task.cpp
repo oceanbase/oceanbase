@@ -20,6 +20,7 @@
 #include "lib/timezone/ob_timezone_info.h"                     // for  ObTimeZoneInfoWrap
 #include "observer/omt/ob_tenant_timezone_mgr.h"               // for OTTZ_MGR
 #include "share/vector_index/ob_vector_index_util.h"
+#include "src/storage/ddl/ob_ddl_lock.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;

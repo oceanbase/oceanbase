@@ -21,7 +21,7 @@ namespace oceanbase
 namespace common
 {
 
-inline int64_t calc_slot_num(int64_t cpu_count)
+int64_t calc_slot_num(int64_t cpu_count)
 {
   constexpr int64_t DEFAULT_MAX_SLOT_NUM = 64;
   constexpr int64_t DEFAULT_MIN_SLOT_NUM = 4;

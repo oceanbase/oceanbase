@@ -15,6 +15,7 @@
 #include "share/vector/ob_uniform_base.h"
 #include "share/vector/ob_discrete_base.h"
 #include "share/vector/ob_continuous_base.h"
+#include "src/share/ob_define.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

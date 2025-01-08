@@ -14,7 +14,7 @@
 
 #include "lib/container/ob_bitmap.h"
 #include "storage/column_store/ob_column_store_util.h"
-
+#include "src/sql/engine/basic/ob_pushdown_filter.h"
 namespace oceanbase
 {
 using namespace common;
@@ -176,9 +176,9 @@ public:
         (filter_constant_type_.is_uncertain() && bitmap_.is_all_false());
   }
 
-  OB_INLINE int bit_and(const ObCGBitmap &right);
+  int bit_and(const ObCGBitmap &right);
 
-  OB_INLINE int bit_or(const ObCGBitmap &right);
+  int bit_or(const ObCGBitmap &right);
 
   OB_INLINE int bit_not()
   {

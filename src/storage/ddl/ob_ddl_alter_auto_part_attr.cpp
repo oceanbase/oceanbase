@@ -15,7 +15,9 @@
 #include "share/schema/ob_table_schema.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "src/share/ob_ddl_common.h"
+#include "storage/ddl/ob_ddl_lock.h"
 
+using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 

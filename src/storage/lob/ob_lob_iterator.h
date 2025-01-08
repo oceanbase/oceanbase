@@ -13,12 +13,16 @@
 #ifndef OCEANBASE_STORAGE_OB_LOB_ITERATOR_H_
 #define OCEANBASE_STORAGE_OB_LOB_ITERATOR_H_
 
+#include "lib/string/ob_string.h"
+#include "lib/charset/ob_charset.h"
+#include "storage/lob/ob_lob_access_param.h"
+#include "storage/lob/ob_lob_meta.h"
+#include "storage/lob/ob_lob_meta_manager.h"
+
 namespace oceanbase
 {
 namespace storage
 {
-
-class ObLobMetaManager;
 
 class ObLobQueryIter
 {

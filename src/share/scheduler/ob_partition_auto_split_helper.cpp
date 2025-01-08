@@ -27,6 +27,7 @@
 #include "rootserver/ob_root_service.h"
 #include "storage/ob_storage_rpc.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {
@@ -1275,7 +1276,7 @@ int ObAutoSplitArgBuilder::print_identifier(
     LOG_WARN("failed to alloc", KR(ret));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ObString(quote)))) {
     LOG_WARN("failed to print quote", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::print_identifier(buf, buf_len, pos, CS_TYPE_UTF8MB4_GENERAL_CI, name, is_oracle_mode))) {
+  } else if (OB_FAIL(sql::ObSQLUtils::print_identifier(buf, buf_len, pos, CS_TYPE_UTF8MB4_GENERAL_CI, name, is_oracle_mode))) {
     LOG_WARN("print partition name failed", K(ret), K(name), K(is_oracle_mode));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ObString(quote)))) {
     LOG_WARN("failed to print quote", K(ret));

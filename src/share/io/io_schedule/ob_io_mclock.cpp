@@ -16,6 +16,7 @@
 #include "share/io/ob_io_manager.h"
 #include "share/io/ob_io_calibration.h"
 #include "lib/time/ob_time_utility.h"
+#include "lib/restore/ob_object_device.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

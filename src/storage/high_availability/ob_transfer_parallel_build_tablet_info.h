@@ -23,6 +23,7 @@
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "share/scn.h"
 #include "ob_storage_ha_struct.h"
+#include "storage/high_availability/ob_transfer_struct.h"
 
 
 namespace oceanbase

@@ -11,6 +11,7 @@
  */
 #define USING_LOG_PREFIX STORAGE
 #include "storage/lob/ob_lob_manager.h"
+#include "storage/lob/ob_lob_locator_struct.h"
 
 namespace oceanbase
 {

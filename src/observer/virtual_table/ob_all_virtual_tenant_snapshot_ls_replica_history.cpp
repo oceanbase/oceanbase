@@ -12,6 +12,7 @@
 
 #include "observer/virtual_table/ob_all_virtual_tenant_snapshot_ls_replica_history.h"
 #include "lib/string/ob_hex_utils_base.h"
+#include "src/observer/ob_inner_sql_result.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

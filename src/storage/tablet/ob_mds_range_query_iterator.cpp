@@ -19,8 +19,7 @@ namespace oceanbase
 namespace storage
 {
 
-template<typename K, typename T>
-int ObMdsRangeQueryIterator<K, T>::get_mds_table(const ObTabletHandle &tablet_handle, mds::MdsTableHandle &mds_table)
+int ob_get_mds_table(const ObTabletHandle &tablet_handle, mds::MdsTableHandle &mds_table)
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
@@ -41,9 +40,7 @@ int ObMdsRangeQueryIterator<K, T>::get_mds_table(const ObTabletHandle &tablet_ha
   return ret;
 }
 
-
-template<typename K, typename T>
-int ObMdsRangeQueryIterator<K, T>::check_mds_data_complete(const ObTabletHandle &tablet_handle, bool &is_data_complete)
+int ob_gcheck_mds_data_complete(const ObTabletHandle &tablet_handle, bool &is_data_complete)
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;

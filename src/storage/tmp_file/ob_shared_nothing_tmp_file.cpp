@@ -19,7 +19,6 @@
 #include "storage/tmp_file/ob_tmp_file_flush_manager.h"
 #include "storage/tmp_file/ob_tmp_file_io_ctx.h"
 #include "storage/blocksstable/ob_block_manager.h"
-#include "lib/hash/ob_hashmap.h"
 #include "lib/random/ob_random.h"
 #include "storage/tmp_file/ob_tmp_file_page_cache_controller.h"
 

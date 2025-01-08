@@ -22,6 +22,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
 {

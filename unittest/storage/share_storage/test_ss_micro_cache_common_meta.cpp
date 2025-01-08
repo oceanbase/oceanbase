@@ -394,7 +394,7 @@ TEST_F(TestSSMicroCacheCommonMeta, super_block)
   // serialize & deserialize
   const int64_t buf_len = 1024;
   char buf[buf_len];
-  MEMSET(buf, buf_len, '\0');
+  MEMSET(buf, '\0', buf_len);
   int64_t pos = 0;
   ASSERT_EQ(OB_SUCCESS, super_block.serialize(buf, buf_len, pos));
   ASSERT_NE(0, pos);

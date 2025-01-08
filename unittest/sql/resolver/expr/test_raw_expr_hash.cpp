@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_OPTIMIZER
+
 
 #include <gtest/gtest.h>
 #include "lib/json/ob_json.h"
@@ -22,7 +22,7 @@
 #define private public
 #include "observer/ob_server.h"
 #undef private
-
+#define USING_LOG_PREFIX SQL_OPTIMIZER
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 namespace test

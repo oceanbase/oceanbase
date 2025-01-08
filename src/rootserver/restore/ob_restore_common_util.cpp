@@ -20,6 +20,7 @@
 #include "src/share/ob_schema_status_proxy.h"
 #include "src/share/ob_rpc_struct.h"
 #include "rootserver/ob_ddl_service.h"
+#include "src/share/ob_rpc_struct.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -237,7 +238,7 @@ int ObRestoreCommonUtil::try_update_tenant_role(common::ObMySQLProxy *sql_proxy,
       LOG_WARN("fail to init all_ls", KR(ret));
     } else if (OB_FAIL(role_transition_service.init(
         tenant_id,
-        ObSwitchTenantArg::OpType::INVALID,
+        obrpc::ObSwitchTenantArg::OpType::INVALID,
         false, /* is_verify */
         sql_proxy,
         GCTX.srv_rpc_proxy_,

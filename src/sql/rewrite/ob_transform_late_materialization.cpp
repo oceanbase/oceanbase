@@ -16,6 +16,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_sort.h"
+#include "sql/optimizer/ob_log_join.h"
 
 namespace oceanbase
 {

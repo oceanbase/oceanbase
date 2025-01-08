@@ -20,9 +20,6 @@ namespace oceanbase
 {
 namespace storage
 {
-
-using namespace blocksstable;
-using namespace share;
 using namespace common;
 
 ObDDLIncLogBasic::ObDDLIncLogBasic()

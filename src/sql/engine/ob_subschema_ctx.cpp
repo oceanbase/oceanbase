@@ -15,6 +15,7 @@
 #include "deps/oblib/src/lib/udt/ob_udt_type.h"
 #include "deps/oblib/src/lib/udt/ob_array_utils.h"
 #include "lib/enumset/ob_enum_set_meta.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

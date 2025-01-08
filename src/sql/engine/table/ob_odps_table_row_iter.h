@@ -20,6 +20,7 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/ob_errno.h"
 #include "lib/hash/ob_hashmap.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
 #include "lib/lock/ob_thread_cond.h"
 
 namespace oceanbase {

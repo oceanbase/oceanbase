@@ -15,6 +15,7 @@
 
 #include "observer/ob_inner_sql_rpc_proxy.h"
 #include "storage/tablelock/ob_table_lock_common.h"
+#include "storage/tablelock/ob_table_lock_rpc_struct.h"
 
 namespace oceanbase
 {

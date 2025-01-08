@@ -12,6 +12,7 @@
 #ifndef OBDEV_SRC_SQL_DAS_OB_VECTOR_INDEX_LOOKUP_OP_H_
 #define OBDEV_SRC_SQL_DAS_OB_VECTOR_INDEX_LOOKUP_OP_H_
 #include "sql/das/ob_domain_index_lookup_op.h"
+#include "sql/das/ob_das_attach_define.h"
 #include "src/share/vector_index/ob_plugin_vector_index_service.h"
 namespace oceanbase
 {

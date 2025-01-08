@@ -17,6 +17,7 @@
 #include "lib/container/ob_iarray.h"
 #include "sql/parser/parse_node.h"
 #include "sql/resolver/ob_stmt_type.h"
+#include "src/share/schema/ob_routine_info.h"
 
 #define DEF_SIMPLE_EXECUTOR(name)                          \
   class name##Executor                                     \
@@ -63,7 +64,7 @@ public:
                       uint64_t tenant_id,
                       uint64_t database_id,
                       ObString &routine_name,
-                      ObRoutineType routine_type,
+                      share::schema::ObRoutineType routine_type,
                       int64_t schema_version);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCompileRoutineInf);

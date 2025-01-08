@@ -27,6 +27,8 @@
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/tablet/ob_tablet_split_mds_helper.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
+#include "observer/ob_server_event_history_table_operator.h"
+#include "storage/access/ob_multiple_scan_merge.h"
 
 namespace oceanbase
 {
@@ -478,11 +480,11 @@ int ObTabletSplitDag::create_first_task()
 
 int64_t ObTabletSplitDag::hash() const
 {
-  int tmp_ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   int64_t hash_val = 0;
   if (OB_UNLIKELY(!is_inited_ || !param_.is_valid())) {
-    tmp_ret = OB_ERR_SYS;
-    LOG_ERROR("invalid argument", K(tmp_ret), K(is_inited_), K(param_));
+    ret = OB_ERR_SYS;
+    LOG_ERROR("invalid argument", K(ret), K(is_inited_), K(param_));
   } else {
     hash_val = param_.tenant_id_ + param_.ls_id_.hash()
              + param_.table_id_ + param_.schema_version_
@@ -493,15 +495,15 @@ int64_t ObTabletSplitDag::hash() const
 
 bool ObTabletSplitDag::operator==(const ObIDag &other) const
 {
-  int tmp_ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   bool is_equal = false;
   if (OB_UNLIKELY(this == &other)) {
     is_equal = true;
   } else if (get_type() == other.get_type()) {
     const ObTabletSplitDag &dag = static_cast<const ObTabletSplitDag &>(other);
     if (OB_UNLIKELY(!param_.is_valid() || !dag.param_.is_valid())) {
-      tmp_ret = OB_ERR_SYS;
-      LOG_ERROR("invalid argument", K(tmp_ret), K(param_), K(dag.param_));
+      ret = OB_ERR_SYS;
+      LOG_WARN("invalid argument", K(ret), K(param_), K(dag.param_));
     } else {
       is_equal = param_.tenant_id_ == dag.param_.tenant_id_
               && param_.ls_id_ == dag.param_.ls_id_
@@ -1668,7 +1670,7 @@ int ObTabletSplitMergeTask::check_and_determine_restore_status(
     LOG_WARN("get tablet handle failed", K(ret), K(dst_tablet_id));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(arg));
+    LOG_WARN("unexpected null", K(ret));
   } else if (OB_FAIL(tablet->get_all_sstables(table_store_iterator))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(ObTabletSplitUtil::get_participants(ObSplitSSTableType::SPLIT_MAJOR, table_store_iterator, false/*is_table_restore*/,

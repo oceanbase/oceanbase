@@ -45,6 +45,8 @@
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "storage/ob_gc_upper_trans_helper.h"
 #include "share/schema/ob_tenant_schema_service.h"
+#include "storage/compaction/ob_schedule_status_cache.h"
+#include "storage/compaction/ob_schedule_tablet_func.h"
 
 namespace oceanbase
 {

@@ -23,11 +23,13 @@
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
+#include "storage/ob_storage_schema_util.h"
+#include "share/schema/ob_tenant_schema_service.h"
 
 using namespace oceanbase;
 using namespace share;
 using namespace storage;
-
+using namespace transaction;
 
 ObTXStartTransferOutInfo::ObTXStartTransferOutInfo()
   : src_ls_id_(),

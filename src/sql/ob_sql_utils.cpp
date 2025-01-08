@@ -55,6 +55,8 @@
 #include "pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#include "share/resource_manager/ob_resource_mapping_rule_manager.h"
+#include "share/resource_manager/ob_resource_manager.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -6000,7 +6002,7 @@ int ObSQLUtils::check_column_with_res_mapping_rule(const ObResolverParams *resol
   const ObSchemaChecker *schema_checker = resolve_ctx->schema_checker_;
   const ParamStore *param_store = resolve_ctx->param_list_;
 
-  share::ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
+  ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
   uint64_t db_id = session_info->get_database_id();
   uint64_t tenant_id = session_info->get_effective_tenant_id();
   const ObObj &value = const_expr->get_value();

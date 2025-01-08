@@ -19,7 +19,7 @@
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_struct.h"
 #include "deps/oblib/src/lib/lock/ob_thread_cond.h"
-
+#include "src/storage/direct_load/ob_direct_load_mem_define.h"
 
 namespace oceanbase
 {

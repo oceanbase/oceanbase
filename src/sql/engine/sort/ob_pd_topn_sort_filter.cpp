@@ -54,7 +54,7 @@ void ObPushDownTopNFilter::destroy()
   topn_filter_ctx_ = nullptr;
 }
 
-inline int ObPushDownTopNFilter::init(const ObSortVecOpContext &ctx,
+int ObPushDownTopNFilter::init(const ObSortVecOpContext &ctx,
                                       lib::MemoryContext &mem_context)
 {
   return init(ctx.is_fetch_with_ties_, ctx.pd_topn_filter_info_, ctx.tenant_id_, ctx.sk_collations_,

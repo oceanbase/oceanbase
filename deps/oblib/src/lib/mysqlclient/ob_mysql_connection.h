@@ -20,6 +20,7 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/net/ob_addr.h"
 #include "lib/mysqlclient/ob_mysql_prepared_statement.h"
+
 namespace oceanbase
 {
 namespace common
@@ -30,6 +31,7 @@ class ObServerConnectionPool;
 class ObMySQLStatement;
 class ObMySQLPreparedStatement;
 class ObMySQLConnectionPool;
+class ObMySQLProcStatement;
 
 class ObMySQLConnection : public ObISQLConnection //, ObIDbLinkConnection
 {

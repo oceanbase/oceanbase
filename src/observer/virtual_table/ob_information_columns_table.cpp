@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SERVER
 
 #include "observer/virtual_table/ob_information_columns_table.h"
 #include "share/schema/ob_schema_getter_guard.h"

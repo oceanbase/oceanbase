@@ -13,7 +13,10 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_retry.h"
-
+#include "share/schema/ob_multi_version_schema_service.h"
+#include "observer/ob_server_struct.h"
+#include "share/interrupt/ob_global_interrupt_call.h"
+#include "storage/lob/ob_lob_location.h"
 
 namespace oceanbase
 {
@@ -46,7 +49,7 @@ int ObLobRetryUtil::check_need_retry(ObLobAccessParam &param, const int error_co
       case  OB_LS_NOT_EXIST: { // check if tenant has been dropped when ls not exist
         int tmp_ret = OB_SUCCESS;
         bool is_dropped = false;
-        schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+        share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
         if (OB_ISNULL(schema_service)) {
           tmp_ret = OB_ERR_UNEXPECTED;
           LOG_WARN("schema_service is nullptr", "tmp_ret", tmp_ret);

@@ -20,6 +20,7 @@
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_refresh_tablet_util.h"
 #endif

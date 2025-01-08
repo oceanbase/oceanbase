@@ -15,8 +15,12 @@
 #include "lib/udt/ob_collection_type.h"
 #include "lib/udt/ob_array_type.h"
 #include "share/object/ob_obj_cast.h"
+#include "deps/oblib/src/lib/json_type/ob_json_tree.h"
 
 namespace oceanbase {
+namespace common {
+class ObJsonNode;
+}
 namespace sql {
 
 enum ARRAY_CAST_TYPE {

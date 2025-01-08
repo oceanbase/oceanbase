@@ -15,6 +15,10 @@
 #include "share/ob_tablet_autoincrement_param.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/blocksstable/ob_storage_datum.h"
+#include "share/vector/ob_fixed_length_vector.h"
+#include "share/vector/ob_continuous_vector.h"
+#include "share/vector/ob_discrete_vector.h"
+#include "share/vector/ob_uniform_vector.h"
 
 namespace oceanbase
 {

@@ -17,6 +17,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "src/storage/blocksstable/ob_object_manager.h"
 #include "src/share/io/ob_io_manager.h"
+#include "observer/ob_server_struct.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"

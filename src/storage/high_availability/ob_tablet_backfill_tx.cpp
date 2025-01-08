@@ -26,6 +26,7 @@
 namespace oceanbase
 {
 using namespace share;
+using namespace compaction;
 namespace storage
 {
 

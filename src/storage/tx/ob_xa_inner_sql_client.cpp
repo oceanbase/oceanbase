@@ -8,6 +8,7 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #include "ob_xa_inner_sql_client.h"
+#include "storage/tx/ob_xa_service.h"
 
 namespace oceanbase
 {
@@ -100,7 +101,7 @@ int ObXAInnerSQLClient::query_xa_coord_for_mysql(const ObXATransID &xid,
                                  bqual_len))) {
       TRANS_LOG(WARN, "fail to convert bqual to hex", K(ret), K(xid));
     } else if (OB_FAIL(sql.assign_fmt(QUERY_MYSQLXA_SQL,
-                                      OB_ALL_TENANT_GLOBAL_TRANSACTION_TNAME,
+                                      share::OB_ALL_TENANT_GLOBAL_TRANSACTION_TNAME,
                                       tenant_id,
                                       (int)gtrid_len, gtrid_str,
                                       (int)bqual_len, bqual_str,
@@ -179,7 +180,7 @@ int ObXAInnerSQLClient::delete_xa_branch_for_mysql(const ObXATransID &xid)
     TRANS_LOG(WARN, "fail to convert bqual to hex", K(ret), K(xid));
   } else {
     if (OB_FAIL(sql.assign_fmt(DELETE_XA_TRANS_SQL,
-                               OB_ALL_TENANT_GLOBAL_TRANSACTION_TNAME,
+                               share::OB_ALL_TENANT_GLOBAL_TRANSACTION_TNAME,
                                tenant_id,
                                (int)gtrid_len, gtrid_str,
                                (int)bqual_len, bqual_str,

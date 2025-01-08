@@ -28,6 +28,7 @@
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include "sql/engine/table/ob_orc_table_row_iter.h"
 #include "sql/engine/table/ob_csv_table_row_iter.h"
+#include "sql/engine/expr/ob_expr_regexp_context.h"
 
 namespace oceanbase
 {

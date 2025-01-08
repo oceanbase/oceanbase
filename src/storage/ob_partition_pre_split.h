@@ -47,7 +47,7 @@ public:
       const int64_t session_id,
       const ObString &database_name,
       const ObString &table_name,
-      common::ObIArray<ObIndexArg *> &index_arg_list);
+      common::ObIArray<obrpc::ObIndexArg *> &index_arg_list);
 
   int do_table_pre_split_if_need(
       const ObString &db_name,

@@ -14,9 +14,10 @@
 #include "storage/memtable/ob_memtable_context.h"
 namespace oceanbase
 {
+using namespace transaction;
 namespace memtable
 {
-int ObMvccAccessCtx::get_write_seq(transaction::ObTxSEQ &seq) const
+int ObMvccAccessCtx::get_write_seq(ObTxSEQ &seq) const
 {
   int ret = OB_SUCCESS;
   // for update uk or pk, set branch part to 0, in orer to let tx-callback fall into single list

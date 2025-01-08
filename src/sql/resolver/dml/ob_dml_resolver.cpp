@@ -65,6 +65,7 @@
 #include "sql/resolver/dml/ob_inlist_resolver.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
