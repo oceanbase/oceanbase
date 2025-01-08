@@ -375,7 +375,7 @@ public:
   {}
   // 析构需要做的两件事：
   // 1. reset事务描述符，避免session析构时，回滚事务
-  // 2. 将session归还到队列，归还失败直接释放
+  // 2. 将session归还到队列，归还失败直接释放（destroy()会将owner_node_设置为null,需要提前记录owner_node）
   ~ObTableApiSessGuard()
   {
     if (OB_NOT_NULL(sess_node_val_)) {
@@ -384,10 +384,11 @@ public:
       sess_node_val_->reset_tx_desc();
       if (OB_FAIL(sess_node_val_->push_back_to_queue())) {
         COMMON_LOG(WARN, "fail to push back session to queue", K(ret));
+        ObTableApiSessNode *owner_node = sess_node_val_->owner_node_;
         sess_node_val_->destroy();
-        if (OB_NOT_NULL(sess_node_val_->owner_node_)) {
-          sess_node_val_->owner_node_->free_sess_val(sess_node_val_);
-          sess_node_val_->owner_node_->dec_ref_cnt();
+        if (OB_NOT_NULL(owner_node)) {
+          owner_node->free_sess_val(sess_node_val_);
+          owner_node->dec_ref_cnt();
         }
       }
       sess_node_val_ = nullptr;

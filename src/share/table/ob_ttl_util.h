@@ -386,6 +386,7 @@ public:
   const static uint64_t TTL_TENNAT_TASK_TABLE_ID = -1;
   const static uint64_t TTL_ROWKEY_TASK_TABLET_ID = -2;
   const static uint64_t TTL_ROWKEY_TASK_TABLE_ID = -2;
+  const static uint64_t TTL_THREAD_MAX_SCORE = 100;
 private:
   static int check_is_htable_ttl_(const ObTableSchema &table_schema, bool &is_ttl_table);
 private:

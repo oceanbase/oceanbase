@@ -14,6 +14,7 @@
 #include "ob_table_session_pool.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/omt/ob_tenant.h"
+#include "share/table/ob_ttl_util.h" // for ObTTLUtil::TTL_THREAD_MAX_SCORE
 
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -393,7 +394,7 @@ int ObTableApiSessPoolMgr::ObTableApiSessSysVarUpdateTask::run_update_sys_var_ta
   if (OB_ISNULL(sess_pool_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sess_pool_mgr_ is null", K(ret));
-  } else if (sess_pool_mgr_->update_sys_vars(true/*only_update_dynamic_vars*/)) {
+  } else if (OB_FAIL(sess_pool_mgr_->update_sys_vars(true/*only_update_dynamic_vars*/))) {
     LOG_WARN("fail to update sys var", K(ret));
   }
 
@@ -781,8 +782,8 @@ int ObTableApiSessNodeVal::push_back_to_queue()
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(owner_node_) && OB_FAIL(owner_node_->push_back_sess_to_queue(this))) {
-    LOG_WARN("fail to push back session to queue",
-        K(ret), K(owner_node_->sess_queue_.capacity()), K(owner_node_->sess_queue_.get_curr_total()));
+    LOG_WARN("fail to push back session to queue", K(ret), K(owner_node_->sess_queue_.capacity()),
+      K(owner_node_->sess_queue_.get_curr_total()), K(owner_node_->sess_ref_cnt_));
   }
   return ret;
 }
@@ -838,14 +839,14 @@ int ObTableApiSessNode::init()
         } else if (OB_FAIL(ob_write_string(mem_ctx_->get_arena_allocator(), db_info->get_database_name(), db_name_))) {
           LOG_WARN("fail to deep copy database name", K(ret));
         } else {
-          int64_t max_sess_num = 0;
+          int64_t max_sess_num = 0; // async query processor need 2 session and TTL task need TTL_THREAD_MAX_SCORE at most
           ObMemAttr attr(tenant_id, "TbSessQueue");
           ObTenantBase *tenant_base = MTL_CTX();
           ObTenant *tenant = static_cast<ObTenant *>(tenant_base);
           if (OB_ISNULL(tenant_base)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get tenant is null", K(ret));
-          } else if (FALSE_IT(max_sess_num = tenant->max_worker_cnt() * 2)) { // TTL task need session as well
+          } else if (FALSE_IT(max_sess_num = tenant->max_worker_cnt() * 2 + ObTTLUtil::TTL_THREAD_MAX_SCORE)) {
           } else if (OB_FAIL(sess_queue_.init(max_sess_num, &queue_allocator_, attr))) {
             LOG_WARN("fail to init queues", K(ret), K(max_sess_num));
           } else {
