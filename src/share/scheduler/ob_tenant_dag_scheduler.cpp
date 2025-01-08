@@ -153,7 +153,10 @@ int ObINodeWithChild::add_parent_node(ObINodeWithChild &parent)
 int ObINodeWithChild::add_child_without_lock(ObINodeWithChild &child)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(child.add_parent_node(*this))) {
+  if (&child == this) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "failed to add self as child", K(ret), KP(this));
+  } else if (OB_FAIL(child.add_parent_node(*this))) {
     COMMON_LOG(WARN, "failed to add parent to child", K(ret), K(child), K(this));
   } else if (OB_FAIL(children_.push_back(&child))) {
     COMMON_LOG(WARN, "failed to add child", K(ret), K(child));

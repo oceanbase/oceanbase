@@ -318,7 +318,6 @@ ObTenantTabletScheduler::ObTenantTabletScheduler()
    fast_freeze_checker_(),
    minor_ls_tablet_iter_(false/*is_major*/),
    gc_sst_tablet_iter_(false/*is_major*/),
-   error_tablet_cnt_(0),
    prohibit_medium_map_(),
    timer_task_mgr_(),
    batch_size_mgr_(),
@@ -699,7 +698,7 @@ int ObTenantTabletScheduler::schedule_merge(const int64_t broadcast_version)
     update_frozen_version_and_merge_progress(broadcast_version);
     LOG_INFO("schedule merge major version", K(broadcast_version));
 
-    clear_error_tablet_cnt();
+    MTL(ObTenantMediumChecker*)->clear_error_tablet_cnt();
 
     medium_loop_.start_merge(broadcast_version); // set all statistics
   }

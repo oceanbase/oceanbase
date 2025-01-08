@@ -156,13 +156,6 @@ public:
   void stop();
   void wait() { timer_task_mgr_.wait(); }
   int reload_tenant_config();
-  int64_t get_error_tablet_cnt() { return ATOMIC_LOAD(&error_tablet_cnt_); }
-  void clear_error_tablet_cnt() { ATOMIC_STORE(&error_tablet_cnt_, 0); }
-  void update_error_tablet_cnt(const int64_t delta_cnt)
-  {
-    // called when check tablet checksum error
-    (void)ATOMIC_AAF(&error_tablet_cnt_, delta_cnt);
-  }
   OB_INLINE bool schedule_ignore_error(const int ret)
   {
     return OB_ITER_END == ret
@@ -287,7 +280,6 @@ private:
   ObFastFreezeChecker fast_freeze_checker_;
   ObCompactionScheduleIterator minor_ls_tablet_iter_;
   ObCompactionScheduleIterator gc_sst_tablet_iter_;
-  int64_t error_tablet_cnt_; // for diagnose
   ObProhibitScheduleMediumMap prohibit_medium_map_;
   ObTenantTabletSchedulerTaskMgr timer_task_mgr_;
   ObScheduleBatchSizeMgr batch_size_mgr_;

@@ -1434,7 +1434,7 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
     }
 
     if (is_medium_checker && affected_rows > 0) {
-      MTL(ObTenantTabletScheduler*)->update_error_tablet_cnt(affected_rows);
+      MTL(ObTenantMediumChecker*)->update_error_tablet_cnt(affected_rows);
     }
   }
   return ret;

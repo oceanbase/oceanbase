@@ -737,7 +737,7 @@ ADD_SUSPECT_INFO(merge_type, diagnose_type, ls_id, UNKNOW_TABLET_ID, info_type, 
     } else if (OB_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(ls_id, tablet_id, diagnose_type))) {     \
       STORAGE_LOG(WARN, "failed to add diagnose tablet", K(ret), K(ls_id), K(tablet_id));         \
     } else {                                                                                      \
-      STORAGE_LOG(INFO, "success to add suspect info", K(ret), K(info), K(info_type),              \
+      STORAGE_LOG(DEBUG, "success to add suspect info", K(ret), K(info), K(info_type),              \
           "info_type_str", OB_SUSPECT_INFO_TYPES[info_type].info_str, K(diagnose_type));                          \
     }                                                                                              \
     return ret;                                                                                \
@@ -777,7 +777,7 @@ ADD_SUSPECT_INFO(merge_type, diagnose_type, ls_id, UNKNOW_TABLET_ID, info_type, 
     } else if (OB_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(ls_id, tablet_id, diagnose_type))) { \
       STORAGE_LOG(WARN, "failed to add diagnose tablet", K(ret), K(ls_id), K(tablet_id));         \
     } else {                                                                                      \
-      STORAGE_LOG(INFO, "success to add suspect info", K(ret), K(info), K(info_type),             \
+      STORAGE_LOG(DEBUG, "success to add suspect info", K(ret), K(info), K(info_type),             \
           "info_type_str", OB_SUSPECT_INFO_TYPES[info_type].info_str, K(diagnose_type));                          \
     }                                                                                              \
     return ret;                                                                                          \

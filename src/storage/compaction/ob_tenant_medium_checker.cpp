@@ -76,6 +76,7 @@ int ObTenantMediumChecker::mtl_init(ObTenantMediumChecker *&tablet_medium_checke
 ObTenantMediumChecker::ObTenantMediumChecker()
   : is_inited_(false),
     last_check_timestamp_(0),
+    error_tablet_cnt_(0),
     tablet_ls_set_(),
     ls_info_map_(),
     lock_(),
@@ -279,6 +280,9 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
         ObServerCompactionEvent::COMPACTION_FINISH_CHECK,
         ObTimeUtility::fast_current_time(),
         K(cost_ts), "batch_check_stat", stat);
+    }
+    if (REACH_THREAD_TIME_INTERVAL(CLEAR_CKM_ERROR_INTERVAL)) {
+      clear_error_tablet_cnt();
     }
   }
   return ret;

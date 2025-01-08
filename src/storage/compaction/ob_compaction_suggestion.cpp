@@ -262,7 +262,7 @@ int64_t ObCompactionDagStatus::get_cost_long_time(const int64_t prio)
 const char *ObCompactionSuggestionMgr::ObCompactionSuggestionReasonStr[] =
 {
   "dag cnt is full",
-  "schedule slower than add",
+  "scheduling cannot keep up with the speed of adding",
   "dag cost long time"
 };
 
