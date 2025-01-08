@@ -321,7 +321,8 @@ all_table_def = dict(
       ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', ''),
       ('micro_index_clustered', 'bool', 'false', 'false'),
       ('mv_mode', 'int', 'false', '0'),
-      ('parser_properties', 'longtext', 'false', '')
+      ('parser_properties', 'longtext', 'false', ''),
+      ('enable_macro_block_bloom_filter', 'bool', 'false', 'false')
     ],
 )
 

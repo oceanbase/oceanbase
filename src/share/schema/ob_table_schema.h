@@ -614,6 +614,7 @@ public:
   virtual inline int64_t get_pctfree() const { return INVAID_RET; }
   virtual inline uint64_t get_master_key_id() const { return OB_INVALID_ID; }
   virtual inline bool is_use_bloomfilter() const { return false; }
+  virtual inline bool get_enable_macro_block_bloom_filter() const { return false; }
   virtual inline bool is_primary_aux_vp_table() const { return false; }
   virtual inline bool is_primary_vp_table() const { return false; }
   virtual inline bool is_aux_vp_table() const { return false; }
@@ -1563,6 +1564,11 @@ public:
   inline int64_t get_constraint_count() const { return cst_cnt_; }
   inline bool get_micro_index_clustered() const { return micro_index_clustered_; }
   inline void set_micro_index_clustered(const bool micro_index_clustered) { micro_index_clustered_ = micro_index_clustered; }
+  inline bool get_enable_macro_block_bloom_filter() const override { return enable_macro_block_bloom_filter_; }
+  inline void set_enable_macro_block_bloom_filter(const bool enable_macro_block_bloom_filter)
+  {
+    enable_macro_block_bloom_filter_ = enable_macro_block_bloom_filter;
+  }
   inline int64_t get_virtual_column_cnt() const { return virtual_column_cnt_; }
   inline const_column_iterator column_begin() const { return column_array_; }
   inline const_column_iterator column_end() const { return NULL == column_array_ ? NULL : &(column_array_[column_cnt_]); }
@@ -2178,6 +2184,7 @@ protected:
   int64_t lob_inrow_threshold_;
   int64_t auto_increment_cache_size_;
   bool micro_index_clustered_;
+  bool enable_macro_block_bloom_filter_;
 
   // column group
   bool is_column_store_supported_;

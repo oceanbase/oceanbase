@@ -2287,6 +2287,7 @@ public:
        KV_ATTRIBUTES,
        LOB_INROW_THRESHOLD,
        INCREMENT_CACHE_SIZE,
+       ENABLE_MACRO_BLOCK_BLOOM_FILTER,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType
@@ -2712,7 +2713,8 @@ public:
     row_store_type_(common::MAX_ROW_STORE),
     store_format_(common::OB_STORE_FORMAT_INVALID),
     progressive_merge_round_(0),
-    storage_format_version_(common::OB_STORAGE_FORMAT_VERSION_INVALID)
+    storage_format_version_(common::OB_STORAGE_FORMAT_VERSION_INVALID),
+    enable_macro_block_bloom_filter_(false)
   {}
   virtual void reset()
   {
@@ -2729,6 +2731,7 @@ public:
     store_format_ = common::OB_STORE_FORMAT_INVALID;
     progressive_merge_round_ = 0;
     storage_format_version_ = common::OB_STORAGE_FORMAT_VERSION_INVALID;
+    enable_macro_block_bloom_filter_ = false;
   }
   bool is_valid() const;
   DECLARE_TO_STRING;
@@ -2746,6 +2749,7 @@ public:
   common::ObStoreFormatType  store_format_;
   int64_t progressive_merge_round_;
   int64_t storage_format_version_;
+  bool enable_macro_block_bloom_filter_;
 };
 
 struct ObIndexOption : public ObTableOption
@@ -4461,7 +4465,12 @@ public:
   bool need_create_empty_major_;
   bool micro_index_clustered_;
   ObTabletID split_src_tablet_id_;
-  TO_STRING_KV(K_(tenant_data_version), K_(need_create_empty_major), K_(micro_index_clustered), K_(split_src_tablet_id));
+  bool enable_macro_block_bloom_filter_;
+  TO_STRING_KV(K_(tenant_data_version),
+               K_(need_create_empty_major),
+               K_(micro_index_clustered),
+               K_(split_src_tablet_id),
+               K_(enable_macro_block_bloom_filter));
 };
 
 struct ObBatchCreateTabletArg

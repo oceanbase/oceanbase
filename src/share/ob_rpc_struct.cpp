@@ -3332,21 +3332,23 @@ DEF_TO_STRING(ObTableOption)
        K_(progressive_merge_num),
        K_(primary_zone),
        K_(row_store_type),
-       K_(store_format));
+       K_(store_format),
+       K_(enable_macro_block_bloom_filter));
   J_OBJ_END();
   return pos;
 }
 
 OB_SERIALIZE_MEMBER(ObTableOption,
-                                 block_size_,
-                                 replica_num_,
-                                 index_status_,
-                                 use_bloom_filter_,
-                                 compress_method_,
-                                 comment_,
-                                 progressive_merge_num_,
-                                 row_store_type_,
-                                 store_format_);
+                    block_size_,
+                    replica_num_,
+                    index_status_,
+                    use_bloom_filter_,
+                    compress_method_,
+                    comment_,
+                    progressive_merge_num_,
+                    row_store_type_,
+                    store_format_,
+                    enable_macro_block_bloom_filter_);
 
 DEF_TO_STRING(ObIndexOption)
 {
@@ -3365,7 +3367,8 @@ DEF_TO_STRING(ObIndexOption)
        K_(parser_properties),
        K_(index_attributes_set),
        K_(row_store_type),
-       K_(store_format));
+       K_(store_format),
+       K_(enable_macro_block_bloom_filter));
   J_OBJ_END();
   return pos;
 }
@@ -10426,6 +10429,7 @@ void ObCreateTabletExtraInfo::reset()
   tenant_data_version_ = 0;
   micro_index_clustered_ = false;
   split_src_tablet_id_.reset();
+  enable_macro_block_bloom_filter_ = false;
 }
 
 int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
@@ -10438,7 +10442,12 @@ int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo, tenant_data_version_, need_create_empty_major_, micro_index_clustered_, split_src_tablet_id_);
+OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo,
+                    tenant_data_version_,
+                    need_create_empty_major_,
+                    micro_index_clustered_,
+                    split_src_tablet_id_,
+                    enable_macro_block_bloom_filter_);
 
 bool ObBatchCreateTabletArg::is_inited() const
 {

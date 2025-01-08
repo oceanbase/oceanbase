@@ -1657,6 +1657,7 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     name_generated_type_(GENERATED_TYPE_UNKNOWN),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
     micro_index_clustered_(false),
+    enable_macro_block_bloom_filter_(false),
     local_session_vars_(allocator),
     index_params_(),
     exec_env_()
@@ -3789,6 +3790,7 @@ void ObTableSchema::reset()
   generated_columns_.reset();
   virtual_column_cnt_ = 0;
   micro_index_clustered_ = false;
+  enable_macro_block_bloom_filter_ = false;
 
   cst_cnt_ = 0;
   cst_array_capacity_ = 0;
@@ -7159,6 +7161,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(index_params_);
   OB_UNIS_ENCODE(micro_index_clustered_);
   OB_UNIS_ENCODE(mv_mode_);
+  OB_UNIS_ENCODE(enable_macro_block_bloom_filter_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7398,6 +7401,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE_AND_FUNC(index_params_, deep_copy_str);
   OB_UNIS_DECODE(micro_index_clustered_);
   OB_UNIS_DECODE(mv_mode_);
+  OB_UNIS_DECODE(enable_macro_block_bloom_filter_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7537,6 +7541,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(index_params_);
   OB_UNIS_ADD_LEN(micro_index_clustered_);
   OB_UNIS_ADD_LEN(mv_mode_);
+  OB_UNIS_ADD_LEN(enable_macro_block_bloom_filter_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
