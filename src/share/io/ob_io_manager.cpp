@@ -244,7 +244,7 @@ int ObTrafficControl::ObSharedDeviceControlV2::update_limit(const obrpc::ObShare
 {
   int ret = OB_SUCCESS;
   limits_[static_cast<int>(limit.type_)] = limit.value_;
-  if (OB_FAIL(tclimit_set_limit(limit_ids_[static_cast<int>(limit.type_)], limits_[static_cast<int>(limit.type_)]))) {
+  if (0 != tclimit_set_limit(limit_ids_[static_cast<int>(limit.type_)], limits_[static_cast<int>(limit.type_)])) {
     LOG_WARN("update limit failed", K(ret), K(limit), K(limit_ids_[static_cast<int>(limit.type_)]));
   }
   return ret;
@@ -508,6 +508,7 @@ int ObTrafficControl::set_limit(const obrpc::ObSharedDeviceResourceArray &limit)
 {
   int ret = OB_SUCCESS;
   inner_calc_();
+  DRWLock::RDLockGuard guard(rw_lock_);
   for (int i = 0; i < limit.array_.count(); ++i) {
     ObSharedDeviceControl *tc = nullptr;
     if (OB_ISNULL(tc = shared_device_map_.get(limit.array_.at(i).key_))) {
@@ -524,10 +525,14 @@ int ObTrafficControl::set_limit_v2(const obrpc::ObSharedDeviceResourceArray &lim
 {
   int ret = OB_SUCCESS;
   inner_calc_();
+  DRWLock::RDLockGuard guard(rw_lock_);
   for (int i = 0; i < limit.array_.count(); ++i) {
     ObSharedDeviceControlV2 *tc = nullptr;
     if (ResourceType::tag == limit.array_.at(i).type_) {
       // Tag is currently unavailable
+    } else if (ResourceType::iops == limit.array_.at(i).type_ || ResourceType::iobw == limit.array_.at(i).type_) {
+    } else if (OB_UNLIKELY(static_cast<int>(ResourceType::ResourceTypeCnt) <= static_cast<int>(limit.array_.at(i).type_))) {
+      LOG_ERROR("unexpected resource type", K(ret), K(limit));
     } else if (OB_FAIL(shared_device_map_v2_.get_refactored(limit.array_.at(i).key_, tc))) {
       LOG_WARN_RET(OB_HASH_NOT_EXIST, "get index from map failed", K(limit.array_.at(i).key_));
     } else if (OB_UNLIKELY(OB_ISNULL(tc))) {
