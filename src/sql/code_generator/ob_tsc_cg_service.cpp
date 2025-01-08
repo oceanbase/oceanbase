@@ -3151,12 +3151,39 @@ int ObTscCgService::filter_out_match_exprs(ObIArray<ObRawExpr*> &exprs) {
     if (OB_ISNULL(exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if (!exprs.at(i)->has_flag(CNT_MATCH_EXPR) && OB_FAIL(temp_exprs.push_back(exprs.at(i)))) {
-      LOG_WARN("failed to push back expr", K(ret));
+    } else if (!exprs.at(i)->has_flag(CNT_MATCH_EXPR)) {
+      if (OB_FAIL(temp_exprs.push_back(exprs.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    } else if (OB_FAIL(flatten_and_filter_match_exprs(exprs.at(i), temp_exprs))) {
+      LOG_WARN("failed to flatten and filter match exprs", K(ret));
     }
   }
   if (OB_SUCC(ret) && OB_FAIL(exprs.assign(temp_exprs))) {
     LOG_WARN("failed to assign exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObTscCgService::flatten_and_filter_match_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &res_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KP(expr));
+  } else if (expr->is_match_against_expr()) {
+    // skip
+  } else if (!expr->has_flag(CNT_MATCH_EXPR)) {
+    if (OB_FAIL(res_exprs.push_back(expr))) {
+      LOG_WARN("failed to append flattened expr", K(ret));
+    }
+  } else {
+    const int64_t param_cnt = expr->get_param_count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
+      if (OB_FAIL(SMART_CALL(flatten_and_filter_match_exprs(expr->get_param_expr(i), res_exprs)))) {
+        LOG_WARN("failed to flatten and filter match exprs", K(ret), K(i), KPC(expr));
+      }
+    }
   }
   return ret;
 }
