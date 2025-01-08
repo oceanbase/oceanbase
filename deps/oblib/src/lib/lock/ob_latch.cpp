@@ -124,7 +124,7 @@ int ObLatchMutex::lock(
         if (record_stat_) {
           ObLatchWaitEventGuard wait_guard(
               ObLatchDesc::wait_event_idx(latch_id),
-              abs_timeout_us / 1000,
+              (abs_timeout_us - ObTimeUtility::current_time()) / 1000,
               reinterpret_cast<uint64_t>(this),
               (uint32_t*)&lock_.val(),
               0,
@@ -807,7 +807,7 @@ OB_INLINE int ObLatch::low_lock(
         waited = true;
         ObLatchWaitEventGuard wait_guard(
           ObLatchDesc::wait_event_idx(latch_id),
-          abs_timeout_us / 1000,
+          (abs_timeout_us - ObTimeUtility::current_time()) / 1000,
           reinterpret_cast<uint64_t>(this),
           (uint32_t*)&lock_,
           0);
