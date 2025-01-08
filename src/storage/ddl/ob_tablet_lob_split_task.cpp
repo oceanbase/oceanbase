@@ -655,26 +655,21 @@ int ObTabletLobBuildMapTask::process()
   } else {
     ObArray<ObRowScan*> iters;
     common::ObArenaAllocator tmp_arena("RowScanIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-
-    if (OB_SUCC(ret)) {
-      ObTabletSplitMdsUserData split_data;
-      const ObStorageSchema *main_storage_schema = nullptr;
-      if (OB_FAIL(ctx_->main_tablet_handle_.get_obj()->get_split_data(split_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S))) {
-        LOG_WARN("fail to get split data", K(ret), K(ctx_->main_tablet_handle_));
-      } else if (OB_FAIL(split_data.get_storage_schema(main_storage_schema))) {
-        LOG_WARN("failed to get storage schema", K(ret));
-      } else if (OB_FAIL(ObTabletLobSplitUtil::generate_col_param(main_storage_schema, rk_cnt_))) {
-        LOG_WARN("fail to generate col param", K(ret), K(task_id_));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
+    ObTabletSplitMdsUserData split_data;
+    const ObStorageSchema *main_storage_schema = nullptr;
+    if (OB_FAIL(ctx_->main_tablet_handle_.get_obj()->get_split_data(split_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S))) {
+      LOG_WARN("fail to get split data", K(ret), K(ctx_->main_tablet_handle_));
+    } else if (OB_FAIL(split_data.get_storage_schema(main_storage_schema))) {
+      LOG_WARN("failed to get storage schema", K(ret));
+    } else if (OB_FAIL(ObTabletLobSplitUtil::generate_col_param(main_storage_schema, rk_cnt_))) {
+      LOG_WARN("fail to generate col param", K(ret), K(task_id_));
     } else if (OB_FAIL(ObTabletLobSplitUtil::open_rowscan_iters(param_->split_sstable_type_,
                                                          tmp_arena,
                                                          param_->source_table_id_,
                                                          ctx_->main_tablet_handle_,
                                                          ctx_->main_table_store_iterator_,
                                                          ctx_->main_table_ranges_.at(task_id_),
+                                                         *main_storage_schema,
                                                          iters))) {
       LOG_WARN("fail to open iters", K(ret));
     } else if (OB_FAIL(build_sorted_map(iters))) {
@@ -1720,6 +1715,7 @@ int ObTabletLobSplitUtil::open_rowscan_iters(const share::ObSplitSSTableType &sp
                                              const ObTabletHandle &tablet_handle,
                                              const ObTableStoreIterator &const_iterator,
                                              const ObDatumRange &query_range,
+                                             const ObStorageSchema &main_table_storage_schema,
                                              ObIArray<ObRowScan*>& iters)
 {
   int ret = OB_SUCCESS;
@@ -1759,7 +1755,7 @@ int ObTabletLobSplitUtil::open_rowscan_iters(const share::ObSplitSSTableType &sp
         ObSSTable *sst = static_cast<ObSSTable*>(table);
         // preprare row scan iter
         if (OB_SUCC(ret)) {
-          ObSplitScanParam scan_param(table_id, *tablet, query_range);
+          ObSplitScanParam scan_param(table_id, *tablet, query_range, main_table_storage_schema);
           ObRowScan *new_scanner = nullptr;
           void* buff = allocator.alloc(sizeof(ObRowScan));
           if (OB_ISNULL(buff)) {
@@ -1798,6 +1794,8 @@ int ObTabletLobSplitUtil::open_uncommitted_scan_iters(ObLobSplitParam *param,
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_iter;
   ObTablet *tablet = nullptr;
+  ObTabletSplitMdsUserData lob_meta_split_data;
+  const ObStorageSchema *lob_meta_storage_schema = nullptr;
   if (OB_ISNULL(param) || OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null param or null ctx", K(ret), K(param), K(ctx));
@@ -1812,6 +1810,10 @@ int ObTabletLobSplitUtil::open_uncommitted_scan_iters(ObLobSplitParam *param,
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
   } else if (OB_FAIL(table_iter.assign(const_table_iter))) {
     LOG_WARN("failed to assign iterator", K(ret));
+  } else if (OB_FAIL(tablet->get_split_data(lob_meta_split_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S))) {
+    LOG_WARN("failed to get split data", K(ret));
+  } else if (OB_FAIL(lob_meta_split_data.get_storage_schema(lob_meta_storage_schema))) {
+    LOG_WARN("failed to get storage schema", K(ret));
   } else {
     ObITable *table = nullptr;
     while (OB_SUCC(ret)) {
@@ -1836,7 +1838,7 @@ int ObTabletLobSplitUtil::open_uncommitted_scan_iters(ObLobSplitParam *param,
         } else if (OB_FAIL(write_sstable_ctx_array.push_back(write_sstable_ctx))) {
           LOG_WARN("push back write sstable ctx failed", K(ret));
         } else {
-          ObSplitScanParam scan_param(table_id, *tablet, query_range);
+          ObSplitScanParam scan_param(table_id, *tablet, query_range, *lob_meta_storage_schema);
           ObUncommittedRowScan *new_scanner = nullptr;
           void *buff = ctx->allocator_.alloc(sizeof(ObUncommittedRowScan));
           if (OB_ISNULL(buff)) {
@@ -1876,6 +1878,8 @@ int ObTabletLobSplitUtil::open_snapshot_scan_iters(ObLobSplitParam *param,
   ObTableStoreIterator table_iter;
   ObTableHandleV2 last_major_table_handle;
   ObTablet *tablet = nullptr;
+  ObTabletSplitMdsUserData lob_meta_split_data;
+  const ObStorageSchema *lob_meta_storage_schema = nullptr;
   if (OB_ISNULL(param) || OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null param or null ctx", K(ret), K(param), K(ctx));
@@ -1888,6 +1892,10 @@ int ObTabletLobSplitUtil::open_snapshot_scan_iters(ObLobSplitParam *param,
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(tablet->get_split_data(lob_meta_split_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S))) {
+    LOG_WARN("failed to get split data", K(ret));
+  } else if (OB_FAIL(lob_meta_split_data.get_storage_schema(lob_meta_storage_schema))) {
+    LOG_WARN("failed to get storage schema", K(ret));
   } else if (OB_FAIL(table_iter.assign(const_table_iter))) {
     LOG_WARN("failed to assign iterator", K(ret));
   } else {
@@ -1936,7 +1944,7 @@ int ObTabletLobSplitUtil::open_snapshot_scan_iters(ObLobSplitParam *param,
     } else if (OB_FAIL(aux_lob_meta_schema.get_store_column_ids(col_descs))) {
       LOG_WARN("failed to get store column ids", K(ret));
     } else {
-      ObSplitScanParam scan_param(table_id, *tablet, query_range);
+      ObSplitScanParam scan_param(table_id, *tablet, query_range, *lob_meta_storage_schema);
       ObSnapshotRowScan *new_scanner = nullptr;
       void *buff = ctx->allocator_.alloc(sizeof(ObSnapshotRowScan));
       if (OB_ISNULL(buff)) {

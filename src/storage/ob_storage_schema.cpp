@@ -665,7 +665,7 @@ int ObStorageSchema::deep_copy_column_array(
   if (OB_UNLIKELY(copy_array_cnt <= 0 || copy_array_cnt > src_schema.column_array_.count())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(copy_array_cnt), K(src_schema.column_array_));
-  } else if (OB_FAIL(column_array_.reserve(src_schema.column_array_.count()))) {
+  } else if (OB_FAIL(column_array_.reserve(copy_array_cnt))) {
     STORAGE_LOG(WARN, "failed to reserve for column array", K(ret), K(src_schema));
   }
   for (int i = 0; OB_SUCC(ret) && i < copy_array_cnt; ++i) {

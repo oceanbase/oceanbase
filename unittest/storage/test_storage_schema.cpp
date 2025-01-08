@@ -326,6 +326,70 @@ TEST_F(TestStorageSchema, test_update_tablet_store_schema)
   ObStorageSchemaUtil::free_storage_schema(allocator_, result_storage_schema);
 }
 
+TEST_F(TestStorageSchema, test_clipped_schema_for_tablet_split)
+{
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema storage_schema1;
+  TestSchemaPrepare::prepare_schema(table_schema);
+  table_schema.set_compress_func_name("compress_func_1");
+  table_schema.add_aux_vp_tid(8989789);
+
+  int64_t stored_column_cnt;
+  int64_t column_id = 100;
+  share::schema::ObColumnSchemaV2 column;
+  char name[OB_MAX_FILE_NAME_LENGTH];
+  memset(name, 0, sizeof(name));
+
+  for (int i = 0; i < 800; ++i) {
+    ObObjType obj_type = ObIntType;
+    column.reset();
+    column.set_table_id(table_schema.table_id_);
+    column.set_column_id(column_id);
+    sprintf(name, "test%020ld", column_id);
+    ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
+    column.set_data_type(obj_type);
+    column.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    column.set_data_length(10);
+    column.set_rowkey_position(0);
+    if (i % 2 == 0) {
+       column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG); // virtual column.
+    }
+    ASSERT_EQ(OB_SUCCESS, table_schema.add_column(column));
+    ++column_id;
+  }
+  table_schema.set_max_used_column_id(column_id);
+  ASSERT_EQ(OB_SUCCESS, table_schema.get_store_column_count(stored_column_cnt));
+  ASSERT_EQ(OB_SUCCESS, storage_schema1.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+
+  const int64_t buf_len = 1024 * 1024;
+  char buf[buf_len] = "\0";
+  const ObTabletID src_tablet_id(200001);
+  for (int i = TestSchemaPrepare::TEST_ROWKEY_COLUMN_CNT; i <= stored_column_cnt; i++) {
+    memset(buf, 0, sizeof(buf));
+    int64_t ser_pos = 0;
+    int64_t deser_pos = 0;
+
+    ObStorageSchema storage_schema2; // clipped storage schema.
+    ObUpdateCSReplicaSchemaParam update_param;
+    ASSERT_EQ(OB_SUCCESS, update_param.init(src_tablet_id,
+          i + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()/*major_column_cnt*/,
+          ObUpdateCSReplicaSchemaParam::UpdateType::TRUNCATE_COLUMN_ARRAY));
+    ASSERT_EQ(OB_SUCCESS, storage_schema2.init(allocator_,
+            storage_schema1/*old_schema*/,
+            false/*skip_column_info*/,
+            nullptr/*column_group_schema*/,
+            false/*generate_cs_replica_cg_array*/,
+            &update_param/*ObUpdateCSReplicaSchemaParam*/));
+    ASSERT_EQ(OB_SUCCESS, storage_schema2.serialize(buf, buf_len, ser_pos));
+    ASSERT_EQ(ser_pos, storage_schema2.get_serialize_size());
+
+    ObStorageSchema des_storage_schema;
+    ASSERT_EQ(OB_SUCCESS, des_storage_schema.deserialize(allocator_, buf, ser_pos, deser_pos));
+    COMMON_LOG(INFO, "test", K(storage_schema2), K(des_storage_schema));
+    ASSERT_EQ(true, judge_storage_schema_equal(storage_schema2, des_storage_schema));
+  }
+}
+
 } // namespace unittest
 } // namespace oceanbase
 

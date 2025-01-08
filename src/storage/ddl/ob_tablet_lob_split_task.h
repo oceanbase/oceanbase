@@ -342,6 +342,7 @@ public:
                                 const ObTabletHandle &tablet_handle,
                                 const ObTableStoreIterator &table_store_iterator,
                                 const ObDatumRange &query_range,
+                                const ObStorageSchema &main_table_storage_schema,
                                 ObIArray<ObRowScan*> &iters);
   static int open_uncommitted_scan_iters(ObLobSplitParam *param,
                                          ObLobSplitContext *ctx,
