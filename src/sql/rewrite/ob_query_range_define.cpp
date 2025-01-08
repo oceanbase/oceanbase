@@ -609,13 +609,14 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
 {
   int ret = OB_SUCCESS;
   ObQueryRangeCtx ctx(exec_ctx);
+  ObRawExprFactory expr_factory(allocator_);
   if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpeced null", K(ret), K(exec_ctx));
   } else if (OB_FAIL(fill_column_metas(range_columns))) {
     LOG_WARN("failed to fill column metas");
   } else if (OB_FAIL(ctx.init(this, range_columns, expr_constraints,
-                              params, exec_ctx->get_expr_factory(),
+                              params, &expr_factory,
                               phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
                               geo_column_id_map))) {
     LOG_WARN("failed to init query range context");
