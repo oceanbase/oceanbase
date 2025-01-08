@@ -58,7 +58,7 @@ int init_grouping_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
 static bool is_rollup_expr(const ObAggrInfo &aggr_info, ObExpr *expr, int64_t seq)
 {
   int ret = false;
-  if ((lib::is_oracle_mode() && has_exist_in_array(aggr_info.hash_rollup_info_->gby_exprs_, expr))
+  if (has_exist_in_array(aggr_info.hash_rollup_info_->gby_exprs_, expr)
       || !has_exist_in_array(aggr_info.hash_rollup_info_->expand_exprs_, expr)) {
     // do nothing
   } else {
