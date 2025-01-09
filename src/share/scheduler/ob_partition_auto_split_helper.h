@@ -216,6 +216,7 @@ private:
                                      const ObTabletID tablet_id,
                                      const share::schema::ObTableSchema *&table_schema,
                                      const share::schema::ObSimpleDatabaseSchema *&db_schema,
+                                     share::schema::ObSchemaGetterGuard &guard,
                                      obrpc::ObAlterTableArg &arg);
   int acquire_table_id_of_tablet_(const uint64_t tenant_id,
                                   const ObTabletID tablet_id,

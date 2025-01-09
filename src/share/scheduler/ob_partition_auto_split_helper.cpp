@@ -1096,6 +1096,7 @@ int ObAutoSplitArgBuilder::build_arg(const uint64_t tenant_id,
   ObSplitSampler sampler;
   ObArray<common::ObNewRange> ranges;
   common::ObArenaAllocator range_allocator;
+  share::schema::ObSchemaGetterGuard guard;
   int64_t ranges_num = 0;
   arg.reset();
 
@@ -1109,7 +1110,7 @@ int ObAutoSplitArgBuilder::build_arg(const uint64_t tenant_id,
                                     (used_disk_space % auto_split_tablet_size == 0 ? 0 : 1)))) {
   } else if (FALSE_IT(ranges_num = MAX_SPLIT_PARTITION_NUM > ranges_num ?
                                    ranges_num : MAX_SPLIT_PARTITION_NUM)) {
-  } else if (OB_FAIL(acquire_schema_info_of_tablet_(tenant_id, tablet_id, table_schema, db_schema, arg))) {
+  } else if (OB_FAIL(acquire_schema_info_of_tablet_(tenant_id, tablet_id, table_schema, db_schema, guard, arg))) {
     LOG_WARN("fail to acquire schema info of tablet", KR(ret), K(tenant_id), K(tablet_id));
   } else if (OB_ISNULL(table_schema) || OB_ISNULL(db_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1146,11 +1147,11 @@ int ObAutoSplitArgBuilder::acquire_schema_info_of_tablet_(const uint64_t tenant_
                                                           const ObTabletID tablet_id,
                                                           const share::schema::ObTableSchema *&table_schema,
                                                           const share::schema::ObSimpleDatabaseSchema *&db_schema,
+                                                          share::schema::ObSchemaGetterGuard &guard,
                                                           obrpc::ObAlterTableArg &arg)
 {
   int ret = OB_SUCCESS;
   share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
-  share::schema::ObSchemaGetterGuard guard;
   uint64_t table_id = OB_INVALID_ID;
   uint64_t db_id = OB_INVALID_ID;
 
