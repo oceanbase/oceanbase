@@ -640,6 +640,7 @@ int ObArrayExprUtils::dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, ObStrin
   if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
     LOG_WARN("failed to get subschema ctx", K(ret));
   } else {
+    // array_data can't be null
     bool is_shadow = true;
     ObLobCommon *lob_comm = (ObLobCommon*)(array_data.ptr());
     if (lob_comm->is_valid()) {
@@ -762,14 +763,13 @@ int ObArrayExprUtils::batch_dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, i
         int64_t idx = selector != NULL ? selector[row_idx] : row_idx;
         ObString raw_data = vec->get_string(idx);
         ObLobLocatorV2 loc(raw_data.ptr(), raw_data.length(), true);
-        bool is_shadow = loc.has_inrow_data(); // outrow lob need copy data to attrs_expr
         uint32_t attr_idx = 0;
         if (vec->is_null(idx)) {
           for (uint32_t i = 0; i < expr.attrs_cnt_; i++) {
             ObIVector *attr_vec = expr.attrs_[i]->get_vector(ctx);
             attr_vec->set_null(idx);
           }
-        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(is_shadow ? &tmp_allocator : allocator,
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(loc.has_inrow_data() ? &tmp_allocator : allocator,
                                                               ObLongTextType,
                                                               CS_TYPE_BINARY,
                                                               true,
