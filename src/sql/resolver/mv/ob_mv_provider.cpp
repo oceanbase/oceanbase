@@ -291,9 +291,9 @@ int ObMVProvider::check_column_type_and_accuracy(const ObColumnSchemaV2 &org_col
     is_match = true;
   } else if (org_column.get_meta_type().get_type() != cur_column.get_meta_type().get_type()) {
     is_match = false;
-  } else if (!ob_is_numeric_type(org_column.get_meta_type().get_type())) {
-    is_match = org_column.get_accuracy() == cur_column.get_accuracy();
-  } else {
+  } else if (ob_is_string_type(org_column.get_meta_type().get_type())) {
+    is_match = org_column.get_accuracy().get_length() >= cur_column.get_accuracy().get_length();
+  } else if (ob_is_numeric_type(org_column.get_meta_type().get_type())) {
     // only check scale for number
     // check scale and length for decimal int
     // not need to check precision here
@@ -302,6 +302,9 @@ int ObMVProvider::check_column_type_and_accuracy(const ObColumnSchemaV2 &org_col
     const ObAccuracy &cur = cur_column.get_accuracy();
     is_match &= (-1 == org.get_scale() || org.get_scale() >= cur.get_scale());
     is_match &= (cur_column.get_meta_type().is_number() || -1 == org.get_length() || org.get_length() >= cur.get_length());
+  } else {
+    // for columns neither string nor numeric, only check the type
+    is_match = true;
   }
   return ret;
 }
