@@ -73,6 +73,8 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
     LOG_WARN("formalize stmt failed", K(ret));
   } else if (OB_FAIL(stmt->adjust_duplicated_table_names(*ctx_->allocator_, is_happened))) {
     LOG_WARN("failed to adjust duplicated table names", K(ret));
+  } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("check status failed", K(ret));
   } else {
     trans_happened |= is_happened;
     OPT_TRACE("adjust duplicated table name", is_happened);
@@ -9743,7 +9745,7 @@ int ObTransformPreProcess::transform_outerjoin_exprs(ObDMLStmt *stmt, bool &is_h
   visitor.set_relation_scope();
   visitor.remove_scope(DmlStmtScope::SCOPE_JOINED_TABLE);
   ObArray<ObRawExpr *> relation_exprs;
-  hash::ObHashSet<uint64_t> expr_set;
+  hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> expr_set;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
@@ -9785,7 +9787,7 @@ int ObTransformPreProcess::transform_outerjoin_exprs(ObDMLStmt *stmt, bool &is_h
 
 int ObTransformPreProcess::remove_shared_expr(ObDMLStmt *stmt,
                                               JoinedTable *joined_table,
-                                              hash::ObHashSet<uint64_t> &expr_set,
+                                              hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                                               bool is_nullside)
 {
   int ret = OB_SUCCESS;
@@ -9834,7 +9836,7 @@ int ObTransformPreProcess::remove_shared_expr(ObDMLStmt *stmt,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < joined_table->join_conditions_.count(); ++i) {
     if (OB_FAIL(ObTransformUtils::append_hashset(joined_table->join_conditions_.at(i),
-                                                 expr_set))) {
+                                                          expr_set))) {
       LOG_WARN("failed to append expr into hashset", K(ret));
     }
   }
@@ -9861,7 +9863,7 @@ int ObTransformPreProcess::remove_shared_expr(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformPreProcess::do_remove_shared_expr(hash::ObHashSet<uint64_t> &expr_set,
+int ObTransformPreProcess::do_remove_shared_expr(hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                                                  ObIArray<ObRawExpr *> &padnull_exprs,
                                                  bool is_nullside,
                                                  ObRawExpr *&expr,

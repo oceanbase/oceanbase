@@ -1819,12 +1819,11 @@ public:
   template <typename T>
   static int remove_dup_expr(ObIArray<T *> &check,
                              ObIArray<T *> &base);
-
   static int append_hashset(ObRawExpr *expr,
-                            hash::ObHashSet<uint64_t> &expr_set);
+                            hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set);
 
   static int find_hashset(ObRawExpr *expr,
-                          hash::ObHashSet<uint64_t> &expr_set,
+                          hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                           ObIArray<ObRawExpr *> &common_exprs);
 
   static int extract_shared_exprs(ObDMLStmt *parent,
