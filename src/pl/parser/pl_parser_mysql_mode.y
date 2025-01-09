@@ -223,7 +223,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
       DATA DEFINER END_KEY EXTEND FOLLOWS FOUND FUNCTION HANDLER INTERFACE INVOKER JSON LANGUAGE
       MESSAGE_TEXT MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES RECORD RETURNS ROW ROWTYPE
       SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME USER TYPE VALUE DATETIME TIMESTAMP TIME DATE YEAR
-      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED ROLE SUBMIT CANCEL JOB
+      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED ROLE SUBMIT CANCEL JOB ROARINGBITMAP
 //-----------------------------non_reserved keyword end---------------------------------------------
 %right END_KEY
 %left ELSE IF ELSEIF
@@ -800,6 +800,7 @@ unreserved_keyword:
   | BIT
   | FIXED
   | SIGNED
+  | ROARINGBITMAP
 ;
 
 /*****************************************************************************
@@ -2318,6 +2319,11 @@ scalar_data_type:
 	{
     malloc_terminal_node($$, parse_ctx->mem_pool_, T_JSON);
     $$->int32_values_[0] = 0;
+  }
+  | ROARINGBITMAP
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_ROARINGBITMAP);
+    $$->int32_values_[0] = 0; /* length */
   }
   | pl_obj_access_ref '%' ROWTYPE
   {

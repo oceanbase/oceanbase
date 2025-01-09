@@ -180,6 +180,7 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"submit", SUBMIT},
   {"job", JOB},
   {"cancel", CANCEL},
+  {"roaringbitmap", ROARINGBITMAP}
 };
 
 const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char *word)
