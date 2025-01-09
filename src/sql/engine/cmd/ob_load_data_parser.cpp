@@ -21,7 +21,7 @@
 #include "share/schema/ob_column_schema.h"
 #include "src/share/ob_encryption_util.h"
 #include "src/sql/engine/ob_exec_context.h"
-#ifdef OB_BUILD_CPP_ODPS
+#if defined (OB_BUILD_CPP_ODPS) || defined (OB_BUILD_JNI_ODPS)
 #include "share/ob_encryption_util.h"
 #endif
 #include "lib/utility/ob_print_utils.h"
@@ -71,13 +71,15 @@ int64_t ObODPSGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len)
   databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(compression_code_)));
   J_COMMA();
   databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[idx++], STR_BOOL(collect_statistics_on_create_));
+  J_COMMA();
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(region_)));
   return pos;
 }
 
 int ObODPSGeneralFormat::encrypt_str(common::ObString &src, common::ObString &dst)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_CPP_ODPS
+#if defined(OB_BUILD_TDE_SECURITY)
   const uint64_t tenant_id = MTL_ID();
   if (src.empty()) {
     //do nothing
@@ -106,6 +108,8 @@ int ObODPSGeneralFormat::encrypt_str(common::ObString &src, common::ObString &ds
       LOG_TRACE("succ to encrypt src", K(ret));
     }
   }
+#else
+  dst = src;
 #endif
   return ret;
 }
@@ -113,7 +117,7 @@ int ObODPSGeneralFormat::encrypt_str(common::ObString &src, common::ObString &ds
 int ObODPSGeneralFormat::decrypt_str(common::ObString &src, common::ObString &dst)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_CPP_ODPS
+#if defined (OB_BUILD_TDE_SECURITY)
   const uint64_t tenant_id = MTL_ID();
   if (src.empty()) {
     // do nothing
@@ -147,6 +151,8 @@ int ObODPSGeneralFormat::decrypt_str(common::ObString &src, common::ObString &ds
       LOG_TRACE("succ to decrypt src", K(ret));
     }
   }
+#else
+  dst = src;
 #endif
   return ret;
 }
@@ -154,7 +160,6 @@ int ObODPSGeneralFormat::decrypt_str(common::ObString &src, common::ObString &ds
 int ObODPSGeneralFormat::encrypt()
 {
   int ret = OB_SUCCESS;
-  #ifdef OB_BUILD_CPP_ODPS
   ObString encrypted_access_id;
   ObString encrypted_access_key;
   ObString encrypted_sts_token;
@@ -169,14 +174,12 @@ int ObODPSGeneralFormat::encrypt()
     access_key_ = encrypted_access_key;
     sts_token_ = encrypted_sts_token;
   }
-  #endif
   return ret;
 }
 
 int ObODPSGeneralFormat::decrypt()
 {
   int ret = OB_SUCCESS;
-  #ifdef OB_BUILD_CPP_ODPS
   ObString decrypted_access_id;
   ObString decrypted_access_key;
   ObString decrypted_sts_token;
@@ -191,7 +194,6 @@ int ObODPSGeneralFormat::decrypt()
     access_key_ = decrypted_access_key;
     sts_token_ = decrypted_sts_token;
   }
-  #endif
   return ret;
 }
 
@@ -239,6 +241,8 @@ int ObODPSGeneralFormat::deep_copy(const ObODPSGeneralFormat &src) {
     LOG_WARN("failed to deep copy", K(ret));
   } else if (OB_FAIL(deep_copy_str(src.compression_code_, compression_code_))) {
     LOG_WARN("failed to deep copy", K(ret));
+  } else if (OB_FAIL(deep_copy_str(src.region_, region_))) {
+    LOG_WARN("failed to deep copy region for odps general format", K(ret));
   } else {
     collect_statistics_on_create_ = src.collect_statistics_on_create_;
   }
@@ -353,6 +357,15 @@ int ObODPSGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &al
       collect_statistics_on_create_ = true;
     } else {
       collect_statistics_on_create_ = false;
+    }
+    node = node->get_next();
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+      && json::JT_STRING == node->value_->get_type()) {
+    ObObj obj;
+    OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+    if (OB_SUCC(ret) && !obj.is_null()) {
+      region_ = obj.get_string();
     }
     node = node->get_next();
   }

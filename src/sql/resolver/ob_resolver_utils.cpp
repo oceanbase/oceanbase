@@ -9793,6 +9793,11 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         }
         break;
       }
+      case T_REGION: {
+        format.odps_format_.region_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid file format option", K(ret), K(node->type_));

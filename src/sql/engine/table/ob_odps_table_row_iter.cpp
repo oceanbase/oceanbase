@@ -1084,7 +1084,6 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
       for (int64_t column_idx = 0; OB_SUCC(ret) && column_idx < target_column_id_list_.count(); ++column_idx) {
         uint32_t target_idx = target_column_id_list_.at(column_idx);
         ObExpr &expr = *file_column_exprs.at(column_idx);
-
         ObObjType type = expr.obj_meta_.get_type();
         ObDatum *datums = expr.locate_batch_datums(ctx);
         if (expr.type_ == T_PSEUDO_PARTITION_LIST_COL) {
@@ -1655,7 +1654,6 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
       }
     }
   }
-
   if (OB_SUCC(ret)) {
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     batch_info_guard.set_batch_idx(0);
@@ -1707,6 +1705,7 @@ int ObODPSTableRowIterator::get_next_row()
       } while (OB_SUCC(ret) && need_retry);
     }
   }
+  // 这里不能隐含假设：返回OB_ITER_END的时候不返回数据
   OZ(calc_exprs_for_rowid(1));
   return ret;
 }
@@ -1814,8 +1813,9 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
     for (int64_t column_idx = 0; OB_SUCC(ret) && column_idx < target_column_id_list_.count(); ++column_idx) {
       uint32_t target_idx = target_column_id_list_.at(column_idx);
       ObExpr &expr = *file_column_exprs.at(column_idx); // do not check null ptr
-      ObDatum &datum = expr.locate_datum_for_write(ctx);
+
       ObObjType type = expr.obj_meta_.get_type();
+      ObDatum &datum = expr.locate_datum_for_write(ctx);
       if (expr.type_ == T_PSEUDO_PARTITION_LIST_COL) {
         int64_t loc_idx = file_column_exprs.at(column_idx)->extra_ - 1;
         if (OB_UNLIKELY(loc_idx < 0 || loc_idx >= state_.part_list_val_.get_count())) {

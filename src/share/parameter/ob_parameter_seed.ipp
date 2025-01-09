@@ -2381,9 +2381,29 @@ DEF_BOOL(_enable_adaptive_auto_dop, OB_CLUSTER_PARAMETER, "False",
 DEF_INT(query_memory_limit_percentage, OB_TENANT_PARAMETER, "50", "[0,100]",
         "the percentage of tenant memory that can be used by a single SQL. The default value is 50. Range: [0,100]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(package_state_sync_max_size, OB_TENANT_PARAMETER, "8192", "[0, 16777216]",
         "the max sync size of single package state that can sync package var value. If over it, package state will not sync package var value. Range: [0, 16777216] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(ob_enable_java_env, OB_CLUSTER_PARAMETER, "False",
+        "Enable or disable java env for external table.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(ob_java_home, OB_CLUSTER_PARAMETER, "",
+                     common::ObConfigJavaParamsChecker,
+                     "specifies the java home path for external table with enabled option: ob_enable_java_env",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(ob_java_opts, OB_CLUSTER_PARAMETER, "",
+                     common::ObConfigJavaParamsChecker,
+                     "specifies the java opts path for external table with enabled option: ob_enable_java_env",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(ob_java_connector_path, OB_CLUSTER_PARAMETER, "",
+                     common::ObConfigJavaParamsChecker,
+                     "specifies the connector path for external table with enabled option: ob_enable_java_env",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_use_odps_jni_connector, OB_CLUSTER_PARAMETER, "True",
+         "Enable or disable jni connector for external odps table",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_parquet_row_group_prebuffer_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
         "the parquet prefetch maximum row group size. Range: [0, +∞)",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

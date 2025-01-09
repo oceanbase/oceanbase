@@ -19,10 +19,18 @@
 #include "share/backup/ob_backup_struct.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+
 #ifdef OB_BUILD_CPP_ODPS
 #include <odps/odps_tunnel.h>
 #include <odps/odps_api.h>
 #endif
+
+#ifdef OB_BUILD_JNI_ODPS
+#include "sql/engine/connector/ob_jni_writer.h"
+#include <arrow/api.h>
+#include "sql/engine/basic/ob_arrow_basic.h"
+#endif
+
 #include <parquet/api/writer.h>
 #include "sql/engine/basic/ob_select_into_basic.h"
 #include "sql/engine/basic/ob_external_file_writer.h"
@@ -145,9 +153,15 @@ public:
       curr_partition_num_(0),
       external_properties_(),
       format_type_(ObExternalFileFormat::FormatType::CSV_FORMAT),
+      is_odps_cpp_table_(false),
+      is_odps_java_table_(false),
 #ifdef OB_BUILD_CPP_ODPS
       upload_(NULL),
       record_writer_(NULL),
+#endif
+#ifdef OB_BUILD_JNI_ODPS
+      uploader_(),
+      arrow_schema_(nullptr),
 #endif
       block_id_(0),
       need_commit_(true),
@@ -241,6 +255,35 @@ private:
                                    const ObObjMeta &obj_meta,
                                    uint32_t col_idx);
 #endif
+#ifdef OB_BUILD_JNI_ODPS
+  int init_odps_jni_tunnel();
+  int into_odps_jni();
+  int into_odps_jni_batch(const ObBatchRows &brs);
+  int odps_jni_commit_upload();
+
+  int create_odps_schema();
+
+  int into_odps_jni_batch_one_col(int64_t col_idx, JniWriter::OdpsType odps_type, arrow::Field &arrow_field,
+      ObDatumMeta &meta, ObObjMeta &obj_meta, ObIVector &expr_vector, arrow::ArrayBuilder *builder,
+      const ObBatchRows &brs, int &act_cnt, ObIAllocator &alloc);
+
+  int set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder,
+                                                JniWriter::OdpsType odps_type,
+                                                const ObDatum &datum,
+                                                const ObDatumMeta &datum_meta,
+                                                const ObObjMeta &obj_meta,
+                                                arrow::Field &arrow_field,
+                                                uint32_t col_idx);
+
+  int set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builder,
+                                                 JniWriter::OdpsType odps_type,
+                                                 const ObDatum &datum,
+                                                 const ObDatumMeta &datum_meta,
+                                                 const ObObjMeta &obj_meta,
+                                                 arrow::Field &arrow_field,
+                                                 uint32_t col_idx);
+#endif
+
   int decimal_or_number_to_int64(const ObDatum &datum, const ObDatumMeta &datum_meta, int64_t &res);
   int decimal_to_string(const ObDatum &datum,
                         const ObDatumMeta &datum_meta,
@@ -374,7 +417,7 @@ private:
                                 int64_t &value);
   bool file_need_split(int64_t file_size);
   int check_oracle_number(ObObjType obj_type, int16_t &precision, int8_t scale);
-
+  static bool day_number_checker(int32_t days);
 private:
   int64_t top_limit_cnt_;
   bool is_first_;
@@ -408,9 +451,15 @@ private:
   int curr_partition_num_;
   ObExternalFileFormat external_properties_;
   ObExternalFileFormat::FormatType format_type_;
+  bool is_odps_cpp_table_;
+  bool is_odps_java_table_;
 #ifdef OB_BUILD_CPP_ODPS
   apsara::odps::sdk::IUploadPtr upload_;
   apsara::odps::sdk::IRecordWriterPtr record_writer_;
+#endif
+#ifdef OB_BUILD_JNI_ODPS
+  ObOdpsJniUploaderMgr::OdpsUploader uploader_;
+  std::shared_ptr<arrow::Schema> arrow_schema_;
 #endif
   uint32_t block_id_;
   bool need_commit_;
@@ -425,6 +474,7 @@ private:
   ObOrcMemPool orc_alloc_;
   std::unique_ptr<orc::Type> orc_schema_;
 };
+
 
 }
 }

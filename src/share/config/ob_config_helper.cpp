@@ -1592,5 +1592,15 @@ bool ObConfigEnableHashRollupChecker::check(const ObConfigItem &t) const
           || 0 == tmp_str.case_compare("disabled"));
   return bret;
 }
+
+bool ObConfigJavaParamsChecker::check(const ObConfigItem &t) const
+{
+  bool bret = false;
+  // Only the ob_enable_java_env is true, then can pass to continue
+  if (GCONF.ob_enable_java_env) {
+    bret = true;
+  }
+  return bret;
+}
 } // end of namepace common
 } // end of namespace oceanbase

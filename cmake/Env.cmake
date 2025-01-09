@@ -51,6 +51,9 @@ ob_define(OB_DISABLE_PIE OFF)
 ob_define(OB_ENABLE_MCMODEL OFF)
 
 ob_define(USE_LTO_CACHE OFF)
+# odps jni
+ob_define(OB_BUILD_JNI_ODPS ON)
+
 
 if(WITH_COVERAGE)
   # -ftest-coverage to generate .gcno file
@@ -143,6 +146,7 @@ if(OB_BUILD_CLOSE_MODULES)
   ob_define(OB_BUILD_DBLINK ON)
   # odps
   ob_define(OB_BUILD_CPP_ODPS ON)
+
   # 仲裁功能
   ob_define(OB_BUILD_ARBITRATION ON)
 
@@ -204,6 +208,10 @@ endif()
 
 if(OB_BUILD_CPP_ODPS)
   add_definitions(-DOB_BUILD_CPP_ODPS)
+endif()
+
+if (OB_BUILD_JNI_ODPS)
+ add_definitions(-DOB_BUILD_JNI_ODPS)
 endif()
 
 # should not use initial-exec for tls-model if building OBCDC.

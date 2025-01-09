@@ -5800,6 +5800,8 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = %s,", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.collect_statistics_on_create_ ? "TRUE" : "FALSE"))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
+      } else if (databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.region_.length(), odps.region_.ptr())) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
       }
     }
     if (OB_SUCC(ret)) {

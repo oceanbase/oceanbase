@@ -8786,6 +8786,10 @@ TYPE COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECT_STATISTICS_ON_CREATE, 1, $3);
 }
+| REGION COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REGION, 1, $3);
+}
 ;
 
 compression_key:

@@ -9,6 +9,8 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#ifndef _OB_LOAD_DATA_PARSER_H_
+#define _OB_LOAD_DATA_PARSER_H_
 
 #include "lib/charset/ob_charset.h"
 #include "common/object/ob_object.h"
@@ -16,8 +18,6 @@
 #include "lib/string/ob_string.h"
 #include "lib/json/ob_json.h"
 
-#ifndef _OB_LOAD_DATA_PARSER_H_
-#define _OB_LOAD_DATA_PARSER_H_
 
 namespace oceanbase
 {
@@ -43,8 +43,11 @@ struct ObODPSGeneralFormat {
     table_(),
     quota_(),
     compression_code_(),
-    collect_statistics_on_create_(false)
-  {}
+    collect_statistics_on_create_(false),
+    region_()
+  {
+  }
+
   int deep_copy_str(const ObString &src,
                     ObString &dest);
   int deep_copy(const ObODPSGeneralFormat &src);
@@ -65,6 +68,7 @@ struct ObODPSGeneralFormat {
     "QUOTA_NAME",
     "COMPRESSION_CODE",
     "COLLECT_STATISTICS_ON_CREATE",
+    "REGION",
   };
   common::ObString access_type_;
   common::ObString access_id_;
@@ -78,10 +82,13 @@ struct ObODPSGeneralFormat {
   common::ObString quota_;
   common::ObString compression_code_;
   bool collect_statistics_on_create_;
+  common::ObString region_;
   common::ObArenaAllocator arena_alloc_;
   int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
-  TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token), K_(endpoint), K_(tunnel_endpoint), K_(project), K_(schema), K_(table), K_(quota), K_(compression_code), K_(collect_statistics_on_create));
+  TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token),
+               K_(endpoint), K_(tunnel_endpoint), K_(project), K_(schema), K_(table), K_(quota),
+               K_(compression_code), K_(collect_statistics_on_create), K_(region));
   OB_UNIS_VERSION(1);
 };
 

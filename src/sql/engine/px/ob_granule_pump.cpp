@@ -687,12 +687,31 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
     } else if (OB_ISNULL(tsc = scan_ops.at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret));
-#ifdef OB_BUILD_CPP_ODPS
-    } else if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(args.external_table_files_.count()))) {
-      LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret), K(args.external_table_files_.count()));
-    } else {
-      LOG_TRACE("succ to init odps table partition downloader", K(ret), K(is_odps_downloader_inited()));
+    }
+    if (OB_SUCC(ret)) {
+      if (!GCONF._use_odps_jni_connector) {
+#if defined(OB_BUILD_CPP_ODPS)
+        if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(args.external_table_files_.count()))) {
+          LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret), K(args.external_table_files_.count()));
+        } else {
+          LOG_TRACE("succ to init odps table partition downloader", K(ret), K(is_odps_downloader_inited()));
+        }
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support odps cpp external table", K(ret));
 #endif
+      } else {
+#if defined(OB_BUILD_JNI_ODPS)
+        if (OB_FAIL(odps_partition_jni_scanner_mgr_.init_map(
+                args.external_table_files_.count()))) {
+          LOG_WARN("init odps_partition_jni_scanner_mgr_ failed", K(ret),
+                   K(args.external_table_files_.count()));
+        }
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support odps jni external table", K(ret));
+#endif
+      }
     }
   }
   return ret;
@@ -742,14 +761,19 @@ int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_random
 void ObGranulePump::destroy()
 {
   gi_task_array_map_.reset();
-#ifdef OB_BUILD_CPP_ODPS
-  int ret = 0;
-  if (is_odps_downloader_inited()) {
-    LOG_TRACE("destroy odps_partition_downloader_mgr_", K(ret), KP(this), KP(&odps_partition_downloader_mgr_));
-    odps_partition_downloader_mgr_.reset();
-  }
-
+  if (!GCONF._use_odps_jni_connector) {
+#if defined (OB_BUILD_CPP_ODPS)
+    int ret = 0;
+    if (is_odps_downloader_inited()) {
+      LOG_TRACE("destroy odps_partition_downloader_mgr_", K(ret), KP(this), KP(&odps_partition_downloader_mgr_));
+      odps_partition_downloader_mgr_.reset();
+    }
 #endif
+  } else {
+#if defined (OB_BUILD_JNI_ODPS)
+    odps_partition_jni_scanner_mgr_.reset();
+#endif
+  }
   pump_args_.reset();
 }
 

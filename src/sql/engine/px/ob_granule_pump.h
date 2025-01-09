@@ -22,6 +22,9 @@
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/engine/px/ob_granule_util.h"
 #include "sql/engine/ob_engine_op_traits.h"
+#include "sql/engine/connector/ob_jni_scanner.h"
+#include "sql/engine/table/ob_odps_jni_table_row_iter.h"
+
 
 namespace oceanbase
 {
@@ -580,6 +583,17 @@ public:
   inline bool is_odps_downloader_inited() {  return odps_partition_downloader_mgr_.is_download_mgr_inited(); }
   ObOdpsPartitionDownloaderMgr &get_odps_mgr() { return odps_partition_downloader_mgr_; }
 #endif
+#ifdef OB_BUILD_JNI_ODPS
+  inline bool is_odps_scanner_mgr_inited() {
+    return odps_partition_jni_scanner_mgr_.is_jni_scanner_mgr_inited();
+  }
+  ObOdpsPartitionJNIScannerMgr &get_odps_jni_scanner_mgr() {
+    return odps_partition_jni_scanner_mgr_;
+  }
+  ObOdpsJniUploaderMgr &get_odps_jni_uploader_mgr() {
+    return odps_jni_uploader_mgr_;
+  }
+#endif
 private:
   int init_external_odps_table_downloader(ObGranulePumpArgs &args);
   int fetch_granule_by_worker_id(const ObGITaskSet *&task_set,
@@ -626,6 +640,10 @@ private:
   GITaskArrayMap gi_task_array_map_;
 #ifdef OB_BUILD_CPP_ODPS
   ObOdpsPartitionDownloaderMgr odps_partition_downloader_mgr_;
+#endif
+#ifdef OB_BUILD_JNI_ODPS
+  ObOdpsPartitionJNIScannerMgr odps_partition_jni_scanner_mgr_;
+  ObOdpsJniUploaderMgr         odps_jni_uploader_mgr_;
 #endif
   ObGranuleSplitterType splitter_type_;
   common::ObArray<ObGranulePumpArgs> pump_args_;
