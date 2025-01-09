@@ -7884,6 +7884,11 @@ def_table_schema(**all_ncomp_dll_v2)
 # 535: __ft_stopword_ik_gbk
 # 536: __ft_quantifier_ik_gbk
 
+# 537: __all_catalog
+# 538: __all_catalog_history
+# 539: __all_catalog_privilege
+# 540: __all_catalog_privilege_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15767,6 +15772,11 @@ def_table_schema(
 
 # 12515: __all_virtual_plugin_info
 
+# 12516: __all_virtual_catalog
+# 12517: __all_virtual_catalog_history
+# 12518: __all_virtual_catalog_privilege
+# 12519: __all_virtual_catalog_privilege_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -16297,6 +16307,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keyword
 # 15491: __all_virtual_standby_log_transport_stat
 # 15492: __all_virtual_wr_sql_plan_aux_key2snapshot
 # 15493: __all_virtual_cs_replica_tablet_stats
+# 15494: __all_catalog
+# 15495: __all_catalog_privilege
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
