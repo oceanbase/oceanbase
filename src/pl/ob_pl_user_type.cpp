@@ -1833,7 +1833,7 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
 int ObRecordType::get_size(ObPLTypeSize type, int64_t &size) const
 {
   int ret = OB_SUCCESS;
-  size += get_data_offset(get_record_member_count());
+  size = get_data_offset(get_record_member_count());
   return ret;
 }
 
@@ -2305,6 +2305,7 @@ int ObRecordType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
 int ObOpaqueType::get_size(ObPLTypeSize type, int64_t &size) const
 {
   int ret = OB_SUCCESS;
+  size = 0;
   if (PL_TYPE_INIT_SIZE == type) {
     ObPLOpaque opaque;
     size += opaque.get_init_size();
@@ -2587,6 +2588,7 @@ int ObCollectionType::get_init_size(int64_t &size) const
 int ObCollectionType::get_size(ObPLTypeSize type, int64_t &size) const
 {
   int ret = OB_SUCCESS;
+  size = 0;
   if (PL_TYPE_ROW_SIZE == type) {
     OZ (get_element_type().get_size(type, size));
   } else if (PL_TYPE_INIT_SIZE == type) {

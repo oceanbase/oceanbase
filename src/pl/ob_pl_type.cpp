@@ -787,7 +787,7 @@ int ObPLDataType::get_size(ObPLTypeSize type, int64_t &size) const
   UNUSED(type);
   int ret = OB_SUCCESS;
 //  if (is_obj_type()) {
-    size += sizeof(ObObj);
+    size = sizeof(ObObj);
 //  } else {
 //    ObArenaAllocator allocator;
 //    OZ (ns.get_size(type, *this, size, &allocator));
