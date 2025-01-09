@@ -459,18 +459,32 @@ void ObIOStatDiff::reset()
 /******************        Function Group Usage      **********************/
 ObIOFuncUsages::ObIOFuncUsages()
 {
-  int FUNC_NUM = static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM);
-  int GROUP_MODE_NUM = static_cast<uint8_t>(ObIOGroupMode::MODECNT);
-  for (int i = 0; i < FUNC_NUM; ++i) {
-    ObIOFuncUsage func_usage;
-    func_usage.reserve(GROUP_MODE_NUM);
-    for (int j = 0; j < GROUP_MODE_NUM; ++j) {
-      func_usage.push_back(ObIOFuncUsageByMode());
-    }
-    func_usages_.push_back(func_usage);
-  }
 }
 
+int ObIOFuncUsages::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int FUNC_NUM = static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM);
+  int GROUP_MODE_NUM = static_cast<uint8_t>(ObIOGroupMode::MODECNT);
+  func_usages_.set_attr(ObMemAttr(tenant_id, "IOFuncUsages"));
+  for (int i = 0; i < FUNC_NUM && OB_SUCC(ret); ++i) {
+    ObIOFuncUsage func_usage;
+    if (OB_FAIL(func_usage.reserve(GROUP_MODE_NUM))) {
+      LOG_WARN("reserve func usage failed", K(ret), K(i));
+    } else {
+      for (int j = 0; j < GROUP_MODE_NUM && OB_SUCC(ret); ++j) {
+        if (OB_FAIL(func_usage.push_back(ObIOFuncUsageByMode()))) {
+          LOG_WARN("func usage push failed", K(ret), K(j));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(func_usages_.push_back(func_usage))) {
+        LOG_WARN("push func usage failed", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
 int ObIOFuncUsages::accumulate(ObIORequest &req) {
   int ret = OB_SUCCESS;
   int64_t io_size = 0;
@@ -516,6 +530,9 @@ int ObIOUsage::init(const uint64_t tenant_id, const int64_t group_num)
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
+  } else if (FALSE_IT(info_.set_attr(ObMemAttr(tenant_id, "IOUsageInfo")))) {
+  } else if (FALSE_IT(failed_req_info_.set_attr(ObMemAttr(tenant_id, "IOUsageInfo")))) {
+  } else if (FALSE_IT(group_throttled_time_us_.set_attr(ObMemAttr(tenant_id, "CPUUSage")))) {
   } else if (OB_FAIL(refresh_group_num(group_num))) {
     LOG_WARN("refresh io usage array failed", K(ret), K(group_num));
   } else if (OB_FAIL(lock_.init(lib::ObMemAttr(tenant_id, "IOUsage")))) {

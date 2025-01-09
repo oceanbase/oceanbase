@@ -1571,6 +1571,8 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
     LOG_WARN("init tenant io memory pool failed", K(ret), K(io_config), K(io_memory_limit_), K(request_count_), K(request_count_));
   } else if (OB_FAIL(io_tracer_.init(tenant_id))) {
     LOG_WARN("init io tracer failed", K(ret));
+  } else if (OB_FAIL(io_func_infos_.init(tenant_id))) {
+    LOG_WARN("init io func infos failed", K(ret), K(tenant_id));
   } else if (OB_FAIL(io_usage_.init(tenant_id, io_config.group_configs_.count() / IO_MODE_CNT))) {
     LOG_WARN("init io usage failed", K(ret), K(io_usage_), K(io_config.group_configs_.count()));
   } else if (OB_FAIL(io_sys_usage_.init(tenant_id, SYS_MODULE_CNT))) { // local and remote

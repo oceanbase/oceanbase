@@ -661,6 +661,7 @@ struct ObIOFuncUsages
 public:
   ObIOFuncUsages();
   ~ObIOFuncUsages() = default;
+  int init(const uint64_t tenant_id);
   int accumulate(ObIORequest &req);
   TO_STRING_KV(K(func_usages_));
   ObIOFuncUsageArr func_usages_;
