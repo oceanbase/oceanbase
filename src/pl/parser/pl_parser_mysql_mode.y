@@ -2837,7 +2837,7 @@ scond_info_item_name:
 submit_job_stmt:
     SUBMIT JOB sql_stmt
     {
-      malloc_terminal_node($$, parse_ctx->mem_pool_, T_OLAP_ASYNC_JOB_SUBMIT);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_OLAP_ASYNC_JOB_SUBMIT, 1, $3);
       const char *stmt_str = parse_ctx->stmt_str_ + @3.first_column;
       int32_t str_len = @3.last_column - @3.first_column + 1;
       $$->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
