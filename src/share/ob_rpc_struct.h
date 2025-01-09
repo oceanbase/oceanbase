@@ -1686,7 +1686,8 @@ public:
                K_(trace_id),
                K_(sql_mode),
                K_(tz_info_wrap),
-               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
+               K_(foreign_key_checks));
   ObStartRedefTableArg():
     orig_tenant_id_(common::OB_INVALID_ID),
     orig_table_id_(common::OB_INVALID_ID),
@@ -1698,7 +1699,8 @@ public:
     trace_id_(),
     sql_mode_(0),
     tz_info_wrap_(),
-    nls_formats_{}
+    nls_formats_{},
+    foreign_key_checks_(true)
   {}
 
   ~ObStartRedefTableArg()
@@ -1716,6 +1718,7 @@ public:
     ddl_type_ = share::DDL_INVALID;
     ddl_stmt_str_.reset();
     sql_mode_ = 0;
+    foreign_key_checks_ = true;
   }
 
   inline void set_tz_info_map(const common::ObTZInfoMap *tz_info_map)
@@ -1749,6 +1752,7 @@ public:
   common::ObTimeZoneInfo tz_info_;
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
+  bool foreign_key_checks_;
 };
 
 struct ObStartRedefTableRes final
@@ -1917,7 +1921,8 @@ public:
                K_(tz_info_wrap),
                "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
                K_(tablet_ids),
-               K_(need_reorder_column_id));
+               K_(need_reorder_column_id),
+               K_(foreign_key_checks));
   ObCreateHiddenTableArg() :
     ObDDLArg(),
     tenant_id_(common::OB_INVALID_ID),
@@ -1931,7 +1936,8 @@ public:
     tz_info_wrap_(),
     nls_formats_{},
     tablet_ids_(),
-    need_reorder_column_id_(false)
+    need_reorder_column_id_(false),
+    foreign_key_checks_(true)
     {}
   ~ObCreateHiddenTableArg()
   {
@@ -1950,6 +1956,7 @@ public:
     sql_mode_ = 0;
     tablet_ids_.reset();
     need_reorder_column_id_ = false;
+    foreign_key_checks_ = true;
   }
   int assign(const ObCreateHiddenTableArg &arg);
   int init(const uint64_t tenant_id, const uint64_t dest_tenant_id, uint64_t exec_tenant_id,
@@ -1958,7 +1965,8 @@ public:
            const ObSQLMode sql_mode, const ObTimeZoneInfo &tz_info,
            const common::ObString &local_nls_date, const common::ObString &local_nls_timestamp,
            const common::ObString &local_nls_timestamp_tz, const ObTimeZoneInfoWrap &tz_info_wrap,
-           const common::ObIArray<common::ObTabletID> &tablet_ids, const bool need_reorder_column_id);
+           const common::ObIArray<common::ObTabletID> &tablet_ids, const bool need_reorder_column_id,
+           const bool foreign_key_checks);
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_table_id() const { return table_id_; }
   int64_t get_consumer_group_id() const { return consumer_group_id_; }
@@ -1974,6 +1982,7 @@ public:
   const common::ObString *get_nls_formats() const { return nls_formats_; }
   const common::ObIArray<common::ObTabletID> &get_tablet_ids() const { return tablet_ids_; }
   bool get_need_reorder_column_id() const { return need_reorder_column_id_; }
+  bool get_foreign_key_checks() const { return foreign_key_checks_; }
 private:
   uint64_t tenant_id_;
   int64_t table_id_;
@@ -1990,6 +1999,7 @@ private:
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
   common::ObSArray<common::ObTabletID> tablet_ids_;
   bool need_reorder_column_id_;
+  bool foreign_key_checks_;
 };
 
 struct ObCreateHiddenTableRes final

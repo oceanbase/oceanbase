@@ -697,7 +697,8 @@ int ObPrepareAlterTableArgParam::init(const int64_t consumer_group_id,
                                       const ObString &target_database_name,
                                       const ObTimeZoneInfo &tz_info,
                                       const ObTimeZoneInfoWrap &tz_info_wrap,
-                                      const ObString *nls_formats)
+                                      const ObString *nls_formats,
+                                      const bool foreign_key_checks)
 {
   int ret = OB_SUCCESS;
   if (FALSE_IT(consumer_group_id_ = consumer_group_id)) {
@@ -720,6 +721,8 @@ int ObPrepareAlterTableArgParam::init(const int64_t consumer_group_id,
     LOG_WARN("failed to deep_copy tz info wrap", K(ret), "tz_info_wrap", tz_info_wrap);
   } else if (OB_FAIL(set_nls_formats(nls_formats))) {
     LOG_WARN("failed to set nls formats", K(ret));
+  } else {
+    foreign_key_checks_ = foreign_key_checks;
   }
   return ret;
 }
@@ -1378,6 +1381,7 @@ int ObDDLScheduler::prepare_alter_table_arg(const ObPrepareAlterTableArgParam &p
     LOG_WARN("failed to add member SESSION_ID for alter table schema", K(ret), K(alter_table_arg));
   } else if (OB_FAIL(alter_table_schema->alter_option_bitset_.add_member(obrpc::ObAlterTableArg::TABLE_NAME))) {
     LOG_WARN("failed to add member TABLE_NAME for alter table schema", K(ret), K(alter_table_arg));
+  } else if (FALSE_IT(alter_table_arg.foreign_key_checks_ = param.foreign_key_checks_)) {
   } else {
     LOG_DEBUG("alter table arg preparation complete!", K(ret), K(*alter_table_schema));
   }
@@ -1698,7 +1702,8 @@ int ObDDLScheduler::start_redef_table(const obrpc::ObStartRedefTableArg &arg, ob
                              orig_database_schema->get_database_name_str(),
                              arg.tz_info_,
                              arg.tz_info_wrap_,
-                             arg.nls_formats_))) {
+                             arg.nls_formats_,
+                             arg.foreign_key_checks_))) {
         LOG_WARN("param init failed", K(ret));
       } else if (OB_FAIL(prepare_alter_table_arg(param, target_table_schema, alter_table_arg))) {
         LOG_WARN("failed to build alter table arg", K(ret));

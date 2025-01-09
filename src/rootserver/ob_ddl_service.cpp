@@ -16180,7 +16180,8 @@ int ObDDLService::create_hidden_table(
                                    orig_database_schema->get_database_name_str(),
                                    create_hidden_table_arg.get_tz_info(),
                                    create_hidden_table_arg.get_tz_info_wrap(),
-                                   create_hidden_table_arg.get_nls_formats()))) {
+                                   create_hidden_table_arg.get_nls_formats(),
+                                   create_hidden_table_arg.get_foreign_key_checks()))) {
               LOG_WARN("param init failed", K(ret));
             } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &new_table_schema, alter_table_arg))) {
               LOG_WARN("prepare alter table arg fail", K(ret));
@@ -16398,7 +16399,8 @@ int ObDDLService::mview_complete_refresh_in_trans(
                                           database_schema->get_database_name_str(),
                                           arg.tz_info_,
                                           arg.tz_info_wrap_,
-                                          arg.nls_formats_))) {
+                                          arg.nls_formats_,
+                                          true/*foreign key checks*/))) {
             LOG_WARN("prepare param init failed", KR(ret));
           } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(prepare_param, &new_container_table_schema, alter_table_arg))) {
             LOG_WARN("prepare alter table arg fail", KR(ret));
@@ -16533,7 +16535,7 @@ int ObDDLService::recover_restore_table_ddl_task(
           ObPrepareAlterTableArgParam param;
           if (OB_FAIL(param.init(arg.consumer_group_id_, session_id, 0/*sql_mode, unused*/, arg.ddl_stmt_str_,
               src_table_schema->get_table_name_str(), src_db_schema->get_database_name_str(),
-              dst_db_schema->get_database_name_str(), arg.tz_info_, arg.tz_info_wrap_, arg.nls_formats_))) {
+              dst_db_schema->get_database_name_str(), arg.tz_info_, arg.tz_info_wrap_, arg.nls_formats_, true/*foreign_key_checks*/))) {
             LOG_WARN("fail to prepare alter table arg param", K(ret), K(arg));
           } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &dst_table_schema, alter_table_arg))) {
             LOG_WARN("prepare alter table arg failed", K(ret), K(param));
@@ -21745,7 +21747,7 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
               LOG_WARN("failed to convert child column ids of foreign key", K(ret));
           }
         }
-        if (OB_SUCC(ret) && foreign_key_info.validate_flag_) {
+        if (OB_SUCC(ret) && foreign_key_info.validate_flag_ && alter_table_arg.foreign_key_checks_) {
           if (OB_FAIL(cst_ids.push_back(foreign_key_info.foreign_key_id_))) {
             LOG_WARN("failed to add new foreign key id!", K(ret));
           }

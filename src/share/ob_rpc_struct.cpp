@@ -352,6 +352,7 @@ int ObStartRedefTableArg::assign(const ObStartRedefTableArg &arg)
     ddl_type_ = arg.ddl_type_;
     trace_id_ = arg.trace_id_;
     sql_mode_ = arg.sql_mode_;
+    foreign_key_checks_ = arg.foreign_key_checks_;
     for (int64_t i = 0; OB_SUCC(ret) && i < common::ObNLSFormatEnum::NLS_MAX; i++) {
       nls_formats_[i].assign_ptr(arg.nls_formats_[i].ptr(), static_cast<int32_t>(arg.nls_formats_[i].length()));
     }
@@ -395,6 +396,9 @@ OB_DEF_SERIALIZE(ObStartRedefTableArg)
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      LST_DO_CODE(OB_UNIS_ENCODE, foreign_key_checks_);
+    }
   }
   return ret;
 }
@@ -436,6 +440,9 @@ OB_DEF_DESERIALIZE(ObStartRedefTableArg)
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, foreign_key_checks_);
+  }
   return ret;
 }
 
@@ -465,6 +472,9 @@ OB_DEF_SERIALIZE_SIZE(ObStartRedefTableArg)
         len += nls_formats_[i].get_serialize_size();
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, foreign_key_checks_);
   }
   if (OB_FAIL(ret)) {
     len = -1;
@@ -712,6 +722,7 @@ int ObCreateHiddenTableArg::assign(const ObCreateHiddenTableArg &arg)
     }
     OZ (tablet_ids_.assign(arg.tablet_ids_));
     need_reorder_column_id_ = arg.need_reorder_column_id_;
+    foreign_key_checks_ = arg.foreign_key_checks_;
   }
   return ret;
 }
@@ -722,7 +733,7 @@ int ObCreateHiddenTableArg::init(const uint64_t tenant_id, const uint64_t dest_t
                                  const ObTimeZoneInfo &tz_info, const common::ObString &local_nls_date,
                                  const common::ObString &local_nls_timestamp, const common::ObString &local_nls_timestamp_tz,
                                  const ObTimeZoneInfoWrap &tz_info_wrap, const ObIArray<ObTabletID> &tablet_ids,
-                                 const bool need_reorder_column_id)
+                                 const bool need_reorder_column_id, const bool foreign_key_checks)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -749,6 +760,7 @@ int ObCreateHiddenTableArg::init(const uint64_t tenant_id, const uint64_t dest_t
     tz_info_ = tz_info;
     // load data no need to reorder column id
     need_reorder_column_id_ = need_reorder_column_id;
+    foreign_key_checks_ = DATA_CURRENT_VERSION >= DATA_VERSION_4_3_5_1 ? (is_oracle_mode() || (is_mysql_mode() && foreign_key_checks)) : true;
   }
   return ret;
 }
@@ -784,7 +796,7 @@ OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
       OB_UNIS_ENCODE(tablet_ids_);
     }
     if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_ENCODE, need_reorder_column_id_);
+      LST_DO_CODE(OB_UNIS_ENCODE, need_reorder_column_id_, foreign_key_checks_);
     }
   }
   return ret;
@@ -829,7 +841,7 @@ OB_DEF_DESERIALIZE(ObCreateHiddenTableArg)
       OB_UNIS_DECODE(tablet_ids_);
     }
     if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_DECODE, need_reorder_column_id_);
+      LST_DO_CODE(OB_UNIS_DECODE, need_reorder_column_id_, foreign_key_checks_);
     }
   }
   return ret;
@@ -863,7 +875,7 @@ OB_DEF_SERIALIZE_SIZE(ObCreateHiddenTableArg)
       OB_UNIS_ADD_LEN(tablet_ids_);
     }
     if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_ADD_LEN, need_reorder_column_id_);
+      LST_DO_CODE(OB_UNIS_ADD_LEN, need_reorder_column_id_, foreign_key_checks_);
     }
   }
   if (OB_FAIL(ret)) {
