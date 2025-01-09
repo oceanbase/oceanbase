@@ -745,7 +745,7 @@ int ObCOMergeSingleWriter::process(const blocksstable::ObDatumRow &row)
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected null write helper", K(ret), K(write_helper));
       } else if (OB_FAIL(write_helper->append(row))) {
-        STORAGE_LOG(WARN, "failed to project row", K(ret), K(i), K(row), KPC(write_helper));
+        STORAGE_LOG(WARN, "failed to project row", K(ret), K(i), K(row), K(write_helper));
       }
     }
   }
@@ -774,7 +774,7 @@ int ObCOMergeSingleWriter::end_write(
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected null write helper", K(ret), K(write_helper), K(merge_infos[i + start]));
       } else if (OB_FAIL(write_helper->end_write(*merge_infos[i + start]))) {
-        STORAGE_LOG(WARN, "fail to close", K(ret), KPC(write_helper));
+        STORAGE_LOG(WARN, "fail to close", K(ret), K(i), K(write_helper));
       }
     }
   }
