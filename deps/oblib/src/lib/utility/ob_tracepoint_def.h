@@ -385,6 +385,7 @@ GLOBAL_ERRSIM_POINT_DEF(559, EN_PRINT_CONSTRAINTS_INFO, "show constraints info w
 GLOBAL_ERRSIM_POINT_DEF(560, EN_CBQT_IGNORE_COST, "Whether ignore the cost when do cost based transformation");
 GLOBAL_ERRSIM_POINT_DEF(561, EN_PX_RANDOM_SHUFFLE_WITHOUT_STATISTIC_INFORMATION, "Use px random shuffle even statistical information do not exist.");
 GLOBAL_ERRSIM_POINT_DEF(562, EN_EXTERNAL_TABLE_ORACLE, "Whether enable external table read and write in oracle mode");
+GLOBAL_ERRSIM_POINT_DEF(563, EN_FORCE_SLAVE_MAPPING, "Whether force use slave mapping plan");
 // 600-700 For PX use
 GLOBAL_ERRSIM_POINT_DEF(600, EN_PX_SQC_EXECUTE_FAILED, "");
 GLOBAL_ERRSIM_POINT_DEF(601, EN_PX_SQC_INIT_FAILED, "Used to simulate the scenario of failure to init sub query coordinator");

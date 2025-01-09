@@ -2716,6 +2716,7 @@ typedef enum ObItemType
   T_ALTER_MLOG_OPTIONS = 4785,
   // macro block bloom filter
   T_ENABLE_MACRO_BLOCK_BLOOM_FILTER = 4786,
+  T_DISTRIBUTE_HASH_LOCAL = 4787,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
