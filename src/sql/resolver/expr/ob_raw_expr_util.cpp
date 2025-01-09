@@ -8169,15 +8169,16 @@ int ObRawExprUtils::build_rowid_expr(ObRawExprFactory &expr_factory,
 }
 
 int ObRawExprUtils::build_empty_rowid_expr(ObRawExprFactory &expr_factory,
-                                           uint64_t table_id,
+                                           const TableItem &table_item,
                                            ObRawExpr *&rowid_expr)
 {
   int ret = OB_SUCCESS;
   ObColumnRefRawExpr *col_expr = NULL;
   OZ(expr_factory.create_raw_expr(T_REF_COLUMN, col_expr));
   CK(OB_NOT_NULL(col_expr));
-  col_expr->set_ref_id(table_id, OB_INVALID_ID);
+  col_expr->set_ref_id(table_item.table_id_, OB_INVALID_ID);
   col_expr->set_data_type(ObURowIDType);
+  col_expr->set_table_name(table_item.table_name_);
   col_expr->set_column_name(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME);
 
   ObAccuracy accuracy;
