@@ -298,7 +298,7 @@ int ObDBMSDataDict::check_scheduled_job_enabled_(const uint64_t tenant_id, bool 
   int ret = OB_SUCCESS;
   common::ObISQLClient *sql_client = nullptr;
   const bool is_oracle_mode = lib::is_oracle_mode();
-  ObVSliceAlloc allocator(ObMemAttr(tenant_id, "dbms_data_dict"));
+  ObArenaAllocator allocator(ObMemAttr(tenant_id, "dbms_data_dict"));
   dbms_scheduler::ObDBMSSchedJobInfo job_info;
   is_enabled = false;
 
@@ -326,10 +326,15 @@ int ObDBMSDataDict::get_tenant_gts_(const uint64_t tenant_id, share::SCN &gts)
   const transaction::MonotonicTs stc = transaction::MonotonicTs::current_time();
   transaction::MonotonicTs tmp_receive_gts_ts(0);
   int64_t retry_cnt = 0;
+  const static int64_t GET_GTS_TIMEOUT = 10_s;
   const static int64_t PRINT_INTERVAL = 10;
+  const int64_t timeout_ts = ObTimeUtility::current_time() + GET_GTS_TIMEOUT;
 
   do{
-    if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id, stc, NULL, gts, tmp_receive_gts_ts))) {
+    if (ObTimeUtility::current_time() > timeout_ts) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("get_tenant_gts timeout, wait retry by dbms_scheduler or user_manual", KR(ret), K(timeout_ts));
+    } else if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id, stc, NULL, gts, tmp_receive_gts_ts))) {
       if (OB_EAGAIN == ret) {
         ob_usleep(100_ms);
         if (++retry_cnt % PRINT_INTERVAL == 0) {
@@ -344,7 +349,7 @@ int ObDBMSDataDict::get_tenant_gts_(const uint64_t tenant_id, share::SCN &gts)
     } else {
       LOG_TRACE("get gts", K(tenant_id), K(gts));
     }
-  } while (OB_EAGAIN == ret && THIS_WORKER.get_timeout_remain() > 0);
+  } while (OB_EAGAIN == ret);
   return ret;
 }
 
@@ -352,10 +357,14 @@ int ObDBMSDataDict::send_trigger_dump_dict_rpc_(const uint64_t tenant_id, const 
 {
   int ret = OB_SUCCESS;
   ObAddr leader;
+  static const int64_t DICT_RPC_TIMEOUT = 10_s;
+
   if (OB_UNLIKELY(! is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
+    const int64_t timeout_ts = ObTimeUtility::current_time() + DICT_RPC_TIMEOUT;
+
     do {
       leader.reset();
       // get ls_leader of SYS_LS
@@ -363,9 +372,9 @@ int ObDBMSDataDict::send_trigger_dump_dict_rpc_(const uint64_t tenant_id, const 
         ret = OB_SUCCESS;
         ob_usleep(1_s);
       }
-      if (0 >= THIS_WORKER.get_timeout_remain()) {
+      if (ObTimeUtility::current_time() > timeout_ts) {
         ret = OB_TIMEOUT;
-        LOG_WARN("query timeout is reached", KR(ret), "timeout_ts", THIS_WORKER.get_timeout_ts());
+        LOG_WARN("send_trigger_dump_dict_rpc_ timeout, wait retry by dbms_scheduler or user_manual", KR(ret), K(timeout_ts));
       } else if (OB_ISNULL(GCTX.location_service_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("location_service_ is invalid", KR(ret));
@@ -381,7 +390,7 @@ int ObDBMSDataDict::send_trigger_dump_dict_rpc_(const uint64_t tenant_id, const 
             K(tenant_id), K(leader));
       } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader)
                                               .by(tenant_id)
-                                              .timeout(THIS_WORKER.get_timeout_remain())
+                                              .timeout(DICT_RPC_TIMEOUT)
                                               .trigger_dump_data_dict(trigger_dump_data_dict_arg))) {
         LOG_WARN("trigger_dump_data_dict rpc failed", KR(ret), K(tenant_id), K(trigger_dump_data_dict_arg));
       } else {
@@ -400,7 +409,7 @@ int ObDBMSDataDict::modify_schedule_job_(
   int ret = OB_SUCCESS;
   common::ObISQLClient *sql_client = nullptr;
   const bool is_oracle_mode = lib::is_oracle_mode();
-  ObVSliceAlloc allocator(ObMemAttr(tenant_id, "dbms_data_dict"));
+  ObArenaAllocator allocator(ObMemAttr(tenant_id, "dbms_data_dict"));
   dbms_scheduler::ObDBMSSchedJobInfo job_info;
 
   if (OB_ISNULL(sql_client = GCTX.sql_proxy_)) {

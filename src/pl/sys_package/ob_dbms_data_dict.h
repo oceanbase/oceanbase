@@ -43,7 +43,6 @@ private:
       const uint64_t tenant_id,
       const ObString &job_attribute_name,
       const ObObj &job_attribute_value);
-  static int build_job_action_(ObObj &job_action, int64_t retention);
 };
 } // end of pl
 } // end of oceanbase
