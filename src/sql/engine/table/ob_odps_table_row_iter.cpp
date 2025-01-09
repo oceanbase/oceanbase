@@ -273,8 +273,8 @@ int ObODPSTableRowIterator::next_task()
                     temp_downloader->downloader_init_status_ = 1; // 1 is temp_downloader was initialized successfully
                     LOG_TRACE("succ to create downloader handle and set it to GI", K(ret), K(part_id), K(state_.is_from_gi_pump_), KP(temp_downloader));
                   }
-                  temp_downloader->tunnel_ready_cond_.unlock();
                   temp_downloader->tunnel_ready_cond_.broadcast(); // wake other threads that temp_downloader has finished initializing. The initialization result may be failure or success.
+                  temp_downloader->tunnel_ready_cond_.unlock();
                 }
                 if (OB_FAIL(ret) && OB_NOT_NULL(temp_downloader)) {
                   allocator.free(temp_downloader);
@@ -1047,13 +1047,17 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
             count = 0;
           } else if (0 == returned_row_cnt) {
             LOG_TRACE("unexpected returned_row_cnt, going to retry read task", K(total_count_), K(returned_row_cnt), K(state_), K(ret));
-            if (OB_FAIL(retry_read_task())) {
+            if (OB_FAIL(THIS_WORKER.check_status())) {
+              LOG_WARN("failed to check status", K(ret));
+            } else if (OB_FAIL(retry_read_task())) {
               LOG_WARN("failed to retry read task", K(ret), K(state_));
             }
           }
         } else {
           LOG_TRACE("unexpected read error exception, going to retry read task", K(OB_ODPS_ERROR), K(total_count_), K(returned_row_cnt), K(state_), K(ret), K(ex.what()));
-          if (OB_FAIL(retry_read_task())) {
+          if (OB_FAIL(THIS_WORKER.check_status())) {
+            LOG_WARN("failed to check status", K(ret));
+          } else if (OB_FAIL(retry_read_task())) {
             LOG_WARN("failed to retry read task", K(ret), K(state_));
           }
         }
@@ -1689,7 +1693,7 @@ int ObODPSTableRowIterator::get_next_row()
       if (OB_FAIL(inner_get_next_row(need_retry))) {
         LOG_WARN("failed to get next row inner", K(ret));
       }
-    } while (OB_SUCC(ret) && need_retry);
+    } while (OB_SUCC(ret) && OB_SUCC(THIS_WORKER.check_status()) && need_retry);
   }
   while(OB_SUCC(ret) && get_next_task_) { // used to get next task which has data need to fetch
     if (state_.count_ >= state_.step_ && OB_FAIL(next_task())) {
@@ -1702,7 +1706,7 @@ int ObODPSTableRowIterator::get_next_row()
         if (OB_FAIL(inner_get_next_row(need_retry))) {
           LOG_WARN("failed to get next row inner", K(ret));
         }
-      } while (OB_SUCC(ret) && need_retry);
+      } while (OB_SUCC(ret) && OB_SUCC(THIS_WORKER.check_status()) && need_retry);
     }
   }
   // 这里不能隐含假设：返回OB_ITER_END的时候不返回数据
@@ -2584,7 +2588,7 @@ int ObOdpsPartitionDownloaderMgr::get_odps_downloader(int64_t part_id, apsara::o
     //timeout is 60s, the initialization of the downloader typically takes under 5 seconds,
     // and 60 seconds is sufficient for that.
     int64_t timeout_ts = ObTimeUtility::current_time() + 60000000;
-    while (0 == odps_downloader->downloader_init_status_) { // wait odps_downloader to finish initialization
+    while (0 == odps_downloader->downloader_init_status_ && OB_SUCC(THIS_WORKER.check_status())) { // wait odps_downloader to finish initialization
       odps_downloader->tunnel_ready_cond_.lock();
       if (0 == odps_downloader->downloader_init_status_) {
         odps_downloader->tunnel_ready_cond_.wait_us(1 * 1000 * 1000); // wait 1s every loop
