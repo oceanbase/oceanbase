@@ -19,8 +19,6 @@ namespace oceanbase
 namespace common
 {
 
-static const int64_t STANDARD_IOPS_SIZE = 16 * (1<<10);
-
 static void io_req_finish(ObIORequest& req, const ObIORetCode& ret_code)
 {
   if (OB_NOT_NULL(req.io_result_)) {

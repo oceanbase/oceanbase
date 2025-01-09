@@ -1437,7 +1437,7 @@ int ObInnerTableSchema::v_ob_group_io_stat_ora_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       A.TENANT_ID AS TENANT_ID,       A.SVR_IP AS SVR_IP,       A.SVR_PORT AS SVR_PORT,       A.GROUP_ID AS GROUP_ID,       A.GROUP_NAME AS GROUP_NAME,       A."MODE" AS "MODE",       A.MIN_IOPS AS MIN_IOPS,       A.MAX_IOPS AS MAX_IOPS,       A.REAL_IOPS AS REAL_IOPS,       A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,       A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,       A.REAL_NET_BANDWIDTH AS REAL_NET_BANDWIDTH,       A.REAL_NET_BANDWIDTH_DISPLAY AS REAL_NET_BANDWIDTH_DISPLAY     FROM       SYS.GV$OB_GROUP_IO_STAT A     WHERE       SVR_IP=HOST_IP()       AND       SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       A.TENANT_ID AS TENANT_ID,       A.SVR_IP AS SVR_IP,       A.SVR_PORT AS SVR_PORT,       A.GROUP_ID AS GROUP_ID,       A.GROUP_NAME AS GROUP_NAME,       A."MODE" AS "MODE",       A.MIN_IOPS AS MIN_IOPS,       A.MAX_IOPS AS MAX_IOPS,       A.NORM_IOPS AS NORM_IOPS,       A.REAL_IOPS AS REAL_IOPS,       A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,       A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,       A.REAL_NET_BANDWIDTH AS REAL_NET_BANDWIDTH,       A.REAL_NET_BANDWIDTH_DISPLAY AS REAL_NET_BANDWIDTH_DISPLAY     FROM       SYS.GV$OB_GROUP_IO_STAT A     WHERE       SVR_IP=HOST_IP()       AND       SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1488,7 +1488,7 @@ int ObInnerTableSchema::gv_ob_group_io_stat_ora_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     A.TENANT_ID AS TENANT_ID,     A.SVR_IP AS SVR_IP,     A.SVR_PORT AS SVR_PORT,     A.GROUP_ID AS GROUP_ID,     A.GROUP_NAME AS GROUP_NAME,     A."MODE" AS "MODE",     A.MIN_IOPS AS MIN_IOPS,     A.MAX_IOPS AS MAX_IOPS,     A.REAL_IOPS AS REAL_IOPS,     A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,     A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,     A.REAL_NET_BANDWIDTH AS REAL_NET_BANDWIDTH,     A.REAL_NET_BANDWIDTH_DISPLAY AS REAL_NET_BANDWIDTH_DISPLAY   FROM     SYS.ALL_VIRTUAL_GROUP_IO_STAT A )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     A.TENANT_ID AS TENANT_ID,     A.SVR_IP AS SVR_IP,     A.SVR_PORT AS SVR_PORT,     A.GROUP_ID AS GROUP_ID,     A.GROUP_NAME AS GROUP_NAME,     A."MODE" AS "MODE",     A.MIN_IOPS AS MIN_IOPS,     A.MAX_IOPS AS MAX_IOPS,     A.NORM_IOPS AS NORM_IOPS,     A.REAL_IOPS AS REAL_IOPS,     A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,     A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,     A.REAL_NET_BANDWIDTH AS REAL_NET_BANDWIDTH,     A.REAL_NET_BANDWIDTH_DISPLAY AS REAL_NET_BANDWIDTH_DISPLAY   FROM     SYS.ALL_VIRTUAL_GROUP_IO_STAT A )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

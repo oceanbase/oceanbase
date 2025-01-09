@@ -32,7 +32,33 @@ using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
 OB_SERIALIZE_MEMBER(ObTrafficControl::ObStorageKey, storage_id_, category_, tenant_id_);
-
+namespace oceanbase
+{
+namespace common
+{
+// for local device
+int64_t get_norm_iops(const int64_t size, const double iops, const ObIOMode mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t norm_iops = 0;
+  double bw = 0;
+  double iops_scale = 0;
+  bool is_io_ability_valid = false;
+  if (iops < std::numeric_limits<double>::epsilon()) {
+  } else if (FALSE_IT(bw = size * iops)) {
+  } else if (mode == ObIOMode::MAX_MODE) {
+    norm_iops = bw / STANDARD_IOPS_SIZE;
+  } else if (FALSE_IT(ObIOCalibration::get_instance().get_iops_scale(mode, size, iops_scale, is_io_ability_valid))) {
+  } else if (iops_scale < std::numeric_limits<double>::epsilon()) {
+    norm_iops = bw / STANDARD_IOPS_SIZE;
+    LOG_WARN("calc iops scale failed", K(ret), K(bw), K(iops), K(mode));
+  } else {
+    norm_iops = static_cast<int64_t>(iops / iops_scale);
+  }
+  return norm_iops;
+}
+}  // namespace common
+}  // namespace oceanbase
 int64_t ObTrafficControl::IORecord::calc()
 {
   int64_t now = ObTimeUtility::fast_current_time();
@@ -2515,7 +2541,7 @@ int ObTenantIOManager::print_io_status()
       if (group_config.deleted_) {
         continue;
       }
-      const char *group_name = i < 4 ? "OTHER_GROUPS" : "";
+      const char *group_name = i < 4 ? "OTHER_GROUPS" : group_config.group_name_;
       const char *mode_str = get_io_mode_string(group_mode);
       int64_t group_bw = 0;
       double failed_avg_size = 0;
@@ -2530,6 +2556,14 @@ int ObTenantIOManager::print_io_status()
       double failed_iops_scale = 1.0;
       bool is_io_ability_valid = false;  // unused
       int64_t limit = 0;
+      int64_t norm_iops = 0;
+      if (group_mode == ObIOGroupMode::LOCALREAD) {
+        norm_iops = get_norm_iops(info.at(i).avg_byte_, info.at(i).avg_iops_, ObIOMode::READ);
+      } else if (group_mode == ObIOGroupMode::LOCALWRITE) {
+        norm_iops = get_norm_iops(info.at(i).avg_byte_, info.at(i).avg_iops_, ObIOMode::WRITE);
+      } else {
+        norm_iops = info.at(i).avg_byte_ * info.at(i).avg_iops_ / STANDARD_IOPS_SIZE;
+      }
       if (OB_TMP_FAIL(io_clock_.get_group_limit(group_config_index, limit))) {
         LOG_WARN("get group limit failed", K(ret), K(group_config_index));
       } else if (OB_TMP_FAIL(failed_req_info.at(i).calc(failed_avg_size,
@@ -2579,7 +2613,7 @@ int ObTenantIOManager::print_io_status()
         }
         snprintf(io_status, sizeof(io_status),"group_id:%ld, group_name:%s, mode:%s, cur_req:%ld, hold_mem:%ld "
             "[FAILED]:fail_size:%ld, fail_iops:%ld, fail_bw:%ld, [delay/us]:prepare:%ld, schedule:%ld, submit:%ld, rt:%ld, total:%ld, "
-            "[SUCC]:size:%ld, iops:%ld, bw:%ld, limit:%ld, [delay/us]:prepare:%ld, schedule:%ld, submit:%ld, rt:%ld, total:%ld",
+            "[SUCC]:size:%ld, iops:%ld, norm_iops:%ld, bw:%ld, limit:%ld, [delay/us]:prepare:%ld, schedule:%ld, submit:%ld, rt:%ld, total:%ld",
             group_config.group_id_,
             group_name,
             mode_str,
@@ -2595,6 +2629,7 @@ int ObTenantIOManager::print_io_status()
             failed_avg_total_delay,
             static_cast<int64_t>(info.at(i).avg_byte_),
             static_cast<int64_t>(info.at(i).avg_iops_ + 0.5),
+            norm_iops,
             static_cast<int64_t>(group_bw),
             static_cast<int64_t>(limit),
             info.at(i).avg_prepare_delay_us_,
@@ -2630,8 +2665,8 @@ int ObTenantIOManager::print_io_status()
       int64_t failed_avg_submit_delay = 0;
       int64_t failed_avg_device_delay = 0;
       int64_t failed_avg_total_delay = 0;
-      ObIOCalibration::get_instance().get_iops_scale(mode, failed_avg_size, failed_iops_scale, is_io_ability_valid);
-      ObIOCalibration::get_instance().get_iops_scale(mode, sys_info.at(i).avg_byte_, iops_scale, is_io_ability_valid);
+      int64_t norm_iops = 0;
+      int64_t norm_failed_iops = 0;
       if (OB_TMP_FAIL(sys_failed_req_info.at(i).calc(failed_avg_size,
               failed_req_iops,
               failed_req_bw,
@@ -2644,21 +2679,17 @@ int ObTenantIOManager::print_io_status()
       } else {
         switch (group_mode) {
           case ObIOGroupMode::LOCALREAD: {
-            if (iops_scale > std::numeric_limits<double>::epsilon()) {
-              ips += sys_info.at(i).avg_iops_ / iops_scale;
-            }
-            if (failed_iops_scale > std::numeric_limits<double>::epsilon()) {
-              failed_ips += failed_req_iops / failed_iops_scale;
-            }
+            norm_iops = get_norm_iops(sys_info.at(i).avg_byte_, sys_info.at(i).avg_iops_, ObIOMode::READ);
+            norm_failed_iops = get_norm_iops(failed_avg_size, failed_req_iops, ObIOMode::READ);
+            ips += norm_iops;
+            failed_ips += norm_failed_iops;
             break;
           }
           case ObIOGroupMode::LOCALWRITE: {
-            if (iops_scale > std::numeric_limits<double>::epsilon()) {
-              ops += sys_info.at(i).avg_iops_ / iops_scale;
-            }
-            if (failed_iops_scale > std::numeric_limits<double>::epsilon()) {
-              failed_ops += failed_req_iops / failed_iops_scale;
-            }
+            norm_iops = get_norm_iops(sys_info.at(i).avg_byte_, sys_info.at(i).avg_iops_, ObIOMode::WRITE);
+            norm_failed_iops = get_norm_iops(failed_avg_size, failed_req_iops, ObIOMode::WRITE);
+            ops += norm_iops;
+            failed_ops += norm_failed_iops;
             break;
           }
           case ObIOGroupMode::REMOTEREAD: {
@@ -2678,7 +2709,7 @@ int ObTenantIOManager::print_io_status()
         snprintf(io_status, sizeof(io_status),
                 "sys_group_name:%s, mode:%s, cur_req:%ld, hold_mem:%ld "
                 "[FAILED]: fail_size:%ld, fail_iops:%ld, fail_bw:%ld, [delay/us]:prepare:%ld, schedule:%ld, submit:%ld, rt:%ld, total:%ld, "
-                "[SUCC]: size:%ld, iops:%ld, bw:%ld, [delay/us]:prepare:%ld, schedule:%ld, submit:%ld, rt:%ld, total:%ld",
+                "[SUCC]: size:%ld, iops:%ld, norm_iops :%ld, bw:%ld, [delay/us]:prepare:%ld, schedule:%ld, submit:%ld, rt:%ld, total:%ld",
                  get_io_sys_group_name(module),
                  mode_str,
                  sys_mem_stat.group_mem_infos_.at(i).total_cnt_,
@@ -2693,6 +2724,7 @@ int ObTenantIOManager::print_io_status()
                  failed_avg_total_delay,
                  static_cast<int64_t>(sys_info.at(i).avg_byte_),
                  static_cast<int64_t>(sys_info.at(i).avg_iops_ + 0.5),
+                 norm_iops,
                  static_cast<int64_t>(group_bw),
                  sys_info.at(i).avg_prepare_delay_us_,
                  sys_info.at(i).avg_schedule_delay_us_,

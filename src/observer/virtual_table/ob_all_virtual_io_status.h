@@ -217,6 +217,7 @@ private:
     MAX_NET_BANDWIDTH_DISPLAY,
     REAL_NET_BANDWIDTH,
     REAL_NET_BANDWIDTH_DISPLAY,
+    NORM_IOPS,
   };
   struct GroupIoStat
   {
@@ -233,6 +234,7 @@ private:
       mode_ = common::ObIOMode::MAX_MODE;
       min_iops_ = 0;
       max_iops_ = 0;
+      norm_iops_ = 0;
       real_iops_ = 0;
       max_net_bandwidth_ = 0;
       real_net_bandwidth_ = 0;
@@ -241,7 +243,7 @@ private:
       memset(real_net_bandwidth_display_, 0, sizeof(real_net_bandwidth_display_));
     }
     TO_STRING_KV(K(tenant_id_), K(group_id_), K(mode_), K_(group_name),
-                 K(min_iops_), K(max_iops_), K_(real_iops),
+                 K(min_iops_), K(max_iops_), K_(norm_iops), K_(real_iops),
                  K_(max_net_bandwidth), K_(max_net_bandwidth_display),
                  K_(real_net_bandwidth), K_(real_net_bandwidth_display));
   public:
@@ -251,6 +253,7 @@ private:
     char group_name_[GroupIoStatusStringLength];
     int64_t min_iops_;
     int64_t max_iops_;
+    int64_t norm_iops_;
     int64_t real_iops_;
     int64_t max_net_bandwidth_;
     char max_net_bandwidth_display_[GroupIoStatusStringLength];

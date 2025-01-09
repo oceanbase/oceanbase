@@ -7048,6 +7048,7 @@ GROUP_NAME	varchar(128)	NO
 MODE	varchar(128)	NO			
 MIN_IOPS	bigint(20)	NO			
 MAX_IOPS	bigint(20)	NO			
+NORM_IOPS	bigint(20)	NO			
 REAL_IOPS	bigint(20)	NO			
 MAX_NET_BANDWIDTH	bigint(20)	NO			
 MAX_NET_BANDWIDTH_DISPLAY	varchar(128)	NO			
@@ -7066,6 +7067,7 @@ GROUP_NAME	varchar(128)	NO		NULL
 MODE	varchar(128)	NO		NULL	
 MIN_IOPS	bigint(20)	NO		NULL	
 MAX_IOPS	bigint(20)	NO		NULL	
+NORM_IOPS	bigint(20)	NO		NULL	
 REAL_IOPS	bigint(20)	NO		NULL	
 MAX_NET_BANDWIDTH	bigint(20)	NO		NULL	
 MAX_NET_BANDWIDTH_DISPLAY	varchar(128)	NO		NULL	

@@ -749,8 +749,11 @@ void ObIOCalibration::get_iops_scale(const ObIOMode mode, const int64_t size, do
   iops_scale = 1.0 * BASELINE_IO_SIZE / size;
   if (OB_UNLIKELY(!is_inited_)) {
     // do nothing
-  } else if (OB_UNLIKELY(mode >= ObIOMode::MAX_MODE || size <= 0)) {
+  } else if (OB_UNLIKELY(mode >= ObIOMode::MAX_MODE)) {
     // do nothing
+  } else if (size <= 0) {
+    iops_scale = 1.0;
+    LOG_WARN("invalid size", K(mode), K(size), K(iops_scale));
   } else {
     DRWLock::RDLockGuard guard(lock_);
     if (!io_ability_.is_valid()) {

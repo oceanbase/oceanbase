@@ -10485,6 +10485,7 @@ max_net_bandwidth	bigint(20)	NO		NULL
 max_net_bandwidth_display	varchar(128)	NO		NULL	
 real_net_bandwidth	bigint(20)	NO		NULL	
 real_net_bandwidth_display	varchar(128)	NO		NULL	
+norm_iops	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_group_io_stat;
 IF(count(*) >= 0, 1, 0)
 1
