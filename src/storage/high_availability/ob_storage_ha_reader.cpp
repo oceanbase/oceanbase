@@ -2234,7 +2234,7 @@ int ObCopySSTableInfoRestoreReader::compare_storage_schema_(
   need_update = false;
   int64_t old_storage_schema_stored_col_cnt = 0;
   const int64_t new_storage_schema_stored_col_cnt = tablet_meta.tablet_meta_.storage_schema_.store_column_cnt_;
-  ObArenaAllocator temp_allocator("RestoreReader", MTL_ID());
+  ObArenaAllocator temp_allocator(common::ObMemAttr(MTL_ID(), "RestoreReader"));
   ObStorageSchema *schema_on_tablet = nullptr;
 
   if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(temp_allocator, schema_on_tablet))) {

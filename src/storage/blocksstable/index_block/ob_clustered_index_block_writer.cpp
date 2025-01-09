@@ -596,7 +596,7 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
   }
   // Iterator index info and transfer it to clustered index row.
   ObMicroIndexInfo index_info;
-  ObArenaAllocator row_key_allocator("MakeClustRK", MTL_ID());
+  ObArenaAllocator row_key_allocator(common::ObMemAttr(MTL_ID(), "MakeClustRK"));
   while (OB_SUCC(ret)) {
     row_key_allocator.reuse();
     // Actually, we only need `row_store_type` and `static_desc` from data store desc.
