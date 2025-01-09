@@ -540,6 +540,12 @@ struct OptSelectivityDSParam {
   {}
   TO_STRING_KV(KPC(table_meta_),
                K(quals_));
+  DISABLE_COPY_ASSIGN(OptSelectivityDSParam);
+  int assign(const OptSelectivityDSParam &other) {
+    table_meta_ = other.table_meta_;
+    return quals_.assign(other.quals_);
+  }
+
   const OptTableMeta *table_meta_;
   ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> quals_;
 };
@@ -637,6 +643,18 @@ struct OptSelInfo
 
   TO_STRING_KV(K_(column_id), K_(selectivity), K_(equal_count),
                K_(range_selectivity), K_(has_range_exprs));
+  DISABLE_COPY_ASSIGN(OptSelInfo);
+  int assign(const OptSelInfo &other)
+  {
+    column_id_ = other.column_id_;
+    selectivity_ = other.selectivity_;
+    equal_count_ = other.equal_count_;
+    range_selectivity_ = other.range_selectivity_;
+    has_range_exprs_ = other.has_range_exprs_;
+    min_ = other.min_;
+    max_ = other.max_;
+    return quals_.assign(other.quals_);
+  }
 
   uint64_t column_id_;
   double selectivity_;
@@ -656,6 +674,11 @@ public:
   OptDistinctHelper() {}
 
   TO_STRING_KV(K_(rel_id), K_(exprs));
+  DISABLE_COPY_ASSIGN(OptDistinctHelper);
+  int assign(const OptDistinctHelper &other) {
+    rel_id_ = other.rel_id_;
+    return exprs_.assign(other.exprs_);
+  }
 
   ObRelIds rel_id_;
   ObSEArray<ObRawExpr *, 2> exprs_;
