@@ -394,8 +394,12 @@ ObPacketStreamFileReader::~ObPacketStreamFileReader()
       timeout_ts_ = ObTimeUtility::current_time() + wait_timeout;
     }
   }
+  LOG_INFO("load data local file reader exit", K(ret), K(eof_), K(timeout_ts_), K(ObTimeUtility::current_time()));
+  if (!eof_ && OB_NOT_NULL(session_) && OB_NOT_NULL(session_->get_cur_exec_ctx())) {
+    session_->get_cur_exec_ctx()->set_need_disconnect(true);
+    LOG_WARN("we'll close the connection as we can't read all of the file content", K(eof_));
+  }
   arena_allocator_.reset();
-  LOG_INFO("load data local file reader exit");
 }
 
 int ObPacketStreamFileReader::open(const ObString &filename,
