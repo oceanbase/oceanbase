@@ -634,7 +634,7 @@ int ObLSRestoreTaskMgr::reload_tablets_()
       } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet is nullptr", K(ret), K(tablet_handle));
-      } else if (OB_FAIL(ObStorageHAUtils::get_tablet_size_in_bytes(
+      } else if (OB_FAIL(ObStorageHAUtils::get_tablet_backup_size_in_bytes(
                  ls->get_ls_id(), tablet->get_tablet_id(), tablet_size))) {
         LOG_WARN("fail to get tablet size in bytes", K(ret),
                  "ls_id", ls->get_ls_id(), "tablet_id", tablet->get_tablet_id());

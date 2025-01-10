@@ -31,6 +31,7 @@
 #include "share/ob_unit_table_operator.h"
 #include "share/ob_max_id_fetcher.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/restore/ob_restore_progress_display_mode.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase;
@@ -60,7 +61,6 @@ int ObRestoreUtil::fill_physical_restore_job(
     if (OB_FAIL(job.set_description(arg.description_))) {
       LOG_WARN("fail to set description", K(ret));
     }
-
     // check restore option
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObPhysicalRestoreOptionParser::parse(arg.restore_option_, job))) {
@@ -77,6 +77,15 @@ int ObRestoreUtil::fill_physical_restore_job(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(fill_backup_info_(arg, job))) {
         LOG_WARN("failed to fill backup info", KR(ret), K(arg), K(job));
+      } else {
+        // restore progress display mode
+        if (share::ObBackupSetFileDesc::is_allow_quick_restore(
+            static_cast<share::ObBackupSetFileDesc::Compatible>(job.get_backup_compatible()))
+            && job.get_restore_type().is_full_restore()) {
+          job.set_progress_display_mode(BYTES_DISPLAY_MODE);
+        } else {
+          job.set_progress_display_mode(TABLET_CNT_DISPLAY_MODE);
+        }
       }
     }
 

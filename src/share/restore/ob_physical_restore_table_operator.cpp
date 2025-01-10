@@ -49,6 +49,7 @@ static const char* phy_restore_status_str_array[PHYSICAL_RESTORE_MAX_STATUS] = {
   "RESTORE_PRE",
   "RESTORE_CREATE_INIT_LS",
   "PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN",
+  "PHYSICAL_RESTORE_WAIT_QUICK_RESTORE_FINISH",
   "RESTORE_WAIT_LS",
   "POST_CHECK",
   "UPGRADE",
@@ -221,6 +222,8 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     ADD_COLUMN_WITH_UINT_VALUE(job_info, consistent_scn, (job_info.get_consistent_scn().get_val_for_inner_table_field()));
     //restore_type
     ADD_COLUMN_WITH_VALUE(job_info, restore_type, job_info.get_restore_type().to_str());
+    //restore progress display mode
+    ADD_COLUMN_WITH_VALUE(job_info, progress_display_mode, job_info.get_progress_display_mode().to_str());
     if (OB_SUCC(ret)) {
       uint64_t post_data_version = job_info.get_post_data_version();
       int64_t len = ObClusterVersion::print_version_str(
@@ -704,6 +707,22 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(job.get_white_list().assign_with_hex_str(str))) {
           LOG_WARN("fail to assign white_list", KR(ret), K(str));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (name == "progress_display_mode") {
+        ObString display_mode_str;
+        EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", display_mode_str);
+        if (OB_SUCC(ret))  {
+          share::ObRestoreProgressDisplayMode tmp_display_mode(display_mode_str);
+          if (!tmp_display_mode.is_valid()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid restore progress display str extracted from sql", K(ret), K(display_mode_str));
+          } else {
+            job.set_progress_display_mode(tmp_display_mode);
+          }
         }
       }
     }

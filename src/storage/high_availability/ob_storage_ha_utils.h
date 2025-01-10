@@ -86,7 +86,8 @@ public:
       ObMacroBlockReuseMgr &macro_block_reuse_mgr,
       const bool &is_restore);
   static void sort_table_key_array_by_snapshot_version(common::ObArray<ObITable::TableKey> &table_key_array);
-  static int get_tablet_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &tablet_size);
+  static int get_tablet_backup_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &backup_size);
+  static int get_tablet_occupy_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &occupy_size);
 private:
   struct TableKeySnapshotVersionComparator final
   {

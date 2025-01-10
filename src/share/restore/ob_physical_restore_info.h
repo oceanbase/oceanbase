@@ -17,6 +17,7 @@
 #include "share/restore/ob_restore_type.h"//ObRestoreType
 #include "share/ob_tenant_info_proxy.h"//ObTenantRole
 #include "share/restore/ob_restore_persist_helper.h"//ObRestoreJobPersistKey
+#include "share/restore/ob_restore_progress_display_mode.h"
 
 namespace oceanbase
 {
@@ -39,18 +40,19 @@ enum PhysicalRestoreMod
 };
 
 /* physical restore related */
-enum PhysicalRestoreStatus
+enum PhysicalRestoreStatus //FARM COMPAT WHITELIST
 {
   PHYSICAL_RESTORE_CREATE_TENANT = 0,          // restore tenant schema
   PHYSICAL_RESTORE_PRE = 1,                    // set parameters
   PHYSICAL_RESTORE_CREATE_INIT_LS = 2,         // create init ls
   PHYSICAL_RESTORE_WAIT_CONSISTENT_SCN = 3,    // wait clog recover to consistent scn
-  PHYSICAL_RESTORE_WAIT_LS = 4,                // check all ls restore finish and sync ts is restore
-  PHYSICAL_RESTORE_POST_CHECK = 5,             // check tenant is in restore, set tenant to normal
-  PHYSICAL_RESTORE_UPGRADE = 6,                // upgrade post
-  PHYSICAL_RESTORE_SUCCESS = 7,                // restore success
-  PHYSICAL_RESTORE_FAIL = 8,                   // restore fail
-  PHYSICAL_RESTORE_WAIT_TENANT_RESTORE_FINISH = 9, //sys tenant wait user tenant restore finish
+  PHYSICAL_RESTORE_WAIT_QUICK_RESTORE_FINISH = 4, // wait all ls quick restore finish
+  PHYSICAL_RESTORE_WAIT_LS = 5,                // check all ls restore finish and sync ts is restore
+  PHYSICAL_RESTORE_POST_CHECK = 6,             // check tenant is in restore, set tenant to normal
+  PHYSICAL_RESTORE_UPGRADE = 7,                // upgrade post
+  PHYSICAL_RESTORE_SUCCESS = 8,                // restore success
+  PHYSICAL_RESTORE_FAIL = 9,                   // restore fail
+  PHYSICAL_RESTORE_WAIT_TENANT_RESTORE_FINISH = 10, //sys tenant wait user tenant restore finish
   PHYSICAL_RESTORE_MAX_STATUS
 };
 
@@ -190,6 +192,7 @@ public:
   Property_declare_int(bool, recover_table)
   Property_declare_int(bool, using_complement_log)
   Property_declare_int(int64_t, backup_compatible)
+  Property_declare_int(ObRestoreProgressDisplayMode, progress_display_mode)
 
   //for sts
   Property_declare_ObString(sts_credential)

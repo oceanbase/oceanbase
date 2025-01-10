@@ -357,6 +357,7 @@ ob_set_subtarget(ob_share common_mixed
   rebuild_tablet/ob_rebuild_tablet_location.cpp
   table/ob_redis_parser.cpp
   table/ob_redis_common.cpp
+  restore/ob_restore_progress_display_mode.cpp
 )
 
 ob_set_subtarget(ob_share tablet

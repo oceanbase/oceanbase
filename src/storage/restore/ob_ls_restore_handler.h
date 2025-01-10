@@ -380,7 +380,6 @@ private:
       const ObLSRestoreTaskMgr::ToRestoreTabletGroup &tablet_need_restore);
   int check_clog_replay_finish_(bool &is_finish);
   int check_tablet_checkpoint_();
-  int calc_and_report_total_bytes_to_restore_();
   // Force reload all tablets and check is restored.
   bool has_rechecked_after_clog_recovered_;
   DISALLOW_COPY_AND_ASSIGN(ObLSQuickRestoreState);
@@ -526,6 +525,8 @@ public:
     is_finish = true;
     return OB_SUCCESS;
   }
+protected:
+  int check_can_advance_status_(bool &can) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitQuickRestoreState);
 };

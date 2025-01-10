@@ -1804,6 +1804,7 @@ int ObLSRestoreHandler::fill_restore_arg()
         ls_restore_arg_.backup_cluster_version_ = job_info.get_source_cluster_version();
         ls_restore_arg_.backup_data_version_ = job_info.get_source_data_version();
         ls_restore_arg_.backup_compatible_ = static_cast<share::ObBackupSetFileDesc::Compatible>(job_info.get_backup_compatible());
+        ls_restore_arg_.progress_display_mode_ = job_info.get_progress_display_mode();
         ls_restore_arg_.backup_set_list_.reset();
         ls_restore_arg_.backup_piece_list_.reset();
         if (OB_FAIL(ls_restore_arg_.backup_piece_list_.assign(
@@ -2376,6 +2377,7 @@ int ObLSQuickRestoreState::do_restore()
 int ObLSQuickRestoreState::leader_quick_restore_()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
   ObLogRestoreHandler *log_restore_handle = ls_->get_log_restore_handler();
@@ -2413,9 +2415,6 @@ int ObLSQuickRestoreState::leader_quick_restore_()
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
     } else {
-      if (ls_restore_arg_->restore_type_.is_full_restore()) {
-        calc_and_report_total_bytes_to_restore_();
-      }
       LOG_INFO("leader quick restore success", KPC(ls_));
     }
   } else if (OB_FAIL(do_quick_restore_(tablet_need_restore))) {
@@ -2446,6 +2445,7 @@ int ObLSQuickRestoreState::leader_quick_restore_()
 int ObLSQuickRestoreState::follower_quick_restore_()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
   ObLogRestoreHandler *log_restore_handle = ls_->get_log_restore_handler();
@@ -2483,9 +2483,6 @@ int ObLSQuickRestoreState::follower_quick_restore_()
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
     } else {
-      if (ls_restore_arg_->restore_type_.is_full_restore()) {
-        calc_and_report_total_bytes_to_restore_();
-      }
       LOG_INFO("follower quick restore success", KPC(ls_));
     }
   } else if (OB_FAIL(do_quick_restore_(tablet_need_restore))) {
@@ -2565,6 +2562,7 @@ int ObLSQuickRestoreState::check_tablet_checkpoint_()
   ObLSTabletService *ls_tablet_svr = nullptr;
   ObLSTabletIterator iterator(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   ObTablet *tablet = nullptr;
+  int64_t total_size = 0;
 
   if (OB_ISNULL(ls_tablet_svr = ls_->get_tablet_svr())) {
     ret = OB_INVALID_ARGUMENT;
@@ -2573,6 +2571,7 @@ int ObLSQuickRestoreState::check_tablet_checkpoint_()
     LOG_WARN("fail to get tablet iterator", K(ret), KPC(ls_));
   } else {
     while (OB_SUCC(ret)) {
+      int64_t tablet_size = 0;
       if (OB_FAIL(iterator.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -2593,67 +2592,44 @@ int ObLSQuickRestoreState::check_tablet_checkpoint_()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tablet clog checkpoint ts should less than restore end ts", K(ret), K(tablet_meta),
               "ls restore end ts", ls_restore_arg_->get_restore_scn());
+        } else if (tablet->is_empty_shell()) {
+        } else if (!ls_restore_arg_->get_progress_display_mode().is_bytes()) {
+        } else if (ls_->is_sys_ls() && tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+          // sys ls's tablets have all been fully restore, take occupy size as total bytes
+          if (OB_FAIL(ObStorageHAUtils::get_tablet_occupy_size_in_bytes(
+                  ls_->get_ls_id(), tablet->get_tablet_id(), tablet_size))) {
+            LOG_WARN("fail to get tablet size", K(ret), KPC(tablet));
+          }
+        } else if (!ls_->is_sys_ls() && tablet->get_tablet_meta().ha_status_.is_restore_status_remote()) {
+          if (OB_FAIL(ObStorageHAUtils::get_tablet_backup_size_in_bytes(
+                  ls_->get_ls_id(), tablet->get_tablet_id(), tablet_size))) {
+            LOG_WARN("fail to get tablet size", K(ret), KPC(tablet));
+          }
         }
       }
-    }
-  }
-  return ret;
-}
-
-int ObLSQuickRestoreState::calc_and_report_total_bytes_to_restore_()
-{
-  int ret = OB_SUCCESS;
-  int64_t total_size = 0;
-  ObLSTabletService *ls_tablet_svr = nullptr;
-  ObLSTabletIterator iterator(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
-
-  if (OB_ISNULL(ls_tablet_svr = ls_->get_tablet_svr())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls_tablet_svr is nullptr", K(ret));
-  } else if (OB_FAIL(ls_tablet_svr->build_tablet_iter(iterator))) {
-    LOG_WARN("fail to build tablet iterator", K(ret), KPC_(ls));
-  }
-
-  while(OB_SUCC(ret)) {
-    ObTabletHandle tablet_handle;
-    ObTablet *tablet = nullptr;
-    int64_t tablet_size = 0;
-    if (OB_FAIL(iterator.get_next_tablet(tablet_handle))) {
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to get next tablet", K(ret));
+      if (OB_SUCC(ret)) {
+        total_size += tablet_size;
       }
-      break;
-    } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet is nullptr", K(ret), K(tablet_handle));
-    } else if (tablet->is_empty_shell()) {
-    } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()
-              && !tablet->get_tablet_meta().ha_status_.is_restore_status_remote()) {
-    } else if (OB_FAIL(ObStorageHAUtils::get_tablet_size_in_bytes(
-               ls_->get_ls_id(), tablet->get_tablet_id(), tablet_size))) {
-      LOG_WARN("fail to get tablet size", K(ret), KPC(tablet));
-    } else {
-      total_size += tablet_size;
     }
-  }
-
-  if (OB_SUCC(ret)) {
-    storage::ObLSRestoreHandler *ls_restore_handler = ls_->get_ls_restore_handler();
-    ObLSRestoreStat &restore_stat = ls_restore_handler->restore_stat();
-    share::ObRestorePersistHelper helper;
-    ObLSRestoreJobPersistKey ls_key;
-    ls_key.tenant_id_ = ls_->get_tenant_id();
-    ls_key.job_id_ = ls_restore_arg_->get_job_id();
-    ls_key.ls_id_ = ls_->get_ls_id();
-    ls_key.addr_ = self_addr_;
-    if (OB_FAIL(helper.init(ls_key.tenant_id_, share::OBCG_STORAGE))) {
-      LOG_WARN("fail to init restore table helper", K(ret), "tenant_id", ls_key.tenant_id_);
-    } else if (OB_FAIL(helper.set_ls_total_bytes(*proxy_, ls_key, total_size))) {
-      LOG_WARN("fail to set ls total bytes", K(ret));
-    } else {
-      restore_stat.set_total_bytes(total_size);
+    // report ls total_bytes
+    if (OB_SUCC(ret) && ls_restore_arg_->get_progress_display_mode().is_bytes()) {
+      storage::ObLSRestoreHandler *ls_restore_handler = ls_->get_ls_restore_handler();
+      ObLSRestoreStat &restore_stat = ls_restore_handler->restore_stat();
+      share::ObRestorePersistHelper helper;
+      ObLSRestoreJobPersistKey ls_key;
+      ls_key.tenant_id_ = ls_->get_tenant_id();
+      ls_key.job_id_ = ls_restore_arg_->get_job_id();
+      ls_key.ls_id_ = ls_->get_ls_id();
+      ls_key.addr_ = self_addr_;
+      if (OB_FAIL(helper.init(ls_key.tenant_id_, share::OBCG_STORAGE))) {
+        LOG_WARN("fail to init restore table helper", K(ret), "tenant_id", ls_key.tenant_id_);
+      } else if (OB_FAIL(helper.set_ls_total_bytes(*proxy_, ls_key, total_size))) {
+        LOG_WARN("fail to set ls total bytes", K(ret), K(ls_key), K(total_size));
+      } else if (ls_key.ls_id_.is_sys_ls() && OB_FAIL(helper.set_ls_finish_bytes(*proxy_, ls_key, total_size))) {
+        LOG_WARN("fail to increase ls total bytes", K(ret), K(ls_key), K(total_size));
+      } else {
+        restore_stat.set_total_bytes(total_size);
+      }
     }
   }
   return ret;
@@ -3127,10 +3103,36 @@ int ObLSWaitRestoreConsistentScnState::check_can_advance_status_(bool &can) cons
     HEAP_VAR(ObPhysicalRestoreJob, job_info) {
       if (OB_FAIL(restore_table_operator.get_job_by_tenant_id(tenant_id, job_info))) {
         LOG_WARN("fail to get restore job", K(ret), K(tenant_id));
-      } else if (share::PhysicalRestoreStatus::PHYSICAL_RESTORE_WAIT_LS != job_info.get_status()) {
-        can = false;
+      } else if (ls_restore_arg_->get_progress_display_mode().is_bytes()) {
+        can = share::PhysicalRestoreStatus::PHYSICAL_RESTORE_WAIT_QUICK_RESTORE_FINISH == job_info.get_status();
       } else {
-        can = true;
+        can = share::PhysicalRestoreStatus::PHYSICAL_RESTORE_WAIT_LS == job_info.get_status();
+      }
+    }
+  }
+  return ret;
+}
+
+//================================ObLSRestoreWaitQuickRestoreState=======================================
+int ObLSRestoreWaitQuickRestoreState::check_can_advance_status_(bool &can) const
+{
+  int ret = OB_SUCCESS;
+  if (ls_restore_arg_->get_progress_display_mode().is_tablet_cnt()) {
+    can = true;
+  } else {
+    share::ObPhysicalRestoreTableOperator restore_table_operator;
+    const uint64_t tenant_id = ls_->get_tenant_id();
+    if (OB_FAIL(restore_table_operator.init(proxy_, tenant_id, share::OBCG_STORAGE))) {
+      LOG_WARN("fail to init restore table operator", K(ret), K(tenant_id));
+    } else {
+      HEAP_VAR(ObPhysicalRestoreJob, job_info) {
+        if (OB_FAIL(restore_table_operator.get_job_by_tenant_id(tenant_id, job_info))) {
+          LOG_WARN("fail to get restore job", K(ret), K(tenant_id));
+        } else if (share::PhysicalRestoreStatus::PHYSICAL_RESTORE_WAIT_LS != job_info.get_status()) {
+          can = false;
+        } else {
+          can = true;
+        }
       }
     }
   }
