@@ -1332,7 +1332,8 @@ int ObPartitionMinorMerger::merge_same_rowkey_iters(
         STORAGE_LOG(WARN, "Failed to calc multi version row flag", K(ret), K(add_shadow_row),
                     K(shadow_already_output), KPC(fuse_iters));
       } else if (OB_FAIL(process(partition_fuser_->get_result_row()))) {
-        STORAGE_LOG(WARN, "Failed to process row", K(ret), K(partition_fuser_->get_result_row()), KPC(fuse_iters));
+        STORAGE_LOG(WARN, "Failed to process row", K(ret), K(partition_fuser_->get_result_row()),
+                    K(shadow_already_output), K(rowkey_first_row), KPC(fuse_iters), K(merge_iters));
       } else if (!shadow_already_output && base_iter->is_compact_completed_row()) {
         shadow_already_output = true;
       }
