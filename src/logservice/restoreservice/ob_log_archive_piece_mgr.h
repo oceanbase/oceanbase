@@ -146,7 +146,7 @@ private:
 
   struct RoundContext
   {
-    enum State : uint8_t
+    enum State : uint8_t // FARM COMPAT WHITELIST
     {
       INVALID = 0,
       ACTIVE = 1,
