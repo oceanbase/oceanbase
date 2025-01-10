@@ -299,7 +299,7 @@ END_P SET_VAR DELIMITER
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GROUP_CONCAT GROUPING GTS
         GLOBAL_NAME GLOBAL_ALIAS
 
-        HANDLER HASH HELP HISTOGRAM HOST HOSTS HOUR HIDDEN HYBRID_HIST
+        HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOUR HIDDEN HYBRID_HIST
 
         ID IDC IDENTIFIED IGNORE_SERVER_IDS ILOG IMMEDIATE IMPORT INCLUDING INCR INDEXES INDEX_TABLE_ID INFO INITIAL_SIZE
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER
@@ -381,13 +381,14 @@ END_P SET_VAR DELIMITER
 
         ZONE ZONE_LIST ZONE_TYPE OPTIMIZER_COSTS
 
-        OVERWRITE
+        ORGANIZATION OVERWRITE
 //-----------------------------non_reserved keyword end---------------------------------------------
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
 %type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option lob_storage_clause lob_storage_parameter lob_storage_parameters lob_chunk_size
 %type <node> opt_force
+%type <node> index_or_heap
 %type <node> create_sequence_stmt alter_sequence_stmt drop_sequence_stmt opt_sequence_option_list sequence_option_list sequence_option simple_num
 %type <node> create_database_stmt drop_database_stmt alter_database_stmt use_database_stmt
 %type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor databases_expr opt_databases
@@ -7733,6 +7734,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($3);
   $$ = NULL;
 }
+| ORGANIZATION opt_equal_mark index_or_heap
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORGANIZATION, 1, $3);
+}
 ;
 
 merge_insert_types:
@@ -8570,6 +8576,17 @@ SUBPARTITIONS INTNUM
 int_or_decimal:
 INTNUM { $$ = $1; }
 | DECIMAL_VAL { $$ = $1; }
+
+index_or_heap:
+INDEX
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ORGANIZATION_INDEX);
+}
+| HEAP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ORGANIZATION_HEAP);
+}
+;
 
 /*tablegroup partition option*/
 opt_tg_partition_option:
@@ -24419,6 +24436,7 @@ ACCESS_INFO
 |       GTS
 |       HANDLER
 |       HASH
+|       HEAP
 |       HELP
 |       HISTOGRAM
 |       HOST
@@ -24980,6 +24998,7 @@ ACCESS_INFO
 |       RB_ITERATE
 |       RB_OR_AGG
 |       RB_AND_AGG
+|       ORGANIZATION
 |       OVERWRITE
 |       OPTIMIZER_COSTS
 |       MICRO_INDEX_CLUSTERED

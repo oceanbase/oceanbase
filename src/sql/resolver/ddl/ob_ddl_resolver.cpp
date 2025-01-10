@@ -2006,11 +2006,6 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             table_mode_.mode_flag_ = TABLE_MODE_QUEUING_SUPER;
           } else if (0 == table_mode_str.case_compare("extreme")) {
             table_mode_.mode_flag_ = TABLE_MODE_QUEUING_EXTREME;
-          } else if (0 == table_mode_str.case_compare("heap_organized_table")) {
-            table_mode_.organization_mode_ = TOM_HEAP_ORGANIZED;
-            table_mode_.pk_mode_ = TPKM_TABLET_SEQ_PK;
-          } else if (0 == table_mode_str.case_compare("index_organized_table")) {
-            table_mode_.organization_mode_ = TOM_INDEX_ORGANIZED;
           } else {
             ret = OB_NOT_SUPPORTED;
             int tmp_ret = OB_SUCCESS;
@@ -2046,7 +2041,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               } else { // 暂不支持用户在alter table时变更PK_MODE
                 // 设置Table当前的PK_MODE，组装最终态TableMode
                 table_mode_.pk_mode_ = tmp_table_schema.get_table_mode_struct().pk_mode_;
-                table_mode_.organization_mode_ = tmp_table_schema.get_table_mode_struct().organization_mode_;
+                table_mode_.pk_exists_ = tmp_table_schema.get_table_mode_struct().pk_exists_;
               }
             }
           }

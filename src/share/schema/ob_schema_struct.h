@@ -136,6 +136,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_VEC_VECTOR_COLUMN_FLAG (INT64_C(1) << 27)
 #define GENERATED_VEC_IVF_CENTER_ID_COLUMN_FLAG (INT64_C(1) << 28)
 #define STRING_LOB_COLUMN_FLAG (INT64_C(1) << 29)
+#define HEAP_TABLE_PRIMARY_KEY_FLAG (INT64_C(1) << 30)
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
@@ -386,12 +387,14 @@ enum ObIndexType
   INDEX_TYPE_VEC_IVFPQ_PQ_CENTROID_LOCAL = 38,
   INDEX_TYPE_VEC_IVFPQ_CODE_LOCAL = 39,
   INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL = 40,
+  // heap table primary key index
+  INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY = 41,
 
   /*
   * Attention!!! when add new index type,
   * need update func ObSimpleTableSchemaV2::should_not_validate_data_index_ckm()
   */
-  INDEX_TYPE_MAX = 41,
+  INDEX_TYPE_MAX = 42,
 };
 
 bool is_support_split_index_type(const ObIndexType index_type);

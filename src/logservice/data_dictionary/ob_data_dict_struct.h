@@ -431,7 +431,7 @@ public:
   OB_INLINE bool is_aux_lob_table() const { return is_aux_lob_meta_table() || is_aux_lob_piece_table(); }
   OB_INLINE bool is_aux_vp_table() const { return share::schema::ObTableType::AUX_VERTIAL_PARTITION_TABLE == table_type_; }
   OB_INLINE bool is_heap_table() const
-  { return share::schema::TOM_HEAP_ORGANIZED == (enum share::schema::ObTableOrganizationMode)table_mode_.organization_mode_; }
+  { return share::schema::TOM_HEAP_ORGANIZED == (enum share::schema::ObTableOrganizationMode)table_mode_.pk_exists_; }
   OB_INLINE bool is_vir_table() const { return share::schema::ObTableType::VIRTUAL_TABLE == table_type_; }
   OB_INLINE bool is_view_table() const
   {

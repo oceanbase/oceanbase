@@ -2419,3 +2419,9 @@ DEF_BOOL(enable_adaptive_plan_cache, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_force_enable_plan_tracing, OB_TENANT_PARAMETER, "True",
          "controls whether plan tracking is enabled when plan cache is disabled",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(default_table_organization, OB_TENANT_PARAMETER, "INDEX",
+        common::ObConfigDefaultOrganizationChecker,
+        "The default_organization configuration option allows you to set the default"
+        " table organization mode to either HEAP (unordered data storage for OLAP) or"
+        " INDEX (index-organized storage for OLTP) when creating new tables.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

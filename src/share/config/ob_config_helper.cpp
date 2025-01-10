@@ -1602,5 +1602,12 @@ bool ObConfigJavaParamsChecker::check(const ObConfigItem &t) const
   }
   return bret;
 }
+
+bool ObConfigDefaultOrganizationChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("INDEX")
+      || 0 == tmp_str.case_compare("HEAP");
+}
 } // end of namepace common
 } // end of namespace oceanbase

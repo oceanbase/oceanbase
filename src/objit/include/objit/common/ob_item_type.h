@@ -2723,6 +2723,11 @@ typedef enum ObItemType
   T_DROP_CATALOG = 4790,
   T_SET_CATALOG = 4791,
   T_SHOW_CATALOGS = 4792,
+
+  // organization option
+  T_ORGANIZATION = 4793,
+  T_ORGANIZATION_INDEX = 4794,
+  T_ORGANIZATION_HEAP = 4795,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

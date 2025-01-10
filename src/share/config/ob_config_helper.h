@@ -1036,6 +1036,16 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigJavaParamsChecker);
 };
+
+class ObConfigDefaultOrganizationChecker : public ObConfigChecker
+{
+public:
+  ObConfigDefaultOrganizationChecker() {}
+  virtual ~ObConfigDefaultOrganizationChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDefaultOrganizationChecker);
+};
 } // namespace common
 } // namespace oceanbase
 

@@ -660,7 +660,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
             // 当用户建表未指定主键时，内部实现为新无主键表，暂不支持用户指定TableOrganizationFormat
             if (0 == get_primary_key_size()) {
               // change default no pk to heap table
-              table_mode_.organization_mode_ = TOM_HEAP_ORGANIZED;
+              table_mode_.pk_exists_ = TOM_HEAP_ORGANIZED;
               table_mode_.pk_mode_ = TPKM_TABLET_SEQ_PK;
             }
             if (is_oracle_temp_table_) {
@@ -750,7 +750,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 
         // 4.0 new heap table has hidden primary key (tablet seq)
         if (OB_SUCC(ret) && 0 == get_primary_key_size()
-            && TOM_HEAP_ORGANIZED == table_mode_.organization_mode_) {
+            && TOM_HEAP_ORGANIZED == table_mode_.pk_exists_) {
           ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
           if (OB_FAIL(add_hidden_tablet_seq_col())) {
             SQL_RESV_LOG(WARN, "failed to add hidden primary key tablet seq", K(ret));
