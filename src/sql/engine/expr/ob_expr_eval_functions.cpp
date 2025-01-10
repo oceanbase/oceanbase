@@ -1351,6 +1351,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprDemoteCast::eval_demoted_val,                        /* 818 */
   NULL, // ObExprRangePlacement::eval_range_placement,                /* 819 */
   NULL, // ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset,      /* 820 */
+  ObExprIsNot::json_is_not_false,                                     /* 821 */
+  ObExprIsNot::json_is_not_true,                                      /* 822 */
+
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
