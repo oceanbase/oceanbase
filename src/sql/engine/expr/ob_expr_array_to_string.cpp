@@ -72,7 +72,7 @@ int ObExprArrayToString::calc_result_typeN(ObExprResType &type,
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "VARCHAR", ob_obj_type_str(delimiter_type->get_type()));
   } else if (param_num == 3) {
     ObExprResType *null_str_type = &types[2];
-    if (!ob_is_varchar_char_type(null_str_type->get_type(), delimiter_type->get_collation_type())
+    if (!ob_is_varchar_char_type(null_str_type->get_type(), null_str_type->get_collation_type())
         && !ob_is_null(null_str_type->get_type())) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "VARCHAR", ob_obj_type_str(null_str_type->get_type()));

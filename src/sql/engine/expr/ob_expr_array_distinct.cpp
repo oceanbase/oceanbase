@@ -79,9 +79,7 @@ int ObExprArrayDistinct::eval_array_distinct(const ObExpr &expr, ObEvalCtx &ctx,
   ObIArrayType *arr_res = NULL;
   ObDatum *datum = NULL;
   bool bret = false;
-  if (ob_is_null(expr.obj_meta_.get_type())) {
-    // do norhing
-  } else if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
+  if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
     LOG_WARN("failed to eval args", K(ret));
   } else if (datum->is_null()) {
     res.set_null();
@@ -113,9 +111,7 @@ int ObExprArrayDistinct::eval_array_distinct_batch(const ObExpr &expr, ObEvalCtx
   const uint16_t meta_id = expr.args_[0]->obj_meta_.get_subschema_id();
   ObIArrayType *arr_obj = NULL;
   ObIArrayType *arr_res = NULL;
-  if (ob_is_null(expr.obj_meta_.get_type())) {
-    // do norhing
-  } else if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
+  if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
     LOG_WARN("eval date_unit_datum failed", K(ret));
   } else {
     ObDatumVector in_array = expr.args_[0]->locate_expr_datumvector(ctx);
@@ -163,9 +159,7 @@ int ObExprArrayDistinct::eval_array_distinct_vector(const ObExpr &expr, ObEvalCt
                                                     const ObBitVector &skip, const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
-  if (ob_is_null(expr.obj_meta_.get_type())) {
-    // do norhing
-  } else if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("fail to eval params", K(ret));
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
