@@ -283,12 +283,12 @@ END_P SET_VAR DELIMITER
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT
 
-        DAG DATA DATAFILE DATA_DISK_SIZE DATA_SOURCE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPTION
+        DAG DATA DATAFILE DATA_DISK_SIZE DATA_SOURCE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPT DECRYPTION
         DEFAULT_AUTH DEFAULT_LOB_INROW_THRESHOLD DEFINER DELAY DELAY_KEY_WRITE DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS
         DIRECTORY DISABLE DISALLOW DISCARD DISK DISKGROUP DO DOT DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DUPLICATE_READ_CONSISTENCY DYNAMIC
         DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND
 
-        EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPTED ENCRYPTION END ENDPOINT ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
+        EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPT ENCRYPTED ENCRYPTION END ENDPOINT ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXCLUDING EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
         EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED ENCODING EMPTY_FIELD_AS_NULL EUCLIDEAN EXTERNAL EXTERNAL_STORAGE_DEST
 
@@ -459,6 +459,7 @@ END_P SET_VAR DELIMITER
 %type <node> truncate_table_stmt
 %type <node> lock_user_stmt lock_spec_mysql57
 %type <node> grant_stmt grant_privileges role_or_priv_list role_or_priv priv_level opt_privilege grant_options object_type
+%type <node> grant_proxy_stmt revoke_proxy_stmt
 %type <node> revoke_stmt opt_with_admin_option opt_ignore_unknown_user set_role_stmt default_set_role_clause set_role_clause
 %type <node> opt_limit opt_for_grant_user opt_using_role
 %type <node> parameterized_trim
@@ -17108,6 +17109,16 @@ role_with_host
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_TRIGGER;
 }
+| ENCRYPT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_ENCRYPT;
+}
+| DECRYPT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_DECRYPT;
+}
 ;
 
 opt_privilege:
@@ -17250,6 +17261,37 @@ opt_ignore_unknown_user:
 | IGNORE UNKNOWN USER
 {
   malloc_terminal_node($$, result->malloc_pool_, T_IGNORE_UNKNOWN_USER);
+}
+;
+
+/*****************************************************************************
+ *
+ *	grant/revoke proxy grammar
+ *
+ *****************************************************************************/
+grant_proxy_stmt:
+GRANT PROXY ON user_specification_without_password TO user_specification_without_password_list grant_options
+{
+  ParseNode *proxy_priv_node = NULL;
+  ParseNode *privlege_node = NULL;
+  ParseNode *proxy_user_list_node = NULL;
+  malloc_non_terminal_node(proxy_priv_node, result->malloc_pool_, T_PRIV_TYPE, 1, $2);
+  proxy_priv_node->value_ = OB_PRIV_PROXY;
+  malloc_non_terminal_node(privlege_node, result->malloc_pool_, T_LINK_NODE, 2, proxy_priv_node, $7);
+  merge_nodes(proxy_user_list_node, result, T_USERS, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_GRANT_PROXY, 3, privlege_node, $4, proxy_user_list_node);
+}
+;
+
+revoke_proxy_stmt:
+REVOKE PROXY ON user_specification_without_password FROM user_specification_without_password_list
+{
+  ParseNode *proxy_priv_node = NULL;
+  ParseNode *proxy_user_list_node = NULL;
+  malloc_non_terminal_node(proxy_priv_node, result->malloc_pool_, T_PRIV_TYPE, 1, $2);
+  proxy_priv_node->value_ = OB_PRIV_PROXY;
+  merge_nodes(proxy_user_list_node, result, T_USERS, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REVOKE_PROXY, 3, proxy_priv_node, $4, proxy_user_list_node);
 }
 ;
 
@@ -20001,6 +20043,14 @@ CHECKSUM TABLE opt_table_list opt_checksum_option
 {
   $$ = $1;
   malloc_terminal_node($$, result->malloc_pool_, T_LOAD_INDEX_INTO_CACHE);
+}
+| grant_proxy_stmt
+{
+  $$ = $1;
+}
+| revoke_proxy_stmt
+{
+  $$ = $1;
 }
 ;
 
@@ -23023,7 +23073,14 @@ NAME_OB
 {
   make_name_node($$, result->malloc_pool_, "password");
 }
-
+| ENCRYPT
+{
+  make_name_node($$, result->malloc_pool_, "encrypt");
+}
+| DECRYPT
+{
+  make_name_node($$, result->malloc_pool_, "decrypt");
+}
 ;
 
 column_label:
@@ -24951,6 +25008,8 @@ unreserved_keyword_ambiguous_roles:
 |       RESOURCE
 |       EXECUTE
 |       SHUTDOWN
+|       ENCRYPT
+|       DECRYPT
 ;
 
 /*注释掉的关键字有规约冲突暂时注释了,都是一些sql中常用的关键字,后面按需打开,增加这块代码逻辑是为了支持在mysql中允许以

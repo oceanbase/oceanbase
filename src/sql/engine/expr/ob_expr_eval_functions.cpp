@@ -414,6 +414,7 @@
 #include "ob_expr_array_cardinality.h"
 #include "ob_expr_audit_log_func.h"
 #include "ob_expr_can_access_trigger.h"
+#include "ob_expr_enhanced_aes_encrypt.h"
 #include "ob_expr_split_part.h"
 #include "ob_expr_inner_decode_like.h"
 #include "ob_expr_inner_double_to_int.h"
@@ -1288,8 +1289,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprRbSelect::eval_rb_select,                                     /* 756 */
   ObExprVectorNegativeIPDistance::calc_negative_inner_product,        /* 757 */
   ObExprTokenize::eval_tokenize,                                      /* 758 */
-  NULL, // ObExprEnhancedAesEncrypt::eval_aes_encrypt                 /* 759 */
-  NULL, // ObExprEnhancedAesDecrypt::eval_aes_decrypt                 /* 760 */
+  ObExprEnhancedAesEncrypt::eval_aes_encrypt,                         /* 759 */
+  ObExprEnhancedAesDecrypt::eval_aes_decrypt,                         /* 760 */
   NULL, // ObExprMysqlProcInfo::eval_mysql_proc_info                       /* 761 */
   ObExprArrayOverlaps::eval_array_overlaps,                           /* 762 */
   ObExprArrayContainsAll::eval_array_contains_all,                    /* 763 */

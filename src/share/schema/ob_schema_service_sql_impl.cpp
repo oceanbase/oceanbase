@@ -9346,7 +9346,7 @@ int ObSchemaServiceSQLImpl::fetch_master_key(
         LOG_WARN("fail to get result. ", K(ret));
       } else if (OB_FAIL(result->next())) {
         if (common::OB_ITER_END == ret) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_GET_MASTER_KEY;
           LOG_WARN("select master_key return no row", K(ret), K(master_key_id));
         } else {
           LOG_WARN("failed to get value about master_key", K(ret), K(master_key_id));

@@ -84,6 +84,12 @@ private:
       case T_DROP_LOGFILE_GROUP:
         ret = stmt::T_DROP_LOGFILE_GROUP;
         break;
+      case T_GRANT_PROXY:
+        ret = stmt::T_GRANT_PROXY;
+        break;
+      case T_REVOKE_PROXY:
+        ret = stmt::T_REVOKE_PROXY;
+        break;
       default:
         ret = stmt::T_NONE;
     }

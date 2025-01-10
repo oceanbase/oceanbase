@@ -402,6 +402,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_elt.cpp
   engine/expr/ob_expr_empty_lob.cpp
   engine/expr/ob_expr_encrypt.cpp
+  engine/expr/ob_expr_enhanced_aes_encrypt.cpp
   engine/expr/ob_expr_equal.cpp
   engine/expr/ob_expr_estimate_ndv.cpp
   engine/expr/ob_expr_exists.cpp

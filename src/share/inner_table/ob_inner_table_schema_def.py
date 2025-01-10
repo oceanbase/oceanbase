@@ -30334,7 +30334,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
           (CASE WHEN (PRIV_OTHERS & (1 << 7)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROLE,
           (CASE WHEN (PRIV_OTHERS & (1 << 8)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DROP_ROLE,
-          (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER
+          (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER,
+          (CASE WHEN (PRIV_OTHERS & (1 << 11)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ENCRYPT,
+          (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT
   FROM OCEANBASE.__all_user;
   """.replace("\n", " ")
 )
@@ -30398,7 +30400,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
           (CASE WHEN (PRIV_OTHERS & (1 << 7)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROLE,
           (CASE WHEN (PRIV_OTHERS & (1 << 8)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DROP_ROLE,
-          (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER
+          (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER,
+          (CASE WHEN (PRIV_OTHERS & (1 << 11)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ENCRYPT,
+          (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT
   FROM OCEANBASE.__all_virtual_user;
   """.replace("\n", " ")
 )
@@ -31067,6 +31071,10 @@ def_table_schema(
                      AND (U.PRIV_OTHERS & (1 << 8)) != 0 THEN 'DROP ROLE'
                 WHEN V1.C1 = 44
                      AND (U.PRIV_OTHERS & (1 << 9)) != 0 THEN 'TRIGGER'
+                WHEN V1.C1 = 46
+                     AND (U.PRIV_OTHERS & (1 << 11) != 0) THEN 'ENCRYPT'
+                WHEN V1.C1 = 47
+                     AND (U.PRIV_OTHERS & (1 << 12) != 0) THEN 'DECRYPT'
                 WHEN V1.C1 = 0
                      AND U.PRIV_ALTER = 0
                      AND U.PRIV_CREATE = 0
@@ -31158,7 +31166,9 @@ def_table_schema(
         UNION ALL SELECT 41 AS C1
         UNION ALL SELECT 42 AS C1
         UNION ALL SELECT 43 AS C1
-        UNION ALL SELECT 44 AS C1) V1,
+        UNION ALL SELECT 44 AS C1
+        UNION ALL SELECT 46 AS C1
+        UNION ALL SELECT 47 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID = 0

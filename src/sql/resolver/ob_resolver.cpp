@@ -1300,6 +1300,11 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(OLAPAsyncJob);
         break;
       }
+      case T_GRANT_PROXY:
+      case T_REVOKE_PROXY: {
+        REGISTER_STMT_RESOLVER(Mock);
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);
