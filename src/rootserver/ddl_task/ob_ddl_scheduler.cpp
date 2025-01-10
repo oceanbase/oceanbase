@@ -1435,6 +1435,10 @@ int ObDDLScheduler::schedule_auto_split_task()
   int ret = OB_SUCCESS;
   ObRsAutoSplitScheduler &split_task_scheduler = ObRsAutoSplitScheduler::get_instance();
   ObArray<ObAutoSplitTask> task_array;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(split_task_scheduler.gc_deleted_tenant_caches())) {
+    LOG_WARN("failed to gc split tasks", K(tmp_ret));
+  }
   if (OB_FAIL(split_task_scheduler.pop_tasks(task_array))) {
     LOG_WARN("fail to pop tasks from auto_split_task_tree");
   } else if (task_array.count() == 0) {
@@ -1445,7 +1449,7 @@ int ObDDLScheduler::schedule_auto_split_task()
     obrpc::ObAlterTableRes unused_res;
     common::ObMalloc allocator(common::ObMemAttr(OB_SERVER_TENANT_ID, "split_sched"));
     for (int64_t i = 0; OB_SUCC(ret) && i < task_array.count(); ++i) {
-      int tmp_ret = OB_SUCCESS;
+      tmp_ret = OB_SUCCESS;
       unused_res.reset();
       ObAutoSplitTask &task = task_array.at(i);
       void *buf = nullptr;

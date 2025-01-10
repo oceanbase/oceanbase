@@ -595,6 +595,15 @@ int ObRsAutoSplitScheduler::check_ls_migrating(
   return ret;
 }
 
+int ObRsAutoSplitScheduler::gc_deleted_tenant_caches()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(polling_mgr_.gc_deleted_tenant_caches())) {
+    LOG_WARN("failed to gc deleted tenant caches", K(ret));
+  }
+  return ret;
+}
+
 int ObServerAutoSplitScheduler::check_sstable_limit(const storage::ObTablet &tablet, bool &exceed_limit)
 {
   int ret = OB_SUCCESS;
@@ -858,6 +867,74 @@ int ObAutoSplitTaskPollingMgr::get_tenant_cache(const int tenant_id, ObAutoSplit
   return ret;
 }
 
+int ObAutoSplitTaskPollingMgr::gc_deleted_tenant_caches()
+{
+  int ret = OB_SUCCESS;
+  ObLockGuard<ObSpinLock> guard(lock_);
+  if (is_root_server_ && REACH_TIME_INTERVAL(60L * 60L * 1000L * 1000L)) {
+    ObSchemaGetterGuard schema_guard;
+    ObSEArray<uint64_t, 10> tenant_ids;
+    common::hash::ObHashSet<uint64_t> existed_tenants_set;
+
+    if (OB_ISNULL(GCTX.schema_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema service should not be null", K(ret), K(GCTX.schema_service_));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+      LOG_WARN("get_schema_guard failed", K(ret));
+    } else if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
+      LOG_WARN("failed to get all tenant ids", K(ret));
+    } else if (OB_FAIL(existed_tenants_set.create(5, ObMemAttr(OB_SERVER_TENANT_ID, "as_ten_set")))) {
+      LOG_WARN("failed to create hash set", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+        if (OB_FAIL(existed_tenants_set.set_refactored(tenant_ids.at(i)))) {
+          LOG_WARN("failed to push into task set", K(ret), K(i), K(tenant_ids));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else {
+        GcTenantCacheOperator tc_op(existed_tenants_set);
+        if (OB_FAIL(map_tenant_to_cache_.foreach_refactored(tc_op))) {
+          LOG_WARN("failed to do for each refactored", K(ret));
+        } else {
+          ObSEArray<oceanbase::common::hash::HashMapPair<uint64_t, ObAutoSplitTaskCache*>, 1> &needed_gc_tenant_caches = tc_op.needed_gc_tenant_caches_;
+          for (int64_t i = 0; OB_SUCC(ret) && i < needed_gc_tenant_caches.count(); ++i) {
+            oceanbase::common::hash::HashMapPair<uint64_t, ObAutoSplitTaskCache*> &pair = needed_gc_tenant_caches.at(i);
+            uint64_t tenant_id = pair.first;
+            ObAutoSplitTaskCache *&tenant_cache = pair.second;
+            if (OB_FAIL(map_tenant_to_cache_.erase_refactored(tenant_id))) {
+              LOG_WARN("failed to erase tenant cache from map_tenant_to_cache_", K(ret), K(tenant_id));
+            } else if (OB_ISNULL(tenant_cache)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("tenant cache ptr should not be null", K(ret), K(tenant_cache));
+            } else {
+              tenant_cache->~ObAutoSplitTaskCache();
+              polling_mgr_malloc_.free(tenant_cache);
+              tenant_cache = nullptr;
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAutoSplitTaskPollingMgr::GcTenantCacheOperator::operator() (oceanbase::common::hash::HashMapPair<uint64_t, ObAutoSplitTaskCache*> &entry)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = entry.first;
+  ObAutoSplitTaskCache *tenant_cache = entry.second;
+  if (OB_ISNULL(tenant_cache)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant cache ptr should not be null", K(ret), K(tenant_cache));
+  } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST == existed_tenants_set_.exist_refactored(tenant_id)) &&
+      OB_FAIL(needed_gc_tenant_caches_.push_back(entry))) {
+    LOG_WARN("failed to push back into needed_gc_tenant_caches_", K(ret));
+  }
+  return ret;
+}
+
 int ObAutoSplitTaskPollingMgr::pop_tasks_from_tenant_cache(const int64_t num_tasks_to_pop,
                                                            ObArray<ObAutoSplitTask> &task_array,
                                                            ObAutoSplitTaskCache *tenant_cache)
@@ -921,7 +998,7 @@ int ObAutoSplitTaskPollingMgr::pop_tasks(const int64_t num_tasks_to_pop, ObArray
   }
   if (OB_SUCC(ret) && OB_LIKELY(total_tasks_pop_budge > 0)) {
     ObArray<uint64_t> tenants_id;
-    for (hash::ObHashMap<uint64_t, ObAutoSplitTaskCache*>::iterator iter = map_tenant_to_cache_.begin(); iter != map_tenant_to_cache_.end(); iter++) {
+    for (hash::ObHashMap<uint64_t, ObAutoSplitTaskCache*>::iterator iter = map_tenant_to_cache_.begin(); OB_SUCC(ret) && iter != map_tenant_to_cache_.end(); iter++) {
       uint64_t tenant_id = iter->first;
       if (OB_FAIL(tenants_id.push_back(tenant_id))) {
         LOG_WARN("failed to push task into tenants_id", K(ret));

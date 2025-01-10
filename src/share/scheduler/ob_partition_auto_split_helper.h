@@ -157,6 +157,17 @@ private:
 
 class ObAutoSplitTaskPollingMgr
 {
+  struct GcTenantCacheOperator
+  {
+  public:
+    GcTenantCacheOperator(common::hash::ObHashSet<uint64_t> &existed_tenants_set)
+      : existed_tenants_set_(existed_tenants_set)
+      {}
+    int operator () (oceanbase::common::hash::HashMapPair<uint64_t, ObAutoSplitTaskCache*> &entry);
+  public:
+    common::hash::ObHashSet<uint64_t> &existed_tenants_set_;
+    ObSEArray<oceanbase::common::hash::HashMapPair<uint64_t, ObAutoSplitTaskCache*>, 1> needed_gc_tenant_caches_;
+  };
 public:
   ObAutoSplitTaskPollingMgr(const bool is_root_server)
     : is_root_server_(is_root_server), inited_(false), total_tasks_(0)
@@ -168,6 +179,8 @@ public:
   int push_tasks(const ObArray<ObAutoSplitTask> &task_array);
   inline bool is_busy() { return ATOMIC_LOAD(&total_tasks_) >= ObAutoSplitTaskPollingMgr::BUSY_THRESHOLD; }
   inline bool empty() { return ATOMIC_LOAD(&total_tasks_) == 0; };
+  int gc_deleted_tenant_caches();
+
 
 private:
   inline int64_t get_total_tenants() { return map_tenant_to_cache_.size(); }
@@ -259,6 +272,7 @@ public:
   int init() { return polling_mgr_.init(); }
   void reset() { polling_mgr_.reset(); }
   static int check_ls_migrating(const uint64_t tenant_id, const ObTabletID &tablet_id, bool &is_migrating);
+  int gc_deleted_tenant_caches();
 private:
   ObRsAutoSplitScheduler ()
     : polling_mgr_(true/*is_root_server*/)
