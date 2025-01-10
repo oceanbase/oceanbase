@@ -391,16 +391,22 @@ int ObSelectIntoOp::calc_url_and_set_access_info()
   int ret = OB_SUCCESS;
   const ObItemType into_type = MY_SPEC.into_type_;
   ObString path = file_name_.get_varchar().trim();
-  file_location_ = path.prefix_match_ci(OB_OSS_PREFIX)
-                    ? IntoFileLocation::REMOTE_OSS
-                    : IntoFileLocation::SERVER_DISK;
+  if (path.prefix_match_ci(OB_OSS_PREFIX)) {
+    file_location_ = IntoFileLocation::REMOTE_OSS;
+  } else if (path.prefix_match_ci(OB_COS_PREFIX)) {
+    file_location_ = IntoFileLocation::REMOTE_COS;
+  } else if (path.prefix_match_ci(OB_S3_PREFIX)) {
+    file_location_ = IntoFileLocation::REMOTE_S3;
+  } else {
+    file_location_ = IntoFileLocation::SERVER_DISK;
+  }
   if (file_location_ == IntoFileLocation::SERVER_DISK && do_partition_) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support partition option on server disk", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition option on server disk");
   } else if (T_INTO_OUTFILE == into_type && !MY_SPEC.is_single_ && OB_FAIL(calc_first_file_path(path))) {
     LOG_WARN("failed to calc first file path", K(ret));
-  } else if (file_location_ == IntoFileLocation::REMOTE_OSS) {
+  } else if (file_location_ != IntoFileLocation::SERVER_DISK) {
     ObString temp_url = path.split_on('?');
     temp_url.trim();
     ObString storage_info;
@@ -735,7 +741,7 @@ int ObSelectIntoOp::calc_first_file_path(ObString &path)
   ObSqlString file_name_with_suffix;
   ObString file_extension;
   ObSelectIntoOpInput *input = static_cast<ObSelectIntoOpInput*>(input_);
-  ObString input_file_name = file_location_ == IntoFileLocation::REMOTE_OSS
+  ObString input_file_name = file_location_ != IntoFileLocation::SERVER_DISK
                              ? path.split_on('?').trim()
                              : path;
   if (OB_ISNULL(input)) {
@@ -764,7 +770,7 @@ int ObSelectIntoOp::calc_first_file_path(ObString &path)
     if (format_type_ == ObExternalFileFormat::FormatType::CSV_FORMAT) {
       OZ(file_name_with_suffix.append(compression_algorithm_to_suffix(external_properties_.csv_format_.compression_algorithm_)));
     }
-    if (file_location_ == IntoFileLocation::REMOTE_OSS) {
+    if (file_location_ != IntoFileLocation::SERVER_DISK) {
       OZ(file_name_with_suffix.append_fmt("?%.*s", path.length(), path.ptr()));
     }
     if (OB_SUCC(ret) && OB_FAIL(ob_write_string(ctx_.get_allocator(), file_name_with_suffix.string(), path))) {
@@ -781,7 +787,7 @@ int ObSelectIntoOp::calc_next_file_path(ObExternalFileWriter &data_writer)
   ObString file_path;
   data_writer.split_file_id_++;
   if (data_writer.split_file_id_ > 0) {
-    if (MY_SPEC.is_single_ && IntoFileLocation::REMOTE_OSS == file_location_) {
+    if (MY_SPEC.is_single_ && IntoFileLocation::SERVER_DISK != file_location_) {
       file_path = (data_writer.split_file_id_ > 1)
                   ? data_writer.url_.split_on(data_writer.url_.reverse_find('.'))
                   : data_writer.url_;
@@ -4505,7 +4511,7 @@ bool ObSelectIntoOp::file_need_split(int64_t file_size)
 {
   return (file_location_ == IntoFileLocation::SERVER_DISK
           && !MY_SPEC.is_single_ && file_size > MY_SPEC.max_file_size_)
-        || (file_location_ == IntoFileLocation::REMOTE_OSS
+        || (file_location_ != IntoFileLocation::SERVER_DISK
             && ((!MY_SPEC.is_single_ && file_size > min(MY_SPEC.max_file_size_, MAX_OSS_FILE_SIZE))
                 || (MY_SPEC.is_single_ && file_size > MAX_OSS_FILE_SIZE)));
 }

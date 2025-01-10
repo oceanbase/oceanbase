@@ -28,6 +28,8 @@ using CsvCompressType = ObCSVGeneralFormat::ObCSVCompression;
 enum class IntoFileLocation {
   SERVER_DISK,
   REMOTE_OSS,
+  REMOTE_COS,
+  REMOTE_S3
 };
 struct ObStorageAppender
 {
