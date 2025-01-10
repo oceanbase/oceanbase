@@ -15493,7 +15493,11 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
                                                                    right_output_rows,
                                                                    &equal_sets))) {
   } else if (INNER_JOIN == join_type) {
-    if (OB_FAIL(ObOptSelectivity::calculate_join_selectivity(plan->get_update_table_metas(),
+    if (join_info.where_conditions_.empty()) {
+      selectivity = 1.0;
+      new_rows = left_output_rows * right_output_rows;
+      new_rows = MAX3(new_rows, left_output_rows, right_output_rows);
+    } else if (OB_FAIL(ObOptSelectivity::calculate_join_selectivity(plan->get_update_table_metas(),
                                                              plan->get_selectivity_ctx(),
                                                              join_info.where_conditions_,
                                                              selectivity,
@@ -15605,31 +15609,25 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
       selectivity *= oj_qual_sel;
     }
   } else if (IS_SEMI_ANTI_JOIN(join_type)) {
-    // semi/anti join is treated as table filter, use origin table metas
-    if (OB_FAIL(ObOptSelectivity::calculate_join_selectivity(plan->get_update_table_metas(),
+    double outer_rows = IS_LEFT_SEMI_ANTI_JOIN(join_type)?
+          left_output_rows: right_output_rows;
+    if (join_info.where_conditions_.empty()) {
+      // It is difficult to esitmate whether the inner table is empty,
+      // so we assume that this cartesian join filters nothing
+      new_rows = outer_rows;
+      selectivity = 1.0;
+    } else if (OB_FAIL(ObOptSelectivity::calculate_join_selectivity(plan->get_update_table_metas(),
                                                              plan->get_selectivity_ctx(),
                                                              join_info.where_conditions_,
                                                              selectivity,
                                                              plan->get_predicate_selectivities()))) {
       LOG_WARN("Failed to calc filter selectivities", K(ret));
     } else {
-      double outer_rows = IS_LEFT_SEMI_ANTI_JOIN(join_type)?
-          left_output_rows: right_output_rows;
       if (LEFT_SEMI_JOIN == join_type || RIGHT_SEMI_JOIN == join_type) {
         new_rows = outer_rows * selectivity;
       } else {
-        //如果有anti join的笛卡尔积，要么左表全输出、要么不输出任何行，
-        //取决于右表是否有输出，但是，我们不应该直接估行为0，
-        //一个简单的策略是，如果右表估行为0，那么应该输出左表的行数，而不是0
         selectivity = 1 - selectivity;
         new_rows = outer_rows * selectivity;
-        if (LEFT_ANTI_JOIN == join_type &&
-            std::fabs(right_output_rows) < OB_DOUBLE_EPSINON) {
-          new_rows = left_output_rows;
-        } else if (RIGHT_ANTI_JOIN == join_type &&
-                  std::fabs(left_output_rows) < OB_DOUBLE_EPSINON) {
-          new_rows = right_output_rows;
-        }
       }
     }
   } else if (CONNECT_BY_JOIN == join_type) {
