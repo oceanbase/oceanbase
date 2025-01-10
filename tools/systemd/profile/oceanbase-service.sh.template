@@ -224,23 +224,12 @@ function do_start_observer {
   identity=$(echo "$response" | grep -o '"identity":[^,]*' | sed 's/"identity"://' | tr -d '"' | tr -d '}')
   if [ "x$identity" = "xCLUSTER AGENT" ]; then
     echo "The observer is already bootstrap, please start it immediately"
-    response=$(curl --silent -H "Content-Type: application/json" -X POST -d '{
-      "scope":
-        {
-          "type":"global",
-          "target":[]
-        },
-      "force": true
-    }' --unix-socket $unix_socket $url/api/v1/ob/start)
-    successful=$(echo "$response" | grep -o '"successful":[^,]*' | sed 's/"successful"://')
-    if [ "x$successful" = "xfalse" ]; then
-        echo "send request failed"
-        exit 1
-    fi
-    trace=$(echo "$response" | grep -o '"id":[^,]*' | sed 's/"id"://' | tr -d '"')
-    check_trace $trace "start observer" 20 6
+    $obshell cluster start -a -y
     if [ $? -eq 0 ]; then
       /bin/bash $prefix/profile/telemetry.sh $report "12" >/dev/null 2>&1
+    else
+      echo "The observer start without bootstarp failed."
+      exit 1
     fi
   elif [ "x$identity" = "xSINGLE" ]; then
     # do config observer first
@@ -298,21 +287,11 @@ function start_observer {
 
 function stop_observer {
   check_obagent_process
-  response=$(curl --silent -H "Content-Type: application/json" -X POST -d '{
-			"scope":
-		{
-		"type":"global",
-		"target":[]
-         },
-      "force": true
-    }' --unix-socket $unix_socket $url/api/v1/ob/stop)
-  successful=$(echo "$response" | grep -o '"successful":[^,]*' | sed 's/"successful"://')
-  if [ "x$successful" = "xfalse" ]; then
-      echo "send request failed"
-      exit 1
+  $obshell cluster stop -a -y -f
+  if [ $? -ne 0 ]; then
+    echo "The observer stop failed."
+    exit 1
   fi
-  trace=$(echo "$response" | grep -o '"id":[^,]*' | sed 's/"id"://' | tr -d '"')
-  check_trace $trace "stop observer" 20 6
 }
 
 function reload_observer {
