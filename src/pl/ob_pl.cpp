@@ -3883,13 +3883,12 @@ do {                                                                  \
               get_params().at(i).set_is_ref_cursor_type(true);  // last assignment statement could clear this flag
               get_params().at(i).set_extend(
                   get_params().at(i).get_ext(), PL_REF_CURSOR_TYPE, get_params().at(i).get_val_len());
-            } else if (pl_type.is_collection_type()
-                  && (is_mocked_anonymous_array_id(params->at(i).get_udt_id()))) {
+            } else if (pl_type.is_collection_type() && (is_mocked_anonymous_array_id(params->at(i).get_udt_id()))) {
               ObPLComposite *composite = NULL;
               get_params().at(i) = params->at(i);
               get_params().at(i).set_udt_id(pl_type.get_user_type_id());
               composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
-              if (OB_NOT_NULL(composite) && composite->is_collection() && OB_INVALID_ID == composite->get_id()) {
+              if (OB_NOT_NULL(composite) && composite->is_collection()) {
                 composite->set_id(pl_type.get_user_type_id());
               }
             } else if (ObNullType == params->at(i).get_meta().get_type()
