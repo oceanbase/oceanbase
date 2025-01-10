@@ -66,7 +66,13 @@ struct ObEstRowCountRecord
 struct SampleInfo
 {
   SampleInfo() { reset(); }
-  enum SampleMethod { NO_SAMPLE = 0, ROW_SAMPLE = 1, BLOCK_SAMPLE = 2 };
+  enum SampleMethod
+  {
+    NO_SAMPLE = 0,
+    ROW_SAMPLE = 1,
+    BLOCK_SAMPLE = 2,
+    HYBRID_SAMPLE = 3
+  };
   enum SampleScope
   {
     SAMPLE_ALL_DATA = 0,

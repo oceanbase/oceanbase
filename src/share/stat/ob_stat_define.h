@@ -136,7 +136,8 @@ enum ColumnGatherFlag
   VALID_OPT_COL         = 1,
   NEED_BASIC_STAT       = 1 << 1,
   NEED_AVG_LEN          = 1 << 2,
-  NEED_REFINE_MIN_MAX   = 1 << 3
+  NEED_REFINE_MIN_MAX   = 1 << 3,
+  NEED_CS_REFINE_MIN_MAX  = 1 << 4
 };
 
 enum ObGranularityType

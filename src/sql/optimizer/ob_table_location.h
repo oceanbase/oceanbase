@@ -130,7 +130,8 @@ public:
     FUNC_VALUE,
     COLUMN_VALUE,
     PRE_RANGE_GRAPH,
-    LIST_VALUE
+    LIST_VALUE,
+    GATHER_STAT
   };
 
   ObPartLocCalcNode (common::ObIAllocator &allocator): node_type_(INVALID), allocator_(allocator)
