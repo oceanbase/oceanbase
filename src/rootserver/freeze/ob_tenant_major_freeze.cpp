@@ -19,6 +19,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_tenant_ls_merge_checker.h"
 #endif
+#include "share/schema/ob_mview_info.h"
 
 
 namespace oceanbase
@@ -179,6 +180,40 @@ int ObTenantMajorFreeze::set_freeze_info(const ObMajorFreezeReason freeze_reason
   return ret;
 }
 
+int ObTenantMajorFreeze::try_schedule_minor_before_major_()
+{
+  /*
+   * when user use large memory, hope use large memtable optimise performance
+   * now major merge read data from sstable so we need schedule minor befor major
+   * make memtable freeze to promise upper_trans_version < new_merge_version
+   */
+  int ret = OB_SUCCESS;
+  bool contains = false;
+  ObAddr rs_addr;
+  obrpc::ObRootMinorFreezeArg arg;
+  if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_) || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid gctx", K(GCTX.rs_rpc_proxy_), K(GCTX.rs_mgr_), K(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObMViewInfo::contains_major_refresh_mview(*GCTX.sql_proxy_, tenant_id_, contains))) {
+    LOG_WARN("failed to check contain major mview", KR(ret));
+  } else if (!contains) {
+    // do nothing
+  } else if (OB_FAIL(arg.tenant_ids_.push_back(tenant_id_))) {
+    LOG_WARN("faiedl to push back tenant_id", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
+    LOG_WARN("get rootservice address failed", K(ret));
+  } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).timeout(GCONF.rpc_timeout)
+                                                    .root_minor_freeze(arg))) {
+    LOG_WARN("fail to execute root_minor_freeze rpc", KR(ret), K(arg));
+  } else {
+    LOG_INFO("try_schedule_minor_before_major_", KR(ret), K(contains), K(rs_addr));
+    // wait for freeze finish
+    const int64_t wait_us = GCONF.rpc_timeout;
+    ob_usleep(wait_us);
+  }
+  return ret;
+}
+
 int ObTenantMajorFreeze::launch_major_freeze(const ObMajorFreezeReason freeze_reason)
 {
   int ret = OB_SUCCESS;
@@ -204,6 +239,7 @@ int ObTenantMajorFreeze::launch_major_freeze(const ObMajorFreezeReason freeze_re
     } else {
       LOG_WARN("fail to check freeze info", KR(ret), K_(tenant_id));
     }
+  } else if (FALSE_IT(/*ignore ret*/(void)try_schedule_minor_before_major_())) {
   } else if (OB_FAIL(set_freeze_info(freeze_reason))) {
     LOG_WARN("fail to set_freeze_info", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(major_merge_info_detector_.signal())) {

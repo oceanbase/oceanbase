@@ -84,6 +84,7 @@ private:
   int set_freeze_info(const ObMajorFreezeReason freeze_reason);
 
   bool is_primary_service() const { return is_primary_service_; }
+  int try_schedule_minor_before_major_();
 
 private:
   bool is_inited_;
