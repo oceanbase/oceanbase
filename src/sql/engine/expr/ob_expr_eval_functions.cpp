@@ -1731,6 +1731,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprBool::calc_vector_bool_expr,                            /* 199 */
   NULL, // ObExprNotBetween::eval_not_between_vector,                    /* 200 */
   NULL, // ObExprNot::eval_not_vector,                                   /* 201 */
+  ObExprFindInSet::calc_find_in_set_vector,                              /* 202 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
