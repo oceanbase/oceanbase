@@ -110,7 +110,8 @@ private:
       : max_batch_size_(0),
         tablet_id_batch_vector_(nullptr),
         tablet_id_const_vector_(nullptr),
-        col_fixed_(nullptr)
+        col_fixed_(nullptr),
+        col_lob_storage_(nullptr)
     {
     }
     ~BatchCtx() {}
@@ -130,6 +131,8 @@ private:
     // for vectorized
     // shallow copy unfixed cols
     sql::ObBitVector *col_fixed_;
+    // expand const vector for lob storage cols
+    sql::ObBitVector *col_lob_storage_;
     // vectorized 1.0 : VEC_UNIFORM
     // vectorized 2.0 : nullptr(fixed), VEC_DISCRETE(unfixed)
     ObArray<ObIVector *> batch_vectors_;

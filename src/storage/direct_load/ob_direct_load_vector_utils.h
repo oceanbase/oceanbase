@@ -53,6 +53,16 @@ public:
   // * VEC_UNIFORM_CONST -> VEC_UNIFORM_CONST
   static int shallow_copy_vector(ObIVector *src_vec, ObIVector *dest_vec, const int64_t batch_size);
 
+  // 按需实现, 目前只支持以下场景:
+  // * VEC_UNIFORM_CONST -> VEC_DISCRETE
+  // * VEC_UNIFORM_CONST -> VEC_UNIFORM
+  static int expand_const_vector(ObIVector *const_vec, ObIVector *dest_vec, const int64_t batch_size);
+
+  // 按需实现, 目标只支持以下场景
+  // * const_datum -> VEC_DISCRETE
+  // * const_datum -> VEC_UNIFORM
+  static int expand_const_datum(const common::ObDatum &const_datum, ObIVector *dest_vec, const int64_t batch_size);
+
   static int get_payload(ObIVector *vector, const int64_t idx, bool &is_null, const char *&payload,
                          ObLength &len);
 

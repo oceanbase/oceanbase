@@ -544,6 +544,74 @@ int ObDirectLoadVectorUtils::shallow_copy_vector(ObIVector *src_vec,
   return ret;
 }
 
+int ObDirectLoadVectorUtils::expand_const_vector(ObIVector *const_vec,
+                                                 ObIVector *dest_vec,
+                                                 const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == const_vec || nullptr == dest_vec || batch_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(const_vec), KP(dest_vec), K(batch_size));
+  } else if (OB_UNLIKELY(VEC_UNIFORM_CONST != const_vec->get_format())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not const vector", KR(ret), K(const_vec->get_format()));
+  } else {
+    const ObDatum &const_datum = static_cast<ObUniformBase *>(const_vec)->get_datums()[0];
+    if (OB_FAIL(expand_const_datum(const_datum, dest_vec, batch_size))) {
+      LOG_WARN("fail to expaned const datum", KR(ret), K(const_datum), KP(dest_vec), K(batch_size));
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadVectorUtils::expand_const_datum(const ObDatum &const_datum,
+                                                ObIVector *dest_vec,
+                                                const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(const_datum.is_ext() || nullptr == dest_vec || batch_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(const_datum), KP(dest_vec), K(batch_size));
+  } else {
+    const VectorFormat dest_format = dest_vec->get_format();
+    switch (dest_format) {
+      case VEC_DISCRETE: {
+        ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(dest_vec);
+        discrete_vec->reset_flag();
+        discrete_vec->get_nulls()->reset(batch_size);
+        if (const_datum.is_null()) {
+          discrete_vec->set_has_null();
+          discrete_vec->get_nulls()->set_all(batch_size);
+        } else {
+          ObLength *lens = discrete_vec->get_lens();
+          char **ptrs = discrete_vec->get_ptrs();
+          for (int64_t i = 0; i < batch_size; ++i) {
+            lens[i] = const_datum.len_;
+          }
+          for (int64_t i = 0; i < batch_size; ++i) {
+            ptrs[i] = const_cast<char *>(const_datum.ptr_);
+          }
+        }
+        break;
+      }
+      case VEC_UNIFORM:
+      {
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(dest_vec);
+        ObDatum *datums = uniform_vec->get_datums();
+        for (int64_t i = 0; i < batch_size; ++i) {
+          datums[i] = const_datum;
+        }
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected vector format", KR(ret), K(dest_format));
+        break;
+    }
+  }
+  return ret;
+}
+
 int ObDirectLoadVectorUtils::get_payload(ObIVector *vector, const int64_t idx, bool &is_null,
                                          const char *&payload, ObLength &len)
 {

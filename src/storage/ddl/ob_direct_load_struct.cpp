@@ -2022,30 +2022,6 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
           }
           break;
         }
-        case VEC_UNIFORM_CONST:
-        {
-          ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
-          ObDatum &datum = uniform_vec->get_datums()[0];
-          if (!datum.is_null()) {
-            temp_datum.ptr_ = datum.ptr_;
-            temp_datum.len_ = datum.len_;
-            if (DATA_VERSION_4_3_0_0 > data_format_version) {
-              if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_inrow_threshold, temp_datum))) {
-                LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
-              }
-            } else {
-              if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
-                  pk_interval, col_type, lob_inrow_threshold, temp_datum))) {
-                LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
-              }
-            }
-            if (OB_SUCC(ret)) {
-              datum.ptr_ = temp_datum.ptr_;
-              datum.len_ = temp_datum.len_;
-            }
-          }
-          break;
-        }
         default:
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected lob vector format", KR(ret), K(i), K(format));
