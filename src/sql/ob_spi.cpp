@@ -9347,7 +9347,7 @@ int ObSPIService::setup_cursor_snapshot_verify_(ObPLCursorInfo *cursor, ObSPIRes
       LOG_ERROR("for update cursor opened but not trans id invalid", K(ret), KPC(tx), K(snapshot));
     }
     need_register_snapshot = true;
-  } else if (cursor->is_streaming() && tx && tx->is_in_tx()) {
+  } else if (cursor->is_streaming() && tx && tx->is_in_tx() && !tx->is_all_parts_clean()) {
     if (exec_ctx.get_my_session()->enable_enhanced_cursor_validation()) {
       need_register_snapshot = false;
       LOG_TRACE("enable cursor open check read uncommitted");

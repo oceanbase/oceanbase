@@ -215,13 +215,8 @@ union ObTxPartFlag
   struct FlagBit
   {
     unsigned int is_dup_ls_ : 1;
-
-    FlagBit() { reset(); }
-
-    void reset() { is_dup_ls_ = 0; }
-
-    TO_STRING_KV(K(is_dup_ls_));
-
+    bool is_clean_          : 1; // no Write happended, even rollbacked
+    TO_STRING_KV(K_(is_dup_ls), K_(is_clean));
   } flag_bit_;
 
   ObTxPartFlag() { reset(); }
@@ -229,11 +224,13 @@ union ObTxPartFlag
   void reset()
   {
     flag_val_ = 0;
-    flag_bit_.reset();
   }
 
   bool is_dup_ls() const { return flag_bit_.is_dup_ls_ == 1; }
   void set_dup_ls() { flag_bit_.is_dup_ls_ = 1; }
+  bool is_clean() const { return flag_bit_.is_clean_; }
+  void set_clean() { flag_bit_.is_clean_ = true; }
+  void set_dirty() { flag_bit_.is_clean_ = false; }
 };
 
 struct ObTxPart
@@ -251,7 +248,8 @@ struct ObTxPart
   ObTxPartFlag flag_;     // used to describe some special attributes of a participant
   bool operator==(const ObTxPart &rhs) const { return id_ == rhs.id_ && addr_ == rhs.addr_; }
   bool operator!=(const ObTxPart &rhs) const { return !operator==(rhs); }
-  bool is_clean() const { return !first_scn_.is_valid() || (first_scn_ > last_scn_); }
+  bool is_clean() const { return flag_.is_clean(); }
+  bool is_without_valid_write() const { return !first_scn_.is_valid() || last_scn_ < first_scn_; }
   bool is_without_ctx() const { return is_without_ctx(epoch_); }
   bool is_dup_ls() const { return flag_.is_dup_ls(); }
   static bool is_without_ctx(int64_t epoch) { return EPOCH_DEAD == epoch; }
@@ -944,6 +942,8 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   void reset_continuous_lock_conflict_cnt() { return ATOMIC_STORE(&continuous_lock_conflict_cnt_, 0); }
   int add_modified_tables(const ObIArray<uint64_t> &tables);
   bool has_modify_table(const uint64_t table_id) const;
+  bool is_all_parts_clean() const;
+  bool is_all_parts_without_valid_write() const;
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;

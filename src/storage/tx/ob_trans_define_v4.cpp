@@ -782,6 +782,9 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append, const bool check_only
         p.first_scn_ = MIN(a.first_scn_, p.first_scn_);
         p.last_scn_ = p.last_scn_.is_max() ? a.last_scn_ : MAX(a.last_scn_, p.last_scn_);
         p.last_touch_ts_ = exec_info_reap_ts_ + 1;
+        if (p.is_clean() && !a.is_clean()) {
+          p.flag_.set_dirty();
+        }
       }
       break;
     }
@@ -846,6 +849,7 @@ int ObTxDesc::add_clean_part_if_absent(const share::ObLSID &id,
   p.addr_ = addr;
   p.first_scn_ = cur_seq;
   p.last_scn_ = cur_seq;
+  p.flag_.set_clean();
   if (is_dup) {
     p.flag_.set_dup_ls();
   }
@@ -2095,6 +2099,23 @@ bool ObTxDesc::has_modify_table(const uint64_t table_id) const
   return is_contain(modified_tables_, table_id);
 }
 
+bool ObTxDesc::is_all_parts_clean() const
+{
+  bool bret = true;
+  ARRAY_FOREACH_X(parts_, i, cnt, bret) {
+    bret = parts_[i].is_without_ctx() || parts_[i].is_clean();
+  }
+  return bret;
+}
+
+bool ObTxDesc::is_all_parts_without_valid_write() const
+{
+  bool bret = true;
+  ARRAY_FOREACH_X(parts_, i, cnt, bret) {
+    bret = parts_[i].is_without_ctx() || parts_[i].is_clean() || parts_[i].is_without_valid_write();
+  }
+  return bret;
+}
 } // transaction
 } // oceanbase
 #undef USING_LOG_PREFIX

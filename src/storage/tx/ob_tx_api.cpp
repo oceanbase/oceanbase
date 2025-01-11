@@ -518,18 +518,12 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
         abort_tx_(tx, OB_TRANS_ROLLBACKED);
         handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
         ret = OB_TRANS_ROLLBACKED;
-      } else {
-        int clean = true;
-        ARRAY_FOREACH_X(tx.parts_, i, cnt, clean) {
-          clean = tx.parts_[i].is_without_ctx() || tx.parts_[i].is_clean();
-        }
-        if (clean) {
-          // explicit savepoint rollback cause empty valid-part-set
-          tx.set_commit_cb(&cb);
-          abort_participants_(tx);                  // let part ctx quit
-          handle_tx_commit_result_(tx, OB_SUCCESS); // commit success
-          ret = OB_SUCCESS;
-        }
+      } else if (tx.is_all_parts_without_valid_write()) {
+        // explicit savepoint rollback cause empty valid-part-set
+        tx.set_commit_cb(&cb);
+        abort_participants_(tx);                  // let part ctx quit
+        handle_tx_commit_result_(tx, OB_SUCCESS); // commit success
+        ret = OB_SUCCESS;
       }
       break;
     default:
@@ -680,8 +674,11 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
     }
     if (tx.state_ != ObTxDesc::State::IDLE) {
       ARRAY_FOREACH(tx.parts_, i) {
-        if (OB_FAIL(snapshot.parts_.push_back(ObTxLSEpochPair(tx.parts_[i].id_, tx.parts_[i].epoch_)))) {
-          TRANS_LOG(WARN, "push snapshot parts fail", K(ret), K(tx), K(snapshot));
+        if (!tx.parts_[i].is_clean()) {
+          ObTxLSEpochPair p(tx.parts_[i].id_, tx.parts_[i].epoch_);
+          if (OB_FAIL(snapshot.parts_.push_back(p))) {
+            TRANS_LOG(WARN, "push snapshot parts fail", K(ret), K(tx), K(p), K(snapshot));
+          }
         }
       }
     }
@@ -745,7 +742,7 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
       }
       if (tx.state_ != ObTxDesc::State::IDLE) {
         ARRAY_FOREACH(tx.parts_, i) {
-          if (tx.parts_[i].id_ == lsid) {
+          if (tx.parts_[i].id_ == lsid && !tx.parts_[i].is_clean()) {
             if (OB_FAIL(snapshot.parts_.push_back(ObTxLSEpochPair(lsid, tx.parts_[i].epoch_)))) {
               TRANS_LOG(WARN, "push lsid to snapshot.parts fail", K(ret), K(lsid), K(tx));
             }
@@ -889,8 +886,7 @@ int ObTransService::register_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
       ObSpinLockGuard guard(tx->lock_);
       if (OB_FAIL(tx_sanity_check_(*tx))) {
       } else if (OB_FAIL(tx->savepoints_.push_back(sp))) {
-        TRANS_LOG(WARN, "push back snapshot fail", K(ret),
-                  K(snapshot), KPC(tx));
+        TRANS_LOG(WARN, "push back snapshot fail", K(ret), K(snapshot), KPC(tx));
       }
       ObTransTraceLog &tlog = tx->get_tlog();
       REC_TRANS_TRACE_EXT(&tlog, register_snapshot, OB_Y(ret),
