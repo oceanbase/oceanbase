@@ -456,6 +456,7 @@ private:
   //***********  end user-defined rules **************
   bool enable_rich_vector_format_;
   common::ObBitSet<> formalize_prec_idx_;
+  int64_t switchover_epoch_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheValue);
 };

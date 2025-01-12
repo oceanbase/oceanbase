@@ -53,6 +53,7 @@ struct ObAllTenantInfo
 {
   OB_UNIS_VERSION(1);
 public:
+ static const int64_t INITIAL_SWITCHOVER_EPOCH = 0;
  ObAllTenantInfo() {reset();};
  virtual ~ObAllTenantInfo() {}
  /**

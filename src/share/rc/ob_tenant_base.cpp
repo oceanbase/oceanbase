@@ -18,6 +18,7 @@
 #include "storage/ob_file_system_router.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
 #include "observer/omt/ob_tenant_mtl_helper.h"
+#include "share/ob_tenant_info_proxy.h"
 
 namespace oceanbase
 {
@@ -102,6 +103,7 @@ ObTenantBase::ObTenantBase(const uint64_t id, const int64_t epoch, bool enable_t
     unit_min_cpu_(0),
     unit_memory_size_(0),
     unit_data_disk_size_(0),
+    switchover_epoch_(ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH),
     cgroups_(nullptr),
     enable_tenant_ctx_check_(enable_tenant_ctx_check),
     thread_count_(0),
@@ -120,6 +122,7 @@ ObTenantBase &ObTenantBase::operator=(const ObTenantBase &ctx)
   unit_data_disk_size_ = ctx.unit_data_disk_size_;
   mtl_init_ctx_ = ctx.mtl_init_ctx_;
   tenant_role_value_ = ctx.tenant_role_value_;
+  switchover_epoch_ = ctx.switchover_epoch_;
 #define CONSTRUCT_MEMBER_TMP2(IDX) \
   m##IDX##_ = ctx.m##IDX##_;
 #define CONSTRUCT_MEMBER2(UNUSED, IDX) CONSTRUCT_MEMBER_TMP2(IDX)

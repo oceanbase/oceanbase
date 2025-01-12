@@ -1438,7 +1438,7 @@ int ObTableLocation::init(
   }
   return ret;
 }
-
+ERRSIM_POINT_DEF(ERRSIM_WEAK_READ_INNER_TABLE);
 int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
                                       const ObSQLSessionInfo *session,
                                       const ObSqlCtx *sql_ctx,
@@ -1451,7 +1451,7 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
     LOG_ERROR("unexpected null", K(ret), K(session), K(sql_ctx));
   } else if (dml_stmt.get_query_ctx()->has_dml_write_stmt_ ||
              dml_stmt.get_query_ctx()->is_contain_select_for_update_ ||
-             dml_stmt.get_query_ctx()->is_contain_inner_table_) {
+             (!ERRSIM_WEAK_READ_INNER_TABLE && dml_stmt.get_query_ctx()->is_contain_inner_table_)) {
     is_weak_read = false;
   } else if (share::ObTenantEnv::get_tenant() == nullptr) { //table api can't invoke MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID
     is_weak_read = false;
