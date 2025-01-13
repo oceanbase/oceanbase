@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL
+
 #include "ob_spi.h"
 #include "ob_sql.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
@@ -48,6 +49,7 @@
 #endif
 #include "pl/ob_pl_allocator.h"
 #include "pl/diagnosis/ob_pl_sql_audit_guard.h"
+
 namespace oceanbase
 {
 using namespace sqlclient;
@@ -176,10 +178,14 @@ int ObSPIResultSet::close_result_set()
   int ret = OB_SUCCESS;
   if (is_inited_) {
     WITH_CONTEXT(mem_context_) {
-      ret = result_set_->close();
+      if (result_set_->get_errcode() != OB_SUCCESS) {
+        IGNORE_RETURN result_set_->close(); // result set already failed before close, ignore error code.
+      } else {
+        ret = result_set_->close();
+      }
     }
   } else {
-    LOG_INFO("result set is not init", K(ret));
+    LOG_DEBUG("result set is not init", K(ret));
   }
   return ret;
 }
