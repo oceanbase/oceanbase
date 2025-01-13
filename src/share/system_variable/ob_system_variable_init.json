@@ -11876,11 +11876,10 @@
     "data_type": "varchar",
     "info": "The path name of the file in which the server writes its process ID",
     "flags": "GLOBAL | READONLY | MYSQL_ONLY",
-    "publish_version": "42110",
+    "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "port": {
     "id": 10744,
@@ -11890,11 +11889,10 @@
     "data_type": "int",
     "info": "The number of the port on which the server listens for TCP/IP connections",
     "flags": "GLOBAL | READONLY | MYSQL_ONLY",
-    "publish_version": "42110",
+    "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "socket": {
     "id": 10745,
@@ -11904,11 +11902,10 @@
     "data_type": "varchar",
     "info": "the name of the socket file that is used for local client connections",
     "flags": "GLOBAL | READONLY | MYSQL_ONLY",
-    "publish_version": "42110",
+    "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "mview_refresh_dop": {
     "id": 10746,

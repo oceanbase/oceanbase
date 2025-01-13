@@ -52,6 +52,16 @@ public:
   //OB_SV_SERVER_UUID:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
   const static int64_t SERVER_UUID_MAX_LEN = 37;
   static char server_uuid_[SERVER_UUID_MAX_LEN];
+
+  // OB_SV_PID_FILE
+  static char server_pid_file_str_[MAX_PATH_SIZE];
+
+  // OB_SV_SOCKET
+  static char server_socket_file_str_[MAX_PATH_SIZE];
+
+  // OB_SV_PORT
+  const static int64_t SERVER_PORT_INT_STR_MAX_LEN = 64;
+  static char server_port_int_str_[SERVER_PORT_INT_STR_MAX_LEN];
 public:
   ObSpecialSysVarValues();
 };
@@ -1126,6 +1136,7 @@ public:
   static int init_sys_var();
 
 private:
+  static int init_config_sys_vars(); //require observer deploy to determine value
   static int change_initial_value();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPreProcessSysVars);
