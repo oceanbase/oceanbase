@@ -5358,7 +5358,7 @@ ObCharsetInfo *uca900_collations[] = {
     &ob_charset_utf8mb4_gl_0900_as_cs,
     &ob_charset_utf8mb4_mn_cyrl_0900_ai_ci,
     &ob_charset_utf8mb4_mn_cyrl_0900_as_cs,
-    nullptr
+    nullptr   // do not delete the nullptr to prevent to count array overflow
 };
 
 
@@ -7118,5 +7118,5 @@ ObCharsetInfo *euro_collations[] = {
   &ob_charset_utf16_croatian_uca_ci  ,
   &ob_charset_utf16_unicode_520_ci   ,
   &ob_charset_utf16_vietnamese_ci    ,
-  nullptr
+  nullptr     // do not delete the nullptr to prevent to count array overflow
 };
