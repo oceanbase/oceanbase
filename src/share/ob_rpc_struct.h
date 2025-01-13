@@ -4475,12 +4475,10 @@ public:
   bool need_create_empty_major_;
   bool micro_index_clustered_;
   ObTabletID split_src_tablet_id_;
-  bool enable_macro_block_bloom_filter_;
   TO_STRING_KV(K_(tenant_data_version),
                K_(need_create_empty_major),
                K_(micro_index_clustered),
-               K_(split_src_tablet_id),
-               K_(enable_macro_block_bloom_filter));
+               K_(split_src_tablet_id));
 };
 
 struct ObBatchCreateTabletArg

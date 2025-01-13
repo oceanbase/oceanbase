@@ -10441,7 +10441,6 @@ void ObCreateTabletExtraInfo::reset()
   tenant_data_version_ = 0;
   micro_index_clustered_ = false;
   split_src_tablet_id_.reset();
-  enable_macro_block_bloom_filter_ = false;
 }
 
 int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
@@ -10458,8 +10457,7 @@ OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo,
                     tenant_data_version_,
                     need_create_empty_major_,
                     micro_index_clustered_,
-                    split_src_tablet_id_,
-                    enable_macro_block_bloom_filter_);
+                    split_src_tablet_id_);
 
 bool ObBatchCreateTabletArg::is_inited() const
 {
