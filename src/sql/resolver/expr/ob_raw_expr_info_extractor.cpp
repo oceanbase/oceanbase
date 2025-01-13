@@ -340,6 +340,8 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
   if (OB_SUCC(ret) && expr.get_expr_type() == T_OBJ_ACCESS_REF) {
     if (OB_FAIL(expr.add_flag(CNT_OBJ_ACCESS_EXPR))) {
       LOG_WARN("failed to add flag IS_OR", K(ret));
+    } else if (ob_is_enumset_tc(expr.get_data_type()) && OB_FAIL(expr.add_flag(IS_ENUM_OR_SET))) {
+      LOG_WARN("failed to add flag IS_ENUM_OR_SET", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
