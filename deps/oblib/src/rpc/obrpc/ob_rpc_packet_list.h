@@ -1243,6 +1243,9 @@ PCODE_DEF(OB_TX_SBY_STATE_RESULT, 0x1642)
 // external catalog
 //PCODE_DEF(OB_HANDLE_CATALOG_DDL, 0x1645)
 
+// parallel create tenant
+// PCODE_DEF(OB_PARALLEL_CREATE_NORMAL_TENANT, 0x1646)
+
 //**** 注意：在此行之前增加新的RPC ID ******
 //
 //占位须知：

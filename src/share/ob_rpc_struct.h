@@ -6870,7 +6870,8 @@ public:
     UPGRADE_ALL_POST_ACTION,
     UPGRADE_INSPECTION,
     UPGRADE_END,
-    UPGRADE_ALL
+    UPGRADE_ALL,
+    UPGRADE_FINISH,
   };
 public:
   ObUpgradeJobArg();
