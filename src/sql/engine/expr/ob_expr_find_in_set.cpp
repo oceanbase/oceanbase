@@ -65,7 +65,8 @@ inline bool memequal(const char* p1, int64_t size1, const char* p2, int64_t size
   return (size1 == size2) && (memcmp(p1, p2, size1) == 0);
 }
 
-int bin_collation_search(const ObString &str, const ObString &str_list, uint64_t &res_pos) {
+int bin_collation_search(const ObString &str, const ObString &str_list, const ObCollationType& cs_type, uint64_t &res_pos) {
+  UNUSED(cs_type);
   int ret = OB_SUCCESS;
   if (str_list.length() < str.length()) {
     res_pos = 0;
@@ -331,6 +332,8 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid cs_type", K(ret), K(cs_type));
   } else {
+    std::function<int (const ObString &, const ObString &, const ObCollationType &, uint64_t &)> search_func = 
+        CS_TYPE_UTF8MB4_BIN == cs_type ? bin_collation_search : search;
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
@@ -339,15 +342,42 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL)
         eval_flags.set(idx);
       } else {
         ObString str = str_vec->get_string(idx), strlist = strlist_vec->get_string(idx);
-        if (expr.args_[1]->is_static_const_) {
-          ret = search_with_const_set(expr, ctx, str, strlist, cs_type, res_pos);
+        ret = search_func(str, strlist, cs_type, res_pos);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("search str in str list failed", K(ret), K(expr.args_[1]->is_static_const_));
         } else {
-          if (CS_TYPE_UTF8MB4_BIN == cs_type) {
-            ret = bin_collation_search(str, strlist, res_pos);
-          } else {
-            ret = search(str, strlist, cs_type, res_pos);
-          }
+          res_vec->set_uint(idx, res_pos);
+          eval_flags.set(idx);
         }
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename Arg0Vec, typename ResVec> 
+int ObExprFindInSet::calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL) {
+  int ret = OB_SUCCESS;
+  Arg0Vec *str_vec = reinterpret_cast<Arg0Vec *>(expr.args_[0]->get_vector(ctx));
+  StrUniCVec *strlist_vec = reinterpret_cast<StrUniCVec *>(expr.args_[1]->get_vector(ctx));
+  ResVec *res_vec = reinterpret_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  const ObCollationType &cs_type = expr.args_[0]->datum_meta_.cs_type_;
+  uint64_t res_pos = 0;
+  if (OB_UNLIKELY(expr.args_[0]->datum_meta_.cs_type_ != expr.args_[1]->datum_meta_.cs_type_ ||
+                  !ObCharset::is_valid_collation(static_cast<int64_t>(cs_type)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid cs_type", K(ret), K(cs_type));
+  } else {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+        continue;
+      } else if (str_vec->is_null(idx) || strlist_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+        eval_flags.set(idx);
+      } else {
+        ObString str = str_vec->get_string(idx), strlist = strlist_vec->get_string(idx);
+        ret = search_with_const_set(expr, ctx, str, strlist, cs_type, res_pos);
         if (OB_FAIL(ret)) {
           LOG_WARN("search str in str list failed", K(ret), K(expr.args_[1]->is_static_const_));
         } else {
@@ -389,6 +419,14 @@ int ObExprFindInSet::calc_find_in_set_vector(VECTOR_EVAL_FUNC_ARG_DECL) {
       ret = calc_find_in_set_vector_dispatch<StrUniVec, StrUniVec, UIntegerFixedVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_UNIFORM == arg0_format && VEC_UNIFORM == arg1_format && VEC_UNIFORM == res_format) {
       ret = calc_find_in_set_vector_dispatch<StrUniVec, StrUniVec, UIntegerUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_DISCRETE == arg0_format && VEC_UNIFORM_CONST == arg1_format && VEC_FIXED == res_format) {
+      ret = calc_find_in_set_vector_dispatch<StrDiscVec, UIntegerFixedVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_DISCRETE == arg0_format && VEC_UNIFORM_CONST == arg1_format && VEC_UNIFORM == res_format) {
+      ret = calc_find_in_set_vector_dispatch<StrDiscVec, UIntegerUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg0_format && VEC_UNIFORM_CONST == arg1_format && VEC_FIXED == res_format) {
+      ret = calc_find_in_set_vector_dispatch<StrUniVec, UIntegerFixedVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg0_format && VEC_UNIFORM_CONST == arg1_format && VEC_UNIFORM == res_format) {
+      ret = calc_find_in_set_vector_dispatch<StrUniVec, UIntegerUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else {
       ret = calc_find_in_set_vector_dispatch<ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
     }
