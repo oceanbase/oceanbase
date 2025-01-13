@@ -1593,10 +1593,12 @@ int ObRangeGenerator::generate_tmp_not_in_param(const ObRangeNode &node,
     } else if (OB_FALSE_IT(all_tmp_node_caches_.at(node.node_id_) = tmp_in_param)) {
     } else if (always_false) {
       tmp_in_param->always_false_ = always_false;
+    } else if (tmp_in_param->in_param_.empty()) {
+      // do nothing
     } else {
       lib::ob_sort(&tmp_in_param->in_param_.at(0),
-                &tmp_in_param->in_param_.at(0) + tmp_in_param->in_param_.count(),
-                InParamObjCmp());
+                   &tmp_in_param->in_param_.at(0) + tmp_in_param->in_param_.count(),
+                   InParamObjCmp());
     }
   }
   return ret;
