@@ -626,6 +626,7 @@ public:
       int init(uint64_t tenant_id)
       {
         int ret = OB_SUCCESS;
+        DISABLE_SQL_MEMLEAK_GUARD;
         if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mem_context_,
             lib::ContextParam().set_mem_attr(tenant_id, ObModIds::OB_PL)))) {
           SQL_ENG_LOG(WARN, "create memory entity failed");

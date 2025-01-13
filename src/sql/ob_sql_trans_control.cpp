@@ -713,6 +713,7 @@ int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
   uint64_t tenant_id = -1;
   uint32_t sessid = -1;
   uint32_t tm_sessid = 0;
+  DISABLE_SQL_MEMLEAK_GUARD;
   common::ObDbLinkProxy *dblink_proxy = GCTX.dblink_proxy_;
   sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);

@@ -398,6 +398,7 @@ int ObSPIResultSet::start_trans(ObExecContext &ctx)
 {
   // cursor执行之前如果还没有事务, 则开始一个新的事务
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx);
   ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx);
   ObTaskExecutorCtx &task_exec_ctx = ctx.get_task_exec_ctx();
@@ -923,6 +924,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
       CK (OB_NOT_NULL(pl_ctx));
       if (OB_SUCC(ret) && lib::is_mysql_mode() && !pl_ctx->is_function_or_trigger()) {
         if (ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
+          DISABLE_SQL_MEMLEAK_GUARD;
           const ObString expr_savepoint_name("PL expr savepoint");
           OZ (ObSqlTransControl::create_savepoint(*ctx->exec_ctx_, expr_savepoint_name));
           OX (has_implicit_savepoint = true);
@@ -946,6 +948,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
         if (OB_SUCCESS != ret && ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
           int tmp_ret = OB_SUCCESS;
           if (has_implicit_savepoint) {
+            DISABLE_SQL_MEMLEAK_GUARD;
             const ObString expr_savepoint_name("PL expr savepoint");
             if (OB_SUCCESS !=
                 (tmp_ret = ObSqlTransControl::rollback_savepoint(*ctx->exec_ctx_, expr_savepoint_name))) {
@@ -1512,6 +1515,7 @@ int ObSPIService::set_variable(ObPLExecCtx *ctx,
 
 void ObSPIService::adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result)
 {
+  DISABLE_SQL_MEMLEAK_GUARD;
   if (OB_NOT_NULL(ctx.get_my_session())
       && ctx.get_my_session()->get_pl_context()) {
     ctx.get_my_session()->set_pl_can_retry(false);
@@ -1523,6 +1527,7 @@ void ObSPIService::adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result)
 int ObSPIService::recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
@@ -1534,6 +1539,7 @@ int ObSPIService::recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int 
 int ObSPIService::recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, int &result)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   CK (OB_NOT_NULL(ctx.get_my_session()));
   if (OB_SUCC(ret) // 存在隐式的savepoint才做检查
       && OB_NOT_NULL(ctx.get_my_session()->get_pl_context())
@@ -1554,6 +1560,7 @@ int ObSPIService::recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, i
 int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollback)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   if (OB_SUCC(ret)) {
     ObSQLSessionInfo *my_session = ctx->exec_ctx_->get_my_session();
@@ -1609,6 +1616,7 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
           ctx->exec_ctx_->set_need_disconnect(false);
 #endif
         } else {
+          DISABLE_SQL_MEMLEAK_GUARD;
           // PL内部的提交使用同步提交
           OZ (sql::ObSqlTransControl::end_trans(*ctx->exec_ctx_, is_rollback, true));
           // 如果发生过提交禁止PL整体重试
@@ -3624,6 +3632,8 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
                                           int64_t orc_max_ret_rows)
 {
   int ret = OB_SUCCESS;
+
+  DISABLE_SQL_MEMLEAK_GUARD;
 
   HEAP_VAR(ObSPIResultSet, spi_result) {
     ObSPICursor* spi_cursor = NULL;
@@ -6000,6 +6010,7 @@ int ObSPIService::spi_destruct_obj(ObPLExecCtx *ctx,
 int ObSPIService::spi_interface_impl(pl::ObPLExecCtx *ctx, const char *interface_name)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   if (OB_UNLIKELY(nullptr == interface_name || nullptr == ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Argument passed in is NULL", K(ctx), K(interface_name), K(ret));
@@ -9016,6 +9027,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
                                      const ObRoutineInfo *dblink_routine_info)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   const ObRoutineInfo *routine_info = NULL;
   const pl::ObPLDbLinkInfo *dblink_info = NULL;
   pl::ObPLPackageGuard *package_guard = NULL;
@@ -9043,6 +9055,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
                                      ObObj *result)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   sql::DblinkGetConnType conn_type = sql::DblinkGetConnType::DBLINK_POOL;
   ObSQLSessionInfo *session = NULL;
   uint64_t tenant_id = OB_INVALID_ID;

@@ -590,6 +590,7 @@ void ObPLContext::record_tx_id_before_begin_autonomous_session_for_deadlock_(ObS
 void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSessionInfo &session_info,
                                                                         const ObTransID last_trans_id)
 {
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObTransID now_trans_id = session_info.get_tx_id();
   // 上一个事务等自治事务结束，若自治事务要加上一个事务已经持有的锁，则会死锁
   // 为检测死锁，需要注册上一个事务到自治事务的等待关系
@@ -677,6 +678,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
         // 如果已经在事务中，则需要创建一个回滚点，用于在PL中的语句失败时回滚到PL的开始点；
         // 如果没有在事务中，则不需要创建回滚点，在PL失败时直接回滚整个事务就可以了；
         if (OB_NOT_NULL(session_info.get_tx_desc()) && session_info.get_tx_desc()->in_tx_or_has_extra_state()) {
+          DISABLE_SQL_MEMLEAK_GUARD;
           OZ (ObSqlTransControl::create_savepoint(ctx, PL_IMPLICIT_SAVEPOINT));
           OX (has_implicit_savepoint_ = true);
           LOG_DEBUG("create pl implicit savepoint for oracle", K(ret), K(PL_IMPLICIT_SAVEPOINT));
@@ -692,6 +694,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       // if failed, rollback to this savepoint, and PL/SQL caller will retry.
       if (OB_NOT_NULL(session_info.get_tx_desc()) &&
           session_info.get_tx_desc()->in_tx_or_has_extra_state() && !in_nested_sql_ctrl()) {
+        DISABLE_SQL_MEMLEAK_GUARD;
         OZ (ObSqlTransControl::create_savepoint(ctx, PL_IMPLICIT_SAVEPOINT));
         OX (has_implicit_savepoint_ = true);
         LOG_DEBUG("create pl implicit savepoint for mysql", K(ret), K(PL_IMPLICIT_SAVEPOINT));
@@ -726,6 +729,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     //如果是udf调udf场景, 外层udf已经重置ac, 且内层udf跟随外层udf在destory阶段的回滚或提交
     if (OB_NOT_NULL(session_info.get_tx_desc()) &&
         session_info.get_tx_desc()->in_tx_or_has_extra_state() && !in_nested_sql_ctrl()) {
+      DISABLE_SQL_MEMLEAK_GUARD;
       OZ (ObSqlTransControl::create_savepoint(ctx, PL_IMPLICIT_SAVEPOINT));
       OX (has_implicit_savepoint_ = true);
       LOG_DEBUG("create pl implicit savepoint for mysql", K(ret), K(PL_IMPLICIT_SAVEPOINT));
@@ -740,6 +744,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       routine->get_has_parallel_affect_factor()) {
     // 并行场景下不能创建stash savepoint, 只有当udf/trigger内部有tcl语句时, stash savepoint才有意义
     // udf内部有tcl语句时，该标记为true
+    DISABLE_SQL_MEMLEAK_GUARD;
     const ObString stash_savepoint_name("PL stash savepoint");
     OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
     OX (has_stash_savepoint_ = true);
@@ -756,6 +761,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
   OX (ret = OBPLCONTEXT_INIT);
 #endif // ERRSIM
   if (OB_SUCC(ret) && is_autonomous_) {
+    DISABLE_SQL_MEMLEAK_GUARD;
     has_inner_dml_write_ = session_info.has_exec_inner_dml();
     session_info.set_has_exec_inner_dml(false);
 
@@ -817,6 +823,7 @@ int ObPLContext::implicit_end_trans(
   ObSQLSessionInfo &session_info, ObExecContext &ctx, bool is_rollback, bool can_async)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   bool is_async = false;
   if (session_info.is_in_transaction()) {
     is_async = !is_rollback && ctx.is_end_trans_async() && can_async;
@@ -876,6 +883,7 @@ void ObPLContext::destory(
       ret = OB_SUCCESS == ret ? update_ret : ret;
     }
     if (has_stash_savepoint_) {
+      DISABLE_SQL_MEMLEAK_GUARD;
       const ObString stash_savepoint_name("PL stash savepoint");
       int pop_ret = ObSqlTransControl::release_stash_savepoint(ctx, stash_savepoint_name);
       if (OB_SUCCESS != pop_ret) {
@@ -916,6 +924,7 @@ void ObPLContext::destory(
               (lib::is_mysql_mode() &&
               ((OB_TRY_LOCK_ROW_CONFLICT == ret && session_info.get_pl_can_retry()) ||
               is_function_or_trigger_))) {
+            DISABLE_SQL_MEMLEAK_GUARD;
             if (OB_SUCCESS !=
                   (tmp_ret = ObSqlTransControl::rollback_savepoint(ctx, PL_IMPLICIT_SAVEPOINT))) {
               LOG_WARN("failed to rollback current pl to implicit savepoint", K(ret), K(tmp_ret));
@@ -934,6 +943,7 @@ void ObPLContext::destory(
               transaction::ObTransID tx_id;
               const bool force_disconnect = false;
               int rl_ret = OB_SUCCESS;
+              DISABLE_SQL_MEMLEAK_GUARD;
               if (OB_SUCCESS != (rl_ret = ObTMService::tm_rollback(ctx, tx_id))) {
                 LOG_WARN("failed to rollback for dblink trans", K(ret), K(rl_ret), K(tx_id), K(xid), K(global_tx_type));
               } else if (OB_SUCCESS != (rl_ret =
@@ -943,6 +953,7 @@ void ObPLContext::destory(
               ret = OB_SUCCESS == ret ? rl_ret : ret;
             }
           } else if (OB_TRANS_XA_BRANCH_FAIL != ret) {
+            DISABLE_SQL_MEMLEAK_GUARD;
             tmp_ret = ObDbmsXA::xa_rollback_savepoint(ctx);
             if (OB_SUCCESS != tmp_ret) {
               LOG_WARN("xa trans roll back to save point failed",
@@ -999,6 +1010,7 @@ void ObPLContext::destory(
           if (is_dblink) {
             transaction::ObTransID tx_id;
             const bool force_disconnect = false;
+            DISABLE_SQL_MEMLEAK_GUARD;
             if (OB_SUCCESS !=(cm_ret = ObTMService::tm_commit(ctx, tx_id))) {
               LOG_WARN("failed to commit dblink trans", K(ret), K(tx_id), K(xid), K(global_tx_type));
             } else if (OB_SUCCESS != (cm_ret = session_info.get_dblink_context().clean_dblink_conn(force_disconnect))) {
@@ -1038,12 +1050,14 @@ void ObPLContext::destory(
     if (OB_SUCCESS != ret && session_info.is_in_transaction()) { // PL执行失败, 需要回滚
       int tmp_ret = OB_SUCCESS;
       if (has_implicit_savepoint_) {
+        DISABLE_SQL_MEMLEAK_GUARD;
         if (OB_SUCCESS != (tmp_ret = ObSqlTransControl::rollback_savepoint(ctx, PL_IMPLICIT_SAVEPOINT))) {
           LOG_WARN("failed to rollback current pl to implicit savepoint", K(ret), K(tmp_ret));
         }
 #ifdef OB_BUILD_ORACLE_PL
       } else if (session_info.associated_xa()) {
         if (OB_TRANS_XA_BRANCH_FAIL != ret) {
+          DISABLE_SQL_MEMLEAK_GUARD;
           tmp_ret = ObDbmsXA::xa_rollback_savepoint(ctx);
           if (OB_SUCCESS != tmp_ret) {
             LOG_WARN("xa trans roll back to save point failed",
@@ -1559,7 +1573,6 @@ int ObPL::execute(ObExecContext &ctx,
                   bool is_called_from_sql)
 {
   int ret = OB_SUCCESS;
-  DISABLE_SQL_MEMLEAK_GUARD;
   int64_t execute_start = ObTimeUtility::current_time();
   ObObj local_result(ObMaxType);
   int local_status = OB_SUCCESS;
@@ -1964,7 +1977,6 @@ struct ObPLExecTraceIdGuard {
 int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *block)
 {
   int ret = OB_SUCCESS;
-  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(pl_entry);
   lib::MemoryContext mem_context = NULL;
   lib::ContextParam param;
@@ -2122,7 +2134,6 @@ int ObPL::execute(ObExecContext &ctx,
                   ObBitSet<OB_DEFAULT_BITSET_SIZE> &out_args)
 {
   int ret = OB_SUCCESS;
-  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(pl_entry);
   ObPLFunction *routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ANON_HANDLE);
@@ -2222,7 +2233,6 @@ int ObPL::execute(ObExecContext &ctx,
                   const ObRoutineInfo *dblink_routine_info)
 {
   int ret = OB_SUCCESS;
-  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(pl_entry);
   bool debug_mode = false;
   ObPLFunction *routine = NULL;
@@ -2439,6 +2449,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
                           ObCacheObjGuard& cacheobj_guard)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObPLFunction* routine = NULL;
   OZ (ObPLContext::valid_execute_context(ctx));
   if (OB_SUCC(ret)) {
@@ -2566,6 +2577,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   ObPLFunction* routine = NULL;
+  DISABLE_SQL_MEMLEAK_GUARD;
   OZ (ObPLContext::valid_execute_context(ctx));
   if (OB_SUCC(ret) && !subprogram_path.empty()) {
     OZ (ObPLContext::get_routine_from_local(
@@ -3279,6 +3291,7 @@ int ObPLExecState::final(int ret)
 
   if (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())) {
   #ifdef OB_BUILD_ORACLE_PL
+    DISABLE_SQL_MEMLEAK_GUARD;
     ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
     ObPlJsonTypeManager::release_useless_resource(session->get_json_pl_mngr());
   #endif
@@ -4373,6 +4386,7 @@ int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
                                           const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   uint64_t db_id = 0;
   const ObUDTTypeInfo *udt_info = NULL;
   const ObRoutineInfo *routine_info = NULL;

@@ -121,7 +121,10 @@ public:
         serially_reusable_(serially_reusable),
         changed_vars_(),
         types_(),
-        vars_() {}
+        vars_() {
+    types_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(MTL_ID(), "PLPkgTypes")));
+    vars_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(MTL_ID(), "PLPkgVars")));
+  }
   virtual ~ObPLPackageState()
   {
     package_id_ = common::OB_INVALID_ID;

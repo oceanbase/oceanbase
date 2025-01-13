@@ -1593,11 +1593,11 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
       bool need_destruct_package_state = false;
       OZ (package_state->init());
       if (OB_SUCC(ret)) {
+        sql::ObPhysicalPlanCtx phy_plan_ctx(exec_ctx.get_allocator());
         need_destruct_package_state = true;
         OX (exec_ctx_bak.backup(exec_ctx));
         OZ (exec_env_bak.load(resolve_ctx.session_info_, &tmp_allocator));
         OZ (package.get_exec_env().store(resolve_ctx.session_info_));
-        sql::ObPhysicalPlanCtx phy_plan_ctx(exec_ctx.get_allocator());
         OX (exec_ctx.set_physical_plan_ctx(&phy_plan_ctx));
         if (OB_SUCC(ret) && package.get_expr_op_size() > 0)  {
           OZ (exec_ctx.init_expr_op(package.get_expr_op_size()));

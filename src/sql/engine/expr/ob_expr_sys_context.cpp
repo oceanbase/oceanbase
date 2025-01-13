@@ -779,6 +779,7 @@ int ObExprSysContext::eval_sys_context(const ObExpr &expr, ObEvalCtx &ctx,
                                        ObDatum &res)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObDatum *ns = NULL;
   ObDatum *para = NULL;
   eval_fun fun = NULL;

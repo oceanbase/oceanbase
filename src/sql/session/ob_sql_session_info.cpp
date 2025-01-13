@@ -1550,6 +1550,7 @@ ObDbmsCursorInfo *ObSQLSessionInfo::get_dbms_cursor(int64_t cursor_id)
 
 int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
 {
+  DISABLE_SQL_MEMLEAK_GUARD
 // open_cursors is 0 to indicate a special state, no limit is set
 #define NEED_CHECK_SESS_OPEN_CURSORS_LIMIT(v) (0 == v ? false : true)
   int ret = OB_SUCCESS;
