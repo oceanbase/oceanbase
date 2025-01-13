@@ -47,15 +47,22 @@ const char *const ObLocalityDistribution::MEMSTORE_PERCENT_STR = "MEMSTORE_PERCE
 bool ObLocalityDistribution::ZoneSetReplicaDist::operator<(
      const ZoneSetReplicaDist &that)
 {
+  return sort_compare_less_than(this, &that);
+}
+
+bool ObLocalityDistribution::ZoneSetReplicaDist::sort_compare_less_than(const ZoneSetReplicaDist *lset, const ZoneSetReplicaDist *rset)
+{
   bool bool_ret = false;
-  if (zone_set_.count() < that.zone_set_.count()) {
+  if (OB_ISNULL(lset) || OB_ISNULL(rset)) {
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "left or right is null", KP(lset), KP(rset));
+  } else if (lset->zone_set_.count() < rset->zone_set_.count()) {
     bool_ret = true;
-  } else if (zone_set_.count() > that.zone_set_.count()) {
+  } else if (lset->zone_set_.count() > rset->zone_set_.count()) {
     bool_ret = false;
   } else {
-    for (int64_t i = 0; i < zone_set_.count(); ++i) {
-      const common::ObZone &this_zone = zone_set_.at(i);
-      const common::ObZone &that_zone = that.zone_set_.at(i);
+    for (int64_t i = 0; i < lset->zone_set_.count(); ++i) {
+      const common::ObZone &this_zone = lset->zone_set_.at(i);
+      const common::ObZone &that_zone = rset->zone_set_.at(i);
       if (this_zone == that_zone) {
         // go on next
       } else if (this_zone < that_zone) {
@@ -1508,6 +1515,7 @@ int ObLocalityDistribution::output_normalized_locality(
     LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len));
   } else {
     ObArray<ZoneSetReplicaDist> zone_set_replica_dist_array;
+    ObArray<const ZoneSetReplicaDist*> sort_array;
     for (int64_t i = 0; i < zone_set_replica_dist_array_.count() && OB_SUCC(ret); ++i) {
       const ZoneSetReplicaDist this_dist = zone_set_replica_dist_array_.at(i);
       if (this_dist.need_format_to_locality_str()) {
@@ -1516,16 +1524,23 @@ int ObLocalityDistribution::output_normalized_locality(
         } else {} // no more to do
       } else {} // this zone do not need to format, go on next
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < zone_set_replica_dist_array.count(); ++i) {
+      if (OB_FAIL(sort_array.push_back(&zone_set_replica_dist_array.at(i)))) {
+        LOG_WARN("failed to push back", KR(ret), K(i));
+      }
+    }
     if (OB_FAIL(ret)) {
       // failed
     } else {
       bool start_format = false;
-      lib::ob_sort(zone_set_replica_dist_array.begin(), zone_set_replica_dist_array.end());
-      for (int64_t i = 0; i < zone_set_replica_dist_array.count() && OB_SUCC(ret); ++i) {
+      lib::ob_sort(sort_array.begin(), sort_array.end(), ZoneSetReplicaDist::sort_compare_less_than);
+      for (int64_t i = 0; i < sort_array.count() && OB_SUCC(ret); ++i) {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s", (start_format ? ", " : "")))) {
           LOG_WARN("fail to format margin", K(ret));
-        } else if (OB_FAIL(zone_set_replica_dist_array.at(i).format_to_locality_str(
-                buf, buf_len, pos))) {
+        } else if (OB_ISNULL(sort_array.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("item in sort_array is nullptr", KR(ret), K(i), KP(sort_array.at(i)));
+        } else if (OB_FAIL(sort_array.at(i)->format_to_locality_str(buf, buf_len, pos))) {
           LOG_WARN("fail to format", K(ret));
         } else {
           start_format = true;
