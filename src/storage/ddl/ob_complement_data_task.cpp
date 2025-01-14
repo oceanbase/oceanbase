@@ -1330,7 +1330,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
   } else if (OB_ISNULL(scan)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret));
-  } else if (OB_FAIL(macro_start_seq.set_parallel_degree(task_id_))) {
+  } else if (OB_FAIL(ObDDLUtil::init_macro_block_seq(task_id_, macro_start_seq))) {
     LOG_WARN("set parallel degree failed", K(ret), K(task_id_));
   } else {
     int64_t affected_rows = 0;

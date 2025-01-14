@@ -361,6 +361,7 @@ int ObDirectLoadInsertTabletContext::get_write_ctx(ObDirectLoadInsertTabletWrite
       LOG_WARN("fail to get pk interval", KR(ret), KP(this));
     } else {
       write_ctx.start_seq_.macro_data_seq_ = start_seq_.macro_data_seq_;
+      // the macro block may not be recycled when load data failed in shared storage mode, TODO(jianming)
       start_seq_.macro_data_seq_ += WRITE_BATCH_SIZE;
     }
   }

@@ -290,7 +290,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
           K(row_tablet_id), K(is_all_partition_finished_), K(count_rows_finish_), K(curr_tablet_idx_), K(tablet_seq_caches_.count()), KPC(curr_tablet_seq_cache));
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(block_start_seq.set_parallel_degree(parallel_idx))) {
+      } else if (OB_FAIL(ObDDLUtil::init_macro_block_seq(parallel_idx, block_start_seq))) {
         LOG_WARN("set parallel index failed", K(ret), K(parallel_idx));
       } else if (OB_FAIL(ddl_agent.open_sstable_slice(block_start_seq, slice_info))) {
         LOG_WARN("create sstable slice writer failed", K(ret), K(block_start_seq), K(slice_info));

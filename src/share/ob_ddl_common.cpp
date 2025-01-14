@@ -36,6 +36,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/meta_store/ob_shared_storage_obj_meta.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
+#include "close_modules/shared_storage/share/compaction/ob_shared_storage_compaction_util.h"
 #endif
 
 using namespace oceanbase::share;
@@ -3186,6 +3187,22 @@ int ObDDLUtil::batch_check_tablet_checksum(
 bool ObDDLUtil::use_idempotent_mode(const int64_t data_format_version)
 {
   return (GCTX.is_shared_storage_mode() && data_format_version >= DATA_VERSION_4_3_3_0);
+}
+
+int ObDDLUtil::init_macro_block_seq(const int64_t parallel_idx, blocksstable::ObMacroDataSeq &start_seq)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(parallel_idx < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(parallel_idx));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    start_seq.data_seq_ = parallel_idx * compaction::MACRO_STEP_SIZE;
+#endif
+  } else if (OB_FAIL(start_seq.set_parallel_degree(parallel_idx))) {
+    LOG_WARN("set parallel index failed", K(ret), K(parallel_idx));
+  }
+  return ret;
 }
 
 bool ObDDLUtil::is_mview_not_retryable(const int64_t data_format_version, const share::ObDDLType task_type)
