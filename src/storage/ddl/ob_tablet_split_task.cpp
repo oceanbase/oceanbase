@@ -2780,7 +2780,7 @@ int ObTabletSplitUtil::check_satisfy_split_condition(
     if (OB_NEED_RETRY != ret) {
       LOG_WARN("check tablet ha status failed", K(ls_handle), K(source_tablet_handle), K(dest_tablets_id));
     }
-  } else if (OB_FAIL(tablet->get_all_memtables(memtable_handles))) {
+  } else if (OB_FAIL(tablet->get_all_memtables_from_memtable_mgr(memtable_handles))) {
     LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
   } else if (!memtable_handles.empty()) {
     ret = OB_NEED_RETRY;

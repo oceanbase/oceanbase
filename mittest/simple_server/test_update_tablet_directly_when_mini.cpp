@@ -108,7 +108,7 @@ TEST_F(ObUpdateTabletDirectlyTest, update_tablet_directly)
   do {
     ASSERT_EQ(OB_SUCCESS, get_tablet(ObLSID(ls_id), ObTabletID(tablet_id), tablet_handle));
     ObSEArray<ObTableHandleV2, BASIC_MEMSTORE_CNT> memtable_handles;
-    if (OB_FAIL(tablet_handle.get_obj()->get_all_memtables(memtable_handles))) {
+    if (OB_FAIL(tablet_handle.get_obj()->get_all_memtables_from_memtable_mgr(memtable_handles))) {
       STORAGE_LOG(WARN, "failed to get all memtable", K(ret), K(ls_id), K(tablet_id));
     } else if (memtable_handles.empty()) {
       break;

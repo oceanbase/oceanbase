@@ -179,7 +179,7 @@ public:
       const ObGetReadTablesMode mode = ObGetReadTablesMode::NORMAL) const;
   int get_all_sstable(ObTableStoreIterator &iter, const bool unpack_co_table = false) const;
   int get_read_major_sstable(const int64_t snapshot_version, ObTableStoreIterator &iter) const;
-  int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
+  int get_memtables(common::ObIArray<storage::ObITable *> &memtables) const;
   int update_memtables(const common::ObIArray<storage::ObITable *> &memtables);
   int clear_memtables();
   int get_first_frozen_memtable(ObITable *&table) const;

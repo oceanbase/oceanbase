@@ -3773,7 +3773,7 @@ int ObTablet::get_max_schema_version(int64_t &schema_version)
   int ret = OB_SUCCESS;
   schema_version = -1;
   common::ObSEArray<ObTableHandleV2, 8> table_handle_array;
-  if (OB_FAIL(get_all_memtables(table_handle_array))) {
+  if (OB_FAIL(get_all_memtables_from_memtable_mgr(table_handle_array))) {
     LOG_WARN("failed to get all memtable", K(ret), KPC(this));
   } else {
     const ObITabletMemtable *memtable = nullptr;
@@ -4412,7 +4412,7 @@ int ObTablet::get_all_tables(ObTableStoreIterator &iter, const bool need_unpack)
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(inner_get_all_sstables(iter, need_unpack))) {
     LOG_WARN("fail to get all sstable", K(ret));
-  } else if (OB_FAIL(get_memtables(memtables, true))) {
+  } else if (OB_FAIL(get_memtables(memtables))) {
     LOG_WARN("fail to get memtables", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
@@ -4486,10 +4486,10 @@ int ObTablet::get_sstables_size(const bool ignore_shared_block, int64_t &used_si
   return ret;
 }
 
-int ObTablet::get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active) const
+int ObTablet::get_memtables(common::ObIArray<storage::ObITable *> &memtables) const
 {
   common::SpinRLockGuard guard(memtables_lock_);
-  return inner_get_memtables(memtables, need_active);
+  return inner_get_memtables(memtables);
 }
 
 int ObTablet::update_row(
@@ -5038,7 +5038,7 @@ int ObTablet::get_newest_schema_version(int64_t &schema_version) const
   ObSEArray<storage::ObITable *, MAX_MEMSTORE_CNT> memtables;
   ObStorageSchema *schema_on_tablet = nullptr;
   int64_t store_column_cnt_in_schema = 0;
-  if (OB_FAIL(get_memtables(memtables, true/*need_active*/))) {
+  if (OB_FAIL(get_memtables(memtables))) {
     LOG_WARN("failed to get memtables", KR(ret), KPC(this));
   } else if (OB_FAIL(load_storage_schema(tmp_allocator, schema_on_tablet))) {
     LOG_WARN("fail to load storage schema", K(ret), KPC(this));
@@ -5130,7 +5130,7 @@ int ObTablet::create_memtable(
         table_store_addr_.addr_.inc_seq();
         if (table_store_addr_.is_memory_object()) {
           ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
-          if (OB_FAIL(inner_get_memtables(memtable_array, true/*need_active*/))) {
+          if (OB_FAIL(inner_get_memtables(memtable_array))) {
             LOG_WARN("inner get memtables fail", K(ret), K(*this));
           } else if (OB_FAIL(table_store_addr_.get_ptr()->update_memtables(memtable_array))) {
             LOG_WARN("table store update memtables fail", K(ret), K(memtable_array));
@@ -5196,7 +5196,7 @@ int ObTablet::inner_create_memtable(
   return ret;
 }
 
-int ObTablet::inner_get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active) const
+int ObTablet::inner_get_memtables(common::ObIArray<storage::ObITable *> &memtables) const
 {
   int ret = OB_SUCCESS;
   memtables.reset();
@@ -5204,8 +5204,6 @@ int ObTablet::inner_get_memtables(common::ObIArray<storage::ObITable *> &memtabl
     if (OB_ISNULL(memtables_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("memtable must not null", K(ret), K(memtables_));
-    } else if (!need_active && memtables_[i]->is_active_memtable()) {
-      continue;
     } else if (OB_FAIL(memtables.push_back(memtables_[i]))) {
       LOG_WARN("failed to add memtables", K(ret), K(*this));
     }
@@ -5229,7 +5227,7 @@ int ObTablet::rebuild_memtables(const share::SCN scn)
         ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
         if (OB_FAIL(table_store_addr_.get_ptr()->clear_memtables())) {
           LOG_WARN("fail to clear memtables", K(ret));
-        } else if (OB_FAIL(inner_get_memtables(memtable_array, true/*need_active*/))) {
+        } else if (OB_FAIL(inner_get_memtables(memtable_array))) {
           LOG_WARN("inner get memtables fail", K(ret), K(*this));
         } else if (OB_FAIL(table_store_addr_.get_ptr()->update_memtables(memtable_array))) {
           LOG_WARN("table store update memtables fail", K(ret), K(memtable_array));
@@ -6472,7 +6470,7 @@ int ObTablet::replay_schema_version_change_log(const int64_t schema_version)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(get_all_memtables(table_handle_array))) {
+  } else if (OB_FAIL(get_all_memtables_from_memtable_mgr(table_handle_array))) {
     LOG_WARN("failed to get all memtable", K(ret), KPC(this));
   } else {
     ObITabletMemtable *memtable = nullptr;
@@ -6983,7 +6981,7 @@ int ObTablet::get_storage_schema_for_transfer_in(
   } else if (OB_UNLIKELY(tablet_id.is_ls_inner_tablet())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported to get storage schema for ls inner tablet", KR(ret), K(tablet_id));
-  } else if (OB_FAIL(get_all_memtables(memtables))) {
+  } else if (OB_FAIL(get_all_memtables_from_memtable_mgr(memtables))) {
     LOG_WARN("failed to get all memtable", K(ret), KPC(this));
   } else if (OB_FAIL(load_storage_schema(allocator, tablet_storage_schema))) {
     LOG_WARN("fail to load storage schema", K(ret), K_(storage_schema_addr));
@@ -7421,7 +7419,7 @@ int ObTablet::refresh_memtable_and_update_seq(const uint64_t seq)
     table_store_addr_.addr_.set_seq(seq);
     if (table_store_addr_.is_memory_object()) {
       ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
-      if (OB_FAIL(inner_get_memtables(memtable_array, true/*need_active*/))) {
+      if (OB_FAIL(inner_get_memtables(memtable_array))) {
         LOG_WARN("inner get memtables fail", K(ret), K(*this));
       } else if (OB_FAIL(table_store_addr_.get_ptr()->update_memtables(memtable_array))) {
         LOG_WARN("table store update memtables fail", K(ret), K(memtable_array));
@@ -7454,7 +7452,7 @@ int ObTablet::pull_memtables_without_ddl()
     LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(this));
   } else if (!protected_handle->has_memtable()) {
     LOG_TRACE("no memtable in memtable mgr", K(ret));
-  } else if (OB_FAIL(get_all_memtables(memtable_handles))) {
+  } else if (OB_FAIL(get_all_memtables_from_memtable_mgr(memtable_handles))) {
     LOG_WARN("failed to get all memtable", K(ret), KPC(this));
   } else {
     int64_t start_snapshot_version = get_snapshot_version();
@@ -7501,7 +7499,7 @@ int ObTablet::update_memtables()
     LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(this));
   } else if (!protected_handle->has_memtable()) {
     LOG_INFO("no memtable in memtable mgr", K(ret), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_);
-  } else if (OB_FAIL(get_all_memtables(inc_memtables))) {
+  } else if (OB_FAIL(get_all_memtables_from_memtable_mgr(inc_memtables))) {
     LOG_WARN("failed to get all memtable", K(ret), KPC(this));
   } else if (is_ls_inner_tablet() && OB_FAIL(rebuild_memtable(inc_memtables))) {
     LOG_ERROR("failed to rebuild table store memtables for ls inner tablet", K(ret), K(inc_memtables), KPC(this));
@@ -8555,7 +8553,7 @@ int ObTablet::set_frozen_for_all_memtables()
   return ret;
 }
 
-int ObTablet::get_all_memtables(ObTableHdlArray &handle) const
+int ObTablet::get_all_memtables_from_memtable_mgr(ObTableHdlArray &handle) const
 {
   int ret = OB_SUCCESS;
   ObProtectedMemtableMgrHandle *protected_handle = NULL;
@@ -8741,7 +8739,7 @@ int ObTablet::build_mds_mini_sstable_for_migration(
   return ret;
 }
 
-int ObTablet::get_memtables(common::ObIArray<ObTableHandleV2> &memtables, const bool need_active) const
+int ObTablet::get_memtables(common::ObIArray<ObTableHandleV2> &memtables) const
 {
   int ret = OB_SUCCESS;
   memtables.reset();
@@ -8760,8 +8758,6 @@ int ObTablet::get_memtables(common::ObIArray<ObTableHandleV2> &memtables, const 
       if (OB_ISNULL(memtables_[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("memtable must not null", K(ret), K(memtables_));
-      } else if (!need_active && memtables_[i]->is_active_memtable()) {
-        continue;
       } else if (OB_FAIL(memtable.set_table(memtables_[i], t3m, memtables_[i]->get_key().table_type_))) {
         LOG_WARN("failed to set table", K(ret), KPC(this));
       } else if (OB_FAIL(memtables.push_back(memtable))) {

@@ -82,7 +82,7 @@ TEST_F(TestTabletMemtableMgr, tablet_memtable_mgr) {
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(2, scn2, false, false));
 
   ObSEArray<ObTableHandleV2, 64> handles;
-  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_all_memtables(handles));
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_all_memtables_from_memtable_mgr(handles));
 
   // memtable_mgr exist
   ASSERT_EQ(OB_SUCCESS, protected_handle->get_active_memtable(handle));

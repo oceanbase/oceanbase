@@ -326,7 +326,7 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
               K(ret), K(tablet));
     // add compaction diagnose info
     ObPartitionMergePolicy::diagnose_table_count_unsafe(MINI_MERGE, ObDiagnoseTabletType::TYPE_MINI_MERGE, tablet);
-  } else if (OB_FAIL(tablet.get_all_memtables(memtable_handles))) {
+  } else if (OB_FAIL(tablet.get_all_memtables_from_memtable_mgr(memtable_handles))) {
     LOG_WARN("failed to get all memtable", K(ret), K(tablet));
   } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_freeze_info_behind_snapshot_version(merge_inc_base_version, next_freeze_info))) {
     if (OB_ENTRY_NOT_EXIST != ret) {

@@ -1160,7 +1160,7 @@ int ObTabletSplitMdsHelper::set_freeze_flag(
       LOG_WARN("failed to get tablet", K(ret));
     }
   } else if (OB_FALSE_IT(tablet = tablet_handle.get_obj())) {
-  } else if (OB_FAIL(tablet->get_all_memtables(memtables))) {
+  } else if (OB_FAIL(tablet->get_all_memtables_from_memtable_mgr(memtables))) {
     LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {

@@ -678,7 +678,6 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
   const int64_t OB_CHECK_MEMTABLE_INTERVAL = 200 * 1000; // 200ms
   const int64_t OB_WAIT_MEMTABLE_READY_TIMEOUT = 30 * 60 * 1000 * 1000L; // 30 min
   table_array.reset();
-  const bool need_active = true;
   share::SCN memtable_end_scn;
   share::SCN tablet_clog_checkpoint_scn;
 
@@ -693,7 +692,7 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), K(ls_id_));
-  } else if (OB_FAIL(tablet->get_memtables(memtables, need_active))) {
+  } else if (OB_FAIL(tablet->get_memtables(memtables))) {
     LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
   } else if (FALSE_IT(tablet_clog_checkpoint_scn = tablet->get_clog_checkpoint_scn())) {
   } else if (memtables.empty()) {
@@ -1181,7 +1180,7 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
     while (OB_SUCC(ret)) {
       memtables.reset();
       bool is_memtable_ready = true;
-      if (OB_FAIL(tablet->get_all_memtables(memtables))) {
+      if (OB_FAIL(tablet->get_all_memtables_from_memtable_mgr(memtables))) {
         LOG_WARN("failed to get all memtables", K(ret), KPC(tablet));
       } else if (memtables.empty()) {
         FLOG_INFO("transfer src tablet memtable is empty", KPC(tablet));

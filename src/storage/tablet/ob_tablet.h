@@ -395,13 +395,9 @@ public:
    */
   int get_all_tables(ObTableStoreIterator &iter, const bool need_unpack = false) const;
   int get_all_sstables(ObTableStoreIterator &iter, const bool need_unpack = false) const;
-  int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
+  int get_memtables(common::ObIArray<storage::ObITable *> &memtables) const;
   int get_ddl_kvs(common::ObIArray<ObDDLKV *> &ddl_kvs) const;
-
-  // memtable operation
-  // ATTENTION!!!
-  // - The `get_all_memtables()` is that get all memtables from memtable mgr, not from this tablet.
-  int get_all_memtables(ObTableHdlArray &handle) const;
+  int get_all_memtables_from_memtable_mgr(ObTableHdlArray &handle) const;
   int get_boundary_memtable_from_memtable_mgr(ObTableHandleV2 &handle) const;
   int get_protected_memtable_mgr_handle(ObProtectedMemtableMgrHandle *&handle) const;
 
@@ -618,8 +614,7 @@ public:
       common::ObArenaAllocator &allocator,
       ObTabletFullMemoryMdsData &data) const;
   int get_memtables(
-      common::ObIArray<ObTableHandleV2> &memtables,
-      const bool need_active) const;
+      common::ObIArray<ObTableHandleV2> &memtables) const;
 
   int set_macro_block(
       const ObDDLMacroBlock &macro_block,
@@ -737,7 +732,7 @@ private:
       const bool for_direct_load,
       const bool for_replay);
 
-  int inner_get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active) const;
+  int inner_get_memtables(common::ObIArray<storage::ObITable *> &memtables) const;
 
   int write_sync_tablet_seq_log(share::ObTabletAutoincSeq &autoinc_seq,
                                 const bool is_tablet_creating,

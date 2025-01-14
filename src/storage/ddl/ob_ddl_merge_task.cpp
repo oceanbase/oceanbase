@@ -157,7 +157,7 @@ int ObDDLTableMergeDag::prepare_incremental_direct_load_ddl_kvs(ObTablet &tablet
   ObDDLKV *ddl_kv = nullptr;
   ObTableHandleV2 selected_ddl_kv_handle;
   ddl_kvs_handle.reset();
-  if (OB_FAIL(tablet.get_all_memtables(memtable_handles))) {
+  if (OB_FAIL(tablet.get_all_memtables_from_memtable_mgr(memtable_handles))) {
     LOG_WARN("fail to get all memtable", K(ret), K(tablet));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < memtable_handles.count(); ++i) {

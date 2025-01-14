@@ -1351,7 +1351,7 @@ int ObService::check_memtable_cnt(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get tablet handle failed", K(ret), K(tablet_id));
         } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
-        } else if (OB_FAIL(tablet->get_all_memtables(memtable_handles))) {
+        } else if (OB_FAIL(tablet->get_all_memtables_from_memtable_mgr(memtable_handles))) {
           LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
         } else {
           result.memtable_cnt_ = memtable_handles.count();

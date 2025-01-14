@@ -1263,7 +1263,6 @@ int ObTransferReplaceTableTask::check_src_memtable_is_valid_(
   } else {
     const ObTabletTableStore &table_store = *(src_wrapper.get_member());
     ObITable *last_minor_mini_sstable = table_store.get_minor_sstables().get_boundary_table(true /*is_last*/);
-    const bool need_active = true;
     if (OB_FAIL(check_memtable_max_end_scn_(*tablet))) {
       LOG_WARN("failed to check memtable max end scn", K(ret), KPC(tablet));
     } else if (OB_FAIL(get_transfer_sstables_info_(filled_table_handle_array, filled_max_minor_end_scn))) {
@@ -1272,7 +1271,7 @@ int ObTransferReplaceTableTask::check_src_memtable_is_valid_(
       ret = OB_EAGAIN;
       LOG_WARN("src tablet minor sstable end scn is bigger than backfill sstable scn, may transfer rollback, need retry",
           K(ret), KPC(tablet), K(filled_max_minor_end_scn), K(filled_table_handle_array));
-    } else if (OB_FAIL(tablet->get_memtables(memtables, need_active))) {
+    } else if (OB_FAIL(tablet->get_memtables(memtables))) {
       LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
     } else {
       //memtable check condition:
@@ -1952,16 +1951,15 @@ int ObTransferReplaceTableTask::check_memtable_max_end_scn_(
   int ret = OB_SUCCESS;
   ObArray<ObTableHandleV2> current_memtables; //memtable from memtable mgr
   ObArray<ObTableHandleV2> tablet_memtables;  //memtable from tablet
-  const bool need_active = true;
   share::SCN curr_memtable_max_end_scn(SCN::min_scn());
   share::SCN tablet_memtable_max_end_scn(SCN::min_scn());
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer replace tables task do not init", K(ret));
-  } else if (OB_FAIL(tablet.get_all_memtables(current_memtables))) {
+  } else if (OB_FAIL(tablet.get_all_memtables_from_memtable_mgr(current_memtables))) {
     LOG_WARN("failed to get all memtables", K(ret), K(tablet));
-  } else if (OB_FAIL(tablet.get_memtables(tablet_memtables, need_active))) {
+  } else if (OB_FAIL(tablet.get_memtables(tablet_memtables))) {
     LOG_WARN("failed to get memtables", K(ret), K(tablet));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < current_memtables.count(); ++i) {
