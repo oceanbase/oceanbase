@@ -442,6 +442,8 @@ int ObTenantFreezer::tenant_freeze()
     LOG_WARN("get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     LOG_WARN("iter is NULL", K(ret));
+  } else if (OB_FAIL(set_tenant_freezing_())) {
+    LOG_WARN("set tenant freeze failed", K(ret));
   } else {
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       if (OB_TMP_FAIL(ls_freeze_all_unit_(ls, abs_timeout_ts))) {
@@ -455,6 +457,9 @@ int ObTenantFreezer::tenant_freeze()
 
   if (OB_SUCC(ret)) {
     freezer_stat_.add_freeze_event();
+  }
+  if (OB_TMP_FAIL(unset_tenant_freezing_(OB_FAIL(ret)))) {
+    LOG_WARN("unset tenant freeze failed", KR(tmp_ret));
   }
 
   LOG_INFO("tenant_freeze finished", KR(ret), K(abs_timeout_ts));
@@ -1739,6 +1744,17 @@ void ObTenantFreezer::get_freezer_stat_from_history(int64_t pos, ObTenantFreezer
 {
   stat = freezer_history_.history_[(freezer_history_.start_ + pos)
                                    % ObTenantFreezerStatHistory::MAX_HISTORY_LENGTH];
+}
+
+int ObTenantFreezer::update_frozen_scn(const int64_t frozen_scn)
+{
+  int ret = OB_SUCCESS;
+  if (!tenant_info_.is_loaded_) {
+    // do nothing
+  } else if (OB_FAIL(tenant_info_.update_frozen_scn(frozen_scn))) {
+    LOG_WARN("update frozen scn failed", K(ret), K(frozen_scn));
+  }
+  return ret;
 }
 
 ObTenantFreezerStat::ObFreezerMergeType ObTenantFreezerStat::switch_to_freezer_merge_type(const ObMergeType type)
