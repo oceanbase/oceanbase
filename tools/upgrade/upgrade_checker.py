@@ -332,7 +332,7 @@ def check_observer_version(query_cur, upgrade_params):
   (desc, results) = query_cur.exec_query("""select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'""")
   if len(results) != 1:
     fail_list.append('min_observer_version is not sync')
-  elif cmp(results[0][0], upgrade_params.old_version) < 0 :
+  elif get_version(results[0][0]) < get_version(upgrade_params.old_version):
     fail_list.append('old observer version is expected equal or higher than: {0}, actual version:{1}'.format(upgrade_params.old_version, results[0][0]))
   logging.info('check observer version success, version = {0}'.format(results[0][0]))
 
