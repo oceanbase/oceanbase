@@ -304,6 +304,11 @@ int ObLSRestoreHandler::process()
     lib::ObMutexGuard guard(mtx_);
     if (is_stop() || !is_online()) {
       LOG_INFO("ls stopped or disabled", KPC(ls_));
+  #ifdef ERRSIM
+    } else if (ls_->get_ls_id().id() == GCONF.errsim_restore_ls_id
+               && state_handler_->get_restore_status() == GCONF.errsim_ls_restore_status) {
+      ret = OB_EAGAIN;
+  #endif
     } else if (OB_FAIL(state_handler_->do_restore())) {
       ObTaskId trace_id(*ObCurTraceId::get_trace_id());
       result_mgr_.set_result(ret, trace_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);

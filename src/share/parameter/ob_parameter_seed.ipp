@@ -2425,3 +2425,12 @@ DEF_STR_WITH_CHECKER(default_table_organization, OB_TENANT_PARAMETER, "INDEX",
         " table organization mode to either HEAP (unordered data storage for OLAP) or"
         " INDEX (index-organized storage for OLTP) when creating new tables.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_INT(errsim_restore_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "the ls id that restore want to insert error"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(errsim_ls_restore_status, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "the ls restore status that restore want to insert error"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
