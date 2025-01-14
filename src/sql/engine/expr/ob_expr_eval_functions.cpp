@@ -1343,7 +1343,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArraySortby::eval_array_sortby,                      /* 810 */
   NULL, // ObExprArrayFilter::eval_array_filter,                      /* 811 */
   NULL, // ObExprArrayLength::eval_array_length,                      /* 812 */
-  NULL, // ObExprArrayRange::eval_array_range,                        /* 813 */
+  NULL, // ObExprArrayRange::eval_array_range,                        /* 813 */ // FARM COMPAT WHITELIST
   NULL, // ObExprArrayPosition::eval_array_position,                  /* 814 */
   NULL, // ObExprURLEncode::eval_url_encode,                          /* 815 */
   NULL, // ObExprURLDecode::eval_url_decode,                          /* 816 */
