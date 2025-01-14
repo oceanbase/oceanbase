@@ -254,7 +254,7 @@ int ObRawExprDeduceType::add_attr_exprs(const ObCollectionTypeBase *coll_meta, R
 {
   int ret = OB_SUCCESS;
   ObItemType expr_type = T_REF_COLUMN;
-  if (coll_meta->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+  if (coll_meta->type_id_ == ObNestedType::OB_ARRAY_TYPE || coll_meta->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
     ObColumnRefRawExpr *attr_expr = NULL;
     const ObCollectionArrayType *arr_meta = static_cast<const ObCollectionArrayType*>(coll_meta);
     if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
