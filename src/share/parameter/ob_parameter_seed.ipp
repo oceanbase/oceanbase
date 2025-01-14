@@ -2401,7 +2401,7 @@ DEF_STR_WITH_CHECKER(ob_java_connector_path, OB_CLUSTER_PARAMETER, "",
                      common::ObConfigJavaParamsChecker,
                      "specifies the connector path for external table with enabled option: ob_enable_java_env",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_use_odps_jni_connector, OB_CLUSTER_PARAMETER, "True",
+DEF_BOOL(_use_odps_jni_connector, OB_CLUSTER_PARAMETER, "False",
          "Enable or disable jni connector for external odps table",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_parquet_row_group_prebuffer_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)",

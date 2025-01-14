@@ -698,9 +698,6 @@ int ObODPSJNITableRowIterator::get_next_rows(int64_t &count, int64_t capacity) {
     // Normally executing to fetch data.
     if (state_.count_ >= state_.step_ && OB_FAIL(next_task(capacity))) {
       // It should close remote scanner whatever get next is iter end or other failures.
-      if (OB_NOT_NULL(state_.odps_jni_scanner_)) {
-        (void)state_.odps_jni_scanner_->do_close();
-      }
       if (OB_ITER_END != ret) {
         LOG_WARN("get next task failed", K(ret));
       }
@@ -732,10 +729,8 @@ int ObODPSJNITableRowIterator::get_next_rows(int64_t &count, int64_t capacity) {
         if (OB_FAIL(state_.odps_jni_scanner_->do_get_next(&read_rows, &eof))) {
           // It should close remote scanner whatever get next is iter end or
           // other failures.
-          if (OB_NOT_NULL(state_.odps_jni_scanner_)) {
-            LOG_TRACE("close scanner when iter end in do_get_next", K(ret));
-            (void)state_.odps_jni_scanner_->do_close();
-          }
+          LOG_WARN("failed to get next rows by jni scanner", K(ret), K(eof),
+                     K(read_rows));
         } else if (0 == read_rows && (INT64_MAX == state_.step_ || state_.count_ == state_.step_ || eof)) {
           state_.step_ = state_.count_; // goto get next task, next task do close
           count = 0;
@@ -745,11 +740,7 @@ int ObODPSJNITableRowIterator::get_next_rows(int64_t &count, int64_t capacity) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected returned_row_cnt", K(total_count_),
                   K(returned_row_cnt), K(state_), K(ret));
-          if (OB_NOT_NULL(state_.odps_jni_scanner_)) {
-            LOG_TRACE("close scanner when iter end in do_get_next", K(ret));
-            (void)state_.odps_jni_scanner_->do_close();
-          }
-        } else{
+        } else if (!eof) {
           state_.count_ += read_rows;
           total_count_ += read_rows;
           returned_row_cnt += read_rows;
@@ -764,7 +755,7 @@ int ObODPSJNITableRowIterator::get_next_rows(int64_t &count, int64_t capacity) {
     // do nothing
   } else if (0 == file_column_exprs.count()) {
     // do nothing
-  } else {
+  } else if (!eof) {
     int64_t should_read_rows = 0;
     if (is_empty_external_file_exprs_ || is_only_part_col_queried_) {
       should_read_rows = std::min(returned_row_cnt, capacity);
@@ -863,7 +854,17 @@ int ObODPSJNITableRowIterator::get_next_rows(int64_t &count, int64_t capacity) {
       }
     }
   }
-  OZ (calc_exprs_for_rowid(count));
+  if (!eof && OB_SUCC(ret) && OB_FAIL(calc_exprs_for_rowid(count))) {
+    LOG_WARN("failed to calc exprs for rowid", K(ret), K(count));
+  }
+  if (OB_FAIL(ret)) { // unlikely
+    if (OB_ITER_END != ret) {
+      // END ABNORMALLY CLEAN TASK IN THIS ROUND
+      if (OB_NOT_NULL(state_.odps_jni_scanner_)) {
+        (void)state_.odps_jni_scanner_->do_close();
+      }
+    }
+  }
   return ret;
 }
 
@@ -877,15 +878,20 @@ int ObODPSJNITableRowIterator::next_task(const int64_t capacity)
   int64_t step = 0;
   if (++task_idx >= scan_param_->key_ranges_.count()) {
     ret = OB_ITER_END;
-    LOG_WARN("odps table iter end", K(ret), K(total_count_), K(state_),
+    LOG_INFO("odps table iter end", K(ret), K(total_count_), K(state_),
              K(task_idx), K_(read_rounds));
     // If the external file exprs is empty, then can cal related size direclty.
     // And does not need to open scanner.
     // Note: if enter the last round, then the scanner will open again to check rows which
     // is already end of file.
     if (!(is_empty_external_file_exprs_ || is_only_part_col_queried_) &&
-        OB_NOT_NULL(state_.odps_jni_scanner_) && OB_FAIL(state_.odps_jni_scanner_->do_close())) {
-      LOG_WARN("failed to close the jni scanner for this state", K(ret));
+        OB_NOT_NULL(state_.odps_jni_scanner_)) {
+      // END NORMALLY
+      int tmp_ret = state_.odps_jni_scanner_->do_close();
+      if (OB_SUCCESS != tmp_ret) {
+        ret = tmp_ret;
+        LOG_WARN("failed to close the jni scanner for this state", K(ret));
+      }
     }
   } else {
     if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(scan_param_->key_ranges_.at(task_idx),
@@ -908,6 +914,7 @@ int ObODPSJNITableRowIterator::next_task(const int64_t capacity)
         LOG_TRACE("iterator of odps jni scanner is end with dummy file", K(ret));
       } else if (OB_NOT_NULL(state_.odps_jni_scanner_) &&
                              OB_FAIL(state_.odps_jni_scanner_->do_close())) {
+        // RELEASE LAST TASK CORRECTLY
         LOG_WARN("failed to close the scanner of previous task", K(ret));
       } else {
         ObEvalCtx &ctx = scan_param_->op_->get_eval_ctx();
@@ -1973,7 +1980,7 @@ int ObODPSJNITableRowIterator::StateValues::reuse()
   count_ = 0;
   is_from_gi_pump_ = false;
   if (OB_NOT_NULL(odps_jni_scanner_)) {
-    odps_jni_scanner_->do_close();
+    (void)odps_jni_scanner_->do_close();
     odps_jni_scanner_.reset();
   }
   return ret;

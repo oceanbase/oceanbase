@@ -970,6 +970,7 @@ private:
        const share::ObServerStatus &server_status);
   void update_cpu_quota_concurrency_in_memory_();
   int set_cpu_quota_concurrency_config_();
+  int set_use_odps_jni_connector_();
   int set_enable_trace_log_();
   int disable_dbms_job();
   int set_bloom_filter_ratio_config_();
