@@ -29,7 +29,7 @@ struct ObTableScanRange
 public:
   ObTableScanRange();
   ~ObTableScanRange() { reset(); }
-  int init(ObTableScanParam &scan_param, const bool is_tablet_spliting = false);
+  int init(ObTableScanParam &scan_param, const bool is_tablet_spliting);
   int init(ObTableScanParam &scan_param,
            const common::ObSimpleBatch &simple_batch,
            common::ObIAllocator &allocator);
