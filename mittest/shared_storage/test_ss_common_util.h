@@ -57,7 +57,13 @@ public:
     MicroBlockInfo(MacroBlockId macro_id, int64_t offset, int64_t size)
         : macro_id_(macro_id), offset_(offset), size_(size)
     {}
-    bool is_valid() const { return macro_id_.is_valid() && offset_ > 0 && size_ > 0; }
+    MicroBlockInfo(const ObSSMicroBlockId &micro_id)
+        : macro_id_(micro_id.macro_id_), offset_(micro_id.offset_), size_(micro_id.size_)
+    {}
+    bool is_valid() const
+    {
+      return macro_id_.is_valid() && offset_ > 0 && size_ > 0;
+    }
     MacroBlockId macro_id_;
     int64_t offset_;
     int64_t size_;

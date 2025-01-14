@@ -1194,7 +1194,6 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
     ASSERT_EQ(OB_ENTRY_NOT_EXIST, micro_meta_mgr.get_micro_block_meta_handle(iter->first, micro_meta_handle, false));
   }
 
-  ASSERT_EQ(0, SSMicroCacheStat.micro_stat().get_micro_pool_alloc_cnt());
   ObSSARCInfo arc_info;
   arc_info = micro_meta_mgr.get_arc_info();
   ASSERT_EQ(arc_info.limit_, origin_arc_info.limit_);
@@ -1207,13 +1206,24 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
     ASSERT_EQ(0, arc_info.seg_info_arr_[i].size_);
   }
 
+  ASSERT_EQ(0, micro_cache->cache_stat_.micro_stat().total_micro_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.micro_stat().total_micro_size_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.micro_stat().valid_micro_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.micro_stat().valid_micro_size_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.micro_stat().micro_pool_fixed_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.micro_stat().micro_pool_mem_size_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.micro_stat().micro_map_mem_size_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.micro_stat().micro_total_mem_size_);
+
   // check mem_data_mgr
   ASSERT_EQ(nullptr, mem_data_mgr.fg_mem_block_);
   ASSERT_EQ(nullptr, mem_data_mgr.bg_mem_block_);
   ASSERT_EQ(0, mem_data_mgr.fg_sealed_mem_blocks_.get_curr_total());
   ASSERT_EQ(0, mem_data_mgr.bg_sealed_mem_blocks_.get_curr_total());
   ASSERT_EQ(0, mem_data_mgr.uncomplete_sealed_mem_blocks_.get_curr_total());
-  ASSERT_EQ(0, micro_cache->cache_stat_.mem_blk_stat().get_total_mem_blk_used_cnt());
+
+  ASSERT_EQ(0, micro_cache->cache_stat_.mem_blk_stat().mem_blk_fg_used_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.mem_blk_stat().mem_blk_bg_used_cnt_);
 
   // check phy_block_mgr
   ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_);
@@ -1225,6 +1235,25 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
   ASSERT_EQ(0, phy_blk_mgr.super_block_.micro_ckpt_entry_list_.count());
   ASSERT_EQ(0, phy_blk_mgr.super_block_.blk_ckpt_entry_list_.count());
   ASSERT_EQ(0, phy_blk_mgr.super_block_.ls_info_list_.count());
+
+  ASSERT_EQ(0, micro_cache->cache_stat_.phy_blk_stat().reusable_blk_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.phy_blk_stat().phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.phy_blk_stat().micro_ckpt_blk_used_cnt_);
+  ASSERT_EQ(phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_, micro_cache->cache_stat_.phy_blk_stat().normal_blk_free_cnt_);
+  ASSERT_EQ(phy_blk_mgr.blk_cnt_info_.reorgan_blk_.total_cnt_, micro_cache->cache_stat_.phy_blk_stat().reorgan_blk_free_cnt_);
+
+  // check CacheHitStat
+  ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().cache_hit_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().cache_hit_bytes_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().cache_miss_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().cache_miss_bytes_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().fail_get_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().fail_get_bytes_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().fail_add_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().fail_add_bytes_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().add_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().add_bytes_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().new_add_cnt_);
 
   ctx.micro_key_map_.reuse();
   TestSSMicroCache::TestSSMicroCacheThread threads2(
