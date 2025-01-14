@@ -177,7 +177,7 @@ public:
   inline void set_auth_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_AUTHED; }
   inline void set_connect_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_CONNECTED; }
   inline bool is_logined() const { return logined_; }
-  inline void set_logined(bool logined) { logined_ = true; }
+  inline void set_logined(bool logined) { logined_ = logined; }
 public:
   obmysql::ObMySQLCapabilityFlags cap_flags_;
   bool is_proxy_;
