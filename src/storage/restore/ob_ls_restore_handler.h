@@ -144,10 +144,12 @@ public:
   int safe_to_destroy(bool &is_safe);
   int offline();
   int online();
-  bool is_stop() { return is_stop_; }
+  bool is_stop() { return ATOMIC_LOAD(&is_stop_); }
   int update_rebuild_seq();
   int64_t get_rebuild_seq();
   int fill_restore_arg();
+  void set_is_online(const bool is_online) { ATOMIC_STORE(&is_online_, is_online); }
+  bool is_online() {return ATOMIC_LOAD(&is_online_); }
   const ObTenantRestoreCtx &get_restore_ctx() const { return ls_restore_arg_; }
   const ObLSRestoreStat &get_restore_stat() const { return restore_stat_; }
   ObLSRestoreStat &restore_stat() { return restore_stat_; }

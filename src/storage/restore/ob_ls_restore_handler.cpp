@@ -99,7 +99,7 @@ int ObLSRestoreHandler::offline()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (!is_online_) {
+  } else if (!is_online()) {
     LOG_INFO("ls restore handler is already offline");
   } else {
     int retry_cnt = 0;
@@ -112,7 +112,7 @@ int ObLSRestoreHandler::offline()
         if (OB_FAIL(cancel_task_())) {
           LOG_WARN("failed to cancel task", K(ret), KPC(ls_));
         } else {
-          is_online_ = false;
+          set_is_online(false);
           LOG_INFO("ls restore handler offline finish");
         }
         mtx_.unlock();
@@ -131,13 +131,13 @@ int ObLSRestoreHandler::online()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (is_online_) {
+  } else if (is_online()) {
     // do nothing
     LOG_INFO("ls restore handler is already online");
   } else if (OB_FAIL(ls_->get_restore_status(new_status))) {
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
   } else if (!new_status.is_in_restoring_or_failed()) {
-    is_online_ = true;
+    set_is_online(true);
   } else {
     lib::ObMutexGuard guard(mtx_);
     if (nullptr != state_handler_) {
@@ -151,7 +151,7 @@ int ObLSRestoreHandler::online()
       }
     }
     if (OB_SUCC(ret)) {
-      is_online_ = true;
+       set_is_online(true);
       LOG_INFO("ls restore handler online finish");
     }
   }
@@ -270,7 +270,7 @@ int ObLSRestoreHandler::handle_pull_tablet(
     LOG_WARN("not init", K(ret));
   } else if (OB_ISNULL(state_handler_)) {
     ret = OB_ERR_SELF_IS_NULL;
-    LOG_WARN("need restart, wait later", KPC(ls_), K(is_stop_), K(is_online_));
+    LOG_WARN("need restart, wait later", KPC(ls_), K(is_stop()), K(is_online()));
   } else if (OB_FAIL(state_handler_->handle_pull_tablet(tablet_ids, leader_restore_status, leader_proposal_id))) {
     LOG_WARN("fail to handl pull tablet", K(ret), K(leader_restore_status), K(leader_proposal_id));
   }
@@ -285,6 +285,8 @@ int ObLSRestoreHandler::process()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (is_stop() || !is_online()) {
+      LOG_INFO("ls stopped or disabled", KPC(ls_));
   } else if (OB_FAIL(check_before_do_restore_(can_do_restore))) {
     LOG_WARN("fail to check before do restore", K(ret), KPC(ls_));
   } else if (!can_do_restore) {
@@ -300,7 +302,7 @@ int ObLSRestoreHandler::process()
     // and an ls leader not exist error will be returned before leader is ready.
     // so in order to improve availability, we need control the retry frequency and the default retry time interval is 10s.
     lib::ObMutexGuard guard(mtx_);
-    if (is_stop_ || !is_online_) {
+    if (is_stop() || !is_online()) {
       LOG_INFO("ls stopped or disabled", KPC(ls_));
     } else if (OB_FAIL(state_handler_->do_restore())) {
       ObTaskId trace_id(*ObCurTraceId::get_trace_id());
@@ -657,7 +659,7 @@ int ObLSRestoreHandler::safe_to_destroy(bool &is_safe)
       LOG_WARN("failed to cancel tasks", K(ret), KPC(ls_));
     } else {
       is_safe = true;
-      is_stop_ = true;
+      stop();
     }
   }
   LOG_INFO("wait ls restore stop", K(ret), K(is_safe), KPC(ls_));
