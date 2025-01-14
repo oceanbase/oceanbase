@@ -366,6 +366,7 @@ public:
   static const int64_t CPU_TIME_SAMPLING_INTERVAL = 20_s; //20 * 1000 * 1000 us
   static constexpr double CPU_TIME_THRESHOLD = 0.8; // 80%
   static const int64_t SHEDDER_EXPIRE_TIME = 2_min;
+  static const int64_t SHEDDER_CPU_CNT_THRESHOLD = 8; // 8c
 private:
   int64_t effect_time_;
   int64_t last_sample_time_;

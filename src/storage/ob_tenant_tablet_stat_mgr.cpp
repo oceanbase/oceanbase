@@ -585,7 +585,7 @@ void ObTenantSysLoadShedder::refresh_sys_load()
       max_cpu_cnt_ = max_cpu_cnt;
     }
 
-    if (min_cpu_cnt_ > 0 && max_cpu_cnt_ > 0) {
+    if (min_cpu_cnt_ > 0 && max_cpu_cnt_ > SHEDDER_CPU_CNT_THRESHOLD) {
       (void) refresh_cpu_utility();
     }
   }
