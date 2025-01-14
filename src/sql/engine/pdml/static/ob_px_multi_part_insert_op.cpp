@@ -116,10 +116,6 @@ int ObPxMultiPartInsertOp::inner_close()
     int64_t px_task_id = ctx_.get_px_task_id() + 1;
     int64_t ddl_task_id = plan->get_ddl_task_id();
     int error_code = (static_cast<const ObPxMultiPartInsertOpInput *>(input_))->get_error_code();
-    if (OB_EAGAIN == error_code) {
-      // replace OB_EAGAIN with OB_NEED_RETRY to force global retry
-      (static_cast<ObPxMultiPartInsertOpInput *>(input_))->set_error_code(OB_NEED_RETRY);
-    }
     if (OB_TMP_FAIL(ObTableDirectInsertService::close_task(plan->get_append_table_id(),
                                                            px_task_id,
                                                            ddl_task_id,
@@ -127,6 +123,10 @@ int ObPxMultiPartInsertOp::inner_close()
                                                            error_code))) {
       LOG_WARN("failed to close table direct insert task", KR(tmp_ret),
           K(plan->get_append_table_id()), K(px_task_id), K(ddl_task_id), K(error_code));
+      if (OB_EAGAIN == tmp_ret) {
+        // replace OB_EAGAIN with OB_NEED_RETRY to force global retry
+        tmp_ret = OB_NEED_RETRY;
+      }
     }
   }
   if (OB_FAIL(ObTableModifyOp::inner_close())) {
