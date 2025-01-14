@@ -274,7 +274,7 @@ int ObMPPacketSender::response_compose_packet(obmysql::ObMySQLPacket &pkt,
                                        ez_buf_->end - ez_buf_->pos,
                                        seri_size,
                                        0,
-                                       true))) {
+                                       proto20_context_.is_proto20_used()))) {
       LOG_WARN("failed to encode packet", K(ret));
     } else {
       LOG_DEBUG("succ encode packet", K(okp), K(seri_size));
