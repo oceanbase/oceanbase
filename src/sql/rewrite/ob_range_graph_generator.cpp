@@ -776,6 +776,20 @@ int ObRangeGraphGenerator::formalize_final_range_node(ObRangeNode *&range_node)
   return ret;
 }
 
+OB_INLINE void mul_check_overflow(uint64_t &a, const uint64_t b)
+{
+  if (__builtin_mul_overflow(a, b, &a)) {
+    a = UINT64_MAX;
+  }
+}
+
+OB_INLINE void add_check_overflow(uint64_t &a, const uint64_t b)
+{
+  if (__builtin_add_overflow(a, b, &a)) {
+    a = UINT64_MAX;
+  }
+}
+
 int ObRangeGraphGenerator::collect_graph_infos(ObRangeNode *range_node,
                                                uint64_t *total_range_sizes,
                                                uint64_t *range_sizes,
@@ -813,7 +827,7 @@ int ObRangeGraphGenerator::collect_graph_infos(ObRangeNode *range_node,
         if (cur_node->min_offset_ <= 0) {
           start_from_zero = true;
         }
-        range_sizes[idx] *= cur_or_count;
+        mul_check_overflow(range_sizes[idx], cur_or_count);
         min_offset = std::min(idx, min_offset);
         if (cur_node->and_next_ != nullptr) {
           int64_t child_min_offset = idx + 1;
@@ -824,20 +838,20 @@ int ObRangeGraphGenerator::collect_graph_infos(ObRangeNode *range_node,
           } else if (idx < child_min_offset) {
             uint64_t range_size = 1;
             for (int64_t i = 0; i <= idx; ++i) {
-              range_size *= range_sizes[i];
+              mul_check_overflow(range_size, range_sizes[i]);
             }
-            total_range_sizes[idx] += range_size;
+            add_check_overflow(total_range_sizes[idx], range_size);
           }
           min_offset = std::min(child_min_offset, min_offset);
         } else {
           uint64_t range_size = 1;
           for (int64_t i = 0; i <= idx; ++i) {
-            range_size *= range_sizes[i];
+            mul_check_overflow(range_size, range_sizes[i]);
           }
-          total_range_sizes[idx] += range_size;
+          add_check_overflow(total_range_sizes[idx], range_size);
           for (int64_t i = idx + 1; i < cur_node->column_cnt_; ++i) {
-            range_size *= range_sizes[i];
-            total_range_sizes[i] += range_size;
+            mul_check_overflow(range_size, range_sizes[i]);
+            add_check_overflow(total_range_sizes[i], range_size);
           }
         }
         range_sizes[idx] /= cur_or_count;
