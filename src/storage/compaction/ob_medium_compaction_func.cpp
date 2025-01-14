@@ -1569,7 +1569,7 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
     LOG_WARN("failed to check if schema changed", K(ret));
   } else if (medium_info.is_schema_changed_) {
     // cannot skip merge
-  } else if (OB_FAIL(tablet.get_all_memtables(memtables))) {
+  } else if (OB_FAIL(tablet.get_memtables(memtables, true/*need_active*/))) {
     LOG_WARN("failed to get all memtable", K(ret), K(tablet));
   } else if (!memtables.empty()) {
     // tablet has memtable, exist inc data to merge
