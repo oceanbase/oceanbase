@@ -4358,6 +4358,35 @@ int ObDDLService::check_can_add_column_instant_(const ObTableSchema &orig_table_
   return ret;
 }
 
+int is_list_part_val_changed(const ObBasePartition &orig_part, const ObBasePartition &new_part)
+{
+  int ret = OB_SUCCESS;
+  if (!orig_part.is_valid() || !new_part.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(orig_part), K(new_part));
+  } else {
+    const ObIArray<common::ObNewRow>* orig_list_values = &(orig_part.get_list_row_values());
+    const ObIArray<common::ObNewRow>* new_list_values   = &(new_part.get_list_row_values());
+    if (OB_ISNULL(orig_list_values) && OB_ISNULL(new_list_values)) {
+      /* both empty, skip */
+    } else if ((OB_ISNULL(orig_list_values) ^ OB_ISNULL(new_list_values))
+             ||(orig_list_values->count() != new_list_values->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, val list changed", K(ret), KPC(orig_list_values), KPC(new_list_values));
+    } else {
+      for (int64_t i = 0; i < orig_list_values->count() && OB_SUCC(ret); i++) {
+        if (orig_list_values->at(i) == new_list_values->at(i)) {
+          /* skip */
+        } else {
+          ret = OB_ERR_PARTITION_CONST_DOMAIN_ERROR;
+          LOG_WARN("partition list val have been changed", K(ret), K(orig_list_values->at(i)), K(new_list_values->at(i)));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_arg,
                                            const ObTableSchema &orig_table_schema,
                                            ObSchemaGetterGuard &schema_guard,
@@ -4465,7 +4494,44 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
         case OB_DDL_MODIFY_COLUMN: {
           bool is_offline = false;
           bool add_pk = false;
-          if (OB_FAIL(fill_column_collation(alter_table_schema.get_sql_mode(),
+
+          // check is partition list val changed
+          bool is_partition_key = orig_column_schema->is_part_key_column();
+          bool is_sub_partition_key = orig_column_schema->is_subpart_key_column();
+          if (orig_column_schema->get_data_type() != alter_column_schema->get_data_type()) {
+            if (orig_table_schema.get_partition_num() != alter_table_schema.get_partition_num()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("partition num have been changed when change column type", K(ret), K(orig_table_schema), K(alter_table_arg));
+            }
+            for (int64_t i = 0; i < orig_table_schema.get_partition_num() && OB_SUCC(ret); i++) {
+              const ObPartition *orig_part = orig_table_schema.get_part_array()[i];
+              const ObPartition *new_part  = alter_table_schema.get_part_array()[i];
+              if (OB_ISNULL(orig_part) || OB_ISNULL(new_part)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("invalid part", K(ret), KPC(orig_part), K(new_part));
+              } else if (is_partition_key && OB_FAIL(is_list_part_val_changed(*orig_part, *new_part))) {
+                LOG_WARN("failed to check new part valid", K(ret), K(orig_table_schema), K(alter_table_arg));
+              } else if (is_sub_partition_key) {
+                if (orig_part->get_sub_part_num() != new_part->get_sub_part_num()) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid part num", K(ret), KPC(orig_part), KPC(new_part), K(orig_table_schema), K(alter_table_arg));
+                }
+                for (int64_t j = 0; OB_SUCC(ret) && j < orig_part->get_sub_part_num(); j++) {
+                  ObSubPartition *orig_sub_part = orig_part->get_subpart_array()[j];
+                  ObSubPartition *new_sub_part  = new_part->get_subpart_array()[j];
+                  if (OB_ISNULL(orig_sub_part) || OB_ISNULL(new_sub_part)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("invalid part", K(ret), KPC(orig_part), KPC(new_part));
+                  } else if (OB_FAIL(is_list_part_val_changed(*orig_sub_part, *new_sub_part))) {
+                    LOG_WARN("failed to check sub part changed", K(ret), KPC(orig_sub_part), K(new_sub_part), K(orig_table_schema), K(alter_table_arg));
+                  }
+                }
+              }
+            }
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(fill_column_collation(alter_table_schema.get_sql_mode(),
                                             is_oracle_mode,
                                             orig_table_schema,
                                             allocator,
@@ -10386,6 +10452,25 @@ int ObDDLService::alter_table_update_aux_column(
                 "table schema", *aux_table_schema, K(ret));
           } else if (OB_FAIL(ddl_operator.update_single_column_group(trans, *aux_table_schema, new_aux_column_schema))) {
             RS_LOG(WARN, "fail to update column group schema name ", K(ret));
+          }
+
+          //  update relevant shadow pk when column changed
+          const ObColumnSchemaV2 *shadow_column = nullptr;
+          if (OB_FAIL(ret)) {
+          } else if (!aux_table_schema->is_global_index_table()) {
+            /* skip */
+          } else if (OB_ISNULL(shadow_column = aux_table_schema->get_column_schema(origin_column_schema->get_column_id() + common::OB_MIN_SHADOW_COLUMN_ID))) {
+            /* skip */
+          } else {
+            ObColumnSchemaV2 new_shadow_column;
+            new_shadow_column.assign(*shadow_column);
+            new_shadow_column.set_data_type(new_column_schema.get_data_type());
+            if (OB_FAIL(ddl_operator.update_single_column(trans, *aux_table_schema, *aux_table_schema, new_shadow_column))) {
+              LOG_WARN("failed to update global index shadow column", K(ret));
+            }
+          }
+
+          if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ddl_operator.sync_aux_schema_version_for_history(
                   trans,
                   *aux_table_schema))) {
