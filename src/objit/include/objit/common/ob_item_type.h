@@ -903,6 +903,11 @@ typedef enum ObItemType
   T_FUNC_SYS_ARRAY_LENGTH = 1775,
   T_FUNC_SYS_ARRAY_RANGE = 1776,
   T_FUNC_SYS_ARRAY_POSITION = 1777,
+  T_FUNC_SYS_ARRAY_EXCEPT = 1778,
+  T_FUNC_SYS_ARRAY_INTERSECT = 1779,
+  T_FUNC_SYS_ARRAY_UNION = 1780,
+  T_FUNC_SYS_ARRAY_REPLACE = 1781,
+  T_FUNC_SYS_ARRAY_POPFRONT = 1782,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table

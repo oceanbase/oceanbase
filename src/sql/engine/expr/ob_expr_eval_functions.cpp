@@ -1353,6 +1353,11 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset,      /* 820 */
   ObExprIsNot::json_is_not_false,                                     /* 821 */
   ObExprIsNot::json_is_not_true,                                      /* 822 */
+  NULL, // ObExprArrayExcept::eval_array_except,                      /* 823 */
+  NULL, // ObExprArrayIntersect::eval_array_intersect,                /* 824 */
+  NULL, // ObExprArrayUnion::eval_array_union,                        /* 825 */
+  NULL, // ObExprArrayReplace::eval_array_replace,                    /* 826 */
+  NULL, // ObExprArrayPopfront::eval_array_popfront,                  /* 827 */
 
 };
 
@@ -1530,6 +1535,11 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL,// ObExprArrayPosition::eval_array_position_batch,             /* 170 */
   NULL, // ObExprURLEncode::eval_url_encode_batch,                    /* 171 */
   NULL, // ObExprURLDecode::eval_url_decode_batch,                    /* 172 */
+  NULL, // ObExprArrayExcept::eval_array_except_batch,                /* 173 */
+  NULL, // ObExprArrayIntersect::eval_array_intersect_batch,          /* 174 */
+  NULL, // ObExprArrayUnion::eval_array_union_batch,                  /* 175 */
+  NULL, // ObExprArrayReplace::eval_array_replace_batch,              /* 176 */
+  NULL, // ObExprArrayPopfront::eval_array_popfront_batch,            /* 177 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1735,6 +1745,11 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprBool::calc_vector_bool_expr,                            /* 199 */
   NULL, // ObExprNotBetween::eval_not_between_vector,                    /* 200 */
   NULL, // ObExprNot::eval_not_vector,                                   /* 201 */
+  NULL, // ObExprArrayExcept::eval_array_except_vector,                  /* 202 */
+  NULL, // ObExprArrayIntersect::eval_array_intersect_vector,            /* 203 */
+  NULL, // ObExprArrayUnion::eval_array_union_vector,                    /* 204 */
+  NULL, // ObExprArrayReplace::eval_array_replace_vector,                /* 205 */
+  NULL, // ObExprArrayPopfront::eval_array_popfront_vector,              /* 206 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
