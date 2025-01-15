@@ -134,7 +134,7 @@ int ObBackupFileWriteCtx::flush_buffer_(const bool is_last_part)
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_BACKUP_TRIGGER_BANDWIDTH_THROTTLE", K(ret));
         // in case of errsim, that the bytes be larger to trigger bandwidth throttle
-        bytes = write_size * 10;
+        bytes = write_size * 100;
         ret = OB_SUCCESS;
       }
     }
