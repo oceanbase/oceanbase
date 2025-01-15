@@ -719,7 +719,8 @@ int ObHashJoinVecOp::process_left(bool &need_not_read_right)
   }
 
   if (OB_SUCC(ret)
-     && (!is_shared_ || 0 == cur_join_table_->get_row_count())
+     && (!is_shared_ || (0 == cur_join_table_->get_row_count()
+                         && cur_dumped_partition_ == MAX_PART_COUNT_PER_LEVEL))
      && ((0 == num_left_rows
          && RIGHT_ANTI_JOIN != MY_SPEC.join_type_
          && RIGHT_OUTER_JOIN != MY_SPEC.join_type_
