@@ -504,7 +504,10 @@ int ObTabletCopyFinishTask::deal_with_major_sstables_()
   } else if (OB_FAIL(classify_major_sstables_(shared_major_sstables, local_major_sstables))) {
     LOG_WARN("failed to split major sstables", K(ret));
   } else if (OB_FAIL(deal_with_shared_majors_(shared_major_sstables))) {
+    // TODO(jyx441808): remove this logic when migration can fetch src macro id list for shared sstable
     LOG_WARN("failed to deal with shared majors", K(ret));
+  } else if (local_major_sstables.empty()) {
+    // do nothing
   } else {
     const bool need_replace_remote_sstable = ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action_);
     ObStorageHATabletBuilderUtil::BatchBuildTabletTablesExtraParam batch_extra_param;
