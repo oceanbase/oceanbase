@@ -1026,9 +1026,9 @@ int ObOptimizerUtil::get_expr_monotonicity_recursively(const ObRawExpr* expr,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected exprssion input is null error", K(ret));
       } else if ((ObCharset::is_bin_sort(param_expr_str->get_result_type().get_collation_type()) ||
-                  CS_TYPE_UTF8MB4_GENERAL_CI == param_expr_str->get_result_type().get_collation_type())
-                 && param_expr_pos->is_const_raw_expr() && !param_expr_pos->get_result_type().is_null()
-                 && param_expr_len->is_const_raw_expr() && !param_expr_len->get_result_type().is_null()) {
+                  CS_TYPE_UTF8MB4_GENERAL_CI == param_expr_str->get_result_type().get_collation_type()) &&
+                 (param_expr_pos->is_const_raw_expr() && !param_expr_pos->get_result_type().is_null()) &&
+                 (param_expr_len == NULL || (param_expr_len != NULL && param_expr_len->is_const_raw_expr() && !param_expr_len->get_result_type().is_null()))) {
         if (OB_FAIL(ObTransformUtils::get_expr_int_value(const_cast<ObRawExpr*>(param_expr_pos), &param_store,
                                                          &ctx, &local_allocator, value, is_null_value))) {
           LOG_WARN("failed to check limit value", K(ret));
