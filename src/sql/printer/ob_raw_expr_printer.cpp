@@ -5330,31 +5330,6 @@ int ObRawExprPrinter::print_sql_udt_construct(ObSysFunRawExpr *expr)
   return ret;
 }
 
-int ObRawExprPrinter::get_max_lambda_param_idx(ObRawExpr *expr, uint32_t &max_idx)
-{
-  int ret = OB_SUCCESS;
-  if (expr->get_expr_type() == T_EXEC_VAR) {
-    ObVarRawExpr *var_expr = static_cast<ObVarRawExpr *>(expr);
-    int64_t idx = var_expr->get_ref_index();
-    if (idx > max_idx) {
-      max_idx = idx;
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
-      ObRawExpr *child_expr = NULL;
-      if (OB_ISNULL(child_expr = expr->get_param_expr(i))) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(ret));
-      } else if (child_expr->get_expr_type() == T_FUNC_SYS_ARRAY_MAP) {
-        // do nothing
-      } else if (OB_FAIL(get_max_lambda_param_idx(child_expr, max_idx))) {
-        LOG_WARN("get max lambda param idx failed", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObRawExprPrinter::print_array_map(ObSysFunRawExpr *expr)
 {
   int ret = OB_SUCCESS;
@@ -5362,12 +5337,10 @@ int ObRawExprPrinter::print_array_map(ObSysFunRawExpr *expr)
   if (OB_ISNULL(expr) || (expr->get_param_count() < 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
-  } else if (OB_FAIL(get_max_lambda_param_idx(expr->get_param_expr(0), max_idx))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("doc type value isn't int value");
   } else {
+    max_idx = expr->get_param_count() - 1;
     DATA_PRINTF("array_map((");
-    for (uint32_t i = 0; i <= max_idx; i++) {
+    for (uint32_t i = 0; i < max_idx; i++) {
       if (i != 0) {
         DATA_PRINTF(",");
       }

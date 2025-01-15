@@ -3691,6 +3691,9 @@ int ObRawExprDeduceType::set_array_agg_result_type(ObAggFunRawExpr &expr,
       if (OB_SUCC(ret)) {
         result_type.set_collection(subschema_id);
         expr.set_result_type(result_type);
+        if (OB_FAIL(construct_collecton_attr_expr(expr))) {
+          LOG_WARN("failed to construct collection attr expr", K(ret));
+        }
       }
     }
   }
