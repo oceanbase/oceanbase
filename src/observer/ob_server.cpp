@@ -301,11 +301,20 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   init_arches();
   scramble_rand_.init(static_cast<uint64_t>(start_time_), static_cast<uint64_t>(start_time_ / 2));
 
+#if defined(__x86_64__)
+  if (OB_UNLIKELY(!is_arch_supported(ObTargetArch::AVX))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("unsupported CPU platform, AVX instructions are required.");
+  }
+#endif
+
   // start ObTimerService first, because some timers depend on it
-  if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
-    LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
-  } else if (OB_FAIL(ObTimerService::get_instance().start())) {
-    LOG_ERROR("start timer service failed", KR(ret));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
+      LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
+    } else if (OB_FAIL(ObTimerService::get_instance().start())) {
+      LOG_ERROR("start timer service failed", KR(ret));
+    }
   }
 
   // server parameters be inited here.
