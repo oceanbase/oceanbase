@@ -83,6 +83,7 @@ public:
   typedef ObMemtableKey Key;
   typedef rpc::ObLockWaitNode Node;
   typedef FixedHash2<Node> Hash;
+  typedef rpc::ObLockWaitNode::NODE_TYPE NodeType;
   struct SessPair {
     uint32_t sess_id_;
     TO_STRING_KV(K(sess_id_));
@@ -246,7 +247,8 @@ public:
   // obtain the specified node waiting on the row or transaction
   Node* fetch_wait_node(uint64_t hash,
                         NodeID node_id,
-                        const ObAddr &addr);
+                        const ObAddr &addr,
+                        NodeType node_type = NodeType::MAX);
   // obtain the first fake placeholder node waiting on the row or transaction
   bool remove_remote_exec_side_node_type_placeholder(uint64_t hash);
   // obtain the first request waiting on the row or transaction and retry
@@ -270,9 +272,10 @@ public:
 protected:
   // obtain the request waiting on the row or transaction
   Node* get_waiter(uint64_t hash,
-                     NodeID node_id = 0,
-                     const ObAddr &addr = ObAddr(),
-                     bool detach_node = true);
+                   NodeID node_id = 0,
+                   const ObAddr &ctrl_side_addr = ObAddr(),
+                   bool detach_node = true,
+                   NodeType node_type = NodeType::MAX);
   // check whether there exits requests already timeoutt or need be
   // retried(session is killed, deadlocked or son on), and wakeup and retry them
   ObLink* check_timeout();

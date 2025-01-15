@@ -78,6 +78,7 @@ struct ObLockWaitNode: public common::SpHashNode
     // used for remote execution, execution side lock wait node which is dynamically allocated
     // and no corresponding request in this side
     REMOTE_EXEC_SIDE = 2,
+    MAX
   };
   void reset_need_wait() { need_wait_ = false; }
   void set(void *addr,

@@ -385,7 +385,7 @@ int ObLockWaitMgr::handle_inform_dst_enqueue_req(const ObLockWaitMgrDstEnqueueMs
   Node *remote_exec_side_node = NULL;
   Node *ptr = NULL;
   ObLockWaitMgrDstEnqueueRespMsg resp_msg;
-  Node *last_node = fetch_wait_node(msg.get_hash(), msg.get_node_id(), msg.get_sender_addr());
+  Node *last_node = fetch_wait_node(msg.get_hash(), msg.get_node_id(), msg.get_sender_addr(), rpc::ObLockWaitNode::REMOTE_EXEC_SIDE);
   bool is_placeholder = false;
   if (OB_UNLIKELY(last_node != NULL)) {
     ptr = last_node;
@@ -456,9 +456,10 @@ ObLockWaitMgr::Node* ObLockWaitMgr::fetch_wait_head(uint64_t hash)
 // obtain the specified node waiting on the row or transaction
 ObLockWaitMgr::Node* ObLockWaitMgr::fetch_wait_node(uint64_t hash,
                                                     NodeID node_id,
-                                                    const ObAddr &addr)
+                                                    const ObAddr &addr,
+                                                    NodeType node_type)
 {
-  Node *node = get_waiter(hash, node_id, addr, true);
+  Node *node = get_waiter(hash, node_id, addr, true, node_type);
   return node;
 }
 
@@ -1261,13 +1262,15 @@ ObLockWaitMgr::Node* ObLockWaitMgr::next(Node*& iter, Node* target)
 ObLockWaitMgr::Node* ObLockWaitMgr::get_waiter(uint64_t hash,
                                                  NodeID node_id,
                                                  const ObAddr &addr,
-                                                 bool detach_node)
+                                                 bool detach_node,
+                                                 NodeType node_type)
 {
   Node* remove_ret = NULL;
   Node* node = NULL;
   bool is_placeholder = false;
   bool find_with_node_id = node_id > 0;
   bool find_with_addr = addr.is_valid();
+  bool find_with_node_type = node_type != NodeType::MAX;
 
   if (get_wait_node_cnt() > 0) {
     CriticalGuard(get_qs());
@@ -1278,6 +1281,8 @@ ObLockWaitMgr::Node* ObLockWaitMgr::get_waiter(uint64_t hash,
       if (find_with_node_id && node->get_node_id() != node_id) {
         // do nothing
       } else if (find_with_addr && node->get_ctrl_addr() != addr) {
+        // do nothing
+      } else if (find_with_node_type && node->get_node_type() != node_type) {
         // do nothing
       } else if (node->hash() == hash) {
         is_placeholder = ATOMIC_LOAD(&node->is_placeholder_);
