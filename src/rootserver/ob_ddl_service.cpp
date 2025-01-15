@@ -4498,7 +4498,8 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
           // check is partition list val changed
           bool is_partition_key = orig_column_schema->is_part_key_column();
           bool is_sub_partition_key = orig_column_schema->is_subpart_key_column();
-          if (orig_column_schema->get_data_type() != alter_column_schema->get_data_type()) {
+          if (!is_partition_key && !is_sub_partition_key) {
+          } else if (orig_column_schema->get_data_type() != alter_column_schema->get_data_type()) {
             if (orig_table_schema.get_partition_num() != alter_table_schema.get_partition_num()) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("partition num have been changed when change column type", K(ret), K(orig_table_schema), K(alter_table_arg));
