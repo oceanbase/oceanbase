@@ -262,7 +262,7 @@ TEST_F(TestObjectMgr, TestSubObjectMgr)
       AObject *obj = it->second;
       ABlock *block = obj->block();
       abort_unless(block->is_valid());
-      ObjectSet *set = block->obj_set_;
+      ObjectSet *set = (ObjectSet *)block->obj_set_;
       set->free_object(obj);
       allocs.erase(it->first);
     }

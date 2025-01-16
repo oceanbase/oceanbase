@@ -28,5 +28,10 @@ static inline void abort_unless(int result)
     ob_abort();
   }
 }
+#ifdef ENABLE_DEBUG_ASSERT
+#define DEBUG_ASSERT(result) abort_unless(result)
+#else
+#define DEBUG_ASSERT(result)
+#endif
 
 #endif // OCEANBASE_COMMON_OB_ABORT_H_

@@ -402,12 +402,7 @@ void ObTenantCtxAllocator::update_wash_stat(int64_t related_chunks, int64_t bloc
 
 void ObTenantCtxAllocator::on_alloc(AObject& obj, const ObMemAttr& attr)
 {
-  if (attr.label_.str_ != nullptr) {
-    STRNCPY(obj.label_, attr.label_.str_, sizeof(obj.label_));
-    obj.label_[sizeof(obj.label_) - 1] = '\0';
-  } else {
-    MEMSET(obj.label_, '\0', sizeof(obj.label_));
-  }
+  obj.set_label(attr.label_.str_);
   if (attr.alloc_extra_info_) {
     void *addrs[100] = {nullptr};
     ob_backtrace(addrs, ARRAYSIZEOF(addrs));
@@ -447,7 +442,7 @@ void ObTenantCtxAllocator::on_free(AObject &obj)
   SANITY_POISON(obj.data_, obj.alloc_bytes_);
   get_mem_leak_checker().on_free(obj);
 
-  IBlockMgr *blk_mgr = block->obj_set_->get_block_mgr();
+  IBlockMgr *blk_mgr = ((ObjectSet*)block->obj_set_)->get_block_mgr();
   abort_unless(NULL != blk_mgr);
 
   int64_t tenant_id = blk_mgr->get_tenant_id();
@@ -471,7 +466,7 @@ void ObTenantCtxAllocator::common_free(void *ptr)
   if (NULL != ptr) {
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
     on_free(*obj);
-    ObjectSet *os = obj->block()->obj_set_;
+    ObjectSet *os = (ObjectSet*)obj->block()->obj_set_;
     os->free_object(obj);
   }
 }

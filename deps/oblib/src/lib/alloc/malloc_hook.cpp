@@ -9,7 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
 #include "malloc_hook.h"
 #include "lib/utility/ob_defer.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
@@ -24,17 +23,15 @@
 using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
-
 static bool g_malloc_hook_inited = false;
 typedef void* (*MemsetPtr)(void*, int, size_t);
 MemsetPtr memset_ptr = nullptr;
-
+ObMallocHook &global_malloc_hook = ObMallocHook::get_instance();
 void init_malloc_hook()
 {
   g_malloc_hook_inited = true;
   memset_ptr = memset;
 }
-
 uint64_t up_align(uint64_t x, uint64_t align)
 {
   return (x + (align - 1)) & ~(align - 1);
@@ -67,14 +64,7 @@ void *ob_malloc_retry(size_t size)
 {
   void *ptr = nullptr;
   do {
-    ObMemAttr attr = ObMallocHookAttrGuard::get_tl_mem_attr();
-    SET_USE_500(attr);
-    attr.ctx_id_ = ObCtxIds::GLIBC;
-    ptr = ob_malloc(size, attr);
-    if (OB_ISNULL(ptr)) {
-      attr.tenant_id_ = OB_SERVER_TENANT_ID;
-      ptr = ob_malloc(size, attr);
-    }
+    ptr = global_malloc_hook.alloc(size);
     if (OB_ISNULL(ptr)) {
       ::usleep(10000);  // 10ms
     }
@@ -121,8 +111,8 @@ malloc(size_t size)
   } else {
     bool in_hook_bak = in_hook();
     in_hook()= true;
-    DEFER(in_hook()= in_hook_bak);
     tmp_ptr = ob_malloc_retry(real_size);
+    in_hook()= in_hook_bak;
   }
   if (OB_LIKELY(tmp_ptr != nullptr)) {
     Header *header = new (tmp_ptr) Header((uint32_t)size, from_mmap);
@@ -144,8 +134,8 @@ free(void *ptr)
     } else {
       bool in_hook_bak = in_hook();
       in_hook()= true;
-      DEFER(in_hook()= in_hook_bak);
-      ob_free(orig_ptr);
+      global_malloc_hook.free(orig_ptr);
+      in_hook()= in_hook_bak;
     }
   }
 }

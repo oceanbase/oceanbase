@@ -1,4 +1,6 @@
 result_format: 4
+alter system set _enable_malloc_v2=false;
+
 DROP PROCEDURE IF EXISTS proc_19194_codegen;
 DROP PROCEDURE IF EXISTS bug_19194_simple;
 DROP PROCEDURE IF EXISTS bug_19194_searched;
@@ -245,3 +247,4 @@ DROP PROCEDURE bug_19194_searched;
 
 DROP PROCEDURE proc_19194_codegen;
 
+alter system set _enable_malloc_v2=true;

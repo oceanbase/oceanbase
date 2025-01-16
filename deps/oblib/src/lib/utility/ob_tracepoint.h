@@ -253,7 +253,13 @@ struct EventItem
   }
 
   int call(const int64_t v) { return cond_ == v ? call() : 0; }
-  int call() { return static_cast<int>(get_event_code()); }
+  int call() {
+    if (OB_LIKELY(0 == trigger_freq_ && 0 == occur_)) {
+      return 0;
+    } else {
+      return static_cast<int>(get_event_code());
+    }
+  }
   int64_t get_event_code()
   {
     int64_t event_code = 0;

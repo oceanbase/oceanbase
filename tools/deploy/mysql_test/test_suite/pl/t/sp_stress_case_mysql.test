@@ -12,6 +12,10 @@ set @@session.explicit_defaults_for_timestamp=off;
 # Bug#19194 (Right recursion in parser for CASE causes excessive stack
 #   usage, limitation)
 #
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+alter system set _enable_malloc_v2=false;
+connection default;
 
 --disable_warnings
 DROP PROCEDURE IF EXISTS proc_19194_codegen;
@@ -113,3 +117,6 @@ DROP PROCEDURE bug_19194_searched;
 
 DROP PROCEDURE proc_19194_codegen;
 
+connection obsys;
+alter system set _enable_malloc_v2=true;
+connection default;

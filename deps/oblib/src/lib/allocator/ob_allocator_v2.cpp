@@ -103,7 +103,7 @@ void ObParallelAllocator::free(void *ptr)
     lib::ABlock *block = obj->block();
     abort_unless(block);
     abort_unless(block->is_valid());
-    ObjectSet *os = block->obj_set_;
+    ObjectSet *os = (ObjectSet*)block->obj_set_;
     // The locking process is driven by obj_set
     os->free_object(obj);
   }
