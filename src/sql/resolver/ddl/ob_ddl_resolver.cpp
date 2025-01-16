@@ -962,7 +962,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
       case T_FUN_SYS_UTC_TIMESTAMP:
       case T_FUN_SYS_CUR_TIME:
       case T_FUN_SYS_UTC_TIME:
-      case T_FUN_SYS_SYSDATE: {
+      case T_FUN_SYS_SYSDATE:
+      case T_FUN_SYS_ARRAY: {
         resolve_res.is_literal_ = false;
         ObObjParam first;
         ObDefaultValueRes first_res(first);
