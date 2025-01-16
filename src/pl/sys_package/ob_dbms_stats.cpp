@@ -1173,7 +1173,7 @@ int ObDbmsStats::parse_degree_option(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   number::ObNumber num_degree;
-  int64_t max_degree = (int64_t)(1<<31)-1;
+  int64_t max_degree = INT32_MAX;
   int64_t min_degree = 1;
   if (degree.is_null()) {
     stat_param.degree_ = 1;
