@@ -2082,7 +2082,8 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
   int ret = OB_SUCCESS;
   ObSqlSchemaGuard *guard = NULL;
   IndexInfoEntry *index_info_entry = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(guard = OPT_CTX.get_sql_schema_guard()) || OB_ISNULL(stmt)) {
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(guard = OPT_CTX.get_sql_schema_guard()) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(get_plan()), K(guard), K(stmt));
   } else if (OB_FAIL(index_info_cache.get_index_info_entry(table_id,
@@ -2139,6 +2140,10 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
           index_dim.set_can_prunning(false);
         }
         if (OB_FAIL(index_dim.add_index_back_dim(is_index_back,
+                                                 interest_column_ids.count() > 0,
+                                                 prefix_range_ids.count() > 0,
+                                                 index_schema->get_column_count(),
+                                                 filter_column_ids,
                                                  *allocator_))) {
           LOG_WARN("add index back dim failed", K(is_index_back), K(ret));
         } else if (OB_FAIL(index_dim.add_interesting_order_dim(is_index_back,
@@ -7684,6 +7689,14 @@ int ObJoinOrder::try_pruning_base_table_access_path(const uint64_t table_id,
   ObSEArray<int64_t, 2> none_range_path_positions;
   AccessPath *ap = NULL;
   const QueryRangeInfo *query_range_info = NULL;
+  bool enable_new_prune_policy = false;
+  const ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
+      OB_ISNULL(query_ctx = get_plan()->get_stmt()->get_query_ctx())) {
+    LOG_WARN("unexpect null ctx", K(ret));
+  } else {
+    enable_new_prune_policy = query_ctx->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_1_BP10;
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
     if (OB_ISNULL(ap = access_paths.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -7694,10 +7707,16 @@ int ObJoinOrder::try_pruning_base_table_access_path(const uint64_t table_id,
     } else if (OB_ISNULL(query_range_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query_range_info should not be null", K(ret));
-    } else if (ap->range_prefix_count_ <= 0 &&
+    } else if (enable_new_prune_policy &&
+               ap->range_prefix_count_ <= 0 &&
                !query_range_info->get_contain_always_false() &&
                OB_FAIL(none_range_path_positions.push_back(i))) {
       LOG_WARN("failed to push back pos", K(ret));
+    } else if (!enable_new_prune_policy &&
+               ap->ref_table_id_ == ap->index_id_) {
+      if (OB_FAIL(none_range_path_positions.push_back(i))) {
+        LOG_WARN("failed to push back pos", K(ret));
+      }
     } else {
       need_prune |= (ap->range_prefix_count_ > 0 || query_range_info->get_contain_always_false()) &&
                     ap->query_range_row_count_ < PRUNING_ROW_COUNT_THRESHOLD;
@@ -7735,7 +7754,7 @@ int ObJoinOrder::try_pruning_base_table_access_path(const uint64_t table_id,
       LOG_WARN("failed to push back index id", K(ret));
     }
   }
-  if (OB_SUCC(ret) && need_prune) {
+  if (OB_SUCC(ret) && need_prune && enable_new_prune_policy) {
     const ObDMLStmt *stmt = NULL;
     ObSEArray<uint64_t, 8> skyline_index_ids;
     if (OB_ISNULL(get_plan()) ||
