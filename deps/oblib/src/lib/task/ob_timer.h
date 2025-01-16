@@ -47,7 +47,7 @@ public:
   {
     int64_t pos = 0;
     if (NULL != buf && buf_len > 0) {
-      databuff_printf(buf, buf_len, pos, "tasktype:%s", typeid(*this).name());
+      databuff_printf(buf, buf_len, pos, "timer_type:%s", typeid(*this).name());
     }
     return pos;
   }
