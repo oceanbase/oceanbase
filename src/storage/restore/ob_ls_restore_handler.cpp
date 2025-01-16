@@ -102,7 +102,7 @@ int ObLSRestoreHandler::offline()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (!is_online_) {
+  } else if (!is_online()) {
     LOG_INFO("ls restore handler is already offline");
   } else {
     int retry_cnt = 0;
@@ -115,7 +115,7 @@ int ObLSRestoreHandler::offline()
         if (OB_FAIL(cancel_task_())) {
           LOG_WARN("failed to cancel task", K(ret), KPC(ls_));
         } else {
-          is_online_ = false;
+          set_is_online(false);
           LOG_INFO("ls restore handler offline finish");
         }
         mtx_.unlock();
@@ -134,13 +134,13 @@ int ObLSRestoreHandler::online()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (is_online_) {
+  } else if (is_online()) {
     // do nothing
     LOG_INFO("ls restore handler is already online");
   } else if (OB_FAIL(ls_->get_restore_status(new_status))) {
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
   } else if (new_status.is_restore_none()) {
-    is_online_ = true;
+    set_is_online(true);
   } else {
     lib::ObMutexGuard guard(mtx_);
     if (nullptr != state_handler_) {
@@ -154,7 +154,7 @@ int ObLSRestoreHandler::online()
       }
     }
     if (OB_SUCC(ret)) {
-      is_online_ = true;
+       set_is_online(true);
       LOG_INFO("ls restore handler online finish");
     }
   }
@@ -273,7 +273,7 @@ int ObLSRestoreHandler::handle_pull_tablet(
     LOG_WARN("not init", K(ret));
   } else if (OB_ISNULL(state_handler_)) {
     ret = OB_ERR_SELF_IS_NULL;
-    LOG_WARN("need restart, wait later", KPC(ls_), K(is_stop_), K(is_online_));
+    LOG_WARN("need restart, wait later", KPC(ls_), K(is_stop()), K(is_online()));
   } else if (OB_FAIL(state_handler_->handle_pull_tablet(tablet_ids, leader_restore_status, leader_proposal_id))) {
     LOG_WARN("fail to handl pull tablet", K(ret), K(leader_restore_status), K(leader_proposal_id));
   }
@@ -303,8 +303,11 @@ int ObLSRestoreHandler::process()
     // and an ls leader not exist error will be returned before leader is ready.
     // so in order to improve availability, we need control the retry frequency and the default retry time interval is 10s.
     lib::ObMutexGuard guard(mtx_);
-    if (is_stop_ || !is_online_) {
+    if (is_stop() || !is_online()) {
       LOG_INFO("ls stopped or disabled", KPC(ls_));
+    } else if (OB_ISNULL(state_handler_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("state handler is nullptr!", K(ret), KPC(ls_));
     } else if (OB_FAIL(state_handler_->do_restore())) {
       result_mgr_.set_result(ret, trace_id_, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
       LOG_WARN("fail to do restore", K(ret), KPC(state_handler_));
@@ -322,7 +325,8 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
   bool is_normal = false;
   bool is_exist = true;
   bool is_in_member_or_learner_list = false;
-  if (is_stop()) { 
+  if (is_stop() || !is_online()) {
+      LOG_INFO("ls stopped or disabled", KPC(ls_));
   } else if (OB_FAIL(check_meta_tenant_normal_(is_normal))) {
     LOG_WARN("fail to get meta tenant status", K(ret));
   } else if (!is_normal) {
@@ -428,8 +432,7 @@ int ObLSRestoreHandler::update_state_handle_()
   ObILSRestoreState *new_state_handler = nullptr;
   if (OB_FAIL(ls_->get_restore_status(new_status))) {
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
-  } else if (nullptr != state_handler_
-      && new_status == state_handler_->get_restore_status()) { // no need update state handler
+  } else if (!need_update_state_handle_(new_status)) { // no need update state handler
   } else if (OB_FAIL(fill_restore_arg())) {
     LOG_WARN("fail to fill restore arg", K(ret));
   } else {
@@ -470,6 +473,12 @@ int ObLSRestoreHandler::update_state_handle_()
     }
   }
   return ret;
+}
+
+bool ObLSRestoreHandler::need_update_state_handle_(share::ObLSRestoreStatus &new_status)
+{
+  lib::ObMutexGuard guard(mtx_);
+  return nullptr == state_handler_ || new_status != state_handler_->get_restore_status();
 }
 
 int ObLSRestoreHandler::get_restore_state_handler_(const share::ObLSRestoreStatus &new_status, ObILSRestoreState *&new_state_handler)
@@ -628,7 +637,11 @@ int ObLSRestoreHandler::construct_state_handler_(T *&new_handler)
 int ObLSRestoreHandler::deal_failed_restore_()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(state_handler_->deal_failed_restore(result_mgr_))) {
+  lib::ObMutexGuard guard(mtx_);
+  if (OB_ISNULL(state_handler_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("state handler is nullptr!", K(ret));
+  } else if (OB_FAIL(state_handler_->deal_failed_restore(result_mgr_))) {
     LOG_WARN("fail to deal failed restore", K(ret), K(result_mgr_), KPC(state_handler_));
   }
   return ret;
@@ -659,7 +672,7 @@ int ObLSRestoreHandler::safe_to_destroy(bool &is_safe)
       LOG_WARN("failed to cancel tasks", K(ret), KPC(ls_));
     } else {
       is_safe = true;
-      is_stop_ = true;
+      stop();
     }
   }
   LOG_INFO("wait ls restore stop", K(ret), K(is_safe), KPC(ls_));
