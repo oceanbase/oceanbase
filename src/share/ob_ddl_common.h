@@ -510,9 +510,10 @@ public:
     const common::ObAddr &leader_addr,
     uint64_t &left_space_size);
   static int generate_partition_names(
-   const ObIArray<ObString> &partition_names_array,
-   common::ObIAllocator &allocator,
-   ObString &partition_names);
+    const ObIArray<ObString> &partition_names_array,
+    const bool is_oracle_mode,
+    common::ObIAllocator &allocator,
+    ObString &partition_names);
   static int check_target_partition_is_running(
    const ObString &running_sql_info,
    const ObString &partition_name,

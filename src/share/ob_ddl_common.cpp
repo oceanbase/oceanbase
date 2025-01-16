@@ -1540,9 +1540,11 @@ int ObDDLUtil::get_ls_host_left_disk_space(
   return ret;
 }
 
-int ObDDLUtil::generate_partition_names(const common::ObIArray<ObString> &partition_names_array, common::ObIAllocator &allocator, ObString &partition_names)
+int ObDDLUtil::generate_partition_names(const common::ObIArray<ObString> &partition_names_array, const bool is_oracle_mode, common::ObIAllocator &allocator, ObString &partition_names)
 {
   int ret = OB_SUCCESS;
+  const char quote = is_oracle_mode ? '"' : '`';
+  ObArenaAllocator tmp_allocator("ObDDLTmp");
   partition_names.reset();
   ObSqlString sql_partition_names;
   if (OB_UNLIKELY(partition_names_array.count() < 1)) {
@@ -1553,13 +1555,17 @@ int ObDDLUtil::generate_partition_names(const common::ObIArray<ObString> &partit
       LOG_WARN("append partition names failed", K(ret), K(partition_names_array));
     } else {
       for (int64_t i = 0; i < partition_nums && OB_SUCC(ret); i++) {
-        if (i == partition_nums - 1) {
-          if (OB_FAIL(sql_partition_names.append_fmt("%.*s)", static_cast<int>(partition_names_array.at(i).length()), partition_names_array.at(i).ptr()))) {
-            LOG_WARN("append partition names failed", K(ret), K(partition_nums), K(partition_names_array), K(i), K(sql_partition_names));
+        ObString part_name;
+        tmp_allocator.reuse();
+        if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(tmp_allocator, partition_names_array.at(i), part_name, is_oracle_mode))) {
+          LOG_WARN("failed to generate new name", K(ret), K(partition_names_array.at(i)));
+        } else if (i == partition_nums - 1) {
+          if (OB_FAIL(sql_partition_names.append_fmt("%c%.*s%c)", quote, static_cast<int>(part_name.length()), part_name.ptr(), quote))) {
+            LOG_WARN("append partition names failed", K(ret), K(partition_nums), K(partition_names_array), K(i), K(sql_partition_names), K(part_name));
           }
         } else {
-          if (OB_FAIL(sql_partition_names.append_fmt("%.*s,", static_cast<int>(partition_names_array.at(i).length()), partition_names_array.at(i).ptr()))) {
-            LOG_WARN("append partition names failed", K(ret), K(partition_nums), K(partition_names_array), K(i), K(sql_partition_names));
+          if (OB_FAIL(sql_partition_names.append_fmt("%c%.*s%c,", quote, static_cast<int>(part_name.length()), part_name.ptr(), quote))) {
+            LOG_WARN("append partition names failed", K(ret), K(partition_nums), K(partition_names_array), K(i), K(sql_partition_names), K(part_name));
           }
         }
       }

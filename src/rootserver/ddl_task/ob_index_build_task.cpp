@@ -110,10 +110,13 @@ int ObIndexSSTableBuildTask::process()
     LOG_WARN("error unexpected, index schema must not be nullptr", K(ret), K(tenant_id_), K(dest_table_id_));
   } else {
     if (is_partitioned_local_index_task()) {
-      if (OB_FAIL(ObDDLUtil::get_index_table_batch_partition_names(tenant_id_, data_table_id_, dest_table_id_, addition_info_.partition_ids_, arena, batch_partition_names))) {
+      bool is_oracle_mode = false;
+      if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(tenant_id_, data_table_id_, is_oracle_mode))) {
+        LOG_WARN("check if oracle mode failed", K(ret), K(data_table_id_));
+      } else if (OB_FAIL(ObDDLUtil::get_index_table_batch_partition_names(tenant_id_, data_table_id_, dest_table_id_, addition_info_.partition_ids_, arena, batch_partition_names))) {
         LOG_WARN("fail to get index table batch partition names", K(ret), K(tenant_id_), K(data_table_id_), K(dest_table_id_), K(addition_info_.partition_ids_), K(batch_partition_names));
-      } else if (OB_FAIL(ObDDLUtil::generate_partition_names(batch_partition_names, arena, partition_names))) {
-        LOG_WARN("fail to generate partition names", K(ret), K(batch_partition_names), K(partition_names));
+      } else if (OB_FAIL(ObDDLUtil::generate_partition_names(batch_partition_names, is_oracle_mode, arena, partition_names))) {
+        LOG_WARN("fail to generate partition names", K(ret), K(batch_partition_names), K(is_oracle_mode), K(partition_names));
       }
     }
     if (OB_SUCC(ret)) {
