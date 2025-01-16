@@ -55,6 +55,7 @@ public:
 
   int64_t captured_merge_time_cost_[ObFreezerMergeType::MAX_MERGE_TYPE];
   int64_t captured_merge_times_[ObFreezerMergeType::MAX_MERGE_TYPE];
+  int64_t captured_source_times_[MAX_FREEZE_SOURCE_TYPE_COUNT];
 
   int64_t last_captured_retire_clock_;
 
@@ -156,7 +157,15 @@ public:
   // check if this tenant's memstore is out of range, and trigger minor/major freeze.
   int check_and_do_freeze();
 
+  // do freezer diagnose info
   int do_freeze_diagnose();
+
+  // record freeze source history
+  void record_freezer_source_event(const share::ObLSID &ls_id,
+                                   const ObFreezeSourceFlag source);
+
+  // report freeze source history
+  void report_freezer_source_events();
 
   // used for replay to check whether can enqueue another replay task
   bool is_replay_pending_log_too_large(const int64_t pending_size);

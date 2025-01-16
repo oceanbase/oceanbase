@@ -47,11 +47,72 @@ enum class ObFreezeSourceFlag : int64_t
   MAX_SOURCE          = 15,
 };
 
+static const int64_t MAX_FREEZE_SOURCE_TYPE_COUNT = static_cast<int64_t>(ObFreezeSourceFlag::MAX_SOURCE);
+
 inline bool is_valid_freeze_source(const ObFreezeSourceFlag source)
 {
   return source > ObFreezeSourceFlag::INVALID_SOURCE
     && source < ObFreezeSourceFlag::MAX_SOURCE;
 }
+
+inline const char *obj_to_cstring(const ObFreezeSourceFlag type)
+{
+  const char *ret = "INVALID";
+  switch (type) {
+  case ObFreezeSourceFlag::INVALID_SOURCE:
+    ret = "INVALID_SOURCE";
+    break;
+  case ObFreezeSourceFlag::CLOG_CHECKPOINT:
+    ret = "CLOG_CHECKPOINT";
+    break;
+  case ObFreezeSourceFlag::USER_MINOR_FREEZE:
+    ret = "USER_MINOR_FREEZE";
+    break;
+  case ObFreezeSourceFlag::FREEZE_TRIGGER:
+    ret = "FREEZE_TRIGGER";
+    break;
+  case ObFreezeSourceFlag::BACKUP:
+    ret = "BACKUP";
+    break;
+  case ObFreezeSourceFlag::TRANSFER_NO_KILL_TX:
+    ret = "TRANSFER_NO_KILL_TX";
+    break;
+  case ObFreezeSourceFlag::TRANSFER_BACKFILL:
+    ret = "TRANSFER_BACKFILL";
+    break;
+  case ObFreezeSourceFlag::MAJOR_FREEZE:
+    ret = "MAJOR_FREEZE";
+    break;
+  case ObFreezeSourceFlag::FAST_FREEZE:
+    ret = "FAST_FREEZE";
+    break;
+  case ObFreezeSourceFlag::DIRECT_INC_START:
+    ret = "DIRECT_INC_START";
+    break;
+  case ObFreezeSourceFlag::DIRECT_INC_END:
+    ret = "DIRECT_INC_END";
+    break;
+  case ObFreezeSourceFlag::DIRECT_INC_FREEZE:
+    ret = "DIRECT_INC_FREEZE";
+    break;
+  case ObFreezeSourceFlag::GC_RETAIN_CTX:
+    ret = "GC_RETAIN_CTX";
+    break;
+  case ObFreezeSourceFlag::TEST_MODE:
+    ret = "TEST_MODE";
+    break;
+  case ObFreezeSourceFlag::TABLET_SPLIT:
+    ret = "TABLET_SPLIT";
+    break;
+  case ObFreezeSourceFlag::MAX_SOURCE:
+    ret = "MAX_SOURCE";
+    break;
+  default:
+    break;
+  }
+  return ret;
+}
+
 
 } // storage
 } // oceanbase

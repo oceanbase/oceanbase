@@ -2050,6 +2050,11 @@ int ObLS::logstream_freeze(const int64_t trace_id,
     const bool is_ls_freeze = true;
     (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
   }
+
+  if (OB_SUCC(ret)) {
+    MTL(storage::ObTenantFreezer *)->record_freezer_source_event(ls_meta_.ls_id_, source);
+  }
+
   return ret;
 }
 
@@ -2171,6 +2176,11 @@ int ObLS::tablet_freeze(const int64_t trace_id,
     (void)record_async_freeze_tablets_(tablet_ids, freeze_epoch);
     (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
   }
+
+  if (OB_SUCC(ret)) {
+    MTL(storage::ObTenantFreezer *)->record_freezer_source_event(ls_meta_.ls_id_, source);
+  }
+
   return ret;
 }
 

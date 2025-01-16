@@ -751,6 +751,8 @@ int ObTenantFreezer::do_freeze_diagnose()
 
       (void)freezer_stat_.print_activity_metrics();
       (void)freezer_history_.add_activity_metric(freezer_stat_);
+
+      (void)report_freezer_source_events();
     }
 
     freezer_stat_.last_captured_timestamp_ = current_time;
@@ -758,6 +760,59 @@ int ObTenantFreezer::do_freeze_diagnose()
   }
 
   return ret;
+}
+
+void ObTenantFreezer::record_freezer_source_event(const ObLSID &ls_id,
+                                                  const ObFreezeSourceFlag source)
+{
+  if (is_valid_freeze_source((source))) {
+    ATOMIC_AAF(&freezer_stat_.captured_source_times_[static_cast<int64_t>(source)], 1);
+    STORAGE_LOG(INFO, "[Freezer] freeze from source", K(ls_id), "freeze_source", obj_to_cstring(source));
+  }
+}
+
+void ObTenantFreezer::report_freezer_source_events()
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+
+  TRANS_LOG(INFO, "[TENANT_FREEZER_EVENT] print freeze source");
+  char server_event_value[MAX_ROOTSERVICE_EVENT_VALUE_LENGTH] = {0};
+
+  ret = common::databuff_printf(server_event_value,
+                                MAX_ROOTSERVICE_EVENT_VALUE_LENGTH,
+                                pos,
+                                "[");
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < MAX_FREEZE_SOURCE_TYPE_COUNT; i++) {
+    if (is_valid_freeze_source((ObFreezeSourceFlag(i)))) {
+      int64_t captured_source_times = ATOMIC_LOAD(&(freezer_stat_.captured_source_times_[i]));
+      TRANS_LOG(INFO, "[TENANT_FREEZER_EVENT] print source", K(i),
+                "source_type", obj_to_cstring(ObFreezeSourceFlag(i)),
+                K(captured_source_times));
+      ret = common::databuff_printf(server_event_value,
+                                    MAX_ROOTSERVICE_EVENT_VALUE_LENGTH,
+                                    pos,
+                                    "%s: %ld; ",
+                                    obj_to_cstring(ObFreezeSourceFlag(i)),
+                                    captured_source_times);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+      ret = common::databuff_printf(server_event_value,
+                                    MAX_ROOTSERVICE_EVENT_VALUE_LENGTH,
+                                    pos,
+                                    "]");
+  }
+
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("freezer", "freeze_source_statistics",
+                     "tenant_id", MTL_ID(),
+                     "source_statistics", server_event_value);
+  } else {
+    TRANS_LOG(WARN, "[TENANT_FREEZER_EVENT] print source failed", K(ret));
+  }
 }
 
 int ObTenantFreezer::check_and_do_freeze()
@@ -1790,6 +1845,10 @@ void ObTenantFreezerStat::reset(int64_t retire_clock)
     ATOMIC_SET(&(captured_merge_times_[i]), 0);
   }
 
+  for (int64_t i = 0; i < MAX_FREEZE_SOURCE_TYPE_COUNT; i++) {
+    ATOMIC_SET(&(captured_source_times_[i]), 0);
+  }
+
   ATOMIC_SET(&last_captured_retire_clock_, retire_clock);
 }
 
@@ -1800,6 +1859,10 @@ void ObTenantFreezerStat::refresh()
   for (int64_t i = 0; i < ObFreezerMergeType::MAX_MERGE_TYPE; i++) {
     ATOMIC_SET(&(captured_merge_time_cost_[i]), 0);
     ATOMIC_SET(&(captured_merge_times_[i]), 0);
+  }
+
+  for (int64_t i = 0; i < MAX_FREEZE_SOURCE_TYPE_COUNT; i++) {
+    ATOMIC_SET(&(captured_source_times_[i]), 0);
   }
 }
 
@@ -1842,6 +1905,10 @@ void ObTenantFreezerStat::assign(const ObTenantFreezerStat stat)
   for (int64_t i = 0; i < ObFreezerMergeType::MAX_MERGE_TYPE; i++) {
     captured_merge_time_cost_[i] = stat.captured_merge_time_cost_[i];
     captured_merge_times_[i] = stat.captured_merge_times_[i];
+  }
+
+  for (int64_t i = 0; i < MAX_FREEZE_SOURCE_TYPE_COUNT; i++) {
+    captured_source_times_[i] = stat.captured_source_times_[i];
   }
 
   last_captured_retire_clock_ = stat.last_captured_retire_clock_;
