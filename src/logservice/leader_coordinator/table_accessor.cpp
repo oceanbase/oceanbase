@@ -608,11 +608,11 @@ int TableAccessor::get_all_ls_election_reference_info(common::ObIArray<LsElectio
         COORDINATOR_LOG_(WARN, "push back new election reference info failed");
       } else {
         LsElectionReferenceInfo &back = all_ls_election_reference_info.at(all_ls_election_reference_info.count() - 1);
-        char ip_port_string[32] = {0};
+        char ip_port_string[MAX_IP_PORT_LENGTH] = {0};
         back.element<0>() = lines[idx].element<0>();// ls_id
         if (CLICK_FAIL(calculate_zone_priority_score(lines[idx].element<1>()/*zone_priority*/, zone_name_holder, back.element<1>()))) {// self server score
           COORDINATOR_LOG_(WARN, "get self zone score failed");
-        } else if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, 32))) {
+        } else if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, MAX_IP_PORT_LENGTH))) {
           COORDINATOR_LOG_(WARN, "ip port to string failed");
         } else {
           back.element<2>() = (lines[idx].element<2>().get_ob_string().case_compare(ip_port_string) == 0);// is_manual_leader
@@ -772,8 +772,8 @@ int TableAccessor::get_removed_status_and_reason(ObStringHolder &blacklist, bool
   if (!blacklist.empty() && CLICK_FAIL(ObTableAccessHelper::split_string_by_char(blacklist, ';', arr))) {
     COORDINATOR_LOG_(WARN, "split_string_by_char(;) failed");
   } else {
-    char ip_port_string[64] = {0};
-    if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, 64))) {
+    char ip_port_string[MAX_IP_PORT_LENGTH] = {0};
+    if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, MAX_IP_PORT_LENGTH))) {
       COORDINATOR_LOG_(WARN, "self addr to string failed");
     } else {
       int64_t len = strlen(ip_port_string);
