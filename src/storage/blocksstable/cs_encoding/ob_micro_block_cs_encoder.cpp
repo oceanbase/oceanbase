@@ -898,7 +898,7 @@ int ObMicroBlockCSEncoder::do_copy_vector_(const ObIVector *vector,
             offsets[j] = length_;
             length_ += len;
           } else {
-            offsets[i] = length_;
+            offsets[j] = length_;
           }
         }
         offsets[row_count] = length_;
