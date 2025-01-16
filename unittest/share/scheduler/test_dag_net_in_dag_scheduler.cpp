@@ -256,7 +256,7 @@ public:
     }
     return common::OB_SUCCESS;
   }
-  bool check_can_retry()
+  bool inner_check_can_retry()
   {
     bool bret = true;
     if (retry_times_++ > MAX_RETRY_TIMES) {
@@ -1704,7 +1704,7 @@ TEST_F(TestDagScheduler, test_cancel_waiting_dag)
 
   ObCancelDag *first_dag = dag_net->first_dag_;
   EXPECT_NE(nullptr, first_dag);
-  first_dag->set_stop();
+  EXPECT_EQ(OB_SUCCESS, first_dag->set_stop());
   first_dag->can_schedule_ = true;
   wait_scheduler();
 }

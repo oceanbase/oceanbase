@@ -37,6 +37,8 @@ namespace compaction
 {
 ERRSIM_POINT_DEF(EN_COMPACTION_ADD_CO_MREGE_FINISH_DAG_INTO_DAG_NET_FAILED);
 ERRSIM_POINT_DEF(EN_COMPACTION_DELAY_FOLLOWER_ROWKEY_CG_MERGE);
+ERRSIM_POINT_DEF(EN_COMPACTION_TX_DATA_RECYCLED);
+ERRSIM_POINT_DEF(EN_COMPACTION_BATCH_EXE_ALLOC_MEM_FAILED);
 ObCOMergeDagParam::ObCOMergeDagParam()
   : ObTabletMergeDagParam(),
     start_cg_idx_(0),
@@ -643,6 +645,30 @@ bool ObCOMergeBatchExeDag::check_can_schedule()
   return bret;
 }
 
+bool ObCOMergeBatchExeDag::check_need_stop_dag(const int error_code)
+{
+  return OB_TRANS_CTX_NOT_EXIST == error_code
+      || OB_SERVER_OUTOF_DISK_SPACE == error_code;
+}
+
+int ObCOMergeBatchExeDag::decide_retry_strategy(const int error_code, ObDagRetryStrategy &retry_status)
+{
+  int ret = OB_SUCCESS;
+  retry_status = DAG_CAN_RETRY;
+  if (OB_TRANS_CTX_NOT_EXIST == error_code
+      || OB_SERVER_OUTOF_DISK_SPACE == error_code) {
+    retry_status = DAG_AND_DAG_NET_SKIP_RETRY;
+  } else if (OB_ALLOCATE_MEMORY_FAILED == error_code) {
+    ObTenantSysStat sys_stat;
+    if (OB_FAIL(sys_stat.refresh(MTL_ID(), true /*force_refresh*/))) {
+      LOG_WARN("failed to refresh sys stat", K(ret));
+    } else if (sys_stat.is_small_tenant()) {
+      retry_status = DAG_SKIP_RETRY;
+    }
+  }
+  return ret;
+}
+
 int ObCOMergeBatchExeDag::inner_reset_status_for_retry()
 {
   int ret = OB_SUCCESS;
@@ -874,6 +900,20 @@ int ObCOMergeBatchExeTask::errsim_before_merge_partition()
     }
   }
   if (OB_SUCC(ret)) {
+    int tmp_ret = EN_COMPACTION_TX_DATA_RECYCLED;
+    if (OB_TMP_FAIL(tmp_ret)) {
+      const bool need_wait = exe_dag->get_start_cg_idx() >= 20; // the third batch in test case
+      if (need_wait) {
+        ob_usleep(20 * 1000 * 1000 /*20s*/);
+        LOG_INFO("EN EN_COMPACTION_TX_DATA_RECYCLED wait for for third batch", K(tmp_ret));
+      } else {
+        ret = OB_TRANS_CTX_NOT_EXIST;
+        ob_usleep(5 * 1000 * 1000 /*5s*/);
+        LOG_INFO("ERRSIM EN_COMPACTION_TX_DATA_RECYCLED", K(ret), K(tmp_ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     int tmp_ret = EN_COMPACTION_DELAY_FOLLOWER_ROWKEY_CG_MERGE;
     if (OB_TMP_FAIL(tmp_ret)) {
       ObLS *ls = ctx_->get_ls();
@@ -898,6 +938,17 @@ int ObCOMergeBatchExeTask::errsim_before_merge_partition()
           ob_usleep(20 * 1000 * 1000 /*20s*/);
           LOG_INFO("EN EN_COMPACTION_DELAY_FOLLOWER_ROWKEY_CG_MERGE for normal cg", K(tmp_ret));
         }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int tmp_ret = EN_COMPACTION_BATCH_EXE_ALLOC_MEM_FAILED;
+    if (OB_TMP_FAIL(tmp_ret)) {
+      if (11 == exe_dag->get_start_cg_idx() && (exe_dag->get_end_cg_idx() - exe_dag->get_start_cg_idx() >= DEFAULT_CG_MERGE_BATCH_SIZE)
+        && 0 == exe_dag->get_running_times()) {
+        // make the batch not including rowkey cg failed for the first time, and dec batch size
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_INFO("EN EN_COMPACTION_BATCH_EXE_ALLOC_MEM_FAILED", K(ret), K(tmp_ret), KPC(exe_dag));
       }
     }
   }
@@ -1227,9 +1278,11 @@ void ObCOMergeDagNet::cancel_dag_net(const int error_code)
   if (should_force_cancel()
       || !ObCOMergeScheduleDag::can_ignore_warning(error_code)) {
     LOG_WARN_RET(error_code, "cancel co dag net");
-    set_cancel();
+    int tmp_ret = OB_SUCCESS;
     // avoid that the canceled dag_net_ keeps an unschedule finish_dag_, which cause the dag_net_ never finish
-    (void)deal_with_cancel();
+    if (OB_TMP_FAIL(set_cancel())) { // co merge dag net do not deal with cancel, so ignore ret
+      LOG_WARN_RET(tmp_ret, "failed to set dag net cancel", K(error_code));
+    }
   }
 }
 
@@ -1380,7 +1433,15 @@ int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
   }
   // refine merge_batch_size_ with tenant memory
   if (OB_SUCC(ret) && ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_merge_schedule()) {
+#ifdef ERRSIM
+    if (OB_UNLIKELY(EN_COMPACTION_BATCH_EXE_ALLOC_MEM_FAILED)) {
+      LOG_INFO("EN_COMPACTION_BATCH_EXE_ALLOC_MEM_FAILED not update merge batch size");
+    } else {
+      try_update_merge_batch_size(co_merge_ctx_->array_count_);
+    }
+#else
     try_update_merge_batch_size(co_merge_ctx_->array_count_);
+#endif
   }
 
   int64_t allowed_schedule_dag_count =
@@ -1635,8 +1696,11 @@ int ObCOMergeDagNet::dag_report_result(
     if (OB_SUCC(ret)
       && !is_cancel()
       && (co_merge_ctx_->is_co_dag_net_failed() || ObTabletMergeDag::can_not_retry_warning(dag_ret))) {
-      set_cancel();
-      LOG_WARN("dag net error count reach ERROR_COUNT_THREASHOLD", "exe_stat", co_merge_ctx_->exe_stat_, K(dag_ret));
+      if (OB_FAIL(set_cancel())) {
+        LOG_WARN("failed to set cancel", K(ret), K(dag_ret), K_(ls_id), K_(tablet_id));
+      } else {
+        LOG_WARN("dag net error count reach ERROR_COUNT_THREASHOLD", "exe_stat", co_merge_ctx_->exe_stat_, K(dag_ret));
+      }
     }
   }
   MTL(share::ObTenantDagScheduler *)->set_fast_schedule_dag_net();

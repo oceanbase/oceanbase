@@ -169,7 +169,7 @@ public:
   ~ObTenantSysStat() = default;
   void reset();
   bool is_small_tenant() const;
-  int refresh(const uint64_t tenant_id);
+  int refresh(const uint64_t tenant_id, const bool force_refresh = false);
   TO_STRING_KV(K_(min_cpu_cnt), K_(max_cpu_cnt), K_(memory_hold), K_(memory_limit));
 
 public:

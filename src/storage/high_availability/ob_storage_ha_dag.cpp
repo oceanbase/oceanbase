@@ -291,7 +291,7 @@ int ObStorageHADag::inner_reset_status_for_retry()
   return ret;
 }
 
-bool ObStorageHADag::check_can_retry()
+bool ObStorageHADag::inner_check_can_retry()
 {
   bool bool_ret = false;
   int ret = OB_SUCCESS;

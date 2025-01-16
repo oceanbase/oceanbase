@@ -316,11 +316,11 @@ bool ObTenantSysStat::is_small_tenant() const
   return bret;
 }
 
-int ObTenantSysStat::refresh(const uint64_t tenant_id)
+int ObTenantSysStat::refresh(const uint64_t tenant_id, const bool force_refresh /*=false*/)
 {
   int ret = OB_SUCCESS;
 
-  if (!REACH_THREAD_TIME_INTERVAL(300_s)) {
+  if (!REACH_THREAD_TIME_INTERVAL(300_s) && !force_refresh) {
   } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu(tenant_id, min_cpu_cnt_, max_cpu_cnt_))) {
     LOG_WARN("failed to get tenant cpu count", K(ret));
   } else {

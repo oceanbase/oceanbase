@@ -608,7 +608,9 @@ int ObCOTabletMergeCtx::create_sstables(const uint32_t start_cg_idx, const uint3
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(revert_pushed_table_handle(start_cg_idx, i/*right_border_cg_idx*/, exist_cg_tables_cnt))) {
       LOG_WARN("failed to revert pushed table handle", KR(tmp_ret), K(start_cg_idx), K(i));
-      dag_net_.set_cancel();
+      if (OB_TMP_FAIL(dag_net_.set_cancel())) {
+        LOG_WARN("failed to set dag net cancel", KR(tmp_ret));
+      }
     }
   }
   return ret;

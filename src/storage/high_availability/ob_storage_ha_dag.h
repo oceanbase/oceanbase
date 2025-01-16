@@ -95,7 +95,7 @@ public:
   explicit ObStorageHADag(const share::ObDagType::ObDagTypeEnum &dag_type);
   virtual ~ObStorageHADag();
   virtual int inner_reset_status_for_retry();
-  virtual bool check_can_retry();
+  virtual bool inner_check_can_retry();
   int check_is_in_retry(bool &is_in_retry);
 
   int set_result(const int32_t result, const bool allow_retry = true,

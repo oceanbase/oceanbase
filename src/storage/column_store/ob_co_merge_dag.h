@@ -142,6 +142,8 @@ public:
   virtual int gene_compaction_info(compaction::ObTabletCompactionProgress &progress) override;
   virtual int diagnose_compaction_info(compaction::ObDiagnoseTabletCompProgress &progress) override;
   virtual bool check_can_schedule() override;
+  virtual bool check_need_stop_dag(const int error_code) override;
+  virtual int decide_retry_strategy(const int error_code, ObDagRetryStrategy &retry_status);
   uint32_t get_start_cg_idx() const { return start_cg_idx_; }
   uint32_t get_end_cg_idx() const { return end_cg_idx_; }
   bool get_retry_create_task() const { return retry_create_task_; }

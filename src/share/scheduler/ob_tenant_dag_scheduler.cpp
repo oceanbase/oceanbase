@@ -499,7 +499,8 @@ ObIDag::ObIDag(const ObDagType::ObDagTypeEnum type)
     running_times_(0),
     dag_net_(nullptr),
     list_idx_(DAG_LIST_MAX),
-    emergency_(false)
+    emergency_(false),
+    retry_strategy_(DAG_CAN_RETRY)
 {
   STATIC_ASSERT(static_cast<int64_t>(DAG_STATUS_MAX) == ARRAYSIZEOF(ObIDagStatusStr), "dag status str len is mismatch");
   STATIC_ASSERT(MergeDagPrioCnt == ARRAYSIZEOF(MergeDagPrio), "merge dag prio len is mismatch");
@@ -511,13 +512,23 @@ ObIDag::~ObIDag()
   reset();
 }
 
-OB_INLINE bool ObIDag::check_can_retry()
+OB_INLINE bool ObIDag::inner_check_can_retry()
 {
   bool bret = false;
-  ObMutexGuard guard(lock_);
   if (running_times_ < max_retry_times_) {
     running_times_++;
     bret = true;
+  }
+  return bret;
+}
+
+bool ObIDag::check_can_retry()
+{
+  bool bret = false;
+  ObMutexGuard guard(lock_);
+  if (OB_UNLIKELY(is_stop_ || need_skip_retry() || is_dag_net_canceled())) {
+  } else {
+    bret = inner_check_can_retry();
   }
   return bret;
 }
@@ -568,6 +579,7 @@ void ObIDag::reset()
   dag_net_ = nullptr;
   list_idx_ = DAG_LIST_MAX;
   emergency_ = false;
+  retry_strategy_ = DAG_CAN_RETRY;
 }
 
 int ObIDag::add_task(ObITask &task)
@@ -583,8 +595,12 @@ int ObIDag::add_task(ObITask &task)
       ret = OB_CANCELED;
       LOG_WARN("dag is stopped", K(ret));
     } else if (OB_FAIL(check_cycle())) {
-      (void) set_stop_without_lock(); // set dag stop and now allow new task to add
       COMMON_LOG(WARN, "check_cycle failed, set dag stop", K(ret), K_(id), K_(is_stop));
+      int tmp_ret = OB_SUCCESS;
+      // set dag stop and do not allow new task to add
+      if (OB_TMP_FAIL(set_stop_without_lock())) {
+        LOG_WARN("failed to set stop", K(tmp_ret), K_(id));
+      }
     }
   }
   return ret;
@@ -868,7 +884,7 @@ int64_t ObIDag::to_string(char *buf, const int64_t buf_len) const
     J_OBJ_START();
     J_KV(KP(this), K_(is_inited), K_(type), "name", get_dag_type_str(type_), K_(id), KPC_(dag_net), K_(dag_ret), K_(dag_status),
         K_(add_time), K_(start_time), K_(running_task_cnt), K_(max_concurrent_task_cnt), K_(indegree), K_(consumer_group_id), "hash", hash(), K(task_list_.get_size()),
-        K_(emergency));
+        K_(emergency), K_(retry_strategy));
     J_OBJ_END();
   }
   return pos;
@@ -929,19 +945,36 @@ int ObIDag::finish(const ObDagStatus status, bool &dag_net_finished)
   return ret;
 }
 
-void ObIDag::set_stop()
+bool ObIDag::is_dag_net_canceled() const
 {
-  ObMutexGuard guard(lock_);
-  set_stop_without_lock();
+  return OB_NOT_NULL(dag_net_) && dag_net_->is_cancel();
 }
 
-void ObIDag::set_stop_without_lock()
+int ObIDag::set_stop()
 {
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(lock_);
+  if (OB_FAIL(set_stop_without_lock())) {
+    COMMON_LOG(WARN, "failed to set stop", K(ret));
+  }
+  return ret;
+}
+
+int ObIDag::set_stop_without_lock()
+{
+  int ret = OB_SUCCESS;
   is_stop_ = true;
   // dag_net and dags in the same dag net should be canceled too.
-  if (OB_NOT_NULL(dag_net_)) {
-    dag_net_->set_cancel();
+  if (OB_NOT_NULL(dag_net_) && OB_FAIL(dag_net_->set_cancel())) {
+    COMMON_LOG(WARN, "failed to set dag net cancel", K(ret), KPC_(dag_net));
   }
+  return ret;
+}
+
+void ObIDag::simply_set_stop()
+{
+  ObMutexGuard guard(lock_);
+  is_stop_ = true;
 }
 
 int ObIDag::add_child_without_inheritance(ObIDag &child)
@@ -1016,6 +1049,32 @@ int ObIDag::fill_comment(char *buf, const int64_t buf_len)
     COMMON_LOG(WARN, "param is null", K(ret));
   } else if (OB_FAIL(param->fill_comment(buf, buf_len))) {
     COMMON_LOG(WARN, "failed to fill comment", K(ret));
+  }
+  return ret;
+}
+
+int ObIDag::handle_retry_strategy(const int errcode)
+{
+  int ret = OB_SUCCESS;
+  ObIDag::ObDagRetryStrategy retry_strategy = ObIDag::DAG_RETRY_STRATEGY_MAX;
+  if (OB_FAIL(decide_retry_strategy(errcode, retry_strategy))) {
+    COMMON_LOG(WARN, "failed to decide retry strategy", K(errcode), KPC(this));
+  } else if (ObIDag::DAG_CAN_RETRY == retry_strategy) {
+  } else if (OB_UNLIKELY(!is_valid_retry_strategy(retry_strategy))) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid retry strategy", K(ret), K(retry_strategy), KPC(this));
+  } else {
+    ObMutexGuard guard(lock_);
+    if (retry_strategy > retry_strategy_) {
+      retry_strategy_ = retry_strategy;
+      if (ObIDag::DAG_AND_DAG_NET_SKIP_RETRY == retry_strategy_) {
+        // dag net will also be canceled
+        if (OB_FAIL(set_stop_without_lock())) {
+          COMMON_LOG(WARN, "failed to cancel dag", K(ret), K(retry_strategy), K(errcode), KPC(this));
+        }
+      }
+      COMMON_LOG(INFO, "skip dag retry for specific errcode", K(ret), K(retry_strategy), K(errcode), KPC(this));
+    }
   }
   return ret;
 }
@@ -1280,10 +1339,18 @@ int ObIDagNet::set_dag_id(const ObDagId &dag_net_id)
   return ret;
 }
 
-void ObIDagNet::set_cancel()
+int ObIDagNet::set_cancel()
 {
+  int ret = OB_SUCCESS;
   ObMutexGuard guard(lock_);
-  is_cancel_ = true;
+  if (is_cancel_) {
+    // may be concurrently set canceled, only deal with cancel once.
+  } else if (OB_FAIL(deal_with_cancel())) {
+    COMMON_LOG(WARN, "failed to deal with cancel", K(ret), K(dag_net_id_));
+  } else {
+    is_cancel_ = true;
+  }
+  return ret;
 }
 
 bool ObIDagNet::is_cancel()
@@ -1725,8 +1792,11 @@ bool ObTenantDagWorker::get_force_cancel_flag()
   } else if (OB_ISNULL(dag = task_->get_dag())) {
     // ignore ret
     COMMON_LOG(WARN, "task does not belong to dag");
-  } else {
-    flag = dag->has_set_stop();
+  } else if (dag->has_set_stop()) {
+    flag = true;
+  } else if (dag->is_dag_net_canceled()) {
+    flag = true;
+    (void) dag->simply_set_stop();
   }
   return flag;
 }
@@ -1914,7 +1984,7 @@ void ObDagPrioScheduler::destroy_workers()
   for (int64_t j = 0; j < DAG_LIST_MAX; ++j) {
     DagList &dl = dag_list_[j];
     DLIST_FOREACH_NORET(dag, dl) {
-      dag->set_stop();
+      (void) dag->set_stop();
     }
   }
   WorkerList &wl = waiting_workers_;
@@ -2187,7 +2257,7 @@ int ObDagPrioScheduler::schedule_dag_(ObIDag &dag, bool &move_dag_to_waiting_lis
   int tmp_ret = OB_SUCCESS;
   bool unused_tmp_bret = false;
   ObIDag::ObDagStatus next_dag_status = dag.get_dag_status();
-  if (OB_NOT_NULL(dag.get_dag_net()) && dag.get_dag_net()->is_cancel()) {
+  if (dag.is_dag_net_canceled()) {
     next_dag_status = ObIDag::DAG_STATUS_NODE_FAILED;
     dag.set_dag_ret(OB_CANCELED);
     LOG_INFO("dag net is cancel", K(dag));
@@ -2665,6 +2735,8 @@ int ObDagPrioScheduler::try_move_child_to_ready_list_(ObIDag &dag)
   const common::ObIArray<ObINodeWithChild*> &child_array = dag.get_child_nodes();
 
   if (child_array.empty()) {
+  } else if (dag.is_dag_net_canceled()) {
+    COMMON_LOG(INFO, "dag net is canceled, skip move child dag to ready list", K(ret), K(dag));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < child_array.count(); ++i) {
       ObIDag *child_dag = static_cast<ObIDag *>(child_array.at(i));
@@ -2703,12 +2775,12 @@ int ObDagPrioScheduler::erase_dag_(ObIDag &dag)
   return ret;
 }
 
-int ObDagPrioScheduler::deal_with_fail_dag_(ObIDag &dag, bool &retry_flag)
+int ObDagPrioScheduler::deal_with_fail_dag_(ObIDag &dag, const int errcode, bool &retry_flag)
 {
   int ret = OB_SUCCESS;
-  // dag retry is triggered by last finish task
-  if (OB_UNLIKELY(dag.has_set_stop())) {
-  } else if (1 == dag.get_running_task_count() && dag.check_can_retry()) {
+  if (OB_FAIL(dag.handle_retry_strategy(errcode))) {
+    COMMON_LOG(WARN, "failed to set retry strategy", K(errcode), K(dag));
+  } else if (1 == dag.get_running_task_count() && dag.check_can_retry()) { // dag retry is triggered by last finished task
     COMMON_LOG(INFO, "dag retry", K(ret), K(dag));
     if (OB_FAIL(dag.reset_status_for_retry())) { // clear task/running_info and init again
       COMMON_LOG(WARN, "failed to reset status for retry", K(ret), K(dag));
@@ -2807,9 +2879,10 @@ int ObDagPrioScheduler::loop_waiting_dag_list()
           ret = OB_ERR_UNEXPECTED;
           COMMON_LOG(ERROR, "get unexpceted dag", K(ret), KPC(cur));
           break;
-        } else if (0 == cur->get_indegree() && OB_NOT_NULL(cur->get_dag_net()) && cur->get_dag_net()->is_cancel()) {
+        } else if (0 == cur->get_indegree() && cur->is_dag_net_canceled()) {
           move_dag = cur;
           cur = cur->get_next();
+          COMMON_LOG(INFO, "finish waiting dag in canceled dag net", K(ret), KPC(move_dag));
           /* the child of the moving dag maybe the next one in the waiting list, cannot move its children to READY LIST */
           if (OB_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *move_dag, false/*try_move_child*/))) { // will report result
             COMMON_LOG(WARN, "failed to deal with failed dag", K(ret), KPC(cur));
@@ -3054,7 +3127,9 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
           }
         } else { // for running dag
           exist = true;
-          cur->set_stop(); // dag exists before finding stop, need check exists again
+          if (OB_TMP_FAIL(cur->set_stop())) { // dag exists before finding stop, need check exists again
+            COMMON_LOG(WARN, "failed to set dag stop", K(tmp_ret), KPC(cur));
+          }
           cur = cur->get_next();
         }
       } else {
@@ -3300,7 +3375,7 @@ int ObDagPrioScheduler::deal_with_finish_task(
         }
         MTL(ObTenantCompactionMemPool *)->set_memory_mode(ObTenantCompactionMemPool::EMERGENCY_MODE);
       }
-      if (OB_FAIL(deal_with_fail_dag_(*dag, retry_flag))) {
+      if (OB_FAIL(deal_with_fail_dag_(*dag, error_code, retry_flag))) {
         COMMON_LOG(WARN, "failed to deal with fail dag", K(ret), KPC(dag));
       }
     }
@@ -3360,8 +3435,11 @@ int ObDagPrioScheduler::cancel_dag(const ObIDag &dag, const bool force_cancel)
         ob_abort();
       }
     } else if (force_cancel && cur_dag->get_dag_status() == ObIDag::DAG_STATUS_NODE_RUNNING) {
-      LOG_INFO("cancel running dag", K(ret), KP(cur_dag), K(force_cancel));
-      cur_dag->set_stop();
+      if (OB_FAIL(cur_dag->set_stop())) {
+        COMMON_LOG(WARN, "failed to set stop", K(ret), KPC(cur_dag));
+      } else {
+        LOG_INFO("cancel running dag", K(ret), KP(cur_dag));
+      }
     }
   }
   return ret;
@@ -3931,11 +4009,8 @@ int ObDagNetScheduler::cancel_dag_net(const ObDagId &dag_id)
       LOG_WARN("dag net key should not be NULL", K(ret), K(dag_id), KP(dag_net));
     } else if (OB_FAIL(dag_net_map_.get_refactored(dag_net_key, dag_net))) {
       LOG_WARN("failed to get dag net", K(ret), KPC(dag_net_key));
-    } else {
-      dag_net->set_cancel();
-      if (OB_FAIL(dag_net->deal_with_cancel())) {
-        LOG_WARN("failed to deal with cancel", K(ret), KPC(dag_net));
-      }
+    } else if (OB_FAIL(dag_net->set_cancel())) {
+      LOG_WARN("failed to set dag net cancel", K(ret), KPC(dag_net));
     }
   }
   return ret;
@@ -3975,9 +4050,12 @@ int ObDagNetScheduler::check_ls_compaction_dag_exist_with_cancel(const ObLSID &l
       if (cur_dag_net->is_co_dag_net()) {
         compaction::ObCOMergeDagNet *co_dag_net = static_cast<compaction::ObCOMergeDagNet*>(cur_dag_net);
         if (ls_id == co_dag_net->get_dag_param().ls_id_) {
-          cur_dag_net->set_cancel();
-          ++cancel_dag_cnt;
-          exist = true;
+          if (OB_FAIL(cur_dag_net->set_cancel())) {
+            LOG_WARN("failed to set cancel", K(ret), K(ls_id), KPC(cur_dag_net));
+          } else {
+            ++cancel_dag_cnt;
+            exist = true;
+          }
         }
       }
     }
