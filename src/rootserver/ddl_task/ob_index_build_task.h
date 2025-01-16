@@ -155,9 +155,6 @@ private:
   int check_build_single_replica(bool &is_end);
   int check_build_local_index_single_replica(bool &is_end);
   int check_need_verify_checksum(bool &need_verify);
-  int check_need_acquire_lob_snapshot(const ObTableSchema *data_table_schema,
-                                      const ObTableSchema *index_table_schema,
-                                      bool &need_acquire);
   bool is_sstable_complete_task_submitted();
   int check_target_cg_cnt();
   int update_mlog_last_purge_scn();

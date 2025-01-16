@@ -2998,7 +2998,8 @@ struct ObCreateAuxIndexArg : public ObDDLArg
 public:
   ObCreateAuxIndexArg()
     : tenant_id_(OB_INVALID_TENANT_ID),
-      data_table_id_(OB_INVALID_ID)
+      data_table_id_(OB_INVALID_ID),
+      snapshot_version_(0)
   {}
   ~ObCreateAuxIndexArg() {}
   bool is_valid() const
@@ -3013,13 +3014,15 @@ public:
     tenant_id_ = OB_INVALID_TENANT_ID;
     data_table_id_ = OB_INVALID_ID;
     create_index_arg_.reset();
+    snapshot_version_ = 0;
   }
-  TO_STRING_KV(K(tenant_id_), K(data_table_id_), K(create_index_arg_));
+  TO_STRING_KV(K(tenant_id_), K(data_table_id_), K(create_index_arg_), K(snapshot_version_));
 
 public:
   uint64_t tenant_id_;
   uint64_t data_table_id_;
   ObCreateIndexArg create_index_arg_;
+  int64_t snapshot_version_;
 };
 
 struct ObCreateAuxIndexRes final

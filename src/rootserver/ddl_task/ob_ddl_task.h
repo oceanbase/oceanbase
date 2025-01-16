@@ -253,7 +253,7 @@ public:
                K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg), K_(tenant_data_version),
                K_(sub_task_trace_id), KPC_(aux_rowkey_doc_schema), KPC_(aux_doc_rowkey_schema), KPC_(fts_index_aux_schema), KPC_(aux_doc_word_schema),
                K_(vec_rowkey_vid_schema), K_(vec_vid_rowkey_schema), K_(vec_domain_index_schema), K_(vec_index_id_schema), K_(vec_snapshot_data_schema),
-               K_(ddl_need_retry_at_executor), K_(is_pre_split));
+               K_(ddl_need_retry_at_executor), K_(is_pre_split), K_(fts_snapshot_version));
 public:
   int32_t sub_task_trace_id_;
   uint64_t tenant_id_;
@@ -280,6 +280,7 @@ public:
   uint64_t tenant_data_version_;
   bool ddl_need_retry_at_executor_;
   bool is_pre_split_;
+  int64_t fts_snapshot_version_;
 };
 
 class ObDDLTaskRecordOperator final
@@ -556,18 +557,6 @@ public:
   TO_STRING_KV(K(is_inited_), K_(tenant_id), K(table_id_), K(is_trans_end_), K(wait_type_),
       K(wait_version_), K_(pending_tx_id), K(tablet_ids_.count()), K(snapshot_array_.count()), K(ddl_task_id_));
 
-public:
-  /**
-   * To calculate the final snapshot version used for writing macro block.
-   * @param [in] tenant_id
-   * @param [in] trans_end_snapshot: usually the snapshot version obtained after wait trans end.
-   * @param [out] snapshot: used for data scan, row trans version for ddl.
-  */
-  static int calc_snapshot_with_gts(
-      const uint64_t tenant_id,
-      const int64_t ddl_task_id,
-      const int64_t trans_end_snapshot,
-      int64_t &snapshot);
 private:
   static bool is_wait_trans_type_valid(const WaitTransType wait_trans_type);
   int get_snapshot_check_list(

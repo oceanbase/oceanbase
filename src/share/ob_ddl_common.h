@@ -950,7 +950,26 @@ public:
       const int64_t start_idx,
       const int64_t end_idx,
       const ObIArray<ObTabletID> &tablet_ids);
-
+  static int hold_snapshot(
+      common::ObMySQLTransaction &trans,
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      const int64_t snapshot);
+  static int check_need_acquire_lob_snapshot(
+      const ObTableSchema *data_table_schema,
+      const ObTableSchema *index_table_schema,
+      bool &need_acquire);
+  static int obtain_snapshot(
+      common::ObMySQLTransaction &trans,
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      int64_t &new_fetched_snapshot);
+  static int calc_snapshot_with_gts(
+      int64_t &snapshot,
+      const uint64_t tenant_id,
+      const int64_t ddl_task_id = 0,
+      const int64_t trans_end_snapshot = 0,
+      const int64_t index_snapshot_version_diff = 0);
 private:
   static int hold_snapshot(
       common::ObMySQLTransaction &trans,

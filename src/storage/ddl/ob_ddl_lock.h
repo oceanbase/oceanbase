@@ -130,6 +130,10 @@ public:
       const ObIArray<ObTabletID> *hidden_tablet_ids_alone,
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
       ObMySQLTransaction &trans);
+  static int lock_table_in_trans(
+      const ObTableSchema &table_schema,
+      const ObTableLockMode lock_mode,
+      ObMySQLTransaction &trans);
 
 private:
   static int lock_table_lock_in_trans(

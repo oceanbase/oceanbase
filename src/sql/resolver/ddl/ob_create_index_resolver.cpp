@@ -833,6 +833,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Create global index on temp table");
   } else {
     ObCreateIndexArg &index_arg = create_index_stmt->get_create_index_arg();
+    index_arg.index_key_ = static_cast<int64_t>(index_keyname_);
     if (is_oracle_temp_table_) { //oracle临时表是系统内部转成了分区表, 索引创建时全部是local
       index_scope_ = LOCAL_INDEX;
     }
@@ -883,7 +884,6 @@ int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id
       } else {
         // set type to fts_index_aux first, append other fts arg later
         index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
-        index_arg.index_key_ = static_cast<int64_t>(index_keyname_);
       }
     } else if (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_) {
       uint64_t tenant_data_version = 0;

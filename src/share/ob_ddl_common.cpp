@@ -1637,6 +1637,168 @@ int ObDDLUtil::release_snapshot(
   return ret;
 }
 
+int ObDDLUtil::hold_snapshot(
+    common::ObMySQLTransaction &trans,
+    const ObTableSchema &data_table_schema,
+    const ObTableSchema &index_table_schema,
+    const int64_t snapshot)
+{
+  int ret = OB_SUCCESS;
+  SCN snapshot_scn;
+  const uint64_t tenant_id = data_table_schema.get_tenant_id();
+  const int64_t data_table_id = data_table_schema.get_table_id();
+  const int64_t index_table_id = index_table_schema.get_table_id();
+  const int64_t schema_version = index_table_schema.get_schema_version();
+  if (snapshot <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("snapshot version not valid", K(ret), K(snapshot));
+  } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot))) {
+    LOG_WARN("failed to convert", K(snapshot), K(ret));
+  } else {
+    rootserver::ObDDLService &ddl_service = GCTX.root_service_->get_ddl_service();
+    ObSEArray<ObTabletID, 2> tablet_ids;
+    bool need_acquire_lob = false;
+    if (OB_FAIL(data_table_schema.get_tablet_ids(tablet_ids))) {
+      LOG_WARN("failed to get data table snapshot", K(ret));
+    } else if (OB_FAIL(index_table_schema.get_tablet_ids(tablet_ids))) {
+      LOG_WARN("failed to get data table snapshot", K(ret));
+    } else if (OB_FAIL(check_need_acquire_lob_snapshot(&data_table_schema, &index_table_schema, need_acquire_lob))) {
+      LOG_WARN("failed to check if need to acquire lob snapshot", K(ret));
+    } else if (need_acquire_lob && data_table_schema.get_aux_lob_meta_tid() != OB_INVALID_ID &&
+               OB_FAIL(ObDDLUtil::get_tablets(tenant_id, data_table_schema.get_aux_lob_meta_tid(), tablet_ids))) {
+      LOG_WARN("failed to get data lob meta table snapshot", K(ret));
+    } else if (need_acquire_lob && data_table_schema.get_aux_lob_piece_tid() != OB_INVALID_ID &&
+               OB_FAIL(ObDDLUtil::get_tablets(tenant_id, data_table_schema.get_aux_lob_piece_tid(), tablet_ids))) {
+      LOG_WARN("failed to get data lob piece table snapshot", K(ret));
+    } else if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
+            trans, SNAPSHOT_FOR_DDL, tenant_id, schema_version, snapshot_scn, nullptr, tablet_ids))) {
+      LOG_WARN("batch acquire snapshot failed", K(ret), K(tablet_ids));
+    }
+  }
+  LOG_INFO("hold snapshot finished", K(ret), K(snapshot), K(data_table_id), K(index_table_id), K(schema_version));
+  return ret;
+}
+
+int ObDDLUtil::check_need_acquire_lob_snapshot(
+    const ObTableSchema *data_table_schema,
+    const ObTableSchema *index_table_schema,
+    bool &need_acquire)
+{
+  int ret = OB_SUCCESS;
+  need_acquire = false;
+  if (OB_ISNULL(data_table_schema) || OB_ISNULL(index_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("there are invalid arguments", K(ret), KP(data_table_schema), KP(index_table_schema));
+  } else {
+    ObTableSchema::const_column_iterator iter = index_table_schema->column_begin();
+    ObTableSchema::const_column_iterator iter_end = index_table_schema->column_end();
+    for (; OB_SUCC(ret) && !need_acquire && iter != iter_end; iter++) {
+      const ObColumnSchemaV2 *index_col = *iter;
+      if (OB_ISNULL(index_col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is null", K(ret));
+      } else {
+        const ObColumnSchemaV2 *col = data_table_schema->get_column_schema(index_col->get_column_id());
+        if (OB_ISNULL(col)) {
+        } else if (col->is_generated_column()) {
+          ObSEArray<uint64_t, 8> ref_columns;
+          if (OB_FAIL(col->get_cascaded_column_ids(ref_columns))) {
+            STORAGE_LOG(WARN, "Failed to get cascaded column ids", K(ret));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && !need_acquire && i < ref_columns.count(); i++) {
+              const ObColumnSchemaV2 *data_table_col = data_table_schema->get_column_schema(ref_columns.at(i));
+              if (OB_ISNULL(data_table_col)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("column schema is null", K(ret));
+              } else if (is_lob_storage(data_table_col->get_data_type())) {
+                need_acquire = true;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::obtain_snapshot(
+    common::ObMySQLTransaction &trans,
+    const ObTableSchema &data_table_schema,
+    const ObTableSchema &index_table_schema,
+    int64_t &new_fetched_snapshot)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = data_table_schema.get_tenant_id();
+  int64_t data_table_id = data_table_schema.get_table_id();
+  new_fetched_snapshot = 0;
+  if (OB_FAIL(calc_snapshot_with_gts(new_fetched_snapshot, tenant_id))) {
+    LOG_WARN("fail to calc snapshot with gts", K(ret), K(new_fetched_snapshot));
+  } else if (new_fetched_snapshot <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the snapshot is not valid", K(ret), K(new_fetched_snapshot));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObDDLUtil::hold_snapshot(trans, data_table_schema, index_table_schema, new_fetched_snapshot))) {
+    if (OB_SNAPSHOT_DISCARDED == ret) {
+      LOG_INFO("snapshot discarded, need retry waiting trans", K(ret), K(new_fetched_snapshot));
+    } else {
+      LOG_WARN("hold snapshot failed", K(ret), K(new_fetched_snapshot));
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::calc_snapshot_with_gts(
+    int64_t &snapshot,
+    const uint64_t tenant_id,
+    const int64_t ddl_task_id,
+    const int64_t trans_end_snapshot,
+    const int64_t index_snapshot_version_diff)
+{
+  int ret = OB_SUCCESS;
+  snapshot = 0;
+  SCN curr_ts;
+  bool is_external_consistent = false;
+  rootserver::ObRootService *root_service = nullptr;
+  const int64_t timeout_us = ObDDLUtil::get_default_ddl_rpc_timeout();
+  ObFreezeInfoProxy freeze_info_proxy(tenant_id);
+  ObFreezeInfo frozen_status;
+  if (OB_UNLIKELY(tenant_id == common::OB_INVALID_ID || ddl_task_id < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(ddl_task_id));
+  } else if (OB_ISNULL(root_service = GCTX.root_service_)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("root service is null", K(ret), KP(root_service));
+  } else {
+    {
+      MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
+      // ignore return, MTL is only used in get_ts_sync, which will handle switch failure.
+      // for performance, everywhere calls get_ts_sync should ensure using correct tenant ctx
+      tenant_guard.switch_to(tenant_id);
+      if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id,
+                                        timeout_us,
+                                        curr_ts,
+                                        is_external_consistent))) {
+        LOG_WARN("fail to get gts sync", K(ret), K(tenant_id), K(timeout_us), K(curr_ts), K(is_external_consistent));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      snapshot = max(trans_end_snapshot, curr_ts.get_val_for_tx() - index_snapshot_version_diff);
+      if (OB_FAIL(freeze_info_proxy.get_freeze_info(
+          root_service->get_sql_proxy(), SCN::min_scn(), frozen_status))) {
+        LOG_WARN("get freeze info failed", K(ret));
+      } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, GET_FREEZE_INFO_FAILED))) {
+        LOG_WARN("ddl sim failure: get freeze info failed", K(ret), K(tenant_id), K(ddl_task_id));
+      } else {
+        const int64_t frozen_scn_val = frozen_status.frozen_scn_.get_val_for_tx();
+        snapshot = max(snapshot, frozen_scn_val);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLUtil::check_and_cancel_single_replica_dag(
     rootserver::ObDDLTask* task,
     const uint64_t table_id,

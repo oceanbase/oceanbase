@@ -646,6 +646,27 @@ int ObDDLLock::unlock_for_offline_ddl(
   return ret;
 }
 
+int ObDDLLock::lock_table_in_trans(
+    const ObTableSchema &table_schema,
+    const ObTableLockMode lock_mode,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  const uint64_t table_id = table_schema.get_table_id();
+  const int64_t timeout_us = DEFAULT_TIMEOUT;
+  ObInnerSQLConnection *iconn = nullptr;
+  if (!need_lock(table_schema)) {
+    LOG_INFO("skip ddl lock for non-user table", K(table_id));
+  } else if (OB_ISNULL(iconn = static_cast<ObInnerSQLConnection *>(trans.get_connection()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid conn", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_table(tenant_id, table_id, lock_mode, timeout_us, iconn))) {
+    LOG_WARN("failed to lock table", K(ret), K(tenant_id), K(table_id));
+  }
+  return ret;
+}
+
 // TODO(lihongqin.lhq): batch rpc
 int ObDDLLock::lock_table_lock_in_trans(
     const uint64_t tenant_id,

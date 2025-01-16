@@ -3522,6 +3522,7 @@ int ObCreateAuxIndexArg::assign(const ObCreateAuxIndexArg &other)
   } else {
     tenant_id_ = other.tenant_id_;
     data_table_id_ = other.data_table_id_;
+    snapshot_version_ = other.snapshot_version_;
   }
   return ret;
 }
@@ -3529,7 +3530,8 @@ int ObCreateAuxIndexArg::assign(const ObCreateAuxIndexArg &other)
 OB_SERIALIZE_MEMBER((ObCreateAuxIndexArg, ObDDLArg),
                     tenant_id_,
                     data_table_id_,
-                    create_index_arg_);
+                    create_index_arg_,
+                    snapshot_version_);
 OB_SERIALIZE_MEMBER(ObCreateAuxIndexRes,
                     aux_table_id_,
                     ddl_task_id_,

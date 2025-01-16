@@ -6970,7 +6970,8 @@ int ObDDLService::create_aux_index_task_(
     const int64_t parent_task_id,
     const uint64_t tenant_data_version,
     ObDDLSQLTransaction &trans,
-    ObDDLTaskRecord &task_record)
+    ObDDLTaskRecord &task_record,
+    const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(data_schema) ||
@@ -6999,6 +7000,7 @@ int ObDDLService::create_aux_index_task_(
                                &create_index_arg,
                                parent_task_id);
     param.tenant_data_version_ = tenant_data_version;
+    param.fts_snapshot_version_ = snapshot_version;
     if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
         create_ddl_task(param, trans, task_record))) {
       if (OB_ENTRY_EXIST == ret) {
@@ -7117,7 +7119,8 @@ int ObDDLService::create_aux_index(
                                            arg.task_id_/*parent fts*/,
                                            tenant_data_version,
                                            trans,
-                                           task_record))) {
+                                           task_record,
+                                           arg.snapshot_version_))) {
           LOG_WARN("failed to create aux index ddl task", K(ret), K(create_index_arg));
         } else if (FALSE_IT(result.ddl_task_id_ = task_record.task_id_)) {
         }
@@ -7379,13 +7382,15 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                                     ObArenaAllocator &allocator,
                                     const uint64_t tenant_data_version,
                                     obrpc::ObAlterTableRes &res,
-                                    ObIArray<ObDDLTaskRecord> &ddl_tasks)
+                                    ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                                    int64_t &new_fetched_snapshot)
 {
   int ret = OB_SUCCESS;
   ObIndexBuilder index_builder(*this);
   ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
   common::ObArray<const ObForeignKeyInfo *> drop_parent_table_mock_foreign_key_infos_array;
   ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
+  new_fetched_snapshot = 0;
   // To many hashset will fill up the stack, construct them on heap instead
   HEAP_VAR(AddIndexNameHashSet, add_index_name_set) {
   HEAP_VAR(DropIndexNameHashSet, drop_index_name_set) {
@@ -7522,10 +7527,11 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                                                        create_index_arg->index_schema_.is_auto_partitioned_table()) ?
                                                        false : true;
               bool rowkey_doc_exist = false;
+              bool is_generate_rowkey_doc = false;
               if (OB_FAIL(ret)) {
               } else if (OB_FAIL(my_arg.assign(*create_index_arg))) {
                 LOG_WARN("fail to assign arg", K(ret));
-              } else if (share::schema::is_fts_index(my_arg.index_type_)) {
+              } else if (share::schema::is_fts_or_multivalue_index(my_arg.index_type_)) {
                 const ObTableSchema *rowkey_doc_schema = nullptr;
                 if (OB_FAIL(tmp_arg.assign(my_arg))) {
                   LOG_WARN("fail to assign arg", K(ret));
@@ -7545,9 +7551,10 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                 }
               }
               if (OB_FAIL(ret)) {
-              } else if (share::schema::is_fts_index(my_arg.index_type_) &&
+              } else if (share::schema::is_fts_or_multivalue_index(my_arg.index_type_) &&
                          !rowkey_doc_exist &&
-                         FALSE_IT(my_arg.index_type_ = INDEX_TYPE_ROWKEY_DOC_ID_LOCAL)) {
+                         (FALSE_IT(my_arg.index_type_ = INDEX_TYPE_ROWKEY_DOC_ID_LOCAL) ||
+                          FALSE_IT(is_generate_rowkey_doc = true))) {
                 // 1. generate rowkey doc schema if not exist
                 // 2. otherwise generate fts index aux schema
               } else if (share::schema::is_fts_index(my_arg.index_type_) &&
@@ -7556,6 +7563,9 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
               } else if (OB_FAIL(ObIndexBuilderUtil::adjust_expr_index_args(
                       my_arg, new_table_schema, allocator, gen_columns))) {
                 LOG_WARN("adjust fulltext args failed", K(ret));
+              } else if (is_generate_rowkey_doc &&
+                         OB_FAIL(ObDDLLock::lock_table_in_trans(new_table_schema, transaction::tablelock::EXCLUSIVE, trans))) {
+                LOG_WARN("fail to lock for offline ddl", K(ret), K(new_table_schema));
               } else if (OB_FAIL(index_builder.generate_schema(my_arg,
                                                         new_table_schema,
                                                         global_index_without_column_info,
@@ -7573,6 +7583,13 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                 if (index_schema.has_tablet()
                     && OB_FAIL(create_index_tablet(index_schema, trans, schema_guard, true/*need_check_tablet_cnt*/, tenant_data_version))) {
                   LOG_WARN("fail to create_index_tablet", KR(ret), K(index_schema));
+                }
+                if (OB_SUCC(ret) && is_generate_rowkey_doc) {
+                  if (new_fetched_snapshot <= 0 &&
+                      OB_FAIL(ObDDLUtil::obtain_snapshot(trans, new_table_schema, index_schema, new_fetched_snapshot))) {
+                    LOG_WARN("fail to obtain snapshot",
+                        K(ret), K(new_table_schema), K(index_schema), K(new_fetched_snapshot));
+                  }
                 }
                 if (OB_SUCC(ret)) {
                   ObIndexNameHashWrapper index_key(create_index_arg->index_name_);
@@ -14346,6 +14363,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         }
 
         //table indexs
+        int64_t new_fetched_snapshot = 0;
         if (OB_SUCC(ret) && alter_table_arg.is_alter_indexs_) {
           if (OB_FAIL(check_restore_point_allow(tenant_id, *orig_table_schema))) {
             LOG_WARN("check restore point allow failed,", K(ret), K(tenant_id), K(orig_table_schema->get_table_id()));
@@ -14358,7 +14376,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                alter_table_arg.allocator_,
                                                tenant_data_version,
                                                res,
-                                               ddl_tasks))) {
+                                               ddl_tasks,
+                                               new_fetched_snapshot))) {
             LOG_WARN("failed to alter table index!", K(ret));
           }
         }
@@ -14822,7 +14841,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                                   const_alter_table_arg.consumer_group_id_,
                                                                   tenant_data_version,
                                                                   alter_table_arg.allocator_,
-                                                                  task_record))) {
+                                                                  task_record,
+                                                                  new_fetched_snapshot))) {
                 LOG_WARN("fail to submit build index task", KR(ret), "type", create_index_arg->index_type_);
               } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
                 LOG_WARN("fail to push ddl task", KR(ret), K(task_record));
