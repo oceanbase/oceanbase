@@ -660,7 +660,7 @@ int ObStorageHASrcProvider::check_replica_validity(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls_info is invalid!", K(ret), K(tenant_id_), K(ls_id_), K(addr), K(ls_info));
   } else if (OB_FAIL(ObStorageHAUtils::check_replica_validity(ls_info))) {
-    LOG_WARN("failed to check replica validity", K(ret), K(ls_info));
+    LOG_WARN("failed to check replica validity", K(ret), K(addr), K(ls_info));
   } else if (local_clog_checkpoint_scn_ > ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn()) {
     ret = OB_DATA_SOURCE_NOT_VALID;
     LOG_WARN("do not choose this src, local checkpoint scn check failed", K(ret), K(tenant_id_), K(ls_id_), K(addr), K(dst), K(learner_list),
@@ -677,7 +677,7 @@ const char *ObStorageHASrcProvider::ObChooseSourcePolicyStr[static_cast<int64_t>
   "zone",
   "idc",
   "region",
-  "different_region"
+  "different_region",
   "checkpoint",
   "recommend",
 };
