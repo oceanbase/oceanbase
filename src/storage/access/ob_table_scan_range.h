@@ -60,6 +60,9 @@ private:
       const common::ObQueryFlag &scan_flag,
       const blocksstable::ObStorageDatumUtils *datum_utils);
   int init_ranges_in_skip_scan(
+      const ObTabletID &tablet_id,
+      const share::ObLSID &ls_id,
+      const bool is_tablet_spliting,
       const common::ObIArray<common::ObNewRange> &ranges,
       const common::ObIArray<common::ObNewRange> &skip_scan_ranges,
       const common::ObQueryFlag &scan_flag,
