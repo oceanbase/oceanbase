@@ -4438,6 +4438,9 @@ int ObPLResolver::resolve_case(const ObStmtNodeTree *parse_tree, ObPLCaseStmt *s
         OZ (current_block_->get_namespace().get_pl_data_type_by_id(case_expr->get_result_type().get_udt_id(), user_type));
         CK (OB_NOT_NULL(user_type));
         OX (pl_data_type = *user_type);
+      } else if (case_expr->get_result_type().is_enum_or_set()) {
+        OX (pl_data_type.set_enum_set_ctx(&func.get_enum_set_ctx()));
+        OZ (pl_data_type.set_type_info(case_expr->get_enum_set_values()));
       }
       OZ (current_block_->get_namespace().add_symbol(
                                           ObString(""), // anonymous variable for holding case expr value
