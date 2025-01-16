@@ -1304,6 +1304,7 @@ int ObAdminSetConfig::update_config_for_compatible(const uint64_t tenant_id,
 int ObAdminSetConfig::execute(obrpc::ObAdminSetConfigArg &arg)
 {
   LOG_INFO("execute set config request", K(arg));
+  DEBUG_SYNC(BEFORE_EXECUTE_ADMIN_SET_CONFIG);
   int ret = OB_SUCCESS;
   int64_t config_version = 0;
   if (!ctx_.is_inited()) {
