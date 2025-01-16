@@ -56,7 +56,7 @@ int ObExprStringToArray::calc_result_typeN(ObExprResType &type,
     if (ob_is_null(types[i].get_type())) {
       // do nothing
     } else if (ob_is_varchar_char_type(types[i].get_type(), types[i].get_collation_type())) {
-      types[i].set_calc_collation_type(ObCharset::get_system_collation());
+      types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "VARCHAR", ob_obj_type_str(types[i].get_type()));

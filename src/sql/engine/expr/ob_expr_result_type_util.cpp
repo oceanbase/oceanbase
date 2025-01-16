@@ -983,7 +983,6 @@ int ObExprResultTypeUtil::get_deduce_element_type(ObExprResType &input_type, ObD
   ObObjType type1 = input_type.get_type();
   ObObjType type2 = elem_type.get_obj_type();
   ObObjType res_type = MERGE_RESULT_TYPE[type1][type2];
-  ObCollationType coll_type = elem_type.get_collation_type();
   ObObjMeta meta;
   if (res_type == ObDecimalIntType || res_type == ObNumberType || res_type == ObUNumberType) {
     // decimal type isn't supported in array, use double/bigint instead
@@ -995,21 +994,19 @@ int ObExprResultTypeUtil::get_deduce_element_type(ObExprResType &input_type, ObD
   } else {
     meta.set_type(res_type);
   }
-  if (ob_is_collection_sql_type(elem_type.get_obj_type())) {
-    ret = OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION;
-    LOG_USER_ERROR(OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION);
+  if (ob_is_string_tc(res_type)) {
+    if (ob_is_string_tc(type2)) {
+      // do nothing
+    } else {
+      // set max len to fix plan cache issue
+      meta.set_collation_type(input_type.get_collation_type());
+      elem_type.set_meta_type(meta);
+      elem_type.set_length(OB_MAX_VARCHAR_LENGTH / 4);
+    }
   } else {
     elem_type.set_meta_type(meta);
-    if (ob_is_string_tc(type1)) {
-      // set max len to fix plan cache issue
-      elem_type.set_length(OB_MAX_VARCHAR_LENGTH / 4);
-      elem_type.set_collation_type(input_type.get_collation_type());
-    } else {
-      elem_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[meta.get_type()]);
-      elem_type.set_collation_type(coll_type);
-    }
+    elem_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[meta.get_type()]);
   }
-
   return ret;
 }
 
