@@ -4499,6 +4499,8 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
           bool is_partition_key = orig_column_schema->is_part_key_column();
           bool is_sub_partition_key = orig_column_schema->is_subpart_key_column();
           if (!is_partition_key && !is_sub_partition_key) {
+          } else if (!ob_is_integer_type(orig_column_schema->get_data_type())
+                    || !ob_is_integer_type(alter_column_schema->get_data_type())) {
           } else if (orig_column_schema->get_data_type() != alter_column_schema->get_data_type()) {
             if (orig_table_schema.get_partition_num() != alter_table_schema.get_partition_num()) {
               ret = OB_ERR_UNEXPECTED;
