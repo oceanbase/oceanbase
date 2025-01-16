@@ -10661,6 +10661,9 @@ def_table_schema(
 
 # 11121: abandoned # __all_virtual_ddl_diagnose_info, which is moved to 12514
 
+# 11122: __all_virtual_ss_tablet_upload_stat
+# 11123: __all_virtual_ss_tablet_compact_stat
+
 ################################################################
 # INFORMATION SCHEMA
 ################################################################
@@ -15777,6 +15780,9 @@ def_table_schema(
 # 12518: __all_virtual_catalog_privilege
 # 12519: __all_virtual_catalog_privilege_history
 
+# 12520: __all_virtual_sswriter_group_stat
+# 12521: __all_virtual_sswriter_lease_mgr
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -16309,6 +16315,10 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keyword
 # 15493: __all_virtual_cs_replica_tablet_stats
 # 15494: __all_catalog
 # 15495: __all_catalog_privilege
+# 15496: __all_virtual_ss_tablet_upload_stat
+# 15497: __all_virtual_ss_tablet_compact_stat
+# 15498: __all_virtual_sswriter_group_stat
+# 15499: __all_virtual_sswriter_lease_mgr
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
