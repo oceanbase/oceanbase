@@ -11,6 +11,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <fstream>
 #include "lib/allocator/ob_malloc.h"
 #include "lib/utility/utility.h"
 #include "lib/number/ob_number_v2.h"
@@ -50,9 +51,16 @@ TEST(utility, load_file_to_string)
   const char *path = NULL;
   CharArena alloc;
   ObString str;
-
   ASSERT_NE(OB_SUCCESS, load_file_to_string(path, alloc, str));
-  ASSERT_EQ(OB_SUCCESS, load_file_to_string(__FILE__, alloc, str));
+
+  // create a tmp file to test
+  const char* testPath = "test_load_file_to_string";
+  std::ofstream testFile(testPath);
+  ASSERT_EQ(true, testFile.is_open());
+  testFile << "test load_file_to_string";
+  testFile.close();
+  ASSERT_EQ(OB_SUCCESS, load_file_to_string(testPath, alloc, str));
+
   ASSERT_EQ(0, str.ptr()[str.length()]);
 }
 
