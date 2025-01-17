@@ -1646,6 +1646,7 @@ int ObLSTabletService::update_tablet_restore_status(
     const ObTabletMapKey key(ls_->get_ls_id(), tablet_id);
     ObTablet *tablet = tablet_handle.get_obj();
     ObTabletHandle new_tablet_handle;
+    const bool current_has_transfer_table = tablet->tablet_meta_.has_transfer_table();
 
     if (OB_FAIL(tablet->tablet_meta_.ha_status_.get_restore_status(current_status))) {
       LOG_WARN("failed to get restore status", K(ret), KPC(tablet));
@@ -1684,6 +1685,8 @@ int ObLSTabletService::update_tablet_restore_status(
         if (OB_SUCCESS != (tmp_ret = tablet->tablet_meta_.ha_status_.set_restore_status(current_status))) {
           LOG_WARN("failed to set restore status", K(tmp_ret), K(current_status), KPC(tablet));
           ob_abort();
+        } else if (need_reset_transfer_flag) { //rollback has_transfer_table
+          tablet->tablet_meta_.transfer_info_.has_transfer_table_ = current_has_transfer_table;
         }
       }
     }
