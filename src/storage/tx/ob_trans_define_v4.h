@@ -871,6 +871,7 @@ public:
   void set_sessid(const uint32_t session_id) { sess_id_ = session_id; }
   void set_assoc_sessid(const uint32_t session_id) { assoc_sess_id_ = session_id; }
   const ObXATransID &get_xid() const { return xid_; }
+  void reset_xid() { xid_.reset(); }
   bool is_xa_trans() const { return !xid_.empty(); }
   bool is_xa_tightly_couple() const { return xa_tightly_couple_; }
   void set_xa_start_addr(common::ObAddr &addr) { xa_start_addr_ = addr; }
