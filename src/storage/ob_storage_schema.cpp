@@ -625,13 +625,8 @@ int ObStorageSchema::init(
       STORAGE_LOG(WARN, "failed to copy skip idx attr array", K(ret), K(old_schema));
     } else if (!column_info_simplified_ && OB_FAIL(deep_copy_column_array(allocator, old_schema, old_schema.column_array_.count()))) {
       STORAGE_LOG(WARN, "failed to deep copy column array", K(ret), K(old_schema));
-    } else if (nullptr != update_param && OB_FAIL(rebuild_column_array(allocator, old_schema, *update_param))) {
-      STORAGE_LOG(WARN, "failed to rebuild column array", K(ret), K(old_schema), KPC(update_param));
-    } else if (!column_info_simplified_ && generate_cs_replica_cg_array) {
-      // if column_info_simplified_, generate from table schema in the future
-      if (OB_FAIL(ObStorageSchema::generate_cs_replica_cg_array())) {
-        STORAGE_LOG(WARN, "failed to generate_cs_replica_cg_array", K(ret));
-      }
+    } else if (generate_cs_replica_cg_array) {
+      // skip deep copy if column group schema array need generated from column array
     } else if (NULL != column_group_schema && OB_FAIL(deep_copy_column_group_array(allocator, *column_group_schema))) {
       STORAGE_LOG(WARN, "failed to deep copy column array from column group schema", K(ret), K(old_schema), KPC(column_group_schema));
     } else if (NULL == column_group_schema && OB_FAIL(deep_copy_column_group_array(allocator, old_schema))) {
@@ -639,6 +634,10 @@ int ObStorageSchema::init(
     }
 
     if (OB_FAIL(ret)) {
+    } else if (nullptr != update_param && OB_FAIL(refactor_storage_schema(allocator, old_schema, *update_param))) {
+      STORAGE_LOG(WARN, "failed to rebuild column array", K(ret), K(old_schema), KPC(update_param));
+    } else if (generate_cs_replica_cg_array && OB_FAIL(ObStorageSchema::generate_cs_replica_cg_array())) {
+      STORAGE_LOG(WARN, "failed to generate_cs_replica_cg_array", K(ret));
     } else if (OB_UNLIKELY(!is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "storage schema is invalid", K(ret));
@@ -685,7 +684,7 @@ int ObStorageSchema::deep_copy_column_array(
   return ret;
 }
 
-int ObStorageSchema::rebuild_column_array(
+int ObStorageSchema::refactor_storage_schema(
     common::ObIAllocator &allocator,
     const ObStorageSchema &src_schema,
     const ObUpdateCSReplicaSchemaParam &update_param)
@@ -730,6 +729,48 @@ int ObStorageSchema::rebuild_column_array(
     if (!finish_truncate) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "failed to truncate column array", K(ret), K(update_param), K_(column_array));
+    } else {
+      if (!skip_idx_attr_array_.empty()) {
+        /*
+         * Remain the skip indexes on old columns(we can not decide whether the skip index is added before or after lastest major compacted).
+         * Since adding primary key is offline ddl, we only consider online adding column with skip index here.
+         * New column is added to the end of column array, and the skip index array is asc with col_idx(begin with 0),
+         * so the skip index with col_idx_ >= column_cnt_ means the it is added after the latest major compacted.
+         */
+        const int64_t original_skip_idx_count = skip_idx_attr_array_.count();
+        for (int64_t i = 0; i < original_skip_idx_count; ++i) {
+          if (skip_idx_attr_array_.at(i).col_idx_ >= column_cnt_) {
+            for (int64_t j = i; j < original_skip_idx_count; ++j) {
+              skip_idx_attr_array_.pop_back();
+            }
+            STORAGE_LOG(INFO, "finish truncate skip idx array", K(ret), K(update_param), K_(skip_idx_attr_array));
+            break;
+          }
+        }
+      }
+      if (!column_group_array_.empty()) {
+        /*
+         * Used for column store tablet split in the future.
+         * Similar to truncate skip_idx_attr_array_, the cg of newly added column is added at the end.
+         * The column idx calculation takes 2 multi-version column, so use update_param.major_column_cnt_ to truncate.
+         */
+        const int64_t original_cg_array_count = column_group_array_.count();
+        for (int64_t i = 0; OB_SUCC(ret) && i < original_cg_array_count; ++i) {
+          const ObStorageColumnGroupSchema &column_group = column_group_array_.at(i);
+          if (column_group.is_single_column_group()) {
+            if (OB_UNLIKELY(column_group.get_column_count() <= 0)) {
+              ret = OB_ERR_UNEXPECTED;
+              STORAGE_LOG(WARN, "invalid column group schema", K(ret), K(column_group));
+            } else if (column_group.get_column_idx(0) >= update_param.major_column_cnt_) {
+              for (int64_t j = i; j < original_cg_array_count; ++j) {
+                column_group_array_.pop_back();
+              }
+              STORAGE_LOG(INFO, "finish truncate cg array", K(ret), K(update_param), K_(column_group_array));
+              break;
+            }
+          }
+        }
+      }
     }
   }
   return ret;
@@ -1286,7 +1327,10 @@ int ObStorageSchema::generate_cs_replica_cg_array(common::ObIAllocator &allocato
 int ObStorageSchema::generate_cs_replica_cg_array()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(generate_cs_replica_cg_array(*allocator_, column_group_array_))) {
+  if (OB_UNLIKELY(column_info_simplified_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "column info is simplified", K(ret), KPC(this));
+  } else if (OB_FAIL(generate_cs_replica_cg_array(*allocator_, column_group_array_))) {
     STORAGE_LOG(WARN, "Failed to generate column store cg array", K(ret), KPC(this));
   } else {
     is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();

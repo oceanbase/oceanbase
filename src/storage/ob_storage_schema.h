@@ -222,7 +222,7 @@ public:
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema,
       const int64_t copy_array_cnt);
-  int rebuild_column_array(
+  int refactor_storage_schema(
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema,
       const ObUpdateCSReplicaSchemaParam &update_param);
