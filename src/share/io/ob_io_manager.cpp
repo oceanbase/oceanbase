@@ -2173,9 +2173,6 @@ int ObTenantIOManager::get_group_index(const ObIOGroupKey &key, uint64_t &index)
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("get index from map failed", K(ret), K(key.group_id_), K(index));
     }
-  } else if (OB_UNLIKELY(index == INT64_MAX)) {
-    //index == INT64_MAX means group has been deleted
-    ret = OB_STATE_NOT_MATCH;
   }
   return ret;
 }
@@ -2278,11 +2275,7 @@ int ObTenantIOManager::modify_io_config(const uint64_t group_id,
       }
       DRWLock::WRLockGuard guard(io_config_lock_);
       if (OB_FAIL(get_group_index(key, index))) {
-        if (OB_STATE_NOT_MATCH == ret) {
-          //group has been deleted, do nothing
-          LOG_INFO("group has been deleted before flush directive", K(group_id), K(index));
-          ret = OB_SUCCESS;
-        } else if (OB_HASH_NOT_EXIST == ret) {
+        if (OB_HASH_NOT_EXIST == ret) {
           //1. add new group
           int64_t group_num = io_config_.group_configs_.count();
           if (OB_FAIL(io_config_.add_single_group_config(tenant_id_, key, group_name, min, max, weight))) {
@@ -2367,9 +2360,6 @@ int ObTenantIOManager::reset_consumer_group_config(const int64_t group_id)
           //directive not flush yet, do nothing
           ret = OB_SUCCESS;
           LOG_INFO("directive not flush yet", K(group_id));
-        } else if (OB_STATE_NOT_MATCH == ret) {
-          ret = OB_SUCCESS;
-          LOG_INFO("group has been deleted", K(group_id));
         } else {
           LOG_WARN("get index from map failed", K(ret), K(group_id), K(index));
         }
@@ -2399,7 +2389,7 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
     ret = OB_INVALID_CONFIG;
     LOG_WARN("cannot delete other group io config", K(ret), K(group_id));
   } else {
-    // 1.map设置非法值
+    // 1.map释放对应的group
     // 2.config设为unusable，资源清零
     // 3.phyqueue停止接受新请求，但是不会析构
     // 4.clock设置为stop，但是不会析构
@@ -2414,12 +2404,6 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
           //GROUP 没有在map里，可能是没有指定资源，io未对其进行隔离或还未下刷
           ret = OB_SUCCESS;
           LOG_INFO("io control not active for this group", K(group_id));
-          if (OB_FAIL(group_id_index_map_.set_refactored(key, INT64_MAX, 1))) { //使用非法值覆盖
-            LOG_WARN("stop phy queues failed", K(ret), K(tenant_id_), K(index));
-          }
-        } else if (OB_STATE_NOT_MATCH == ret) {
-          // group delete twice, maybe deleted by delete_directive or delete_plan
-          LOG_INFO("group delete twice", K(ret), K(index), K(group_id));
         } else {
           LOG_WARN("get index from map failed", K(ret), K(group_id), K(index));
         }
@@ -2427,7 +2411,7 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid index, maybe try to delete OTHER_GROUPS or deleted_groups", K(ret), K(index), K(group_id));
       } else {
-        if (OB_FAIL(group_id_index_map_.set_refactored(key, INT64_MAX, 1))) { //使用非法值覆盖
+        if (OB_FAIL(group_id_index_map_.erase_refactored(key))) {
           LOG_WARN("stop phy queues failed", K(ret), K(tenant_id_), K(index));
         } else if (OB_FAIL(modify_group_io_config(index, 0, 100, 0, true/*deleted*/, false))) {
           LOG_WARN("modify group io config failed", K(ret), K(tenant_id_), K(index));

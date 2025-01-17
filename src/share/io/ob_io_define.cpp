@@ -980,8 +980,9 @@ int ObIOResult::transform_group_config_index_to_usage_index(const ObIOGroupKey &
     tmp_index = get_sys_module_id() - SYS_MODULE_START_ID;
     usage_index = tmp_index * GROUP_MODE_CNT + offset;
   } else {
-    if (OB_FAIL(tenant_io_mgr_.get_ptr()->get_group_index(key, tmp_index))) {
-      // do nothing
+    if (OB_SUCCESS !=  tenant_io_mgr_.get_ptr()->get_group_index(key, tmp_index)) {
+      tmp_index = 0;
+      LOG_WARN("get group index failed", K(ret), K(key));
     }
     uint64_t quot = tmp_index / MODE_CNT;
     usage_index = quot * GROUP_MODE_CNT +

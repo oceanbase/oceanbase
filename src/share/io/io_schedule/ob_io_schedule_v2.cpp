@@ -295,7 +295,7 @@ int64_t ObTenantIOSchedulerV2::get_qindex(ObIORequest& req)
     index = static_cast<int64_t>(grp_key.mode_);
   } else if (!is_valid_group(grp_key.group_id_)) {
   } else if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->get_group_index(grp_key, (uint64_t&)index))) {
-    if (ret == OB_HASH_NOT_EXIST || ret == OB_STATE_NOT_MATCH) {
+    if (ret == OB_HASH_NOT_EXIST) {
       ret = OB_SUCCESS;
       if (REACH_TIME_INTERVAL(1 * 1000L * 1000L)) {
         LOG_INFO("get group index failed, but maybe it is ok", K(ret), K(grp_key), K(index)); // group is not build

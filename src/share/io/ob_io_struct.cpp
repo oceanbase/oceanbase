@@ -1226,7 +1226,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
         const uint64_t group_id = key.group_id_;
         if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->get_group_index(key, index))) {
           // 防止删除group、新建group等情况发生时在途req无法找到对应的group
-          if (ret == OB_HASH_NOT_EXIST || ret == OB_STATE_NOT_MATCH) {
+          if (ret == OB_HASH_NOT_EXIST) {
             ret = OB_SUCCESS;
             tmp_phy_queue = io_group_queues->group_phy_queues_.at(default_group_index);
           } else {
