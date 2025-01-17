@@ -56,6 +56,32 @@ int ObStatsEstimator::gen_select_filed()
   return ret;
 }
 
+int ObStatsEstimator::add_from_table(common::ObIAllocator &allocator,
+                                     const ObString &db_name,
+                                     const ObString &table_name)
+{
+  int ret = OB_SUCCESS;
+  ObString new_db_name;
+  ObString new_tbl_name;
+  if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+              allocator,
+              db_name,
+              new_db_name,
+              lib::is_oracle_mode()))) {
+    LOG_WARN("fail to generate new name with escape character", K(ret), K(db_name));
+  } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                    allocator,
+                    table_name,
+                    new_tbl_name,
+                    lib::is_oracle_mode()))) {
+    LOG_WARN("fail to generate new name with escape character", K(ret), K(table_name));
+  } else {
+    db_name_ = new_db_name;
+    from_table_ = new_tbl_name;
+  }
+  return ret;
+}
+
 int ObStatsEstimator::pack(ObSqlString &raw_sql_str)
 {
   int ret = OB_SUCCESS;

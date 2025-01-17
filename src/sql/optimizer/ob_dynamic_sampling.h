@@ -172,7 +172,7 @@ public:
   }
   virtual ~ObDSStatItem() { reset(); }
   virtual bool is_needed() const { return true; }//TODO, need refine??
-  virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos);
+  virtual int gen_expr(common::ObIAllocator &allocator, char *buf, const int64_t buf_len, int64_t &pos);
   virtual int decode(double sample_ratio, ObObj &obj);
   ObDSStatItemType get_type() { return type_; }
   int cast_int(const ObObj &obj, int64_t &ret_value);

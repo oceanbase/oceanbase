@@ -136,7 +136,7 @@ int ObMinMaxEstimator::estimate(const ObOptStatGatherParam &param,
   ObSqlString raw_sql;
   int64_t duration_time = -1;
   ObSEArray<ObOptStat, 1> tmp_opt_stats;
-  if (OB_FAIL(add_from_table(param.db_name_, param.tab_name_))) {
+  if (OB_FAIL(add_from_table(allocator, param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
   } else if (OB_UNLIKELY(param.partition_infos_.count() > 1)) {
     ret = OB_ERR_UNEXPECTED;

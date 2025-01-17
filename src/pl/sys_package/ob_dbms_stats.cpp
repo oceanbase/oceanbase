@@ -3635,6 +3635,7 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
   for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); ++i) {
     const share::schema::ObColumnSchemaV2 *col = table_schema.get_column_schema_by_idx(i);
     ObColumnStatParam col_param;
+    ObString new_col_name;
     if (OB_ISNULL(col)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column is null", K(ret), K(col));
@@ -3642,8 +3643,14 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
     //hidden, that's will cause the fewer columns.
     } else if (!check_column_validity(table_schema, *col)){
       continue;
+    } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                                                          allocator,
+                                                          col->get_column_name_str(),
+                                                          new_col_name,
+                                                          lib::is_oracle_mode()))) {
+      LOG_WARN("fail to generate new name with escape character", K(ret), K(col->get_column_name_str()));
     } else if (OB_FAIL(ob_write_string(allocator,
-                                       col->get_column_name_str(),
+                                       new_col_name,
                                        col_param.column_name_))) {
       LOG_WARN("failed to write column name", K(ret));
     } else {
@@ -3831,6 +3838,7 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
     bool find_it = false;
     for (int64_t i = 0; OB_SUCC(ret) && !find_it && i < table_schema->get_column_count(); ++i) {
       const share::schema::ObColumnSchemaV2 *tmp_col = table_schema->get_column_schema_by_idx(i);
+      ObString new_col_name;
       if (OB_ISNULL(tmp_col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(tmp_col));
@@ -3838,8 +3846,14 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
                   ObCharset::case_sensitive_equal(column_name, tmp_col->get_column_name_str())) ||
                  (!lib::is_oracle_mode() &&
                   ObCharset::case_insensitive_equal(column_name, tmp_col->get_column_name_str()))) {
-        if (OB_FAIL(ob_write_string(*param.allocator_,
-                                    tmp_col->get_column_name_str(),
+        if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                                                          *param.allocator_,
+                                                          tmp_col->get_column_name_str(),
+                                                          new_col_name,
+                                                          lib::is_oracle_mode()))) {
+          LOG_WARN("fail to generate new name with escape character", K(ret), K(tmp_col->get_column_name_str()));
+        } else if (OB_FAIL(ob_write_string(*param.allocator_,
+                                    new_col_name,
                                     col_param.column_name_))) {
           LOG_WARN("failed to write column name", K(ret));
         } else {
@@ -4182,7 +4196,8 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
   if (OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(param.allocator_));
-  } else if (est_percent.is_null()) {
+  } else if (est_percent.is_null() ||
+            (is_virtual_table(param.table_id_) && !is_oracle_mapping_real_virtual_table(param.table_id_))) {
     //if specify estimate percent null meanings 100% percent sample
     //https://community.oracle.com/tech/developers/discussion/2205871/null-for-estimate-percent-of-dbms-stats?spm=a2o8d.corp_prod_issue_detail_v2.0.0.316db27cDq1yD6
     param.sample_info_.set_percent(100.0);

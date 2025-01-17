@@ -55,7 +55,7 @@ int ObBasicStatsEstimator::estimate(const ObOptStatGatherParam &param,
   } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_,
                                 param.use_column_store_ && dst_opt_stats.count() == 1))) {
     LOG_WARN("failed to fill hints", K(ret));
-  } else if (OB_FAIL(add_from_table(param.db_name_, param.tab_name_))) {
+  } else if (OB_FAIL(add_from_table(allocator, param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
     LOG_WARN("failed to add query sql parallel info", K(ret));
