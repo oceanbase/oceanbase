@@ -44,6 +44,7 @@ using namespace share;
 using namespace compaction;
 namespace blocksstable
 {
+ERRSIM_POINT_DEF(EN_NO_NEED_MERGE_MICRO_BLK);
 
 ObMicroBlockBufferHelper::ObMicroBlockBufferHelper()
   : data_store_desc_(nullptr),
@@ -1955,6 +1956,16 @@ int ObMacroBlockWriter::check_micro_block_need_merge(
             micro_writer_->get_row_count() >= max_block_row_count / 3) {
           need_merge = false;
         }
+#ifdef ERRSIM
+        if (OB_SUCC(ret)) {
+          // always reuse micro block for test
+          if (OB_UNLIKELY(EN_NO_NEED_MERGE_MICRO_BLK)) {
+            need_merge = false;
+            FLOG_INFO("ERRSIM EN_NO_NEED_MERGE_MICRO_BLK", KR(ret));
+            ret = OB_SUCCESS;
+          }
+        }
+#endif
       }
       if (!need_merge) {
       } else if (micro_writer_->get_row_count() <= 0

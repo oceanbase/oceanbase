@@ -581,7 +581,7 @@ int ObPartitionMergeHelper::init_merge_iters(const ObMergeParameter &merge_param
     ObITable *table = nullptr;
     ObSSTable *sstable = nullptr;
     ObPartitionMergeIter *merge_iter = nullptr;
-    bool is_small_sstable = false;
+
     if (merge_param.is_mv_merge() && OB_FAIL(init_mv_merge_iters(merge_param))) {
       STORAGE_LOG(WARN, "Failed to init mv merge iters", K(ret), K(merge_param));
     }
@@ -600,7 +600,7 @@ int ObPartitionMergeHelper::init_merge_iters(const ObMergeParameter &merge_param
         // do nothing. don't need to construct iter for empty sstable
         FLOG_INFO("table is empty, need not create iter", K(i), "sstable_key", sstable->get_key());
         continue;
-      } else if (OB_ISNULL(merge_iter = alloc_merge_iter(merge_param, 0 == i, table->is_sstable() && sstable->is_small_sstable(), table))) {
+      } else if (OB_ISNULL(merge_iter = alloc_merge_iter(merge_param, table))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "Failed to alloc memory for merge iter", K(ret));
       } else if (OB_FAIL(merge_iter->init(merge_param, i, &read_info_))) {
@@ -953,20 +953,24 @@ void ObPartitionMergeHelper::reset()
  * ---------------------------------------------------------ObPartitionMajorMergeHelper--------------------------------------------------------------
  */
 
-ObPartitionMergeIter *ObPartitionMajorMergeHelper::alloc_merge_iter(const ObMergeParameter &merge_param,
-                                                                    const bool is_base_iter,
-                                                                    const bool is_small_sstable,
-                                                                    const ObITable *table)
+ObPartitionMergeIter *ObPartitionMajorMergeHelper::alloc_merge_iter(const ObMergeParameter &merge_param, const ObITable *table)
 {
   ObPartitionMergeIter *merge_iter = nullptr;
-  if (is_base_iter && !merge_param.is_full_merge() && !is_small_sstable) {
-    if (MICRO_BLOCK_MERGE_LEVEL == merge_param.static_param_.merge_level_) {
+  if (OB_UNLIKELY(nullptr == table || !table->is_sstable())) {
+    // do nothing
+  } else if (!table->is_major_sstable() || merge_param.is_full_merge()) {
+    merge_iter = alloc_helper<ObPartitionRowMergeIter>(allocator_, allocator_);
+  } else if (static_cast<const ObSSTable *>(table)->is_small_sstable()) {
+    const uint64_t compat_version = merge_param.static_param_.data_version_;
+    if (compat_version >= DATA_VERSION_4_3_5_1 && MICRO_BLOCK_MERGE_LEVEL == merge_param.static_param_.merge_level_) {
       merge_iter = alloc_helper<ObPartitionMicroMergeIter>(allocator_, allocator_);
     } else {
-      merge_iter = alloc_helper<ObPartitionMacroMergeIter>(allocator_, allocator_);
+      merge_iter = alloc_helper<ObPartitionRowMergeIter>(allocator_, allocator_);
     }
+  } else if (MICRO_BLOCK_MERGE_LEVEL == merge_param.static_param_.merge_level_) {
+    merge_iter = alloc_helper<ObPartitionMicroMergeIter>(allocator_, allocator_);
   } else {
-    merge_iter = alloc_helper<ObPartitionRowMergeIter>(allocator_, allocator_);
+    merge_iter = alloc_helper<ObPartitionMacroMergeIter>(allocator_, allocator_);
   }
 
   return merge_iter;
@@ -1001,16 +1005,14 @@ int ObPartitionMinorMergeHelper::collect_tnode_dml_stat(
   return ret;
 }
 
-ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(const ObMergeParameter &merge_param,
-                                                                    const bool is_base_iter,
-                                                                    const bool is_small_sstable,
-                                                                    const ObITable *table)
+ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(const ObMergeParameter &merge_param, const ObITable *table)
 {
   int ret = OB_SUCCESS;
-  UNUSEDx(is_base_iter);
   const ObStaticMergeParam &static_param = merge_param.static_param_;
   ObPartitionMergeIter *merge_iter = nullptr;
-  if (!is_small_sstable
+  if (OB_ISNULL(table)) {
+    // do nothing
+  } else if (!(table->is_sstable() && static_cast<const ObSSTable*>(table)->is_small_sstable())
       && !is_mini_merge(static_param.get_merge_type())
       && !static_param.is_full_merge_
       && static_param.sstable_logic_seq_ < ObMacroDataSeq::MAX_SSTABLE_SEQ) {

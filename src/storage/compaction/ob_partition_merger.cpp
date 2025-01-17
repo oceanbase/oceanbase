@@ -776,6 +776,33 @@ int ObPartitionMajorMerger::rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters)
   return ret;
 }
 
+int ObPartitionMajorMerger::reuse_base_small_sstable(ObPartitionMergeIter *base_iter)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(nullptr == base_iter || !base_iter->is_macro_block_opened())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected base iter stat for small sstable", K(ret), K(base_iter));
+  }
+
+  while (OB_SUCC(ret)) {
+    const blocksstable::ObMicroBlock *micro_block = nullptr;
+    if (OB_FAIL(base_iter->get_curr_micro_block(micro_block))) {
+      STORAGE_LOG(WARN, "failed to get_curr_micro_block", K(ret), KPC(base_iter));
+    } else if (OB_ISNULL(micro_block) || !micro_block->is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected micro block", K(ret), KPC(base_iter), KPC(micro_block));
+    } else if (OB_FAIL(process(*micro_block))) {
+      STORAGE_LOG(WARN, "failed to process micro block", K(ret));
+    } else if (OB_FAIL(base_iter->next())) {
+      if (OB_ITER_END != ret) {
+        STORAGE_LOG(WARN, "Failed to get next", K(ret), KPC(base_iter));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPartitionMajorMerger::reuse_base_sstable(ObPartitionMergeHelper &merge_helper)
 {
   int ret = OB_SUCCESS;
@@ -783,6 +810,7 @@ int ObPartitionMajorMerger::reuse_base_sstable(ObPartitionMergeHelper &merge_hel
   ObPartitionMergeIter *base_iter = nullptr;
   const ObMacroBlockDesc *macro_desc = nullptr;
   const ObMicroBlockData *micro_block_data = nullptr;
+  const uint64_t compat_version = merge_param_.static_param_.data_version_;
 
   if (OB_FAIL(merge_helper.find_rowkey_minimum_iters(minimum_iters))) {
     STORAGE_LOG(WARN, "failed to find_rowkey_minimum_iters", K(ret), K(merge_helper));
@@ -795,15 +823,10 @@ int ObPartitionMajorMerger::reuse_base_sstable(ObPartitionMergeHelper &merge_hel
     while (OB_SUCC(ret)) {
       if (base_iter->is_iter_end()) {
         ret = OB_ITER_END;
-      } else if (base_table->is_small_sstable()
-          && !base_iter->is_macro_block_opened()
-          && merge_param_.static_param_.concurrent_cnt_ > 1) { // small_sstable should not reuse macro in concurrency
-        if (OB_FAIL(base_iter->open_curr_range(true/*for_rewrite*/))) {
-          LOG_WARN("failed to open curr range", KR(ret), K(base_iter));
+      } else if (base_table->is_small_sstable() && compat_version >= DATA_VERSION_4_3_5_1 && nullptr == base_iter->get_curr_row()) {
+        if (OB_FAIL(reuse_base_small_sstable(base_iter))) {
+          LOG_WARN("failed to reuse base small sstable", K(ret));
         }
-      }
-
-      if (OB_FAIL(ret)) {
       } else if (base_iter->is_macro_block_opened()) { // opend for cross range
         // flush all row in curr macro block
         while (OB_SUCC(ret) && base_iter->is_macro_block_opened()) {

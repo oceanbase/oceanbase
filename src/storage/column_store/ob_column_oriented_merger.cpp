@@ -95,9 +95,9 @@ int ObCOMerger::inner_prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t id
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected null table", K(ret));
   } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
-  } else if (OB_FAIL(init_merge_iters(sstable))) {
+  } else if (OB_FAIL(init_base_merge_iter(sstable))) {
     STORAGE_LOG(WARN, "failed to init_merge_iters", K(ret));
-  } else if (OB_FAIL(init_writers(sstable))) {
+  } else if (OB_FAIL(init_cg_writers(sstable))) {
     STORAGE_LOG(WARN, "failed to init writers", K(ret));
   } else {
     merge_helper_ = OB_NEWx(ObCOMinorSSTableMergeHelper,
@@ -123,18 +123,26 @@ int ObCOMerger::inner_prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t id
   return ret;
 }
 
-int ObCOMerger::init_merge_iters(ObSSTable *sstable)
+int ObCOMerger::init_base_merge_iter(ObSSTable *sstable)
 {
   int ret = OB_SUCCESS;
 
   //prepare row_store_iter_
-  if (OB_UNLIKELY(sstable == nullptr)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected null sstable", K(ret));
+  if (OB_UNLIKELY(nullptr == sstable || nullptr == merge_ctx_)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid argument", K(ret), KPC(sstable), KPC(merge_ctx_));
   } else if (sstable->get_data_macro_block_count() <= 0) {
+    row_store_iter_ = nullptr;
   } else {
-    if (merge_param_.is_full_merge() || sstable->is_small_sstable()) {
+    const uint64_t compat_version = merge_ctx_->static_param_.data_version_;
+    if (merge_param_.is_full_merge()) {
       row_store_iter_ = OB_NEWx(ObPartitionRowMergeIter, (&merger_arena_), merger_arena_);
+    } else if (sstable->is_small_sstable()) {
+      if (compat_version >= DATA_VERSION_4_3_5_1 && MICRO_BLOCK_MERGE_LEVEL == merge_param_.static_param_.merge_level_) {
+        row_store_iter_ = OB_NEWx(ObPartitionMicroMergeIter, (&merger_arena_), merger_arena_);
+      } else {
+        row_store_iter_ = OB_NEWx(ObPartitionRowMergeIter, (&merger_arena_), merger_arena_);
+      }
     } else if (MICRO_BLOCK_MERGE_LEVEL == merge_param_.static_param_.merge_level_) {
       row_store_iter_ = OB_NEWx(ObPartitionMicroMergeIter, (&merger_arena_), merger_arena_);
     } else {
@@ -162,7 +170,7 @@ int ObCOMerger::init_merge_iters(ObSSTable *sstable)
   return ret;
 }
 
-int ObCOMerger::init_writers(ObSSTable *sstable)
+int ObCOMerger::init_cg_writers(ObSSTable *sstable)
 {
   int ret = OB_SUCCESS;
   blocksstable::ObDatumRow default_row;
@@ -390,7 +398,7 @@ int ObCOMerger::build_mergelog(
   need_replay = true;
   row_store_iter_need_move = false;
 
-  if (OB_ISNULL(row_store_iter_)) {
+  if (OB_ISNULL(row_store_iter_)) { // old major is empty
     merge_log.op_ = ObMergeLog::INSERT;
     merge_log.row_id_ = INT64_MAX;
   } else if (row_store_iter_->is_iter_end()) {
