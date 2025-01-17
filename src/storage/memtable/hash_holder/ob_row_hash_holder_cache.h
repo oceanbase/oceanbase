@@ -88,43 +88,32 @@ struct HashHolderFactory {
   int create(T *&obj, uint64_t hash, Args &&...args);
   template <typename T>
   void destroy(T *obj, uint64_t hash);
-  int init() {
+  int init(bool for_unit_test) {
     int ret = OB_SUCCESS;
-#ifdef UNITTEST_DEBUG
-    if (OB_FAIL(list_cache_.init(MIN_LIST_CACHE_CNT, 1))) {
-      DETECT_LOG(WARN, "fail to init little list_cache", KR(ret));
-    } else if (OB_FAIL(node_cache_.init(MIN_NODE_CACHE_CNT, 1))) {
-      DETECT_LOG(WARN, "fail to init little node_cache", KR(ret));
-    }
-#else
-    int64_t tenant_memory_limit = lib::get_tenant_memory_limit(MTL_ID());
-    if (!is_user_tenant(MTL_ID()) || tenant_memory_limit < 1_GB) {// non-user tenant or small user tenant use little cache
-      if (OB_FAIL(list_cache_.init(MIN_LIST_CACHE_CNT, 1))) {// 32KB
+    if (for_unit_test) {
+      if (OB_FAIL(list_cache_.init(MIN_LIST_CACHE_CNT, 1))) {
         DETECT_LOG(WARN, "fail to init little list_cache", KR(ret));
-      } else if (OB_FAIL(node_cache_.init(MIN_NODE_CACHE_CNT, 1))) {// 32KB
-        DETECT_LOG(WARN, "fail to init little node_cache", KR(ret));
-      }
-    } else if (tenant_memory_limit <= 16_GB) {
-      // 1G <-> 1MB(total)
-      // 2G <-> 4MB(total)
-      // 4G <-> 8MB(total)
-      // ...
-      // 16G <-> 32MB(total)
-      int64_t adapted_list_cache_cnt = MAX_LIST_CACHE_CNT * (double(tenant_memory_limit) / 16_GB);
-      int64_t adapted_node_cache_cnt = MAX_NODE_CACHE_CNT * (double(tenant_memory_limit) / 16_GB);
-      if (OB_FAIL(list_cache_.init(adapted_list_cache_cnt, THREAD_CACHE_CNT))) {
-        DETECT_LOG(WARN, "fail to init little list_cache", KR(ret));
-      } else if (OB_FAIL(node_cache_.init(adapted_node_cache_cnt, THREAD_CACHE_CNT))) {
+      } else if (OB_FAIL(node_cache_.init(MIN_NODE_CACHE_CNT, 1))) {
         DETECT_LOG(WARN, "fail to init little node_cache", KR(ret));
       }
     } else {
-      if (OB_FAIL(list_cache_.init(MAX_LIST_CACHE_CNT, THREAD_CACHE_CNT))) {// 16M
-        DETECT_LOG(WARN, "fail to init little list_cache", KR(ret));
-      } else if (OB_FAIL(node_cache_.init(MAX_NODE_CACHE_CNT, THREAD_CACHE_CNT))) { // 16M
-        DETECT_LOG(WARN, "fail to init little node_cache", KR(ret));
+      int64_t tenant_memory_limit = lib::get_tenant_memory_limit(MTL_ID());
+      if (!is_user_tenant(MTL_ID()) || tenant_memory_limit < 1_GB) {// non-user tenant or small user tenant use little cache
+        if (OB_FAIL(list_cache_.init(MIN_LIST_CACHE_CNT, 1))) {// 32KB
+          DETECT_LOG(WARN, "fail to init little list_cache", KR(ret));
+        } else if (OB_FAIL(node_cache_.init(MIN_NODE_CACHE_CNT, 1))) {// 32KB
+          DETECT_LOG(WARN, "fail to init little node_cache", KR(ret));
+        }
+      } else {
+        int64_t each_thread_cache_list_cnt = MIN(tenant_memory_limit * 0.01, 3.9_GB) / THREAD_CACHE_CNT / sizeof(RowHolderList); // 1%
+        int64_t each_thread_cache_node_cnt = MIN(tenant_memory_limit * 0.01, 3.9_GB) / THREAD_CACHE_CNT / sizeof(RowHolderNode); // 1%
+        if (OB_FAIL(list_cache_.init(each_thread_cache_list_cnt, THREAD_CACHE_CNT))) {
+          DETECT_LOG(WARN, "fail to init little list_cache", KR(ret));
+        } else if (OB_FAIL(node_cache_.init(each_thread_cache_node_cnt, THREAD_CACHE_CNT))) {
+          DETECT_LOG(WARN, "fail to init little node_cache", KR(ret));
+        }
       }
     }
-#endif
     if (OB_FAIL(ret)) {
       this->~HashHolderFactory();
     }
@@ -133,13 +122,7 @@ struct HashHolderFactory {
 public:
   static constexpr int64_t MIN_LIST_CACHE_CNT = 1LL << 10;// 1024
   static constexpr int64_t MIN_NODE_CACHE_CNT = 1LL << 10;// 1024
-  static constexpr int64_t MAX_LIST_CACHE_CNT = 1LL << 15;// 32768
-  static constexpr int64_t MAX_NODE_CACHE_CNT = 1LL << 15;// 32768
   static constexpr int64_t THREAD_CACHE_CNT = 1LL << 4;// 16
-  static constexpr double MIN_NODE_CACHE_COST = THREAD_CACHE_CNT * 1.0 * MIN_LIST_CACHE_CNT * sizeof(RowHolderNode) / 1_MB;// 0.5M
-  static constexpr double MIN_LIST_CACHE_COST = THREAD_CACHE_CNT * 1.0 * MIN_NODE_CACHE_CNT * sizeof(RowHolderList) / 1_MB;// 0.5M
-  static constexpr double MAX_NODE_CACHE_COST = THREAD_CACHE_CNT * 1.0 * MAX_LIST_CACHE_CNT * sizeof(RowHolderNode) / 1_MB;// 16M
-  static constexpr double MAX_LIST_CACHE_COST = THREAD_CACHE_CNT * 1.0 * MAX_NODE_CACHE_CNT * sizeof(RowHolderList) / 1_MB;// 16M
   HashHolderGlocalMonitor &monitor_;
   CacheTypeRouter<RowHolderNode>::type node_cache_;
   CacheTypeRouter<RowHolderList>::type list_cache_;

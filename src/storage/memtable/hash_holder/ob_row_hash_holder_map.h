@@ -57,9 +57,6 @@ struct RowHolderBucketHead {// RAII + thread safe
 } CACHE_ALIGNED;
 
 struct RowHolderMapper {// RAII + thread safe
-  static constexpr int64_t LITTLE_BUCKET_CNT = 1 << 10;
-  static constexpr int64_t BUCKET_CNT = 1 << 16;
-  static constexpr int64_t BUCKET_COST = BUCKET_CNT * sizeof(RowHolderBucketHead) * 1.0 / 1_MB;
   RowHolderMapper(const RowHolderMapper &) = delete;
   RowHolderMapper &operator=(const RowHolderMapper &) = delete;
   RowHolderMapper()
@@ -68,7 +65,7 @@ struct RowHolderMapper {// RAII + thread safe
   bucket_cnt_(0),
   monitor_() {}
   ~RowHolderMapper();
-  int init();
+  int init(bool for_unit_test);
   void clear();
   int64_t count() const;
   void periodic_tasks();

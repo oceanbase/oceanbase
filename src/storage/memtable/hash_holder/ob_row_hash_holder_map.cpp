@@ -195,17 +195,17 @@ void RowHolderBucketHead::destroy_hash_list_if_not_valid_(const uint64_t hash,
   }
 }
 
-int RowHolderMapper::init() {
+int RowHolderMapper::init(bool for_unit_test) {
   int ret = OB_SUCCESS;
-#ifdef UNITTEST_DEBUG
-  bucket_cnt_ = LITTLE_BUCKET_CNT;
-#else
-  if (!is_user_tenant(MTL_ID())) {// non-user tenant use little cache
-    bucket_cnt_ = LITTLE_BUCKET_CNT;
-  } else {
-    bucket_cnt_ = BUCKET_CNT;
+  int64_t tenant_memory_limit = lib::get_tenant_memory_limit(MTL_ID());
+  int64_t BUCKET_COST = MIN(tenant_memory_limit * 0.005, 3.9_GB);// 0.5%
+  int64_t BUCKET_CNT_LIMIT = (BUCKET_COST / sizeof(RowHolderBucketHead));
+  int64_t BUCKET_CNT = 1;
+  while (BUCKET_CNT <= BUCKET_CNT_LIMIT) {
+    BUCKET_CNT <<= 1;
   }
-#endif
+  BUCKET_CNT >>= 1;
+  bucket_cnt_ = for_unit_test ? 1ULL << 16 : BUCKET_CNT;
   if (OB_ISNULL(bucket_head_ = (RowHolderBucketHead *)HashHolderAllocator::alloc(sizeof(RowHolderBucketHead) * bucket_cnt_, "HHBucket"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     DETECT_LOG(WARN, "init bucket head failed", KR(ret));
@@ -213,7 +213,7 @@ int RowHolderMapper::init() {
     for (int64_t idx = 0; idx < bucket_cnt_; ++idx) {
       new (&bucket_head_[idx]) RowHolderBucketHead(this);
     }
-    if (OB_FAIL(factory_.init())) {
+    if (OB_FAIL(factory_.init(for_unit_test))) {
       DETECT_LOG(WARN, "init factory failed", KR(ret));
     }
     if (OB_FAIL(ret)) {

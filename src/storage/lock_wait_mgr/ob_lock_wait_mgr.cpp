@@ -89,14 +89,14 @@ ObLockWaitMgr::ObLockWaitMgr()
 
 ObLockWaitMgr::~ObLockWaitMgr() {}
 
-int ObLockWaitMgr::init()
+int ObLockWaitMgr::init(bool for_unit_test)
 {
   int ret = OB_SUCCESS;
   const ObAddr &self = GCTX.self_addr();
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     TRANS_LOG(WARN, "ob lock wait mgr already init", K(ret), K(is_inited_));
-  } else if (OB_FAIL(row_holder_mapper_.init())) {
+  } else if (OB_FAIL(row_holder_mapper_.init(for_unit_test))) {
     TRANS_LOG(WARN, "fail to init row_holder_mapper_", K(ret), K(is_inited_));
   } else if (OB_FAIL(rpc_->init(this))) {
     TRANS_LOG(WARN, "init rpc error", KR(ret));

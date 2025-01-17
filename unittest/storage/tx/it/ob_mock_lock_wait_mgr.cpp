@@ -37,7 +37,7 @@ ObMockLockWaitMgr::ObMockLockWaitMgr(const uint64_t tenant_id,
 int ObMockLockWaitMgr::init()
 {
   int ret = OB_SUCCESS;
-  ObLockWaitMgr::init();
+  ObLockWaitMgr::init(true);
   is_inited_ = true;
   total_wait_node_ = 0;
   stop_repost_node_ = false;

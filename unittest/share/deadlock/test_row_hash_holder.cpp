@@ -44,7 +44,7 @@ public:
     HashHolderAllocator::FREE_TIMES = 0;
     HashHolderAllocator::NO_MEMORY = false;
     map = new RowHolderMapper();
-    ASSERT_EQ(map->init(), OB_SUCCESS);
+    ASSERT_EQ(map->init(true), OB_SUCCESS);
   }
   virtual void TearDown() {
     delete map;

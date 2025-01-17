@@ -95,7 +95,7 @@ public:
   virtual ~ObLockWaitMgr();
 
   static int mtl_init(ObLockWaitMgr *&lock_wait_mgr) { return lock_wait_mgr->init(); }
-  int init();
+  int init(bool for_unit_test = false);
   bool is_inited() { return is_inited_; };
   int start();
   void stop();
