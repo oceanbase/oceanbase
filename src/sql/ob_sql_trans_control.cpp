@@ -913,7 +913,10 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     }
     // per-opt: set read elr for DML stmt
     if (OB_SUCC(ret) && local_single_ls_plan && !plan->is_plain_select() && txs->get_tx_elr_util().is_can_tenant_elr()) {
-      snapshot.try_set_read_elr();
+      if (tx_desc.get_cluster_version() >= CLUSTER_VERSION_4_3_5_0) {
+        // for compatible reason, support it when upgraded to 4.3.5.0+
+        snapshot.try_set_read_elr();
+      }
     }
     if (OB_SUCC(ret) && !local_single_ls_plan) {
       ret = txs->get_read_snapshot(tx_desc,
