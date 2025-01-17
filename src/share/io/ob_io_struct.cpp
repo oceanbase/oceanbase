@@ -2238,7 +2238,7 @@ void ObAsyncIOChannel::get_events()
           req->io_result_->time_log_.return_ts_ = ObTimeUtility::fast_current_time();
         }
         int64_t io_size = req->get_align_size();
-        ATOMIC_FAS(&device_channel_->used_io_depth_, io_size);
+        ATOMIC_FAS(&device_channel_->used_io_depth_, get_io_depth(io_size));
         const int system_errno = io_events_->get_ith_ret_code(i);
         const int complete_size = io_events_->get_ith_ret_bytes(i);
         if (OB_LIKELY(0 == system_errno)) { // io succ
