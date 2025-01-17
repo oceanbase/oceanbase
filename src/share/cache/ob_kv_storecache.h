@@ -327,18 +327,7 @@ public:
   void reset();
   inline bool is_valid() const { return NULL != mb_handle_; }
   // simulate move obj, use must pay attention
-  inline void move_from(ObKVCacheHandle &other) {
-    reset();
-    mb_handle_ = other.mb_handle_;
-    if (mb_handle_ != nullptr) {
-#ifdef ENABLE_DEBUG_LOG
-      storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::ALL_CACHE);
-      storage::ObStorageLeakChecker::get_instance().handle_reset(&other, storage::ObStorageCheckID::ALL_CACHE);
-#endif
-    }
-    other.mb_handle_ = nullptr;
-    other.reset();
-  }
+  void move_from(ObKVCacheHandle &other);
   inline ObKVMemBlockHandle* get_mb_handle() const { return mb_handle_; }
   inline void set_mb_handle(ObKVMemBlockHandle *mb_handle) { mb_handle_ = mb_handle; }
   TO_STRING_KV(KP_(mb_handle));
@@ -349,6 +338,7 @@ private:
   friend class ObKVCacheIterator;
   friend class storage::ObStorageLeakChecker;
   ObKVMemBlockHandle *mb_handle_;
+  bool is_traced_;
 };
 
 class ObKVCacheIterator
@@ -585,11 +575,6 @@ int ObKVCache<Key, Value>::put(const Key &key, const Value &value, bool overwrit
     if (OB_ENTRY_EXIST != ret) {
       COMMON_LOG(WARN, "Fail to put kv to ObKVGlobalCache, ", K_(cache_id), K(ret));
     }
-  } else {
-#ifdef ENABLE_DEBUG_LOG
-    storage::ObStorageLeakChecker::get_instance().handle_hold(&handle, storage::ObStorageCheckID::ALL_CACHE);
-#endif
-    handle.reset();
   }
   return ret;
 }
@@ -614,9 +599,7 @@ int ObKVCache<Key, Value>::put_and_fetch(
       COMMON_LOG(WARN, "Fail to put kv to ObKVGlobalCache, ", K_(cache_id), K(ret));
     }
   } else {
-#ifdef ENABLE_DEBUG_LOG
     storage::ObStorageLeakChecker::get_instance().handle_hold(&handle, storage::ObStorageCheckID::ALL_CACHE);
-#endif
   }
   return ret;
 }
@@ -637,9 +620,7 @@ int ObKVCache<Key, Value>::get(const Key &key, const Value *&pvalue, ObKVCacheHa
       }
     } else {
       pvalue = reinterpret_cast<const Value*> (value);
-#ifdef ENABLE_DEBUG_LOG
       storage::ObStorageLeakChecker::get_instance().handle_hold(&handle, storage::ObStorageCheckID::ALL_CACHE);
-#endif
     }
   }
   return ret;
@@ -677,9 +658,7 @@ int ObKVCache<Key, Value>::alloc(const uint64_t tenant_id, const int64_t key_siz
           inst_handle))) {
     COMMON_LOG(WARN, "failed to alloc", K(ret));
   } else {
-#ifdef ENABLE_DEBUG_LOG
     storage::ObStorageLeakChecker::get_instance().handle_hold(&handle, storage::ObStorageCheckID::ALL_CACHE);
-#endif
   }
 
   return ret;
@@ -744,9 +723,7 @@ int ObKVCacheIterator::get_next_kvpair(
     key = reinterpret_cast<const Key*>(node.key_);
     value = reinterpret_cast<const Value*>(node.value_);
     handle.mb_handle_ = node.mb_handle_;
-#ifdef ENABLE_DEBUG_LOG
     storage::ObStorageLeakChecker::get_instance().handle_hold(&handle, storage::ObStorageCheckID::ALL_CACHE);
-#endif
   }
   return ret;
 }

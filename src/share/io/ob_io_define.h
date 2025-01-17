@@ -743,6 +743,7 @@ private:
 
 private:
   ObIOResult *result_;
+  bool is_traced_;
 };
 
 struct ObTenantIOConfig final

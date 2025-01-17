@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "storage/ob_storage_leak_checker.h"
 #define USING_LOG_PREFIX COMMON
 
 #include "share/cache/ob_kv_storecache.h"
@@ -30,7 +31,7 @@ using namespace lib;
 namespace common
 {
 ObKVCacheHandle::ObKVCacheHandle()
-  : mb_handle_(NULL)
+  : mb_handle_(NULL), is_traced_(false)
 {
 }
 
@@ -50,9 +51,10 @@ ObKVCacheHandle &ObKVCacheHandle::operator =(const ObKVCacheHandle &other)
   if (&other != this) {
     int ret = OB_SUCCESS;
     if (NULL != mb_handle_) {
-#ifdef ENABLE_DEBUG_LOG
-      storage::ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::ALL_CACHE);
-#endif
+      if (is_traced_) {
+        storage::ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::ALL_CACHE);
+        is_traced_ = false;
+      }
       ObKVGlobalCache::get_instance().revert(mb_handle_);
     }
     mb_handle_ = other.mb_handle_;
@@ -61,20 +63,33 @@ ObKVCacheHandle &ObKVCacheHandle::operator =(const ObKVCacheHandle &other)
         //should not happen
         COMMON_LOG(ERROR, "Fail to add handle ref, ", K(ret));
       }
-#ifdef ENABLE_DEBUG_LOG
-      storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::ALL_CACHE);
-#endif
+      is_traced_ = storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::ALL_CACHE);
     }
   }
   return *this;
 }
 
+void ObKVCacheHandle::move_from(ObKVCacheHandle &other)
+{
+  reset();
+  mb_handle_ = other.mb_handle_;
+  if (mb_handle_ != nullptr) {
+    is_traced_ = storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::ALL_CACHE);
+    if (other.is_traced_) {
+      storage::ObStorageLeakChecker::get_instance().handle_reset(&other, storage::ObStorageCheckID::ALL_CACHE);
+    }
+  }
+  other.mb_handle_ = nullptr;
+  other.reset();
+}
+
 void ObKVCacheHandle::reset()
 {
   if (NULL != mb_handle_) {
-#ifdef ENABLE_DEBUG_LOG
-   storage:: ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::ALL_CACHE);
-#endif
+    if (is_traced_) {
+      storage::ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::ALL_CACHE);
+      is_traced_ = false;
+    }
     ObKVGlobalCache::get_instance().revert(mb_handle_);
     mb_handle_ = NULL;
   }
@@ -237,12 +252,10 @@ int ObKVGlobalCache::init(
     }
     map_once_replace_num_ = min(MAX_MAP_ONCE_REPLACE_NUM, bucket_num / MAP_ONCE_REPLACE_RATIO);
     inited_ = true;
-#ifdef ENABLE_DEBUG_LOG
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(set_storage_leak_check_mod(GCONF._storage_leak_check_mod.str()))) {
       COMMON_LOG(WARN, "[STORAGE-CHECKER] Fail to set check cache name", K(tmp_ret));
     }
-#endif
   }
 
   if (OB_UNLIKELY(!inited_)) {
@@ -946,39 +959,8 @@ int ObKVGlobalCache::sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_
 
 int ObKVGlobalCache::set_storage_leak_check_mod(const char *check_mod)
 {
-  int ret = OB_SUCCESS;
-  int64_t cache_id = INVALID_CACHE_ID;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "[STORAGE-CHECKER] The ObKVGlobalCache has not been inited", K(ret));
-  } else if (OB_UNLIKELY(nullptr == check_mod)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "[STORAGE-CHECKER] Invalid argument", K(ret), KP(check_mod));
-  } else {
-    if (0 == STRNCMP(check_mod, storage::ObStorageLeakChecker::IO_HANDLE_CHECKER_NAME, MAX_CACHE_NAME_LENGTH)) {
-      cache_id = storage::ObStorageCheckID::IO_HANDLE;
-    } else if (0 == STRNCMP(check_mod, storage::ObStorageLeakChecker::ITER_CHECKER_NAME, MAX_CACHE_NAME_LENGTH)) {
-      cache_id = storage::ObStorageCheckID::STORAGE_ITER;
-    } else if (0 == STRNCMP(check_mod, storage::ObStorageLeakChecker::ALL_CACHE_NAME, MAX_CACHE_NAME_LENGTH)) {
-      cache_id = storage::ObStorageCheckID::ALL_CACHE;
-    } else {
-      lib::ObMutexGuard guard(mutex_);
-      for (int64_t i = 0 ; OB_SUCC(ret) && i < cache_num_ ; ++i) {
-        if (configs_[i].is_valid_) {
-          if (0 == STRNCMP(check_mod, configs_[i].cache_name_, MAX_CACHE_NAME_LENGTH)) {
-            cache_id = i;
-            break;
-          }
-        }
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(storage::ObStorageLeakChecker::get_instance().set_check_id( cache_id))) {
-      COMMON_LOG(WARN, "Fail to set cache handle checker cache id", K(ret), K(cache_id));
-    }
-    COMMON_LOG(INFO, "[STORAGE-CHECKER] set checker type details", K(ret), K(cache_id), K(check_mod));
-  }
-  return ret;
+  storage::ObStorageLeakChecker::get_instance().reset();
+  return OB_SUCCESS;
 }
 
 void ObKVGlobalCache::print_all_cache_info()
