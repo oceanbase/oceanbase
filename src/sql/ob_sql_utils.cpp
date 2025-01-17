@@ -494,8 +494,7 @@ int ObSQLUtils::calc_simple_expr_without_row(
     if (OB_FAIL(calc_const_expr(raw_expr, params, result, need_check))) {
       SQL_LOG(WARN, "failed to calc const expr", KPC(raw_expr), K(ret));
     } else { /*do nothing*/ }
-  } else if (OB_FAIL(calc_const_expr(session, *raw_expr, result, allocator, *params,
-    session != NULL ? session->get_cur_exec_ctx() : NULL, force_copy_extend_type))) {
+  } else if (OB_FAIL(calc_const_expr(session, *raw_expr, result, allocator, *params, NULL, force_copy_extend_type))) {
     SQL_LOG(WARN, "Get const_expr value error", KPC(raw_expr), K(ret));
   }
 
