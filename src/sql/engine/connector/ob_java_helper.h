@@ -90,9 +90,11 @@ typedef jint (*DETACHCURRENTTHREAD)(void);
 typedef jint (*DESTROYJNIENV)(void);
 
 // desclare function
-extern "C" GETJNIENV getJNIEnv = NULL;
-extern "C" DETACHCURRENTTHREAD detachCurrentThread = NULL;
-extern "C" DESTROYJNIENV destroyJNIEnv = NULL;
+extern "C" {
+  static GETJNIENV getJNIEnv = NULL;
+  static DETACHCURRENTTHREAD detachCurrentThread = NULL;
+  static DESTROYJNIENV destroyJNIEnv = NULL;
+}
 
 namespace oceanbase
 {

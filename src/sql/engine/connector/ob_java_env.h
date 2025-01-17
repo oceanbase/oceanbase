@@ -17,6 +17,8 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
 #include "lib/lock/ob_mutex.h"
+#include "lib/lock/ob_rwlock.h"
+#include "lib/allocator/page_arena.h"
 
 namespace oceanbase
 {

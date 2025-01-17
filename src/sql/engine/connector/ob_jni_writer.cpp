@@ -14,6 +14,7 @@
 
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/string/ob_sql_string.h"
 
 #include "ob_java_helper.h"
 #include "ob_jni_writer.h"

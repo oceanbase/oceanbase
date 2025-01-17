@@ -19,6 +19,7 @@
 #include "observer/ob_server_struct.h" // GCTX
 #include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 #include "share/ls/ob_ls_status_operator.h" // ObLSStatus
+#include "share/ob_all_server_tracer.h"
 
 namespace oceanbase
 {

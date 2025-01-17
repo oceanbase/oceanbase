@@ -21,6 +21,7 @@
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/engine/connector/ob_jni_scanner.h"
 #include "sql/engine/connector/ob_jni_writer.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
 
 namespace oceanbase
 {

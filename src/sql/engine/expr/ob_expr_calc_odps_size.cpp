@@ -14,6 +14,7 @@
 #include "sql/engine/table/ob_odps_table_row_iter.h"
 #include "sql/engine/expr/ob_expr_calc_odps_size.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/table/ob_odps_jni_table_row_iter.h"
 
 namespace oceanbase
 {

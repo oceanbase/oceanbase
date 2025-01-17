@@ -23,6 +23,7 @@
 #include "lib/compress/zstd_1_3_8/ob_zstd_wrapper.h"
 #include "lib/compress/ob_compress_util.h"
 #include "share/table/ob_table_load_define.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

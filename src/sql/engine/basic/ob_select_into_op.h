@@ -19,6 +19,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#include "sql/engine/table/ob_odps_jni_table_row_iter.h"
 
 #ifdef OB_BUILD_CPP_ODPS
 #include <odps/odps_tunnel.h>

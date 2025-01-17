@@ -35,6 +35,7 @@
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/connector/ob_java_env.h"
+#include "sql/engine/table/ob_odps_jni_table_row_iter.h"
 
 #include <arrow/c/bridge.h>
 #include <arrow/array.h>

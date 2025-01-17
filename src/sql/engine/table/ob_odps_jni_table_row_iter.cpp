@@ -19,7 +19,7 @@
 #include "sql/engine/connector/ob_java_env.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "lib/charset/ob_charset.h"
-
+#include "sql/engine/expr/ob_datum_cast.h"
 
 namespace oceanbase
 {

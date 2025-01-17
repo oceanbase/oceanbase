@@ -26,6 +26,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {

@@ -132,7 +132,7 @@ public:
       ObMySQLTransaction &trans);
   static int lock_table_in_trans(
       const ObTableSchema &table_schema,
-      const ObTableLockMode lock_mode,
+      const transaction::tablelock::ObTableLockMode lock_mode,
       ObMySQLTransaction &trans);
 
 private:
