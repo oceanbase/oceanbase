@@ -187,9 +187,13 @@ public:
   static int split_parallel_into_task(const int64_t parallelism,
                                       const common::ObIArray<int64_t> &sqc_partition_count,
                                       common::ObIArray<int64_t> &results);
-  static int build_tablet_idx_map(
-      const share::schema::ObTableSchema *table_schema,
-      ObTabletIdxMap &idx_map);
+  
+  static int split_parallel_into_task_by_cpu_usage(const int64_t parallelism,
+                                      const common::ObIArray<int64_t> &sqc_partition_count,
+                                      const common::ObIArray<double> &cpu_usage,
+                                      common::ObIArray<int64_t> &results);
+  static int build_tablet_idx_map(const share::schema::ObTableSchema *table_schema,
+                                  ObTabletIdxMap &idx_map);
   static int find_dml_ops(common::ObIArray<const ObTableModifySpec *> &insert_ops,
                           const ObOpSpec &op);
   static int get_external_table_loc(
@@ -271,10 +275,9 @@ private:
     const ObOpSpec *phy_op,
     bool &asc_order);
 
-
-  static int adjust_sqc_task_count(common::ObIArray<ObPxSqcTaskCountMeta> &sqc_tasks,
-                                   int64_t parallel,
-                                   int64_t partition);
+  static int adjust_sqc_task_count_by_cpu_usage(common::ObIArray<ObPxSqcTaskCountMeta> &sqc_tasks,
+                                         const common::ObIArray<double> &sqc_weight, int64_t parallel,
+                                         int64_t partition);
   static int do_random_dfo_distribution(const common::ObIArray<common::ObAddr> &src_addrs,
                                         int64_t dst_addrs_count,
                                         common::ObIArray<common::ObAddr> &dst_addrs);
@@ -286,6 +289,21 @@ private:
                                           int64_t parallel);
 private:
   static int generate_dh_map_info(ObDfo &dfo);
+
+  // allocate the sqc task count based on the weights provided by the weight_provider
+  template <typename Func, typename... Args>
+  static int adjust_sqc_task_count_by_weight(common::ObIArray<ObPxSqcTaskCountMeta> &sqc_tasks,
+                                             int64_t parallel, int64_t partition,
+                                             Func weight_provider, Args &&...args);
+
+  // splits the parallism based on provided weights
+  template <typename Func, typename... Args>
+  static int split_parallel_into_task_by_weight(
+    const int64_t parallelism, const common::ObIArray<int64_t> &sqc_partition_count,
+    common::ObIArray<int64_t> &results, Func weight_provider, Args &&...args);
+  static int collect_cpu_usage_info(const uint64_t tenant_id, const ObArray<ObAddr> &addrs,
+                                    ObArray<double> &cpu_usage);
+  static int check_load_balance(const ObArray<double> &cpu_usage, bool &do_load_balance);
   DISALLOW_COPY_AND_ASSIGN(ObPXServerAddrUtil);
 };
 

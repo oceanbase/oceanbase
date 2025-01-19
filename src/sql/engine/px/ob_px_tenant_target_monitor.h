@@ -47,9 +47,10 @@ struct ObPxTargetInfo
   int64_t peer_target_used_;
   int64_t local_target_used_;
   int64_t local_parallel_session_count_;
+  double peer_cpu_usage_;
   TO_STRING_KV(K_(server), K_(tenant_id), K_(is_leader), K_(version), K_(peer_server),
                K_(parallel_servers_target), K_(peer_target_used), K_(local_target_used),
-               K_(local_parallel_session_count));
+               K_(local_parallel_session_count), K_(peer_cpu_usage));
 };
 
 struct ServerTargetUsage {
@@ -58,7 +59,8 @@ public:
   ServerTargetUsage() :
       peer_target_used_(0),
       local_target_used_(0),
-      report_target_used_(0) {}
+      report_target_used_(0),
+      peer_cpu_usage_(0.) {}
 public:
   void set_peer_used(int64_t peer_used) { peer_target_used_ = peer_used; }
   void update_peer_used(int64_t peer_used) { peer_target_used_ += peer_used; }
@@ -71,8 +73,15 @@ public:
   void set_report_used(int64_t report_used) { report_target_used_ = report_used; }
   void update_report_used(int64_t report_used) { report_target_used_ += report_used; }
   int64_t get_report_used() const { return report_target_used_; }
+  void set_peer_cpu_usage(double cpu_usage) { peer_cpu_usage_ = cpu_usage; }
+  void update_peer_cpu_usage(double cpu_usage)
+  {
+    // use exponentially weighted averages to update the cpu usage
+    peer_cpu_usage_ = beta_ * cpu_usage + (1 - beta_) * peer_cpu_usage_;
+  }
+  double get_peer_cpu_usage() const { return peer_cpu_usage_; }
 
-  TO_STRING_KV(K_(peer_target_used), K_(local_target_used), K_(report_target_used));
+  TO_STRING_KV(K_(peer_target_used), K_(local_target_used), K_(report_target_used), K_(peer_cpu_usage));
 private:
   // 理解重点：
   // 各个 follower 都会向 leader 汇报本机对各个机器的 target 消耗，这个消耗都是本机局部视角。leader
@@ -87,6 +96,8 @@ private:
   int64_t peer_target_used_;     // leader 视角的数据：各个 follower 汇报上来的 target 使用量汇总成 peer_target_used_
   int64_t local_target_used_;    // follower 视角数据：本地记录的资源消耗数量，这个量里面可能有部分尚未汇报给 leader
   int64_t report_target_used_;   // follower 视角数据：已经上报给 leader 的数量，使得 leader 汇总后能有一个尽量精确的全局视图
+  double peer_cpu_usage_; // leader's perspective: the cpu usage percent of the follower [0.0, 100.0]
+  constexpr const static double beta_ = 0.9; // the parameter in exponentially weighted average
 
   // 注意：本地记录的资源消耗(local_target_used_)来源与 ObPxSubAdmission 中申请的任何内容无关，仅被下面的过程改变：
   //  - Query 通过 ObPxAdmission 申请、释放
@@ -127,7 +138,9 @@ public:
   int refresh_statistics(bool need_refresh_all);
   bool is_leader();
   uint64_t get_version();
-  int update_peer_target_used(const ObAddr &server, int64_t peer_used, uint64_t version);
+  // peer_used is the incremental value for leader and realtime value for follower
+  // cpu_percent is negative when invalid
+  int update_peer_target_used(const ObAddr &server, int64_t peer_used, double cpu_percent, uint64_t version);
   int get_global_target_usage(const hash::ObHashMap<ObAddr, ServerTargetUsage> *&global_target_usage);
   // if role is follower and find that its version is different with leader's
   // call this function to reset statistics, the param version is from the leader.
