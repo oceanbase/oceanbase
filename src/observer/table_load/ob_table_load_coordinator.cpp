@@ -319,12 +319,15 @@ int ObTableLoadCoordinator::calc_session_count(
 
   // 第一次遍历如果不能分配完所有的线程，继续给每个节点平均分配剩余的线程，直到所有的线程都被分配完
   if (OB_SUCC(ret)) {
-    while (remain_session_count > 0) {
+    bool need_break = false;
+    while (remain_session_count > 0 && !need_break) {
+      need_break = true;
       for (int64_t i = 0; remain_session_count > 0 && i < store_server_count; i++) {
         ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
         if (unit.thread_count_ < limit_session_count) {
           unit.thread_count_++;
           remain_session_count--;
+          need_break = false;
         }
       }
     }
