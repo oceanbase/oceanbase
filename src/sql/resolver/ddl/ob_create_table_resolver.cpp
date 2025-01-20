@@ -3535,7 +3535,8 @@ int ObCreateTableResolver::add_inner_index_for_heap_gtt() {
         } else {
           if (!column->is_rowkey_column()
               && column->get_column_id() != OB_HIDDEN_SESSION_ID_COLUMN_ID
-              && column->get_column_id() != OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID) {
+              && column->get_column_id() != OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID
+              && !column->is_generated_column()) {
             ObString column_name = column->get_column_name_str();
             bool has_invalid_types = false;
             if (OB_FAIL(add_storing_column(column_name,
