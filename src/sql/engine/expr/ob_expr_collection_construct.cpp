@@ -351,7 +351,8 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
         tmp_ret = exec_ctx.get_pl_ctx()->add(result);
       }
       if (OB_SUCCESS != tmp_ret) {
-        LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+        int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
+        LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
       }
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
