@@ -692,7 +692,7 @@ int ObPartitionMajorMerger::merge_partition(
     }
     if (OB_ITER_END != ret || OB_FAIL(merge_helper.check_iter_end())) { //verify merge end
       STORAGE_LOG(WARN, "Partition merge did not end normally", K(ret));
-      if (GCONF._enable_compaction_diagnose) {
+      if (OB_ALLOCATE_MEMORY_FAILED != ret && GCONF._enable_compaction_diagnose) {
         ObPartitionMergeDumper::print_error_info(ret, merge_helper.get_merge_iters(), *merge_ctx_);
         macro_writer_->dump_block_and_writer_buffer();
       }
@@ -1171,7 +1171,7 @@ int ObPartitionMinorMerger::merge_partition(
     } // end of while
     if (OB_ITER_END != ret || OB_FAIL(merge_helper.check_iter_end())) {
       STORAGE_LOG(WARN, "Partition merge did not end normally", K(ret));
-      if (GCONF._enable_compaction_diagnose) {
+      if (OB_ALLOCATE_MEMORY_FAILED != ret && GCONF._enable_compaction_diagnose) {
         ObPartitionMergeDumper::print_error_info(ret, merge_helper.get_merge_iters(), *merge_ctx_);
         macro_writer_->dump_block_and_writer_buffer();
       }

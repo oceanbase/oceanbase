@@ -1652,10 +1652,14 @@ void ObMacroBlockWriter::dump_micro_block(ObIMicroBlockWriter &micro_writer)
   char *buf = NULL;
   int64_t size = 0;
   if (micro_writer.get_row_count() > 0) {
-    if (OB_FAIL(micro_writer.build_block(buf, size))) {
-      STORAGE_LOG(WARN, "failed to build micro block", K(ret));
-    } else if (OB_FAIL(micro_helper_.dump_micro_block_writer_buffer(buf, size))) {
-      STORAGE_LOG(WARN, "failed to dump micro block", K(ret));
+    if (data_store_desc_->encoding_enabled()) {
+      micro_writer.dump_diagnose_info();
+    } else {
+      if (OB_FAIL(micro_writer.build_block(buf, size))) {
+        STORAGE_LOG(WARN, "failed to build micro block", K(ret));
+      } else if (OB_FAIL(micro_helper_.dump_micro_block_writer_buffer(buf, size))) {
+        STORAGE_LOG(WARN, "failed to dump micro block", K(ret));
+      }
     }
   }
   return;
