@@ -1742,7 +1742,7 @@ int ObService::do_migrate_ls_replica(const obrpc::ObLSMigrateReplicaArg &arg)
       migration_op_arg.data_src_ = arg.force_data_source_;
       migration_op_arg.dst_ = arg.dst_;
       migration_op_arg.ls_id_ = arg.ls_id_;
-      //TODO(muwei.ym) need check priority
+      //TODO(muwei.ym) need check priority in 4.3
       migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
       migration_op_arg.paxos_replica_number_ = arg.paxos_replica_number_;
       migration_op_arg.src_ = arg.src_;
@@ -1791,7 +1791,7 @@ int ObService::do_add_ls_replica(const obrpc::ObLSAddReplicaArg &arg)
       migration_op_arg.data_src_ = arg.force_data_source_;
       migration_op_arg.dst_ = arg.dst_;
       migration_op_arg.ls_id_ = arg.ls_id_;
-      //TODO(muwei.ym) need check priority
+      //TODO(muwei.ym) need check priority in 4.3
       migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
       migration_op_arg.paxos_replica_number_ = arg.new_paxos_replica_number_;
       // for add tasks, the src_ field is useless, but must be valid

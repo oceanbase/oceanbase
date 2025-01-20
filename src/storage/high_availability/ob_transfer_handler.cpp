@@ -1402,7 +1402,7 @@ int ObTransferHandler::get_abort_trans_timeout_(
     int64_t &stmt_timeout)
 {
   int ret = OB_SUCCESS;
-  //TODO(muwei.ym) using tenant config to set abort trans timeout
+  //TODO(muwei.ym) using tenant config to set abort trans timeout in 4.3
   stmt_timeout = 10_s;
   return ret;
 }
@@ -1836,7 +1836,7 @@ int ObTransferHandler::wait_ls_replay_event_(
     }
 
     if (OB_FAIL(ret)) {
-      //TODO(muwei.ym) check need retry in 4.2 RC3
+      //TODO(muwei.ym) check need retry in 4.3
     }
     ob_usleep(OB_CHECK_START_SCN_READY_INTERVAL);
   }

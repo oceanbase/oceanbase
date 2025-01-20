@@ -2296,7 +2296,6 @@ int ObTabletTableStore::combine_ha_minor_sstables_(
   }
 
   if (OB_SUCC(ret)) {
-    //TODO(muwei.ym) remove compare with clog checkpoint scn in 4.2 RC3
     if (tmp_minor_sstables.empty()) {
       //do nothing
     } else if (OB_FAIL(ObTableStoreUtil::sort_minor_tables(tmp_minor_sstables))) {
@@ -2406,7 +2405,6 @@ int ObTabletTableStore::build_ha_minor_tables_(
   return ret;
 }
 
-//TODO (muwei.ym) temporay fix in 430 for transfer
 int ObTabletTableStore::get_mini_minor_sstables_(ObTableStoreIterator &iter) const
 {
   int ret = OB_SUCCESS;

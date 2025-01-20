@@ -3452,7 +3452,7 @@ int ObCheckTransferInTabletAbortDelegate::process()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls should not be NULL", KR(ret), K(arg_), KP(ls));
     } else {
-      //TODO(muwei.ym) check dest ls replay scn
+      //TODO(muwei.ym) check dest ls replay scn in 4.3
       bool is_aborted = true;
       for (int64_t i = 0; OB_SUCC(ret) && i < arg_.tablet_list_.count(); ++i) {
         bool has_transfer_table = false;

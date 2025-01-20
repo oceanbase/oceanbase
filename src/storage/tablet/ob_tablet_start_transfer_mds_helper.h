@@ -174,7 +174,6 @@ private:
       const ObMigrationTabletParam &tablet_meta,
       const bool for_replay,
       ObLS *dest_ls);
-  // TODO:(muwei) donot pass parameter 'for_replay'
   static int check_transfer_src_tablets_(
       const share::SCN &scn,
       const bool for_replay,

@@ -1666,7 +1666,6 @@ int ObTabletRebuildMajorTask::build_copy_table_key_info_()
     rpc_arg.tablet_id_ = copy_tablet_ctx_->tablet_id_;
     rpc_arg.dest_major_sstable_snapshot_ = local_max_major_snapshot;
     rpc_arg.version_ = server_version;
-    //TODO(muwei.ym) COSSTable should using iterator
     if (OB_FAIL(reader.init(ctx_->src_, rpc_arg, *svr_rpc_proxy_, *bandwidth_throttle_))) {
       LOG_WARN("failed to init rebuild tablet sstable info reader", K(ret));
     } else if (OB_FAIL(reader.get_next_tablet_sstable_header(copy_tablet_ctx_->copy_header_))) {

@@ -779,7 +779,7 @@ int ObStartPrepareMigrationTask::process()
   } else if (OB_FAIL(wait_transfer_tablets_ready_())) {
     LOG_WARN("failed to wait transfer tablets ready", K(ret), KPC(ctx_));
   }
-  //TODO(muwei.ym) delete it in 4.2 RC3
+  //TODO(muwei.ym) delete it in 4.3
   /*
    else if (OB_FAIL(remove_local_incomplete_tablets_())) {
     LOG_WARN("failed to remove local incomplete tablets", K(ret), KPC(ctx_));
