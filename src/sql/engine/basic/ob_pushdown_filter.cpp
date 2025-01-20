@@ -1941,10 +1941,11 @@ int ObWhiteFilterExecutor::init_compare_eval_datums(bool &is_valid)
           }
         } else if (OB_FAIL(datum_params_.push_back(*datum))) {
           LOG_WARN("Failed to push back datum", K(ret));
-        } else if (is_null_param(*datum, param_obj_meta)) {
-          null_param_contained_ = true;
         } else {
           param_obj_meta = filter_.expr_->args_[i]->obj_meta_;
+          if (is_null_param(*datum, param_obj_meta)) {
+            null_param_contained_ = true;
+          }
         }
       }
     }
