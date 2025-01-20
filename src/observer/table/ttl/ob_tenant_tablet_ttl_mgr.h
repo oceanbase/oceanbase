@@ -72,7 +72,9 @@ class OBTTLTimerPeriodicTask : public common::ObTimerTask {
 public:
   OBTTLTimerPeriodicTask(ObTabletTTLScheduler &tablet_ttl_mgr)
   : tablet_ttl_mgr_(tablet_ttl_mgr)
-  {}
+  {
+    disable_timeout_check();
+  }
   virtual ~OBTTLTimerPeriodicTask() {}
   virtual void runTimerTask() override;
 private:

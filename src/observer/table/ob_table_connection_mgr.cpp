@@ -135,6 +135,9 @@ int ObTableConnectionMgr::update_table_connection(const rpc::ObRequest *req, int
   if (OB_ISNULL(req)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null request", K(ret));
+  } else if (!common::is_valid_tenant_id(tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid tenant id", K(ret), K(tenant_id));
   } else {
     const ObAddr &client_addr = RPC_REQ_OP.get_peer(req);
     if (OB_FAIL(update_table_connection(client_addr, tenant_id, database_id, user_id))) {
