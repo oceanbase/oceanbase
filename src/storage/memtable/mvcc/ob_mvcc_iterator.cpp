@@ -273,14 +273,28 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
         if (OB_FAIL(try_cleanout_tx_node_(iter))) {
           TRANS_LOG(WARN, "cleanout tx state failed", K(ret), KPC(value_), KPC(iter));
         }
-        // NB: We rely on the row_scn and state on the tx node if we really can
-        // read from the tx node. So if the tx node is not cleanout, we must
+        // Tip1: We rely on the row_scn and state on the tx node if we really
+        // can read from the tx node. So if the tx node is not cleanout, we must
         // wait until the tx node is written back its state.
         if (0 == (++counter) % 10000
             && REACH_TIME_INTERVAL(1_s)) {
           TRANS_LOG(WARN, "waiting for the iter to be cleanout", K(ret),
                     KPC(iter), K(lock_for_read_arg), KPC(value_), KPC(ctx_));
         }
+
+        // Tip2: In the transfer scenario, the tx_table and data at the src and
+        // dest are independent. Therefore, it is possible to use the src's data
+        // with the dest's tx_table. In the case, when reading from the standby,
+        // the tx_data may have already been updated while the data cannot be
+        // cleanout. Thus, it is necessary to detect and avoid such situations.
+        if (1 == counter % 10000
+            && !MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+          ctx_->is_standby_read_ = true;
+          TRANS_LOG(WARN, "encounter standyby read with uncleanout data", K(ret),
+                    KPC(iter), K(lock_for_read_arg), KPC(value_), KPC(ctx_));
+
+        }
+
         usleep(10); // 10us
       }
       version_iter_ = iter;
