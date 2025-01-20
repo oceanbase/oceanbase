@@ -1511,7 +1511,8 @@ int ObTransformSimplifyGroupby::transform_const_aggr(ObDMLStmt *stmt, bool &tran
     //from dual
   } else if (select_stmt->is_single_table_stmt()
              && OB_NOT_NULL(table = select_stmt->get_table_item(0))
-             && table->is_generated_table()) {
+             && table->is_generated_table()
+             && select_stmt->get_condition_size() == 0) {
     ObSelectStmt *ref_query = NULL;
     if (OB_ISNULL(ref_query = table->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
