@@ -5871,6 +5871,14 @@ int ObDDLResolver::resolve_part_func(ObResolverParams &params,
     }
   }
   if (OB_SUCC(ret)) {
+    bool is_h_t = false;
+    if (OB_FAIL(table_schema.is_hbase_table(is_h_t))) {
+      LOG_WARN("failed to check is hbase table", K(ret));
+    } else if (is_h_t && OB_FAIL(verify_hbase_table_part_keys(partition_keys))) {
+      LOG_WARN("failed to verify hbase table part keys", K(ret), K(table_schema.get_partition_key_info()));
+    }
+  }
+  if (OB_SUCC(ret)) {
     //check duplicate of PARTITION_FUNC_TYPE_RANGE_COLUMNS
     /* because key range has checked as sys(c1,c1) before, so here key is no need check */
     if (OB_SUCC(ret)) {
@@ -6214,6 +6222,29 @@ int ObDDLResolver::check_partition_name_duplicate(ParseNode *node, bool is_oracl
   return ret;
 }
 
+int ObDDLResolver::verify_hbase_table_part_keys(const ObIArray<ObString> &part_keys)
+{
+  int ret = OB_SUCCESS;
+  if (part_keys.count() != 1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("the number of partition keys of range partitioned hbase table can only be 1", K(ret), K(part_keys));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "settting the number of partition keys of hbase table other than 1 is");
+  } else {
+    const ObString &col_name = part_keys.at(0);
+    const char* K_COLUMN = "K";
+    ObCompareNameWithTenantID name_cmp;
+
+    if (OB_ISNULL(col_name.ptr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("col_name ptr should not be null", K(ret));
+    } else if (OB_UNLIKELY(0 != strcmp(col_name.ptr(), K_COLUMN))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("the partition key column of the hbase table can only be K column", K(ret), K(part_keys));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "settting the partition key column of the hbase other than K column is");
+    }
+  }
+  return ret;
+}
 
 int ObDDLResolver::resolve_collection_column(const ParseNode *type_node, ObColumnSchemaV2 &column)
 {

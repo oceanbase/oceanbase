@@ -1811,6 +1811,7 @@ public:
 
   int get_fk_check_index_tid(ObSchemaGetterGuard &schema_guard, const common::ObIArray<uint64_t> &parent_column_ids, uint64_t &scan_index_tid) const;
   int check_rowkey_column(const common::ObIArray<uint64_t> &parent_column_ids, bool &is_rowkey) const;
+  int is_hbase_table(bool &is_h_table) const;
 
   // trigger
   inline const common::ObIArray<uint64_t> &get_trigger_list() const
