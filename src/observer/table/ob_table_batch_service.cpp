@@ -225,7 +225,6 @@ int ObTableBatchService::get_result_index(
   for (int64_t i = 0; i < ops.count() && OB_SUCC(ret); i++) {
     const ObITableEntity &entity = ops.at(i).entity();
     ObRowkey entity_rowkey = entity.get_rowkey();
-    ObRowkey row_rowkey(row.cells_, entity_rowkey.get_obj_cnt());
     bool equal = false;
     if (OB_FAIL(row_rowkey.equal(entity_rowkey, equal))) {
       LOG_WARN("fail to compare rowkey", K(row_rowkey), K(entity_rowkey));
