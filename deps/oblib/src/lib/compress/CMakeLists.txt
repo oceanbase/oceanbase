@@ -21,6 +21,13 @@ oblib_add_library(compress
   zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.cpp
   zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.h)
 
+if (CPP_STANDARD_20)
+  target_compile_options(compress
+    PRIVATE
+    -Wno-deprecated-non-prototype
+  )
+endif()
+
 add_subdirectory(zstd)
 add_subdirectory(zstd_1_3_8)
 add_subdirectory(lz4)

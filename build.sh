@@ -20,6 +20,8 @@ ASAN_OPTION=ON
 ONLY_BUILD_CDC=OFF
 STATIC_LINK_LGPL_DEPS_OPTION=ON
 ENABLE_BOLT_OPTION=ON
+CPP_STANDARD_OPTION=11
+CPP_STANDARD_20_OPTION=OFF
 
 echo "$0 ${ALL_ARGS[@]}"
 
@@ -68,6 +70,10 @@ function parse_args
         then
           ONLY_BUILD_CDC=ON
           BUILD_ARGS+=("$i")
+        elif [[ "$i" == "-DCPP_STANDARD_20=ON" ]]
+        then
+            CPP_STANDARD_OPTION=20
+            CPP_STANDARD_20_OPTION=ON
         elif [[ $NEED_MAKE == false ]]
         then
             BUILD_ARGS+=("$i")
@@ -110,6 +116,7 @@ function prepare_build_dir
 # dep_create
 function do_init
 {
+    export CPP_STANDARD=${CPP_STANDARD_OPTION}
     time1_ms=$(echo $[$(date +%s%N)/1000000])
     (cd $TOPDIR/deps/init && bash dep_create.sh)
     if [ $? -ne 0 ]; then
@@ -135,7 +142,7 @@ function do_build
 
     TYPE=$1; shift
     prepare_build_dir $TYPE || return
-    ${CMAKE_COMMAND} ${TOPDIR} "$@"
+    ${CMAKE_COMMAND} ${TOPDIR} "$@" -DCPP_STANDARD_20=$CPP_STANDARD_20_OPTION
     if [ $? -ne 0 ]; then
       echo_err "Failed to generate Makefile"
       exit 1

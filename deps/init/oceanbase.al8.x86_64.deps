@@ -41,7 +41,8 @@ obdevtools-ccache-3.7.12-52024092621.al8.x86_64.rpm
 obdevtools-cmake-3.22.1-122024092710.al8.x86_64.rpm
 obdevtools-flex-2.5.35-42024092621.al8.x86_64.rpm
 obdevtools-gcc9-9.3.0-152024092711.al8.x86_64.rpm
-obdevtools-llvm-11.0.1-662024092811.al8.x86_64.rpm
+obdevtools-llvm-11.0.1-312022092921.el8.x86_64.rpm cpp_standard=11
+obdevtools-llvm-17.0.3-232024111415.el8.x86_64.rpm cpp_standard=20
 
 [tools-deps]
 devdeps-oblogmsg-1.1-122024093010.al8.x86_64.rpm

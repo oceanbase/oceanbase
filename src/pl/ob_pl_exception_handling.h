@@ -15,10 +15,14 @@
 
 #include "ob_pl_stmt.h"
 
+#ifdef CPP_STANDARD_20
+#include "lib/clang/17/include/unwind.h"
+#else
 #if defined(__powerpc64__)
 #include "lib/clang/11.1.0/include/unwind.h" //use clang 11.1.0 other than 11.0.1 on Power ppc64le
 #else
 #include "lib/clang/11.0.1/include/unwind.h"
+#endif
 #endif
 
 namespace oceanbase

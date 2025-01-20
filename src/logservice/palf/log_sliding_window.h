@@ -69,7 +69,7 @@ enum FetchTriggerType
 
 inline const char *fetch_trigger_type_2_str(const FetchTriggerType type)
 {
-#define EXTRACT_TRIGGER_TYPE(type_var) ({ case(type_var): return #type_var; })
+#define EXTRACT_TRIGGER_TYPE(type_var) case(type_var): return #type_var
   switch(type)
   {
     EXTRACT_TRIGGER_TYPE(LOG_LOOP_TH);
@@ -97,7 +97,7 @@ enum TruncateType
 
 inline const char *truncate_type_2_str(const TruncateType type)
 {
-#define EXTRACT_TRUNCATE_TYPE(type_var) ({ case(type_var): return #type_var; })
+#define EXTRACT_TRUNCATE_TYPE(type_var) case(type_var): return #type_var
   switch(type)
   {
     EXTRACT_TRUNCATE_TYPE(INVALID_TRUNCATE_TYPE);
@@ -118,7 +118,7 @@ enum FreezeMode
 
 inline const char *freeze_mode_2_str(const FreezeMode mode)
 {
-#define EXTRACT_FREEZE_MODE(type_var) ({ case(type_var): return #type_var; })
+#define EXTRACT_FREEZE_MODE(type_var) case(type_var): return #type_var
   switch(mode)
   {
     EXTRACT_FREEZE_MODE(PERIOD_FREEZE_MODE);

@@ -38,6 +38,9 @@ endif()
 if (OB_USE_CLANG)
   set(EASY_CC_WNO -fno-strict-aliasing -Wno-unused-variable -Wno-unused-function -fmax-type-align=8
   -Wno-tautological-constant-out-of-range-compare -fno-omit-frame-pointer)
+  if(CPP_STANDARD_20)
+    set(EASY_CC_WNO ${EASY_CC_WNO} -Wno-unused-but-set-variable)
+  endif()
 else()
   set(EASY_CC_WNO -fno-strict-aliasing -Wno-unused-variable -Wno-implicit-function-declaration 
   -Wno-unused-but-set-variable -Wno-unused-function -fno-omit-frame-pointer)

@@ -100,9 +100,7 @@ endif()
 
 if (OB_USE_CLANG)
   # The following clang warnings should be fixed later: -Wno-unused-variable -Wno-invalid-offsetof
-  target_compile_options(oblib_base_base_base
-    INTERFACE
-    -fno-strict-aliasing -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
+  set(OBLIB_COMPILE_DEFINITIONS -fno-strict-aliasing -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
     -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D_NO_EXCEPTION -DTSI_STATIC_SUM
     -DOCI_LINK_RUNTIME
     -Wall -Wextra -Wformat -Werror
@@ -116,6 +114,18 @@ if (OB_USE_CLANG)
     -Wno-self-assign -Wno-inconsistent-missing-override -Wno-mismatched-tags -Wno-unused-variable
     -Wno-invalid-offsetof -Wno-unevaluated-expression -Wno-constant-logical-operand>
     $<$<COMPILE_LANGUAGE:C>:-Wno-unused-parameter>)
+  if (CPP_STANDARD_20)
+    set(OBLIB_COMPILE_DEFINITIONS ${OBLIB_COMPILE_DEFINITIONS}
+        -Wno-unused-but-set-variable -Wno-null-pointer-subtraction -Wno-compound-token-split-by-macro
+        -Wno-packed-non-pod -Wno-format -Wno-shorten-64-to-32 -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
+        -Wno-enum-constexpr-conversion -Wno-covered-switch-default
+        -Wno-bitwise-instead-of-logical -Wno-suggest-override -Wno-non-virtual-dtor -Wno-cast-qual
+        -Wno-unused-value -Wno-macro-redefined -Wno-reinterpret-base-class -Wno-register
+        -Wno-implicit-fallthrough -Wno-deprecated-non-prototype
+        -Wno-ambiguous-reversed-operator -Wno-invalid-partial-specialization
+        -Wno-string-concatenation)
+  endif()
+  target_compile_options(oblib_base_base_base INTERFACE ${OBLIB_COMPILE_DEFINITIONS})
   if (ENABLE_SANITY)
     target_compile_options(oblib_base_base
       INTERFACE
@@ -245,7 +255,9 @@ endif()
 target_link_libraries(oblib_base_base INTERFACE oblib_base_base_base)
 
 add_library(oblib_base INTERFACE)
-target_compile_options(oblib_base INTERFACE -D_GLIBCXX_USE_CXX11_ABI=0)
+if(NOT CPP_STANDARD_20)
+  target_compile_options(oblib_base INTERFACE -D_GLIBCXX_USE_CXX11_ABI=0)
+endif()
 target_link_libraries(oblib_base INTERFACE oblib_base_base)
 
 function(oblib_add_library target)

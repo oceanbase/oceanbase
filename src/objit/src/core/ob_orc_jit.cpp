@@ -31,7 +31,6 @@
 #include "llvm/ExecutionEngine/RuntimeDyld.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
-#include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Mangler.h"
 #include "llvm/IR/Verifier.h"
@@ -44,6 +43,11 @@
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 
 #include "core/ob_pl_ir_compiler.h"
+#ifdef CPP_STANDARD_20
+#include "llvm/ExecutionEngine/JITSymbol.h"
+#else
+#include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
+#endif
 
 using namespace llvm;
 using namespace llvm::orc;
@@ -166,7 +170,11 @@ int ObOrcJit::lookup(const std::string &name, ObJITSymbol &symbol)
         "name", name.c_str(),
         "msg", msg.c_str());
     } else {
+#ifdef CPP_STANDARD_20
+      symbol = JITEvaluatedSymbol(value->getValue(), JITSymbolFlags::Exported);
+#else
       symbol = *value;
+#endif
     }
   }
 
@@ -202,7 +210,11 @@ int ObOrcJit::get_function_address(const std::string &name, uint64_t &addr)
 }
 
 void ObNotifyLoaded::notifyObjectLoaded(
+#ifdef CPP_STANDARD_20
+  ObJitEventListener::ObjectKey Key,
+#else
   ObVModuleKey Key,
+#endif
   const object::ObjectFile &Obj,
   const RuntimeDyld::LoadedObjectInfo &Info)
 {
@@ -263,7 +275,11 @@ int ObOrcJit::set_optimize_level(ObPLOptLevel level)
 
   if (OB_SUCC(ret) && level == ObPLOptLevel::O0) {
     auto &tm_builder = ObEngineBuilder.getJITTargetMachineBuilder();
+#ifdef CPP_STANDARD_20
+    if (!tm_builder.has_value()) {
+#else
     if (!tm_builder.hasValue()) {
+#endif
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected NULL JITTargetMachineBuilder", K(ret), K(lbt()));
     } else {

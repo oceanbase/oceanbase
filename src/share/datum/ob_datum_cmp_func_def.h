@@ -132,7 +132,7 @@ struct ObDatumTCCmp<ObFloatTC, ObFloatTC> : public ObDefined<>
 template <ObScale SCALE>
 struct ObFixedDoubleCmp: public ObDefined<>
 {
-  constexpr static double LOG_10[] =
+  constexpr static double LOG_10[32] =
   {
     1e000, 1e001, 1e002, 1e003, 1e004, 1e005, 1e006, 1e007,
     1e008, 1e009, 1e010, 1e011, 1e012, 1e013, 1e014, 1e015,

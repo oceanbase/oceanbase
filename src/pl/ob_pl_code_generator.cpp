@@ -6220,7 +6220,11 @@ int ObPLCodeGenerator::generate_debug(const ObString &name, ObLLVMValue &value)
   OZ (args.push_back(str));
   OZ (args.push_back(len));
   OZ (args.push_back(value));
+#ifdef CPP_STANDARD_20
+  if (helper_.get_integer_type_id() == value.get_type_id()) {
+#else
   if (12 == value.get_type_id()) { //12 is IntegerTyID
+#endif
     switch (value.get_type().get_width()) {
       case 8: {
         OZ (helper_.create_call(ObString("debug"), get_eh_service().eh_debug_int8_, args));
@@ -6240,7 +6244,11 @@ int ObPLCodeGenerator::generate_debug(const ObString &name, ObLLVMValue &value)
       }
       break;
     }
+#ifdef CPP_STANDARD_20
+  } else if (helper_.get_pointer_type_id() == value.get_type_id() && helper_.get_integer_type_id() == value.get_type().get_child(0).get_id()) {
+#else
   } else if (14 == value.get_type_id() && 12 == value.get_type().get_child(0).get_id()) { //14 is PointerTyID
+#endif
     switch (value.get_type().get_child(0).get_width()) {
       case 8: {
         OZ (helper_.create_call(ObString("debug"), get_eh_service().eh_debug_int8ptr_, args));
@@ -6260,7 +6268,11 @@ int ObPLCodeGenerator::generate_debug(const ObString &name, ObLLVMValue &value)
       }
       break;
     }
+#ifdef CPP_STANDARD_20
+  } else if (helper_.get_pointer_type_id() == value.get_type_id() && helper_.get_struct_type_id() == value.get_type().get_child(0).get_id()) {
+#else
   } else if (14 == value.get_type_id() && 15 == value.get_type().get_child(0).get_id()) { //14 is PointerTyID, 15 is StructTyID
+#endif
     ObLLVMType obj_type;
     ObLLVMType objparam_type;
     OZ (adt_service_.get_obj(obj_type));

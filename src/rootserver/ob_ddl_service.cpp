@@ -15656,7 +15656,7 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
       }
 
       bool is_truncate_table = false;
-      bool recycle_cnt = 0;
+      int recycle_cnt = 0;
       for (int64_t i = 0; i < table_schemas.count() && OB_SUCC(ret); i++) {
         if (0 == i) {
           is_truncate_table = true; //record create table with opertion type TRUNCATE_TABLE_CREATE
