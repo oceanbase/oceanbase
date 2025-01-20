@@ -72,7 +72,7 @@ int ObResourcePlanManager::switch_resource_plan(const uint64_t tenant_id, ObStri
 int ObResourcePlanManager::refresh_global_background_cpu()
 {
   int ret = OB_SUCCESS;
-  if (GCONF.enable_global_background_resource_isolation) {
+  if (GCONF.enable_global_background_resource_isolation && GCTX.cgroup_ctrl_->is_valid()) {
     double cpu = static_cast<double>(GCONF.global_background_cpu_quota);
     if (cpu <= 0) {
       cpu = -1;
