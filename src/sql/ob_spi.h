@@ -1313,6 +1313,15 @@ struct ObPLSubPLSqlTimeGuard
   int64_t old_pure_sql_exec_time_;
 };
 
+struct ObPLPartitionHitGuard
+{
+  ObPLPartitionHitGuard(pl::ObPLExecCtx &pl_exec_ctx_);
+  ~ObPLPartitionHitGuard();
+  pl::ObPLExecCtx &pl_exec_ctx_;
+  bool old_partition_hit_;
+  bool can_freeze_;
+};
+
 }
 }
 
