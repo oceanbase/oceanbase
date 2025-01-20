@@ -351,6 +351,7 @@ public:
     return op_alloc(common::LinkHashNode<N>);
   }
   TO_STRING_KV(K_(alloc_count));
+  int64_t get_alloc_count() const { return alloc_count_; }
 
 private:
   volatile int64_t alloc_count_;

@@ -163,6 +163,7 @@ public:
 public:
   bool force_explict_500_malloc_ = false;
   int pl_leaked_times_ = 0;
+  int di_leaked_times_ = 0;
   bool force_malloc_for_absent_tenant_ = false;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMallocAllocator);

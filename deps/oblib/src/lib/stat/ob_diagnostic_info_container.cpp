@@ -348,6 +348,19 @@ int64_t ObRunningDiagnosticInfoContainer::size() const
   return size;
 }
 
+int64_t ObRunningDiagnosticInfoContainer::get_value_alloc_count() const
+{
+  int64_t alloc_count = 0;
+  if (!is_inited_) {
+    LOG_WARN_RET(OB_SUCCESS, "get session diagnostic info alloc count before init!", K(ret));
+  } else {
+    for (int i = 0; i < slot_count_; i++) {
+      alloc_count += buffer_[i].get_alloc_conut();
+    }
+  }
+  return alloc_count;
+}
+
 int ObDiagnosticInfoContainer::init(int64_t cpu_cnt)
 {
   int ret = OB_SUCCESS;
@@ -482,9 +495,9 @@ void ObDiagnosticInfoContainer::mtl_wait(ObDiagnosticInfoContainer *&container)
 {
   if (container != NULL) {
     container->stop();
-    while (container->get_running_size() != 0) {
-      LOG_WARN_RET(OB_NEED_RETRY, "tenant di is not empty",
-                   K(container->get_running_size()), KPC(container));
+    while (container->get_running_size() != 0 || !container->check_element_all_freed()) {
+      LOG_WARN_RET(OB_NEED_RETRY, "tenant di is not empty", K(container->get_running_size()),
+          KPC(container));
       ob_usleep(1000 * 1000);
     }
   }
@@ -532,6 +545,22 @@ void ObDiagnosticInfoContainer::purge_tenant_summary(int64_t tenant_id)
       LOG_INFO("success to remove summary collects", K(tenant_id), KPC(this));
     }
   }
+}
+
+bool ObDiagnosticInfoContainer::check_element_all_freed() const
+{
+  bool bret = true;
+  const int64_t summary_left =
+      summarys_.get_value_alloc_count();  // no need to check summary. it would be removed in
+                                          // mtl_destroy
+  const int64_t running_left = runnings_.get_value_alloc_count();
+  if (running_left) {
+    bret = false;
+    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+      LOG_INFO("there are some di element left", K(summary_left), K(running_left), KPC(this));
+    }
+  }
+  return bret;
 }
 
 } /* namespace common */
