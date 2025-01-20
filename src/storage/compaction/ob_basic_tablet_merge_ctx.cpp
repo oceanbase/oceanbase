@@ -481,15 +481,19 @@ int ObBasicTabletMergeCtx::check_merge_ctx_valid()
     if (OB_UNLIKELY(!tablet_handle_.is_valid()) || OB_ISNULL(tablet = tablet_handle_.get_obj())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid tablet", K(ret), K_(tablet_handle));
-    } else if (!tablet->is_row_store()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column store table should do co merge", K(ret), KPC(tablet));
     } else if (OB_ISNULL(base_table = static_param_.tables_handle_.get_table(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("base table is null", K(ret), K_(static_param));
     } else if (OB_UNLIKELY(!base_table->is_major_sstable() || base_table->is_co_sstable())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid base table type", K(ret), KPC(base_table));
+    } else if (!tablet->is_row_store()) {
+      if (ObCOMajorMergePolicy::is_valid_major_merge_type(get_co_major_merge_type())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column store table with valid co merge type should do co merge", K(ret), KPC(tablet), K(get_co_major_merge_type()));
+      } else {
+        LOG_INFO("column store table with invalid co merge type, should be delayed column transform", K(ret), KPC(tablet), K(get_co_major_merge_type()));
+      }
     }
   }
   return ret;

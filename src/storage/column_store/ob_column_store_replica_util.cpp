@@ -330,7 +330,7 @@ int ObCSReplicaUtil::init_cs_replica_tablet_status(
         if (ObITable::is_row_store_major_sstable(sstable->get_key().table_type_)) {
           cs_replica_status = ObCSReplicaTabletStatus::NEED_CO_CONVERT_MERGE;
         } else {
-          cs_replica_status = ObCSReplicaTabletStatus::NORMAL;
+          cs_replica_status = ObCSReplicaTabletStatus::NORMAL_CS_REPLICA;
         }
       }
       ObTabletObjLoadHelper::free(arena_allocator, storage_schema);

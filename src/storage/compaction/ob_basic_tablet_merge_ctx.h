@@ -231,6 +231,7 @@ public:
   STATIC_PARAM_FUNC(int64_t, ls_rebuild_seq);
   STATIC_PARAM_FUNC(const storage::ObTablesHandleArray &, tables_handle);
   STATIC_PARAM_FUNC(const ObTabletMergeDagParam &, dag_param);
+  STATIC_PARAM_FUNC(const ObCOMajorMergePolicy::ObCOMajorMergeType &, co_major_merge_type);
   STATIC_PARAM_FUNC(const SCN &, merge_scn);
   PROGRESSIVE_FUNC(progressive_merge_round);
   PROGRESSIVE_FUNC(progressive_merge_num);

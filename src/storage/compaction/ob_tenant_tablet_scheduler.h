@@ -28,6 +28,7 @@
 #include "storage/compaction/ob_compaction_schedule_util.h"
 #include "storage/compaction/ob_medium_loop.h"
 #include "storage/compaction/ob_mview_compaction_util.h"
+#include "storage/column_store/ob_column_store_replica_util.h"
 
 namespace oceanbase
 {
@@ -220,7 +221,8 @@ public:
   static int check_ready_for_major_merge(
       const ObLSID &ls_id,
       const storage::ObTablet &tablet,
-      const ObMergeType merge_type);
+      const ObMergeType merge_type,
+      ObCSReplicaTabletStatus &cs_replica_status);
   static int schedule_merge_dag(
       const share::ObLSID &ls_id,
       const storage::ObTablet &tablet,

@@ -205,7 +205,8 @@ int ObScheduleTabletFunc::schedule_tablet_execute(
   bool can_merge = false;
   int64_t schedule_scn = 0;
   ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
-  if (OB_FAIL(ObTenantTabletScheduler::check_ready_for_major_merge(ls_id, tablet, MEDIUM_MERGE))) {
+  ObCSReplicaTabletStatus cs_replica_status = ObCSReplicaTabletStatus::NORMAL;
+  if (OB_FAIL(ObTenantTabletScheduler::check_ready_for_major_merge(ls_id, tablet, MEDIUM_MERGE, cs_replica_status))) {
     LOG_WARN("failed to check ready for major merge", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(get_schedule_execute_info(tablet, schedule_scn, co_major_merge_type))) {
     if (OB_NO_NEED_MERGE == ret) {
