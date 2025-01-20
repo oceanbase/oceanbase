@@ -304,7 +304,9 @@ private:
 
   int inner_split_or_having_expr(ObSelectStmt &stmt,
                                 ObIArray<ObSEArray<ObRawExpr *, 16> > &sub_exprs,
-                                ObRawExpr *&new_expr);                                      
+                                ObRawExpr *&new_expr);
+
+  int extract_leaf_filters(ObRawExpr *expr, ObIArray<ObRawExpr *> &leaf_filters);
 
   int choose_pushdown_preds(ObIArray<ObRawExpr *> &preds,
                             ObIArray<ObRawExpr *> &invalid_preds,

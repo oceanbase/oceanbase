@@ -2449,6 +2449,7 @@ int ObTransformPredicateMoveAround::inner_split_or_having_expr(ObSelectStmt &stm
   ObSQLSessionInfo *session_info = NULL;
   ObRawExpr *new_and_expr = NULL;
   ObSEArray<ObRawExpr*, 4> or_exprs;
+  ObSEArray<ObRawExpr*, 4> leaf_filters;
   if (OB_ISNULL(ctx_) || 
       OB_ISNULL(expr_factory = ctx_->expr_factory_) ||
       OB_ISNULL(session_info = ctx_->session_info_)) {
@@ -2466,15 +2467,45 @@ int ObTransformPredicateMoveAround::inner_split_or_having_expr(ObSelectStmt &stm
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObRawExprUtils::build_or_exprs(*expr_factory, or_exprs, new_expr))) {
+    ObRawExprCopier copier(*ctx_->expr_factory_);
+    ObRawExpr *or_expr = NULL;
+    if (OB_FAIL(ObRawExprUtils::build_or_exprs(*expr_factory, or_exprs, or_expr))) {
       LOG_WARN("failed to build or expr", K(ret));
-    } else if (OB_ISNULL(new_expr)) {
+    } else if (OB_ISNULL(or_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_FAIL(extract_leaf_filters(or_expr, leaf_filters))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
+    } else if (OB_FAIL(copier.add_skipped_expr(leaf_filters))) {
+      LOG_WARN("failed to add skipped expr", K(ret));
+    } else if (OB_FAIL(copier.copy(or_expr, new_expr))) {
+      LOG_WARN("failed to copy expr", K(ret));
     } else if (OB_FAIL(new_expr->formalize(session_info))) {
       LOG_WARN("failed to formalize and expr", K(ret));
     } else if (OB_FAIL(new_expr->pull_relation_id())) {
       LOG_WARN("failed to pull relation id and levels", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::extract_leaf_filters(ObRawExpr *expr,
+                                                         ObIArray<ObRawExpr *> &leaf_filters)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (expr->get_expr_type() != T_OP_OR && expr->get_expr_type() != T_OP_AND) {
+    if (OB_FAIL(leaf_filters.push_back(expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      ObRawExpr *cur_expr = NULL;
+      if (OB_FAIL(SMART_CALL(extract_leaf_filters(expr->get_param_expr(i), leaf_filters)))) {
+        LOG_WARN("failed to extract leaf filters", K(ret));
+      }
     }
   }
   return ret;
