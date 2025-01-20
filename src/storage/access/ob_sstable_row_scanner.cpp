@@ -243,8 +243,9 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
         ObSampleFilterExecutor *sample_executor = static_cast<ObSampleFilterExecutor *>(access_ctx_->get_sample_executor());
         if (nullptr != sample_executor && sstable_->is_major_sstable()) {
           sample_executor->set_block_row_range(prefetcher_.cur_micro_data_fetch_idx_,
-                                             micro_scanner_->get_current_pos(),
-                                             micro_scanner_->get_last_pos());
+                                               micro_scanner_->get_current_pos(),
+                                               micro_scanner_->get_last_pos(),
+                                               prefetcher_.current_micro_info().get_row_count());
         }
         if (nullptr != filter) {
           micro_info.pre_process_filter(*filter);
