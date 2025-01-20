@@ -152,10 +152,11 @@ int ObUserDefinedType::init_obj(
 
 int ObUserDefinedType::serialize(
   share::schema::ObSchemaGetterGuard &schema_guard,
+  const sql::ObSQLSessionInfo &session,
   const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
   char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const
 {
-  UNUSEDx(schema_guard, tz_info, type, src, dst, dst_len, dst_pos);
+  UNUSEDx(schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos);
   LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
@@ -1065,6 +1066,7 @@ int ObUserDefinedSubType::get_all_depended_user_type(const ObPLResolveCtx &resol
 }
 
 int ObUserDefinedSubType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
+                                    const sql::ObSQLSessionInfo &session,
                                     const common::ObTimeZoneInfo *tz_info,
                                     obmysql::MYSQL_PROTOCOL_TYPE type,
                                     char *&src,
@@ -1073,7 +1075,7 @@ int ObUserDefinedSubType::serialize(share::schema::ObSchemaGetterGuard &schema_g
                                     int64_t &dst_pos) const
 {
   int ret = OB_SUCCESS;
-  OZ (base_type_.serialize(schema_guard, tz_info, type, src, dst, dst_len, dst_pos));
+  OZ (base_type_.serialize(schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos));
   return ret;
 }
 
@@ -2068,6 +2070,7 @@ int ObRecordType::init_obj(ObSchemaGetterGuard &schema_guard,
 }
 
 int ObRecordType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
+                            const sql::ObSQLSessionInfo &session,
                             const ObTimeZoneInfo *tz_info,
                             MYSQL_PROTOCOL_TYPE protocl_type,
                             char *&src,
@@ -2135,7 +2138,7 @@ int ObRecordType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
         } else if (BINARY == protocl_type && !coll_table->is_inited()) {
           ObMySQLUtil::update_null_bitmap(bitmap, i);
         } else {
-          OZ (type->serialize(schema_guard, tz_info, protocl_type, new_src, dst, dst_len, dst_pos));
+          OZ (type->serialize(schema_guard, session, tz_info, protocl_type, new_src, dst, dst_len, dst_pos));
         }
 #endif
       } else {
@@ -2144,7 +2147,7 @@ int ObRecordType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
         if (TEXT == protocl_type && OB_FAIL(base_type_serialize_for_text(obj, tz_info, dst, dst_len, dst_pos, has_serialized))) {
           LOG_WARN("serialize for text fail.", K(ret), K(has_serialized));
         } else if (false == has_serialized) {
-          OZ (type->serialize(schema_guard, tz_info, protocl_type, new_src, dst, dst_len, dst_pos),
+          OZ (type->serialize(schema_guard, session, tz_info, protocl_type, new_src, dst, dst_len, dst_pos),
                               K(i), KPC(this));
         }
         if (TEXT == protocl_type && !type->is_record_type()) {
@@ -2986,6 +2989,7 @@ int ObCollectionType::init_obj(ObSchemaGetterGuard &schema_guard,
 }
 
 int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
+                                const sql::ObSQLSessionInfo &session,
                                 const ObTimeZoneInfo *tz_info,
                                 MYSQL_PROTOCOL_TYPE type,
                                 char *&src,
@@ -3062,7 +3066,7 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
         } else if (BINARY == type && !coll_table->is_inited()) {
           ObMySQLUtil::update_null_bitmap(bitmap, i);
         } else {
-          OZ (element_type_.serialize(schema_guard, tz_info, type, data, dst, dst_len, dst_pos), KPC(this), K(i));
+          OZ (element_type_.serialize(schema_guard, session, tz_info, type, data, dst, dst_len, dst_pos), KPC(this), K(i));
         }
       } else {
         int64_t offset_dst_pos = dst_pos;
@@ -3070,7 +3074,7 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
         if (TEXT == type && OB_FAIL(base_type_serialize_for_text(obj, tz_info, dst, dst_len, dst_pos, has_serialized))) {
           LOG_WARN("serialize for text fail.", K(ret), K(has_serialized));
         } else if (false == has_serialized) {
-          OZ (element_type_.serialize(schema_guard, tz_info, type, data, dst, dst_len, dst_pos), KPC(this), K(i));
+          OZ (element_type_.serialize(schema_guard, session, tz_info, type, data, dst, dst_len, dst_pos), KPC(this), K(i));
         }
         if (TEXT == type && !element_type_.is_record_type()) {
           OZ (text_protocol_base_type_convert(element_type_, dst, offset_dst_pos, dst_len));
@@ -3374,6 +3378,7 @@ int ObNestedTableType::init_session_var(const ObPLResolveCtx &resolve_ctx,
 }
 
 int ObNestedTableType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
+                                 const sql::ObSQLSessionInfo &session,
                                  const ObTimeZoneInfo *tz_info,
                                  MYSQL_PROTOCOL_TYPE type,
                                  char *&src,
@@ -3383,6 +3388,7 @@ int ObNestedTableType::serialize(share::schema::ObSchemaGetterGuard &schema_guar
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObCollectionType::serialize(schema_guard,
+                                          session,
                                           tz_info,
                                           type,
                                           src,

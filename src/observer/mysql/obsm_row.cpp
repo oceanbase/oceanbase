@@ -23,12 +23,14 @@ using namespace oceanbase::obmysql;
 ObSMRow::ObSMRow(MYSQL_PROTOCOL_TYPE type,
                  const ObNewRow &obrow,
                  const ObDataTypeCastParams &dtc_params,
+                 const sql::ObSQLSessionInfo &session,
                  const common::ColumnsFieldIArray *fields,
                  ObSchemaGetterGuard *schema_guard,
                  uint64_t tenant_id)
     : ObMySQLRow(type),
       obrow_(obrow),
       dtc_params_(dtc_params),
+      session_(session),
       fields_(fields),
       schema_guard_(schema_guard),
       tenant_id_(tenant_id)
@@ -62,10 +64,10 @@ int ObSMRow::encode_cell(
 
     if (NULL == fields_) {
       ret = ObSMUtils::cell_str(
-          buf, len, *cell, type_, pos, idx, bitmap, dtc_params_, NULL, NULL);
+          buf, len, *cell, type_, pos, idx, bitmap, dtc_params_, NULL, session_, NULL);
     } else {
       ret = ObSMUtils::cell_str(
-          buf, len, *cell, type_, pos, idx, bitmap, dtc_params_, &fields_->at(idx), schema_guard_, tenant_id_);
+          buf, len, *cell, type_, pos, idx, bitmap, dtc_params_, &fields_->at(idx), session_, schema_guard_, tenant_id_);
     }
   }
 

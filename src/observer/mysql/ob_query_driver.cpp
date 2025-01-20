@@ -299,6 +299,7 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session_);
       ObSMRow sm(protocol_type, *row, dtc_params,
+                         session_,
                          result.get_field_columns(),
                          ctx_.schema_guard_,
                          session_.get_effective_tenant_id());
