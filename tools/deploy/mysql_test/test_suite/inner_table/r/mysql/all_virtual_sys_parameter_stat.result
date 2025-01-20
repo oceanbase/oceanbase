@@ -267,6 +267,7 @@ tcp_keepcnt
 tcp_keepidle
 tcp_keepintvl
 tde_method
+temporary_file_max_disk_size
 tenant_sql_login_thread_count
 tenant_sql_net_thread_count
 tenant_task_queue_size

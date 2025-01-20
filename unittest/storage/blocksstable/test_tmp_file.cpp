@@ -1956,7 +1956,11 @@ TEST_F(TestTmpFile, test_tmp_file_wash)
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
-  store_handle.get_tenant_store()->tmp_mem_block_manager_.cleanup();
+  ObTmpTenantFileStore *store = store_handle.get_tenant_store();
+  int64_t on_disk_block_num =
+      store->tmp_block_manager_.get_total_block_num() - store->tmp_mem_block_manager_.get_mem_block_num();
+  int64_t disk_usage_limit = store->disk_usage_limit_;
+  store->tmp_mem_block_manager_.cleanup(on_disk_block_num, disk_usage_limit);
 
   std::chrono::milliseconds(50);
   ret = store_handle.get_tenant_store()->tmp_mem_block_manager_.wait_write_finish(oldest_id, ObTmpTenantMemBlockManager::get_default_timeout_ms());

@@ -904,7 +904,8 @@ ObTmpTenantFileStore::ObTmpTenantFileStore()
     tmp_block_manager_(),
     tmp_mem_block_manager_(*this),
     last_access_tenant_config_ts_(0),
-    last_meta_mem_limit_(TOTAL_LIMIT)
+    last_meta_mem_limit_(TOTAL_LIMIT),
+    disk_usage_limit_(0)
 {
 }
 
@@ -992,6 +993,10 @@ int64_t ObTmpTenantFileStore::get_memory_limit(const uint64_t tenant_id)
         ATOMIC_STORE(&last_meta_mem_limit_, memory_limit);
         ATOMIC_STORE(&last_access_tenant_config_ts_, common::ObClockGenerator::getClock());
       }
+
+      const int64_t max_disk_size = config->temporary_file_max_disk_size;
+      int64_t disk_limit = max_disk_size > 0 ? max_disk_size : 0;
+      ATOMIC_STORE(&disk_usage_limit_, disk_limit);
     }
   }
   return memory_limit;
@@ -1013,6 +1018,7 @@ void ObTmpTenantFileStore::destroy()
               K(ATOMIC_LOAD(&page_cache_num_)), K(ATOMIC_LOAD(&block_cache_num_)));
   page_cache_num_ = 0;
   block_cache_num_ = 0;
+  disk_usage_limit_ = 0;
 }
 
 int ObTmpTenantFileStore::alloc(const int64_t dir_id, const uint64_t tenant_id, const int64_t alloc_size,
@@ -1035,10 +1041,14 @@ int ObTmpTenantFileStore::alloc(const int64_t dir_id, const uint64_t tenant_id, 
     const int64_t timeout_ts = THIS_WORKER.get_timeout_ts();
     ret = OB_STATE_NOT_MATCH;
     while (OB_STATE_NOT_MATCH == ret || OB_SIZE_OVERFLOW == ret) {
+      int64_t on_disk_block_num =
+          tmp_block_manager_.get_total_block_num() - tmp_mem_block_manager_.get_mem_block_num();
+      int64_t disk_usage_limit = ATOMIC_LOAD(&disk_usage_limit_);
+
       if (OB_UNLIKELY(timeout_ts <= ObTimeUtility::current_time())) {
         ret = OB_TIMEOUT;
         STORAGE_LOG(WARN, "it's timeout", K(ret), K(timeout_ts), K(ObTimeUtility::current_time()));
-      } else if (OB_FAIL(tmp_mem_block_manager_.cleanup())) {
+      } else if (OB_FAIL(tmp_mem_block_manager_.cleanup(on_disk_block_num, disk_usage_limit))) {
         if (OB_STATE_NOT_MATCH != ret) {
           STORAGE_LOG(WARN, "fail to try wash tmp macro block", K(ret), K(dir_id), K(tenant_id));
         }

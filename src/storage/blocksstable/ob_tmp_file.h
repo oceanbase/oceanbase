@@ -312,9 +312,11 @@ private:
   static const int64_t SMALL_FILE_MAX_THRESHOLD = 4;
   static const int64_t BIG_FILE_PREALLOC_EXTENT_SIZE = 8;
   static const int64_t READ_SIZE_PER_BATCH = 8 * 1024 * 1024; // 8MB
+  static const int64_t PRINT_LOG_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
   bool is_inited_;
   bool is_big_;
+  int64_t diag_log_print_cnt_; // print diagnosis log every PRINT_LOG_FILE_SIZE
   int64_t offset_;  // read offset
   uint64_t tenant_id_;
   common::SpinRWLock lock_;

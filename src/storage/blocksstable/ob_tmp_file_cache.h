@@ -332,7 +332,7 @@ public:
   int alloc_block_all_pages(ObTmpMacroBlock *t_mblk, ObTmpFileExtent &extent);
   int free_macro_block(const int64_t block_id);
   int wash_block(const int64_t block_id, ObIOWaitInfoHandle &handle);
-  int cleanup();
+  int cleanup(const int64_t on_disk_block_num, const int64_t disk_usage_limit);
   int add_macro_block(ObTmpMacroBlock *&t_mblk);
   int wait_write_finish(const int64_t block_id, const int64_t timeout_ms);
   static int64_t get_default_timeout_ms() {return GCONF._data_storage_io_timeout / 1000L;}
@@ -343,7 +343,7 @@ public:
 
   int exec_wait();
   int change_mem();
-
+  OB_INLINE int64_t get_mem_block_num() const { return t_mblk_map_.size(); }
 private:
   // 1/256, only one free block each 256 block.
   static constexpr double DEFAULT_MIN_FREE_BLOCK_RATIO = 0.00390625;
@@ -351,7 +351,7 @@ private:
   static const uint64_t MBLK_HASH_BUCKET_NUM = 10243L;
   static const int64_t TENANT_MEM_BLOCK_NUM = 64L;
   const int64_t TASK_INTERVAL = 10 * 1000; // 10 ms
-  const int64_t MEMORY_TASK_INTERVAL = 1000 * 1000; // 1 s
+  const int64_t MEMORY_TASK_INTERVAL = 10 * 1000 * 1000; // 10 s
   typedef common::hash::ObHashMap<int64_t, ObTmpMacroBlock*, common::hash::SpinReadWriteDefendMode>
       TmpMacroBlockMap;
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::SpinReadWriteDefendMode> Map;
@@ -424,6 +424,7 @@ private:
   int get_block_from_dir_cache(const int64_t dir_id, const int64_t tenant_id,
                                const int64_t page_nums, ObTmpMacroBlock *&t_mblk);
   int get_block_and_set_washing(int64_t block_id, ObTmpMacroBlock *&m_blk);
+  int check_disk_usage_limit(const int64_t on_disk_block_num, const int64_t disk_usage_limit);
 
   ObTmpTenantFileStore &tenant_store_;
   ObSpLinkQueue wait_info_queue_;

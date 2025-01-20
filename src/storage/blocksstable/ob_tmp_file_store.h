@@ -224,6 +224,7 @@ public:
   int get_macro_block(const int64_t block_id, ObTmpMacroBlock *&t_mblk);
   int get_disk_macro_block_list(common::ObIArray<MacroBlockId> &macro_id_list);
   void print_block_usage();
+  OB_INLINE int64_t get_total_block_num() const { return blocks_.size(); }
 
 private:
   static const uint64_t MBLK_HASH_BUCKET_NUM = 10243L;
@@ -287,7 +288,7 @@ private:
   static const uint64_t IO_LIMIT = 4 * 1024L * 1024L * 1024L;
   static const uint64_t TOTAL_LIMIT = 15 * 1024L * 1024L * 1024L;
   static const uint64_t HOLD_LIMIT = 8 * 1024L * 1024L;
-  static const uint64_t REFRESH_CONFIG_INTERVAL = 5 * 60 * 1000 * 1000L; // 5min
+  static const uint64_t REFRESH_CONFIG_INTERVAL = 10 * 1000 * 1000L; // 10s
   static const uint64_t BLOCK_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE;
   static constexpr double DEFAULT_PAGE_IO_MERGE_RATIO = 0.5;
 
@@ -303,6 +304,7 @@ private:
   ObTmpTenantMemBlockManager tmp_mem_block_manager_;
   int64_t last_access_tenant_config_ts_;
   int64_t last_meta_mem_limit_;
+  int64_t disk_usage_limit_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTmpTenantFileStore);
 };

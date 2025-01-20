@@ -716,6 +716,7 @@ int ObTmpFileMeta::clear()
 ObTmpFile::ObTmpFile()
   : is_inited_(false),
     is_big_(false),
+    diag_log_print_cnt_(0),
     offset_(0),
     tenant_id_(-1),
     lock_(common::ObLatchIds::TMP_FILE_LOCK),
@@ -739,6 +740,7 @@ int ObTmpFile::clear()
   } else {
     if (is_inited_) {
       is_big_ = false;
+      diag_log_print_cnt_ = 0;
       tenant_id_ = -1;
       offset_ = 0;
       allocator_ = NULL;
@@ -1186,6 +1188,16 @@ int ObTmpFile::aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &hand
       is_big_ = tmp->get_global_end() >=
           SMALL_FILE_MAX_THRESHOLD * ObTmpMacroBlock::get_default_page_size();
     }
+
+    // print diagnosis log
+    ObTmpFileExtent *last_extent = file_meta_.get_last_extent();
+    int64_t file_size = OB_ISNULL(last_extent) ? 0 : last_extent->get_global_end();
+    int64_t cur_print_cnt = file_size / PRINT_LOG_FILE_SIZE;
+    if (cur_print_cnt > ATOMIC_LOAD(&diag_log_print_cnt_)) {
+      int64_t fd = file_meta_.get_fd();
+      ATOMIC_INC(&diag_log_print_cnt_);
+      STORAGE_LOG(INFO, "aio write finish", K(fd), KPC(last_extent));
+    }
   }
   return ret;
 }
@@ -1298,6 +1310,7 @@ int ObTmpFile::deep_copy(char *buf, const int64_t buf_len, ObTmpFile *&value) co
 
 void ObTmpFile::get_file_size(int64_t &file_size)
 {
+  SpinRLockGuard guard(lock_);
   ObTmpFileExtent *tmp = file_meta_.get_last_extent();
   file_size = (nullptr == tmp) ? 0 : tmp->get_global_end();
 }

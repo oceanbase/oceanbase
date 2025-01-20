@@ -1132,13 +1132,29 @@ bool ObTmpTenantMemBlockManager::BlockWashScoreCompare::operator() (
   return left.wash_score_ < right.wash_score_;
 }
 
-int ObTmpTenantMemBlockManager::cleanup()
+int ObTmpTenantMemBlockManager::check_disk_usage_limit(const int64_t on_disk_block_num, const int64_t disk_usage_limit)
+{
+  int ret = OB_SUCCESS;
+  int64_t washing_block_num = ATOMIC_LOAD(&washing_count_);
+  int64_t current_disk_usage = (on_disk_block_num + washing_block_num) * OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  if (disk_usage_limit > 0 && disk_usage_limit <= current_disk_usage) {
+    ret = OB_TMP_FILE_EXCEED_DISK_QUOTA;
+    STORAGE_LOG(INFO, "tmp file exceeds max disk usage limit", KR(ret),
+        K(disk_usage_limit), K(current_disk_usage),
+        K(on_disk_block_num), K(washing_block_num));
+  }
+  return ret;
+}
+
+int ObTmpTenantMemBlockManager::cleanup(const int64_t on_disk_block_num, const int64_t disk_usage_limit)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "TmpFileRank"));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
+  } else if (OB_FAIL(check_disk_usage_limit(on_disk_block_num, disk_usage_limit))) {
+    STORAGE_LOG(WARN, "fail at checking tmp file disk usage", KR(ret));
   } else if (OB_FAIL(check_memory_limit())) {
     STORAGE_LOG(WARN, "fail to check memory limit", K(ret), K(t_mblk_map_.size()), K(get_tenant_mem_block_num()));
   } else {
