@@ -238,6 +238,14 @@ int ObStatisticsCollectorOp::set_join_passed(bool use_hash_join)
 
 int ObStatisticsCollectorOp::global_decide_join_method(bool &use_hash_join)
 {
+  // If local chooses hash_join, then globally it must also be hash_join,
+  // no need to wait for the response
+  return global_decide_join_method(use_hash_join, !use_hash_join);
+}
+
+int ObStatisticsCollectorOp::global_decide_join_method(bool &use_hash_join,
+                                                  bool need_wait_whole_msg)
+{
   int ret = OB_SUCCESS;
   ObPxSqcHandler *handler = ctx_.get_sqc_handler();
   if (OB_NOT_NULL(handler)) {
@@ -249,9 +257,6 @@ int ObStatisticsCollectorOp::global_decide_join_method(bool &use_hash_join)
     piece_msg.target_dfo_id_ =  proxy.get_dfo_id();
     piece_msg.use_hash_join_ = use_hash_join;
     const ObStatisticsCollectorWholeMsg *whole_msg = nullptr;
-    // If local chooses hash_join, then globally it must also be hash_join,
-    // no need to wait for the response
-    bool need_wait_whole_msg = !piece_msg.use_hash_join_;
     if (OB_FAIL(proxy.get_dh_msg(get_spec().id_,
                                 dtl::DH_STATISTICS_COLLECTOR_WHOLE_MSG,
                                 piece_msg,
@@ -260,8 +265,13 @@ int ObStatisticsCollectorOp::global_decide_join_method(bool &use_hash_join)
                                 true,
                                 need_wait_whole_msg))) {
       LOG_WARN("failed to send piece msg", K(ret));
-    } else if (!use_hash_join) {
-      use_hash_join = whole_msg->use_hash_join_;
+    } else if (need_wait_whole_msg) {
+      if (OB_ISNULL(whole_msg)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("whole_msg is null", K(ret));
+      } else {
+        use_hash_join = whole_msg->use_hash_join_;
+      }
     }
   }
   op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::JOIN_METHOD;
@@ -377,6 +387,19 @@ int ObStatisticsCollectorOp::do_batch_statistics_collect()
         LOG_WARN("failed to finish add row to row store");
       }
     }
+  }
+  return ret;
+}
+
+int ObStatisticsCollectorOp::inner_drain_exch()
+{
+  int ret = OB_SUCCESS;
+  if (!statistics_collect_done_) {
+    bool use_hash_join = false;
+    if (OB_FAIL(global_decide_join_method(use_hash_join, false))) {
+      LOG_WARN("Failed to global decide join method", K(ret));
+    }
+    statistics_collect_done_ = true;
   }
   return ret;
 }

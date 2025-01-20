@@ -55,12 +55,14 @@ public:
   virtual int inner_close() override;
   int do_row_statistics_collect();
   int do_batch_statistics_collect();
+  virtual int inner_drain_exch() override;
 
 private:
   int init_material_impl();
   int set_op_passed(int64_t op_id);
   int set_join_passed(bool use_hash_join);
   int global_decide_join_method(bool &use_hash_join);
+  int global_decide_join_method(bool &use_hash_join, bool need_wait_whole_msg);
 private:
   int64_t read_row_cnt_;
   bool statistics_collect_done_;
