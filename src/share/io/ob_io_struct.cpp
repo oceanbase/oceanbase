@@ -2042,6 +2042,10 @@ int ObIOChannel::convert_sys_errno(const int system_errno)
       ret = OB_SERVER_OUTOF_DISK_SPACE;
       LOG_ERROR("server out of disk space", K(ret), K(system_errno));
       break;
+    case EDQUOT:
+      ret = OB_SERVER_OUTOF_DISK_SPACE;
+      LOG_ERROR("server out of disk space", K(ret), K(system_errno));
+      break;
     default:
       use_warn_log = true;
       break;
