@@ -336,12 +336,9 @@ int ObCreateIndexResolver::resolve_index_option_node(
 
     // block_size
     if (OB_SUCC(ret)) {
-      if(T_TABLE_OPTION_LIST != index_option_node->type_ || index_option_node->num_child_ < 1) {
+      if(T_TABLE_OPTION_LIST != index_option_node->type_) {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "invalid parse node", K(ret));
-      } else if (OB_ISNULL(index_option_node->children_)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_RESV_LOG(WARN, "node children is null", K(index_option_node->children_), K(ret));
       } else {
         int64_t num = index_option_node->num_child_;
         for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {

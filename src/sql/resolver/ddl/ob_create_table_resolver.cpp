@@ -3128,7 +3128,7 @@ int ObCreateTableResolver::resolve_index_name(
 int ObCreateTableResolver::resolve_table_charset_info(const ParseNode *node) {
   int ret = OB_SUCCESS;
   if (NULL != node) {
-    if (T_TABLE_OPTION_LIST != node->type_ || node->num_child_ < 1 || OB_ISNULL(node->children_)) {
+    if (T_TABLE_OPTION_LIST != node->type_) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid argument.", K(ret));
     } else {
