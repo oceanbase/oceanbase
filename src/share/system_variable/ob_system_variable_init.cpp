@@ -11285,13 +11285,27 @@ static struct VarsInit{
     ObSysVars[823].alias_ = "OB_SV_SOCKET" ;
     }();
 
+    [&] (){
+      ObSysVars[824].default_value_ = "1" ;
+      ObSysVars[824].info_ = "Control whether the optimizer considers the impact of rowgoal (such as the LIMIT operator, etc.) during cardinality estimation." ;
+      ObSysVars[824].name_ = "enable_optimizer_rowgoal" ;
+      ObSysVars[824].data_type_ = ObIntType ;
+      ObSysVars[824].enum_names_ = "[u'OFF', u'AUTO', u'ON']" ;
+      ObSysVars[824].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[824].id_ = SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL] = 824 ;
+      ObSysVars[824].base_value_ = "1" ;
+    ObSysVars[824].alias_ = "OB_SV_ENABLE_OPTIMIZER_ROWGOAL" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 824;
+static int64_t var_amount = 825;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

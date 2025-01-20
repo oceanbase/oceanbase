@@ -536,6 +536,12 @@ const char *ObSysVarUpdatableViewsWithLimit::UPDATABLE_VIEWS_WITH_LIMIT_NAMES[] 
   "YES",
   0
 };
+const char *ObSysVarEnableOptimizerRowgoal::ENABLE_OPTIMIZER_ROWGOAL_NAMES[] = {
+  "OFF",
+  "AUTO",
+  "ON",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "__ob_client_capability_flag",
@@ -646,6 +652,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "disabled_storage_engines",
   "disconnect_on_expired_password",
   "div_precision_increment",
+  "enable_optimizer_rowgoal",
   "enable_sql_plan_monitor",
   "enforce_gtid_consistency",
   "eq_range_index_dive_limit",
@@ -1473,6 +1480,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_DISABLED_STORAGE_ENGINES,
   SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD,
   SYS_VAR_DIV_PRECISION_INCREMENT,
+  SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL,
   SYS_VAR_ENABLE_SQL_PLAN_MONITOR,
   SYS_VAR_ENFORCE_GTID_CONSISTENCY,
   SYS_VAR_EQ_RANGE_INDEX_DIVE_LIMIT,
@@ -3015,7 +3023,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "partition_index_dive_limit",
   "pid_file",
   "port",
-  "socket"
+  "socket",
+  "enable_optimizer_rowgoal"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4044,6 +4053,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarPidFile)
         + sizeof(ObSysVarPort)
         + sizeof(ObSysVarSocket)
+        + sizeof(ObSysVarEnableOptimizerRowgoal)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11466,6 +11476,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SOCKET))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarSocket));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableOptimizerRowgoal())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableOptimizerRowgoal", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableOptimizerRowgoal));
       }
     }
 
@@ -20539,6 +20558,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSocket())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarSocket", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEnableOptimizerRowgoal)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEnableOptimizerRowgoal)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableOptimizerRowgoal())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableOptimizerRowgoal", K(ret));
       }
       break;
     }

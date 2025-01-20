@@ -11596,5 +11596,23 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
+  },
+  "enable_optimizer_rowgoal": {
+    "id": 10747,
+    "name": "enable_optimizer_rowgoal",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "enum",
+    "info": "Control whether the optimizer considers the impact of rowgoal (such as the LIMIT operator, etc.) during cardinality estimation.",
+    "flags": "GLOBAL | SESSION ",
+    "enum_names": [
+      "OFF",
+      "AUTO",
+      "ON"
+    ],
+    "publish_version": "435",
+    "info_cn": "控制优化器在基数估计时是否考虑行数目标（如 LIMIT 算子等）的影响",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

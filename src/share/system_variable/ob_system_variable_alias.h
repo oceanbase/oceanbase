@@ -840,6 +840,7 @@ namespace share
   static const char* const OB_SV_PID_FILE = "pid_file";
   static const char* const OB_SV_PORT = "port";
   static const char* const OB_SV_SOCKET = "socket";
+  static const char* const OB_SV_ENABLE_OPTIMIZER_ROWGOAL = "enable_optimizer_rowgoal";
 
 }
 }

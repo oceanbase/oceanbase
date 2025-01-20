@@ -7211,7 +7211,8 @@ int JoinPath::get_re_estimate_param(EstimateCostInfo &param,
   left_param.override_ = param.override_;
   right_param.override_ = param.override_;
   right_param.need_batch_rescan_ = can_use_batch_nlj_;
-  if (OB_ISNULL(left_path_) || OB_ISNULL(right_path_)) {
+  if (OB_ISNULL(left_path_) || OB_ISNULL(right_path_) ||
+      OB_ISNULL(parent_) || OB_ISNULL(parent_->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(left_path_), K(right_path_), K(ret));
   } else if (OB_UNLIKELY(param.need_parallel_ < ObGlobalHint::DEFAULT_PARALLEL)) {
@@ -7241,7 +7242,8 @@ int JoinPath::get_re_estimate_param(EstimateCostInfo &param,
     }
 
     if (right_path_->is_inner_path() && (right_param.need_row_count_ > 1 || right_param.need_row_count_ < 0)
-        && (LEFT_SEMI_JOIN == join_type_ || LEFT_ANTI_JOIN == join_type_)) {
+        && (LEFT_SEMI_JOIN == join_type_ || LEFT_ANTI_JOIN == join_type_)
+        && ObEnableOptRowGoal::OFF != parent_->get_plan()->get_optimizer_context().get_enable_opt_row_goal()) {
       right_param.need_row_count_ = 1;
     }
     if (is_adaptive_join() && right_path_->is_inner_path()) {

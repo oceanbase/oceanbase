@@ -49,6 +49,13 @@ enum class ObEstCorrelationType
   MAX
 };
 
+enum class ObEnableOptRowGoal {
+  OFF,
+  AUTO,
+  ON,
+  MAX
+};
+
 typedef common::ObArray<common::ObString, common::ObIAllocator &> ObPlanNotes;
 //table location local index id related info
 //tablet_loc_id and ref_table_id_ are used to uniquely determine
@@ -252,7 +259,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     is_skip_scan_enabled_(false),
     enable_better_inlist_costing_(false),
     push_join_pred_into_view_enabled_(true),
-    enable_distributed_das_scan_(true)
+    enable_distributed_das_scan_(true),
+    enable_opt_row_goal_(ObEnableOptRowGoal::MAX)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -717,6 +725,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_push_join_pred_into_view_enabled(bool enabled) { push_join_pred_into_view_enabled_ = enabled; }
   inline bool is_enable_distributed_das_scan() const { return enable_distributed_das_scan_; }
   inline void set_enable_distributed_das_scan(bool enabled) { enable_distributed_das_scan_ = enabled; }
+  inline void set_enable_opt_row_goal(int64_t type) { enable_opt_row_goal_ = static_cast<ObEnableOptRowGoal>(type); }
+  inline ObEnableOptRowGoal get_enable_opt_row_goal() const { return enable_opt_row_goal_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -830,6 +840,7 @@ private:
   bool enable_better_inlist_costing_;
   bool push_join_pred_into_view_enabled_;
   bool enable_distributed_das_scan_;
+  ObEnableOptRowGoal enable_opt_row_goal_;
 };
 }
 }

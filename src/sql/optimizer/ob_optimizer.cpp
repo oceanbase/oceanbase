@@ -634,6 +634,8 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
+  int64_t rowgoal_type = -1;
+  const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   if (OB_ISNULL(session_info = ctx_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info), K(ret));
@@ -651,7 +653,13 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("fail to check enable pdml", K(ret));
   } else if (OB_FAIL(init_correlation_model(stmt, *session_info))) {
     LOG_WARN("failed to init correlation model", K(ret));
-  }
+  } else if (OB_FAIL(opt_params.get_enum_sys_var(ObOptParamHint::ENABLE_OPTIMIZER_ROWGOAL,
+                                                 session_info,
+                                                 share::SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL,
+                                                 rowgoal_type))) {
+    LOG_WARN("failed to get hint param", K(ret));
+  } else if (FALSE_IT(ctx_.set_enable_opt_row_goal(rowgoal_type))) {
+  } else { /*do nothing*/ }
   return ret;
 }
 

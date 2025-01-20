@@ -1058,7 +1058,14 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
   bool contain_false_filter = false;
   card = 0.0;
   cost = 0.0;
-  if (!param.need_re_est(get_parallel(), get_card())) {  // no need to re est cost
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (ObEnableOptRowGoal::OFF == get_plan()->get_optimizer_context().get_enable_opt_row_goal()) {
+    param.need_row_count_ = -1;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!param.need_re_est(get_parallel(), get_card())) {  // no need to re est cost
     card = get_card();
     cost = get_cost();
   } else if (OB_FAIL(check_need_parallel_valid(parallel))) {
@@ -1071,9 +1078,6 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
     // never reach
   } else if (!param.override_) {
     /* do nothing */
-  } else if (OB_ISNULL(get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
   } else {
     set_op_cost(op_cost);
     set_cost(cost);

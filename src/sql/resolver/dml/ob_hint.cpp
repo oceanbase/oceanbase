@@ -849,6 +849,16 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && 0 <= val.get_int();
       break;
     }
+    case ENABLE_OPTIMIZER_ROWGOAL: {
+      if (val.is_int()) {
+        is_valid = 0 <= val.get_int() && val.get_int() < static_cast<int64_t>(ObEnableOptRowGoal::MAX);
+      } else if (val.is_varchar()) {
+        int64_t type = OB_INVALID_ID;
+        ObSysVarEnableOptimizerRowgoal sv;
+        is_valid = (OB_SUCCESS == sv.find_type(val.get_varchar(), type));
+      }
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
@@ -975,6 +985,13 @@ int ObOptParamHint::get_enum_opt_param(const OptParamType param_type, int64_t &v
       case CORRELATION_FOR_CARDINALITY_ESTIMATION:
       case CARDINALITY_ESTIMATION_MODEL: {
         ObSysVarCardinalityEstimationModel sv;
+        if (OB_FAIL(sv.find_type(obj.get_varchar(), val))) {
+          LOG_WARN("param obj is invalid", K(ret), K(obj));
+        }
+        break;
+      }
+      case ENABLE_OPTIMIZER_ROWGOAL: {
+        ObSysVarEnableOptimizerRowgoal sv;
         if (OB_FAIL(sv.find_type(obj.get_varchar(), val))) {
           LOG_WARN("param obj is invalid", K(ret), K(obj));
         }

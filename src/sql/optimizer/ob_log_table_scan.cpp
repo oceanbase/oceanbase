@@ -275,8 +275,12 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
       }
       est_cost_info_->limit_rows_ = limit_count_double;
     }
-    if (stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3 &&
+    if (ObEnableOptRowGoal::OFF == get_plan()->get_optimizer_context().get_enable_opt_row_goal()) {
+      param.need_row_count_ = -1;
+      est_cost_info_->limit_rows_ = -1;
+    } else if (stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3 &&
         range_conds_.empty() &&
+        ObEnableOptRowGoal::AUTO == get_plan()->get_optimizer_context().get_enable_opt_row_goal() &&
         (!est_cost_info_->postfix_filters_.empty() ||
         !est_cost_info_->table_filters_.empty() ||
         !est_cost_info_->ss_postfix_range_filters_.empty())) {
