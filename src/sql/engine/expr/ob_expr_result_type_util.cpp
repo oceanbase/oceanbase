@@ -994,7 +994,10 @@ int ObExprResultTypeUtil::get_deduce_element_type(ObExprResType &input_type, ObD
   } else {
     meta.set_type(res_type);
   }
-  if (ob_is_string_tc(res_type)) {
+  if (ob_is_collection_sql_type(elem_type.get_obj_type())) {
+    ret = OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION;
+    LOG_USER_ERROR(OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION);
+  } else if (ob_is_string_tc(res_type)) {
     if (ob_is_string_tc(type2)) {
       // do nothing
     } else {
