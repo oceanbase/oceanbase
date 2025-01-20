@@ -9866,16 +9866,26 @@ int ObLogPlan::get_subplan_filter_distributed_method(ObLogicalOperator *&top,
         distributed_methods = DistAlgo::DIST_RANDOM_ALL;
         OPT_TRACE("SPF will use random all method by hint");
       } else {
+        int enable_px_random_shuffle_only_statistic_exist = (OB_E(EventTable::EN_PX_RANDOM_SHUFFLE_WITHOUT_STATISTIC_INFORMATION) OB_SUCCESS);
         int64_t compute_parallel = top->get_parallel();
-        ObLogTableScan *log_table_scan = static_cast<ObLogTableScan *>(top);
         int64_t px_expected_work_count = 0;
-        const ObTableMetaInfo *table_meta_info =
-          log_table_scan->get_access_path()->est_cost_info_.table_meta_info_;
-        LOG_TRACE("SPF random shuffle est table meta info", K(*table_meta_info));
-
-        if (OB_FAIL(ObOptimizerUtil::compute_nlj_spf_storage_compute_parallel_skew(
-              &get_optimizer_context(), log_table_scan->get_ref_table_id(), table_meta_info,
-              compute_parallel, px_expected_work_count))) {
+        ObLogTableScan *log_table_scan = static_cast<ObLogTableScan *>(top);
+        const AccessPath *ap = NULL;
+        const ObTableMetaInfo *table_meta_info = NULL;
+        if (OB_ISNULL(ap = log_table_scan->get_access_path())
+            || OB_ISNULL(table_meta_info = ap->est_cost_info_.table_meta_info_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("get unexpected null", KPC(ap), KPC(table_meta_info), K(ret));
+        } else if (OB_SUCC(enable_px_random_shuffle_only_statistic_exist) &&
+         (!table_meta_info->has_opt_stat_ || table_meta_info->micro_block_count_ == 0)) {
+          // Whether to use PX Random Shuffle is based on statistic infomation, so if we don't have
+          // it, we just use normal NONE_ALL
+          distributed_methods &= ~DIST_HASH_ALL;
+          distributed_methods &= ~DIST_RANDOM_ALL;
+          OPT_TRACE("plan will not use random all because lack of statistic information");
+        } else if (OB_FAIL(ObOptimizerUtil::compute_nlj_spf_storage_compute_parallel_skew(
+                     &get_optimizer_context(), log_table_scan->get_ref_table_id(), table_meta_info,
+                     compute_parallel, px_expected_work_count))) {
           LOG_WARN("Fail to compute none_all spf storage compute parallel skew", K(ret));
         } else if (px_expected_work_count < compute_parallel) {
           // we have more compute resources, so we should add a hash shuffle

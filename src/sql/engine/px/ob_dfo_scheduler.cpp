@@ -1431,8 +1431,10 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
           }
           LOG_TRACE("alloc_by_data_distribution", K(parent));
         } else if (parent.is_single()) {
-          // parent 可能是一个 scalar group by，会被标记为 is_local，此时
+          // 常见于PDML场景，如果parent没有tsc，则中间parent DFO需要把数据从child dfo先拉到QC本地，再shuffle到上面的DFO
+          // 比如parent 可能是一个 scalar group by，会被标记为 is_local，此时
           // 走 alloc_by_data_distribution，内部会分配一个 QC 本地线程来执行
+          // 或者嵌套PX场景
           if (OB_FAIL(ObPXServerAddrUtil::alloc_by_data_distribution(
             coord_info_.pruning_table_location_, exec_ctx, parent))) {
             LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
@@ -1446,7 +1448,7 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
             LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
           }
         } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_random_distribution(exec_ctx, child, parent))) {
-          LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
+          LOG_WARN("fail alloc addr by random distribution", K(parent), K(child), K(ret));
         }
         LOG_TRACE("alloc_by_child_distribution", K(child), K(parent));
       }

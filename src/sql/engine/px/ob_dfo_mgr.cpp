@@ -471,7 +471,11 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the first phy_op must be a coord op", K(ret));
   } else if (phy_op->is_table_scan() && NULL != parent_dfo) {
-    parent_dfo->set_scan(true);
+    if (static_cast<const ObTableScanSpec*>(phy_op)->use_dist_das()) {
+      parent_dfo->set_das(true);
+    } else {
+      parent_dfo->set_scan(true);
+    }
     parent_dfo->inc_tsc_op_cnt();
     auto tsc_op = static_cast<const ObTableScanSpec *>(phy_op);
     if (TableAccessType::HAS_USER_TABLE == px_coord_info.table_access_type_){

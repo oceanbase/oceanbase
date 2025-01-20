@@ -356,6 +356,7 @@ GLOBAL_ERRSIM_POINT_DEF(557, EN_COALESCE_AGGR_IGNORE_COST, "");
 GLOBAL_ERRSIM_POINT_DEF(558, EN_CHECK_REWRITE_ITER_CONVERGE, "Reporting error when rewrite iter nonconvergent");
 GLOBAL_ERRSIM_POINT_DEF(559, EN_PRINT_CONSTRAINTS_INFO, "show constraints info when explain query plan");
 GLOBAL_ERRSIM_POINT_DEF(560, EN_CBQT_IGNORE_COST, "Whether ignore the cost when do cost based transformation");
+GLOBAL_ERRSIM_POINT_DEF(561, EN_PX_RANDOM_SHUFFLE_WITHOUT_STATISTIC_INFORMATION, "Use px random shuffle even statistical information do not exist.");
 
 // 600-700 For PX use
 GLOBAL_ERRSIM_POINT_DEF(600, EN_PX_SQC_EXECUTE_FAILED, "");

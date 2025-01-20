@@ -6724,12 +6724,21 @@ int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt
       if (OB_FAIL(server_list.push_back(local_server_addr))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
-    } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo ||
-               DistAlgo::DIST_RANDOM_ALL == join_dist_algo) {
+    } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo) {
       parallel = left_path->parallel_;
       server_cnt = left_path->server_cnt_;
       if (OB_FAIL(server_list.assign(left_path->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
+      }
+    } else if (DistAlgo::DIST_RANDOM_ALL == join_dist_algo) {
+      common::ObAddr all_server_list;
+      // like hash_hash, a special ALL server list indicating we would use all servers of this sql relate
+      all_server_list.set_max();
+      if (OB_FAIL(server_list.push_back(all_server_list))) {
+        LOG_WARN("failed to assign all server list", K(ret));
+      } else {
+        parallel = left_path->parallel_;
+        server_cnt = left_path->server_cnt_;
       }
     } else if (DistAlgo::DIST_ALL_NONE == join_dist_algo) {
       parallel = right_path->parallel_;
@@ -10363,14 +10372,23 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
         distributed_methods = DistAlgo::DIST_RANDOM_ALL;
         OPT_TRACE("plan will use random all method by hint");
       } else {
+        int enable_px_random_shuffle_only_statistic_exist = (OB_E(EventTable::EN_PX_RANDOM_SHUFFLE_WITHOUT_STATISTIC_INFORMATION) OB_SUCCESS);
         int64_t px_expected_work_count = 0;
         int64_t compute_parallel = left_path.parallel_;
         AccessPath *left_access_path = static_cast<AccessPath *>(&left_path);
-        const ObTableMetaInfo *table_meta_info = left_access_path->est_cost_info_.table_meta_info_;
-        LOG_TRACE("SPF random shuffle est table meta info", K(*table_meta_info));
-        if (OB_FAIL(ObOptimizerUtil::compute_nlj_spf_storage_compute_parallel_skew(
-              &get_plan()->get_optimizer_context(), left_access_path->get_ref_table_id(),
-              table_meta_info, compute_parallel, px_expected_work_count))) {
+        ObTableMetaInfo *table_meta_info = NULL;
+        if (OB_ISNULL(table_meta_info = left_access_path->est_cost_info_.table_meta_info_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("get unexpected null", KPC(table_meta_info), K(ret));
+        } else if (OB_SUCC(enable_px_random_shuffle_only_statistic_exist) &&
+          (!table_meta_info->has_opt_stat_ || table_meta_info->micro_block_count_ == 0)) {
+          // Whether to use PX Random Shuffle is based on statistic infomation, so if we don't have
+          // it, we just use normal NONE_ALL
+          distributed_methods &= ~DistAlgo::DIST_RANDOM_ALL;
+          OPT_TRACE("plan will not use random all because lack of statistic information");
+        } else if (OB_FAIL(ObOptimizerUtil::compute_nlj_spf_storage_compute_parallel_skew(
+                     &get_plan()->get_optimizer_context(), left_access_path->get_ref_table_id(),
+                     table_meta_info, compute_parallel, px_expected_work_count))) {
           LOG_WARN("Fail to compute none_all nlj storage compute parallel skew", K(ret));
         } else if (px_expected_work_count < compute_parallel) {
           // we have more compute resources, so we should add a random shuffle, not choose none_all

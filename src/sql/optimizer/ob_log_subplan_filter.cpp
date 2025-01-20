@@ -838,6 +838,14 @@ int ObLogSubPlanFilter::compute_op_parallel_and_server_info()
   int ret = OB_SUCCESS;
   if (OB_FAIL(compute_normal_multi_child_parallel_and_server_info())) {
     LOG_WARN("failed to compute multi child parallel and server info", K(ret), K(get_distributed_algo()));
+  } else if (dist_algo_ == DistAlgo::DIST_RANDOM_ALL) {
+    get_server_list().reuse();
+    common::ObAddr all_server_list;
+    // like hash_hash, a special ALL server list indicating we would use all servers of this sql relate
+    all_server_list.set_max();
+    if (OB_FAIL(get_server_list().push_back(all_server_list))) {
+      LOG_WARN("failed to assign all server list", K(ret));
+    }
   }
   return ret;
 }
