@@ -214,6 +214,7 @@ private:
                                       const ObRawExpr &const_expr,
                                       ObItemType cmp_type,
                                       bool &is_precise);
+  int ignore_inner_generate_expr(const ObRawExpr *const_expr, bool &can_ignore);
 private:
   ObIAllocator &allocator_;
   ObQueryRangeCtx &ctx_;
