@@ -5887,13 +5887,14 @@ int ObSPIService::spi_copy_ref_cursor(ObPLExecCtx *ctx,
       // 到了这里先把returning状态重置，ref count先不加，等赋值成功再加
       OX (src_cursor->set_is_returning(false));
     }
-    if (src_cursor == dest_cursor) {
+    if (OB_FAIL(ret)) {
+    } else if (src_cursor == dest_cursor) {
       // 说明指向同一个内存，或者都为null， 这个时候应该不干，除了一个特殊的场景，即return场景，需要将count+1
       // 例如: c1 := c2; c1 := c2; c2 may null or not null;
       if (need_inc_ref_cnt) {
         OX (src_cursor->inc_ref_count());
       }
-    } else if (!src_cursor->isopen() && 0 == src_cursor->get_ref_count() && NULL == dest_cursor) {
+    } else if (OB_NOT_NULL(src_cursor) && !src_cursor->isopen() && 0 == src_cursor->get_ref_count() && NULL == dest_cursor) {
       // src cursor is already closed and do not has any ref
       // dest cursor is null do not need copy
     } else {
