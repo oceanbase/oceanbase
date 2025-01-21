@@ -1716,7 +1716,14 @@ inline void ObMPQuery::record_stat(const stmt::StmtType type,
     }                                           \
     EVENT_ADD(SQL_##type##_TIME, time_cost);    \
     break
-  const int64_t time_cost = end_time - get_receive_timestamp();
+  int64_t start_ts = 0;
+  if (session.get_raw_audit_record().exec_timestamp_.multistmt_start_ts_ > 0) {
+    // In the scenario of multi-query, use the start time of the current query
+    start_ts = session.get_raw_audit_record().exec_timestamp_.multistmt_start_ts_;
+  } else {
+    start_ts = get_receive_timestamp();
+  }
+  const int64_t time_cost = end_time - start_ts;
   if (!THIS_THWORKER.need_retry())
   {
     switch (type)

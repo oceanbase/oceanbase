@@ -1239,6 +1239,7 @@ public:
     }
   }
   ObAuditRecordData &get_raw_audit_record() { return audit_record_; }
+  const ObAuditRecordData &get_raw_audit_record() const { return audit_record_; }
   //在最最终需要push record到audit buffer中时使用该方法，
   //该方法会将一些session中能够拿到的并且重试过程中不会变化的
   //字段初始化
