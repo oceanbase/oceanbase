@@ -190,7 +190,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
           LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
         } else if (OB_FAIL(trans.start(&ddl_service_.get_sql_proxy(), tenant_id, refreshed_schema_version))) {
           LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-        } else if (!arg.is_inner_ && !index_table_schema->can_read_index() && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_task(
+        } else if (!arg.is_inner_ && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_task(
               trans, tenant_id, data_table_id, index_table_schema->get_table_id(), has_index_task))) {
           LOG_WARN("failed to check ddl conflict", K(ret));
         } else if (has_index_task) {
