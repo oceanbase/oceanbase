@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include "lib/hash/ob_link_hashmap.h"
+#include "lib/list/ob_dlink_node.h"
 #include "observer/table_load/ob_table_load_exec_ctx.h"
 #include "observer/table_load/ob_table_load_instance.h"
 #include "observer/table_load/ob_table_load_struct.h"
@@ -102,7 +102,7 @@ private:
   common::ObArray<ObString> column_names_;
 };
 
-class ObTableLoadClientTask
+class ObTableLoadClientTask : public common::ObDLinkBase<ObTableLoadClientTask>
 {
 public:
   ObTableLoadClientTask();
@@ -111,10 +111,12 @@ public:
   int start();
   int write(table::ObTableLoadObjRowArray &obj_rows);
   int commit();
-  void abort();
+  void abort(int error_code = OB_CANCELED);
   OB_INLINE int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   OB_INLINE int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
   OB_INLINE int64_t dec_ref_count() { return ATOMIC_SAF(&ref_count_, 1); }
+  void set_is_in_map(bool is_in_map) { is_in_map_ = is_in_map; }
+  bool is_in_map() const { return is_in_map_; }
   OB_INLINE int64_t get_task_id() const { return param_.get_task_id(); }
   OB_INLINE uint64_t get_table_id() const { return 0; }
   void heart_beat();
@@ -127,6 +129,7 @@ public:
   int set_status_error(int error_code);
   void set_status_abort(int error_code = OB_CANCELED);
   table::ObTableLoadClientStatus get_status() const;
+  int get_error_code() const;
   void get_status(table::ObTableLoadClientStatus &client_status, int &error_code) const;
   int check_status(table::ObTableLoadClientStatus client_status);
 
@@ -139,7 +142,8 @@ public:
                K_(client_status),
                K_(error_code),
                K_(result_info),
-               K_(ref_count));
+               K_(ref_count),
+               K_(is_in_map));
 
 private:
   int create_session_info();
@@ -167,6 +171,7 @@ private:
   sql::ObFreeSessionCtx free_session_ctx_;
   sql::ObSqlCtx sql_ctx_;
   sql::ObPhysicalPlanCtx plan_ctx_;
+  ObPhysicalPlan plan_;
   ObExecContext exec_ctx_;
   ObTableLoadClientExecCtx client_exec_ctx_;
   ObITableLoadTaskScheduler *task_scheduler_;
@@ -179,10 +184,11 @@ private:
   int error_code_;
   table::ObTableLoadResultInfo result_info_;
   int64_t ref_count_ CACHE_ALIGNED;
+  volatile bool is_in_map_;
   bool is_inited_;
 };
 
-struct ObTableLoadClientTaskBrief : public common::LinkHashValue<ObTableLoadUniqueKey>
+struct ObTableLoadClientTaskBrief : public common::ObDLinkBase<ObTableLoadClientTaskBrief>
 {
 public:
   ObTableLoadClientTaskBrief()
@@ -190,12 +196,24 @@ public:
       table_id_(common::OB_INVALID_ID),
       client_status_(table::ObTableLoadClientStatus::MAX_STATUS),
       error_code_(common::OB_SUCCESS),
-      active_time_(0)
+      active_time_(0),
+      ref_count_(0),
+      is_in_map_(false)
   {
   }
-  TO_STRING_KV(K_(task_id), K_(table_id), K_(client_status), K_(error_code), K_(result_info),
-               K_(active_time));
-
+  OB_INLINE int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
+  OB_INLINE int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
+  OB_INLINE int64_t dec_ref_count() { return ATOMIC_SAF(&ref_count_, 1); }
+  void set_is_in_map(bool is_in_map) { is_in_map_ = is_in_map; }
+  bool is_in_map() const { return is_in_map_; }
+  TO_STRING_KV(K_(task_id),
+               K_(table_id),
+               K_(client_status),
+               K_(error_code),
+               K_(result_info),
+               K_(active_time),
+               K_(ref_count),
+               K_(is_in_map));
 public:
   int64_t task_id_;
   uint64_t table_id_;
@@ -203,6 +221,8 @@ public:
   int error_code_;
   table::ObTableLoadResultInfo result_info_;
   int64_t active_time_;
+  int64_t ref_count_ CACHE_ALIGNED;
+  volatile bool is_in_map_;
 };
 
 } // namespace observer

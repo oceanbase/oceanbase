@@ -99,8 +99,7 @@ int ObDirectLoadControlPreBeginExecutor::create_table_ctx(const ObTableLoadParam
 {
   int ret = OB_SUCCESS;
   table_ctx = nullptr;
-  if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
+  if (OB_FAIL(ObTableLoadService::alloc_ctx(table_ctx))) {
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
   } else if (OB_FAIL(table_ctx->init(param, ddl_param, arg_.session_info_))) {
     LOG_WARN("fail to init table ctx", KR(ret));
@@ -112,7 +111,7 @@ int ObDirectLoadControlPreBeginExecutor::create_table_ctx(const ObTableLoadParam
   }
   if (OB_FAIL(ret)) {
     if (nullptr != table_ctx) {
-      ObTableLoadService::free_ctx(table_ctx);
+      ObTableLoadService::put_ctx(table_ctx);
       table_ctx = nullptr;
     }
   }
@@ -309,6 +308,7 @@ int ObDirectLoadControlAbortExecutor::process()
     }
   } else {
     ObTableLoadStore::abort_ctx(table_ctx, res_.is_stopped_);
+    table_ctx->mark_delete();
     if (res_.is_stopped_ && OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
       LOG_WARN("fail to remove table ctx", KR(ret), K(key));
     }

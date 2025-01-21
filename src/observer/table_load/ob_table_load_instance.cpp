@@ -256,8 +256,7 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
   if (OB_UNLIKELY(nullptr != table_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table ctx is not null", KR(ret));
-  } else if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (OB_FAIL(ObTableLoadService::alloc_ctx(table_ctx))) {
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
   } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info))) {
     LOG_WARN("fail to init table ctx", KR(ret));
@@ -269,8 +268,9 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
     table_ctx_ = table_ctx;
   }
   if (OB_FAIL(ret)) {
+    // table_ctx没有初始化成功不能赋值给table_ctx_
     if (nullptr != table_ctx) {
-      ObTableLoadService::free_ctx(table_ctx);
+      ObTableLoadService::put_ctx(table_ctx);
       table_ctx = nullptr;
     }
   }

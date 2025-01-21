@@ -14,12 +14,12 @@
 
 #include "lib/task/ob_timer.h"
 #include "observer/table_load/control/ob_table_load_control_rpc_proxy.h"
+#include "observer/table_load/ob_table_load_assigned_memory_manager.h"
+#include "observer/table_load/ob_table_load_assigned_task_manager.h"
 #include "observer/table_load/ob_table_load_client_service.h"
+#include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/table_load/ob_table_load_manager.h"
 #include "observer/table_load/ob_table_load_struct.h"
-#include "observer/table_load/ob_table_load_coordinator.h"
-#include "observer/table_load/ob_table_load_assigned_task_manager.h"
-#include "observer/table_load/ob_table_load_assigned_memory_manager.h"
 #include "observer/table_load/resource/ob_table_load_resource_rpc_proxy.h"
 #include "observer/table_load/resource/ob_table_load_resource_service.h"
 
@@ -28,11 +28,13 @@ namespace oceanbase
 namespace observer
 {
 class ObTableLoadTableCtx;
+class ObTableLoadClientTask;
 
 class ObTableLoadService
 {
 public:
-  static int mtl_init(ObTableLoadService *&service);
+  static int mtl_new(ObTableLoadService *&service);
+  static void mtl_destroy(ObTableLoadService *&service);
   static int check_tenant();
   // 旁路导入内核获取加表锁后的schema进行检查
   static int check_support_direct_load(uint64_t table_id,
@@ -44,13 +46,11 @@ public:
   static int check_support_direct_load(share::schema::ObSchemaGetterGuard &schema_guard,
                                        const share::schema::ObTableSchema *table_schema,
                                        const common::ObIArray<uint64_t> &column_ids);
-  static ObTableLoadTableCtx *alloc_ctx();
-  static void free_ctx(ObTableLoadTableCtx *table_ctx);
+
+  static int alloc_ctx(ObTableLoadTableCtx *&table_ctx);
   static int add_ctx(ObTableLoadTableCtx *table_ctx);
   static int remove_ctx(ObTableLoadTableCtx *table_ctx);
-  // get ctx
   static int get_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTableCtx *&table_ctx);
-  // get ctx by table_id
   static void put_ctx(ObTableLoadTableCtx *table_ctx);
 
   // for direct load control api
@@ -74,16 +74,16 @@ public:
 	static int get_sort_memory(int64_t &sort_memory);
   static int refresh_and_check_resource(ObDirectLoadResourceCheckArg &arg, ObDirectLoadResourceOpRes &res);
 public:
-  ObTableLoadService();
-  int init(uint64_t tenant_id);
+  ObTableLoadService(const uint64_t tenant_id);
+  int init();
   int start();
   int stop();
   void wait();
   void destroy();
+  bool is_stop() const { return is_stop_; }
   ObTableLoadManager &get_manager() { return manager_; }
-  ObTableLoadClientService &get_client_service() { return client_service_; }
 private:
-  void abort_all_client_task();
+  void abort_all_client_task(int error_code);
   void fail_all_ctx(int error_code);
   void release_all_ctx();
 private:
@@ -97,93 +97,72 @@ private:
   class ObCheckTenantTask : public common::ObTimerTask
   {
   public:
-    ObCheckTenantTask(ObTableLoadService &service)
-      : service_(service), tenant_id_(common::OB_INVALID_ID), is_inited_(false) {}
+    ObCheckTenantTask(ObTableLoadService &service) : service_(service) {}
     virtual ~ObCheckTenantTask() = default;
-    int init(uint64_t tenant_id);
     void runTimerTask() override;
   private:
     ObTableLoadService &service_;
-    uint64_t tenant_id_;
-    bool is_inited_;
   };
   class ObHeartBeatTask : public common::ObTimerTask
   {
   public:
-    ObHeartBeatTask(ObTableLoadService &service)
-      : service_(service), tenant_id_(common::OB_INVALID_ID), is_inited_(false) {}
+    ObHeartBeatTask(ObTableLoadService &service) : service_(service) {}
     virtual ~ObHeartBeatTask() = default;
-    int init(uint64_t tenant_id);
     void runTimerTask() override;
   private:
     ObTableLoadService &service_;
-    uint64_t tenant_id_;
-    bool is_inited_;
   };
   class ObGCTask : public common::ObTimerTask
   {
   public:
-    ObGCTask(ObTableLoadService &service)
-      : service_(service), tenant_id_(common::OB_INVALID_ID), is_inited_(false) {}
+    ObGCTask(ObTableLoadService &service) : service_(service) {}
     virtual ~ObGCTask() = default;
-    int init(uint64_t tenant_id);
     void runTimerTask() override;
   private:
+    bool gc_mark_delete(ObTableLoadTableCtx *table_ctx);
     bool gc_heart_beat_expired_ctx(ObTableLoadTableCtx *table_ctx);
     bool gc_table_not_exist_ctx(ObTableLoadTableCtx *table_ctx);
   private:
     ObTableLoadService &service_;
-    uint64_t tenant_id_;
-    bool is_inited_;
   };
   class ObReleaseTask : public common::ObTimerTask
   {
   public:
-    ObReleaseTask(ObTableLoadService &service)
-      : service_(service), tenant_id_(common::OB_INVALID_ID), is_inited_(false) {}
+    ObReleaseTask(ObTableLoadService &service) : service_(service) {}
     virtual ~ObReleaseTask() = default;
-    int init(uint64_t tenant_id);
     void runTimerTask() override;
   private:
     ObTableLoadService &service_;
-    uint64_t tenant_id_;
-    bool is_inited_;
   };
   class ObClientTaskAutoAbortTask : public common::ObTimerTask
   {
   public:
-    ObClientTaskAutoAbortTask(ObTableLoadService &service)
-      : service_(service), tenant_id_(common::OB_INVALID_ID), is_inited_(false)
-    {
-    }
+    ObClientTaskAutoAbortTask(ObTableLoadService &service) : service_(service) {}
     virtual ~ObClientTaskAutoAbortTask() = default;
-    int init(uint64_t tenant_id);
     void runTimerTask() override;
   private:
     ObTableLoadService &service_;
-    uint64_t tenant_id_;
-    bool is_inited_;
   };
   class ObClientTaskPurgeTask : public common::ObTimerTask
   {
   public:
-    ObClientTaskPurgeTask(ObTableLoadService &service)
-      : service_(service), tenant_id_(common::OB_INVALID_ID), is_inited_(false)
-    {
-    }
+    static const int64_t CLIENT_TASK_BRIEF_RETENTION_PERIOD = 24LL * 60 * 60 * 1000 * 1000; // 1day
+  public:
+    ObClientTaskPurgeTask(ObTableLoadService &service) : service_(service) {}
     virtual ~ObClientTaskPurgeTask() = default;
-    int init(uint64_t tenant_id);
     void runTimerTask() override;
   private:
+    int add_client_task_brief(ObTableLoadClientTask *client_task);
+    void purge_client_task();
+    void purge_client_task_brief();
+  private:
     ObTableLoadService &service_;
-    uint64_t tenant_id_;
-    bool is_inited_;
   };
 private:
+  const uint64_t tenant_id_;
   ObTableLoadManager manager_;
   ObTableLoadAssignedMemoryManager assigned_memory_manager_;
   ObTableLoadAssignedTaskManager assigned_task_manager_;
-  ObTableLoadClientService client_service_;
   common::ObTimer timer_;
   ObCheckTenantTask check_tenant_task_;
   ObHeartBeatTask heart_beat_task_;
@@ -195,5 +174,5 @@ private:
   bool is_inited_;
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase
