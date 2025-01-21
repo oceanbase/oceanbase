@@ -29,6 +29,7 @@ namespace share
 {
 class ObGroupName;
 class ObTenantBase;
+class ObResourcePlanManager;
 
 typedef enum  : uint64_t {
   DEFAULT = 0,
@@ -157,9 +158,6 @@ public:
 
   // 删除租户cgroup规则
   int remove_cgroup(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
-
-  int add_self_to_cgroup(const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT, const bool is_background = false);
-
   // 设定指定租户cgroup组的cpu.shares
   int set_cpu_shares(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
   int get_cpu_shares(const uint64_t tenant_id, double &cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
@@ -201,6 +199,9 @@ private:
 private:
   friend class oceanbase::omt::ObTenant;
   friend class oceanbase::share::ObTenantBase;
+  friend class oceanbase::share::ObResourcePlanManager;
+  friend int oceanbase::lib::SET_GROUP_ID(uint64_t group_id, bool is_background);
+  int add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT, const bool is_background = false);
   int add_thread_to_cgroup_(const int64_t tid,const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT, const bool is_background = false);
   static int init_dir_(const char *curr_dir);
   static int init_full_dir_(const char *curr_path);

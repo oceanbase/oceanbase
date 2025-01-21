@@ -377,7 +377,7 @@ int ObTenantBase::pre_run()
   ObCgroupCtrl *cgroup_ctrl = get_cgroup();
   if (OB_NOT_NULL(cgroup_ctrl) && cgroup_ctrl->is_valid()) {
     // add thread to tenant OBCG_DEFAULT cgroup
-    ret = cgroup_ctrl->add_self_to_cgroup(id_);
+    ret = cgroup_ctrl->add_self_to_cgroup_(id_);
   }
 
   LOG_DEBUG("tenant thread pre_run", K(ret), K(thread_count_), K(id_), K(GET_GROUP_ID()));

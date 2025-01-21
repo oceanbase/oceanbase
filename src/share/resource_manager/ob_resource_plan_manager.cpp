@@ -96,39 +96,39 @@ int ObResourcePlanManager::refresh_global_background_cpu()
         LOG_WARN("fail to set background cpu cfs quota", K(ret));
       } else {
         if (compare_ret < 0) {
+          const int64_t phy_cpu_cnt = sysconf(_SC_NPROCESSORS_ONLN);
           int tmp_ret = OB_SUCCESS;
           omt::TenantIdList ids;
           GCTX.omt_->get_tenant_ids(ids);
           for (uint64_t i = 0; i < ids.size(); i++) {
             uint64_t tenant_id = ids[i];
-            double target_cpu = -1;
-            if (!is_virtual_tenant_id(tenant_id)) {
-              MTL_SWITCH(tenant_id)
-              {
-                target_cpu = MTL_CTX()->unit_max_cpu();
+            if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+              // do nothing
+              // meta tenant and sys tenant are unlimited
+            } else {
+              double target_cpu = -1;
+              if (OB_DTL_TENANT_ID == tenant_id) {
+                target_cpu = (phy_cpu_cnt <= 4) ? 1.0 : OB_DTL_CPU;
+              } else if (!is_virtual_tenant_id(tenant_id)) {
+                MTL_SWITCH(tenant_id)
+                {
+                  target_cpu = MTL_CTX()->unit_max_cpu();
+                }
               }
-            }
-            if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->compare_cpu(target_cpu, cpu, compare_ret))) {
-              LOG_WARN_RET(tmp_ret, "compare tenant cpu failed", K(tmp_ret), K(tenant_id));
-            } else if (compare_ret > 0) {
-              target_cpu = cpu;
-            }
-            if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(
-                    tenant_id, target_cpu, OB_INVALID_GROUP_ID, true /* is_background */))) {
-              LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K(tenant_id));
-            } else if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(
-                           tenant_id, target_cpu, USER_RESOURCE_OTHER_GROUP_ID, true /* is_background */))) {
-              LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(ret), K(tenant_id));
-            } else if (is_user_tenant(tenant_id)) {
-              uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+              if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->compare_cpu(target_cpu, cpu, compare_ret))) {
+                LOG_WARN_RET(tmp_ret, "compare tenant cpu failed", K(tmp_ret), K(tenant_id));
+              } else if (compare_ret > 0) {
+                target_cpu = cpu;
+              }
               if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(
-                      meta_tenant_id, target_cpu, OB_INVALID_GROUP_ID, true /* is_background */))) {
-                LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K(meta_tenant_id));
+                      tenant_id, target_cpu, OB_INVALID_GROUP_ID, true /* is_background */))) {
+                LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K(tenant_id));
               }
             }
           }
         }
-
+      }
+      if (OB_SUCC(ret) && 0 != compare_ret) {
         background_quota_ = cpu;
       }
     }
@@ -303,7 +303,7 @@ int ObResourcePlanManager::flush_directive_to_cgroup_fs(ObPlanDirectiveSet &dire
       double tenant_cpu_quota = 0;
       if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_cfs_quota(d.tenant_id_, tenant_cpu_quota, OB_INVALID_GROUP_ID))) {
         LOG_WARN("fail get cpu quota", K(d), K(ret));
-      } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(d.tenant_id_,
+      } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota_(d.tenant_id_,
                      -1 == tenant_cpu_quota ? -1 : tenant_cpu_quota * d.utilization_limit_ / 100,
                      d.group_id_))) {
         LOG_ERROR(
@@ -313,7 +313,7 @@ int ObResourcePlanManager::flush_directive_to_cgroup_fs(ObPlanDirectiveSet &dire
         if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_cfs_quota(
                 d.tenant_id_, tenant_cpu_quota, OB_INVALID_GROUP_ID, true /* is_background */))) {
           LOG_WARN("fail get cpu quota", K(d), K(ret));
-        } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(d.tenant_id_,
+        } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota_(d.tenant_id_,
                        -1 == tenant_cpu_quota ? -1 : tenant_cpu_quota * d.utilization_limit_ / 100,
                        d.group_id_,
                        true /* is_background */))) {

@@ -83,7 +83,6 @@ enum ObIOModule {
 };
 
 const int64_t SYS_MODULE_CNT = SYS_MODULE_END_ID - SYS_MODULE_START_ID;
-static constexpr char BACKGROUND_CGROUP[] = "background";
 
 const char *get_io_sys_group_name(ObIOModule module);
 struct ObIOFlag final
