@@ -11953,5 +11953,21 @@
       "info_cn": "",
       "background_cn": "",
       "ref_url": ""
+  },
+  "_current_default_catalog": {
+    "id": 10749,
+    "name": "_current_default_catalog",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "uint",
+    "info": "The default catalog for session.",
+    "flags": "SESSION | NEED_SERIALIZE | INVISIBLE",
+    "min_val": "0",
+    "max_val": "18446744073709551615",
+    "publish_version": "435",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
   }
 }

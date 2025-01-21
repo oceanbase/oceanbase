@@ -1750,7 +1750,8 @@ public:
         compat_type_(share::ObCompatType::COMPAT_MYSQL57),
         compat_version_(0),
         enable_sql_plan_monitor_(false),
-        ob_enable_parameter_anonymous_block_(false)
+        ob_enable_parameter_anonymous_block_(false),
+        current_default_catalog_(0)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -2055,6 +2056,7 @@ public:
     // No use. Placeholder.
     bool enable_sql_plan_monitor_;
     bool ob_enable_parameter_anonymous_block_;
+    uint64_t current_default_catalog_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };

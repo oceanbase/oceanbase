@@ -1358,6 +1358,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArrayUnion::eval_array_union,                        /* 825 */
   NULL, // ObExprArrayReplace::eval_array_replace,                    /* 826 */
   NULL, // ObExprArrayPopfront::eval_array_popfront,                  /* 827 */
+  NULL, // ObExprCurrentCatalog::eval_current_catalog,                /* 828 */
 
 };
 

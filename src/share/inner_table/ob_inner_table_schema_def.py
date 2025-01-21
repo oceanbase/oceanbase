@@ -16319,6 +16319,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keyword
 # 15497: __all_virtual_ss_tablet_compact_stat
 # 15498: __all_virtual_sswriter_group_stat
 # 15499: __all_virtual_sswriter_lease_mgr
+# 15500: __idx_15494_idx_catalog_name_real_agent
+# 15501: __idx_15495_idx_catalog_priv_catalog_name_real_agent
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -72914,6 +72916,9 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_pkg_coll_type'])
+
+# 101113 __idx_537_idx_catalog_name
+# 101114 __idx_539_idx_catalog_priv_catalog_name
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
