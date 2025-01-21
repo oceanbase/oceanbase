@@ -112,6 +112,9 @@ private:
                                          ObSelectStmt *select_stmt,
                                          ObSelectStmt *&view_stmt,
                                          TableItem *&table_item);
+  int replace_expr_skip_part(ObSelectStmt &select_stmt,
+                             ObIArray<ObRawExpr*> &old_col_exprs,
+                             ObIArray<ObRawExpr*> &new_col_exprs);
   int extract_replace_column_exprs(const ObSelectStmt &select_stmt,
                                    const ObSelectStmt &view_stmt,
                                    const uint64_t table_id,

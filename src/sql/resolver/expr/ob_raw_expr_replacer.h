@@ -68,6 +68,7 @@ public:
   int append_replace_exprs(const ObRawExprReplacer &other);
   int check_need_replace(const ObRawExpr *old_expr, ObRawExpr *&new_expr, bool &need_replace);
   bool is_existed(const ObRawExpr *target) const;
+  int add_skip_expr(const ObRawExpr *target);
 
 private:
   // types and constants
