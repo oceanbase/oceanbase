@@ -178,6 +178,7 @@ public:
         agg_cell_proj_(allocator_),
         is_count_all_(false),
         has_auto_inc_(false),
+        skip_check_rowkey_(false),
         has_global_index_(false),
         has_local_index_(false),
         is_global_index_scan_(false),
@@ -361,6 +362,7 @@ public:
                K_(entity_type),
                K_(cur_cluster_version),
                K_(is_ttl_table),
+               K_(skip_check_rowkey),
                K_(is_skip_scan),
                K_(is_client_set_put),
                K_(binlog_row_image_type),
@@ -502,6 +504,7 @@ public:
   OB_INLINE bool is_count_all() const { return is_count_all_; }
   OB_INLINE ObPhysicalPlanCtx *get_physical_plan_ctx() { return exec_ctx_.get_physical_plan_ctx(); }
   OB_INLINE bool has_auto_inc() { return has_auto_inc_; }
+  OB_INLINE void set_skip_check_rowkey(bool skip_check_rowkey) { skip_check_rowkey_ = skip_check_rowkey; }
   // for global index
   OB_INLINE bool has_global_index() { return has_global_index_; }
   OB_INLINE bool is_global_index_scan() const { return is_global_index_scan_; }
@@ -781,6 +784,8 @@ private:
   bool is_count_all_;
   // for auto inc
   bool has_auto_inc_;
+  // for ttl del
+  bool skip_check_rowkey_;
   // for increment/append
   ObTableIncAppendStage inc_append_stage_;
   bool return_affected_entity_;

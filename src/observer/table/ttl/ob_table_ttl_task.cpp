@@ -464,6 +464,7 @@ int ObTableTTLDeleteTask::init_tb_ctx(ObKvSchemaCacheGuard &schema_cache_guard,
   ctx.set_entity_type(ObTableEntityType::ET_KV);
   ctx.set_operation_type(ObTableOperationType::DEL);
   ctx.set_batch_operation(NULL);
+  ctx.set_skip_check_rowkey(true);
   ctx.set_schema_cache_guard(&schema_cache_guard);
   ctx.set_schema_guard(&schema_guard_);
   ctx.set_simple_table_schema(simple_table_schema_);
