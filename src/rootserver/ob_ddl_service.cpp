@@ -8154,6 +8154,35 @@ int ObDDLService::refill_columns_id_for_check_constraint(
   return ret;
 }
 
+int ObDDLService::refill_column_id_array_for_constraint(
+    const ObAlterTableArg::AlterConstraintType op_type,
+    const ObTableSchema &new_table_schema,
+    AlterTableSchema &alter_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == op_type) {
+    ObTableSchema::constraint_iterator cst_iter = alter_table_schema.constraint_begin_for_non_const_iter();
+    for (; OB_SUCC(ret) && cst_iter != alter_table_schema.constraint_end_for_non_const_iter(); cst_iter++) {
+      if (OB_ISNULL(*cst_iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected", K(ret));
+      } else if (CONSTRAINT_TYPE_NOT_NULL == (*cst_iter)->get_constraint_type()) {
+        ObString cst_col_name;
+        const ObColumnSchemaV2 *column = nullptr;
+        if (OB_FAIL((*cst_iter)->get_not_null_column_name(cst_col_name))) {
+          LOG_WARN("get not null cst column name failed", K(ret), KPC(*cst_iter));
+        } else if (OB_ISNULL(column = new_table_schema.get_column_schema(cst_col_name))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("no column in new table schema", K(ret), K(cst_col_name));
+        } else if (OB_FAIL((*cst_iter)->assign_not_null_cst_column_id(column->get_column_id()))) {
+          LOG_WARN("failed to assign not null cst column id", K(ret), KPC(column));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::rebuild_constraint_check_expr(
     const share::schema::ObColumnSchemaV2 &orig_column,
     const share::schema::ObColumnSchemaV2 &alter_column,
@@ -13058,15 +13087,21 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           obrpc::ObAlterTableArg::CONSTRAINT_NO_OPERATION) {
         if (ObDDLType::DDL_TABLE_REDEFINITION == ddl_type
             || ObDDLType::DDL_MODIFY_COLUMN == ddl_type) {
-          if (OB_FAIL(alter_table_constraints(
-              alter_table_arg.alter_constraint_type_,
-              schema_guard,
-              *orig_table_schema,
-              alter_table_schema,
-              new_table_schema,
-              ddl_operator,
-              trans))) {
-            LOG_WARN("alter table constraints failed", K(ret));
+          HEAP_VAR(AlterTableSchema, tmp_alter_table_schema) {
+            if (OB_FAIL(tmp_alter_table_schema.assign(alter_table_schema))) {
+              LOG_WARN("failed to assign", K(ret));
+            } else if (OB_FAIL(refill_column_id_array_for_constraint(alter_table_arg.alter_constraint_type_, new_table_schema, tmp_alter_table_schema))) {
+              LOG_WARN("failed to refill columns id", K(ret));
+            } else if (OB_FAIL(alter_table_constraints(
+                alter_table_arg.alter_constraint_type_,
+                schema_guard,
+                *orig_table_schema,
+                tmp_alter_table_schema,
+                new_table_schema,
+                ddl_operator,
+                trans))) {
+              LOG_WARN("alter table constraints failed", K(ret));
+            }
           }
         }
       }
@@ -13093,13 +13128,6 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                     ddl_operator,
                                     trans,
                                     alter_table_arg.allocator_));
-      }
-      if (OB_SUCC(ret) && need_redistribute_column_id) {
-        if (OB_FAIL(redistribute_column_ids(new_table_schema))) {
-          LOG_WARN("failed to redistribute column ids", K(ret));
-        } else {
-          // do nothing
-        }
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(new_table_schema.sort_column_array_by_column_id())) {
@@ -19373,20 +19401,7 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
     } else {
       ObColumnNameMap col_name_map;
       const ObConstraint *cst = *alter_table_schema.constraint_begin_for_non_const_iter();
-      const uint64_t orig_column_id = *(cst->cst_col_begin());
-      uint64_t hidden_column_id = 0;
-      if (nullptr == orig_table_schema->get_column_schema(orig_column_id)) {
-        hidden_column_id = orig_column_id;
-      } else if (OB_FAIL(col_name_map.init(*orig_table_schema, *hidden_table_schema, alter_table_schema))) {
-        LOG_WARN("failed to init column name map", K(ret));
-      } else if (OB_FAIL(get_hidden_table_column_id_by_orig_column_id(*orig_table_schema,
-                                                                      *hidden_table_schema,
-                                                                      col_name_map,
-                                                                      orig_column_id,
-                                                                      hidden_column_id))) {
-        LOG_WARN("failed to get hidden table column id", K(ret), K(orig_column_id));
-      }
-
+      const uint64_t hidden_column_id = *(cst->cst_col_begin());
       if (OB_SUCC(ret)) {
         const ObColumnSchemaV2 *col_schema = new_hidden_table_schema.get_column_schema(hidden_column_id);
         ObColumnSchemaV2 new_col_schema;

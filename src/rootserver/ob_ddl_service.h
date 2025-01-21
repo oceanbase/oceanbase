@@ -1918,6 +1918,10 @@ private:
     const share::schema::ObColumnSchemaV2 &alter_column_schema,
     const bool is_oracle_mode,
     common::ObIAllocator &allocator);
+  int refill_column_id_array_for_constraint(
+    const obrpc::ObAlterTableArg::AlterConstraintType op_type,
+    const share::schema::ObTableSchema &new_table_schema,
+    share::schema::AlterTableSchema &alter_table_schema);
   /**
    * Rebuild check constraint expr, if the expr str contains the old column name
    *
