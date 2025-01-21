@@ -922,7 +922,7 @@ int ObDbmsWorkloadRepository::append_fmt_ash_view_sql(
       }
     }
     if (ash_report_params.port != -1) {
-      if (OB_FAIL(sql_string.append_fmt(" AND ASH.PORT = '%lu'", ash_report_params.port))) {
+      if (OB_FAIL(sql_string.append_fmt(" AND ASH.SVR_PORT = '%lu'", ash_report_params.port))) {
         LOG_WARN("failed to assign query string", K(ret));
       }
     }
@@ -1805,9 +1805,9 @@ int ObDbmsWorkloadRepository::print_ash_top_execution_phase(
                                 "IN_STORAGE_READ",
                                 "IN_STORAGE_WRITE",
                                 "IN_REMOTE_DAS_EXECUTION",
-                                "IN_FILTER_ROWS",
                                 "IN_PLSQL_COMPILATION",
                                 "IN_PLSQL_EXECUTION",
+                                "IN_FILTER_ROWS",
                                 "IN_RPC_ENCODE",
                                 "IN_RPC_DECODE",
                                 "IN_CONNECTION_MGR"};
@@ -2932,9 +2932,9 @@ int ObDbmsWorkloadRepository::print_top_sql_with_top_wait_events(
                                 "IN_STORAGE_READ",
                                 "IN_STORAGE_WRITE",
                                 "IN_REMOTE_DAS_EXECUTION",
-                                "IN_FILTER_ROWS",
                                 "IN_PLSQL_COMPILATION",
                                 "IN_PLSQL_EXECUTION",
+                                "IN_FILTER_ROWS",
                                 "IN_RPC_ENCODE",
                                 "IN_RPC_DECODE",
                                 "IN_CONNECTION_MGR"};
@@ -4011,7 +4011,7 @@ int ObDbmsWorkloadRepository::process_ash_report_params(
       ash_report_params.user_input_ash_begin_time = ash_report_params.ash_begin_time;
       ash_report_params.user_input_ash_end_time = ash_report_params.ash_end_time;
 
-      if (7 >= params.count() && data_version >= DATA_VERSION_4_2_3_0) {
+      if (5 < params.count()) {
         if (OB_FAIL(params.at(5).get_string(ash_report_params.svr_ip))) {
           LOG_WARN("failed to get svr_ip from params", K(ret), K(params.at(5)));
         }
@@ -4029,7 +4029,7 @@ int ObDbmsWorkloadRepository::process_ash_report_params(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (9 == params.count() && data_version >= DATA_VERSION_4_2_4_0) {
+      } else if (7 < params.count()) {
         ObString tmp;
         if (OB_FAIL(params.at(8).get_string(tmp))) {
           LOG_WARN("failed to get report_type from params", K(ret), K(params.at(8)));
