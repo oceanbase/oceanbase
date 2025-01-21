@@ -128,7 +128,7 @@ public:
            share::schema::ObMultiVersionSchemaService &schema_service,
            ObRootBalancer &root_balance,
            ObRootService &root_service);
-  virtual bool check_inner_stat() const { return inited_ && loaded_; }
+  virtual int check_inner_stat() const;
   virtual int load();
   common::SpinRWLock& get_lock() { return lock_; }
   common::ObMySQLProxy &get_sql_proxy() { return *proxy_; }
@@ -1089,8 +1089,7 @@ int ObUnitManager::check_schema_zone_unit_enough(
   int ret = OB_SUCCESS;
   enough = true;
   SpinRLockGuard guard(lock_);
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
+  if (OB_FAIL(check_inner_stat())) {
     RS_LOG(WARN, "variable is not init", K(ret));
   } else if (zone.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1117,8 +1116,7 @@ int ObUnitManager::inner_check_schema_zone_unit_enough(
   common::ObArray<share::ObZoneReplicaNumSet> zone_locality_array;
   enough = true;
   UNUSED(logonly_unit_num);
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
+  if (OB_FAIL(check_inner_stat())) {
     RS_LOG(WARN, "variable is not init", K(ret));
   } else if (zone.is_empty()) {
     ret = OB_INVALID_ARGUMENT;

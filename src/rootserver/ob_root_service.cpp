@@ -2801,6 +2801,12 @@ int ObRootService::drop_tenant(const ObDropTenantArg &arg)
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (OB_FAIL(ddl_service_.drop_tenant(arg))) {
     LOG_WARN("ddl_service_ drop_tenant failed", K(arg), K(ret));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
+      if (OB_CANCELED != tmp_ret) {
+        LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+      }
+    }
   }
   return ret;
 }
