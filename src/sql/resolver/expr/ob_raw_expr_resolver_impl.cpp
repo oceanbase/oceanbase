@@ -1783,6 +1783,9 @@ int ObRawExprResolverImpl::process_remote_sequence_node(const ParseNode *node, O
     ret = OB_ERR_PARSER_SYNTAX;
     LOG_WARN("all star should be replaced");
   } else {
+    if (OB_NOT_NULL(ctx_.query_ctx_)) {
+      ctx_.query_ctx_->set_has_dblink(true);
+    }
     ParseNode* dblink_node = node->children_[3];
     if (dblink_node != NULL) {
       column_ref.dblink_name_.assign_ptr(const_cast<char*>(dblink_node->str_value_),
