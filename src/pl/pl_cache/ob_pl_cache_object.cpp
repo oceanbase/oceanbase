@@ -43,6 +43,18 @@ void ObPLCacheObject::reset()
   expressions_.reset();
 }
 
+int ObPLCacheObject::set_tenant_sys_schema_version(schema::ObSchemaGetterGuard &schema_guard,
+                                                    int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_schema_version = OB_INVALID_VERSION;
+  int64_t sys_schema_version = OB_INVALID_VERSION;
+  OZ (schema_guard.get_schema_version(tenant_id, tenant_schema_version));
+  OZ (schema_guard.get_schema_version(OB_SYS_TENANT_ID, sys_schema_version));
+  OX (set_tenant_schema_version(tenant_schema_version));
+  OX (set_sys_schema_version(sys_schema_version));
+  return ret;
+}
 
 int ObPLCacheObject::set_params_info(const ParamStore &params, bool is_anonymous)
 {
@@ -173,7 +185,7 @@ int ObPLCacheObject::update_cache_obj_stat(sql::ObILibCacheCtx &ctx)
   stat.pl_schema_id_ = pc_ctx.key_.key_id_;
   stat.gen_time_ = ObTimeUtility::current_time();
   stat.hit_count_ = 0;
-  stat.schema_version_ = get_tenant_schema_version();
+  stat.pl_evict_version_ = get_tenant_schema_version();
   MEMCPY(stat.sql_id_, pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_));
 
   if (OB_SUCC(ret)) {

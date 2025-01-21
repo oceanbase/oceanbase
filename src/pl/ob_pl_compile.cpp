@@ -591,15 +591,10 @@ int ObPLCompiler::compile(
       }
 
       if (OB_SUCC(ret)) {
-        int64_t tenant_id = session_info_.get_effective_tenant_id();
-        int64_t tenant_schema_version = OB_INVALID_VERSION;
-        int64_t sys_schema_version = OB_INVALID_VERSION;
-        OZ (schema_guard_.get_schema_version(tenant_id, tenant_schema_version));
-        OZ (schema_guard_.get_schema_version(OB_SYS_TENANT_ID, sys_schema_version));
-        OX (func.set_tenant_schema_version(tenant_schema_version));
-        OX (func.set_sys_schema_version(sys_schema_version));
+        OZ (func.set_tenant_sys_schema_version(schema_guard_, session_info_.get_effective_tenant_id()));
         OX (func.set_ret_type(func_ast.get_ret_type()));
         OX (func.get_stat_for_update().pl_cg_mem_hold_ = cg_jit_mem);
+        OX (func.get_stat_for_update().schema_version_ = routine.get_schema_version());
       }
       if (OB_SUCC(ret) && OB_FAIL(check_dep_schema(schema_guard_, func.get_dependency_table()))) {
         LOG_WARN("fail to check schema version", K(ret));
@@ -1021,6 +1016,14 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   int64_t compile_end = ObTimeUtility::current_time();
   OX (package.get_stat_for_update().compile_time_ = compile_end - compile_start);
   OX (session_info_.add_plsql_compile_time(compile_end - compile_start));
+  OZ (package.set_tenant_sys_schema_version(schema_guard_, session_info_.get_effective_tenant_id()));
+  if (package_info.is_for_trigger()) {
+    CK (OB_NOT_NULL(trigger_info));
+    OX (package.get_stat_for_update().schema_version_ = trigger_info->get_schema_version());
+  } else {
+    OX (package.get_stat_for_update().schema_version_ = package_info.get_schema_version());
+  }
+  OX (package.get_stat_for_update().name_ = package.get_name());
   if (PL_PACKAGE_BODY == package_ast.get_package_type()) {
     OX (package.get_stat_for_update().type_ = ObPLCacheObjectType::PACKAGE_BODY_TYPE);
   } else {
