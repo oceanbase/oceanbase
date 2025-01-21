@@ -391,7 +391,9 @@ public:
   int to_double(double &value) const;
   int to_number(ObIAllocator *allocator, number::ObNumber &number) const;
   int to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t = nullptr) const;
+  int to_mdatetime(ObMySQLDateTime &value, ObTimeConvertCtx *cvrt_ctx_t = nullptr) const;
   int to_date(int32_t &value) const;
+  int to_mdate(ObMySQLDate &value, const ObDateSqlMode date_sql_mode) const;
   int to_otimestamp(common::ObOTimestampData &value, ObTimeConvertCtx *cvrt_ctx = nullptr) const;
   int to_time(int64_t &value) const;
   int to_bit(uint64_t &value) const;
@@ -900,6 +902,8 @@ private:
   int trans_to_boolean(ObIAllocator* allocator, ObString num_str, ObIJsonBase* &origin) const;
   int trans_to_date_timestamp(ObIAllocator* allocator, ObString num_str,
                               ObIJsonBase* &origin, bool is_date) const;
+  int trans_to_mdate(ObIAllocator* allocator, ObString num_str,
+                              ObIJsonBase* &origin) const;
   int trans_json_node (ObIAllocator* allocator, ObIJsonBase* &left, ObIJsonBase* &right) const;
   // Used to compare with multiple right_arg, when left_arg is the results found by the sub_path
   //

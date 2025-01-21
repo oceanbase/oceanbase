@@ -2142,6 +2142,7 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
   int64_t server_collation = CS_TYPE_INVALID;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (raw_params.empty()) {
     // do nothing
   } else if (raw_params_idx.count() != raw_params.count()) {
@@ -2157,6 +2158,9 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
     LOG_WARN("get sys variable failed", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(&session, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session, false /*is_ddl*/,
+                       enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   }
   for (int i = 0; OB_SUCC(ret) && i < raw_params.count(); ++i) {
     value.reset();
@@ -2179,8 +2183,8 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
                                                       session.get_actual_nls_length_semantics(),
                                                       static_cast<ObCollationType>(server_collation),
                                                       NULL, session.get_sql_mode(),
-                                                      enable_decimal_int,
-                                                      compat_type,
+                                                      enable_decimal_int, compat_type,
+                                                      enable_mysql_compatible_dates,
                                                       session.get_local_ob_enable_plan_cache()))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (OB_FAIL(add_param_to_param_store(value, fixed_param_store))) {

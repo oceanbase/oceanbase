@@ -2503,7 +2503,7 @@ int ObDbmsStats::restore_table_stats(sql::ObExecContext &ctx,
       ret = OB_ERR_DBMS_STATS_PL;
       LOG_WARN("Invalid or inconsistent input values", K(ret));
       LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid or inconsistent input values");
-    } else if (!params.at(2).is_datetime()) {
+    } else if (!params.at(2).is_datetime() && !params.at(2).is_mysql_datetime()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid argument", K(ret), K(params.at(2)),
                                        K(get_type_name(params.at(2).get_type())));
@@ -2513,6 +2513,12 @@ int ObDbmsStats::restore_table_stats(sql::ObExecContext &ctx,
                                                          get_timezone_info(ctx.get_my_session()),
                                                          specify_time))) {
         LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
+      }
+    } else if (params.at(2).is_mysql_datetime()) {
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_timestamp(params.at(2).get_mysql_datetime(),
+                                                          get_timezone_info(ctx.get_my_session()),
+                                                          specify_time))) {
+        LOG_WARN("failed to mdatetime to timestamp", K(ret), K(specify_time));
       }
     }
   }
@@ -2603,7 +2609,8 @@ int ObDbmsStats::restore_schema_stats(sql::ObExecContext &ctx,
       specify_time = params.at(1).get_otimestamp_value().time_us_;
     }
   } else if (lib::is_mysql_mode()) {
-    if (!params.at(1).is_null() && !params.at(1).is_datetime()) {
+    if (!params.at(1).is_null() && !params.at(1).is_datetime()
+          && !params.at(1).is_mysql_datetime()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid argument", K(ret), K(params.at(1)),
                                        K(get_type_name(params.at(1).get_type())));
@@ -2612,6 +2619,12 @@ int ObDbmsStats::restore_schema_stats(sql::ObExecContext &ctx,
       if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(specify_time,
                                                          get_timezone_info(ctx.get_my_session()),
                                                          specify_time))) {
+        LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
+      }
+    } else if (params.at(1).is_mysql_datetime()) {
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_timestamp(params.at(1).get_mysql_datetime(),
+                                                          get_timezone_info(ctx.get_my_session()),
+                                                          specify_time))) {
         LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
       }
     }
@@ -2684,7 +2697,8 @@ int ObDbmsStats::purge_stats(sql::ObExecContext &ctx,
       specify_time = params.at(0).get_otimestamp_value().time_us_;
     }
   } else if (lib::is_mysql_mode()) {
-    if (!params.at(0).is_null() && !params.at(0).is_datetime()) {
+    if (!params.at(0).is_null() && !params.at(0).is_datetime()
+          && !params.at(0).is_mysql_datetime()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid argument", K(ret), K(params.at(0)),
                                        K(get_type_name(params.at(0).get_type())));
@@ -2693,6 +2707,12 @@ int ObDbmsStats::purge_stats(sql::ObExecContext &ctx,
       if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(specify_time,
                                                          get_timezone_info(ctx.get_my_session()),
                                                          specify_time))) {
+        LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
+      }
+    } else if (params.at(0).is_mysql_datetime()) {
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_timestamp(params.at(0).get_mysql_datetime(),
+                                                          get_timezone_info(ctx.get_my_session()),
+                                                          specify_time))) {
         LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
       }
     }

@@ -190,6 +190,10 @@ public:                                                                         
   {                                                                                                \
     return get<int64_t>(idx);                                                                      \
   }                                                                                                \
+  OB_INLINE int64_t get_mysql_datetime(const int64_t idx) const                            \
+  {                                                                                                \
+    return get<int64_t>(idx);                                                              \
+  }                                                                                                \
   OB_INLINE int64_t get_timestamp(const int64_t idx) const                                         \
   {                                                                                                \
     return get<int64_t>(idx);                                                                      \
@@ -197,6 +201,10 @@ public:                                                                         
   OB_INLINE int32_t get_date(const int64_t idx) const                                              \
   {                                                                                                \
     return get<int32_t>(idx);                                                                      \
+  }                                                                                                \
+  OB_INLINE int32_t get_mysql_date(const int64_t idx) const                                    \
+  {                                                                                                \
+    return get<int32_t>(idx);                                                                  \
   }                                                                                                \
   OB_INLINE int64_t get_time(const int64_t idx) const                                              \
   {                                                                                                \
@@ -323,6 +331,10 @@ public:                                                                         
   {                                                                                                \
     set<int64_t>(idx, v);                                                                          \
   }                                                                                                \
+  OB_INLINE void set_mysql_datetime(const int64_t idx, const ObMySQLDateTime v)                    \
+  {                                                                                                \
+    set<ObMySQLDateTime>(idx, v);                                                                  \
+  }                                                                                                \
   OB_INLINE void set_timestamp(const int64_t idx, const int64_t v)                                 \
   {                                                                                                \
     set<int64_t>(idx, v);                                                                          \
@@ -334,6 +346,10 @@ public:                                                                         
   OB_INLINE void set_date(const int64_t idx, const int32_t v)                                      \
   {                                                                                                \
     set<int32_t>(idx, v);                                                                          \
+  }                                                                                                \
+  OB_INLINE void set_mysql_date(const int64_t idx, const ObMySQLDate v)                            \
+  {                                                                                                \
+    set<ObMySQLDate>(idx, v);                                                                      \
   }                                                                                                \
   OB_INLINE void set_year(const int64_t idx, const int8_t v)                                       \
   {                                                                                                \

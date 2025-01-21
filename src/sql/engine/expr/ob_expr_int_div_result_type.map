@@ -2981,8 +2981,8 @@ static constexpr ObObjType INT_DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* UDT */
     ObIntType,         /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType */
-    ObMaxType,         /* ObMySQLDateType */
-    ObMaxType,         /* ObMySQLDateTimeType */
+    ObIntType,         /* ObMySQLDateType */
+    ObIntType,         /* ObMySQLDateTimeType */
     ObMaxType,         /* ObRoaringBitmapType */
   },
   /*ObCollectionSQLType*/
@@ -3095,7 +3095,7 @@ static constexpr ObObjType INT_DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObIntType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSQLType*/
-    ObMaxType,         /* ObDecimalIntType */
+    ObIntType,         /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType */
     ObIntType,         /* ObMySQLDateType */
     ObIntType,         /* ObMySQLDateTimeType */
@@ -3153,7 +3153,7 @@ static constexpr ObObjType INT_DIV_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObIntType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSQLType*/
-    ObMaxType,         /* ObDecimalIntType */
+    ObIntType,         /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType */
     ObIntType,         /* ObMySQLDateType */
     ObIntType,         /* ObMySQLDateTimeType */

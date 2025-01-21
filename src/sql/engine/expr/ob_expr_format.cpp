@@ -143,6 +143,8 @@ int ObExprFormat::calc_result_type(ObExprResType &type, ObExprResType *type_arra
         case ObDateTimeType:
         case ObTimestampType:
         case ObDateType:
+        case ObMySQLDateType:
+        case ObMySQLDateTimeType:
         case ObTimeType:
         case ObYearType: {
           int64_t max_char_length = type_array[0].get_length();

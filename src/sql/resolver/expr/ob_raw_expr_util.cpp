@@ -5657,6 +5657,38 @@ int ObRawExprUtils::build_const_date_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::build_const_mysql_datetime_expr(ObRawExprFactory &expr_factory,
+                                                    int64_t int_value,
+                                                    ObConstRawExpr *&expr){
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *c_expr = NULL;
+  if (OB_FAIL(expr_factory.create_raw_expr(static_cast<ObItemType>(ObMySQLDateTimeType), c_expr))) {
+    LOG_WARN("fail to create const raw c_expr", K(ret));
+  } else {
+    ObObj obj;
+    obj.set_mysql_datetime(int_value);
+    c_expr->set_value(obj);
+    expr = c_expr;
+  }
+  return ret;
+}
+
+int ObRawExprUtils::build_const_mysql_date_expr(ObRawExprFactory &expr_factory,
+                                                int64_t int_value,
+                                                ObConstRawExpr *&expr){
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *c_expr = NULL;
+  if (OB_FAIL(expr_factory.create_raw_expr(static_cast<ObItemType>(ObMySQLDateType), c_expr))) {
+    LOG_WARN("fail to create const raw c_expr", K(ret));
+  } else {
+    ObObj obj;
+    obj.set_mysql_date(int_value);
+    c_expr->set_value(obj);
+    expr = c_expr;
+  }
+  return ret;
+}
+
 int ObRawExprUtils::build_mul_expr(
     ObRawExprFactory &raw_expr_factory,
     ObRawExpr *expr1,
@@ -7358,7 +7390,9 @@ int ObRawExprUtils::need_wrap_to_string(const ObExprResType &src_res_type,
       case ObIntervalDSType:
       case ObIntervalYMType:
       case ObNVarchar2Type:
-      case ObNCharType: {
+      case ObNCharType:
+      case ObMySQLDateType:
+      case ObMySQLDateTimeType: {
         // use the generic cast expr to process the enumset cast.
         need_wrap = !src_res_type.is_enum_set_with_subschema();
         break;

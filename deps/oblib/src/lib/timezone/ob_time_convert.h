@@ -55,19 +55,21 @@ class ObFixedBitSet;
 #define DT_TYPE_ORACLE      (1UL << 8)  //oracle timestamp to nanosecond (nano, tz, ltz)
 #define DT_TYPE_STORE_UTC   (1UL << 9)  //store utc  (tz, ltz)
 #define DT_TYPE_TIMEZONE    (1UL << 10) //oracle timestamp with time zone (tz)
+#define DT_MODE_MYSQL_DATES (1UL << 11) // mysql compatible dates
 
 typedef uint64_t ObDTMode;
 
 #define DT_TYPE_DATETIME          (DT_TYPE_DATE | DT_TYPE_TIME)
 #define DT_TYPE_ORACLE_TIMESTAMP  (DT_TYPE_DATETIME | DT_TYPE_ORACLE)
 #define DT_TYPE_ORACLE_TTZ        (DT_TYPE_DATETIME | DT_TYPE_ORACLE | DT_TYPE_TIMEZONE)
-#define DT_TYPE_CNT               (3)
+#define DT_TYPE_MYSQL_DATE        (DT_TYPE_DATE | DT_MODE_MYSQL_DATES)
+#define DT_TYPE_MYSQL_DATETIME    (DT_TYPE_DATETIME | DT_MODE_MYSQL_DATES)
+#define DT_TYPE_CNT               (5)
 
 #define HAS_TYPE_DATE(mode)     (DT_TYPE_DATE & (mode))
 #define HAS_TYPE_TIME(mode)     (DT_TYPE_TIME & (mode))
-#define IS_TYPE_DATE(mode)      (DT_TYPE_DATE == (mode))
 #define IS_TYPE_TIME(mode)      (DT_TYPE_TIME == (mode))
-#define IS_TYPE_DATETIME(mode)  (DT_TYPE_DATETIME == (mode))
+#define IS_TYPE_DATETIME(mode)  (DT_TYPE_DATETIME == (mode) || DT_TYPE_MYSQL_DATETIME == (mode))
 #define IS_NEG_TIME(mode)       (DT_MODE_NEG & (mode))
 #define IS_SUN_BEGIN(mode)      ((DT_WEEK_SUN_BEGIN & (mode)) ? 1 : 0)
 #define IS_ZERO_BEGIN(mode)     ((DT_WEEK_ZERO_BEGIN & (mode)) ? 1 : 0)
@@ -75,6 +77,7 @@ typedef uint64_t ObDTMode;
 #define HAS_TYPE_ORACLE(mode)   ((DT_TYPE_ORACLE & (mode)) ? 1 : 0)
 #define HAS_TYPE_TIMEZONE(mode) ((DT_TYPE_TIMEZONE & (mode)) ? 1 : 0)
 #define HAS_TYPE_STORE_UTC(mode) ((DT_TYPE_STORE_UTC & (mode)) ? 1 : 0)
+#define IS_MYSQL_COMPAT_DATES(mode) ((DT_MODE_MYSQL_DATES & (mode)) ? 1 : 0)
 
 #define DATE_PART_CNT   3
 #define TIME_PART_CNT   4
@@ -150,9 +153,11 @@ extern const int64_t USECS_PER_MIN;
 #define SEC_TO_MIN(secs)    ((secs) / SECS_PER_MIN)
 #define MIN_TO_USEC(min)    ((min) * SECS_PER_MIN * USECS_PER_SEC)
 #define TIMESTAMP_MAX_VAL   253402272000
-#define DATETIME_MAX_VAL    253402300799999999
-#define DATE_MAX_VAL        2932896
-#define DATETIME_MIN_VAL    -62167132800000000
+#define DATETIME_MAX_VAL    253402300799999999 // '9999-12-31 23:59:59.999999'
+#define MYSQL_DATETIME_MAX_VAL    9147936188962652735 // '9999-12-31 23:59:59.999999'
+#define DATE_MAX_VAL        2932896 // '9999-12-31'
+#define DATETIME_MIN_VAL    -62167132800000000 // '0000-01-01 00:00:00.000000'
+#define MYSQL_DATETIME_MIN_VAL  0 // '0000-00-00 00:00:00.000000'
 #define MYSQL_TIMESTAMP_MAX_VAL 253402214399999999
 #define MYSQL_TIMESTAMP_MIN_VAL -62167046400000000
 #define ORACLE_DATETIME_MIN_VAL -62135596800000000 //start from '0001-1-1 00:00:00'
@@ -161,7 +166,8 @@ extern const int64_t USECS_PER_MIN;
 
 #define EPOCH_WDAY    4
 #define WEEK_MODE_CNT   8
-extern const bool IS_LEAP_YEAR[10000];
+extern const bool INNER_IS_LEAP_YEAR[10000];
+#define IS_LEAP_YEAR(y) ((y >= 0 && y < 10000) ? INNER_IS_LEAP_YEAR[y] : (y == 0 ? 0 : ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0)))
 extern const int32_t DAYS_UNTIL_MON[2][12 + 1];
 extern const int32_t DAYS_PER_YEAR[2];
 extern const int8_t (*WDAY_OFFSET)[DAYS_PER_WEEK + 1];
@@ -228,7 +234,13 @@ struct ObDateSqlMode {
     no_zero_date_ = (bool)(SMO_NO_ZERO_DATE & sql_mode);
     no_zero_in_date_ = (bool)(SMO_NO_ZERO_IN_DATE & sql_mode);
   }
-  TO_STRING_KV(K_(allow_invalid_dates), K_(no_zero_date), K_(allow_incomplete_dates), K_(no_zero_in_date));
+  // There are two situations where zero in date is allowed. The first is allow_incomplete_dates_,
+  // and the second is when configure `enable_mysql_compatible_dates_` is turned on and
+  // sql mode `no_zero_in_date` is not set.
+  bool allow_zero_in_date(const bool is_mysql_compat_dates) const
+  { return allow_incomplete_dates_ || (is_mysql_compat_dates && !no_zero_in_date_); }
+  TO_STRING_KV(K_(allow_invalid_dates), K_(no_zero_date), K_(allow_incomplete_dates),
+               K_(no_zero_in_date));
 };
 
 class ObIntervalParts
@@ -338,24 +350,88 @@ struct ObTimeConvertCtx
      :tz_info_(tz_info),
       oracle_nls_format_(),
       is_timestamp_(is_timestamp),
-      need_truncate_(need_truncate) {}
+      need_truncate_(need_truncate),
+      date_sql_mode_(0) {}
   ObTimeConvertCtx(const ObTimeZoneInfo *tz_info, const ObString &oracle_nls_format, const bool is_timestamp)
      :tz_info_(tz_info),
       oracle_nls_format_(oracle_nls_format),
-      is_timestamp_(is_timestamp) {}
+      is_timestamp_(is_timestamp),
+      date_sql_mode_(0) {}
   const ObTimeZoneInfo *tz_info_;
   ObString oracle_nls_format_;
   bool is_timestamp_; //means mysql timestamp?
   bool need_truncate_;
+  ObDateSqlMode date_sql_mode_;
 };
+
+struct ObMySQLDate
+{
+  ObMySQLDate() : date_(0) {}
+  ObMySQLDate(int32_t date) : date_(date) {}
+  inline bool operator==(const ObMySQLDate &other) const { return date_ == other.date_; }
+  inline bool operator!=(const ObMySQLDate &other) const { return date_ != other.date_; }
+  inline bool operator>(const ObMySQLDate &other) const { return date_ > other.date_; }
+  inline bool operator<(const ObMySQLDate &other) const { return date_ < other.date_; }
+  inline bool operator>=(const ObMySQLDate &other) const { return date_ >= other.date_; }
+  inline bool operator<=(const ObMySQLDate &other) const { return date_ <= other.date_; }
+  TO_STRING_KV(K_(date), K_(year), K_(month), K_(day));
+  union {
+    struct {
+      uint32_t day_ : 5;
+      uint32_t month_ : 4;
+      uint32_t year_ : 14;
+      uint32_t reserved_ : 9;
+    };
+    int32_t date_;
+  };
+};
+
+struct ObMySQLDateTime
+{
+private:
+  static const int32_t DATETIME_YEAR_OFFSET = 13;
+public:
+  ObMySQLDateTime() : datetime_(0) {}
+  ObMySQLDateTime(int64_t datetime) : datetime_(datetime) {}
+  inline bool operator==(const ObMySQLDateTime &other) const { return datetime_ == other.datetime_; }
+  inline bool operator!=(const ObMySQLDateTime &other) const { return datetime_ != other.datetime_; }
+  inline bool operator>(const ObMySQLDateTime &other) const { return datetime_ > other.datetime_; }
+  inline bool operator<(const ObMySQLDateTime &other) const { return datetime_ < other.datetime_; }
+  inline bool operator>=(const ObMySQLDateTime &other) const { return datetime_ >= other.datetime_; }
+  inline bool operator<=(const ObMySQLDateTime &other) const { return datetime_ <= other.datetime_; }
+  inline int32_t year() const { return year_month_ / DATETIME_YEAR_OFFSET; }
+  inline int32_t month() const { return year_month_ % DATETIME_YEAR_OFFSET; }
+  inline static uint64_t year_month(uint64_t year, uint64_t month)
+  { return year * DATETIME_YEAR_OFFSET + month; }
+  TO_STRING_KV(K_(datetime), "year", year(), "month", month(), K_(day), K_(hour), K_(minute),
+               K_(second), K_(microseconds));
+  union {
+    struct {
+      uint64_t microseconds_ : 24;
+      uint64_t second_ : 6;
+      uint64_t minute_ : 6;
+      uint64_t hour_ : 5;
+      uint64_t day_ : 5;
+      uint64_t year_month_: 17;
+      uint64_t sign_ : 1;
+    };
+    int64_t datetime_;
+  };
+};
+
+typedef ObMySQLDate MySQLDateType;
+typedef ObMySQLDateTime MySQLDateTimeType;
+
 class ObTimeConverter
 {
 public:
   // ZERO_DATETIME is the minimal value that satisfied: 0 == value % USECS_PER_DAY.
-  static const int64_t ZERO_DATETIME = static_cast<int64_t>(-9223372022400000000);
+  static const int64_t ZERO_DATETIME = static_cast<int64_t>(-9223372022400000000); // 0-0-0 0:0:0
+  static const int64_t MYSQL_ZERO_DATETIME = 0; // 0-0-0 0:0:0
 
   // ZERO_DATE is ZERO_DATETIME / USECS_PER_DAY
-  static const int32_t ZERO_DATE = static_cast<int32_t>(-106751991);
+  static const int32_t ZERO_DATE = static_cast<int32_t>(-106751991); // 0-0-0
+  static const int32_t MYSQL_ZERO_DATE = 0; // 0-0-0
   static const int64_t ZERO_TIME = 0;
   static const uint8_t ZERO_YEAR = 0;
   static const ObString DEFAULT_NLS_DATE_FORMAT;
@@ -364,6 +440,7 @@ public:
   static const ObString COMPAT_OLD_NLS_DATE_FORMAT;
   static const ObString COMPAT_OLD_NLS_TIMESTAMP_FORMAT;
   static const ObString COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT;
+
 private:
   struct ObYearWeekWdayElems {
     enum ElemSetState
@@ -400,7 +477,10 @@ public:
   // int / double / string -> datetime(timestamp) / interval / date / time / year.
   static int int_to_datetime(int64_t int_part, int64_t dec_part, const ObTimeConvertCtx &cvrt_ctx,
                              int64_t &value, const ObDateSqlMode date_sql_mode);
+  static int int_to_mdatetime(int64_t int_part, int64_t dec_part, const ObTimeConvertCtx &cvrt_ctx,
+                             ObMySQLDateTime &value, const ObDateSqlMode date_sql_mode);
   static int int_to_date(int64_t int64, int32_t &value, const ObDateSqlMode date_sql_mode);
+  static int int_to_mdate(int64_t int64, ObMySQLDate &value, const ObDateSqlMode date_sql_mode);
   static int int_to_time(int64_t int64, int64_t &value);
   static int int_to_year(int64_t int64, uint8_t &value);
   static int literal_date_validate_oracle(const ObString &str, const ObTimeConvertCtx &cvrt_ctx, ObDateTime &value);
@@ -412,9 +492,15 @@ public:
                                                  ObDateUnitType part_begin, ObDateUnitType part_end);
   static int str_to_datetime(const ObString &str, const ObTimeConvertCtx &cvrt_ctx, int64_t &value,
                              int16_t *scale = NULL, const ObDateSqlMode date_sql_mode = 0);
+  static int str_to_mdatetime(const ObString &str, const ObTimeConvertCtx &cvrt_ctx,
+                             ObMySQLDateTime &value, int16_t *scale = NULL,
+                             const ObDateSqlMode date_sql_mode = 0);
   static int str_to_date_oracle(const ObString &str, const ObTimeConvertCtx &cvrt_ctx, ObDateTime &value);
   static int str_to_datetime_format(const ObString &str, const ObString &fmt,
                                     const ObTimeConvertCtx &cvrt_ctx, int64_t &value,
+                                    int16_t *scale, const ObDateSqlMode date_sql_mode);
+  static int str_to_mdatetime_format(const ObString &str, const ObString &fmt,
+                                    const ObTimeConvertCtx &cvrt_ctx, ObMySQLDateTime &value,
                                     int16_t *scale, const ObDateSqlMode date_sql_mode);
   static int str_to_otimestamp(const ObString &str, const ObTimeConvertCtx &cvrt_ctx,
                                const ObObjType target_type, ObOTimestampData &value,
@@ -453,30 +539,45 @@ public:
 
   static int str_is_date_format(const ObString &str, bool &date_flag);
   static int str_to_date(const ObString &str, int32_t &value, const ObDateSqlMode date_sql_mode = 0);
+  static int str_to_mdate(const ObString &str, ObMySQLDate &value, const ObDateSqlMode date_sql_mode = 0);
   static int str_to_time(const ObString &str, int64_t &value, int16_t *scale = NULL, const bool &need_truncate = false);
   static int str_to_year(const ObString &str, uint8_t &value);
   static int str_to_interval(const ObString &str, ObDateUnitType unit_type, int64_t &value);
   // int / double / string <- datetime(timestamp) / date / time / year.
   static int datetime_to_int(int64_t value, const ObTimeZoneInfo *tz_info, int64_t &int64);
+  static int mdatetime_to_int(ObMySQLDateTime value, int64_t &int64);
   static int datetime_to_double(int64_t value, const ObTimeZoneInfo *tz_info, double &dbl);
+  static int mdatetime_to_double(ObMySQLDateTime value, double &dbl);
   static int datetime_to_str(int64_t value, const ObTimeZoneInfo *tz_info, const ObString &nls_format,
                              int16_t scale, char *buf, int64_t buf_len, int64_t &pos, bool with_delim = true);
+  static int mdatetime_to_str(ObMySQLDateTime value, const ObTimeZoneInfo *tz_info,
+                              const ObString &nls_format, int16_t scale, char *buf, int64_t buf_len,
+                              int64_t &pos, bool with_delim = true);
   static int otimestamp_to_str(const ObOTimestampData &value, const ObDataTypeCastParams &dtc_params,
                                const int16_t scale, const ObObjType type, char *buf,
                                int64_t buf_len, int64_t &pos);
   static int date_to_int(int32_t value, int64_t &int64);
+  static int mdate_to_int(ObMySQLDate value, int64_t &int64);
   static int date_to_str(int32_t value, char *buf, int64_t buf_len, int64_t &pos);
+  static int mdate_to_str(ObMySQLDate value, char *buf, int64_t buf_len, int64_t &pos);
   static int time_to_int(int64_t value, int64_t &int64);
   static int time_to_double(int64_t value, double &dbl);
   static int time_to_str(int64_t value, int16_t scale,
                          char *buf, int64_t buf_len, int64_t &pos, bool with_delim = true);
   static int time_to_datetime(int64_t t_value, int64_t cur_dt_value,
                               const ObTimeZoneInfo *tz_info, int64_t &dt_value, const ObObjType expect_type);
+  static int time_to_mdatetime(int64_t t_value, int64_t cur_dt_value,
+                               const ObTimeZoneInfo *tz_info, ObMySQLDateTime &mdt_value);
   static int year_to_int(uint8_t value, int64_t &int64);
   static int year_to_str(uint8_t value, char *buf, int64_t buf_len, int64_t &pos);
   // inner cast between datetime, timestamp, date, time, year.
   static int datetime_to_timestamp(int64_t dt_value, const ObTimeZoneInfo *tz_info, int64_t &ts_value);
+  static int mdatetime_to_timestamp(ObMySQLDateTime mdt_value, const ObTimeZoneInfo *tz_info, int64_t &ts_value);
   static int timestamp_to_datetime(int64_t ts_value, const ObTimeZoneInfo *tz_info, int64_t &dt_value);
+  static int timestamp_to_mdatetime(int64_t ts_value, const ObTimeZoneInfo *tz_info, ObMySQLDateTime &mdt_value);
+  static int mdatetime_to_datetime(ObMySQLDateTime mdt_value, int64_t &dt_value, const ObDateSqlMode date_sql_mode);
+  static int mdatetime_to_datetime_without_check(ObMySQLDateTime mdt_value, int64_t &dt_value);
+  static int datetime_to_mdatetime(int64_t dt_value, ObMySQLDateTime &mdt_value);
   static inline void datetime_to_odate(int64_t dt_value, int64_t &odate_value) { odate_value = dt_value; }
   static int odate_to_otimestamp(int64_t in_value_us, const ObTimeZoneInfo *tz_info, const ObObjType out_type,
                                  ObOTimestampData &out_value);
@@ -488,10 +589,21 @@ public:
   static int extract_offset_from_otimestamp(const ObOTimestampData &in_value, const ObTimeZoneInfo *tz_info,
                                             int32_t &offset_min, ObTime &ob_time);
   static int datetime_to_date(int64_t dt_value, const ObTimeZoneInfo *tz_info, int32_t &d_value);
+  static int datetime_to_mdate(int64_t dt_value, const ObTimeZoneInfo *tz_info, ObMySQLDate &md_value);
+  static int mdatetime_to_date(ObMySQLDateTime mdt_value, int32_t &d_value, const ObDateSqlMode date_sql_mode);
+  static int mdatetime_to_mdate(ObMySQLDateTime mdt_value, ObMySQLDate &md_value);
   static int datetime_to_time(int64_t dt_value, const ObTimeZoneInfo *tz_info, int64_t &t_value);
+  static int mdatetime_to_time(ObMySQLDateTime mdt_value, int64_t &t_value);
   static int datetime_to_year(int64_t dt_value, const ObTimeZoneInfo *tz_info, uint8_t &y_value);
+  static int mdatetime_to_year(ObMySQLDateTime mdt_value, uint8_t &y_value);
   static int date_to_datetime(int32_t d_value, const ObTimeConvertCtx &cvrt_ctx, int64_t &dt_value);
+  static int date_to_mdatetime(int32_t d_value, ObMySQLDateTime &mdt_value);
+  static int mdate_to_datetime(ObMySQLDate md_value, const ObTimeConvertCtx &cvrt_ctx, int64_t &dt_value, const ObDateSqlMode date_sql_mode);
+  static int mdate_to_mdatetime(ObMySQLDate md_value, ObMySQLDateTime &mdt_value);
+  static int mdate_to_date(ObMySQLDate md_value, int32_t &d_value, const ObDateSqlMode date_sql_mode);
+  static int date_to_mdate(int32_t d_value, ObMySQLDate &md_value);
   static int date_to_year(int32_t d_value, uint8_t &y_value);
+  static int mdate_to_year(ObMySQLDate md_value, uint8_t &y_value);
   // string -> offset. value: seconds, not useconds.
   static int str_to_offset(const ObString &str, int32_t &value, int &ret_more,
                            const bool is_oracle_mode, const bool need_check_valid = false);
@@ -504,6 +616,7 @@ public:
   static int date_adjust(const ObString &base_str, const ObString &interval_str,
                          ObDateUnitType unit_type, int64_t &value, bool is_add);
   static bool is_valid_datetime(const int64_t usec);
+  static bool is_valid_mdatetime(const ObMySQLDateTime usec);
   static bool is_valid_otimestamp(const int64_t time_us, const int32_t tail_nsec);
   static void calc_oracle_temporal_minus(const ObOTimestampData &v1, const ObOTimestampData &v2, ObIntervalDSValue &result);
   static int date_add_nmonth(const int64_t ori_date_value, const int64_t nmonth,
@@ -518,6 +631,8 @@ public:
   static int calc_last_date_of_the_month(const int64_t ori_date_value, int64_t &result_date_value,
                                          const ObObjType dest_type,
                                          const ObDateSqlMode date_sql_mode);
+  static int calc_last_mdate_of_the_month(const ObMySQLDateTime mdatetime, ObMySQLDate &mdate,
+                                          const ObDateSqlMode date_sql_mode);
   static int calc_next_date_of_the_wday(const int64_t ori_date_value, const ObString &wday_name, const int64_t week_count, int64_t &result_date_value);
   static int calc_days_and_months_between_dates(const int64_t date_value1, const int64_t date_value2, int64_t &months_diff, int64_t &rest_utc_diff);
 
@@ -546,10 +661,14 @@ public:
   static int str_to_ob_interval(const ObString &str, ObDateUnitType unit_type, ObInterval &ob_interval);
   static int usec_to_ob_time(int64_t usecs, ObTime &ob_time);
   static int datetime_to_ob_time(int64_t value, const ObTimeZoneInfo *tz_info, ObTime &ob_time);
+  template <bool calc_date = false>
+  static int mdatetime_to_ob_time(const ObMySQLDateTime &value, ObTime &ob_time);
   static int otimestamp_to_ob_time(const ObObjType type, const ObOTimestampData &ot_data,
                                    const ObTimeZoneInfo *tz_info, ObTime &ob_time,
                                    const bool store_utc_time = true);
   static int date_to_ob_time(int32_t value, ObTime &ob_time);
+  template <bool calc_date = false>
+  static int mdate_to_ob_time(ObMySQLDate value, ObTime &ob_time);
   static int time_to_ob_time(int64_t value, ObTime &ob_time);
   // int / string <- ObTime -> datetime(timestamp) / date / time.
   static int64_t ob_time_to_int(const ObTime &ob_time, ObDTMode mode);
@@ -569,8 +688,23 @@ public:
                                    char *buf, int64_t buf_len, int64_t &pos, bool &res_null,
                                    const ObString &locale_name);
   static int ob_time_to_datetime(ObTime &ob_time, const ObTimeConvertCtx &cvrt_ctx, int64_t &value);
+  static int ob_time_to_mdatetime(ObTime &ob_time, ObMySQLDateTime &value);
   static int ob_time_to_otimestamp(ObTime &ob_time, ObOTimestampData &value);
   static int32_t ob_time_to_date(ObTime &ob_time);
+  static ObMySQLDate ob_time_to_mdate(ObTime &ob_time);
+  static int32_t calc_date(int64_t year, int64_t month, int64_t day);
+  static int32_t calc_date(const ObMySQLDate mdate)
+  { return calc_date(mdate.year_, mdate.month_, mdate.day_); }
+  static int32_t calc_yday(const ObTime &ob_time) {
+    int32_t yday = 0;
+    const int32_t *parts = ob_time.parts_;
+    if (OB_UNLIKELY(parts[DT_MON] <= 0 || parts[DT_MON] > 13)) {
+      yday = 0;
+    } else {
+      yday = DAYS_UNTIL_MON[IS_LEAP_YEAR(parts[DT_YEAR])][parts[DT_MON] - 1] + parts[DT_MDAY];
+    }
+    return yday;
+  }
   static int64_t ob_time_to_time(const ObTime &ob_time);
   static int ob_interval_to_interval(const ObInterval &ob_interval, int64_t &value);
   // year / month / day / quarter / week / hour / minite / second / microsecond.
@@ -630,6 +764,10 @@ public:
     date = usec = 0;
     return OB_ERR_DATETIME_INTERVAL_INTERNAL_ERROR;
   }
+  template <typename T>
+  static int parse_ob_time(T value, ObTime &ob_time, bool calc_date = false) {
+    return OB_ERR_DATETIME_INTERVAL_INTERNAL_ERROR;
+  }
 
 public:
   // other functions.
@@ -638,9 +776,11 @@ public:
   static int32_t calc_max_name_length(const ObTimeConstStr names[], const int64_t size);
   static int time_overflow_trunc(int64_t &value, const ObScale &time_scale = 0);
   static void round_datetime(int16_t scale, int64_t &value);
+  static void round_mdatetime(int16_t scale, ObMySQLDateTime &value);
   static ObOTimestampData round_otimestamp(const int16_t scale, const ObOTimestampData &in_ot_data);
   static int round_interval_ds(const ObScale scale, ObIntervalDSValue &value);
   static void trunc_datetime(int16_t scale, int64_t &value);
+  static void trunc_mdatetime(int16_t scale, ObMySQLDateTime &value);
   static bool ob_is_date_datetime_all_parts_zero(const int64_t &value)
   {
     return (ZERO_DATE == value) || (ZERO_DATETIME == value);
@@ -744,6 +884,7 @@ private:
   static int get_day_and_month_from_year_day(const int32_t yday, const int32_t year, int32_t &month, int32_t &day);
   static int set_ob_time_year_may_conflict(ObTime &ob_time, int32_t &julian_year_value,
                                           int32_t check_year, int32_t set_year, bool overwrite);
+  static void carry_over_microseconds(ObMySQLDateTime &value);
 private:
   ObTimeConverter();
   virtual ~ObTimeConverter();
@@ -862,6 +1003,49 @@ public:
   ObCollationType connection_collation_; //as client cs for now
 };
 
+template <bool calc_date>
+int ObTimeConverter::mdatetime_to_ob_time(const ObMySQLDateTime &value, ObTime &ob_time)
+{
+  int ret = OB_SUCCESS;
+  int32_t *parts = ob_time.parts_;
+  if (OB_UNLIKELY(MYSQL_ZERO_DATETIME == value.datetime_)) {
+    MEMSET(ob_time.parts_, 0, sizeof(*parts) * TOTAL_PART_CNT);
+    parts[DT_DATE] = ZERO_DATE;
+  } else {
+    parts[DT_YEAR] = value.year();
+    parts[DT_MON] = value.month();
+    parts[DT_MDAY] = value.day_;
+    parts[DT_HOUR] = value.hour_;
+    parts[DT_MIN] = value.minute_;
+    parts[DT_SEC] = value.second_;
+    parts[DT_USEC] = value.microseconds_;
+    parts[DT_DATE] = 0;
+    if (calc_date) {
+      parts[DT_DATE] = ob_time_to_date(ob_time);
+    }
+  }
+  return ret;
+}
+
+template <bool calc_date>
+int ObTimeConverter::mdate_to_ob_time(ObMySQLDate value, ObTime &ob_time)
+{
+  int ret = OB_SUCCESS;
+  int32_t *parts = ob_time.parts_;
+  if (OB_UNLIKELY(MYSQL_ZERO_DATE == value.date_)) {
+    memset(parts, 0, sizeof(*parts) * DATETIME_PART_CNT);
+    parts[DT_DATE] = ZERO_DATE;
+  } else {
+    parts[DT_YEAR] = value.year_;
+    parts[DT_MON] = value.month_;
+    parts[DT_MDAY] = value.day_;
+    parts[DT_DATE] = 0;
+    if (calc_date) {
+      parts[DT_DATE] = ob_time_to_date(ob_time);
+    }
+  }
+  return ret;
+}
 /// @fn get year from days, ObTimeConverter::ZERO_DATE NOT allowed to run in this function
 /// @brief accuracy relies on 0 <= year <= 9999
 ///   1. The algorithm is derived from the formula y*365 + (y-1)/4 - (y-1)/100 + (y-1)/400 = D
@@ -907,7 +1091,7 @@ OB_INLINE void ObTimeConverter::ydays_to_month_mdays(
     YearType year, DateType dt_yday,
     MonthType &month, DateType &dt_mday)
 {
-  bool is_leap = IS_LEAP_YEAR[year];
+  bool is_leap = IS_LEAP_YEAR(year);
   // month
   month = 1 + ((dt_yday - 1) >> 5); // 1 + (dt_yday - 1) / 32
   if (OB_UNLIKELY(dt_yday > DAYS_UNTIL_MON[is_leap][month])) {
@@ -928,7 +1112,7 @@ OB_INLINE void ObTimeConverter::to_week(
   int32_t is_zero_begin = IS_ZERO_BEGIN(mode);
   int32_t is_ge_4_begin = IS_GE_4_BEGIN(mode);
   if (dt_yday > DAYS_PER_NYEAR - 3 && is_ge_4_begin && !is_zero_begin) {
-    int32_t days_cur_year = DAYS_PER_YEAR[IS_LEAP_YEAR[year]];
+    int32_t days_cur_year = DAYS_PER_YEAR[IS_LEAP_YEAR(year)];
     int32_t wday_next_yday1 = WDAY_OFFSET[days_cur_year - dt_yday + 1][dt_wday];
     int32_t yday_next_week1 = YDAY_WEEK1[wday_next_yday1][is_sun_begin][is_ge_4_begin];
     if (dt_yday >= days_cur_year + yday_next_week1) {
@@ -940,7 +1124,7 @@ OB_INLINE void ObTimeConverter::to_week(
     int32_t wday_cur_yday1 = WDAY_OFFSET[(1 - dt_yday) % DAYS_PER_WEEK][dt_wday];
     int32_t yday_cur_week1 = YDAY_WEEK1[wday_cur_yday1][is_sun_begin][is_ge_4_begin];
     if (dt_yday < yday_cur_week1 && !is_zero_begin) {
-      int32_t days_prev_year = DAYS_PER_YEAR[IS_LEAP_YEAR[year - 1]];
+      int32_t days_prev_year = DAYS_PER_YEAR[IS_LEAP_YEAR(year - 1)];
       int32_t wday_prev_yday1 = WDAY_OFFSET[(1 - days_prev_year - dt_yday) % DAYS_PER_WEEK][dt_wday];
       int32_t yday_prev_week1 = YDAY_WEEK1[wday_prev_yday1][is_sun_begin][is_ge_4_begin];
       week = (days_prev_year + dt_yday - yday_prev_week1 + DAYS_PER_WEEK) / DAYS_PER_WEEK;
@@ -962,9 +1146,6 @@ OB_INLINE int ObTimeConverter::parse_date_usec(
   int ret = OB_SUCCESS;
   date = value;  // if (ZERO_DATE == date) { date = ZERO_DATE; }
   usec = 0;
-  if (ObTimeConverter::ZERO_DATE == date) {
-    // do nothing
-  }
   return ret;
 }
 template<>
@@ -986,6 +1167,60 @@ OB_INLINE int ObTimeConverter::parse_date_usec(
       --date;
       usec += USECS_PER_DAY;
     }
+  }
+  return ret;
+}
+
+template<>
+OB_INLINE int ObTimeConverter::parse_date_usec(
+    ObMySQLDate value,
+    int64_t tz_offset, bool is_oracle,
+    DateType &date, UsecType &usec)
+{
+  int ret = OB_SUCCESS;
+  date = calc_date(value);
+  usec = 0;
+  return ret;
+}
+
+template<>
+OB_INLINE int ObTimeConverter::parse_date_usec(
+    ObMySQLDateTime value,
+    int64_t tz_offset, bool is_oracle,
+    DateType &date, UsecType &usec)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObTimeConverter::MYSQL_ZERO_DATETIME == value.datetime_)) {
+    date = ObTimeConverter::ZERO_DATE;
+    usec = 0;
+  } else {
+    date = calc_date(value.year(), value.month(), value.day_);
+    usec = ((value.hour_ * MINS_PER_HOUR + value.minute_) * SECS_PER_MIN + value.second_) * USECS_PER_SEC
+            + value.microseconds_;
+  }
+  return ret;
+}
+
+template<>
+OB_INLINE int ObTimeConverter::parse_ob_time(ObMySQLDate value, ObTime &ob_time, bool calc_date)
+{
+  int ret = OB_SUCCESS;
+  if (calc_date) {
+    ret = mdate_to_ob_time<true>(value, ob_time);
+  } else {
+    ret = mdate_to_ob_time<false>(value, ob_time);
+  }
+  return ret;
+}
+
+template<>
+OB_INLINE int ObTimeConverter::parse_ob_time(ObMySQLDateTime value, ObTime &ob_time, bool calc_date)
+{
+  int ret = OB_SUCCESS;
+  if (calc_date) {
+    ret = mdatetime_to_ob_time<true>(value, ob_time);
+  } else {
+    ret = mdatetime_to_ob_time<false>(value, ob_time);
   }
   return ret;
 }

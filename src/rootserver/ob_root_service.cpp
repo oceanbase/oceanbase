@@ -2063,6 +2063,8 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
       LOG_WARN("failed to update _enable_dbms_job_package", K(ret));
     } else if (OB_FAIL(set_bloom_filter_ratio_config_())) {
       LOG_WARN("failed to update _bloom_filter_ratio", K(ret));
+    } else if (OB_FAIL(enable_mysql_compatible_dates_config_())) {
+      LOG_WARN("fail to update _enable_mysql_compatible_dates config", K(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -12244,6 +12246,19 @@ int ObRootService::set_bloom_filter_ratio_config_()
   if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _bloom_filter_ratio = 3;", affected_rows))) {
     LOG_WARN("update _bloom_filter_ratio failed", K(ret));
   } else if (OB_FAIL(check_config_result("_bloom_filter_ratio", "3"))) {
+    LOG_WARN("failed to check config same", K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::enable_mysql_compatible_dates_config_()
+{
+  int64_t affected_rows = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _enable_mysql_compatible_dates = true;",
+              affected_rows))) {
+    LOG_WARN("update _enable_mysql_compatible_dates to false failed", K(ret));
+  } else if (OB_FAIL(check_config_result("_enable_mysql_compatible_dates", "true"))) {
     LOG_WARN("failed to check config same", K(ret));
   }
   return ret;

@@ -424,6 +424,10 @@ DEF_BOOL(_nested_loop_join_enabled, OB_TENANT_PARAMETER, "True",
          "enable/disable nested loop join",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //
+DEF_BOOL(_enable_mysql_compatible_dates, OB_TENANT_PARAMETER, "False",
+         "Specifies whether to use MySQL-compatible date format that allows for invalid dates.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+//
 DEF_BOOL(_enable_enum_set_subschema, OB_TENANT_PARAMETER, "True",
          "Specifies whether to enable the enum/set extended type info is stored as subschema "
          "and to activate the related new type cast logic behavior.",

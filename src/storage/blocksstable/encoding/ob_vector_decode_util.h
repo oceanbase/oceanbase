@@ -1336,6 +1336,7 @@ int ObVecDecodeUtils::load_byte_aligned_vector(
     break;
   }
   case VEC_TC_DATE:
+  case VEC_TC_MYSQL_DATE:
   case VEC_TC_DEC_INT32: {
     // int32_t
     LOAD_VEC_BY_TYPE(int32_t, INTEGER_DATA_TYPE);
@@ -1343,6 +1344,7 @@ int ObVecDecodeUtils::load_byte_aligned_vector(
   }
   case VEC_TC_INTEGER:
   case VEC_TC_DATETIME:
+  case VEC_TC_MYSQL_DATETIME:
   case VEC_TC_TIME:
   case VEC_TC_UNKNOWN:
   case VEC_TC_INTERVAL_YM:

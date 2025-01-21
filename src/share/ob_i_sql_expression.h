@@ -152,7 +152,8 @@ public:
      session_(NULL),
      udf_meta_(NULL),
      cast_mode_(CM_NONE),
-     raw_expr_(NULL)
+     raw_expr_(NULL),
+     enable_mysql_compatible_dates_(false)
   {}
 
   inline ObCollationType get_coll_type() const {
@@ -221,13 +222,18 @@ public:
   inline void set_tz_info_map(const ObTZInfoMap * map) {
     tz_info_map_ = map;
   }
+  inline bool enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
+  inline void set_enable_mysql_compatible_dates(const bool enable_mysql_compatible_dates) {
+    enable_mysql_compatible_dates_ = enable_mysql_compatible_dates;
+  }
   TO_STRING_KV(K_(coll_type),
                K_(div_precision_increment),
                K_(ob_max_allowed_packet),
                KP_(session),
                KP_(udf_meta),
                K_(cast_mode),
-               K_(sql_mode));
+               K_(sql_mode),
+               K_(enable_mysql_compatible_dates));
 private:
 //  const sql::ObSQLSessionInfo *my_session_;
    ObCollationType coll_type_;
@@ -248,6 +254,7 @@ private:
    sql::ObRawExpr *raw_expr_;
    //used to switch params in subquery comparison operators
    int64_t cur_row_idx_;
+   bool enable_mysql_compatible_dates_;
 };
 
 class ObISqlExpression

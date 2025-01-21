@@ -6275,17 +6275,31 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
       }
     } else if (ObTimestampType == child_type.get_type()
                || ObDateTimeType == child_type.get_type()) {
-      if (ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
+      if (ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()
+            || ObMySQLDateTimeType == dst_type.get_type() || ObMySQLDateType == dst_type.get_type()) {
         if (child_type.get_accuracy().get_precision() == dst_acc.get_precision()
             && child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
           is_lossless = true;
         }
+      }
+    } else if (ObMySQLDateTimeType == child_type.get_type()) {
+      if (ObMySQLDateTimeType == dst_type.get_type()) {
+        if (child_type.get_accuracy().get_precision() == dst_acc.get_precision() &&
+            child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
+          is_lossless = true;
+         }
       }
     } else if (ObDateTC == child_tc || ObTimeTC == child_tc) {
       if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type()
           || ObTimestampType == dst_type.get_type()) {
         if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) { is_lossless = true; }
       }
+    } else if (ObMySQLDateTC == child_tc) {
+      if (child_tc == dst_tc || ObMySQLDateTimeType == dst_type.get_type() ||  ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
+        if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+           is_lossless = true;
+         }
+       }
     } else if (ObYearTC == child_tc) {
       if (ObNumberTC == dst_tc) {
         ObAccuracy lossless_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[ObCompatibilityMode::MYSQL_MODE][child_type.get_type()];
@@ -6441,17 +6455,27 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
             is_lossless = true;
           }
         }
-      } else if (ObDateTimeType == child_type.get_type()) {
+      } else if (ObDateTimeType == child_type.get_type()
+                  || ObMySQLDateTimeType == child_type.get_type()) {
         // do nothing
       } else if (ObTimestampType == child_type.get_type()) {
-        if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type()) {
+        if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type()
+              || ObMySQLDateTimeType == dst_type.get_type() || ObMySQLDateType == dst_type.get_type()) {
           if (child_type.get_accuracy().get_precision() == dst_acc.get_precision() &&
               child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
             is_lossless = true;
           }
         }
       } else if (ObDateTC == child_tc || ObTimeTC == child_tc) {
-        if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
+        if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type()
+              || ObTimestampType == dst_type.get_type()
+              || ObMySQLDateTimeType == dst_type.get_type()) {
+          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+            is_lossless = true;
+          }
+        }
+      } else if (ObMySQLDateTC == child_tc) {
+        if (child_tc == dst_tc || ObMySQLDateTimeType == dst_type.get_type() || ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
           if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
             is_lossless = true;
           }

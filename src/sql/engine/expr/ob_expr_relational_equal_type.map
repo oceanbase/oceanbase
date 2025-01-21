@@ -55,8 +55,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType] =
   ObMaxType,            /* ObUserDefinedSqlType */
   ObDecimalIntType,     /* ObDecimalIntType     */
   ObMaxType,            /* ObCollectionSQLType  */
-  ObMaxType,            /* ObMySQLDateType      */
-  ObMaxType,            /* ObMySQLDateTimeType  */
+  ObMySQLDateType,      /* ObMySQLDateType      */
+  ObMySQLDateTimeType,  /* ObMySQLDateTimeType  */
   ObMaxType,            /* ObRoaringBitmapType  */
 };
 

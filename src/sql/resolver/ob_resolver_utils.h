@@ -381,6 +381,7 @@ public:
                            const ObSQLMode mode,
                            bool enable_decimal_int_type,
                            const ObCompatType compat_type,
+                           const bool enable_mysql_compatible_dates,
                            bool use_plan_cache,
                            bool is_from_pl = false,
                            bool formalize_int_precision = false);
@@ -400,6 +401,7 @@ public:
                                const ObSessionNLSParams &nls_session_param,
                                uint64_t tenant_id,
                                const bool enable_decimal_int_type,
+                               const bool enable_mysql_compatible_dates,
                                const bool convert_real_type_to_decimal = false);
 
   static int resolve_str_charset_info(const ParseNode &type_node,
@@ -883,6 +885,7 @@ public:
                             const ObBitSet<> &formalize_prec_idx,
                             const ObPCParam *pc_param,
                             const int64_t param_idx,
+                            const bool enable_mysql_compatible_dates,
                             ObObjParam &obj_param,
                             bool &is_param,
                             const bool enable_decimal_int);

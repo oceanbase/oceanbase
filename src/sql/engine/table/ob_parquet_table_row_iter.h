@@ -110,11 +110,13 @@ private:
     int load_uint32_to_int64_vec();
     int load_int32_to_int32_vec();
     int load_bool_to_int64_vec();
+    int load_date_to_mysql_date();
     int load_string_col();
     int load_fixed_string_col();
     int load_decimal_any_col();
     //[TODO EXTERNAL TABLE] float16
     int load_date_col_to_datetime();
+    int load_date_col_to_mysql_datetime();
     int load_year_col();
     int load_time_millis_col();
     int load_time_nanos_col();

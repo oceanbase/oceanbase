@@ -138,6 +138,7 @@ private:
                                  const sql::ObExpr &expr,
                                  sql::ObEvalCtx &eval_ctx,
                                  const ObObj &obj);
+  static int adjust_date_datum(const ObExpr &expr, const ObObj &obj, ObDatum &datum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableExprCgService);
 };

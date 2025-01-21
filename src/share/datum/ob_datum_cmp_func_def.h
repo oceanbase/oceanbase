@@ -227,7 +227,10 @@ template <> struct ObDatumTCCmp<ObUIntTC, ObIntTC> : public ObUnsignedSignedCmp 
 template <> struct ObDatumTCCmp<ObEnumSetTC, ObIntTC> : public ObUnsignedSignedCmp {};
 template <> struct ObDatumTCCmp<ObUIntTC, ObEnumSetTC> : public ObTCPayloadCmp<ObUIntTC> {};
 template <> struct ObDatumTCCmp<ObEnumSetTC, ObUIntTC> : public ObTCPayloadCmp<ObUIntTC> {};
-
+template <>
+struct ObDatumTCCmp<ObMySQLDateTC, ObMySQLDateTC> : public ObTCPayloadCmp<ObMySQLDateTC> {};
+template <>
+struct ObDatumTCCmp<ObMySQLDateTimeTC, ObMySQLDateTimeTC> : public ObTCPayloadCmp<ObMySQLDateTimeTC> {};
 
 // special process for extend and null class type.
 

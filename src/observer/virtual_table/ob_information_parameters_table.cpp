@@ -162,7 +162,8 @@ int ObInformationParametersTable::fill_row_cells(const ObRoutineInfo *routine_in
         }
         case (DATETIME_PRECISION): {
           if(common::ObDateTimeTC == param_type.get_type_class()
-             || ObTimeTC == param_type.get_type_class()) {
+             || ObTimeTC == param_type.get_type_class()
+             || common::ObMySQLDateTimeTC == param_type.get_type_class()) {
             cells[col_idx].set_uint64(static_cast<uint64_t>(param_type.get_scale()));
           } else {
             cells[col_idx].set_null();

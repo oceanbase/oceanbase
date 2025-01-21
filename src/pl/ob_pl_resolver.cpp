@@ -2256,7 +2256,11 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
         TENANT_CONF(session_info.get_effective_tenant_id()));
     bool convert_real_to_decimal =
         (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
-    if (OB_FAIL(ObResolverUtils::resolve_data_type(*sp_data_type_node,
+    bool enable_mysql_compatible_dates = false;
+    if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info, false /*is_ddl*/,
+                              enable_mysql_compatible_dates))) {
+      LOG_WARN("fail to check enable mysql compatible dates", K(ret));
+    } else if (OB_FAIL(ObResolverUtils::resolve_data_type(*sp_data_type_node,
                                       ident_name,
                                       scalar_data_type,
                                       is_oracle_mode(),
@@ -2264,6 +2268,7 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
                                       session_info.get_session_nls_params(),
                                       session_info.get_effective_tenant_id(),
                                       false, // TODO
+                                      enable_mysql_compatible_dates,
                                       convert_real_to_decimal))) {
       LOG_WARN("resolve data type failed", K(ret));
     } else if (scalar_data_type.get_meta_type().is_string_or_lob_locator_type()
@@ -3482,11 +3487,13 @@ int ObPLResolver::adjust_routine_param_type(ObPLDataType &type)
           static_cast<int16_t>(default_accuracy.get_precision() + default_accuracy.get_scale()));
         data_type.set_scale(default_accuracy.get_scale());
       } break;
-      case ObDateTimeTC: {
+      case ObDateTimeTC:
+      case ObMySQLDateTimeTC: {
         data_type.set_precision(static_cast<int16_t>(default_accuracy.get_precision()));
         data_type.set_scale(0);
       } break;
-      case ObDateTC: {
+      case ObDateTC:
+      case ObMySQLDateTC: {
         data_type.set_precision(default_accuracy.get_precision());
         data_type.set_scale(default_accuracy.get_scale());
       } break;

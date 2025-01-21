@@ -5682,6 +5682,7 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node, ObColumnName
             SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
           } else if (OB_FAIL(add_udt_hidden_column(alter_table_stmt, alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter udt hidden column schema failed!", K(ret));
+          } else if (FALSE_IT(alter_table_stmt->set_sql_mode(session_info_->get_sql_mode()))) {
           }
         }
       }

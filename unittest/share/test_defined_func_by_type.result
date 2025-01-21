@@ -3068,7 +3068,7 @@
 <MYSQL_DATE, UDT> : not defined
 <MYSQL_DATE, DECIMAL_INT> : not defined
 <MYSQL_DATE, ARRAY> : not defined
-<MYSQL_DATE, MYSQL_DATE> : not defined
+<MYSQL_DATE, MYSQL_DATE> : defined
 <MYSQL_DATE, MYSQL_DATETIME> : not defined
 <MYSQL_DATE, ROARINGBITMAP> : not defined
 
@@ -3127,7 +3127,7 @@
 <MYSQL_DATETIME, DECIMAL_INT> : not defined
 <MYSQL_DATETIME, ARRAY> : not defined
 <MYSQL_DATETIME, MYSQL_DATE> : not defined
-<MYSQL_DATETIME, MYSQL_DATETIME> : not defined
+<MYSQL_DATETIME, MYSQL_DATETIME> : defined
 <MYSQL_DATETIME, ROARINGBITMAP> : not defined
 
 /**************** ROARINGBITMAP ****************/

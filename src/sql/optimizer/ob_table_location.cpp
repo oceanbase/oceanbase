@@ -5672,7 +5672,9 @@ int ObTableLocation::can_get_part_by_range_for_temporal_column(const ObRawExpr *
             LOG_WARN("fail to get real expr", K(ret));
           } else if (real_sub_expr->is_column_ref_expr() &&
                      (ObDateType == real_sub_expr->get_result_type().get_type() ||
-                     ObDateTimeType == real_sub_expr->get_result_type().get_type())) {
+                     ObDateTimeType == real_sub_expr->get_result_type().get_type() ||
+                     ObMySQLDateType == real_sub_expr->get_result_type().get_type() ||
+                     ObMySQLDateTimeType == real_sub_expr->get_result_type().get_type())) {
             is_valid = true;
           }
         }

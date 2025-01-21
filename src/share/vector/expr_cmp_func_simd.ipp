@@ -118,7 +118,9 @@ private:
            || vec_tc == VEC_TC_DEC_INT32
            || vec_tc == VEC_TC_YEAR
            || vec_tc == VEC_TC_INTERVAL_YM
-           || vec_tc == VEC_TC_DEC_INT64;
+           || vec_tc == VEC_TC_DEC_INT64
+           || vec_tc == VEC_TC_MYSQL_DATE
+           || vec_tc == VEC_TC_MYSQL_DATETIME;
   }
 };
 

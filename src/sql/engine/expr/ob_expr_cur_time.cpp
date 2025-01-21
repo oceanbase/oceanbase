@@ -37,7 +37,11 @@ ObExprUtcTimestamp::~ObExprUtcTimestamp()
 int ObExprUtcTimestamp::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
-  type.set_datetime();
+  if (type_ctx.enable_mysql_compatible_dates()) {
+    type.set_mysql_datetime();
+  } else {
+    type.set_datetime();
+  }
   type.set_result_flag(NOT_NULL_FLAG);
   if (type.get_scale() < MIN_SCALE_FOR_TEMPORAL) {
     type.set_scale(MIN_SCALE_FOR_TEMPORAL);
@@ -58,8 +62,18 @@ int ObExprUtcTimestamp::eval_utc_timestamp(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("physical plan context don't have current time value");
   } else {
     int64_t ts_value = ctx.exec_ctx_.get_physical_plan_ctx()->get_cur_time().get_timestamp();
-    ObTimeConverter::trunc_datetime(expr.datum_meta_.scale_, ts_value);
-    expr_datum.set_datetime(ts_value);
+    if (ObMySQLDateTimeType == expr.datum_meta_.type_) {
+      ObMySQLDateTime mdt_value = 0;
+      if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(ts_value, mdt_value))) {
+        LOG_WARN("failed to convert datetime to mysql datetime", K(ret));
+      } else {
+        ObTimeConverter::trunc_mdatetime(expr.datum_meta_.scale_, mdt_value);
+        expr_datum.set_mysql_datetime(mdt_value);
+      }
+    } else {
+      ObTimeConverter::trunc_datetime(expr.datum_meta_.scale_, ts_value);
+      expr_datum.set_datetime(ts_value);
+    }
   }
   return ret;
 }
@@ -136,7 +150,11 @@ ObExprUtcDate::~ObExprUtcDate()
 int ObExprUtcDate::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
-  type.set_date();
+  if (type_ctx.enable_mysql_compatible_dates()) {
+    type.set_mysql_date();
+  } else {
+    type.set_date();
+  }
   type.set_result_flag(NOT_NULL_FLAG);
   type.set_precision(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][type.get_type()].get_precision());
   type.set_scale(0);
@@ -165,11 +183,20 @@ int ObExprUtcDate::eval_utc_date(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("physical plan context don't have current time value");
   } else {
     int64_t ts_value = ctx.exec_ctx_.get_physical_plan_ctx()->get_cur_time().get_timestamp();
-    int32_t d_value = 0;
-    if (OB_FAIL(ObTimeConverter::datetime_to_date(ts_value, NULL /* tz_info */, d_value))) {
-      LOG_WARN("failed to convert datetime to date", K(ret));
+    if (ObMySQLDateType == expr.datum_meta_.type_) {
+      ObMySQLDate d_value = 0;
+      if (OB_FAIL(ObTimeConverter::datetime_to_mdate(ts_value, NULL /* tz_info */, d_value))) {
+        LOG_WARN("failed to convert datetime to mysql date", K(ret));
+      } else {
+        expr_datum.set_mysql_date(d_value);
+      }
     } else {
-      expr_datum.set_date(d_value);
+      int32_t d_value = 0;
+      if (OB_FAIL(ObTimeConverter::datetime_to_date(ts_value, NULL /* tz_info */, d_value))) {
+        LOG_WARN("failed to convert datetime to date", K(ret));
+      } else {
+        expr_datum.set_date(d_value);
+      }
     }
   }
   return ret;
@@ -188,6 +215,8 @@ int ObExprCurTimestamp::calc_result_type0(ObExprResType &type, ObExprTypeCtx &ty
   UNUSED(type_ctx);
   if (lib::is_oracle_mode()) {
     type.set_timestamp_tz();
+  } else if (type_ctx.enable_mysql_compatible_dates()) {
+    type.set_mysql_datetime();
   } else {
     type.set_datetime();
   }
@@ -233,14 +262,24 @@ int ObExprCurTimestamp::eval_cur_timestamp(const ObExpr &expr, ObEvalCtx &ctx,
       }
     } else {
       ts_value = ctx.exec_ctx_.get_physical_plan_ctx()->get_cur_time().get_timestamp();
-      if (OB_FAIL(ObTimeConverter::timestamp_to_datetime(ts_value,
-          get_timezone_info(ctx.exec_ctx_.get_my_session()),
-          dt_value))) {
-        LOG_WARN("failed to convert timestamp to datetime", K(ret));
+      const ObTimeZoneInfo *tz_info = get_timezone_info(ctx.exec_ctx_.get_my_session());
+      if (ObMySQLDateTimeType == expr.datum_meta_.type_) {
+        ObMySQLDateTime mdt_value = 0;
+        if (OB_FAIL(ObTimeConverter::timestamp_to_mdatetime(ts_value, tz_info, mdt_value))) {
+          LOG_WARN("failed to convert timestamp to mysql datetime", K(ret));
+        } else {
+          ObTimeConverter::trunc_mdatetime(expr.datum_meta_.scale_, mdt_value);
+          //mysql: return a datetime value
+          expr_datum.set_mysql_datetime(mdt_value);
+        }
       } else {
-        ObTimeConverter::trunc_datetime(expr.datum_meta_.scale_, dt_value);
-        //mysql: return a datetime value
-        expr_datum.set_datetime(dt_value);
+        if (OB_FAIL(ObTimeConverter::timestamp_to_datetime(ts_value, tz_info, dt_value))) {
+          LOG_WARN("failed to convert timestamp to datetime", K(ret));
+        } else {
+          ObTimeConverter::trunc_datetime(expr.datum_meta_.scale_, dt_value);
+          //mysql: return a datetime value
+          expr_datum.set_datetime(dt_value);
+        }
       }
     }
   }
@@ -267,7 +306,11 @@ ObExprSysdate::~ObExprSysdate()
 int ObExprSysdate::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
-  type.set_datetime();
+  if (type_ctx.enable_mysql_compatible_dates()) {
+    type.set_mysql_datetime();
+  } else {
+    type.set_datetime();
+  }
   if (type.get_scale() < MIN_SCALE_FOR_TEMPORAL) {
     type.set_scale(MIN_SCALE_FOR_TEMPORAL);
   }
@@ -322,14 +365,26 @@ int ObExprSysdate::eval_sysdate(const ObExpr &expr, ObEvalCtx &ctx,
     }
 
     if (OB_SUCC(ret)) {
-      int64_t dt_value = 0;
-      if (OB_FAIL(ObTimeConverter::timestamp_to_datetime(utc_timestamp,
-                                                         cur_tz_info,
-                                                         dt_value))) {
-        LOG_WARN("failed to convert timestamp to datetime", K(ret));
+      if (ObMySQLDateTimeType == expr.datum_meta_.type_) {
+        ObMySQLDateTime dt_value = 0;
+        if (OB_FAIL(ObTimeConverter::timestamp_to_mdatetime(utc_timestamp,
+                                                            cur_tz_info,
+                                                            dt_value))) {
+          LOG_WARN("failed to convert timestamp to mysql datetime", K(ret));
+        } else {
+          ObTimeConverter::trunc_mdatetime(expr.datum_meta_.scale_, dt_value);
+          expr_datum.set_mysql_datetime(dt_value);
+        }
       } else {
-        ObTimeConverter::trunc_datetime(expr.datum_meta_.scale_, dt_value);
-        expr_datum.set_datetime(dt_value);
+        int64_t dt_value = 0;
+        if (OB_FAIL(ObTimeConverter::timestamp_to_datetime(utc_timestamp,
+                                                          cur_tz_info,
+                                                          dt_value))) {
+          LOG_WARN("failed to convert timestamp to datetime", K(ret));
+        } else {
+          ObTimeConverter::trunc_datetime(expr.datum_meta_.scale_, dt_value);
+          expr_datum.set_datetime(dt_value);
+        }
       }
     }
   }
@@ -359,7 +414,11 @@ int ObExprCurDate::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ct
 {
   UNUSED(type_ctx);
   if (lib::is_mysql_mode()) {
-    type.set_date();
+    if (type_ctx.enable_mysql_compatible_dates()) {
+      type.set_mysql_date();
+    } else {
+      type.set_date();
+    }
   } else {
     type.set_datetime();
   }
@@ -399,13 +458,21 @@ int ObExprCurDate::eval_cur_date(const ObExpr &expr, ObEvalCtx &ctx,
       }
     } else {
       ts_value = ctx.exec_ctx_.get_physical_plan_ctx()->get_cur_time().get_timestamp();
-      int32_t d_value = 0;
-      if (OB_FAIL(ObTimeConverter::datetime_to_date(ts_value,
-          get_timezone_info(ctx.exec_ctx_.get_my_session()),
-          d_value))) {
-        LOG_WARN("failed to convert datetime to date", K(ret));
+      const ObTimeZoneInfo *tz_info = get_timezone_info(ctx.exec_ctx_.get_my_session());
+      if (ObMySQLDateType == expr.datum_meta_.type_) {
+        ObMySQLDate d_value = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_mdate(ts_value, tz_info, d_value))) {
+          LOG_WARN("failed to convert datetime to mysql date", K(ret));
+        } else {
+          expr_datum.set_mysql_date(d_value);
+        }
       } else {
-        expr_datum.set_date(d_value);
+        int32_t d_value = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_date(ts_value, tz_info, d_value))) {
+          LOG_WARN("failed to convert datetime to date", K(ret));
+        } else {
+          expr_datum.set_date(d_value);
+        }
       }
     }
   }

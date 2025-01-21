@@ -4083,8 +4083,10 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
               dst_type.get_calc_scale() != SCALE_UNKNOWN_YET) {
     cast_dst_type.set_accuracy(dst_type.get_calc_accuracy());
   } else if (lib::is_mysql_mode()
-             && ObDateTimeTC == child_res_type.get_type_class()
-             && ObDateTimeTC == dst_type.get_calc_meta().get_type_class()) {
+             && (ObDateTimeTC == child_res_type.get_type_class()
+                || ObMySQLDateTimeTC == child_res_type.get_type_class())
+             && (ObDateTimeTC == dst_type.get_calc_meta().get_type_class()
+                || ObMySQLDateTimeTC == dst_type.get_calc_meta().get_type_class())) {
     cast_dst_type.set_accuracy(child_res_type.get_accuracy());
   } else if (lib::is_mysql_mode() && ObDoubleTC == dst_type.get_calc_meta().get_type_class()) {
     if (ob_is_numeric_tc(child_res_type.get_type_class())) {

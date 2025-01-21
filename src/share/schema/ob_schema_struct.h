@@ -95,7 +95,8 @@ class ObColumnSchemaV2;
 
 //match the default now func
 #define IS_DEFAULT_NOW_STR(data_type, def_str) \
-    ((ObDateTimeType == data_type || ObTimestampType == data_type) && (def_str == N_UPPERCASE_CUR_TIMESTAMP))
+    ((ObDateTimeType == data_type || ObTimestampType == data_type || ObMySQLDateTimeType == data_type) && \
+     (def_str == N_UPPERCASE_CUR_TIMESTAMP))
 
 #define IS_DEFAULT_NOW_OBJ(def_obj) \
   (ObExtendType == def_obj.get_type() && ObActionFlag::OP_DEFAULT_NOW_FLAG == def_obj.get_ext())

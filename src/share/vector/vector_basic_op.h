@@ -437,6 +437,10 @@ template<typename HashMethod, bool hash_v2>
 struct VecTCHashCalc<VEC_TC_ENUM_SET, HashMethod, hash_v2>
   : public VecTCHashCalcWithHashType<VEC_TC_ENUM_SET, HashMethod, hash_v2, uint64_t> {};
 
+template <typename HashMethod, bool hash_v2>
+struct VecTCHashCalc<VEC_TC_MYSQL_DATE, HashMethod, hash_v2>
+  : public VecTCHashCalcWithHashType<VEC_TC_UINTEGER, HashMethod, hash_v2, int32_t> {};
+
 
 // string data hash
 
@@ -532,12 +536,19 @@ struct VecTCCmpCalc<VEC_TC_DATE, VEC_TC_DATE>
   : public BasicCmpCalc<VEC_TC_DATE, VEC_TC_DATE> {};
 
 template<>
+struct VecTCCmpCalc<VEC_TC_MYSQL_DATE, VEC_TC_MYSQL_DATE>
+  : public BasicCmpCalc<VEC_TC_MYSQL_DATE, VEC_TC_MYSQL_DATE> {};
+template<>
 struct VecTCCmpCalc<VEC_TC_TIME, VEC_TC_TIME>
   : public BasicCmpCalc<VEC_TC_TIME, VEC_TC_TIME> {};
 
 template<>
 struct VecTCCmpCalc<VEC_TC_DATETIME, VEC_TC_DATETIME>
   : public BasicCmpCalc<VEC_TC_DATETIME, VEC_TC_DATETIME> {};
+
+template<>
+struct VecTCCmpCalc<VEC_TC_MYSQL_DATETIME, VEC_TC_MYSQL_DATETIME>
+  : public BasicCmpCalc<VEC_TC_MYSQL_DATETIME, VEC_TC_MYSQL_DATETIME> {};
 
 template<>
 struct VecTCCmpCalc<VEC_TC_YEAR, VEC_TC_YEAR>

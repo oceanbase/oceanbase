@@ -1564,7 +1564,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 17) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATETIME(-1, -1)) = t2.c]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -1606,7 +1606,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 19) = t2.d]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATE(-1, -1)) = t2.d]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -1829,7 +1829,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 17) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATETIME(-1, -1)) = t2.c]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -1871,7 +1871,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 19) = t2.d]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATE(-1, -1)) = t2.d]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -1959,16 +1959,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.a], [t1.b], [t1.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.a, 110, 19)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.a, MYSQL_DATE(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 19)], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-  6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 19)], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 19)]), dop=1
+  5 - output([t2.a], [cast(t2.a, MYSQL_DATE(-1, -1))], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+  6 - output([t2.a], [cast(t2.a, MYSQL_DATE(-1, -1))], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.a, MYSQL_DATE(-1, -1))]), dop=1
   7 - output([t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
@@ -2001,16 +2001,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.b], [t1.b], [t1.a], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.b, 110, 19)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.b, MYSQL_DATE(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.b], [INTERNAL_FUNCTION(t2.b, 110, 19)], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-  6 - output([t2.b], [INTERNAL_FUNCTION(t2.b, 110, 19)], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.b, 110, 19)]), dop=1
+  5 - output([t2.b], [cast(t2.b, MYSQL_DATE(-1, -1))], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+  6 - output([t2.b], [cast(t2.b, MYSQL_DATE(-1, -1))], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.b, MYSQL_DATE(-1, -1))]), dop=1
   7 - output([t2.a], [t2.b], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.b], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
@@ -2040,7 +2040,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([cast(t1.c, DATETIME(-1, -1)) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.c, MYSQL_DATETIME(-1, -1)) = t2.c]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -2132,7 +2132,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([cast(t1.c, TIMESTAMP(-1, -1)) = t2.e]), other_conds(nil)
+      equal_conds([cast(t1.c, MYSQL_DATETIME(-1, -1)) = cast(t2.e, MYSQL_DATETIME(19, 0))]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -2182,16 +2182,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.a], [t1.b], [t1.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.a, 110, 17)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.a, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 17)], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-  6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 17)], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 17)]), dop=1
+  5 - output([t2.a], [cast(t2.a, MYSQL_DATETIME(-1, -1))], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+  6 - output([t2.a], [cast(t2.a, MYSQL_DATETIME(-1, -1))], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.a, MYSQL_DATETIME(-1, -1))]), dop=1
   7 - output([t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
@@ -2224,16 +2224,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.b], [t1.b], [t1.a], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.b, 110, 17)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.b, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.b], [INTERNAL_FUNCTION(t2.b, 110, 17)], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-  6 - output([t2.b], [INTERNAL_FUNCTION(t2.b, 110, 17)], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.b, 110, 17)]), dop=1
+  5 - output([t2.b], [cast(t2.b, MYSQL_DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+  6 - output([t2.b], [cast(t2.b, MYSQL_DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.b, MYSQL_DATETIME(-1, -1))]), dop=1
   7 - output([t2.a], [t2.b], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.b], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
@@ -2312,16 +2312,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.d], [t1.b], [t1.a], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.c = cast(t2.d, DATETIME(-1, -1))]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.d, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.d], [cast(t2.d, DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
-  6 - output([t2.d], [cast(t2.d, DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
-      (#keys=1, [cast(t2.d, DATETIME(-1, -1))]), dop=1
+  5 - output([t2.d], [cast(t2.d, MYSQL_DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
+  6 - output([t2.d], [cast(t2.d, MYSQL_DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.d, MYSQL_DATETIME(-1, -1))]), dop=1
   7 - output([t2.a], [t2.d], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.d], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
@@ -2358,16 +2358,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.e], [t1.b], [t1.a], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
-      equal_conds([t1.c = cast(t2.e, DATETIME(19, 0))]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.e, MYSQL_DATETIME(19, 0))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.e], [cast(t2.e, DATETIME(19, 0))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
-  6 - output([t2.e], [cast(t2.e, DATETIME(19, 0))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
-      (#keys=1, [cast(t2.e, DATETIME(19, 0))]), dop=1
+  5 - output([t2.e], [cast(t2.e, MYSQL_DATETIME(19, 0))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
+  6 - output([t2.e], [cast(t2.e, MYSQL_DATETIME(19, 0))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.e, MYSQL_DATETIME(19, 0))]), dop=1
   7 - output([t2.a], [t2.e], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.e], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
@@ -2405,7 +2405,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t1.b], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = INTERNAL_FUNCTION(t2.a, 110, 17)]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.a, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -2447,7 +2447,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t2.aa], [t1.b], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = INTERNAL_FUNCTION(t2.aa, 110, 17)]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.aa, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -2489,7 +2489,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t2.b], [t1.b], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = INTERNAL_FUNCTION(t2.b, 110, 17)]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.b, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -2531,7 +2531,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t2.bb], [t1.b], [t2.aa], [t2.b], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = INTERNAL_FUNCTION(t2.bb, 110, 17)]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.bb, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -2618,7 +2618,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t2.d], [t1.b], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = cast(t2.d, DATETIME(-1, -1))]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.d, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -2662,7 +2662,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t2.e], [t1.b], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = cast(t2.e, DATETIME(19, 0))]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.e, MYSQL_DATETIME(19, 0))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -2749,16 +2749,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.c], [t2.b], [t2.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 19) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATE(-1, -1)) = t2.c]), other_conds(nil)
   3 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
       access([t2.b], [t2.c], [t2.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t2.b], [t2.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 19)], [t1.b], [t1.c]), filter(nil), rowset=16
-  6 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 19)], [t1.b], [t1.c]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t1.a, 110, 19)]), dop=1
+  5 - output([t1.a], [cast(t1.a, MYSQL_DATE(-1, -1))], [t1.b], [t1.c]), filter(nil), rowset=16
+  6 - output([t1.a], [cast(t1.a, MYSQL_DATE(-1, -1))], [t1.b], [t1.c]), filter(nil), rowset=16
+      (#keys=1, [cast(t1.a, MYSQL_DATE(-1, -1))]), dop=1
   7 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       force partition granule
   8 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
@@ -2791,16 +2791,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.c], [t2.b], [t2.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 17) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATETIME(-1, -1)) = t2.c]), other_conds(nil)
   3 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
       access([t2.b], [t2.c], [t2.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t2.b], [t2.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 17)], [t1.b], [t1.c]), filter(nil), rowset=16
-  6 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 17)], [t1.b], [t1.c]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t1.a, 110, 17)]), dop=1
+  5 - output([t1.a], [cast(t1.a, MYSQL_DATETIME(-1, -1))], [t1.b], [t1.c]), filter(nil), rowset=16
+  6 - output([t1.a], [cast(t1.a, MYSQL_DATETIME(-1, -1))], [t1.b], [t1.c]), filter(nil), rowset=16
+      (#keys=1, [cast(t1.a, MYSQL_DATETIME(-1, -1))]), dop=1
   7 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       force partition granule
   8 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
@@ -2876,16 +2876,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.a], [t1.b], [t1.a], [t2.b], [t2.c]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.a, 110, 19)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.a, MYSQL_DATE(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 19)], [t2.b], [t2.c]), filter(nil), rowset=16
-  6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 19)], [t2.b], [t2.c]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 19)]), dop=1
+  5 - output([t2.a], [cast(t2.a, MYSQL_DATE(-1, -1))], [t2.b], [t2.c]), filter(nil), rowset=16
+  6 - output([t2.a], [cast(t2.a, MYSQL_DATE(-1, -1))], [t2.b], [t2.c]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.a, MYSQL_DATE(-1, -1))]), dop=1
   7 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
@@ -2956,10 +2956,10 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.c], [t1.b], [t1.a], [t2.b], [t2.a]), filter(nil), rowset=16
-      equal_conds([cast(t1.c, DATETIME(-1, -1)) = t2.c]), other_conds(nil)
-  3 - output([t1.c], [cast(t1.c, DATETIME(-1, -1))], [t1.b], [t1.a]), filter(nil), rowset=16
-  4 - output([t1.c], [cast(t1.c, DATETIME(-1, -1))], [t1.b], [t1.a]), filter(nil), rowset=16
-      (#keys=1, [cast(t1.c, DATETIME(-1, -1))]), dop=1
+      equal_conds([cast(t1.c, MYSQL_DATETIME(-1, -1)) = t2.c]), other_conds(nil)
+  3 - output([t1.c], [cast(t1.c, MYSQL_DATETIME(-1, -1))], [t1.b], [t1.a]), filter(nil), rowset=16
+  4 - output([t1.c], [cast(t1.c, MYSQL_DATETIME(-1, -1))], [t1.b], [t1.a]), filter(nil), rowset=16
+      (#keys=1, [cast(t1.c, MYSQL_DATETIME(-1, -1))]), dop=1
   5 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       force partition granule
   6 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
@@ -2999,7 +2999,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
-      equal_conds([cast(t1.c, TIMESTAMP(-1, -1)) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.c, MYSQL_DATETIME(-1, -1)) = cast(t2.c, MYSQL_DATETIME(19, 0))]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -3049,16 +3049,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.a], [t1.b], [t1.a], [t2.b], [t2.c]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.a, 110, 17)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.a, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 17)], [t2.b], [t2.c]), filter(nil), rowset=16
-  6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 17)], [t2.b], [t2.c]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 17)]), dop=1
+  5 - output([t2.a], [cast(t2.a, MYSQL_DATETIME(-1, -1))], [t2.b], [t2.c]), filter(nil), rowset=16
+  6 - output([t2.a], [cast(t2.a, MYSQL_DATETIME(-1, -1))], [t2.b], [t2.c]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.a, MYSQL_DATETIME(-1, -1))]), dop=1
   7 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
@@ -3091,10 +3091,10 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.c], [t2.b], [t2.a], [t1.b], [t1.a]), filter(nil), rowset=16
-      equal_conds([t1.c = cast(t2.c, DATETIME(-1, -1))]), other_conds(nil)
-  3 - output([t2.c], [cast(t2.c, DATETIME(-1, -1))], [t2.b], [t2.a]), filter(nil), rowset=16
-  4 - output([t2.c], [cast(t2.c, DATETIME(-1, -1))], [t2.b], [t2.a]), filter(nil), rowset=16
-      (#keys=1, [cast(t2.c, DATETIME(-1, -1))]), dop=1
+      equal_conds([t1.c = cast(t2.c, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
+  3 - output([t2.c], [cast(t2.c, MYSQL_DATETIME(-1, -1))], [t2.b], [t2.a]), filter(nil), rowset=16
+  4 - output([t2.c], [cast(t2.c, MYSQL_DATETIME(-1, -1))], [t2.b], [t2.a]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.c, MYSQL_DATETIME(-1, -1))]), dop=1
   5 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
       force partition granule
   6 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
@@ -3175,16 +3175,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.c], [t1.b], [t1.a], [t2.a], [t2.b]), filter(nil), rowset=16
-      equal_conds([t1.c = cast(t2.c, DATETIME(19, 0))]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.c, MYSQL_DATETIME(19, 0))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.c], [cast(t2.c, DATETIME(19, 0))], [t2.a], [t2.b]), filter(nil), rowset=16
-  6 - output([t2.c], [cast(t2.c, DATETIME(19, 0))], [t2.a], [t2.b]), filter(nil), rowset=16
-      (#keys=1, [cast(t2.c, DATETIME(19, 0))]), dop=1
+  5 - output([t2.c], [cast(t2.c, MYSQL_DATETIME(19, 0))], [t2.a], [t2.b]), filter(nil), rowset=16
+  6 - output([t2.c], [cast(t2.c, MYSQL_DATETIME(19, 0))], [t2.a], [t2.b]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.c, MYSQL_DATETIME(19, 0))]), dop=1
   7 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
@@ -3357,7 +3357,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 17) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATETIME(-1, -1)) = t2.c]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -3399,7 +3399,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 19) = t2.d]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATE(-1, -1)) = t2.d]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -3622,7 +3622,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 17) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATETIME(-1, -1)) = t2.c]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -3664,7 +3664,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 19) = t2.d]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATE(-1, -1)) = t2.d]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -3752,16 +3752,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.a], [t1.b], [t1.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.a, 110, 19)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.a, MYSQL_DATE(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 19)], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-  6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 19)], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 19)]), dop=1
+  5 - output([t2.a], [cast(t2.a, MYSQL_DATE(-1, -1))], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+  6 - output([t2.a], [cast(t2.a, MYSQL_DATE(-1, -1))], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.a, MYSQL_DATE(-1, -1))]), dop=1
   7 - output([t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
@@ -3794,16 +3794,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.b], [t1.b], [t1.a], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.b, 110, 19)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.b, MYSQL_DATE(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.b], [INTERNAL_FUNCTION(t2.b, 110, 19)], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-  6 - output([t2.b], [INTERNAL_FUNCTION(t2.b, 110, 19)], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.b, 110, 19)]), dop=1
+  5 - output([t2.b], [cast(t2.b, MYSQL_DATE(-1, -1))], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+  6 - output([t2.b], [cast(t2.b, MYSQL_DATE(-1, -1))], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.b, MYSQL_DATE(-1, -1))]), dop=1
   7 - output([t2.a], [t2.b], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.b], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
@@ -3833,7 +3833,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([cast(t1.c, DATETIME(-1, -1)) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.c, MYSQL_DATETIME(-1, -1)) = t2.c]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -3925,7 +3925,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([cast(t1.c, TIMESTAMP(-1, -1)) = t2.e]), other_conds(nil)
+      equal_conds([cast(t1.c, MYSQL_DATETIME(-1, -1)) = cast(t2.e, MYSQL_DATETIME(19, 0))]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -3975,16 +3975,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.a], [t1.b], [t1.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.a, 110, 17)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.a, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 17)], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-  6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 17)], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 17)]), dop=1
+  5 - output([t2.a], [cast(t2.a, MYSQL_DATETIME(-1, -1))], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+  6 - output([t2.a], [cast(t2.a, MYSQL_DATETIME(-1, -1))], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.a, MYSQL_DATETIME(-1, -1))]), dop=1
   7 - output([t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
@@ -4017,16 +4017,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.b], [t1.b], [t1.a], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.b, 110, 17)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.b, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.b], [INTERNAL_FUNCTION(t2.b, 110, 17)], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-  6 - output([t2.b], [INTERNAL_FUNCTION(t2.b, 110, 17)], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.b, 110, 17)]), dop=1
+  5 - output([t2.b], [cast(t2.b, MYSQL_DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+  6 - output([t2.b], [cast(t2.b, MYSQL_DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.b, MYSQL_DATETIME(-1, -1))]), dop=1
   7 - output([t2.a], [t2.b], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.b], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
@@ -4105,16 +4105,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.d], [t1.b], [t1.a], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.c = cast(t2.d, DATETIME(-1, -1))]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.d, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.d], [cast(t2.d, DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
-  6 - output([t2.d], [cast(t2.d, DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
-      (#keys=1, [cast(t2.d, DATETIME(-1, -1))]), dop=1
+  5 - output([t2.d], [cast(t2.d, MYSQL_DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
+  6 - output([t2.d], [cast(t2.d, MYSQL_DATETIME(-1, -1))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.d, MYSQL_DATETIME(-1, -1))]), dop=1
   7 - output([t2.a], [t2.d], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.d], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
@@ -4151,16 +4151,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.e], [t1.b], [t1.a], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
-      equal_conds([t1.c = cast(t2.e, DATETIME(19, 0))]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.e, MYSQL_DATETIME(19, 0))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.e], [cast(t2.e, DATETIME(19, 0))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
-  6 - output([t2.e], [cast(t2.e, DATETIME(19, 0))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
-      (#keys=1, [cast(t2.e, DATETIME(19, 0))]), dop=1
+  5 - output([t2.e], [cast(t2.e, MYSQL_DATETIME(19, 0))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
+  6 - output([t2.e], [cast(t2.e, MYSQL_DATETIME(19, 0))], [t2.a], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.e, MYSQL_DATETIME(19, 0))]), dop=1
   7 - output([t2.a], [t2.e], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.e], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
@@ -4336,7 +4336,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.b], [t2.c], [t1.c], [t2.aa], [t2.b], [t2.bb], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [INTERNAL_FUNCTION(t1.b, 110, 17) = t2.c]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [cast(t1.b, MYSQL_DATETIME(-1, -1)) = t2.c]), other_conds(nil)
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -4378,7 +4378,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.b], [t2.d], [t1.c], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [INTERNAL_FUNCTION(t1.b, 110, 19) = t2.d]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [cast(t1.b, MYSQL_DATE(-1, -1)) = t2.d]), other_conds(nil)
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -4463,7 +4463,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t1.b], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = INTERNAL_FUNCTION(t2.a, 110, 17)]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.a, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -4505,7 +4505,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t2.aa], [t1.b], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = INTERNAL_FUNCTION(t2.aa, 110, 17)]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.aa, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -4547,7 +4547,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t2.b], [t1.b], [t2.aa], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = INTERNAL_FUNCTION(t2.b, 110, 17)]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.b, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -4589,7 +4589,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t2.bb], [t1.b], [t2.aa], [t2.b], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = INTERNAL_FUNCTION(t2.bb, 110, 17)]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.bb, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -4676,7 +4676,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t2.d], [t1.b], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.e]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = cast(t2.d, DATETIME(-1, -1))]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.d, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -4720,7 +4720,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.aa, t2.b, t2.bb, t2.c, t2.d, t2.e)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.c], [t2.e], [t1.b], [t2.aa], [t2.b], [t2.bb], [t2.c], [t2.d]), filter(nil), rowset=16
-      equal_conds([t1.a = t2.a], [t1.c = cast(t2.e, DATETIME(19, 0))]), other_conds(nil)
+      equal_conds([t1.a = t2.a], [t1.c = cast(t2.e, MYSQL_DATETIME(19, 0))]), other_conds(nil)
   3 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
   4 - output([t1.a], [t1.c], [t1.b]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
@@ -4807,16 +4807,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.c], [t2.b], [t2.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 19) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATE(-1, -1)) = t2.c]), other_conds(nil)
   3 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
       access([t2.b], [t2.c], [t2.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t2.b], [t2.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 19)], [t1.b], [t1.c]), filter(nil), rowset=16
-  6 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 19)], [t1.b], [t1.c]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t1.a, 110, 19)]), dop=1
+  5 - output([t1.a], [cast(t1.a, MYSQL_DATE(-1, -1))], [t1.b], [t1.c]), filter(nil), rowset=16
+  6 - output([t1.a], [cast(t1.a, MYSQL_DATE(-1, -1))], [t1.b], [t1.c]), filter(nil), rowset=16
+      (#keys=1, [cast(t1.a, MYSQL_DATE(-1, -1))]), dop=1
   7 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       force partition granule
   8 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
@@ -4849,16 +4849,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.c], [t2.b], [t2.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      equal_conds([INTERNAL_FUNCTION(t1.a, 110, 17) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.a, MYSQL_DATETIME(-1, -1)) = t2.c]), other_conds(nil)
   3 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
       access([t2.b], [t2.c], [t2.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t2.b], [t2.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 17)], [t1.b], [t1.c]), filter(nil), rowset=16
-  6 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 17)], [t1.b], [t1.c]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t1.a, 110, 17)]), dop=1
+  5 - output([t1.a], [cast(t1.a, MYSQL_DATETIME(-1, -1))], [t1.b], [t1.c]), filter(nil), rowset=16
+  6 - output([t1.a], [cast(t1.a, MYSQL_DATETIME(-1, -1))], [t1.b], [t1.c]), filter(nil), rowset=16
+      (#keys=1, [cast(t1.a, MYSQL_DATETIME(-1, -1))]), dop=1
   7 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       force partition granule
   8 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
@@ -4934,16 +4934,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.a], [t1.b], [t1.a], [t2.b], [t2.c]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.a, 110, 19)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.a, MYSQL_DATE(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 19)], [t2.b], [t2.c]), filter(nil), rowset=16
-  6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 19)], [t2.b], [t2.c]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 19)]), dop=1
+  5 - output([t2.a], [cast(t2.a, MYSQL_DATE(-1, -1))], [t2.b], [t2.c]), filter(nil), rowset=16
+  6 - output([t2.a], [cast(t2.a, MYSQL_DATE(-1, -1))], [t2.b], [t2.c]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.a, MYSQL_DATE(-1, -1))]), dop=1
   7 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
@@ -5014,10 +5014,10 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.c], [t1.b], [t1.a], [t2.b], [t2.a]), filter(nil), rowset=16
-      equal_conds([cast(t1.c, DATETIME(-1, -1)) = t2.c]), other_conds(nil)
-  3 - output([t1.c], [cast(t1.c, DATETIME(-1, -1))], [t1.b], [t1.a]), filter(nil), rowset=16
-  4 - output([t1.c], [cast(t1.c, DATETIME(-1, -1))], [t1.b], [t1.a]), filter(nil), rowset=16
-      (#keys=1, [cast(t1.c, DATETIME(-1, -1))]), dop=1
+      equal_conds([cast(t1.c, MYSQL_DATETIME(-1, -1)) = t2.c]), other_conds(nil)
+  3 - output([t1.c], [cast(t1.c, MYSQL_DATETIME(-1, -1))], [t1.b], [t1.a]), filter(nil), rowset=16
+  4 - output([t1.c], [cast(t1.c, MYSQL_DATETIME(-1, -1))], [t1.b], [t1.a]), filter(nil), rowset=16
+      (#keys=1, [cast(t1.c, MYSQL_DATETIME(-1, -1))]), dop=1
   5 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       force partition granule
   6 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
@@ -5057,7 +5057,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
-      equal_conds([cast(t1.c, TIMESTAMP(-1, -1)) = t2.c]), other_conds(nil)
+      equal_conds([cast(t1.c, MYSQL_DATETIME(-1, -1)) = cast(t2.c, MYSQL_DATETIME(19, 0))]), other_conds(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
@@ -5107,16 +5107,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.a], [t1.b], [t1.a], [t2.b], [t2.c]), filter(nil), rowset=16
-      equal_conds([t1.c = INTERNAL_FUNCTION(t2.a, 110, 17)]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.a, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 17)], [t2.b], [t2.c]), filter(nil), rowset=16
-  6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 17)], [t2.b], [t2.c]), filter(nil), rowset=16
-      (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 17)]), dop=1
+  5 - output([t2.a], [cast(t2.a, MYSQL_DATETIME(-1, -1))], [t2.b], [t2.c]), filter(nil), rowset=16
+  6 - output([t2.a], [cast(t2.a, MYSQL_DATETIME(-1, -1))], [t2.b], [t2.c]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.a, MYSQL_DATETIME(-1, -1))]), dop=1
   7 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
@@ -5149,10 +5149,10 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.c], [t2.b], [t2.a], [t1.b], [t1.a]), filter(nil), rowset=16
-      equal_conds([t1.c = cast(t2.c, DATETIME(-1, -1))]), other_conds(nil)
-  3 - output([t2.c], [cast(t2.c, DATETIME(-1, -1))], [t2.b], [t2.a]), filter(nil), rowset=16
-  4 - output([t2.c], [cast(t2.c, DATETIME(-1, -1))], [t2.b], [t2.a]), filter(nil), rowset=16
-      (#keys=1, [cast(t2.c, DATETIME(-1, -1))]), dop=1
+      equal_conds([t1.c = cast(t2.c, MYSQL_DATETIME(-1, -1))]), other_conds(nil)
+  3 - output([t2.c], [cast(t2.c, MYSQL_DATETIME(-1, -1))], [t2.b], [t2.a]), filter(nil), rowset=16
+  4 - output([t2.c], [cast(t2.c, MYSQL_DATETIME(-1, -1))], [t2.b], [t2.a]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.c, MYSQL_DATETIME(-1, -1))]), dop=1
   5 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
       force partition granule
   6 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
@@ -5233,16 +5233,16 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.c], [t2.c], [t1.b], [t1.a], [t2.a], [t2.b]), filter(nil), rowset=16
-      equal_conds([t1.c = cast(t2.c, DATETIME(19, 0))]), other_conds(nil)
+      equal_conds([t1.c = cast(t2.c, MYSQL_DATETIME(19, 0))]), other_conds(nil)
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       affinitize, force partition granule
   4 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t2.c], [cast(t2.c, DATETIME(19, 0))], [t2.a], [t2.b]), filter(nil), rowset=16
-  6 - output([t2.c], [cast(t2.c, DATETIME(19, 0))], [t2.a], [t2.b]), filter(nil), rowset=16
-      (#keys=1, [cast(t2.c, DATETIME(19, 0))]), dop=1
+  5 - output([t2.c], [cast(t2.c, MYSQL_DATETIME(19, 0))], [t2.a], [t2.b]), filter(nil), rowset=16
+  6 - output([t2.c], [cast(t2.c, MYSQL_DATETIME(19, 0))], [t2.a], [t2.b]), filter(nil), rowset=16
+      (#keys=1, [cast(t2.c, MYSQL_DATETIME(19, 0))]), dop=1
   7 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
       force partition granule
   8 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16

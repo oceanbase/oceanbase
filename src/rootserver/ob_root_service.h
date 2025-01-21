@@ -974,6 +974,7 @@ private:
   int set_enable_trace_log_();
   int disable_dbms_job();
   int set_bloom_filter_ratio_config_();
+  int enable_mysql_compatible_dates_config_();
   int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 
   int precheck_interval_part(const obrpc::ObAlterTableArg &arg);

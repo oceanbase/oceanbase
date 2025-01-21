@@ -70,7 +70,7 @@ int ObExprCast::get_cast_inttc_len(ObExprResType &type1,
     int16_t scale = type1.get_accuracy().get_scale();
     if (ObDoubleTC == tc1) {
       res_len -= 1;
-    } else if (ObDateTimeTC == tc1 && scale > 0) {
+    } else if ((ObDateTimeTC == tc1 || ObMySQLDateTimeTC == tc1) && scale > 0) {
       res_len += scale - 1;
     } else if (OB_FAIL(get_cast_string_len(type1, type2, type_ctx, res_len, length_semantics, conn, cast_mode))) {
       LOG_WARN("fail to get cast string length", K(ret));
@@ -142,6 +142,7 @@ int ObExprCast::get_cast_string_len(ObExprResType &type1,
     case ObTimestampLTZType:
     case ObTimestampNanoType:
     case ObDateTimeType:
+    case ObMySQLDateTimeType:
     case ObTimestampType: {
         if (scale > 0) {
           res_len += scale + 1;
@@ -251,7 +252,8 @@ int ObExprCast::get_explicit_cast_cm(const ObExprResType &src_type,
                                     session.get_stmt_type(),
                                     session.is_ignore_stmt(),
                                     sql_mode, cast_mode);
-  if (ObDateTimeTC == dst_tc || ObDateTC == dst_tc || ObTimeTC == dst_tc) {
+  if (ObDateTimeTC == dst_tc || ObDateTC == dst_tc || ObTimeTC == dst_tc || ObMySQLDateTC == dst_tc
+      || ObMySQLDateTimeTC == dst_tc) {
     cast_mode |= CM_NULL_ON_WARN;
   } else if (ob_is_int_uint(src_tc, dst_tc)) {
     cast_mode |= CM_NO_RANGE_CHECK;
@@ -348,7 +350,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session, enable_decimalint))) {
     LOG_WARN("fail to check_enable_decimalint", K(ret), K(session->get_effective_tenant_id()));
   } else if (OB_FAIL(get_cast_type(enable_decimalint,
-                                   type2, cast_raw_expr->get_extra(), dst_type))) {
+                                   type2, cast_raw_expr->get_extra(), type_ctx, dst_type))) {
     LOG_WARN("get cast dest type failed", K(ret));
   } else if (OB_FAIL(ObSQLUtils::get_cs_level_from_cast_mode(cast_raw_expr->get_extra(),
                                                              type1.get_collation_level(),
@@ -428,7 +430,8 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     int16_t scale = dst_type.get_scale();
     if (is_explicit_cast
         && !lib::is_oracle_mode()
-        && (ObTimeType == dst_type.get_type() || ObDateTimeType == dst_type.get_type())
+        && (ObTimeType == dst_type.get_type()
+          || ob_is_datetime_or_mysql_datetime(dst_type.get_type()))
         && scale > 6) {
       ret = OB_ERR_TOO_BIG_PRECISION;
       LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST", OB_MAX_DATETIME_PRECISION);
@@ -627,6 +630,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
 int ObExprCast::get_cast_type(const bool enable_decimal_int,
                               const ObExprResType param_type2,
                               const ObCastMode cast_mode,
+                              const ObExprTypeCtx &type_ctx,
                               ObExprResType &dst_type)
 {
   int ret = OB_SUCCESS;
@@ -712,6 +716,15 @@ int ObExprCast::get_cast_type(const bool enable_decimal_int,
     } else {
       dst_type.set_precision(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]);
       dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
+    }
+    if (OB_SUCC(ret) && CM_IS_EXPLICIT_CAST(cast_mode) && lib::is_mysql_mode()) {
+      if (type_ctx.enable_mysql_compatible_dates()) {
+        if (ObDateType == dst_type.get_type()) {
+          dst_type.set_type(ObMySQLDateType);
+        } else if (ObDateTimeType == dst_type.get_type()) {
+          dst_type.set_type(ObMySQLDateTimeType);
+        }
+      }
     }
     LOG_DEBUG("get_cast_type", K(dst_type), K(param_type2));
   }

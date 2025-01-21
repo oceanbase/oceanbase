@@ -701,6 +701,12 @@ public:
   static int build_const_date_expr(ObRawExprFactory &expr_factory,
                                    int64_t int_value,
                                    ObConstRawExpr *&expr);
+  static int build_const_mysql_datetime_expr(ObRawExprFactory &expr_factory,
+                                             int64_t int_value,
+                                              ObConstRawExpr *&expr);
+  static int build_const_mysql_date_expr(ObRawExprFactory &expr_factory,
+                                         int64_t int_value,
+                                         ObConstRawExpr *&expr);
   static int build_const_ym_expr(ObRawExprFactory &expr_factory,
                                  common::ObObjType type,
                                  const ObObj &obj,

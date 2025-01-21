@@ -1205,6 +1205,8 @@ enum VecValueTypeClass: uint16_t {
   VEC_TC_DEC_INT512,
   VEC_TC_COLLECTION,
   VEC_TC_ROARINGBITMAP,
+  VEC_TC_MYSQL_DATE,
+  VEC_TC_MYSQL_DATETIME,
   MAX_VEC_TC
 };
 
@@ -1268,8 +1270,8 @@ OB_INLINE VecValueTypeClass get_vec_value_tc(const ObObjType type, const int16_t
     VEC_TC_UDT,               // ObUserDefinedSQLType
     MAX_VEC_TC,               // invalid for ObDecimalIntType
     VEC_TC_COLLECTION,        // ObCollectionSQLType
-    MAX_VEC_TC,               // reserved for ObMySQLDateType
-    MAX_VEC_TC,               // reserved for ObMySQLDateTimeType
+    VEC_TC_MYSQL_DATE,        // reserved for ObMySQLDateType
+    VEC_TC_MYSQL_DATETIME,    // reserved for ObMySQLDateTimeType
     VEC_TC_ROARINGBITMAP      // ObRoaringBitmapType
   };
   VecValueTypeClass t = MAX_VEC_TC;
@@ -1312,7 +1314,7 @@ OB_INLINE bool ob_is_castable_type_class(ObObjTypeClass tc)
       || ObOTimestampTC == tc || ObRawTC == tc || ObIntervalTC == tc
       || ObRowIDTC == tc || ObLobTC == tc || ObJsonTC == tc || ObGeometryTC == tc
       || ObUserDefinedSQLTC == tc || ObDecimalIntTC == tc || ObCollectionSQLTC == tc
-      || ObRoaringBitmapTC == tc;
+      || ObMySQLDateTimeTC == tc || ObMySQLDateTC == tc || ObRoaringBitmapTC == tc;
 }
 
 //used for arithmetic
@@ -1401,7 +1403,9 @@ inline bool ob_is_float_tc(ObObjType type) { return ObFloatTC == ob_obj_type_cla
 inline bool ob_is_double_tc(ObObjType type) { return ObDoubleTC == ob_obj_type_class(type); }
 inline bool ob_is_number_tc(ObObjType type) { return ObNumberTC == ob_obj_type_class(type); }
 inline bool ob_is_datetime_tc(ObObjType type) { return ObDateTimeTC == ob_obj_type_class(type); }
+inline bool ob_is_mysql_datetime_tc(ObObjType type) { return ObMySQLDateTimeTC == ob_obj_type_class(type); }
 inline bool ob_is_date_tc(ObObjType type) { return ObDateTC == ob_obj_type_class(type); }
+inline bool ob_is_mysql_date_tc(ObObjType type) { return ObMySQLDateTC == ob_obj_type_class(type); }
 inline bool ob_is_otimestampe_tc(ObObjType type) { return ObOTimestampTC == ob_obj_type_class(type); }
 inline bool ob_is_time_tc(ObObjType type) { return ObTimeTC == ob_obj_type_class(type); }
 inline bool ob_is_year_tc(ObObjType type) { return ObYearTC == ob_obj_type_class(type); }
@@ -1499,7 +1503,8 @@ inline bool ob_is_oracle_temporal_type(ObObjType type)
 inline bool ob_is_enumset_numeric_type(ObObjType type) { return (ob_is_numeric_type(type) || ObYearType == type); }
 
 inline bool ob_is_enum_or_set_type(ObObjType type) { return ObEnumType == type || ObSetType == type; }
-inline bool ob_is_temporal_type(ObObjType type) { return type >= ObDateTimeType && type <= ObYearType; }
+inline bool ob_is_temporal_type(ObObjType type)
+{ return (type >= ObDateTimeType && type <= ObYearType) || (type == ObMySQLDateType || type == ObMySQLDateTimeType); }
 inline bool ob_is_string_or_enumset_type(ObObjType type)
 { return (type >= ObVarcharType && type <= ObHexStringType)
       || ObEnumType == type || ObSetType == type
@@ -1578,6 +1583,7 @@ inline bool ob_is_accuracy_length_valid_tc(ObObjType type) { return ob_is_string
 inline bool ob_is_string_or_enumset_tc(ObObjType type) { return ObStringTC == ob_obj_type_class(type) || ob_is_enumset_tc(type); }
 inline bool ob_is_large_text(ObObjType type) { return ObTextType <= type && ObLongTextType >= type; }
 inline bool ob_is_datetime(const ObObjType type) { return ObDateTimeType == type; }
+inline bool ob_is_mysql_datetime(const ObObjType type) { return ObMySQLDateTimeType == type; }
 inline bool ob_is_timestamp_tz(const ObObjType type) { return ObTimestampTZType == type; }
 inline bool ob_is_timestamp_ltz(const ObObjType type) { return ObTimestampLTZType == type; }
 inline bool ob_is_timestamp_nano(const ObObjType type) { return ObTimestampNanoType == type; }
@@ -1622,6 +1628,22 @@ inline bool ob_is_xml_sql_type(const ObObjType type, const uint16_t sub_schema_i
 
 inline bool ob_is_xml_pl_type(const ObObjType type, const uint64_t udt_id) {
   return (ObExtendType == type) && (udt_id == static_cast<uint64_t>(T_OBJ_XML));
+}
+inline bool ob_is_datetime_or_mysql_datetime(const ObObjType type)
+{
+  return ObMySQLDateTimeType == type || ObDateTimeType == type;
+}
+inline bool ob_is_date_or_mysql_date(const ObObjType type)
+{
+  return ObMySQLDateType == type || ObDateType == type;
+}
+inline bool ob_is_datetime_or_mysql_datetime_tc(ObObjType type)
+{
+  return ObDateTimeTC == ob_obj_type_class(type) || ObMySQLDateTimeTC == ob_obj_type_class(type);
+}
+inline bool ob_is_mysql_compact_dates_type(const ObObjType type)
+{
+  return ObMySQLDateType == type || ObMySQLDateTimeType == type;
 }
 
 // to_string adapter

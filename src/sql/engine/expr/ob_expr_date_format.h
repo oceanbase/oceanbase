@@ -18,16 +18,17 @@
 #include "sql/session/ob_sql_session_info.h"
 
 #define MAX_FORMAT_LENGTH (128) // maybe enough
-#define COMMON_PART_FORMAT_FUNC_ARG_DECL ArgVec *arg_vec, int idx, int64_t tz_offset,\
-                                         YearType &year, MonthType &month, DateType &date,\
-                                         UsecType &usec, DateType &dt_yday, DateType &dt_mday, DateType &dt_wday
-#define FORMAT_FUNC_ARG_DECL YearType year, MonthType month, DateType date,\
-                             UsecType usec, DateType dt_yday, DateType dt_mday, DateType dt_wday,\
-                             WeekType &week_sunday, WeekType &week_monday,\
-                             int8_t &delta_sunday, int8_t &delta_monday, char *res_buf, int16_t &len,\
-                             bool &res_null, bool no_null,\
-                             const char *const *day_name, const char *const *ab_day_name,\
-                             const char *const *month_name, const char *const *ab_month_name
+#define COMMON_PART_FORMAT_FUNC_ARG_DECL                                                           \
+  ArgVec *arg_vec, int idx, int64_t tz_offset, YearType &year, MonthType &month, DateType &date,   \
+    UsecType &usec, DateType &dt_yday, DateType &dt_mday, DateType &dt_wday, int32_t &hour,        \
+    int32_t &minute, int32_t &sec, int32_t &fsec, ObTime &ob_time
+#define FORMAT_FUNC_ARG_DECL                                                                       \
+  YearType year, MonthType month, DateType dt_yday, DateType dt_mday, DateType dt_wday,            \
+    int32_t hour, int32_t minute, int32_t sec, int32_t fsec, WeekType &week_sunday,                \
+    WeekType &week_monday, int8_t &delta_sunday, int8_t &delta_monday, char *res_buf,              \
+    int16_t &len, bool &res_null, bool no_null, const char *const *day_name,                       \
+    const char *const *ab_day_name, const char *const *month_name,                                 \
+    const char *const *ab_month_name
 
 namespace oceanbase
 {

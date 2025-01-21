@@ -1466,6 +1466,12 @@ int ObObj::build_not_strict_default_value(
       }
       break;
     }
+    case ObMySQLDateType:
+      set_mysql_date(ObTimeConverter::MYSQL_ZERO_DATE);
+      break;
+    case ObMySQLDateTimeType:
+      set_mysql_datetime(ObTimeConverter::MYSQL_ZERO_DATETIME);
+      break;
     default:
       ret = OB_INVALID_ARGUMENT;
       _OB_LOG(WARN, "unexpected data type=%u", data_type);
@@ -2005,8 +2011,8 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] =
   DEF_FUNC_ENTRY(ObUserDefinedSQLType),// 49, udt
   DEF_FUNC_ENTRY(ObDecimalIntType),    // 50, decimal int
   DEF_FUNC_ENTRY(ObCollectionSQLType), // 51, collection
-  DEF_FUNC_ENTRY(ObNullType),          // 52, mysql date
-  DEF_FUNC_ENTRY(ObNullType),          // 53, mysql datetime
+  DEF_FUNC_ENTRY(ObMySQLDateType),     // 52, mysql date
+  DEF_FUNC_ENTRY(ObMySQLDateTimeType), // 53, mysql datetime
   DEF_FUNC_ENTRY(ObRoaringBitmapType), // 54, roaringbitmap
 
 };

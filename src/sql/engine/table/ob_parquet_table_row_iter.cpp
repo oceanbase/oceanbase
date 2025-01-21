@@ -363,11 +363,18 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
       }
     }
   } else if ((no_log_type || log_type->is_date())
-             && (ob_is_datetime(datum_type.type_) || ob_is_date_tc(datum_type.type_))) {
+             && (ob_is_datetime_or_mysql_datetime(datum_type.type_)
+                 || ob_is_date_or_mysql_date(datum_type.type_))) {
     if (parquet::Type::INT32 == phy_type && ob_is_date_tc(datum_type.type_)) {
       func = &DataLoader::load_int32_to_int32_vec;
-    } else if (parquet::Type::INT32 == phy_type && ob_is_datetime(datum_type.type_)) {
-      func = &DataLoader::load_date_col_to_datetime;
+    } else if (parquet::Type::INT32 == phy_type && ob_is_mysql_date_tc(datum_type.type_)) {
+      func = &DataLoader::load_date_to_mysql_date;
+    } else if (parquet::Type::INT32 == phy_type) {
+      if(ob_is_datetime(datum_type.type_)) {
+        func = &DataLoader::load_date_col_to_datetime;
+      } else if (ob_is_mysql_datetime(datum_type.type_)) {
+        func = &DataLoader::load_date_col_to_mysql_datetime;
+      }
     }
   } else if ((no_log_type || log_type->is_int()) && parquet::Type::INT32 == phy_type
              && ob_is_year_tc(datum_type.type_)) {
@@ -474,6 +481,39 @@ int ObParquetTableRowIterator::DataLoader::load_int32_to_int32_vec()
           dec_vec->set_null(i + row_offset_);
         } else {
           dec_vec->set_int32(i + row_offset_, values.at(j++));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::load_date_to_mysql_date()
+{
+  int ret = OB_SUCCESS;
+  int64_t values_cnt = 0;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+  ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
+  int16_t max_def_level = reader_->descr()->max_definition_level();
+  ObArrayWrap<int32_t> values;
+
+  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  if (OB_SUCC(ret)) {
+    row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
+          batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
+          values.get_data(), &values_cnt);
+    int j = 0;
+    if (IS_PARQUET_COL_NOT_NULL && values_cnt == row_count_) {
+      MEMCPY(pointer_cast<int32_t*>(dec_vec->get_data()) + row_offset_, values.get_data(), sizeof(int32_t) * row_count_);
+    } else {
+      ObMySQLDate md_value = 0;
+      for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
+        if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
+          dec_vec->set_null(i + row_offset_);
+        } else if (OB_FAIL(ObTimeConverter::date_to_mdate(values.at(j++), md_value))) {
+          LOG_WARN("date_to_mdate fail", K(ret));
+        } else {
+          dec_vec->set_mysql_date(i + row_offset_, md_value);
         }
       }
     }
@@ -1004,6 +1044,34 @@ int ObParquetTableRowIterator::DataLoader::load_date_col_to_datetime()
         dec_vec->set_null(i + row_offset_);
       } else {
         dec_vec->set_datetime(i + row_offset_, values.at(j++) * USECS_PER_DAY);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::load_date_col_to_mysql_datetime()
+{
+  int ret = OB_SUCCESS;
+  int64_t values_cnt = 0;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+  ObFixedLengthBase *dec_vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
+  int16_t max_def_level = reader_->descr()->max_definition_level();
+  ObArrayWrap<int32_t> values;
+  OZ (values.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+  if (OB_SUCC(ret)) {
+    row_count_ = static_cast<parquet::Int32Reader*>(reader_)->ReadBatch(
+          batch_size_, def_levels_buf_.get_data(), rep_levels_buf_.get_data(),
+          values.get_data(), &values_cnt);
+    int j = 0;
+    ObMySQLDateTime mdt_value = 0;
+    for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
+      if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
+        dec_vec->set_null(i + row_offset_);
+      } else if (OB_FAIL(ObTimeConverter::date_to_mdatetime(values.at(j++), mdt_value))) {
+        LOG_WARN("date_to_mdatetime fail", K(ret));
+      } else {
+        dec_vec->set_mysql_datetime(i + row_offset_, mdt_value);
       }
     }
   }

@@ -392,10 +392,14 @@ int ObSqlCollectionInfo::create_meta_info_by_name(const std::string &name, ObCol
     basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].precision_);
   } else if (0 == name.compare("DATETIME")) {
     basic_meta.meta_.set_datetime();
+  } else if (0 == name.compare("MYSQL_DATETIME")) {
+    basic_meta.meta_.set_mysql_datetime();
   } else if (0 == name.compare("TIMESTAMP")) {
     basic_meta.meta_.set_timestamp();
   } else if (0 == name.compare("DATE")) {
     basic_meta.meta_.set_date();
+  } else if (0 == name.compare("MYSQL_DATE")) {
+    basic_meta.meta_.set_mysql_date();
   } else if (0 == name.compare("TIME")) {
     basic_meta.meta_.set_time();
   } else if (0 == name.compare("YEAR")) {

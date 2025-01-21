@@ -340,7 +340,7 @@ int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder &decoder,
             VEC_TC_FIXED_DOUBLE, VEC_TC_DATETIME, VEC_TC_DATE, VEC_TC_TIME, VEC_TC_YEAR, VEC_TC_UNKNOWN,
             VEC_TC_BIT, VEC_TC_ENUM_SET, VEC_TC_TIMESTAMP_TZ, VEC_TC_TIMESTAMP_TINY, VEC_TC_INTERVAL_YM,
             VEC_TC_INTERVAL_DS, VEC_TC_DEC_INT32, VEC_TC_DEC_INT64, VEC_TC_DEC_INT128, VEC_TC_DEC_INT256,
-            VEC_TC_DEC_INT512};
+            VEC_TC_DEC_INT512, VEC_TC_MYSQL_DATETIME, VEC_TC_MYSQL_DATE};
         VecValueTypeClass *vec = std::find(std::begin(fixed_tc_arr), std::end(fixed_tc_arr), vec_tc);
         if (vec == std::end(fixed_tc_arr)) {
           need_test_column = false;

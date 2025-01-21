@@ -502,7 +502,9 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
       obj.set_collation_type(cs_type);
     }
   } else if (column_type.get_type() != obj.get_type()
-             && !(ob_is_string_type(column_type.get_type()) && ob_is_string_type(obj.get_type()))) {
+             && !(ob_is_string_type(column_type.get_type()) && ob_is_string_type(obj.get_type()))
+             && !(ob_is_mysql_date_tc(column_type.get_type()) && ob_is_date_tc(obj.get_type()))
+             && !(ob_is_mysql_datetime(column_type.get_type()) && ob_is_datetime(obj.get_type()))) {
     // 2. data type mismatch
     ret = OB_KV_COLUMN_TYPE_NOT_MATCH;
     const char *schema_type_str = ob_obj_type_str(column_type.get_type());

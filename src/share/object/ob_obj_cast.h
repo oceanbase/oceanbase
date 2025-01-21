@@ -257,6 +257,11 @@ struct ObObjCastParams
     return;
   }
 
+  void set_allow_invalid_dates_cast_mode()
+  {
+    cast_mode_ |= CM_ALLOW_INVALID_DATES;
+  }
+
   TO_STRING_KV(K(cur_time_),
                KP(cast_mode_),
                K(warning_),

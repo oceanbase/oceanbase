@@ -2270,10 +2270,14 @@ public:
   static int init();
   static int calc_hash(const char *p, int64_t len, uint64_t &hash);
   static int trunc_new_obtime(common::ObTime &ob_time,
-                              const common::ObString &fmt);
+                              const common::ObString &fmt,
+                              bool is_mysql_compat_dates);
   static int round_new_obtime(common::ObTime &ob_time,
                               const common::ObString &fmt);
   static int trunc_new_obtime_by_fmt_id(common::ObTime &ob_time,
+                                        int64_t fmt_id,
+                                        bool is_mysql_compat_dates);
+  static int trunc_obtime_by_fmt_id_for_mdatetime(ObTime &ob_time,
                                         int64_t fmt_id);
   static int round_new_obtime_by_fmt_id(common::ObTime &ob_time,
                                         int64_t fmt_id);

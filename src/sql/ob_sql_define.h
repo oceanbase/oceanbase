@@ -738,6 +738,7 @@ static int16_t get_type_fixed_length(ObObjType type) {
     case ObIntTC:
     case ObDoubleTC:
     case ObDateTimeTC:
+    case ObMySQLDateTimeTC:
     case ObTimeTC:
     case ObBitTC:
     case ObEnumSetTC:
@@ -746,6 +747,7 @@ static int16_t get_type_fixed_length(ObObjType type) {
       break;
     }
     case ObDateTC:
+    case ObMySQLDateTC:
     case ObFloatTC:
     {
       len = 4;

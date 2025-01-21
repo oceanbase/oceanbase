@@ -3079,6 +3079,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
   uint64_t tenant_data_ver = 0;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
@@ -3089,6 +3090,9 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
     LOG_WARN("failed to get compat type", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info, false,
+                       enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else if (lib::is_oracle_mode() && ctx_.is_expanding_view_) {
     // numeric constants should parsed with ObNumber in view expansion for oracle mode
     enable_decimal_int = false;
@@ -3107,6 +3111,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              session_info->get_sql_mode(),
                                              enable_decimal_int, // FIXME: enable decimal int
                                              compat_type,
+                                             enable_mysql_compatible_dates,
                                              session_info->get_local_ob_enable_plan_cache(),
                                              nullptr != ctx_.secondary_namespace_,
                                              ctx_.formalize_const_int_prec_))) {

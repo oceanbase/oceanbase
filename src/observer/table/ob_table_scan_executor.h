@@ -116,6 +116,8 @@ public:
   virtual ObTableApiScanExecutor *get_scan_executor() { return scan_executor_; };
   virtual int close();
 private:
+  int adjust_output_obj_type(ObObj &obj);
+private:
   ObTableApiScanExecutor *scan_executor_;
   common::ObArenaAllocator row_allocator_; // alloc the memory of result row
   bool is_opened_;

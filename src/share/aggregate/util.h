@@ -717,7 +717,9 @@ inline bool agg_res_not_null(const ObItemType agg_op)
   VEC_TC_DEC_INT64,           \
   VEC_TC_DEC_INT128,          \
   VEC_TC_DEC_INT256,          \
-  VEC_TC_DEC_INT512
+  VEC_TC_DEC_INT512,          \
+  VEC_TC_MYSQL_DATETIME,      \
+  VEC_TC_MYSQL_DATE           \
 
 #define AGG_VEC_TC_LIST       \
   VEC_TC_NULL,                \
@@ -752,6 +754,8 @@ inline bool agg_res_not_null(const ObItemType agg_op)
   VEC_TC_DEC_INT256,          \
   VEC_TC_DEC_INT512,          \
   VEC_TC_COLLECTION,          \
+  VEC_TC_MYSQL_DATETIME,      \
+  VEC_TC_MYSQL_DATE,          \
   VEC_TC_ROARINGBITMAP
 
 } // end namespace aggregate

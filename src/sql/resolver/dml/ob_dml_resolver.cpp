@@ -6993,7 +6993,9 @@ int ObDMLResolver::resolve_is_expr(ObRawExpr *&expr, bool &replace_happened)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get column item failed", K(ret));
     } else if (T_NULL == is_expr->get_param_expr(1)->get_expr_type()) {
-      if ((column_item->get_column_type()->is_date() || column_item->get_column_type()->is_datetime())
+      if ((column_item->get_column_type()->is_date() || column_item->get_column_type()->is_datetime()
+           || column_item->get_column_type()->is_mysql_date()
+           || column_item->get_column_type()->is_mysql_datetime())
           && !lib::is_oracle_mode()
           && column_item->is_not_null_for_read()) {
         // If c1 is a date or datetime column and is declared not null,
@@ -8417,6 +8419,16 @@ int ObDMLResolver::resolve_not_null_date_column_is_null(ObRawExpr *&expr, const 
   } else if (col_type->is_datetime() &&
              OB_FAIL(ObRawExprUtils::build_const_datetime_expr(*params_.expr_factory_,
                                                                ObTimeConverter::ZERO_DATETIME,
+                                                               zero_date))) {
+    LOG_WARN("fail to create zero datetime", K(ret));
+  } else if (col_type->is_mysql_date() &&
+             OB_FAIL(ObRawExprUtils::build_const_mysql_date_expr(*params_.expr_factory_,
+                                                                 ObTimeConverter::MYSQL_ZERO_DATE,
+                                                                 zero_date))) {
+    LOG_WARN("fail to create zero date", K(ret));
+  } else if (col_type->is_mysql_datetime() &&
+             OB_FAIL(ObRawExprUtils::build_const_mysql_datetime_expr(*params_.expr_factory_,
+                                                               ObTimeConverter::MYSQL_ZERO_DATETIME,
                                                                zero_date))) {
     LOG_WARN("fail to create zero datetime", K(ret));
   }else if (OB_ISNULL(equal_expr) || OB_ISNULL(zero_date)) {
@@ -10365,7 +10377,11 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
       omt::ObTenantConfigGuard tcg(TENANT_CONF(session_info_->get_effective_tenant_id()));
       bool convert_real_to_decimal = (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
       uint64_t tenant_data_version = 0;
-      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+      bool enable_mysql_compatible_dates = false;
+      if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info_, false,
+                                enable_mysql_compatible_dates))) {
+        LOG_WARN("fail to check enable mysql compatible dates", K(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
         LOG_WARN("get tenant data version failed", K(ret));
       } else if (OB_FAIL(ObResolverUtils::resolve_data_type(parse_tree,
                                                           col_def->col_base_info_.col_name_,
@@ -10374,6 +10390,8 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
                                                           false,
                                                           session_info_->get_session_nls_params(),
                                                           session_info_->get_effective_tenant_id(),
+                                                          convert_real_to_decimal,  /*todo @weiyouchao.wyc, check_enable_decimalint*/
+                                                          enable_mysql_compatible_dates,
                                                           convert_real_to_decimal))) {
         LOG_WARN("resolve data type failed", K(ret), K(col_def->col_base_info_.col_name_));
       } else {

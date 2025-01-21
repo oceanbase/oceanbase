@@ -17098,7 +17098,7 @@ def_table_schema(
                     END
                       AS NUMERIC_SCALE,
                       CASE
-                      WHEN rp.param_type IN (17, 18, 20) THEN CAST(rp.param_scale AS UNSIGNED)
+                      WHEN rp.param_type IN (17, 18, 20, 53) THEN CAST(rp.param_scale AS UNSIGNED)
                       ELSE CAST(NULL AS UNSIGNED)
                     END
                       AS DATETIME_PRECISION,
@@ -17144,6 +17144,8 @@ def_table_schema(
                         )
                         WHEN rp.param_type IN (18, 20) THEN CONCAT(lower(v.data_type_str), '(', rp.param_scale, ')')
                         WHEN rp.param_type IN (22, 23) and rp.param_length > 0 THEN CONCAT(lower(v.data_type_str), '(', rp.param_length, ')')
+                        WHEN rp.param_type = 52 THEN lower('DATE')
+                        WHEN rp.param_type = 53 THEN lower('DATETIME')
                         ELSE lower(v.data_type_str)
                         END
                           AS CHAR(4194304)
@@ -22435,6 +22437,8 @@ SELECT/*+leading(DB,TC,STAT)*/
         WHEN 46 THEN (CASE TC.COLLATION_TYPE WHEN 63 THEN 'BLOB' ELSE 'CLOB' END)
         WHEN 47 THEN 'JSON'
         WHEN 50 THEN 'NUMBER'
+        WHEN 52 THEN 'MYSQL_DATE'
+        WHEN 53 THEN 'MYSQL_DATETIME'
         WHEN 54 THEN 'ROARINGBITMAP'
         ELSE 'UNDEFINED' END AS CHAR(128)) AS  DATA_TYPE,
   CAST(NULL AS CHAR(3)) AS  DATA_TYPE_MOD,
@@ -22455,11 +22459,11 @@ SELECT/*+leading(DB,TC,STAT)*/
                                   ELSE 1 END)
                             ELSE 1 END
                             AS SIGNED) AS  DATA_LENGTH,
-  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44,54)
+  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44,52,53,54)
             THEN NULL
             ELSE CASE WHEN TC.DATA_PRECISION < 0 THEN NULL ELSE TC.DATA_PRECISION END
        END AS SIGNED) AS  DATA_PRECISION,
-  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,19,22,23,27,28,29,30,42,43,44,54)
+  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,19,22,23,27,28,29,30,42,43,44,52,53,54)
             THEN NULL
             ELSE CASE WHEN TC.DATA_SCALE < -84 THEN NULL ELSE TC.DATA_SCALE END
        END AS SIGNED) AS  DATA_SCALE,
@@ -30741,6 +30745,8 @@ def_table_schema(
                                    when 'TEXT' then if(rp.param_charset = 1, 'BLOB', 'TEXT')
                                    when 'MEDIUMTEXT' then if(rp.param_charset = 1, 'MEDIUMBLOB', 'MEDIUMTEXT')
                                    when 'LONGTEXT' then if(rp.param_charset = 1, 'LONGBLOB', 'LONGTEXT')
+                                   when 'MYSQL_DATE' then 'DATE'
+                                   when 'MYSQL_DATETIME' then 'DATETIME'
                                    else v.data_type_str end) AS CHAR(64)) AS DATA_TYPE,
                         CASE WHEN rp.param_type IN (22, 23, 27, 28, 29, 30) THEN CAST(rp.param_length AS SIGNED)
                           ELSE CAST(NULL AS SIGNED)
@@ -30775,7 +30781,7 @@ def_table_schema(
                           WHEN rp.param_type IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 31) THEN CAST(0 AS SIGNED)
                           ELSE CAST(NULL AS SIGNED)
                         END AS NUMERIC_SCALE,
-                        CASE WHEN rp.param_type IN (17, 18, 20) THEN CAST(rp.param_scale AS UNSIGNED)
+                        CASE WHEN rp.param_type IN (17, 18, 20, 53) THEN CAST(rp.param_scale AS UNSIGNED)
                           ELSE CAST(NULL AS UNSIGNED)
                         END AS DATETIME_PRECISION,
                         CAST(CASE rp.param_charset
@@ -30839,6 +30845,8 @@ def_table_schema(
                           THEN lower(REPLACE(v.data_type_str, 'TEXT', 'BLOB'))
                           WHEN rp.param_type IN (32, 33)
                           THEN get_mysql_routine_parameter_type_str(rp.routine_id, rp.param_position)
+                          WHEN rp.param_type = 52 THEN lower('DATE')
+                          WHEN rp.param_type = 53 THEN CONCAT(lower('DATETIME'),'(', rp.param_scale, ')')
                           ELSE lower(v.data_type_str) END AS char(4194304)) AS DTD_IDENTIFIER,
                         CAST(CASE WHEN r.routine_type = 1 THEN 'PROCEDURE'
                           WHEN ROUTINE_TYPE = 2 THEN 'FUNCTION'
@@ -42801,6 +42809,8 @@ SELECT
         48, 'SDO_GEOMETRY',
         49, DECODE(TC.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
         50, 'NUMBER',
+        52, 'MYSQL_DATE',
+        53, 'MYSQL_DATETIME',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,
@@ -43016,6 +43026,8 @@ SELECT
         48, 'SDO_GEOMETRY',
         49, DECODE(TC.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
         50, 'NUMBER',
+        52, 'MYSQL_DATE',
+        53, 'MYSQL_DATETIME',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,
@@ -43228,6 +43240,8 @@ SELECT
         48, 'SDO_GEOMETRY',
         49, DECODE(TC.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
         50, 'NUMBER',
+        52, 'MYSQL_DATE',
+        53, 'MYSQL_DATETIME',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,

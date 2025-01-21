@@ -724,6 +724,7 @@ public:
                                  _query_record_size_limit_(65536),
                                  enable_column_store_(false),
                                  enable_decimal_int_type_(false),
+                                 enable_mysql_compatible_dates_(false),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  sql_plan_management_mode_(0),
@@ -757,6 +758,7 @@ public:
     bool get_enable_decimal_int_type() const { return enable_decimal_int_type_; }
     int64_t get_sql_plan_management_mode() const { return sql_plan_management_mode_; }
     bool enable_enhanced_cursor_validation() const { return enable_enhanced_cursor_validation_; }
+    bool get_enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
     bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
     bool get_ob_sqlstat_enable() const { return _ob_sqlstat_enable_; }
   private:
@@ -781,6 +783,7 @@ public:
     int64_t _query_record_size_limit_;
     bool enable_column_store_;
     bool enable_decimal_int_type_;
+    bool enable_mysql_compatible_dates_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
@@ -1431,6 +1434,15 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_print_sample_ppm();
+  }
+  bool is_enable_mysql_compatible_dates()
+  {
+    return enable_mysql_compatible_dates();
+  }
+  bool get_enable_mysql_compatible_dates_from_config()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_enable_mysql_compatible_dates();
   }
   bool is_enable_column_store()
   {

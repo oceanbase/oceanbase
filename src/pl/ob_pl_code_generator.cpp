@@ -9316,6 +9316,8 @@ int ObPLCodeGenerator::extract_value_ptr_from_obj(ObLLVMValue &p_obj, ObObjType 
     case ObDateTimeType:
     case ObTimestampType:
     case ObDateType:
+    case ObMySQLDateType:
+    case ObMySQLDateTimeType:
     case ObTimeType:
     case ObYearType:
     case ObBitType:

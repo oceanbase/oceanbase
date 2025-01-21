@@ -249,7 +249,8 @@ private:
                                   const ObDatum &datum,
                                   const ObDatumMeta &datum_meta,
                                   const ObObjMeta &obj_meta,
-                                  uint32_t col_idx);
+                                  uint32_t col_idx,
+                                  const ObDateSqlMode date_sql_mode);
   int set_odps_column_value_oracle(apsara::odps::sdk::ODPSTableRecord &table_record,
                                    const ObDatum &datum,
                                    const ObDatumMeta &datum_meta,
@@ -381,7 +382,8 @@ private:
                          int64_t &value_offset,
                          int16_t* definition_levels,
                          ObIAllocator &allocator,
-                         void* value_batch);
+                         void* value_batch,
+                         const ObDateSqlMode date_sql_mode);
   int calc_parquet_decimal_array(const common::ObIVector* expr_vector,
                                  int row_idx,
                                  const ObDatumMeta &datum_meta,
@@ -410,12 +412,14 @@ private:
                      int64_t row_idx,
                      int64_t row_offset,
                      orc::ColumnVectorBatch* col_vector_batch,
-                     ObIAllocator &allocator);
+                     ObIAllocator &allocator,
+                     const ObDateSqlMode date_sql_mode);
   int check_orc_file_size(ObOrcFileWriter &data_writer);
   int get_data_from_expr_vector(const common::ObIVector* expr_vector,
                                 int row_idx,
                                 ObObjType type,
-                                int64_t &value);
+                                int64_t &value,
+                                const ObDateSqlMode date_sql_mode);
   bool file_need_split(int64_t file_size);
   int check_oracle_number(ObObjType obj_type, int16_t &precision, int8_t scale);
   static bool day_number_checker(int32_t days);

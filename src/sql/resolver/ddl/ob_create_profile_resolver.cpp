@@ -258,6 +258,7 @@ int ObUserProfileResolver::resolve(const ParseNode &parse_tree)
                                                          params_.session_info_->get_sql_mode(),
                                                          false, // FIXME: enable decimal int
                                                          compat_type,
+                                                         false, /*enable_mysql_compatible_dates*/
                                                          params_.session_info_->get_local_ob_enable_plan_cache()))) {
                 LOG_WARN("fail to resolve const", K(ret));
               } else if (OB_FAIL(fill_arg(param_type->value_, numeric_value, arg))) {

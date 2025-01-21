@@ -82,6 +82,7 @@ int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
       break;
     }
     case ObDateType:
+    case ObMySQLDateType:
     case ObMediumIntType:
     case ObInt32Type: {
       if (to_len + sizeof(int32_t) > max_buf_len) {
@@ -95,6 +96,7 @@ int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
     case ObIntervalYMType:
     case ObTimeType:
     case ObDateTimeType:
+    case ObMySQLDateTimeType:
     case ObTimestampType:
     case ObIntType: {
       if (to_len + sizeof(int64_t) > max_buf_len) {

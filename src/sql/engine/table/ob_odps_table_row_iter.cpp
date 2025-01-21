@@ -639,7 +639,7 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
       }
       case apsara::odps::sdk::ODPS_DATE:
       {
-        if (ObDateType == ob_type) {
+        if (ObDateType == ob_type || ObMySQLDateType == ob_type) {
           // odps_type to ob_type is valid
         } else {
           ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
@@ -650,7 +650,7 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
       }
       case apsara::odps::sdk::ODPS_DATETIME:
       {
-        if (ObDateTimeType == ob_type) {
+        if (ObDateTimeType == ob_type || ObMySQLDateTimeType == ob_type) {
           // odps_type to ob_type is valid
           if (ob_type_scale < 3) {
             ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
@@ -1565,7 +1565,8 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       datums[row_idx].set_date(date);
                     }
                   }
-                } else if (false && ObDateTimeType == type && is_oracle_mode()) {
+                } else if (false && (ObDateTimeType == type || ObMySQLDateTimeType == type)
+                           && is_oracle_mode()) {
                   for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < returned_row_cnt; ++row_idx) {
                     const int64_t* v = records_[row_idx]->GetDateValue(target_idx);
                     if (v == NULL) {
@@ -2226,7 +2227,7 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   int32_t date = *v;
                   datum.set_date(date);
                 }
-              } else if (false && ObDateTimeType == type && is_oracle_mode()) {
+              } else if (false && (ObDateTimeType == type || ObMySQLDateTimeType == type) && is_oracle_mode()) {
                 const int64_t* v = record_->GetDateValue(target_idx);
                 if (v == NULL) {
                   datum.set_null();

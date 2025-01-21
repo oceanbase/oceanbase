@@ -488,6 +488,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
   int64_t value_level = NO_VALUES;
   int64_t assign_level = NO_VALUES;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(ctx.top_node_)
       || OB_ISNULL(ctx.allocator_)
       || OB_ISNULL(ctx.sql_info_)
@@ -505,6 +506,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
     LOG_WARN("failed to get compat type", K(ret));
   } else if (NULL == ctx.tree_) {
     // do nothing
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info, false/*is_ddl*/,
+                       enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {
     ParseNode *func_name_node = NULL;
     if (T_WHERE_SCOPE == ctx.expr_scope_ && T_FUN_SYS == ctx.tree_->type_) {
@@ -585,6 +589,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                               NULL, session_info.get_sql_mode(),
                               enable_decimal_int,
                               compat_type,
+                              enable_mysql_compatible_dates,
                               session_info.get_local_ob_enable_plan_cache(),
                               ctx.is_from_pl_,
                               formalize_int_prec))) {

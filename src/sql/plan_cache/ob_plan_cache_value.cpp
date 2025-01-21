@@ -761,6 +761,7 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
   const int64_t raw_param_cnt = raw_params.count();
   ObObjParam value;
   bool enable_decimal_int = false;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(session) || OB_ISNULL(phy_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret), KP(session), KP(phy_ctx));
@@ -772,6 +773,9 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
                K(raw_param_cnt), K(param_charset_type.count()), K(pc_ctx.raw_sql_));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
+   } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session, false,
+                          enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {
     CHECK_COMPATIBILITY_MODE(session);
     ObCollationType collation_connection = static_cast<ObCollationType>(session->get_local_collation_connection());
@@ -780,7 +784,8 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
       bool is_param = false;
       if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_ctx->get_param_store_for_update(), stmt_type,
                   param_charset_type.at(i), neg_param_index, not_param_index, must_be_positive_idx, formalize_prec_idx,
-                  raw_params.at(i), i, value, is_param, enable_decimal_int))) {
+                  raw_params.at(i), i, enable_mysql_compatible_dates, value, is_param,
+                  enable_decimal_int))) {
         SQL_PC_LOG(WARN, "failed to resolver param", K(ret), K(i));
       } else if (is_param && OB_FAIL(obj_params->push_back(value))) {
         SQL_PC_LOG(WARN, "fail to push item to array", K(ret));
