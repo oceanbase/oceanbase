@@ -856,7 +856,6 @@ int ObBackupMacroBlockIndexMerger::prepare_merge_ctx_(
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupRetryDesc> retry_list;
-  MERGE_ITER_ARRAY merge_iters;
   ObBackupPath backup_path;
   if (OB_FAIL(get_all_retries_(merge_param.task_id_,
           merge_param.tenant_id_,
@@ -865,10 +864,8 @@ int ObBackupMacroBlockIndexMerger::prepare_merge_ctx_(
           sql_proxy,
           retry_list))) {
     LOG_WARN("failed to get all retries", K(ret), K(merge_param));
-  } else if (OB_FAIL(prepare_merge_iters_(merge_param, retry_list, sql_proxy, merge_iters))) {
+  } else if (OB_FAIL(prepare_merge_iters_(merge_param, retry_list, sql_proxy, merge_iter_array_))) {
     LOG_WARN("failed to prepare merge iters", K(ret), K(retry_list));
-  } else if (OB_FAIL(merge_iter_array_.assign(merge_iters))) {
-    LOG_WARN("failed to assign array", K(ret));
   } else if (OB_FAIL(get_output_file_path_(merge_param, backup_path))) {
     LOG_WARN("failed to get output file path", K(ret), K(merge_param));
   } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info()))) {
@@ -905,6 +902,7 @@ int ObBackupMacroBlockIndexMerger::prepare_merge_iters_(const ObBackupIndexMerge
       LOG_WARN("failed to prepare prev backup set index iter", K(ret), K(merge_param));
     } else if (OB_FAIL(merge_iters.push_back(iter))) {
       LOG_WARN("failed to push back", K(ret), K(iter));
+      ObLSBackupFactory::free(iter);
     }
   }
   return ret;
@@ -1378,7 +1376,6 @@ int ObBackupMetaIndexMerger::prepare_merge_ctx_(
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupRetryDesc> retry_list;
-  MERGE_ITER_ARRAY merge_iters;
   ObBackupPath backup_path;
   if (OB_FAIL(get_all_retries_(merge_param.task_id_,
           merge_param.tenant_id_,
@@ -1387,10 +1384,8 @@ int ObBackupMetaIndexMerger::prepare_merge_ctx_(
           sql_proxy,
           retry_list))) {
     LOG_WARN("failed to get all retries", K(ret), K(merge_param));
-  } else if (OB_FAIL(prepare_merge_iters_(merge_param, retry_list, is_sec_meta, merge_iters))) {
+  } else if (OB_FAIL(prepare_merge_iters_(merge_param, retry_list, is_sec_meta, merge_iter_array_))) {
     LOG_WARN("failed to prepare merge iters", K(ret), K(merge_param), K(retry_list));
-  } else if (OB_FAIL(merge_iter_array_.assign(merge_iters))) {
-    LOG_WARN("failed to assign array", K(ret));
   } else if (OB_FAIL(get_output_file_path_(merge_param, is_sec_meta, backup_path))) {
     LOG_WARN("failed to get output file path", K(ret), K(merge_param));
   } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info()))) {
