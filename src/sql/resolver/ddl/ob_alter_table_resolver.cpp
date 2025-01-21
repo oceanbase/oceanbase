@@ -5877,7 +5877,8 @@ int ObAlterTableResolver::resolve_alter_column_not_null(share::schema::AlterColu
         LOG_WARN("drop not null constraint failed", K(ret));
       }
     } else {
-      column.add_not_null_cst();
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify column that is being validating");
     }
   } else if (ori_column.is_nullable() && !column.is_nullable() && !column.is_autoincrement()) {
     column.set_nullable(true);
