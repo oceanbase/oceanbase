@@ -626,8 +626,11 @@ int ObTableLoadClientTask::init_task_scheduler()
   int ret = OB_SUCCESS;
   const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
   THIS_WORKER.set_timeout_ts(ObTimeUtil::current_time() + param_.get_timeout_us());
-  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_), 1,
-                                          param_.get_task_id(), "Executor"))) {
+  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
+                                          1 /*thread_count*/,
+                                          param_.get_task_id(),
+                                          "Executor",
+                                          session_info_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
   } else if (OB_FAIL(task_scheduler_->init())) {

@@ -176,9 +176,11 @@ int ObTableLoadStoreCtx::init(
     LOG_WARN("fail to create index_store_table_ctx_map", KR(ret));
   }
   // 初始化task_scheduler_
-  else if (OB_ISNULL(task_scheduler_ =
-                       OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
-                               ctx_->param_.session_count_, ctx_->param_.table_id_, "Store"))) {
+  else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
+                                               ctx_->param_.session_count_,
+                                               ctx_->param_.table_id_,
+                                               "Store",
+                                               ctx_->session_info_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
   } else if (OB_FAIL(task_scheduler_->init())) {

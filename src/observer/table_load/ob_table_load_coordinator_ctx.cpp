@@ -927,11 +927,11 @@ int ObTableLoadCoordinatorCtx::init_complete()
 {
   int ret = OB_SUCCESS;
   // init task_scheduler_
-  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler,
-                                          (&allocator_),
+  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
                                           ctx_->param_.write_session_count_,
                                           ctx_->param_.table_id_,
-                                          "Coordinator"))) {
+                                          "Coordinator",
+                                          ctx_->session_info_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
   }

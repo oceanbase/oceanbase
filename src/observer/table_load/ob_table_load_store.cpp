@@ -87,6 +87,7 @@ void ObTableLoadStore::cancel_table_ctx(ObTableLoadTableCtx *ctx)
 void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ctx->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(ctx));
@@ -96,13 +97,16 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
     is_stopped = true;
   } else {
     LOG_INFO("store abort");
+    // 0. mark session query killed
+    if (nullptr != ctx->session_info_ && OB_TMP_FAIL(ctx->session_info_->kill_query())) {
+      LOG_WARN("fail to kill query", KR(tmp_ret));
+    }
     // 1. mark status abort, speed up background task exit
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = ctx->store_ctx_->set_status_abort())) {
+    if (OB_TMP_FAIL(ctx->store_ctx_->set_status_abort())) {
       LOG_WARN("fail to set store status abort", KR(tmp_ret));
     }
     // 2. mark all active trans abort
-    if (OB_SUCCESS != (tmp_ret = abort_active_trans(ctx))) {
+    if (OB_TMP_FAIL(abort_active_trans(ctx))) {
       LOG_WARN("fail to abort active trans", KR(tmp_ret));
     }
     cancel_table_ctx(ctx);

@@ -132,9 +132,10 @@ int ObTableLoadPreSorter::init_sample_task_scheduler()
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sample_task_scheduler_ = OB_NEW(ObTableLoadTaskThreadPoolScheduler,
                                                 ObMemAttr(MTL_ID(), "TLD_PreSorter"),
-                                                1,
+                                                1 /*thread_count*/,
                                                 ctx_->param_.table_id_,
-                                                "TLD_PreSorter"))) {
+                                                "TLD_PreSorter",
+                                                ctx_->session_info_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new sample task scheduler", KR(ret));
   } else if (OB_FAIL(sample_task_scheduler_->init())) {
