@@ -1478,6 +1478,7 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
         ObDASLocalLookupIterParam doc_id_lookup_param;
         doc_id_lookup_param.max_size_ = aux_lookup_rtdef->eval_ctx_->is_vectorized()
            ? aux_lookup_rtdef->eval_ctx_->max_batch_size_ : 1;
+        doc_id_lookup_param.max_size_ = 1; // TODO: zyx439997 "A temporary solution, to be resolved after FTS4 is merged."
         doc_id_lookup_param.eval_ctx_ = aux_lookup_rtdef->eval_ctx_;
         doc_id_lookup_param.exec_ctx_ = &aux_lookup_rtdef->eval_ctx_->exec_ctx_;
         doc_id_lookup_param.output_ = &aux_lookup_ctdef->result_output_;
@@ -1623,6 +1624,7 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
     ObDASCacheLookupIterParam root_lookup_param;
     root_lookup_param.max_size_ = idx_proj_lookup_rtdef->eval_ctx_->is_vectorized()
         ? idx_proj_lookup_rtdef->get_rowkey_scan_rtdef()->eval_ctx_->max_batch_size_ : 1;
+    root_lookup_param.max_size_ = 1; // TODO: zyx439997 "A temporary solution, to be resolved after FTS4 is merged."
     root_lookup_param.eval_ctx_ = idx_proj_lookup_rtdef->eval_ctx_;
     root_lookup_param.exec_ctx_ = &idx_proj_lookup_rtdef->eval_ctx_->exec_ctx_;
     root_lookup_param.output_ = &idx_proj_lookup_ctdef->result_output_;
