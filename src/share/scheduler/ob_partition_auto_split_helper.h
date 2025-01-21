@@ -251,11 +251,19 @@ private:
                                 const share::schema::ObTableSchema &table_schema,
                                 const ObTabletID split_source_tablet_id,
                                 const ObArray<ObNewRange> &ranges,
+                                const ObTimeZoneInfo *tz_info,
                                 share::schema::AlterTableSchema &alter_table_schema);
   int build_partition_(const uint64_t tenant_id, const uint64_t table_id,
                        const ObTabletID split_source_tablet_id,
                        const ObRowkey &high_bound_val,
+                       const ObTimeZoneInfo *tz_info,
                        share::schema::ObPartition &new_part);
+  int check_and_cast_high_bound(const ObRowkey &origin_high_bound_val,
+                                const ObTimeZoneInfo *tz_info,
+                                ObRowkey &cast_hight_bound_val,
+                                bool &need_cast,
+                                ObIAllocator &allocator);
+  int check_need_to_cast(const ObObj &obj, bool &need_to_cast);
 private:
   static const int32_t MAX_SPLIT_PARTITION_NUM = 2;
 };

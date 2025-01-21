@@ -1306,13 +1306,13 @@ int ObAutoSplitArgBuilder::build_arg_(const uint64_t tenant_id,
   arg.reset();
   ObTZMapWrap tz_map_wrap;
   share::schema::AlterTableSchema& alter_table_schema = arg.alter_table_schema_;
-
   if (tenant_id == OB_INVALID_ID) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
   } else if (OB_FAIL(build_alter_table_schema_(tenant_id, db_name, table_schema,
                                                split_source_tablet_id,
                                                ranges,
+                                               arg.tz_info_wrap_.get_time_zone_info(),
                                                alter_table_schema))) {
     LOG_WARN("fail to build alter_table_schema", KR(ret), K(tenant_id), K(db_name),
                                                  K(table_schema), K(split_source_tablet_id),
@@ -1334,7 +1334,6 @@ int ObAutoSplitArgBuilder::build_arg_(const uint64_t tenant_id,
       LOG_WARN("failed to build ddl stmt str", K(ret), K(tenant_id), K(table_schema.get_table_id()), K(split_source_tablet_id));
     }
   }
-
   return ret;
 }
 
@@ -1517,6 +1516,7 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
                                                      const share::schema::ObTableSchema &table_schema,
                                                      const ObTabletID split_source_tablet_id,
                                                      const ObArray<ObNewRange> &ranges,
+                                                     const ObTimeZoneInfo *tz_info,
                                                      share::schema::AlterTableSchema &alter_table_schema)
 {
   int ret = OB_SUCCESS;
@@ -1548,7 +1548,7 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
       const ObRowkey& high_bound_val = ranges[i].get_end_key();
 
       if (OB_FAIL(build_partition_(tenant_id, table_id,
-                                   split_source_tablet_id, high_bound_val,
+                                   split_source_tablet_id, high_bound_val, tz_info,
                                    new_part))) {
         LOG_WARN("fail to build partition", KR(ret), K(tenant_id), K(table_id), K(split_source_tablet_id),
                                             K(high_bound_val), K(table_schema));
@@ -1558,6 +1558,7 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
         new_part.reset();
       }
     }
+
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(rootserver::ObDDLService::fill_part_name(table_schema, alter_table_schema))) {
@@ -1588,11 +1589,18 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
 int ObAutoSplitArgBuilder::build_partition_(const uint64_t tenant_id, const uint64_t table_id,
                                             const ObTabletID split_source_tablet_id,
                                             const ObRowkey &high_bound_val,
+                                            const ObTimeZoneInfo *tz_info,
                                             share::schema::ObPartition &new_part)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_FAIL(new_part.set_high_bound_val(high_bound_val))) {
+  bool need_cast = false;
+  ObRowkey cast_high_bound_val;
+  common::ObArenaAllocator cast_allocator;
+  if (OB_FAIL(check_and_cast_high_bound(high_bound_val, tz_info, cast_high_bound_val, need_cast, cast_allocator))) {
+    LOG_WARN("failed to check cast high bound", K(ret));
+  } else if (need_cast && OB_FAIL(new_part.set_high_bound_val(cast_high_bound_val))) {
+    LOG_WARN("failed to set high_bound_val", KR(ret));
+  } else if (!need_cast && OB_FAIL(new_part.set_high_bound_val(high_bound_val))) {
     LOG_WARN("failed to set high_bound_val", KR(ret));
   } else {
     new_part.set_is_empty_partition_name(true);
@@ -1602,6 +1610,79 @@ int ObAutoSplitArgBuilder::build_partition_(const uint64_t tenant_id, const uint
     new_part.set_partition_type(PartitionType::PARTITION_TYPE_NORMAL);
   }
 
+  if (OB_NOT_NULL(cast_high_bound_val.get_obj_ptr())) {
+    cast_high_bound_val.destroy(cast_allocator);
+  }
+  return ret;
+}
+
+int ObAutoSplitArgBuilder::check_and_cast_high_bound(const ObRowkey &origin_high_bound_val,
+                                                     const ObTimeZoneInfo *tz_info,
+                                                     ObRowkey &cast_hight_bound_val,
+                                                     bool &need_cast,
+                                                     ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  const ObObj *ori_obj_ptr = origin_high_bound_val.get_obj_ptr();
+  const int64_t obj_count = origin_high_bound_val.get_obj_cnt();
+  need_cast = false;
+  cast_hight_bound_val.reset();
+  if (OB_ISNULL(ori_obj_ptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("object ptr should not be null", K(ret), K(origin_high_bound_val));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !need_cast && i < obj_count; ++i) {
+      if (OB_FAIL(check_need_to_cast(ori_obj_ptr[i], need_cast))) {
+        LOG_WARN("fail to check need to cast", K(ret), K(ori_obj_ptr[i]));
+      }
+    }
+    if (OB_SUCC(ret) && need_cast) {
+      ObObj *cast_obj_ptr = nullptr;
+      if (OB_FAIL(origin_high_bound_val.deep_copy(cast_hight_bound_val, allocator))) {
+        LOG_WARN("failed to copy rowkey", K(origin_high_bound_val));
+      } else if (OB_ISNULL(cast_obj_ptr = cast_hight_bound_val.get_obj_ptr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("object ptr should not be null", K(ret), K(cast_obj_ptr));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < obj_count; ++i) {
+          const ObObj *o_obj_ptr = &ori_obj_ptr[i];
+          ObObj *c_obj_ptr = &cast_obj_ptr[i];
+          bool need_to_cast = false;
+          if (OB_ISNULL(c_obj_ptr) || OB_ISNULL(o_obj_ptr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ptr should not be null", K(ret), K(c_obj_ptr), K(o_obj_ptr));
+          } else if (OB_FAIL(check_need_to_cast(*o_obj_ptr, need_to_cast))) {
+            LOG_WARN("fail to check need to cast", K(ret), K(*o_obj_ptr));
+          } else if (need_to_cast) {
+            const ObObjType expected_obj_type = ori_obj_ptr[i].is_timestamp_ltz() ? ObTimestampTZType : (ob_is_int_tc(c_obj_ptr->get_type()) ? ObIntType : ObUInt64Type);
+            int64_t cm_mode = CM_NONE;
+            ObDataTypeCastParams dtc_params;
+            dtc_params.tz_info_ = tz_info;
+            ObCastCtx cast_ctx(&allocator, &dtc_params, cm_mode, c_obj_ptr->get_meta().get_collation_type());
+            if (OB_FAIL(ObObjCaster::to_type(expected_obj_type, cast_ctx, *o_obj_ptr, *c_obj_ptr))) {
+              STORAGE_LOG(WARN, "fail to cast obj",
+                  K(ret), K(*o_obj_ptr), K(*c_obj_ptr), K(o_obj_ptr->get_type()),
+                  K(ob_obj_type_str(o_obj_ptr->get_type())),
+                  K(o_obj_ptr->get_meta().get_type()), K(ob_obj_type_str(o_obj_ptr->get_meta().get_type())));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAutoSplitArgBuilder::check_need_to_cast(const ObObj &obj, bool &need_to_cast)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!obj.is_valid_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid type", K(ret), K(obj));
+  } else {
+    need_to_cast = (ob_is_integer_type(obj.get_type()) && (ObIntType != obj.get_type() || ObUInt64Type != obj.get_type()))
+              || obj.is_timestamp_ltz();
+  }
   return ret;
 }
 
