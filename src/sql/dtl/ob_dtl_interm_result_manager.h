@@ -76,7 +76,7 @@ struct ObDTLMemProfileKey {
     return px_sequence_id_ == key.px_sequence_id_ && dfo_id_ == key.dfo_id_;
   }
 
-  inline bool is_valid() {
+  inline bool is_valid() const {
     return ((px_sequence_id_ >= 0) && (dfo_id_ >= 0));
   }
 
