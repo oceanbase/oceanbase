@@ -126,6 +126,7 @@ public:
   int update_tenant_audit_log_config();
   int start_kv_group_commit_timer();
   int update_tenant_query_response_time_flush_config();
+  int get_tenant_unsafe(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;
   int get_active_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;
@@ -173,7 +174,6 @@ public:
 
 protected:
   void run1();
-  int get_tenant_unsafe(const uint64_t tenant_id, ObTenant *&tenant) const;
 
   int write_create_tenant_prepare_slog(const ObTenantMeta &meta);
   int write_create_tenant_commit_slog(uint64_t tenant_id);
