@@ -3054,18 +3054,16 @@ int ObHashGroupByOp::init_by_pass_op()
     LOG_WARN("failed to init by pass group row item", K(ret));
   } else if (MY_SPEC.max_batch_size_ > 0 && OB_FAIL(init_by_pass_group_batch_item())) {
     LOG_WARN("failed to init by pass group batch item", K(ret));
+  } else if (MY_SPEC.max_batch_size_ > 0
+              && OB_FAIL(by_pass_brs_holder_.init(child_->get_spec().output_, eval_ctx_))) {
+    LOG_WARN("failed to init brs holder", K(ret));
   } else if (OB_ISNULL(store_row_buf = mem_context_->get_malloc_allocator()
                                           .alloc(sizeof(ObChunkDatumStore::LastStoredRow)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for store row", K(ret));
-  } else if (MY_SPEC.max_batch_size_ > 0
-              && OB_FAIL(by_pass_brs_holder_.init(child_->get_spec().output_, eval_ctx_))) {
-    LOG_WARN("failed to init brs holder", K(ret));
   } else {
-    if (nullptr != store_row_buf) {
-      last_child_row_ = new(store_row_buf)ObChunkDatumStore::LastStoredRow(mem_context_->get_arena_allocator());
-      last_child_row_->reuse_ = true;
-    }
+    last_child_row_ = new(store_row_buf)ObChunkDatumStore::LastStoredRow(mem_context_->get_arena_allocator());
+    last_child_row_->reuse_ = true;
     LOG_TRACE("check by pass", K(MY_SPEC.id_), K(MY_SPEC.by_pass_enabled_), K(bypass_ctrl_.get_small_row_cnt()),
                                K(get_actual_mem_used_size()), K(INIT_L2_CACHE_SIZE), K(INIT_L3_CACHE_SIZE));
     // to avoid performance decrease, at least deduplicate 2/3
