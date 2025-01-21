@@ -269,6 +269,16 @@ bool ObIOFlag::is_sys_module() const
           && sys_module_id_ < SYS_MODULE_END_ID;
 }
 
+bool ObIORequest::is_object_device_req() const
+{
+  bool ret = false;
+  if (io_result_ == nullptr) {
+  } else {
+    ret = io_result_->is_object_device_req_;
+  }
+  return ret;
+}
+
 int64_t ObIOFlag::get_wait_event() const
 {
   return wait_event_id_;

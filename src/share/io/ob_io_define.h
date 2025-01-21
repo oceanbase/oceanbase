@@ -606,6 +606,7 @@ public:
   ObIOGroupKey get_group_key() const;
   uint64_t get_sys_module_id() const;
   bool is_sys_module() const;
+  bool is_object_device_req() const;
   char *calc_io_buf();  // calc the aligned io_buf of raw_buf_, which interact with the operating system
   const ObIOFlag &get_flag() const;
   ObIOMode get_mode() const; // 2 mode
@@ -627,7 +628,7 @@ public:
 
   int64_t get_remained_io_timeout_us();
 
-  TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_),
+  TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_), K(is_object_device_req()),
                K(trace_id_), K(retry_count_), K(tenant_io_mgr_), K_(storage_accesser),
                KPC(io_result_), K_(part_id));
 private:

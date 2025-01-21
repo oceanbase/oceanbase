@@ -62,6 +62,7 @@ inline const char *get_resource_type_str(const ResourceType type)
 namespace common
 {
 int64_t get_norm_iops(const int64_t size, const double iops, const ObIOMode mode);
+int64_t get_norm_bw(const int64_t size, const ObIOMode mode);
 class ObTenantIOManager;
 #ifdef OB_BUILD_SHARED_STORAGE
 class ObSSIORequest;

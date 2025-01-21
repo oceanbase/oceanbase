@@ -57,6 +57,23 @@ int64_t get_norm_iops(const int64_t size, const double iops, const ObIOMode mode
   }
   return norm_iops;
 }
+
+// for local device
+int64_t get_norm_bw(const int64_t size, const ObIOMode mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t norm_bw = size;
+  double iops_scale = 0;
+  bool is_io_ability_valid = false;
+  if (mode == ObIOMode::MAX_MODE) {
+  } else if (FALSE_IT(ObIOCalibration::get_instance().get_iops_scale(mode, size, iops_scale, is_io_ability_valid))) {
+  } else if (iops_scale < std::numeric_limits<double>::epsilon()) {
+    LOG_WARN("calc iops scale failed", K(ret), K(mode));
+  } else {
+    norm_bw = static_cast<int64_t>((double)STANDARD_IOPS_SIZE / iops_scale);
+  }
+  return max(norm_bw, 1);;
+}
 }  // namespace common
 }  // namespace oceanbase
 int64_t ObTrafficControl::IORecord::calc()
@@ -2695,7 +2712,7 @@ int ObTenantIOManager::print_io_status()
         snprintf(io_status, sizeof(io_status),
                 "sys_group_name:%s, mode:%s, cur_req:%ld, hold_mem:%ld "
                 "[FAILED]: fail_size:%ld, fail_iops:%ld, fail_bw:%ld, [delay/us]:prepare:%ld, schedule:%ld, submit:%ld, rt:%ld, total:%ld, "
-                "[SUCC]: size:%ld, iops:%ld, norm_iops :%ld, bw:%ld, [delay/us]:prepare:%ld, schedule:%ld, submit:%ld, rt:%ld, total:%ld",
+                "[SUCC]: size:%ld, iops:%ld, norm_iops:%ld, bw:%ld, [delay/us]:prepare:%ld, schedule:%ld, submit:%ld, rt:%ld, total:%ld",
                  get_io_sys_group_name(module),
                  mode_str,
                  sys_mem_stat.group_mem_infos_.at(i).total_cnt_,
