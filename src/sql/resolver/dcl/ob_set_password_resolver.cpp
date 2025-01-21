@@ -169,19 +169,21 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("The child 1 or child 2 should not be NULL",
               K(ret), "child 1", node->children_[1], "child 2", node->children_[2]);
         } else {
-          bool need_enc = (1 == node->children_[2]->value_) ? true : false;
           ObString password(static_cast<int32_t>(node->children_[1]->str_len_),
                             node->children_[1]->str_value_);
-          if (need_enc && !lib::is_oracle_mode() && OB_FAIL(check_password_strength(password))) {
+          if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password))) {
             LOG_WARN("fail to check password strength", K(ret));
-          } else if (need_enc && lib::is_oracle_mode() && OB_FAIL(
+          } else if (lib::is_oracle_mode() && OB_FAIL(
                      resolve_oracle_password_strength(user_name, host_name, password))) {
             LOG_WARN("fail to check password strength", K(ret));
-          } else if (!need_enc && (!is_valid_mysql41_passwd(password))) {
-            ret = OB_ERR_PASSWORD_FORMAT;
-            LOG_WARN("Wrong password hash format");
-          } else if (0 != password.length()) { //set password
-            set_pwd_stmt->set_need_enc(need_enc);
+          } else if (0 != password.length()) {//set password
+            bool need_enc = (1 == node->children_[2]->value_) ? true : false;
+            if (!need_enc && (!is_valid_mysql41_passwd(password))) {
+              ret = OB_ERR_PASSWORD_FORMAT;
+              LOG_WARN("Wrong password hash format");
+            } else {
+              set_pwd_stmt->set_need_enc(need_enc);
+            }
           } else {
             set_pwd_stmt->set_need_enc(false); //clear password
           }
