@@ -302,12 +302,14 @@ typedef struct ObCollationHandler
   //size_t    (*strnxfrmlen)(const struct ObCharsetInfo *, size_t);
 
   // creates a LIKE range, for optimizer，query range模块使用到了
+  // prifix_len should return **byte** length before the first '%'
   bool (*like_range)(const struct ObCharsetInfo *,
             const char *s, size_t s_length,
             pchar w_prefix, pchar w_one, pchar w_many,
             size_t res_length,
             char *min_str, char *max_str,
-            size_t *min_len, size_t *max_len);
+            size_t *min_len, size_t *max_len,
+            size_t *prefix_len);
   // wildcard comparison, for LIKE
   int     (*wildcmp)(const struct ObCharsetInfo *,
   		     const char *str,const char *str_end,
@@ -406,8 +408,8 @@ struct ObCharsetInfo
 #define ob_strnxfrm(cs, d, dl, s, sl) \
    ((cs)->coll->strnxfrm((cs), (d), (dl), (dl), (s), (sl), MY_STRXFRM_PAD_WITH_SPACE))
 #define ob_strnncoll(s, a, b, c, d) ((s)->coll->strnncoll((s), (a), (b), (c), (d), 0))
-#define ob_like_range(s, a, b, c, d, e, f, g, h, i, j) \
-   ((s)->coll->like_range((s), (a), (b), (c), (d), (e), (f), (g), (h), (i), (j)))
+#define ob_like_range(s, a, b, c, d, e, f, g, h, i, j, k) \
+   ((s)->coll->like_range((s), (a), (b), (c), (d), (e), (f), (g), (h), (i), (j), (k)))
 #define ob_wildcmp(cs,s,se,w,we,e,o,m) ((cs)->coll->wildcmp((cs),(s),(se),(w),(we),(e),(o),(m)))
 #define ob_strcasecmp(s, a, b)        ((s)->coll->strcasecmp((s), (a), (b)))
 #define ob_charpos(cs, b, e, num)     (cs)->cset->charpos((cs), (const char*) (b), (const char *)(e), (num))
@@ -545,11 +547,12 @@ size_t ob_scan_8bit(const ObCharsetInfo *cs, const char *b, const char *e,
 
 /* For 8-bit character set */
 bool  ob_like_range_simple(const ObCharsetInfo *cs,
-			      const char *ptr, size_t ptr_length,
-			      pbool escape, pbool w_one, pbool w_many,
-			      size_t res_length,
-			      char *min_str, char *max_str,
-			      size_t *min_length, size_t *max_length);
+            const char *ptr, size_t ptr_length,
+            pbool escape, pbool w_one, pbool w_many,
+            size_t res_length,
+            char *min_str, char *max_str,
+            size_t *min_length, size_t *max_length,
+            size_t *prefix_length);
 
 bool ob_propagate_simple(const ObCharsetInfo *cs, const unsigned char *str,
                             size_t len);
@@ -570,7 +573,8 @@ bool ob_like_range_mb(const ObCharsetInfo *cs,
 			 pbool escape, pbool w_one, pbool w_many,
 			 size_t res_length,
 			 char *min_str,char *max_str,
-       size_t *min_length,size_t *max_length);
+       size_t *min_length,size_t *max_length,
+       size_t *prefix_length);
 
 int ob_wildcmp_mb(const ObCharsetInfo *cs,
                   const char *str,const char *str_end,
@@ -666,7 +670,7 @@ bool ob_like_range_generic(const ObCharsetInfo *cs, const char *ptr,
                               size_t ptr_length, char escape, char w_one,
                               char w_many, size_t res_length, char *min_str,
                               char *max_str, size_t *min_length,
-                              size_t *max_length);
+                              size_t *max_length, size_t *prefix_length);
 
 size_t ob_strnxfrm_unicode(const ObCharsetInfo *cs,
                     unsigned char *dst, size_t dstlen, unsigned int nweights,

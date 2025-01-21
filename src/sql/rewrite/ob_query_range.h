@@ -539,6 +539,11 @@ public:
                              int64_t &range_prefix_count,
                              bool &contain_always_false) const;
   virtual bool is_fast_nlj_range() const { return false; }
+  // get prefix string (without wildcards) length of like pattern
+  static int get_pattern_prefix_len(const ObCollationType &cs_type,
+                                    const ObString &escape_str,
+                                    const ObString &pattern_str,
+                                    int32_t &pattern_prefix_len);
 private:
 
   int init_query_range_ctx(common::ObIAllocator &allocator,

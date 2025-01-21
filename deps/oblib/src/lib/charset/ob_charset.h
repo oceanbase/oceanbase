@@ -515,7 +515,8 @@ public:
                         char *min_str,
                         size_t *min_str_len,
                         char *max_str,
-                        size_t *max_str_len);
+                        size_t *max_str_len,
+                        size_t *prefix_len = NULL);
   static size_t strlen_char(ObCollationType collation_type,
                             const char *str,
                             int64_t str_len);
@@ -716,6 +717,7 @@ public:
 
   static bool is_cs_nonascii(ObCollationType collation_type);
   static bool is_cs_unicode(ObCollationType collation_type);
+  static bool is_cs_uca(ObCollationType collation_type);
   static int get_replace_character(ObCollationType collation_type, int32_t &replaced_char_unicode);
   static bool is_cjk_charset(ObCollationType collation_type);
   static bool is_valid_connection_collation(ObCollationType collation_type);
