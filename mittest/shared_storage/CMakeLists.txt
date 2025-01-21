@@ -60,6 +60,7 @@ if(OB_BUILD_CLOSE_MODULES)
   mit_shared_storage_unittest(test_ss_fd_cache_perf)
   mit_shared_storage_unittest(test_calibrate_disk_space)
   mit_shared_storage_unittest(test_segment_file_manager)
+  mit_shared_storage_unittest(test_flush_unsealed_tmp_file)
 endif()
 
 add_subdirectory(tmp_file)

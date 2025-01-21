@@ -590,8 +590,8 @@ int ObObjectManager::seal_object(const MacroBlockId &object_id, const int64_t ls
   } else if (OB_ISNULL(file_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant file manager is null", KR(ret), "tenant_id", MTL_ID());
-  } else if (OB_FAIL(file_mgr->seal_file(object_id, ls_epoch_id))) {
-    LOG_WARN("fail to seal file", KR(ret), K(object_id), K(ls_epoch_id));
+  } else if (OB_FAIL(file_mgr->push_to_flush_queue(object_id, ls_epoch_id))) {
+    LOG_WARN("fail to push to flush queue", KR(ret), K(object_id), K(ls_epoch_id));
   }
   return ret;
 }

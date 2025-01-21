@@ -23,6 +23,7 @@
 #include "storage/shared_storage/micro_cache/task/ob_ss_micro_cache_task_runner.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_meta_manager.h"
 #include "storage/shared_storage/micro_cache/ob_ss_physical_block_manager.h"
+#include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_reader.h"
 
 namespace oceanbase
 {
@@ -42,10 +43,10 @@ public:
   virtual void TearDown();
 
   void restart_micro_cache();
-  int add_batch_micro_block(const int64_t start_idx, const int64_t total_cnt,
+  int add_batch_micro_block(const int64_t start_idx, const int64_t macro_cnt, const int64_t micro_cnt,
                             ObArray<ObSSMicroBlockMeta *> &micro_meta_arr);
   int alloc_batch_phy_block_to_reuse(const int64_t total_cnt, ObArray<ObSSPhyBlockPersistInfo> &phy_block_arr);
-  void check_micro_meta(const ObArray<ObSSMicroBlockMeta *> &micro_meta_arr);
+  void check_micro_meta(const ObArray<ObSSMicroBlockMeta *> &micro_meta_arr, const bool is_exist);
   void check_phy_blk_info(const ObArray<ObSSPhyBlockPersistInfo> &phy_block_arr, const int64_t increment);
   void check_super_block(const ObSSMicroCacheSuperBlock &super_block);
 public:
@@ -97,6 +98,9 @@ void TestSSExecuteCheckpointTask::SetUp()
 void TestSSExecuteCheckpointTask::TearDown()
 {
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  // clear micro_meta_ckpt
+  ObSSMicroCacheSuperBlock new_super_blk(micro_cache->cache_file_size_);
+  ASSERT_EQ(OB_SUCCESS, micro_cache->phy_blk_mgr_.update_ss_super_block(new_super_blk));
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
@@ -122,7 +126,8 @@ void TestSSExecuteCheckpointTask::restart_micro_cache()
 
 int TestSSExecuteCheckpointTask::add_batch_micro_block(
     const int64_t start_idx,
-    const int64_t write_blk_cnt,
+    const int64_t macro_cnt,
+    const int64_t micro_cnt,
     ObArray<ObSSMicroBlockMeta *> &micro_meta_arr)
 {
   int ret = OB_SUCCESS;
@@ -131,19 +136,18 @@ int TestSSExecuteCheckpointTask::add_batch_micro_block(
   const int64_t payload_offset =
       ObSSPhyBlockCommonHeader::get_serialize_size() + ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
   const int32_t micro_index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
-  const int32_t micro_cnt = 20;
   const int32_t micro_size = (DEFAULT_BLOCK_SIZE - payload_offset) / micro_cnt - micro_index_size;
   char *data_buf = nullptr;
   ObArray<ObSSMicroBlockCacheKey> micro_key_arr;
-  if (OB_UNLIKELY(start_idx < 0 || write_blk_cnt <= 0)) {
+  if (OB_UNLIKELY(start_idx < 0 || macro_cnt <= 0 || micro_cnt <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(start_idx), K(write_blk_cnt));
+    LOG_WARN("invalid argument", KR(ret), K(start_idx), K(macro_cnt), K(micro_cnt));
   } else if (OB_ISNULL(data_buf = static_cast<char *>(allocator_.alloc(micro_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret), K(micro_size));
   } else {
     MEMSET(data_buf, 'a', micro_size);
-    const int64_t end_idx = start_idx + write_blk_cnt;
+    const int64_t end_idx = start_idx + macro_cnt;
     for (int64_t i = start_idx; OB_SUCC(ret) && i < end_idx; ++i) {
       const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(i);
       for (int64_t j = 0; OB_SUCC(ret) && j < micro_cnt; ++j) {
@@ -196,7 +200,7 @@ int TestSSExecuteCheckpointTask::alloc_batch_phy_block_to_reuse(
     for (int64_t i = 0; OB_SUCC(ret) && i < total_cnt; i++) {
       int64_t block_idx = 0;
       ObSSPhysicalBlockHandle phy_blk_handle;
-      if (OB_FAIL(phy_blk_mgr_->alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_NORMAL_BLK))) {
+      if (OB_FAIL(phy_blk_mgr_->alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK))) {
         LOG_WARN("fail to alloc block", KR(ret), K(block_idx), K(phy_blk_handle));
       } else if (OB_UNLIKELY(!phy_blk_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
@@ -214,7 +218,9 @@ int TestSSExecuteCheckpointTask::alloc_batch_phy_block_to_reuse(
   return ret;
 }
 
-void TestSSExecuteCheckpointTask::check_micro_meta(const ObArray<ObSSMicroBlockMeta *> &micro_meta_arr)
+void TestSSExecuteCheckpointTask::check_micro_meta(
+    const ObArray<ObSSMicroBlockMeta *> &micro_meta_arr,
+    const bool is_exist)
 {
   int ret = OB_SUCCESS;
   const int64_t micro_cnt = micro_meta_arr.count();
@@ -223,21 +229,24 @@ void TestSSExecuteCheckpointTask::check_micro_meta(const ObArray<ObSSMicroBlockM
     const ObSSMicroBlockCacheKey &micro_key = old_micro_meta->get_micro_key();
     ObSSMicroBlockMetaHandle micro_handle;
     ret = micro_meta_mgr_->get_micro_block_meta_handle(micro_key, micro_handle, false);
-    // ckpt will record all persisted micro_block's meta
-    if (old_micro_meta->is_persisted()) {
-      if (OB_FAIL(ret)) {
-        LOG_WARN("unexpected", KR(ret), K(micro_key), K(i), K(micro_cnt), KPC(old_micro_meta));
+    if (is_exist == true) {
+      if (old_micro_meta->is_persisted()) {
+        if (OB_FAIL(ret)) {
+          LOG_WARN("unexpected", KR(ret), K(micro_key), K(i), K(micro_cnt), KPC(old_micro_meta));
+        }
+        ASSERT_EQ(OB_SUCCESS, ret);
+        ASSERT_EQ(true, micro_handle.is_valid());
+        ObSSMicroBlockMeta *micro_meta = micro_handle.get_ptr();
+        ASSERT_EQ(micro_meta->reuse_version_, old_micro_meta->reuse_version_);
+        ASSERT_EQ(micro_meta->data_dest_, old_micro_meta->data_dest_);
+        ASSERT_EQ(micro_meta->length_, old_micro_meta->length_);
+        ASSERT_EQ(micro_meta->is_in_l1_, old_micro_meta->is_in_l1_);
+        ASSERT_EQ(micro_meta->is_in_ghost_, old_micro_meta->is_in_ghost_);
+        ASSERT_EQ(micro_meta->is_persisted_, old_micro_meta->is_persisted_);
+        ASSERT_EQ(micro_meta->is_reorganizing_, old_micro_meta->is_reorganizing_);
+      } else {
+        ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
       }
-      ASSERT_EQ(OB_SUCCESS, ret);
-      ASSERT_EQ(true, micro_handle.is_valid());
-      ObSSMicroBlockMeta *micro_meta = micro_handle.get_ptr();
-      ASSERT_EQ(micro_meta->reuse_version_, old_micro_meta->reuse_version_);
-      ASSERT_EQ(micro_meta->data_dest_, old_micro_meta->data_dest_);
-      ASSERT_EQ(micro_meta->length_, old_micro_meta->length_);
-      ASSERT_EQ(micro_meta->is_in_l1_, old_micro_meta->is_in_l1_);
-      ASSERT_EQ(micro_meta->is_in_ghost_, old_micro_meta->is_in_ghost_);
-      ASSERT_EQ(micro_meta->is_persisted_, old_micro_meta->is_persisted_);
-      ASSERT_EQ(micro_meta->is_reorganizing_, old_micro_meta->is_reorganizing_);
     } else {
       ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
     }
@@ -311,8 +320,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(false, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_super_block_.is_valid());
   ASSERT_EQ(false, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.is_valid());
-  ASSERT_EQ(0, phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_.used_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr->blk_cnt_info_.micro_ckpt_blk_.used_cnt_);
+  ASSERT_EQ(0, phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(0, phy_blk_mgr->blk_cnt_info_.meta_blk_.used_cnt_);
   ASSERT_EQ(0, phy_blk_mgr->reusable_set_.size());
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
 
@@ -321,7 +330,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(0, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.micro_ckpt_entry_list_.count());
   int64_t blk_ckpt_list_cnt = blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.count();
   ASSERT_LT(0, blk_ckpt_list_cnt);
-  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_.used_cnt_, blk_ckpt_list_cnt);
+  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_used_cnt_, blk_ckpt_list_cnt);
   ObSEArray<int64_t, 8> blk_ckpt_entry_list;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_entry_list.assign(blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_));
 
@@ -338,7 +347,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(true, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_super_block_.is_valid());
   ASSERT_EQ(0, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.micro_ckpt_entry_list_.count());
   ASSERT_EQ(blk_ckpt_list_cnt, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.count());
-  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_.used_cnt_, blk_ckpt_list_cnt);
+  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_used_cnt_, blk_ckpt_list_cnt);
 
   for (int64_t i = 0; i < blk_ckpt_entry_list.count(); ++i) {
     const int64_t blk_idx = blk_ckpt_entry_list.at(i);
@@ -354,7 +363,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(blk_ckpt_list_cnt, blk_ckpt_entry_list.count());
 
   // 3. make some micro_data
-  const int64_t available_block_cnt = phy_blk_mgr->get_free_normal_block_cnt();
+  const int64_t available_block_cnt = phy_blk_mgr->blk_cnt_info_.cache_limit_blk_cnt();
   const int64_t WRITE_BLK_CNT = 50;
   ASSERT_LT(WRITE_BLK_CNT, available_block_cnt);
 
@@ -398,7 +407,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   const int64_t max_retry_cnt = 10;
   bool result_match = false;
   for (int64_t i = 0; !result_match && i < max_retry_cnt; ++i) {
-    result_match = (phy_blk_mgr->blk_cnt_info_.normal_blk_.used_cnt_ == WRITE_BLK_CNT);
+    result_match = (phy_blk_mgr->blk_cnt_info_.data_blk_.used_cnt_ == WRITE_BLK_CNT);
     if (!result_match) {
       ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
     }
@@ -432,9 +441,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
       ASSERT_EQ(true, micro_meta->is_in_ghost_);
       ASSERT_EQ(false, micro_meta->is_valid_field());
       int64_t phy_blk_idx = -1;
-      bool is_empty_blk = false;
       ASSERT_EQ(OB_SUCCESS, phy_blk_mgr->update_block_valid_length(tmp_micro_meta->data_dest_, tmp_micro_meta->reuse_version_,
-        tmp_micro_meta->length_ * -1, phy_blk_idx, is_empty_blk));
+        tmp_micro_meta->length_ * -1, phy_blk_idx));
       evict_blk_idx = tmp_micro_meta->data_dest_ / phy_blk_mgr->block_size_;
       tmp_micro_handle.reset();
     }
@@ -454,9 +462,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
       ASSERT_EQ(true, micro_meta_handle.is_valid());
       ObSSMicroBlockMeta *micro_meta = micro_meta_handle.get_ptr();
       int64_t phy_blk_idx = -1;
-      bool is_empty_blk = false;
       ASSERT_EQ(OB_SUCCESS, phy_blk_mgr->update_block_valid_length(micro_meta->data_dest_, micro_meta->reuse_version_,
-                micro_meta->length_ * -1, phy_blk_idx, is_empty_blk));
+                micro_meta->length_ * -1, phy_blk_idx));
       invalid_blk_idx = micro_meta->data_dest_ / phy_blk_mgr->block_size_;
       micro_meta->mark_invalid();
     }
@@ -483,16 +490,26 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr->scan_blocks_to_reuse());
   ASSERT_EQ(2, phy_blk_mgr->reusable_set_.size());
 
-  // 4.3. first, mock all internal phy_block were used, will fail to gen micro_meta ckpt
-  const int64_t ori_internal_cnt = phy_blk_mgr->blk_cnt_info_.micro_ckpt_blk_.used_cnt_;
-  phy_blk_mgr->blk_cnt_info_.micro_ckpt_blk_.used_cnt_ = phy_blk_mgr->blk_cnt_info_.micro_ckpt_blk_.total_cnt_;
+  // 4.3. first, mock all reserved_micro_ckpt_blk were used up, will fail to gen micro_meta ckpt
+  const int64_t ori_micro_blk_used_cnt = phy_blk_mgr->blk_cnt_info_.meta_blk_.used_cnt_;
+  const int64_t ori_micro_blk_hold_cnt = phy_blk_mgr->blk_cnt_info_.meta_blk_.hold_cnt_;
+  const int64_t ori_micro_blk_max_cnt = phy_blk_mgr->blk_cnt_info_.meta_blk_.max_cnt_;
+  phy_blk_mgr->blk_cnt_info_.meta_blk_.used_cnt_ = ori_micro_blk_max_cnt;
+  phy_blk_mgr->blk_cnt_info_.meta_blk_.hold_cnt_ = ori_micro_blk_max_cnt;
+  phy_blk_mgr->blk_cnt_info_.shared_blk_used_cnt_ =
+      phy_blk_mgr->blk_cnt_info_.meta_blk_.hold_cnt_ + phy_blk_mgr->blk_cnt_info_.data_blk_.hold_cnt_;
+
   ASSERT_EQ(OB_SUCCESS, micro_ckpt_task.ckpt_op_.gen_micro_meta_checkpoint());
   ASSERT_EQ(true, micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.lack_phy_blk_);
   micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.lack_phy_blk_ = false;
   micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.ckpt_item_cnt_ = 0;
   micro_ckpt_task.ckpt_op_.tablet_cache_info_map_.clear();
   ASSERT_EQ(((WRITE_BLK_CNT - 2) * micro_cnt + 1) * micro_size, arc_info.get_valid_size());
-  phy_blk_mgr->blk_cnt_info_.micro_ckpt_blk_.used_cnt_ = ori_internal_cnt;
+
+  phy_blk_mgr->blk_cnt_info_.meta_blk_.used_cnt_ = ori_micro_blk_used_cnt;
+  phy_blk_mgr->blk_cnt_info_.meta_blk_.hold_cnt_ = ori_micro_blk_hold_cnt;
+  phy_blk_mgr->blk_cnt_info_.shared_blk_used_cnt_ =
+      phy_blk_mgr->blk_cnt_info_.meta_blk_.hold_cnt_ + phy_blk_mgr->blk_cnt_info_.data_blk_.hold_cnt_;
 
   // 4.4. normal situation
   ObSEArray<uint64_t, 128> reuse_version_arr;
@@ -524,10 +541,11 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
 
   // 4.6. finish checkpoint
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr->update_block_gc_reuse_version(reuse_version_arr));
-  int64_t ori_reusable_cnt = phy_blk_mgr->get_reusable_set_count();
-  ASSERT_EQ(OB_SUCCESS, micro_ckpt_task.ckpt_op_.add_into_reusable_set(
-      micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.prev_super_block_.micro_ckpt_entry_list_));
-  ASSERT_EQ(ori_reusable_cnt, phy_blk_mgr->get_reusable_set_count());
+  int64_t free_blk_cnt = 0;
+  ASSERT_EQ(OB_SUCCESS,
+      phy_blk_mgr->try_free_batch_blocks(micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.prev_super_block_.micro_ckpt_entry_list_, free_blk_cnt));
+  ASSERT_EQ(free_blk_cnt, micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.prev_super_block_.micro_ckpt_entry_list_.count());
+
   micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = 0;
 
   // 4.7. read micro_block checkpoint, and check it
@@ -581,7 +599,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   uint64_t ori_reuse_version_2 = phy_blk_handle.get_ptr()->reuse_version_;
   phy_blk_handle.reset();
 
-  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.try_free_phy_block(blk_ckpt_task.ckpt_op_.reusable_block_idxs_));
+  ASSERT_EQ(OB_SUCCESS,
+      phy_blk_mgr->try_free_batch_blocks(blk_ckpt_task.ckpt_op_.reusable_block_idxs_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.free_blk_cnt_));
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr->get_block_handle(evict_blk_idx, phy_blk_handle));
   ASSERT_EQ(true, phy_blk_handle.is_valid());
   ASSERT_EQ(true, phy_blk_handle.ptr_->is_free_);
@@ -595,8 +614,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(ori_reuse_version_2 + 1, phy_blk_handle.ptr_->reuse_version_);
   ASSERT_EQ(ori_reuse_version_2, phy_blk_handle.ptr_->gc_reuse_version_);
   phy_blk_handle.reset();
-  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.micro_ckpt_blk_.used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.micro_ckpt_entry_list_.count());
-  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_.used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.count());
+  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.meta_blk_.used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.micro_ckpt_entry_list_.count());
+  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.count());
 
   // 5.5. read phy_block checkpoint, and check it
   ObArray<ObSSPhyBlockReuseInfo> reuse_info_arr1;
@@ -639,15 +658,14 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ((WRITE_BLK_CNT - 1) * micro_cnt, micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.ckpt_item_cnt_);
   ASSERT_EQ(blk_ckpt_list_cnt, micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.prev_super_block_.blk_ckpt_entry_list_.count());
   ASSERT_EQ(micro_ckpt_entry_list.count(), micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.prev_super_block_.micro_ckpt_entry_list_.count());
-  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.micro_ckpt_blk_.used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.micro_ckpt_entry_list_.count() * 2);
-  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_.used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.count());
+  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.meta_blk_.used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.micro_ckpt_entry_list_.count());
+  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.count());
 
   // 8. execute phy_block checkpoint
   blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.reuse();
   blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(false, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_super_block_.is_valid());
   ASSERT_EQ(false, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.is_valid());
-  ASSERT_EQ(micro_ckpt_entry_list.count(), phy_blk_mgr->reusable_set_.size());
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
 
   ASSERT_EQ(true, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_super_block_.is_valid());
@@ -655,8 +673,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.total_blk_cnt_ - 2, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.ckpt_item_cnt_);
   ASSERT_EQ(blk_ckpt_list_cnt, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_super_block_.blk_ckpt_entry_list_.count());
   ASSERT_EQ(micro_ckpt_list_cnt, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_super_block_.micro_ckpt_entry_list_.count());
-  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.micro_ckpt_blk_.used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.micro_ckpt_entry_list_.count());
-  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_.used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.count());
+  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.meta_blk_.used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.micro_ckpt_entry_list_.count());
+  ASSERT_EQ(phy_blk_mgr->blk_cnt_info_.phy_ckpt_blk_used_cnt_, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.cur_super_block_.blk_ckpt_entry_list_.count());
 
   allocator.clear();
 }
@@ -676,8 +694,9 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   ObArray<ObSSMicroBlockMeta *> micro_meta_arr1;
   int64_t macro_start_idx = 1;
   int64_t write_blk_cnt = 10;
-  ASSERT_EQ(OB_SUCCESS, add_batch_micro_block(macro_start_idx, write_blk_cnt, micro_meta_arr1));
-  const int64_t used_normal_blk_cnt1 = phy_blk_mgr_->blk_cnt_info_.normal_blk_.used_cnt_;
+  const int64_t micro_cnt = 20;
+  ASSERT_EQ(OB_SUCCESS, add_batch_micro_block(macro_start_idx, write_blk_cnt, micro_cnt, micro_meta_arr1));
+  const int64_t used_data_blk_cnt1 = phy_blk_mgr_->blk_cnt_info_.data_blk_.used_cnt_;
 
   ObArray<ObSSPhyBlockPersistInfo> phy_block_arr1;
   int64_t alloc_phy_blk_cnt = 20;
@@ -697,20 +716,20 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   ASSERT_EQ(false, micro_ckpt_task_->ckpt_op_.micro_ckpt_ctx_.cur_super_block_.is_valid());
   ASSERT_EQ(false, blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_super_block_.is_valid());
   ASSERT_EQ(false, blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.cur_super_block_.is_valid());
-  ASSERT_EQ(0, phy_blk_mgr_->blk_cnt_info_.micro_ckpt_blk_.used_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_.used_cnt_);
+  ASSERT_EQ(0, phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_);
+  ASSERT_EQ(0, phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_);
   ASSERT_EQ(0, phy_blk_mgr_->reusable_set_.size());
   int64_t start_time_us = ObTimeUtility::current_time();
   ASSERT_EQ(OB_SUCCESS, micro_ckpt_task_->ckpt_op_.gen_checkpoint());
   const int64_t micro_exe_time_us = ObTimeUtility::current_time() - start_time_us;
-  ASSERT_LT(0, phy_blk_mgr_->blk_cnt_info_.micro_ckpt_blk_.used_cnt_);
+  ASSERT_LT(0, phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_);
   ASSERT_LT(0, phy_blk_mgr_->reusable_set_.size());
   ASSERT_EQ((write_blk_cnt - 1) * 20, micro_ckpt_task_->ckpt_op_.micro_ckpt_ctx_.ckpt_item_cnt_);
 
   start_time_us = ObTimeUtility::current_time();
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task_->ckpt_op_.gen_checkpoint());
   const int64_t blk_exe_time_us = ObTimeUtility::current_time() - start_time_us;
-  ASSERT_LT(0, phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_.used_cnt_);
+  ASSERT_LT(0, phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_);
   ASSERT_EQ(total_blk_cnt - SS_CACHE_SUPER_BLOCK_CNT, blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.ckpt_item_cnt_);
   micro_ckpt_task_->is_inited_ = false;
   blk_ckpt_task_->is_inited_ = false;
@@ -723,11 +742,11 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
 
   // 4. check super_block, micro_meta and phy_block_info
   check_phy_blk_info(phy_block_arr1, 1);
-  check_micro_meta(micro_meta_arr1);
+  check_micro_meta(micro_meta_arr1, true);
   check_super_block(super_block1);
-  ASSERT_EQ(super_block1.micro_ckpt_entry_list_.count(), phy_blk_mgr_->blk_cnt_info_.micro_ckpt_blk_.used_cnt_);
-  ASSERT_EQ(super_block1.blk_ckpt_entry_list_.count(), phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_.used_cnt_);
-  ASSERT_EQ(used_normal_blk_cnt1, phy_blk_mgr_->blk_cnt_info_.normal_blk_.used_cnt_);
+  ASSERT_EQ(super_block1.micro_ckpt_entry_list_.count(), phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_);
+  ASSERT_EQ(super_block1.blk_ckpt_entry_list_.count(), phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(used_data_blk_cnt1, phy_blk_mgr_->blk_cnt_info_.data_blk_.used_cnt_);
 
   // 5. clear all micro meta
   micro_meta_mgr_->micro_meta_map_.reset();
@@ -735,15 +754,11 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   // 6. repeat step 1
   ObArray<ObSSMicroBlockMeta *> micro_meta_arr2;
   macro_start_idx += write_blk_cnt;
-  write_blk_cnt = 10;
-  ASSERT_EQ(OB_SUCCESS, add_batch_micro_block(macro_start_idx, write_blk_cnt, micro_meta_arr2));
-  const int64_t used_normal_blk_cnt2 = phy_blk_mgr_->blk_cnt_info_.normal_blk_.used_cnt_;
+  write_blk_cnt = 20;
+  ASSERT_EQ(OB_SUCCESS, add_batch_micro_block(macro_start_idx, write_blk_cnt, micro_cnt, micro_meta_arr2));
+  const int64_t used_data_blk_cnt2 = phy_blk_mgr_->blk_cnt_info_.data_blk_.used_cnt_;
 
-  alloc_phy_blk_cnt = 20;
-  ObArray<ObSSPhyBlockPersistInfo> phy_block_arr2;
-  ASSERT_EQ(OB_SUCCESS, alloc_batch_phy_block_to_reuse(alloc_phy_blk_cnt, phy_block_arr2));
-
-  // 7. do ckpt_task second round and randomly force to end ckpt_task and restart micro_cache
+  // 7. do ckpt_task second round and randomly force to end micro_ckpt_task and restart micro_cache
   micro_ckpt_task_->is_inited_ = true;
   blk_ckpt_task_->is_inited_ = true;
   micro_ckpt_task_->interval_us_ = 3600 * 1000 * 1000L;
@@ -752,57 +767,40 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
 
   micro_ckpt_task_->ckpt_op_.micro_ckpt_ctx_.need_ckpt_ = true;
   micro_ckpt_task_->ckpt_op_.micro_ckpt_ctx_.need_scan_blk_ = true;
-  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  ObSSMicroCacheSuperBlock super_block2 = phy_blk_mgr_->super_block_;
+
   std::thread micro_t([&]() {
     ObRandom rand;
     const int64_t sleep_us = ObRandom::rand(1, micro_exe_time_us * 2);
     ob_usleep(sleep_us);
     micro_ckpt_task_->ckpt_op_.is_inited_ = false; // force to end micro_ckpt
   });
-  std::thread blk_t([&]() {
-    ObRandom rand;
-    const int64_t sleep_us = ObRandom::rand(1, blk_exe_time_us * 2);
-    ob_usleep(sleep_us);
-    blk_ckpt_task_->ckpt_op_.is_inited_ = false; // force to end blk_ckpt
-  });
-  blk_ckpt_task_->ckpt_op_.gen_checkpoint();
   micro_ckpt_task_->ckpt_op_.gen_checkpoint();
-  ObSSMicroCacheSuperBlock super_block2 = phy_blk_mgr_->super_block_;
-  blk_t.join();
   micro_t.join();
+  ObSSMicroCacheSuperBlock super_block3 = phy_blk_mgr_->super_block_;
 
   LOG_INFO("TEST: start second restart");
   restart_micro_cache();
   LOG_INFO("TEST: finish second restart");
 
-  // // 8. check super_block, micro_meta and phy_block_info
-  // if (phy_blk_mgr_->super_block_.modify_time_us_ == super_block1.modify_time_us_) {
-  //   // fail to generate new ckpt
-  //   LOG_INFO("TEST: only ckpt once", K(super_block1));
-  //   check_phy_blk_info(phy_block_arr2, 0);
-  //   check_micro_meta(micro_meta_arr1);
-  //   check_super_block(super_block1);
-  //   ASSERT_EQ(super_block1.micro_ckpt_entry_list_.count(), phy_blk_mgr_->blk_cnt_info_.micro_ckpt_blk_.used_cnt_);
-  //   ASSERT_EQ(super_block1.blk_ckpt_entry_list_.count(), phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_.used_cnt_);
-  //   ASSERT_EQ(used_normal_blk_cnt1, phy_blk_mgr_->blk_cnt_info_.normal_blk_.used_cnt_);
-  // } else {
-  //   ASSERT_GT(phy_blk_mgr_->super_block_.modify_time_us_, super_block1.modify_time_us_);
-  //   // succeed to generate new ckpt
-  //   LOG_INFO("TEST: ckpt twice", K(super_block2));
-  //   check_phy_blk_info(phy_block_arr2, 1);
-  //   check_micro_meta(micro_meta_arr2);
-  //   check_super_block(super_block2);
-  //   ASSERT_EQ(super_block2.micro_ckpt_entry_list_.count(), phy_blk_mgr_->blk_cnt_info_.micro_ckpt_blk_.used_cnt_);
-  //   ASSERT_EQ(super_block2.blk_ckpt_entry_list_.count(), phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_.used_cnt_);
-  //   // Because the micro_meta written by round1 has been cleared, if round2 do ckpt_task successfully,
-  //   // after micro_cache restart, the phy_block corresponding to the micro_block written by round1 will be recycled.
-  //   ASSERT_GT(used_normal_blk_cnt2, phy_blk_mgr_->blk_cnt_info_.normal_blk_.used_cnt_);
-  // }
+  // 8. check super_block, micro_meta and phy_block_info
+  if (phy_blk_mgr_->super_block_.modify_time_us_ == super_block2.modify_time_us_) {
+    check_super_block(super_block2);
+    check_micro_meta(micro_meta_arr1, true);
+    check_micro_meta(micro_meta_arr2, false);
+    ASSERT_EQ(used_data_blk_cnt1, phy_blk_mgr_->blk_cnt_info_.data_blk_.used_cnt_);
+  } else {
+    check_super_block(super_block3);
+    check_micro_meta(micro_meta_arr1, false);
+    check_micro_meta(micro_meta_arr2, true);
+    ASSERT_EQ(used_data_blk_cnt2 - used_data_blk_cnt1, phy_blk_mgr_->blk_cnt_info_.data_blk_.used_cnt_);
+  }
 }
 
 /* After micro_ckpt_task execucte scan_blocks_to_reuse, must set need_scan_blk_ = false */
 TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_task_exec_scan_block)
 {
+  LOG_INFO("TEST: test_micro_ckpt_task_exec_scan_block");
   int ret = OB_SUCCESS;
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ASSERT_NE(nullptr, micro_cache);
@@ -815,7 +813,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_task_exec_scan_block)
   for (int64_t i = 0; i < block_cnt; i++) {
     int64_t phy_blk_idx = -1;
     ObSSPhysicalBlockHandle phy_blk_handle;
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(phy_blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_NORMAL_BLK));
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(phy_blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
     phy_blk_handle()->is_free_ = false;
     phy_blk_handle()->is_sealed_ = true;
     phy_blk_handle()->valid_len_ = 0;
@@ -825,6 +823,173 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_task_exec_scan_block)
   ob_usleep(3 * 1000 * 1000);
   ASSERT_EQ(block_cnt, phy_blk_mgr.get_reusable_set_count());
   ASSERT_EQ(false, micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.need_scan_blk_);
+}
+
+/* Test whether extra meta blocks can be dynamically allocated when the number of blocks required
+ * by micro_ckpt exceeds meta_blk.min_cnt_ */
+TEST_F(TestSSExecuteCheckpointTask, test_reserve_micro_ckpt_blk)
+{
+  LOG_INFO("TEST_CASE: start test_reserve_micro_ckpt_blk");
+  int ret = OB_SUCCESS;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+
+  ObSSExecuteMicroCheckpointTask &micro_ckpt_task = micro_cache->task_runner_.micro_ckpt_task_;
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  SSPhyBlockCntInfo &blk_cnt_info = micro_cache->phy_blk_mgr_.blk_cnt_info_;
+
+  // 1. write enough micro blocks so that the number of blocks required to execute micro_ckpt exceeds meta_blk.min_cnt_
+  const int64_t extra_meta_blk_cnt = 5;
+  const int64_t estimate_micro_cnt =
+      (blk_cnt_info.meta_blk_.hold_cnt_ + extra_meta_blk_cnt) * phy_blk_mgr.get_block_size() / AVG_MICRO_META_PERSIST_COST;
+  const int64_t macro_cnt = blk_cnt_info.data_blk_.hold_cnt_ * 0.2;
+  const int64_t micro_cnt = estimate_micro_cnt / macro_cnt;
+  ObArray<ObSSMicroBlockMeta *> micro_meta_arr;
+  ASSERT_EQ(OB_SUCCESS, add_batch_micro_block(1, macro_cnt, micro_cnt, micro_meta_arr));
+
+  // 2. mock shared_block is used up
+  blk_cnt_info.data_blk_.hold_cnt_ = blk_cnt_info.data_blk_.max_cnt_;
+  blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_;
+
+  // 3. execute micro_meta_ckpt
+  ASSERT_EQ(0, blk_cnt_info.meta_blk_.used_cnt_);
+  micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = ObSSExecuteMicroCheckpointOp::MICRO_META_CKPT_INTERVAL_ROUND - 1;
+  ob_usleep(10 * 1000 * 1000);
+
+  ASSERT_EQ(blk_cnt_info.meta_blk_.hold_cnt_, blk_cnt_info.meta_blk_.used_cnt_);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.used_cnt_, phy_blk_mgr.super_block_.micro_ckpt_entry_list_.count());
+
+  // 4. revert step2
+  blk_cnt_info.data_blk_.hold_cnt_ = blk_cnt_info.data_blk_.min_cnt_;
+  blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_;
+
+  // 5. execute micro_meta_ckpt again, check that the number of blocks used by micro_ckpt has increased
+  const int64_t origin_meta_blk_usd_cnt = blk_cnt_info.meta_blk_.used_cnt_;
+  micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = ObSSExecuteMicroCheckpointOp::ESTIMATE_MICRO_CKPT_BLK_CNT_ROUND - 1;
+  ob_usleep(2 * 1000 * 1000);
+  ASSERT_LT(2 * origin_meta_blk_usd_cnt, blk_cnt_info.meta_blk_.hold_cnt_);
+
+  micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = ObSSExecuteMicroCheckpointOp::MICRO_META_CKPT_INTERVAL_ROUND - 1;
+  ob_usleep(10 * 1000 * 1000);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.used_cnt_, phy_blk_mgr.super_block_.micro_ckpt_entry_list_.count());
+  ASSERT_LT(origin_meta_blk_usd_cnt, blk_cnt_info.meta_blk_.used_cnt_);
+  ASSERT_LT(origin_meta_blk_usd_cnt, phy_blk_mgr.super_block_.micro_ckpt_entry_list_.count());
+}
+
+
+TEST_F(TestSSExecuteCheckpointTask, test_dynamic_update_arc_limit)
+{
+  LOG_INFO("TEST_CASE: start test_dynamic_update_arc_limit");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSARCInfo &arc_info = micro_cache->micro_meta_mgr_.arc_info_;
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  SSPhyBlockCntInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
+  ObSSExecuteMicroCheckpointOp &micro_ckpt_op = micro_cache->task_runner_.micro_ckpt_task_.ckpt_op_;
+
+  const int64_t origin_limit = arc_info.limit_;
+  const int64_t origin_work_limit = arc_info.work_limit_;
+  const int64_t origin_p = arc_info.p_;
+  const int64_t origin_max_p = arc_info.max_p_;
+  const int64_t origin_min_p = arc_info.min_p_;
+
+  // mock micro_ckpt use extra block from shared_blocks.
+  // this will result in fewer available cache_data_blocks and dynamically lower arc_limit.
+  blk_cnt_info.meta_blk_.hold_cnt_ = blk_cnt_info.meta_blk_.max_cnt_;
+  blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.meta_blk_.hold_cnt_ + blk_cnt_info.data_blk_.hold_cnt_;
+  micro_ckpt_op.dynamic_update_arc_limit();
+
+  ASSERT_GT(origin_limit, arc_info.limit_);
+  ASSERT_GT(origin_work_limit, arc_info.work_limit_);
+  ASSERT_GT(origin_p, arc_info.p_);
+  ASSERT_GT(origin_max_p, arc_info.max_p_);
+  ASSERT_GT(origin_min_p, arc_info.min_p_);
+
+  blk_cnt_info.meta_blk_.hold_cnt_ = blk_cnt_info.meta_blk_.min_cnt_;
+  blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.meta_blk_.hold_cnt_ + blk_cnt_info.data_blk_.hold_cnt_;
+
+  micro_ckpt_op.dynamic_update_arc_limit();
+  ASSERT_EQ(origin_limit, arc_info.limit_);
+  ASSERT_EQ(origin_work_limit, arc_info.work_limit_);
+  ASSERT_LE(abs(origin_p - arc_info.p_), 5); // the conversion between 'int64_t' and 'double' causes some deviations
+  ASSERT_EQ(origin_max_p, arc_info.max_p_);
+  ASSERT_EQ(origin_min_p, arc_info.min_p_);
+
+  // test dynamically update arc_limit when prewarming
+  micro_cache->begin_free_space_for_prewarm();
+
+  const int64_t prewarm_work_limit = static_cast<int64_t>((static_cast<double>(origin_work_limit * SS_ARC_LIMIT_SHRINK_PCT) / 100.0));
+  double ori_pct = static_cast<double>(origin_p * 100) / origin_work_limit;
+  const int64_t p1 = static_cast<int64_t>((static_cast<double>(ori_pct * prewarm_work_limit) / 100.0));
+  ASSERT_EQ(prewarm_work_limit, arc_info.work_limit_);
+  ASSERT_EQ(origin_limit, arc_info.limit_);
+  ASSERT_LE(abs(p1 - arc_info.p_), 5); // the conversion between 'int64_t' and 'double' causes some deviations
+
+  // mock micro_ckpt use extra block from shared_blocks.
+  // this will result in fewer available cache_data_blocks and dynamically lower arc_limit.
+  blk_cnt_info.meta_blk_.hold_cnt_ = blk_cnt_info.meta_blk_.max_cnt_;
+  blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.meta_blk_.hold_cnt_ + blk_cnt_info.data_blk_.hold_cnt_;
+
+  micro_ckpt_op.dynamic_update_arc_limit();
+
+  const int64_t new_limit = phy_blk_mgr.get_cache_limit_size() * SS_ARC_LIMIT_PCT / 100;
+  const int64_t new_work_limit = (static_cast<double>(prewarm_work_limit) / origin_limit) * new_limit;
+  ori_pct = static_cast<double>(p1 * 100) / prewarm_work_limit;
+  const int64_t p2 = static_cast<int64_t>((static_cast<double>(new_work_limit * ori_pct) / 100.0));
+  ASSERT_EQ(new_limit, arc_info.limit_);
+  ASSERT_EQ(new_work_limit, arc_info.work_limit_);
+  ASSERT_LE(abs(p2 - arc_info.p_), 5); // the conversion between 'int64_t' and 'double' causes some deviations
+
+  micro_cache->finish_free_space_for_prewarm();
+
+  ori_pct = static_cast<double>(p2 * 100) / new_work_limit;
+  const int64_t p3 = static_cast<int64_t>((static_cast<double>(new_limit * ori_pct) / 100.0));
+  ASSERT_EQ(new_limit, arc_info.work_limit_);
+  ASSERT_EQ(new_limit, arc_info.limit_);
+  ASSERT_LE(abs(p3 - arc_info.p_), 5); // the conversion between 'int64_t' and 'double' causes some deviations
+}
+
+TEST_F(TestSSExecuteCheckpointTask, test_estimate_micro_meta_persist_cost)
+{
+  LOG_INFO("TEST_CASE: start test_estimate_micro_meta_persist_cost");
+  int ret = OB_SUCCESS;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+
+  ObSSExecuteMicroCheckpointTask &micro_ckpt_task = micro_cache->task_runner_.micro_ckpt_task_;
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  SSPhyBlockCntInfo &blk_cnt_info = micro_cache->phy_blk_mgr_.blk_cnt_info_;
+
+  const int64_t estimate_micro_cnt =
+      (blk_cnt_info.meta_blk_.hold_cnt_) * phy_blk_mgr.get_block_size() / AVG_MICRO_META_PERSIST_COST;
+  const int64_t macro_cnt = blk_cnt_info.data_blk_.hold_cnt_ * 0.2;
+  const int64_t micro_cnt = estimate_micro_cnt / macro_cnt;
+  ObArray<ObSSMicroBlockMeta *> micro_meta_arr;
+  ASSERT_EQ(OB_SUCCESS, add_batch_micro_block(1, macro_cnt, micro_cnt, micro_meta_arr));
+
+  // 1. execute micro_meta_ckpt
+  micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = ObSSExecuteMicroCheckpointOp::MICRO_META_CKPT_INTERVAL_ROUND - 1;
+  ob_usleep(10 * 1000 * 1000);
+
+  // 2. read ckpt_blk
+  ObIArray<int64_t> &meta_blk_arr = phy_blk_mgr.super_block_.micro_ckpt_entry_list_;
+  ASSERT_LT(0, meta_blk_arr.count());
+  ObSSLinkedPhyBlockReader block_reader;
+  const int64_t entry_block_idx = meta_blk_arr.at(0);
+  ASSERT_EQ(OB_SUCCESS, block_reader.init(entry_block_idx, MTL_ID(), phy_blk_mgr));
+
+  int64_t total_item_cnt = 0;
+  // skip first block, because it is the last written block when execute micro_ckpt
+  for (int64_t i = 1; i < meta_blk_arr.count(); i++) {
+    const int64_t block_idx = meta_blk_arr.at(i);
+    ASSERT_EQ(OB_SUCCESS, block_reader.inner_read_block_(block_idx));
+    total_item_cnt += block_reader.linked_header_.item_count_;
+    LOG_INFO("print block header", K(i), K(block_idx), K_(block_reader.common_header), K_(block_reader.linked_header));
+  }
+
+  const int64_t total_blk_cnt = meta_blk_arr.count() - 1;
+  double avg_cost = static_cast<double>(total_blk_cnt * phy_blk_mgr.get_block_size()) / total_item_cnt;
+  std::cout << "avg_meta_persist_cost: " << avg_cost << ", total_meta_blk_cnt: " << total_blk_cnt << std::endl;
 }
 
 }  // namespace storage

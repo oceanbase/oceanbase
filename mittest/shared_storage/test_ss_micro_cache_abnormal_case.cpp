@@ -176,7 +176,7 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_alloc_phy_block_abnormal)
   phy_blk->valid_len_ = 100;
   int64_t tmp_block_idx = -1;
   ObSSPhysicalBlockHandle phy_blk_handle;
-  ASSERT_EQ(OB_INVALID_ARGUMENT, phy_blk_mgr.alloc_block(tmp_block_idx, phy_blk_handle, ObSSPhyBlockType::SS_NORMAL_BLK));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, phy_blk_mgr.alloc_block(tmp_block_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
   ASSERT_EQ(block_idx, tmp_block_idx);
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.add_reusable_block(tmp_block_idx));
   ASSERT_EQ(1, phy_blk_mgr.get_reusable_set_count());
@@ -185,7 +185,7 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_alloc_phy_block_abnormal)
   phy_blk_handle.reset();
 
   tmp_block_idx = -1;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(tmp_block_idx, phy_blk_handle, ObSSPhyBlockType::SS_NORMAL_BLK));
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(tmp_block_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
   ASSERT_EQ(3, tmp_block_idx);
   ASSERT_EQ(true, phy_blk_handle.is_valid());
   phy_blk_handle.reset();
@@ -198,10 +198,63 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_alloc_phy_block_abnormal)
   ASSERT_EQ(0, phy_blk_mgr.get_reusable_set_count());
 
   tmp_block_idx = -1;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(tmp_block_idx, phy_blk_handle, ObSSPhyBlockType::SS_NORMAL_BLK));
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(tmp_block_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
   ASSERT_EQ(2, tmp_block_idx);
   ASSERT_EQ(true, phy_blk_handle.is_valid());
   phy_blk_handle.reset();
+}
+
+TEST_F(TestSSMicroCacheAbnormalCase, test_micro_cache_abnormal_health)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  ASSERT_NE(nullptr, micro_cache);
+  ObSSMicroCacheStat &cache_stat = MTL(ObSSMicroCache*)->cache_stat_;
+  ObSSMemDataManager &mem_data_mgr = MTL(ObSSMicroCache*)->mem_data_mgr_;
+  ObSSExecuteMicroCheckpointTask &micro_ckpt_task = MTL(ObSSMicroCache*)->task_runner_.micro_ckpt_task_;
+
+  // 1. mock used up all mem_block
+  mem_data_mgr.mem_block_pool_.used_fg_count_ = mem_data_mgr.mem_block_pool_.get_fg_max_count();
+
+  // 2. write some micro_block into micro_cache
+  const int64_t micro_block_cnt = 50;
+  const int32_t micro_size = 512;
+  const char c = 'a';
+  char *buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, buf);
+  MEMSET(buf, c, micro_size);
+
+  uint32_t crc = 0;
+  ObSSMicroBlockCacheKey micro_key;
+  MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100);
+  int64_t offset = 1;
+  for (int64_t i = 0; i < 5; ++i) {
+    micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = ObSSExecuteMicroCheckpointOp::CHECK_CACHE_ABNORMAL_ROUND - 10;
+    for (int64_t j = 0; j < micro_block_cnt; ++j) {
+      micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ret = micro_cache->add_micro_block_cache(micro_key, buf, micro_size, ObSSMicroCacheAccessType::COMMON_IO_TYPE);
+      ASSERT_NE(OB_SUCCESS, ret);
+      offset += micro_size;
+    }
+    ob_usleep(2 * 1000 * 1000);
+  }
+
+  // check abnormal count
+  ASSERT_LE(3, micro_ckpt_task.ckpt_op_.cache_abnormal_cnt_);
+
+  mem_data_mgr.mem_block_pool_.used_fg_count_ = 0;
+  {
+    micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = ObSSExecuteMicroCheckpointOp::CHECK_CACHE_ABNORMAL_ROUND - 10;
+    for (int64_t j = 0; j < micro_block_cnt; ++j) {
+      micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ret = micro_cache->add_micro_block_cache(micro_key, buf, micro_size, ObSSMicroCacheAccessType::COMMON_IO_TYPE);
+      ASSERT_EQ(OB_SUCCESS, ret);
+      offset += micro_size;
+    }
+    ob_usleep(2 * 1000 * 1000);
+  }
+  ASSERT_EQ(0, micro_ckpt_task.ckpt_op_.cache_abnormal_cnt_);
 }
 
 }  // namespace storage

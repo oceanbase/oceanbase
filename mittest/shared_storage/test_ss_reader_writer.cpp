@@ -280,15 +280,17 @@ void TestSSReaderWriter::check_tmp_file_seg_meta(
   static int64_t call_times = 0;
   call_times++;
   TmpFileSegId seg_id(macro_id.second_id(), macro_id.third_id());
-  TmpFileMeta seg_meta;
+  TmpFileMetaHandle meta_handle;
   bool exist = false;
   ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
   ASSERT_NE(nullptr, file_manager) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SUCCESS, file_manager->get_segment_file_mgr().try_get_seg_meta(seg_id, seg_meta, exist)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SUCCESS, file_manager->get_segment_file_mgr().try_get_seg_meta(seg_id, meta_handle, exist)) << "call_times: " << call_times;
   ASSERT_EQ(is_meta_exist, exist) << "call_times: " << call_times;
   if (is_meta_exist) {
-    ASSERT_EQ(is_in_local, seg_meta.is_in_local_) << "call_times: " << call_times;
-    ASSERT_EQ(valid_length, seg_meta.valid_length_) << "call_times: " << call_times;
+    ASSERT_TRUE(meta_handle.is_valid());
+    ASSERT_TRUE(meta_handle.get_tmpfile_meta()->is_valid());
+    ASSERT_EQ(is_in_local, meta_handle.is_in_local()) << "call_times: " << call_times;
+    ASSERT_EQ(valid_length, meta_handle.get_valid_length()) << "call_times: " << call_times;
   }
 }
 

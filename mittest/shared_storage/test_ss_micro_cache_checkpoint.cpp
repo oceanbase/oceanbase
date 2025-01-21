@@ -80,8 +80,8 @@ TEST_F(TestSSMicroCacheCheckpoint, test_compress_micro_ckpt)
                                  ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
   const int32_t micro_index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
   const int32_t micro_cnt = (block_size - payload_offset) / (micro_size + micro_index_size);
-  const int64_t total_normal_blk_cnt = phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_;
-  const int64_t macro_cnt = MIN(150, total_normal_blk_cnt);
+  const int64_t total_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
+  const int64_t macro_cnt = MIN(150, total_data_blk_cnt);
 
   ObArenaAllocator allocator;
   char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
@@ -200,13 +200,18 @@ TEST_F(TestSSMicroCacheCheckpoint, test_compress_micro_ckpt)
   }
 
   // 6. use checkpoint_op logic to gen micro_ckpt, mock micro_ckpt_block is not enough, we will allow this situation
+  SSPhyBlockCntInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
   ObSSExecuteMicroCheckpointTask &micro_ckpt_task = micro_cache->task_runner_.micro_ckpt_task_;
-  const int64_t ori_micro_ckpt_blk_cnt = phy_blk_mgr.blk_cnt_info_.micro_ckpt_blk_.used_cnt_;
-  phy_blk_mgr.blk_cnt_info_.micro_ckpt_blk_.used_cnt_ = phy_blk_mgr.blk_cnt_info_.micro_ckpt_blk_.total_cnt_ - 1;
+  const int64_t origin_micro_ckpt_blk_used_cnt = blk_cnt_info.meta_blk_.used_cnt_;
+  // mock only one micro_ckpt_blk can be allocated.
+  blk_cnt_info.meta_blk_.min_cnt_ = origin_micro_ckpt_blk_used_cnt + 1;
+  blk_cnt_info.meta_blk_.max_cnt_ = origin_micro_ckpt_blk_used_cnt + 1;
+  blk_cnt_info.meta_blk_.hold_cnt_ = origin_micro_ckpt_blk_used_cnt + 1;
+  blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.meta_blk_.hold_cnt_ + blk_cnt_info.data_blk_.hold_cnt_;
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.get_ss_super_block(micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.prev_super_block_));
   ASSERT_EQ(OB_SUCCESS, micro_ckpt_task.ckpt_op_.gen_micro_meta_checkpoint());
   // actually we need more than 1 phy_block to store micro_ckpt, but here we just used 1 phy_block.
-  ASSERT_EQ(phy_blk_mgr.blk_cnt_info_.micro_ckpt_blk_.used_cnt_, phy_blk_mgr.blk_cnt_info_.micro_ckpt_blk_.total_cnt_);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.used_cnt_, origin_micro_ckpt_blk_used_cnt + 1);
 
   allocator.clear();
 }

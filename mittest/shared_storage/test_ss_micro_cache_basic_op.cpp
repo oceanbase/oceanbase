@@ -142,7 +142,7 @@ int TestSSMicroCacheBasicOp::mock_micro_block_persisted(ObSSMicroBlockMeta *micr
   } else {
     int64_t block_idx = 0;
     ObSSPhysicalBlockHandle phy_handle;
-    if (OB_FAIL(SSPhyBlockMgr.alloc_block(block_idx, phy_handle, ObSSPhyBlockType::SS_NORMAL_BLK))) {
+    if (OB_FAIL(SSPhyBlockMgr.alloc_block(block_idx, phy_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK))) {
       LOG_WARN("fail to alloc phy_block", KR(ret));
     } else if (OB_UNLIKELY(!phy_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;

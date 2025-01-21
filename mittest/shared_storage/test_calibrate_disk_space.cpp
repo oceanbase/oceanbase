@@ -199,6 +199,7 @@ void TestCalibrateDisk::write_dir()
   write_info.buffer_ = write_buf;
   write_info.offset_ = 0;
   write_info.size_ = file_size_;
+  write_info.tmp_file_valid_length_ = file_size_;
   write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info.mtl_tenant_id_ = MTL_ID();
 

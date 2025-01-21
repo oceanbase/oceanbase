@@ -186,15 +186,15 @@ TEST_F(TestSSMicroCacheResize, test_resize_between_free_space_for_prewarm)
   ObSSARCInfo &arc_info = micro_cache->micro_meta_mgr_.arc_info_;
 
   const int64_t old_limit = arc_info.limit_;
-  const int64_t work_limit = static_cast<int64_t>((static_cast<double>(old_limit * SS_ARC_LIMIT_SHRINK_PCT) / 100.0));
   micro_cache->begin_free_space_for_prewarm();
-  ASSERT_EQ(work_limit, arc_info.work_limit_);
+  const int64_t prewarm_work_limit = static_cast<int64_t>((static_cast<double>(old_limit * SS_ARC_LIMIT_SHRINK_PCT) / 100.0));
+  ASSERT_EQ(prewarm_work_limit, arc_info.work_limit_);
 
   const int64_t new_cache_file_size = micro_cache->phy_blk_mgr_.total_file_size_ * 2;
   ASSERT_EQ(OB_SUCCESS, micro_cache->resize_micro_cache_file_size(new_cache_file_size));
   const int64_t new_limit = arc_info.limit_;
   ASSERT_LE(old_limit * 2, new_limit);
-  ASSERT_LT(work_limit * 2, arc_info.work_limit_);
+  ASSERT_LT(prewarm_work_limit * 2, arc_info.work_limit_);
 
   micro_cache->finish_free_space_for_prewarm();
   ASSERT_EQ(new_limit, arc_info.work_limit_);
@@ -202,14 +202,14 @@ TEST_F(TestSSMicroCacheResize, test_resize_between_free_space_for_prewarm)
   const int64_t p = static_cast<int64_t>((static_cast<double>(new_limit * arc_info.DEF_ARC_P_OF_LIMIT_PCT) / 100.0));
   const int64_t max_p = new_limit * arc_info.MAX_ARC_P_OF_LIMIT_PCT / 100;
   const int64_t min_p = new_limit * arc_info.MIN_ARC_P_OF_LIMIT_PCT / 100;
-  ASSERT_EQ(p, arc_info.p_);
+  ASSERT_LE(abs(p - arc_info.p_), 5); // the conversion between 'int64_t' and 'double' causes some deviations
   ASSERT_EQ(max_p, arc_info.max_p_);
   ASSERT_EQ(min_p, arc_info.min_p_);
 }
 
 /*
   Multiple threads read micro blocks in parallel, and thread 0 will resize the file size from 128M to 256M. Check the
-  normal_blk_used_cnt exceeds origin_normal_blk_cnt.
+  data_blk_used_cnt exceeds total_data_blk_cnt.
 */
 TEST_F(TestSSMicroCacheResize, test_get_micro_block_and_resize_larger)
 {
@@ -217,8 +217,8 @@ TEST_F(TestSSMicroCacheResize, test_get_micro_block_and_resize_larger)
   LOG_INFO("TEST_CASE: start test_get_micro_block_and_resize_larger");
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
-  const int64_t origin_normal_blk_cnt = phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_;
-  const int64_t total_macro_blk_cnt = origin_normal_blk_cnt * 2;
+  const int64_t origin_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
+  const int64_t total_macro_blk_cnt = origin_data_blk_cnt * 2;
   const int32_t block_size = phy_blk_mgr.block_size_;
   TestSSMicroCacheResizeCtx ctx;
   ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::prepare_micro_blocks(total_macro_blk_cnt, block_size, ctx.micro_block_info_arr_, 1, true, 100 * 1024, 160 * 1024));
@@ -234,7 +234,7 @@ TEST_F(TestSSMicroCacheResize, test_get_micro_block_and_resize_larger)
   threads.start();
   threads.wait();
   ASSERT_EQ(0, threads.get_fail_cnt());
-  ASSERT_LT(origin_normal_blk_cnt, phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_);
+  ASSERT_LT(origin_data_blk_cnt, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
 }
 
 } // namespace storage

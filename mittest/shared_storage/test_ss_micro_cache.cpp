@@ -259,9 +259,9 @@ TEST_F(TestSSMicroCache, test_get_micro_block)
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
   ObSSARCInfo &arc_info = micro_meta_mgr.arc_info_;
-  const int64_t total_normal_blk_cnt = phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_;
+  const int64_t total_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
   const int32_t block_size = phy_blk_mgr.block_size_;
-  const int64_t macro_blk_cnt = MIN(4, total_normal_blk_cnt);
+  const int64_t macro_blk_cnt = MIN(4, total_data_blk_cnt);
   ASSERT_LT(0, arc_info.p_);
   int64_t available_prewarm_size = 0;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_available_space_for_prewarm(available_prewarm_size));
@@ -337,7 +337,7 @@ TEST_F(TestSSMicroCache, test_get_micro_block)
     ASSERT_EQ(false, cur_micro_meta->is_in_l1_);
     ASSERT_EQ(false, cur_micro_meta->is_in_ghost_);
     ASSERT_EQ(micro_cnt + 1, cache_stat.hit_stat().add_cnt_);
-    ASSERT_EQ(micro_cnt, cache_stat.hit_stat().new_add_cnt_);
+    ASSERT_EQ(micro_cnt + 1, cache_stat.hit_stat().new_add_cnt_);
   }
 
   allocator.clear();
@@ -372,10 +372,10 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
   int ret = OB_SUCCESS;
   LOG_INFO("TEST_CASE: start test_get_micro_block_cache");
   ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
-  const int64_t total_normal_blk_cnt = 5;
+  const int64_t total_data_blk_cnt = 5;
   const int32_t block_size = phy_blk_mgr.block_size_;
   TestSSMicroCacheCtx ctx;
-  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::prepare_micro_blocks(total_normal_blk_cnt, block_size, ctx.micro_block_info_arr_));
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::prepare_micro_blocks(total_data_blk_cnt, block_size, ctx.micro_block_info_arr_));
 
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ASSERT_NE(nullptr, micro_cache);
@@ -517,7 +517,6 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
     1. add micro_block for the first time.
     2. add micro_block which has been added into T1.
     3. micro_block is evicted to ghost and added again.
-    4. normal_blk_used_cnt reaches the upper limit.
 */
 TEST_F(TestSSMicroCache, test_add_micro_block_cache)
 {
@@ -564,17 +563,6 @@ TEST_F(TestSSMicroCache, test_add_micro_block_cache)
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(micro_key, micro_meta_handle, false));
   ASSERT_EQ(false, micro_meta_handle()->is_in_l1());
   ASSERT_EQ(false, micro_meta_handle()->is_in_ghost());
-
-  // Scenario 4
-  micro_meta_handle.reset();
-  const int64_t origin_normal_blk_used_cnt = phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_;
-  const int64_t max_used_pct = SS_CACHE_SPACE_USAGE_MAX_PCT;
-  phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_ = phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_ * max_used_pct / 100 + 1;
-  const ObSSMicroBlockCacheKey micro_key2 =
-      TestSSCommonUtil::gen_phy_micro_key(macro_id, offset + micro_size, micro_size);
-  ASSERT_EQ(true, phy_blk_mgr.reach_block_limit(true/*is_fg_io*/));
-  phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_ = origin_normal_blk_used_cnt; // recover real normal_blk_used_cnt.
-
 }
 
 /*  parallelly add micro_block randomly. */
@@ -781,7 +769,11 @@ TEST_F(TestSSMicroCache, test_get_available_space_for_prewarm)
   ASSERT_LT(0, available_space_size);
 
   available_space_size = 0;
-  phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_ = phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_;
+  const int64_t max_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
+  phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_ = max_data_blk_cnt;
+  phy_blk_mgr.blk_cnt_info_.data_blk_.hold_cnt_ = max_data_blk_cnt;
+  phy_blk_mgr.blk_cnt_info_.shared_blk_used_cnt_ =
+      phy_blk_mgr.blk_cnt_info_.data_blk_.hold_cnt_ + phy_blk_mgr.blk_cnt_info_.meta_blk_.hold_cnt_;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_available_space_for_prewarm(available_space_size));
   ASSERT_EQ(0, available_space_size);
 }
@@ -850,9 +842,9 @@ TEST_F(TestSSMicroCache, test_get_batch_la_micro_keys)
 
 /*
   Test three scenarios:
-    1. used_normal_block_cnt % split_cnt == 0
-    2. used_normal_block_cnt % split_cnt != 0
-    3. used_normal_block_cnt < split_cnt
+    1. used_data_block_cnt % split_cnt == 0
+    2. used_data_block_cnt % split_cnt != 0
+    3. used_data_block_cnt < split_cnt
  */
 TEST_F(TestSSMicroCache, test_divide_phy_block_range)
 {
@@ -865,13 +857,14 @@ TEST_F(TestSSMicroCache, test_divide_phy_block_range)
 
   // Scenario 1
   int64_t split_cnt = 3;
-  const int64_t used_normal_block_cnt = (phy_blk_mgr.get_free_normal_block_cnt() / split_cnt) * split_cnt - split_cnt;
-  const int64_t block_cnt_per_range = (used_normal_block_cnt + split_cnt - 1) / split_cnt;
-  for (int i = 0; i < used_normal_block_cnt; i++) {
+  const int64_t used_data_block_cnt =
+      (phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt() / split_cnt) * split_cnt - split_cnt;
+  const int64_t block_cnt_per_range = (used_data_block_cnt + split_cnt - 1) / split_cnt;
+  for (int i = 0; i < used_data_block_cnt; i++) {
     int64_t block_idx = 0;
     ObSSPhysicalBlockHandle phy_blk_handle;
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_NORMAL_BLK));
-    phy_blk_handle()->update_valid_len(1024);
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
+    phy_blk_handle()->set_valid_len(1024);
   }
   ASSERT_EQ(OB_SUCCESS, micro_cache->divide_phy_block_range(ls_id, split_cnt, block_ranges));
   ASSERT_EQ(split_cnt, block_ranges.count());
@@ -884,13 +877,13 @@ TEST_F(TestSSMicroCache, test_divide_phy_block_range)
   }
 
   // Scenario 2
-  const int64_t used_normal_block_cnt2 = used_normal_block_cnt + split_cnt - 1;
-  const int64_t block_cnt_per_range2 = (used_normal_block_cnt2 + split_cnt - 1) / split_cnt;
-  while (phy_blk_mgr.get_used_normal_block_cnt() < used_normal_block_cnt2) {
+  const int64_t used_data_block_cnt2 = used_data_block_cnt + split_cnt - 1;
+  const int64_t block_cnt_per_range2 = (used_data_block_cnt2 + split_cnt - 1) / split_cnt;
+  while (phy_blk_mgr.get_data_block_used_cnt() < used_data_block_cnt2) {
     int64_t block_idx = 0;
     ObSSPhysicalBlockHandle phy_blk_handle;
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_NORMAL_BLK));
-    phy_blk_handle()->update_valid_len(1024);
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
+    phy_blk_handle()->set_valid_len(1024);
   }
   block_ranges.reset();
   ASSERT_EQ(OB_SUCCESS, micro_cache->divide_phy_block_range(ls_id, split_cnt, block_ranges));
@@ -907,11 +900,11 @@ TEST_F(TestSSMicroCache, test_divide_phy_block_range)
   }
 
   // Scenario 3
-  split_cnt = used_normal_block_cnt2 + 10;
-  const int64_t block_cnt_per_range3 = (used_normal_block_cnt2 + split_cnt - 1) / split_cnt;
+  split_cnt = used_data_block_cnt2 + 10;
+  const int64_t block_cnt_per_range3 = (used_data_block_cnt2 + split_cnt - 1) / split_cnt;
   block_ranges.reset();
   ASSERT_EQ(OB_SUCCESS, micro_cache->divide_phy_block_range(ls_id, split_cnt, block_ranges));
-  ASSERT_EQ(used_normal_block_cnt2, block_ranges.count());
+  ASSERT_EQ(used_data_block_cnt2, block_ranges.count());
   ASSERT_EQ(1, block_cnt_per_range3);
   for (int64_t i = 0; i < block_ranges.count(); ++i) {
     const int64_t l = block_ranges[i].start_blk_idx_;
@@ -1161,6 +1154,7 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
   int ret = OB_SUCCESS;
   LOG_INFO("TEST_CASE: start test_clear_micro_cache");
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
   ObSSMemDataManager &mem_data_mgr = micro_cache->mem_data_mgr_;
@@ -1226,10 +1220,20 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
   ASSERT_EQ(0, micro_cache->cache_stat_.mem_blk_stat().mem_blk_bg_used_cnt_);
 
   // check phy_block_mgr
-  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.reorgan_blk_.used_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.micro_ckpt_blk_.used_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_.used_cnt_);
+  SSPhyBlockCntInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
+  const int64_t shared_blk_used_cnt = blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_;
+  ASSERT_EQ(0, blk_cnt_info.data_blk_.used_cnt_);
+  ASSERT_EQ(0, blk_cnt_info.meta_blk_.used_cnt_);
+  ASSERT_EQ(0, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.min_cnt_, blk_cnt_info.data_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.min_cnt_, blk_cnt_info.meta_blk_.hold_cnt_);
+  ASSERT_EQ(shared_blk_used_cnt, blk_cnt_info.shared_blk_used_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().data_blk_used_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().meta_blk_used_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.hold_cnt_, cache_stat.phy_blk_stat().data_blk_cnt_);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.hold_cnt_, cache_stat.phy_blk_stat().meta_blk_cnt_);
+  ASSERT_EQ(shared_blk_used_cnt, cache_stat.phy_blk_stat().shared_blk_used_cnt_);
+
   ASSERT_EQ(true, phy_blk_mgr.free_bitmap_->is_all_true());
   ASSERT_EQ(origin_super_blk.cache_file_size_, phy_blk_mgr.super_block_.cache_file_size_);
   ASSERT_EQ(0, phy_blk_mgr.super_block_.micro_ckpt_entry_list_.count());
@@ -1238,9 +1242,9 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
 
   ASSERT_EQ(0, micro_cache->cache_stat_.phy_blk_stat().reusable_blk_cnt_);
   ASSERT_EQ(0, micro_cache->cache_stat_.phy_blk_stat().phy_ckpt_blk_used_cnt_);
-  ASSERT_EQ(0, micro_cache->cache_stat_.phy_blk_stat().micro_ckpt_blk_used_cnt_);
-  ASSERT_EQ(phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_, micro_cache->cache_stat_.phy_blk_stat().normal_blk_free_cnt_);
-  ASSERT_EQ(phy_blk_mgr.blk_cnt_info_.reorgan_blk_.total_cnt_, micro_cache->cache_stat_.phy_blk_stat().reorgan_blk_free_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.phy_blk_stat().meta_blk_used_cnt_);
+  ASSERT_EQ(phy_blk_mgr.blk_cnt_info_.data_blk_.free_blk_cnt(), micro_cache->cache_stat_.phy_blk_stat().data_blk_cnt_ -
+                                                                micro_cache->cache_stat_.phy_blk_stat().data_blk_used_cnt_);
 
   // check CacheHitStat
   ASSERT_EQ(0, micro_cache->cache_stat_.hit_stat().cache_hit_cnt_);
@@ -1270,7 +1274,7 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
   }
   ASSERT_EQ(ctx.micro_key_map_.size(), SSMicroCacheStat.micro_stat().get_micro_pool_alloc_cnt());
   // check phy_block_mgr
-  ASSERT_LT(0, phy_blk_mgr.get_used_normal_block_cnt());
+  ASSERT_LT(0, phy_blk_mgr.get_data_block_used_cnt());
   ASSERT_EQ(false, phy_blk_mgr.free_bitmap_->is_all_true());
   ASSERT_LT(0, micro_cache->cache_stat_.mem_blk_stat().get_total_mem_blk_used_cnt());
 }

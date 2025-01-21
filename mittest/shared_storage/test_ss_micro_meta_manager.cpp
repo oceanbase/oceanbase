@@ -846,8 +846,8 @@ TEST_F(TestSSMicroMetaManager, test_clear_micro_meta_by_tablet_id)
       ASSERT_EQ(OB_SUCCESS,
           micro_meta_mgr.add_or_update_micro_block_meta(micro_key, micro_size, micro_crc, mem_blk_handle, real_add));
     }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   }
-  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(macro_cnt * micro_cnt * micro_size, cache_stat.micro_stat().total_micro_size_);
 
@@ -919,7 +919,7 @@ TEST_F(TestSSMicroMetaManager, test_arc_limit_p)
   ObSSARCInfo &arc_info = micro_cache->micro_meta_mgr_.arc_info_;
   const int64_t origin_p = arc_info.p_;
   const int32_t block_size = phy_blk_mgr.block_size_;
-  const int64_t macro_blk_cnt = phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_;
+  const int64_t macro_blk_cnt = phy_blk_mgr.blk_cnt_info_.data_blk_.max_cnt_;
 
   int64_t start_macro_id = 1;
   const int64_t micro_size = (1L << 16);  // 64K

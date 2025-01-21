@@ -213,8 +213,8 @@ TEST_F(TestSSMicroCacheParallelism, test_parallel_add_same_data)
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSARCInfo &arc_info = micro_meta_mgr.arc_info_;
   const int32_t block_size = phy_blk_mgr.block_size_;
-  const int64_t total_normal_blk_cnt = phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_;
-  const int64_t exp_total_data_size = total_normal_blk_cnt / 2 * block_size;
+  const int64_t total_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
+  const int64_t exp_total_data_size = total_data_blk_cnt / 2 * block_size;
 
   const int64_t thread_num = 4;
   TestSSMicroCacheParallelism::TestSSMicroCacheParallellismCtx ctx;

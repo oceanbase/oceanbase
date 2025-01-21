@@ -93,7 +93,7 @@ TEST_F(TestSSPersistMicroDataTask, test_persist_micro_task)
   ASSERT_NE(nullptr, micro_meta_mgr);
   ObSSPhysicalBlockManager *phy_blk_mgr = &(micro_cache->phy_blk_mgr_);
   ASSERT_NE(nullptr, phy_blk_mgr);
-  const int64_t available_block_cnt = phy_blk_mgr->get_free_normal_block_cnt();
+  const int64_t available_block_cnt = phy_blk_mgr->blk_cnt_info_.cache_limit_blk_cnt();
   const int64_t WRITE_BLK_CNT = 50;
   ASSERT_LT(WRITE_BLK_CNT, available_block_cnt);
 
@@ -178,8 +178,7 @@ TEST_F(TestSSPersistMicroDataTask, test_persist_micro_task)
   ASSERT_EQ(1, mem_data_mgr->mem_block_pool_.used_extra_count_);
 
   // 2. check the count of the sealed mem_block
-  ASSERT_EQ(cur_mem_micro_cnt, mem_data_mgr->fg_sealed_mem_blocks_.get_curr_total());
-  ASSERT_EQ(cur_pool_def_cnt, cur_mem_micro_cnt);
+  ASSERT_EQ(cur_pool_def_cnt, mem_data_mgr->fg_sealed_mem_blocks_.get_curr_total());
 
   // 3. mock the first sealed_mem_block not complete its micro_meta update
   ASSERT_NE(nullptr, first_sealed_mem_blk);
@@ -190,7 +189,7 @@ TEST_F(TestSSPersistMicroDataTask, test_persist_micro_task)
   // 4. persist these sealed mem_block, check the micro_block meta
   persist_task.is_inited_ = true;
   ASSERT_EQ(OB_SUCCESS, persist_task.persist_op_.persist_sealed_mem_blocks());
-  for (int64_t i = 0; i < cur_mem_micro_cnt; ++i) {
+  for (int64_t i = 0; i < cur_pool_def_cnt; ++i) {
     MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(200 + i);
     for (int32_t j = 0; j < cur_mem_micro_cnt; ++j) {
       const int32_t offset = payload_offset + j * micro_size;
@@ -309,10 +308,15 @@ TEST_F(TestSSPersistMicroDataTask, test_persist_task_exit_loop)
 {
   ObArenaAllocator allocator;
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  SSPhyBlockCntInfo &blk_cnt_info = micro_cache->phy_blk_mgr_.blk_cnt_info_;
   ASSERT_NE(nullptr, micro_cache);
 
-  // 1. mock normal phy_block used up.
-  micro_cache->phy_blk_mgr_.blk_cnt_info_.normal_blk_.used_cnt_ = micro_cache->phy_blk_mgr_.blk_cnt_info_.normal_blk_.total_cnt_;
+  // 1. mock cache_data_block used up.
+  const int64_t max_cache_data_blk_cnt = blk_cnt_info.cache_limit_blk_cnt();
+  blk_cnt_info.data_blk_.max_cnt_ = max_cache_data_blk_cnt;
+  blk_cnt_info.data_blk_.hold_cnt_ = max_cache_data_blk_cnt;
+  blk_cnt_info.data_blk_.used_cnt_ = max_cache_data_blk_cnt;
+  blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_;
 
   // 2. write micro data to add some sealed_mem_blocks.
   const int64_t macro_block_cnt = 5;

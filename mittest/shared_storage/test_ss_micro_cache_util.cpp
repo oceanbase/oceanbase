@@ -37,6 +37,8 @@ public:
   static void TearDownTestCase();
   virtual void SetUp();
   virtual void TearDown();
+
+  void write_batch_macro_block_data(const int64_t micro_cnt, const int64_t macro_cnt);
 };
 
 void TestSSMicroCacheUtil::SetUpTestCase()
@@ -51,10 +53,50 @@ void TestSSMicroCacheUtil::TearDownTestCase()
 }
 
 void TestSSMicroCacheUtil::SetUp()
-{}
+{
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  micro_cache->stop();
+  micro_cache->wait();
+  micro_cache->destroy();
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 27)));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+}
 
 void TestSSMicroCacheUtil::TearDown()
-{}
+{
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  ASSERT_NE(nullptr, micro_cache);
+  micro_cache->stop();
+  micro_cache->wait();
+  micro_cache->destroy();
+}
+
+void TestSSMicroCacheUtil::write_batch_macro_block_data(const int64_t micro_cnt, const int64_t macro_cnt)
+{
+  ObArenaAllocator allocator;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+
+  const int64_t payload_offset =
+      ObSSPhyBlockCommonHeader::get_serialize_size() + ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
+  const int32_t micro_index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
+  const int32_t micro_size = (DEFAULT_BLOCK_SIZE - payload_offset) / micro_cnt - micro_index_size;
+  char *data_buf = reinterpret_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+
+  MEMSET(data_buf, 'a', micro_size);
+  for (int64_t i = 1; i <= macro_cnt; ++i) {
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(i);
+    for (int64_t j = 0; j < micro_cnt; ++j) {
+      const int32_t offset = payload_offset + j * micro_size;
+      const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ASSERT_EQ(OB_SUCCESS,
+          micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+    }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+  }
+}
+
 
 TEST_F(TestSSMicroCacheUtil, test_phy_block_common_header)
 {
@@ -143,30 +185,22 @@ TEST_F(TestSSMicroCacheUtil, test_parse_micro_block_indexs)
 
 TEST_F(TestSSMicroCacheUtil, test_parse_ss_super_block)
 {
-  ObArenaAllocator allocator;
+  ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager*);
+  ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache*)->phy_blk_mgr_;
+
+  ObMemAttr attr(MTL_ID(), "test");
   const int64_t buf_len = DEFAULT_BLOCK_SIZE;
-  char *dest_buf = reinterpret_cast<char *>(allocator.alloc(buf_len));
-  char *src_buf = reinterpret_cast<char *>(allocator.alloc(buf_len));
+  char *dest_buf = reinterpret_cast<char *>(ob_malloc(buf_len, attr));
+  char *src_buf = reinterpret_cast<char *>(ob_malloc_align(SS_MEM_BUF_ALIGNMENT, buf_len, attr));
   ASSERT_NE(nullptr, dest_buf);
   ASSERT_NE(nullptr, src_buf);
 
-  const int64_t cache_file_size = (1L << 32);
-  const int64_t common_hdr_size = ObSSPhyBlockCommonHeader::get_serialize_size();
-  ObSSMicroCacheSuperBlock super_block(cache_file_size);
+  const int64_t align_size = lib::align_up(phy_blk_mgr.super_block_.get_serialize_size(), SS_MEM_BUF_ALIGNMENT);
+  int64_t read_size = 0;
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->pread_cache_block(0, align_size, src_buf, read_size));
+  ASSERT_EQ(read_size, align_size);
+
   int64_t pos = 0;
-  ASSERT_EQ(OB_SUCCESS, super_block.serialize(src_buf + common_hdr_size, buf_len, pos));
-  ASSERT_EQ(pos, super_block.get_serialize_size());
-
-  ObSSPhyBlockCommonHeader common_hdr;
-  const int64_t payload_size = super_block.get_serialize_size();
-  common_hdr.set_payload_size(payload_size);
-  common_hdr.set_block_type(ObSSPhyBlockType::SS_SUPER_BLK);
-  common_hdr.calc_payload_checksum(src_buf + common_hdr_size, payload_size);
-  pos = 0;
-  ASSERT_EQ(OB_SUCCESS, common_hdr.serialize(src_buf, common_hdr_size, pos));
-  ASSERT_EQ(pos, common_hdr.get_serialize_size());
-
-  pos = 0;
   ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::parse_ss_super_block(dest_buf, buf_len, src_buf, buf_len, pos));
   const char *file = "test_parse_ss_super_block";
   ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::dump_phy_block(src_buf, buf_len, file, true));
@@ -174,124 +208,103 @@ TEST_F(TestSSMicroCacheUtil, test_parse_ss_super_block)
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(file, is_exist));
   ASSERT_TRUE(is_exist);
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::unlink(file));
+
+  ob_free(dest_buf);
+  ob_free_align(src_buf);
 }
 
 TEST_F(TestSSMicroCacheUtil, test_parse_normal_phy_block)
 {
-  ObArenaAllocator allocator;
-  const int64_t buf_len = DEFAULT_BLOCK_SIZE;
-  char *dest_buf = reinterpret_cast<char *>(allocator.alloc(buf_len));
-  char *src_buf = reinterpret_cast<char *>(allocator.alloc(buf_len));
-  ASSERT_NE(nullptr, dest_buf);
+  ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager*);
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObMemAttr attr(MTL_ID(), "test");
+
+  // 1. write micro block data
+  const int64_t micro_cnt = 1024;
+  const int64_t macro_cnt = 5;
+  write_batch_macro_block_data(micro_cnt, macro_cnt);
+
+  ObSSPhysicalBlockHandle phy_blk_handle;
+  const int64_t phy_blk_idx = 3;
+  phy_blk_mgr.get_block_handle(3, phy_blk_handle);
+  ASSERT_EQ(ObSSPhyBlockType::SS_CACHE_DATA_BLK, phy_blk_handle()->get_block_type());
+
+  // 2. dump normal_block
+  const int64_t block_size = phy_blk_mgr.get_block_size();
+  const int64_t src_buf_len = block_size;
+  const int64_t dest_buf_len = block_size * 5;
+  char *src_buf = reinterpret_cast<char *>(ob_malloc_align(SS_MEM_BUF_ALIGNMENT, src_buf_len, attr));
+  char *dest_buf = reinterpret_cast<char *>(ob_malloc(dest_buf_len, attr));
   ASSERT_NE(nullptr, src_buf);
+  ASSERT_NE(nullptr, dest_buf);
 
-  const int64_t cnt = 100;
-  const int64_t micro_block_size = 100;
-  int64_t index_size = 0;
-  ObSEArray<ObSSMicroBlockIndex, 64> micro_indexs;
-  for (int64_t i = 0; i < cnt; ++i) {
-    const int64_t offset = i + 100;
-    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(i + 1);
-    const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_block_size);
-    const ObSSMicroBlockIndex micro_index = ObSSMicroBlockIndex(micro_key, micro_block_size);
-    ASSERT_EQ(OB_SUCCESS, micro_indexs.push_back(micro_index));
-    index_size += micro_index.get_serialize_size();
-  }
+  const int64_t block_offset = phy_blk_mgr.get_block_size() * phy_blk_idx;
+  int64_t read_size = 0;
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->pread_cache_block(block_offset, block_size, src_buf, read_size));
+  ASSERT_EQ(read_size, block_size);
 
-  const int64_t common_hdr_size = ObSSPhyBlockCommonHeader::get_serialize_size();
-  const int64_t blk_hdr_size = ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
-  const int64_t reserved_size = common_hdr_size + blk_hdr_size;
-  const int64_t data_size = cnt * micro_block_size;
-
-  ObSSNormalPhyBlockHeader blk_hdr;
-  blk_hdr.micro_count_ = cnt;
-  blk_hdr.micro_index_offset_ = reserved_size + data_size;
-  blk_hdr.micro_index_size_ = index_size;
-  blk_hdr.payload_offset_ = reserved_size;
-  blk_hdr.payload_size_ = data_size + index_size;
-  MEMSET(src_buf + blk_hdr.payload_offset_, 'c', data_size);
-  int64_t pos = blk_hdr.micro_index_offset_;
-  for (int64_t i = 0; i < cnt; ++i) {
-    ASSERT_EQ(OB_SUCCESS, micro_indexs[i].serialize(src_buf, buf_len, pos));
-  }
-  pos = 0;
-  ASSERT_EQ(OB_SUCCESS, blk_hdr.serialize(src_buf + common_hdr_size, common_hdr_size, pos));
-  ASSERT_EQ(pos, blk_hdr.get_serialize_size());
-
-  ObSSPhyBlockCommonHeader common_hdr;
-  const int64_t payload_size = blk_hdr.payload_size_ + blk_hdr_size;
-  common_hdr.set_payload_size(payload_size);
-  common_hdr.set_block_type(ObSSPhyBlockType::SS_CACHE_DATA_BLK);
-  common_hdr.calc_payload_checksum(src_buf + common_hdr_size, payload_size);
-  pos = 0;
-  ASSERT_EQ(OB_SUCCESS, common_hdr.serialize(src_buf, buf_len, pos));
-  ASSERT_EQ(pos, common_hdr.get_serialize_size());
-
-  pos = 0;
-  ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::parse_normal_phy_block(dest_buf, buf_len, src_buf, buf_len, pos, false));
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::parse_normal_phy_block(dest_buf, dest_buf_len, src_buf, src_buf_len, pos, false));
   const char *file = "test_parse_normal_phy_block";
-  ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::dump_phy_block(src_buf, buf_len, file, false, false));
+  ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::dump_phy_block(src_buf, src_buf_len, file, false, false));
   bool is_exist = false;
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(file, is_exist));
   ASSERT_TRUE(is_exist);
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::unlink(file));
+
+  ob_free(dest_buf);
+  ob_free_align(src_buf);
 }
 
 
-TEST_F(TestSSMicroCacheUtil, test_parse_ckpt_block)
+TEST_F(TestSSMicroCacheUtil, test_parse_micro_ckpt_block)
 {
-  ObArenaAllocator allocator;
-  const int64_t buf_len = DEFAULT_BLOCK_SIZE;
-  char *dest_buf = reinterpret_cast<char *>(allocator.alloc(buf_len));
-  char *src_buf = reinterpret_cast<char *>(allocator.alloc(buf_len));
-  ASSERT_NE(nullptr, dest_buf);
+  ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager*);
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObMemAttr attr(MTL_ID(), "test");
+
+  // 1. write micro block data and persist some phy_block
+  const int64_t micro_cnt = 1024;
+  const int64_t macro_cnt = 5;
+  write_batch_macro_block_data(micro_cnt, macro_cnt);
+
+  // 2. execute micro_meta_ckpt
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSExecuteMicroCheckpointTask &micro_ckpt_task = micro_cache->task_runner_.micro_ckpt_task_;
+  micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = ObSSExecuteMicroCheckpointOp::MICRO_META_CKPT_INTERVAL_ROUND - 2;
+  usleep(5 * 1000 * 1000);
+  ASSERT_EQ(1, cache_stat.task_stat().micro_ckpt_cnt_);
+  ASSERT_LT(0, phy_blk_mgr.super_block_.micro_ckpt_entry_list_.count());
+
+  // 3. dump micro_meta_ckpt block
+  const int64_t block_size = phy_blk_mgr.get_block_size();
+  const int64_t src_buf_len = block_size;
+  const int64_t dest_buf_len = block_size * 10;
+  char *src_buf = reinterpret_cast<char *>(ob_malloc_align(SS_MEM_BUF_ALIGNMENT, src_buf_len, attr));
+  char *dest_buf = reinterpret_cast<char *>(ob_malloc(dest_buf_len, attr));
   ASSERT_NE(nullptr, src_buf);
+  ASSERT_NE(nullptr, dest_buf);
 
-  const int64_t common_hdr_size = ObSSPhyBlockCommonHeader::get_serialize_size();
-  const int64_t linked_hdr_size = ObSSLinkedPhyBlockHeader::get_fixed_serialize_size();
-  // item_writer init and gen ckpt.
-  ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
-  ObSSLinkedPhyBlockItemWriter item_writer;
-  ASSERT_EQ(OB_SUCCESS, item_writer.init(OB_SERVER_TENANT_ID, phy_blk_mgr, ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK));
-  const int64_t cnt = 100;
-  for (int64_t i = 0; i < cnt; ++i) {
-    const int64_t item_buf_size = sizeof(ObSSPhyBlockPersistInfo);
-    char item_buf[item_buf_size];
-    int64_t item_pos = 0;
-    ObSSPhyBlockPersistInfo persist_info(i + 100, 1);
-    ASSERT_EQ(OB_SUCCESS, persist_info.serialize(item_buf, item_buf_size, item_pos));
-    ASSERT_EQ(OB_SUCCESS, item_writer.write_item(item_buf, item_pos));
-  }
-  if (item_writer.io_seg_buf_pos_ > 0) {
-    ASSERT_EQ(OB_SUCCESS, item_writer.write_segment_());
-  }
-  MEMCPY(src_buf, item_writer.io_buf_, item_writer.io_buf_pos_);
-  const int64_t io_buf_pos = item_writer.io_buf_pos_;
-  const int64_t payload_offset = common_hdr_size + linked_hdr_size;
+  const int64_t phy_blk_idx = phy_blk_mgr.super_block_.micro_ckpt_entry_list_[0];
+  const int64_t block_offset = phy_blk_mgr.get_block_size() * phy_blk_idx;
+  int64_t read_size = 0;
+  ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->pread_cache_block(block_offset, block_size, src_buf, read_size));
+  ASSERT_EQ(read_size, block_size);
 
-  ObSSLinkedPhyBlockHeader linked_hdr;
-  linked_hdr.set_payload_size(static_cast<int32_t>(io_buf_pos - payload_offset));
-  linked_hdr.item_count_ = cnt;
   int64_t pos = 0;
-  ASSERT_EQ(OB_SUCCESS, linked_hdr.serialize(src_buf + common_hdr_size, linked_hdr_size, pos));
-  ASSERT_EQ(pos, linked_hdr.get_serialize_size());
-
-  ObSSPhyBlockCommonHeader common_hdr;
-  common_hdr.set_payload_size(io_buf_pos - common_hdr_size);
-  common_hdr.set_block_type(ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK);
-  common_hdr.calc_payload_checksum(src_buf + common_hdr_size, common_hdr.payload_size_);
-  pos = 0;
-  ASSERT_EQ(OB_SUCCESS, common_hdr.serialize(src_buf, common_hdr_size, pos));
-  ASSERT_EQ(pos, common_hdr.get_serialize_size());
-
-  pos = 0;
-  ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::parse_checkpoint_block(dest_buf, buf_len, src_buf, buf_len, pos, false));
+  const bool is_micro_meta = true;
+  ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::parse_checkpoint_block(dest_buf, dest_buf_len, src_buf, src_buf_len, pos, is_micro_meta));
   const char *file = "test_parse_ckpt_block";
-  ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::dump_phy_block(src_buf, buf_len, file, false, false));
+  ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::dump_phy_block(src_buf, src_buf_len, file, false, is_micro_meta));
   bool is_exist = false;
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(file, is_exist));
   ASSERT_TRUE(is_exist);
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::unlink(file));
+
+  ob_free(dest_buf);
+  ob_free_align(src_buf);
 }
 
 }  // namespace storage

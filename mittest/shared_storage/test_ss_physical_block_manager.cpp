@@ -41,11 +41,13 @@ public:
   virtual ~TestSSPhysicalBlockManager() {}
   static void SetUpTestCase();
   static void TearDownTestCase();
+  virtual void SetUp();
+  virtual void TearDown();
   int serialize_super_block(char *buf, const int64_t buf_size, const ObSSMicroCacheSuperBlock &super_block);
   int deserialize_super_block(char *buf, const int64_t buf_size, ObSSMicroCacheSuperBlock &super_block);
   void check_super_block_identical(
       const ObSSMicroCacheSuperBlock &super_block1, const ObSSMicroCacheSuperBlock &super_block2);
-
+  void check_phy_block_reserve_cnt(const int64_t expect_cnt, const ObSSPhyBlockType type);
 public:
   class TestSSPhyBlockMgrThread : public Threads {
   public:
@@ -57,21 +59,22 @@ public:
     };
 
   public:
-    TestSSPhyBlockMgrThread(ObSSPhysicalBlockManager *phy_blk_mgr, int64_t normal_blk_cnt, int64_t phy_ckpt_blk_cnt,
-        int64_t micro_ckpt_blk_cnt, TestParallelType type)
-        : phy_blk_mgr_(phy_blk_mgr),
-          normal_blk_cnt_(normal_blk_cnt),
+    TestSSPhyBlockMgrThread(ObTenantBase *tenant_base, ObSSPhysicalBlockManager *phy_blk_mgr, int64_t normal_blk_cnt,
+        int64_t phy_ckpt_blk_cnt, int64_t micro_ckpt_blk_cnt, int64_t reorgan_blk_cnt, TestParallelType type)
+        : tenant_base_(tenant_base),
+          phy_blk_mgr_(phy_blk_mgr),
+          data_blk_cnt_(normal_blk_cnt),
           phy_ckpt_blk_cnt_(phy_ckpt_blk_cnt),
           micro_ckpt_blk_cnt_(micro_ckpt_blk_cnt),
-          ori_total_file_size_(0),
+          reorgan_blk_cnt_(reorgan_blk_cnt),
+          ori_total_file_size_(phy_blk_mgr->total_file_size_),
           type_(type),
           fail_cnt_(0)
-    {
-      ori_total_file_size_ = phy_blk_mgr_->total_file_size_;
-    }
+    {}
 
     void run(int64_t idx) final
     {
+      ObTenantEnv::set_tenant(tenant_base_);
       if (type_ == TestParallelType::TEST_PARALLEL_ALLOCATE_BLOCK) {
         parallel_allocate_block(idx);
       } else if (type_ == TestParallelType::TEST_PARALLEL_ALLOCATE_BLOCK_AND_CHECK_REUSE_VERSION) {
@@ -90,58 +93,44 @@ public:
     int parallel_allocate_block(int64_t idx)
     {
       int ret = OB_SUCCESS;
-      int64_t block_idx = -1;
-      common::ObArray<int64_t> block_idx_arr;
-      bool succ_free = false;
+      int64_t blk_cnt = 0;
+      ObSSPhyBlockType blk_type = ObSSPhyBlockType::SS_INVALID_BLK_TYPE;
+
       if (idx < 5) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < normal_blk_cnt_; i++) {
-          ObSSPhysicalBlockHandle phy_block_handle;
-          if (OB_FAIL(phy_blk_mgr_->alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_NORMAL_BLK))) {
-            LOG_WARN("fail to allocate block", KR(ret));
-          } else if (OB_FAIL(block_idx_arr.push_back(block_idx))) {
-            LOG_WARN("fail to push back block_idx", KR(ret), K(block_idx));
-          } else {
-            phy_block_handle.get_ptr()->is_sealed_ = true;
-          }
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < normal_blk_cnt_ / 2; i++) {
-          block_idx = block_idx_arr[i];
-          if (OB_FAIL(phy_blk_mgr_->add_reusable_block(block_idx))) {
-            LOG_WARN("fail to add block into reusable_set", KR(ret), K(block_idx));
-          } else if (OB_FAIL(phy_blk_mgr_->free_block(block_idx, succ_free)) || (succ_free != true)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("fail to allocate block", KR(ret), K(block_idx), K(succ_free));
-          }
-        }
+        blk_cnt = data_blk_cnt_;
+        blk_type = ObSSPhyBlockType::SS_CACHE_DATA_BLK;
       } else if (idx < 10) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < micro_ckpt_blk_cnt_; i++) {
-          ObSSPhysicalBlockHandle phy_block_handle;
-          if (OB_FAIL(phy_blk_mgr_->alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK))) {
-            LOG_WARN("fail to allocate block", KR(ret));
-          } else if (OB_FAIL(block_idx_arr.push_back(block_idx))) {
-            LOG_WARN("fail to push back block_idx", KR(ret), K(block_idx));
-          } else {
-            phy_block_handle.get_ptr()->is_sealed_ = true;
-          }
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < micro_ckpt_blk_cnt_ / 2; i++) {
-          block_idx = block_idx_arr[i];
-          if (OB_FAIL(phy_blk_mgr_->add_reusable_block(block_idx))) {
-            LOG_WARN("fail to add block into reusable_set", KR(ret), K(block_idx));
-          } else if (OB_FAIL(phy_blk_mgr_->free_block(block_idx, succ_free)) && (succ_free != true)) {
-            LOG_WARN("fail to allocate block", KR(ret), K(block_idx), K(succ_free));
-          }
-        }
+        blk_cnt = micro_ckpt_blk_cnt_;
+        blk_type = ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK;
+      } else if (idx < 11) {
+        blk_cnt = phy_ckpt_blk_cnt_;
+        blk_type = ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK;
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < phy_ckpt_blk_cnt_; i++) {
-          ObSSPhysicalBlockHandle phy_block_handle;
-          if (OB_FAIL(phy_blk_mgr_->alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK))) {
-            LOG_WARN("fail to allocate block", KR(ret));
-          } else if (OB_FAIL(block_idx_arr.push_back(block_idx))) {
-            LOG_WARN("fail to push back block_idx", KR(ret), K(block_idx));
-          } else {
-            phy_block_handle.get_ptr()->is_sealed_ = true;
-          }
+        blk_cnt = reorgan_blk_cnt_;
+        blk_type = ObSSPhyBlockType::SS_REORGAN_BLK;
+      }
+
+      int64_t block_idx = -1;
+      ObArray<int64_t> block_idx_arr;
+      bool succ_free = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < blk_cnt; i++) {
+        ObSSPhysicalBlockHandle phy_block_handle;
+        if (OB_FAIL(phy_blk_mgr_->alloc_block(block_idx, phy_block_handle, blk_type))) {
+          LOG_WARN("fail to allocate block", KR(ret));
+        } else if (OB_FAIL(block_idx_arr.push_back(block_idx))) {
+          LOG_WARN("fail to push back block_idx", KR(ret), K(block_idx));
+        } else {
+          phy_block_handle.get_ptr()->is_sealed_ = true;
+        }
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < blk_cnt; i++) {
+        block_idx = block_idx_arr[i];
+        if (OB_FAIL(phy_blk_mgr_->add_reusable_block(block_idx))) {
+          LOG_WARN("fail to add block into reusable_set", KR(ret), K(block_idx));
+        } else if (OB_FAIL(phy_blk_mgr_->free_block(block_idx, succ_free)) || (succ_free != true)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to allocate block", KR(ret), K(block_idx), K(succ_free));
         }
       }
 
@@ -158,10 +147,10 @@ public:
       common::ObArray<int64_t> block_idx_arr;
       bool succ_free = false;
       for (int64_t epoch = 0; OB_SUCC(ret) && epoch < 10; epoch++) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < normal_blk_cnt_; i++) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < data_blk_cnt_; i++) {
           ObSSPhysicalBlockHandle phy_block_handle;
           if (OB_FAIL(
-                  phy_blk_mgr_->alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_NORMAL_BLK))) {
+                  phy_blk_mgr_->alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK))) {
             LOG_WARN("fail to allocate block", KR(ret));
           } else if (OB_FAIL(block_idx_arr.push_back(block_idx))) {
             LOG_WARN("fail to push back block_idx", KR(ret), K(block_idx));
@@ -193,10 +182,9 @@ public:
       common::ObArray<ObSSPhysicalBlock*> phy_block_arr;
       common::ObArray<int64_t> block_idx_arr;
       if (idx >= 5) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < normal_blk_cnt_; i++) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < data_blk_cnt_; i++) {
           ObSSPhysicalBlockHandle phy_block_handle;
-          if (OB_FAIL(
-                  phy_blk_mgr_->alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_NORMAL_BLK))) {
+          if (OB_FAIL(phy_blk_mgr_->alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK))) {
             LOG_WARN("fail to allocate block", KR(ret), K(block_idx));
           } else if (OB_FAIL(block_idx_arr.push_back(block_idx))) {
             LOG_WARN("fail to push back block idx",  KR(ret), K(block_idx));
@@ -227,10 +215,12 @@ public:
     }
 
   private:
+    ObTenantBase *tenant_base_;
     ObSSPhysicalBlockManager *phy_blk_mgr_;
-    int64_t normal_blk_cnt_;
+    int64_t data_blk_cnt_;
     int64_t phy_ckpt_blk_cnt_;
     int64_t micro_ckpt_blk_cnt_;
+    int64_t reorgan_blk_cnt_;
     int64_t ori_total_file_size_;
     TestParallelType type_;
     int64_t fail_cnt_;
@@ -250,6 +240,25 @@ void TestSSPhysicalBlockManager::TearDownTestCase()
       LOG_WARN("failed to clean residual data", KR(ret));
   }
   MockTenantModuleEnv::get_instance().destroy();
+}
+
+void TestSSPhysicalBlockManager::SetUp()
+{
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  micro_cache->stop();
+  micro_cache->wait();
+  micro_cache->destroy();
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 32)));
+  micro_cache->start();
+}
+
+void TestSSPhysicalBlockManager::TearDown()
+{
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  ASSERT_NE(nullptr, micro_cache);
+  micro_cache->stop();
+  micro_cache->wait();
+  micro_cache->destroy();
 }
 
 int TestSSPhysicalBlockManager::serialize_super_block(
@@ -333,24 +342,37 @@ void TestSSPhysicalBlockManager::check_super_block_identical(
 TEST_F(TestSSPhysicalBlockManager, physical_block)
 {
   ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
-  ASSERT_LT(0, phy_blk_mgr.blk_cnt_info_.total_blk_cnt_);
-  ASSERT_EQ(phy_blk_mgr.blk_cnt_info_.total_blk_cnt_,
-            phy_blk_mgr.blk_cnt_info_.super_blk_cnt_ +
-            phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_ +
-            phy_blk_mgr.blk_cnt_info_.reorgan_blk_.total_cnt_ +
-            phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_.total_cnt_ +
-            phy_blk_mgr.blk_cnt_info_.micro_ckpt_blk_.total_cnt_);
+  ObSSMicroCacheStat &cache_stat = phy_blk_mgr.cache_stat_;
+  SSPhyBlockCntInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
+  ASSERT_EQ(true, blk_cnt_info.is_valid());
+
+  ASSERT_LT(0, blk_cnt_info.total_blk_cnt_);
+  ASSERT_EQ(blk_cnt_info.total_blk_cnt_, blk_cnt_info.super_blk_cnt_ +
+                                         blk_cnt_info.shared_blk_cnt_ +
+                                         blk_cnt_info.phy_ckpt_blk_cnt_);
+  const int64_t data_blk_min_cnt =
+      MAX(blk_cnt_info.reorgan_blk_cnt_, blk_cnt_info.shared_blk_cnt_ * MIN_CACHE_DATA_BLOCK_CNT_PCT / 100);
+  const int64_t micro_blk_min_cnt = MAX(2, blk_cnt_info.shared_blk_cnt_ * MIN_MICRO_CKPT_BLOCK_CNT_PCT / 100);
+  ASSERT_EQ(data_blk_min_cnt, blk_cnt_info.data_blk_.min_cnt_);
+  ASSERT_EQ(data_blk_min_cnt, blk_cnt_info.data_blk_.hold_cnt_);
+  ASSERT_EQ(micro_blk_min_cnt, blk_cnt_info.meta_blk_.min_cnt_);
+  ASSERT_EQ(micro_blk_min_cnt, blk_cnt_info.meta_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.shared_blk_cnt_, blk_cnt_info.data_blk_.min_cnt_ + blk_cnt_info.meta_blk_.max_cnt_);
+  ASSERT_EQ(blk_cnt_info.shared_blk_cnt_, blk_cnt_info.data_blk_.max_cnt_ + blk_cnt_info.meta_blk_.min_cnt_);
+  ASSERT_EQ(data_blk_min_cnt, cache_stat.phy_blk_stat().data_blk_cnt_);
+  ASSERT_EQ(micro_blk_min_cnt, cache_stat.phy_blk_stat().meta_blk_cnt_);
+
   ObSSPhysicalBlockHandle phy_blk_handle;
   int64_t phy_blk_idx = -1;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(phy_blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_NORMAL_BLK));
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(phy_blk_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
   ASSERT_LT(0, phy_blk_idx);
   ASSERT_EQ(true, phy_blk_handle.is_valid());
-  ASSERT_EQ(1, phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_);
-  ASSERT_EQ(1, phy_blk_mgr.cache_stat_.phy_blk_stat().get_normal_block_used_cnt());
-  phy_blk_handle.ptr_->valid_len_ = 50;
+  ASSERT_EQ(1, blk_cnt_info.data_blk_.used_cnt_);
+  ASSERT_EQ(1, cache_stat.phy_blk_stat().data_blk_used_cnt_);
+  phy_blk_handle()->valid_len_ = 50;
   bool is_empty = false;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_handle.ptr_->update_valid_len_by_delta(-50, is_empty, phy_blk_idx));
-  ASSERT_EQ(true, is_empty);
+  ASSERT_EQ(OB_SUCCESS, phy_blk_handle()->dec_valid_len(phy_blk_idx, -50));
+  ASSERT_EQ(true, phy_blk_handle()->is_empty());
   ASSERT_EQ(1, phy_blk_mgr.reusable_set_.size());
   ASSERT_EQ(2, phy_blk_handle()->ref_cnt_);
   bool succ_free = false;
@@ -365,8 +387,8 @@ TEST_F(TestSSPhysicalBlockManager, physical_block)
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.free_block(phy_blk_idx, succ_free));
   ASSERT_EQ(false, succ_free);
 
-  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr.cache_stat_.phy_blk_stat().get_normal_block_used_cnt());
+  ASSERT_EQ(0, blk_cnt_info.data_blk_.used_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().data_blk_used_cnt_);
 }
 
 TEST_F(TestSSPhysicalBlockManager, super_block)
@@ -391,33 +413,54 @@ TEST_F(TestSSPhysicalBlockManager, super_block)
 TEST_F(TestSSPhysicalBlockManager, physical_block_manager)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  ASSERT_EQ(true, is_valid_tenant_id(tenant_id));
   ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
+  ObSSMicroCacheStat &cache_stat = phy_blk_mgr.cache_stat_;
+  SSPhyBlockCntInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
   ASSERT_EQ(true, phy_blk_mgr.is_inited_);
 
-  // 1. allocate all normal_block
-  int64_t normal_blk_cnt = phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_;
-  ASSERT_LT(0, normal_blk_cnt);
+  // 1. allocate all avaliable cache_data_block
+  const int64_t data_blk_cnt = blk_cnt_info.cache_limit_blk_cnt();
+  ASSERT_LT(0, data_blk_cnt);
   int64_t block_idx = -1;
   ObSSPhysicalBlockHandle phy_blk_handle;
-  ObArray<int64_t> normal_blk_idx_arr;
-  for (int64_t i = 0; OB_SUCC(ret) && i < normal_blk_cnt; i++) {
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_NORMAL_BLK));
-    ASSERT_EQ(OB_SUCCESS, normal_blk_idx_arr.push_back(block_idx));
+  ObArray<int64_t> data_blk_idx_arr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < data_blk_cnt; i++) {
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
+    ASSERT_EQ(OB_SUCCESS, data_blk_idx_arr.push_back(block_idx));
     ASSERT_EQ(true, phy_blk_handle.is_valid());
     phy_blk_handle.get_ptr()->is_sealed_ = true;
     phy_blk_handle.reset();
   }
-  ASSERT_EQ(normal_blk_cnt, phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_);
-  ASSERT_EQ(normal_blk_cnt, phy_blk_mgr.cache_stat_.phy_blk_stat().get_normal_block_used_cnt());
+
+  ASSERT_LT(blk_cnt_info.data_blk_.min_cnt_, blk_cnt_info.data_blk_.hold_cnt_);
+  ASSERT_EQ(data_blk_cnt, blk_cnt_info.data_blk_.used_cnt_);
+  ASSERT_EQ(data_blk_cnt, cache_stat.phy_blk_stat().data_blk_used_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.max_cnt_, blk_cnt_info.data_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.max_cnt_, cache_stat.phy_blk_stat().data_blk_cnt_);
+
+  int64_t shared_blk_used_cnt = blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_;
+  ASSERT_EQ(shared_blk_used_cnt, blk_cnt_info.shared_blk_used_cnt_);
+  ASSERT_EQ(shared_blk_used_cnt, cache_stat.phy_blk_stat().shared_blk_used_cnt_);
   {
-    // no free normal_block to allocate.
-    ASSERT_EQ(OB_EAGAIN, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_NORMAL_BLK));
+    // no free cache_data_block to allocate.
+    ASSERT_EQ(OB_EAGAIN, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
   }
 
-  // 2. allocate all phy_block_ckpt_block
-  int64_t phy_ckpt_blk_cnt = phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_.total_cnt_;
+  // 2. free all cache_data_blk
+  bool succ_free = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < data_blk_cnt; i++) {
+    succ_free = false;
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.add_reusable_block(data_blk_idx_arr.at(i)));
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.free_block(data_blk_idx_arr.at(i), succ_free));
+    ASSERT_EQ(true, succ_free);
+  }
+  ASSERT_EQ(0, blk_cnt_info.data_blk_.used_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().data_blk_used_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.min_cnt_, blk_cnt_info.data_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.min_cnt_, cache_stat.phy_blk_stat().data_blk_cnt_);
+
+  // 3. allocate all phy_block_ckpt_block
+  int64_t phy_ckpt_blk_cnt = phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_cnt_;
   ASSERT_LT(0, phy_ckpt_blk_cnt);
   block_idx = -1;
   ObArray<int64_t> phy_ckpt_blk_idx_arr;
@@ -428,15 +471,26 @@ TEST_F(TestSSPhysicalBlockManager, physical_block_manager)
     phy_blk_handle.get_ptr()->is_sealed_ = true;
     phy_blk_handle.reset();
   }
-  ASSERT_EQ(phy_ckpt_blk_cnt, phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_.used_cnt_);
-  ASSERT_EQ(phy_ckpt_blk_cnt, phy_blk_mgr.cache_stat_.phy_blk_stat().phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(phy_ckpt_blk_cnt, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(phy_ckpt_blk_cnt, cache_stat.phy_blk_stat().phy_ckpt_blk_used_cnt_);
   {
     // no free ckpt_block to allocate.
     ASSERT_EQ(OB_EAGAIN, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_PHY_BLOCK_CKPT_BLK));
   }
 
-  // 3. allocate all micro_meta_ckpt_block
-  int64_t micro_ckpt_blk_cnt = phy_blk_mgr.blk_cnt_info_.micro_ckpt_blk_.total_cnt_;
+  // 4. free all phy_block_ckpt_block
+  succ_free = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < phy_ckpt_blk_cnt; i++) {
+    succ_free = false;
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.add_reusable_block(phy_ckpt_blk_idx_arr.at(i)));
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.free_block(phy_ckpt_blk_idx_arr.at(i), succ_free));
+    ASSERT_EQ(true, succ_free);
+  }
+  ASSERT_EQ(0, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().phy_ckpt_blk_used_cnt_);
+
+  // 5. allocate all micro_meta_ckpt_block
+  const int64_t micro_ckpt_blk_cnt = blk_cnt_info.meta_blk_.max_cnt_;
   ASSERT_LT(0, micro_ckpt_blk_cnt);
   block_idx = -1;
   ObArray<int64_t> micro_ckpt_blk_idx_arr;
@@ -447,42 +501,20 @@ TEST_F(TestSSPhysicalBlockManager, physical_block_manager)
     phy_blk_handle.get_ptr()->is_sealed_ = true;
     phy_blk_handle.reset();
   }
-  ASSERT_EQ(micro_ckpt_blk_cnt, phy_blk_mgr.blk_cnt_info_.micro_ckpt_blk_.used_cnt_);
-  ASSERT_EQ(micro_ckpt_blk_cnt, phy_blk_mgr.cache_stat_.phy_blk_stat().micro_ckpt_blk_used_cnt_);
+  ASSERT_LT(blk_cnt_info.meta_blk_.min_cnt_, blk_cnt_info.meta_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.max_cnt_, blk_cnt_info.meta_blk_.hold_cnt_);
+  ASSERT_EQ(micro_ckpt_blk_cnt, blk_cnt_info.meta_blk_.used_cnt_);
+  ASSERT_EQ(micro_ckpt_blk_cnt, phy_blk_mgr.cache_stat_.phy_blk_stat().meta_blk_used_cnt_);
+  ASSERT_EQ(micro_ckpt_blk_cnt, blk_cnt_info.meta_blk_.hold_cnt_);
+  ASSERT_EQ(micro_ckpt_blk_cnt, phy_blk_mgr.cache_stat_.phy_blk_stat().meta_blk_cnt_);
+
+  shared_blk_used_cnt = blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_;
+  ASSERT_EQ(shared_blk_used_cnt, blk_cnt_info.shared_blk_used_cnt_);
+  ASSERT_EQ(shared_blk_used_cnt, cache_stat.phy_blk_stat().shared_blk_used_cnt_);
   {
     // no free ckpt_block to allocate.
     ASSERT_EQ(OB_EAGAIN, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK));
   }
-
-  // 4. allocate all reorgan_block
-  int64_t reorgan_blk_cnt = phy_blk_mgr.blk_cnt_info_.reorgan_blk_.total_cnt_;
-  ASSERT_LT(0, reorgan_blk_cnt);
-  block_idx = -1;
-  ObArray<int64_t> reorgan_blk_idx_arr;
-  for (int64_t i = 0; OB_SUCC(ret) && i < reorgan_blk_cnt; i++) {
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_REORGAN_BLK));
-    ASSERT_EQ(OB_SUCCESS, reorgan_blk_idx_arr.push_back(block_idx));
-    ASSERT_EQ(true, phy_blk_handle.is_valid());
-    phy_blk_handle.get_ptr()->is_sealed_ = true;
-    phy_blk_handle.reset();
-  }
-  ASSERT_EQ(reorgan_blk_cnt, phy_blk_mgr.blk_cnt_info_.reorgan_blk_.used_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr.cache_stat_.phy_blk_stat().reorgan_blk_free_cnt_);
-  {
-    // no free reorgan_block to allocate.
-    ASSERT_EQ(OB_EAGAIN, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_REORGAN_BLK));
-  }
-
-  // 5. free all phy_block_ckpt_block
-  bool succ_free = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < phy_ckpt_blk_cnt; i++) {
-    succ_free = false;
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.add_reusable_block(phy_ckpt_blk_idx_arr.at(i)));
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.free_block(phy_ckpt_blk_idx_arr.at(i), succ_free));
-    ASSERT_EQ(true, succ_free);
-  }
-  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.phy_ckpt_blk_.used_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr.cache_stat_.phy_blk_stat().phy_ckpt_blk_used_cnt_);
 
   // 6. free all micro_meta_blockckpt_block
   succ_free = false;
@@ -492,29 +524,35 @@ TEST_F(TestSSPhysicalBlockManager, physical_block_manager)
     ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.free_block(micro_ckpt_blk_idx_arr.at(i), succ_free));
     ASSERT_EQ(true, succ_free);
   }
-  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.micro_ckpt_blk_.used_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr.cache_stat_.phy_blk_stat().micro_ckpt_blk_used_cnt_);
+  ASSERT_EQ(0, blk_cnt_info.meta_blk_.used_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().meta_blk_used_cnt_);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.min_cnt_, blk_cnt_info.meta_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.min_cnt_, cache_stat.phy_blk_stat().meta_blk_cnt_);
 
-
-  // 7. free all normal_block
-  succ_free = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < normal_blk_cnt; i++) {
-    succ_free = false;
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.add_reusable_block(normal_blk_idx_arr.at(i)));
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.free_block(normal_blk_idx_arr.at(i), succ_free));
-    ASSERT_EQ(true, succ_free);
+  // 7. allocate all reorgan_block
+  const int64_t reorgan_blk_cnt = blk_cnt_info.data_blk_.max_cnt_;
+  block_idx = -1;
+  ObArray<int64_t> reorgan_blk_idx_arr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < reorgan_blk_cnt; i++) {
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_REORGAN_BLK));
+    ASSERT_EQ(OB_SUCCESS, reorgan_blk_idx_arr.push_back(block_idx));
+    ASSERT_EQ(true, phy_blk_handle.is_valid());
+    phy_blk_handle.get_ptr()->is_sealed_ = true;
+    phy_blk_handle.reset();
   }
-  // cuz we will prefer to add free block count for reorgan_task.
-  if (normal_blk_cnt > reorgan_blk_cnt) {
-    ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.reorgan_blk_.used_cnt_);
-    ASSERT_EQ(reorgan_blk_cnt, phy_blk_mgr.cache_stat_.phy_blk_stat().reorgan_blk_free_cnt_);
-    ASSERT_EQ(reorgan_blk_cnt, phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_);
-    ASSERT_EQ(reorgan_blk_cnt, phy_blk_mgr.cache_stat_.phy_blk_stat().get_normal_block_used_cnt());
-  } else {
-    ASSERT_EQ(reorgan_blk_cnt - normal_blk_cnt, phy_blk_mgr.blk_cnt_info_.reorgan_blk_.used_cnt_);
-    ASSERT_EQ(normal_blk_cnt, phy_blk_mgr.cache_stat_.phy_blk_stat().reorgan_blk_free_cnt_);
-    ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_);
-    ASSERT_EQ(0, phy_blk_mgr.cache_stat_.phy_blk_stat().get_normal_block_used_cnt());
+  ASSERT_LT(blk_cnt_info.data_blk_.min_cnt_, blk_cnt_info.data_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.max_cnt_, blk_cnt_info.data_blk_.hold_cnt_);
+  ASSERT_EQ(reorgan_blk_cnt, blk_cnt_info.data_blk_.used_cnt_);
+  ASSERT_EQ(reorgan_blk_cnt, cache_stat.phy_blk_stat().data_blk_used_cnt_);
+  ASSERT_EQ(reorgan_blk_cnt, blk_cnt_info.data_blk_.hold_cnt_);
+  ASSERT_EQ(reorgan_blk_cnt, cache_stat.phy_blk_stat().data_blk_cnt_);
+
+  shared_blk_used_cnt = blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_;
+  ASSERT_EQ(shared_blk_used_cnt, blk_cnt_info.shared_blk_used_cnt_);
+  ASSERT_EQ(shared_blk_used_cnt, cache_stat.phy_blk_stat().shared_blk_used_cnt_);
+  {
+    // no free reorgan_block to allocate.
+    ASSERT_EQ(OB_EAGAIN, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_REORGAN_BLK));
   }
 
   // 8. free all reorgan_block
@@ -525,36 +563,10 @@ TEST_F(TestSSPhysicalBlockManager, physical_block_manager)
     ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.free_block(reorgan_blk_idx_arr.at(i), succ_free));
     ASSERT_EQ(true, succ_free);
   }
-  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.reorgan_blk_.used_cnt_);
-  ASSERT_EQ(reorgan_blk_cnt, phy_blk_mgr.cache_stat_.phy_blk_stat().reorgan_blk_free_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr.cache_stat_.phy_blk_stat().get_normal_block_used_cnt());
-}
-
-TEST_F(TestSSPhysicalBlockManager, physical_block_manager2)
-{
-  int ret = OB_SUCCESS;
-  ObSSPhysicalBlockManager &phy_blk_mgr = SSPhyBlockMgr;
-  ASSERT_EQ(true, phy_blk_mgr.is_inited_);
-
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.scan_blocks_to_reuse());
-  int64_t ori_reusable_cnt = phy_blk_mgr.reusable_set_.size();
-
-  int64_t micro_ckpt_blk_cnt = phy_blk_mgr.blk_cnt_info_.micro_ckpt_blk_.total_cnt_;
-  int64_t block_idx = -1;
-  for (int64_t i = 0; OB_SUCC(ret) && i < micro_ckpt_blk_cnt; i++) {
-    ObSSPhysicalBlockHandle handle;
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, handle, ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK));
-    ASSERT_EQ(true, handle.is_valid());
-    handle.get_ptr()->set_sealed(100/*valid_len*/);
-    bool succ_free = false;
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.free_block(block_idx, succ_free));
-    ASSERT_EQ(false, succ_free);
-    handle.get_ptr()->update_valid_len(0);
-    handle.reset();
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.free_block(block_idx, succ_free));
-    ASSERT_EQ(true, succ_free);
-  }
+  ASSERT_EQ(0, blk_cnt_info.data_blk_.used_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().data_blk_used_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.min_cnt_, blk_cnt_info.data_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.min_cnt_, cache_stat.phy_blk_stat().data_blk_cnt_);
 }
 
 TEST_F(TestSSPhysicalBlockManager, reusable_set)
@@ -565,10 +577,10 @@ TEST_F(TestSSPhysicalBlockManager, reusable_set)
 
   ObSSPhysicalBlockHandle handle;
   int64_t block_idx = -1;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, handle, ObSSPhyBlockType::SS_NORMAL_BLK));
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
   ASSERT_GT(block_idx, 1);
   bool is_exist = false;
-  handle.get_ptr()->update_valid_len(256);
+  handle.get_ptr()->set_valid_len(256);
   hash::ObHashSet<int64_t>::iterator iter = phy_blk_mgr.reusable_set_.begin();
   for (; iter != phy_blk_mgr.reusable_set_.end() && !is_exist; iter++) {
     if (block_idx == iter->first) {
@@ -578,8 +590,8 @@ TEST_F(TestSSPhysicalBlockManager, reusable_set)
   ASSERT_EQ(false, is_exist);
 
   bool is_empty = false;
-  ASSERT_EQ(OB_SUCCESS, handle.get_ptr()->update_valid_len_by_delta(-256, is_empty, block_idx));
-  ASSERT_EQ(true, is_empty);
+  ASSERT_EQ(OB_SUCCESS, handle()->dec_valid_len(block_idx, -256));
+  ASSERT_EQ(true, handle()->is_empty());
   is_exist = false;
   iter = phy_blk_mgr.reusable_set_.begin();
   for (; iter != phy_blk_mgr.reusable_set_.end() && !is_exist; iter++) {
@@ -606,27 +618,17 @@ TEST_F(TestSSPhysicalBlockManager, resize_file_size)
 
   ObSSMicroCacheStat cache_stat;
   ObSSPhysicalBlockManager blk_mgr(cache_stat);
-  const uint64_t tenant_id = MTL_ID();
-  ASSERT_EQ(OB_SUCCESS, blk_mgr.init(tenant_id, file_size, BLOCK_SIZE));
-  int64_t max_normal_cnt = blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_;
-  int64_t max_micro_ckpt_cnt = blk_mgr.blk_cnt_info_.micro_ckpt_blk_.total_cnt_;
-  int64_t max_phy_ckpt_cnt = blk_mgr.blk_cnt_info_.phy_ckpt_blk_.total_cnt_;
+  ASSERT_EQ(OB_SUCCESS, blk_mgr.init(MTL_ID(), file_size, BLOCK_SIZE));
+  SSPhyBlockCntInfo &blk_cnt_info = blk_mgr.blk_cnt_info_;
+  int64_t max_data_cnt = blk_cnt_info.cache_limit_blk_cnt();
+  int64_t max_phy_ckpt_cnt = blk_cnt_info.phy_ckpt_blk_cnt_;
 
   ObArray<int64_t> phy_blk_idxs;
   ObArray<ObSSPhysicalBlock *> phy_blocks;
-  for (int64_t i = 0; i < max_normal_cnt; i++) {
+  for (int64_t i = 0; i < max_data_cnt; i++) {
     int64_t block_idx = -1;
     ObSSPhysicalBlockHandle phy_block_handle;
-    ASSERT_EQ(OB_SUCCESS, blk_mgr.alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_NORMAL_BLK));
-    ASSERT_EQ(true, phy_block_handle.is_valid());
-    phy_block_handle.get_ptr()->is_sealed_ = true;
-    ASSERT_EQ(OB_SUCCESS, phy_blocks.push_back(phy_block_handle.get_ptr()));
-    ASSERT_EQ(OB_SUCCESS, phy_blk_idxs.push_back(block_idx));
-  }
-  for (int64_t i = 0; i < max_micro_ckpt_cnt; ++i) {
-    int64_t block_idx = -1;
-    ObSSPhysicalBlockHandle phy_block_handle;
-    ASSERT_EQ(OB_SUCCESS, blk_mgr.alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK));
+    ASSERT_EQ(OB_SUCCESS, blk_mgr.alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
     ASSERT_EQ(true, phy_block_handle.is_valid());
     phy_block_handle.get_ptr()->is_sealed_ = true;
     ASSERT_EQ(OB_SUCCESS, phy_blocks.push_back(phy_block_handle.get_ptr()));
@@ -643,30 +645,39 @@ TEST_F(TestSSPhysicalBlockManager, resize_file_size)
   }
 
   // 2. resize file_size
+  const int64_t old_min_data_blk_cnt = blk_cnt_info.data_blk_.min_cnt_;
+  const int64_t old_max_data_blk_cnt = blk_cnt_info.data_blk_.max_cnt_;
+  const int64_t old_used_data_blk_cnt = blk_cnt_info.data_blk_.used_cnt_;
+  const int64_t old_min_micro_blk_cnt = blk_cnt_info.meta_blk_.min_cnt_;
+  const int64_t old_max_micro_blk_cnt = blk_cnt_info.meta_blk_.max_cnt_;
+  const int64_t old_micro_blk_cnt = blk_cnt_info.meta_blk_.used_cnt_;
   ASSERT_EQ(OB_SUCCESS, blk_mgr.format_ss_super_block());
   total_block_cnt += ObSSPhysicalBlockManager::PHY_BLOCK_SUB_ARR_SIZE / sizeof(ObSSPhysicalBlock);
   file_size = BLOCK_SIZE * total_block_cnt;
   ASSERT_EQ(OB_SUCCESS, blk_mgr.resize_file_size(file_size, BLOCK_SIZE));
+  ASSERT_LT(old_min_data_blk_cnt, blk_cnt_info.data_blk_.min_cnt_);
+  ASSERT_LT(old_max_data_blk_cnt, blk_cnt_info.data_blk_.max_cnt_);
+  ASSERT_EQ(old_used_data_blk_cnt, blk_cnt_info.data_blk_.used_cnt_);
+  ASSERT_LE(old_min_micro_blk_cnt, blk_cnt_info.meta_blk_.min_cnt_);
+  ASSERT_LT(old_max_micro_blk_cnt, blk_cnt_info.meta_blk_.max_cnt_);
+  ASSERT_EQ(old_micro_blk_cnt, blk_cnt_info.meta_blk_.used_cnt_);
+  ASSERT_LE(blk_cnt_info.data_blk_.min_cnt_, blk_cnt_info.data_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.min_cnt_, blk_cnt_info.meta_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.shared_blk_used_cnt_, blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.shared_blk_used_cnt_, cache_stat.phy_blk_stat().shared_blk_used_cnt_);
+  ASSERT_EQ(blk_cnt_info.shared_blk_cnt_, cache_stat.phy_blk_stat().shared_blk_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.hold_cnt_, cache_stat.phy_blk_stat().data_blk_cnt_);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.hold_cnt_, cache_stat.phy_blk_stat().meta_blk_cnt_);
 
-  int64_t new_max_normal_cnt = blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_;
-  ASSERT_LT(max_normal_cnt, new_max_normal_cnt);
-  int64_t new_max_micro_ckpt_cnt = blk_mgr.blk_cnt_info_.micro_ckpt_blk_.total_cnt_;
-  int64_t new_max_phy_ckpt_cnt = blk_mgr.blk_cnt_info_.phy_ckpt_blk_.total_cnt_;
-  ASSERT_LT(max_micro_ckpt_cnt, new_max_micro_ckpt_cnt);
+  // alloc more cache_data block after resize
+  int64_t new_max_data_cnt = blk_cnt_info.cache_limit_blk_cnt();
+  ASSERT_LT(max_data_cnt, new_max_data_cnt);
+  int64_t new_max_phy_ckpt_cnt = blk_cnt_info.phy_ckpt_blk_cnt_;
   ASSERT_LE(max_phy_ckpt_cnt, new_max_phy_ckpt_cnt);
-  for (int64_t i = max_normal_cnt; i < new_max_normal_cnt; i++) {
+  for (int64_t i = max_data_cnt; i < new_max_data_cnt; i++) {
     int64_t block_idx = -1;
     ObSSPhysicalBlockHandle phy_block_handle;
-    ASSERT_EQ(OB_SUCCESS, blk_mgr.alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_NORMAL_BLK));
-    ASSERT_EQ(true, phy_block_handle.is_valid());
-    phy_block_handle.get_ptr()->is_sealed_ = true;
-    ASSERT_EQ(OB_SUCCESS, phy_blocks.push_back(phy_block_handle.get_ptr()));
-    ASSERT_EQ(OB_SUCCESS, phy_blk_idxs.push_back(block_idx));
-  }
-  for (int64_t i = max_micro_ckpt_cnt; i < new_max_micro_ckpt_cnt; ++i) {
-    int64_t block_idx = -1;
-    ObSSPhysicalBlockHandle phy_block_handle;
-    ASSERT_EQ(OB_SUCCESS, blk_mgr.alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK));
+    ASSERT_EQ(OB_SUCCESS, blk_mgr.alloc_block(block_idx, phy_block_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
     ASSERT_EQ(true, phy_block_handle.is_valid());
     phy_block_handle.get_ptr()->is_sealed_ = true;
     ASSERT_EQ(OB_SUCCESS, phy_blocks.push_back(phy_block_handle.get_ptr()));
@@ -683,7 +694,7 @@ TEST_F(TestSSPhysicalBlockManager, resize_file_size)
   }
 
   // 3. check the original phy_block's ptr not changed
-  for (int64_t i = 0; OB_SUCC(ret) && i < max_normal_cnt + max_micro_ckpt_cnt + max_phy_ckpt_cnt; i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < max_data_cnt + max_phy_ckpt_cnt; i++) {
     const int64_t block_idx = phy_blk_idxs.at(i);
     ObSSPhysicalBlockHandle handle;
     ASSERT_EQ(OB_SUCCESS, blk_mgr.get_block_handle(block_idx, handle));
@@ -700,7 +711,6 @@ TEST_F(TestSSPhysicalBlockManager, resize_file_size)
   ASSERT_EQ(3, handle2.ptr_->ref_cnt_);
   handle2.reset();
   handle1.reset();
-  ASSERT_EQ(0, blk_mgr.blk_cnt_info_.get_normal_blk_free_cnt());
 
   // 5. free all allocated phy_blocks
   bool succ_free = false;
@@ -711,43 +721,62 @@ TEST_F(TestSSPhysicalBlockManager, resize_file_size)
     ASSERT_EQ(OB_SUCCESS, blk_mgr.free_block(block_idx, succ_free));
     ASSERT_EQ(true, succ_free);
   }
-  ASSERT_EQ(blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_, blk_mgr.blk_cnt_info_.get_normal_blk_free_cnt());
+  ASSERT_EQ(0, blk_cnt_info.data_blk_.used_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().data_blk_used_cnt_);
+  ASSERT_EQ(0, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().phy_ckpt_blk_used_cnt_);
 }
 
-/* Multiple threads allocate/free normal and ckpt blocks in parallel. */
+/* Multiple threads allocate/free blocks in parallel. */
 TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block)
 {
   int ret = OB_SUCCESS;
-  const static uint64_t FILE_SIZE = (1L << 40);
+  const static uint64_t FILE_SIZE = (1L << 32);
   const static uint32_t BLOCK_SIZE = (1 << 21);
   ObSSMicroCacheStat cache_stat;
   ObSSPhysicalBlockManager blk_mgr(cache_stat);
   const uint64_t tenant_id = MTL_ID();
   ASSERT_EQ(true, is_valid_tenant_id(tenant_id));
   ASSERT_EQ(OB_SUCCESS, blk_mgr.init(tenant_id, FILE_SIZE, BLOCK_SIZE));
+  SSPhyBlockCntInfo &blk_cnt_info = blk_mgr.blk_cnt_info_;
 
-  int64_t normal_blk_cnt = MIN(2000, blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_ / 10);
-  int64_t micro_ckpt_cnt = MIN(50, blk_mgr.blk_cnt_info_.micro_ckpt_blk_.total_cnt_ / 10);
-  int64_t phy_ckpt_cnt = blk_mgr.blk_cnt_info_.phy_ckpt_blk_.total_cnt_;
-  TestSSPhysicalBlockManager::TestSSPhyBlockMgrThread threads(&blk_mgr,
-      normal_blk_cnt,
+  const int64_t max_reorgan_blk_cnt = blk_cnt_info.reorgan_blk_cnt_ * 2;
+  const int64_t max_data_blk_cnt = blk_cnt_info.shared_blk_cnt_ * (MIN_CACHE_DATA_BLOCK_CNT_PCT + 5) / 100 - max_reorgan_blk_cnt;    // 85%
+  const int64_t max_micro_ckpt_cnt = blk_cnt_info.shared_blk_cnt_ * (MIN_MICRO_CKPT_BLOCK_CNT_PCT + 5) / 100;  // 9%
+  const int64_t data_blk_thread_num = 5;
+  const int64_t micro_ckpt_blk_thread_num = 5;
+  const int64_t phy_ckpt_blk_thread_num = 1;
+  const int64_t reorgan_blk_thread_num = 1;
+
+  int64_t data_blk_cnt = max_data_blk_cnt / data_blk_thread_num;
+  int64_t micro_ckpt_cnt = max_micro_ckpt_cnt / micro_ckpt_blk_thread_num;
+  int64_t phy_ckpt_cnt = blk_cnt_info.phy_ckpt_blk_cnt_ / phy_ckpt_blk_thread_num;
+  int64_t reorgan_blk_cnt = max_reorgan_blk_cnt / reorgan_blk_thread_num;
+  TestSSPhysicalBlockManager::TestSSPhyBlockMgrThread threads(ObTenantEnv::get_tenant(),
+      &blk_mgr,
+      data_blk_cnt,
       phy_ckpt_cnt,
       micro_ckpt_cnt,
+      max_reorgan_blk_cnt,
       TestSSPhyBlockMgrThread::TestParallelType::TEST_PARALLEL_ALLOCATE_BLOCK);
-  threads.set_thread_count(11);
+  threads.set_thread_count(12);
   threads.start();
   threads.wait();
-
-  int64_t allocated_normal_cnt = blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_;
-  int64_t allocated_micro_ckpt_cnt = blk_mgr.blk_cnt_info_.micro_ckpt_blk_.used_cnt_;
-  int64_t allocated_phy_ckpt_cnt = blk_mgr.blk_cnt_info_.phy_ckpt_blk_.used_cnt_;
-  int64_t expected_normal_cnt = (normal_blk_cnt - normal_blk_cnt / 2) * 5;
-  int64_t expected_micro_ckpt_cnt = (micro_ckpt_cnt - micro_ckpt_cnt / 2) * 5;
-  int64_t expected_phy_ckpt_cnt = phy_ckpt_cnt;
-  ASSERT_EQ(expected_normal_cnt, allocated_normal_cnt);
-  ASSERT_EQ(expected_micro_ckpt_cnt, allocated_micro_ckpt_cnt);
-  ASSERT_EQ(expected_phy_ckpt_cnt, allocated_phy_ckpt_cnt);
   ASSERT_EQ(0, threads.get_fail_cnt());
+
+  ASSERT_EQ(0, blk_cnt_info.data_blk_.used_cnt_);
+  ASSERT_EQ(0, blk_cnt_info.meta_blk_.used_cnt_);
+  ASSERT_EQ(0, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.min_cnt_, blk_cnt_info.data_blk_.hold_cnt_);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.min_cnt_, blk_cnt_info.meta_blk_.hold_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().data_blk_used_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().meta_blk_used_cnt_);
+  ASSERT_EQ(0, cache_stat.phy_blk_stat().phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(blk_cnt_info.data_blk_.hold_cnt_, cache_stat.phy_blk_stat().data_blk_cnt_);
+  ASSERT_EQ(blk_cnt_info.meta_blk_.hold_cnt_, cache_stat.phy_blk_stat().meta_blk_cnt_);
+  const int64_t shared_blk_used_cnt = blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_;
+  ASSERT_EQ(shared_blk_used_cnt, blk_cnt_info.shared_blk_used_cnt_);
+  ASSERT_EQ(shared_blk_used_cnt, cache_stat.phy_blk_stat().shared_blk_used_cnt_);
 }
 
 /* Multiple threads allocate/free normal blocks in parallel for multiple rounds and check reuse version. */
@@ -763,9 +792,11 @@ TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block_and_check_reuse_
   ASSERT_EQ(OB_SUCCESS, blk_mgr.init(tenant_id, FILE_SIZE, BLOCK_SIZE));
 
   const int32_t thread_cnt = 2;
-  int64_t normal_blk_cnt = MIN(2000, blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_ / thread_cnt);
+  int64_t data_blk_cnt = blk_mgr.blk_cnt_info_.cache_limit_blk_cnt() / thread_cnt;
+  data_blk_cnt = MIN(2000, data_blk_cnt);
   int64_t phy_ckpt_blk_cnt = 0;
   int64_t micro_ckpt_blk_cnt = 0;
+  int64_t reorgan_blk_cnt = 0;
   int64_t ori_total_reuse_version = 0;
   for (int64_t i = 2; OB_SUCC(ret) && i < blk_mgr.blk_cnt_info_.total_blk_cnt_; i++) {
     ObSSPhysicalBlockHandle handle;
@@ -774,18 +805,20 @@ TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block_and_check_reuse_
     ++ori_total_reuse_version;
   }
 
-  TestSSPhysicalBlockManager::TestSSPhyBlockMgrThread threads(&blk_mgr,
-      normal_blk_cnt,
+  TestSSPhysicalBlockManager::TestSSPhyBlockMgrThread threads(ObTenantEnv::get_tenant(),
+      &blk_mgr,
+      data_blk_cnt,
       phy_ckpt_blk_cnt,
       micro_ckpt_blk_cnt,
+      reorgan_blk_cnt,
       TestSSPhyBlockMgrThread::TestParallelType::TEST_PARALLEL_ALLOCATE_BLOCK_AND_CHECK_REUSE_VERSION);
   threads.set_thread_count(thread_cnt);
   threads.start();
   threads.wait();
 
   int64_t block_idx = -1;
-  const int64_t alloc_cnt = blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_;
-  ASSERT_EQ(0, alloc_cnt);
+  const int64_t data_blk_used_cnt = blk_mgr.blk_cnt_info_.data_blk_.used_cnt_;
+  ASSERT_EQ(0, data_blk_used_cnt);
   int64_t total_reuse_version = 0;
   for (int64_t i = 2; OB_SUCC(ret) && i < blk_mgr.blk_cnt_info_.total_blk_cnt_; i++) {
     ObSSPhysicalBlockHandle handle;
@@ -793,34 +826,37 @@ TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block_and_check_reuse_
     total_reuse_version += handle.get_ptr()->reuse_version_;
   }
   ASSERT_EQ(0, threads.get_fail_cnt());
-  ASSERT_EQ(normal_blk_cnt * 10 * thread_cnt, total_reuse_version - ori_total_reuse_version);
+  ASSERT_EQ(data_blk_cnt * 10 * thread_cnt, total_reuse_version - ori_total_reuse_version);
 }
 
-// Can't write super_block
-// /* Multiple threads allocate normal blocks and resize file size in parallel. */
-// TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block_and_resize)
-// {
-//   int ret = OB_SUCCESS;
-//   ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
-//   const int64_t ori_file_size = phy_blk_mgr.total_file_size_;
+/* Multiple threads allocate cache_data_blocks and resize file size in parallel. */
+TEST_F(TestSSPhysicalBlockManager, test_parallel_allocate_block_and_resize)
+{
+  int ret = OB_SUCCESS;
+  ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
+  const int64_t ori_file_size = phy_blk_mgr.total_file_size_;
 
-//   int64_t normal_blk_cnt = MIN(2000, phy_blk_mgr.blk_cnt_info_.normal_blk_cnt_ / 10);
-//   int64_t internal_blk_cnt = MIN(50, phy_blk_mgr.blk_cnt_info_.ckpt_blk_cnt_ / 10);
-//   TestSSPhysicalBlockManager::TestSSPhyBlockMgrThread threads(&phy_blk_mgr,
-//       normal_blk_cnt,
-//       internal_blk_cnt,
-//       TestSSPhyBlockMgrThread::TestParallelType::TEST_PARALLEL_ALLOCATE_BLOCK_AND_RESIZE);
-//   threads.set_thread_count(10);
-//   threads.start();
-//   threads.wait();
+  const int64_t thread_cnt = 10;
+  int64_t data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt() / thread_cnt;
+  data_blk_cnt = MIN(2000, data_blk_cnt);
+  int64_t phy_ckpt_blk_cnt = 0;
+  int64_t micro_ckpt_blk_cnt = 0;
+  int64_t reorgan_blk_cnt = 0;
+  TestSSPhysicalBlockManager::TestSSPhyBlockMgrThread threads(ObTenantEnv::get_tenant(),
+      &phy_blk_mgr,
+      data_blk_cnt,
+      phy_ckpt_blk_cnt,
+      micro_ckpt_blk_cnt,
+      reorgan_blk_cnt,
+      TestSSPhyBlockMgrThread::TestParallelType::TEST_PARALLEL_ALLOCATE_BLOCK_AND_RESIZE);
+  threads.set_thread_count(thread_cnt);
+  threads.start();
+  threads.wait();
 
-//   const int64_t alloc_cnt = phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_;
-//   const int64_t file_size = phy_blk_mgr.total_file_size_;
-//   ASSERT_EQ(normal_blk_cnt * 5, alloc_cnt);
-//   ASSERT_EQ(ori_file_size * 5, file_size);
-//   ASSERT_EQ(0, threads.get_fail_cnt());
-// }
-
+  ASSERT_EQ(data_blk_cnt * 5, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
+  ASSERT_EQ(ori_file_size * 5, phy_blk_mgr.total_file_size_);
+  ASSERT_EQ(0, threads.get_fail_cnt());
+}
 
 /*
   Test two scenarios:
@@ -870,6 +906,54 @@ TEST_F(TestSSPhysicalBlockManager, test_double_write_super_blk)
   check_super_block_identical(phy_blk_mgr.super_block_, new_super_blk);
 
   ob_free_align(buf);
+}
+
+TEST_F(TestSSPhysicalBlockManager, test_scan_reorgan_blk)
+{
+  int ret = OB_SUCCESS;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSReleaseCacheTask &arc_task = micro_cache->task_runner_.release_cache_task_;
+  arc_task.is_inited_ = false;
+
+  const int64_t block_size = phy_blk_mgr.get_block_size();
+  int64_t total_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
+  ASSERT_LT(10, total_data_blk_cnt);
+  int64_t block_idx = -1;
+  ObSSPhysicalBlockHandle phy_blk_handle;
+  ObArray<int64_t> normal_blk_idx_arr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_data_blk_cnt; i++) {
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.alloc_block(block_idx, phy_blk_handle, ObSSPhyBlockType::SS_CACHE_DATA_BLK));
+    ASSERT_EQ(OB_SUCCESS, normal_blk_idx_arr.push_back(block_idx));
+    ASSERT_EQ(true, phy_blk_handle.is_valid());
+
+    phy_blk_handle()->is_sealed_ = true;
+    phy_blk_handle()->is_free_ = false;
+    phy_blk_handle()->block_type_ = static_cast<int64_t>(ObSSPhyBlockType::SS_CACHE_DATA_BLK);
+    phy_blk_handle()->valid_len_ = phy_blk_mgr.get_block_size();
+    ASSERT_EQ(false, phy_blk_handle()->can_reorganize(block_size));
+  }
+
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.scan_sparse_blocks());
+  ASSERT_EQ(0, phy_blk_mgr.get_sparse_block_cnt());
+
+  const int64_t dec_len = -1 * phy_blk_mgr.get_block_size() * 0.2;
+  for (int64_t i = 0; i < 10; i++) {
+    const int64_t block_idx = normal_blk_idx_arr[i];
+    ObSSPhysicalBlockHandle phy_blk_handle;
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.get_block_handle(block_idx, phy_blk_handle));
+    ASSERT_EQ(OB_SUCCESS, phy_blk_handle()->dec_valid_len(block_idx, dec_len));
+  }
+  ASSERT_EQ(10, phy_blk_mgr.get_sparse_block_cnt());
+
+  for (int64_t i = 0; i < 10; ++i) {
+    const int64_t block_idx = normal_blk_idx_arr[i];
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.delete_sparse_block(block_idx));
+  }
+  ASSERT_EQ(0, phy_blk_mgr.get_sparse_block_cnt());
+
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.scan_sparse_blocks());
+  ASSERT_EQ(10, phy_blk_mgr.get_sparse_block_cnt());
 }
 
 }  // namespace storage

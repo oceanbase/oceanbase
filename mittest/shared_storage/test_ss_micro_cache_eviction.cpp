@@ -182,7 +182,7 @@ TEST_F(TestSSMicroCacheEviction, test_delete_ghost_micro)
   }
 
   // 3. wait for all the B1 micro_meta being deleted
-  ASSERT_TRUE(arc_info.update_arc_work_limit(0));
+  arc_info.do_update_arc_limit(0, /* need_update_limit */ false); // set work_limit = 0
   arc_task.is_inited_ = true;
 
   const int64_t start_us = ObTimeUtility::current_time();
@@ -199,7 +199,7 @@ TEST_F(TestSSMicroCacheEviction, test_delete_ghost_micro)
 
 /*
   step1: write cache_file_size * 50% data to T1, then read this part of data again and transfer it to T2.
-  step2: write cache_file_size until cache reaches phy_block limit(95%)
+  step2: write cache_file_size until usage of cache_data_block reach limit.
   step3: adjust arc_limit to 0, and the background thread clears all micro_meta which is persisted.
   step4: check the number of micro_cnt, total_micro_cnt <= bg_mem_blk.max_micro_cnt + fg_mem_blk.max_micro_cnt,
          and all used phy_blk is added into reusable_set.
@@ -230,8 +230,8 @@ TEST_F(TestSSMicroCacheEviction, test_delete_all_persisted_micro)
   ASSERT_NE(nullptr, read_buf);
   MEMSET(data_buf, 'a', micro_size);
 
-  const int64_t normal_blk_cnt = phy_blk_mgr.blk_cnt_info_.get_normal_blk_cnt();
-  const int64_t macro_block_cnt1 = normal_blk_cnt / 2;
+  const int64_t data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
+  const int64_t macro_block_cnt1 = data_blk_cnt / 2;
   for (int64_t i = 0; i < macro_block_cnt1; ++i) {
     const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(i + 1);
     for (int64_t j = 0; j < micro_cnt; ++j) {
@@ -250,22 +250,21 @@ TEST_F(TestSSMicroCacheEviction, test_delete_all_persisted_micro)
   }
 
   // Step 2
-  const int64_t normal_blk_limit_cnt = normal_blk_cnt * SS_CACHE_SPACE_USAGE_MAX_PCT / 100 + 1;
-  const int64_t macro_block_cnt2 = normal_blk_limit_cnt - macro_block_cnt1 + 1;
+  const int64_t data_blk_limit_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
+  const int64_t macro_block_cnt2 = data_blk_limit_cnt - macro_block_cnt1 + 1;
   for (int64_t i = 0; i < macro_block_cnt2; ++i) {
     const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(i + macro_block_cnt1 + 1);
     for (int64_t j = 0; j < micro_cnt; ++j) {
       const int32_t offset = payload_offset + j * micro_size;
       const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
-      // ignore no free normal_phy_block error
+      // ignore no free cache_data_phy_block error
       micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size, ObSSMicroCacheAccessType::COMMON_IO_TYPE);
     }
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   }
-  ASSERT_TRUE(phy_blk_mgr.reach_block_limit(true/*is_fg_io*/));
 
   // Step 3
-  ASSERT_TRUE(arc_info.update_arc_work_limit(0));
+  arc_info.do_update_arc_limit(0, /* need_update_limit */false); // set work_limit = 0
   arc_task.is_inited_ = true;
 
   const int64_t start_us = ObTimeUtility::current_time();
@@ -306,11 +305,8 @@ TEST_F(TestSSMicroCacheEviction, test_delete_all_persisted_micro)
   total_unpersisted_micro_cnt = cal_unpersisted_micro_cnt();
   ASSERT_EQ(total_unpersisted_micro_cnt, micro_cache->cache_stat_.micro_stat().valid_micro_cnt_);
   ASSERT_LE(micro_cache->cache_stat_.micro_stat().valid_micro_cnt_, micro_cnt * 2);
-  const int64_t blk_used_cnt =
-      phy_blk_mgr.blk_cnt_info_.normal_blk_.used_cnt_ + phy_blk_mgr.blk_cnt_info_.reorgan_blk_.used_cnt_;
-  ASSERT_EQ(phy_blk_mgr.reusable_set_.size(), blk_used_cnt);
+  ASSERT_EQ(phy_blk_mgr.reusable_set_.size(), phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
 }
-
 } // namespace storage
 } // namespace oceanbase
 

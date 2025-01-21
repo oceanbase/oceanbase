@@ -87,7 +87,8 @@ public:
 
 MacroBlockId TestSSCommonUtil::gen_macro_block_id(const int64_t second_id)
 {
-  MacroBlockId macro_id(0, second_id, 0);
+  MacroBlockId macro_id;
+  macro_id.second_id_ = second_id;
   macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_DATA_MACRO);
   return macro_id;

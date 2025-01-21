@@ -365,34 +365,21 @@ int MacroBlockId::memcpy_deserialize(const char* buf, const int64_t data_len, in
  */
 bool is_read_through_storage_object_type(const ObStorageObjectType type)
 {
-  bool is_read_through = false;
+  bool read_through = false;
   switch (type) {
-    case ObStorageObjectType::SHARED_MAJOR_TABLET_META:
-    case ObStorageObjectType::SHARED_TABLET_ID:
-    case ObStorageObjectType::COMPACTION_SERVER:
-    case ObStorageObjectType::LS_COMPACTION_STATUS:
-    case ObStorageObjectType::LS_COMPACTION_LIST:
-    case ObStorageObjectType::LS_SVR_COMPACTION_STATUS:
-    case ObStorageObjectType::COMPACTION_REPORT:
-    case ObStorageObjectType::SHARED_MAJOR_GC_INFO:
-    case ObStorageObjectType::SHARED_MAJOR_META_LIST:
-    case ObStorageObjectType::TABLET_COMPACTION_STATUS:
-    case ObStorageObjectType::MAJOR_PREWARM_DATA:
-    case ObStorageObjectType::MAJOR_PREWARM_DATA_INDEX:
-    case ObStorageObjectType::MAJOR_PREWARM_META:
-    case ObStorageObjectType::MAJOR_PREWARM_META_INDEX:
-    case ObStorageObjectType::IS_SHARED_TABLET_DELETED:
-    case ObStorageObjectType::IS_SHARED_TENANT_DELETED:
-    case ObStorageObjectType::CHECKSUM_ERROR_DUMP_MACRO: {
-      is_read_through = true;
-      break;
+#define STORAGE_OBJECT_TYPE_INFO(obj_id, obj_str, is_pin_local, is_read_through, is_valid, to_local_path_format, to_remote_path_format, get_parent_dir, create_parent_dir) \
+    case ObStorageObjectType::obj_id: { \
+      read_through = is_read_through; \
+      break; \
     }
+    OB_STORAGE_OBJECT_TYPE_LIST
+#undef STORAGE_OBJECT_TYPE_INFO
     default: {
-      is_read_through = false;
+      read_through = false;
       break;
     }
   }
-  return is_read_through;
+  return read_through;
 }
 
 // judge object type is only store in remote object storage
@@ -413,20 +400,13 @@ bool is_pin_storage_object_type(const ObStorageObjectType type)
 {
   bool is_pin = false;
   switch (type) {
-    case ObStorageObjectType::PRIVATE_TABLET_META:
-    case ObStorageObjectType::PRIVATE_TABLET_CURRENT_VERSION:
-    case ObStorageObjectType::LS_META:
-    case ObStorageObjectType::LS_TRANSFER_TABLET_ID_ARRAY:
-    case ObStorageObjectType::LS_ACTIVE_TABLET_ARRAY:
-    case ObStorageObjectType::LS_PENDING_FREE_TABLET_ARRAY:
-    case ObStorageObjectType::LS_DUP_TABLE_META:
-    case ObStorageObjectType::SERVER_META:
-    case ObStorageObjectType::TENANT_DISK_SPACE_META:
-    case ObStorageObjectType::TENANT_SUPER_BLOCK:
-    case ObStorageObjectType::TENANT_UNIT_META: {
-      is_pin = true;
-      break;
+#define STORAGE_OBJECT_TYPE_INFO(obj_id, obj_str, is_pin_local, is_read_through, is_valid, to_local_path_format, to_remote_path_format, get_parent_dir, create_parent_dir) \
+    case ObStorageObjectType::obj_id: { \
+      is_pin = is_pin_local; \
+      break; \
     }
+    OB_STORAGE_OBJECT_TYPE_LIST
+#undef STORAGE_OBJECT_TYPE_INFO
     default: {
       is_pin = false;
       break;
