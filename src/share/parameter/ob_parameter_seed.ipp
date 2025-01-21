@@ -1069,6 +1069,10 @@ DEF_INT(_fast_commit_callback_count, OB_CLUSTER_PARAMETER, "10000", "[0,)"
         "trigger max callback count allowed within transaction for durable callback checkpoint, 0 represents not allow durable callback"
         "Range: [0, not limited callback count",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_trx_max_log_cb_limit, OB_TENANT_PARAMETER, "16", "[0,)",
+        "Control the upper limit of TxLogCbs involved in the participant to manage the maximum "
+        "concurrency of  submiting logs in a transaction",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_minor_compaction_amplification_factor, OB_TENANT_PARAMETER, "0", "[0,100]",
         "thre L1 compaction write amplification factor, 0 means default 25, Range: [0,100] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

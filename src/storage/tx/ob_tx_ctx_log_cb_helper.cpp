@@ -37,12 +37,7 @@ int ObPartTransCtx::init_log_cbs_(const share::ObLSID &ls_id, const ObTransID &t
     ObSpinLockGuard guard(log_cb_lock_);
     for (int i = 0; i < ObTxLogCbGroup::MAX_LOG_CB_COUNT_IN_GROUP; i++) {
       if (i != ObTxLogCbGroup::FREEZE_LOG_CB_INDEX) {
-        TRANS_LOG(DEBUG,
-                  "init reserved log cb into free_list",
-                  K(ret),
-                  K(ls_id),
-                  K(tx_id),
-                  K(i),
+        TRANS_LOG(DEBUG, "init reserved log cb into free_list", K(ret), K(ls_id), K(tx_id), K(i),
                   KPC(reserve_log_cb_group_.get_log_cb_by_index(i)));
         free_cbs_.add_last(reserve_log_cb_group_.get_log_cb_by_index(i));
       }
@@ -124,6 +119,7 @@ int ObPartTransCtx::get_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_cb)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
 
   if (OB_NOT_NULL(log_cb)) {
     ret = OB_INVALID_ARGUMENT;
@@ -151,11 +147,20 @@ int ObPartTransCtx::get_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_cb)
       ObSpinLockGuard guard(log_cb_lock_);
       if (free_cbs_.is_empty()) {
         const int64_t busy_cbs_cnt = busy_cbs_.get_size();
-        if (OB_TMP_FAIL(extend_log_cb_group_())) {
-          TRANS_LOG(WARN, "extend a log cb group  failed", K(ret), K(tmp_ret), K(trans_id_), K(ls_id_));
-        } else {
-          TRANS_LOG(INFO, "extend log cb group success", K(ret), K(trans_id_), K(ls_id_),
-                    K(busy_cbs_cnt), K(busy_cbs_.get_size()), K(free_cbs_.get_size()));
+        const int64_t trx_max_log_cb_limit =
+            tenant_config.is_valid() ? tenant_config->_trx_max_log_cb_limit : 16;
+        if (busy_cbs_cnt < trx_max_log_cb_limit || trx_max_log_cb_limit <= 0) {
+          if (OB_TMP_FAIL(extend_log_cb_group_())) {
+            TRANS_LOG(WARN, "extend a log cb group  failed", K(ret), K(tmp_ret), K(trans_id_),
+                      K(ls_id_));
+          } else {
+            TRANS_LOG(INFO, "extend log cb group success", K(ret), K(tmp_ret), K(trans_id_),
+                      K(ls_id_), K(busy_cbs_cnt), K(busy_cbs_.get_size()), K(free_cbs_.get_size()));
+          }
+        } else if (EXECUTE_COUNT_PER_SEC(10)) {
+          TRANS_LOG(INFO, "The configured limit of log_cbs has been reached", K(ret), K(tmp_ret),
+                    K(trans_id_), K(ls_id_), K(busy_cbs_cnt), K(trx_max_log_cb_limit),
+                    K(free_cbs_.get_size()));
         }
       }
 
