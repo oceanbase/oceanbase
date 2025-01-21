@@ -63,8 +63,7 @@ deleting plan x                  |
 void ObCacheObjAtomicOp::operator()(ObjKV &entry)
 {
   if (NULL != entry.second) {
-    int64_t ref_cnt = entry.second->inc_ref_count(ref_handle_);
-    if (ref_cnt > 1) {
+    if (entry.second->try_inc_ref_count(ref_handle_)) {
       cache_obj_ = entry.second;
     } else {
       cache_obj_ = nullptr;
