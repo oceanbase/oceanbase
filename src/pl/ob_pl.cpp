@@ -3263,7 +3263,9 @@ int ObPLExecState::final(int ret)
     }
   }
 
-  if (OB_FAIL(ret) && func_.get_ret_type().is_composite_type() && result_.is_ext()) {
+  if (OB_FAIL(ret) &&
+     ((func_.get_ret_type().is_composite_type() && result_.is_ext()) ||
+      (func_.get_ret_type().is_obj_type() && result_.need_deep_copy()))) {
     tmp_ret = ObUserDefinedType::destruct_objparam(*get_allocator(), result_, ctx_.exec_ctx_->get_my_session(), true);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("failed to destruct pl object", K(tmp_ret));
