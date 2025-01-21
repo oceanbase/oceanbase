@@ -111,9 +111,21 @@ int calc_char_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
   ObSqlString str_buf;
   ObDatum *child_res = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  const ObCharsetInfo *cs = NULL;
+  int64_t mb_minlen = 0;
+  char align_buf[4] = {0};
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
+  } else if (OB_ISNULL(cs = ObCharset::get_charset(expr.datum_meta_.cs_type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect collation type", K(ret), K(expr.datum_meta_.cs_type_));
+  } else {
+    mb_minlen = cs->mbminlen;
+    if (OB_UNLIKELY(mb_minlen > 4)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected mb min len", K(ret), K(mb_minlen));
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_-1; ++i) {
     if (OB_FAIL(expr.args_[i]->eval(ctx, child_res))) {
@@ -138,44 +150,32 @@ int calc_char_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
         buf[0] = static_cast<char>(int32_val);
         append_len = 1;
       }
-      if (OB_FAIL(str_buf.append(buf, append_len))) {
+      if (mb_minlen > 0 && append_len % mb_minlen != 0
+          && OB_FAIL(str_buf.append(align_buf, mb_minlen - append_len % mb_minlen))) {
+        LOG_WARN("fail to append align character", K(ret));
+      } else if (OB_FAIL(str_buf.append(buf, append_len))) {
         LOG_WARN("fail to append convert result", K(ret));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    
-    //
-    // convert utf8 to dest collation
-    //
-    ObString out; 
     const ObString in_str(str_buf.length(), str_buf.ptr());
-    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-    ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
     char *res_str = NULL;
-    if (OB_FAIL(ObExprUtil::convert_string_collation(in_str, CS_TYPE_UTF8MB4_BIN, out, 
-                                                     expr.datum_meta_.cs_type_, tmp_alloc))) {
-      LOG_WARN("failed to convert string from utf8 to other collation", K(ret), 
-                                                                        K(expr.datum_meta_.cs_type_));
-    } else if (OB_ISNULL(res_str = expr.get_str_res_mem(ctx, out.length() + 1))) {
+    int64_t res_len = in_str.length();
+    if (OB_ISNULL(res_str = expr.get_str_res_mem(ctx, res_len + 1))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("fail to allocate memory", K(out.length()), K(ret));
+      LOG_ERROR("fail to allocate memory", K(res_len), K(ret));
     } else {
-      int64_t res_len = out.length();
-      if (NULL != str_buf.ptr()) {
-        MEMCPY(res_str, out.ptr(), res_len);
+      if (NULL != in_str.ptr()) {
+        MEMCPY(res_str, in_str.ptr(), res_len);
       }
       res_str[res_len] = '\0';
       bool is_null = false;
       ObString checked_res_str;
-      ObSQLMode sql_mode = 0;
-      ObSolidifiedVarsGetter helper(expr, ctx, session);
-      if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-        LOG_WARN("failed to get local sql mode", K(ret));
-      } else if (OB_FAIL(ObSQLUtils::check_well_formed_str(ObString(res_len, res_str),
+      if (OB_FAIL(ObSQLUtils::check_well_formed_str(ObString(res_len, res_str),
                                                     expr.datum_meta_.cs_type_,
                                                     checked_res_str, is_null,
-                                                    is_strict_mode(sql_mode)))) {
+                                                    true, false))) {
         LOG_WARN("check_well_formed_str failed", K(ret), K(res_str),
                   K(expr.datum_meta_));
       } else if (is_null) {
