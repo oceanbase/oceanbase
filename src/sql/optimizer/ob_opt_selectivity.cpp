@@ -274,7 +274,7 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
                          column_id == OB_HIDDEN_PK_INCREMENT_COLUMN_ID;
   int64_t global_ndv = 0;
   int64_t num_null = 0;
-  if (use_default_stat()) {
+  if (use_default_stat() || stat_parts_.empty()) {
     col_meta.set_default_meta(rows_);
   } else if (OB_ISNULL(ctx.get_opt_stat_manager()) || OB_ISNULL(ctx.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
@@ -287,7 +287,7 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
                                                                  rows_,
                                                                  scale_ratio_,
                                                                  stat))) {
-    LOG_WARN("failed to get column stats", K(ret));
+    LOG_WARN("failed to get column stats", K(ret), KPC(this));
   } else if (OB_FAIL(refine_column_stat(stat, rows_, col_meta))) {
     LOG_WARN("failed to refine column stat", K(ret));
   }

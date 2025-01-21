@@ -315,16 +315,7 @@ int ObOptimizerTraceImpl::append_lower(const char* msg)
 
 int ObOptimizerTraceImpl::append_ptr(const void *ptr)
 {
-  int ret = OB_SUCCESS;
-  char buf[32] = {0};
-  int64_t buf_len = 32;
-  buf_len = snprintf(buf, buf_len, "ptr:%p", ptr);
-  if (buf_len > 0) {
-    if (OB_FAIL(log_handle_.append(buf, buf_len))) {
-      LOG_WARN("failed to append value", K(ret));
-    }
-  }
-  return ret;
+  return append_format<32>("ptr:%p", ptr);
 }
 
 int ObOptimizerTraceImpl::append()
@@ -362,58 +353,22 @@ int ObOptimizerTraceImpl::append(const common::ObString &msg)
 
 int ObOptimizerTraceImpl::append(const int64_t &value)
 {
-  int ret = OB_SUCCESS;
-  char buf[32] = {0};
-  int64_t buf_len = 32;
-  buf_len = snprintf(buf, buf_len, "%ld", value);
-  if (buf_len > 0) {
-    if (OB_FAIL(log_handle_.append(buf, buf_len))) {
-      LOG_WARN("failed to append value", K(ret));
-    }
-  }
-  return ret;
+  return append_format<32>("%ld", value);
 }
 
 int ObOptimizerTraceImpl::append(const uint64_t &value)
 {
-  int ret = OB_SUCCESS;
-  char buf[32] = {0};
-  int64_t buf_len = 32;
-  buf_len = snprintf(buf, buf_len, "%lu", value);
-  if (buf_len > 0) {
-    if (OB_FAIL(log_handle_.append(buf, buf_len))) {
-      LOG_WARN("failed to append value", K(ret));
-    }
-  }
-  return ret;
+  return append_format<32>("%lu", value);
 }
 
 int ObOptimizerTraceImpl::append(const uint32_t &value)
 {
-  int ret = OB_SUCCESS;
-  char buf[32] = {0};
-  int64_t buf_len = 32;
-  buf_len = snprintf(buf, buf_len, "%u", value);
-  if (buf_len > 0) {
-    if (OB_FAIL(log_handle_.append(buf, buf_len))) {
-      LOG_WARN("failed to append value", K(ret));
-    }
-  }
-  return ret;
+  return append_format<32>("%u", value);
 }
 
 int ObOptimizerTraceImpl::append(const double & value)
 {
-  int ret = OB_SUCCESS;
-  char buf[32] = {0};
-  int64_t buf_len = 32;
-  buf_len = snprintf(buf, buf_len, "%f", value);
-  if (buf_len > 0) {
-    if (OB_FAIL(log_handle_.append(buf, buf_len))) {
-      LOG_WARN("failed to append value", K(ret));
-    }
-  }
-  return ret;
+  return append_format<32>("%f", value);
 }
 
 int ObOptimizerTraceImpl::append(const ObObj& value)
@@ -929,6 +884,7 @@ int ObOptimizerTraceImpl::append(const ObBatchEstTasks& task)
   const ObIArray<obrpc::ObEstPartResElement> &res = task.res_.index_param_res_;
   int64_t cnt = MIN(params.count(), res.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < cnt; i ++) {
+    const ObIArray<ObEstRowCountRecord> &est_records = res.at(i).est_records_;
     if (i != 0 && OB_FAIL(new_line())) {
       LOG_WARN("failed to append", K(ret));
     } else if (OB_FAIL(append("( index", params.at(i).index_id_))) {
@@ -946,6 +902,22 @@ int ObOptimizerTraceImpl::append(const ObBatchEstTasks& task)
     } else if (!res.at(i).reliable_ && OB_FAIL(append(" [NOT RELIABLE]"))) {
       LOG_WARN("failed to append", K(ret));
     }
+    increase_section();
+    for (int64_t j = 0; OB_SUCC(ret) && j < est_records.count(); j ++) {
+      const ObEstRowCountRecord &record = est_records.at(j);
+      if (OB_FAIL(new_line())) {
+        LOG_WARN("failed to append", K(ret));
+      } else if (OB_FAIL(append("table type:", record.table_type_))) {
+        LOG_WARN("failed to append", K(ret));
+      } else if (OB_FAIL(append(", version:", record.version_range_))) {
+        LOG_WARN("failed to append", K(ret));
+      } else if (OB_FAIL(append(", logical rows:", record.logical_row_count_))) {
+        LOG_WARN("failed to append", K(ret));
+      } else if (OB_FAIL(append(", physical rows:", record.physical_row_count_))) {
+        LOG_WARN("failed to append", K(ret));
+      }
+    }
+    decrease_section();
   }
   return ret;
 }
@@ -953,6 +925,14 @@ int ObOptimizerTraceImpl::append(const ObBatchEstTasks& task)
 int ObOptimizerTraceImpl::append(const ObTabletID& id)
 {
   return append(id.id());
+}
+
+int ObOptimizerTraceImpl::append(const ObVersionRange& version_range)
+{
+  return append_format<128>("%ld-%ld-%ld",
+                            version_range.base_version_,
+                            version_range.multi_version_start_,
+                            version_range.snapshot_version_);
 }
 
 template <>

@@ -28,6 +28,7 @@ namespace common {
 class ObObj;
 class ObDSResultItem;
 class ObTabletID;
+struct ObVersionRange;
 }
 using namespace common;
 namespace sql
@@ -311,6 +312,9 @@ public:
 ////print basic type
 /***********************************************/
   int new_line();
+
+  template<int64_t BUF_LEN, typename ...ARGS>
+  int append_format(const char *format, const ARGS&... args);
   int append_lower(const char* msg);
   int append_ptr(const void *ptr);
   int append();
@@ -344,6 +348,7 @@ public:
   int append(const ObCandiTabletLoc& candi_tablet_loc);
   int append(const ObBatchEstTasks& task);
   int append(const ObTabletID& id);
+  int append(const ObVersionRange& version_range);
 /***********************************************/
 ////print template type
 /***********************************************/
@@ -509,7 +514,22 @@ int ObOptimizerTraceImpl::append_title(const ARGS&... args)
   return ret;
 }
 
+template<int64_t BUF_LEN, typename ...ARGS>
+int ObOptimizerTraceImpl::append_format(const char *format, const ARGS&... args)
+{
+  int ret = OB_SUCCESS;
+  char buf[BUF_LEN] = {0};
+  int64_t print_len = snprintf(buf, BUF_LEN, format, args...);
+  if (print_len > 0) {
+    if (OB_FAIL(log_handle_.append(buf, std::min(print_len, BUF_LEN)))) {
+      COMMON_LOG(WARN, "failed to append value", K(ret));
+    }
+  }
+  return ret;
 }
+
+}
+
 }
 
 #endif /* _OB_OPTIMIZER_TRACE_IMPL_H */

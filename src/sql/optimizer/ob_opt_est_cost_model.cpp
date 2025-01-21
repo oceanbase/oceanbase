@@ -69,6 +69,7 @@ int ObCostTableScanInfo::assign(const ObCostTableScanInfo &est_cost_info)
     rescan_left_server_list_ = est_cost_info.rescan_left_server_list_;
     rescan_server_list_ = est_cost_info.rescan_server_list_;
     limit_rows_ = est_cost_info.limit_rows_;
+    total_range_cnt_ = est_cost_info.total_range_cnt_;
     // no need to copy table scan param
   }
   return ret;
@@ -1686,7 +1687,7 @@ int ObOptEstCostModel::range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_i
     }
     // CPU代价，包括get_next_row调用的代价和谓词代价
     double range_cost = 0;
-    double range_count = est_cost_info.ranges_.count();
+    double range_count = est_cost_info.total_range_cnt_;
     if (is_get) {
       if (est_cost_info.at_most_one_range_) {
         range_count = 1;

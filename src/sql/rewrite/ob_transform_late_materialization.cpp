@@ -533,7 +533,7 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
   ObTryTransHelper try_trans_helper;
   cost_based_trans_tried_ = true;
   trans_happened = false;
-  STOP_OPT_TRACE;
+  BEGIN_OPT_TRACE_EVA_COST;
   if (OB_ISNULL(ctx_) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("context is null", K(ret), K(ctx_), K(stmt));
@@ -572,7 +572,7 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
     }
     ctx_->in_accept_transform_ = false;
   }
-  RESUME_OPT_TRACE;
+  END_OPT_TRACE_EVA_COST;
 
   if (OB_FAIL(ret)) {
   } else if (!trans_happened) {

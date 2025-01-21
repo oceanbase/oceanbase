@@ -72,9 +72,32 @@ int ObJoinOrder::fill_query_range_info(const QueryRangeInfo &range_info,
   int ret = OB_SUCCESS;
   const ObQueryRangeArray &ranges = range_info.get_ranges();
   const ObQueryRangeArray &ss_ranges = range_info.get_ss_ranges();
+  const ObQueryRangeProvider *provider = range_info.get_query_range_provider();
+  ObSEArray<uint64_t, 4> total_range_sizes;
   est_cost_info.ranges_.reset();
   est_cost_info.ss_ranges_.reset();
   est_cost_info.at_most_one_range_ = false;
+  bool has_exec_param = false;
+  if (OB_ISNULL(provider)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret), K(provider));
+  } else if (OB_FAIL(check_has_exec_param(*provider, has_exec_param))) {
+    LOG_WARN("failed to check has exec param", K(ret));
+  } else if (!has_exec_param) {
+    est_cost_info.total_range_cnt_ = ranges.count();
+  } else if (OB_FAIL(provider->get_total_range_sizes(total_range_sizes))) {
+    LOG_WARN("failed to get range size", K(ret));
+  } else {
+    int64_t index_prefix = range_info.get_index_prefix();
+    if (-1 == index_prefix || index_prefix >= total_range_sizes.count()) {
+      index_prefix = total_range_sizes.count() - 1;
+    }
+    if (total_range_sizes.empty() || index_prefix < 0 ) {
+      est_cost_info.total_range_cnt_ = ranges.count();
+    } else {
+      est_cost_info.total_range_cnt_ = total_range_sizes.at(index_prefix);
+    }
+  }
   // maintain query range info
   for(int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
     if (OB_ISNULL(ranges.at(i))) {
@@ -98,14 +121,8 @@ int ObJoinOrder::fill_query_range_info(const QueryRangeInfo &range_info,
     // for (min; max) range extract from range_exprs contain exec params, do nothing now.
     ObSEArray<ObRawExpr*, 4> cur_const_exprs;
     ObSEArray<ObRawExpr*, 16> columns;
-    bool has_exec_param = false;
-    if (OB_ISNULL(range_info.get_query_range_provider())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected NULL", K(ret), K(range_info.get_query_range_provider()));
-    } else if (OB_FAIL(check_has_exec_param(*range_info.get_query_range_provider(), has_exec_param))) {
-      LOG_WARN("failed to check has exec param", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(range_info.get_query_range_provider()->get_range_exprs(),
-                                                            columns))) {
+    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(provider->get_range_exprs(),
+                                                     columns))) {
       LOG_WARN("failed to extract column exprs", K(ret));
     } else if (columns.empty() || !has_exec_param) {
       /* do nothing */
