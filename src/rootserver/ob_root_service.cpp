@@ -8632,10 +8632,19 @@ int ObRootService::admin_set_config(obrpc::ObAdminSetConfigArg &arg)
     if (OB_FAIL(init_sys_admin_ctx(ctx))) {
       LOG_WARN("init_sys_admin_ctx failed", K(ret));
     } else {
-      ObLatchWGuard guard(set_config_lock_, ObLatchIds::CONFIG_LOCK);
+      bool lock_succ = false;
       ObAdminSetConfig admin_util(ctx);
-      if (OB_FAIL(admin_util.execute(arg))) {
+      if (OB_FAIL(set_config_lock_.wrlock(ObLatchIds::CONFIG_LOCK, THIS_WORKER.get_timeout_ts()))) {
+        LOG_WARN("fail to wrlock CONFIG_LOCK", KR(ret), "abs_timeout", THIS_WORKER.get_timeout_ts());
+      } else if (FALSE_IT(lock_succ = true)) {
+      } else if (OB_FAIL(admin_util.execute(arg))) {
         LOG_WARN("execute set config failed", K(arg), K(ret));
+      }
+      if (lock_succ) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(set_config_lock_.unlock())) {
+          LOG_ERROR("unlock failed", KR(tmp_ret), KR(ret));
+        }
       }
     }
   }
