@@ -2397,18 +2397,18 @@ int ObOptimizerUtil::find_common_joined_table(JoinedTable *joined_table,
     JoinedTable *left_common_table = NULL;
     JoinedTable *right_common_table = NULL;
     if (left_table->is_joined_table() &&
-        OB_FAIL(find_common_joined_table(static_cast<JoinedTable *>(left_table),
-                                         source_table_id,
-                                         target_table_id,
-                                         left_common_table))) {
+        OB_FAIL(SMART_CALL(find_common_joined_table(static_cast<JoinedTable *>(left_table),
+                                                    source_table_id,
+                                                    target_table_id,
+                                                    left_common_table)))) {
       LOG_WARN("failed to find left common joined table", K(ret));
     } else if (left_common_table != NULL) {
       target_joined_table = left_common_table;
     } else if (right_table->is_joined_table() &&
-               OB_FAIL(find_common_joined_table(static_cast<JoinedTable *>(right_table),
-                                                source_table_id,
-                                                target_table_id,
-                                                right_common_table))) {
+               OB_FAIL(SMART_CALL(find_common_joined_table(static_cast<JoinedTable *>(right_table),
+                                                           source_table_id,
+                                                           target_table_id,
+                                                           right_common_table)))) {
       LOG_WARN("failed to find right common joined table", K(ret));
     } else if (right_common_table != NULL) {
       target_joined_table = right_common_table;
