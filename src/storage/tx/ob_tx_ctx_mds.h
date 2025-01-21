@@ -48,7 +48,14 @@ public:
   int decide_cache_state_log_mds_barrier_type(
       const ObTxLogType state_log_type,
       logservice::ObReplayBarrierType &cache_final_barrier_type);
-  int earse_from_cache(const ObTxBufferNode &node) { return mds_list_.erase(node); }
+  int earse_from_cache(const ObTxBufferNode &node)
+  {
+
+    if (node.get_register_no() > max_synced_register_no_) {
+      max_synced_register_no_ = node.get_register_no();
+    }
+    return mds_list_.erase(node);
+  }
 
   int reserve_final_notify_array(const int durable_cnt);
   int generate_final_notify_array(const ObTxBufferNodeArray &mds_durable_arr,
@@ -71,7 +78,11 @@ public:
   void set_need_retry_submit_mds(bool need_retry) { need_retry_submit_mds_ = need_retry; };
   bool need_retry_submit_mds() { return need_retry_submit_mds_; }
 
-  TO_STRING_KV(K(unsubmitted_size_), K(mds_list_.size()), K(max_register_no_));
+  TO_STRING_KV(K(unsubmitted_size_),
+               K(mds_list_.size()),
+               K(max_register_no_),
+               K(max_submitted_register_no_),
+               K(max_synced_register_no_));
 
 private:
   int copy_to_(ObTxBufferNodeArray &tmp_array) const;
@@ -79,6 +90,8 @@ private:
 private:
   // TransModulePageAllocator allocator_;
   uint64_t max_register_no_;
+  uint64_t max_submitted_register_no_;
+  uint64_t max_synced_register_no_;
   bool need_retry_submit_mds_;
   int64_t unsubmitted_size_;
   ObTxBufferNodeList mds_list_;

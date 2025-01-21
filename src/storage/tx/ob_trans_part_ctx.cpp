@@ -7093,7 +7093,7 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
       } else if (OB_FAIL(after_submit_log_(log_block, log_cb, NULL))) {
         log_cb = nullptr;
       } else {
-        if (barrier_type != LogBarrierType::NO_NEED_BARRIER || !mds_base_scn.is_min()) {
+        if (barrier_type != LogBarrierType::NO_NEED_BARRIER || mds_base_scn.is_valid_and_not_min()) {
           TRANS_LOG(INFO, "submit MDS redo with barrier or base_scn successfully", K(ret), K(trans_id_),
                     K(ls_id_), KPC(log_cb), K(mds_cache_), K(exec_info_.multi_data_source_),
                     K(mds_base_scn), K(barrier_type));
@@ -7403,6 +7403,11 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "register MDS redo in part_ctx failed", K(ret), K(trans_id_), K(ls_id_),
               K(data_source_type), K(len), K(register_flag), K(mds_cache_), K(*this), K(lbt()));
+  } else {
+#ifdef ENABLE_DEBUG_LOG
+    TRANS_LOG(INFO, "register MDS redo in part_ctx successfully", K(ret), K(trans_id_), K(ls_id_),
+        K(data_source_type), K(len), K(register_flag), K(mds_cache_), K(*this));
+#endif
   }
 
   REC_TRANS_TRACE_EXT2(tlog_, register_multi_data_source, OB_ID(ret), ret, OB_ID(type),

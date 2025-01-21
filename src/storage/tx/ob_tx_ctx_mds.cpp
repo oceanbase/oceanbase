@@ -25,6 +25,8 @@ void ObTxMDSCache::reset()
   submitted_iterator_ = mds_list_.end(); // ObTxBufferNodeList::iterator();
   need_retry_submit_mds_ = false;
   max_register_no_ = 0;
+  max_submitted_register_no_ = 0;
+  max_synced_register_no_ = 0;
 }
 
 void ObTxMDSCache::destroy()
@@ -45,9 +47,13 @@ int ObTxMDSCache::try_recover_max_register_no(const ObTxBufferNodeArray &node_ar
   int ret = OB_SUCCESS;
   int64_t array_cnt = node_array.count();
   if (array_cnt > 0) {
-    int64_t max_register_no = node_array[array_cnt - 1].get_register_no();
-    if (max_register_no > max_register_no_) {
-      max_register_no_ = max_register_no;
+    int64_t durable_max_register_no = node_array[array_cnt - 1].get_register_no();
+    if (durable_max_register_no > max_register_no_) {
+      TRANS_LOG(INFO, "recover the max_register_no from the exec_info", K(ret),
+                K(node_array[array_cnt - 1]), KPC(this));
+      max_register_no_ = durable_max_register_no;
+      max_submitted_register_no_ = durable_max_register_no;
+      max_synced_register_no_ = durable_max_register_no;
     }
   }
 
@@ -62,9 +68,14 @@ int ObTxMDSCache::insert_mds_node(ObTxBufferNode &buf_node)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "insert MDS buf node", K(ret));
   } else if (OB_FALSE_IT(max_register_no_++)) {
-    //do nothing
+    // do nothing
   } else if (OB_FAIL(buf_node.set_mds_register_no(max_register_no_))) {
     TRANS_LOG(WARN, "set mds register no failed", K(ret), K(buf_node), KPC(this));
+  } else if (!mds_list_.empty()
+             && buf_node.get_register_no() <= mds_list_.get_last().get_register_no()) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(WARN, "we can not insert a new buf_node with the smaller register_no", K(ret),
+              K(buf_node), K(mds_list_.get_last()), KPC(this));
   } else if (OB_FAIL(mds_list_.push_back(buf_node))) {
     TRANS_LOG(WARN, "push back MDS buf node", K(ret));
   } else {
@@ -116,9 +127,24 @@ int ObTxMDSCache::fill_mds_log(ObPartTransCtx *ctx,
       submitted_iterator_ = mds_list_.begin();
     }
     ObTxBufferNodeList::iterator iter = submitted_iterator_;
+    ObTxBufferNodeList::iterator prev_iter = mds_list_.end();
     for (; iter != mds_list_.end() && OB_SUCC(ret); iter++) {
+      prev_iter = iter;
       if (iter->is_submitted()) {
         // do nothing
+      } else if (OB_FALSE_IT(prev_iter--)) {
+        // do nothing
+      } else if (prev_iter != mds_list_.end() && !prev_iter->is_submitted()
+                 && prev_iter->get_register_no() < iter->get_register_no()) {
+        ret = OB_EAGAIN;
+        TRANS_LOG(WARN, "we must submit the previous mds node first", K(ret), K(mds_base_scn),KPC(this),
+                  K(*prev_iter), K(*iter), KPC(ctx));
+        clear_submitted_iterator();
+      } else if (iter->get_register_no() <= max_submitted_register_no_
+                 || iter->get_register_no() <= max_synced_register_no_) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "try to submit a mds node with the smaller register no", K(ret), KPC(this),
+                  K(*prev_iter), K(*iter), KPC(ctx));
       } else if (OB_FAIL(mds_log.fill_MDS_data(*iter))) {
         if (ret != OB_SIZE_OVERFLOW) {
           TRANS_LOG(WARN, "fill mds data in log failed", K(ret));
@@ -276,6 +302,9 @@ void ObTxMDSCache::update_submitted_iterator(ObTxBufferNodeArray &range_array)
 
     search_iter->set_submitted();
     range_array[i].set_submitted();
+    if (range_array[i].get_register_no() > max_submitted_register_no_) {
+      max_submitted_register_no_ = range_array[i].get_register_no();
+    }
 
     unsubmitted_size_ = unsubmitted_size_ - search_iter->get_serialize_size();
     submitted_iterator_ = search_iter;
@@ -293,6 +322,9 @@ void ObTxMDSCache::update_sync_failed_range(ObTxBufferNodeArray &range_array)
     search_iter->log_sync_fail();
     range_array[i].log_sync_fail();
   }
+
+  max_submitted_register_no_ = max_synced_register_no_;
+  clear_submitted_iterator();
 }
 
 bool ObTxMDSCache::is_contain(const ObTxDataSourceType target_type) const
@@ -377,6 +409,7 @@ int ObTxMDSRange::move_from_cache_to_arr(ObTxMDSCache &mds_cache,
                      mds_durable_arr[mds_durable_arr.count() - 1].get_register_no())
                  && range_array_[i].get_register_no()
                         <= mds_durable_arr[mds_durable_arr.count() - 1].get_register_no()) {
+        ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "invalid smaller register no", K(ret), K(i), K(range_array_[i]),
                   K(mds_durable_arr[mds_durable_arr.count() - 1]));
       } else if (OB_FAIL(mds_cache.earse_from_cache(range_array_[i]))) {
