@@ -24,6 +24,7 @@
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "lib/function/ob_function.h"
+#include "lib/hash/ob_hashset.h"
 #include "logservice/ob_server_log_block_mgr.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
@@ -397,10 +398,20 @@ int ObDiskUsageReportTask::count_server_meta()
 int ObDiskUsageReportTask::count_tenant_tmp()
 {
   int ret = OB_SUCCESS;
+  common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> tenant_ids_in_tmpfile;
   ObDiskUsageReportKey report_key;
   int64_t macro_block_cnt = 0;
   common::ObArray<blocksstable::ObTmpFileStore::TenantTmpBlockCntPair> tenant_block_cnt_pairs;
-  if (OB_FAIL(OB_TMP_FILE_STORE.get_macro_block_list(tenant_block_cnt_pairs))) {
+  common::ObArray<uint64_t> tenant_ids;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  if (OB_ISNULL(omt)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected error, omt is nullptr", K(ret));
+  } else if (OB_FAIL(omt->get_mtl_tenant_ids(tenant_ids))) {
+    STORAGE_LOG(WARN, "fail to get_mtl_tenant_ids", K(ret));
+  } else if (OB_FAIL(tenant_ids_in_tmpfile.create(MAX(2, tenant_ids.count()), "TidDiskR", "TidDiskR"))) {
+    STORAGE_LOG(WARN, "fail to create tenant ids set", K(ret), K(tenant_ids));
+  } else if (OB_FAIL(OB_TMP_FILE_STORE.get_macro_block_list(tenant_block_cnt_pairs))) {
     STORAGE_LOG(WARN, "failed to get tenant tmp macro block list", K(ret));
   } else {
     report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_TMP_DATA;
@@ -410,6 +421,22 @@ int ObDiskUsageReportTask::count_tenant_tmp()
       int64_t tenant_tmp_size = macro_block_cnt * common::OB_DEFAULT_MACRO_BLOCK_SIZE;
       if (OB_FAIL(result_map_.set_refactored(report_key, std::make_pair(tenant_tmp_size, tenant_tmp_size), 1))) {
         STORAGE_LOG(WARN, "failed to set tenant tmp usage into result map", K(ret), K(report_key), K(macro_block_cnt));
+      } else if (OB_FAIL(tenant_ids_in_tmpfile.set_refactored(report_key.tenant_id_, 0/*no override*/))) {
+        STORAGE_LOG(WARN, "fail to set tenant id in tmp file", K(ret), K(report_key));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+      const uint64_t tenant_id = tenant_ids.at(i);
+      report_key.tenant_id_ = tenant_id;
+      const int64_t tenant_tmp_size = 0;
+      if (OB_FAIL(tenant_ids_in_tmpfile.exist_refactored(tenant_id)) && OB_HASH_NOT_EXIST != ret) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          STORAGE_LOG(WARN, "fail to exist refactored", K(ret), K(tenant_id));
+        }
+      } else if (OB_FAIL(result_map_.set_refactored(report_key, std::make_pair(tenant_tmp_size, tenant_tmp_size), 1))) {
+        STORAGE_LOG(WARN, "fail to set tenant tmp usage into result map", K(ret), K(tenant_id), K(tenant_tmp_size));
       }
     }
   }
