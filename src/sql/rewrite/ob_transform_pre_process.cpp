@@ -9710,11 +9710,13 @@ int ObTransformPreProcess::expand_last_insert_id_for_join(ObDMLStmt &stmt, Joine
   } else if (OB_FAIL(expand_for_last_insert_id(stmt, join_table->join_conditions_, has_happened))) {
     LOG_WARN("failed to expand join conditions", K(ret));
   } else if (join_table->left_table_->is_joined_table() &&
-            OB_FAIL(expand_last_insert_id_for_join(stmt, static_cast<JoinedTable*>(join_table->left_table_), is_happened))) {
+            OB_FAIL(SMART_CALL(expand_last_insert_id_for_join(
+                                   stmt, static_cast<JoinedTable*>(join_table->left_table_), is_happened)))) {
     LOG_WARN("fail to expand last_insert_id in left join table", K(ret));
   } else if (FALSE_IT(has_happened |= is_happened)) {
   } else if (join_table->right_table_->is_joined_table() &&
-            OB_FAIL(expand_last_insert_id_for_join(stmt, static_cast<JoinedTable*>(join_table->right_table_), is_happened))) {
+            OB_FAIL(SMART_CALL(expand_last_insert_id_for_join(
+                                   stmt, static_cast<JoinedTable*>(join_table->right_table_), is_happened)))) {
     LOG_WARN("fail to expand last_insert_id in right join table", K(ret));
   } else {
     has_happened |= is_happened;
