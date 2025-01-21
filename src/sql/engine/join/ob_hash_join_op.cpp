@@ -1844,7 +1844,8 @@ int ObHashJoinOp::in_memory_process(bool &need_not_read_right)
     LOG_WARN("failed to build hash table", K(ret), K(part_level_));
   }
   if (OB_SUCC(ret)
-      && (!is_shared_ || 0 == cur_hash_table_->row_count_)
+      && (!is_shared_ || (0 == cur_hash_table_->row_count_
+                          && cur_dumped_partition_ == max_partition_count_per_level_))
       && ((0 == num_left_rows
           && RIGHT_ANTI_JOIN != MY_SPEC.join_type_
           && RIGHT_OUTER_JOIN != MY_SPEC.join_type_
@@ -3640,7 +3641,8 @@ int ObHashJoinOp::recursive_process(bool &need_not_read_right)
     LOG_WARN("failed to build hash table", K(ret), K(part_level_));
   }
   if (OB_SUCC(ret)
-      && (!is_shared_ || 0 == cur_hash_table_->row_count_)
+      && (!is_shared_ || (0 == cur_hash_table_->row_count_
+                          && cur_dumped_partition_ == max_partition_count_per_level_))
       && ((0 == num_left_rows
           && RIGHT_ANTI_JOIN != MY_SPEC.join_type_
           && RIGHT_OUTER_JOIN != MY_SPEC.join_type_
