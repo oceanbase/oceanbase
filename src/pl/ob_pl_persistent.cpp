@@ -632,7 +632,10 @@ int ObRoutinePersistentInfo::insert_or_update_dll_to_disk(schema::ObSchemaGetter
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id_);
     ObDMLSqlSplicer dml;
     int64_t tenant_schema_version = OB_INVALID_VERSION;
-    if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, tenant_schema_version))) {
+    if (OB_INVALID_ID == tenant_id_belongs_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected tenant id", K(ret));
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_belongs_, tenant_schema_version))) {
       LOG_WARN("fail to get schema version");
     } else if (OB_FAIL(gen_routine_storage_dml(exec_tenant_id, dml, tenant_schema_version, binary))) {
       LOG_WARN("gen table dml failed", K(ret));
