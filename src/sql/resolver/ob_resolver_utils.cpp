@@ -34,6 +34,7 @@
 #include "pl/ob_pl_resolver.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_stmt.h"
+#include "pl/ob_pl_compile.h"
 #include "observer/ob_server_struct.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
@@ -3266,6 +3267,7 @@ int ObResolverUtils::resolve_columns_for_const_expr(ObRawExpr *&expr, ObArray<Ob
                                                            real_exprs,
                                                            real_ref_expr,
                                                            resolve_params.package_guard_,
+                                                           resolve_params.param_list_,
                                                            resolve_params.is_prepare_protocol_,
                                                            false, /*is_check_mode*/
                                                            true /*is_sql_scope*/))) {
@@ -5332,6 +5334,7 @@ int ObResolverUtils::resolve_default_expr_v2_column_expr(ObResolverParams &param
                                                              real_exprs,
                                                              real_ref_expr,
                                                              params.package_guard_,
+                                                             params.param_list_,
                                                              params.is_prepare_protocol_,
                                                              false, /*is_check_mode*/
                                                              true /*is_sql_scope*/))) {
@@ -7515,6 +7518,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                              ObIArray<ObRawExpr*> &real_exprs,
                                              ObRawExpr *&expr,
                                              pl::ObPLPackageGuard *package_guard,
+                                             const ParamStore *params,
                                              bool is_prepare_protocol,
                                              bool is_check_mode,
                                              bool is_sql_scope)
@@ -7537,23 +7541,32 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
 
   if (OB_SUCC(ret)) {
     pl::ObPLResolver pl_resolver(allocator,
-                                session_info,
-                                schema_guard,
-                                *package_guard,
-                                NULL == sql_proxy ? (NULL == ns ? *GCTX.sql_proxy_ : ns->get_external_ns()->get_resolve_ctx().sql_proxy_) : *sql_proxy,
-                                expr_factory,
-                                NULL == ns ? NULL : ns->get_external_ns()->get_parent_ns(),
-                                is_prepare_protocol,
-                                is_check_mode,
-                                is_sql_scope,
-                                NULL/*param store*/,
-                                extern_param_info);
+                                 session_info,
+                                 schema_guard,
+                                 *package_guard,
+                                 NULL == sql_proxy ? (NULL == ns ? *GCTX.sql_proxy_ : ns->get_external_ns()->get_resolve_ctx().sql_proxy_) : *sql_proxy,
+                                 expr_factory,
+                                 NULL == ns ? NULL : ns->get_external_ns()->get_parent_ns(),
+                                 is_prepare_protocol,
+                                 is_check_mode,
+                                 is_sql_scope,
+                                 params/*param store*/,
+                                 extern_param_info);
     HEAP_VAR(pl::ObPLFunctionAST, func_ast, allocator) {
-      if (OB_FAIL(pl_resolver.init(func_ast))) {
+      if (OB_FAIL(pl::ObPLCompiler::init_anonymous_ast(func_ast,
+                                                       allocator,
+                                                       session_info,
+                                                       NULL == sql_proxy ? (NULL == ns ? *GCTX.sql_proxy_ : ns->get_external_ns()->get_resolve_ctx().sql_proxy_) : *sql_proxy,
+                                                       schema_guard,
+                                                       *package_guard,
+                                                       params,
+                                                       false))) {
+        LOG_WARN("failed to init anonymous ast", K(ret));
+      } else if (OB_FAIL(pl_resolver.init(func_ast))) {
         LOG_WARN("pl resolver init failed", K(ret));
       } else if (NULL != ns) {
         pl_resolver.get_current_namespace() = *ns;
-      } else { /*do nothing*/ }
+      }
 
       if (OB_SUCC(ret)) {
         if (OB_FAIL(pl_resolver.resolve_qualified_name(q_name, columns, real_exprs, func_ast, expr))) {

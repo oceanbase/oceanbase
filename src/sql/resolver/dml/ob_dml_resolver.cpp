@@ -9419,6 +9419,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
                                                          real_exprs,
                                                          expr,
                                                          params_.package_guard_,
+                                                         params_.param_list_,
                                                          params_.is_prepare_protocol_,
                                                          false, /*is_check_mode*/
                                                          current_scope_ != T_CURRENT_OF_SCOPE /*is_sql_scope*/))) {
