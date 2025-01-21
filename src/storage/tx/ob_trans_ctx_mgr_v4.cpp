@@ -477,7 +477,7 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
     } else if (OB_NOT_NULL(arg.move_arg_) && OB_FAIL(tmp->init_for_transfer_move(*arg.move_arg_))) {
       TRANS_LOG(WARN, "init tx ctx for transfer failed", KR(ret), K(*arg.move_arg_));
     } else if (FALSE_IT(inc_total_tx_ctx_count())) {
-    } else if (FALSE_IT(tmp_ctx->get_ctx_guard(ctx_lock_guard, CtxLockGuard::MODE::CTX))) {
+    } else if (FALSE_IT(tmp_ctx->get_ctx_guard(ctx_lock_guard))) {
     } else if (OB_FAIL(ls_tx_ctx_map_.insert_and_get(arg.tx_id_, tmp_ctx, &exist_ctx))) {
       if (OB_ENTRY_EXIST == ret) {
         if (OB_ISNULL(exist_ctx)) {
