@@ -557,7 +557,11 @@ public:
   static int wrap_enum_set_for_stmt(ObRawExprFactory &expr_factory,
                                     ObSelectStmt *stmt,
                                     ObSQLSessionInfo *session_info);
-
+  static int create_inner_type_to_enumset_expr(ObRawExprFactory &expr_factory,
+                                               ObRawExpr *src_expr,
+                                               ObSysFunRawExpr *&out_expr,
+                                               const ObSQLSessionInfo *session_info,
+                                               ObIArray<common::ObString> &type_info_value);
   static int get_exec_param_expr(ObRawExprFactory &expr_factory,
                                  ObQueryRefRawExpr *query_ref,
                                  ObRawExpr *correlated_expr,

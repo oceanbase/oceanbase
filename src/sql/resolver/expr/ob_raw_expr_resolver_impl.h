@@ -59,6 +59,8 @@ private:
   // function members
   int try_negate_const(ObRawExpr *&expr, const int64_t neg_cnt, int64_t &remain_reg_cnt);
   int do_recursive_resolve(const ParseNode *node, ObRawExpr *&expr, bool is_root_expr = false);
+  int mock_enum_type_info(common::ObIAllocator &allocator, ObString &string, uint64_t idx, ObIArray<common::ObString> &type_info);
+  int mock_set_type_info(common::ObIAllocator &allocator, ObString &string, uint64_t idx, ObIArray<common::ObString> &type_info);
   int process_datatype_or_questionmark(const ParseNode &node, ObRawExpr *&expr);
   int process_system_variable_node(const ParseNode *node, ObRawExpr *&expr);
   int process_char_charset_node(const ParseNode *node, ObRawExpr *&expr);

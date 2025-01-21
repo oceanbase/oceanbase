@@ -8659,7 +8659,7 @@ int ObSPIService::resolve_exec_params(const ParseResult &parse_result,
                                                           expr,
                                                           out_expr,
                                                           &session,
-                                                          true))) {
+                                                          false))) {
         LOG_WARN("failed to create type to str expr", K(ret));
       } else if (OB_ISNULL(out_expr)) {
         ret = OB_ERR_UNEXPECTED;

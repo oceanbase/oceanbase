@@ -620,5 +620,69 @@ int ObExprEnumToInnerType::calc_to_inner_expr(const ObExpr &expr, ObEvalCtx &ctx
   return ret;
 }
 
+//////////////////////////// ObExprInnerTypeToEnumSet ////////////////////////////
+ObExprInnerTypeToEnumSet::ObExprInnerTypeToEnumSet(ObIAllocator &alloc)
+  : ObExprOperator(alloc, T_FUN_INNER_TYPE_TO_ENUMSET, N_INNER_TYPE_TO_ENUMSET, 2, NOT_VALID_FOR_GENERATED_COL, INTERNAL_IN_MYSQL_MODE)
+{
+}
+
+ObExprInnerTypeToEnumSet::~ObExprInnerTypeToEnumSet()
+{
+}
+
+int ObExprInnerTypeToEnumSet::calc_result_type2(ObExprResType &type,
+                                                ObExprResType &type1,
+                                                ObExprResType &type2,
+                                                ObExprTypeCtx &type_ctx) const
+{
+  UNUSED(type_ctx);
+  int ret = OB_SUCCESS;
+  if (ObEnumInnerType == type2.get_type()) {
+    type.set_type(ObEnumType);
+  } else {
+    type.set_type(ObSetType);
+  }
+  type.reset_enum_set_meta_state();
+  type.set_collation_type(type1.get_collation_type());
+  type.set_collation_level(type1.get_collation_level());
+  type.set_length(type1.get_length());
+  type1.set_calc_collation_type(type.get_collation_type());
+  type1.set_calc_collation_level(type.get_collation_level());
+  return ret;
+}
+
+int ObExprInnerTypeToEnumSet::cg_expr(ObExprCGCtx &op_cg_ctx,
+                                 const ObRawExpr &raw_expr,
+                                 ObExpr &rt_expr) const
+{
+  UNUSED(raw_expr);
+  UNUSED(op_cg_ctx);
+  rt_expr.eval_func_ = ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset;
+  return OB_SUCCESS;
+}
+
+int ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *inner_datum = NULL;
+  if (OB_FAIL(expr.args_[1]->eval(ctx, inner_datum))) {
+    LOG_WARN("eval inner datum failed", K(ret));
+  } else if (inner_datum->is_null()) {
+    res_datum.set_null();
+  } else {
+    ObEnumSetInnerValue inner_value;
+    if (OB_FAIL(inner_datum->get_enumset_inner(inner_value))) {
+      LOG_WARN("failed to get enumset inner value", K(ret), K(inner_datum));
+    } else {
+      if (ObEnumInnerType == expr.args_[1]->obj_meta_.get_type()) {
+        res_datum.set_enum(inner_value.numberic_value_);
+      } else {
+        res_datum.set_set(inner_value.numberic_value_);
+      }
+    }
+  }
+  return ret;
+}
+
 }// sql
 }// oceanbase

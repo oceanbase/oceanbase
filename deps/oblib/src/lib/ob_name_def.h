@@ -809,6 +809,7 @@
 #define N_ENUM_TO_STR "enum_to_str"
 #define N_SET_TO_INNER_TYPE "set_to_inner_type"
 #define N_ENUM_TO_INNER_TYPE "enum_to_inner_type"
+#define N_INNER_TYPE_TO_ENUMSET "inner_type_to_enumset"
 #define N_ASCII "ascii"
 #define N_ORD "ord"
 #define N_LTRIM "ltrim"

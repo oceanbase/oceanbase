@@ -1285,6 +1285,18 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprKeyValue::calc_key_value_expr,                       /* 806 */
   NULL, // ObExprToChar::eval_to_char,                                /* 807 */
   ObExprToPinyin::eval_to_pinyin,                                     /* 808 */
+  NULL, // ObExprArraySlice::eval_array_slice,                        /* 809 */
+  NULL, // ObExprArraySortby::eval_array_sortby,                      /* 810 */
+  NULL, // ObExprArrayFilter::eval_array_filter,                      /* 811 */
+  NULL, // ObExprArrayLength::eval_array_length,                      /* 812 */
+  NULL, // ObExprArrayRange::eval_array_range,                        /* 813 */
+  NULL, // ObExprArrayPosition::eval_array_position,                  /* 814 */
+  NULL, // ObExprURLEncode::eval_url_encode,                          /* 815 */
+  NULL, // ObExprURLDecode::eval_url_decode,                          /* 816 */
+  NULL, // ObExprVecIVFPQCenterVector::generate_pq_center_vector,     /* 817 */
+  NULL, // ObExprDemoteCast::eval_demoted_val,                        /* 818 */
+  NULL, // ObExprRangePlacement::eval_range_placement,                /* 819 */
+  ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset,               /* 820 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

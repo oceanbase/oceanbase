@@ -4809,6 +4809,74 @@ int ObRawExprUtils::wrap_enum_set_for_stmt(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::create_inner_type_to_enumset_expr(ObRawExprFactory &expr_factory,
+                                                      ObRawExpr *src_expr,
+                                                      ObSysFunRawExpr *&out_expr,
+                                                      const ObSQLSessionInfo *session_info,
+                                                      ObIArray<common::ObString> &type_info_value)
+{
+  int ret = OB_SUCCESS;
+  ObExprOperator *op = NULL;
+  ObObjType data_type = ObNullType;
+  if (OB_ISNULL(src_expr) || OB_ISNULL(session_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("src_expr or session_info is NULL", K(ret), K(src_expr), K(session_info));
+  } else if (FALSE_IT(data_type = src_expr->get_data_type())) {
+  } else if (OB_UNLIKELY(!ob_is_enumset_inner_tc(data_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data_type of src_expr is not enumset inner", K(ret), K(data_type));
+  } else {
+    if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_INNER_TYPE_TO_ENUMSET, out_expr))) {
+      LOG_WARN("create out_expr failed", K(ret));
+    } else if (OB_ISNULL(out_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN(" out_expr is null", K(ret));
+    } else if (OB_ISNULL(op = out_expr->get_op())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("allocate expr operator failed", K(ret));
+    } else {
+      out_expr->set_func_name(ObString::make_string(N_INNER_TYPE_TO_ENUMSET));
+      out_expr->set_extra(0);
+    }
+
+    ObConstRawExpr *col_accuracy_expr = NULL;
+    if (OB_SUCC(ret)) {
+      ObString str_col_accuracy;
+      ObObjMeta obj_meta;
+      if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(src_expr->get_result_type(),
+                                                             session_info,
+                                                             obj_meta))) {
+        LOG_WARN("fail to extract enum set cs type", K(ret));
+      } else if (OB_FAIL(build_const_string_expr(expr_factory, ObVarcharType, str_col_accuracy,
+                                                 obj_meta.get_collation_type(), col_accuracy_expr))) {
+        LOG_WARN("fail to build type expr", K(ret));
+      } else if (OB_ISNULL(col_accuracy_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col_accuracy_expr is NULL", K(ret));
+      } else {
+        col_accuracy_expr->set_collation_type(src_expr->get_collation_type());
+        col_accuracy_expr->set_collation_level(src_expr->get_collation_level());
+        col_accuracy_expr->set_accuracy(src_expr->get_accuracy());
+        col_accuracy_expr->set_scale(SCALE_UNKNOWN_YET);
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObExprInnerTypeToEnumSet *inner_type_to_enumset = static_cast<ObExprInnerTypeToEnumSet*>(op);
+      if (OB_FAIL(out_expr->add_param_expr(col_accuracy_expr))) {
+        LOG_WARN("failed to add param expr", K(ret));
+      }else if (OB_FAIL(out_expr->add_param_expr(src_expr))) {
+        LOG_WARN("failed to add param expr", K(ret));
+      } else if (out_expr->set_enum_set_values(type_info_value)) {
+        LOG_WARN("failed to set enum_set_values", K(ret));
+      } else if (OB_FAIL(out_expr->formalize(session_info))) {
+        LOG_WARN("failed to formalize out_expr", K(ret), K(out_expr));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::get_exec_param_expr(ObRawExprFactory &expr_factory,
                                         ObQueryRefRawExpr *query_ref,
                                         ObRawExpr *outer_val_expr,

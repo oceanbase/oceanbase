@@ -1237,7 +1237,7 @@ int ObSqlParameterization::construct_no_check_type_params(const ObIArray<int64_t
       LOG_WARN("Invalid offset", K(ret), K(offset), K(params.count()));
     } else if (need_check_type_offsets.has_member(offset)) {
       // do nothing
-    } else if (!params.at(offset).is_ext()) { // extend type need to be checked
+    } else if (!params.at(offset).is_ext() && !ob_is_enumset_inner_tc(params.at(offset).get_meta().get_type())) { // extend type and enum or set inner type need to be checked
       params.at(offset).set_need_to_check_type(false);
     } else {
       // real type do not need to be checked

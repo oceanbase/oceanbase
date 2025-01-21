@@ -982,6 +982,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSqlModeConvert);
     REG_OP(ObExprCanAccessTrigger);
     REG_OP(ObExprMysqlProcInfo);
+    REG_OP(ObExprInnerTypeToEnumSet);
 #if  defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
     // convert input value into an OceanBase error number and throw out as exception
     REG_OP(ObExprErrno);

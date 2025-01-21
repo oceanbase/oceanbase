@@ -2931,7 +2931,50 @@ int ObRawExprResolverImpl::process_prior_node(const ParseNode &node, ObRawExpr *
   }
   return ret;
 }
+int ObRawExprResolverImpl::mock_enum_type_info(common::ObIAllocator &allocator, ObString &string, uint64_t idx, ObIArray<common::ObString> &type_info)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < idx - 1; ++i) {
+    if(OB_FAIL(type_info.push_back(ObString(0, NULL)))) {
+      LOG_WARN("fail to push back info", K(i), K(ret), K(idx));
+    }
+  }
+  if(OB_SUCC(ret)) {
+    ObString temp_str;
+    if (OB_FAIL(ob_write_string(allocator, string, temp_str))) {
+      LOG_WARN("fail to write string", K(ret), K(string));
+    } else if (OB_FAIL(type_info.push_back(temp_str))) {
+      LOG_WARN("fail to push back info", K(ret), K(idx), K(temp_str));
+    }
+  }
+  return ret;
+}
 
+int ObRawExprResolverImpl::mock_set_type_info(common::ObIAllocator &allocator, ObString &string, uint64_t element_val, ObIArray<common::ObString> &type_info)
+{
+  int ret = OB_SUCCESS;
+  void *mem = NULL;
+  const uint64_t effective_count = 64;
+  const uint64_t element_num = effective_count - static_cast<uint64_t>(__builtin_clzll(element_val));
+  ObString element_str = ObString();
+  for (int64_t i = 0; OB_SUCC(ret) && i < element_num && i < effective_count; ++i) {
+    if (i == element_num - 1) { //last set element
+      element_str = string;
+    } else if (element_val & 1U) { //this bit has set element
+      element_str = string.split_on(',');
+    } else { //this bit does not have set element
+      element_str = ObString(0, NULL);
+    }
+    ObString temp_str;
+    if (OB_FAIL(ob_write_string(allocator, element_str, temp_str))) {
+      LOG_WARN("fail to write string", K(ret), K(string));
+    } else if (OB_FAIL(type_info.push_back(temp_str))) {
+      LOG_WARN("fail to push back info", K(ret), K(temp_str));
+    }
+    OX (element_val >>= 1);
+  }
+  return ret;
+}
 int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &node, ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
@@ -3113,6 +3156,23 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
               result_type.set_length_semantics(session_info->get_actual_nls_length_semantics());
             }
             c_expr->set_result_type(result_type);
+            if (ob_is_enumset_inner_tc(param.get_type())) { // only in PL execute, enum or set paramters generate enumset_inner type param value
+              ObDatum datum;
+              ObEnumSetInnerValue inner_value;
+              ObSEArray<common::ObString, 64> type_info_value;
+              OZ (datum.from_obj(param));
+              OZ (datum.get_enumset_inner(inner_value));
+              if (ObEnumInnerType == param.get_type()) {
+                OZ (mock_enum_type_info(ctx_.expr_factory_.get_allocator(), inner_value.string_value_, inner_value.numberic_value_, type_info_value));
+              } else {
+                OZ (mock_set_type_info(ctx_.expr_factory_.get_allocator(), inner_value.string_value_, inner_value.numberic_value_, type_info_value));
+              }
+              if (OB_SUCC(ret)) {
+                ObSysFunRawExpr *out_expr = NULL;
+                OZ (ObRawExprUtils::create_inner_type_to_enumset_expr(ctx_.expr_factory_, c_expr, out_expr, ctx_.session_info_, type_info_value));
+                OX (c_expr = (ObConstRawExpr*)(out_expr));
+              }
+            }
           }
 //execute阶段不需要统计prepare_param_count_的个数
 //          ctx_.prepare_param_count_++;
