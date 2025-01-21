@@ -124,6 +124,7 @@ private:
   {
   public:
     bool operator<(const ZoneSetReplicaDist &that);
+    static bool sort_compare_less_than(const ZoneSetReplicaDist *lset, const ZoneSetReplicaDist *rset);
   public:
     ZoneSetReplicaDist(); 
     ~ZoneSetReplicaDist() {} // no one shall derive from this
