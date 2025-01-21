@@ -395,8 +395,13 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
   const int32_t state = ATOMIC_LOAD(&tx_data.state_);
 
   if (OB_ISNULL(tx_cc_ctx) && (ObTxData::RUNNING == state)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "lock for read functor need prepare version.", KR(ret));
+    // Tip: It might be cases where the tx_ctx_table hasn't dump the txn while
+    // the txn_data_table has dump the txn in the RUNNING state(because of the
+    // rollback_to) and the data for this txn is already dumped as sstable. In
+    // such cases, reads will experience exceptions that the txn is in a RUNNING
+    // state without tx_ctx. Therefore, we need to tolerate this exception.
+    ret = OB_REPLICA_NOT_READABLE;
+    STORAGE_LOG(WARN, "lock for read meet stale data", KR(ret));
   } else {
     for (int32_t i = 0; OB_ERR_SHARED_LOCK_CONFLICT == ret; i++) {
       retry_cnt++;
