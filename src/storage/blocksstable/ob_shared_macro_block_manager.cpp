@@ -518,6 +518,7 @@ int ObSharedMacroBlockMgr::defragment()
   } else if (OB_ALLOCATE_MEMORY_FAILED != ret
       && OB_SERVER_OUTOF_DISK_SPACE != ret
       && OB_TIMEOUT != ret
+      && OB_NOT_RUNNING != ret
       && REACH_COUNT_INTERVAL(FAILURE_COUNT_INTERVAL)) {
     LOG_ERROR("defragmentation can't be finished, something is wrong", K(ret), K(macro_ids));
   }
