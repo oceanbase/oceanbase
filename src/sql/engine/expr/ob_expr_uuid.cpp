@@ -96,8 +96,12 @@ int ObUUIDNode::init()
                 MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
                 mac_addr_found = true;
                 break;
+              } else {
+                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
               }
             }
+          } else {
+            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(errno), K(it->ifr_name));
           }
         }
       }//end for
