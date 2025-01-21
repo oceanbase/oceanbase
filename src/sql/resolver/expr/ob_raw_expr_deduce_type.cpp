@@ -1627,8 +1627,8 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
                 MIN(OB_MAX_DOUBLE_FLOAT_SCALE, result_type.get_scale() + scale_increment)));
             }
             result_type.set_precision(static_cast<ObPrecision>(result_type.get_precision() + scale_increment));
-            result_type.unset_result_flag(ZEROFILL_FLAG);
           }
+          result_type.unset_result_flag(ZEROFILL_FLAG);
           expr.set_result_type(result_type);
           ObObjTypeClass from_tc = expr.get_param_expr(0)->get_type_class();
           //use fast path
