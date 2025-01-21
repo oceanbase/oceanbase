@@ -59,5 +59,6 @@ typedef struct pkts_t {
   idm_t sk_map;
   idm_item_t sk_table[1<<16];
   dlink_t sk_list;
+  int64_t user_keepalive_timeout;
   diag_info_t diag_info;
 } pkts_t;

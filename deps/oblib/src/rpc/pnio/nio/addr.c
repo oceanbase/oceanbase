@@ -53,7 +53,7 @@ addr_t get_local_addr(int fd) {
   addr_t addr;
   struct sockaddr_storage sock_addr;
   socklen_t addr_len = sizeof(sock_addr);
-  if (0 == getpeername(fd, (struct sockaddr*)&sock_addr, &addr_len)) {
+  if (0 == getsockname(fd, (struct sockaddr*)&sock_addr, &addr_len)) {
     sockaddr_to_addr_c(&sock_addr, &addr.is_ipv6, &addr.ip, (int*)&addr.port);
   } else {
     addr_reset(&addr);
