@@ -72,6 +72,14 @@ public:
       SQL_ENG_LOG(WARN, "failed to lseek res.", K(ret), K(str_result), K(res_size));
     } else {
       str_result.set_result();
+      if (!is_uniform_format(res_vec->get_format())) {
+        ObString array_data(res_buf_len, res_buf);
+        if (OB_FAIL(arr_obj->init(array_data))) {
+          SQL_ENG_LOG(WARN, "failed to init array", K(ret));
+        } else if (OB_FAIL(dispatch_array_attrs_rows(ctx, arr_obj, batch_idx, expr.attrs_, expr.attrs_cnt_, true))) {
+          SQL_ENG_LOG(WARN, "failed to dispatch array attrs rows", K(ret));
+        }
+      }
     }
     return ret;
   }
