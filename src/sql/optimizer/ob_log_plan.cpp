@@ -5772,12 +5772,14 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
       LOG_WARN("build rollup grouping id expr failed", K(ret));
     } else if (OB_FAIL(ObLogExpand::dup_and_replace_exprs_within_aggrs(factory,
                                                                        get_optimizer_context().get_session_info(),
+                                                                       query_ctx->all_expr_constraints_,
                                                                        rollup_exprs,
                                                                        aggr_items,
                                                                        groupby_helper.dup_expr_pairs_))) {
       LOG_WARN("duplicate and replace exprs failed", K(ret));
     } else if (OB_FAIL(ObLogExpand::gen_expand_exprs(factory,
                                                      get_optimizer_context().get_session_info(),
+                                                     query_ctx->all_expr_constraints_,
                                                      const_cast<ObIArray<ObRawExpr *> &>(rollup_exprs),
                                                      const_cast<ObIArray<ObRawExpr *> &>(group_exprs),
                                                      groupby_helper.dup_expr_pairs_))) {
