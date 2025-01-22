@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SERVER
 
 #include "share/interrupt/ob_interrupt_rpc_proxy.h"
 #include "observer/ob_srv_xlator.h"

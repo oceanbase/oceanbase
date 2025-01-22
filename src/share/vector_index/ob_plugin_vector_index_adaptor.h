@@ -78,11 +78,12 @@ enum ObVectorIndexDistAlgorithm
 enum ObVectorIndexAlgorithmLib
 {
   VIAL_VSAG = 0,
-  IAL_OB,
+  VIAL_OB,
   VIAL_MAX
 };
 
-enum ObVectorIndexAlgorithmType
+
+enum ObVectorIndexAlgorithmType : uint16_t
 {
   VIAT_HNSW = 0,
   VIAT_HNSW_SQ,

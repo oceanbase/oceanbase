@@ -20,6 +20,7 @@
 #include "observer/virtual_table/ob_table_index.h"
 
 using namespace oceanbase::common;
+using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 namespace oceanbase
 {

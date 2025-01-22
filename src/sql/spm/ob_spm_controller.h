@@ -17,6 +17,7 @@
 #include "sql/spm/ob_spm_define.h"
 #include "share/ob_rpc_struct.h"
 #include "sql/monitor/ob_exec_stat.h"
+#include "sql/spm/ob_plan_baseline_mgr.h"
 
 namespace oceanbase
 {

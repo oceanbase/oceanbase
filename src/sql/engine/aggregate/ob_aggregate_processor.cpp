@@ -7373,6 +7373,19 @@ int ObAggregateProcessor::get_wm_concat_result(const ObAggrInfo &aggr_info,
   return ret;
 }
 
+static int get_param_int_val(ObExpr *expr, ObDatum *datum, int64_t &val)
+{
+  int ret = OB_SUCCESS;
+  if (expr->obj_meta_.is_integer_type()) {
+    val = datum->get_int();
+  } else if (expr->obj_meta_.is_decimal_int()) {
+    ret = ObExprUtil::trunc_decint2int64(datum->get_decimal_int(), datum->get_int_bytes(),
+                                         expr->datum_meta_.scale_, val);
+  } else if (expr->obj_meta_.is_number()) {
+    ret = ObExprUtil::trunc_num2int64(*datum, val);
+  }
+  return ret;
+}
 int ObAggregateProcessor::init_topk_fre_histogram_item(
   const ObAggrInfo &aggr_info,
   ObTopKFrequencyHistograms *topk_fre_hist)
@@ -7407,18 +7420,16 @@ int ObAggregateProcessor::init_topk_fre_histogram_item(
                OB_ISNULL(item_size_result)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(window_size_result), K(item_size_result));
-    } else if (OB_FAIL(ObExprUtil::get_int_param_val(
-                 window_size_result, aggr_info.window_size_param_expr_->obj_meta_.is_decimal_int(),
-                 window_size))
-               || OB_FAIL(ObExprUtil::get_int_param_val(
-                 item_size_result, aggr_info.item_size_param_expr_->obj_meta_.is_decimal_int(),
-                 item_size))
-               || (aggr_info.max_disuse_param_expr_ != NULL && OB_FAIL(ObExprUtil::get_int_param_val(
-                 max_disuse_cnt_result, aggr_info.max_disuse_param_expr_->obj_meta_.is_decimal_int(),
-                 max_disuse_cnt)))) {
+    } else if (OB_FAIL(get_param_int_val(aggr_info.window_size_param_expr_, window_size_result,
+                                         window_size))
+               || OB_FAIL(get_param_int_val(aggr_info.item_size_param_expr_,
+                                            item_size_result, item_size))
+               || (aggr_info.max_disuse_param_expr_ != NULL
+                   && OB_FAIL(get_param_int_val(aggr_info.max_disuse_param_expr_,
+                                                max_disuse_cnt_result, max_disuse_cnt)))) {
       LOG_WARN("failed to get int param val", K(*window_size_result), K(window_size),
                                               K(*item_size_result), K(item_size),
-                                              KPC(max_disuse_cnt_result), K(max_disuse_cnt), K(ret));
+                                              KPC(max_disuse_cnt_result), K(max_disuse_cnt), K(ret));;
     } else {
       topk_fre_hist->set_window_size(window_size);
       topk_fre_hist->set_item_size(item_size);

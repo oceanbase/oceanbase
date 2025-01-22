@@ -1909,7 +1909,7 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
         "sql_seq", lock_for_read_arg.data_sql_sequence_);
     }
   }
-  if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
+  if (REACH_THREAD_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
     cost_time = common::ObClockGenerator::getClock() - cost_time;
     if (cost_time > 10 * 1000 /*10ms*/) {
       LOG_INFO("multi-ver row scanner lock for read", K(ret), K(cost_time));
@@ -2151,7 +2151,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::get_trans_state_from_tx_table(
           committed_trans_version_, last_trans_state_, can_read))) {
         LOG_WARN("failed to add minor trans state", K(tmp_ret), K(read_trans_id), K(sql_seq), K(can_read));
       }
-      if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
+      if (REACH_THREAD_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
         cost_time = common::ObClockGenerator::getClock() - cost_time;
         if (cost_time > 10 * 1000 /*10ms*/) {
           LOG_INFO("multi-ver minor row scanner check seq", K(ret), K(cost_time));

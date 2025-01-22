@@ -44,6 +44,7 @@ using namespace share;
 using namespace compaction;
 namespace blocksstable
 {
+ERRSIM_POINT_DEF(EN_NO_NEED_MERGE_MICRO_BLK);
 
 ObMicroBlockBufferHelper::ObMicroBlockBufferHelper()
   : data_store_desc_(nullptr),
@@ -168,8 +169,8 @@ int ObMicroBlockBufferHelper::check_micro_block(
           decomp_buf, real_decomp_size))) {
     STORAGE_LOG(WARN, "failed to decompress data", K(ret));
   } else if (uncompressed_size != real_decomp_size) {
-    ret = OB_CHECKSUM_ERROR;
-    LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "decompressed size is not equal to original size", K(ret),
+    ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
+    LOG_DBA_ERROR(OB_ERR_COMPRESS_DECOMPRESS_DATA, "msg", "decompressed size is not equal to original size", K(ret),
         K(uncompressed_size), K(real_decomp_size));
   }
   if (OB_SUCC(ret)) {
@@ -219,16 +220,16 @@ int ObMicroBlockBufferHelper::check_micro_block_checksum(
     if (OB_SUCC(ret)) {
       const int64_t new_checksum = checksum_helper_.get_row_checksum();
       if (checksum != new_checksum) {
-        ret = OB_CHECKSUM_ERROR; // ignore print error code
-        LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "micro block checksum is not equal", K(new_checksum),
-            K(checksum), K(ret), KPC(data_store_desc_), K(checksum_helper_));
+        ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
+        LOG_DBA_ERROR(OB_ERR_COMPRESS_DECOMPRESS_DATA, "msg", "micro block write check failed",
+            K(new_checksum), K(checksum), K(ret), KPC(data_store_desc_), K(checksum_helper_));
       }
 #ifdef ERRSIM
   if (data_store_desc_->encoding_enabled()) {
     ret = OB_E(EventTable::EN_BUILD_DATA_MICRO_BLOCK) ret;
   }
 #endif
-      if (OB_UNLIKELY(OB_CHECKSUM_ERROR == ret)) {
+      if (OB_UNLIKELY(OB_ERR_COMPRESS_DECOMPRESS_DATA == ret)) {
         print_micro_block_row(micro_reader);
       }
     }
@@ -360,7 +361,6 @@ int ObMicroBlockAdaptiveSplitter::check_need_split(const int64_t micro_size,
       is_split = true;
     }
   }
-
   return ret;
 }
 
@@ -1789,8 +1789,6 @@ int ObMacroBlockWriter::wait_io_finish(ObStorageObjectHandle &macro_handle, ObMa
     macro_handle.reset();
   } else {
     if (!macro_handle.is_empty()) {
-      FLOG_INFO("wait io finish", K(macro_handle.get_macro_id()), K(data_store_desc_->get_table_cg_idx()),
-                K(is_normal_cg), KP(macro_block));
       int64_t block_io_us;
       if (OB_SUCCESS == macro_handle.get_io_time_us(block_io_us)) {
         merge_block_info_.block_io_us_ += block_io_us;
@@ -1958,6 +1956,16 @@ int ObMacroBlockWriter::check_micro_block_need_merge(
             micro_writer_->get_row_count() >= max_block_row_count / 3) {
           need_merge = false;
         }
+#ifdef ERRSIM
+        if (OB_SUCC(ret)) {
+          // always reuse micro block for test
+          if (OB_UNLIKELY(EN_NO_NEED_MERGE_MICRO_BLK)) {
+            need_merge = false;
+            FLOG_INFO("ERRSIM EN_NO_NEED_MERGE_MICRO_BLK", KR(ret));
+            ret = OB_SUCCESS;
+          }
+        }
+#endif
       }
       if (!need_merge) {
       } else if (micro_writer_->get_row_count() <= 0
@@ -2201,10 +2209,14 @@ void ObMacroBlockWriter::dump_micro_block(ObIMicroBlockWriter &micro_writer)
   char *buf = NULL;
   int64_t size = 0;
   if (micro_writer.get_row_count() > 0) {
-    if (OB_FAIL(micro_writer.build_block(buf, size))) {
-      STORAGE_LOG(WARN, "failed to build micro block", K(ret));
-    } else if (OB_FAIL(micro_helper_.dump_micro_block_writer_buffer(buf, size))) {
-      STORAGE_LOG(WARN, "failed to dump micro block", K(ret));
+    if (data_store_desc_->encoding_enabled()) {
+      micro_writer.dump_diagnose_info();
+    } else {
+      if (OB_FAIL(micro_writer.build_block(buf, size))) {
+        STORAGE_LOG(WARN, "failed to build micro block", K(ret));
+      } else if (OB_FAIL(micro_helper_.dump_micro_block_writer_buffer(buf, size))) {
+        STORAGE_LOG(WARN, "failed to dump micro block", K(ret));
+      }
     }
   }
   return;

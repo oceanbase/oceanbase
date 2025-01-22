@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX STORAGE
+#define USING_LOG_PREFIX RS
 
 #include "share/ob_errno.h"
 #include "ob_replica_safe_check_task.h"
@@ -173,6 +173,7 @@ void ObReplicaSafeCheckTask::runTimerTask()
         LOG_WARN("unexpected status", KR(ret), KPC(this));
         break;
     }
+    LOG_INFO("timer task finish", KR(ret), KPC(this));
   }
 }
 
@@ -198,6 +199,38 @@ void ObReplicaSafeCheckTask::switch_status(StatusType new_status, int64_t delay)
     LOG_ERROR("status error", KR(ret), K(new_status), K(delay), KPC(this));
     ob_abort();
   }
+}
+
+int ObReplicaSafeCheckTask::register_mds_in_trans(
+    const transaction::ObTxDataSourceType type,
+    const ObUpdateMergeScnArg &arg,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  observer::ObInnerSQLConnection *conn = NULL;
+  int MAX_MULTI_BUF_SIZE = 64;
+  char buf[MAX_MULTI_BUF_SIZE];
+  int64_t pos = 0;
+  int64_t buf_len = arg.get_serialize_size();
+  if (share::SYS_LS == arg.ls_id_ ||
+      !arg.is_valid() ||
+      (transaction::ObTxDataSourceType::MV_PUBLISH_SCN != type &&
+       transaction::ObTxDataSourceType::MV_NOTICE_SAFE != type &&
+       transaction::ObTxDataSourceType::MV_MERGE_SCN != type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(type), K(arg));
+  } else if (!trans.is_started()) {
+    LOG_WARN("trans is not started", KR(ret), K(type), K(arg));
+  } else if (OB_ISNULL(conn = dynamic_cast<observer::ObInnerSQLConnection *>
+                       (trans.get_connection()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("conn is NULL", KR(ret));
+  } else if (OB_FAIL(arg.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize", KR(ret), K(arg));
+  } else if (OB_FAIL(conn->register_multi_data_source(MTL_ID(), arg.ls_id_, type, buf, buf_len))) {
+    LOG_WARN("fail to register_tx_data", KR(ret), K(arg), K(buf_len));
+  }
+  return ret;
 }
 
 int ObReplicaSafeCheckTask::do_multi_trans(
@@ -286,7 +319,7 @@ int ObReplicaSafeCheckTask::publish_scn()
     }
     if (OB_SUCC(ret)) {
       if (0 == publish_cnt) {
-        need_publish = false;
+        LOG_INFO("there no log publish", KR(ret), KPC(this));
       } else if (OB_FAIL(ls_cache_.clear_deleted_ls_info(merge_scn_))) {
         LOG_WARN("failed to clear_deleted_ls_info", KR(ret), K(publish_cnt), K(this));
       }
@@ -302,6 +335,7 @@ int ObReplicaSafeCheckTask::publish_scn()
     switch_status(StatusType::PUBLISH_SCN, CHECK_INTERVAL);
   } else if (OB_FAIL(get_transfer_task_id(max_transfer_task_id_))) {
     LOG_WARN("failed to get_transfer_task_id", KR(ret), KPC(this));
+    switch_status(StatusType::PUBLISH_SCN, ERROR_RETRY_INTERVAL);
   } else {
     switch_status(StatusType::CHECK_END);
   }
@@ -453,6 +487,51 @@ int ObReplicaSafeCheckTask::notice_safe()
   return ret;
 }
 
+int ObReplicaSafeCheckTask::create_ls_with_tenant_mv_merge_scn(const uint64_t tenant_id,
+                                                               const share::ObLSID &ls_id,
+                                                               common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  share::SCN merge_scn(share::SCN::min_scn());
+
+  if (tenant_id == OB_INVALID_TENANT_ID ||
+      !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
+  } else if (data_version < DATA_VERSION_4_3_4_0) {
+    // do nothing
+  } else if (ls_id.is_sys_ls()) {
+    // do nothing
+  } else if (!trans.is_started()) {
+    LOG_WARN("trans not start", KR(ret), K(tenant_id));
+  } else {
+    ObGlobalStatProxy proxy(trans, tenant_id);
+    if (OB_FAIL(proxy.get_major_refresh_mv_merge_scn(false /* for_update */, merge_scn))) {
+      LOG_WARN("fail to get major_refresh_mv_merge_scn", KR(ret), K(tenant_id));
+      if (OB_ERR_NULL_VALUE == ret) {
+        ret = OB_SUCCESS;
+        merge_scn.set_min();
+      }
+    }
+    if (OB_SUCC(ret) && !merge_scn.is_min()) { // skip min merge scn
+      ObUpdateMergeScnArg arg;
+      if (OB_FAIL(arg.init(ls_id, merge_scn))) {
+        LOG_WARN("failed to init arg", KR(ret), K(ls_id), K(merge_scn));
+      } else if (OB_FAIL(register_mds_in_trans(transaction::ObTxDataSourceType::MV_PUBLISH_SCN, arg, trans))) {
+        LOG_WARN("failed to do multi trans", KR(ret), K(arg));
+      } else if (OB_FAIL(register_mds_in_trans(transaction::ObTxDataSourceType::MV_NOTICE_SAFE, arg, trans))) {
+        LOG_WARN("failed to do multi trans", KR(ret), K(arg));
+      } else if (OB_FAIL(register_mds_in_trans(transaction::ObTxDataSourceType::MV_MERGE_SCN, arg, trans))) {
+        LOG_WARN("failed to do multi trans", KR(ret), K(arg));
+      }
+    }
+  }
+  LOG_INFO("create ls with tenant mv merge scn", K(ret), K(merge_scn), K(tenant_id), K(ls_id));
+  return ret;
+}
 // void ObReplicaSafeCheckTask::finish()
 // {
 //   int ret = OB_SUCCESS;

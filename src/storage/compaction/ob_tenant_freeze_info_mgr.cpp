@@ -35,8 +35,10 @@
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
+
 namespace oceanbase
 {
 
@@ -55,7 +57,8 @@ const char *ObStorageSnapshotInfo::ObSnapShotTypeStr[] = {
     "MULTI_VERSION_START_ON_TABLET",
     "SNAPSHOT_ON_TABLET",
     "LS_RESERVED",
-    "MIN_MEDIUM"
+    "MIN_MEDIUM",
+    "SPLIT"
 };
 
 ObStorageSnapshotInfo::ObStorageSnapshotInfo()
@@ -276,7 +279,9 @@ int ObTenantFreezeInfoMgr::get_freeze_info_behind_snapshot_version(
   if (OB_FAIL(ret)) {
     STORAGE_LOG(WARN, "get_lock failed", KR(ret));
   } else if (OB_FAIL(get_freeze_info_compare_with_snapshot_version_(snapshot_version, share::ObFreezeInfoManager::CmpType::GREATER_THAN, freeze_info))) {
-    STORAGE_LOG(WARN, "failed to get freeze info behind snapshot version", KR(ret), K(snapshot_version));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      STORAGE_LOG(WARN, "failed to get freeze info behind snapshot version", KR(ret), K(snapshot_version));
+    }
   }
   return ret;
 }
@@ -623,7 +628,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
           if (is_primary_tenant(role) || is_standby_tenant(role)) {
             check_tenant_status_ = false;
             LOG_INFO("finish check tenant restore", K(tenant_id), K(role));
-          } else if (REACH_TENANT_TIME_INTERVAL(10L * 1000L * 1000L)) {
+          } else if (REACH_THREAD_TIME_INTERVAL(10L * 1000L * 1000L)) {
             LOG_INFO("skip restoring tenant to schedule major merge", K(tenant_id), K(role));
           }
         }
@@ -636,6 +641,8 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
             zone_merge_info.broadcast_scn_, K(cur_broadcast_version));
           if (OB_FAIL(MERGE_SCHEDULER_PTR->schedule_merge(zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx()))) {
             LOG_WARN("fail to schedule merge", K(ret), K(zone_merge_info));
+          } else if (OB_FAIL(MTL(ObTenantFreezer*)->update_frozen_scn(zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx()))) {
+            LOG_WARN("update frozen scn failed", K(ret), K(zone_merge_info.broadcast_scn_.get_scn()));
           }
         }
       }
@@ -699,7 +706,8 @@ int ObTenantFreezeInfoMgr::inner_update_info(
     const int64_t last_not_change_interval_us = ObTimeUtility::current_time() - last_change_ts_;
     if (MAX_GC_SNAPSHOT_TS_REFRESH_TS <= last_not_change_interval_us &&
         (0 != snapshot_gc_ts && 1 != snapshot_gc_ts)) {
-      if (REACH_TENANT_TIME_INTERVAL(60L * 1000L * 1000L)) {
+      if (REACH_THREAD_TIME_INTERVAL(60L * 1000L * 1000L)) {
+        // ignore ret
         STORAGE_LOG(WARN, "snapshot_gc_ts not refresh too long",
                     K(snapshot_gc_ts), K(new_snapshots), K(last_change_ts_),
                     K(last_not_change_interval_us));
@@ -713,7 +721,7 @@ int ObTenantFreezeInfoMgr::inner_update_info(
   STORAGE_LOG(DEBUG, "reload freeze info and snapshots", K(snapshot_gc_ts), K(new_snapshots));
 
   if (OB_SUCC(ret)) {
-    if (REACH_TENANT_TIME_INTERVAL(20 * 1000 * 1000 /*20s*/)) {
+    if (REACH_THREAD_TIME_INTERVAL(20 * 1000 * 1000 /*20s*/)) {
       STORAGE_LOG(INFO, "ObTenantFreezeInfoMgr success to update infos",
           K(new_snapshot_gc_scn), K(new_freeze_infos), K(new_snapshots), K(freeze_info_mgr_));
     }

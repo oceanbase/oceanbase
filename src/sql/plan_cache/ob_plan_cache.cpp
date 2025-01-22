@@ -1214,6 +1214,10 @@ int ObPlanCache::add_cache_obj(ObILibCacheCtx &ctx,
         cache_node->dec_ref_count(LC_NODE_HANDLE); //cache node dec ref in block
         cache_node->dec_ref_count(LC_NODE_HANDLE); //cache node dec ref in alloc
       }
+    } else {
+      if (!ctx.need_destroy_node_ && ret != OB_SQL_PC_PLAN_DUPLICATE) {
+        ctx.need_destroy_node_ = true;
+      }
     }
   } else {  /* node exist, add cache obj to it */
     LOG_TRACE("inner add cache obj", K(key), K(cache_node));
@@ -2413,6 +2417,7 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   pc_key.config_use_rich_format_ = session.config_use_rich_format();
   pc_key.sys_var_config_hash_val_ = session.get_sys_var_config_hash_val();
   pc_key.is_weak_read_ = is_weak;
+  pc_key.enable_mysql_compatible_dates_ = session.enable_mysql_compatible_dates();
   return ret;
 }
 

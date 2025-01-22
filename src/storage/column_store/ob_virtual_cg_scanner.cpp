@@ -235,7 +235,7 @@ int ObVirtualCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
 void ObDefaultCGScanner::reset()
 {
   if (nullptr != agg_group_) {
-    if (agg_group_->is_vec()) {
+    if (!agg_group_->is_vec()) {
       agg_group_->~ObAggGroupBase();
       if (stmt_allocator_ != nullptr ) {
         stmt_allocator_->free(agg_group_);

@@ -16,12 +16,17 @@
 #include "share/tablet/ob_tablet_to_table_history_operator.h"
 #include "src/share/scheduler/ob_partition_auto_split_helper.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "share/tablet/ob_tablet_to_ls_operator.h"
+#include "storage/ddl/ob_ddl_lock.h"
+#include "src/rootserver/ob_root_service.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
 using namespace obrpc;
 using namespace share;
 using namespace share::schema;
+using namespace storage;
 
 namespace rootserver
 {

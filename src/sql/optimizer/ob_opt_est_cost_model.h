@@ -220,6 +220,7 @@ struct ObCostTableScanInfo
      is_rescan_(false),
      is_batch_rescan_(false),
      ranges_(),
+     total_range_cnt_(0),
      ss_ranges_(),
      range_columns_(),
      prefix_filters_(),
@@ -264,7 +265,7 @@ struct ObCostTableScanInfo
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
                K_(postfix_filter_sel), K_(table_filter_sel),
                K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel),
-               K_(limit_rows),
+               K_(limit_rows), K_(total_range_cnt),
                K_(use_column_store),
                K_(index_back_with_column_store),
                K_(index_scan_column_group_infos),
@@ -281,6 +282,7 @@ struct ObCostTableScanInfo
   bool is_rescan_;
   bool is_batch_rescan_;
   ObRangesArray ranges_;  // all the ranges
+  int64_t total_range_cnt_;
   ObRangesArray ss_ranges_;  // skip scan ranges
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> range_columns_; // all the range columns
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> access_column_items_; // all the access columns
@@ -875,23 +877,19 @@ protected:
 
   int cost_index_scan(const ObCostTableScanInfo &est_cost_info,
                       double row_count,
-                      double &prefix_filter_sel,
                       double &cost);
 
   int cost_index_back(const ObCostTableScanInfo &est_cost_info,
                       double row_count,
                       double limit_count,
-                      double &prefix_filter_sel,
                       double &cost);
   int cost_column_store_index_scan(const ObCostTableScanInfo &est_cost_info,
                                     double row_count,
-                                    double &prefix_filter_sel,
                                     double &cost);
 
   int cost_column_store_index_back(const ObCostTableScanInfo &est_cost_info,
                                     double row_count,
                                     double limit_count,
-                                    double &prefix_filter_sel,
                                     double &cost);
   int cost_row_store_index_scan(const ObCostTableScanInfo &est_cost_info,
                                 double row_count,

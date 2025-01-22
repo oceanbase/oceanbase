@@ -113,15 +113,18 @@ public:
   ObPLPackageState(uint64_t package_id,
                    const ObPackageStateVersion &state_version,
                    bool serially_reusable)
-      : parent_alloc_(SET_IGNORE_MEM_VERSION("pkgsymbol"), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      : parent_alloc_(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(MTL_ID(), "PLPkgSymbol")), OB_MALLOC_NORMAL_BLOCK_SIZE),
         inner_allocator_(PL_MOD_IDX::OB_PL_PACKAGE_SYMBOL, &parent_alloc_),
-        cursor_allocator_("PlPkgCursor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+        cursor_allocator_(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(MTL_ID(), "PLPkgCursor")), OB_MALLOC_NORMAL_BLOCK_SIZE),
         package_id_(package_id),
         state_version_(state_version),
         serially_reusable_(serially_reusable),
         changed_vars_(),
         types_(),
-        vars_() {}
+        vars_() {
+    types_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(MTL_ID(), "PLPkgTypes")));
+    vars_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(MTL_ID(), "PLPkgVars")));
+  }
   virtual ~ObPLPackageState()
   {
     package_id_ = common::OB_INVALID_ID;

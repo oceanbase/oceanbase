@@ -179,7 +179,8 @@ ObPlanCacheValue::ObPlanCacheValue()
     has_dynamic_values_table_(false),
     stored_schema_objs_(pc_alloc_),
     stmt_type_(stmt::T_MAX),
-    enable_rich_vector_format_(false)
+    enable_rich_vector_format_(false),
+    switchover_epoch_(OB_INVALID_VERSION)
 {
   MEMSET(sql_id_, 0, sizeof(sql_id_));
   MEMSET(format_sql_id_, 0, sizeof(format_sql_id_));
@@ -189,6 +190,7 @@ ObPlanCacheValue::ObPlanCacheValue()
   not_param_info_.set_attr(ObMemAttr(MTL_ID(), "NotParamInfo"));
   not_param_var_.set_attr(ObMemAttr(MTL_ID(), "NotParamVar"));
   param_charset_type_.set_attr(ObMemAttr(MTL_ID(), "ParamCharsType"));
+  formalize_prec_idx_.set_attr(ObMemAttr(MTL_ID(), "FMTIntPrecIdx"));
 }
 
 int ObPlanCacheValue::assign_udr_infos(ObPlanCacheCtx &pc_ctx)
@@ -259,6 +261,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
   }
 
   if (OB_SUCC(ret)) {
+    switchover_epoch_ = MTL_GET_SWITCHOVER_EPOCH();
     pcv_set_ = pcv_set;
     //use_global_location_cache_ = !cache_obj->is_contain_virtual_table();
     outline_state_ = plan->get_outline_state();
@@ -280,6 +283,8 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
     } else if (OB_FAIL(param_charset_type_.assign(pc_ctx.param_charset_type_))) {
       LOG_WARN("fail to assign param charset type", K(ret));
     } else if (OB_FAIL(must_be_positive_idx_.add_members2(pc_ctx.must_be_positive_index_))) {
+      LOG_WARN("failed to add bitset members", K(ret));
+    } else if (OB_FAIL(formalize_prec_idx_.add_members2(pc_ctx.formalize_prec_index_))) {
       LOG_WARN("failed to add bitset members", K(ret));
     } else if (OB_FAIL(set_stored_schema_objs(plan->get_dependency_table(),
                                               pc_ctx.sql_ctx_.schema_guard_))) {
@@ -486,6 +491,7 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   //TODO shengle 此处拷贝需要想办法处理掉
   int64_t spm_mode = 0;
   bool need_check_schema = (schema_array.count() != 0);
+  int64_t new_switchover_epoch = MTL_GET_SWITCHOVER_EPOCH();
   if (schema_array.count() == 0 && stored_schema_objs_.count() == 0) {
     need_check_schema = true;
   }
@@ -519,6 +525,10 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   } else if (OB_INVALID_ID == (tenant_id = session->get_effective_tenant_id())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(ERROR, "got effective tenant id is invalid", K(ret));
+  } else if (OB_UNLIKELY(switchover_epoch_ != new_switchover_epoch)) {
+    ret = OB_OLD_SCHEMA_VERSION;
+    switchover_epoch_ = new_switchover_epoch;
+    SQL_PC_LOG(TRACE, "switchover_epoch changed, view or table is old version", KR(ret));
   } else if (OB_FAIL(check_value_version_for_get(pc_ctx.sql_ctx_.schema_guard_,
                                                  need_check_schema,
                                                  schema_array,
@@ -543,7 +553,7 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
     } else if (OB_UNLIKELY(pc_ctx.exec_ctx_.has_dynamic_values_table())) {
       if (OB_FAIL(ObValuesTableCompression::resolve_params_for_values_clause(pc_ctx, stmt_type_,
                   not_param_info_, param_charset_type_, neg_param_index_, not_param_index_,
-                  must_be_positive_idx_, params))) {
+                  must_be_positive_idx_, formalize_prec_idx_, params))) {
         LOG_WARN("failed to resolve_params_for_values_clause ", K(ret));
       }
     } else if (OB_FAIL(resolver_params(pc_ctx,
@@ -552,6 +562,7 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
                                        neg_param_index_,
                                        not_param_index_,
                                        must_be_positive_idx_,
+                                       formalize_prec_idx_,
                                        pc_ctx.fp_result_.raw_params_,
                                        params))) {
       LOG_WARN("fail to resolver raw params", K(ret));
@@ -740,6 +751,7 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
                                       const ObBitSet<> &neg_param_index,
                                       const ObBitSet<> &not_param_index,
                                       const ObBitSet<> &must_be_positive_idx,
+                                      const ObBitSet<> &formalize_prec_idx,
                                       ObIArray<ObPCParam *> &raw_params,
                                       ParamStore *obj_params)
 {
@@ -749,6 +761,7 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
   const int64_t raw_param_cnt = raw_params.count();
   ObObjParam value;
   bool enable_decimal_int = false;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(session) || OB_ISNULL(phy_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret), KP(session), KP(phy_ctx));
@@ -760,6 +773,9 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
                K(raw_param_cnt), K(param_charset_type.count()), K(pc_ctx.raw_sql_));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
+   } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session, false,
+                          enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {
     CHECK_COMPATIBILITY_MODE(session);
     ObCollationType collation_connection = static_cast<ObCollationType>(session->get_local_collation_connection());
@@ -767,8 +783,9 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < raw_param_cnt; i++) {
       bool is_param = false;
       if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_ctx->get_param_store_for_update(), stmt_type,
-                  param_charset_type.at(i), neg_param_index, not_param_index, must_be_positive_idx,
-                  raw_params.at(i), i, value, is_param, enable_decimal_int))) {
+                  param_charset_type.at(i), neg_param_index, not_param_index, must_be_positive_idx, formalize_prec_idx,
+                  raw_params.at(i), i, enable_mysql_compatible_dates, value, is_param,
+                  enable_decimal_int))) {
         SQL_PC_LOG(WARN, "failed to resolver param", K(ret), K(i));
       } else if (is_param && OB_FAIL(obj_params->push_back(value))) {
         SQL_PC_LOG(WARN, "fail to push item to array", K(ret));
@@ -820,6 +837,7 @@ int ObPlanCacheValue::resolve_multi_stmt_params(ObPlanCacheCtx &pc_ctx)
                                                  neg_param_index_,
                                                  not_param_index_,
                                                  must_be_positive_idx_,
+                                                 formalize_prec_idx_,
                                                  param_num,
                                                  *ab_params)) {
 
@@ -850,6 +868,7 @@ int ObPlanCacheValue::resolve_multi_stmt_params(ObPlanCacheCtx &pc_ctx)
                                                    neg_param_index_,
                                                    not_param_index_,
                                                    must_be_positive_idx_,
+                                                   formalize_prec_idx_,
                                                    *ab_params))) {
       LOG_WARN("failed to check multi stmt param type", K(ret));
     } else {
@@ -866,6 +885,7 @@ int ObPlanCacheValue::resolve_insert_multi_values_param(ObPlanCacheCtx &pc_ctx,
                                                         const ObBitSet<> &neg_param_index,
                                                         const ObBitSet<> &not_param_index,
                                                         const ObBitSet<> &must_be_positive_idx,
+                                                        const ObBitSet<> &formalize_prec_idx,
                                                         int64_t params_num,
                                                         ParamStore &param_store)
 {
@@ -887,6 +907,7 @@ int ObPlanCacheValue::resolve_insert_multi_values_param(ObPlanCacheCtx &pc_ctx,
                                        neg_param_index,
                                        not_param_index,
                                        must_be_positive_idx,
+                                       formalize_prec_idx,
                                        *raw_param_array,
                                        &temp_obj_params))) {
       LOG_WARN("failed to resolve parames", K(ret));
@@ -940,6 +961,7 @@ int ObPlanCacheValue::check_multi_stmt_param_type(ObPlanCacheCtx &pc_ctx,
                                                   const ObBitSet<> &neg_param_index,
                                                   const ObBitSet<> &not_param_index,
                                                   const ObBitSet<> &must_be_positive_idx,
+                                                  const ObBitSet<> &formalize_prec_idx,
                                                   ParamStore &param_store)
 {
   int ret = OB_SUCCESS;
@@ -957,6 +979,7 @@ int ObPlanCacheValue::check_multi_stmt_param_type(ObPlanCacheCtx &pc_ctx,
                                 neg_param_index,
                                 not_param_index,
                                 must_be_positive_idx,
+                                formalize_prec_idx,
                                 pc_ctx.multi_stmt_fp_results_.at(i).raw_params_,
                                 &temp_obj_params))) {
       LOG_WARN("failed to resolve parames", K(ret));
@@ -1452,6 +1475,7 @@ void ObPlanCacheValue::reset()
   not_param_index_.reset();
   not_param_var_.reset();
   neg_param_index_.reset();
+  formalize_prec_idx_.reset();
   param_charset_type_.reset();
   sql_traits_.reset();
   reset_tpl_sql_const_cons();

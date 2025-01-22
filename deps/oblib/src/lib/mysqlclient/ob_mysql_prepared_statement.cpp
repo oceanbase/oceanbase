@@ -2336,6 +2336,7 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
     OZ (pl::ObUserDefinedType::destruct_obj(param, nullptr, true));
     CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(param.get_ext())));
     OX (coll->set_count(0));
+    LOG_INFO("coll allocator is", K(coll->get_allocator()), K(ret));
   } else {
     // 原来无值，重新分配内存
     int64_t init_size = 0;
@@ -2378,11 +2379,15 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
       } else {
         field_cnt = 1;
       }
-      OX (elem_desc.set_field_count(field_cnt));
-      OX (elem_desc.set_pl_type(coll_type->get_element_type().get_type()));
-      OX (elem_desc.set_udt_id(coll_type->get_element_type().get_user_type_id()));
-      OX (coll->set_element_desc(elem_desc));
-      OX (param.set_extend(reinterpret_cast<int64_t>(ptr), coll_type->get_type(), init_size));
+      if (OB_SUCC(ret)) {
+        elem_desc.set_field_count(field_cnt);
+        elem_desc.set_pl_type(coll_type->get_element_type().get_type());
+        elem_desc.set_udt_id(coll_type->get_element_type().get_user_type_id());
+        coll->set_element_desc(elem_desc);
+        param.set_extend(reinterpret_cast<int64_t>(ptr), coll_type->get_type(), init_size);
+      } else if (NULL != ptr) {
+        allocator.free(ptr);
+      }
     }
   }
   // deal with is null
@@ -2438,7 +2443,10 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
           coll->set_last(array_size);
         } else if (NULL != new_data) {
           for (int64_t j = 0; j < i; j++) {
-            pl::ObUserDefinedType::destruct_objparam(*local_allocator, new_data[j]);
+            int tmp_ret = OB_SUCCESS;
+            if (OB_SUCCESS != (tmp_ret = pl::ObUserDefinedType::destruct_objparam(*local_allocator, new_data[j]))) {
+              LOG_WARN("dblink destruct_objparam failed", K(ret), K(tmp_ret));
+            }
           }
           local_allocator->free(new_data);
         }
@@ -2488,27 +2496,32 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
                 ObObj *element = NULL;
                 new(ptr)pl::ObPLRecord(record_type->get_user_type_id(), record_type->get_member_count());
                 OZ (record->init_data(*local_allocator, false));
-                CK (record->get_allocator());
-                for (int64_t j = 0; OB_SUCC(ret) && j < record_type->get_member_count(); ++j) {
-                  CK (OB_NOT_NULL(record_type->get_record_member_type(j)));
-                  OZ (record->get_element(j, element));
-                  CK (OB_NOT_NULL(element));
-                  CK (record_type->get_record_member_type(j)->is_obj_type());
-                  OX (new (element) ObObj(ObNullType));
-                  if (OB_SUCC(ret)) {
-                    CK (start_idx + j < com_data.get_data_array().count());
-                    CK (OB_NOT_NULL(bind_param = com_data.get_data_array().at(start_idx + j)));
-                    CK (MYSQL_TYPE_OBJECT == bind_param->buffer_type_);
-                    CK (OB_NOT_NULL(pl_array = (MYSQL_COMPLEX_BIND_ARRAY *)bind_param->buffer_));
-                    OX (element->set_meta_type(*(record_type->get_record_member_type(j)->get_meta_type())));
-                    OZ (process_array_element(i, *(record->get_allocator()), pl_array->buffer, *element, tz_info));
-                  }
-                } // end for
-              }
-              if (NULL != ptr) {
-                current_obj->set_extend(reinterpret_cast<int64_t>(ptr), pl::PL_RECORD_TYPE, init_size);
                 if (OB_FAIL(ret)) {
-                  pl::ObUserDefinedType::destruct_objparam(*local_allocator, *current_obj);
+                  local_allocator->free(ptr);
+                } else {
+                  CK (record->get_allocator());
+                  for (int64_t j = 0; OB_SUCC(ret) && j < record_type->get_member_count(); ++j) {
+                    CK (OB_NOT_NULL(record_type->get_record_member_type(j)));
+                    OZ (record->get_element(j, element));
+                    CK (OB_NOT_NULL(element));
+                    CK (record_type->get_record_member_type(j)->is_obj_type());
+                    OX (new (element) ObObj(ObNullType));
+                    if (OB_SUCC(ret)) {
+                      CK (start_idx + j < com_data.get_data_array().count());
+                      CK (OB_NOT_NULL(bind_param = com_data.get_data_array().at(start_idx + j)));
+                      CK (MYSQL_TYPE_OBJECT == bind_param->buffer_type_);
+                      CK (OB_NOT_NULL(pl_array = (MYSQL_COMPLEX_BIND_ARRAY *)bind_param->buffer_));
+                      OX (element->set_meta_type(*(record_type->get_record_member_type(j)->get_meta_type())));
+                      OZ (process_array_element(i, *(record->get_allocator()), pl_array->buffer, *element, tz_info));
+                    }
+                  } // end for
+                  current_obj->set_extend(reinterpret_cast<int64_t>(ptr), pl::PL_RECORD_TYPE, init_size);
+                  if (OB_FAIL(ret)) {
+                    int tmp_ret = OB_SUCCESS;
+                    if (OB_SUCCESS != (tmp_ret = pl::ObUserDefinedType::destruct_objparam(*local_allocator, *current_obj))) {
+                      LOG_WARN("dblink destruct_objparam failed", K(ret), K(tmp_ret));
+                    }
+                  }
                 }
               }
             }
@@ -2520,7 +2533,10 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
             coll->set_last(array_size);
           } else if (NULL != new_data) {
             for (int64_t j = 0; j < i; j++) {
-              pl::ObUserDefinedType::destruct_objparam(*local_allocator, new_data[j]);
+              int tmp_ret = OB_SUCCESS;
+              if (OB_SUCCESS != (tmp_ret = pl::ObUserDefinedType::destruct_objparam(*local_allocator, new_data[j]))) {
+                LOG_WARN("dblink destruct_objparam failed", K(ret), K(tmp_ret));
+              }
             }
             local_allocator->free(new_data);
           }

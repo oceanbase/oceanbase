@@ -154,7 +154,19 @@ public:
                ObIArray<ObOptStat> &dst_opt_stats);
 
   template <class T>
-  int add_stat_item(const T &item);
+  int add_stat_item(const T &item) {
+    int ret = OB_SUCCESS;
+    ObStatItem *cpy = NULL;
+    if (!item.is_needed()) {
+      // do nothing
+    } else if (OB_ISNULL(cpy = copy_stat_item(allocator_, item))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to copy stat item", K(ret));
+    } else if (OB_FAIL(stat_items_.push_back(cpy))) {
+      LOG_WARN("failed to push back stat item", K(ret));
+    }
+    return ret;
+  }
 
   int fill_hints(common::ObIAllocator &alloc,
                  const ObString &table_name,
@@ -192,7 +204,6 @@ private:
 
   static int get_gather_table_type_list(ObSqlString &gather_table_type_list);
 };
-
 }
 }
 

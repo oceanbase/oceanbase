@@ -380,7 +380,7 @@ int ObHATabletGroupCOConvertCtx::inner_check_and_schedule(ObLS &ls, const ObTabl
   } else if (OB_FAIL(compaction::ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(ls_id, *tablet, convert_ctxs_[idx].retry_cnt_, convert_ctxs_[idx].co_dag_net_id_, schedule_ret))) {
     LOG_WARN("failed to schedule convert co merge", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_EAGAIN == schedule_ret && !convert_ctxs_[idx].is_eagain_exhausted()) {
-    if (REACH_TENANT_TIME_INTERVAL(10 * 60 * 1000 * 1000L /*10min*/)) {
+    if (REACH_THREAD_TIME_INTERVAL(10 * 60 * 1000 * 1000L /*10min*/)) {
       LOG_INFO("[CS-Replica] convert co merge is doing now, please wait for a while, or set EN_DISABLE_WAITING_CONVERT_CO_WHEN_MIGRATION tracepoint to skip it",
         K(schedule_ret), K(ls_id), K(tablet_id), K(convert_ctxs_[idx]));
     }
@@ -493,7 +493,7 @@ int ObDataTabletsCheckCOConvertDag::inner_check_can_schedule(
   }
 
   const int64_t cost_time = ObTimeUtility::current_time() - current_time;
-  if (REACH_TENANT_TIME_INTERVAL(OB_DATA_TABLETS_NOT_CHECK_CONVERT_THRESHOLD)) {
+  if (REACH_THREAD_TIME_INTERVAL(OB_DATA_TABLETS_NOT_CHECK_CONVERT_THRESHOLD)) {
     LOG_INFO("[CS-Replica] finish check_can_schedule", K(ret), K(can_schedule), K(reason), K(wait_one_round_time), K(total_wait_time), K(cost_time), K(migration_ctx.tablet_group_mgr_));
   } else {
     LOG_TRACE("[CS-Replica] finish check_can_schedule", K(ret), K(can_schedule), K(reason), K(wait_one_round_time), K(total_wait_time), K(cost_time), K(migration_ctx.tablet_group_mgr_));

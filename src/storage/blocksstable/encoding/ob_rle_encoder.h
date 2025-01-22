@@ -73,6 +73,8 @@ public:
   virtual int64_t calc_size() const override;
   virtual ObColumnHeader::Type get_type() const override { return type_; }
   virtual int store_fix_data(ObBufferWriter &buf_writer) override;
+  INHERIT_TO_STRING_KV("ObIColumnEncoder", ObIColumnEncoder, K_(count), K_(row_id_byte),
+      K_(ref_byte), KPC_(rle_meta_header), K_(dict_encoder));
 private:
   int64_t count_;
   int64_t row_id_byte_;

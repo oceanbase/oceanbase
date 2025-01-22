@@ -31,7 +31,7 @@ namespace sql
 {
 
 ObExprArrayContainsAll::ObExprArrayContainsAll(ObIAllocator &alloc)
-    : ObExprArrayOverlaps(alloc, T_FUNC_SYS_ARRAY_CONTAINS_ALL, N_ARRAY_CONTAINS_ALL, 2, NOT_ROW_DIMENSION)
+    : ObExprArrayOverlaps(alloc, T_FUNC_SYS_ARRAY_CONTAINS_ALL, N_ARRAY_CONTAINS_ALL, 2, ObArithExprOperator::NOT_ROW_DIMENSION)
 {
 }
 

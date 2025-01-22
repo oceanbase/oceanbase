@@ -41,6 +41,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/access/ob_table_read_info.h"
+#include "share/ob_io_device_helper.h"
 
 using namespace oceanbase::share;
 
@@ -248,7 +249,7 @@ int ObStorageHAUtils::check_ls_deleted(
   if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get ls status from inner table get invalid argument", K(ret), K(ls_id));
-  } else if (!REACH_TENANT_TIME_INTERVAL(60 * 1000L * 1000L)) { //60s
+  } else if (!REACH_THREAD_TIME_INTERVAL(60 * 1000L * 1000L)) { //60s
     is_deleted = false;
   } else if (OB_FAIL(ObLocationService::check_ls_exist(tenant_id, ls_id, state))) {
     LOG_WARN("failed to check ls exist", K(ret), K(tenant_id), K(ls_id));
@@ -621,11 +622,11 @@ int ObStorageHAUtils::append_tablet_list(
   return ret;
 }
 
-int ObStorageHAUtils::get_tablet_size_in_bytes(
-    const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &tablet_size)
+int ObStorageHAUtils::get_tablet_backup_size_in_bytes(
+    const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &backup_size)
 {
   int ret = OB_SUCCESS;
-  tablet_size = 0;
+  backup_size = 0;
   ObTabletResidentInfo info;
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -638,7 +639,29 @@ int ObStorageHAUtils::get_tablet_size_in_bytes(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid resident_info", K(ret), K(key), K(info));
   } else {
-    tablet_size = info.get_occupy_size() + info.get_backup_size();
+    backup_size = info.get_backup_size();
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::get_tablet_occupy_size_in_bytes(
+    const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &occupy_size)
+{
+  int ret = OB_SUCCESS;
+  occupy_size = 0;
+  ObTabletResidentInfo info;
+  const ObTabletMapKey key(ls_id, tablet_id);
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+
+  if (!ls_id.is_valid() || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(t3m->get_tablet_resident_info(key, info))) {
+    LOG_WARN("fail to get tablet resident_info", K(ret), K(key));
+  } else if (!info.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid resident_info", K(ret), K(key), K(info));
+  } else {
+    occupy_size = info.get_occupy_size() + info.get_backup_size();
   }
   return ret;
 }

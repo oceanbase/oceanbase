@@ -295,6 +295,15 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_olap_async_job_executor.cpp
 )
 
+ob_set_subtarget(ob_sql engine_connector
+  engine/connector/ob_java_native_method.cpp
+  engine/connector/ob_java_env.cpp
+  engine/connector/ob_java_helper.cpp
+  engine/connector/ob_jni_connector.cpp
+  engine/connector/ob_jni_scanner.cpp
+  engine/connector/ob_jni_writer.cpp
+)
+
 ob_set_subtarget(ob_sql engine_dml
   engine/dml/ob_conflict_checker.cpp
   engine/dml/ob_dml_ctx_define.cpp
@@ -393,6 +402,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_elt.cpp
   engine/expr/ob_expr_empty_lob.cpp
   engine/expr/ob_expr_encrypt.cpp
+  engine/expr/ob_expr_enhanced_aes_encrypt.cpp
   engine/expr/ob_expr_equal.cpp
   engine/expr/ob_expr_estimate_ndv.cpp
   engine/expr/ob_expr_exists.cpp
@@ -857,7 +867,6 @@ ob_set_subtarget(ob_sql ALONE
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part4.cpp
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part5.cpp
   engine/expr/vector_cast/vector_cast_compile/vector_cast_part6.cpp
-  engine/expr/vector_cast/vector_cast_compile/vector_cast_part7.cpp
   engine/expr/vector_cast/vector_cast_compile/vector_cast_all.cpp
   engine/expr/vector_cast/vector_cast.cpp
 )
@@ -998,6 +1007,8 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_orc_table_row_iter.cpp
   engine/table/ob_parquet_table_row_iter.cpp
   engine/table/ob_odps_table_row_iter.cpp
+  engine/table/ob_file_prefetch_buffer.cpp
+  engine/table/ob_odps_jni_table_row_iter.cpp
 )
 
 ob_set_subtarget(ob_sql executor

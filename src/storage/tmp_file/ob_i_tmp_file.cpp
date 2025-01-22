@@ -209,6 +209,7 @@ ObITmpFile::ObITmpFile()
       begin_page_id_(ObTmpFileGlobal::INVALID_PAGE_ID),
       begin_page_virtual_id_(ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID),
       end_page_id_(ObTmpFileGlobal::INVALID_PAGE_ID),
+      diag_log_print_cnt_(0),
       data_page_flush_level_(-1),
       data_flush_node_(*this),
       meta_lock_(common::ObLatchIds::TMP_FILE_LOCK),
@@ -319,6 +320,7 @@ void ObITmpFile::reset()
     begin_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
     begin_page_virtual_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
     end_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
+    diag_log_print_cnt_ = 0;
     data_page_flush_level_ = -1;
     data_flush_node_.unlink();
     wbp_ = nullptr;
@@ -623,7 +625,15 @@ int ObITmpFile::aio_write(ObTmpFileIOCtx &io_ctx)
   }
 
   if (OB_SUCC(ret)) {
-    LOG_DEBUG("aio write finish", KR(ret), K(fd_), K(file_size_), K(io_ctx));
+    // ATTENTION! we print tmp file data members here without meta_lock_.
+    static const int64_t PRINT_LOG_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+    int64_t cur_print_cnt = file_size_ / PRINT_LOG_FILE_SIZE;
+    if (cur_print_cnt > ATOMIC_LOAD(&diag_log_print_cnt_)) {
+      ATOMIC_INC(&diag_log_print_cnt_);
+      LOG_INFO("aio write finish", K(fd_), K(io_ctx), KPC(this));
+    } else {
+      LOG_DEBUG("aio write finish", KR(ret), K(fd_), K(file_size_), K(io_ctx));
+    }
   } else {
     LOG_DEBUG("aio write failed", KR(ret), K(fd_), K(file_size_), K(io_ctx), KPC(this));
   }

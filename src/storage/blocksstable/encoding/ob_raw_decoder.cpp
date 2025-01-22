@@ -12,8 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "deps/oblib/src/lib/oblog/ob_log_module.h"
 #include "ob_raw_decoder.h"
-
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "ob_bit_stream.h"
 #include "ob_integer_array.h"
@@ -25,11 +25,11 @@
 
 namespace oceanbase
 {
+using namespace common;
 namespace blocksstable
 {
 
 class ObIRowIndex;
-using namespace common;
 const ObColumnHeader::Type ObRawDecoder::type_;
 
 // define fast batch decode function family
@@ -622,6 +622,7 @@ int ObRawDecoder::decode_vector_bitpacked(
       break;
     }
     case VEC_TC_DATE:
+    case VEC_TC_MYSQL_DATE:
     case VEC_TC_DEC_INT32: {
       // int32_t
       FILL_VECTOR_FUNC(ObFixedLengthFormat<int32_t>, decoder_ctx.has_extend_value());
@@ -629,6 +630,7 @@ int ObRawDecoder::decode_vector_bitpacked(
     }
     case VEC_TC_INTEGER:
     case VEC_TC_DATETIME:
+    case VEC_TC_MYSQL_DATETIME:
     case VEC_TC_TIME:
     case VEC_TC_UNKNOWN:
     case VEC_TC_INTERVAL_YM:
@@ -831,6 +833,8 @@ int ObRawDecoder::check_fast_filter_valid(
     case ObIntTC:
     case ObDateTimeTC:
     case ObDateTC:
+    case ObMySQLDateTC:
+    case ObMySQLDateTimeTC:
     case ObTimeTC: {
       is_signed_data = true;
       break;

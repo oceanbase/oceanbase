@@ -261,6 +261,7 @@ class ObDDLFinishLog final
 public:
   ObDDLFinishLog();
   ~ObDDLFinishLog() = default;
+  void reset();
   int init(const int64_t tenant_id,
            const share::ObLSID ls_id,
            const ObITable::TableKey &table_key,

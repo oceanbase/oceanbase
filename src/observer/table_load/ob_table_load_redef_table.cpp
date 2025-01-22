@@ -65,6 +65,8 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     uint64_t tenant_id = arg.tenant_id_;
     const bool need_reorder_column_id = false;
     const share::ObDDLType ddl_type = arg.is_load_data_ ? share::DDL_DIRECT_LOAD : share::DDL_DIRECT_LOAD_INSERT;
+    int64_t foreign_key_checks = 1;
+    session_info.get_foreign_key_checks(foreign_key_checks);
     if (OB_FAIL(create_table_arg.init(tenant_id, tenant_id, tenant_id, arg.table_id_,
                                       THIS_WORKER.get_group_id(), session_info.get_sessid_for_table(),
                                       arg.parallelism_, ddl_type, session_info.get_sql_mode(),
@@ -74,7 +76,8 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
                                       session_info.get_local_nls_timestamp_tz_format(),
                                       session_info.get_tz_info_wrap(),
                                       arg.tablet_ids_,
-                                      need_reorder_column_id))) {
+                                      need_reorder_column_id,
+                                      foreign_key_checks))) {
       LOG_WARN("fail to init create hidden table arg", KR(ret));
     } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res,
         res.snapshot_version_, res.data_format_version_, session_info))) {

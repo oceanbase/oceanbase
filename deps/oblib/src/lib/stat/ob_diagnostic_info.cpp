@@ -17,6 +17,7 @@
 #include "lib/stat/ob_diagnostic_info_util.h"
 #include "lib/objectpool/ob_server_object_pool.h"
 #include "lib/time/ob_tsc_timestamp.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {

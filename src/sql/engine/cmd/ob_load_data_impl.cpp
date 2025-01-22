@@ -45,6 +45,7 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "share/config/ob_config_helper.h"
+#include "src/observer/mysql/ob_query_driver.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

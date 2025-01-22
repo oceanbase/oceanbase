@@ -118,6 +118,7 @@ public:
   int64_t get_indegree() const;
   int add_parent_node(ObINodeWithChild &parent);
   const common::ObIArray<ObINodeWithChild*> &get_child_nodes() const { return children_; }
+  const common::ObIArray<ObINodeWithChild*> &get_parent_nodes() const { return parent_; }
   int remove_parent_for_children();
   int remove_child_for_parents();
   int deep_copy_children(const common::ObIArray<ObINodeWithChild*> &other);
@@ -128,7 +129,7 @@ public:
       const ObINodeWithChild *child,
       bool &is_exist);
 
-  TO_STRING_KV(K_(indegree));
+  TO_STRING_KV(KP(this), K_(indegree));
 
 protected:
   virtual int add_child_without_lock(ObINodeWithChild &child);
@@ -352,6 +353,15 @@ public:
     DAG_STATUS_MAX,
   };
 
+  enum ObDagRetryStrategy : uint8_t
+  {
+    DAG_CAN_RETRY = 0,
+    DAG_SKIP_RETRY = 1,
+    DAG_AND_DAG_NET_SKIP_RETRY = 2,
+    // Ascending with priority, strategy with higher priority can replace lower one.
+    DAG_RETRY_STRATEGY_MAX
+  };
+
   const static char *ObIDagStatusStr[];
 
   static const int64_t MergeDagPrioCnt = 3;
@@ -413,9 +423,15 @@ public:
     }
     return diagnose_type;
   }
+  static bool is_valid_retry_strategy(const ObDagRetryStrategy strategy)
+  {
+    return strategy >= DAG_CAN_RETRY && strategy < DAG_RETRY_STRATEGY_MAX;
+  }
   bool has_set_stop() { return is_stop_; }
-  void set_stop();
-  void set_stop_without_lock();
+  int set_stop();
+  int set_stop_without_lock();
+  void simply_set_stop(); // do not set dag net cancel.
+  bool is_dag_net_canceled() const;
   ObIDagNet *get_dag_net() const { return dag_net_; }
   void set_dag_net(ObIDagNet &dag_net)
   {
@@ -431,6 +447,7 @@ public:
   void set_list_idx(ObDagListIndex list_idx) { list_idx_ = list_idx; }
 
   int64_t get_running_task_count() const { return running_task_cnt_; }
+  int64_t get_running_times() const { return running_times_; }
   int64_t get_task_list_count()
   {
     lib::ObMutexGuard guard(lock_);
@@ -440,7 +457,10 @@ public:
   int64_t get_max_concurrent_task_cnt() const { return max_concurrent_task_cnt_;}
   virtual int gene_warning_info(ObDagWarningInfo &info, ObIAllocator &allocator);
   virtual bool ignore_warning() { return false; }
-  virtual bool check_can_retry();
+  virtual bool check_need_stop_dag(const int error_code) { return false; }
+  virtual int decide_retry_strategy(const int error_code, ObDagRetryStrategy &retry_status) { retry_status = DAG_CAN_RETRY; return OB_SUCCESS; }
+  virtual bool inner_check_can_retry();
+  bool check_can_retry();
   void set_max_retry_times(const uint32_t max_retry_times)
   {
     lib::ObMutexGuard guard(lock_);
@@ -494,6 +514,9 @@ public:
   virtual bool is_ha_dag() const { return false; }
   void set_dag_emergency(const bool emergency) { emergency_ = emergency; }
   bool get_emergency() const { return emergency_; }
+  int handle_retry_strategy(const int errcode);
+  bool need_skip_retry() const { return DAG_SKIP_RETRY == retry_strategy_
+                                     || DAG_AND_DAG_NET_SKIP_RETRY == retry_strategy_; }
 
   DECLARE_VIRTUAL_TO_STRING;
   DISABLE_COPY_ASSIGN(ObIDag);
@@ -558,6 +581,7 @@ private:
   ObIDagNet *dag_net_; // should protect by lock
   ObDagListIndex list_idx_;
   bool emergency_;
+  ObDagRetryStrategy retry_strategy_; // should protect by lock
 };
 
 /*
@@ -629,7 +653,7 @@ public:
   {
     return OB_SUCCESS;
   }
-  void set_cancel();
+  int set_cancel();
   bool is_cancel();
   void set_last_dag_finished();
   bool is_inited();
@@ -841,6 +865,7 @@ public:
   int cancel_dag_net(const ObDagId &dag_id);
   int get_first_dag_net(ObIDagNet *&dag_net);
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
+  int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
 private:
   typedef common::ObDList<ObIDagNet> DagNetList;
   typedef common::hash::ObHashMap<const ObIDagNet*,
@@ -954,6 +979,7 @@ public:
   // 1. check ls compaction exist
   // 2. cancel ls compaction waiting dag
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
+  int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
   int get_compaction_dag_count(int64_t dag_count);
   int get_max_major_finish_time(const int64_t version, int64_t &estimated_finish_time);
   int diagnose_dag(
@@ -1060,7 +1086,7 @@ private:
     const bool try_move_child);
   int try_move_child_to_ready_list_(ObIDag &dag);
   int erase_dag_(ObIDag &dag);
-  int deal_with_fail_dag_(ObIDag &dag, bool &retry_flag);
+  int deal_with_fail_dag_(ObIDag &dag, const int errcode, bool &retry_flag);
   int finish_task_in_dag_(ObITask &task, ObIDag &dag);
   void pause_worker_(ObTenantDagWorker &worker);
   bool check_need_load_shedding_(const bool for_schedule);
@@ -1215,6 +1241,7 @@ public:
   // 1. check ls compaction exist
   // 2. cancel ls compaction waiting dag
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
+  int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
   int check_dag_net_exist(
       const ObDagId &dag_id, bool &exist);
   int cancel_dag_net(const ObDagId &dag_id);
@@ -1559,7 +1586,7 @@ inline bool is_reserve_mode()
     if (NULL != worker) {                                                \
       if (worker->hold_by_compaction_dag()) {                            \
         worker->set_mem_ctx(&mem_ctx);                                   \
-      } else if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000L/*30s*/)) { \
+      } else if (REACH_THREAD_TIME_INTERVAL(30 * 1000 * 1000L/*30s*/)) { \
         COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED,                          \
           "only compaction dag can set memctx", K(worker), K(lbt()));    \
       }                                                                  \
@@ -1573,7 +1600,7 @@ inline bool is_reserve_mode()
     if (NULL != worker) {                                                      \
       if (worker->hold_by_compaction_dag()) {                                  \
         mem_ctx = worker->get_mem_ctx();                                       \
-      } else if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000L /*30s*/)) {      \
+      } else if (REACH_THREAD_TIME_INTERVAL(30 * 1000 * 1000L /*30s*/)) {      \
         COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED,                                \
                        "memctx only provided for compaction dag", K(worker),   \
                        K(lbt()));                                              \

@@ -17,7 +17,6 @@
 #include "lib/utility/ob_print_kv.h"
 //to be removed
 #include "common/rowkey/ob_store_rowkey.h"
-#include "share/schema/ob_table_param.h"
 
 namespace oceanbase
 {

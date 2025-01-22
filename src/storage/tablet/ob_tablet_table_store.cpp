@@ -1188,8 +1188,7 @@ int ObTabletTableStore::get_all_sstable(
 }
 
 int ObTabletTableStore::get_memtables(
-    common::ObIArray<storage::ObITable *> &memtables,
-    const bool need_active) const
+    common::ObIArray<storage::ObITable *> &memtables) const
 {
   common::SpinRLockGuard guard(memtables_lock_);
   int ret = OB_SUCCESS;
@@ -1197,8 +1196,6 @@ int ObTabletTableStore::get_memtables(
     if (OB_ISNULL(memtables_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("memtable must not null", K(ret), K(memtables_));
-    } else if (!need_active && memtables_[i]->is_active_memtable()) {
-      continue;
     } else if (OB_FAIL(memtables.push_back(memtables_[i]))) {
       LOG_WARN("failed to add memtables", K(ret), K(*this));
     }
@@ -1995,7 +1992,7 @@ int ObTabletTableStore::build_memtable_array(const ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
-  if (OB_FAIL(tablet.get_memtables(memtable_array, true/*need_active*/))) {
+  if (OB_FAIL(tablet.get_memtables(memtable_array))) {
     LOG_WARN("failed to get all memtables from memtable_mgr", K(ret));
   } else if (memtable_array.empty()) {
     // empty memtable array

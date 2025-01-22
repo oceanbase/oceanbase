@@ -124,7 +124,7 @@ int ObTableLoadPreSortWriter::px_write(ObIVector *tablet_id_vector,
                          batch_rows.size_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(tablet_id_vector), K(vectors.count()), K(batch_rows));
-  } else if (!datum_row_.is_valid() && datum_row_.init(table_data_desc_->column_count_)) {
+  } else if (!datum_row_.is_valid() && OB_FAIL(datum_row_.init(table_data_desc_->column_count_))) {
     LOG_WARN("fail to init datum row", KR(ret));
   } else {
     affected_rows = 0;

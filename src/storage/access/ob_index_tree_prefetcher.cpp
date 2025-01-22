@@ -400,7 +400,7 @@ int ObIndexTreePrefetcher::prefetch_block_data(
     const bool need_submit_io)
 {
   int ret = OB_SUCCESS;
-  if (is_rescan() && last_handle_hit(index_block_info, is_data, micro_handle)) {
+  if (need_cache_last_block() && last_handle_hit(index_block_info, is_data, micro_handle)) {
     ++access_ctx_->table_store_stat_.block_cache_hit_cnt_;
     LOG_DEBUG("last micro block handle hits", K(is_data), K(index_block_info),
                                               K(last_micro_block_handle_), K(micro_handle));
@@ -417,7 +417,7 @@ int ObIndexTreePrefetcher::prefetch_block_data(
     } else {
       LOG_WARN("Fail to get micro block handle from handle mgr", K(ret));
     }
-  } else if (is_rescan() && is_data && micro_handle.in_block_state()) {
+  } else if (need_cache_last_block() && is_data && micro_handle.in_block_state()) {
     last_micro_block_handle_ = micro_handle;
   }
   return ret;
@@ -1601,28 +1601,34 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
         }
       }
     } else {
-      can_blockscan_ = false;
-      if (start_pos < end_pos) {
-        // check border in range [start_pos, end_pos]
-        if (end_idx  > start_idx) {
-          // binary check in rang [start_idx, end_idx]
-          if (OB_FAIL(binary_check_micro_infos(micro_data_infos_, datum_utils, start_idx, end_idx, border_rowkey, is_reverse))) {
-            LOG_WARN("Fail to check_micro_infos", K(ret), K(start_idx), K(end_idx));
-          }
-        } else {
-          cmp_ret = 0;
-          // split to [start_idx, max_micro_handle_cnt_ - 1], [0, end_idx]
-          if (OB_FAIL(micro_data_infos_[0].endkey_.compare(border_rowkey, datum_utils, cmp_ret, false))) {
-            LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[0]));
-          } else if (cmp_ret > 0) {
-            for (int64_t idx = start_idx; idx < max_micro_handle_cnt_; idx++) {
-              micro_data_infos_[idx].set_blockscan();
+      if (border_rowkey.is_min_rowkey()) {
+        for (int64_t pos = start_pos; pos <= end_pos; pos++) {
+          micro_data_infos_[pos % max_micro_handle_cnt_].set_blockscan();
+        }
+      } else {
+        can_blockscan_ = false;
+        if (start_pos < end_pos) {
+          // check border in range [start_pos, end_pos]
+          if (end_idx  > start_idx) {
+            // binary check in rang [start_idx, end_idx]
+            if (OB_FAIL(binary_check_micro_infos(micro_data_infos_, datum_utils, start_idx, end_idx, border_rowkey, is_reverse))) {
+              LOG_WARN("Fail to check_micro_infos", K(ret), K(start_idx), K(end_idx));
             }
-            if (OB_FAIL(binary_check_micro_infos(micro_data_infos_, datum_utils, 0, end_idx, border_rowkey, is_reverse))) {
-              LOG_WARN("Fail to check_micro_infos", K(ret), K(end_idx));
+          } else {
+            cmp_ret = 0;
+            // split to [start_idx, max_micro_handle_cnt_ - 1], [0, end_idx]
+            if (OB_FAIL(micro_data_infos_[0].endkey_.compare(border_rowkey, datum_utils, cmp_ret, false))) {
+              LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[0]));
+            } else if (cmp_ret > 0) {
+              for (int64_t idx = start_idx; idx < max_micro_handle_cnt_; idx++) {
+                micro_data_infos_[idx].set_blockscan();
+              }
+              if (OB_FAIL(binary_check_micro_infos(micro_data_infos_, datum_utils, 0, end_idx, border_rowkey, is_reverse))) {
+                LOG_WARN("Fail to check_micro_infos", K(ret), K(end_idx));
+              }
+            } else if (OB_FAIL(binary_check_micro_infos(micro_data_infos_, datum_utils, start_idx, max_micro_handle_cnt_ - 1, border_rowkey, is_reverse))) {
+              LOG_WARN("Fail to check_micro_infos", K(ret), K(start_idx));
             }
-          } else if (OB_FAIL(binary_check_micro_infos(micro_data_infos_, datum_utils, start_idx, max_micro_handle_cnt_ - 1, border_rowkey, is_reverse))) {
-            LOG_WARN("Fail to check_micro_infos", K(ret), K(start_idx));
           }
         }
       }

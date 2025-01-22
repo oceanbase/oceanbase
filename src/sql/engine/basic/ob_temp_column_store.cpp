@@ -688,6 +688,8 @@ int ObTempColumnStore::init_vectors(const ObIArray<ObColumnSchemaItem> &col_arra
           FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT128);
           FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT256);
           FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT512);
+          FIXED_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATE);
+          FIXED_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATETIME);
         #undef FIXED_VECTOR_INIT_SWITCH
           default:
             ret = OB_INVALID_ARGUMENT;

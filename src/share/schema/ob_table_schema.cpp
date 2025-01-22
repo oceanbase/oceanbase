@@ -1657,6 +1657,7 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     name_generated_type_(GENERATED_TYPE_UNKNOWN),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
     micro_index_clustered_(false),
+    enable_macro_block_bloom_filter_(false),
     local_session_vars_(allocator),
     index_params_(),
     exec_env_()
@@ -3789,6 +3790,7 @@ void ObTableSchema::reset()
   generated_columns_.reset();
   virtual_column_cnt_ = 0;
   micro_index_clustered_ = false;
+  enable_macro_block_bloom_filter_ = false;
 
   cst_cnt_ = 0;
   cst_array_capacity_ = 0;
@@ -5791,6 +5793,57 @@ int ObTableSchema::check_row_length(
   return ret;
 }
 
+int64_t ObTableSchema::get_max_row_length() const
+{
+  return is_inner_table(get_table_id()) ? INT64_MAX : OB_MAX_USER_ROW_LENGTH;
+}
+
+int ObTableSchema::get_column_byte_length(const bool is_oracle_mode, const ObColumnSchemaV2 &col,
+                                          const bool use_lob_inrow_threshold, int64_t &length) const
+{
+  int ret = OB_SUCCESS;
+  length = 0;
+  if ((is_table() || is_tmp_table() || is_external_table()) && !col.is_column_stored_in_sstable()) {
+    // The virtual column in the table does not actually store data, and does not count the length
+  } else if (is_storage_index_table() && col.is_fulltext_column()) {
+    // The full text column in the index only counts the length of one word segment
+    length = OB_MAX_OBJECT_NAME_LENGTH;
+  } else if (OB_FAIL(col.get_byte_length(length, is_oracle_mode, false))) {
+    LOG_WARN("fail to get byte length of column", K(ret));
+  } else if (is_lob_storage(col.get_data_type())) {
+    // be careful lob_inrow_threshold may be actually value when deserialize table schema beacuase lob_inrow_threshold is deserialized after add_column
+    // so add use_lob_inrow_threshold flag to handle this situation
+    length = OB_MIN(length, use_lob_inrow_threshold ? get_lob_inrow_threshold() : OB_MAX_LOB_HANDLE_LENGTH);
+  }
+  return ret;
+}
+
+int ObTableSchema::check_row_length(const bool is_oracle_mode) const
+{
+  int ret = OB_SUCCESS;
+  if (is_view_table()) {
+    // It isn't necessary to check for view table, so skip
+  } else {
+    ObColumnSchemaV2 *col = nullptr;
+    int64_t row_length = 0;
+    const int64_t max_row_length = get_max_row_length();
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
+      int64_t length = 0;
+      if (OB_ISNULL(col = column_array_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is null", K(ret), K(i), KPC(this));
+      } else if (OB_FAIL(get_column_byte_length(is_oracle_mode, *col, true/*use_lob_inrow_threshold*/, length))) {
+        LOG_WARN("fail to get byte length of column", K(ret), K(i), KPC(col), KPC(this));
+      } else if (OB_FALSE_IT(row_length += length)) {
+      } else if (row_length > max_row_length) {
+        ret = OB_ERR_TOO_BIG_ROWSIZE;
+        LOG_WARN("row_length is larger than max_row_length", K(ret), K(row_length), K(max_row_length), K(i), K(length), K(column_cnt_), KPC(col), KPC(this));
+      }
+    }
+  }
+  return ret;
+}
+
 void ObTableSchema::reset_column_info()
 {
   column_cnt_ = 0;
@@ -7108,6 +7161,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(index_params_);
   OB_UNIS_ENCODE(micro_index_clustered_);
   OB_UNIS_ENCODE(mv_mode_);
+  OB_UNIS_ENCODE(enable_macro_block_bloom_filter_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7347,6 +7401,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE_AND_FUNC(index_params_, deep_copy_str);
   OB_UNIS_DECODE(micro_index_clustered_);
   OB_UNIS_DECODE(mv_mode_);
+  OB_UNIS_DECODE(enable_macro_block_bloom_filter_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7486,6 +7541,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(index_params_);
   OB_UNIS_ADD_LEN(micro_index_clustered_);
   OB_UNIS_ADD_LEN(mv_mode_);
+  OB_UNIS_ADD_LEN(enable_macro_block_bloom_filter_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7830,15 +7886,50 @@ int ObTableSchema::get_presetting_partition_keys(common::ObIArray<uint64_t> &par
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid table type", KR(ret), KPC(this));
   } else if (ori_part_func_str.empty()) {
-    const ObRowkeyInfo &partition_keys = is_global_index_table() ? get_index_info() : get_rowkey_info();
-    for (int64_t i = 0; OB_SUCC(ret) && i < partition_keys.get_size(); ++i) {
-      const ObRowkeyColumn *partition_column = partition_keys.get_column(i);
-      if (OB_ISNULL(partition_column)) {
+    bool is_h_t = false;
+    if (OB_FAIL(is_hbase_table(is_h_t))) {
+      LOG_WARN("failed to check if it is hbase_table", K(ret), K(*this));
+    } else if (!is_h_t) {
+      const ObRowkeyInfo &partition_keys = is_global_index_table() ? get_index_info() : get_rowkey_info();
+      for (int64_t i = 0; OB_SUCC(ret) && i < partition_keys.get_size(); ++i) {
+        const ObRowkeyColumn *partition_column = partition_keys.get_column(i);
+        if (OB_ISNULL(partition_column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the partition key is NULL, ", KR(ret), K(i), K(partition_keys), KPC(this));
+        } else if (!is_shadow_column(partition_column->column_id_) &&
+            OB_FAIL(partition_key_ids.push_back(partition_column->column_id_))) {
+          LOG_WARN("failed to push back rowkey column id", KR(ret), KPC(this));
+        }
+      }
+    } else {
+      const ObRowkeyInfo &rowkey_info = get_rowkey_info();
+      const char* K_COLULMN = "K";
+      ObColumnIterByPrevNextID pre_next_id_iter(*this);
+      const ObColumnSchemaV2 *column_schema = NULL;
+      ObCompareNameWithTenantID name_cmp;
+      if (OB_FAIL(pre_next_id_iter.next(column_schema))) {
+        LOG_ERROR("pre_next_id_iter next fail", KR(ret), KPC(column_schema));
+      } else if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the partition key is NULL, ", KR(ret), K(i), K(partition_keys), KPC(this));
-      } else if (!is_shadow_column(partition_column->column_id_) &&
-                 OB_FAIL(partition_key_ids.push_back(partition_column->column_id_))) {
-        LOG_WARN("failed to push back rowkey column id", KR(ret), KPC(this));
+        LOG_WARN("column schema should not be null", K(ret), K(*this));
+      } else {
+        ObString col_name;
+        col_name.reset();
+        bool is_col_existed = false;
+        uint64_t col_id = column_schema->get_column_id();
+        get_column_name_by_column_id(col_id, col_name, is_col_existed);
+        if (!is_col_existed) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the col should exist", K(ret), K(col_id));
+        } else if (OB_ISNULL(col_name.ptr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("col_name ptr should not be null", K(ret));
+        } else if (OB_UNLIKELY(0 != strcmp(col_name.ptr(), K_COLULMN))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the first column of a hbase table should be column K", K(ret));
+        } else if (OB_FAIL(partition_key_ids.push_back(col_id))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
       }
     }
   } else if (!is_user_table()) {
@@ -8702,6 +8793,69 @@ int ObTableSchema::check_rowkey_column(const common::ObIArray<uint64_t> &parent_
     for (int i = 0; OB_SUCC(ret) && i < parent_column_ids.count() && is_rowkey; ++i) {
       const uint64_t parent_column_id = parent_column_ids.at(i);
       ret = rowkey_info_.is_rowkey_column(parent_column_id, is_rowkey);
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::is_hbase_table(bool &is_h_table) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t HBASE_TABLE_COLUMN_COUNT = 4;
+  is_h_table = false;
+  if (get_column_count() != HBASE_TABLE_COLUMN_COUNT) {
+      //do nothing
+  } else {
+    const char* K_COLULMN = "K";
+    const char* Q_COLULMN = "Q";
+    const char* T_COLULMN = "T";
+    const char* V_COLULMN = "V";
+    ObSEArray<bool, HBASE_TABLE_COLUMN_COUNT> col_flags;
+    for (int64_t i = 0; OB_SUCC(ret) && i < HBASE_TABLE_COLUMN_COUNT; ++i) {
+      if (OB_FAIL(col_flags.push_back(false))) {
+        LOG_WARN("failed to push back into col_falgs", K(ret));
+      }
+    }
+    // Mark column T as bigint or not
+    bool is_T_column_bigint_type = false;
+    ObColumnIterByPrevNextID pre_next_id_iter(*this);
+    while (OB_SUCC(ret)) {
+      const ObColumnSchemaV2 *column_schema = NULL;
+      if (OB_FAIL(pre_next_id_iter.next(column_schema))) {
+        if (OB_ITER_END != ret) {
+          LOG_ERROR("pre_next_id_iter next fail", KR(ret), KPC(column_schema));
+        }
+      } else if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("column_schema is null", K(ret), KPC(column_schema));
+      } else {
+        const char *column_name_ptr = column_schema->get_column_name();
+        if (OB_ISNULL(column_name_ptr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("column_name should not be null", K(ret), K(column_name_ptr));
+        } else if (0 == strcmp(column_name_ptr, K_COLULMN)) {
+            col_flags.at(0) = true;
+        } else if (0 == strcmp(column_name_ptr, Q_COLULMN)) {
+            col_flags.at(1) = true;
+        } else if (0 == strcmp(column_name_ptr, T_COLULMN)) {
+          col_flags.at(2) = true;
+          /*The T column must be int type for mysql mode*/
+          /*Since the oralce mode hasn't officially specified the htable schema so we do a strict denfensive here*/
+          if (lib::is_oracle_mode()) {
+            is_h_table = true;
+          } else if (!lib::is_oracle_mode() && ObIntType == column_schema->get_data_type()) {
+            is_h_table = true;
+          }
+        } else if (0 == strcmp(column_name_ptr, V_COLULMN)) {
+          col_flags.at(3) = true;
+        }
+      }
+    }
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+    for (int64_t i = 0; is_h_table && OB_SUCC(ret) && i < col_flags.count(); ++i) {
+      is_h_table &= col_flags.at(i);
     }
   }
   return ret;

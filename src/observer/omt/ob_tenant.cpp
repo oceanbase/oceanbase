@@ -453,7 +453,7 @@ int ObResourceGroup::acquire_more_worker(int64_t num, int64_t &succ_num, bool fo
 
 inline bool is_dbms_job_group(int64_t group_id)
 {
-  return share::OBCG_DBMS_SCHED_JOB == group_id || share::OBCG_OLAP_ASYNC_JOB == group_id;
+  return oceanbase::share::OBCG_DBMS_SCHED_JOB == group_id || oceanbase::share::OBCG_OLAP_ASYNC_JOB == group_id;
 }
 
 void ObResourceGroup::check_worker_count()
@@ -1185,9 +1185,10 @@ void ObTenant::set_unit_max_cpu(double cpu)
 {
   int tmp_ret = OB_SUCCESS;
   unit_max_cpu_ = cpu;
-  if (!cgroup_ctrl_.is_valid() || is_meta_tenant(id_)) {
+  if (!cgroup_ctrl_.is_valid() || is_sys_tenant(id_) || is_meta_tenant(id_)) {
     // do nothing
-  } else if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_cfs_quota(id_, is_sys_tenant(id_) ? -1 : cpu))) {
+    // meta tenant and sys tenant are unlimited
+  } else if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_cfs_quota(id_, cpu))) {
     _LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed, tenant_id=%lu, cpu=%.2f", id_, cpu);
   }
 }
@@ -1999,8 +2000,7 @@ void ObTenant::periodically_check()
 void ObTenant::check_resource_manager_plan()
 {
   int ret = OB_SUCCESS;
-  ObString plan;
-  ObString up_plan;
+  ObString plan_name;
   ObResourcePlanManager &plan_mgr = G_RES_MGR.get_plan_mgr();
   ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
   ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
@@ -2012,28 +2012,26 @@ void ObTenant::check_resource_manager_plan()
               id_,
               SYS_VAR_RESOURCE_MANAGER_PLAN,
               allocator,
-              plan))) {
-    LOG_WARN("fail get tenant variable", K(id_), K(plan), K(ret));
+              plan_name))) {
+    LOG_WARN("fail get tenant variable", K(id_), K(plan_name), K(ret));
     // skip
-  } else if (OB_FAIL(ob_simple_low_to_up(allocator, plan, up_plan))) {
-    LOG_WARN("plan change to upper string failed", K(ret));
-  } else if (OB_FAIL(rule_mgr.refresh_group_mapping_rule(id_, up_plan))) {
+  } else if (OB_FAIL(rule_mgr.refresh_group_mapping_rule(id_, plan_name))) {
     LOG_WARN("refresh group id name mapping rule fail."
              "Tenant resource isolation may not work",
-             K(id_), K(up_plan), K(ret));
-  } else if (OB_FAIL(plan_mgr.refresh_resource_plan(id_, up_plan))) {
+             K(id_), K(plan_name), K(ret));
+  } else if (OB_FAIL(plan_mgr.refresh_resource_plan(id_, plan_name))) {
     LOG_WARN("refresh resource plan fail."
              "Tenant resource isolation may not work",
-             K(id_), K(up_plan), K(ret));
-  } else if (OB_FAIL(rule_mgr.refresh_resource_mapping_rule(id_, up_plan))) {
+             K(id_), K(plan_name), K(ret));
+  } else if (OB_FAIL(rule_mgr.refresh_resource_mapping_rule(id_, plan_name))) {
     LOG_WARN("refresh resource mapping rule fail."
              "Tenant resource isolation may not work",
-             K(id_), K(up_plan), K(ret));
+             K(id_), K(plan_name), K(ret));
   } else if (OB_FAIL(col_rule_mgr.refresh_resource_column_mapping_rule(id_, get<ObPlanCache*>(),
-                                                                       up_plan))) {
+                                                                       plan_name))) {
     LOG_WARN("refresh resource column mapping rule fail."
              "Tenant resource isolation may not work",
-             K(id_), K(up_plan), K(ret));
+             K(id_), K(plan_name), K(ret));
   }
 }
 

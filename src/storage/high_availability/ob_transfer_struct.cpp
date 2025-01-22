@@ -23,11 +23,13 @@
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
+#include "storage/ob_storage_schema_util.h"
+#include "share/schema/ob_tenant_schema_service.h"
 
 using namespace oceanbase;
 using namespace share;
 using namespace storage;
-
+using namespace transaction;
 
 ObTXStartTransferOutInfo::ObTXStartTransferOutInfo()
   : src_ls_id_(),
@@ -530,7 +532,6 @@ int ObTXTransferUtils::get_tablet_status_(
   return ret;
 }
 
-// TODO(wenjinyu.wjy) (4.3)It needs to be added to trigger the tablet freezing operation
 int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *tablet)
 {
   MDS_TG(10_ms);
@@ -551,7 +552,7 @@ int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *table
   } else if (ObScnRange::MIN_SCN == weak_read_scn) {
     ret = OB_EAGAIN;
     LOG_WARN("weak read service not inited, need to wait for weak read scn to advance", K(ret), K(ls_id), K(weak_read_scn));
-  } else if (OB_FAIL(tablet->get_all_memtables(memtables))) {
+  } else if (OB_FAIL(tablet->get_all_memtables_from_memtable_mgr(memtables))) {
     LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
   } else {
     CLICK();
@@ -636,62 +637,8 @@ int ObTXTransferUtils::build_empty_minor_sstable_param_(
       || !table_schema.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("build empty minor sstable param get invalid argument", K(ret), K(table_schema), K(tablet_id), K(start_scn), K(end_scn));
-  }else if (OB_FAIL(table_schema.get_encryption_id(param.encrypt_id_))) {
-    LOG_WARN("fail to get encryption id", K(ret), K(table_schema));
-  } else {
-    param.master_key_id_ = table_schema.get_master_key_id();
-    MEMCPY(param.encrypt_key_, table_schema.get_encrypt_key_str(), table_schema.get_encrypt_key_len());
-    const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    param.table_key_.table_type_ = ObITable::TableType::MINOR_SSTABLE;
-    param.table_key_.tablet_id_ = tablet_id;
-    param.table_key_.scn_range_.start_scn_ = start_scn;
-    param.table_key_.scn_range_.end_scn_ = end_scn;
-    param.max_merged_trans_version_ = 0;
-
-    param.schema_version_ = table_schema.get_schema_version();
-    param.create_snapshot_version_ = 0;
-    param.progressive_merge_round_ = table_schema.get_progressive_merge_round();
-    param.progressive_merge_step_ = 0;
-
-    param.table_mode_ = table_schema.get_table_mode_struct();
-    param.index_type_ = table_schema.get_index_type();
-    param.rowkey_column_cnt_ = table_schema.get_rowkey_column_num()
-            + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    param.root_block_addr_.set_none_addr();
-    param.data_block_macro_meta_addr_.set_none_addr();
-    param.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-    param.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-    param.data_index_tree_height_ = 0;
-    param.index_blocks_cnt_ = 0;
-    param.data_blocks_cnt_ = 0;
-    param.micro_block_cnt_ = 0;
-    param.use_old_macro_block_count_ = 0;
-    param.column_cnt_ = table_schema.get_column_count() + multi_version_col_cnt;
-    param.data_checksum_ = 0;
-    param.occupy_size_ = 0;
-    param.ddl_scn_.set_min();
-    param.filled_tx_scn_ = end_scn;
-    param.tx_data_recycle_scn_.set_min();
-    param.original_size_ = 0;
-    param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
-    param.table_backup_flag_.reset();
-    param.table_shared_flag_.reset();
-    param.sstable_logic_seq_ = 0;
-    param.row_count_ = 0;
-    param.recycle_version_ = 0;
-    param.root_macro_seq_ = 0;
-    param.nested_offset_ = 0;
-    param.nested_size_ = 0;
-    param.column_group_cnt_ = 1;
-    param.co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
-    param.full_column_cnt_ = 0;
-    param.is_co_table_without_cgs_ = false;
-    param.co_base_snapshot_version_ = 0;
-
-    if (!param.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid param", K(ret), K(param));
-    }
+  } else if (OB_FAIL(param.init_for_transfer_empty_minor_sstable(tablet_id, start_scn, end_scn, table_schema))) {
+    LOG_WARN("fail to init sstable param", K(ret), K(tablet_id), K(start_scn), K(end_scn), K(table_schema));
   }
   return ret;
 }

@@ -219,6 +219,7 @@ private:
   int convert_domain_expr(const ObRawExpr *expr, int64_t expr_depth, ObRangeNode *&range_node);
   int need_extract_domain_range(const ObOpRawExpr &domain_expr, bool& need_extract);
   int check_decimal_int_range_cmp_valid(const ObRawExpr *const_expr, bool &is_valid);
+  int ignore_inner_generate_expr(const ObRawExpr *const_expr, bool &can_ignore);
 private:
   ObIAllocator &allocator_;
   ObQueryRangeCtx &ctx_;

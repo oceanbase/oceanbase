@@ -15,7 +15,7 @@
 #include "sql/das/iter/ob_das_iter.h"
 #include "sql/das/iter/ob_das_doc_id_merge_iter.h"
 #include "sql/das/iter/ob_das_vid_merge_iter.h"
-
+#include "src/sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

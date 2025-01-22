@@ -57,7 +57,13 @@ public:
     MicroBlockInfo(MacroBlockId macro_id, int64_t offset, int64_t size)
         : macro_id_(macro_id), offset_(offset), size_(size)
     {}
-    bool is_valid() const { return macro_id_.is_valid() && offset_ > 0 && size_ > 0; }
+    MicroBlockInfo(const ObSSMicroBlockId &micro_id)
+        : macro_id_(micro_id.macro_id_), offset_(micro_id.offset_), size_(micro_id.size_)
+    {}
+    bool is_valid() const
+    {
+      return macro_id_.is_valid() && offset_ > 0 && size_ > 0;
+    }
     MacroBlockId macro_id_;
     int64_t offset_;
     int64_t size_;
@@ -81,7 +87,8 @@ public:
 
 MacroBlockId TestSSCommonUtil::gen_macro_block_id(const int64_t second_id)
 {
-  MacroBlockId macro_id(0, second_id, 0);
+  MacroBlockId macro_id;
+  macro_id.second_id_ = second_id;
   macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_DATA_MACRO);
   return macro_id;

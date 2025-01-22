@@ -1306,7 +1306,7 @@ int ObWaitDataReadyTask::wait_log_sync_()
         LOG_WARN("failed to get end scn", K(ret), KPC(ctx_));
       } else {
         bool is_timeout = false;
-        if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("log is not sync, retry next loop", "arg", ctx_->arg_);
         }
 
@@ -1443,7 +1443,7 @@ int ObWaitDataReadyTask::wait_log_replay_sync_()
       if (OB_SUCC(ret) && !wait_log_replay_success) {
         current_ts = ObTimeUtility::current_time();
         bool is_timeout = false;
-        if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("replay log is not sync, retry next loop", "arg", ctx_->arg_,
               "current_replay_scn", current_replay_scn,
               "log_sync_lsn", log_sync_lsn_);
@@ -1779,7 +1779,7 @@ int ObWaitDataReadyTask::check_need_wait_(
     LOG_WARN("check need wait log sync get invalid argument", K(ret), KP(ls));
   } else if (OB_FAIL(ls->get_restore_status(ls_restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ctx_));
-  } else if (ls_restore_status.is_in_restoring_or_failed()) {
+  } else if (ls_restore_status.is_in_restore_and_before_quick_restore_finish() || ls_restore_status.is_failed()) {
     need_wait = false;
   } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
     need_wait = false;
@@ -1980,7 +1980,7 @@ int ObWaitDataReadyTask::check_tablet_ready_(
         break;
       } else {
         const int64_t current_ts = ObTimeUtility::current_time();
-        if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("tablet not ready, retry next loop", "arg", ctx_->arg_, "tablet_id", tablet_id,
               "ha_status", tablet->get_tablet_meta().ha_status_,
               "wait_tablet_start_ts", wait_tablet_start_ts,
@@ -2123,7 +2123,7 @@ int ObWaitDataReadyTask::inner_check_tablet_transfer_table_ready_(
     }
   } else if (scn <= tablet->get_tablet_meta().transfer_info_.transfer_start_scn_) {
     need_check_again = true;
-    if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000/*5s*/)) {
+    if (REACH_THREAD_TIME_INTERVAL(5 * 1000 * 1000/*5s*/)) {
       LOG_INFO("need to wait for the max_decided_scn to be greater than transfer_start_scn", K(tablet_id), K(scn),
           "transfer_start_scn", tablet->get_tablet_meta().transfer_info_.transfer_start_scn_,
           "ls_id", tablet->get_tablet_meta().transfer_info_.ls_id_);
@@ -2138,7 +2138,7 @@ int ObWaitDataReadyTask::inner_check_tablet_transfer_table_ready_(
   } else {
     need_check_again = true;
 #ifdef ERRSIM
-    if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
+    if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000)) {
       SERVER_EVENT_ADD("TRANSFER", "still_has_transfer_table",
                       "ls_id", ls->get_ls_id(),
                       "tablet_id", tablet_id.id(),
@@ -2194,7 +2194,7 @@ int ObWaitDataReadyTask::wait_log_replay_to_max_minor_end_scn_()
         break;
       } else {
         const int64_t current_ts = ObTimeUtility::current_time();
-        if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("ls wait replay to max minor sstable end log ts, retry next loop", "arg", ctx_->arg_,
               "wait_replay_start_ts", wait_replay_start_ts,
               "current_ts", current_ts,
@@ -2238,6 +2238,12 @@ int ObWaitDataReadyTask::check_ls_and_task_status_(
   } else if (ctx_->is_failed()) {
     ret = OB_CANCELED;
     STORAGE_LOG(WARN, "ls migration task is failed", K(ret), KPC(ctx_));
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("storage_ha", "wait_data_ready_task_cancel",
+                          "tenant_id", ctx_->tenant_id_,
+                          "ls_id", ctx_->arg_.ls_id_.id(),
+                          "ret", ret);
+#endif
   } else if (ls->is_stopped()) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls is not running, stop migration dag net", K(ret), KPC(ctx_));

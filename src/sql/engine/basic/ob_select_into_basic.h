@@ -17,6 +17,8 @@
 #include "common/storage/ob_io_device.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
+#include "lib/file/ob_file.h"
 
 namespace oceanbase
 {
@@ -26,6 +28,8 @@ using CsvCompressType = ObCSVGeneralFormat::ObCSVCompression;
 enum class IntoFileLocation {
   SERVER_DISK,
   REMOTE_OSS,
+  REMOTE_COS,
+  REMOTE_S3
 };
 struct ObStorageAppender
 {

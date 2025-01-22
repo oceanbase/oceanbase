@@ -17,6 +17,7 @@
 #include "observer/mysql/obmp_base.h"
 #include "observer/mysql/ob_query_retry_ctrl.h"
 #include "lib/rc/context.h"
+#include "observer/mysql/obmp_stmt_execute.h"
 
 namespace oceanbase
 {

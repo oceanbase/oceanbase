@@ -138,7 +138,8 @@ private:
                                     const ObTableSchema *left_table_schema, bool &is_valid);
   int check_broadcast_table_valid(const ObSelectStmt &stmt, const ObTableSchema *right_table_schema,
                                   bool &is_valid);
-  int check_column_store_valid(const ObSelectStmt &stmt, bool &is_valid);
+  int check_column_store_valid(const ObSelectStmt &stmt, const ObTableSchema *left_table_schema,
+                               const ObTableSchema *right_table_schema, bool &is_valid);
 
   const ObSelectStmt &stmt_;
   ObMVRefreshableType refresh_type_;

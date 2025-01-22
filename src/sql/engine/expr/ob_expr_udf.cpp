@@ -184,7 +184,7 @@ int ObExprUDF::check_types(const ObExpr &expr, const ObExprUDFInfo &info)
     if (!expr.args_[i]->obj_meta_.is_null()
         && (!info.params_desc_.at(i).is_out())) {
       if (expr.args_[i]->obj_meta_.get_type() != info.params_type_.at(i).get_type()) {
-        if (info.params_type_.at(i).is_enum_or_set() && ObVarcharType == expr.args_[i]->obj_meta_.get_type()) {
+        if (info.params_type_.at(i).is_enum_or_set() && (ObVarcharType == expr.args_[i]->obj_meta_.get_type() || expr.args_[i]->obj_meta_.is_numeric_type())) {
           // do nothing ...
         } else {
           ret = OB_INVALID_ARGUMENT;

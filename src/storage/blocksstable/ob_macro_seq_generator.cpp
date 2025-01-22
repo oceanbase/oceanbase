@@ -13,10 +13,10 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/blocksstable/ob_macro_seq_generator.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #include "share/ob_server_struct.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
 #endif
 using namespace oceanbase;
 using namespace oceanbase::common;

@@ -16,6 +16,7 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "observer/omt/ob_multi_tenant_operator.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "src/storage/checkpoint/ob_checkpoint_diagnose.h"
 namespace oceanbase
 {
 namespace observer

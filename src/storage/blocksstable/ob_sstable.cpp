@@ -280,8 +280,8 @@ int ObSSTable::init(
   } else if (OB_UNLIKELY(!param.is_valid()) || OB_ISNULL(allocator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param), KP(allocator));
-  } else if (OB_FAIL(ObITable::init(param.table_key_))) {
-    LOG_WARN("fail to initialize ObITable", K(ret), "table_key", param.table_key_);
+  } else if (OB_FAIL(ObITable::init(param.table_key()))) {
+    LOG_WARN("fail to initialize ObITable", K(ret), "table_key", param.table_key());
   } else if (OB_FAIL(init_sstable_meta(param, allocator))) {
     LOG_WARN("fail to initialize sstable meta", K(ret), K(param));
   } else if (FALSE_IT(addr_.set_mem_addr(0, sizeof(ObSSTable)))) {
@@ -289,7 +289,7 @@ int ObSSTable::init(
     LOG_WARN("fail to add macro ref", K(ret), K(inc_success));
   } else if (FALSE_IT(meta_->macro_info_.dec_linked_block_ref_cnt())) {
   } else if (FALSE_IT(is_tmp_sstable_ = true)) {
-  } else if (param.is_ready_for_read_) {
+  } else if (param.is_ready_for_read()) {
     if (OB_FAIL(check_valid_for_reading())) {
       LOG_WARN("Failed to check state", K(ret));
     }

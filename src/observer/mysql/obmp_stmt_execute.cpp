@@ -1332,6 +1332,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
         ctx_.retry_times_ = retry_ctrl_.get_retry_times();
         session.reset_plsql_exec_time();
+        session.reset_plsql_compile_time();
         if (OB_ISNULL(ctx_.schema_guard_)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("newest schema is NULL", K(ret));
@@ -1474,6 +1475,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.params_value_len_ = params_value_len_;
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
       audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+      audit_record.plsql_compile_time_ = session.get_plsql_compile_time();
       if (result.is_pl_stmt(result.get_stmt_type()) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
         audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
       }
@@ -1812,7 +1814,6 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
     } else if (OB_FAIL(session.update_timezone_info())) {
       LOG_WARN("fail to update time zone info", K(ret));
     } else if (is_arraybinding_) {
-      need_response_error = false;
       bool optimization_done = false;
       if (ctx_.can_reroute_sql_) {
         ctx_.can_reroute_sql_ = false;
@@ -1829,6 +1830,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
                                                            async_resp_used, optimization_done))) {
         LOG_WARN("fail to try_batch_multi_stmt_optimization", K(ret));
       } else if (!optimization_done) {
+        need_response_error = false;
         ctx_.multi_stmt_item_.set_ps_mode(true);
         ctx_.multi_stmt_item_.set_ab_cnt(0);
         for (int64_t i = 0; OB_SUCC(ret) && i < arraybinding_size_; ++i) {
@@ -1865,25 +1867,15 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
           No need to setup group_id here,
           Only setup group_id in MPConnect
       */
-      // if (is_conn_valid()) {
-      //   int bak_ret = ret;
-      //   ObSQLSessionInfo *sess = NULL;
-      //   if (OB_FAIL(get_session(sess))) {
-      //     LOG_WARN("get session fail", K(ret));
-      //   } else if (OB_ISNULL(sess)) {
-      //     ret = OB_ERR_UNEXPECTED;
-      //     LOG_WARN("session is NULL or invalid", K(ret));
-      //   } else {
-      //     // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
-      //     if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
-      //       LOG_WARN("fail setup user resource group", K(ret));
-      //     }
-      //   }
-      //   if (sess != NULL) {
-      //     revert_session(sess);
-      //   }
-      //   ret = OB_SUCC(bak_ret) ? ret : bak_ret;
-      // }
+      if (is_conn_valid()) {
+        // int bak_ret = ret;
+        // // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
+        // if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
+        //   LOG_WARN("fail setup user resource group", K(ret));
+        // }
+        set_request_expect_group_id(&session);
+        // ret = OB_SUCC(bak_ret) ? ret : bak_ret;
+      }
     }
     ObThreadLogLevelUtils::clear();
     const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
@@ -2008,6 +2000,8 @@ int ObMPStmtExecute::process()
       retry_ctrl_.set_sys_global_schema_version(sys_version);
       session.partition_hit().reset();
       session.set_pl_can_retry(true);
+      session.set_enable_mysql_compatible_dates(
+        session.get_enable_mysql_compatible_dates_from_config());
 
       need_response_error = false;
       need_disconnect = false;

@@ -62,7 +62,7 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_batch_datum_rows.cpp
 )
 
-ob_set_subtarget(ob_storage blocksstable_encoding
+ob_set_subtarget(ob_storage blocksstable_encoding1
   blocksstable/encoding/ob_bit_stream.cpp
   blocksstable/encoding/ob_column_equal_decoder.cpp
   blocksstable/encoding/ob_column_equal_encoder.cpp
@@ -81,6 +81,8 @@ ob_set_subtarget(ob_storage blocksstable_encoding
   blocksstable/encoding/ob_icolumn_encoder.cpp
   blocksstable/encoding/ob_integer_base_diff_decoder.cpp
   blocksstable/encoding/ob_integer_base_diff_encoder.cpp
+)
+ob_set_subtarget(ob_storage blocksstable_encoding2
   blocksstable/encoding/ob_inter_column_substring_decoder.cpp
   blocksstable/encoding/ob_inter_column_substring_encoder.cpp
   blocksstable/encoding/ob_imicro_block_decoder.cpp

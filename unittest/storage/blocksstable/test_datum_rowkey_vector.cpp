@@ -16,6 +16,7 @@
 #define protected public
 #include "lib/oblog/ob_log_module.h"
 #include "storage/blocksstable/ob_datum_rowkey_vector.h"
+#include "src/share/schema/ob_table_param.h"
 namespace oceanbase
 {
 

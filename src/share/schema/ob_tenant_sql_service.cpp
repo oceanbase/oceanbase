@@ -24,6 +24,7 @@
 #include "share/ob_zone_merge_table_operator.h"
 #include "share/ob_share_util.h" // for ObShareUtils
 #include "sql/ob_sql_utils.h"
+#include "rootserver/ob_rs_job_table_operator.h"
 
 namespace oceanbase
 {

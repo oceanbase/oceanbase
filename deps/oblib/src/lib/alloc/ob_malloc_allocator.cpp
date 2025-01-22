@@ -22,12 +22,21 @@
 #include "lib/rc/ob_rc.h"
 #include "lib/rc/context.h"
 #include "common/ob_smart_var.h"
+#include "lib/alloc/ob_malloc_sample_struct.h"
+#include "lib/utility/ob_tracepoint.h"
+#include "lib/alloc/ob_malloc_time_monitor.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
 bool ObMallocAllocator::is_inited_ = false;
 
+static bool g_malloc_v2_enabled = false;
+
+void enable_malloc_v2(bool enable)
+{
+  g_malloc_v2_enabled = enable;
+}
 namespace oceanbase
 {
 namespace lib
@@ -718,6 +727,11 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
                      "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
                      "label", first_label,
                      "backtrace", first_bt);
+          } else if (0 == strncmp("Diagnostic", first_label, 10) && di_leaked_times_++ < 10) {
+            LOG_WARN("tenant memory leak!!!", K(tenant_id), K(ctx_id),
+                      "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
+                      "label", first_label,
+                      "backtrace", first_bt);
           } else {
             LOG_ERROR("tenant memory leak!!!", K(tenant_id), K(ctx_id),
                       "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
@@ -817,5 +831,106 @@ void ObMallocAllocator::modify_tenant_memory_access_permission(ObTenantCtxAlloca
 }
 #endif
 
+ObMallocHook::ObMallocHook()
+  : attr_(OB_SERVER_TENANT_ID, "glibc_malloc", ObCtxIds::GLIBC),
+    mgr_(OB_SERVER_TENANT_ID, ObCtxIds::GLIBC)
+{
+  STRNCPY(label_, "glibc_malloc_v2", AOBJECT_LABEL_SIZE);
+  label_[AOBJECT_LABEL_SIZE] = '\0';
+}
+
+ObMallocHook &ObMallocHook::get_instance()
+{
+  static char buffer[sizeof(ObMallocHook)] __attribute__((__aligned__(16)));
+  static ObMallocHook *instance = new (buffer) ObMallocHook();
+  return *instance;
+}
+
+void *ObMallocHook::alloc(const int64_t size)
+{
+  if (OB_UNLIKELY(!g_malloc_v2_enabled)) {
+    ObMemAttr attr = ObMallocHookAttrGuard::get_tl_mem_attr();
+    return ob_malloc(size, attr);
+  }
+  SANITY_DISABLE_CHECK_RANGE();
+  int ret = EventTable::EN_4;
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    const ObErrsimModuleType type = THIS_WORKER.get_module_type();
+    if (is_errsim_module(attr_.tenant_id_, type.type_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    }
+  }
+#endif
+  void *ptr = NULL;
+  if (OB_FAIL(ret)) {
+    AllocFailedCtx &afc = g_alloc_failed_ctx();
+    afc.reason_ = AllocFailedReason::ERRSIM_INJECTION;
+  } else {
+    AObject *obj = NULL;
+    static thread_local ObMallocSampleLimiter sample_limiter;
+    bool sample_allowed = sample_limiter.try_acquire(size);
+    if (OB_UNLIKELY(sample_allowed)) {
+      ObMemAttr inner_attr = attr_;
+      inner_attr.alloc_extra_info_ = true;
+      obj = mgr_.alloc_object(size, inner_attr);
+    } else {
+      obj = mgr_.alloc_object(size, attr_);
+    }
+    if (OB_UNLIKELY(NULL == obj)) {
+      if (mgr_.sync_wash() >= size) {
+        if (OB_UNLIKELY(sample_allowed)) {
+          ObMemAttr inner_attr = attr_;
+          inner_attr.alloc_extra_info_ = true;
+          obj = mgr_.alloc_object(size, inner_attr);
+        } else {
+          obj = mgr_.alloc_object(size, attr_);
+        }
+      }
+    }
+    if (OB_LIKELY(NULL != obj)) {
+      if (OB_UNLIKELY(sample_allowed)) {
+        void *addrs[100] = {nullptr};
+        backtrace(addrs, ARRAYSIZEOF(addrs));
+        MEMCPY(obj->bt(), (char*)addrs, AOBJECT_BACKTRACE_SIZE);
+        obj->on_malloc_sample_ = true;
+      }
+      MEMCPY(obj->label_, label_, AOBJECT_LABEL_SIZE + 1);
+      obj->ignore_version_ = true;
+      SANITY_POISON(obj, AOBJECT_HEADER_SIZE);
+      SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
+      SANITY_POISON(obj->data_ + obj->alloc_bytes_,
+          AOBJECT_TAIL_SIZE + (obj->on_malloc_sample_ ? AOBJECT_BACKTRACE_SIZE : 0));
+      ptr = (void*)obj->data_;
+    }
+  }
+  if (OB_UNLIKELY(NULL == ptr)) {
+    if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+      const char *msg = alloc_failed_msg();
+      LOG_DBA_WARN_V2(OB_LIB_ALLOCATE_MEMORY_FAIL, OB_ALLOCATE_MEMORY_FAILED, "[OOPS]: alloc failed reason is that ", msg);
+    }
+  }
+  return ptr;
+}
+
+void ObMallocHook::free(void *ptr)
+{
+  SANITY_DISABLE_CHECK_RANGE();
+  if (NULL != ptr) {
+    AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
+    abort_unless(obj->is_valid() && obj->in_use_);
+    ABlock *block = obj->block();
+    DEBUG_ASSERT(block->is_valid());
+    DEBUG_ASSERT(block->in_use_);
+    DEBUG_ASSERT(block->obj_set_ != NULL);
+    if (OB_LIKELY(block->is_malloc_v2_)) {
+      SANITY_POISON(obj->data_, obj->alloc_bytes_);
+      ObjectSetV2 *os = (ObjectSetV2*)block->obj_set_;
+      os->free_object(obj, block);
+    } else {
+      ob_free(ptr);
+    }
+  }
+}
 } // end of namespace lib
 } // end of namespace oceanbase

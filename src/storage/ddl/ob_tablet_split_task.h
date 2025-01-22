@@ -97,12 +97,13 @@ public:
   TO_STRING_KV(K_(is_inited), K_(data_split_ranges), K_(complement_data_ret), K_(row_inserted), K_(physical_row_count), K_(skipped_split_major_keys));
 
 private:
+  template <typename KEY, typename VALUE>
   struct GetMapItemKeyFn final
   {
   public:
     GetMapItemKeyFn() : map_keys_(), ret_code_(OB_SUCCESS) {}
     ~GetMapItemKeyFn() = default;
-    int operator() (common::hash::HashMapPair<ObSplitSSTableTaskKey, ObSSTableIndexBuilder*> &entry)
+    int operator() (common::hash::HashMapPair<KEY, VALUE> &entry)
     {
       int ret = ret_code_; // for LOG_WARN
       if (OB_LIKELY(OB_SUCCESS == ret_code_) && OB_SUCCESS != (ret_code_ = map_keys_.push_back(entry.first))) {
@@ -112,12 +113,18 @@ private:
       return ret_code_;
     }
   public:
-    ObArray<ObSplitSSTableTaskKey> map_keys_;
+    ObArray<KEY> map_keys_;
     int ret_code_;
   };
 public:
   // generate index tree.
   int prepare_index_builder(const ObTabletSplitParam &param);
+  int get_clipped_storage_schema_on_demand(
+      const ObTabletID &src_tablet_id,
+      const ObSSTable &src_sstable,
+      const ObStorageSchema &latest_schema,
+      const bool try_create,
+      const ObStorageSchema *&storage_schema);
 private:
   common::ObArenaAllocator range_allocator_; // for datum range.
 public:
@@ -131,6 +138,7 @@ public:
   ObTableStoreIterator table_store_iterator_;
   // for rewrite macro block task.
   INDEX_BUILDER_MAP index_builder_map_; // map between source sstable and dest sstables.
+  common::hash::ObHashMap<int64_t/*schema_stored_column_count*/, ObStorageSchema*> clipped_schemas_map_;
   common::ObArenaAllocator allocator_;
   ObArray<ObITable::TableKey> skipped_split_major_keys_;
   int64_t row_inserted_;
@@ -194,28 +202,40 @@ public:
   virtual int process() override;
 private:
   int generate_next_task(ObITask *&next_task);
+  // prepare default_row, write_row.
+  int prepare_context(
+      ObTabletSplitMdsUserData &split_data,
+      const ObStorageSchema *&clipped_storage_schema);
   // fill nop for minor, and fill orig default value for major.
   int fill_tail_column_datums(
       const blocksstable::ObDatumRow &scan_row);
   int prepare_macro_block_writer(
+      const ObStorageSchema &clipped_storage_schema,
       ObIArray<ObWholeDataStoreDesc> &data_desc_arr,
       ObIArray<ObMacroBlockWriter *> &macro_block_writer_arr);
   // for reuse macro block task.
   int prepare_sorted_high_bound_pair(
       common::ObSArray<TabletBoundPair> &tablet_bound_arr);
   int process_reuse_macro_block_task(
-      const ObIArray<ObMacroBlockWriter *> &macro_block_writer_arr);
+      const ObIArray<ObMacroBlockWriter *> &macro_block_writer_arr,
+      const ObStorageSchema &clipped_storage_schema);
   int process_rows_for_reuse_task(
+      const ObStorageSchema &clipped_storage_schema,
       const ObIArray<TabletBoundPair> &tablet_bound_arr,
       const ObIArray<ObMacroBlockWriter *> &macro_block_writer_arr,
       const ObMacroBlockDesc &data_macro_desc,
       int64_t &dest_tablet_index);
   // for rewrite macro block task.
   int process_rewrite_macro_block_task(
-      const ObIArray<ObMacroBlockWriter *> &macro_block_writer_arr);
+      const ObIArray<ObMacroBlockWriter *> &macro_block_writer_arr,
+      const ObStorageSchema &clipped_storage_schema);
   int process_rows_for_rewrite_task(
+      const ObStorageSchema &clipped_storage_schema,
       const ObIArray<ObMacroBlockWriter *> &macro_block_writer_arr,
       const ObDatumRange &query_range);
+  int check_and_cast_high_bound(
+      const common::ObIArray<ObColDesc> &col_descs,
+      common::ObSArray<TabletBoundPair> &bound_pairs);
 private:
   static const int64_t MAP_BUCKET_NUM = 100;
   bool is_inited_;
@@ -288,18 +308,22 @@ public:
   ObSplitScanParam(
     const int64_t table_id,
     ObTablet &src_tablet,
-    const ObDatumRange &query_range) :
-    table_id_(table_id), src_tablet_(src_tablet), query_range_(&query_range)
+    const ObDatumRange &query_range,
+    const ObStorageSchema &storage_schema) :
+    table_id_(table_id), src_tablet_(src_tablet), query_range_(&query_range),
+    storage_schema_(&storage_schema)
   { }
   ~ObSplitScanParam() = default;
   bool is_valid() const {
-    return table_id_ > 0 && src_tablet_.is_valid() && nullptr != query_range_;
+    return table_id_ > 0 && src_tablet_.is_valid() && nullptr != query_range_
+        && (nullptr != storage_schema_ && storage_schema_->is_valid());
   }
-  TO_STRING_KV(K_(table_id), K_(src_tablet), KPC_(query_range));
+  TO_STRING_KV(K_(table_id), K_(src_tablet), KPC_(query_range), KPC_(storage_schema));
 public:
   int64_t table_id_;
   ObTablet &src_tablet_; // split source tablet.
   const ObDatumRange *query_range_; // whole_range for sstable scan.
+  const ObStorageSchema *storage_schema_;
 };
 
 class ObRowScan : public ObIStoreRowIterator
@@ -330,12 +354,14 @@ private:
   int construct_access_ctx(
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id);
+  int build_rowkey_read_info(
+      const ObSplitScanParam &param);
 private:
   bool is_inited_;
   ObSSTableRowWholeScanner *row_iter_;
   ObStoreCtx ctx_;
   ObTableAccessContext access_ctx_;
-  const ObITableReadInfo *rowkey_read_info_; // with extra rowkey.
+  ObRowkeyReadInfo *rowkey_read_info_; // with extra rowkey.
   ObTableAccessParam access_param_;
   common::ObArenaAllocator allocator_;
 };

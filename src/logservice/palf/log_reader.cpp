@@ -20,6 +20,7 @@
 #include "log_reader_utils.h"             // ReadBuf
 #include "lib/stat/ob_session_stat.h"     // Session
 #include "log_io_adapter.h"               // LogIOAdapter
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

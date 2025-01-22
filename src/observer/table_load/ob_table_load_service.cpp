@@ -69,8 +69,8 @@ void ObTableLoadService::ObHeartBeatTask::runTimerTask()
   }
   for (int64_t i = 0; i < table_ctx_array.count(); ++i) {
     ObTableLoadTableCtx *table_ctx = table_ctx_array.at(i);
-    if (nullptr != table_ctx->coordinator_ctx_ &&
-        table_ctx->coordinator_ctx_->enable_heart_beat()) {
+    if (nullptr != table_ctx->coordinator_ctx_
+        && table_ctx->coordinator_ctx_->enable_heart_beat()) {
       ObTableLoadCoordinator coordinator(table_ctx);
       if (OB_FAIL(coordinator.init())) {
         LOG_WARN("fail to init coordinator", KR(ret));
@@ -154,8 +154,7 @@ bool ObTableLoadService::ObGCTask::gc_heart_beat_expired_ctx(ObTableLoadTableCtx
       is_removed = true;
     }
     // check if heart beat expired, ignore coordinator
-    else if (nullptr == table_ctx->coordinator_ctx_ && nullptr != table_ctx->store_ctx_ &&
-             table_ctx->store_ctx_->enable_heart_beat_check()) {
+    else if (nullptr == table_ctx->coordinator_ctx_ && nullptr != table_ctx->store_ctx_) {
       if (OB_UNLIKELY(
             table_ctx->store_ctx_->check_heart_beat_expired(HEART_BEEAT_EXPIRED_TIME_US))) {
         FLOG_INFO("store heart beat expired, abort", K(table_id), K(task_id), K(dest_table_id));
@@ -959,6 +958,7 @@ void ObTableLoadService::fail_all_ctx(int error_code)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadTableCtx *> table_ctx_array;
+  bool is_stopped = false;
   table_ctx_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(manager_.get_all_table_ctx(table_ctx_array))) {
     LOG_WARN("fail to get all table ctx list", KR(ret));
@@ -968,10 +968,12 @@ void ObTableLoadService::fail_all_ctx(int error_code)
       // fail coordinator
       if (nullptr != table_ctx->coordinator_ctx_) {
         table_ctx->coordinator_ctx_->set_status_error(error_code);
+        ObTableLoadStore::abort_ctx(table_ctx, is_stopped);
       }
       // fail store
       if (nullptr != table_ctx->store_ctx_) {
         table_ctx->store_ctx_->set_status_error(error_code);
+        ObTableLoadStore::abort_ctx(table_ctx, is_stopped);
       }
       manager_.revert_table_ctx(table_ctx);
     }

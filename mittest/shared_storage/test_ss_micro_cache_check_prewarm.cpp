@@ -83,7 +83,7 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
   ObSSPhysicalBlockManager *phy_blk_mgr = &(micro_cache->phy_blk_mgr_);
   ASSERT_NE(nullptr, phy_blk_mgr);
   ObSSARCInfo &arc_info = micro_meta_mgr->arc_info_;
-  const int64_t available_block_cnt = phy_blk_mgr->get_free_normal_block_cnt();
+  const int64_t available_block_cnt = phy_blk_mgr->blk_cnt_info_.cache_limit_blk_cnt();
   const int64_t WRITE_BLK_CNT = 50;
   ASSERT_LT(WRITE_BLK_CNT, available_block_cnt);
 

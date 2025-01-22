@@ -1950,6 +1950,15 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort()
 
   if (OB_FAIL(ret)) {
     // do nothing
+  } else if (sort_chunks_.get_size() == 1) {
+    SortVecOpChunk *chunk = sort_chunks_.get_first();
+    if (OB_FAIL(chunk->init_row_iter())) {
+      LOG_WARN("init iterator failed", K(ret));
+    } else {
+      set_blk_holder(&blk_holder_);
+      next_stored_row_func_ =
+        &ObSortVecOpImpl<Compare, Store_Row, has_addon>::array_next_dump_stored_row;
+    }
   } else if (sort_chunks_.get_size() >= 2) {
     blk_holder_.release();
     set_blk_holder(nullptr);
@@ -2017,6 +2026,22 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::array_next_stored_row(const 
   } else {
     sk_row = ties_array_.at(ties_array_pos_);
     ties_array_pos_ += 1;
+  }
+  return ret;
+}
+
+template <typename Compare, typename Store_Row, bool has_addon>
+int ObSortVecOpImpl<Compare, Store_Row, has_addon>::array_next_dump_stored_row(
+  const Store_Row *&sk_row)
+{
+  int ret = OB_SUCCESS;
+  SortVecOpChunk *chunk = sort_chunks_.get_first();
+  if (OB_FAIL(chunk->get_next_row())) {
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to get next row", K(ret));
+    }
+  } else {
+    sk_row = chunk->sk_row_;
   }
   return ret;
 }

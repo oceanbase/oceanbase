@@ -458,7 +458,7 @@ int TabletToTableInfo::insert_tablet_table_info(const common::ObTabletID &tablet
 int TabletToTableInfo::exchange_tablet_table_info(const common::ObSArray<common::ObTabletID> &tablet_ids, const common::ObSArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
-  common::ObLinearHashMap<TableID, ObCDCTableInfo> table_to_table_info_map;
+  common::ObLinearHashMap<ObLogHbaseUtil::TableID, ObCDCTableInfo> table_to_table_info_map;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -471,7 +471,7 @@ int TabletToTableInfo::exchange_tablet_table_info(const common::ObSArray<common:
       ObCDCTableInfo tmp_table_info;
       if (OB_FAIL(tablet_to_table_map_.get(tablet_id, tmp_table_info))) {
         LOG_ERROR("tablet_to_table_map_ get failed", KR(ret), K(tablet_id));
-      } else if (OB_FAIL(table_to_table_info_map.insert(TableID(tmp_table_info.get_table_id()), tmp_table_info))) {
+      } else if (OB_FAIL(table_to_table_info_map.insert(ObLogHbaseUtil::TableID(tmp_table_info.get_table_id()), tmp_table_info))) {
         // insert overwrite may exchange more than one partition
         if (OB_ENTRY_EXIST != ret) {
           LOG_ERROR("table_to_table_info_map insert failed", KR(ret), K(tablet_id), K(tmp_table_info));
@@ -487,7 +487,7 @@ int TabletToTableInfo::exchange_tablet_table_info(const common::ObSArray<common:
       const common::ObTabletID &tablet_id = tablet_ids.at(idx);
       const uint64_t table_id = table_ids.at(idx);
       ObCDCTableInfo tmp_table_info;
-      if (OB_FAIL(table_to_table_info_map.get(TableID(table_id), tmp_table_info))) {
+      if (OB_FAIL(table_to_table_info_map.get(ObLogHbaseUtil::TableID(table_id), tmp_table_info))) {
         LOG_ERROR("table_to_table_info_map get failed", KR(ret), K(table_id));
       } else if (OB_FAIL(tablet_to_table_map_.insert_or_update(tablet_id, tmp_table_info))) {
         LOG_ERROR("tablet_to_table_map_ update failed", KR(ret), K(tablet_id), K(tmp_table_info));

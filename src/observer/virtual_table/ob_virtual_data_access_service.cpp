@@ -12,6 +12,7 @@
 
 #include "ob_virtual_data_access_service.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "sql/ob_sql_context.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

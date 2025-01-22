@@ -36,7 +36,7 @@ public:
                                 ObExprResType &type2,
                                 common::ObExprTypeCtx &type_ctx) const override;
 protected:
-  static int check_privilege(ObSQLSessionInfo &session,
+  static int check_privilege(ObEvalCtx &ctx,
                              bool &is_valid,
                              common::ObString &error_info);
   static int parse_user_name(const common::ObString &str,

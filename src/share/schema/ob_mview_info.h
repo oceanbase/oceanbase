@@ -110,7 +110,8 @@ public:
                K_(last_refresh_date),
                K_(last_refresh_time),
                K_(last_refresh_trace_id),
-               K_(schema_version));
+               K_(schema_version),
+               K_(refresh_dop));
 
 public:
   static constexpr char *MVIEW_REFRESH_JOB_PREFIX = const_cast<char *>("MVIEW_REFRESH$J_");
@@ -130,6 +131,7 @@ private:
   int64_t last_refresh_time_;
   ObString last_refresh_trace_id_;
   int64_t schema_version_;
+  int64_t refresh_dop_;
 };
 
 } // namespace schema

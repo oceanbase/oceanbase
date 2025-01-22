@@ -55,9 +55,6 @@ static const int8_t DAYS_PER_MON[2][12 + 1] = {
   {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 };
 
-#define IS_LEAP_YEAR(y) (y == 0 ? 0 : ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0))
-
-
 const char *ObExprTRDateFormat::FORMATS_TEXT[FORMAT_MAX_TYPE] =
 {
       "SYYYY", "YYYY", "YEAR", "SYEAR", "YYY", "YY", "Y",
@@ -1881,8 +1878,8 @@ ObObjType ObExprOperator::enumset_calc_types_[2 /*use_subschema*/][ObMaxTC] =
     ObNullType, /*UDT*/
     ObUInt64Type, /*ObDecimalIntTC*/
     ObNullType, /*COLLECTION*/
-    ObMaxType, /*ObMySQLDateTC*/
-    ObMaxType, /*ObMySQLDateTimeTC*/
+    ObMySQLDateType, /*ObMySQLDateTC*/
+    ObMySQLDateTimeType, /*ObMySQLDateTimeTC*/
     ObVarcharType, /*ObRoaringBitmapTC*/
   },
 };
@@ -5634,6 +5631,7 @@ int ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_A
     LOG_WARN("unsupported bit operator", K(ret), K(op), K(BIT_AND));
   } else {
     ObBitVector &tmp_skip = expr.get_pvt_skip(ctx);
+    bool skip_flag = false;
     if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
       LOG_WARN("failed to eval vector result", K(ret), K(0));
     } else {
@@ -5645,12 +5643,14 @@ int ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_A
         ObBitmapNullVectorBase &cur_vec = *static_cast<ObBitmapNullVectorBase *>(param_vec);
         if (cur_vec.has_null()) {
           tmp_skip.bit_or(*cur_vec.get_nulls(), bound);
+          skip_flag = true;
         }
       } else if (left_format == VEC_UNIFORM) {
         ObUniformFormat<false> &cur_vec = *static_cast<ObUniformFormat<false> *>(param_vec);
         for (int i = bound.start(); i < bound.end(); i++) {
           if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
             tmp_skip.set(i);
+            skip_flag = true;
           }
         }
       } else if (left_format == VEC_UNIFORM_CONST) {
@@ -5658,6 +5658,7 @@ int ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_A
         for (int i = bound.start(); i < bound.end(); i++) {
           if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
             tmp_skip.set(i);
+            skip_flag = true;
           }
         }
       } else {
@@ -5666,7 +5667,12 @@ int ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_A
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
+      if (!skip_flag && OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
+        LOG_WARN("failed to eval vector result", K(ret), K(1));
+      } else if (skip_flag
+                 && OB_FAIL(expr.args_[1]->eval_vector(
+                      ctx, tmp_skip,
+                      EvalBound(bound.batch_size(), bound.start(), bound.end(), false)))) {
         LOG_WARN("failed to eval vector result", K(ret), K(1));
       } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, ctx.exec_ctx_.get_my_session(),
                                                            cast_mode))) {
@@ -5700,6 +5706,7 @@ int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_AR
     ObSQLUtils::get_default_cast_mode(false, 0, session->get_stmt_type(), session->is_ignore_stmt(),
                                       sql_mode, cast_mode);
     ObBitVector &tmp_skip = expr.get_pvt_skip(ctx);
+    bool skip_flag = false;
     if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
       LOG_WARN("failed to eval vector result", K(ret), K(0));
     } else {
@@ -5711,12 +5718,14 @@ int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_AR
         ObBitmapNullVectorBase &cur_vec = *static_cast<ObBitmapNullVectorBase *>(param_vec);
         if (cur_vec.has_null()) {
           tmp_skip.bit_or(*cur_vec.get_nulls(), bound);
+          skip_flag = true;
         }
       } else if (left_format == VEC_UNIFORM) {
         ObUniformFormat<false> &cur_vec = *static_cast<ObUniformFormat<false> *>(param_vec);
         for (int i = bound.start(); i < bound.end(); i++) {
           if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
             tmp_skip.set(i);
+            skip_flag = true;
           }
         }
       } else if (left_format == VEC_UNIFORM_CONST) {
@@ -5724,6 +5733,7 @@ int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_AR
         for (int i = bound.start(); i < bound.end(); i++) {
           if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
             tmp_skip.set(i);
+            skip_flag = true;
           }
         }
       } else {
@@ -5732,7 +5742,12 @@ int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_AR
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
+      if (!skip_flag && OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
+        LOG_WARN("failed to eval vector result", K(ret), K(1));
+      } else if (skip_flag
+                 && OB_FAIL(expr.args_[1]->eval_vector(
+                      ctx, tmp_skip,
+                      EvalBound(bound.batch_size(), bound.start(), bound.end(), false)))) {
         LOG_WARN("failed to eval vector result", K(ret), K(1));
       } else if (OB_FAIL(dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode))) {
         LOG_WARN("failed to dispatch eval vector and", K(ret), K(expr), K(ctx), K(bound));
@@ -7062,18 +7077,20 @@ int ObExprTRDateFormat::get_format_id_by_format_string(const ObString &fmt, int6
   return ret;
 }
 
-int ObExprTRDateFormat::trunc_new_obtime(ObTime &ob_time, const ObString &fmt)
+int ObExprTRDateFormat::trunc_new_obtime(ObTime &ob_time, const ObString &fmt,
+                                         bool is_mysql_compat_dates)
 {
   int ret = OB_SUCCESS;
   int64_t fmt_id = SYYYY;
 
   OZ (get_format_id_by_format_string(fmt, fmt_id));
-  OZ (trunc_new_obtime_by_fmt_id(ob_time, fmt_id));
+  OZ (trunc_new_obtime_by_fmt_id(ob_time, fmt_id, is_mysql_compat_dates));
   LOG_DEBUG("check value", K(ob_time), K(fmt_id), K(fmt));
   return ret;
 }
 
-int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_id)
+int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_id,
+                                                   bool is_mysql_compat_dates)
 {
   int ret = OB_SUCCESS;
   switch (fmt_id) {
@@ -7091,6 +7108,8 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
     case Y: {
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_YDAY] - 1);
+      ob_time.parts_[DT_MON] = 1;
+      ob_time.parts_[DT_MDAY] = 1;
       ob_time.parts_[DT_DATE] -= offset;
       break;
     }
@@ -7099,7 +7118,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       int32_t quarter = (ob_time.parts_[DT_MON] + 2) / MONS_PER_QUAR;
       ob_time.parts_[DT_MON] = (quarter - 1) * MONS_PER_QUAR + 1;
       ob_time.parts_[DT_MDAY] = 1;
-      ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      if (!is_mysql_compat_dates) {
+        ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      }
       break;
     }
     case MONTH:
@@ -7111,6 +7132,7 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
     case RM: {
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_MDAY] - 1);
+      ob_time.parts_[DT_MDAY] = 1;
       ob_time.parts_[DT_DATE] -= offset;
       break;
     }
@@ -7119,6 +7141,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_YDAY] - 1) % DAYS_PER_WEEK;
       ob_time.parts_[DT_DATE] -= offset;
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     case IW: {
@@ -7126,12 +7151,16 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_WDAY] - 1) % DAYS_PER_WEEK;
       ob_time.parts_[DT_DATE] -= offset;
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     case W: {
       //xx-01 is the first day
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_MDAY] - 1) % DAYS_PER_WEEK;
+      ob_time.parts_[DT_MDAY] -= offset;
       ob_time.parts_[DT_DATE] -= offset;
       break;
     }
@@ -7152,6 +7181,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_WDAY]) % DAYS_PER_WEEK;
       ob_time.parts_[DT_DATE] -= offset;
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     case HH:
@@ -7176,7 +7208,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       ob_time.parts_[DT_YEAR] = ob_time.parts_[DT_YEAR] / YEARS_PER_CENTURY * YEARS_PER_CENTURY + 1;
       ob_time.parts_[DT_MON] = 1;
       ob_time.parts_[DT_MDAY] = 1;
-      ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      if (!is_mysql_compat_dates) {
+        ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      }
       break;
     }
     case IYYY:
@@ -7187,6 +7221,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       //not used heavily. so, do not care too much about performance !
       set_time_part_to_zero(ob_time);
       ObTimeConverter::get_first_day_of_isoyear(ob_time);
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     default: {

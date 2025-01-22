@@ -21,6 +21,7 @@
 #include "share/scn.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/blocksstable/ob_table_flag.h"
+#include "storage/compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {
@@ -28,6 +29,8 @@ namespace blocksstable
 {
 struct ObSSTableMergeRes;
 struct ObBlockInfo;
+struct ObSSTableBasicMeta;
+class ObSSTableMacroInfo;
 class ObSSTableMeta;
 class ObMigrationSSTableParam;
 class ObSSTable;
@@ -41,6 +44,8 @@ namespace storage
 {
 struct ObTabletDDLParam;
 
+class ObBlockMetaTree;
+
 struct ObTabletCreateSSTableParam final
 {
 public:
@@ -52,6 +57,13 @@ public:
   bool is_valid() const;
   bool is_block_meta_valid(const ObMetaDiskAddr &addr,
                            const blocksstable::ObMicroBlockData &data) const;
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
+  int init_for_empty_major_sstable(const ObTabletID &tablet_id,
+                                   const ObStorageSchema &storage_schema,
+                                   const int64_t snapshot_version,
+                                   const int64_t column_group_idx,
+                                   const bool has_all_column_group);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_small_sstable(const blocksstable::ObSSTableMergeRes &res,
@@ -74,10 +86,41 @@ public:
                    const int64_t create_schema_version_on_tablet,
                    const ObIArray<blocksstable::MacroBlockId> &macro_id_array);
 
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
+  int init_for_ddl_mem(const ObITable::TableKey &table_key,
+                       const share::SCN &ddl_start_scn,
+                       const ObStorageSchema &storage_schema,
+                       ObBlockMetaTree &block_meta_tree);
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_ss_ddl(blocksstable::ObSSTableMergeRes &res,
                       const ObITable::TableKey &table_key,
                       const ObStorageSchema &storage_schema,
                       const int64_t create_schema_version_on_tablet);
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
+  int init_for_split(const ObTabletID &dst_tablet_id,
+                     const ObITable::TableKey &src_table_key,
+                     const blocksstable::ObSSTableBasicMeta &basic_meta,
+                     const int64_t schema_version,
+                     const blocksstable::ObSSTableMergeRes &res);
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
+  int init_for_split_empty_minor_sstable(const ObTabletID &tablet_id,
+                                         const share::SCN &start_scn,
+                                         const share::SCN &end_scn,
+                                         const blocksstable::ObSSTableBasicMeta &basic_meta);
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
+  int init_for_lob_split(const ObTabletID &new_tablet_id,
+                         const ObITable::TableKey &table_key,
+                         const blocksstable::ObSSTableBasicMeta &basic_meta,
+                         const compaction::ObMergeType &merge_type,
+                         const int64_t schema_version,
+                         const int64_t dst_major_snapshot_version,
+                         const int64_t uncommitted_tx_id,
+                         const int64_t sstable_logic_seq,
+                         const blocksstable::ObSSTableMergeRes &res);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_ha(const blocksstable::ObMigrationSSTableParam &migration_param,
@@ -87,12 +130,30 @@ public:
   int init_for_ha(const blocksstable::ObMigrationSSTableParam &migration_param);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
-  // This is used to create remote sstable
+  int init_for_transfer_empty_minor_sstable(const common::ObTabletID &tablet_id,
+                                            const share::SCN &start_scn,
+                                            const share::SCN &end_scn,
+                                            const ObStorageSchema &table_schema);
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_remote(const blocksstable::ObMigrationSSTableParam &migration_param);
 
   int init_for_mds(const compaction::ObBasicTabletMergeCtx &ctx,
                    const blocksstable::ObSSTableMergeRes &res,
                    const ObStorageSchema &mds_schema);
+
+  inline const ObITable::TableKey& table_key() const { return table_key_; }
+  inline bool is_ready_for_read() const { return is_ready_for_read_; }
+  inline int64_t data_blocks_cnt() const { return data_blocks_cnt_; }
+  inline share::SCN filled_tx_scn() const { return filled_tx_scn_; }
+  inline int32_t co_base_type() const { return co_base_type_; }
+  inline bool is_co_table_without_cgs() const { return is_co_table_without_cgs_; }
+  inline int64_t column_group_cnt() const { return column_group_cnt_; }
+  inline int64_t full_column_cnt() const { return full_column_cnt_; }
+
+  // TODO: delete this interface
+  // ObTabletMergeInfo::record_start_tx_scn_for_tx_data
+  inline void set_filled_tx_scn(const share::SCN &scn) { filled_tx_scn_ = scn; }
 
   TO_STRING_KV(K_(table_key),
       K_(sstable_logic_seq),
@@ -148,7 +209,10 @@ private:
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
   int inner_init_with_shared_sstable(const blocksstable::ObMigrationSSTableParam &migration_param);
   void set_init_value_for_column_store_();
-public:
+private:
+  friend class blocksstable::ObSSTableMeta;
+  friend class blocksstable::ObSSTableMacroInfo;
+private:
   ObITable::TableKey table_key_;
   int16_t sstable_logic_seq_;
   int64_t schema_version_;

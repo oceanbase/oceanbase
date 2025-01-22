@@ -91,7 +91,7 @@ TEST_F(TestSSHandleArcSegOp, test_arc_evict_delete)
   ASSERT_NE(nullptr, phy_blk_mgr);
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
 
-  const int64_t available_block_cnt = phy_blk_mgr->get_free_normal_block_cnt();
+  const int64_t available_block_cnt = phy_blk_mgr->blk_cnt_info_.cache_limit_blk_cnt();
   const int64_t WRITE_BLK_CNT = 230;
   ASSERT_LT(WRITE_BLK_CNT, available_block_cnt);
 

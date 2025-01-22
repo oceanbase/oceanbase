@@ -575,6 +575,7 @@ public:
   const common::ObIArray<uint64_t>& get_enable_role_ids() const { return enable_role_ids_; }
   int get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mode) const;
   int get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search) const;
+  int get_ob_ivf_nprobes(uint64_t &ob_ivf_nprobes) const;
   int get_sql_quote_show_create(bool &sql_quote_show_create) const;
   common::ObConsistencyLevel get_consistency_level() const { return consistency_level_; };
   bool is_zombie() const { return SESSION_KILLED == get_session_state();}
@@ -1749,7 +1750,8 @@ public:
         compat_type_(share::ObCompatType::COMPAT_MYSQL57),
         compat_version_(0),
         enable_sql_plan_monitor_(false),
-        ob_enable_parameter_anonymous_block_(false)
+        ob_enable_parameter_anonymous_block_(false),
+        current_default_catalog_(0)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -2054,6 +2056,7 @@ public:
     // No use. Placeholder.
     bool enable_sql_plan_monitor_;
     bool ob_enable_parameter_anonymous_block_;
+    uint64_t current_default_catalog_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };

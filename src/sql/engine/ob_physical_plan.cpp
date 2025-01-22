@@ -154,7 +154,10 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     data_complement_gen_doc_id_(false),
     dml_table_ids_(&allocator_),
     direct_load_need_sort_(false),
-    insertup_can_do_gts_opt_(false)
+    insertup_can_do_gts_opt_(false),
+    px_node_policy_(ObPxNodePolicy::INVALID),
+    px_node_addrs_(&allocator_),
+    px_node_count_(ObGlobalHint::UNSET_PX_NODE_COUNT)
 {
 }
 
@@ -266,6 +269,9 @@ void ObPhysicalPlan::reset()
   dml_table_ids_.reset();
   direct_load_need_sort_ = false;
   insertup_can_do_gts_opt_ = false;
+  px_node_policy_ = ObPxNodePolicy::INVALID;
+  px_node_count_ = ObGlobalHint::UNSET_PX_NODE_COUNT;
+  px_node_addrs_.reset();
 }
 void ObPhysicalPlan::destroy()
 {
@@ -909,7 +915,10 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     need_switch_to_table_lock_worker_,
                     data_complement_gen_doc_id_,
                     direct_load_need_sort_,
-                    px_parallel_rule_);
+                    px_parallel_rule_,
+                    px_node_policy_,
+                    px_node_addrs_,
+                    px_node_count_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

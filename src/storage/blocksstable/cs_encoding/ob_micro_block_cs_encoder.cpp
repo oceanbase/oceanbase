@@ -121,7 +121,9 @@ ObMicroBlockCSEncoder::ObMicroBlockCSEncoder()
     hashtable_factory_(),
     col_ctxs_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
     length_(0), is_inited_(false),
-    is_all_column_force_raw_(false), all_string_data_len_(0)
+    is_all_column_force_raw_(false),
+    encoder_freezed_(false),
+    all_string_data_len_(0)
 {
 }
 
@@ -166,6 +168,7 @@ int ObMicroBlockCSEncoder::init(const ObMicroBlockEncodingCtx &ctx)
         need_check_lob_ = true;
       }
     }
+    encoder_freezed_ = false;
     is_inited_ = true;
   }
   return ret;
@@ -246,6 +249,7 @@ void ObMicroBlockCSEncoder::reset()
   length_ = 0;
   is_all_column_force_raw_ = false;
   all_string_data_len_ = 0;
+  encoder_freezed_ = false;
 }
 
 void ObMicroBlockCSEncoder::reuse()
@@ -282,9 +286,10 @@ void ObMicroBlockCSEncoder::reuse()
   length_ = 0;
   is_all_column_force_raw_ = false;
   all_string_data_len_ = 0;
+  encoder_freezed_ = false;
 }
 
-void ObMicroBlockCSEncoder::dump_diagnose_info() const
+void ObMicroBlockCSEncoder::dump_diagnose_info()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -310,7 +315,34 @@ void ObMicroBlockCSEncoder::dump_diagnose_info() const
     } else if (OB_FAIL(datum_row.init(column_cnt))) {
       LOG_WARN("fail to init datum row", K_(ctx), K(column_cnt));
     } else {
-      for (int64_t row_id = 0; OB_SUCC(ret) && row_id < appended_row_count_; ++row_id) {
+      bool can_dump_buffered_row = false;
+      if (0 == appended_batch_count_) {
+        // non-batch interface
+        if (OB_FAIL(set_datum_rows_ptr_())) {
+          LOG_WARN("fail to set datum rows ptr", K(ret));
+        } else {
+          can_dump_buffered_row = true;
+        }
+      } else {
+        if (!encoder_freezed_) {
+          if (OB_FAIL(build_all_col_datums_())) {
+            LOG_WARN("fail to build all column datums before dump diagnose info", K(ret));
+          } else {
+            can_dump_buffered_row = true;
+          }
+        } else {
+          can_dump_buffered_row = true;
+          for (int64_t col_idx = 0; col_idx < column_cnt && can_dump_buffered_row; ++col_idx) {
+            if (all_col_datums_.at(col_idx)->count() != appended_row_count_) {
+              can_dump_buffered_row = false;
+              LOG_WARN("can not dump buffered rows since buffered datum is invalid", K(col_idx),
+                  K(all_col_datums_.at(col_idx)->count()), K_(appended_row_count));
+            }
+          }
+        }
+      }
+
+      for (int64_t row_id = 0; OB_SUCC(ret) && can_dump_buffered_row && row_id < appended_row_count_; ++row_id) {
         for (int64_t col_idx = 0; col_idx < column_cnt; ++col_idx) {
           datum_row.storage_datums_[col_idx].ptr_ = all_col_datums_.at(col_idx)->at(row_id).ptr_;
           datum_row.storage_datums_[col_idx].pack_ = all_col_datums_.at(col_idx)->at(row_id).pack_;
@@ -326,6 +358,7 @@ void ObMicroBlockCSEncoder::dump_diagnose_info() const
           FLOG_WARN("error micro block store_row (original)", K(row_id), K(store_row));
         }
       }
+      encoder_freezed_ = true;
     }
   }
   // ignore ret
@@ -428,6 +461,9 @@ int ObMicroBlockCSEncoder::append_row(const ObDatumRow &row)
   } else if (OB_UNLIKELY(row.get_column_count() != ctx_.column_cnt_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column count mismatch", K(ret), "ctx", ctx_, K(row));
+  } else if (OB_UNLIKELY(encoder_freezed_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected encoder status", K(ret), K_(encoder_freezed), K_(appended_row_count), K_(appended_batch_count));
   } else if (OB_FAIL(inner_init_())) {
     LOG_WARN("failed to inner init", K(ret));
   } else if (0 == appended_row_count_) {
@@ -476,6 +512,9 @@ int ObMicroBlockCSEncoder::append_batch(const ObBatchDatumRows &vec_batch,
   } else if (OB_UNLIKELY(vec_batch.vectors_.count() != ctx_.column_cnt_ || row_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column count mismatch", K(ret), K_(ctx), K(vec_batch), K(row_count));
+  } else if (OB_UNLIKELY(encoder_freezed_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected encoder status", K(ret), K_(encoder_freezed), K_(appended_row_count), K_(appended_batch_count));
   } else if (OB_FAIL(inner_init_())) {
     LOG_WARN("failed to inner init", K(ret));
   } else if (0 == appended_batch_count_) {
@@ -898,7 +937,7 @@ int ObMicroBlockCSEncoder::do_copy_vector_(const ObIVector *vector,
             offsets[j] = length_;
             length_ += len;
           } else {
-            offsets[i] = length_;
+            offsets[j] = length_;
           }
         }
         offsets[row_count] = length_;
@@ -1266,6 +1305,10 @@ int ObMicroBlockCSEncoder::build_block(char *&buf, int64_t &size)
   } else if (OB_UNLIKELY(0 == appended_row_count_)) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("empty micro block", K(ret));
+  } else if (OB_UNLIKELY(encoder_freezed_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected encoder status", K(ret), K_(encoder_freezed), K_(appended_row_count), K_(appended_batch_count));
+  } else if (FALSE_IT(encoder_freezed_ = true)) {
   } else if (OB_FAIL(prepare_for_build_block_())) {
     LOG_WARN("fail to prepare_for_build_block", K(ret));
   } else if (OB_FAIL(encoder_detection_())) {

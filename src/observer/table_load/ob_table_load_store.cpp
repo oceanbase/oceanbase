@@ -87,6 +87,7 @@ void ObTableLoadStore::cancel_table_ctx(ObTableLoadTableCtx *ctx)
 void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ctx->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(ctx));
@@ -96,15 +97,16 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
     is_stopped = true;
   } else {
     LOG_INFO("store abort");
+    // 0. mark session query killed
+    if (nullptr != ctx->session_info_ && OB_TMP_FAIL(ctx->session_info_->kill_query())) {
+      LOG_WARN("fail to kill query", KR(tmp_ret));
+    }
     // 1. mark status abort, speed up background task exit
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = ctx->store_ctx_->set_status_abort())) {
+    if (OB_TMP_FAIL(ctx->store_ctx_->set_status_abort())) {
       LOG_WARN("fail to set store status abort", KR(tmp_ret));
     }
-    // 2. disable heart beat check
-    ctx->store_ctx_->set_enable_heart_beat_check(false);
-    // 3. mark all active trans abort
-    if (OB_SUCCESS != (tmp_ret = abort_active_trans(ctx))) {
+    // 2. mark all active trans abort
+    if (OB_TMP_FAIL(abort_active_trans(ctx))) {
       LOG_WARN("fail to abort active trans", KR(tmp_ret));
     }
     cancel_table_ctx(ctx);
@@ -191,7 +193,6 @@ int ObTableLoadStore::confirm_begin()
   } else {
     LOG_INFO("store confirm begin");
     store_ctx_->heart_beat(); // init heart beat
-    store_ctx_->set_enable_heart_beat_check(true);
     if (ObDirectLoadMethod::is_incremental(param_.method_)) {
       if (OB_FAIL(open_insert_table_ctx())) {
         LOG_WARN("fail to open insert_table_ctx", KR(ret));
@@ -505,7 +506,6 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
         }
         ctx_->reset_assigned_memory();
       }
-      store_ctx_->set_enable_heart_beat_check(false);
       result_info = store_ctx_->result_info_;
     }
   }

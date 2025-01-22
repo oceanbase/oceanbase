@@ -165,7 +165,7 @@ int ObExpandVecOp::do_dup_partial()
   //
   // if rollup expr is a const expr, just cp current batch (both mysql & oracle)
   //
-  // in oracle,  `group by c1, c2, rollup (c1, c2)`, result of rollup(c1) is same as group by (c1, NULL)
+  // `group by c1, c2, rollup (c1, c2)`, result of rollup(c1) is same as group by (c1, NULL)
   //
   // in oracle group by roll(c1, c1, c2), rollup result of last c1 is same as group by (c1, c1, NULL)
   // rollup result of first c1 is same as group by (NULL, NULL, NULL)
@@ -174,8 +174,7 @@ int ObExpandVecOp::do_dup_partial()
     && MY_SPEC.expand_exprs_.at(expr_iter_idx_)->args_[0]->is_static_const_;
   if ((lib::is_oracle_mode() && is_real_static_const)
       || MY_SPEC.expand_exprs_.at(expr_iter_idx_)->is_const_expr()
-      || (lib::is_oracle_mode()
-          && has_exist_in_array(MY_SPEC.gby_exprs_, MY_SPEC.expand_exprs_.at(expr_iter_idx_)))
+      || has_exist_in_array(MY_SPEC.gby_exprs_, MY_SPEC.expand_exprs_.at(expr_iter_idx_))
       || exists_dup_expr(expr_iter_idx_)) {
     // do nothing
   } else if (MY_SPEC.use_rich_format_) {
@@ -551,14 +550,19 @@ void ObExpandVecOp::clear_evaluated_flags()
   // we don't clear evaluated flags of expand exprs and duplicate exprs
   // expand exprs do not need re-calculation, just set null flags
   // duplicate exprs are copied once, and do not changed ever since
-  for (int i = 0; i < MY_SPEC.output_.count(); i++) {
-    ObExpr *expr = MY_SPEC.output_.at(i);
-    bool is_expand_expr = has_exist_in_array(MY_SPEC.expand_exprs_, expr);
-    bool is_dup_expr = false;
-    for (int j = 0; !is_dup_expr && j < MY_SPEC.dup_expr_pairs_.count(); j++) {
-      is_dup_expr = (expr == MY_SPEC.dup_expr_pairs_.at(j).dup_expr_);
+  for (int i = 0; i < eval_infos_.count(); i++) {
+    bool is_expand_eval_info = false;
+    bool is_dup_expr_eval_info = false;
+    for (int j = 0; !is_expand_eval_info && j < MY_SPEC.expand_exprs_.count(); j++) {
+      is_expand_eval_info = eval_infos_.at(i) == &(MY_SPEC.expand_exprs_.at(j)->get_eval_info(eval_ctx_));
     }
-    if (!is_expand_expr && !is_dup_expr) { expr->get_eval_info(eval_ctx_).clear_evaluated_flag(); }
+    for (int j = 0; !is_dup_expr_eval_info && j < MY_SPEC.dup_expr_pairs_.count(); j++) {
+      is_dup_expr_eval_info =
+        (eval_infos_.at(i) == &(MY_SPEC.dup_expr_pairs_.at(j).dup_expr_->get_eval_info(eval_ctx_)));
+    }
+    if (!is_dup_expr_eval_info && !is_expand_eval_info) {
+      eval_infos_.at(i)->clear_evaluated_flag();
+    }
   }
 }
 } // end sql

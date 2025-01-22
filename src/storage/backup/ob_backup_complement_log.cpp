@@ -918,8 +918,6 @@ int ObBackupLSLogTask::inner_deal_with_piece_meta_(const ObTenantArchivePieceAtt
   ObBackupDest dest;
   if (OB_FAIL(transform_and_copy_meta_file_(piece_attr))) {
     LOG_WARN("failed to transform and copy meta file", K(ret), K(piece_attr));
-  } else if (!ls_id_.is_sys_ls()) {
-    // do nothing
   } else if (OB_FAIL(get_copy_src_and_dest_(piece_attr, src, dest))) {
     LOG_WARN("failed to get copy src and dest", K(ret), K(piece_attr));
   } else if (OB_FAIL(copy_piece_start_file_(piece_attr, src, dest))) {
@@ -1490,8 +1488,6 @@ int ObBackupLSLogTask::transform_and_copy_meta_file_(const ObTenantArchivePieceA
     LOG_WARN("failed to init dest store", K(ret), K(dest));
   } else if (OB_FAIL(copy_ls_file_info_(piece_attr, src_store, dest_store))) {
     LOG_WARN("failed to copy ls file info", K(ret), K(src), K(dest), K(piece_attr));
-  } else if (!ls_id.is_sys_ls()) {
-    // do nothing
   } else if (OB_FAIL(copy_piece_file_info_(piece_attr, src_store, dest_store))) {
     LOG_WARN("failed to copy piece file info", K(ret), K(src), K(dest), K(piece_attr));
   } else if (OB_FAIL(copy_single_piece_info_(piece_attr, src_store, dest_store))) {

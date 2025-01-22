@@ -161,7 +161,7 @@ int QueryAllServerInfoStrategy::build_sql_statement(
       LOG_ERROR("build_sql_statement failed for query all_server in tenant_sync_mode", KR(ret), K(pos), KCSTRING(sql_buf));
     }
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-      "SELECT SVR_IP, SVR_PORT, SQL_PORT FROM %s WHERE STATUS = 'ACTIVE'", OB_DBA_OB_SERVERS_TNAME))) {
+      "SELECT SVR_IP, SVR_PORT, SQL_PORT FROM %s WHERE STATUS = 'ACTIVE' AND START_SERVICE_TIME > 0", OB_DBA_OB_SERVERS_TNAME))) {
     LOG_ERROR("build_sql_statement failed for query all_server_info", KR(ret), K(pos), KCSTRING(sql_buf));
   }
 
@@ -216,6 +216,7 @@ int QueryTenantServerListStrategy::build_sql_statement(
       "JOIN %s SERVER "
       "ON SERVER.SVR_PORT=UNIT.SVR_PORT AND SERVER.SVR_IP=UNIT.SVR_IP "
       "AND SERVER.STATUS='ACTIVE' "
+      "AND SERVER.START_SERVICE_TIME > 0 "
       "AND TENANT_ID = %lu",
       OB_DBA_OB_UNITS_TNAME, OB_DBA_OB_SERVERS_TNAME, tenant_id_))) {
     LOG_ERROR("build_sql_statement failed for query all_server_info", KR(ret), K(pos), K_(tenant_id), KCSTRING(sql_buf));

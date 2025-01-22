@@ -220,7 +220,7 @@ Outputs & filters:
        [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.normalword], [luna_core_bidword_diagnose.target],
        [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
        [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
-       [luna_core_bidword_diagnose.click_factor]), filter([cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(4, 0))]), rowset=16
+       [luna_core_bidword_diagnose.click_factor]), filter([cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(20, 0))]), rowset=16
       access([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
        [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
        [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
@@ -266,7 +266,7 @@ Outputs & filters:
        [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.normalword], [luna_core_bidword_diagnose.target],
        [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
        [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
-       [luna_core_bidword_diagnose.click_factor]), filter([cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(4, 0))]), rowset=16
+       [luna_core_bidword_diagnose.click_factor]), filter([cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(20, 0))]), rowset=16
       access([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
        [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
        [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
@@ -313,7 +313,7 @@ Outputs & filters:
        [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
        [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
        [luna_core_bidword_diagnose.click_factor]), filter([luna_core_bidword_diagnose.custid = 1], [luna_core_bidword_diagnose.campaignid = 2], [luna_core_bidword_diagnose.adgroupid 
-      = 3], [luna_core_bidword_diagnose.bidwordid = 5], [cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(4, 0))], [luna_core_bidword_diagnose.type 
+      = 3], [luna_core_bidword_diagnose.bidwordid = 5], [cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(20, 0))], [luna_core_bidword_diagnose.type 
       = 6], [luna_core_bidword_diagnose.platform = 7]), rowset=16
       access([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
        [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],

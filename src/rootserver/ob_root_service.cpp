@@ -2055,12 +2055,16 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
       LOG_WARN("fail to get baseline schema version", KR(ret));
     } else if (OB_FAIL(set_cpu_quota_concurrency_config_())) {
       LOG_WARN("failed to update cpu_quota_concurrency", K(ret));
+    } else if (OB_FAIL(set_use_odps_jni_connector_())) {
+      LOG_WARN("fail to set use_odps_jni_connector", K(ret));
     } else if (OB_FAIL(set_enable_trace_log_())) {
       LOG_WARN("fail to set one phase commit config", K(ret));
     } else if (OB_FAIL(disable_dbms_job())) {
       LOG_WARN("failed to update _enable_dbms_job_package", K(ret));
     } else if (OB_FAIL(set_bloom_filter_ratio_config_())) {
       LOG_WARN("failed to update _bloom_filter_ratio", K(ret));
+    } else if (OB_FAIL(enable_mysql_compatible_dates_config_())) {
+      LOG_WARN("fail to update _enable_mysql_compatible_dates config", K(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -2905,6 +2909,12 @@ int ObRootService::drop_tenant(const ObDropTenantArg &arg)
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (OB_FAIL(ddl_service_.drop_tenant(arg))) {
     LOG_WARN("ddl_service_ drop_tenant failed", K(arg), K(ret));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
+      if (OB_CANCELED != tmp_ret) {
+        LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+      }
+    }
   }
   return ret;
 }
@@ -9414,10 +9424,19 @@ int ObRootService::admin_set_config(obrpc::ObAdminSetConfigArg &arg)
     if (OB_FAIL(init_sys_admin_ctx(ctx))) {
       LOG_WARN("init_sys_admin_ctx failed", K(ret));
     } else {
-      ObLatchWGuard guard(set_config_lock_, ObLatchIds::CONFIG_LOCK);
+      bool lock_succ = false;
       ObAdminSetConfig admin_util(ctx);
-      if (OB_FAIL(admin_util.execute(arg))) {
+      if (OB_FAIL(set_config_lock_.wrlock(ObLatchIds::CONFIG_LOCK, THIS_WORKER.get_timeout_ts()))) {
+        LOG_WARN("fail to wrlock CONFIG_LOCK", KR(ret), "abs_timeout", THIS_WORKER.get_timeout_ts());
+      } else if (FALSE_IT(lock_succ = true)) {
+      } else if (OB_FAIL(admin_util.execute(arg))) {
         LOG_WARN("execute set config failed", K(arg), K(ret));
+      }
+      if (lock_succ) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(set_config_lock_.unlock())) {
+          LOG_ERROR("unlock failed", KR(tmp_ret), KR(ret));
+        }
       }
     }
   }
@@ -12196,6 +12215,18 @@ int ObRootService::set_cpu_quota_concurrency_config_()
   return ret;
 }
 
+int ObRootService::set_use_odps_jni_connector_()
+{
+  int64_t affected_rows = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _use_odps_jni_connector = true;", affected_rows))) {
+    LOG_WARN("update _use_odps_jni_connector to false failed", K(ret));
+  } else if (OB_FAIL(check_config_result("_use_odps_jni_connector", "true"))) {
+    LOG_WARN("failed to check config same", K(ret));
+  }
+  return ret;
+}
+
 int ObRootService::disable_dbms_job()
 {
   int64_t affected_rows = 0;
@@ -12215,6 +12246,19 @@ int ObRootService::set_bloom_filter_ratio_config_()
   if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _bloom_filter_ratio = 3;", affected_rows))) {
     LOG_WARN("update _bloom_filter_ratio failed", K(ret));
   } else if (OB_FAIL(check_config_result("_bloom_filter_ratio", "3"))) {
+    LOG_WARN("failed to check config same", K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::enable_mysql_compatible_dates_config_()
+{
+  int64_t affected_rows = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _enable_mysql_compatible_dates = true;",
+              affected_rows))) {
+    LOG_WARN("update _enable_mysql_compatible_dates to false failed", K(ret));
+  } else if (OB_FAIL(check_config_result("_enable_mysql_compatible_dates", "true"))) {
     LOG_WARN("failed to check config same", K(ret));
   }
   return ret;

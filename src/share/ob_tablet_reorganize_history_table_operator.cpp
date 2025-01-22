@@ -39,7 +39,7 @@ int ObTabletReorganizeHistoryTableOperator::check_tablet_has_reorganized(
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tablet_id));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      ObMySQLResult *result = NULL;
+      sqlclient::ObMySQLResult *result = NULL;
       const uint64_t zero_tenant_id = 0;
       if (OB_FAIL(sql.assign_fmt(
         "select * from %s where tenant_id = %lu and src_tablet_id = %ld",
@@ -187,7 +187,7 @@ int ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_dest(
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tablet_id));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      ObMySQLResult *result = NULL;
+      sqlclient::ObMySQLResult *result = NULL;
       const uint64_t zero_tenant_id = 0;
       if (OB_FAIL(sql.assign_fmt(
         "select * from %s where tenant_id = %lu and dest_tablet_id = %ld",

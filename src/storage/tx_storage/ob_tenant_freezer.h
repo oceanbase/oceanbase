@@ -55,6 +55,7 @@ public:
 
   int64_t captured_merge_time_cost_[ObFreezerMergeType::MAX_MERGE_TYPE];
   int64_t captured_merge_times_[ObFreezerMergeType::MAX_MERGE_TYPE];
+  int64_t captured_source_times_[MAX_FREEZE_SOURCE_TYPE_COUNT];
 
   int64_t last_captured_retire_clock_;
 
@@ -125,6 +126,7 @@ public:
   // replay use 1G/s
   const static int64_t REPLAY_RESERVE_MEMSTORE_BYTES = 100 * 1024 * 1024; // 100 MB
   const static int64_t MEMSTORE_USED_CACHE_REFRESH_INTERVAL = 100_ms;
+  const static int64_t TENANT_FREEZE_RETRY_TIME_US = 600LL * 1000LL * 1000LL; // 10 minutes
   static double MDS_TABLE_FREEZE_TRIGGER_TENANT_PERCENTAGE;
 
 public:
@@ -155,7 +157,15 @@ public:
   // check if this tenant's memstore is out of range, and trigger minor/major freeze.
   int check_and_do_freeze();
 
+  // do freezer diagnose info
   int do_freeze_diagnose();
+
+  // record freeze source history
+  void record_freezer_source_event(const share::ObLSID &ls_id,
+                                   const ObFreezeSourceFlag source);
+
+  // report freeze source history
+  void report_freezer_source_events();
 
   // used for replay to check whether can enqueue another replay task
   bool is_replay_pending_log_too_large(const int64_t pending_size);
@@ -219,8 +229,7 @@ public:
   int print_tenant_usage(char *print_buf,
                          int64_t buf_len,
                          int64_t &pos);
-
-                                // if major freeze is failed and need retry, set the major freeze into at retry_major_info_.
+  // if major freeze is failed and need retry, set the major freeze into at retry_major_info_.
   const ObRetryMajorInfo &get_retry_major_info() const { return retry_major_info_; }
   void record_freeze_failed_tablet(const ObTabletID &tablet_id);
   void erase_freeze_failed_tablet(const ObTabletID &tablet_id);
@@ -243,6 +252,9 @@ public:
 
   void get_freezer_stat_from_history(int64_t pos, ObTenantFreezerStat& stat);
 
+  // record major frozen scn and reset freeze cnt
+  int update_frozen_scn(const int64_t frozen_scn);
+
 private:
   int get_tenant_memstore_cond_(int64_t &active_memstore_used,
                                 int64_t &total_memstore_used,
@@ -254,6 +266,7 @@ private:
                            int64_t &last_check_timestamp,
                            bool &is_out_of_mem,
                            const bool from_user = true);
+  static int ls_freeze_data_(ObLS *ls);
   static int ls_freeze_data_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts);
   static int ls_freeze_all_unit_(
     ObLS *ls,

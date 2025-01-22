@@ -327,7 +327,7 @@ int ObHashGroupByOp::inner_open()
   }
   if (OB_SUCC(ret)) {
     if (ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_) {
-      no_non_distinct_aggr_ = (0 == MY_SPEC.aggr_infos_.count());
+      can_skip_last_group_ = (0 == MY_SPEC.aggr_infos_.count() && !MY_SPEC.need_last_group_in_3stage_);
     } else if (ObThreeStageAggrStage::SECOND_STAGE == MY_SPEC.aggr_stage_) {
       if (OB_FAIL(append(distinct_origin_exprs_, MY_SPEC.group_exprs_))) {
         LOG_WARN("failed to append distinct_origin_exprs", K(ret));
@@ -659,7 +659,7 @@ int ObHashGroupByOp::next_duplicate_data_permutation(
       LOG_DEBUG("debug write aggr code", K(ret), K(aggr_code), K(first_idx));
     }
     LOG_DEBUG("debug write aggr code", K(ret), K(last_group), K(nth_group), K(first_idx),
-      K(no_non_distinct_aggr_), K(start_idx), K(end_idx));
+      K(can_skip_last_group_), K(start_idx), K(end_idx));
   } else if (ObThreeStageAggrStage::SECOND_STAGE == MY_SPEC.aggr_stage_) {
     if (!use_distinct_data_) {
       //get the aggr_code and then insert group hash-table or insert duplicate hash-table
@@ -1031,7 +1031,7 @@ int ObHashGroupByOp::load_data()
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(next_duplicate_data_permutation(nth_dup_data, last_group, nullptr, insert_group_ht))) {
         LOG_WARN("failed to get next duplicate data purmutation", K(ret));
-      } else if (last_group && no_non_distinct_aggr_) {
+      } else if (last_group && can_skip_last_group_) {
         // no groupby exprs, don't calculate the last duplicate data for non-distinct aggregate
         break;
       } else if (!insert_group_ht) {
@@ -1755,7 +1755,7 @@ int ObHashGroupByOp::load_data_batch(int64_t max_row_cnt)
                                              loop_cnt, *child_brs, part_cnt, parts, est_part_cnt,
                                              bloom_filter))) {
           LOG_WARN("fail to group child batch rows", K(ret));
-        } else if (no_non_distinct_aggr_) {
+        } else if (can_skip_last_group_) {
         } else if (OB_FAIL(aggr_processor_.eval_aggr_param_batch(*child_brs))) {
           LOG_WARN("fail to eval aggr param batch", K(ret), K(*child_brs));
         }
@@ -2333,7 +2333,7 @@ int ObHashGroupByOp::group_child_batch_rows(const ObChunkDatumStore::StoredRow *
       part_shift, loop_cnt, child_brs, part_cnt, parts, est_part_cnt, bloom_filter,
       process_check_dump))) {
     LOG_WARN("failed to batch process duplicate data", K(ret));
-  } else if (no_non_distinct_aggr_) {
+  } else if (can_skip_last_group_) {
     // no groupby exprs, don't calculate the last duplicate data for non-distinct aggregate
   } else {
     if (!group_rows_arr_.is_valid_ && nullptr == store_rows) {
@@ -2604,7 +2604,7 @@ int ObHashGroupByOp::load_one_row()
       } else if (OB_FAIL(by_pass_get_next_permutation(by_pass_nth_group_, last_group, insert_group_ht))) {
         LOG_WARN("failed to get next permutation row", K(ret));
       } else {
-        if (no_non_distinct_aggr_ && last_group) {
+        if (can_skip_last_group_ && last_group) {
           got_row = false;
         } else {
           got_row = true;
@@ -2625,7 +2625,7 @@ int ObHashGroupByOp::load_one_row()
     } else if (OB_FAIL(by_pass_get_next_permutation(by_pass_nth_group_, last_group, insert_group_ht))) {
       LOG_WARN("failed to get next permutation row", K(ret));
     } else {
-      if (no_non_distinct_aggr_ && last_group) {
+      if (can_skip_last_group_ && last_group) {
         got_row = false;
       } else {
         got_row = true;
@@ -2652,7 +2652,7 @@ int ObHashGroupByOp::load_one_row()
       }
     }
 
-    if (OB_FAIL(ret) || no_non_distinct_aggr_
+    if (OB_FAIL(ret) || can_skip_last_group_
         || (MY_SPEC.skew_detection_enabled_ && is_popular_value)) {
     } else if (OB_ISNULL(by_pass_group_row_)
                 || OB_ISNULL(by_pass_group_row_->group_row_)) {
@@ -2726,7 +2726,7 @@ int ObHashGroupByOp::by_pass_prepare_one_batch(const int64_t batch_size)
     }
   }
 
-  if (OB_FAIL(ret) || no_non_distinct_aggr_) {
+  if (OB_FAIL(ret) || can_skip_last_group_) {
   } else if (OB_ISNULL(by_pass_group_batch_)
              || by_pass_batch_size_ <= 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -2786,7 +2786,7 @@ int ObHashGroupByOp::by_pass_get_next_permutation_batch(int64_t &nth_group, bool
     LOG_WARN("failed to get next permutation", K(ret));
   } else {
     CK (dup_groupby_exprs_.count() == all_groupby_exprs_.count());
-    if (no_non_distinct_aggr_ && last_group) {
+    if (can_skip_last_group_ && last_group) {
       my_brs.skip_->set_all(child_brs->size_);
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < dup_groupby_exprs_.count(); ++i) {
@@ -3065,18 +3065,16 @@ int ObHashGroupByOp::init_by_pass_op()
     LOG_WARN("failed to init by pass group row item", K(ret));
   } else if (MY_SPEC.max_batch_size_ > 0 && OB_FAIL(init_by_pass_group_batch_item())) {
     LOG_WARN("failed to init by pass group batch item", K(ret));
+  } else if (MY_SPEC.max_batch_size_ > 0
+              && OB_FAIL(by_pass_brs_holder_.init(child_->get_spec().output_, eval_ctx_))) {
+    LOG_WARN("failed to init brs holder", K(ret));
   } else if (OB_ISNULL(store_row_buf = mem_context_->get_malloc_allocator()
                                           .alloc(sizeof(ObChunkDatumStore::LastStoredRow)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for store row", K(ret));
-  } else if (MY_SPEC.max_batch_size_ > 0
-              && OB_FAIL(by_pass_brs_holder_.init(child_->get_spec().output_, eval_ctx_))) {
-    LOG_WARN("failed to init brs holder", K(ret));
   } else {
-    if (nullptr != store_row_buf) {
-      last_child_row_ = new(store_row_buf)ObChunkDatumStore::LastStoredRow(mem_context_->get_arena_allocator());
-      last_child_row_->reuse_ = true;
-    }
+    last_child_row_ = new(store_row_buf)ObChunkDatumStore::LastStoredRow(mem_context_->get_arena_allocator());
+    last_child_row_->reuse_ = true;
     LOG_TRACE("check by pass", K(MY_SPEC.id_), K(MY_SPEC.by_pass_enabled_), K(bypass_ctrl_.get_small_row_cnt()),
                                K(get_actual_mem_used_size()), K(INIT_L2_CACHE_SIZE), K(INIT_L3_CACHE_SIZE));
     // to avoid performance decrease, at least deduplicate 2/3

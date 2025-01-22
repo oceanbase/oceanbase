@@ -21,6 +21,8 @@
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #endif
@@ -155,39 +157,12 @@ int ObCopiedSSTableCreatorImpl::init(
   return ret;
 }
 
-int ObCopiedSSTableCreatorImpl::init_param_for_co_sstable_(ObTabletCreateSSTableParam &param) const
-{
-  int ret = OB_SUCCESS;
-  if (src_sstable_param_->table_key_.is_co_sstable()) {
-    if (!src_sstable_param_->is_empty_sstable()
-        && (src_sstable_param_->co_base_type_ <= ObCOSSTableBaseType::INVALID_TYPE
-            || src_sstable_param_->co_base_type_ >= ObCOSSTableBaseType::MAX_TYPE
-            || src_sstable_param_->column_group_cnt_ <= 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("co sstable with invalid co sstable param", K(ret), KPC(src_sstable_param_));
-    } else {
-      param.column_group_cnt_ = src_sstable_param_->column_group_cnt_;
-      param.full_column_cnt_ = src_sstable_param_->full_column_cnt_;
-      param.co_base_type_ = src_sstable_param_->co_base_type_;
-      if (src_sstable_param_->is_empty_sstable()) {
-        param.is_co_table_without_cgs_ = !src_sstable_param_->table_key_.is_ddl_sstable();
-      } else {
-        param.is_co_table_without_cgs_ = src_sstable_param_->is_empty_cg_sstables_;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObCopiedSSTableCreatorImpl::init_create_sstable_param_(ObTabletCreateSSTableParam &param) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(param.init_for_ha(*src_sstable_param_))) {
     LOG_WARN("fail to init create sstable param", K(ret), KPC(src_sstable_param_));
-  } else if (OB_FAIL(init_param_for_co_sstable_(param))) {
-    LOG_WARN("fail to init co sstable param", K(ret), KPC(src_sstable_param_));
   }
-
   return ret;
 }
 
@@ -198,10 +173,7 @@ int ObCopiedSSTableCreatorImpl::init_create_sstable_param_(
   int ret = OB_SUCCESS;
   if (OB_FAIL(param.init_for_ha(*src_sstable_param_, res))) {
     LOG_WARN("fail to init create sstable param", K(ret), KPC(src_sstable_param_));
-  } else if (OB_FAIL(init_param_for_co_sstable_(param))) {
-    LOG_WARN("fail to init co sstable param", K(ret), KPC(src_sstable_param_));
   }
-
   return ret;
 }
 
@@ -210,7 +182,7 @@ int ObCopiedSSTableCreatorImpl::do_create_sstable_(
     ObTableHandleV2 &table_handle) const
 {
   int ret = OB_SUCCESS;
-  if (param.table_key_.is_co_sstable()) {
+  if (param.table_key().is_co_sstable()) {
     if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param,
                                                                           *allocator_,
                                                                           table_handle))) {
@@ -273,52 +245,6 @@ int ObCopiedEmptySSTableCreator::check_sstable_param_for_init_(const ObMigration
   if (!src_sstable_param->is_empty_sstable()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("sstable is not empty", K(ret), KPC(src_sstable_param));
-  }
-
-  return ret;
-}
-
-
-// ObBackupSSTableCreator
-int ObBackupSSTableCreator::create_sstable()
-{
-  int ret = OB_SUCCESS;
-  ObTableHandleV2 table_handle;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObCopiedSSTableCreator not init", K(ret));
-  } else {
-    SMART_VAR(ObTabletCreateSSTableParam, param) {
-      if (OB_FAIL(param.init_for_remote(*src_sstable_param_))) {
-        LOG_WARN("failed to init for remote", K(ret));
-      } else {
-        param.table_backup_flag_.set_has_backup();
-        param.table_backup_flag_.set_no_local();
-      }
-
-      if (FAILEDx(do_create_sstable_(param, table_handle))) {
-        LOG_WARN("failed to create sstable", K(ret), K(param));
-      } else if (OB_FAIL(finish_task_->add_sstable(table_handle))) {
-        LOG_WARN("fail to add sstable", K(ret), K(table_handle));
-      }
-    }
-  }
-
-  LOG_INFO("create backup sstable", K(ret), K(table_handle));
-
-  return ret;
-}
-
-int ObBackupSSTableCreator::check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const
-{
-  int ret = OB_SUCCESS;
-  if (src_sstable_param->is_empty_sstable()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sstable is empty", K(ret), KPC(src_sstable_param));
-  } else if (src_sstable_param->is_shared_macro_blocks_sstable()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sstable has shared macro blocks", K(ret), KPC(src_sstable_param));
   }
 
   return ret;
@@ -964,12 +890,17 @@ int ObSSTableCopyFinishTask::get_cluster_version_(
 
 bool ObSSTableCopyFinishTask::is_sstable_should_rebuild_index_(const ObMigrationSSTableParam *sstable_param) const
 {
+  // Non-empty SSTable whose macro blocks should be copied needs rebuild index after
+  // macros are copied.
   return !sstable_param->is_empty_sstable()
          && !is_shared_sstable_without_copy_(sstable_param);
 }
 
 bool ObSSTableCopyFinishTask::is_shared_sstable_without_copy_(const ObMigrationSSTableParam *sstable_param) const
 {
+  // Shared SSTable is the SSTable whose macro blocks, including data and index blocks,
+  // are all in shared storage or backup storage. During migration or follower restore,
+  // macro blocks are no need to be copied.
   return !copy_ctx_.is_leader_restore_ && sstable_param->is_shared_sstable();
 }
 

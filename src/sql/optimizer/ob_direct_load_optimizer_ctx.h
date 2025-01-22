@@ -18,7 +18,8 @@ namespace oceanbase
 {
 namespace sql
 {
-
+class ObInsertStmt;
+class ObOptimizerContext;
 struct ObDefaultLoadMode
 {
 #define OB_DEFAULT_LOAD_MODE_DEF(DEF)      \
@@ -39,6 +40,7 @@ public:
   void reset();
   int init_direct_load_ctx(ObExecContext *exec_ctx, ObLoadDataStmt &stmt);
   int init_direct_load_ctx(const ObInsertStmt &stmt, ObOptimizerContext &optimizer_ctx);
+  static int check_direct_load_allow_fallback(const ObDirectLoadOptimizerCtx &optimize_ctx, ObExecContext *exec_ctx, bool &allow_fallback);
   bool can_use_direct_load() const { return can_use_direct_load_; }
   bool use_direct_load() const { return use_direct_load_; }
   void set_use_direct_load() { use_direct_load_ = true; }
@@ -58,7 +60,6 @@ private:
   int check_semantics();
   int check_support_insert_overwrite(const ObGlobalHint &global_hint);
   int check_support_direct_load(ObExecContext *exec_ctx);
-  int check_direct_load_allow_fallback(ObExecContext *exec_ctx, bool &allow_fallback);
 public:
   uint64_t table_id_;
   storage::ObDirectLoadMethod::Type load_method_;

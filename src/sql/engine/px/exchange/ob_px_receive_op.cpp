@@ -933,6 +933,7 @@ int ObPxFifoReceiveOp::get_rows_from_channels_vec(const int64_t row_cnt, int64_t
       } else {
         got_row = true;
         brs_.size_ = read_rows;
+        brs_.all_rows_active_ = true;
       }
       break;
     }

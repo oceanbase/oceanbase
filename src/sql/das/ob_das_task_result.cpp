@@ -17,6 +17,7 @@
 #include "sql/das/ob_das_define.h"
 #include "sql/das/ob_data_access_service.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/ob_exec_context.h"
 namespace oceanbase
 {
 using namespace common;

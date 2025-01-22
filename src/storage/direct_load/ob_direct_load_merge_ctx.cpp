@@ -27,6 +27,7 @@
 #include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
 #include "observer/table_load/ob_table_load_schema.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/direct_load/ob_direct_load_sstable.h"
 
 namespace oceanbase
 {

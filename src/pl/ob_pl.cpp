@@ -590,6 +590,7 @@ void ObPLContext::record_tx_id_before_begin_autonomous_session_for_deadlock_(ObS
 void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSessionInfo &session_info,
                                                                         const ObTransID last_trans_id)
 {
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObTransID now_trans_id = session_info.get_tx_id();
   // 上一个事务等自治事务结束，若自治事务要加上一个事务已经持有的锁，则会死锁
   // 为检测死锁，需要注册上一个事务到自治事务的等待关系
@@ -677,6 +678,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
         // 如果已经在事务中，则需要创建一个回滚点，用于在PL中的语句失败时回滚到PL的开始点；
         // 如果没有在事务中，则不需要创建回滚点，在PL失败时直接回滚整个事务就可以了；
         if (OB_NOT_NULL(session_info.get_tx_desc()) && session_info.get_tx_desc()->in_tx_or_has_extra_state()) {
+          DISABLE_SQL_MEMLEAK_GUARD;
           OZ (ObSqlTransControl::create_savepoint(ctx, PL_IMPLICIT_SAVEPOINT));
           OX (has_implicit_savepoint_ = true);
           LOG_DEBUG("create pl implicit savepoint for oracle", K(ret), K(PL_IMPLICIT_SAVEPOINT));
@@ -692,6 +694,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       // if failed, rollback to this savepoint, and PL/SQL caller will retry.
       if (OB_NOT_NULL(session_info.get_tx_desc()) &&
           session_info.get_tx_desc()->in_tx_or_has_extra_state() && !in_nested_sql_ctrl()) {
+        DISABLE_SQL_MEMLEAK_GUARD;
         OZ (ObSqlTransControl::create_savepoint(ctx, PL_IMPLICIT_SAVEPOINT));
         OX (has_implicit_savepoint_ = true);
         LOG_DEBUG("create pl implicit savepoint for mysql", K(ret), K(PL_IMPLICIT_SAVEPOINT));
@@ -726,6 +729,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     //如果是udf调udf场景, 外层udf已经重置ac, 且内层udf跟随外层udf在destory阶段的回滚或提交
     if (OB_NOT_NULL(session_info.get_tx_desc()) &&
         session_info.get_tx_desc()->in_tx_or_has_extra_state() && !in_nested_sql_ctrl()) {
+      DISABLE_SQL_MEMLEAK_GUARD;
       OZ (ObSqlTransControl::create_savepoint(ctx, PL_IMPLICIT_SAVEPOINT));
       OX (has_implicit_savepoint_ = true);
       LOG_DEBUG("create pl implicit savepoint for mysql", K(ret), K(PL_IMPLICIT_SAVEPOINT));
@@ -740,6 +744,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       routine->get_has_parallel_affect_factor()) {
     // 并行场景下不能创建stash savepoint, 只有当udf/trigger内部有tcl语句时, stash savepoint才有意义
     // udf内部有tcl语句时，该标记为true
+    DISABLE_SQL_MEMLEAK_GUARD;
     const ObString stash_savepoint_name("PL stash savepoint");
     OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
     OX (has_stash_savepoint_ = true);
@@ -756,6 +761,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
   OX (ret = OBPLCONTEXT_INIT);
 #endif // ERRSIM
   if (OB_SUCC(ret) && is_autonomous_) {
+    DISABLE_SQL_MEMLEAK_GUARD;
     has_inner_dml_write_ = session_info.has_exec_inner_dml();
     session_info.set_has_exec_inner_dml(false);
 
@@ -817,6 +823,7 @@ int ObPLContext::implicit_end_trans(
   ObSQLSessionInfo &session_info, ObExecContext &ctx, bool is_rollback, bool can_async)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   bool is_async = false;
   if (session_info.is_in_transaction()) {
     is_async = !is_rollback && ctx.is_end_trans_async() && can_async;
@@ -876,6 +883,7 @@ void ObPLContext::destory(
       ret = OB_SUCCESS == ret ? update_ret : ret;
     }
     if (has_stash_savepoint_) {
+      DISABLE_SQL_MEMLEAK_GUARD;
       const ObString stash_savepoint_name("PL stash savepoint");
       int pop_ret = ObSqlTransControl::release_stash_savepoint(ctx, stash_savepoint_name);
       if (OB_SUCCESS != pop_ret) {
@@ -916,6 +924,7 @@ void ObPLContext::destory(
               (lib::is_mysql_mode() &&
               ((OB_TRY_LOCK_ROW_CONFLICT == ret && session_info.get_pl_can_retry()) ||
               is_function_or_trigger_))) {
+            DISABLE_SQL_MEMLEAK_GUARD;
             if (OB_SUCCESS !=
                   (tmp_ret = ObSqlTransControl::rollback_savepoint(ctx, PL_IMPLICIT_SAVEPOINT))) {
               LOG_WARN("failed to rollback current pl to implicit savepoint", K(ret), K(tmp_ret));
@@ -934,6 +943,7 @@ void ObPLContext::destory(
               transaction::ObTransID tx_id;
               const bool force_disconnect = false;
               int rl_ret = OB_SUCCESS;
+              DISABLE_SQL_MEMLEAK_GUARD;
               if (OB_SUCCESS != (rl_ret = ObTMService::tm_rollback(ctx, tx_id))) {
                 LOG_WARN("failed to rollback for dblink trans", K(ret), K(rl_ret), K(tx_id), K(xid), K(global_tx_type));
               } else if (OB_SUCCESS != (rl_ret =
@@ -943,6 +953,7 @@ void ObPLContext::destory(
               ret = OB_SUCCESS == ret ? rl_ret : ret;
             }
           } else if (OB_TRANS_XA_BRANCH_FAIL != ret) {
+            DISABLE_SQL_MEMLEAK_GUARD;
             tmp_ret = ObDbmsXA::xa_rollback_savepoint(ctx);
             if (OB_SUCCESS != tmp_ret) {
               LOG_WARN("xa trans roll back to save point failed",
@@ -999,6 +1010,7 @@ void ObPLContext::destory(
           if (is_dblink) {
             transaction::ObTransID tx_id;
             const bool force_disconnect = false;
+            DISABLE_SQL_MEMLEAK_GUARD;
             if (OB_SUCCESS !=(cm_ret = ObTMService::tm_commit(ctx, tx_id))) {
               LOG_WARN("failed to commit dblink trans", K(ret), K(tx_id), K(xid), K(global_tx_type));
             } else if (OB_SUCCESS != (cm_ret = session_info.get_dblink_context().clean_dblink_conn(force_disconnect))) {
@@ -1038,12 +1050,14 @@ void ObPLContext::destory(
     if (OB_SUCCESS != ret && session_info.is_in_transaction()) { // PL执行失败, 需要回滚
       int tmp_ret = OB_SUCCESS;
       if (has_implicit_savepoint_) {
+        DISABLE_SQL_MEMLEAK_GUARD;
         if (OB_SUCCESS != (tmp_ret = ObSqlTransControl::rollback_savepoint(ctx, PL_IMPLICIT_SAVEPOINT))) {
           LOG_WARN("failed to rollback current pl to implicit savepoint", K(ret), K(tmp_ret));
         }
 #ifdef OB_BUILD_ORACLE_PL
       } else if (session_info.associated_xa()) {
         if (OB_TRANS_XA_BRANCH_FAIL != ret) {
+          DISABLE_SQL_MEMLEAK_GUARD;
           tmp_ret = ObDbmsXA::xa_rollback_savepoint(ctx);
           if (OB_SUCCESS != tmp_ret) {
             LOG_WARN("xa trans roll back to save point failed",
@@ -1380,7 +1394,7 @@ int ObPLContext::set_default_database(ObPLFunction &routine,
   bool need_set_db = true;
 
   // in mysql mode, only system packages with invoker's right do not need set db
-  // in oracle mode, set db by if the routine is invoker's right
+  // in oracle mode, set db by if the routine is definer's right
   if (lib::is_oracle_mode()
       || get_tenant_id_by_object_id(routine.get_package_id()) == OB_SYS_TENANT_ID) {
     need_set_db = !routine.is_invoker_right();
@@ -1559,7 +1573,6 @@ int ObPL::execute(ObExecContext &ctx,
                   bool is_called_from_sql)
 {
   int ret = OB_SUCCESS;
-  DISABLE_SQL_MEMLEAK_GUARD;
   int64_t execute_start = ObTimeUtility::current_time();
   ObObj local_result(ObMaxType);
   int local_status = OB_SUCCESS;
@@ -1964,7 +1977,6 @@ struct ObPLExecTraceIdGuard {
 int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *block)
 {
   int ret = OB_SUCCESS;
-  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(pl_entry);
   lib::MemoryContext mem_context = NULL;
   lib::ContextParam param;
@@ -2122,7 +2134,6 @@ int ObPL::execute(ObExecContext &ctx,
                   ObBitSet<OB_DEFAULT_BITSET_SIZE> &out_args)
 {
   int ret = OB_SUCCESS;
-  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(pl_entry);
   ObPLFunction *routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ANON_HANDLE);
@@ -2222,7 +2233,6 @@ int ObPL::execute(ObExecContext &ctx,
                   const ObRoutineInfo *dblink_routine_info)
 {
   int ret = OB_SUCCESS;
-  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(pl_entry);
   bool debug_mode = false;
   ObPLFunction *routine = NULL;
@@ -2439,6 +2449,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
                           ObCacheObjGuard& cacheobj_guard)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObPLFunction* routine = NULL;
   OZ (ObPLContext::valid_execute_context(ctx));
   if (OB_SUCC(ret)) {
@@ -2470,7 +2481,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
         // use stmt id as key
         pc_ctx.key_.key_id_ = stmt_id;
         if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
-          LOG_INFO("get pl function from plan cache failed",
+          LOG_INFO("get pl function by stmt id from plan cache failed",
                     K(ret), K(pc_ctx.key_), K(stmt_id), K(sql), K(params));
           ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
         } else if (FALSE_IT(routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()))) {
@@ -2566,6 +2577,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   ObPLFunction* routine = NULL;
+  DISABLE_SQL_MEMLEAK_GUARD;
   OZ (ObPLContext::valid_execute_context(ctx));
   if (OB_SUCC(ret) && !subprogram_path.empty()) {
     OZ (ObPLContext::get_routine_from_local(
@@ -2701,17 +2713,17 @@ int ObPL::add_pl_lib_cache(ObPLFunction *pl_func, ObPLCacheCtx &pc_ctx)
   } else if (OB_FAIL(ObPLCacheMgr::add_pl_cache(plan_cache, pl_func, pc_ctx))) {
     if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
       ret = OB_SUCCESS;
-      LOG_DEBUG("this plan has been added by others, need not add again", KPC(pl_func));
+      LOG_WARN("this plan has been added by others, need not add again", KPC(pl_func));
     } else if (OB_REACH_MEMORY_LIMIT == ret || OB_SQL_PC_PLAN_SIZE_LIMIT == ret) {
       if (REACH_TIME_INTERVAL(1000000)) { //1s, 当内存达到上限时, 该日志打印会比较频繁, 所以以1s为间隔打印
-        LOG_DEBUG("can't add plan to plan cache",
+        LOG_WARN("can't add plan to plan cache",
                  K(ret), K(pl_func->get_mem_size()), K(pc_ctx.key_),
                  K(plan_cache->get_mem_used()));
       }
       ret = OB_SUCCESS;
     } else if (is_not_supported_err(ret)) {
       ret = OB_SUCCESS;
-      LOG_DEBUG("plan cache don't support add this kind of plan now",  KPC(pl_func));
+      LOG_WARN("plan cache don't support add this kind of plan now",  KPC(pl_func));
     } else {
       if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
         ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
@@ -2719,7 +2731,7 @@ int ObPL::add_pl_lib_cache(ObPLFunction *pl_func, ObPLCacheCtx &pc_ctx)
       }
     }
   } else {
-    LOG_DEBUG("add pl function to plan cache success", K(pc_ctx.key_));
+    LOG_INFO("add pl function to plan cache success", K(pc_ctx.key_));
   }
   return ret;
 }
@@ -3279,6 +3291,7 @@ int ObPLExecState::final(int ret)
 
   if (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())) {
   #ifdef OB_BUILD_ORACLE_PL
+    DISABLE_SQL_MEMLEAK_GUARD;
     ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
     ObPlJsonTypeManager::release_useless_resource(session->get_json_pl_mngr());
   #endif
@@ -3883,13 +3896,12 @@ do {                                                                  \
               get_params().at(i).set_is_ref_cursor_type(true);  // last assignment statement could clear this flag
               get_params().at(i).set_extend(
                   get_params().at(i).get_ext(), PL_REF_CURSOR_TYPE, get_params().at(i).get_val_len());
-            } else if (pl_type.is_collection_type()
-                  && (is_mocked_anonymous_array_id(params->at(i).get_udt_id()))) {
+            } else if (pl_type.is_collection_type() && (is_mocked_anonymous_array_id(params->at(i).get_udt_id()))) {
               ObPLComposite *composite = NULL;
               get_params().at(i) = params->at(i);
               get_params().at(i).set_udt_id(pl_type.get_user_type_id());
               composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
-              if (OB_NOT_NULL(composite) && composite->is_collection() && OB_INVALID_ID == composite->get_id()) {
+              if (OB_NOT_NULL(composite) && composite->is_collection()) {
                 composite->set_id(pl_type.get_user_type_id());
               }
             } else if (ObNullType == params->at(i).get_meta().get_type()
@@ -4374,6 +4386,7 @@ int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
                                           const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   uint64_t db_id = 0;
   const ObUDTTypeInfo *udt_info = NULL;
   const ObRoutineInfo *routine_info = NULL;
@@ -5007,9 +5020,10 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     }
     if (OB_FAIL(ret) && need_construct && OB_NOT_NULL(record->get_allocator())) {
       ObObj tmp;
+      ObIAllocator *alloc = record->get_allocator();
       tmp.set_extend(reinterpret_cast<int64_t>(ptr), user_type->get_type(), init_size);
       ObUserDefinedType::destruct_obj(tmp, nullptr);
-      allocator.free(record->get_allocator());
+      allocator.free(alloc);
     }
     // f(self object_type, p1 out object_type), p1 will be init here, we have to set it null
     // but self can't be set to null.
@@ -5072,9 +5086,10 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     OX (coll->set_element_desc(elem_desc));
     if (OB_FAIL(ret) && need_construct && OB_NOT_NULL(coll->get_allocator())) {
       ObObj tmp;
+      ObIAllocator *alloc = coll->get_allocator();
       tmp.set_extend(reinterpret_cast<int64_t>(ptr), user_type->get_type(), init_size);
       ObUserDefinedType::destruct_obj(tmp, nullptr);
-      allocator.free(coll->get_allocator());
+      allocator.free(alloc);
     }
   }
 #endif

@@ -594,6 +594,31 @@ int ObTableLoadCoordinatorCtx::init_partition_ids(const ObIArray<ObTabletID> &ta
   return ret;
 }
 
+int ObTableLoadCoordinatorCtx::init_partition_location_and_store_infos()
+{
+  int ret = OB_SUCCESS;
+  store_infos_.reset();
+  ObTableLoadArray<ObAddr> all_addr_array;
+  if (OB_FAIL(ObTableLoadPartitionLocation::init_partition_location(partition_ids_,
+                                                                    target_partition_ids_,
+                                                                    partition_location_,
+                                                                    target_partition_location_))) {
+    LOG_WARN("fail to init partition location", KR(ret));
+  } else if (OB_FAIL(partition_location_.get_all_leader(all_addr_array))) {
+    LOG_WARN("fail to get all leader", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
+      StoreInfo store_info;
+      store_info.addr_ = all_addr_array.at(i);
+      store_info.enable_heart_beat_ = false;
+      if (OB_FAIL(store_infos_.push_back(store_info))) {
+        LOG_WARN("fail to push back store info", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadCoordinatorCtx::init_empty_insert_tablet_ctx_manager()
 {
   int ret = OB_SUCCESS;
@@ -902,11 +927,11 @@ int ObTableLoadCoordinatorCtx::init_complete()
 {
   int ret = OB_SUCCESS;
   // init task_scheduler_
-  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler,
-                                          (&allocator_),
+  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
                                           ctx_->param_.write_session_count_,
                                           ctx_->param_.table_id_,
-                                          "Coordinator"))) {
+                                          "Coordinator",
+                                          ctx_->session_info_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
   }

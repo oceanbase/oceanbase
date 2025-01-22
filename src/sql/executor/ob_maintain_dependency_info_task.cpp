@@ -14,6 +14,7 @@
 #include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/schema/ob_schema_getter_guard.h"
+#include "src/share/ob_server_struct.h"
 
 namespace oceanbase
 {

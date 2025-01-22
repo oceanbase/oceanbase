@@ -39,6 +39,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/blocksstable/index_block/ob_sstable_meta_info.h"
 #include "storage/ob_storage_schema_util.h"
+#include "storage/compaction/ob_schedule_dag_func.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::share::schema;
@@ -156,7 +157,7 @@ int ObDDLTableMergeDag::prepare_incremental_direct_load_ddl_kvs(ObTablet &tablet
   ObDDLKV *ddl_kv = nullptr;
   ObTableHandleV2 selected_ddl_kv_handle;
   ddl_kvs_handle.reset();
-  if (OB_FAIL(tablet.get_all_memtables(memtable_handles))) {
+  if (OB_FAIL(tablet.get_all_memtables_from_memtable_mgr(memtable_handles))) {
     LOG_WARN("fail to get all memtable", K(ret), K(tablet));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < memtable_handles.count(); ++i) {
@@ -920,7 +921,6 @@ int ObTabletDDLUtil::create_ddl_sstable(
         LOG_WARN("create sstable failed", K(ret), K(param));
       }
     } else {
-      param.uncommitted_tx_id_ = ddl_param.trans_id_.get_id();
       if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObSSTable>(param, allocator, sstable_handle))) {
         LOG_WARN("create sstable failed", K(ret), K(param));
       }

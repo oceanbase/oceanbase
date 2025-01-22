@@ -218,6 +218,8 @@ int ObMPQuery::process()
         retry_ctrl_.set_sys_global_schema_version(sys_version);
         session.partition_hit().reset();
         session.set_pl_can_retry(true);
+        session.set_enable_mysql_compatible_dates(
+          session.get_enable_mysql_compatible_dates_from_config());
 
         bool has_more = false;
         bool force_sync_resp = false;
@@ -381,20 +383,20 @@ int ObMPQuery::process()
       No need to setup group_id here,
       Only setup group_id in MPConnect
   */
-  // if (is_conn_valid()) {
-  //   int tmp_ret = OB_SUCCESS;
-  //   // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
-  //   // because we have to reset conn.group_id_ according to user_name.
-  //   // Otherwise, suppose we execute a query with a mapping rule on the column in the query at first,
-  //   // we switch to the defined consumer group, batch_group for example,
-  //   // and after that, the next query will also be executed with batch_group.
-  //   if (OB_UNLIKELY(OB_SUCCESS !=
-  //           (tmp_ret = setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess)))) {
-  //     LOG_WARN("fail setup user resource group", K(tmp_ret), K(ret));
-  //     ret = OB_SUCC(ret) ? tmp_ret : ret;
-  //   }
-  // }
-
+  if (is_conn_valid()) {
+    // int tmp_ret = OB_SUCCESS;
+    // // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
+    // // because we have to reset conn.group_id_ according to user_name.
+    // // Otherwise, suppose we execute a query with a mapping rule on the column in the query at first,
+    // // we switch to the defined consumer group, batch_group for example,
+    // // and after that, the next query will also be executed with batch_group.
+    // if (OB_UNLIKELY(OB_SUCCESS !=
+    //         (tmp_ret = setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess)))) {
+    //   LOG_WARN("fail setup user resource group", K(tmp_ret), K(ret));
+    //   ret = OB_SUCC(ret) ? tmp_ret : ret;
+    // }
+    set_request_expect_group_id(sess);
+  }
   if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
     send_error_packet(ret, NULL);
   }
@@ -728,6 +730,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
     } else {
       session.set_current_execution_id(GCTX.sql_engine_->get_execution_id());
       session.reset_plsql_exec_time();
+      session.reset_plsql_compile_time();
       session.set_stmt_type(stmt::T_NONE);
       result.get_exec_context().set_need_disconnect(true);
       ctx_.schema_guard_ = schema_guard;
@@ -984,6 +987,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       }
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
       audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+      audit_record.plsql_compile_time_ = session.get_plsql_compile_time();
       if (result.is_pl_stmt(result.get_stmt_type()) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
         audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
       }
@@ -1336,22 +1340,34 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
       ret = drv.response_result(result);
     }
   } else {
-    if (need_trans_cb) {
-      ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
-      ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this);
-      if (OB_FAIL(sql_end_cb.init(packet_sender_, &session))) {
-        LOG_WARN("failed to init sql end callback", K(ret));
-      } else if (OB_FAIL(drv.response_result(result))) {
-        LOG_WARN("fail response async result", K(ret));
-      }
-      async_resp_used = result.is_async_end_trans_submitted();
-    } else {
-      ObSyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this);
-      session.set_pl_query_sender(&drv);
-      session.set_ps_protocol(result.is_ps_protocol());
-      ret = drv.response_result(result);
-      session.set_pl_query_sender(NULL);
+
+#define CMD_EXEC \
+    if (need_trans_cb) {\
+      ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb(); \
+      ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this); \
+      if (OB_FAIL(sql_end_cb.init(packet_sender_, &session))) { \
+        LOG_WARN("failed to init sql end callback", K(ret)); \
+      } else if (OB_FAIL(drv.response_result(result))) { \
+        LOG_WARN("fail response async result", K(ret)); \
+      } \
+      async_resp_used = result.is_async_end_trans_submitted(); \
+    } else { \
+      ObSyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this); \
+      session.set_pl_query_sender(&drv); \
+      session.set_ps_protocol(result.is_ps_protocol()); \
+      ret = drv.response_result(result); \
+      session.set_pl_query_sender(NULL); \
     }
+
+    if (result.is_pl_stmt(result.get_stmt_type())) {
+      ENABLE_SQL_MEMLEAK_GUARD;
+      CMD_EXEC;
+    } else {
+      CMD_EXEC;
+    }
+
+#undef CMD_EXEC
+
   }
 
   return ret;
@@ -1372,7 +1388,14 @@ inline void ObMPQuery::record_stat(const stmt::StmtType type,
     }                                           \
     EVENT_ADD(SQL_##type##_TIME, time_cost);    \
     break
-  const int64_t time_cost = end_time - get_receive_timestamp();
+  int64_t start_ts = 0;
+  if (session.get_raw_audit_record().exec_timestamp_.multistmt_start_ts_ > 0) {
+    // In the scenario of multi-query, use the start time of the current query
+    start_ts = session.get_raw_audit_record().exec_timestamp_.multistmt_start_ts_;
+  } else {
+    start_ts = get_receive_timestamp();
+  }
+  const int64_t time_cost = end_time - start_ts;
   if (!THIS_THWORKER.need_retry())
   {
     switch (type)

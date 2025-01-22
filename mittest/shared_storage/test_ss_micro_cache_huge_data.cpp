@@ -208,9 +208,10 @@ TEST_F(TestSSMicroCacheHugeData, test_add_huge_micro_data)
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSARCInfo &arc_info = micro_meta_mgr.arc_info_;
+  ObSSExecuteMicroCheckpointTask &micro_ckpt_task = micro_cache->task_runner_.micro_ckpt_task_;
   const int32_t block_size = phy_blk_mgr.block_size_;
-  const int64_t total_normal_blk_cnt = phy_blk_mgr.blk_cnt_info_.normal_blk_.total_cnt_;
-  const int64_t exp_total_data_size = total_normal_blk_cnt * block_size * 3;
+  const int64_t total_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
+  const int64_t exp_total_data_size = total_data_blk_cnt * block_size * 3;
 
   const int64_t thread_num = 4;
   TestSSMicroCacheHugeData::TestSSMicroCacheHugeDataCtx ctx;
@@ -219,7 +220,7 @@ TEST_F(TestSSMicroCacheHugeData, test_add_huge_micro_data)
   ctx.min_micro_size_ = 1024;
   ctx.max_micro_size_ = 12 * 1024;
   const int32_t avg_micro_size = (ctx.min_micro_size_ + ctx.max_micro_size_) / 2;
-  ctx.micro_cnt_ = exp_total_data_size / avg_micro_size / 4;
+  ctx.micro_cnt_ = exp_total_data_size / avg_micro_size / thread_num;
   ctx.interval_us_ = 50;
   ctx.arc_limit_ = micro_meta_mgr.arc_info_.limit_;
   int64_t start_us = ObTimeUtility::current_time();
@@ -251,11 +252,13 @@ TEST_F(TestSSMicroCacheHugeData, test_add_huge_micro_data)
   const int64_t ori_valid_size = arc_info.get_valid_size();
 
   LOG_INFO("TEST: start update arc", K(cache_stat), K(arc_info));
+  micro_ckpt_task.ckpt_op_.enable_update_arc_limit_ = false;
+  ob_usleep(1000);
   const int64_t tmp_arc_limit = arc_info.limit_ / 4;
   arc_info.update_arc_limit(tmp_arc_limit);
   ASSERT_EQ(tmp_arc_limit, arc_info.limit_);
 
-  ob_usleep(30 * 1000 * 1000);
+  ob_usleep(10 * 1000 * 1000);
   LOG_INFO("TEST: finish update arc", K(cache_stat), K(arc_info));
   ASSERT_LT(arc_info.get_valid_size(), ori_valid_size);
 

@@ -15,6 +15,7 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/rewrite/ob_expand_aggregate_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -103,9 +104,10 @@ int ObTransformDistinctAggregate::check_transform_validity(const ObDMLStmt *stmt
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("agg expr is null", K(ret), K(i));
     } else if (aggr_expr->is_param_distinct()) {
-      if (1 < aggr_expr->get_real_param_count()
-          && T_FUN_COUNT != aggr_expr->get_expr_type()
-          && T_FUN_GROUP_CONCAT != aggr_expr->get_expr_type()) {
+      if (1 > aggr_expr->get_real_param_count()
+          || (1 < aggr_expr->get_real_param_count()
+              && T_FUN_COUNT != aggr_expr->get_expr_type()
+              && T_FUN_GROUP_CONCAT != aggr_expr->get_expr_type())) {
         is_valid = false;
         OPT_TRACE("can not do transform, stmt has distinct aggregate functions with more than one params");
       } else if (!aggr_expr->get_order_items().empty() || aggr_expr->contain_nested_aggr()) {
@@ -294,10 +296,20 @@ int ObTransformDistinctAggregate::construct_view_group_exprs(const ObIArray<ObRa
     if (OB_ISNULL(param_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("param expr is null", K(ret), K(i), KPC(distinct_aggr.at(0)));
-    } else if (param_expr->is_static_const_expr()) {
+    } else if (param_expr->is_static_scalar_const_expr()) {
       // do nothing, do not need to add static const expr into group exprs
     } else if (OB_FAIL(add_var_to_array_no_dup(view_group_exprs, param_expr))) {
       LOG_WARN("failed to add distinct aggr param", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && view_group_exprs.empty()) {
+    // If all of the distinct params are static const exprs, we need to add one
+    // param expr into view_group_exprs to keep the aggregate semantics.
+    if (OB_UNLIKELY(1 > distinct_aggr.at(0)->get_real_param_count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("distinct aggr does not have param", K(ret), KPC(distinct_aggr.at(0)));
+    } else if (OB_FAIL(view_group_exprs.push_back(distinct_aggr.at(0)->get_real_param_exprs().at(0)))) {
+      LOG_WARN("failed to push back group exprs", K(ret));
     }
   }
   return ret;

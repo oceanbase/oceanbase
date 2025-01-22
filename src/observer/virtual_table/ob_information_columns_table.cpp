@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SERVER
 
 #include "observer/virtual_table/ob_information_columns_table.h"
 #include "share/schema/ob_schema_getter_guard.h"
@@ -703,7 +704,8 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
           }
         case DATETIME_PRECISION: {
             if(ob_is_datetime_tc(column_schema->get_data_type())
-                || ob_is_time_tc(column_schema->get_data_type())) {
+                || ob_is_time_tc(column_schema->get_data_type())
+                || ob_is_mysql_datetime_tc(column_schema->get_data_type())) {
               cells[cell_idx].set_uint64(static_cast<uint64_t>(
                       column_schema->get_data_scale()));
             } else {
@@ -1179,7 +1181,8 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
           }
         case DATETIME_PRECISION: {
             if(ob_is_datetime_tc(column_attributes.result_type_.get_type())
-                || ob_is_time_tc(column_attributes.result_type_.get_type())) {
+                || ob_is_time_tc(column_attributes.result_type_.get_type())
+                || ob_is_mysql_datetime_tc(column_attributes.result_type_.get_type())) {
               cells[cell_idx].set_uint64(static_cast<uint64_t>(
                       column_attributes.result_type_.get_scale()));
             } else {

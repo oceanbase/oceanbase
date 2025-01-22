@@ -223,38 +223,11 @@ int ObPLPackageState::set_package_var_val(const int64_t var_idx,
                && types_.at(var_idx) != PL_CURSOR_TYPE
                && types_.at(var_idx) != PL_REF_CURSOR_TYPE) {
       CK (vars_.at(var_idx).get_ext() != 0);
-      OZ (ObUserDefinedType::destruct_obj(vars_.at(var_idx), NULL, true));
-      if (OB_SUCC(ret) && PL_RECORD_TYPE == types_.at(var_idx)) {
-        const ObUserDefinedType *user_type = NULL;
-        const ObRecordType *record_type = NULL;
-        ObObj *member = NULL;
-        ObPLRecord *record = reinterpret_cast<ObPLRecord *>(vars_.at(var_idx).get_ext());
-        int64_t udt_id = OB_INVALID_ID;
-        CK (OB_NOT_NULL(record));
-        OX (udt_id = record->get_id());
-        OZ (resolve_ctx.get_user_type(udt_id, user_type));
-        CK (OB_NOT_NULL(user_type));
-        CK (OB_NOT_NULL(record_type = static_cast<const ObRecordType *>(user_type)));
-        for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_member_count(); ++i) {
-          const ObRecordMember* record_member = record_type->get_record_member(i);
-          const ObPLDataType* member_type = record_type->get_record_member_type(i);
-          CK (OB_NOT_NULL(record_type->get_member(i)));
-          OZ (record->get_element(i, member));
-          CK (OB_NOT_NULL(member));
-          CK (OB_NOT_NULL(record_member));
-          CK (OB_NOT_NULL(member_type));
-          if (OB_SUCC(ret)) {
-            if (record_type->get_member(i)->is_obj_type()) {
-              OX (new (member) ObObj(ObNullType));
-            } else {
-              int64_t init_size = OB_INVALID_SIZE;
-              int64_t member_ptr = 0;
-              OZ (record_type->get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
-              OZ (record_type->get_member(i)->newx(*record->get_allocator(), &resolve_ctx, member_ptr));
-              OX (member->set_extend(member_ptr, record_type->get_member(i)->get_type(), init_size));
-            }
-          }
-        }
+      if (OB_FAIL(ret)) {
+      } else if (PL_RECORD_TYPE == types_.at(var_idx)) {
+        OZ (ObUserDefinedType::reset_record(vars_.at(var_idx), NULL));
+      } else {
+        OZ (ObUserDefinedType::destruct_obj(vars_.at(var_idx), NULL, true));
       }
     } else {
       vars_.at(var_idx) = value;

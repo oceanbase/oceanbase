@@ -48,6 +48,10 @@ public:
   {
     return di_infos_.size();
   };
+  int64_t get_alloc_conut() const
+  {
+    return di_infos_.get_alloc_handle().get_alloc_count();
+  }
   void reset()
   {
     di_infos_.destroy();
@@ -79,6 +83,7 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(slot_count), K_(slot_mask), K_(is_inited));
   int get_session_diag_info(int64_t session_id, ObDISessionCollect &diag_info);
   void reset();
+  int64_t get_value_alloc_count() const;
 
 private:
   int64_t tenant_id_;
@@ -155,6 +160,7 @@ public:
   {
     return wait_event_pool_;
   };
+  bool check_element_all_freed() const;
 
 private:
   int aggregate_diagnostic_info_summary(ObDiagnosticInfo *di_info);

@@ -285,6 +285,8 @@ int ObExprVectorDims::calc_result_type1(
     LOG_WARN("failed to calc cast type", K(ret), K(type1));
   } else {
     type.set_type(ObIntType);
+    type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
+    type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
     type.set_calc_type(ObIntType);
   }
   return ret;

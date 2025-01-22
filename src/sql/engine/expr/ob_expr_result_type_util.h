@@ -231,7 +231,7 @@ public:
                                  const ObDataType &coll_elem2_type,
                                  uint32_t depth,
                                  ObExprResType &calc_type,
-                                 ObObjType &element_type);
+                                 ObObjMeta &element_meta);
   static int get_deduce_element_type(ObExprResType &input_type, ObDataType &elem_type);
 };
 

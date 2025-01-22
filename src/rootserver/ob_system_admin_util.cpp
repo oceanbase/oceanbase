@@ -1304,6 +1304,7 @@ int ObAdminSetConfig::update_config_for_compatible(const uint64_t tenant_id,
 int ObAdminSetConfig::execute(obrpc::ObAdminSetConfigArg &arg)
 {
   LOG_INFO("execute set config request", K(arg));
+  DEBUG_SYNC(BEFORE_EXECUTE_ADMIN_SET_CONFIG);
   int ret = OB_SUCCESS;
   int64_t config_version = 0;
   if (!ctx_.is_inited()) {
@@ -2315,10 +2316,12 @@ int ObTenantServerAdminUtil::get_tenant_servers(const uint64_t tenant_id, common
     if (OB_ISNULL(ctx_.unit_mgr_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ctx_.unit_mgr_), KR(ret));
-    } else if (!SVR_TRACER.has_build() || !ctx_.unit_mgr_->check_inner_stat()) {
+    } else if (!SVR_TRACER.has_build()) {
       ret = OB_SERVER_IS_INIT;
-      LOG_WARN("server manager or unit manager hasn't built",
-               "unit_mgr built", ctx_.unit_mgr_->check_inner_stat(), KR(ret));
+      LOG_WARN("server manager hasn't built", KR(ret));
+    } else if (OB_FAIL(ctx_.unit_mgr_->check_inner_stat())) {
+      ret = OB_SERVER_IS_INIT;
+      LOG_WARN("unit manager is not inited", KR(ret));
     } else if (OB_FAIL(ctx_.unit_mgr_->get_pool_ids_of_tenant(tenant_id, pool_ids))) {
       LOG_WARN("get_pool_ids_of_tenant failed", K(tenant_id), KR(ret));
     } else {

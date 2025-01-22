@@ -319,7 +319,7 @@ int ObTabletEmptyShellHandler::check_tablet_from_aborted_tx_(const ObTablet &tab
         K(ret), K(ls_id), K(tablet_id), K(rec_scn), K(readable_scn));
   } else {
     need_retry = true;
-    if (REACH_TENANT_TIME_INTERVAL(1_s)) {
+    if (REACH_THREAD_TIME_INTERVAL(1_s)) {
       STORAGE_LOG(INFO, "readable scn is smaller than rec scn, shoudle retry",
           K(ret), K(ls_id), K(tablet_id), K(rec_scn), K(readable_scn));
     }
@@ -362,7 +362,7 @@ int ObTabletEmptyShellHandler::check_tablet_from_deleted_tx_(
       STORAGE_LOG(INFO, "readable scn is bigger than finish scn", K(ret), K(tablet_id), K(tablet_id), K(readable_scn), K(user_data));
     } else {
       need_retry = true;
-      if (REACH_TENANT_TIME_INTERVAL(1_s)) {
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
         STORAGE_LOG(INFO, "readable scn is smaller than finish scn", K(ret), K(tablet_id), K(tablet_id), K(readable_scn), K(user_data));
       }
     }
@@ -421,7 +421,7 @@ int ObTabletEmptyShellHandler::check_transfer_out_deleted_tablet_(
       "ls_id", ls_->get_ls_id(), K(tablet_id), K(can), K(user_data), K(decided_scn));
   } else {
     need_retry = true;
-    if (REACH_TENANT_TIME_INTERVAL(1_s)) {
+    if (REACH_THREAD_TIME_INTERVAL(1_s)) {
       STORAGE_LOG(INFO, "decided_scn is smaller than tablet delete commit scn",
         "ls_id", ls_->get_ls_id(), K(tablet_id), K(user_data), K(decided_scn));
     }

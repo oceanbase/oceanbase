@@ -28,9 +28,6 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/das/ob_das_simple_op.h"
-#ifdef OB_BUILD_CPP_ODPS
-#include "sql/engine/table/ob_odps_table_row_iter.h"
-#endif
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -114,7 +111,7 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
     }
   } else if (!external_table_files.empty() &&
              ObExternalFileFormat::ODPS_FORMAT == external_file_format.format_type_) {
-#ifdef OB_BUILD_CPP_ODPS
+#if defined (OB_BUILD_CPP_ODPS) || defined (OB_BUILD_JNI_ODPS)
     int64_t task_idx = 0;
     LOG_TRACE("odps external table granule switch", K(ret), K(external_table_files.count()), K(external_table_files));
     for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {

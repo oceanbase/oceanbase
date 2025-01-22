@@ -16,6 +16,7 @@
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "lib/ob_lib_config.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "lib/stat/ob_diagnostic_info_util.h"
 
 namespace oceanbase
 {

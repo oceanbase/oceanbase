@@ -460,7 +460,7 @@ int ObAdminDumpBackupDataUtil::parse_from_index_index_blocks(blocksstable::ObBuf
       if (OB_FAIL(buffer_reader.advance(data_zlength + common_header->align_length_))) {
         STORAGE_LOG(WARN, "buffer reader buf not enough", K(ret), KPC(common_header));
       } else {
-        STORAGE_LOG(WARN, "failed to advance", KPC(common_header));
+        STORAGE_LOG(INFO, "success to advance", KPC(common_header));
       }
     }
   }
@@ -620,7 +620,7 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:o:l:qce:";
+  const char *opt_str = "h:d:s:o:l:qce:i:";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"backup_path", 1, NULL, 'd'},
       {"storage_info", 1, NULL, 's'},
@@ -630,6 +630,7 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
       {"check_exist", 0, NULL, 'c'},
       {"length", 1, NULL, 'l'},
       {"s3_url_encode_type", 0, NULL, 'e'},
+      {"sts_credential", 0, NULL, 'i'},
       {NULL, 0, NULL, 0}};
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
@@ -674,6 +675,12 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
       case 'e': {
         if (OB_FAIL(set_s3_url_encode_type(optarg))) {
           STORAGE_LOG(WARN, "failed to set s3 url encode type", KR(ret));
+        }
+        break;
+      }
+      case 'i': {
+        if (OB_FAIL(set_sts_credential_key(optarg))) {
+          STORAGE_LOG(WARN, "failed to set sts credential", KR(ret));
         }
         break;
       }
@@ -986,6 +993,7 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
   printf(HELP_FMT, "-l,--length", "data length");
   printf(HELP_FMT, "-c,--check-exist", "check file is exist or not");
   printf(HELP_FMT, "-e,--s3_url_encode_type", "set S3 protocol url encode type");
+  printf(HELP_FMT, "-i, --sts_credential", "set STS credential");
   printf("samples:\n");
   printf("  dump meta: \n");
   printf("\tob_admin dump_backup -dfile:///home/admin/backup_info \n");
@@ -999,6 +1007,12 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
   printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
          "-s'host=xxx.com&access_id=111&access_key=222&region=333'\t"
          "-e'compliantRfc3986Encoding'");
+  printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
+         "-s'host=xxx.com&role_arn=xxx&appid=333'\n"
+         "-i'sts_url=xxx&sts_ak=aaa&sts_sk=bbb'");
+  printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
+         "-s'host=xxx.com&role_arn=xxx&external_id=xxx&appid=333'\n"
+         "-i'sts_url=xxx&sts_ak=aaa&sts_sk=bbb'");
   return ret;
 }
 

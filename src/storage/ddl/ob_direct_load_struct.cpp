@@ -182,7 +182,8 @@ ObDDLInsertRowIterator::ObDDLInsertRowIterator()
     lob_allocator_(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     lob_slice_id_(0),
     lob_cols_cnt_(0),
-    is_skip_lob_(false)
+    is_skip_lob_(false),
+    total_slice_cnt_(-1)
 {
   lob_id_cache_.set(1/*start*/, 0/*end*/);
 }
@@ -200,6 +201,7 @@ int ObDDLInsertRowIterator::init(
     const int64_t context_id,
     const ObTabletSliceParam &tablet_slice_param,
     const int64_t lob_cols_cnt,
+    const int64_t total_slice_cnt,
     const bool is_skip_lob)
 {
   int ret = OB_SUCCESS;
@@ -212,9 +214,10 @@ int ObDDLInsertRowIterator::init(
         || !tablet_id.is_valid()
         || context_id < 0
         // no need check tablet slice param, invalid when slice empty
-        || lob_cols_cnt < 0)) {
+        || lob_cols_cnt < 0
+        || (is_shared_storage_dempotent_mode(agent.get_direct_load_type()) && total_slice_cnt < 0))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(source_tenant_id), KP(slice_row_iter), K(ls_id), K(tablet_id), K(context_id), K(tablet_slice_param), K(lob_cols_cnt));
+    LOG_WARN("invalid argument", K(ret), K(source_tenant_id), KP(slice_row_iter), K(ls_id), K(tablet_id), K(context_id), K(tablet_slice_param), K(lob_cols_cnt), K(total_slice_cnt));
   } else if (lob_cols_cnt > 0 && tablet_slice_param.is_valid()
       && OB_FAIL(lob_id_generator_.init(tablet_slice_param.slice_idx_ * ObTabletSliceParam::LOB_ID_SEQ_INTERVAL, // start
                                         ObTabletSliceParam::LOB_ID_SEQ_INTERVAL, // interval
@@ -230,6 +233,9 @@ int ObDDLInsertRowIterator::init(
     const int64_t parallel_idx = tablet_slice_param.slice_idx_ >= 0 ? tablet_slice_param.slice_idx_ : 0;
     is_skip_lob_ = is_skip_lob;
     is_inited_ = true;
+    if ((is_shared_storage_dempotent_mode(ddl_agent_->get_direct_load_type()))) {
+      total_slice_cnt_ = total_slice_cnt;
+    }
     if (OB_FAIL(macro_seq_.set_parallel_degree(parallel_idx))) {
       LOG_WARN("set failed", K(ret), K(parallel_idx));
   #ifdef OB_BUILD_SHARED_STORAGE
@@ -343,6 +349,9 @@ int ObDDLInsertRowIterator::switch_to_new_lob_slice()
   slice_info.data_tablet_id_ = current_tablet_id_;
   slice_info.slice_id_ = lob_slice_id_;
   slice_info.context_id_ = context_id_;
+  if (is_shared_storage_dempotent_mode(ddl_agent_->get_direct_load_type())) {
+    slice_info.total_slice_cnt_ = total_slice_cnt_;
+  }
   ObTabletAutoincrementService &auto_inc = ObTabletAutoincrementService::get_instance();
   ObTabletID lob_meta_tablet_id;
   int64_t CACHE_SIZE_REQUESTED = AUTO_INC_CACHE_SIZE;
@@ -2009,30 +2018,6 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
                 datum.ptr_ = temp_datum.ptr_;
                 datum.len_ = temp_datum.len_;
               }
-            }
-          }
-          break;
-        }
-        case VEC_UNIFORM_CONST:
-        {
-          ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
-          ObDatum &datum = uniform_vec->get_datums()[0];
-          if (!datum.is_null()) {
-            temp_datum.ptr_ = datum.ptr_;
-            temp_datum.len_ = datum.len_;
-            if (DATA_VERSION_4_3_0_0 > data_format_version) {
-              if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_inrow_threshold, temp_datum))) {
-                LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
-              }
-            } else {
-              if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
-                  pk_interval, col_type, lob_inrow_threshold, temp_datum))) {
-                LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
-              }
-            }
-            if (OB_SUCC(ret)) {
-              datum.ptr_ = temp_datum.ptr_;
-              datum.len_ = temp_datum.len_;
             }
           }
           break;

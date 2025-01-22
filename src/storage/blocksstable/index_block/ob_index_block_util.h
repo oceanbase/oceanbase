@@ -163,7 +163,8 @@ OB_INLINE static bool is_skip_index_black_list_type(const ObObjType &obj_type)
 OB_INLINE static bool is_skip_index_while_list_type(const ObObjType &obj_type)
 {
   const ObObjTypeClass tc = ob_obj_type_class(obj_type);
-  return (ObIntTC <= tc && tc <= ObLobTC) || ObDecimalIntTC == tc;
+  return (ObIntTC <= tc && tc <= ObLobTC) || ObDecimalIntTC == tc || ObMySQLDateTC == tc
+         || ObMySQLDateTimeTC == tc;
 }
 
 OB_INLINE static bool can_agg_sum(const ObObjType &obj_type)

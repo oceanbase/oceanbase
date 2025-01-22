@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/table/ob_odps_table_row_iter.h"
 #include "sql/engine/expr/ob_expr_calc_odps_size.h"
+#include "sql/engine/ob_exec_context.h"
+#include "sql/engine/table/ob_odps_jni_table_row_iter.h"
 
 namespace oceanbase
 {
@@ -67,7 +69,8 @@ int ObExprCalcOdpsSize::calc_odps_size(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       const uint64_t tenant_id = ctx.exec_ctx_.get_my_session()->get_effective_tenant_id();
       ObSchemaGetterGuard *schema_guard = ctx.exec_ctx_.get_sql_ctx()->schema_guard_;
       const ObTableSchema *table_schema = NULL;
-      int64_t row_count = 0;
+
+      int64_t row_count = -1;
       if (OB_ISNULL(schema_guard)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null ptr", K(ret));
@@ -76,20 +79,39 @@ int ObExprCalcOdpsSize::calc_odps_size(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null ptr", K(ret));
-#ifdef OB_BUILD_CPP_ODPS
-      } else if (OB_FAIL(ObOdpsPartitionDownloaderMgr::fetch_row_count(file_url,
-                                                          table_schema->get_external_properties(),
-                                                          row_count))) {
-        if (ret == OB_ODPS_ERROR) {
-          ret = OB_SUCCESS;
-          row_count = -1;
-        } else {
-          LOG_WARN("failed to fetch row count", K(ret), K(file_url), K(table_schema->get_external_properties()));
-        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (!GCONF._use_odps_jni_connector) {
+#if defined (OB_BUILD_CPP_ODPS)
+          if (OB_FAIL(ObOdpsPartitionDownloaderMgr::fetch_row_count(
+                  file_url, table_schema->get_external_properties(),
+                  row_count))) {
+            if (ret == OB_ODPS_ERROR) {
+              ret = OB_SUCCESS;
+              row_count = -1;
+            } else {
+              LOG_WARN("failed to fetch row count", K(ret), K(file_url),
+                       K(table_schema->get_external_properties()));
+            }
+          }
 #else
-      } else {
-        row_count = -1;
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support odps cpp connector", K(ret), K(GCONF._use_odps_jni_connector));
 #endif
+        } else {
+#if defined(OB_BUILD_JNI_ODPS)
+          if (OB_FAIL(ObOdpsPartitionJNIScannerMgr::fetch_row_count(
+                  file_url, table_schema->get_external_properties(),
+                  row_count))) {
+            LOG_WARN("failed to fetch row count", K(ret), K(file_url),
+                     K(table_schema->get_external_properties()));
+          }
+#else
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support odps jni connector", K(ret), K(GCONF._use_odps_jni_connector));
+#endif
+        }
       }
       if (OB_SUCC(ret)) {
         res_datum.set_int(row_count);

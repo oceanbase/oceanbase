@@ -870,6 +870,8 @@
 #define N_DES_DECRYPT "des_decrypt"
 #define N_DES_ENCRYPT "des_encrypt"
 #define N_ENCRYPT "encrypt"
+#define N_ENHANCED_AES_ENCRYPT "enhanced_aes_encrypt"
+#define N_ENHANCED_AES_DECRYPT "enhanced_aes_decrypt"
 
 //*********** for spm
 #define N_SPM_LOAD_PLANS_FROM_PLAN_CACHE "spm_load_plans_from_plan_cache"

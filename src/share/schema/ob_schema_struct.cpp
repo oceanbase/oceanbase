@@ -7850,7 +7850,8 @@ OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
     start_time_,
     next_time_expr_,
     exec_env_,
-    parallel_);
+    parallel_,
+    refresh_dop_);
 
 /*-------------------------------------------------------------------------------------------------
  * ------------------------------ObViewSchema-------------------------------------------
@@ -8204,6 +8205,12 @@ DEF_TO_STRING(ObPrintPrivSet)
   }
   if ((priv_set_ & OB_PRIV_TRIGGER) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" TRIGGER,");
+  }
+  if ((priv_set_ & OB_PRIV_ENCRYPT) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" ENCRYPT,");
+  }
+  if ((priv_set_ & OB_PRIV_DECRYPT) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" DECRYPT,");
   }
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','

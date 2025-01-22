@@ -144,10 +144,12 @@ public:
   int safe_to_destroy(bool &is_safe);
   int offline();
   int online();
-  bool is_stop() { return is_stop_; }
+  bool is_stop() { return ATOMIC_LOAD(&is_stop_); }
   int update_rebuild_seq();
   int64_t get_rebuild_seq();
   int fill_restore_arg();
+  void set_is_online(const bool is_online) { ATOMIC_STORE(&is_online_, is_online); }
+  bool is_online() {return ATOMIC_LOAD(&is_online_); }
   const ObTenantRestoreCtx &get_restore_ctx() const { return ls_restore_arg_; }
   const ObLSRestoreStat &get_restore_stat() const { return restore_stat_; }
   ObLSRestoreStat &restore_stat() { return restore_stat_; }
@@ -380,7 +382,6 @@ private:
       const ObLSRestoreTaskMgr::ToRestoreTabletGroup &tablet_need_restore);
   int check_clog_replay_finish_(bool &is_finish);
   int check_tablet_checkpoint_();
-  int calc_and_report_total_bytes_to_restore_();
   // Force reload all tablets and check is restored.
   bool has_rechecked_after_clog_recovered_;
   DISALLOW_COPY_AND_ASSIGN(ObLSQuickRestoreState);
@@ -526,6 +527,8 @@ public:
     is_finish = true;
     return OB_SUCCESS;
   }
+protected:
+  int check_can_advance_status_(bool &can) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitQuickRestoreState);
 };

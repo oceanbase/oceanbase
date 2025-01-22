@@ -151,7 +151,7 @@ public:
   {
   public:
     static const int64_t TASK_SCHEDULE_INTERVAL = 1000 * 1000; // 1s
-    static const int64_t LS_GROUP_MAX_ACTIVE_TS = 10 * 60 * 1000 * 1000; // 10min
+    static const int64_t LS_GROUP_MAX_ACTIVE_TS = 1 * 60 * 1000 * 1000; // 1min
     static const int64_t MAX_CLEAN_GROUP_SIZE_EACH_TASK = 100;
     ObTableGroupInfoTask(ObTableGroupCommitMgr &mgr)
         : need_update_group_info_(false),

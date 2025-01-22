@@ -20,6 +20,8 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/ob_errno.h"
 #include "lib/hash/ob_hashmap.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
+#include "lib/lock/ob_thread_cond.h"
 
 namespace oceanbase {
 namespace sql {
@@ -190,6 +192,7 @@ private:
   ObSEArray<OdpsPartition, 8> partition_list_;
   ObSEArray<OdpsColumn, 8> column_list_;
   ObSEArray<int64_t, 8> target_column_id_list_;
+  std::vector<std::string> column_names_;
   StateValues state_;
   bool is_part_table_;
   int64_t total_count_;
@@ -210,7 +213,8 @@ public:
   struct OdpsPartitionDownloader {
     OdpsPartitionDownloader() :
       odps_driver_(),
-      odps_partition_downloader_(NULL)
+      odps_partition_downloader_(NULL),
+      downloader_init_status_(0)
     {}
     ~OdpsPartitionDownloader() {
       reset();
@@ -218,13 +222,28 @@ public:
     int reset();
     ObODPSTableRowIterator odps_driver_;
     apsara::odps::sdk::IDownloadPtr odps_partition_downloader_;
+    common::ObThreadCond tunnel_ready_cond_;
+    int downloader_init_status_; // 0 is uninitialized, 1 is successfully initialized, -1 is failed to initialize
   };
   class DeleteDownloaderFunc
   {
+  private:
+    enum ErrType
+    {
+      SUCCESS = 0,
+      ALLOC_IS_NULL,
+      DOWNLOADER_IS_NULL
+    };
+    ObIAllocator *downloader_alloc_;
+    ErrType err_;
   public:
-    DeleteDownloaderFunc() {}
+    explicit DeleteDownloaderFunc(ObIAllocator *downloader_alloc) :
+                              downloader_alloc_(downloader_alloc),
+                              err_(ErrType::SUCCESS) {}
     virtual ~DeleteDownloaderFunc() = default;
     int operator()(common::hash::HashMapPair<int64_t, int64_t> &kv);
+    OB_INLINE bool err_occurred() { return err_ != ErrType::SUCCESS; }
+    OB_INLINE int get_err() { return static_cast<int>(err_); }
   };
   struct OdpsUploader {
     OdpsUploader() : upload_(NULL), record_writer_(NULL) {}
@@ -236,23 +255,9 @@ public:
     apsara::odps::sdk::IRecordWriterPtr record_writer_;
   };
   ObOdpsPartitionDownloaderMgr() : inited_(false), is_download_(true), ref_(0), need_commit_(true) {}
-  OB_INLINE int init_map(int64_t bucket_size) {
-    int ret = OB_SUCCESS;
-    if (!odps_mgr_map_.created()){
-      ret = odps_mgr_map_.create(bucket_size, "OdpsTable","OdpsTableReader");
-      if (OB_SUCC(ret)) {
-        inited_ = true;
-        is_download_ = true;
-      }
-    }
-    return ret;
-  }
-  OdpsMgrMap &get_odps_map() {
-    return odps_mgr_map_;
-  }
-  OB_INLINE ObIAllocator &get_allocator() { return arena_alloc_; }
-  int init_downloader(common::ObArray<share::ObExternalFileInfo> &external_table_files,
-                      const ObString &properties);
+  int init_downloader(int64_t bucket_size);
+  OB_INLINE OdpsMgrMap &get_odps_map() { return odps_mgr_map_; }
+  OB_INLINE ObIAllocator &get_allocator() { return fifo_alloc_; }
   int init_uploader(const ObString &properties,
                     const ObString &external_partition,
                     bool is_overwrite,
@@ -291,6 +296,7 @@ private:
   bool inited_;
   bool is_download_;
   OdpsMgrMap odps_mgr_map_;
+  common::ObConcurrentFIFOAllocator fifo_alloc_;
   common::ObArenaAllocator arena_alloc_;
   int64_t ref_;
   bool need_commit_;

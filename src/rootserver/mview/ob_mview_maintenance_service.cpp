@@ -27,7 +27,9 @@ using namespace common;
  * ObMViewMaintenanceService
  */
 
-ObMViewMaintenanceService::ObMViewMaintenanceService() : is_inited_(false) {}
+ObMViewMaintenanceService::ObMViewMaintenanceService() : is_inited_(false),
+                                                         mview_refresh_info_timestamp_(0)
+  {}
 
 ObMViewMaintenanceService::~ObMViewMaintenanceService() {}
 
@@ -75,7 +77,7 @@ int ObMViewMaintenanceService::init()
       LOG_WARN("fail to init mview clean snapshot task", KR(ret));
     } else if (OB_FAIL(mview_update_cache_task_.init())) {
       LOG_WARN("fail to init mview update cache task", KR(ret));
-    } else if (OB_FAIL(mview_refresh_info_map_.create(bucket_num, attr))) {
+    } else if (OB_FAIL(mview_refresh_info_cache_.create(bucket_num, attr))) {
       LOG_WARN("fail to create mview refresh info map", KR(ret));
     } else {
       is_inited_ = true;
@@ -90,6 +92,8 @@ int ObMViewMaintenanceService::start()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMViewMaintenanceService not init", KR(ret), KP(this));
+  } else if (!is_meta_tenant(MTL_ID()) && OB_FAIL(mview_update_cache_task_.start())) { // run on every tenant server
+    LOG_WARN("fail to start mview update cache task", KR(ret));
   } else {
     // do nothing
   }
@@ -97,6 +101,12 @@ int ObMViewMaintenanceService::start()
 }
 
 void ObMViewMaintenanceService::stop()
+{
+  sys_ls_task_stop_();
+  mview_update_cache_task_.stop();
+}
+
+void ObMViewMaintenanceService::sys_ls_task_stop_()
 {
   mlog_maintenance_task_.stop();
   mview_maintenance_task_.stop();
@@ -133,7 +143,7 @@ void ObMViewMaintenanceService::destroy()
   collect_mv_merge_info_task_.destroy();
   mview_clean_snapshot_task_.destroy();
   mview_update_cache_task_.destroy();
-  mview_refresh_info_map_.destroy();
+  mview_refresh_info_cache_.destroy();
 }
 
 int ObMViewMaintenanceService::inner_switch_to_leader()
@@ -161,8 +171,6 @@ int ObMViewMaintenanceService::inner_switch_to_leader()
       LOG_WARN("collect mv merge info task start failed", KR(ret));
     } else if (OB_FAIL(mview_clean_snapshot_task_.start())) {
       LOG_WARN("fail to start mview clean snapshot task", KR(ret));
-    } else if (OB_FAIL(mview_update_cache_task_.start())) {
-      LOG_WARN("fail to start mview update cache task", KR(ret));
     }
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
@@ -178,12 +186,7 @@ int ObMViewMaintenanceService::inner_switch_to_follower()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMViewMaintenanceService not init", KR(ret), KP(this));
-  } else {
-    // start update cache task in follower
-    if (OB_FAIL(mview_update_cache_task_.start())) {
-      LOG_WARN("fail to start mview update cache task", KR(ret));
-    }
-    stop();
+  } else if (FALSE_IT(sys_ls_task_stop_())) {
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
   FLOG_INFO("mview_maintenance: switch_to_follower", KR(ret), K(tenant_id), K(cost_us));
@@ -225,73 +228,71 @@ int ObMViewMaintenanceService::resume_leader()
   return ret;
 }
 
-int ObMViewMaintenanceService::extract_sql_result(sqlclient::ObMySQLResult *mysql_result,
-                                                  ObIArray<uint64_t> &mview_ids,
-                                                  ObIArray<uint64_t> &last_refresh_scns,
-                                                  ObIArray<uint64_t> &mview_refresh_modes)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(mysql_result)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("mysql result is null", K(ret), KP(mysql_result));
-  } else {
-    ObSEArray<uint64_t, 2> res_ids;
-    ObSEArray<uint64_t, 2> res_scns;
-    ObSEArray<uint64_t, 2> refresh_modes;
-    const int64_t col_idx0 = 0;
-    const int64_t col_idx1 = 1;
-    const int64_t col_idx2 = 2;
-    while (OB_SUCC(ret) && OB_SUCC(mysql_result->next())) {
-      uint64_t mview_id = OB_INVALID_ID;
-      uint64_t last_refresh_scn = OB_INVALID_SCN_VAL;
-      uint64_t refresh_mode = (uint64_t)ObMVRefreshMode::MAX;
-      if (OB_FAIL(mysql_result->get_uint(col_idx0, mview_id))
-          || OB_FAIL(mysql_result->get_uint(col_idx1, last_refresh_scn))
-          || OB_FAIL(mysql_result->get_uint(col_idx2, refresh_mode))) {
-        LOG_WARN("fail to get int/uint value", K(ret));
-      } else if (OB_FAIL(res_ids.push_back(mview_id))
-                  || OB_FAIL(res_scns.push_back(last_refresh_scn))
-                  || OB_FAIL(refresh_modes.push_back(refresh_mode))) {
-        LOG_WARN("fail to push back array", K(ret));
-      }
-    }
-    if (OB_LIKELY(OB_SUCCESS == ret || OB_ITER_END == ret)) {
-      if((OB_FAIL(mview_ids.assign(res_ids)) ||
-          OB_FAIL(last_refresh_scns.assign(res_scns)) ||
-          OB_FAIL(mview_refresh_modes.assign(refresh_modes)))) {
-        LOG_WARN("fail to assign array", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObMViewMaintenanceService::update_mview_refresh_info_cache(
         const ObIArray<uint64_t> &mview_ids,
         const ObIArray<uint64_t> &mview_refresh_scns,
-        const ObIArray<uint64_t> &mview_refresh_modes,
-        ObMviewRefreshInfoMap &mview_refresh_info_map) {
+        const ObIArray<uint64_t> &mview_refresh_modes) {
   int ret = OB_SUCCESS;
   int update_cache_cnt = 0;
-  const int invalid_refresh_scn = 0;
-  ARRAY_FOREACH_X(mview_ids, idx, cnt, OB_SUCC(ret)) {
-    RefreshInfo new_refresh_info;
-    if (mview_refresh_scns.at(idx) == invalid_refresh_scn) {
-      // skip update invalid scn in cache
-    } else if (mview_refresh_modes.at(idx) == (uint64_t)ObMVRefreshMode::MAJOR_COMPACTION) {
-      new_refresh_info.refresh_scn_ = mview_refresh_scns.at(idx);
-      new_refresh_info.refresh_ts_ = ObTimeUtility::fast_current_time();
-      new_refresh_info.expired_ts_ = new_refresh_info.refresh_ts_ +
-                                     ObMViewMaintenanceService::CacheValidInterval;
-      if (OB_FAIL(mview_refresh_info_map.set_refactored(mview_ids.at(idx), new_refresh_info, 1/*overwrite*/))) {
-        LOG_WARN("fail to set refresh info", KR(ret), K(idx), K(mview_ids.at(idx)));
+  int64_t start_ts = ObTimeUtility::current_time();
+  hash::ObHashSet<uint64_t> update_set;
+  ObSEArray<uint64_t, 1> del_mview_id;
+  if (OB_FAIL(update_set.create(10))) {
+    LOG_WARN("init update set failed", KR(ret));
+  } else {
+    ARRAY_FOREACH_X(mview_ids, idx, cnt, OB_SUCC(ret)) {
+      if (mview_refresh_scns.at(idx) > 0 && mview_refresh_modes.at(idx) == (uint64_t)ObMVRefreshMode::MAJOR_COMPACTION) {
+        MViewRefreshInfo cache_info;
+        bool need_update = true;
+        if (OB_FAIL(update_set.set_refactored(mview_ids.at(idx)))) {
+          LOG_WARN("fail to set mview_id", KR(ret), K(idx), K(mview_ids.at(idx)));
+        } else if (OB_FAIL(mview_refresh_info_cache_.get_refactored(mview_ids.at(idx), cache_info))) {
+          if (OB_HASH_NOT_EXIST) {
+            ret = OB_SUCCESS;
+          }
+        } else if (mview_refresh_scns.at(idx) == cache_info.refresh_scn_) {
+         need_update = false;
+        }
+        if (OB_SUCC(ret) && need_update) {
+          MViewRefreshInfo new_refresh_info;
+          new_refresh_info.refresh_scn_ = mview_refresh_scns.at(idx);
+          if (OB_FAIL(mview_refresh_info_cache_.set_refactored(mview_ids.at(idx), new_refresh_info, 1/*overwrite*/))) {
+            LOG_WARN("fail to set refresh info", KR(ret), K(idx), K(mview_ids.at(idx)));
+          } else {
+            update_cache_cnt++;
+          }
+        }
       }
-      update_cache_cnt += 1;
-      // for debug
-      LOG_INFO("update mview refresh info", K(ret), K(mview_refresh_scns.at(idx)),
-              K(update_cache_cnt));
     }
   }
+  // remove deleted mview_id in cache
+  if (OB_SUCC(ret) && mview_refresh_info_cache_.size() != update_set.size()) {
+    for (MViewRefreshInfoCache::iterator it = mview_refresh_info_cache_.begin();OB_SUCC(ret) && it != mview_refresh_info_cache_.end(); it++) {
+      if (OB_FAIL(update_set.exist_refactored(it->first))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else if (OB_HASH_NOT_EXIST) {
+          if (OB_FAIL(del_mview_id.push_back(it->first))) {
+            LOG_WARN("del_mview_id push failed", KR(ret), K(it->first));
+          }
+        } else {
+          LOG_WARN("check mview_id failed", KR(ret), K(it->first));
+        }
+      }
+    }
+    for (int64_t idx = 0; idx < del_mview_id.count() && OB_SUCC(ret); idx++) {
+      if (OB_FAIL(mview_refresh_info_cache_.erase_refactored(del_mview_id.at(idx))))  {
+        LOG_WARN("erash mview failed", KR(ret), K(del_mview_id.at(idx)));
+      }
+    }
+  }
+  // update timestamp
+  if (OB_SUCC(ret)) {
+    mview_refresh_info_timestamp_ = start_ts;
+  }
+  int64_t end_ts = ObTimeUtility::current_time();
+  LOG_INFO("update mview refresh info", K(ret), K(mview_ids), K(mview_refresh_scns), K(update_cache_cnt), K(del_mview_id),
+      "cost", end_ts - start_ts);
   return ret;
 }
 
@@ -322,10 +323,10 @@ int ObMViewMaintenanceService::
                                          tenant_id,
                                          sql.ptr()))) {
         LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
-      } else if (OB_FAIL(extract_sql_result(res.get_result(),
-                                            mview_ids,
-                                            last_refresh_scns,
-                                            mview_refresh_modes))) {
+      } else if (OB_FAIL(mview_update_cache_task_.extract_sql_result(res.get_result(),
+                                                  mview_ids,
+                                                  last_refresh_scns,
+                                                  mview_refresh_modes))) {
         LOG_WARN("failt to extract sql result", K(ret), K(sql), K(tenant_id));
       }
     }
@@ -338,31 +339,38 @@ int ObMViewMaintenanceService::fetch_mv_refresh_scns(
                             const share::SCN &read_snapshot,
                             ObIArray<uint64_t> &mview_ids,
                             ObIArray<uint64_t> &mview_refresh_scns,
-                            uint64_t &not_hit_count)
+                            bool &hit_cache)
 {
   int ret = OB_SUCCESS;
+  hit_cache = false;
   if (src_mview_ids.empty()) {
     // do nothing
   } else if (!read_snapshot.is_valid()) {
-    not_hit_count += 1;
+  } else if (ObTimeUtil::current_time() - mview_refresh_info_timestamp_ > CacheValidInterval) {
+    // cache expired
   } else {
-    set_last_request_ts(ObTimeUtility::fast_current_time());
-    ARRAY_FOREACH_X(src_mview_ids, idx, cnt, OB_SUCC(ret) && 0 == not_hit_count) {
-      RefreshInfo refresh_info;
-      if (OB_FAIL(mview_refresh_info_map_.get_refactored(src_mview_ids.at(idx), refresh_info))) {
+    int64_t succ_cnt = 0;
+    ARRAY_FOREACH_X(src_mview_ids, idx, cnt, OB_SUCC(ret)) {
+      MViewRefreshInfo refresh_info;
+      if (OB_FAIL(mview_refresh_info_cache_.get_refactored(src_mview_ids.at(idx), refresh_info))) {
         if (OB_HASH_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
-          not_hit_count += 1;
+          break;
         }
         LOG_WARN("fail to get refresh info", KR(ret), K(idx), K(src_mview_ids.at(idx)));
       } else {
-        if (refresh_info.hit_cache(read_snapshot)) {
+        if (read_snapshot.get_val_for_tx() >= refresh_info.refresh_scn_) {
           if (OB_FAIL(mview_refresh_scns.push_back(refresh_info.refresh_scn_))) {
             LOG_WARN("fail to push back refresh scns", KR(ret), K(idx), K(src_mview_ids.at(idx)));
+          } else {
+            succ_cnt++;
           }
         } else {
-          not_hit_count += 1;
+          break;
         }
+      }
+      if (OB_SUCC(ret) && src_mview_ids.count() == succ_cnt) {
+        hit_cache = true;
       }
     }
   }
@@ -376,14 +384,13 @@ int ObMViewMaintenanceService::get_mview_refresh_info(const ObIArray<uint64_t> &
                                                       ObIArray<uint64_t> &mview_refresh_scns)
 {
   int ret = OB_SUCCESS;
-  uint64_t not_hit_count = 0;
+  bool hit_cache = false;
   const uint64_t tenant_id = MTL_ID();
   ObSEArray<uint64_t, 2> refresh_modes;
   ObSEArray<uint64_t, 2> refresh_scns;
-  if (!is_inited_ || !mview_refresh_info_map_.created()) {
+  if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObMViewMaintenanceService not init", KR(ret),
-             K(is_inited_), K(mview_refresh_info_map_.created()));
+    LOG_WARN("ObMViewMaintenanceService not init", KR(ret), K(is_inited_));
   } else if (OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(sql_proxy));
@@ -393,11 +400,11 @@ int ObMViewMaintenanceService::get_mview_refresh_info(const ObIArray<uint64_t> &
   } else if (src_mview_ids.empty()) {
     // do nothing
   } else if (OB_FAIL(fetch_mv_refresh_scns(src_mview_ids, read_snapshot,
-                                           mview_ids, refresh_scns, not_hit_count))){
+                                           mview_ids, refresh_scns, hit_cache))){
     LOG_WARN("fail to fetch mv refresh scns", KR(ret), K(tenant_id), K(src_mview_ids));
   }
   if (OB_FAIL(ret)) {
-  } else if (not_hit_count == 0) {
+  } else if (hit_cache) {
     if (OB_FAIL(mview_ids.assign(src_mview_ids)) ||
         OB_FAIL(mview_refresh_scns.assign(refresh_scns))) {
       LOG_WARN("fail to assign mview ids or mview refresh scns", K(ret));
@@ -412,19 +419,13 @@ int ObMViewMaintenanceService::get_mview_refresh_info(const ObIArray<uint64_t> &
                                             mview_refresh_scns,
                                             refresh_modes))) {
       LOG_WARN("fail to get mview last refresh info", K(ret), K(src_mview_ids), K(tenant_id));
-    } else if (OB_FAIL(ObMViewMaintenanceService::
-                        update_mview_refresh_info_cache(mview_ids,
-                                                        mview_refresh_scns,
-                                                        refresh_modes,
-                                                        mview_refresh_info_map_))) {
-      LOG_WARN("fail to update mview refresh info cache", K(ret), K(tenant_id));
     }
   }
-  // for debug
-  LOG_INFO("use mview refresh info cache",
-            K(src_mview_ids), K(mview_ids),
-            K(tenant_id), K(not_hit_count),
+  if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+    LOG_INFO("get_mview_refresh_info", K(ret), K(src_mview_ids), K(mview_ids),
+            K(tenant_id), K(hit_cache),
             K(mview_refresh_scns), K(read_snapshot));
+  }
   return ret;
 }
 } // namespace rootserver

@@ -549,6 +549,13 @@ STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_COUNT, "multi put execute count", ObStatCl
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_TIME, "multi put execute time", ObStatClassIds::TABLEAPI, 191304, true, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_ROW, "multi put rows", ObStatClassIds::TABLEAPI, 191305, true, true, true)
 
+// -- table checkAndInsertUp
+STAT_EVENT_ADD_DEF(TABLEAPI_CHECK_AND_INSERT_UP_COUNT, "single check and insertUp execute count", ObStatClassIds::TABLEAPI, 191306, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_CHECK_AND_INSERT_UP_TIME, "single check and insertUp execute time", ObStatClassIds::TABLEAPI, 191307, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_CHECK_AND_INSERT_UP_COUNT, "multi check and insertUp execute count", ObStatClassIds::TABLEAPI, 191308, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_CHECK_AND_INSERT_UP_TIME, "multi check and insertUp execute time", ObStatClassIds::TABLEAPI, 191309, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_CHECK_AND_INSERT_UP_ROW, "multi check and insertUp rows", ObStatClassIds::TABLEAPI, 191310, true, true, true)
+
 // -- table trigger 1914xx
 STAT_EVENT_ADD_DEF(TABLEAPI_GROUP_TRIGGER_COUNT, "group commit trigger execute count", ObStatClassIds::TABLEAPI, 191401, true, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_GROUP_TRIGGER_TIME, "group commit trigger execute execute time", ObStatClassIds::TABLEAPI, 191402, true, true, true)
@@ -906,7 +913,14 @@ STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_R, "ss_local_cache tmpf
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_META_USED_DISK_SIZE, "ss_local_cache meta file used disk size", ObStatClassIds::CACHE, 245008, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_INCREMENTAL_DATA_USED_DISK_SIZE, "ss_local_cache incremental data used disk size", ObStatClassIds::CACHE, 245009, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_MAJOR_MACRO_USED_DISK_SIZE, "ss_local_cache major macro used disk size", ObStatClassIds::CACHE, 245010, false, true, true)
-
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_ADD_COUNT, "ss_micro_cache add micro_block count of common_io", ObStatClassIds::CACHE, 245011, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_GET_COUNT, "ss_micro_cache get micro_block count of common_io", ObStatClassIds::CACHE, 245012, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_NEW_ADD_COUNT, "ss_micro_cache total new added micro_block count", ObStatClassIds::CACHE, 245013, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_NEW_ADD_COUNT, "ss_micro_cache new added micro_block count of common_io", ObStatClassIds::CACHE, 245014, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_EVICT_COUNT, "ss_micro_cache total evicted micro_block count", ObStatClassIds::CACHE, 245015, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_DELETE_COUNT, "ss_micro_cache total deleted micro_block count", ObStatClassIds::CACHE, 245016, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_REORGAN_FREE_BLK_COUNT, "ss_micro_cache released phy_block count by reorgan_task", ObStatClassIds::CACHE, 245017, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_HOT_MICRO_LACK_COUNT, "ss_micro_cache hot micro_block lack count", ObStatClassIds::CACHE, 245018, false, true, true)
 
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true)

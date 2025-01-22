@@ -320,7 +320,9 @@ all_table_def = dict(
       ('duplicate_read_consistency', 'int', 'false', '0'),
       ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', ''),
       ('micro_index_clustered', 'bool', 'false', 'false'),
-      ('mv_mode', 'int', 'false', '0')
+      ('mv_mode', 'int', 'false', '0'),
+      ('parser_properties', 'longtext', 'false', ''),
+      ('enable_macro_block_bloom_filter', 'bool', 'false', 'false')
     ],
 )
 
@@ -4442,7 +4444,8 @@ def_table_schema(
     ('interval_ts', 'int', 'true'),
     ('user_id', 'int', 'true', 'OB_INVALID_ID'),
     ('database_id', 'int', 'true', 'OB_INVALID_ID'),
-    ('max_failures', 'int', 'true', '0')
+    ('max_failures', 'int', 'true', '0'),
+    ('func_type', 'int', 'true', '0')
   ],
 )
 
@@ -6288,7 +6291,8 @@ def_table_schema(
     ('last_refresh_date', 'timestamp', 'true'),
     ('last_refresh_time', 'int', 'true'),
     ('last_refresh_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
-    ('schema_version', 'int')
+    ('schema_version', 'int'),
+    ('refresh_dop', 'int', 'false', '0')
   ]
 )
 
@@ -7880,6 +7884,11 @@ def_table_schema(**all_ncomp_dll_v2)
 # 535: __ft_stopword_ik_gbk
 # 536: __ft_quantifier_ik_gbk
 
+# 537: __all_catalog
+# 538: __all_catalog_history
+# 539: __all_catalog_privilege
+# 540: __all_catalog_privilege_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -8507,6 +8516,8 @@ def_table_schema(
       ('compile_time', 'uint'),
       ('pl_cg_mem_hold', 'int'),
       ('pl_evict_version', 'int'),
+      ('plan_status', 'int'),
+      ('adaptive_feedback_times', 'int'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -10649,6 +10660,9 @@ def_table_schema(
 )
 
 # 11121: abandoned # __all_virtual_ddl_diagnose_info, which is moved to 12514
+
+# 11122: __all_virtual_ss_tablet_upload_stat
+# 11123: __all_virtual_ss_tablet_compact_stat
 
 ################################################################
 # INFORMATION SCHEMA
@@ -15420,6 +15434,7 @@ def_table_schema(
     ('max_net_bandwidth_display', 'varchar:128'),
     ('real_net_bandwidth', 'int'),
     ('real_net_bandwidth_display', 'varchar:128'),
+    ('norm_iops', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -15735,8 +15750,38 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12511: __all_virtual_wr_sql_plan_aux_key2snapshot
 # 12512: __all_virtual_tablet_mds_info
 # 12513: __all_virtual_cs_replica_tablet_stats
-# 12514: __all_virtual_ddl_diagnose_info
+
+def_table_schema(
+  owner = 'buming.lj',
+  table_name    = '__all_virtual_ddl_diagnose_info',
+  table_id      = '12514',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('ddl_task_id','int'),
+    ('object_table_id','int'),
+    ('opname', 'varchar:OB_MAX_DDL_ID_STR_LENGTH'),
+    ('create_time', 'timestamp'),
+    ('finish_time', 'timestamp'),
+    ('diagnose_info', 'varchar:OB_DIAGNOSE_INFO_LENGTH'),
+  ],
+  vtable_route_policy = 'only_rs',
+  index = {'all_virtual_ddl_diagnose_info_i1' : { 'index_columns' : ['ddl_task_id'],
+                    'index_using_type' : 'USING_HASH'}},
+)
+
 # 12515: __all_virtual_plugin_info
+
+# 12516: __all_virtual_catalog
+# 12517: __all_virtual_catalog_history
+# 12518: __all_virtual_catalog_privilege
+# 12519: __all_virtual_catalog_privilege_history
+
+# 12520: __all_virtual_sswriter_group_stat
+# 12521: __all_virtual_sswriter_lease_mgr
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16268,6 +16313,14 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keyword
 # 15491: __all_virtual_standby_log_transport_stat
 # 15492: __all_virtual_wr_sql_plan_aux_key2snapshot
 # 15493: __all_virtual_cs_replica_tablet_stats
+# 15494: __all_catalog
+# 15495: __all_catalog_privilege
+# 15496: __all_virtual_ss_tablet_upload_stat
+# 15497: __all_virtual_ss_tablet_compact_stat
+# 15498: __all_virtual_sswriter_group_stat
+# 15499: __all_virtual_sswriter_lease_mgr
+# 15500: __idx_15494_idx_catalog_name_real_agent
+# 15501: __idx_15495_idx_catalog_priv_catalog_name_real_agent
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -16348,7 +16401,7 @@ def_table_schema(
     DELAYED_LARGE_QUERYS,DELAYED_PX_QUERYS,OUTLINE_VERSION,OUTLINE_ID,OUTLINE_DATA,ACS_SEL_INFO,
     TABLE_SCAN,EVOLUTION, EVO_EXECUTIONS, EVO_CPU_TIME, TIMEOUT_COUNT, PS_STMT_ID, SESSID,
     TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID,
-    IS_BATCHED_MULTI_STMT, RULE_NAME
+    IS_BATCHED_MULTI_STMT, RULE_NAME, PLAN_STATUS, ADAPTIVE_FEEDBACK_TIMES
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND is_in_pc=true
 """.replace("\n", " "),
 
@@ -16693,9 +16746,9 @@ def_table_schema(
                     cast(a.store_format as char(10)) as ROW_FORMAT,
                     cast( coalesce(ts.row_cnt,0) as unsigned) as TABLE_ROWS,
                     cast( coalesce(ts.avg_row_len,0) as unsigned) as AVG_ROW_LENGTH,
-                    cast( coalesce(su.size,0) as unsigned) as DATA_LENGTH,
+                    cast( coalesce(ts.data_size,0) as unsigned) as DATA_LENGTH,
                     cast(NULL as unsigned) as MAX_DATA_LENGTH,
-                    cast( coalesce(su_idx.size, 0) as unsigned) as INDEX_LENGTH,
+                    cast( coalesce(idx_stat.index_length, 0) as unsigned) as INDEX_LENGTH,
                     cast(NULL as unsigned) as DATA_FREE,
                     cast(NULL as unsigned) as AUTO_INCREMENT,
                     cast(a.gmt_create as datetime) as CREATE_TIME,
@@ -16751,86 +16804,12 @@ def_table_schema(
                       select tenant_id,
                              table_id,
                              row_cnt,
-                             avg_row_len
+                             avg_row_len,
+                             (macro_blk_cnt * 2 * 1024 * 1024) as data_size
                       from oceanbase.__all_table_stat
                       where partition_id = -1 or partition_id = table_id) ts
                     on a.table_id = ts.table_id
                     and a.tenant_id = ts.tenant_id
-                    left join (
-                      SELECT
-                        avt.database_id as database_id,
-                        avt.table_id as table_id,
-                        SUM(avtps.required_size) AS size
-                      FROM oceanbase.__all_virtual_tablet_pointer_status avtps
-                      INNER JOIN oceanbase.__all_tablet_to_ls avttl
-                        ON      avttl.tablet_id = avtps.tablet_id
-                      INNER JOIN oceanbase.__all_table avt
-                        ON      avt.table_id = avttl.table_id
-                          AND   avt.table_type != 5
-                      INNER JOIN oceanbase.__all_database ad
-                        ON      ad.database_id = avt.database_id
-                      INNER JOIN oceanbase.DBA_OB_LS_LOCATIONS avlmt
-                        ON     avtps.ls_id = avlmt.ls_id
-                          AND  avtps.svr_ip = avlmt.svr_ip
-                          AND  avtps.svr_port = avlmt.svr_port
-                          AND  avlmt.role = 'LEADER'
-                      group by database_id, table_id
-                      UNION
-                      SELECT
-                        avt.database_id as database_id,
-                        avt.table_id as table_id,
-                        SUM(avtps.required_size) AS size
-                      FROM oceanbase.__all_virtual_tablet_pointer_status avtps
-                      INNER JOIN oceanbase.__all_table avt
-                        ON    table_type = 0
-                          AND avt.tablet_id = avtps.tablet_id
-                      INNER JOIN oceanbase.__all_database ad
-                        ON      ad.database_id = avt.database_id
-                      INNER JOIN oceanbase.DBA_OB_LS_LOCATIONS avlmt
-                        ON     avtps.ls_id = avlmt.ls_id
-                          AND  avtps.svr_ip = avlmt.svr_ip
-                          AND  avtps.svr_port = avlmt.svr_port
-                          AND  avlmt.role = 'LEADER'
-                      group by database_id, table_id) su
-                        ON a.database_id = su.database_id and a.table_id = su.table_id
-
-                    left join (
-                      SELECT
-                        avt.database_id as database_id,
-                        avt.data_table_id as data_table_id,
-                        SUM(avtps.required_size) AS size
-                      FROM oceanbase.__all_virtual_tablet_pointer_status avtps
-                      INNER JOIN oceanbase.__all_tablet_to_ls avttl
-                        ON      avttl.tablet_id = avtps.tablet_id
-                      INNER JOIN oceanbase.__all_table avt
-                        ON      avt.table_id = avttl.table_id
-                          AND table_type = 5
-                      INNER JOIN oceanbase.__all_database ad
-                        ON      ad.database_id = avt.database_id
-                      INNER JOIN oceanbase.DBA_OB_LS_LOCATIONS avlmt
-                        ON     avtps.ls_id = avlmt.ls_id
-                          AND  avtps.svr_ip = avlmt.svr_ip
-                          AND  avtps.svr_port = avlmt.svr_port
-                          AND  avlmt.role = 'LEADER'
-                      group by database_id, data_table_id
-                      UNION
-                      SELECT
-                        avt.database_id as database_id,
-                        avt.data_table_id as data_table_id,
-                        SUM(avtps.required_size) AS size
-                      FROM oceanbase.__all_virtual_tablet_pointer_status avtps
-                      INNER JOIN oceanbase.__all_table avt
-                        ON    table_type = 0
-                          AND avt.tablet_id = avtps.tablet_id
-                      INNER JOIN oceanbase.__all_database ad
-                        ON      ad.database_id = avt.database_id
-                      INNER JOIN oceanbase.DBA_OB_LS_LOCATIONS avlmt
-                        ON     avtps.ls_id = avlmt.ls_id
-                          AND  avtps.svr_ip = avlmt.svr_ip
-                          AND  avtps.svr_port = avlmt.svr_port
-                          AND  avlmt.role = 'LEADER'
-                      group by database_id, data_table_id) su_idx
-                        ON su_idx.database_id = a.database_id and su_idx.data_table_id = a.table_id
                     left join (
                       select e.tenant_id as tenant_id,
                              e.data_table_id as data_table_id,
@@ -17119,7 +17098,7 @@ def_table_schema(
                     END
                       AS NUMERIC_SCALE,
                       CASE
-                      WHEN rp.param_type IN (17, 18, 20) THEN CAST(rp.param_scale AS UNSIGNED)
+                      WHEN rp.param_type IN (17, 18, 20, 53) THEN CAST(rp.param_scale AS UNSIGNED)
                       ELSE CAST(NULL AS UNSIGNED)
                     END
                       AS DATETIME_PRECISION,
@@ -17165,6 +17144,8 @@ def_table_schema(
                         )
                         WHEN rp.param_type IN (18, 20) THEN CONCAT(lower(v.data_type_str), '(', rp.param_scale, ')')
                         WHEN rp.param_type IN (22, 23) and rp.param_length > 0 THEN CONCAT(lower(v.data_type_str), '(', rp.param_length, ')')
+                        WHEN rp.param_type = 52 THEN lower('DATE')
+                        WHEN rp.param_type = 53 THEN lower('DATETIME')
                         ELSE lower(v.data_type_str)
                         END
                           AS CHAR(4194304)
@@ -17907,7 +17888,8 @@ def_table_schema(
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
                          proxy_user as PROXY_USER,
                          seq_num as SEQ_NUM,
-                         network_wait_time as NETWORK_WAIT_TIME
+                         network_wait_time as NETWORK_WAIT_TIME,
+                         plsql_compile_time as PLSQL_COMPILE_TIME
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -18145,7 +18127,7 @@ def_table_schema(
     DELAYED_LARGE_QUERYS,DELAYED_PX_QUERYS,OUTLINE_VERSION,OUTLINE_ID,OUTLINE_DATA,ACS_SEL_INFO,
     TABLE_SCAN,EVOLUTION, EVO_EXECUTIONS, EVO_CPU_TIME, TIMEOUT_COUNT, PS_STMT_ID, SESSID,
     TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID,
-    IS_BATCHED_MULTI_STMT, RULE_NAME
+    IS_BATCHED_MULTI_STMT, RULE_NAME, PLAN_STATUS, ADAPTIVE_FEEDBACK_TIMES
   FROM oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -18320,7 +18302,8 @@ def_table_schema(
     TOTAL_SSSTORE_READ_ROW_COUNT,
     PROXY_USER,
     SEQ_NUM,
-    NETWORK_WAIT_TIME
+    NETWORK_WAIT_TIME,
+    PLSQL_COMPILE_TIME
   FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -19683,10 +19666,17 @@ def_table_schema(
       END AS RECOVER_PROGRESS,
     TABLET_COUNT,
     FINISH_TABLET_COUNT,
-    CASE
-      WHEN FINISH_BYTES IS NULL
-        THEN NULL
-      ELSE CAST(TRUNCATE((FINISH_BYTES / TOTAL_BYTES) * 100, 2) AS DECIMAL(6, 2))
+    CASE PROGRESS_DISPLAY_MODE
+      WHEN 'BYTES' THEN
+        CASE
+          WHEN FINISH_BYTES IS NULL THEN NULL
+          ELSE CAST(TRUNCATE((FINISH_BYTES / TOTAL_BYTES) * 100, 2) AS DECIMAL(6, 2))
+          END
+      WHEN 'TABLET_CNT' THEN
+        CASE
+          WHEN FINISH_TABLET_COUNT IS NULL THEN NULL
+          ELSE CAST(TRUNCATE((FINISH_TABLET_COUNT / TABLET_COUNT) * 100, 2) AS DECIMAL(6, 2))
+          END
       END AS RESTORE_PROGRESS,
     TOTAL_BYTES,
     CASE
@@ -19731,7 +19721,8 @@ def_table_schema(
       MAX(CASE NAME WHEN 'backup_set_list' THEN VALUE ELSE '' END) AS BACKUP_SET_LIST,
       MAX(CASE NAME WHEN 'backup_piece_list' THEN VALUE ELSE '' END) AS BACKUP_PIECE_LIST,
       MAX(CASE NAME WHEN 'description' THEN VALUE ELSE '' END) AS DESCRIPTION,
-      MAX(CASE NAME WHEN 'restore_type' THEN VALUE ELSE '' END) AS RESTORE_TYPE
+      MAX(CASE NAME WHEN 'restore_type' THEN VALUE ELSE '' END) AS RESTORE_TYPE,
+      MAX(CASE NAME WHEN 'progress_display_mode' THEN VALUE ELSE '' END) AS PROGRESS_DISPLAY_MODE
       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID
   ) P LEFT JOIN
   (
@@ -22446,6 +22437,8 @@ SELECT/*+leading(DB,TC,STAT)*/
         WHEN 46 THEN (CASE TC.COLLATION_TYPE WHEN 63 THEN 'BLOB' ELSE 'CLOB' END)
         WHEN 47 THEN 'JSON'
         WHEN 50 THEN 'NUMBER'
+        WHEN 52 THEN 'MYSQL_DATE'
+        WHEN 53 THEN 'MYSQL_DATETIME'
         WHEN 54 THEN 'ROARINGBITMAP'
         ELSE 'UNDEFINED' END AS CHAR(128)) AS  DATA_TYPE,
   CAST(NULL AS CHAR(3)) AS  DATA_TYPE_MOD,
@@ -22466,11 +22459,11 @@ SELECT/*+leading(DB,TC,STAT)*/
                                   ELSE 1 END)
                             ELSE 1 END
                             AS SIGNED) AS  DATA_LENGTH,
-  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44,54)
+  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44,52,53,54)
             THEN NULL
             ELSE CASE WHEN TC.DATA_PRECISION < 0 THEN NULL ELSE TC.DATA_PRECISION END
        END AS SIGNED) AS  DATA_PRECISION,
-  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,19,22,23,27,28,29,30,42,43,44,54)
+  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,19,22,23,27,28,29,30,42,43,44,52,53,54)
             THEN NULL
             ELSE CASE WHEN TC.DATA_SCALE < -84 THEN NULL ELSE TC.DATA_SCALE END
        END AS SIGNED) AS  DATA_SCALE,
@@ -28152,10 +28145,17 @@ def_table_schema(
       END AS RECOVER_PROGRESS,
     TABLET_COUNT,
     FINISH_TABLET_COUNT,
-    CASE
-      WHEN FINISH_BYTES IS NULL
-        THEN NULL
-      ELSE CAST(TRUNCATE((FINISH_BYTES / TOTAL_BYTES) * 100, 2) AS DECIMAL(6, 2))
+    CASE PROGRESS_DISPLAY_MODE
+      WHEN 'BYTES' THEN
+        CASE
+          WHEN FINISH_BYTES IS NULL THEN NULL
+          ELSE CAST(TRUNCATE((FINISH_BYTES / TOTAL_BYTES) * 100, 2) AS DECIMAL(6, 2))
+          END
+      WHEN 'TABLET_CNT' THEN
+        CASE
+          WHEN FINISH_TABLET_COUNT IS NULL THEN NULL
+          ELSE CAST(TRUNCATE((FINISH_TABLET_COUNT / TABLET_COUNT) * 100, 2) AS DECIMAL(6, 2))
+          END
       END AS RESTORE_PROGRESS,
     TOTAL_BYTES,
     CASE
@@ -28200,7 +28200,8 @@ def_table_schema(
       MAX(CASE NAME WHEN 'backup_set_list' THEN VALUE ELSE '' END) AS BACKUP_SET_LIST,
       MAX(CASE NAME WHEN 'backup_piece_list' THEN VALUE ELSE '' END) AS BACKUP_PIECE_LIST,
       MAX(CASE NAME WHEN 'description' THEN VALUE ELSE '' END) AS DESCRIPTION,
-      MAX(CASE NAME WHEN 'restore_type' THEN VALUE ELSE '' END) AS RESTORE_TYPE
+      MAX(CASE NAME WHEN 'restore_type' THEN VALUE ELSE '' END) AS RESTORE_TYPE,
+      MAX(CASE NAME WHEN 'progress_display_mode' THEN VALUE ELSE '' END) AS PROGRESS_DISPLAY_MODE
       FROM OCEANBASE.__ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID
   ) P LEFT JOIN
   (
@@ -29514,7 +29515,7 @@ def_table_schema(
           CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_TOTAL,
           CAST(NULL AS CHAR(32)) AS PARALLEL_EXECUTION_MANAGED
         FROM oceanbase.__tenant_virtual_global_variable A, oceanbase.dba_rsrc_plans B
-        WHERE A.variable_name = 'resource_manager_plan' AND A.value = B.plan
+        WHERE A.variable_name = 'resource_manager_plan' AND UPPER(A.value) = UPPER(B.plan)
 """.replace("\n", " "),
 )
 
@@ -30349,7 +30350,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
           (CASE WHEN (PRIV_OTHERS & (1 << 7)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROLE,
           (CASE WHEN (PRIV_OTHERS & (1 << 8)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DROP_ROLE,
-          (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER
+          (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER,
+          (CASE WHEN (PRIV_OTHERS & (1 << 11)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ENCRYPT,
+          (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT
   FROM OCEANBASE.__all_user;
   """.replace("\n", " ")
 )
@@ -30413,7 +30416,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
           (CASE WHEN (PRIV_OTHERS & (1 << 7)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROLE,
           (CASE WHEN (PRIV_OTHERS & (1 << 8)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DROP_ROLE,
-          (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER
+          (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER,
+          (CASE WHEN (PRIV_OTHERS & (1 << 11)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ENCRYPT,
+          (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT
   FROM OCEANBASE.__all_virtual_user;
   """.replace("\n", " ")
 )
@@ -30740,6 +30745,8 @@ def_table_schema(
                                    when 'TEXT' then if(rp.param_charset = 1, 'BLOB', 'TEXT')
                                    when 'MEDIUMTEXT' then if(rp.param_charset = 1, 'MEDIUMBLOB', 'MEDIUMTEXT')
                                    when 'LONGTEXT' then if(rp.param_charset = 1, 'LONGBLOB', 'LONGTEXT')
+                                   when 'MYSQL_DATE' then 'DATE'
+                                   when 'MYSQL_DATETIME' then 'DATETIME'
                                    else v.data_type_str end) AS CHAR(64)) AS DATA_TYPE,
                         CASE WHEN rp.param_type IN (22, 23, 27, 28, 29, 30) THEN CAST(rp.param_length AS SIGNED)
                           ELSE CAST(NULL AS SIGNED)
@@ -30774,7 +30781,7 @@ def_table_schema(
                           WHEN rp.param_type IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 31) THEN CAST(0 AS SIGNED)
                           ELSE CAST(NULL AS SIGNED)
                         END AS NUMERIC_SCALE,
-                        CASE WHEN rp.param_type IN (17, 18, 20) THEN CAST(rp.param_scale AS UNSIGNED)
+                        CASE WHEN rp.param_type IN (17, 18, 20, 53) THEN CAST(rp.param_scale AS UNSIGNED)
                           ELSE CAST(NULL AS UNSIGNED)
                         END AS DATETIME_PRECISION,
                         CAST(CASE rp.param_charset
@@ -30838,6 +30845,8 @@ def_table_schema(
                           THEN lower(REPLACE(v.data_type_str, 'TEXT', 'BLOB'))
                           WHEN rp.param_type IN (32, 33)
                           THEN get_mysql_routine_parameter_type_str(rp.routine_id, rp.param_position)
+                          WHEN rp.param_type = 52 THEN lower('DATE')
+                          WHEN rp.param_type = 53 THEN CONCAT(lower('DATETIME'),'(', rp.param_scale, ')')
                           ELSE lower(v.data_type_str) END AS char(4194304)) AS DTD_IDENTIFIER,
                         CAST(CASE WHEN r.routine_type = 1 THEN 'PROCEDURE'
                           WHEN ROUTINE_TYPE = 2 THEN 'FUNCTION'
@@ -31082,6 +31091,10 @@ def_table_schema(
                      AND (U.PRIV_OTHERS & (1 << 8)) != 0 THEN 'DROP ROLE'
                 WHEN V1.C1 = 44
                      AND (U.PRIV_OTHERS & (1 << 9)) != 0 THEN 'TRIGGER'
+                WHEN V1.C1 = 46
+                     AND (U.PRIV_OTHERS & (1 << 11) != 0) THEN 'ENCRYPT'
+                WHEN V1.C1 = 47
+                     AND (U.PRIV_OTHERS & (1 << 12) != 0) THEN 'DECRYPT'
                 WHEN V1.C1 = 0
                      AND U.PRIV_ALTER = 0
                      AND U.PRIV_CREATE = 0
@@ -31173,7 +31186,9 @@ def_table_schema(
         UNION ALL SELECT 41 AS C1
         UNION ALL SELECT 42 AS C1
         UNION ALL SELECT 43 AS C1
-        UNION ALL SELECT 44 AS C1) V1,
+        UNION ALL SELECT 44 AS C1
+        UNION ALL SELECT 46 AS C1
+        UNION ALL SELECT 47 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID = 0
@@ -31756,9 +31771,9 @@ def_table_schema(
        END AS CHAR(4096)) AS SUBPARTITION_DESCRIPTION,
   CAST(TS.ROW_CNT AS UNSIGNED) AS TABLE_ROWS,
   CAST(TS.AVG_ROW_LEN AS UNSIGNED) AS AVG_ROW_LENGTH,
-  CAST(COALESCE(P_SP.size, 0) AS UNSIGNED) AS DATA_LENGTH,
+  CAST(COALESCE(TS.MACRO_BLK_CNT * 2 * 1024 * 1024, 0) AS UNSIGNED) AS DATA_LENGTH,
   CAST(NULL AS UNSIGNED) AS MAX_DATA_LENGTH,
-  CAST(COALESCE(P_IDX_SP.INDEX_LENGTH, 0) AS UNSIGNED) AS INDEX_LENGTH,
+  CAST(COALESCE(IDX_STAT.INDEX_LENGTH, 0) AS UNSIGNED) AS INDEX_LENGTH,
   CAST(NULL AS UNSIGNED) AS DATA_FREE,
   CASE T.PART_LEVEL
     WHEN 0 THEN T.GMT_CREATE
@@ -31791,7 +31806,6 @@ FROM
         COMMENT,
         PARTITION_TYPE,
         PART_IDX,
-        TABLET_ID,
         ROW_NUMBER() OVER(PARTITION BY TENANT_ID,TABLE_ID ORDER BY PART_IDX) AS PART_POSITION
       FROM OCEANBASE.__ALL_PART
   ) P ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
@@ -31809,44 +31823,24 @@ FROM
         COMMENT,
         PARTITION_TYPE,
         SUB_PART_IDX,
-        TABLET_ID,
         ROW_NUMBER() OVER(PARTITION BY TENANT_ID,TABLE_ID,PART_ID ORDER BY SUB_PART_IDX) AS SUB_PART_POSITION
     FROM OCEANBASE.__ALL_SUB_PART
   ) SP ON T.TABLE_ID = SP.TABLE_ID AND P.PART_ID = SP.PART_ID AND T.TENANT_ID = SP.TENANT_ID
-
   LEFT JOIN OCEANBASE.__ALL_TENANT_TABLESPACE TP ON TP.TABLESPACE_ID = IFNULL(SP.TABLESPACE_ID, P.TABLESPACE_ID) AND TP.TENANT_ID = T.TENANT_ID
   LEFT JOIN OCEANBASE.__ALL_TABLE_STAT TS ON T.TENANT_ID = TS.TENANT_ID AND TS.TABLE_ID = T.TABLE_ID AND TS.PARTITION_ID = CASE T.PART_LEVEL WHEN 0 THEN T.TABLE_ID WHEN 1 THEN P.PART_ID WHEN 2 THEN SP.SUB_PART_ID END
   LEFT JOIN (
-      select
-        tablet_id,
-        avtps.required_size as size
-      from OCEANBASE.__ALL_VIRTUAL_TABLET_POINTER_STATUS avtps
-      JOIN oceanbase.DBA_OB_LS_LOCATIONS avlmt
-        ON     avtps.ls_id = avlmt.ls_id
-          AND  avtps.svr_ip = avlmt.svr_ip
-          AND  avtps.svr_port = avlmt.svr_port
-          AND  avlmt.role = 'LEADER'
-    ) P_SP
-      ON P_SP.tablet_id = CASE T.PART_LEVEL WHEN 0 THEN T.tablet_id WHEN 1 THEN P.tablet_id WHEN 2 THEN SP.tablet_id END
-  LEFT JOIN (
-      select
+    SELECT E.TENANT_ID AS TENANT_ID,
 		E.DATA_TABLE_ID AS DATA_TABLE_ID,
         F.PART_IDX AS PART_IDX,
         SF.SUB_PART_IDX AS SUB_PART_IDX,
-        sum(avtps.required_size) as INDEX_LENGTH
-      from OCEANBASE.__ALL_VIRTUAL_TABLET_POINTER_STATUS avtps
-		 JOIN OCEANBASE.__ALL_TABLE E ON E.INDEX_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12) AND E.TABLE_TYPE = 5
-         LEFT JOIN OCEANBASE.__ALL_PART F ON E.TABLE_ID = F.TABLE_ID
-         LEFT JOIN OCEANBASE.__ALL_SUB_PART SF ON E.TABLE_ID = SF.TABLE_ID AND F.PART_ID = SF.PART_ID
-         JOIN OCEANBASE.DBA_OB_LS_LOCATIONS avlmt
-          ON     avtps.ls_id = avlmt.ls_id
-            AND  avtps.svr_ip = avlmt.svr_ip
-            AND  avtps.svr_port = avlmt.svr_port
-            AND  avlmt.role = 'LEADER'
-		 where avtps.tablet_id = case E.PART_LEVEL WHEN 0 THEN E.tablet_id WHEN 1 THEN F.tablet_id WHEN 2 THEN SF.tablet_id end
-		 GROUP BY DATA_TABLE_ID, PART_IDX, SUB_PART_IDX
-  ) P_IDX_SP ON P_IDX_SP.DATA_TABLE_ID = T.TABLE_ID AND
-                CASE T.PART_LEVEL WHEN 0 THEN 1 WHEN 1 THEN P.PART_IDX = P_IDX_SP.PART_IDX WHEN 2 THEN P.PART_IDX = P_IDX_SP.PART_IDX AND SP.SUB_PART_IDX = P_IDX_SP.SUB_PART_IDX END
+           SUM(G.macro_blk_cnt * 2 * 1024 * 1024) AS INDEX_LENGTH
+    FROM OCEANBASE.__ALL_TABLE E LEFT JOIN OCEANBASE.__ALL_PART F ON E.TENANT_ID = F.TENANT_ID AND E.TABLE_ID = F.TABLE_ID
+                                 LEFT JOIN OCEANBASE.__ALL_SUB_PART SF ON E.TENANT_ID = SF.TENANT_ID AND E.TABLE_ID = SF.TABLE_ID AND F.PART_ID = SF.PART_ID
+         JOIN OCEANBASE.__ALL_TABLE_STAT G ON E.TENANT_ID = G.TENANT_ID AND E.TABLE_ID = G.TABLE_ID AND G.PARTITION_ID = CASE E.PART_LEVEL WHEN 0 THEN E.TABLE_ID WHEN 1 THEN F.PART_ID WHEN 2 THEN SF.SUB_PART_ID END
+    WHERE E.INDEX_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12) AND E.TABLE_TYPE = 5 GROUP BY TENANT_ID, DATA_TABLE_ID, PART_IDX, SUB_PART_IDX
+  ) IDX_STAT ON IDX_STAT.TENANT_ID = T.TENANT_ID AND
+                IDX_STAT.DATA_TABLE_ID = T.TABLE_ID AND
+                CASE T.PART_LEVEL WHEN 0 THEN 1 WHEN 1 THEN P.PART_IDX = IDX_STAT.PART_IDX WHEN 2 THEN P.PART_IDX = IDX_STAT.PART_IDX AND SP.SUB_PART_IDX = IDX_STAT.SUB_PART_IDX END
 WHERE T.TABLE_TYPE IN (3,6,8,9,14,15)
       AND (P.PARTITION_TYPE = 0 OR P.PARTITION_TYPE is NULL)
       AND (SP.PARTITION_TYPE = 0 OR SP.PARTITION_TYPE is NULL)
@@ -34292,7 +34286,9 @@ def_table_schema(
            PL_EVICT_VERSION,
            PS_STMT_ID,
            DB_ID,
-           PL_CG_MEM_HOLD
+           PL_CG_MEM_HOLD,
+           SYS_VARS,
+           PARAM_INFOS
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true
 """.replace("\n", " "),
     normal_columns = [
@@ -34330,7 +34326,9 @@ def_table_schema(
            PL_EVICT_VERSION,
            PS_STMT_ID,
            DB_ID,
-           PL_CG_MEM_HOLD
+           PL_CG_MEM_HOLD,
+           SYS_VARS,
+           PARAM_INFOS
     FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 
@@ -37876,6 +37874,7 @@ def_table_schema(
       A.MODE AS MODE,
       A.MIN_IOPS AS MIN_IOPS,
       A.MAX_IOPS AS MAX_IOPS,
+      A.NORM_IOPS AS NORM_IOPS,
       A.REAL_IOPS AS REAL_IOPS,
       A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,
       A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,
@@ -37909,6 +37908,7 @@ def_table_schema(
     A.MODE AS MODE,
     A.MIN_IOPS AS MIN_IOPS,
     A.MAX_IOPS AS MAX_IOPS,
+    A.NORM_IOPS AS NORM_IOPS,
     A.REAL_IOPS AS REAL_IOPS,
     A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,
     A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,
@@ -39978,8 +39978,8 @@ def_table_schema(
 # 21632: V$OB_STANDBY_LOG_TRANSPORT_STAT
 # 21633: DBA_OB_CS_REPLICA_STATS
 # 21634: CDB_OB_CS_REPLICA_STATS
-# 21635: DBA_OB_PLUGINS
-# 21636: CDB_OB_PLUGINS
+# 21635: GV$OB_PLUGINS
+# 21636: V$OB_PLUGINS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -42809,6 +42809,8 @@ SELECT
         48, 'SDO_GEOMETRY',
         49, DECODE(TC.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
         50, 'NUMBER',
+        52, 'MYSQL_DATE',
+        53, 'MYSQL_DATETIME',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,
@@ -43024,6 +43026,8 @@ SELECT
         48, 'SDO_GEOMETRY',
         49, DECODE(TC.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
         50, 'NUMBER',
+        52, 'MYSQL_DATE',
+        53, 'MYSQL_DATETIME',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,
@@ -43236,6 +43240,8 @@ SELECT
         48, 'SDO_GEOMETRY',
         49, DECODE(TC.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
         50, 'NUMBER',
+        52, 'MYSQL_DATE',
+        53, 'MYSQL_DATETIME',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,
@@ -56304,10 +56310,17 @@ def_table_schema(
       END AS RECOVER_PROGRESS,
     TABLET_COUNT,
     FINISH_TABLET_COUNT,
-    CASE
-      WHEN FINISH_BYTES IS NULL
-        THEN NULL
-      ELSE CAST(TRUNC((FINISH_BYTES / TOTAL_BYTES) * 100, 2) AS NUMBER(6, 2))
+    CASE PROGRESS_DISPLAY_MODE
+      WHEN 'BYTES' THEN
+        CASE
+          WHEN FINISH_BYTES IS NULL THEN NULL
+          ELSE CAST(TRUNC((FINISH_BYTES / TOTAL_BYTES) * 100, 2) AS NUMBER(6, 2))
+          END
+      WHEN 'TABLET_CNT' THEN
+        CASE
+          WHEN FINISH_TABLET_COUNT IS NULL THEN NULL
+          ELSE CAST(TRUNC((FINISH_TABLET_COUNT / TABLET_COUNT) * 100, 2) AS NUMBER(6, 2))
+          END
       END AS RESTORE_PROGRESS,
     TOTAL_BYTES,
     CASE
@@ -56352,7 +56365,8 @@ def_table_schema(
       MAX(CASE NAME WHEN 'backup_set_list' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_SET_LIST,
       MAX(CASE NAME WHEN 'backup_piece_list' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_PIECE_LIST,
       MAX(CASE NAME WHEN 'description' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS DESCRIPTION,
-      MAX(CASE NAME WHEN 'restore_type' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_TYPE
+      MAX(CASE NAME WHEN 'restore_type' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_TYPE,
+      MAX(CASE NAME WHEN 'progress_display_mode' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS PROGRESS_DISPLAY_MODE
       FROM SYS.ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID
   ) P LEFT JOIN
   (
@@ -60985,7 +60999,8 @@ def_table_schema(
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
                          proxy_user as PROXY_USER,
                          seq_num as SEQ_NUM,
-                         network_wait_time as  NETWORK_WAIT_TIME
+                         network_wait_time as  NETWORK_WAIT_TIME,
+                         plsql_compile_time as PLSQL_COMPILE_TIME
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -61102,7 +61117,8 @@ TOTAL_MEMSTORE_READ_ROW_COUNT,
 TOTAL_SSSTORE_READ_ROW_COUNT,
 PROXY_USER,
 SEQ_NUM,
-NETWORK_WAIT_TIME FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+NETWORK_WAIT_TIME,
+PLSQL_COMPILE_TIME FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -61254,7 +61270,10 @@ def_table_schema(
       IS_USE_JIT AS IS_USE_JIT,
       OBJECT_TYPE AS OBJECT_TYPE,
       PL_SCHEMA_ID AS PL_SCHEMA_ID,
-      IS_BATCHED_MULTI_STMT AS IS_BATCHED_MULTI_STMT
+      IS_BATCHED_MULTI_STMT AS IS_BATCHED_MULTI_STMT,
+      RULE_NAME AS RULE_NAME,
+      PLAN_STATUS AS PLAN_STATUS,
+      ADAPTIVE_FEEDBACK_TIMES AS ADAPTIVE_FEEDBACK_TIMES
       FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND IS_IN_PC='1'
 """.replace("\n", " ")
 )
@@ -61325,7 +61344,10 @@ TEMP_TABLES,
 IS_USE_JIT,
 OBJECT_TYPE,
 PL_SCHEMA_ID,
-IS_BATCHED_MULTI_STMT FROM SYS.GV$OB_PLAN_CACHE_PLAN_STAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+IS_BATCHED_MULTI_STMT,
+RULE_NAME,
+PLAN_STATUS,
+ADAPTIVE_FEEDBACK_TIMES FROM SYS.GV$OB_PLAN_CACHE_PLAN_STAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -63043,7 +63065,7 @@ def_table_schema(
           CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_TOTAL,
           CAST(NULL AS VARCHAR2(32)) AS PARALLEL_EXECUTION_MANAGED
         FROM SYS.tenant_virtual_global_variable A, SYS.DBA_RSRC_PLANS B
-        WHERE A.variable_name = 'resource_manager_plan' AND A.value = B.plan
+        WHERE A.variable_name = 'resource_manager_plan' AND UPPER(A.value) = UPPER(B.plan)
 """.replace("\n", " "),
 )
 
@@ -68030,7 +68052,9 @@ def_table_schema(
            PL_EVICT_VERSION AS PL_EVICT_VERSION,
            PS_STMT_ID AS PS_STMT_ID,
            DB_ID AS DB_ID,
-           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD
+           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD,
+           SYS_VARS AS SYS_VARS,
+           PARAM_INFOS AS PARAM_INFOS
     FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc='1'
 """.replace("\n", " "),
     normal_columns = [
@@ -68069,7 +68093,9 @@ def_table_schema(
            PL_EVICT_VERSION AS PL_EVICT_VERSION,
            PS_STMT_ID AS PS_STMT_ID,
            DB_ID AS DB_ID,
-           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD
+           PL_CG_MEM_HOLD AS PL_CG_MEM_HOLD,
+           SYS_VARS AS SYS_VARS,
+           PARAM_INFOS AS PARAM_INFOS
     FROM SYS.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
     normal_columns = [
@@ -69085,6 +69111,7 @@ def_table_schema(
       A."MODE" AS "MODE",
       A.MIN_IOPS AS MIN_IOPS,
       A.MAX_IOPS AS MAX_IOPS,
+      A.NORM_IOPS AS NORM_IOPS,
       A.REAL_IOPS AS REAL_IOPS,
       A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,
       A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,
@@ -69120,6 +69147,7 @@ def_table_schema(
     A."MODE" AS "MODE",
     A.MIN_IOPS AS MIN_IOPS,
     A.MAX_IOPS AS MAX_IOPS,
+    A.NORM_IOPS AS NORM_IOPS,
     A.REAL_IOPS AS REAL_IOPS,
     A.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,
     A.MAX_NET_BANDWIDTH_DISPLAY AS MAX_NET_BANDWIDTH_DISPLAY,
@@ -72902,6 +72930,9 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_pkg_coll_type'])
+
+# 101113 __idx_537_idx_catalog_name
+# 101114 __idx_539_idx_catalog_priv_catalog_name
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名

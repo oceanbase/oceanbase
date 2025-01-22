@@ -2151,6 +2151,7 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
   das_dml_ctdef.is_batch_stmt_ = op.get_plan()->get_optimizer_context().is_batched_multi_stmt();
   das_dml_ctdef.is_access_vidx_as_master_table_ = false;
   ObSQLSessionInfo *session = nullptr;
+  bool is_update_uk_parallel = false;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
   if (OB_FAIL(convert_dml_column_info(index_tid, false, das_dml_ctdef))) {
     LOG_WARN("add column ids to das_dml_ctdef failed", K(ret));
@@ -2164,9 +2165,12 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
     LOG_WARN("session is invalid", K(op.get_plan()), K(session));
   } else if (OB_FAIL(session->get_binlog_row_image(binlog_row_image))) {
     LOG_WARN("get binlog row image failed", K(ret));
+  } else if (OB_FAIL(op.op_is_update_pk_with_dop(is_update_uk_parallel))) {
+    LOG_WARN("fail to check is update pk parallel", K(ret));
   } else {
     das_dml_ctdef.tz_info_ = *session->get_tz_info_wrap().get_time_zone_info();
     das_dml_ctdef.is_total_quantity_log_ = (ObBinlogRowImage::FULL == binlog_row_image);
+    das_dml_ctdef.is_update_pk_with_dop_ = is_update_uk_parallel;
   }
 #ifdef OB_BUILD_TDE_SECURITY
   // generate encrypt_meta for table

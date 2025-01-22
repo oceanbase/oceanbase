@@ -23,6 +23,7 @@
 #include "storage/multi_data_source/runtime_utility/common_define.h"
 #include "storage/tablet/ob_mds_row_iterator.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
+// #include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,8 @@ class ObIAllocator;
 namespace storage
 {
 class ObTabletHandle;
+class ObTabletPointer;
+class ObTablet;
 
 namespace mds
 {
@@ -286,6 +289,22 @@ int ObMdsRangeQueryIterator<K, T>::get_key_from_dump_kv(const mds::MdsDumpKV &kv
   }
 
   return ret;
+}
+
+int ob_get_mds_table(const ObTabletHandle &tablet_handle, mds::MdsTableHandle &mds_table);
+
+template<typename K, typename T>
+int ObMdsRangeQueryIterator<K, T>::get_mds_table(const ObTabletHandle &tablet_handle, mds::MdsTableHandle &mds_table)
+{
+  return ob_get_mds_table(tablet_handle, mds_table);
+}
+
+int ob_gcheck_mds_data_complete(const ObTabletHandle &tablet_handle, bool &is_data_complete);
+
+template<typename K, typename T>
+int ObMdsRangeQueryIterator<K, T>::check_mds_data_complete(const ObTabletHandle &tablet_handle, bool &is_data_complete)
+{
+  return ob_gcheck_mds_data_complete(tablet_handle, is_data_complete);
 }
 
 template <typename K, typename T>

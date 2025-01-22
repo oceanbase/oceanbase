@@ -76,7 +76,7 @@ int ObDirectLoadPartitionMergeTask::process()
       LOG_WARN("fail to construct row iters", KR(ret));
     }
     // 对于全量导入, 无论一个分区有没有数据, 都需要创建ddl对象来为该分区创建major sstable
-    else if (OB_FAIL(block_start_seq.set_parallel_degree(parallel_idx_))) {
+    else if (OB_FAIL(ObDDLUtil::init_macro_block_seq(parallel_idx_, block_start_seq))) {
       LOG_WARN("fail to set parallel degree", KR(ret), K(parallel_idx_));
     } else if (OB_FAIL(insert_tablet_ctx_->open_sstable_slice(block_start_seq, slice_id))) {
       LOG_WARN("fail to open sstable slice ", KR(ret), K(block_start_seq));

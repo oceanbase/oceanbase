@@ -813,8 +813,8 @@ int ObTableLocation::assign(const ObTableLocation &other)
     has_dynamic_exec_param_ = other.has_dynamic_exec_param_;
     is_valid_temporal_part_range_ = other.is_valid_temporal_part_range_;
     is_valid_temporal_subpart_range_ = other.is_valid_temporal_subpart_range_;
-    is_part_range_get_ = other.is_part_range_get_;
-    is_subpart_range_get_ = other.is_subpart_range_get_;
+    is_part_range_precise_get_ = other.is_part_range_precise_get_;
+    is_subpart_range_precise_get_ = other.is_subpart_range_precise_get_;
     is_non_partition_optimized_ = other.is_non_partition_optimized_;
     tablet_id_ = other.tablet_id_;
     object_id_ = other.object_id_;
@@ -945,8 +945,8 @@ void ObTableLocation::reset()
   has_dynamic_exec_param_ = false;
   is_valid_temporal_part_range_ = false;
   is_valid_temporal_subpart_range_ = false;
-  is_part_range_get_ = false;
-  is_subpart_range_get_ = false;
+  is_part_range_precise_get_ = false;
+  is_subpart_range_precise_get_ = false;
   is_non_partition_optimized_ = false;
   tablet_id_.reset();
   object_id_ = OB_INVALID_ID;
@@ -1438,7 +1438,7 @@ int ObTableLocation::init(
   }
   return ret;
 }
-
+ERRSIM_POINT_DEF(ERRSIM_WEAK_READ_INNER_TABLE);
 int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
                                       const ObSQLSessionInfo *session,
                                       const ObSqlCtx *sql_ctx,
@@ -1451,7 +1451,7 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
     LOG_ERROR("unexpected null", K(ret), K(session), K(sql_ctx));
   } else if (dml_stmt.get_query_ctx()->has_dml_write_stmt_ ||
              dml_stmt.get_query_ctx()->is_contain_select_for_update_ ||
-             dml_stmt.get_query_ctx()->is_contain_inner_table_) {
+             (!ERRSIM_WEAK_READ_INNER_TABLE && dml_stmt.get_query_ctx()->is_contain_inner_table_)) {
     is_weak_read = false;
   } else if (share::ObTenantEnv::get_tenant() == nullptr) { //table api can't invoke MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID
     is_weak_read = false;
@@ -2531,7 +2531,7 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                      calc_node_,
                                      gen_col_node_,
                                      part_get_all_,
-                                     is_part_range_get_,
+                                     is_part_range_precise_get_,
                                      is_in_range_optimization_enabled,
                                      use_new_query_range))) {
     LOG_WARN("failed to set location calc node for first-level partition", K(ret));
@@ -2547,7 +2547,7 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                                subcalc_node_,
                                                sub_gen_col_node_,
                                                subpart_get_all_,
-                                               is_subpart_range_get_,
+                                               is_subpart_range_precise_get_,
                                                is_in_range_optimization_enabled,
                                                use_new_query_range))) {
     LOG_WARN("failed to set location calc node for second-level partition", K(ret));
@@ -2634,7 +2634,7 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                             const ObIArray<ObRawExpr*> &filter_exprs,
                                             ObPartLocCalcNode *&res_node,
                                             bool &get_all,
-                                            bool &is_range_get,
+                                            bool &is_precise_get,
                                             const ObDataTypeCastParams &dtc_params,
                                             ObExecContext *exec_ctx,
                                             ObQueryCtx *query_ctx,
@@ -2644,7 +2644,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_INVALID_ID;
   get_all = false;
-  is_range_get = false;
+  is_precise_get = false;
+  bool is_get = false;
   bool only_range_node = false;
 
   if (partition_expr->is_column_ref_expr() || is_virtual_table(loc_meta_.ref_table_id_)) {
@@ -2674,7 +2675,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       } else {
         res_node = calc_node;
         if (OB_NOT_NULL(calc_node)) {
-          is_range_get = static_cast<ObPLPreRangeGraphNode*>(calc_node)->pre_range_graph_.is_precise_get();
+          is_precise_get = static_cast<ObPLPreRangeGraphNode*>(calc_node)->pre_range_graph_.is_precise_get();
+          static_cast<ObPLPreRangeGraphNode*>(calc_node)->pre_range_graph_.is_get(is_get);
         }
       }
     } else {
@@ -2693,7 +2695,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       } else {
         res_node = calc_node;
         if (OB_NOT_NULL(calc_node)) {
-          is_range_get = static_cast<ObPLQueryRangeNode*>(calc_node)->pre_query_range_.is_precise_get();
+          is_precise_get = static_cast<ObPLQueryRangeNode*>(calc_node)->pre_query_range_.is_precise_get();
+          static_cast<ObPLQueryRangeNode*>(calc_node)->pre_query_range_.is_get(is_get);
         }
       }
     }
@@ -2701,8 +2704,10 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
     ObSEArray<ObRawExpr *, 5> normal_filters;
     bool func_always_true = true;
     ObPartLocCalcNode *func_node = NULL;
-    bool is_func_range_get = false;
-    bool is_column_range_get = false;
+    bool is_func_precise_get = false;
+    bool is_func_get = false;
+    bool is_column_precise_get = false;
+    bool is_column_get = false;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < filter_exprs.count(); ++idx) {
       bool cnt_func_expr = false;
       bool always_true = false;
@@ -2719,7 +2724,9 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
         //如果是这种保证这个变量名就不太合适
         LOG_WARN("Failed to add and node", K(ret));
       } else {
-        is_func_range_get = true;
+        // 如果有有两个filter都贡献了calc node, 就不是precise get了。先保持原样
+        is_func_precise_get = true;
+        is_func_get = true;
         func_always_true &= always_true || NULL == calc_node;
       }
     }
@@ -2734,14 +2741,16 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                                column_always_true, column_node, exec_ctx))) {
             LOG_WARN("Failed to get query range node", K(ret));
           } else if (OB_NOT_NULL(column_node)) {
-            is_column_range_get = static_cast<ObPLPreRangeGraphNode*>(column_node)->pre_range_graph_.is_precise_get();
+            is_column_precise_get = static_cast<ObPLPreRangeGraphNode*>(column_node)->pre_range_graph_.is_precise_get();
+            static_cast<ObPLPreRangeGraphNode*>(column_node)->pre_range_graph_.is_get(is_column_get);
           }
         } else {
           if (OB_FAIL(get_query_range_node(part_level, partition_columns, filter_exprs, column_always_true,
                                           column_node, dtc_params, exec_ctx, query_ctx, is_in_range_optimization_enabled))) {
             LOG_WARN("Failed to get query range node", K(ret));
           } else if (OB_NOT_NULL(column_node)) {
-            is_column_range_get = static_cast<ObPLQueryRangeNode*>(column_node)->pre_query_range_.is_precise_get();
+            is_column_precise_get = static_cast<ObPLQueryRangeNode*>(column_node)->pre_query_range_.is_precise_get();
+            static_cast<ObPLQueryRangeNode*>(column_node)->pre_query_range_.is_get(is_column_get);
           }
         }
       }
@@ -2757,10 +2766,11 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       } else {
         res_node = column_node;
       }
-      is_range_get = is_func_range_get || is_column_range_get;
+      is_precise_get = is_func_precise_get || is_column_precise_get;
+      is_get = is_func_get || is_column_get;
     }
   }
-  if (OB_SUCC(ret) && !is_range_get &&
+  if (OB_SUCC(ret) && !is_get &&
       GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0 &&
       ((PARTITION_LEVEL_ONE == part_level && is_column_list_part(part_type_, is_col_part_expr_)) ||
        (PARTITION_LEVEL_TWO == part_level && is_column_list_part(subpart_type_, is_col_subpart_expr_)))) {
@@ -5216,8 +5226,8 @@ OB_DEF_SERIALIZE(ObTableLocation)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ENCODE,
-                is_part_range_get_,
-                is_subpart_range_get_);
+                is_part_range_precise_get_,
+                is_subpart_range_precise_get_);
   }
   OB_UNIS_ENCODE(is_non_partition_optimized_);
   OB_UNIS_ENCODE(tablet_id_);
@@ -5297,8 +5307,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
     OB_UNIS_ADD_LEN(part_hint_ids_.at(i));
   }
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-              is_part_range_get_,
-              is_subpart_range_get_);
+              is_part_range_precise_get_,
+              is_subpart_range_precise_get_);
   OB_UNIS_ADD_LEN(is_non_partition_optimized_);
   OB_UNIS_ADD_LEN(tablet_id_);
   OB_UNIS_ADD_LEN(object_id_);
@@ -5454,8 +5464,8 @@ OB_DEF_DESERIALIZE(ObTableLocation)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE,
-                is_part_range_get_,
-                is_subpart_range_get_);
+                is_part_range_precise_get_,
+                is_subpart_range_precise_get_);
   }
   OB_UNIS_DECODE(is_non_partition_optimized_);
   OB_UNIS_DECODE(tablet_id_);
@@ -5662,7 +5672,9 @@ int ObTableLocation::can_get_part_by_range_for_temporal_column(const ObRawExpr *
             LOG_WARN("fail to get real expr", K(ret));
           } else if (real_sub_expr->is_column_ref_expr() &&
                      (ObDateType == real_sub_expr->get_result_type().get_type() ||
-                     ObDateTimeType == real_sub_expr->get_result_type().get_type())) {
+                     ObDateTimeType == real_sub_expr->get_result_type().get_type() ||
+                     ObMySQLDateType == real_sub_expr->get_result_type().get_type() ||
+                     ObMySQLDateTimeType == real_sub_expr->get_result_type().get_type())) {
             is_valid = true;
           }
         }
@@ -6162,10 +6174,12 @@ int ObTableLocation::get_list_value_node(const ObPartitionLevel part_level,
         LOG_WARN("get null expr");
       } else if (OB_FAIL(expr->has_exec_param(has_exec))) {
         LOG_WARN("failed to check expr has exec param");
-      } else if (has_exec || expr->has_flag(CNT_SUB_QUERY) || !expr->is_op_expr()) {
+      } else if (has_exec || expr->cnt_not_calculable_expr_ignore_column() || !expr->is_op_expr()) {
         // do nothing
       } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, expr_columns))) {
         LOG_WARN("extract column exprs failed", K(ret));
+      } else if (expr_columns.empty()) {
+        // do nothing
       } else if (!ObOptimizerUtil::subset_exprs(expr_columns, part_column_exprs)) {
         // do nothing
       } else if (OB_FAIL(part_filters.push_back(expr))) {

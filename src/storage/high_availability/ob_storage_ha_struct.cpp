@@ -22,6 +22,7 @@
 #include "logservice/ob_log_service.h"
 #include "share/transfer/ob_transfer_task_operator.h"
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -467,7 +468,8 @@ int ObMigrationStatusHelper::allow_transfer_src_ls_gc_(
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != status
       && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT != status
       && ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT != status
-      && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != status) {
+      && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != status) {
     allow_gc = true;
   }
   return ret;
@@ -1018,7 +1020,8 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_status_for_ls_gc_v1_(
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != dest_ls_status
       && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT != dest_ls_status
       && ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT != dest_ls_status
-      && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != dest_ls_status) {
+      && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != dest_ls_status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != dest_ls_status) {
     allow_gc = true;
     LOG_INFO("transfer dest ls check transfer status passed", K(ret), K(transfer_ls_id), K(dest_ls_status));
   } else if (OB_FAIL(check_transfer_dest_tablet_for_ls_gc_v1_(dest_ls, tablet_id, transfer_scn, need_wait_dest_ls_replay, allow_gc))) {
@@ -1090,6 +1093,19 @@ bool ObMigrationStatusHelper::can_gc_ls_without_check_dependency(
     allow_gc = true;
   }
   return allow_gc;
+}
+
+bool ObMigrationStatusHelper::check_can_report_readable_scn(
+    const ObMigrationStatus &cur_status)
+{
+  bool can_report = false;
+  if (ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == cur_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_NONE == cur_status) {
+    can_report = true;
+  } else {
+    can_report = false;
+  }
+  return can_report;
 }
 
 /******************ObMigrationOpArg*********************/

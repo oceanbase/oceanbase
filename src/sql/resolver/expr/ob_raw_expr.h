@@ -1668,7 +1668,8 @@ struct ObResolveContext
     is_need_print_(false),
     is_from_show_resolver_(false),
     is_in_system_view_(false),
-    match_exprs_(NULL)
+    match_exprs_(NULL),
+    formalize_const_int_prec_(false)
   {
   }
 
@@ -1720,6 +1721,7 @@ struct ObResolveContext
   bool is_from_show_resolver_;
   bool is_in_system_view_;
   common::ObIArray<ObMatchFunRawExpr*> *match_exprs_;
+  bool formalize_const_int_prec_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;
@@ -1803,7 +1805,7 @@ public:
   virtual void reset();
   /// whether is the same expression.
   /// Compare the two expression tree.
-  bool has_generalized_column() const;
+  bool has_generalized_column(bool ignore_column = false) const;
   bool has_enum_set_column() const;
   bool has_specified_pseudocolumn() const;
   bool same_as(const ObRawExpr &expr,
@@ -1891,6 +1893,7 @@ public:
   virtual inline bool is_white_runtime_filter_expr() const { return false; }
   bool is_not_calculable_expr() const;
   bool cnt_not_calculable_expr() const;
+  bool cnt_not_calculable_expr_ignore_column() const;
   int is_const_inherit_expr(bool &is_const_inherit, const bool param_need_replace = false) const;
   bool check_is_deterministic_expr() const;
   int is_non_pure_sys_func_expr(bool &is_non_pure) const;
@@ -2055,6 +2058,7 @@ public:
   int extract_local_session_vars_recursively(ObIArray<const ObSessionSysVar *> &var_array);
   void set_local_session_var_id(int64_t idx) { local_session_var_id_ = idx; }
   int64_t get_local_session_var_id() { return local_session_var_id_; }
+  int fast_check_status(uint64_t n = 0xFFFF) const;
   int64_t get_attr_count() const { return attr_exprs_.count(); }
   const ObRawExpr *get_attr_expr(int64_t index) const;
   ObRawExpr *get_attr_expr(int64_t index);
@@ -5025,12 +5029,15 @@ public:
       expr_store_(alloc),
       is_called_sql_(true),
       proxy_(nullptr),
-      try_check_tick_(0)
+      try_check_tick_(0),
+      worker_check_status_times_(0)
   {
   }
   ObRawExprFactory(ObRawExprFactory &expr_factory) : allocator_(expr_factory.allocator_),
                                                      expr_store_(allocator_),
-                                                     proxy_(&expr_factory)
+                                                     proxy_(&expr_factory),
+                                                     try_check_tick_(0),
+                                                     worker_check_status_times_(0)
   {
   }
   ~ObRawExprFactory() {
@@ -5128,6 +5135,7 @@ public:
   inline common::ObIAllocator &get_allocator() { return allocator_; }
   common::ObObjStore<ObRawExpr*, common::ObIAllocator&, true> &get_expr_store() { return expr_store_; }
   void set_is_called_sql(const bool is_called_sql) { is_called_sql_ = is_called_sql; }
+  inline uint64_t inc_worker_check_status_times() { return ++worker_check_status_times_; }
   TO_STRING_KV("", "");
 private:
   common::ObIAllocator &allocator_;
@@ -5136,6 +5144,7 @@ private:
   //if not null, raw_expr is create by pl resolver
   ObRawExprFactory *proxy_;
   int64_t try_check_tick_;
+  mutable uint64_t worker_check_status_times_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprFactory);
 };

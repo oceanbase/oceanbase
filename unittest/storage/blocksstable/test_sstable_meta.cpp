@@ -1056,7 +1056,7 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
   }
 
   ObTabletCreateSSTableParam dest_sstable_param;
-  ret = ObLSTabletService::build_create_sstable_param_for_migration(mig_param, dest_sstable_param);
+  ret = dest_sstable_param.init_for_ha(mig_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ASSERT_TRUE(dest_sstable_param.encrypt_id_ == src_sstable_param.encrypt_id_);

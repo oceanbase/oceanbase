@@ -163,6 +163,11 @@ int ObExprJsonType::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, 
           }
         } else {
           ObJsonNodeType j_type = j_base->json_type();
+          if (j_type == ObJsonNodeType::J_MYSQL_DATE){
+            j_type = ObJsonNodeType::J_DATE;
+          } else if (j_type == ObJsonNodeType::J_MYSQL_DATETIME){
+            j_type = ObJsonNodeType::J_DATETIME;
+          }
           type_idx = static_cast<uint32_t>(j_type);
           if (j_type == ObJsonNodeType::J_OPAQUE) {
             type_idx = opaque_index(j_base->field_type());

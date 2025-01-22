@@ -286,6 +286,19 @@ public:
     } else if (OB_FAIL(resolve_part_names(table_schema, task_param.get_part_names(), tablet_ids))) {
       LOG_WARN("fail to resolve part name", KR(ret));
     }
+    if (OB_SUCC(ret) && ObDirectLoadMethod::INCREMENTAL == method) {
+      if (ObDirectLoadInsertMode::NORMAL == insert_mode
+          && ObLoadDupActionType::LOAD_REPLACE == task_param.get_dup_action()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace for inc load method in direct load is");
+        LOG_WARN("replace for inc load method in direct load is not supported", KR(ret));
+      } else if (ObDirectLoadInsertMode::INC_REPLACE == insert_mode
+                 && ObLoadDupActionType::LOAD_STOP_ON_DUP != task_param.get_dup_action()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace or ignore for inc_replace load method in direct load is");
+        LOG_WARN("replace or ignore for inc_replace load method in direct load is not supported", KR(ret));
+      }
+    }
     if (OB_SUCC(ret)) {
       load_param.tenant_id_ = tenant_id;
       load_param.table_id_ = table_schema->get_table_id();
@@ -595,8 +608,15 @@ int ObTableLoadClientTask::init_exec_ctx()
     exec_ctx_.set_sql_ctx(&sql_ctx_);
     exec_ctx_.set_physical_plan_ctx(&plan_ctx_);
     exec_ctx_.set_my_session(session_info_);
-    client_exec_ctx_.exec_ctx_ = &exec_ctx_;
-    client_exec_ctx_.init_heart_beat(param_.get_heartbeat_timeout_us());
+    if (OB_FAIL(session_info_->set_cur_phy_plan(&plan_))) {
+      LOG_WARN("fail to set cur phy plan", KR(ret));
+    } else if (FALSE_IT(exec_ctx_.reference_my_plan(&plan_))) {
+    } else if (OB_FAIL(exec_ctx_.init_phy_op(1))) {
+      LOG_WARN("fail to init phy op", KR(ret));
+    } else {
+      client_exec_ctx_.exec_ctx_ = &exec_ctx_;
+      client_exec_ctx_.init_heart_beat(param_.get_heartbeat_timeout_us());
+    }
   }
   return ret;
 }
@@ -606,8 +626,11 @@ int ObTableLoadClientTask::init_task_scheduler()
   int ret = OB_SUCCESS;
   const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
   THIS_WORKER.set_timeout_ts(ObTimeUtil::current_time() + param_.get_timeout_us());
-  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_), 1,
-                                          param_.get_task_id(), "Executor"))) {
+  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
+                                          1 /*thread_count*/,
+                                          param_.get_task_id(),
+                                          "Executor",
+                                          session_info_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
   } else if (OB_FAIL(task_scheduler_->init())) {

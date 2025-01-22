@@ -457,6 +457,7 @@ private:
 
 private:
   static const int32_t MAX_AIO_EVENT_CNT = 512;
+  static const int32_t MAX_DETECT_DISK_HUNG_IO_CNT = 10;
   static const int64_t AIO_POLLING_TIMEOUT_NS = 1000L * 1000L * 1000L - 1L; // almost 1s, for timespec_valid check
 private:
   bool is_inited_;
@@ -660,6 +661,7 @@ struct ObIOFuncUsages
 public:
   ObIOFuncUsages();
   ~ObIOFuncUsages() = default;
+  int init(const uint64_t tenant_id);
   int accumulate(ObIORequest &req);
   TO_STRING_KV(K(func_usages_));
   ObIOFuncUsageArr func_usages_;

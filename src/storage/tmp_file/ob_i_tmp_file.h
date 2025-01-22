@@ -332,6 +332,7 @@ protected:
   uint32_t begin_page_id_;        // the first page index in write buffer pool
   int64_t begin_page_virtual_id_;
   uint32_t end_page_id_;          // the last page index in write buffer pool
+  int64_t diag_log_print_cnt_;    // print diagnosis log every PRINT_LOG_FILE_SIZE
   int64_t data_page_flush_level_;
   ObTmpFileNode data_flush_node_;
   common::TCRWLock meta_lock_; // handle conflicts between writing and reading meta tree and meta data of file

@@ -1213,7 +1213,9 @@ void ObLS::unregister_sys_service_()
     UNREGISTER_FROM_LOGSERVICE(CLONE_SCHEDULER_LOG_BASE_TYPE, clone_scheduler);
     if (is_sys_tenant(MTL_ID())) {
       ObIngressBWAllocService *ingress_service = GCTX.net_frame_->get_ingress_service();
+      ObSSNTAllocService *SSNT_service = GCTX.net_frame_->get_SSNT_service();
       UNREGISTER_FROM_LOGSERVICE(NET_ENDPOINT_INGRESS_LOG_BASE_TYPE, ingress_service);
+      UNREGISTER_FROM_LOGSERVICE(SHARE_STORAGE_NRT_THROT_LOG_BASE_TYPE, SSNT_service);
       UNREGISTER_FROM_LOGSERVICE(WORKLOAD_REPOSITORY_SERVICE_LOG_BASE_TYPE, GCTX.wr_service_);
       ObHeartbeatService * heartbeat_service = MTL(ObHeartbeatService*);
       UNREGISTER_FROM_LOGSERVICE(HEARTBEAT_SERVICE_LOG_BASE_TYPE, heartbeat_service);
@@ -2048,6 +2050,11 @@ int ObLS::logstream_freeze(const int64_t trace_id,
     const bool is_ls_freeze = true;
     (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
   }
+
+  if (OB_SUCC(ret)) {
+    MTL(storage::ObTenantFreezer *)->record_freezer_source_event(ls_meta_.ls_id_, source);
+  }
+
   return ret;
 }
 
@@ -2169,6 +2176,11 @@ int ObLS::tablet_freeze(const int64_t trace_id,
     (void)record_async_freeze_tablets_(tablet_ids, freeze_epoch);
     (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
   }
+
+  if (OB_SUCC(ret)) {
+    MTL(storage::ObTenantFreezer *)->record_freezer_source_event(ls_meta_.ls_id_, source);
+  }
+
   return ret;
 }
 

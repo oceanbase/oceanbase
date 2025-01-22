@@ -1628,6 +1628,9 @@ int ObTabletStartTransferInHelper::on_replay(
   ObTransferUtils::set_transfer_module();
   const int64_t start_ts = ObTimeUtility::current_time();
   share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::MAX_NAME;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  share::ObLSRestoreStatus ls_restore_status;
+
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on replay start transfer in get invalid argument", K(ret), KP(buf), K(len));
@@ -1639,6 +1642,10 @@ int ObTabletStartTransferInHelper::on_replay(
   } else if (!tx_start_transfer_in_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx start transfer in info is unexpected", K(ret), K(tx_start_transfer_in_info));
+  } else if (CLICK_FAIL(get_migration_and_restore_status_(tx_start_transfer_in_info, migration_status, ls_restore_status))) {
+    LOG_WARN("failed to get migration and restore status", K(ret), K(tx_start_transfer_in_info));
+  } else if (CLICK_FAIL(check_can_replay_redo_log_(tx_start_transfer_in_info, scn, migration_status, ls_restore_status))) {
+    LOG_WARN("failed to check can replay redo log", K(ret), K(tx_start_transfer_in_info));
   } else if (CLICK_FAIL(check_can_skip_replay_(scn, tx_start_transfer_in_info, skip_replay))) {
     LOG_WARN("failed to check can skip replay", K(ret), K(tx_start_transfer_in_info));
   } else if (skip_replay) {
@@ -1663,7 +1670,11 @@ int ObTabletStartTransferInHelper::on_replay(
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("TRANSFER", "AFTER_ON_REDO_START_TRANSFER_IN");
 #endif
-  DEBUG_SYNC(AFTER_ON_REDO_START_TRANSFER_IN);
+
+  if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status) {
+    DEBUG_SYNC(AFTER_ON_REDO_START_TRANSFER_IN);
+  }
+
   ObTransferUtils::clear_transfer_module();
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
@@ -2245,6 +2256,97 @@ int ObTabletStartTransferInHelper::do_tx_end_before_abort_(
       tablet_id_list,
       tx_start_transfer_in_info.data_version_))) {
     LOG_WARN("failed to set transfer meta info", K(ret), K(tx_start_transfer_in_info));
+  }
+  return ret;
+}
+
+int ObTabletStartTransferInHelper::get_migration_and_restore_status_(
+    const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+    ObMigrationStatus &migration_status,
+    share::ObLSRestoreStatus &ls_restore_status)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLSService *ls_service = nullptr;
+  ObLS *ls = nullptr;
+  migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  if (!tx_start_transfer_in_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get migration and restore status get invalid argument", K(ret), K(tx_start_transfer_in_info));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(tx_start_transfer_in_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("fail to get ls", KR(ret), K(tx_start_transfer_in_info));
+  } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", KR(ret), K(tx_start_transfer_in_info), KP(ls));
+  } else if (OB_FAIL(ls->get_migration_and_restore_status(migration_status, ls_restore_status))) {
+    LOG_WARN("failed to get migration and restore status", K(ret), KPC(ls));
+  }
+  return ret;
+}
+
+int ObTabletStartTransferInHelper::check_can_replay_redo_log_(
+    const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+    const share::SCN &scn,
+    const ObMigrationStatus &migration_status,
+    const share::ObLSRestoreStatus &ls_restore_status)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  SCN gts_scn;
+
+  if (!tx_start_transfer_in_info.is_valid() || !scn.is_valid()
+      || !ObMigrationStatusHelper::is_valid(migration_status) || !ls_restore_status.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check can replay redo log invalid argument", K(ret), K(tx_start_transfer_in_info),
+        K(scn), K(migration_status), K(ls_restore_status));
+  } else if (ls_restore_status.is_in_restore_and_before_quick_restore_finish()
+         && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+    const SCN new_scn = SCN::scn_dec(scn);
+    if (OB_FAIL(ObTransferUtils::get_gts(tenant_id, gts_scn))) {
+      LOG_WARN("failed to get gts", K(ret), K(tenant_id), K(scn));
+    } else if (gts_scn < new_scn) {
+      LOG_INFO("ls is in restore status with migration, and tenant readable scn is smaller than transfer in redo scn",
+          K(tx_start_transfer_in_info), K(gts_scn), K(new_scn), K(scn));
+      ObLSHandle ls_handle;
+      ObLSService *ls_service = nullptr;
+      ObLS *ls = nullptr;
+      bool is_exist = false;
+      ObMigrationStatus src_ls_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+      if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
+      } else if (OB_FAIL(ls_service->get_ls(tx_start_transfer_in_info.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+        if (OB_LS_NOT_EXIST == ret) {
+          ret = OB_EAGAIN;
+          LOG_WARN("src ls do not exist, cannot replay start transfer in redo log", K(ret), K(tx_start_transfer_in_info));
+        } else {
+          LOG_WARN("fail to get ls", KR(ret), K(tx_start_transfer_in_info));
+        }
+      } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls should not be NULL", KR(ret), K(tx_start_transfer_in_info), KP(ls));
+      } else if (OB_FAIL(ls->get_migration_status(src_ls_migration_status))) {
+        LOG_WARN("failed to get ls migration status", K(ret), KPC(ls));
+      } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == src_ls_migration_status) {
+        SCN max_decided_scn;
+        if (OB_FAIL(ls->get_max_decided_scn(max_decided_scn))) {
+          LOG_WARN("failed to get max decided scn", K(ret), KPC(ls));
+        } else if (max_decided_scn >= tx_start_transfer_in_info.start_scn_) {
+          //allow replay redo log
+        } else {
+          ret = OB_EAGAIN;
+          LOG_WARN("src ls exit but replay scn is smaller than transfer scn, cannot replay reod log",
+              K(tx_start_transfer_in_info), K(max_decided_scn));
+        }
+      } else {
+        ret = OB_EAGAIN;
+        LOG_WARN("src ls exit but in migration and tenant readable scn is smaller than transfer in redo scn, cannot replay redo log",
+            K(tx_start_transfer_in_info), K(src_ls_migration_status));
+      }
+    }
   }
   return ret;
 }

@@ -31,6 +31,14 @@ ObExprMakeSet::~ObExprMakeSet()
 {
 }
 
+static bool enable_return_longtext()
+{
+  const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  // [4.2.5.2, 4.3.0) || [4.3.5.1, )
+  return (min_cluster_version >= CLUSTER_VERSION_4_3_5_1)
+    || (MOCK_CLUSTER_VERSION_4_2_5_2 <= min_cluster_version && min_cluster_version < CLUSTER_VERSION_4_3_0_0);
+}
+
 int ObExprMakeSet::calc_result_typeN(ObExprResType &type,
                                      ObExprResType *types,
                                      int64_t param_num,
@@ -46,12 +54,23 @@ int ObExprMakeSet::calc_result_typeN(ObExprResType &type,
     ObLength max_len = 0;
     type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
     types[0].set_calc_type(ObIntType);
+
+    bool has_text = false;
+    for (int64_t i = 1; !has_text && i < param_num; ++i) {
+      if (ObTinyTextType != types[i].get_type() && types[i].is_lob()) {
+        has_text = true;
+      }
+    }
+    if (has_text && enable_return_longtext()) {
+      type.set_type(ObLongTextType);
+    } else {
+      type.set_varchar();
+    }
     for (int64_t i = 1; i < param_num; ++i) {
-      types[i].set_calc_type(ObVarcharType);
+      types[i].set_calc_type(type.get_type());
       max_len += types[i].get_length();
     }
     // set expected type of results
-    type.set_varchar();
     type.set_length(max_len);
     if OB_FAIL(aggregate_charsets_for_string_result(type, &types[1], param_num - 1, type_ctx)) {
       LOG_WARN("aggregate charset for string result failed", K(ret));
@@ -77,6 +96,10 @@ int ObExprMakeSet::calc_make_set_expr(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("eval param failed", K(ret));
   } else if (input_bits_dat->is_null()) {
     res.set_null();
+  } else if (ob_is_text_tc(expr.datum_meta_.type_)) {
+    if (OB_FAIL(calc_text(expr, ctx, *input_bits_dat, res))) {
+      LOG_WARN("calc concat text ws failed", K(ret));
+    }
   } else {
     // compute input bits representation
     uint64_t input_bits = static_cast<uint64_t>(input_bits_dat->get_int());
@@ -110,6 +133,36 @@ int ObExprMakeSet::calc_make_set_expr(const ObExpr &expr, ObEvalCtx &ctx,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObExprMakeSet::calc_text(const ObExpr &expr, ObEvalCtx &ctx, const ObDatum &input_bits_dat, ObDatum &res)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  const ObString sep_str = ObCharsetUtils::get_const_str(expr.datum_meta_.cs_type_, ',');
+  ObSEArray<ObExpr*, 32> words;
+
+  // compute input bits representation
+  uint64_t input_bits = static_cast<uint64_t>(input_bits_dat.get_int());
+  if (expr.arg_cnt_ <= 64) {
+    input_bits &= ((ulonglong) 1 << (expr.arg_cnt_ - 1)) - 1;
+  }
+  for (int64_t pos = 1, temp_input_bits = input_bits; OB_SUCC(ret) && temp_input_bits > 0;
+        temp_input_bits >>= 1, ++pos) {
+    const ObDatum &dat = expr.locate_param_datum(ctx, pos);
+    if (((temp_input_bits & 1) > 0) && (!dat.is_null())) {
+      if (OB_FAIL(words.push_back(expr.args_[pos]))) {
+        LOG_WARN("push back word failed", K(ret), K(pos), K(input_bits), K(temp_input_bits));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObExprConcatWs::calc_text(expr, ctx, sep_str, words, temp_allocator, res))) {
+    LOG_WARN("calc_text fail", K(ret), K(expr), K(words), K(sep_str));
   }
   return ret;
 }

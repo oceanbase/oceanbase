@@ -253,35 +253,52 @@ TEST_F(TestSSMemDataManager, test_mem_data_mgr)
   ObSSMemDataManager mem_data_mgr(cache_stat);
   const uint64_t tenant_id = OB_SERVER_TENANT_ID;
   const int64_t block_size = DEFAULT_BLOCK_SIZE;
+  const int64_t cache_file_size = 500L * (1 << 30); // 500G
+  const int64_t tenant_mem_limit = 64L * (1 << 30); // 64G
 
-  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, block_size, false/*is_mini_mode*/));
+  lib::set_tenant_memory_limit(tenant_id, tenant_mem_limit);
+  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, cache_file_size, block_size, false/*is_mini_mode*/));
+  ObSSMemBlockPool &mem_blk_pool = mem_data_mgr.mem_block_pool_;
 
-  const int64_t macro_block_cnt = 4;
-  const int64_t max_micro_block_cnt = 128;
-  const int64_t default_micro_size = block_size / max_micro_block_cnt;
-  int32_t micro_size = 0;
+  const int64_t def_cnt =
+      BASE_MEM_BLK_CNT + MIN(cache_file_size / DISK_SIZE_PER_MEM_BLK, tenant_mem_limit / MEMORY_SIZE_PER_MEM_BLK);
+  const int64_t dynamic_cnt = MIN_DYNAMIC_MEM_BLK_CNT + tenant_mem_limit / MEMORY_SIZE_PER_MEM_BLK;
+  ASSERT_EQ(def_cnt, mem_blk_pool.def_count_);
+  ASSERT_EQ(dynamic_cnt, mem_blk_pool.max_extra_count_);
+  ASSERT_EQ(MAX_BG_MEM_BLK_CNT, mem_blk_pool.max_bg_count_);
+
+  const int64_t payload_offset = ObSSPhyBlockCommonHeader::get_serialize_size() +
+                                 ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
+  const int32_t micro_index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
+  const int64_t macro_block_cnt = mem_data_mgr.mem_block_pool_.get_fg_max_count();
+  const int64_t micro_block_cnt = 128;
+  const int64_t micro_size = (block_size - payload_offset) / micro_block_cnt - micro_index_size;
+  char *buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, buf);
   const char c = 'a';
+
   ObSSMemBlockHandle mem_blk_handle;
   uint32_t crc = 0;
   ObSSMicroBlockCacheKey micro_key;
   for (int64_t i = 1; i <= macro_block_cnt; ++i) {
     MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100 + i);
     int64_t offset = 1;
-    for (int64_t j = 0; j < max_micro_block_cnt; ++j) {
+    for (int64_t j = 0; j < micro_block_cnt; ++j) {
       mem_blk_handle.reset();
-      micro_size = default_micro_size + j;
+      const int32_t offset = payload_offset + j * micro_size;
       micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
-      char *buf = static_cast<char *>(allocator.alloc(micro_size));
-      ASSERT_NE(nullptr, buf);
       MEMSET(buf, c, micro_size);
       ASSERT_EQ(OB_SUCCESS, mem_data_mgr.add_micro_block_data(micro_key, buf, micro_size, mem_blk_handle, crc));
       ASSERT_EQ(true, mem_blk_handle.is_valid());
       const uint32_t real_crc = static_cast<int32_t>(ob_crc64(buf, micro_size));
       ASSERT_EQ(crc, real_crc);
-      offset += micro_size;
+
+      if (i > mem_blk_pool.def_count_) {
+        ASSERT_EQ(true, mem_blk_pool.is_alloc_dynamiclly(mem_blk_handle.get_ptr()));
+      }
     }
   }
-  ASSERT_LE(macro_block_cnt, mem_data_mgr.get_sealed_mem_block_cnt());
+  ASSERT_EQ(mem_data_mgr.get_sealed_mem_block_cnt(), macro_block_cnt - 1);
 
   // check last micro_block
   ASSERT_EQ(true, mem_blk_handle.is_valid());
@@ -300,13 +317,19 @@ TEST_F(TestSSMemDataManager, test_mem_data_mgr_mini_mode)
   ObSSMemDataManager mem_data_mgr(cache_stat);
   const uint64_t tenant_id = OB_SERVER_TENANT_ID;
   const int64_t block_size = DEFAULT_BLOCK_SIZE;
+  const int64_t cache_file_size = (1L << 30);
 
-  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, block_size, true/*is_mini_mode*/));
+  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, cache_file_size, block_size, true/*is_mini_mode*/));
+
+  ObSSMemBlockPool &mem_blk_pool = mem_data_mgr.mem_block_pool_;
+  ASSERT_EQ(MINI_MODE_BASE_MEM_BLK_CNT, mem_blk_pool.def_count_);
+  ASSERT_EQ(MIN_DYNAMIC_MEM_BLK_CNT, mem_blk_pool.max_extra_count_);
+  ASSERT_EQ(MINI_MODE_MAX_BG_MEM_BLK_CNT, mem_blk_pool.max_bg_count_);
 
   const int64_t payload_offset = ObSSPhyBlockCommonHeader::get_serialize_size() +
                                  ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
   const int32_t micro_index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
-  const int64_t macro_block_cnt = MINI_MODE_MAX_MEM_BLK_CNT - MINI_MODE_MAX_BG_MEM_BLK_CNT;
+  const int64_t macro_block_cnt = mem_data_mgr.mem_block_pool_.get_fg_max_count();
   const int64_t micro_block_cnt = 20;
   const int64_t micro_size = (block_size - payload_offset) / micro_block_cnt - micro_index_size;
   char *buf = static_cast<char *>(allocator.alloc(micro_size));
@@ -363,7 +386,9 @@ TEST_F(TestSSMemDataManager, test_parallel_allocate_mem_block)
   ObSSMemDataManager mem_data_mgr(cache_stat);
   const uint64_t tenant_id = MTL_ID();
   ASSERT_EQ(true, is_valid_tenant_id(tenant_id));
-  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, BLOCK_SIZE, false/*is_mini_mode*/));
+  const int64_t cache_file_size = (1L << 30);
+
+  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, cache_file_size, BLOCK_SIZE, false/*is_mini_mode*/));
 
   TestSSMemDataManager::TestSSMemDataMgrThread threads(
       &mem_data_mgr, TestSSMemDataMgrThread::TestParallelType::TEST_PARALLEL_ALLOCATE_MEM_BLOCK);
@@ -384,7 +409,8 @@ TEST_F(TestSSMemDataManager, test_parallel_alloc_and_free_bg_mem_block)
   ObSSMemDataManager mem_data_mgr(cache_stat);
   const uint64_t tenant_id = MTL_ID();
   ASSERT_EQ(true, is_valid_tenant_id(tenant_id));
-  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, BLOCK_SIZE, false/*is_mini_mode*/));
+  const int64_t cache_file_size = (1L << 30);
+  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, cache_file_size, BLOCK_SIZE, false/*is_mini_mode*/));
 
   TestSSMemDataManager::TestSSMemDataMgrThread threads(
       &mem_data_mgr, TestSSMemDataMgrThread::TestParallelType::TEST_PARALLEL_ALLOC_AND_FREE_BG_MEM_BLOCK);
@@ -404,7 +430,9 @@ TEST_F(TestSSMemDataManager, test_parallel_add_and_get_micro_data)
   ObSSMemDataManager mem_data_mgr(cache_stat);
   const uint64_t tenant_id = MTL_ID();
   ASSERT_EQ(true, is_valid_tenant_id(tenant_id));
-  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, BLOCK_SIZE, false/*is_mini_mode*/));
+  const int64_t cache_file_size = (1L << 30);
+
+  ASSERT_EQ(OB_SUCCESS, mem_data_mgr.init(tenant_id, cache_file_size, BLOCK_SIZE, false/*is_mini_mode*/));
   TestSSMemDataManager::TestSSMemDataMgrThread threads(
       &mem_data_mgr, TestSSMemDataMgrThread::TestParallelType::TEST_PARALLEL_ADD_AND_GET_MICRO_DATA);
   threads.set_thread_count(10);

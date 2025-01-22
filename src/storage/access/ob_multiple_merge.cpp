@@ -34,6 +34,7 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
+#include "share/ob_partition_split_query.h"
 
 namespace oceanbase
 {

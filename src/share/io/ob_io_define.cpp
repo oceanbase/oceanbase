@@ -269,6 +269,16 @@ bool ObIOFlag::is_sys_module() const
           && sys_module_id_ < SYS_MODULE_END_ID;
 }
 
+bool ObIORequest::is_object_device_req() const
+{
+  bool ret = false;
+  if (io_result_ == nullptr) {
+  } else {
+    ret = io_result_->is_object_device_req_;
+  }
+  return ret;
+}
+
 int64_t ObIOFlag::get_wait_event() const
 {
   return wait_event_id_;
@@ -980,8 +990,9 @@ int ObIOResult::transform_group_config_index_to_usage_index(const ObIOGroupKey &
     tmp_index = get_sys_module_id() - SYS_MODULE_START_ID;
     usage_index = tmp_index * GROUP_MODE_CNT + offset;
   } else {
-    if (OB_FAIL(tenant_io_mgr_.get_ptr()->get_group_index(key, tmp_index))) {
-      // do nothing
+    if (OB_SUCCESS !=  tenant_io_mgr_.get_ptr()->get_group_index(key, tmp_index)) {
+      tmp_index = 0;
+      LOG_WARN("get group index failed", K(ret), K(key));
     }
     uint64_t quot = tmp_index / MODE_CNT;
     usage_index = quot * GROUP_MODE_CNT +
@@ -1514,6 +1525,17 @@ int ObIORequest::re_prepare()
   return ret;
 }
 
+int ObIORequest::retry_io()
+{
+  int ret = OB_SUCCESS;
+  if(OB_ISNULL(tenant_io_mgr_.get_ptr())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant io mgr is null", K(ret), K(*this));
+  } else if (OB_FAIL(tenant_io_mgr_.get_ptr()->retry_io(*this))) {
+    LOG_WARN("retry io failed", K(ret), K(*this));
+  }
+  return ret;
+}
 int ObIORequest::try_alloc_buf_until_timeout(char *&io_buf)
 {
   int ret = OB_SUCCESS;
@@ -1720,7 +1742,7 @@ bool ObPhyQueue::reach_adjust_interval()
 
 /******************             IOHandle              **********************/
 ObIOHandle::ObIOHandle()
-  : result_(nullptr)
+  : result_(nullptr), is_traced_(false)
 {
 }
 
@@ -1755,9 +1777,7 @@ int ObIOHandle::set_result(ObIOResult &result)
   result.inc_ref("handle_inc"); // ref for handle
   result.inc_out_ref();
   result_ = &result;
-#ifdef ENABLE_DEBUG_LOG
-  storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::IO_HANDLE);
-#endif
+  is_traced_ = storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::IO_HANDLE);
   return ret;
 }
 
@@ -1945,9 +1965,9 @@ int64_t ObIOHandle::get_rt() const
 void ObIOHandle::reset()
 {
   if (OB_NOT_NULL(result_)) {
-#ifdef ENABLE_DEBUG_LOG
-    storage::ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::IO_HANDLE);
-#endif
+    if (is_traced_) {
+      storage::ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::IO_HANDLE);
+    }
     result_->dec_out_ref();
     result_->dec_ref("handle_dec"); // ref for handle
     result_ = nullptr;
@@ -2288,6 +2308,23 @@ int64_t ObTenantIOConfig::to_string(char* buf, const int64_t buf_len) const
 }
 
 /******************             IOClock              **********************/
+void ObAtomIOClock::atom_update_reserve(const int64_t current_ts, const double iops_scale, int64_t &deadline_ts)
+{
+  if (0 == iops_scale * iops_) {
+    deadline_ts = INT64_MAX;
+  } else {
+    const int64_t delta_ns = 1000L * 1000L * 1000L / (iops_scale * iops_);
+    int64_t ov = ATOMIC_LOAD(&last_ns_);
+    int64_t nv = 0;
+    int64_t tv = max(current_ts * 1000L, ov + delta_ns);
+    while (ov != (nv = ATOMIC_VCAS(&last_ns_, ov, tv))) {
+      ov = nv;
+      tv = max(current_ts * 1000L, ov + delta_ns);
+    }
+    deadline_ts = tv / 1000L;
+  }
+}
+
 void ObAtomIOClock::atom_update(const int64_t current_ts, const double iops_scale, int64_t &deadline_ts)
 {
   if (0 == iops_scale * iops_) {
@@ -2309,7 +2346,7 @@ void ObAtomIOClock::compare_and_update(const int64_t current_ts, const double io
 {
   int64_t tmp = 0;
   atom_update(current_ts, iops_scale, tmp);
-  deadline_ts = (INT64_MAX == deadline_ts) ? current_ts : max(deadline_ts, tmp);
+  deadline_ts = (INT64_MAX == deadline_ts) ? tmp : max(deadline_ts, tmp);
 }
 
 void ObAtomIOClock::reset()

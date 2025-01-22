@@ -183,7 +183,8 @@ private:
   int try_encode_with(obmysql::ObMySQLPacket &pkt,
                       int64_t current_size,
                       int64_t &seri_size,
-                      int64_t try_steps);
+                      int64_t try_steps,
+                      bool is_composed_ok_pkt = false);
   int build_encode_param_(obmysql::ObProtoEncodeParam &param,
                           obmysql::ObMySQLPacket *pkt,
                           const bool is_last);

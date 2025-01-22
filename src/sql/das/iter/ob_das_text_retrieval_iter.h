@@ -15,11 +15,21 @@
 
 #include "ob_das_iter.h"
 #include "lib/container/ob_se_array.h"
+#include "share/ob_ls_id.h"
+#include "src/storage/access/ob_dml_param.h"
 
 namespace oceanbase
 {
+namespace transaction
+{
+class ObTxDesc;
+class ObTxReadSnapshot;
+}
 namespace sql
 {
+class ObDASScanRtDef;
+class ObDASScanCtDef;
+class ObDASScanIter;
 struct ObDASIRScanCtDef;
 struct ObDASIRScanRtDef;
 
@@ -88,10 +98,10 @@ protected:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const sql::ObDASScanCtDef *ctdef,
-      sql::ObDASScanRtDef *rtdef,
+      ObDASScanRtDef *rtdef,
       transaction::ObTxDesc *tx_desc,
       transaction::ObTxReadSnapshot *snapshot,
-      ObTableScanParam &scan_param);
+      storage::ObTableScanParam &scan_param);
   int get_next_doc_token_cnt(const bool use_fwd_idx_agg);
   int do_doc_cnt_agg();
   int do_token_cnt_agg(const ObDocId &doc_id, int64_t &token_count);
@@ -140,9 +150,9 @@ protected:
   share::ObLSID ls_id_;
   common::ObTabletID inv_idx_tablet_id_;
   common::ObTabletID fwd_idx_tablet_id_;
-  ObTableScanParam inv_idx_scan_param_;
-  ObTableScanParam inv_idx_agg_param_;
-  ObTableScanParam fwd_idx_scan_param_;
+  storage::ObTableScanParam inv_idx_scan_param_;
+  storage::ObTableScanParam inv_idx_agg_param_;
+  storage::ObTableScanParam fwd_idx_scan_param_;
   common::ObSEArray<sql::ObExpr *, 2> calc_exprs_;
   ObDASScanIter *inverted_idx_scan_iter_;
   ObDASScanIter *inverted_idx_agg_iter_;

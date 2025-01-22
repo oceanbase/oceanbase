@@ -273,7 +273,7 @@ public:
   OB_INLINE void set_profiler_unit_info(const std::pair<uint64_t, ObProcType> &unit_info) { profiler_unit_info_ = unit_info; }
 
   TO_STRING_KV(K_(routine_table), K_(can_cached),
-               K_(tenant_schema_version), K_(sys_schema_version));
+               K_(tenant_schema_version), K_(sys_schema_version), K_(stat));
 
 protected:
 
@@ -525,7 +525,8 @@ public:
                K_(variables),
                K_(default_idxs),
                K_(function_name),
-               K_(priv_user));
+               K_(priv_user),
+               K_(stat));
 
 private:
   //符号表信息

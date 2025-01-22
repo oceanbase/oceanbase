@@ -15,6 +15,8 @@
 #include "ob_direct_load_mgr_agent.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "storage/direct_load/ob_direct_load_insert_table_row_iterator.h"
+#include "storage/tx_storage/ob_ls_service.h"
+#include "storage/ddl/ob_ddl_merge_task.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -181,6 +183,8 @@ int ObDirectLoadMgrAgent::open_sstable_slice_for_ss(
     LOG_WARN("error sys", K(ret));
   } else if (OB_FAIL(mgr_handle_.get_obj()->open_sstable_slice(slice_info.is_lob_slice_, start_seq, slice_info.context_id_, slice_info.slice_id_))) {
     LOG_WARN("open sstable slice failed", K(ret), K(start_seq), K(slice_info));
+  } else if (OB_FAIL(mgr_handle_.get_obj()->set_total_slice_cnt(slice_info.total_slice_cnt_))) {
+    LOG_WARN("failed to set total slice cnt for direct load mgr", K(ret));
   }
   return ret;
 }

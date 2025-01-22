@@ -7,6 +7,8 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
+#define USING_LOG_PREFIX STORAGE
+
 #include "observer/virtual_table/ob_all_virtual_tablet_compaction_info.h"
 #include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"

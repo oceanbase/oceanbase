@@ -1269,10 +1269,16 @@ int ObService::check_schema_version_elapsed(
         const ObTabletID &tablet_id = arg.tablets_.at(i).tablet_id_;
         ObCheckTransElapsedResult single_result;
         int tmp_ret = OB_SUCCESS;
+        bool is_leader_serving = false;
         if (OB_TMP_FAIL(DDL_SIM(arg.tenant_id_, arg.ddl_task_id_, CHECK_SCHEMA_TRANS_END_SLOW))) {
           LOG_WARN("ddl sim failure: check schema version elapsed slow", K(tmp_ret), K(arg));
         } else if (OB_TMP_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
           LOG_WARN("get ls failed", K(tmp_ret), K(i), K(ls_id));
+        } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tx_svr()->check_in_leader_serving_state(is_leader_serving))) {
+          LOG_WARN("fail to check ls in leader serving state", K(tmp_ret), K(ls_id));
+        } else if (!is_leader_serving) {
+          tmp_ret = OB_NOT_MASTER;   // check is leader ready
+          LOG_WARN("ls leader is not ready, should not provide service", K(ret));
         } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet(tablet_id,
                                                               tablet_handle,
                                                               ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
@@ -1345,7 +1351,7 @@ int ObService::check_memtable_cnt(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get tablet handle failed", K(ret), K(tablet_id));
         } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
-        } else if (OB_FAIL(tablet->get_all_memtables(memtable_handles))) {
+        } else if (OB_FAIL(tablet->get_all_memtables_from_memtable_mgr(memtable_handles))) {
           LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
         } else {
           result.memtable_cnt_ = memtable_handles.count();
@@ -3680,9 +3686,9 @@ int ObService::get_ls_replayed_scn(
       LOG_WARN("log stream is null", KR(ret), K(arg), K(ls_handle));
     } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
       LOG_WARN("failed to get migration status", K(ret), KPC(ls));
-    } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+    } else if (!ObMigrationStatusHelper::check_can_report_readable_scn(migration_status)) {
       cur_readable_scn = SCN::base_scn();
-      LOG_INFO("ls migration status is not none, report base scn as readable scn", K(migration_status), "ls_id", ls->get_ls_id());
+      LOG_INFO("ls migration status cannot report reablase scn, report base scn as readable scn", K(migration_status), "ls_id", ls->get_ls_id());
       if (arg.is_all_replica()) {
         ret = OB_EAGAIN;
         LOG_WARN("leader get all replica min readable scn, but leader migration status is not none, need retry",
@@ -3703,10 +3709,10 @@ int ObService::get_ls_replayed_scn(
 
       if (FAILEDx(ls->get_migration_status(migration_status))) {
         LOG_WARN("failed to get migration status", K(ret), KPC(ls));
-      } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+      } else if (!ObMigrationStatusHelper::check_can_report_readable_scn(migration_status)) {
         const SCN original_readable_scn = cur_readable_scn;
         cur_readable_scn = SCN::base_scn();
-        LOG_INFO("ls migration status is not none, report base scn as readable scn", K(migration_status),
+        LOG_INFO("ls migration status cannot report reablase scn, report base scn as readable scn", K(migration_status),
             "ls_id", ls->get_ls_id(), K(original_readable_scn));
         if (arg.is_all_replica()) {
           ret = OB_EAGAIN;

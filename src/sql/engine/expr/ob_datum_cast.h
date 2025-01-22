@@ -203,6 +203,16 @@ int ob_datum_to_ob_time_with_date(const T &datum,
       }
       break;
     }
+    case ObMySQLDateTC: {
+      ob_time.mode_ |= DT_TYPE_DATE;
+      ret = ObTimeConverter::mdate_to_ob_time<true>(datum.get_mysql_date(), ob_time);
+      break;
+    }
+    case ObMySQLDateTimeTC: {
+      ob_time.mode_ |= DT_TYPE_DATETIME;
+      ret = ObTimeConverter::mdatetime_to_ob_time<true>(datum.get_mysql_datetime(), ob_time);
+      break;
+    }
     default: {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "cast to time with date");
@@ -316,6 +326,14 @@ int ob_datum_to_ob_time_without_date(const T &datum,
           }
         }
       }
+      break;
+    }
+    case ObMySQLDateTC: {
+      ret = ObTimeConverter::mdate_to_ob_time<true>(datum.get_mysql_date(), ob_time);
+      break;
+    }
+    case ObMySQLDateTimeTC: {
+      ret = ObTimeConverter::mdatetime_to_ob_time<true>(datum.get_mysql_datetime(), ob_time);
       break;
     }
     default: {

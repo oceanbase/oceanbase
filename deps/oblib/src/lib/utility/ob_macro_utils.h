@@ -814,7 +814,7 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
     bret;                                 \
   })
 
-#define REACH_TENANT_TIME_INTERVAL(i) \
+#define REACH_THREAD_TIME_INTERVAL(i) \
   ({ \
     bool bret = false; \
     RLOCAL_STATIC(int64_t, last_time) = ObClockGenerator::getClock(); \

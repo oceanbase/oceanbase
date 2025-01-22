@@ -14,6 +14,7 @@
 #include "ob_array_cast.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_parse.h"
+#include "src/share/object/ob_obj_cast_util.h"
 
 namespace oceanbase {
 namespace sql {
@@ -434,8 +435,9 @@ int ObArrayCastUtils::string_cast(common::ObIAllocator &alloc, ObString &arr_tex
   const char *syntaxerr = NULL;
   uint64_t err_offset = 0;
   ObJsonNode *j_node = NULL;
+  uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
   if (OB_FAIL(
-          ObJsonParser::parse_json_text(&alloc, arr_text.ptr(), arr_text.length(), syntaxerr, &err_offset, j_node))) {
+          ObJsonParser::parse_json_text(&alloc, arr_text.ptr(), arr_text.length(), syntaxerr, &err_offset, j_node, parse_flag))) {
     LOG_WARN("failed to parse array text", K(ret), K(arr_text), KCSTRING(syntaxerr), K(err_offset));
   } else if (j_node->json_type() != ObJsonNodeType::J_ARRAY) {
     ret = OB_INVALID_ARGUMENT;

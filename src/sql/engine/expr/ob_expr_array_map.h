@@ -68,7 +68,7 @@ public:
                       ObExpr &rt_expr) const override;
 private:
 
-  int get_array_map_lambda_params(const ObRawExpr *raw_expr, ObArray<uint32_t> &param_idx,
+  int get_array_map_lambda_params(const ObRawExpr *raw_expr, ObArray<uint32_t> &param_idx, int depth,
                                   ObArray<ObExpr *> &param_exprs) const;
   DISALLOW_COPY_AND_ASSIGN(ObExprArrayMap);
 };

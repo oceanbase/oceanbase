@@ -324,11 +324,16 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
           // the running txn
           can_read_ = false;
           trans_version_.set_min();
+        } else if (is_rollback) {
+          // Case 2.2.3: data has been rollbacked by its Tx
+          can_read_ = false;
+          trans_version_.set_min();
         } else {
-          // Only dml statement can read elr data
+          // only reader has created TxCtx can read elr, this promise the reader
+          // Tx will be failed when the elr committed Tx failed
           if (ObTxData::ELR_COMMIT == state
-              && lock_for_read_arg_.mvcc_acc_ctx_.snapshot_.tx_id_.is_valid()) {
-            can_read_ =  snapshot_version >= commit_version && !is_rollback;
+              && OB_NOT_NULL(lock_for_read_arg_.mvcc_acc_ctx_.tx_ctx_)) {
+            can_read_ =  snapshot_version >= commit_version;
             trans_version_ = commit_version;
           } else {
             // Case 2.2.3: data is in prepare state and the prepare version is
@@ -385,8 +390,13 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
   const int32_t state = ATOMIC_LOAD(&tx_data.state_);
 
   if (OB_ISNULL(tx_cc_ctx) && (ObTxData::RUNNING == state)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "lock for read functor need prepare version.", KR(ret));
+    // Tip: It might be cases where the tx_ctx_table hasn't dump the txn while
+    // the txn_data_table has dump the txn in the RUNNING state(because of the
+    // rollback_to) and the data for this txn is already dumped as sstable. In
+    // such cases, reads will experience exceptions that the txn is in a RUNNING
+    // state without tx_ctx. Therefore, we need to tolerate this exception.
+    ret = OB_REPLICA_NOT_READABLE;
+    STORAGE_LOG(WARN, "lock for read meet stale data", KR(ret));
   } else {
     for (int32_t i = 0; OB_ERR_SHARED_LOCK_CONFLICT == ret; i++) {
       retry_cnt++;
@@ -405,7 +415,8 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
         } else if (i < 10) {
           PAUSE();
         } else {
-          ob_usleep((i < MAX_SLEEP_US ? i : MAX_SLEEP_US));
+          ob_usleep<ObWaitEventIds::LOCK_FOR_READ_WAIT>(
+            (i < MAX_SLEEP_US ? i : MAX_SLEEP_US));
         }
         if (retry_cnt == MAX_RETRY_CNT) {
           int tmp_ret = OB_SUCCESS;
@@ -569,10 +580,8 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxDataCheckData &tx_data)
         }
       } else if (ObTxData::RUNNING == state) {
       } else if (ObTxData::ELR_COMMIT == state) {
-        // TODO: make it more clear
-        value_.update_max_elr_trans_version(commit_version, tnode_.tx_id_);
-        tnode_.fill_trans_version(commit_version);
-        tnode_.set_elr();
+        // should not cleanout ELR_COMMIT, because the ELR_COMMIT is unstable
+        // and if commit failed, need revert the state on TransNode
       } else if (ObTxData::COMMIT == state) {
         // Case 4: data is committed, so we should write back the commit state
         if (OB_FAIL(value_.trans_commit(commit_version, tnode_))) {

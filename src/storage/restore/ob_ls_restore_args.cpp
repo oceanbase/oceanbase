@@ -26,7 +26,8 @@ ObTenantRestoreCtx::ObTenantRestoreCtx()
     backup_data_version_(0),
     backup_compatible_(share::ObBackupSetFileDesc::MAX_COMPATIBLE_VERSION),
     backup_set_list_(),
-    backup_piece_list_()
+    backup_piece_list_(),
+    progress_display_mode_(ObRestoreProgressDisplayMode::TABLET_CNT)
 {
 }
 
@@ -58,6 +59,7 @@ int ObTenantRestoreCtx::assign(const ObTenantRestoreCtx &args)
     backup_cluster_version_ = args.get_backup_cluster_version();
     backup_data_version_ = args.get_backup_data_version();
     backup_compatible_ = args.backup_compatible_;
+    progress_display_mode_ = args.progress_display_mode_;
   }
   return ret;
 }

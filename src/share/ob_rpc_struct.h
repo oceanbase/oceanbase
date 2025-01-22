@@ -1686,7 +1686,8 @@ public:
                K_(trace_id),
                K_(sql_mode),
                K_(tz_info_wrap),
-               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
+               K_(foreign_key_checks));
   ObStartRedefTableArg():
     orig_tenant_id_(common::OB_INVALID_ID),
     orig_table_id_(common::OB_INVALID_ID),
@@ -1698,7 +1699,8 @@ public:
     trace_id_(),
     sql_mode_(0),
     tz_info_wrap_(),
-    nls_formats_{}
+    nls_formats_{},
+    foreign_key_checks_(true)
   {}
 
   ~ObStartRedefTableArg()
@@ -1716,6 +1718,7 @@ public:
     ddl_type_ = share::DDL_INVALID;
     ddl_stmt_str_.reset();
     sql_mode_ = 0;
+    foreign_key_checks_ = true;
   }
 
   inline void set_tz_info_map(const common::ObTZInfoMap *tz_info_map)
@@ -1749,6 +1752,7 @@ public:
   common::ObTimeZoneInfo tz_info_;
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
+  bool foreign_key_checks_;
 };
 
 struct ObStartRedefTableRes final
@@ -1917,7 +1921,8 @@ public:
                K_(tz_info_wrap),
                "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
                K_(tablet_ids),
-               K_(need_reorder_column_id));
+               K_(need_reorder_column_id),
+               K_(foreign_key_checks));
   ObCreateHiddenTableArg() :
     ObDDLArg(),
     tenant_id_(common::OB_INVALID_ID),
@@ -1931,7 +1936,8 @@ public:
     tz_info_wrap_(),
     nls_formats_{},
     tablet_ids_(),
-    need_reorder_column_id_(false)
+    need_reorder_column_id_(false),
+    foreign_key_checks_(true)
     {}
   ~ObCreateHiddenTableArg()
   {
@@ -1950,6 +1956,7 @@ public:
     sql_mode_ = 0;
     tablet_ids_.reset();
     need_reorder_column_id_ = false;
+    foreign_key_checks_ = true;
   }
   int assign(const ObCreateHiddenTableArg &arg);
   int init(const uint64_t tenant_id, const uint64_t dest_tenant_id, uint64_t exec_tenant_id,
@@ -1958,7 +1965,8 @@ public:
            const ObSQLMode sql_mode, const ObTimeZoneInfo &tz_info,
            const common::ObString &local_nls_date, const common::ObString &local_nls_timestamp,
            const common::ObString &local_nls_timestamp_tz, const ObTimeZoneInfoWrap &tz_info_wrap,
-           const common::ObIArray<common::ObTabletID> &tablet_ids, const bool need_reorder_column_id);
+           const common::ObIArray<common::ObTabletID> &tablet_ids, const bool need_reorder_column_id,
+           const bool foreign_key_checks);
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_table_id() const { return table_id_; }
   int64_t get_consumer_group_id() const { return consumer_group_id_; }
@@ -1974,6 +1982,7 @@ public:
   const common::ObString *get_nls_formats() const { return nls_formats_; }
   const common::ObIArray<common::ObTabletID> &get_tablet_ids() const { return tablet_ids_; }
   bool get_need_reorder_column_id() const { return need_reorder_column_id_; }
+  bool get_foreign_key_checks() const { return foreign_key_checks_; }
 private:
   uint64_t tenant_id_;
   int64_t table_id_;
@@ -1990,6 +1999,7 @@ private:
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
   common::ObSArray<common::ObTabletID> tablet_ids_;
   bool need_reorder_column_id_;
+  bool foreign_key_checks_;
 };
 
 struct ObCreateHiddenTableRes final
@@ -2287,6 +2297,7 @@ public:
        KV_ATTRIBUTES,
        LOB_INROW_THRESHOLD,
        INCREMENT_CACHE_SIZE,
+       ENABLE_MACRO_BLOCK_BLOOM_FILTER,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType
@@ -2712,7 +2723,8 @@ public:
     row_store_type_(common::MAX_ROW_STORE),
     store_format_(common::OB_STORE_FORMAT_INVALID),
     progressive_merge_round_(0),
-    storage_format_version_(common::OB_STORAGE_FORMAT_VERSION_INVALID)
+    storage_format_version_(common::OB_STORAGE_FORMAT_VERSION_INVALID),
+    enable_macro_block_bloom_filter_(false)
   {}
   virtual void reset()
   {
@@ -2729,6 +2741,7 @@ public:
     store_format_ = common::OB_STORE_FORMAT_INVALID;
     progressive_merge_round_ = 0;
     storage_format_version_ = common::OB_STORAGE_FORMAT_VERSION_INVALID;
+    enable_macro_block_bloom_filter_ = false;
   }
   bool is_valid() const;
   DECLARE_TO_STRING;
@@ -2746,6 +2759,7 @@ public:
   common::ObStoreFormatType  store_format_;
   int64_t progressive_merge_round_;
   int64_t storage_format_version_;
+  bool enable_macro_block_bloom_filter_;
 };
 
 struct ObIndexOption : public ObTableOption
@@ -2755,6 +2769,7 @@ public:
   ObIndexOption() :
     ObTableOption(),
     parser_name_(),
+    parser_properties_(),
     index_attributes_set_(common::OB_DEFAULT_INDEX_ATTRIBUTES_SET)
   { }
 
@@ -2763,10 +2778,12 @@ public:
   {
     ObTableOption::reset();
     parser_name_.reset();
+    parser_properties_.reset();
   }
   DECLARE_TO_STRING;
 
   common::ObString parser_name_;
+  common::ObString parser_properties_;
   uint64_t index_attributes_set_;//flags, one bit for one attribute
 };
 
@@ -2798,7 +2815,9 @@ public:
         index_cgs_(),
         vidx_refresh_info_(),
         is_rebuild_index_(false),
-        is_index_scope_specified_(false)
+        is_index_scope_specified_(false),
+        is_offline_rebuild_(false),
+        index_key_(-1)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2833,6 +2852,8 @@ public:
     vidx_refresh_info_.reset();
     is_rebuild_index_ = false;
     is_index_scope_specified_ = false;
+    is_offline_rebuild_ = false;
+    index_key_ = -1;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2873,6 +2894,8 @@ public:
       vidx_refresh_info_ = other.vidx_refresh_info_;
       is_rebuild_index_ = other.is_rebuild_index_;
       is_index_scope_specified_ = other.is_index_scope_specified_;
+      is_offline_rebuild_ = other.is_offline_rebuild_;
+      index_key_ = other.index_key_;
     }
     return ret;
   }
@@ -2944,6 +2967,29 @@ public:
   share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;
   bool is_rebuild_index_;
   bool is_index_scope_specified_;
+  bool is_offline_rebuild_;
+  int64_t index_key_;
+};
+
+struct ObIndexOfflineDdlArg : ObDDLArg
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObIndexOfflineDdlArg() {}
+  ObIndexOfflineDdlArg(const ObCreateIndexArg &arg, int64_t task_id, int32_t sub_task_trace_id)
+      : arg_(),
+        task_id_(task_id),
+        sub_task_trace_id_(sub_task_trace_id)
+  {
+    exec_tenant_id_ = arg.tenant_id_;;
+    arg_.assign(arg);
+  }
+  ~ObIndexOfflineDdlArg() {}
+
+public:
+  ObCreateIndexArg arg_;
+  int64_t task_id_;
+  int32_t sub_task_trace_id_;
 };
 
 struct ObCreateAuxIndexArg : public ObDDLArg
@@ -2952,7 +2998,8 @@ struct ObCreateAuxIndexArg : public ObDDLArg
 public:
   ObCreateAuxIndexArg()
     : tenant_id_(OB_INVALID_TENANT_ID),
-      data_table_id_(OB_INVALID_ID)
+      data_table_id_(OB_INVALID_ID),
+      snapshot_version_(0)
   {}
   ~ObCreateAuxIndexArg() {}
   bool is_valid() const
@@ -2967,13 +3014,15 @@ public:
     tenant_id_ = OB_INVALID_TENANT_ID;
     data_table_id_ = OB_INVALID_ID;
     create_index_arg_.reset();
+    snapshot_version_ = 0;
   }
-  TO_STRING_KV(K(tenant_id_), K(data_table_id_), K(create_index_arg_));
+  TO_STRING_KV(K(tenant_id_), K(data_table_id_), K(create_index_arg_), K(snapshot_version_));
 
 public:
   uint64_t tenant_id_;
   uint64_t data_table_id_;
   ObCreateIndexArg create_index_arg_;
+  int64_t snapshot_version_;
 };
 
 struct ObCreateAuxIndexRes final
@@ -4354,6 +4403,7 @@ public:
     INVALID_TYPE = -1,
     RECOVERY_LS_SERVICE,
     BALANCE_TASK_EXECUTE,
+    DISASTER_RECOVERY_SERVICE,
   };
   ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
   ~ObNotifyTenantThreadArg() {}
@@ -4428,7 +4478,10 @@ public:
   bool need_create_empty_major_;
   bool micro_index_clustered_;
   ObTabletID split_src_tablet_id_;
-  TO_STRING_KV(K_(tenant_data_version), K_(need_create_empty_major), K_(micro_index_clustered), K_(split_src_tablet_id));
+  TO_STRING_KV(K_(tenant_data_version),
+               K_(need_create_empty_major),
+               K_(micro_index_clustered),
+               K_(split_src_tablet_id));
 };
 
 struct ObBatchCreateTabletArg
@@ -6820,7 +6873,8 @@ public:
     UPGRADE_ALL_POST_ACTION,
     UPGRADE_INSPECTION,
     UPGRADE_END,
-    UPGRADE_ALL
+    UPGRADE_ALL,
+    UPGRADE_FINISH,
   };
 public:
   ObUpgradeJobArg();
@@ -8435,12 +8489,12 @@ public:
   ObGetLSSyncScnRes(): tenant_id_(OB_INVALID_TENANT_ID),
                        ls_id_(),
                        cur_sync_scn_(share::SCN::min_scn()),
-                       cur_restore_source_max_scn_(share::SCN::min_scn()) {}
+                       cur_restore_source_next_scn_(share::SCN::min_scn()) {}
   ~ObGetLSSyncScnRes() {}
   bool is_valid() const;
-  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_max_scn);
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_next_scn);
   int assign(const ObGetLSSyncScnRes &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(cur_sync_scn), K_(cur_restore_source_max_scn));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(cur_sync_scn), K_(cur_restore_source_next_scn));
   uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -8453,9 +8507,9 @@ public:
   {
     return cur_sync_scn_;
   }
-  share::SCN get_cur_restore_source_max_scn() const
+  share::SCN get_cur_restore_source_next_scn() const
   {
-    return cur_restore_source_max_scn_;
+    return cur_restore_source_next_scn_;
   }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGetLSSyncScnRes);
@@ -8463,7 +8517,7 @@ private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   share::SCN cur_sync_scn_;
-  share::SCN cur_restore_source_max_scn_;
+  share::SCN cur_restore_source_next_scn_;
 };
 
 struct ObRefreshTenantInfoArg
@@ -8585,16 +8639,16 @@ public:
   ObCheckpoint():
     ls_id_(),
     cur_sync_scn_(share::SCN::min_scn()),
-    cur_restore_source_max_scn_(share::SCN::min_scn()) {}
-  explicit ObCheckpoint(const int64_t id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_max_scn):
+    cur_restore_source_next_scn_(share::SCN::min_scn()) {}
+  explicit ObCheckpoint(const int64_t id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_next_scn):
     ls_id_(id),
     cur_sync_scn_(cur_sync_scn),
-    cur_restore_source_max_scn_(cur_restore_source_max_scn) {}
+    cur_restore_source_next_scn_(cur_restore_source_next_scn) {}
 
-  explicit ObCheckpoint(const share::ObLSID id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_max_scn):
+  explicit ObCheckpoint(const share::ObLSID id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_next_scn):
     ls_id_(id),
     cur_sync_scn_(cur_sync_scn),
-    cur_restore_source_max_scn_(cur_restore_source_max_scn) {}
+    cur_restore_source_next_scn_(cur_restore_source_next_scn) {}
 
   bool is_valid() const;
   bool operator==(const obrpc::ObCheckpoint &r) const;
@@ -8609,23 +8663,23 @@ public:
   {
     return cur_sync_scn_;
   }
-  share::SCN get_cur_restore_source_max_scn() const
+  share::SCN get_cur_restore_source_next_scn() const
   {
-    return cur_restore_source_max_scn_;
+    return cur_restore_source_next_scn_;
   }
 
   bool is_sync_to_latest() const
   {
-    return (cur_sync_scn_ >= cur_restore_source_max_scn_
-            && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_max_scn_.is_valid_and_not_min());
+    return (cur_sync_scn_ >= cur_restore_source_next_scn_
+            && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_next_scn_.is_valid_and_not_min());
   }
 
   TO_STRING_KV("ls_id", ls_id_.id(), "cur_sync_scn", cur_sync_scn_.get_val_for_inner_table_field(),
-      "cur_restore_source_max_scn", cur_restore_source_max_scn_.get_val_for_inner_table_field());
+      "cur_restore_source_next_scn", cur_restore_source_next_scn_.get_val_for_inner_table_field());
 
   share::ObLSID ls_id_;
   share::SCN cur_sync_scn_;
-  share::SCN cur_restore_source_max_scn_;
+  share::SCN cur_restore_source_next_scn_;
 };
 
 struct ObGetTenantResArg
@@ -9865,7 +9919,7 @@ struct ObPrepareServerForAddingServerArg
 {
   OB_UNIS_VERSION(1);
 public:
-  enum Mode {
+  enum Mode { // FARM COMPAT WHITELIST
     ADD_SERVER,
     BOOTSTRAP
   };

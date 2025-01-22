@@ -61,6 +61,7 @@ namespace common
     __sync_bool_compare_and_swap((val), (cmpv), (newv)); })
 #define ATOMIC_ANDFx(val, andv, id)                              \
     ({ UNUSED(id); OB_ATOMIC_EVENT(atomic_Aaf); __sync_and_and_fetch((val), (andv)); })
+#define ATOMIC_CMP_AND_EXCHANGE(val, cmpv, newv) ({ __atomic_compare_exchange_n(val, cmpv, newv, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE); })
 
 template<typename T>
     struct remove_volatile { using type=T; };

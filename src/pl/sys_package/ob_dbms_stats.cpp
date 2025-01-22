@@ -1173,14 +1173,20 @@ int ObDbmsStats::parse_degree_option(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   number::ObNumber num_degree;
+  int64_t max_degree = INT32_MAX;
+  int64_t min_degree = 1;
   if (degree.is_null()) {
     stat_param.degree_ = 1;
   } else if (OB_FAIL(degree.get_number(num_degree))) {
     LOG_WARN("failed to get degree", K(ret), K(degree));
   } else if (OB_FAIL(num_degree.extract_valid_int64_with_trunc(stat_param.degree_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_degree));
-  } else if (stat_param.degree_ < 1) {
-    stat_param.degree_ = 1;
+  } else if (stat_param.degree_ > max_degree) {
+    stat_param.degree_ = max_degree;
+  } else if (stat_param.degree_ < min_degree) {
+    stat_param.degree_ = min_degree;
+  } else {
+    //do nothing
   }
   return ret;
 }
@@ -1504,7 +1510,7 @@ int ObDbmsStats::export_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
                                       K(stat_table_param.db_name_), K(stat_table_param.tab_name_));
       LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
                                         to_cstring(stat_table_param.tab_name_));
-    } else if (!params.at(2).is_null() && OB_FAIL(params.at(5).get_varchar((stat_table_param.stat_id_)))) {
+    } else if (!params.at(2).is_null() && OB_FAIL(params.at(2).get_varchar((stat_table_param.stat_id_)))) {
       LOG_WARN("failed to get stat id ", K(ret));
     } else {
       ObArenaAllocator tmp_alloc("OptStatExport", OB_MALLOC_NORMAL_BLOCK_SIZE, global_param.tenant_id_);
@@ -1868,7 +1874,7 @@ int ObDbmsStats::import_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
                                       K(stat_table_param.tab_name_));
       LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
                                         to_cstring(stat_table_param.tab_name_));
-    } else if (!params.at(2).is_null() && OB_FAIL(params.at(4).get_varchar(stat_table_param.stat_id_))) {
+    } else if (!params.at(2).is_null() && OB_FAIL(params.at(2).get_varchar(stat_table_param.stat_id_))) {
       LOG_WARN("failed to get stat id ", K(ret));
     } else {
       ObArenaAllocator tmp_alloc("OptStatImport", OB_MALLOC_NORMAL_BLOCK_SIZE, global_param.tenant_id_);
@@ -2497,7 +2503,7 @@ int ObDbmsStats::restore_table_stats(sql::ObExecContext &ctx,
       ret = OB_ERR_DBMS_STATS_PL;
       LOG_WARN("Invalid or inconsistent input values", K(ret));
       LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid or inconsistent input values");
-    } else if (!params.at(2).is_datetime()) {
+    } else if (!params.at(2).is_datetime() && !params.at(2).is_mysql_datetime()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid argument", K(ret), K(params.at(2)),
                                        K(get_type_name(params.at(2).get_type())));
@@ -2507,6 +2513,12 @@ int ObDbmsStats::restore_table_stats(sql::ObExecContext &ctx,
                                                          get_timezone_info(ctx.get_my_session()),
                                                          specify_time))) {
         LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
+      }
+    } else if (params.at(2).is_mysql_datetime()) {
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_timestamp(params.at(2).get_mysql_datetime(),
+                                                          get_timezone_info(ctx.get_my_session()),
+                                                          specify_time))) {
+        LOG_WARN("failed to mdatetime to timestamp", K(ret), K(specify_time));
       }
     }
   }
@@ -2597,7 +2609,8 @@ int ObDbmsStats::restore_schema_stats(sql::ObExecContext &ctx,
       specify_time = params.at(1).get_otimestamp_value().time_us_;
     }
   } else if (lib::is_mysql_mode()) {
-    if (!params.at(1).is_null() && !params.at(1).is_datetime()) {
+    if (!params.at(1).is_null() && !params.at(1).is_datetime()
+          && !params.at(1).is_mysql_datetime()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid argument", K(ret), K(params.at(1)),
                                        K(get_type_name(params.at(1).get_type())));
@@ -2606,6 +2619,12 @@ int ObDbmsStats::restore_schema_stats(sql::ObExecContext &ctx,
       if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(specify_time,
                                                          get_timezone_info(ctx.get_my_session()),
                                                          specify_time))) {
+        LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
+      }
+    } else if (params.at(1).is_mysql_datetime()) {
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_timestamp(params.at(1).get_mysql_datetime(),
+                                                          get_timezone_info(ctx.get_my_session()),
+                                                          specify_time))) {
         LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
       }
     }
@@ -2678,7 +2697,8 @@ int ObDbmsStats::purge_stats(sql::ObExecContext &ctx,
       specify_time = params.at(0).get_otimestamp_value().time_us_;
     }
   } else if (lib::is_mysql_mode()) {
-    if (!params.at(0).is_null() && !params.at(0).is_datetime()) {
+    if (!params.at(0).is_null() && !params.at(0).is_datetime()
+          && !params.at(0).is_mysql_datetime()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid argument", K(ret), K(params.at(0)),
                                        K(get_type_name(params.at(0).get_type())));
@@ -2687,6 +2707,12 @@ int ObDbmsStats::purge_stats(sql::ObExecContext &ctx,
       if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(specify_time,
                                                          get_timezone_info(ctx.get_my_session()),
                                                          specify_time))) {
+        LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
+      }
+    } else if (params.at(0).is_mysql_datetime()) {
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_timestamp(params.at(0).get_mysql_datetime(),
+                                                          get_timezone_info(ctx.get_my_session()),
+                                                          specify_time))) {
         LOG_WARN("failed to datetime to timestamp", K(ret), K(specify_time));
       }
     }
@@ -3629,6 +3655,7 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
   for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); ++i) {
     const share::schema::ObColumnSchemaV2 *col = table_schema.get_column_schema_by_idx(i);
     ObColumnStatParam col_param;
+    ObString new_col_name;
     if (OB_ISNULL(col)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column is null", K(ret), K(col));
@@ -3636,8 +3663,14 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
     //hidden, that's will cause the fewer columns.
     } else if (!check_column_validity(table_schema, *col)){
       continue;
+    } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                                                          allocator,
+                                                          col->get_column_name_str(),
+                                                          new_col_name,
+                                                          lib::is_oracle_mode()))) {
+      LOG_WARN("fail to generate new name with escape character", K(ret), K(col->get_column_name_str()));
     } else if (OB_FAIL(ob_write_string(allocator,
-                                       col->get_column_name_str(),
+                                       new_col_name,
                                        col_param.column_name_))) {
       LOG_WARN("failed to write column name", K(ret));
     } else {
@@ -3825,6 +3858,7 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
     bool find_it = false;
     for (int64_t i = 0; OB_SUCC(ret) && !find_it && i < table_schema->get_column_count(); ++i) {
       const share::schema::ObColumnSchemaV2 *tmp_col = table_schema->get_column_schema_by_idx(i);
+      ObString new_col_name;
       if (OB_ISNULL(tmp_col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(tmp_col));
@@ -3832,8 +3866,14 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
                   ObCharset::case_sensitive_equal(column_name, tmp_col->get_column_name_str())) ||
                  (!lib::is_oracle_mode() &&
                   ObCharset::case_insensitive_equal(column_name, tmp_col->get_column_name_str()))) {
-        if (OB_FAIL(ob_write_string(*param.allocator_,
-                                    tmp_col->get_column_name_str(),
+        if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                                                          *param.allocator_,
+                                                          tmp_col->get_column_name_str(),
+                                                          new_col_name,
+                                                          lib::is_oracle_mode()))) {
+          LOG_WARN("fail to generate new name with escape character", K(ret), K(tmp_col->get_column_name_str()));
+        } else if (OB_FAIL(ob_write_string(*param.allocator_,
+                                    new_col_name,
                                     col_param.column_name_))) {
           LOG_WARN("failed to write column name", K(ret));
         } else {
@@ -4176,7 +4216,8 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
   if (OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(param.allocator_));
-  } else if (est_percent.is_null()) {
+  } else if (est_percent.is_null() ||
+            (is_virtual_table(param.table_id_) && !is_oracle_mapping_real_virtual_table(param.table_id_))) {
     //if specify estimate percent null meanings 100% percent sample
     //https://community.oracle.com/tech/developers/discussion/2205871/null-for-estimate-percent-of-dbms-stats?spm=a2o8d.corp_prod_issue_detail_v2.0.0.316db27cDq1yD6
     param.sample_info_.set_percent(100.0);
@@ -4219,10 +4260,8 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
   if (OB_SUCC(ret)) {
     if (degree.is_null()) {
       stat_options |= StatOptionFlags::OPT_DEGREE;
-    } else if (OB_FAIL(degree.get_number(num_degree))) {
-      LOG_WARN("failed to get degree", K(ret));
-    } else if (OB_FAIL(num_degree.extract_valid_int64_with_trunc(param.degree_))) {
-      LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_degree));
+    } else if (OB_FAIL(parse_degree_option(ctx, degree, param))) {
+      LOG_WARN("parse degree param failed", K(ret));
     }
   }
 

@@ -499,7 +499,7 @@ int ObTenantWeakReadClusterService::get_cluster_version(SCN &version, SCN &min_v
   int ret = OB_SUCCESS;
   static const int64_t GET_CLUSTER_VERSION_RDLOCK_TIMEOUT = 100;
   SCN ret_version;
-  int64_t rdlock_wait_time = GET_CLUSTER_VERSION_RDLOCK_TIMEOUT;
+  int64_t rdlock_wait_time = ObTimeUtility::current_time() + GET_CLUSTER_VERSION_RDLOCK_TIMEOUT;
 
   // Lock wait time is necessary to prevent 'deadlock'
   //
@@ -1014,7 +1014,7 @@ int ObTenantWeakReadClusterService::update_server_version(const common::ObAddr &
   int ret = OB_SUCCESS;
   int64_t cur_leader_epoch = 0;
   bool is_new_server = false;
-  int64_t rdlock_wait_time = PROCESS_CLUSTER_HEARTBEAT_RPC_RDLOCK_TIMEOUT;
+  int64_t rdlock_wait_time = PROCESS_CLUSTER_HEARTBEAT_RPC_RDLOCK_TIMEOUT + ObTimeUtility::current_time();
 
   // rpc worker can not hang, overtime should be set
   // bug:

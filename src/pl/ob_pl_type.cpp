@@ -809,7 +809,7 @@ int ObPLDataType::get_size(ObPLTypeSize type, int64_t &size) const
   UNUSED(type);
   int ret = OB_SUCCESS;
 //  if (is_obj_type()) {
-    size += sizeof(ObObj);
+    size = sizeof(ObObj);
 //  } else {
 //    ObArenaAllocator allocator;
 //    OZ (ns.get_size(type, *this, size, &allocator));
@@ -2277,7 +2277,10 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
                   LOG_WARN("failed to copy pl extend", K(ret));
                 } else {
                   obj = tmp;
-                  dest_cursor->complex_objs_.push_back(tmp);
+                  if (OB_FAIL(dest_cursor->complex_objs_.push_back(tmp))) {
+                    int tmp_ret = ObUserDefinedType::destruct_obj(tmp, dest_cursor->session_info_);
+                    LOG_WARN("fail to push back", K(ret), K(tmp_ret));
+                  }
                 }
               }
             }

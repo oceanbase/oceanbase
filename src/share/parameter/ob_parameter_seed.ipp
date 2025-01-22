@@ -424,6 +424,10 @@ DEF_BOOL(_nested_loop_join_enabled, OB_TENANT_PARAMETER, "True",
          "enable/disable nested loop join",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //
+DEF_BOOL(_enable_mysql_compatible_dates, OB_TENANT_PARAMETER, "False",
+         "Specifies whether to use MySQL-compatible date format that allows for invalid dates.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+//
 DEF_BOOL(_enable_enum_set_subschema, OB_TENANT_PARAMETER, "True",
          "Specifies whether to enable the enum/set extended type info is stored as subschema "
          "and to activate the related new type cast logic behavior.",
@@ -547,15 +551,14 @@ DEF_INT(_pushdown_storage_level, OB_TENANT_PARAMETER, "4", "[0, 4]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_WORK_AREA_POLICY(workarea_size_policy, OB_TENANT_PARAMETER, "AUTO", "policy used to size SQL working areas (MANUAL/AUTO)",
               ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(temporary_file_max_disk_size, OB_TENANT_PARAMETER, "0M", "[0,)",
+        "maximum disk usage of temporary file on a single node, 0 means no limit. "
+        "Range: [0,+∞)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_temporary_file_io_area_size, OB_TENANT_PARAMETER, "1", "[0, 50)",
          "memory buffer size of temporary file, as a percentage of total tenant memory. "
          "Range: [0, 50), percentage",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_temporary_file_meta_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
-        "The memory limit of temporary file meta, and the value is a percentage of the tenant's memory. "
-        "The default value is 70. For compatibility, 0 is 70% of tenant memory."
-        "Range: [0, 100], percentage",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_storage_meta_memory_limit_percentage, OB_TENANT_PARAMETER, "20", "[0, 50)",
          "maximum memory for storage meta, as a percentage of total tenant memory. "
          "Range: [0, 50), percentage, 0 means no limit to storage meta memory",
@@ -614,9 +617,9 @@ DEF_TIME(tablet_meta_table_check_interval, OB_CLUSTER_PARAMETER, "30m", "[1m,)",
          "the time interval that observer compares tablet meta table with local ls replica info "
          "and make adjustments to ensure the correctness of tablet meta table. Range: [1m,+∞)",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "4.3.5.0", "the min observer version",
+DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "4.3.5.1", "the min observer version",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_VERSION(compatible, OB_TENANT_PARAMETER, "4.3.5.0", "compatible version for persisted data",
+DEF_VERSION(compatible, OB_TENANT_PARAMETER, "4.3.5.1", "compatible version for persisted data",
             ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_ddl, OB_CLUSTER_PARAMETER, "True", "specifies whether DDL operation is turned on. "
          "Value:  True:turned on;  False: turned off",
@@ -1426,7 +1429,7 @@ DEF_BOOL(ob_enable_batched_multi_statement, OB_TENANT_PARAMETER, "False",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_bloom_filter_ratio, OB_CLUSTER_PARAMETER, "35", "[0, 100]",
-        "the px bloom filter false-positive rate.the default value is 1, range: [0,100]",
+        "The px bloom filter false-positive rate. Range: [0,100]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_restore_idle_time, OB_CLUSTER_PARAMETER, "1m", "[10s,]",
          "the time interval between the schedules of physical restore task. "
@@ -1567,6 +1570,12 @@ DEF_BOOL(_enable_das_keep_order, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_nlj_spf_use_rich_format, OB_TENANT_PARAMETER, "True",
          "enable nlj and spf use rich format",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_distributed_das_scan, OB_TENANT_PARAMETER, "True",
+         "enable distributed DAS scan",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_enable_das_batch_rescan_flag, OB_TENANT_PARAMETER, "0",
+        "enable das batch rescan for multiple scenarios.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_parallel_max_active_sessions, OB_TENANT_PARAMETER, "0", "[0,]",
         "max active parallel sessions allowed for tenant. Range: [0,+∞)",
@@ -2133,6 +2142,10 @@ DEF_BOOL(_enable_new_query_range_extraction, OB_TENANT_PARAMETER, "True",
 DEF_TIME(_ha_diagnose_history_recycle_interval, OB_CLUSTER_PARAMETER, "7d", "[2m, 180d]",
          "The recycle interval time of diagnostic history data. Range: [2m, 180d]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_TIME(_errsim_ha_diagnose_history_recycle_interval, OB_CLUSTER_PARAMETER, "0", "[0s, 180d]",
+         "The recycle interval time of diagnostic history data. Range: [0s, 180d]",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_TIME(errsim_transfer_diagnose_server_wait_time, OB_CLUSTER_PARAMETER, "5m", "[1s,1h]",
         "the wakeup wait time of the transfer diagnose server. "
         "Range: [0s, 1h]",
@@ -2285,7 +2298,7 @@ DEF_STR_WITH_CHECKER(default_load_mode, OB_TENANT_PARAMETER, "DISABLED",
                      "\"INC_DIRECT_WRITE\" represent load data in inc direct load path with insert semantics."
                      "\"INC_REPLACE_DIRECT_WRITE\" represent load data in inc direct load path with replace semantics.",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(direct_load_allow_fallback, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(direct_load_allow_fallback, OB_TENANT_PARAMETER, "True",
         "Control whether an error is reported when direct load of the derivative operation scenario is not supported.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_TIME(errsim_delay_gc_interval, OB_CLUSTER_PARAMETER, "30m", "[0,)",
@@ -2376,6 +2389,64 @@ DEF_BOOL(_enable_adaptive_auto_dop, OB_CLUSTER_PARAMETER, "False",
 DEF_INT(query_memory_limit_percentage, OB_TENANT_PARAMETER, "50", "[0,100]",
         "the percentage of tenant memory that can be used by a single SQL. The default value is 50. Range: [0,100]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(package_state_sync_max_size, OB_TENANT_PARAMETER, "8192", "[0, 16777216]",
         "the max sync size of single package state that can sync package var value. If over it, package state will not sync package var value. Range: [0, 16777216] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(ob_enable_java_env, OB_CLUSTER_PARAMETER, "False",
+        "Enable or disable java env for external table.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(ob_java_home, OB_CLUSTER_PARAMETER, "",
+                     common::ObConfigJavaParamsChecker,
+                     "specifies the java home path for external table with enabled option: ob_enable_java_env",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(ob_java_opts, OB_CLUSTER_PARAMETER, "",
+                     common::ObConfigJavaParamsChecker,
+                     "specifies the java opts path for external table with enabled option: ob_enable_java_env",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(ob_java_connector_path, OB_CLUSTER_PARAMETER, "",
+                     common::ObConfigJavaParamsChecker,
+                     "specifies the connector path for external table with enabled option: ob_enable_java_env",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_use_odps_jni_connector, OB_CLUSTER_PARAMETER, "False",
+         "Enable or disable jni connector for external odps table",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(_parquet_row_group_prebuffer_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
+        "the parquet prefetch maximum row group size. Range: [0, +∞)",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_pc_adaptive_min_exec_time_threshold, OB_TENANT_PARAMETER, "1s", "[0,)",
+        "minimum execution time threshold for enabling adaptive plan cache. Range: [0, +∞]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_pc_adaptive_effectiveness_ratio_threshold, OB_TENANT_PARAMETER, "5", "[0,)",
+        "minimum effectiveness ratio threshold for enabling adaptive plan cache. Range:[0, +∞]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_adaptive_plan_cache, OB_TENANT_PARAMETER, "False",
+         "enable/disable adaptive plan cache",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_force_enable_plan_tracing, OB_TENANT_PARAMETER, "True",
+         "controls whether plan tracking is enabled when plan cache is disabled",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(default_table_organization, OB_TENANT_PARAMETER, "INDEX",
+        common::ObConfigDefaultOrganizationChecker,
+        "The default_organization configuration option allows you to set the default"
+        " table organization mode to either HEAP (unordered data storage for OLAP) or"
+        " INDEX (index-organized storage for OLTP) when creating new tables.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_INT(errsim_restore_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "the ls id that restore want to insert error"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(errsim_ls_restore_status, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "the ls restore status that restore want to insert error"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_auth_switch, OB_CLUSTER_PARAMETER, "True",
+         "Control whether to use auth_switch.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_malloc_v2, OB_CLUSTER_PARAMETER, "True",
+         "Enable or disable ob_malloc_v2.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

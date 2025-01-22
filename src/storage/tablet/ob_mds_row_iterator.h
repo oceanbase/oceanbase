@@ -21,6 +21,7 @@
 #include "storage/access/ob_table_access_context.h"
 #include "storage/access/ob_table_scan_range.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
+#include "storage/multi_data_source/adapter_define/mds_dump_node.h"
 
 namespace oceanbase
 {

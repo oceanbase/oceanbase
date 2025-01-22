@@ -53,6 +53,7 @@ ObMViewInfo &ObMViewInfo::operator=(const ObMViewInfo &src_schema)
     last_refresh_date_ = src_schema.last_refresh_date_;
     last_refresh_time_ = src_schema.last_refresh_time_;
     schema_version_ = src_schema.schema_version_;
+    refresh_dop_ = src_schema.refresh_dop_;
     if (OB_FAIL(deep_copy_str(src_schema.refresh_next_, refresh_next_))) {
       LOG_WARN("deep copy refresh next failed", KR(ret), K(src_schema.refresh_next_));
     } else if (OB_FAIL(deep_copy_str(src_schema.refresh_job_, refresh_job_))) {
@@ -100,6 +101,7 @@ void ObMViewInfo::reset()
   last_refresh_time_ = OB_INVALID_COUNT;
   reset_string(last_refresh_trace_id_);
   schema_version_ = OB_INVALID_VERSION;
+  refresh_dop_ = 0;
   ObSchema::reset();
 }
 
@@ -127,7 +129,8 @@ OB_SERIALIZE_MEMBER(ObMViewInfo,
                     last_refresh_date_,
                     last_refresh_time_,
                     last_refresh_trace_id_,
-                    schema_version_);
+                    schema_version_,
+                    refresh_dop_);
 
 int ObMViewInfo::gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSplicer &dml) const
 {
@@ -370,7 +373,7 @@ int ObMViewInfo::fetch_mview_info(ObISQLClient &sql_client, uint64_t tenant_id, 
   }
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
-    ObMySQLResult *result = nullptr;
+    common::sqlclient::ObMySQLResult *result = nullptr;
     ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE tenant_id = 0 AND mview_id = %ld",
                                OB_ALL_MVIEW_TNAME, mview_id))) {
@@ -424,7 +427,7 @@ int ObMViewInfo::batch_fetch_mview_ids(ObISQLClient &sql_client, uint64_t tenant
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
-    ObMySQLResult *result = nullptr;
+    common::sqlclient::ObMySQLResult *result = nullptr;
     ObSqlString sql;
     uint64_t mview_id = OB_INVALID_ID;
     if (OB_FAIL(
@@ -501,7 +504,7 @@ int ObMViewInfo::get_min_major_refresh_mview_scn(ObISQLClient &sql_client, const
 
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
-    ObMySQLResult *result = nullptr;
+    common::sqlclient::ObMySQLResult *result = nullptr;
     if (INT64_MAX == snapshot_for_tx) {
       if (OB_FAIL(sql.assign_fmt(
               "SELECT min(last_refresh_scn) min_refresh_scn FROM %s WHERE "
@@ -547,7 +550,7 @@ int ObMViewInfo::contains_major_refresh_mview_in_creation(ObISQLClient &sql_clie
 
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
-    ObMySQLResult *result = nullptr;
+    common::sqlclient::ObMySQLResult *result = nullptr;
     if (OB_FAIL(sql.assign_fmt(
             "SELECT count(*) cnt FROM %s WHERE refresh_mode = %ld and last_refresh_scn = 0",
             OB_ALL_MVIEW_TNAME, ObMVRefreshMode::MAJOR_COMPACTION))) {
@@ -579,7 +582,7 @@ int ObMViewInfo::contains_major_refresh_mview(ObISQLClient &sql_client,
 
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
-    ObMySQLResult *result = nullptr;
+    common::sqlclient::ObMySQLResult *result = nullptr;
     if (OB_FAIL(sql.assign_fmt(
             "SELECT count(*) cnt FROM %s WHERE refresh_mode = %ld",
             OB_ALL_MVIEW_TNAME, ObMVRefreshMode::MAJOR_COMPACTION))) {

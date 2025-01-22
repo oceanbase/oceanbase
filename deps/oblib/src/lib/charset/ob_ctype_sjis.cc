@@ -11,7 +11,7 @@
  */
 
 #include "lib/charset/ob_ctype.h"
-
+#include "lib/charset/ob_template_helper.h"
 
 /*
  * This comment is parsed by configure to create ctype.c,

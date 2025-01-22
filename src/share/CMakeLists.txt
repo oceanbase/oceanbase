@@ -47,6 +47,8 @@ ob_set_subtarget(ob_share ALONE
   datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_6.cpp
   datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_7.cpp
   datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_all.cpp
+  ob_srv_rpc_proxy.cpp
+  ob_common_rpc_proxy.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -355,6 +357,7 @@ ob_set_subtarget(ob_share common_mixed
   rebuild_tablet/ob_rebuild_tablet_location.cpp
   table/ob_redis_parser.cpp
   table/ob_redis_common.cpp
+  restore/ob_restore_progress_display_mode.cpp
 )
 
 ob_set_subtarget(ob_share tablet
@@ -563,6 +566,7 @@ ob_set_subtarget(ob_share external_table
   external_table/ob_external_table_file_rpc_processor.cpp
   external_table/ob_external_table_file_task.cpp
   external_table/ob_external_table_utils.cpp
+  external_table/ob_partition_id_row_pair.cpp
 )
 
 ob_set_subtarget(ob_share io

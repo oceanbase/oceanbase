@@ -334,9 +334,9 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer *&buf)
         LOG_WARN("set start fail failed", K(tmp_ret));
       }
     } else if (!send_by_tenant()
-               && DTL.get_rpc_proxy().to(peer_).timeout(timeout_us)
+               && OB_FAIL(DTL.get_rpc_proxy().to(peer_).timeout(timeout_us)
                      .compressed(compressor_type_)
-                     .ap_send_message(ObDtlSendArgs{peer_id_, *buf}, &cb)) {
+                     .ap_send_message(ObDtlSendArgs{peer_id_, *buf}, &cb))) {
       LOG_WARN("send message failed", K_(peer), K(ret));
       int tmp_ret = msg_response_.on_start_fail();
       if (OB_SUCCESS != tmp_ret) {

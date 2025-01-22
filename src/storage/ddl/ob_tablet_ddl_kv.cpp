@@ -123,15 +123,10 @@ int ObDDLMemtable::init_sstable_param(
 {
   int ret = OB_SUCCESS;
   ObStorageSchema *storage_schema_ptr = nullptr;
-  ObLSService *ls_service = MTL(ObLSService *);
   ObArenaAllocator allocator("DDL_MMT", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  ObTabletHandle tablet_handle;
   if (OB_UNLIKELY(!table_key.is_valid() || !ddl_start_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(table_key), K(ddl_start_scn));
-  } else if (OB_ISNULL(ls_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("ls service is null", K(ret), K(table_key));
   } else if (OB_FAIL(tablet.load_storage_schema(allocator, storage_schema_ptr))) {
     LOG_WARN("fail to get storage schema", K(ret));
   } else {
@@ -141,103 +136,8 @@ int ObDDLMemtable::init_sstable_param(
     const ObDataStoreDesc &data_desc = block_meta_tree_.get_data_desc();
     if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(column_count))) {
       LOG_WARN("fail to get stored column count in sstable", K(ret));
-    } else {
-      sstable_param.table_key_ = table_key;
-      if (table_key.is_column_store_sstable()) {
-        if (table_key.is_normal_cg_sstable()) {
-          sstable_param.table_key_.table_type_ = ObITable::TableType::DDL_MEM_CG_SSTABLE;
-          sstable_param.rowkey_column_cnt_ = 0;
-          sstable_param.column_cnt_ = 1;
-        } else {
-          sstable_param.table_key_.table_type_ = ObITable::TableType::DDL_MEM_CO_SSTABLE;
-          sstable_param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-
-          // calculate column count
-          const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema.get_column_groups();
-          const int64_t cg_idx = sstable_param.table_key_.get_column_group_id();
-          if (cg_idx < 0 || cg_idx >= cg_schemas.count()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected column group index", K(ret), K(cg_idx));
-          } else if (cg_schemas.at(cg_idx).is_rowkey_column_group()) {
-            column_count = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-          } else {
-            if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(column_count))) {
-              LOG_WARN("fail to get stored column count in sstable", K(ret));
-            }
-          }
-          if (OB_SUCC(ret)) {
-            sstable_param.column_cnt_ = column_count;
-          }
-        }
-      } else {
-        if (table_key.table_type_ == ObITable::TableType::MINI_SSTABLE) {
-          sstable_param.table_key_.table_type_ = ObITable::TableType::DDL_MEM_MINI_SSTABLE;
-        } else {
-          sstable_param.table_key_.table_type_ = ObITable::TableType::DDL_MEM_SSTABLE;
-        }
-        sstable_param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-        sstable_param.column_cnt_ = column_count;
-      }
-      sstable_param.is_ready_for_read_ = true;
-      sstable_param.table_mode_ = storage_schema.get_table_mode_struct();
-      sstable_param.index_type_ = storage_schema.get_index_type();
-      sstable_param.schema_version_ = storage_schema.get_schema_version();
-      sstable_param.latest_row_store_type_ = storage_schema.get_row_store_type();
-      sstable_param.create_snapshot_version_ = table_key.get_snapshot_version();
-      sstable_param.max_merged_trans_version_ = table_key.get_snapshot_version();
-      sstable_param.ddl_scn_ = ddl_start_scn;
-      sstable_param.root_row_store_type_ = data_desc.get_row_store_type(); // for root block, not used for ddl memtable
-      sstable_param.data_index_tree_height_ = 2; // fixed tree height, because there is only one root block
-      sstable_param.contain_uncommitted_row_ = table_key.is_minor_sstable();
-      sstable_param.compressor_type_ = data_desc.get_compressor_type();
-      sstable_param.encrypt_id_ = data_desc.get_encrypt_id();
-      sstable_param.master_key_id_ = data_desc.get_master_key_id();
-      MEMCPY(sstable_param.encrypt_key_, data_desc.get_encrypt_key(), share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-      sstable_param.use_old_macro_block_count_ = 0; // all new, no reuse
-      sstable_param.index_blocks_cnt_ = 0; // index macro block count, the index is in memory, so be 0.
-      sstable_param.other_block_ids_.reset(); // other blocks contains only index macro blocks now, so empty.
-      sstable_param.filled_tx_scn_ = table_key.is_major_sstable() ? SCN::min_scn() : table_key.get_end_scn();
-      sstable_param.tx_data_recycle_scn_.set_min();
-      sstable_param.table_backup_flag_.reset();
-      sstable_param.table_shared_flag_.reset();
-      sstable_param.sstable_logic_seq_ = 0;
-      sstable_param.row_count_ = 0;
-      sstable_param.recycle_version_ = 0;
-      sstable_param.root_macro_seq_ = 0;
-      sstable_param.nested_size_ = 0;
-      sstable_param.nested_offset_ = 0;
-      sstable_param.data_blocks_cnt_ = 0;
-      sstable_param.micro_block_cnt_ = 0;
-      sstable_param.occupy_size_ = 0;
-      sstable_param.original_size_ = 0;
-      sstable_param.progressive_merge_round_ = 0;
-      sstable_param.progressive_merge_step_ = 0;
-      sstable_param.column_group_cnt_ = 1;
-      sstable_param.co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
-      sstable_param.full_column_cnt_ = 0;
-      sstable_param.is_co_table_without_cgs_ = false;
-      sstable_param.co_base_snapshot_version_ = 0;
-    }
-    if (OB_SUCC(ret)) {
-      // set root block for data tree
-      if (OB_FAIL(sstable_param.root_block_addr_.set_mem_addr(0/*offset*/, root_block_size/*size*/))) {
-        LOG_WARN("set root block address for data tree failed", K(ret));
-      } else {
-        sstable_param.root_block_data_.type_ = ObMicroBlockData::DDL_BLOCK_TREE;
-        sstable_param.root_block_data_.buf_ = reinterpret_cast<char *>(&block_meta_tree_);
-        sstable_param.root_block_data_.size_ = root_block_size;
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      // set root block for secondary meta tree
-      if (OB_FAIL(sstable_param.data_block_macro_meta_addr_.set_mem_addr(0/*offset*/, root_block_size/*size*/))) {
-        LOG_WARN("set root block address for secondary meta tree failed", K(ret));
-      } else {
-        sstable_param.data_block_macro_meta_.type_ = ObMicroBlockData::DDL_BLOCK_TREE;
-        sstable_param.data_block_macro_meta_.buf_ = reinterpret_cast<char *>(&block_meta_tree_);
-        sstable_param.data_block_macro_meta_.size_ = root_block_size;
-      }
+    } else if (OB_FAIL(sstable_param.init_for_ddl_mem(table_key, ddl_start_scn, storage_schema, block_meta_tree_))) {
+      LOG_WARN("fail to init sstable param", K(ret), K(table_key), K(table_key));
     }
   }
   ObTabletObjLoadHelper::free(allocator, storage_schema_ptr);

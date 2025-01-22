@@ -39,6 +39,8 @@ int ObMockResolver::resolve(const ParseNode& parse_tree)
     case T_CREATE_LOGFILE_GROUP:
     case T_ALTER_LOGFILE_GROUP:
     case T_DROP_LOGFILE_GROUP:
+    case T_GRANT_PROXY:
+    case T_REVOKE_PROXY:
     {
       ObMockStmt *mock_stmt = NULL;
       if (OB_UNLIKELY(NULL == (mock_stmt = create_stmt<ObMockStmt>()))) {

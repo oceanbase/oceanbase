@@ -517,6 +517,8 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
           LOG_WARN("fail to eval datum", K(ret));
         } else if (OB_FAIL(datum->to_obj(tmp_obj, output_exprs.at(idx)->obj_meta_))) {
           LOG_WARN("fail to datum to obj", K(ret), K(output_exprs.at(idx)->obj_meta_), K(i), K(idx));
+        } else if (OB_FAIL(adjust_output_obj_type(tmp_obj))) {
+          LOG_WARN("fail to adjust output obj type", K(ret));
         } else {
           cells[i] = tmp_obj;
         }
@@ -527,6 +529,8 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
           LOG_WARN("fail to eval datum", K(ret));
         } else if (OB_FAIL(datum->to_obj(tmp_obj, output_exprs.at(i)->obj_meta_))) {
           LOG_WARN("fail to datum to obj", K(ret), K(output_exprs.at(i)->obj_meta_));
+        } else if (OB_FAIL(adjust_output_obj_type(tmp_obj))) {
+          LOG_WARN("fail to adjust output obj type", K(ret));
         } else {
           cells[i] = tmp_obj;
         }
@@ -538,6 +542,31 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
     row = tmp_row;
   }
 
+  return ret;
+}
+
+// Some internal types in OceanBase, such as `ObMySQLDateType` and ObMySQLDateTimeType`,
+// do not have corresponding client interface types. Here we need to adjust the corresponding
+// internal types to client-receivable types for output.
+int ObTableApiScanRowIterator::adjust_output_obj_type(ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  if (obj.is_mysql_date()) {
+    int32_t date = 0;
+    if (OB_FAIL(ObTimeConverter::mdate_to_date(obj.get_mysql_date(), date, 0 /*date_sql_mode*/))) {
+      LOG_WARN("fail to convert mysql date to date", K(ret), K(obj));
+    } else {
+      obj.set_date(date);
+    }
+  } else if (obj.is_mysql_datetime()) {
+    int64_t datetime = 0;
+    if (OB_FAIL(ObTimeConverter::mdatetime_to_datetime(obj.get_mysql_datetime(), datetime,
+                                                       0 /*date_sql_mode*/))) {
+      LOG_WARN("fail to convert mysql datetime to datetime", K(ret), K(obj));
+    } else {
+      obj.set_datetime(datetime);
+    }
+  }
   return ret;
 }
 

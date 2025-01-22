@@ -165,6 +165,7 @@ public:
 
   int clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &arg);
   int generate_splitted_schema_array(const obrpc::ObCleanSplittedTabletArg &arg,
+                                    ObSchemaGetterGuard &schema_guard,
                                     ObArenaAllocator& allocator,
                                     common::ObIArray<const share::schema::ObTableSchema*> &splitting_table_schemas,
                                     common::ObIArray<share::schema::ObTableSchema*> &del_table_schemas,
@@ -329,7 +330,8 @@ public:
                                 common::ObArenaAllocator &allocator,
                                 const uint64_t tenant_data_version,
                                 obrpc::ObAlterTableRes &res,
-                                ObIArray<ObDDLTaskRecord> &ddl_tasks);
+                                ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                                int64_t &new_fetched_snapshot);
   int generate_object_id_for_partition_schemas(
       ObIArray<ObTableSchema> &partition_schemas);
   int generate_object_id_for_partition_schema(
@@ -2388,7 +2390,8 @@ private:
       const int64_t parent_task_id,
       const uint64_t tenant_data_version,
       ObDDLSQLTransaction &trans,
-      ObDDLTaskRecord &task_record);
+      ObDDLTaskRecord &task_record,
+      const int64_t snapshot_version = 0);
   int adjust_cg_for_offline(ObTableSchema &new_table_schema);
   int add_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
                        const share::schema::ObTableSchema &ori_table_schema,

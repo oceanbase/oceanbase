@@ -73,6 +73,8 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
     LOG_WARN("formalize stmt failed", K(ret));
   } else if (OB_FAIL(stmt->adjust_duplicated_table_names(*ctx_->allocator_, is_happened))) {
     LOG_WARN("failed to adjust duplicated table names", K(ret));
+  } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("check status failed", K(ret));
   } else {
     trans_happened |= is_happened;
     OPT_TRACE("adjust duplicated table name", is_happened);
@@ -6741,6 +6743,7 @@ int ObTransformPreProcess::transform_inner_op_row_cmp_for_decimal_int(
   const uint64_t extra = static_cast<uint64_t>(error_ret);
   const int64_t row_count = row_expr->get_param_count();
   ObSEArray<ObRawExpr *, 4> new_params;
+  bool trans_happened_in_row_op = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < row_count - 1; ++i) {
     ObRawExpr *param_expr = row_expr->get_param_expr(i);
     ObRawExpr *next_expr = row_expr->get_param_expr(i + 1);
@@ -6776,7 +6779,7 @@ int ObTransformPreProcess::transform_inner_op_row_cmp_for_decimal_int(
         LOG_WARN("fail to build inner row cmp expr", K(ret));
       } else {
         new_expr = inner_row_cmp_expr;
-        trans_happened = true;
+        trans_happened_in_row_op = true;
       }
     }
     if (OB_SUCC(ret)) {
@@ -6788,14 +6791,15 @@ int ObTransformPreProcess::transform_inner_op_row_cmp_for_decimal_int(
       }
     }
   }
-  // replace all params expr to new param exprs
-  if (OB_FAIL(ret)) {
+  // replace all params expr to new param exprs if tansform happened
+  if (OB_FAIL(ret) || !trans_happened_in_row_op) {
   } else if (new_params.count() != row_count) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected row count", K(ret), K(new_params.count()), K(row_count));
   } else {
     // This vector may have multiple values, such as (C1, C2, C3, ..., C). After conversion,
     // it is (C1, inner(c2), inner(c3), ..., inner(c))
+    trans_happened = true;
     for (int64_t i = 0; OB_SUCC(ret) && trans_happened && i < row_count; ++i) {
       row_expr->get_param_expr(i) = new_params.at(i);
     }
@@ -9741,7 +9745,7 @@ int ObTransformPreProcess::transform_outerjoin_exprs(ObDMLStmt *stmt, bool &is_h
   visitor.set_relation_scope();
   visitor.remove_scope(DmlStmtScope::SCOPE_JOINED_TABLE);
   ObArray<ObRawExpr *> relation_exprs;
-  hash::ObHashSet<uint64_t> expr_set;
+  hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> expr_set;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
@@ -9783,7 +9787,7 @@ int ObTransformPreProcess::transform_outerjoin_exprs(ObDMLStmt *stmt, bool &is_h
 
 int ObTransformPreProcess::remove_shared_expr(ObDMLStmt *stmt,
                                               JoinedTable *joined_table,
-                                              hash::ObHashSet<uint64_t> &expr_set,
+                                              hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                                               bool is_nullside)
 {
   int ret = OB_SUCCESS;
@@ -9832,7 +9836,7 @@ int ObTransformPreProcess::remove_shared_expr(ObDMLStmt *stmt,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < joined_table->join_conditions_.count(); ++i) {
     if (OB_FAIL(ObTransformUtils::append_hashset(joined_table->join_conditions_.at(i),
-                                                 expr_set))) {
+                                                          expr_set))) {
       LOG_WARN("failed to append expr into hashset", K(ret));
     }
   }
@@ -9859,7 +9863,7 @@ int ObTransformPreProcess::remove_shared_expr(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformPreProcess::do_remove_shared_expr(hash::ObHashSet<uint64_t> &expr_set,
+int ObTransformPreProcess::do_remove_shared_expr(hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                                                  ObIArray<ObRawExpr *> &padnull_exprs,
                                                  bool is_nullside,
                                                  ObRawExpr *&expr,
@@ -10023,11 +10027,13 @@ int ObTransformPreProcess::expand_last_insert_id_for_join(ObDMLStmt &stmt, Joine
   } else if (OB_FAIL(expand_for_last_insert_id(stmt, join_table->join_conditions_, has_happened))) {
     LOG_WARN("failed to expand join conditions", K(ret));
   } else if (join_table->left_table_->is_joined_table() &&
-            OB_FAIL(expand_last_insert_id_for_join(stmt, static_cast<JoinedTable*>(join_table->left_table_), is_happened))) {
+            OB_FAIL(SMART_CALL(expand_last_insert_id_for_join(
+                                   stmt, static_cast<JoinedTable*>(join_table->left_table_), is_happened)))) {
     LOG_WARN("fail to expand last_insert_id in left join table", K(ret));
   } else if (FALSE_IT(has_happened |= is_happened)) {
   } else if (join_table->right_table_->is_joined_table() &&
-            OB_FAIL(expand_last_insert_id_for_join(stmt, static_cast<JoinedTable*>(join_table->right_table_), is_happened))) {
+            OB_FAIL(SMART_CALL(expand_last_insert_id_for_join(
+                                   stmt, static_cast<JoinedTable*>(join_table->right_table_), is_happened)))) {
     LOG_WARN("fail to expand last_insert_id in right join table", K(ret));
   } else {
     has_happened |= is_happened;

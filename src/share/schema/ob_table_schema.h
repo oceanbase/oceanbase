@@ -312,8 +312,8 @@ private:
   static const int32_t TM_PK_MODE_BITS = 4;
   static const int32_t TM_TABLE_STATE_FLAG_OFFSET = 12;
   static const int32_t TM_TABLE_STATE_FLAG_BITS = 4;
-  static const int32_t TM_TABLE_ORGANIZATION_MODE_OFFSET = 16;
-  static const int32_t TM_TABLE_ORGANIZATION_MODE_BITS = 1;
+  static const int32_t TM_TABLE_PK_EXISTS_MODE_OFFSET = 16;
+  static const int32_t TM_TABLE_PK_EXISTS_MODE_BITS = 1;
   static const int32_t TM_VIEW_CREATED_METHOD_FLAG_OFFSET = 17;
   static const int32_t TM_VIEW_CREATED_METHOD_FLAG_BITS = 4;
   static const int32_t TM_TABLE_AUTO_INCREMENT_MODE_OFFSET = 21;
@@ -334,12 +334,14 @@ private:
   static const int32_t TM_MV_ON_QUERY_COMPUTATION_BITS = 1;
   static const int32_t TM_DDL_IGNORE_SYNC_CDC_OFFSET = 29;
   static const int32_t TM_DDL_IGNORE_SYNC_CDC_BITS = 1;
-  static const int32_t TM_RESERVED = 2;
+  static const int32_t TM_TABLE_ORGANIZATION_MODE_OFFSET = 30;
+  static const int32_t TM_TABLE_ORGANIZATION_MODE_BITS = 1;
+  static const int32_t TM_RESERVED = 1;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
   static const uint32_t STATE_FLAG_MASK = (1U << TM_TABLE_STATE_FLAG_BITS) - 1;
-  static const uint32_t ORGANIZATION_MODE_MASK = (1U << TM_TABLE_ORGANIZATION_MODE_BITS) - 1;
+  static const uint32_t TABLE_PK_EXISTS_MODE_MASK = (1U << TM_TABLE_PK_EXISTS_MODE_OFFSET) - 1;
   static const uint32_t VIEW_CREATED_METHOD_FLAG_MASK = (1U << TM_TABLE_STATE_FLAG_BITS) - 1;
   static const uint32_t AUTO_INCREMENT_MODE_MASK = (1U << TM_TABLE_AUTO_INCREMENT_MODE_BITS) - 1;
   static const uint32_t ROWID_MODE_MASK = (1U << TM_TABLE_ROWID_MODE_BITS) - 1;
@@ -350,6 +352,7 @@ private:
   static const uint32_t MV_ENABLE_QUERY_REWRITE_MASK = (1U << TM_MV_ENABLE_QUERY_REWRITE_BITS) - 1;
   static const uint32_t MV_ON_QUERY_COMPUTATION_MASK = (1U << TM_MV_ON_QUERY_COMPUTATION_BITS) - 1;
   static const uint32_t DDL_IGNORE_SYNC_CDC_MASK = (1U << TM_DDL_IGNORE_SYNC_CDC_BITS) - 1;
+  static const uint32_t TABLE_ORGANIZATION_MODE_MASK = (1U << TM_TABLE_ORGANIZATION_MODE_BITS) - 1;
 public:
   ObTableMode() { reset(); }
   virtual ~ObTableMode() { reset(); }
@@ -376,7 +379,7 @@ public:
   }
   static ObTableOrganizationMode get_table_organization_flag(int32_t table_mode)
   {
-    return (ObTableOrganizationMode)((table_mode >> TM_TABLE_ORGANIZATION_MODE_OFFSET) & ORGANIZATION_MODE_MASK);
+    return (ObTableOrganizationMode)((table_mode >> TM_TABLE_PK_EXISTS_MODE_OFFSET) & TABLE_PK_EXISTS_MODE_MASK);
   }
   static ObViewCreatedMethodFlag get_view_created_method_flag(int32_t table_mode)
   {
@@ -420,7 +423,7 @@ public:
                "pk_mode", pk_mode_,
                "table_state_flag", state_flag_,
                "view_created_method_flag", view_created_method_flag_,
-               "table_organization_mode", organization_mode_,
+               "pk_exists", pk_exists_,
                "auto_increment_mode", auto_increment_mode_,
                "rowid_mode", rowid_mode_,
                "view_column_filled_flag", view_column_filled_flag_,
@@ -429,14 +432,16 @@ public:
                "table_referenced_by_mv_flag", table_referenced_by_mv_flag_,
                "mv_enable_query_rewrite_flag", mv_enable_query_rewrite_flag_,
                "mv_on_query_computation_flag", mv_on_query_computation_flag_,
-               "ddl_table_ignore_sync_cdc_flag", ddl_table_ignore_sync_cdc_flag_);
+               "ddl_table_ignore_sync_cdc_flag", ddl_table_ignore_sync_cdc_flag_,
+               "table_organization_mode", table_organization_mode_);
+
   union {
     int32_t mode_;
     struct {
       uint32_t mode_flag_ :TM_MODE_FLAG_BITS;
       uint32_t pk_mode_ :TM_PK_MODE_BITS;
       uint32_t state_flag_ :TM_TABLE_STATE_FLAG_BITS;
-      uint32_t organization_mode_: TM_TABLE_ORGANIZATION_MODE_BITS;
+      uint32_t pk_exists_: TM_TABLE_PK_EXISTS_MODE_BITS; // FARM COMPAT WHITELIST, renamed
       uint32_t view_created_method_flag_ :TM_VIEW_CREATED_METHOD_FLAG_BITS;
       uint32_t auto_increment_mode_: TM_TABLE_AUTO_INCREMENT_MODE_BITS;
       uint32_t rowid_mode_: TM_TABLE_ROWID_MODE_BITS;
@@ -447,6 +452,7 @@ public:
       uint32_t mv_enable_query_rewrite_flag_ : TM_MV_ENABLE_QUERY_REWRITE_BITS;
       uint32_t mv_on_query_computation_flag_ : TM_MV_ON_QUERY_COMPUTATION_BITS;
       uint32_t ddl_table_ignore_sync_cdc_flag_ : TM_DDL_IGNORE_SYNC_CDC_BITS;
+      uint32_t table_organization_mode_: TM_TABLE_ORGANIZATION_MODE_BITS;
       uint32_t reserved_ : TM_RESERVED;
     };
   };
@@ -522,9 +528,9 @@ struct ObBackUpTableModeOp
   #define SET_QUEUING_TABLE_MODE_WITH_OTHER_MODE(mode, queuing_mode_str) \
     if (TPKM_NEW_NO_PK == mode.pk_mode_) {                               \
       ret_str = queuing_mode_str"|NEW_NO_PK_MODE";                       \
-    } else if (TOM_HEAP_ORGANIZED == mode.organization_mode_) {          \
+    } else if (TOM_HEAP_ORGANIZED == mode.pk_exists_) {          \
       ret_str = queuing_mode_str"|HEAP_ORGANIZED_TABLE";                 \
-    } else if (TOM_INDEX_ORGANIZED == mode.organization_mode_) {         \
+    } else if (TOM_INDEX_ORGANIZED == mode.pk_exists_) {         \
       ret_str = queuing_mode_str"|INDEX_ORGANIZED_TABLE";                \
     } else {                                                             \
       ret_str = queuing_mode_str;                                        \
@@ -545,9 +551,9 @@ struct ObBackUpTableModeOp
       }
     } else if (TPKM_NEW_NO_PK == mode.pk_mode_) {
       ret_str = "NEW_NO_PK_MODE";
-    } else if (TOM_HEAP_ORGANIZED == mode.organization_mode_) {
+    } else if (TOM_HEAP_ORGANIZED == mode.pk_exists_) {
       ret_str = "HEAP_ORGANIZED_TABLE";
-    } else if (TOM_INDEX_ORGANIZED == mode.organization_mode_) {
+    } else if (TOM_INDEX_ORGANIZED == mode.pk_exists_) {
       ret_str = "INDEX_ORGANIZED_TABLE";
     }
     return ret_str;
@@ -579,10 +585,10 @@ struct ObBackUpTableModeOp
        } else if (0 == flag_str.case_compare("new_no_pk_mode")) {
          ret_mode.pk_mode_ = TPKM_NEW_NO_PK;
        } else if (0 == flag_str.case_compare("heap_organized_table")) {
-         ret_mode.organization_mode_ = TOM_HEAP_ORGANIZED;
+         ret_mode.pk_exists_ = TOM_HEAP_ORGANIZED;
          ret_mode.pk_mode_ = TPKM_TABLET_SEQ_PK;
        } else if (0 == flag_str.case_compare("index_organized_table")) {
-         ret_mode.organization_mode_ = TOM_INDEX_ORGANIZED;
+         ret_mode.pk_exists_ = TOM_INDEX_ORGANIZED;
        } else {
          ret = common::OB_ERR_PARSER_SYNTAX;
        }
@@ -614,6 +620,7 @@ public:
   virtual inline int64_t get_pctfree() const { return INVAID_RET; }
   virtual inline uint64_t get_master_key_id() const { return OB_INVALID_ID; }
   virtual inline bool is_use_bloomfilter() const { return false; }
+  virtual inline bool get_enable_macro_block_bloom_filter() const { return false; }
   virtual inline bool is_primary_aux_vp_table() const { return false; }
   virtual inline bool is_primary_vp_table() const { return false; }
   virtual inline bool is_aux_vp_table() const { return false; }
@@ -793,7 +800,7 @@ public:
   inline void set_table_pk_mode(const ObTablePKMode pk_mode)
   { table_mode_.pk_mode_ =  pk_mode; }
   inline void set_table_organization_mode(const ObTableOrganizationMode organization_mode)
-  { table_mode_.organization_mode_ = organization_mode; }
+  { table_mode_.pk_exists_ = organization_mode; }
   inline void set_view_created_method_flag(const ObViewCreatedMethodFlag view_created_method_flag)
     { table_mode_.view_created_method_flag_ =  view_created_method_flag; }
   inline ObViewCreatedMethodFlag get_view_created_method_flag() const
@@ -830,9 +837,9 @@ public:
   inline bool is_queuing_table() const
   { return is_queuing_table_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_)); }
   inline bool is_iot_table() const
-  { return TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.organization_mode_; }
+  { return TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.pk_exists_; }
   inline bool is_heap_table() const
-  { return TOM_HEAP_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.organization_mode_; }
+  { return TOM_HEAP_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.pk_exists_; }
   inline bool view_column_filled() const
   { return FILLED == (enum ObViewColumnFilledFlag)table_mode_.view_column_filled_flag_; }
   inline void set_view_column_filled_flag(const ObViewColumnFilledFlag flag)
@@ -1563,6 +1570,11 @@ public:
   inline int64_t get_constraint_count() const { return cst_cnt_; }
   inline bool get_micro_index_clustered() const { return micro_index_clustered_; }
   inline void set_micro_index_clustered(const bool micro_index_clustered) { micro_index_clustered_ = micro_index_clustered; }
+  inline bool get_enable_macro_block_bloom_filter() const override { return enable_macro_block_bloom_filter_; }
+  inline void set_enable_macro_block_bloom_filter(const bool enable_macro_block_bloom_filter)
+  {
+    enable_macro_block_bloom_filter_ = enable_macro_block_bloom_filter;
+  }
   inline int64_t get_virtual_column_cnt() const { return virtual_column_cnt_; }
   inline const_column_iterator column_begin() const { return column_array_; }
   inline const_column_iterator column_end() const { return NULL == column_array_ ? NULL : &(column_array_[column_cnt_]); }
@@ -1799,6 +1811,7 @@ public:
 
   int get_fk_check_index_tid(ObSchemaGetterGuard &schema_guard, const common::ObIArray<uint64_t> &parent_column_ids, uint64_t &scan_index_tid) const;
   int check_rowkey_column(const common::ObIArray<uint64_t> &parent_column_ids, bool &is_rowkey) const;
+  int is_hbase_table(bool &is_h_table) const;
 
   // trigger
   inline const common::ObIArray<uint64_t> &get_trigger_list() const
@@ -1880,6 +1893,10 @@ public:
                               const bool is_oracle_mode,
                               bool &is_offline) const;
 
+  int get_column_byte_length(const bool is_oracle_mode, const ObColumnSchemaV2 &col,
+                             const bool use_lob_inrow_threshold, int64_t &length) const;
+  int64_t get_max_row_length() const;
+  int check_row_length(const bool is_oracle_mode) const;
 
   int get_column_schema_in_same_col_group(uint64_t column_id, uint64_t udt_set_id,
                                           common::ObIArray<ObColumnSchemaV2 *> &column_group) const;
@@ -2174,6 +2191,7 @@ protected:
   int64_t lob_inrow_threshold_;
   int64_t auto_increment_cache_size_;
   bool micro_index_clustered_;
+  bool enable_macro_block_bloom_filter_;
 
   // column group
   bool is_column_store_supported_;

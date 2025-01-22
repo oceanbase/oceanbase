@@ -8538,13 +8538,81 @@ static struct VarsInit{
     ObSysVars[612].alias_ = "OB_SV_TABLE_ACCESS_POLICY" ;
     }();
 
+    [&] (){
+      ObSysVars[613].default_value_ = "3" ;
+      ObSysVars[613].info_ = "The path name of the file in which the server writes its process ID" ;
+      ObSysVars[613].name_ = "pid_file" ;
+      ObSysVars[613].data_type_ = ObVarcharType ;
+      ObSysVars[613].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[613].id_ = SYS_VAR_PID_FILE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PID_FILE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PID_FILE] = 613 ;
+      ObSysVars[613].base_value_ = "3" ;
+    ObSysVars[613].alias_ = "OB_SV_PID_FILE" ;
+    }();
+
+    [&] (){
+      ObSysVars[614].default_value_ = "3" ;
+      ObSysVars[614].info_ = "The number of the port on which the server listens for TCP/IP connections" ;
+      ObSysVars[614].name_ = "port" ;
+      ObSysVars[614].data_type_ = ObIntType ;
+      ObSysVars[614].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[614].id_ = SYS_VAR_PORT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PORT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PORT] = 614 ;
+      ObSysVars[614].base_value_ = "3" ;
+    ObSysVars[614].alias_ = "OB_SV_PORT" ;
+    }();
+
+    [&] (){
+      ObSysVars[615].default_value_ = "3" ;
+      ObSysVars[615].info_ = "the name of the socket file that is used for local client connections" ;
+      ObSysVars[615].name_ = "socket" ;
+      ObSysVars[615].data_type_ = ObVarcharType ;
+      ObSysVars[615].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[615].id_ = SYS_VAR_SOCKET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SOCKET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SOCKET] = 615 ;
+      ObSysVars[615].base_value_ = "3" ;
+    ObSysVars[615].alias_ = "OB_SV_SOCKET" ;
+    }();
+
+    [&] (){
+      ObSysVars[616].default_value_ = "1" ;
+      ObSysVars[616].info_ = "Control whether the optimizer considers the impact of rowgoal (such as the LIMIT operator, etc.) during cardinality estimation." ;
+      ObSysVars[616].name_ = "enable_optimizer_rowgoal" ;
+      ObSysVars[616].data_type_ = ObIntType ;
+      ObSysVars[616].enum_names_ = "[u'OFF', u'AUTO', u'ON']" ;
+      ObSysVars[616].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[616].id_ = SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL] = 616 ;
+      ObSysVars[616].base_value_ = "1" ;
+    ObSysVars[616].alias_ = "OB_SV_ENABLE_OPTIMIZER_ROWGOAL" ;
+    }();
+
+    [&] (){
+      ObSysVars[617].default_value_ = "8" ;
+      ObSysVars[617].info_ = "The number of nearest cluster centers from the IVF vector index searched during this session." ;
+      ObSysVars[617].name_ = "ob_ivf_nprobes" ;
+      ObSysVars[617].data_type_ = ObUInt64Type ;
+      ObSysVars[617].min_val_ = "1" ;
+      ObSysVars[617].max_val_ = "65536" ;
+      ObSysVars[617].flags_ = ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[617].id_ = SYS_VAR_OB_IVF_NPROBES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_IVF_NPROBES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_IVF_NPROBES] = 617 ;
+      ObSysVars[617].base_value_ = "8" ;
+    ObSysVars[617].alias_ = "OB_SV_IVF_NPROBES" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 613;
+static int64_t var_amount = 618;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

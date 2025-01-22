@@ -450,6 +450,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_ID() share::ObTenantEnv::get_tenant_local()->id()
 // 获取租户epoch id
 #define MTL_EPOCH_ID() share::ObTenantEnv::get_tenant_local()->get_epoch()
+// 租户switchover epoch
+#define MTL_GET_SWITCHOVER_EPOCH() share::ObTenantEnv::get_tenant()->get_switchover_epoch()
+#define MTL_SET_SWITCHOVER_EPOCH(switchover_epoch) share::ObTenantEnv::get_tenant()->set_switchover_epoch(switchover_epoch)
 // 获取是否为主租户
 #define MTL_TENANT_ROLE_CACHE_IS_PRIMARY() share::ObTenantEnv::get_tenant()->is_primary_tenant()
 //由于之前租户默认为主库，兼容性写法
@@ -677,6 +680,20 @@ public:
     return share::is_invalid_tenant(ATOMIC_LOAD(&tenant_role_value_));
   }
 
+  void set_switchover_epoch(const int64_t switchover_epoch)
+  {
+    int64_t cached_switchover_epoch = get_switchover_epoch();
+    if (OB_INVALID_VERSION != switchover_epoch && cached_switchover_epoch < switchover_epoch) {
+      SHARE_LOG(INFO, "try set switchover_epoch", K(switchover_epoch), K(cached_switchover_epoch));
+      ATOMIC_BCAS(&switchover_epoch_, cached_switchover_epoch, switchover_epoch);
+    }
+  }
+
+  int64_t get_switchover_epoch() const
+  {
+    return ATOMIC_LOAD(&switchover_epoch_);
+  }
+
   template<class T>
   T get() { return inner_get(Identity<T>()); }
 
@@ -760,6 +777,7 @@ protected:
   int64_t unit_memory_size_;
   // tenant data disk size
   int64_t unit_data_disk_size_;
+  int64_t switchover_epoch_;
 
 private:
   common::hash::ObHashSet<int64_t> tg_set_;
@@ -937,7 +955,6 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
     } while(0)
 
 
-#ifdef ENABLE_DEBUG_LOG
 #define mtl_sop_borrow(type)                                                                                    \
   ({                                                                                                            \
     type *iter = MTL(common::ObServerObjectPool<type>*)->borrow_object();                                       \
@@ -946,11 +963,7 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
     }                                                                                                           \
     (iter);                                                                                                     \
   })
-#else
-#define mtl_sop_borrow(type) MTL(common::ObServerObjectPool<type>*)->borrow_object()
-#endif
 
-#ifdef ENABLE_DEBUG_LOG
 #define mtl_sop_return(type, ptr)                                                                               \
   do {                                                                                                          \
     if (OB_NOT_NULL(ptr)) {                                                                                     \
@@ -958,9 +971,6 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
     }                                                                                                           \
     MTL(common::ObServerObjectPool<type>*)->return_object(ptr);                                                 \
   } while (false)
-#else
-#define mtl_sop_return(type, ptr) MTL(common::ObServerObjectPool<type>*)->return_object(ptr)
-#endif
 
 } // end of namespace share
 

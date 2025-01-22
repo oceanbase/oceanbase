@@ -139,11 +139,13 @@ class ObTabletAutoincrementService
 {
 public:
   static ObTabletAutoincrementService &get_instance();
+  static const int64_t DEFAULT_CACHE_SIZE = 10000;
+  static const int64_t LOB_CACHE_SIZE = 100000;
   int init();
   void destroy();
   int get_tablet_cache_interval(const uint64_t tenant_id,
                                 ObTabletCacheInterval &interval);
-  int get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq);
+  int get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq, const int64_t cache_size=ObTabletAutoincrementService::DEFAULT_CACHE_SIZE);
   int get_autoinc_seq_for_mlog(
       const uint64_t tenant_id,
       const ObLSID &ls_id,

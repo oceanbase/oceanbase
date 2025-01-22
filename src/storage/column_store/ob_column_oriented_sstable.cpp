@@ -271,17 +271,17 @@ int ObCOSSTableV2::init(
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!param.is_valid() ||
-                  ObCOSSTableBaseType::INVALID_TYPE >= param.co_base_type_ ||
-                  ObCOSSTableBaseType::MAX_TYPE <= param.co_base_type_ ||
-                  1 >= param.column_group_cnt_ ||
+                  ObCOSSTableBaseType::INVALID_TYPE >= param.co_base_type() ||
+                  ObCOSSTableBaseType::MAX_TYPE <= param.co_base_type() ||
+                  1 >= param.column_group_cnt() ||
                   NULL == allocator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(param), K(allocator));
   } else if (OB_FAIL(ObSSTable::init(param, allocator))) {
     LOG_WARN("failed to init basic ObSSTable", K(ret), K(param));
-  } else if (param.is_co_table_without_cgs_) {
+  } else if (param.is_co_table_without_cgs()) {
     // current co sstable is empty, or the normal cg is redundant, no need to init cg sstable
-    cs_meta_.column_group_cnt_ = param.column_group_cnt_; // other cs meta is zero.
+    cs_meta_.column_group_cnt_ = param.column_group_cnt(); // other cs meta is zero.
     is_cgs_empty_co_ = true;
     if (OB_FAIL(build_cs_meta_without_cgs())) {
       LOG_WARN("failed to build cs meta without cgs", K(ret), K(param), KPC(this));
@@ -289,9 +289,9 @@ int ObCOSSTableV2::init(
   }
 
   if (OB_SUCC(ret)) {
-    base_type_ = static_cast<ObCOSSTableBaseType>(param.co_base_type_);
-    valid_for_cs_reading_ = param.is_co_table_without_cgs_;
-    cs_meta_.full_column_cnt_ = param.full_column_cnt_;
+    base_type_ = static_cast<ObCOSSTableBaseType>(param.co_base_type());
+    valid_for_cs_reading_ = param.is_co_table_without_cgs();
+    cs_meta_.full_column_cnt_ = param.full_column_cnt();
   } else {
     reset();
   }

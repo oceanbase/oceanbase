@@ -159,7 +159,13 @@ int ObDelUpdLogPlan::check_use_direct_load()
       }
     } else if (direct_load_opt_ctx.can_use_direct_load()) {
       if (OB_UNLIKELY(!use_pdml_)) {
-        LOG_USER_WARN(OB_NOT_SUPPORTED, "PDML is disabled, direct load is");
+        bool allow_fallback = false;
+        if (OB_FAIL(ObDirectLoadOptimizerCtx::check_direct_load_allow_fallback(direct_load_opt_ctx, exec_ctx, allow_fallback))) {
+          LOG_WARN("fail to check support direct load allow fallback", K(ret));
+        } else if (!allow_fallback) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "PDML is disabled, direct load is");
+        }
       } else {
         use_direct_load = true;
       }
@@ -2388,8 +2394,6 @@ int ObDelUpdLogPlan::check_update_primary_key(const ObTableSchema* index_schema,
   if (OB_ISNULL(stmt) || OB_ISNULL(index_schema) || OB_ISNULL(index_dml_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(index_schema), K(index_dml_info));
-  } else if (!index_dml_info->is_primary_index_) {
-    // do nothing
   } else if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(pk_ids))) {
     LOG_WARN("failed to get rowkey column ids", K(ret));
   } else {

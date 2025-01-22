@@ -304,7 +304,7 @@ int TestCompactionPolicy::mock_sstable(
   ObStorageSchema storage_schema;
   if (OB_FAIL(storage_schema.init(allocator, table_schema, lib::Worker::CompatMode::MYSQL))) {
     LOG_WARN("failed to init storage schema", K(ret));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::build_create_sstable_param(storage_schema, tablet_id, 100, param))) {
+  } else if (OB_FAIL(param.init_for_empty_major_sstable(tablet_id, storage_schema, 100, -1, false))) {
     LOG_WARN("failed to build create sstable param", K(ret), K(table_key));
   } else {
     param.table_key_ = table_key;
@@ -363,7 +363,7 @@ int TestCompactionPolicy::mock_column_sstable(
 
   if (OB_FAIL(storage_schema.init(allocator, table_schema, lib::Worker::CompatMode::MYSQL))) {
     LOG_WARN("failed to init storage schema", K(ret));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::build_create_sstable_param(storage_schema, tablet_id, 100, param))) {
+  } else if (OB_FAIL(param.init_for_empty_major_sstable(tablet_id, storage_schema, 100, -1, false))) {
     LOG_WARN("failed to build create sstable param", K(ret), K(table_key));
   } else {
     param.table_key_ = table_key;

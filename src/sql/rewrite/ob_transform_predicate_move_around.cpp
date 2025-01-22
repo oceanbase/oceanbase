@@ -18,6 +18,8 @@
 #include "sql/rewrite/ob_predicate_deduce.h"
 #include "share/schema/ob_table_schema.h"
 #include "common/ob_smart_call.h"
+#include "sql/resolver/expr/ob_shared_expr_resolver.h"
+
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
@@ -361,6 +363,8 @@ int ObTransformPredicateMoveAround::pullup_predicates(ObDMLStmt *stmt,
     LOG_WARN("stmt is null", K(ret), K(stmt));
   } else if (stmt->is_hierarchical_query()) {
     OPT_TRACE("can not pullup predicates for hierarchical query");
+  } else if (stmt->is_select_stmt() && static_cast<ObSelectStmt *>(stmt)->get_rollup_expr_size() != 0) {
+    OPT_TRACE("can not pullup predicates for select stmt if stmt has rollup exprs");
   } else if (OB_FAIL(check_stack_overflow(is_overflow))) {
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_overflow) {
@@ -2133,7 +2137,8 @@ int ObTransformPredicateMoveAround::pushdown_into_where(ObDMLStmt &stmt,
   ObSqlBitSet<> table_set;
   bool is_needed = false;
   OPT_TRACE("try to transform where condition");
-  ObIArray<ObRawExpr *> &conditions = (stmt.is_insert_stmt() || stmt.is_merge_stmt())
+  bool is_insert_stmt = stmt.is_insert_stmt() || stmt.is_merge_stmt();
+  ObIArray<ObRawExpr *> &conditions = is_insert_stmt
                                       ? static_cast<ObInsertStmt &>(stmt).get_sharding_conditions()
                                       : stmt.get_condition_exprs();
   if (conditions.empty() && predicates.empty()) {
@@ -2160,7 +2165,8 @@ int ObTransformPredicateMoveAround::pushdown_into_where(ObDMLStmt &stmt,
   } else if (OB_FAIL(accept_predicates(stmt,
                                        conditions,
                                        pullup_preds,
-                                       new_conds))) {
+                                       new_conds,
+                                       is_insert_stmt))) {
     LOG_WARN("failed to accept predicate", K(ret));
   }
   return ret;
@@ -3374,7 +3380,8 @@ int ObTransformPredicateMoveAround::check_need_transform_predicates(ObIArray<ObR
 int ObTransformPredicateMoveAround::accept_predicates(ObDMLStmt &stmt,
                                                       ObIArray<ObRawExpr *> &conds,
                                                       ObIArray<ObRawExpr *> &properties,
-                                                      ObIArray<ObRawExpr *> &new_conds)
+                                                      ObIArray<ObRawExpr *> &new_conds,
+                                                      const bool preserve_conds)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> chosen_preds;
@@ -3386,6 +3393,8 @@ int ObTransformPredicateMoveAround::accept_predicates(ObDMLStmt &stmt,
   } else if (OB_FAIL(equal_param_constraints.assign(stmt.get_query_ctx()->all_equal_param_constraints_))
              || OB_FAIL(append(equal_param_constraints, ctx_->equal_param_constraints_))) {
     LOG_WARN("failed to fill equal param constraints", K(ret));
+  } else if (preserve_conds && OB_FAIL(chosen_preds.assign(conds))) {
+    LOG_WARN("failed to assign conditions", K(ret));
   } else {
     context.init(&stmt.get_query_ctx()->calculable_items_, &equal_param_constraints);
   }

@@ -154,7 +154,8 @@ int ObImportTableJobScheduler::process_(share::ObImportTableJob &job)
         }
         break;
       }
-      case ObImportTableJobStatus::IMPORT_FINISH: {
+      case ObImportTableJobStatus::IMPORT_FINISH:
+      case ObImportTableJobStatus::IMPORT_FAILED: {
         if (OB_FAIL(finish_(job))) {
           LOG_WARN("failed to cancel", K(ret), K(job));
         }
@@ -209,10 +210,26 @@ int ObImportTableJobScheduler::reconstruct_ref_constraint_(share::ObImportTableJ
   int ret = OB_SUCCESS;
   ObArray<share::ObImportTableTask> import_tasks;
   ObImportTableJobStatus next_status = ObImportTableJobStatus::get_next_status(job.get_status());
+  int64_t succeed_table_cnt = job.get_finished_table_count();
+  int64_t failed_table_cnt = job.get_failed_table_count();
+  ObImportResult::Comment comment;
+  int64_t pos = 0;
   LOG_INFO("[IMPORT_TABLE]start reconstruct ref constraint", K(job));
   if (OB_FAIL(get_import_table_tasks_(job, import_tasks))) {
       LOG_WARN("failed to get import table task", K(ret));
   } else if (OB_FALSE_IT(job.set_end_ts(ObTimeUtility::current_time()))) {
+  } else if (OB_FAIL(databuff_printf(comment.ptr(), comment.capacity(), pos,
+    "import succeed table count: %ld, failed table count: %ld", succeed_table_cnt, failed_table_cnt))) {
+    if (OB_SIZE_OVERFLOW == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to databuff_printf", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FALSE_IT(job.get_result().set_result(true, comment))) {
+  } else if (OB_FALSE_IT(job.get_result().set_tables_import_result(succeed_table_cnt, failed_table_cnt))) {
   } else if (OB_FAIL(advance_status_(*sql_proxy_, job, next_status))) {
     LOG_WARN("failed to advance status", K(ret), K(job), K(next_status));
   } else {
@@ -256,7 +273,7 @@ int ObImportTableJobScheduler::gen_import_table_task_(share::ObImportTableJob &j
     LOG_WARN("failed to gen import table task", K(ret), K(job));
     if (!ObImportTableUtil::can_retrieable_err(ret)) {
       int tmp_ret = OB_SUCCESS;
-      ObImportTableJobStatus next_status(ObImportTableJobStatus::IMPORT_FINISH);
+      ObImportTableJobStatus next_status(ObImportTableJobStatus::IMPORT_FAILED);
       job.set_end_ts(ObTimeUtility::current_time());
 
       if (!job.get_result().is_comment_setted()) {
@@ -264,6 +281,8 @@ int ObImportTableJobScheduler::gen_import_table_task_(share::ObImportTableJob &j
         ObImportResult result;
         if (OB_TMP_FAIL(result.set_result(ret, trace_id, GCONF.self_addr_))) {
           LOG_WARN("failed to set result", K(ret));
+        } else if (OB_FALSE_IT(result.set_tables_import_result(ObImportResult::FAILED))) {
+          LOG_WARN("failed to set recover table result", K(ret));
         } else {
           job.set_result(result);
         }
@@ -400,20 +419,7 @@ int ObImportTableJobScheduler::update_statistic_(
       failed_task_cnt++;
     }
   }
-  ObImportResult result;
 
-  if (OB_FAIL(databuff_printf(comment.ptr(), comment.capacity(), pos,
-    "import succeed table count: %ld, failed table count: %ld", succeed_task_cnt, failed_task_cnt))) {
-    if (OB_SIZE_OVERFLOW == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to databuff_printf", K(ret));
-    }
-  }
-
-  bool is_succeed = (succeed_task_cnt > 0);
-  result.set_result(is_succeed, comment);
-  job.set_result(result);
   job.set_finished_table_count(succeed_task_cnt);
   job.set_failed_table_count(failed_task_cnt);
 
@@ -428,7 +434,13 @@ int ObImportTableJobScheduler::canceling_(share::ObImportTableJob &job)
   int ret = OB_SUCCESS;
   LOG_INFO("[IMPORT_TABLE]cancel import table job", K(job));
   ObArray<share::ObImportTableTask> import_tasks;
-  if (OB_FAIL(get_import_table_tasks_(job, import_tasks))) {
+  int64_t succeed_task_cnt = 0;
+  int64_t failed_task_cnt = 0;
+  ObMySQLTransaction trans;
+  uint64_t meta_tenant_id = gen_meta_tenant_id(job.get_tenant_id());
+  if (OB_FAIL(trans.start(sql_proxy_, meta_tenant_id))) {
+    LOG_WARN("failed to start trans", K(ret), K(meta_tenant_id));
+  } else if (OB_FAIL(get_import_table_tasks_(job, import_tasks))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
@@ -443,6 +455,9 @@ int ObImportTableJobScheduler::canceling_(share::ObImportTableJob &job)
       arg.tenant_id_ = task.get_tenant_id();
       bool is_exist = false;
       if (task.get_status().is_finish()) {
+        if (task.get_result().is_succeed()) {
+          succeed_task_cnt ++;
+        }
       } else if (OB_FAIL(check_import_ddl_task_exist_(task, is_exist))) {
         LOG_WARN("failed to check import ddl task", K(ret));
       } else if (is_exist && OB_FAIL(ObDDLServerClient::abort_redef_table(arg))) {
@@ -454,11 +469,19 @@ int ObImportTableJobScheduler::canceling_(share::ObImportTableJob &job)
         if (OB_FAIL(result.set_result(OB_CANCELED, trace_id, GCONF.self_addr_))) {
           LOG_WARN("failed to set result", K(ret));
         } else if (OB_FALSE_IT(task.set_result(result))) {
-        } else if (OB_FAIL(task_helper_.advance_status(*sql_proxy_, task, next_status))) {
+        } else if (OB_FAIL(task_helper_.advance_status(trans, task, next_status))) {
           LOG_WARN("failed to cancel import task", K(ret), K(task));
         } else {
           LOG_INFO("[IMPORT_TABLE]succeed cancel import table task", K(arg));
         }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      failed_task_cnt = max(0, job.get_total_table_count() - succeed_task_cnt);
+      job.set_finished_table_count(succeed_task_cnt);
+      job.set_failed_table_count(failed_task_cnt);
+      if (OB_FAIL(job_helper_.report_statistics(trans, job))) {
+        LOG_WARN("failed to report statistics", K(ret));
       }
     }
   }
@@ -466,18 +489,31 @@ int ObImportTableJobScheduler::canceling_(share::ObImportTableJob &job)
   if (OB_SUCC(ret)) {
     share::ObTaskId trace_id(*ObCurTraceId::get_trace_id());
     ObImportResult result;
-    ObImportTableJobStatus next_status(ObImportTableJobStatus::IMPORT_FINISH);
+    ObImportTableJobStatus next_status(ObImportTableJobStatus::IMPORT_FAILED);
     job.set_end_ts(ObTimeUtility::current_time());
     if (OB_FAIL(result.set_result(OB_CANCELED, trace_id, GCONF.self_addr_))) {
       LOG_WARN("failed to set result", K(ret));
+    } else if (OB_FALSE_IT(result.set_tables_import_result(succeed_task_cnt, failed_task_cnt))) {
+      LOG_WARN("failed to set recover table result", K(ret));
     } else if (OB_FALSE_IT(job.set_result(result))) {
-    } else if (OB_FAIL(advance_status_(*sql_proxy_, job, next_status))) {
+    } else if (OB_FAIL(advance_status_(trans, job, next_status))) {
       LOG_WARN("failed to advance status", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(trans.end(true))) {
+      LOG_WARN("failed to commit", K(ret));
     } else {
       LOG_INFO("[IMPORT_TABLE]succeed to cancel import table job", K(job));
       ROOTSERVICE_EVENT_ADD("import_table", "cancel import table task",
                       "tenant_id", job.get_tenant_id(),
                       "job_id", job.get_job_id());
+    }
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+      LOG_WARN("failed to roll back", K(ret), K(tmp_ret));
     }
   }
   return ret;

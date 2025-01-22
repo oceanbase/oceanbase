@@ -627,6 +627,9 @@ int ObTransformSimplifyWinfunc::do_remove_stmt_win(ObSelectStmt *select_stmt,
       } else if (OB_FAIL(select_stmt->remove_window_func_expr(
                            static_cast<ObWinFunRawExpr*>(exprs.at(i))))) {
         LOG_WARN("failed to remove window func expr", K(ret));
+      } else if (new_expr->is_win_func_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nested win expr", K(ret), K(new_expr));
       }
     }
     if (OB_SUCC(ret) && OB_FAIL(select_stmt->replace_relation_exprs(exprs, new_exprs))) {

@@ -112,13 +112,11 @@ void ObTableLoadCoordinator::abort_ctx(ObTableLoadTableCtx *ctx)
     if (OB_SUCCESS != (tmp_ret = ctx->coordinator_ctx_->set_status_abort())) {
       LOG_WARN("fail to set coordinator status abort", KR(tmp_ret));
     }
-    // 2. disable heart beat
-    ctx->coordinator_ctx_->set_enable_heart_beat(false);
-    // 3. mark all active trans abort
+    // 2. mark all active trans abort
     if (OB_SUCCESS != (tmp_ret = abort_active_trans(ctx))) {
       LOG_WARN("fail to abort active trans", KR(tmp_ret));
     }
-    // 4. abort peers ctx
+    // 3. abort peers ctx
     if (OB_SUCCESS != (tmp_ret = abort_peers_ctx(ctx))) {
       LOG_WARN("fail to abort peers ctx", KR(tmp_ret));
     }
@@ -156,14 +154,12 @@ int ObTableLoadCoordinator::abort_active_trans(ObTableLoadTableCtx *ctx)
 int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(ctx->coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("route_abort_peer_request begin", K(all_addr_array.count()));
+  {
+    using StoreInfo = ObTableLoadCoordinatorCtx::StoreInfo;
+    LOG_INFO("route_abort_peer_request begin", K(ctx->coordinator_ctx_->store_infos_));
     static const int64_t max_retry_times = 100; // ensure store ctx detect heart beat timeout and abort
-    ObArray<ObAddr> addr_array1, addr_array2;
-    ObIArray<ObAddr> *curr_round = &addr_array1, *next_round = &addr_array2;
+    ObArray<StoreInfo *> addr_array1, addr_array2;
+    ObIArray<StoreInfo *> *curr_round = &addr_array1, *next_round = &addr_array2;
     int64_t running_cnt = 0;
     int64_t fail_cnt = 0;
     int64_t round = 0;
@@ -174,10 +170,10 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
     addr_array2.set_tenant_id(MTL_ID());
     arg.table_id_ = ctx->param_.table_id_;
     arg.task_id_ = ctx->ddl_param_.task_id_;
-    for (int64_t i = 0; i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
-      if (OB_FAIL(curr_round->push_back(addr))) {
-        LOG_WARN("fail to push back", KR(ret), K(addr));
+    for (int64_t i = 0; i < ctx->coordinator_ctx_->store_infos_.count(); ++i) {
+      StoreInfo *store_info = &(ctx->coordinator_ctx_->store_infos_.at(i));
+      if (OB_FAIL(curr_round->push_back(store_info))) {
+        LOG_WARN("fail to push back", KR(ret), K(*store_info));
       }
     }
     ObTableLoadIndexLongWait wait_obj(10 * 1000, WAIT_INTERVAL_US);
@@ -187,7 +183,8 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
       running_cnt = 0;
       fail_cnt = 0;
       for (int64_t i = 0; i < curr_round->count(); ++i) {
-        const ObAddr &addr = curr_round->at(i);
+        StoreInfo *store_info = curr_round->at(i);
+        const ObAddr &addr = store_info->addr_;
         if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
           ObTableLoadStore::abort_ctx(ctx, res.is_stopped_);
           ret = OB_SUCCESS;
@@ -200,6 +197,7 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
         }
         if (OB_SUCC(ret) && res.is_stopped_) {
           // peer is stopped
+          store_info->enable_heart_beat_ = false;
         } else {
           if (OB_FAIL(ret)) {
             ++fail_cnt;
@@ -207,8 +205,8 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
           } else {
             ++running_cnt;
           }
-          if (OB_FAIL(next_round->push_back(addr))) {
-            LOG_WARN("fail to push back", KR(ret));
+          if (OB_FAIL(next_round->push_back(store_info))) {
+            LOG_WARN("fail to push back", KR(ret), K(*store_info));
           }
         }
       }
@@ -278,10 +276,188 @@ int ObTableLoadCoordinator::check_need_sort_for_lob_or_index(bool &need_sort) co
   return ret;
 }
 
+int ObTableLoadCoordinator::calc_session_count(
+    const int64_t total_session_count,
+    const int64_t limit_session_count,
+    const ObTableLoadArray<ObTableLoadPartitionLocation::LeaderInfo> all_leader_info_array,
+    ObArray<int64_t> &partitions,
+    ObDirectLoadResourceApplyArg &apply_arg,
+    int64_t &coord_session_count,
+    int64_t &min_session_count,
+    int64_t &write_session_count)
+{
+  int ret = OB_SUCCESS;
+  int64_t remain_session_count = total_session_count;
+  ObAddr coord_addr = ObServer::get_instance().get_self();
+  bool include_coord_addr = false;
+  int64_t total_partitions = 0;
+  int64_t store_server_count = all_leader_info_array.count();
+
+  // 判断coordinator节点是否也作为store节点
+  for (int64_t i = 0; i < store_server_count; i++) {
+    total_partitions += all_leader_info_array[i].partition_id_array_.count();
+    if (coord_addr == all_leader_info_array[i].addr_) {
+      include_coord_addr = true;
+    }
+  }
+
+  // 资源控制先确定线程，第一次遍历先按分区等比例分配线程
+  for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
+    ObDirectLoadResourceUnit unit;
+    unit.addr_ = all_leader_info_array[i].addr_;
+    if (OB_FAIL(partitions.push_back(all_leader_info_array[i].partition_id_array_.count()))) {
+      LOG_WARN("fail to push back", KR(ret));
+    } else {
+      unit.thread_count_ = MAX(MIN(limit_session_count, total_session_count * partitions[i] / total_partitions), MIN_THREAD_COUNT);
+      if (OB_FAIL(apply_arg.apply_array_.push_back(unit))) {
+        LOG_WARN("fail to push back", KR(ret));
+      } else {
+        remain_session_count -= unit.thread_count_;
+      }
+    }
+  }
+
+  // 第一次遍历如果不能分配完所有的线程，继续给每个节点平均分配剩余的线程，直到所有的线程都被分配完
+  if (OB_SUCC(ret)) {
+    bool need_break = false;
+    while (remain_session_count > 0 && !need_break) {
+      need_break = true;
+      for (int64_t i = 0; remain_session_count > 0 && i < store_server_count; i++) {
+        ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
+        if (unit.thread_count_ < limit_session_count) {
+          unit.thread_count_++;
+          remain_session_count--;
+          need_break = false;
+        }
+      }
+    }
+  }
+
+  /*
+  协调节点不存在数据分区时，需要申请线程资源，但不需要申请内存，放在申请资源数组的最后一个位置
+  coord_session_count表示coordinator节点可用线程数，min_session_count表示所有节点可用线程数的最小值
+  */
+  if (OB_SUCC(ret)) {
+    if (!include_coord_addr) {
+      ObDirectLoadResourceUnit unit;
+      unit.addr_ = coord_addr;
+      unit.thread_count_ = MAX(MIN(limit_session_count, total_session_count / store_server_count), MIN_THREAD_COUNT);
+      unit.memory_size_ = 0;
+      coord_session_count = unit.thread_count_;
+      min_session_count = MIN(min_session_count, unit.thread_count_);
+      if (OB_FAIL(apply_arg.apply_array_.push_back(unit))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
+      ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
+      if (all_leader_info_array[i].addr_ == coord_addr) {
+        coord_session_count = unit.thread_count_;
+      }
+      min_session_count = MIN(min_session_count, unit.thread_count_);
+    }
+  }
+
+  /*
+  确定write_session_count，表示发送数据阶段store节点可用的线程数
+  对于load data模式，如果 协调节点和数据节点都在同一个节点上，就分出一半的线程用于解析数据，一半的线程用于存储数据
+  */
+  if (OB_SUCC(ret)) {
+    if (include_coord_addr && ObDirectLoadMode::is_load_data(ctx_->param_.load_mode_)) {
+      write_session_count = MIN(min_session_count, (coord_session_count + 1) / 2);
+    } else {
+      write_session_count = min_session_count;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadCoordinator::cal_memory_size(
+    const bool need_check_need_sort,
+    const int64_t store_server_count,
+    const int64_t write_session_count,
+    const int64_t memory_limit,
+    const ObArray<int64_t> &partitions,
+    ObDirectLoadResourceApplyArg &apply_arg,
+    bool &main_need_sort,
+    bool &task_need_sort)
+{
+  int ret = OB_SUCCESS;
+  if (need_check_need_sort) {
+    /*
+    先确定主表是否要走排序，对于堆表，sql指定need_sort=true时，如果内存满足不排序，就走不排序流程，只要有一个节点内存不足，整体都要走排序
+    如果主表要走排序，则整个任务按排序方式分配内存，否则再确定是否要做lob_id排序和索引排序，需要的话就按照MAX(主表不排序内存，索引排序内存)来分配内存，否则分配主表不排序需要的内存
+    */
+    for (int64_t i = 0; !main_need_sort && i < store_server_count; i++) {
+      ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
+      int64_t min_sort_memory = unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4;
+      int64_t min_unsort_memory = 0;
+      int64_t thread_count = write_session_count;
+      // insert into 和 insert overwrite各个节点的并发在写入数据阶段是独立的
+      if (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_)) {
+        thread_count = unit.thread_count_;
+      }
+      if (ctx_->schema_.is_heap_table_) {
+        // 直接写宏块需要的内存，对于非排序模式，每个分区各自写宏块，所以要乘分区数
+        min_unsort_memory = MACROBLOCK_BUFFER_SIZE * partitions[i] * thread_count;
+        if (!ctx_->param_.need_sort_) {
+          // sql指定need_sort=false，强制不排序
+        } else {
+          if (min_unsort_memory > memory_limit) {
+            main_need_sort = true;
+          }
+        }
+      } else {
+        // 取写宏块或写临时文件需要内存的最小值，对于非排序模式，每个分区各自写临时文件，所以要乘分区数
+        min_unsort_memory = SSTABLE_BUFFER_SIZE * partitions[i] * thread_count;
+        if (ctx_->param_.need_sort_) {
+          // sql指定need_sort=true，强制走排序
+          main_need_sort = true;
+        } else {
+          if (min_unsort_memory > memory_limit) {
+            main_need_sort = true;
+          }
+        }
+      }
+    }
+
+    task_need_sort = main_need_sort;
+    if (!task_need_sort) {
+      if (OB_FAIL(check_need_sort_for_lob_or_index(task_need_sort))) {
+        LOG_WARN("fail to check need sort for lob or index", KR(ret));
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
+    ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
+    int64_t min_sort_memory = MIN(unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4, memory_limit);
+    int64_t min_unsort_memory = 0;
+    int64_t thread_count = write_session_count;
+    // insert into 和 insert overwrite各个节点的并发在写入数据阶段是独立的
+    if (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_)) {
+      thread_count = unit.thread_count_;
+    }
+    if (ctx_->schema_.is_heap_table_) {
+      min_unsort_memory = MIN(MACROBLOCK_BUFFER_SIZE * partitions[i] * thread_count, memory_limit);
+    } else {
+      min_unsort_memory = MIN(MAX(SSTABLE_BUFFER_SIZE * partitions[i] * thread_count, MACROBLOCK_BUFFER_SIZE * thread_count), memory_limit);
+    }
+    if (task_need_sort) {
+      if (main_need_sort) {
+        unit.memory_size_ = min_sort_memory;
+      } else {
+        unit.memory_size_ = MAX(min_unsort_memory, min_sort_memory);
+      }
+    } else {
+      unit.memory_size_ = min_unsort_memory;
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg)
 {
   int ret = OB_SUCCESS;
-  const int64_t MIN_THREAD_COUNT = 2;
   ObTenant *tenant = nullptr;
   int64_t tenant_id = MTL_ID();
   uint64_t cluster_version = ctx_->ddl_param_.cluster_version_;
@@ -290,11 +466,8 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
   } else if (cluster_version < CLUSTER_VERSION_4_2_2_0 ||
              (cluster_version >= CLUSTER_VERSION_4_3_0_0 && cluster_version < CLUSTER_VERSION_4_3_1_0)) {
     // not support resource manage
-    if (OB_FAIL(ObTableLoadPartitionLocation::init_partition_location(coordinator_ctx_->partition_ids_,
-                                                                      coordinator_ctx_->target_partition_ids_,
-                                                                      coordinator_ctx_->partition_location_,
-                                                                      coordinator_ctx_->target_partition_location_))) {
-      LOG_WARN("fail to inner init partition location", KR(ret));
+    if (OB_FAIL(coordinator_ctx_->init_partition_location_and_store_infos())) {
+      LOG_WARN("fail to init partition location and store infos", KR(ret));
     } else {
       ctx_->param_.session_count_ = MAX(MIN(ctx_->param_.parallel_, (int64_t)tenant->unit_max_cpu() * 2), MIN_THREAD_COUNT);
       ctx_->param_.write_session_count_ = ctx_->param_.session_count_;
@@ -303,7 +476,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
     apply_arg.tenant_id_ = tenant_id;
     apply_arg.task_key_ = ObTableLoadUniqueKey(ctx_->param_.table_id_, ctx_->ddl_param_.task_id_);
     int64_t retry_count = 0;
-    common::ObAddr coordinator_addr = ObServer::get_instance().get_self();
+    ObAddr coordinator_addr = ObServer::get_instance().get_self();
     while (OB_SUCC(ret)) {
       apply_arg.apply_array_.reset();
       int64_t memory_limit = 0;
@@ -315,11 +488,8 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         LOG_WARN("fail to check status", KR(ret));
       } else if (OB_FAIL(coordinator_ctx_->exec_ctx_->check_status())) {
         LOG_WARN("fail to check status", KR(ret));
-      } else if (OB_FAIL(ObTableLoadPartitionLocation::init_partition_location(coordinator_ctx_->partition_ids_,
-                                                                               coordinator_ctx_->target_partition_ids_,
-                                                                               coordinator_ctx_->partition_location_,
-                                                                               coordinator_ctx_->target_partition_location_))) {
-        LOG_WARN("fail to inner init partition location", KR(ret));
+      } else if (OB_FAIL(coordinator_ctx_->init_partition_location_and_store_infos())) {
+        LOG_WARN("fail to init partition location and store infos", KR(ret));
       } else if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader_info(all_leader_info_array))) {
         LOG_WARN("fail to get all leader info", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::get_memory_limit(memory_limit))) {
@@ -330,149 +500,74 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         bool main_need_sort = false;  // 表示主表是否会走排序
         int64_t total_partitions = 0;
         ObArray<int64_t> partitions;
-        int64_t store_server_count = all_leader_info_array.count();
-        int64_t coordinator_session_count = 0;
-        int64_t write_session_count = 0;
-        int64_t min_session_count = MAX(ctx_->param_.parallel_, 2);
-        int64_t max_session_count = MIN((int64_t)tenant->unit_max_cpu() * 2, oceanbase::ObMacroDataSeq::MAX_PARALLEL_IDX + 1);  // 节点内不能超过这个并行度
-        int64_t total_session_count = MIN(ctx_->param_.parallel_, max_session_count * store_server_count);
-        int64_t remain_session_count = total_session_count;
         partitions.set_tenant_id(MTL_ID());
+        int64_t store_server_count = all_leader_info_array.count();
+        int64_t coord_session_count = 0;
+        int64_t write_session_count = 0;
+        int64_t min_session_count = ctx_->param_.parallel_;
+        int64_t max_session_count = 0;
+        int64_t limit_session_count = MIN((int64_t)tenant->unit_max_cpu() * 2, ObMacroDataSeq::MAX_PARALLEL_IDX + 1);  // 节点内不能超过这个并行度
+        int64_t total_limit_session_count = limit_session_count * store_server_count; // 所有节点加起来不能超过这个并行度
+        int64_t total_session_count = MIN(ctx_->param_.parallel_, total_limit_session_count);
+        bool need_recalculate = false;
+        int64_t parallel_servers_target = 0;
 
-        // 判断coordinator节点是否也作为store节点
-        for (int64_t i = 0; i < store_server_count; i++) {
-          total_partitions += all_leader_info_array[i].partition_id_array_.count();
-          if (coordinator_addr == all_leader_info_array[i].addr_) {
-            include_cur_addr = true;
+        // 数据写入阶段，导入内部无法控制并发，由pdml控制，所以并行度需要根据pdml的规则来调整
+        // 影响了快速堆表路径，pdml的并发可能比limit_session_count大
+        if (ctx_->schema_.is_heap_table_ && (ObDirectLoadMode::is_insert_overwrite(ctx_->param_.load_mode_) || ObDirectLoadMode::is_insert_into(ctx_->param_.load_mode_))) {
+          if (OB_FAIL(ObSchemaUtils::get_tenant_int_variable(tenant_id, SYS_VAR_PARALLEL_SERVERS_TARGET, parallel_servers_target))) {
+            LOG_WARN("fail read tenant variable", KR(ret), K(tenant_id));
+          } else if (ctx_->param_.parallel_ > limit_session_count && limit_session_count < parallel_servers_target) {
+            limit_session_count = MIN(parallel_servers_target, ObMacroDataSeq::MAX_PARALLEL_IDX + 1);
+            total_session_count = MIN(ctx_->param_.parallel_, parallel_servers_target);
+            need_recalculate = true;
           }
         }
-
-        // 资源控制先确定线程，第一次遍历先按分区等比例分配线程
-        for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
-          ObDirectLoadResourceUnit unit;
-          unit.addr_ = all_leader_info_array[i].addr_;
-          if (OB_FAIL(partitions.push_back(all_leader_info_array[i].partition_id_array_.count()))) {
-            LOG_WARN("fail to push back", KR(ret));
-          } else {
-            unit.thread_count_ = MAX(MIN(max_session_count, total_session_count * partitions[i] / total_partitions), MIN_THREAD_COUNT);
-            if (OB_FAIL(apply_arg.apply_array_.push_back(unit))) {
-              LOG_WARN("fail to push back", KR(ret));
-            } else {
-              remain_session_count -= unit.thread_count_;
-            }
-          }
-        }
-
-        // 第一次遍历如果不能分配完所有的线程，继续给每个节点平均分配剩余的线程，直到所有的线程都被分配完
         if (OB_SUCC(ret)) {
-          while (remain_session_count > 0) {
-            for (int64_t i = 0; remain_session_count > 0 && i < store_server_count; i++) {
-              ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
-              if (unit.thread_count_ < max_session_count) {
-                unit.thread_count_++;
-                remain_session_count--;
-              }
+          if (OB_FAIL(calc_session_count(total_session_count,
+                                         limit_session_count,
+                                         all_leader_info_array,
+                                         partitions,
+                                         apply_arg,
+                                         coord_session_count,
+                                         min_session_count,
+                                         write_session_count))) {
+            LOG_WARN("fail to calc session count", KR(ret));
+          } else if (OB_FAIL(cal_memory_size(true/*need_check_need_sort*/,
+                                             store_server_count,
+                                             write_session_count,
+                                             memory_limit,
+                                             partitions,
+                                             apply_arg,
+                                             main_need_sort,
+                                             task_need_sort))) {
+            LOG_WARN("fail to calc memory size", KR(ret));
+          } else if (need_recalculate) {
+            limit_session_count = MIN((int64_t)tenant->unit_max_cpu() * 2, ObMacroDataSeq::MAX_PARALLEL_IDX + 1);
+            total_session_count = MIN(ctx_->param_.parallel_, total_limit_session_count);
+            apply_arg.apply_array_.reset();
+            partitions.reset();
+            if (OB_FAIL(calc_session_count(total_session_count,
+                                           limit_session_count,
+                                           all_leader_info_array,
+                                           partitions,
+                                           apply_arg,
+                                           coord_session_count,
+                                           min_session_count,
+                                           write_session_count))) {
+              LOG_WARN("fail to calc session count", KR(ret));
+            } else if (OB_FAIL(cal_memory_size(false/*need_check_need_sort*/,
+                                               store_server_count,
+                                               write_session_count,
+                                               memory_limit,
+                                               partitions,
+                                               apply_arg,
+                                               main_need_sort,
+                                               task_need_sort))) {
+              LOG_WARN("fail to calc memory size", KR(ret));
             }
           }
         }
-
-        /*
-        协调节点不存在数据分区时，需要申请线程资源，但不需要申请内存，放在申请资源数组的最后一个位置
-        coordinator_session_count表示coordinator节点可用线程数，min_session_count表示所有节点可用线程数的最小值
-        */
-        if (OB_SUCC(ret)) {
-          if (!include_cur_addr) {
-            ObDirectLoadResourceUnit unit;
-            unit.addr_ = coordinator_addr;
-            unit.thread_count_ = MAX(MIN(max_session_count, total_session_count / store_server_count), MIN_THREAD_COUNT);
-            unit.memory_size_ = 0;
-            coordinator_session_count = unit.thread_count_;
-            min_session_count = MIN(min_session_count, unit.thread_count_);
-            if (OB_FAIL(apply_arg.apply_array_.push_back(unit))) {
-              LOG_WARN("fail to push back", KR(ret));
-            }
-          }
-          for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
-            ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
-            if (all_leader_info_array[i].addr_ == coordinator_addr) {
-              coordinator_session_count = unit.thread_count_;
-            }
-            min_session_count = MIN(min_session_count, unit.thread_count_);
-          }
-        }
-
-        /*
-        确定write_session_count，表示发送数据阶段store节点可用的线程数
-        对于load data模式，如果 协调节点和数据节点都在同一个节点上，就分出一半的线程用于解析数据，一半的线程用于存储数据
-        */
-        if (OB_SUCC(ret)) {
-          if (include_cur_addr && ctx_->param_.load_mode_ == ObDirectLoadMode::LOAD_DATA) {
-            write_session_count = MIN(min_session_count, (coordinator_session_count + 1) / 2);
-          } else {
-            write_session_count = min_session_count;
-          }
-        }
-
-        /*
-        先确定主表是否要走排序，对于堆表，sql指定need_sort=true时，如果内存满足不排序，就走不排序流程，只要有一个节点内存不足，整体都要走排序
-        如果主表要走排序，则整个任务按排序方式分配内存，否则再确定是否要做lob_id排序和索引排序，需要的话就按照MAX(主表不排序内存，索引排序内存)来分配内存，否则分配主表不排序需要的内存
-        */
-        if (OB_SUCC(ret)) {
-          for (int64_t i = 0; !main_need_sort && i < store_server_count; i++) {
-            ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
-            int64_t min_sort_memory = unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4;
-            int64_t min_unsort_memory = 0;
-            if (ctx_->schema_.is_heap_table_) {
-              // 直接写宏块需要的内存，对于非排序模式，每个分区各自写宏块，所以要乘分区数
-              min_unsort_memory = MACROBLOCK_BUFFER_SIZE * partitions[i] * write_session_count;
-              if (!ctx_->param_.need_sort_) {
-                // sql指定need_sort=false，强制不排序
-              } else {
-                if (min_unsort_memory > memory_limit) {
-                  main_need_sort = true;
-                }
-              }
-            } else {
-              // 取写宏块或写临时文件需要内存的最小值，对于非排序模式，每个分区各自写临时文件，所以要乘分区数
-              min_unsort_memory = SSTABLE_BUFFER_SIZE * partitions[i] * unit.thread_count_;
-              if (ctx_->param_.need_sort_) {
-                // sql指定need_sort=true，强制走排序
-                main_need_sort = true;
-              } else {
-                if (min_unsort_memory > memory_limit) {
-                  main_need_sort = true;
-                }
-              }
-            }
-          }
-
-          task_need_sort = main_need_sort;
-          if (!task_need_sort) {
-            if (OB_FAIL(check_need_sort_for_lob_or_index(task_need_sort))) {
-              LOG_WARN("fail to check need sort for lob or index", KR(ret));
-            }
-          }
-          for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
-            ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
-            int64_t min_sort_memory = MIN(unit.thread_count_ * ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT * 4, memory_limit);
-            int64_t min_unsort_memory = 0;
-            if (ctx_->schema_.is_heap_table_) {
-              min_unsort_memory = MIN(MACROBLOCK_BUFFER_SIZE * partitions[i] * write_session_count, memory_limit);
-            } else {
-              min_unsort_memory = MIN(MAX(SSTABLE_BUFFER_SIZE * partitions[i] * unit.thread_count_, MACROBLOCK_BUFFER_SIZE * unit.thread_count_), memory_limit);
-            }
-            if (task_need_sort) {
-              if (main_need_sort) {
-                unit.memory_size_ = min_sort_memory;
-              } else {
-                unit.memory_size_ = MAX(min_unsort_memory, min_sort_memory);
-              }
-            } else {
-              unit.memory_size_ = min_unsort_memory;
-            }
-          }
-        }
-
         if (OB_SUCC(ret)) {
           ObDirectLoadResourceOpRes apply_res;
           if (OB_FAIL(ObTableLoadResourceService::apply_resource(apply_arg, apply_res))) {
@@ -487,17 +582,18 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
           } else {
             ctx_->param_.need_sort_ = main_need_sort;
             ctx_->param_.task_need_sort_ = task_need_sort;
-            ctx_->param_.session_count_ = coordinator_session_count;
+            ctx_->param_.session_count_ = coord_session_count;
             ctx_->param_.write_session_count_ = write_session_count;
             ctx_->param_.exe_mode_ = (ctx_->schema_.is_heap_table_ ?
                 (main_need_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT : ObTableLoadExeMode::FAST_HEAP_TABLE) :
                 (main_need_sort ? ObTableLoadExeMode::MEM_COMPACT : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
-            ctx_->job_stat_->parallel_ = coordinator_session_count;
+            ctx_->job_stat_->parallel_ = coord_session_count;
             if (OB_FAIL(ObTableLoadService::add_assigned_task(apply_arg))) {
               LOG_WARN("fail to add_assigned_task", KR(ret));
             } else {
               ctx_->set_assigned_resource();
-              LOG_INFO("Coordinator::gen_apply_arg", K(retry_count), K(param_.exe_mode_), K(main_need_sort), K(task_need_sort), K(partitions), K(coordinator_addr), K(apply_arg));
+              LOG_INFO("Coordinator::gen_apply_arg", K(retry_count), K(ctx_->param_), K(main_need_sort), K(need_recalculate),
+                  K(parallel_servers_target), K(task_need_sort), K(partitions), K(coordinator_addr), K(apply_arg));
               break;
             }
           }
@@ -514,16 +610,18 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
   int ret = OB_SUCCESS;
   ObTableLoadArray<ObTableLoadPartitionLocation::LeaderInfo> all_leader_info_array;
   ObTableLoadArray<ObTableLoadPartitionLocation::LeaderInfo> target_all_leader_info_array;
+  coordinator_ctx_->set_enable_heart_beat(true);
   if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader_info(all_leader_info_array))) {
     LOG_WARN("fail to get all leader info", KR(ret));
   } else if (OB_FAIL(coordinator_ctx_->target_partition_location_.get_all_leader_info(target_all_leader_info_array))) {
     LOG_WARN("fail to get all leader info", KR(ret));
-  } else if (all_leader_info_array.count() != target_all_leader_info_array.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN(
-        "origin table leader count must be qual to target table leader count",
-        K(all_leader_info_array.count()),
-        K(target_all_leader_info_array.count()), KR(ret));
+  } else if (OB_UNLIKELY(coordinator_ctx_->store_infos_.count() != all_leader_info_array.count()
+                         || coordinator_ctx_->store_infos_.count() != target_all_leader_info_array.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("store infos count must equal to leader info array count",
+              KR(ret),
+              K(coordinator_ctx_->store_infos_),
+              K(all_leader_info_array), K(target_all_leader_info_array));
   } else {
     LOG_INFO("route_pre_begin_peer_request begin", K(all_leader_info_array.count()));
     ObDirectLoadControlPreBeginArg arg;
@@ -552,14 +650,18 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
       LOG_WARN("fail to set exec ctx", KR(ret));
     }
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_leader_info_array.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      ObTableLoadCoordinatorCtx::StoreInfo &store_info = coordinator_ctx_->store_infos_.at(i);
+      const ObAddr &addr = store_info.addr_;
       const ObTableLoadPartitionLocation::LeaderInfo &leader_info = all_leader_info_array.at(i);
       const ObTableLoadPartitionLocation::LeaderInfo &target_leader_info =
         target_all_leader_info_array.at(i);
       //目前源表和目标表的分区信息连同每个分区的地址都完全一样
-      const ObAddr &addr = leader_info.addr_;
-      if (OB_UNLIKELY(leader_info.addr_ != target_leader_info.addr_)) {
-        LOG_INFO("addr must be same", K(leader_info.addr_), K(target_leader_info.addr_));
+      if (OB_UNLIKELY(addr != leader_info.addr_ || addr != target_leader_info.addr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("addr must be same", K(addr),
+                                      K(leader_info.addr_),
+                                      K(target_leader_info.addr_));
       }
       if (arg.exe_mode_ == ObTableLoadExeMode::MAX_TYPE) {
         arg.config_.parallel_ = ctx_->param_.session_count_;
@@ -569,7 +671,9 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
       }
       arg.partition_id_array_ = leader_info.partition_id_array_;
       arg.target_partition_id_array_ = target_leader_info.partition_id_array_;
-      if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
+      if (OB_FAIL(ret)) {
+
+      } else if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ctx_->param_.session_count_ = arg.config_.parallel_;
         ctx_->param_.avail_memory_ = arg.avail_memory_;
         if (OB_FAIL(ObTableLoadStore::init_ctx(ctx_, arg.partition_id_array_, arg.target_partition_id_array_))) {
@@ -584,6 +688,9 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
         }
       } else { // 对端, 发送rpc
         TABLE_LOAD_CONTROL_RPC_CALL(pre_begin, addr, arg);
+      }
+      if (OB_SUCC(ret)) {
+        store_info.enable_heart_beat_ = true;
       }
     }
   }
@@ -705,16 +812,14 @@ private:
 int ObTableLoadCoordinator::confirm_begin_peers()
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("route_confirm_begin_peer_request begin", K(all_addr_array.count()));
+  {
+    LOG_INFO("route_confirm_begin_peer_request begin", K(coordinator_ctx_->store_infos_));
     ObDirectLoadControlConfirmBeginArg arg;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      ObTableLoadCoordinatorCtx::StoreInfo &store_info = coordinator_ctx_->store_infos_.at(i);
+      const ObAddr &addr = store_info.addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -751,7 +856,6 @@ int ObTableLoadCoordinator::begin()
     } else if (OB_FAIL(confirm_begin_peers())) {
       LOG_WARN("fail to confirm begin peers", KR(ret));
     } else {
-      coordinator_ctx_->set_enable_heart_beat(true);
       if (OB_NOT_NULL(coordinator_ctx_->empty_insert_tablet_ctx_manager_)) {
         if (OB_FAIL(init_empty_tablets())) {
           LOG_WARN("fail to init empty partition", KR(ret));
@@ -773,18 +877,15 @@ int ObTableLoadCoordinator::begin()
 int ObTableLoadCoordinator::check_peers_begin_result(bool &is_finish)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("check_peers_begin_result begin", K(all_addr_array.count()));
+  {
+    LOG_INFO("check_peers_begin_result begin", K(coordinator_ctx_->store_infos_));
     ObDirectLoadControlGetStatusArg arg;
     ObDirectLoadControlGetStatusRes res;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
     is_finish = true;
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      const ObAddr &addr = coordinator_ctx_->store_infos_.at(i).addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -925,11 +1026,8 @@ int ObTableLoadCoordinator::add_check_begin_result_task()
 int ObTableLoadCoordinator::pre_merge_peers()
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("route_pre_merge_peer_request begin", K(all_addr_array.count()));
+  {
+    LOG_INFO("route_pre_merge_peer_request begin", K(coordinator_ctx_->store_infos_));
     ObArenaAllocator allocator("TLD_Coord");
     ObDirectLoadControlPreMergeArg arg;
     allocator.set_tenant_id(MTL_ID());
@@ -943,8 +1041,8 @@ int ObTableLoadCoordinator::pre_merge_peers()
         lib::ob_sort(arg.committed_trans_id_array_.begin(), arg.committed_trans_id_array_.end());
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      const ObAddr &addr = coordinator_ctx_->store_infos_.at(i).addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -963,16 +1061,13 @@ int ObTableLoadCoordinator::pre_merge_peers()
 int ObTableLoadCoordinator::start_merge_peers()
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("route_start_merge_peer_request begin", K(all_addr_array.count()));
+  {
+    LOG_INFO("route_start_merge_peer_request begin", K(coordinator_ctx_->store_infos_));
     ObDirectLoadControlStartMergeArg arg;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      const ObAddr &addr = coordinator_ctx_->store_infos_.at(i).addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -1045,18 +1140,15 @@ int ObTableLoadCoordinator::finish()
 int ObTableLoadCoordinator::check_peers_merge_result(bool &is_finish)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("route_get_status_peer_request begin", K(all_addr_array.count()));
+  {
+    LOG_INFO("route_get_status_peer_request begin", K(coordinator_ctx_->store_infos_));
     ObDirectLoadControlGetStatusArg arg;
     ObDirectLoadControlGetStatusRes res;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
     is_finish = true;
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      const ObAddr &addr = coordinator_ctx_->store_infos_.at(i).addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -1199,20 +1291,18 @@ int ObTableLoadCoordinator::commit_peers(ObTableLoadSqlStatistics &sql_statistic
 {
   int ret = OB_SUCCESS;
   ObTransService *txs = nullptr;
-  ObTableLoadArray<ObAddr> all_addr_array;
   if (OB_ISNULL(MTL(ObTransService *))) {
     ret = OB_ERR_SYS;
     LOG_WARN("trans service is null", KR(ret));
-  } else if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
   } else {
-    LOG_INFO("route_commit_peer_request begin", K(all_addr_array.count()));
+    LOG_INFO("route_commit_peer_request begin", K(coordinator_ctx_->store_infos_));
     ObDirectLoadControlCommitArg arg;
     ObDirectLoadControlCommitRes res;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      ObTableLoadCoordinatorCtx::StoreInfo &store_info = coordinator_ctx_->store_infos_.at(i);
+      const ObAddr &addr = store_info.addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -1236,8 +1326,10 @@ int ObTableLoadCoordinator::commit_peers(ObTableLoadSqlStatistics &sql_statistic
         } else if (OB_FAIL(dml_stats.merge(res.dml_stats_))) {
           LOG_WARN("fail to add result dml stats", KR(ret), K(addr), K(res));
         } else if (ObDirectLoadMethod::is_incremental(param_.method_) &&
-                   txs->add_tx_exec_result(*ctx_->session_info_->get_tx_desc(), res.trans_result_)) {
+                   OB_FAIL(txs->add_tx_exec_result(*ctx_->session_info_->get_tx_desc(), res.trans_result_))) {
           LOG_WARN("fail to add tx exec result", KR(ret));
+        } else {
+          store_info.enable_heart_beat_ = false;
         }
       }
     }
@@ -1379,7 +1471,6 @@ int ObTableLoadCoordinator::commit(ObTableLoadResultInfo &result_info)
       LOG_WARN("fail to check coordinator status", KR(ret));
     } else if (OB_FAIL(commit_peers(sql_statistics, dml_stats))) {
       LOG_WARN("fail to commit peers", KR(ret));
-    } else if (FALSE_IT(coordinator_ctx_->set_enable_heart_beat(false))) {
     } else if (param_.online_opt_stat_gather_ &&
                OB_FAIL(write_sql_stat(sql_statistics, dml_stats))) {
       LOG_WARN("fail to write sql stat", KR(ret));
@@ -1416,16 +1507,13 @@ int ObTableLoadCoordinator::get_status(ObTableLoadStatusType &status, int &error
 int ObTableLoadCoordinator::heart_beat_peer()
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_DEBUG("route_heart_beat_peer_request begin", K(all_addr_array.count()));
+  {
+    LOG_DEBUG("route_heart_beat_peer_request begin", K(coordinator_ctx_->store_infos_));
     ObDirectLoadControlHeartBeatArg arg;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
-    for (int64_t i = 0; i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; i < coordinator_ctx_->store_infos_.count(); ++i) {
+      const ObAddr &addr = coordinator_ctx_->store_infos_.at(i).addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -1464,18 +1552,15 @@ int ObTableLoadCoordinator::heart_beat()
 int ObTableLoadCoordinator::pre_start_trans_peers(ObTableLoadCoordinatorTrans *trans)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("route_pre_start_trans_peer_request begin", K(all_addr_array.count()));
+  {
+    LOG_INFO("route_pre_start_trans_peer_request begin", K(coordinator_ctx_->store_infos_));
     const ObTableLoadTransId &trans_id = trans->get_trans_id();
     ObDirectLoadControlPreStartTransArg arg;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
     arg.trans_id_ = trans_id;
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      const ObAddr &addr = coordinator_ctx_->store_infos_.at(i).addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -1494,18 +1579,15 @@ int ObTableLoadCoordinator::pre_start_trans_peers(ObTableLoadCoordinatorTrans *t
 int ObTableLoadCoordinator::confirm_start_trans_peers(ObTableLoadCoordinatorTrans *trans)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("route_confirm_start_trans_peer_request begin", K(all_addr_array.count()));
+  {
+    LOG_INFO("route_confirm_start_trans_peer_request begin", K(coordinator_ctx_->store_infos_));
     const ObTableLoadTransId &trans_id = trans->get_trans_id();
     ObDirectLoadControlConfirmStartTransArg arg;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
     arg.trans_id_ = trans_id;
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      const ObAddr &addr = coordinator_ctx_->store_infos_.at(i).addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -1577,18 +1659,15 @@ int ObTableLoadCoordinator::start_trans(const ObTableLoadSegmentID &segment_id,
 int ObTableLoadCoordinator::pre_finish_trans_peers(ObTableLoadCoordinatorTrans *trans)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("route_pre_finish_trans_peer_request begin", K(all_addr_array.count()));
+  {
+    LOG_INFO("route_pre_finish_trans_peer_request begin", K(coordinator_ctx_->store_infos_));
     const ObTableLoadTransId &trans_id = trans->get_trans_id();
     ObDirectLoadControlPreFinishTransArg arg;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
     arg.trans_id_ = trans_id;
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      const ObAddr &addr = coordinator_ctx_->store_infos_.at(i).addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -1607,18 +1686,15 @@ int ObTableLoadCoordinator::pre_finish_trans_peers(ObTableLoadCoordinatorTrans *
 int ObTableLoadCoordinator::confirm_finish_trans_peers(ObTableLoadCoordinatorTrans *trans)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("route_pre_finish_trans_peer_request begin", K(all_addr_array.count()));
+  {
+    LOG_INFO("route_pre_finish_trans_peer_request begin", K(coordinator_ctx_->store_infos_));
     const ObTableLoadTransId &trans_id = trans->get_trans_id();
     ObDirectLoadControlConfirmFinishTransArg arg;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
     arg.trans_id_ = trans_id;
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      const ObAddr &addr = coordinator_ctx_->store_infos_.at(i).addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -1663,19 +1739,16 @@ int ObTableLoadCoordinator::finish_trans(const ObTableLoadTransId &trans_id)
 int ObTableLoadCoordinator::check_peers_trans_commit(ObTableLoadCoordinatorTrans *trans, bool &is_commit)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("route_check_peers_trans_commit begin", K(all_addr_array.count()));
+  {
+    LOG_INFO("route_check_peers_trans_commit begin", K(coordinator_ctx_->store_infos_));
     ObDirectLoadControlGetTransStatusArg arg;
     ObDirectLoadControlGetTransStatusRes res;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
     arg.trans_id_ = trans->get_trans_id();
     is_commit = true;
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      const ObAddr &addr = coordinator_ctx_->store_infos_.at(i).addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
@@ -1774,18 +1847,15 @@ int ObTableLoadCoordinator::commit_trans(ObTableLoadCoordinatorTrans *trans)
 int ObTableLoadCoordinator::abandon_trans_peers(ObTableLoadCoordinatorTrans *trans)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadArray<ObAddr> all_addr_array;
-  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
-    LOG_WARN("fail to get all addr", KR(ret));
-  } else {
-    LOG_INFO("route_abandon_trans_peer_request begin", K(all_addr_array.count()));
+  {
+    LOG_INFO("route_abandon_trans_peer_request begin", K(coordinator_ctx_->store_infos_));
     const ObTableLoadTransId &trans_id = trans->get_trans_id();
     ObDirectLoadControlAbandonTransArg arg;
     arg.table_id_ = param_.table_id_;
     arg.task_id_ = ctx_->ddl_param_.task_id_;
     arg.trans_id_ = trans_id;
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
-      const ObAddr &addr = all_addr_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < coordinator_ctx_->store_infos_.count(); ++i) {
+      const ObAddr &addr = coordinator_ctx_->store_infos_.at(i).addr_;
       if (ObTableLoadUtils::is_local_addr(addr)) {  // 本机
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {

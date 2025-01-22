@@ -61,7 +61,7 @@ int ObLogExpand::get_plan_item_info(PlanText &plan_text, ObSqlPlanItem &plan_ite
         if (exists_dup
             || is_const_expr
             || (lib::is_oracle_mode() && is_real_static_const)
-            || (lib::is_oracle_mode() && has_exist_in_array(gby_exprs_, expand_exprs_.at(i)))) {
+            || has_exist_in_array(gby_exprs_, expand_exprs_.at(i))) {
           ret = gen_duplicate_expr_text(plan_text, uniq_rollup_exprs);
           if (!exists_dup) { nil_idx--; }
         } else {

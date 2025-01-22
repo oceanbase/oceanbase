@@ -2474,6 +2474,12 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
 #define DEFINE_CMP_FUNCS_YEAR_YEAR() \
   DEFINE_CMP_FUNCS(ObYearTC, year);
 
+#define DEFINE_CMP_FUNCS_MYSQL_DATE_MYSQL_DATE() \
+  DEFINE_CMP_FUNCS(ObMySQLDateTC, mysql_date);
+
+#define DEFINE_CMP_FUNCS_MYSQL_DATETIME_MYSQL_DATETIME() \
+  DEFINE_CMP_FUNCS(ObMySQLDateTimeTC, mysql_datetime);
+
 #define DEFINE_CMP_FUNCS_DATETIME_OTIMESTAMP() \
     DEFINE_CMP_OP_FUNC_DT_OT(CO_EQ, ==); \
     DEFINE_CMP_OP_FUNC_DT_OT(CO_LE, <=); \
@@ -2849,6 +2855,8 @@ DEFINE_CMP_FUNCS_XXX_NULL();
 DEFINE_CMP_FUNCS_XXX_EXT();
 DEFINE_CMP_FUNCS_EXT_XXX();
 DEFINE_CMP_FUNCS_JSON_EXTEND();
+DEFINE_CMP_FUNCS_MYSQL_DATE_MYSQL_DATE();
+DEFINE_CMP_FUNCS_MYSQL_DATETIME_MYSQL_DATETIME();
 
 #define DEFINE_CMP_FUNCS_ENTRY(tc1, tc2) \
 { \
@@ -2950,6 +2958,8 @@ DEFINE_CMP_FUNCS_NULLSAFE_NULL_NULL
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObBitTC, ObBitTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObDateTC, ObDateTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObDateTimeTC, ObDateTimeTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObMySQLDateTC, ObMySQLDateTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObMySQLDateTimeTC, ObMySQLDateTimeTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObDoubleTC, ObDoubleTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObDoubleTC, ObEnumSetTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObDoubleTC, ObFloatTC, ObMaxTC, ObMaxTC)
@@ -3054,8 +3064,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // udt
     DECLARE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObMaxTC),// decimalint
     NULL, // collection
-    NULL, // mysql date
-    NULL, // mysql datetime
+    DECLARE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObMaxTC), // mysql date
+    DECLARE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObMaxTC), // mysql datetime
     NULL, // roaringbitmap
   },
   { // int
@@ -3406,8 +3416,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // udt
     DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObExtendTC, ObMaxTC, ObExtendTC, ObMaxTC), // decimalint
     NULL, // collection
-    NULL, // mysql date
-    NULL, // mysql datetime
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObExtendTC, ObMaxTC, ObExtendTC, ObMaxTC), // mysql date
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObExtendTC, ObMaxTC, ObExtendTC, ObMaxTC), // mysql datetime
     NULL, // roaringbitmap
   },
   { // unknown
@@ -3902,7 +3912,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // time
     NULL, // year
     NULL, // string
-    NULL, // extend
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObMaxTC, ObExtendTC, ObMaxTC, ObExtendTC), // extend
     NULL, // unknown
     NULL, // text
     NULL, // bit
@@ -3918,7 +3928,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // udt
     NULL, // decimalint
     NULL, // collection
-    NULL, // mysql date
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObMySQLDateTC, ObMySQLDateTC, ObMaxTC, ObMaxTC), // mysql date
     NULL, // mysql datetime
     NULL, // roaringbitmap
   },
@@ -3934,7 +3944,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // time
     NULL, // year
     NULL, // string
-    NULL, // extend
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObMaxTC, ObExtendTC, ObMaxTC, ObExtendTC), // extend
     NULL, // unknown
     NULL, // text
     NULL, // bit
@@ -3951,7 +3961,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // decimalint
     NULL, // collection
     NULL, // mysql date
-    NULL, // mysql datetime
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObMySQLDateTimeTC, ObMySQLDateTimeTC, ObMaxTC, ObMaxTC), // mysql datetime
     NULL, // roaringbitmap
   },
   { // roaringbitmap
@@ -4018,8 +4028,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//udt
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC), // decimal int
     DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
-    DEFINE_CMP_FUNCS_ENTRY_NULL, // mysql date
-    DEFINE_CMP_FUNCS_ENTRY_NULL, // mysql datetime
+    DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC), // mysql date
+    DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC), // mysql datetime
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC), // roaringbitmap
   },
   { // int
@@ -4370,8 +4380,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
     DEFINE_CMP_FUNCS_ENTRY(ObExtendTC, ObMaxTC), // decimal int
     DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
-    DEFINE_CMP_FUNCS_ENTRY_NULL, // mysql date
-    DEFINE_CMP_FUNCS_ENTRY_NULL, // mysql datetime
+    DEFINE_CMP_FUNCS_ENTRY(ObExtendTC, ObMaxTC), // mysql date
+    DEFINE_CMP_FUNCS_ENTRY(ObExtendTC, ObMaxTC), // mysql datetime
     DEFINE_CMP_FUNCS_ENTRY_NULL, // roaringbitmap
   },
   { // unknown
@@ -4866,7 +4876,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // time
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // year
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // string
-    DEFINE_CMP_FUNCS_ENTRY_NULL,  //extend
+    DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObExtendTC), // extend
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // unknown
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // text
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // bit
@@ -4881,8 +4891,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
-    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
-    DEFINE_CMP_FUNCS_ENTRY_NULL, // mysql date
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // collection
+    DEFINE_CMP_FUNCS_ENTRY(ObMySQLDateTC, ObMySQLDateTC), // mysql date
     DEFINE_CMP_FUNCS_ENTRY_NULL, // mysql datetime
     DEFINE_CMP_FUNCS_ENTRY_NULL, // roaringbitmap
   },
@@ -4898,7 +4908,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // time
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // year
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // string
-    DEFINE_CMP_FUNCS_ENTRY_NULL, // extend
+    DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObExtendTC), // extend
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // unknown
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // text
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // bit
@@ -4915,7 +4925,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // collection
     DEFINE_CMP_FUNCS_ENTRY_NULL, // mysql date
-    DEFINE_CMP_FUNCS_ENTRY_NULL, // mysql datetime
+    DEFINE_CMP_FUNCS_ENTRY(ObMySQLDateTimeTC, ObMySQLDateTimeTC), // mysql datetime
     DEFINE_CMP_FUNCS_ENTRY_NULL, // roaringbitmap
   },
   { // roaringbitmap

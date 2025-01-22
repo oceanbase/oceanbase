@@ -1763,7 +1763,12 @@ int ObExprRangeConverter::check_calculable_expr_valid(const ObRawExpr *expr,
 {
   int ret = OB_SUCCESS;
   ObObj val;
+  bool can_ignore_check = false;
   if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
+    is_valid = true;
+  } else if (OB_FAIL(ignore_inner_generate_expr(expr, can_ignore_check))) {
+    LOG_WARN("failedto check can ignore inner generate expr", K(ret));
+  } else if (can_ignore_check) {
     is_valid = true;
   } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_.exec_ctx_,
                                                                expr,
@@ -3531,6 +3536,15 @@ int ObExprRangeConverter::can_extract_implicit_cast_range(const ObColumnRefRawEx
              (const_tc == ObNumberTC || const_tc == ObIntTC || const_tc == ObDecimalIntTC)) {
     can_extract = true;
   }
+
+  if (OB_SUCC(ret) && can_extract) {
+    bool is_valid = false;
+    if (OB_FAIL(check_calculable_expr_valid(&const_expr, is_valid))) {
+      LOG_WARN("failed to check calculable expr valid", K(ret));
+    } else if (!is_valid) {
+      can_extract = false;
+    }
+  }
   return ret;
 }
 
@@ -3691,6 +3705,17 @@ int ObExprRangeConverter::check_decimal_int_range_cmp_valid(const ObRawExpr *con
       // use origin cmp type to calc row range.
       is_valid = false;
     }
+  }
+  return ret;
+}
+
+int ObExprRangeConverter::ignore_inner_generate_expr(const ObRawExpr *const_expr, bool &can_ignore)
+{
+  int ret = OB_SUCCESS;
+  can_ignore = false;
+  if (const_expr->get_expr_type() == T_FUN_SYS_INNER_DOUBLE_TO_INT ||
+      const_expr->get_expr_type() == T_FUN_SYS_INNER_DECIMAL_TO_YEAR) {
+    can_ignore = true;
   }
   return ret;
 }

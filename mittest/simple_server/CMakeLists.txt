@@ -109,6 +109,7 @@ ob_unittest_observer(test_transfer_commit_action test_transfer_with_commit_actio
 ob_unittest_observer(test_transfer_rollback_to test_transfer_between_rollback_to.cpp)
 ob_unittest_observer(test_memtable_new_safe_to_destroy test_memtable_new_safe_to_destroy.cpp)
 ob_unittest_observer(test_tablet_to_ls_cache test_tablet_to_ls_cache.cpp)
+ob_unittest_observer(test_update_tablet_directly_when_mini test_update_tablet_directly_when_mini.cpp)
 
 ####### freeze case #######
 #ob_freeze_observer(test_frequently_freeze freeze/test_frequently_freeze.cpp)

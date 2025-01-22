@@ -43,6 +43,10 @@ public:
   void clean_up();
   void runTimerTask() override;
   DISABLE_COPY_ASSIGN(ObMviewUpdateCacheTask);
+  int extract_sql_result(sqlclient::ObMySQLResult *mysql_result,
+                         ObIArray<uint64_t> &mview_ids,
+                         ObIArray<uint64_t> &last_refresh_scns,
+                         ObIArray<uint64_t> &mview_refresh_modes);
 private:
   bool is_inited_;
   bool is_stop_;

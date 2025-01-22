@@ -302,6 +302,12 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int delete_blocks_(
     const common::ObIArray<ObSharedObjectsWriteCtx> &total_write_ctxs);
+  static int check_macro_seq_isolation_(
+        const ObTabletPersisterParam &param,
+        const ObTablet &old_tablet);
+  int check_shared_root_macro_seq_(
+    const blocksstable::ObStorageObjectOpt& shared_tablet_opt,
+    const ObTabletHandle &tablet_hdl);
 #endif
   void build_async_write_start_opt_(blocksstable::ObStorageObjectOpt &start_opt) const;
   void sync_cur_macro_seq_from_opt_(const blocksstable::ObStorageObjectOpt &curr_opt);

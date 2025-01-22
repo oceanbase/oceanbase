@@ -843,6 +843,7 @@ int ObAllTenantInfoCache::assign_new_tenant_info_(
              K(new_finish_data_version), K(new_data_version_barrier_scn));
   } else if (new_ora_rowscn > ora_rowscn_) {
     MTL_SET_TENANT_ROLE_CACHE(new_tenant_info.get_tenant_role().value());
+    MTL_SET_SWITCHOVER_EPOCH(new_tenant_info.get_switchover_epoch());
     (void)tenant_info_.assign(new_tenant_info);
     ora_rowscn_ = new_ora_rowscn;
     assigned = true;

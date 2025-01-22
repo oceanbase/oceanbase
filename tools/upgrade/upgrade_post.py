@@ -26,8 +26,8 @@
 #    self.action_sql = action_sql
 #    self.rollback_sql = rollback_sql
 #
-#current_cluster_version = "4.3.5.0"
-#current_data_version = "4.3.5.0"
+#current_cluster_version = "4.3.5.1"
+#current_data_version = "4.3.5.1"
 #g_succ_sql_list = []
 #g_commit_sql_list = []
 #
@@ -1346,11 +1346,12 @@
 ##这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
 #  current_version = actions.fetch_observer_version(cur)
 #  target_version = actions.get_current_cluster_version()
-#  # when upgrade across version, disable enable_ddl/major_freeze
+#  # when upgrade across version, disable enable_ddl/major_freeze/direct_load
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
 #    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
 #    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+#    actions.set_parameter(cur, '_ob_enable_direct_load', 'False', timeout)
 #    # wait scheduler in storage to notice adaptive_compaction is switched to false
 #    time.sleep(60 * 2)
 #    query_cur = actions.QueryCursor(cur)
@@ -2546,11 +2547,7 @@
 #  return bret
 #
 ## 检查 direct_load 是否已经结束，开启升级之前需要确保没有 direct_load 任务，且升级期间尽量禁止 direct_load 任务
-#def disable_and_check_direct_load_task(cur, query_cur):
-#  # 通过配置项关闭 direct_load
-#  set_parameter(cur, '_ob_enable_direct_load', 'False')
-#  # 等待 5s，确保没有导入任务
-#  time.sleep(5)
+#def check_direct_load_job_exist(cur, query_cur):
 #  sql = """select count(1) from __all_virtual_load_data_stat"""
 #  (desc, results) = query_cur.exec_query(sql)
 #  if 0 != results[0][0]:
@@ -2668,7 +2665,7 @@
 #      check_disk_space_for_mds_sstable_compat(query_cur)
 #      check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch)
 #      # all check func should execute before check_fail_list
-#      disable_and_check_direct_load_task(cur, query_cur)
+#      check_direct_load_job_exist(cur, query_cur)
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)
 #    except Exception as e:

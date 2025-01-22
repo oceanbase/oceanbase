@@ -2781,6 +2781,8 @@ int ObJsonSchemaValidator::check_all_schema_def(ObIJsonBase *json_doc, ObIArray<
         case ObJsonNodeType::J_DATE:
         case ObJsonNodeType::J_TIME:
         case ObJsonNodeType::J_DATETIME:
+        case ObJsonNodeType::J_MYSQL_DATE:
+        case ObJsonNodeType::J_MYSQL_DATETIME:
         case ObJsonNodeType::J_TIMESTAMP:
         case ObJsonNodeType::J_STRING:
         case ObJsonNodeType::J_OBINARY:
@@ -2938,6 +2940,8 @@ int ObJsonSchemaValidator::check_all_composition_def(ObIJsonBase *json_doc, ObIA
       case ObJsonNodeType::J_DATE:
       case ObJsonNodeType::J_TIME:
       case ObJsonNodeType::J_DATETIME:
+      case ObJsonNodeType::J_MYSQL_DATE:
+      case ObJsonNodeType::J_MYSQL_DATETIME:
       case ObJsonNodeType::J_TIMESTAMP:
       case ObJsonNodeType::J_STRING:
       case ObJsonNodeType::J_OBINARY:

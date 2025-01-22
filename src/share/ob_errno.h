@@ -247,7 +247,6 @@ constexpr int OB_DISK_ERROR = -4375;
 constexpr int OB_UNIMPLEMENTED_FEATURE = -4376;
 constexpr int OB_ERR_DEFENSIVE_CHECK = -4377;
 constexpr int OB_CLUSTER_NAME_HASH_CONFLICT = -4378;
-constexpr int OB_HEAP_TABLE_EXAUSTED = -4379;
 constexpr int OB_ERR_INDEX_KEY_NOT_FOUND = -4380;
 constexpr int OB_UNSUPPORTED_DEPRECATED_FEATURE = -4381;
 constexpr int OB_ERR_DUP_RESTART_SPEC = -4382;
@@ -1378,6 +1377,7 @@ constexpr int OB_TRANS_LIVE_TOO_MUCH_TIME = -6280;
 constexpr int OB_TRANS_COMMIT_TOO_MUCH_TIME = -6281;
 constexpr int OB_TRANS_TOO_MANY_PARTICIPANTS = -6282;
 constexpr int OB_LOG_ALREADY_SPLIT = -6283;
+constexpr int INCORRECT_ARGUMENTS_TO_URL_DECODE = -6286;
 constexpr int OB_TX_PENDING_LOG_OVERFLOW = -6288;
 constexpr int OB_LOG_ID_NOT_FOUND = -6301;
 constexpr int OB_LSR_THREAD_STOPPED = -6302;
@@ -1592,6 +1592,7 @@ constexpr int OB_STORAGE_DEST_NOT_CONNECT = -9115;
 constexpr int OB_TABLET_IS_SPLIT_SRC = -9123;
 constexpr int OB_TABLET_STATUS_NO_NEED_TO_SPLIT = -9127;
 constexpr int OB_FILE_DELETE_FAILED = -9128;
+constexpr int OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE = -9136;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -1898,6 +1899,7 @@ constexpr int OB_ERR_CANNOT_RENAME_TRIGGER = -9803;
 constexpr int OB_ERR_LOGON_TRIGGER = -9804;
 constexpr int OB_ERR_LOGOFF_TRIGGER = -9805;
 constexpr int OB_ERR_MALFORMED_WRAPPED_UNIT = -9806;
+constexpr int OB_ERR_INVALID_PLSQL_UNIT = -9807;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -1958,6 +1960,8 @@ constexpr int OB_JNI_FORCE_CLOSE_JAVA_ENV_ERROR = -11075;
 constexpr int OB_PLUGIN_VERSION_INCOMPATIBLE = -11076;
 constexpr int OB_PLUGIN_DLOPEN_FAILED = -11077;
 constexpr int OB_PLUGIN_ERROR = -11078;
+constexpr int OB_CATALOG_EXIST = -11079;
+constexpr int OB_CATALOG_NOT_EXIST = -11080;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -3580,6 +3584,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LOG_ALREADY_SPLIT__USER_ERROR_MSG "The big log entry has been split into multiple part"
 #define OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA__USER_ERROR_MSG "This version doesn't yet support 'references in JSON Schema."
 #define OB_ERR_TYPE_OF_JSON_SCHEMA__USER_ERROR_MSG "Invalid JSON type in argument, should be object."
+#define INCORRECT_ARGUMENTS_TO_URL_DECODE__USER_ERROR_MSG "Incorrect arguments to URL_DECODE, %s: %%%c%c"
 #define OB_TX_PENDING_LOG_OVERFLOW__USER_ERROR_MSG "too many pending log in the trx"
 #define OB_LOG_ID_NOT_FOUND__USER_ERROR_MSG "log id not found"
 #define OB_LSR_THREAD_STOPPED__USER_ERROR_MSG "log scan runnable thread stop"
@@ -3947,6 +3952,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_ZONE_IDC_REGION_INVALID__USER_ERROR_MSG "%s"
 #define OB_ERR_TMP_FILE_ALREADY_SEALED__USER_ERROR_MSG "tmp file has already sealed"
 #define OB_TMP_FILE_EXCEED_DISK_QUOTA__USER_ERROR_MSG "tmp file exceeds disk quota"
+#define OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE__USER_ERROR_MSG "Backup missing mview dependent tablet sstable, sstable maybe recycled"
+#define OB_ERR_DUPLICATE_INDEX__USER_ERROR_MSG "Duplicate index \'%s\' defined on the table \'%s.%s\'"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4255,6 +4262,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_LOGON_TRIGGER__USER_ERROR_MSG "client logon triggers cannot have BEFORE type"
 #define OB_ERR_LOGOFF_TRIGGER__USER_ERROR_MSG "client logoff triggers cannot have AFTER type"
 #define OB_ERR_MALFORMED_WRAPPED_UNIT__USER_ERROR_MSG "malformed or corrupted wrapped unit"
+#define OB_ERR_INVALID_PLSQL_UNIT__USER_ERROR_MSG "input to DBMS_DDL.WRAP is not a legal PL/SQL unit"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -4354,6 +4362,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_PLUGIN_VERSION_INCOMPATIBLE__USER_ERROR_MSG "The plugin's version is incompatible with current server"
 #define OB_PLUGIN_DLOPEN_FAILED__USER_ERROR_MSG "Failed to open library"
 #define OB_PLUGIN_ERROR__USER_ERROR_MSG "Plugin internal error"
+#define OB_CATALOG_EXIST__USER_ERROR_MSG "Can't create catalog '%.*s'; catalog exists"
+#define OB_CATALOG_NOT_EXIST__USER_ERROR_MSG "Catalog '%.*s' doesn\'t exist"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -7587,6 +7597,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA__OBE_USER_ERROR_MSG "OBE-40441: This version doesn't yet support 'references in JSON Schema."
 #define OB_ERR_TYPE_OF_JSON_SCHEMA__ORA_USER_ERROR_MSG "ORA-40876: invalid JSON schema document"
 #define OB_ERR_TYPE_OF_JSON_SCHEMA__OBE_USER_ERROR_MSG "OBE-40876: invalid JSON schema document"
+#define INCORRECT_ARGUMENTS_TO_URL_DECODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6286, Incorrect arguments to URL_DECODE, %s: %%%c%c"
+#define INCORRECT_ARGUMENTS_TO_URL_DECODE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6286, Incorrect arguments to URL_DECODE, %s: %%%c%c"
 #define OB_TX_PENDING_LOG_OVERFLOW__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6288, too many pending log in the trx"
 #define OB_TX_PENDING_LOG_OVERFLOW__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6288, too many pending log in the trx"
 #define OB_LOG_ID_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6301, log id not found"
@@ -8321,6 +8333,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TMP_FILE_ALREADY_SEALED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9134, tmp file has already sealed"
 #define OB_TMP_FILE_EXCEED_DISK_QUOTA__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9135, tmp file exceeds disk quota"
 #define OB_TMP_FILE_EXCEED_DISK_QUOTA__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9135, tmp file exceeds disk quota"
+#define OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9136, Backup missing mview dependent tablet sstable, sstable maybe recycled"
+#define OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9136, Backup missing mview dependent tablet sstable, sstable maybe recycled"
+#define OB_ERR_DUPLICATE_INDEX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9137, Duplicate index \'%s\' defined on the table \'%s.%s\'"
+#define OB_ERR_DUPLICATE_INDEX__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9137, Duplicate index \'%s\' defined on the table \'%s.%s\'"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -8937,6 +8953,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_LOGOFF_TRIGGER__OBE_USER_ERROR_MSG "OBE-30509: client logoff triggers cannot have AFTER type"
 #define OB_ERR_MALFORMED_WRAPPED_UNIT__ORA_USER_ERROR_MSG "PLS-00753: malformed or corrupted wrapped unit"
 #define OB_ERR_MALFORMED_WRAPPED_UNIT__OBE_USER_ERROR_MSG "PLS-00753: malformed or corrupted wrapped unit"
+#define OB_ERR_INVALID_PLSQL_UNIT__ORA_USER_ERROR_MSG "ORA-24230: input to DBMS_DDL.WRAP is not a legal PL/SQL unit"
+#define OB_ERR_INVALID_PLSQL_UNIT__OBE_USER_ERROR_MSG "OBE-24230: input to DBMS_DDL.WRAP is not a legal PL/SQL unit"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9135,6 +9153,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_PLUGIN_DLOPEN_FAILED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11077, Failed to open library"
 #define OB_PLUGIN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11078, Plugin internal error"
 #define OB_PLUGIN_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11078, Plugin internal error"
+#define OB_CATALOG_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11079, Can't create catalog '%.*s'; catalog exists"
+#define OB_CATALOG_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11079, Can't create catalog '%.*s'; catalog exists"
+#define OB_CATALOG_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11080, Catalog '%.*s' doesn\'t exist"
+#define OB_CATALOG_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11080, Catalog '%.*s' doesn\'t exist"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9154,7 +9176,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2392];
+extern int g_all_ob_errnos[2398];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

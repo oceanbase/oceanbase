@@ -1014,7 +1014,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigVectorMemoryChecker);
 };
 
-
 class ObConfigEnableHashRollupChecker: public ObConfigChecker
 {
 public:
@@ -1025,6 +1024,27 @@ public:
   bool check(const ObConfigItem &t) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigEnableHashRollupChecker);
+};
+
+class ObConfigJavaParamsChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigJavaParamsChecker() {}
+  virtual ~ObConfigJavaParamsChecker() {}
+  bool check(const ObConfigItem& t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigJavaParamsChecker);
+};
+
+class ObConfigDefaultOrganizationChecker : public ObConfigChecker
+{
+public:
+  ObConfigDefaultOrganizationChecker() {}
+  virtual ~ObConfigDefaultOrganizationChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDefaultOrganizationChecker);
 };
 } // namespace common
 } // namespace oceanbase

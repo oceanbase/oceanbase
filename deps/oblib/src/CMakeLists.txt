@@ -203,6 +203,28 @@ endif()
 
 target_compile_features(oblib_base_base INTERFACE cxx_std_11)
 
+set(OBLIB_ABSEIL_LIST
+    ${DEP_DIR}/lib64/libabsl_base.a
+    ${DEP_DIR}/lib64/libabsl_city.a
+    ${DEP_DIR}/lib64/libabsl_debugging_internal.a
+    ${DEP_DIR}/lib64/libabsl_demangle_internal.a
+    ${DEP_DIR}/lib64/libabsl_hash.a
+    ${DEP_DIR}/lib64/libabsl_int128.a
+    ${DEP_DIR}/lib64/libabsl_low_level_hash.a
+    ${DEP_DIR}/lib64/libabsl_malloc_internal.a
+    ${DEP_DIR}/lib64/libabsl_raw_hash_set.a
+    ${DEP_DIR}/lib64/libabsl_raw_logging_internal.a
+    ${DEP_DIR}/lib64/libabsl_spinlock_wait.a
+    ${DEP_DIR}/lib64/libabsl_stacktrace.a
+    ${DEP_DIR}/lib64/libabsl_str_format_internal.a
+    ${DEP_DIR}/lib64/libabsl_strings.a
+    ${DEP_DIR}/lib64/libabsl_strings_internal.a
+    ${DEP_DIR}/lib64/libabsl_symbolize.a
+    ${DEP_DIR}/lib64/libabsl_synchronization.a
+    ${DEP_DIR}/lib64/libabsl_throw_delegate.a
+    ${DEP_DIR}/lib64/libabsl_time.a
+    ${DEP_DIR}/lib64/libabsl_time_zone.a)
+
 if(OB_BUILD_OPENSOURCE)
 set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -lmariadb")
 if (OB_STATIC_LINK_LGPL_DEPS)
@@ -215,13 +237,12 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libcurl.a
   ${DEP_DIR}/lib/libssl.a
   ${DEP_DIR}/lib/libcrypto.a
-  ${DEP_DIR}/lib/libs2.a
+  ${DEP_DIR}/lib64/libs2.a
+  ${OBLIB_ABSEIL_LIST}
   ${DEP_DIR}/lib/libroaring.a
   ${LGPL_DEPS}
   $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEP_DIR}/lib/libunwind.a>
   ${DEP_DIR}/lib/libz.a
-  ${DEP_DIR}/lib/libs2.a
-  ${DEP_DIR}/lib/libroaring.a
   ${DEP_DIR}/lib/libicui18n.a
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
@@ -254,7 +275,8 @@ target_link_libraries(oblib_base_base_base
   ${DEP_3RD_DIR}/usr/local/babassl-ob/lib/libssl.a
   ${DEP_3RD_DIR}/usr/local/babassl-ob/lib/libcrypto.a
   ${DEP_3RD_DIR}/u01/obclient/lib/libobclnt.a
-  ${DEP_DIR}/lib/libs2.a
+  ${DEP_DIR}/lib64/libs2.a
+  ${OBLIB_ABSEIL_LIST}
   ${DEP_DIR}/lib/libroaring.a
   ${DEP_DIR}/lib/libz.a
   ${DEP_DIR}/lib/libicui18n.a

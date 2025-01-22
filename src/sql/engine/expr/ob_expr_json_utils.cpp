@@ -275,6 +275,42 @@ int ObJsonUtil::datetime_scale_check(const ObAccuracy &accuracy,
   return ret;
 }
 
+int ObJsonUtil::mdatetime_scale_check(const ObAccuracy &accuracy,
+                                     ObMySQLDateTime &value,
+                                     bool strict)
+{
+  INIT_SUCC(ret);
+  ObScale scale = accuracy.get_scale();
+
+  if (OB_UNLIKELY(scale > MAX_SCALE_FOR_TEMPORAL)) {
+    ret = OB_ERR_TOO_BIG_PRECISION;
+    LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST",
+        static_cast<int64_t>(MAX_SCALE_FOR_TEMPORAL));
+  } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+    // first check zero
+    if (strict &&
+        (value == ObTimeConverter::MYSQL_ZERO_DATE ||
+        value == ObTimeConverter::MYSQL_ZERO_DATETIME)) {
+      ret = OB_INVALID_DATE_VALUE;
+      LOG_WARN("Zero datetime is invalid in json_value.", K(value));
+    } else {
+      ObMySQLDateTime temp_value = value;
+      ObTimeConverter::round_mdatetime(scale, temp_value);
+      if (strict && temp_value != value) {
+        ret = OB_OPERATE_OVERFLOW;
+        LOG_WARN("Invalid input value.", K(value), K(scale));
+      } else if (ObTimeConverter::is_valid_mdatetime(temp_value)) {
+        value = temp_value;
+      } else {
+        ret = OB_ERR_NULL_VALUE; // set null for res
+        LOG_DEBUG("Invalid datetime val, return set_null", K(temp_value));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObJsonUtil::get_accuracy(const ObExpr &expr,
                              ObEvalCtx &ctx,
                              ObAccuracy &accuracy,
@@ -1154,6 +1190,84 @@ int cast_to_date(common::ObIAllocator *allocator,
   return ret;
 }
 
+int cast_to_mdate(common::ObIAllocator *allocator,
+                 ObEvalCtx &ctx,
+                 ObIJsonBase *j_base,
+                 common::ObAccuracy &accuracy,
+                 ObJsonCastParam &cast_param,
+                 ObDatum &res,
+                 uint8_t &is_type_mismatch)
+{
+  INIT_SUCC(ret);
+  UNUSED(allocator);
+  UNUSED(cast_param);
+  UNUSED(ctx);
+  UNUSED(accuracy);
+  GET_SESSION()
+  {
+    ObMySQLDate val;
+    ObDateSqlMode date_sql_mode;
+    ObSQLMode sql_mode = session->get_sql_mode();
+    date_sql_mode.allow_invalid_dates_ = is_allow_invalid_dates(sql_mode);
+    date_sql_mode.no_zero_date_ = is_no_zero_date(sql_mode);
+    date_sql_mode.no_zero_in_date_ = is_no_zero_in_date(sql_mode);
+    if (OB_ISNULL(j_base)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("json base is null", K(ret));
+    } else if (j_base->json_type() == ObJsonNodeType::J_NULL) {
+      res.set_null();
+    } else if (CAST_FAIL(j_base->to_mdate(val, date_sql_mode))) {
+      is_type_mismatch = 1;
+      LOG_WARN("wrapper to date failed.", K(ret), K(*j_base));
+      ret = OB_OPERATE_OVERFLOW;
+      LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "DATE", "json_value");
+    } else if (!cast_param.is_only_check_) {
+      res.set_mysql_date(val);
+    }
+  }
+  return ret;
+}
+
+
+int cast_to_mdatetime(common::ObIAllocator *allocator,
+                     ObEvalCtx &ctx,
+                     ObIJsonBase *j_base,
+                     common::ObAccuracy &accuracy,
+                     ObJsonCastParam &cast_param,
+                     ObDatum &res,
+                     uint8_t &is_type_mismatch)
+{
+  INIT_SUCC(ret);
+  UNUSED(cast_param);
+  ObString json_string;
+  ObMySQLDateTime val;
+  GET_SESSION()
+  {
+    oceanbase::common::ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), false);
+    ObSQLMode sql_mode = session->get_sql_mode();
+    cvrt_ctx.date_sql_mode_.allow_invalid_dates_ = is_allow_invalid_dates(sql_mode);
+    cvrt_ctx.date_sql_mode_.no_zero_date_ = is_no_zero_date(sql_mode);
+    cvrt_ctx.date_sql_mode_.no_zero_in_date_ = is_no_zero_in_date(sql_mode);
+    if (OB_ISNULL(j_base)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("json base is null", K(ret));
+    } else {
+      if (CAST_FAIL(j_base->to_mdatetime(val, &cvrt_ctx))) {
+        LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
+      } else if (CAST_FAIL(ObJsonUtil::mdatetime_scale_check(accuracy, val))) {
+        LOG_WARN("datetime_scale_check failed.", K(ret));
+      }
+    }
+  }
+  if (cast_param.is_only_check_) {
+  } else if (ret == OB_ERR_NULL_VALUE) {
+    res.set_null();
+  } else if (OB_SUCC(ret)) {
+    res.set_mysql_datetime(val);
+  }
+  return ret;
+}
+
 int cast_to_time(common::ObIAllocator *allocator,
                  ObEvalCtx &ctx,
                  ObIJsonBase *j_base,
@@ -1744,6 +1858,12 @@ ObJsonUtil::ObJsonCastSqlScalar OB_JSON_CAST_SQL_EXPLICIT[ObMaxTC] =
   cast_not_expected,
   // ObDecimalIntTC = 25, // decimal int class
   cast_to_decimalint,
+  // ObCollectionSQLTC = 26, // collection type class in SQL
+  cast_not_expected,
+  // ObMySQLDateTC  = 27,    // datetime, timestamp.
+  cast_to_mdate,
+  // ObMySQLDateTimeTC = 28, // mysql date time type class
+  cast_to_mdatetime,
 };
 
 #undef CAST_FAIL

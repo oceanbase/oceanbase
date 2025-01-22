@@ -1091,6 +1091,88 @@ int get_dml_stmt_ora_need_privs(
   return ret;
 }
 
+int check_encrypt_priv_for_expr(const ObRawExpr *expr,
+                                bool &need_encrypt_priv,
+                                bool &need_decrypt_priv,
+                                ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && (!need_encrypt_priv || !need_decrypt_priv) && i < expr->get_param_count(); ++i) {
+    const ObRawExpr *param_expr = expr->get_param_expr(i);
+    if (OB_ISNULL(param_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null param expr", K(ret));
+    } else if (OB_FAIL(SMART_CALL(check_encrypt_priv_for_expr(param_expr,
+                                                              need_encrypt_priv,
+                                                              need_decrypt_priv,
+                                                              need_privs)))) {
+      LOG_WARN("failed to check if expr contains enhanced aes expr", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    need_encrypt_priv |= T_FUN_SYS_ENHANCED_AES_ENCRYPT == expr->get_expr_type();
+    need_decrypt_priv |= T_FUN_SYS_ENHANCED_AES_DECRYPT == expr->get_expr_type();
+  }
+  return ret;
+}
+
+int add_encrypt_priv_to_need_privs(const ObDMLStmt *dml_stmt, ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 8> relation_exprs;
+  bool need_encrypt_priv = false;
+  bool need_decrypt_priv = false;
+  if (OB_ISNULL(dml_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null dml stmt", K(ret));
+  } else if (OB_FAIL(dml_stmt->get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else if (dml_stmt->is_insert_stmt()) {
+    // needs to check if insert stmt needs encrypt or decrypt priv for values vector
+    const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(dml_stmt);
+    int64_t values_vector_cnt = insert_stmt->get_values_vector().count();
+    for (int64_t i = 0; OB_SUCC(ret) && (!need_encrypt_priv || !need_decrypt_priv) && i < values_vector_cnt; ++i) {
+      ObRawExpr *value_expr = insert_stmt->get_values_vector().at(i);
+      if (OB_ISNULL(value_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr", K(ret));
+      } else if (OB_FAIL(check_encrypt_priv_for_expr(value_expr,
+                                                     need_encrypt_priv,
+                                                     need_decrypt_priv,
+                                                     need_privs))) {
+        LOG_WARN("failed to check encrypt priv for insert value expr", K(ret));
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && (!need_encrypt_priv || !need_decrypt_priv) && i < relation_exprs.count(); ++i) {
+    ObRawExpr *expr = relation_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (OB_FAIL(check_encrypt_priv_for_expr(expr,
+                                                   need_encrypt_priv,
+                                                   need_decrypt_priv,
+                                                   need_privs))) {
+      LOG_WARN("failed to check encrypt priv for relation expr", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)){
+  } else if (!(need_encrypt_priv || need_decrypt_priv)) {
+  } else {
+    ObNeedPriv need_priv;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL; // encrypt/decrypt priv must be user-level priv
+    need_priv.priv_set_ |= need_encrypt_priv ? OB_PRIV_ENCRYPT : 0;
+    need_priv.priv_set_ |= need_decrypt_priv ? OB_PRIV_DECRYPT : 0;
+    ADD_NEED_PRIV(need_priv);
+  }
+  return ret;
+}
+
 int get_dml_stmt_need_privs(
     const ObSessionPrivInfo &session_priv,
     const ObStmt *basic_stmt,
@@ -1162,6 +1244,9 @@ int get_dml_stmt_need_privs(
           } else if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, table_infos, op_literal))) {
             LOG_WARN("cann't do this operation on this database", K(ret), K(stmt_type));
           }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(add_encrypt_priv_to_need_privs(dml_stmt, need_privs))) {
+          LOG_WARN("failed to add encrypt priv to need privs", K(ret));
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < table_size; i++) {
           const TableItem *table_item = dml_stmt->get_table_item(i);
@@ -2056,6 +2141,8 @@ int get_revoke_stmt_need_privs(
   } else if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(session_priv,
                                           ObCompatFeatureType::MYSQL_USER_REVOKE_ALL_ENHANCE, check_revoke_all_user_create_user))) {
         LOG_WARN("failed to get priv need check", K(ret));
+  } else if (is_root_user(session_priv.user_id_)) {
+    // not necessary
   } else {
     ObNeedPriv need_priv;
     const ObRevokeStmt *stmt = static_cast<const ObRevokeStmt *>(basic_stmt);

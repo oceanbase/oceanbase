@@ -16,7 +16,6 @@
 
 namespace oceanbase
 {
-using namespace storage;
 using namespace share;
 
 namespace tmp_file

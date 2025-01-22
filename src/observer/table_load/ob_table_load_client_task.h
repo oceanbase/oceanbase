@@ -177,6 +177,7 @@ private:
   sql::ObFreeSessionCtx free_session_ctx_;
   sql::ObSqlCtx sql_ctx_;
   sql::ObPhysicalPlanCtx plan_ctx_;
+  ObPhysicalPlan plan_;
   ObExecContext exec_ctx_;
   ObTableLoadClientExecCtx client_exec_ctx_;
   ObITableLoadTaskScheduler *task_scheduler_;

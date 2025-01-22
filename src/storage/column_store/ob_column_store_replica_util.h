@@ -23,12 +23,12 @@ namespace storage
 {
 
 enum class ObCSReplicaTabletStatus : uint8_t {
-  NORMAL                 = 0,  // local ls is not cs replica (F/R)
-                               // local ls is cs replica (C), but no need to be column store (like index or inner table) || valid schema and valid major in cs replica
+  NORMAL                 = 0,  // local ls is not cs replica (F/R), local ls is cs replica (C), but no need to be column store (like index or inner table)
   NOT_COMPLETE           = 1,  // ha status not data complete, need wait transfer/migration/rebuild finish
   NO_MAJOR_SSTABLE       = 2,  // offline ddl or direct load data not finish
   NEED_CO_CONVERT_MERGE  = 3,  // lastest major is row store MAJOR
   NEED_CS_STORAGE_SCHEMA = 4,  // lastest major is column store CO_MAJOR but storage schema is row store.
+  NORMAL_CS_REPLICA      = 5,  // valid schema and valid major in cs replica
   MAX_STATUS
 };
 
@@ -39,7 +39,8 @@ inline bool is_valid_cs_replica_status(const ObCSReplicaTabletStatus &status)
 
 inline bool is_normal_status(const ObCSReplicaTabletStatus &status)
 {
-  return ObCSReplicaTabletStatus::NORMAL == status;
+  return ObCSReplicaTabletStatus::NORMAL == status
+      || ObCSReplicaTabletStatus::NORMAL_CS_REPLICA == status;
 }
 
 inline bool is_need_wait_status(const ObCSReplicaTabletStatus &status)

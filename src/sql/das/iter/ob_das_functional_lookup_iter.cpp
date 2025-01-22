@@ -17,6 +17,7 @@
 #include "sql/das/ob_das_scan_op.h"
 #include "sql/das/ob_das_ir_define.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
+#include "sql/das/iter/ob_das_text_retrieval_iter.h"
 
 namespace oceanbase
 {

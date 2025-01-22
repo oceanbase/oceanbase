@@ -697,7 +697,8 @@ int ObPrepareAlterTableArgParam::init(const int64_t consumer_group_id,
                                       const ObString &target_database_name,
                                       const ObTimeZoneInfo &tz_info,
                                       const ObTimeZoneInfoWrap &tz_info_wrap,
-                                      const ObString *nls_formats)
+                                      const ObString *nls_formats,
+                                      const bool foreign_key_checks)
 {
   int ret = OB_SUCCESS;
   if (FALSE_IT(consumer_group_id_ = consumer_group_id)) {
@@ -720,6 +721,8 @@ int ObPrepareAlterTableArgParam::init(const int64_t consumer_group_id,
     LOG_WARN("failed to deep_copy tz info wrap", K(ret), "tz_info_wrap", tz_info_wrap);
   } else if (OB_FAIL(set_nls_formats(nls_formats))) {
     LOG_WARN("failed to set nls formats", K(ret));
+  } else {
+    foreign_key_checks_ = foreign_key_checks;
   }
   return ret;
 }
@@ -1024,7 +1027,8 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                             param.type_,
                                             param.tenant_data_version_,
                                             *param.allocator_,
-                                            task_record))) {
+                                            task_record,
+                                            param.fts_snapshot_version_))) {
           LOG_WARN("fail to create build index task", K(ret));
         }
         break;
@@ -1040,7 +1044,8 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                 param.tenant_data_version_,
                                                 create_index_arg,
                                                 *param.allocator_,
-                                                task_record))) {
+                                                task_record,
+                                                param.fts_snapshot_version_))) {
           LOG_WARN("fail to create build fts index task", K(ret));
         }
         break;
@@ -1378,6 +1383,7 @@ int ObDDLScheduler::prepare_alter_table_arg(const ObPrepareAlterTableArgParam &p
     LOG_WARN("failed to add member SESSION_ID for alter table schema", K(ret), K(alter_table_arg));
   } else if (OB_FAIL(alter_table_schema->alter_option_bitset_.add_member(obrpc::ObAlterTableArg::TABLE_NAME))) {
     LOG_WARN("failed to add member TABLE_NAME for alter table schema", K(ret), K(alter_table_arg));
+  } else if (FALSE_IT(alter_table_arg.foreign_key_checks_ = param.foreign_key_checks_)) {
   } else {
     LOG_DEBUG("alter table arg preparation complete!", K(ret), K(*alter_table_schema));
   }
@@ -1431,6 +1437,10 @@ int ObDDLScheduler::schedule_auto_split_task()
   int ret = OB_SUCCESS;
   ObRsAutoSplitScheduler &split_task_scheduler = ObRsAutoSplitScheduler::get_instance();
   ObArray<ObAutoSplitTask> task_array;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(split_task_scheduler.gc_deleted_tenant_caches())) {
+    LOG_WARN("failed to gc split tasks", K(tmp_ret));
+  }
   if (OB_FAIL(split_task_scheduler.pop_tasks(task_array))) {
     LOG_WARN("fail to pop tasks from auto_split_task_tree");
   } else if (task_array.count() == 0) {
@@ -1441,7 +1451,7 @@ int ObDDLScheduler::schedule_auto_split_task()
     obrpc::ObAlterTableRes unused_res;
     common::ObMalloc allocator(common::ObMemAttr(OB_SERVER_TENANT_ID, "split_sched"));
     for (int64_t i = 0; OB_SUCC(ret) && i < task_array.count(); ++i) {
-      int tmp_ret = OB_SUCCESS;
+      tmp_ret = OB_SUCCESS;
       unused_res.reset();
       ObAutoSplitTask &task = task_array.at(i);
       void *buf = nullptr;
@@ -1698,7 +1708,8 @@ int ObDDLScheduler::start_redef_table(const obrpc::ObStartRedefTableArg &arg, ob
                              orig_database_schema->get_database_name_str(),
                              arg.tz_info_,
                              arg.tz_info_wrap_,
-                             arg.nls_formats_))) {
+                             arg.nls_formats_,
+                             arg.foreign_key_checks_))) {
         LOG_WARN("param init failed", K(ret));
       } else if (OB_FAIL(prepare_alter_table_arg(param, target_table_schema, alter_table_arg))) {
         LOG_WARN("failed to build alter table arg", K(ret));
@@ -1743,7 +1754,8 @@ int ObDDLScheduler::create_build_fts_index_task(
     const uint64_t tenant_data_version,
     const obrpc::ObCreateIndexArg *create_index_arg,
     ObIAllocator &allocator,
-    ObDDLTaskRecord &task_record)
+    ObDDLTaskRecord &task_record,
+    const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   int64_t task_id = 0;
@@ -1769,7 +1781,9 @@ int ObDDLScheduler::create_build_fts_index_task(
                                        consumer_group_id,
                                        *create_index_arg,
                                        tenant_data_version,
-                                       parent_task_id))) {
+                                       parent_task_id,
+                                       share::ObDDLTaskStatus::PREPARE,
+                                       snapshot_version))) {
       LOG_WARN("init fts index task failed", K(ret), K(data_table_schema), K(index_schema));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
       LOG_WARN("set trace id failed", K(ret));
@@ -1841,7 +1855,8 @@ int ObDDLScheduler::create_build_index_task(
     const share::ObDDLType task_type,
     const uint64_t tenant_data_version,
     ObIAllocator &allocator,
-    ObDDLTaskRecord &task_record)
+    ObDDLTaskRecord &task_record,
+    const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   int64_t task_id = 0;
@@ -1867,7 +1882,9 @@ int ObDDLScheduler::create_build_index_task(
                                       *create_index_arg,
                                       task_type,
                                       parent_task_id,
-                                      tenant_data_version))) {
+                                      tenant_data_version,
+                                      !index_schema->is_rowkey_doc_id() ? share::ObDDLTaskStatus::PREPARE : share::ObDDLTaskStatus::REDEFINITION,
+                                      snapshot_version))) {
       LOG_WARN("init global index task failed", K(ret), K(data_table_schema), K(index_schema));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
       LOG_WARN("set trace id failed", K(ret));

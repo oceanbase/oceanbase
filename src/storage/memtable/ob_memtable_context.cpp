@@ -48,6 +48,7 @@ ObMemtableCtx::ObMemtableCtx()
       lock_(),
       end_code_(OB_SUCCESS),
       tx_status_(ObTxStatus::NORMAL),
+      elr_state_(ELR_STATE_INIT),
       ref_(0),
       query_allocator_(),
       ctx_cb_allocator_(),
@@ -171,6 +172,7 @@ void ObMemtableCtx::reset()
     is_read_only_ = false;
     end_code_ = OB_SUCCESS;
     tx_status_ = ObTxStatus::NORMAL;
+    elr_state_ = ELR_STATE_INIT;
     // blocked_trans_ids_.reset();
     //FIXME: ObIMemtableCtx don't have resetfunction,
     //thus ObIMvccCtx::reset is called, so resource_link_is not reset
@@ -502,11 +504,24 @@ int ObMemtableCtx::trans_clear()
 int ObMemtableCtx::elr_trans_preparing()
 {
   RDLockGuard guard(rwlock_);
-  if (NULL != ATOMIC_LOAD(&ctx_) && OB_SUCCESS == end_code_) {
-    set_commit_version(static_cast<ObPartTransCtx *>(ctx_)->get_commit_version());
+  if (NULL != ATOMIC_LOAD(&ctx_) && OB_SUCCESS == end_code_ && ATOMIC_LOAD(&elr_state_) == ELR_STATE_INIT) {
+    set_commit_version(ctx_->get_commit_version());
     trans_mgr_.elr_trans_preparing();
+    ATOMIC_STORE(&elr_state_, ELR_STATE_DONE);
   }
   return OB_SUCCESS;
+}
+
+void ObMemtableCtx::elr_trans_revoke()
+{
+  WRLockGuard guard(rwlock_); // mutex with elr_trans_preparing
+  if (NULL != ATOMIC_LOAD(&ctx_) && OB_SUCCESS == end_code_) {
+    if (ATOMIC_LOAD(&elr_state_) == ELR_STATE_DONE) {
+      set_commit_version(share::SCN::min_scn());
+      trans_mgr_.elr_trans_revoke();
+    }
+    ATOMIC_STORE(&elr_state_, ELR_STATE_REVOKED);
+  }
 }
 
 int ObMemtableCtx::do_trans_end(

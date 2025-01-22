@@ -183,6 +183,7 @@ public:
   int get_group_event(int64_t group_id, ObWaitEventStatArray &arr);
   int get_group_add_stats(int64_t group_id, ObStatEventAddStatArray &arr);
   int remove_if(std::function<bool(const ObDiagnosticKey&, ObDiagnosticInfoCollector*)> fn);
+  int64_t get_value_alloc_count() const { return collectors_.get_alloc_handle().get_alloc_count(); }
   DISABLE_COPY_ASSIGN(ObBaseDiagnosticInfoSummary);
   TO_STRING_KV(K_(cpu_cnt));
 

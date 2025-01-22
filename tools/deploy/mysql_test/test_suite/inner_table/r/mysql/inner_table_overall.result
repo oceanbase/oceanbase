@@ -805,6 +805,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12504	__all_virtual_function_io_stat	2	201001	1
 12505	__all_virtual_temp_file	2	201001	1
 12506	__all_virtual_ncomp_dll_v2	2	201001	1
+12514	__all_virtual_ddl_diagnose_info	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1

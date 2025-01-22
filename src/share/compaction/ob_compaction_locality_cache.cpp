@@ -73,7 +73,7 @@ int ObCompactionLocalityCache::refresh_ls_locality(const bool force_refresh)
 #ifdef ERRSIM
   ret = inner_refresh_ls_locality();
 #else
-  if (force_refresh || empty() || REACH_TENANT_TIME_INTERVAL(CHECK_LS_LOCALITY_INTERVAL)) {
+  if (force_refresh || empty() || REACH_THREAD_TIME_INTERVAL(CHECK_LS_LOCALITY_INTERVAL)) {
     ret = inner_refresh_ls_locality();
   }
 #endif

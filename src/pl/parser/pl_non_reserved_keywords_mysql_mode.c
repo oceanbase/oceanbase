@@ -182,6 +182,16 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"cancel", CANCEL},
   {"xa", XA},
   {"recover", RECOVER},
+  {"polygon", POLYGON},
+  {"multipoint", MULTIPOINT},
+  {"point", POINT},
+  {"linestring", LINESTRING},
+  {"geometry", GEOMETRY},
+  {"multilinestring", MULTILINESTRING},
+  {"multipolygon", MULTIPOLYGON},
+  {"geometrycollection", GEOMETRYCOLLECTION},
+  {"geomcollection", GEOMCOLLECTION},
+  {"roaringbitmap", ROARINGBITMAP}
 };
 
 const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char *word)

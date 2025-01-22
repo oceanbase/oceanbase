@@ -65,6 +65,7 @@
 #include "sql/resolver/dml/ob_inlist_resolver.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -3095,15 +3096,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
 {
   int ret = OB_SUCCESS;
   bool is_external = false;
-  ObExecContext *exec_ctx = NULL;
-  if (OB_ISNULL(session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null session_info or exec context", K(ret), K(session_info_));
-  } else {
-    exec_ctx = session_info_->get_cur_exec_ctx();
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(stmt_) || OB_ISNULL(stmt_->get_query_ctx())) {
+  if (OB_ISNULL(stmt_) || OB_ISNULL(stmt_->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(stmt_));
   } else if (q_name.is_sys_func()) {
@@ -3293,9 +3286,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
   //因为obj access的参数拉平处理，a(b,c)在columns会被存储为b,c,a，所以解释完一个ObQualifiedName，
   //都要把他前面的ObQualifiedName拿过来尝试替换一遍参数
   for (int64_t i = 0; OB_SUCC(ret) && i < real_exprs.count(); ++i) {
-    if ((0 == i % 1000) && NULL != exec_ctx && OB_FAIL(exec_ctx->check_status())) {
-      LOG_WARN("check status failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr, columns.at(i).ref_expr_, real_exprs.at(i)))) {
+    if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr, columns.at(i).ref_expr_, real_exprs.at(i)))) {
       LOG_WARN("replace column ref expr failed", K(ret));
     }
   }
@@ -3313,11 +3304,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
-    if ((0 == i % 1000) && NULL != exec_ctx && OB_FAIL(exec_ctx->check_status())) {
-      LOG_WARN("check status failed", K(ret));
-    } else {
-      OZ (columns.at(i).replace_access_ident_params(q_name.ref_expr_, real_ref_expr));
-    }
+    OZ (columns.at(i).replace_access_ident_params(q_name.ref_expr_, real_ref_expr));
   }
 
   if (OB_ERR_BAD_FIELD_ERROR == ret) {
@@ -5178,6 +5165,7 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
                                              session_info->get_sql_mode(),
                                              enable_decimal_int,
                                              compat_type,
+                                             session_info->get_local_ob_enable_plan_cache(),
                                              nullptr != params_.secondary_namespace_))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(val.get_string().length())))) { // deep copy str value
@@ -7005,7 +6993,9 @@ int ObDMLResolver::resolve_is_expr(ObRawExpr *&expr, bool &replace_happened)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get column item failed", K(ret));
     } else if (T_NULL == is_expr->get_param_expr(1)->get_expr_type()) {
-      if ((column_item->get_column_type()->is_date() || column_item->get_column_type()->is_datetime())
+      if ((column_item->get_column_type()->is_date() || column_item->get_column_type()->is_datetime()
+           || column_item->get_column_type()->is_mysql_date()
+           || column_item->get_column_type()->is_mysql_datetime())
           && !lib::is_oracle_mode()
           && column_item->is_not_null_for_read()) {
         // If c1 is a date or datetime column and is declared not null,
@@ -7365,6 +7355,8 @@ int ObDMLResolver::resolve_and_split_sql_expr_with_bool_expr(const ParseNode &no
       if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(and_exprs.at(i), new_expr,
                                                           *params_.expr_factory_))) {
         LOG_WARN("try create bool expr failed", K(ret), K(i));
+      } else if (OB_FAIL(new_expr->formalize(session_info_))) {
+        LOG_WARN("formalize expr failed", K(ret));
       } else {
         and_exprs.at(i) = new_expr;
       }
@@ -8427,6 +8419,16 @@ int ObDMLResolver::resolve_not_null_date_column_is_null(ObRawExpr *&expr, const 
   } else if (col_type->is_datetime() &&
              OB_FAIL(ObRawExprUtils::build_const_datetime_expr(*params_.expr_factory_,
                                                                ObTimeConverter::ZERO_DATETIME,
+                                                               zero_date))) {
+    LOG_WARN("fail to create zero datetime", K(ret));
+  } else if (col_type->is_mysql_date() &&
+             OB_FAIL(ObRawExprUtils::build_const_mysql_date_expr(*params_.expr_factory_,
+                                                                 ObTimeConverter::MYSQL_ZERO_DATE,
+                                                                 zero_date))) {
+    LOG_WARN("fail to create zero date", K(ret));
+  } else if (col_type->is_mysql_datetime() &&
+             OB_FAIL(ObRawExprUtils::build_const_mysql_datetime_expr(*params_.expr_factory_,
+                                                               ObTimeConverter::MYSQL_ZERO_DATETIME,
                                                                zero_date))) {
     LOG_WARN("fail to create zero datetime", K(ret));
   }else if (OB_ISNULL(equal_expr) || OB_ISNULL(zero_date)) {
@@ -9753,6 +9755,9 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
                                                         is_public_synonym))) {
     if (OB_TABLE_NOT_EXIST == ret) {
       if (synonym_checker.has_synonym()) {
+        if (is_public_synonym) {
+          synonym_db_name.reset();
+        }
         ret = OB_ERR_SYNONYM_TRANSLATION_INVALID;
         LOG_WARN("Synonym translation is no longer valid");
         LOG_USER_ERROR(OB_ERR_SYNONYM_TRANSLATION_INVALID, to_cstring(orig_name));
@@ -10372,7 +10377,11 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
       omt::ObTenantConfigGuard tcg(TENANT_CONF(session_info_->get_effective_tenant_id()));
       bool convert_real_to_decimal = (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
       uint64_t tenant_data_version = 0;
-      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+      bool enable_mysql_compatible_dates = false;
+      if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info_, false,
+                                enable_mysql_compatible_dates))) {
+        LOG_WARN("fail to check enable mysql compatible dates", K(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
         LOG_WARN("get tenant data version failed", K(ret));
       } else if (OB_FAIL(ObResolverUtils::resolve_data_type(parse_tree,
                                                           col_def->col_base_info_.col_name_,
@@ -10381,6 +10390,8 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
                                                           false,
                                                           session_info_->get_session_nls_params(),
                                                           session_info_->get_effective_tenant_id(),
+                                                          convert_real_to_decimal,  /*todo @weiyouchao.wyc, check_enable_decimalint*/
+                                                          enable_mysql_compatible_dates,
                                                           convert_real_to_decimal))) {
         LOG_WARN("resolve data type failed", K(ret), K(col_def->col_base_info_.col_name_));
       } else {
@@ -11444,7 +11455,7 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
       if (stmt->is_select_stmt()) {
         ObRawExpr *empty_rowid_expr = NULL;
         if (OB_FAIL(ObRawExprUtils::build_empty_rowid_expr(*params_.expr_factory_,
-                                                           table_item.table_id_,
+                                                           table_item,
                                                            empty_rowid_expr))) {
           LOG_WARN("build empty rowid expr failed", K(ret));
         } else if (OB_ISNULL(empty_rowid_expr) ||
@@ -13997,7 +14008,7 @@ int ObDMLResolver::resolve_rowid_pseudo_column(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr factory is null", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_empty_rowid_expr(*params_.expr_factory_,
-                                                              table_item->table_id_,
+                                                              *table_item,
                                                               real_ref_expr))) {
       LOG_WARN("build empty rowid expr failed", K(ret));
     }
@@ -14415,9 +14426,12 @@ int ObDMLResolver::check_insert_into_select_use_fast_column_convert(const ObColu
           } else if (source_base_table_schema->is_external_table()) {
             ObArenaAllocator alloc;
             ObExternalFileFormat format;
-            if (OB_FAIL(format.load_from_string(source_base_table_schema->get_external_file_format(), alloc))) {
-              LOG_WARN("load from string failed", K(ret));
-            } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT) {
+            const ObString &format_or_properties = source_base_table_schema->get_external_file_format().empty() ?
+                                            source_base_table_schema->get_external_properties() :
+                                            source_base_table_schema->get_external_file_format();
+            if (OB_FAIL(format.load_from_string(format_or_properties, alloc))) {
+              LOG_WARN("load from string failed", K(ret), K(format_or_properties.length()), K(format_or_properties));
+            } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT || format.format_type_ == ObExternalFileFormat::ODPS_FORMAT) {
               fast_calc = true;
             }
           }
@@ -14534,6 +14548,10 @@ int ObDMLResolver::resolve_outline_data_hints()
                                     hints,
                                     qb_name))) {
       LOG_WARN("failed to resolve outline data hints", K(ret));
+    } else if (OB_UNLIKELY(0 == global_hint.max_concurrent_)) {
+      ret = OB_REACH_MAX_CONCURRENT_NUM;
+      LOG_USER_ERROR(OB_REACH_MAX_CONCURRENT_NUM, global_hint.max_concurrent_);
+      LOG_WARN("SQL reach max concurrent num 0", K(ret));
     } else if (hints.empty() && !global_hint.has_hint_exclude_concurrent()
                && ObGlobalHint::UNSET_MAX_CONCURRENT != global_hint.max_concurrent_) {
       /* max concurrent outline, do not ignore other hint */

@@ -62,6 +62,7 @@ public:
   virtual bool is_iter_end() const = 0;
   virtual bool is_macro_block_opened() const { return true; }
   virtual bool is_micro_block_opened() const { return true; }
+  virtual bool OB_INLINE is_small_sstable_iter() const { return false; }
   virtual const blocksstable::ObDatumRow *get_curr_row() const = 0;
   virtual int get_curr_macro_block(const blocksstable::ObMacroBlockDesc *&macro_desc) const
   {
@@ -172,7 +173,7 @@ protected:
   virtual int inner_init(const ObMergeParameter &merge_param) = 0;
   void revise_macro_range(ObDatumRange &range) const;
 private:
-  int init(const ObMergeParameter &merge_param);
+  int common_init(const ObMergeParameter &merge_param);
   int init_query_base_params(const ObMergeParameter &merge_param);
 protected:
   ObTabletID tablet_id_;
@@ -227,6 +228,7 @@ public:
   virtual void reset() override;
   virtual int next() override;
   virtual OB_INLINE bool is_macro_merge_iter() const { return true; }
+  virtual bool OB_INLINE is_small_sstable_iter() const override { return is_small_sstable_iter_; }
   virtual bool is_macro_block_opened() const override { return macro_block_opened_; }
   virtual int open_curr_range(const bool for_rewrite, const bool for_compare = false) override;
   virtual int get_curr_range_end_rowid(int64_t &row_id) const override;
@@ -243,7 +245,7 @@ public:
   virtual int need_open_curr_range(const blocksstable::ObDatumRow &row, bool &need_open, const int64_t row_id_for_cg = 0) override final;
   INHERIT_TO_STRING_KV("ObPartitionMacroMergeIter", ObPartitionMergeIter,
                        K_(macro_block_opened), KP_(macro_block_iter),
-                       K_(curr_block_desc), K_(curr_block_meta));
+                       K_(curr_block_desc), K_(curr_block_meta), K_(is_small_sstable_iter));
 
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
@@ -264,6 +266,7 @@ protected:
   ObCSDatumRange cs_datum_range_;
   bool macro_block_opened_;
   bool macro_block_opened_for_cmp_;
+  bool is_small_sstable_iter_; // for small major sstable merge, disable reuse macro block but enable reuse micro block
 };
 
 class ObPartitionMicroMergeIter : public ObPartitionMacroMergeIter
@@ -410,14 +413,24 @@ private:
 class ObPartitionMVRowMergeIter final : public ObPartitionMergeIter
 {
 public:
+  struct ObMVSqlResource
+  {
+    ObMVSqlResource();
+    ~ObMVSqlResource();
+    TO_STRING_KV(K_(free_session_ctx), KP_(session), KP_(conn), KP_(sql_result));
+    ObISQLClient::ReadResult read_result_;
+    sql::ObFreeSessionCtx free_session_ctx_;
+    sql::ObSQLSessionInfo *session_;
+    sqlclient::ObISQLConnection *conn_;
+    observer::ObInnerSQLResult *sql_result_;
+  };
   ObPartitionMVRowMergeIter(common::ObIAllocator &allocator);
   virtual ~ObPartitionMVRowMergeIter();
   virtual int init(const ObMergeParameter &merge_param,
            const int64_t refresh_sql_idx,
            const ObITableReadInfo *read_info) override;
   virtual int next() override;
-  TO_STRING_KV(K_(is_delete), K_(is_replace), K_(sql_idx), K_(sql_read_col_cnt), K_(store_col_cnt),
-               K_(free_session_ctx), KP_(session), KP_(conn), KP_(sql_result));
+  TO_STRING_KV(K_(is_delete), K_(is_replace), K_(sql_idx), K_(sql_read_col_cnt), K_(store_col_cnt), K_(mv_sql_resource));
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
@@ -427,12 +440,8 @@ private:
   int64_t sql_idx_;
   int64_t sql_read_col_cnt_;
   int64_t store_col_cnt_;
-  ObISQLClient::ReadResult read_result_;
   blocksstable::ObDatumRow result_row_;
-  sql::ObFreeSessionCtx free_session_ctx_;
-  sql::ObSQLSessionInfo *session_;
-  sqlclient::ObISQLConnection *conn_;
-  observer::ObInnerSQLResult *sql_result_;
+  ObMVSqlResource mv_sql_resource_;
 };
 
 static const int64_t DEFAULT_ITER_COUNT = 16;

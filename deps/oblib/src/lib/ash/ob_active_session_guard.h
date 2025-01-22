@@ -90,7 +90,7 @@ public:
     top_level_sql_id_[0] = '\0';
     plsql_entry_subprogram_name_[0] = '\0';
     plsql_subprogram_name_[0] = '\0';
-#if !defined(NDEBUG) || defined(ENABLE_DEBUG_LOG)
+#if !defined(NDEBUG)
     bt_[0] = '\0';
 #endif
     program_[0] = '\0';
@@ -170,7 +170,7 @@ public:
   char module_[ASH_MODULE_STR_LEN];
   char action_[ASH_ACTION_STR_LEN];
   char client_id_[ASH_CLIENT_ID_STR_LEN];
-#if !defined(NDEBUG) || defined(ENABLE_DEBUG_LOG)
+#if !defined(NDEBUG)
   char bt_[ASH_BACKTRACE_STR_LEN];
 #endif
   TO_STRING_KV(K_(tenant_id), K_(session_id), "event id", OB_WAIT_EVENTS[event_no_].event_id_,
@@ -178,7 +178,7 @@ public:
       K_(plan_line_id), K_(sql_id), K_(top_level_sql_id), K_(plsql_entry_subprogram_name),
       K_(plsql_subprogram_name), K_(session_type), K_(is_wr_sample), K_(delta_time),
       K_(delta_cpu_time), K_(delta_db_time), K_(program), K_(module), K_(action), K_(client_id),
-#if !defined(NDEBUG) || defined(ENABLE_DEBUG_LOG)
+#if !defined(NDEBUG)
       K_(bt),
 #endif
       K_(group_id), K_(tid), K_(plan_hash), K_(tx_id), K_(stmt_type), K_(tablet_id), K_(block_sessid));
@@ -231,7 +231,7 @@ public:
     p1_ = p1;
     p2_ = p2;
     p3_ = p3;
-#if !defined(NDEBUG) || defined(ENABLE_DEBUG_LOG)
+#if !defined(NDEBUG)
     const char *bt = lbt();
     int64_t size = std::min(sizeof(bt_) - 1, STRLEN(bt));
     MEMCPY(bt_, bt, size);
@@ -245,7 +245,7 @@ public:
     p2_ = 0;
     p3_ = 0;
     wait_event_begin_ts_ = 0;
-#if !defined(NDEBUG) || defined(ENABLE_DEBUG_LOG)
+#if !defined(NDEBUG)
     MEMSET(bt_, 0, sizeof(bt_));
 #endif
   }

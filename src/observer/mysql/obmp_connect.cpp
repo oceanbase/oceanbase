@@ -47,6 +47,7 @@
 #include "sql/privilege_check/ob_privilege_check.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "lib/utility/ob_backtrace.h"
+#include "rpc/obmysql/packet/ompk_auth_switch.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -545,6 +546,7 @@ inline void reset_inner_proxyro_scramble(
   login_info.scramble_str_.assign_ptr(conn.scramble_buf_, sizeof(conn.scramble_buf_));
 }
 
+const char *AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD = "mysql_native_password";
 int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
 {
   LOG_DEBUG("load privilege info");
@@ -698,7 +700,9 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           } else if (!is_empty_passwd && // user account with empty password do not need auth switch, same as MySQL 5.7 and 8.x
                     OB_CLIENT_NON_STANDARD == conn->client_type_ && // client is not OB's C/JAVA client
                     !hsr_.get_auth_plugin_name().empty() && // client do not use mysql_native_method
-                    hsr_.get_auth_plugin_name().compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD)) {
+                    hsr_.get_auth_plugin_name().compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD) &&
+                    GCONF._enable_auth_switch &&
+                    (!conn->is_proxy_ || conn->proxy_version_ >= PROXY_VERSION_4_3_3_0)) {
             // Client is not use mysql_native_password method,
             // but observer only support mysql_native_password in user account's authentication,
             // so observer need tell client use mysql_native_password method by sending "AuthSwitchRequest"

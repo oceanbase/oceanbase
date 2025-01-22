@@ -16,11 +16,17 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/task/ob_timer.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
+namespace common
+{
+class ObTabletID;
+}
 namespace storage
 {
+class ObLS;
 // check whether the ddl tablet can become empty shell.
 class ObDDLEmptyShellChecker
 {

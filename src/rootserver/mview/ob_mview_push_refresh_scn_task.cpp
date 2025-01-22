@@ -23,17 +23,20 @@
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "storage/mview/ob_mview_refresh_stats_purge.h"
 #include "observer/ob_inner_sql_connection.h"
+#include "share/ob_all_server_tracer.h"
 
 namespace oceanbase {
 namespace rootserver {
 
 #define QUERY_MAJOR_MV_MERGE_SCN_SQL "select mview_id,t2.data_table_id,last_refresh_scn,t3.tablet_id, \
-  t4.svr_ip,t4.svr_port,t4.ls_id,t5.learner_list, t4.end_log_scn from %s t1 \
+  t4.svr_ip,t4.svr_port,t4.ls_id,t4.end_log_scn, \
+  locate(concat(t4.svr_ip,\":\", t4.svr_port), t5.paxos_member_list) > 0 is_member, \
+  locate(concat(t4.svr_ip,\":\", t4.svr_port), t5.learner_list) > 0 is_leaner from %s t1 \
   left join %s t2 on t1.mview_id = t2.table_id \
   left join %s t3 on t2.data_table_id = t3.table_id \
   left join %s t4 on t3.tablet_id = t4.tablet_id and t4.table_type = 10 \
   left join %s t5 on t4.svr_ip = t5.svr_ip and t4.svr_port = t5.svr_port and t4.ls_id = t5.ls_id \
-  where t1.refresh_mode = %ld and t1.last_refresh_scn > 0 order by 1,2,3,4,5,6,7,9"
+  where t1.refresh_mode = %ld and t1.last_refresh_scn > 0 order by 1,2,3,4,5,6,7,8"
 
 
 ObMViewPushRefreshScnTask::ObMViewPushRefreshScnTask()
@@ -113,7 +116,7 @@ void ObMViewPushRefreshScnTask::runTimerTask()
   } else if (OB_FAIL(need_schedule_major_refresh_mv_task(tenant_id_, need_schedule))) {
     LOG_WARN("fail to check need schedule major refresh mv task", KR(ret), K(tenant_id_));
   } else if (!need_schedule) {
-  } else if (FALSE_IT(void(check_major_mv_refresh_scn_safety(tenant_id_)))) {
+  } else if (REACH_TIME_INTERVAL(300 * 1000 * 1000) && FALSE_IT(void(check_major_mv_refresh_scn_safety(tenant_id_)))) {
   } else if (OB_UNLIKELY(OB_ISNULL(sql_proxy))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
@@ -123,7 +126,6 @@ void ObMViewPushRefreshScnTask::runTimerTask()
     share::ObGlobalStatProxy stat_proxy(trans, tenant_id_);
     share::SCN major_refresh_mv_merge_scn;
     ObArray<share::ObBackupJobAttr> backup_jobs;
-    uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     if (OB_FAIL(stat_proxy.get_major_refresh_mv_merge_scn(true /*select for update*/,
                                                           major_refresh_mv_merge_scn))) {
       LOG_WARN("fail to get major_refresh_mv_merge_scn", KR(ret), K(tenant_id_));
@@ -131,12 +133,6 @@ void ObMViewPushRefreshScnTask::runTimerTask()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("major_refresh_mv_merge_scn is invalid", KR(ret), K(tenant_id_),
                 K(major_refresh_mv_merge_scn));
-    } else if (OB_FAIL(share::ObBackupJobOperator::get_jobs(
-                   *sql_proxy, meta_tenant_id, false /*select for update*/, backup_jobs))) {
-      LOG_WARN("failed to get backup jobs", K(ret), K(tenant_id_));
-    } else if (!backup_jobs.empty()) {
-      LOG_INFO("[MAJ_REF_MV] backup jobs exist, skip push major refresh mv scn", KR(ret),
-               K(tenant_id_));
     } else if (OB_FAIL(update_major_refresh_mview_scn_(tenant_id_, major_refresh_mv_merge_scn, trans))) {
       LOG_WARN("fail to update major_refresh_mview_scn", KR(ret), K(tenant_id_), K(major_refresh_mv_merge_scn));
     } else {
@@ -199,16 +195,19 @@ int ObMViewPushRefreshScnTask::check_major_mv_refresh_scn_safety(const uint64_t 
              }
           }
         }
+        bool alive = true;
+        // ignore ret
+        SVR_TRACER.check_server_alive(merge_info.svr_addr_, alive);
         if (find_dest_merge_scn) {
-        } else if (merge_info.has_learner_) {
-          LOG_WARN("major_mv_safety>>>>", K(merge_info));
+        } else if (!merge_info.is_member_ || merge_info.is_learner_) {
+          LOG_WARN("major_mv_safety>>>>", K(merge_info), K(alive));
         } else {
-          LOG_ERROR("major_mv_safety>>>>", K(merge_info));
+          LOG_ERROR("major_mv_safety>>>>", K(merge_info), K(alive));
           is_safety = false;
         }
       }
     }
-    LOG_INFO("major_mv_safety>>>>", K(is_safety));
+    LOG_INFO("major_mv_safety<<<<<<<<<<<", K(is_safety));
   }
   return ret;
 }
@@ -282,27 +281,23 @@ int ObMViewPushRefreshScnTask::get_major_mv_merge_info_(const uint64_t tenant_id
           char svr_ip[OB_IP_STR_BUFF] = "";
           int64_t svr_port = 0;
           int64_t tmp_real_str_len = 0;
-          ObString learner_list;
           EXTRACT_INT_FIELD_MYSQL(*result, "mview_id", merge_info.mview_id_, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "data_table_id", merge_info.data_table_id_, int64_t);
           EXTRACT_UINT_FIELD_MYSQL(*result, "last_refresh_scn", merge_info.last_refresh_scn_, uint64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", merge_info.tablet_id_, int64_t);
           EXTRACT_STRBUF_FIELD_MYSQL(*result, "svr_ip", svr_ip, OB_IP_STR_BUFF, tmp_real_str_len);
           EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", svr_port, int64_t);
-          (void)merge_info.svr_addr_.set_ip_addr(svr_ip, static_cast<int32_t>(svr_port));
           EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", merge_info.ls_id_, int64_t);
           EXTRACT_UINT_FIELD_MYSQL(*result, "end_log_scn", merge_info.end_log_scn_, uint64_t);
-          EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*result, "learner_list", learner_list);
-          if (learner_list.length() > 0) {
-            merge_info.has_learner_ = true;
-          } else {
-            merge_info.has_learner_ = false;
-          }
-
+          EXTRACT_INT_FIELD_MYSQL(*result, "is_member", merge_info.is_member_, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "is_leaner", merge_info.is_learner_, int64_t);
           if (OB_FAIL(ret)) {
             LOG_WARN("fail to extract field from result", KR(ret));
-          } else if (OB_FAIL(merge_info_array.push_back(merge_info))) {
-            LOG_WARN("fail to push merge_info to array", KR(ret));
+          } else {
+            (void)merge_info.svr_addr_.set_ip_addr(svr_ip, static_cast<int32_t>(svr_port));
+            if (OB_FAIL(merge_info_array.push_back(merge_info))) {
+              LOG_WARN("fail to push merge_info to array", KR(ret));
+            }
           }
           if (OB_FAIL(ret)) {
             is_result_next_err = false;

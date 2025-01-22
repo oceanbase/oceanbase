@@ -283,12 +283,12 @@ END_P SET_VAR DELIMITER
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT
 
-        DAG DATA DATAFILE DATA_DISK_SIZE DATA_SOURCE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPTION
+        DAG DATA DATAFILE DATA_DISK_SIZE DATA_SOURCE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPT DECRYPTION
         DEFAULT_AUTH DEFAULT_LOB_INROW_THRESHOLD DEFINER DELAY DELAY_KEY_WRITE DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS
         DIRECTORY DISABLE DISALLOW DISCARD DISK DISKGROUP DO DOT DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DUPLICATE_READ_CONSISTENCY DYNAMIC
         DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND
 
-        EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPTED ENCRYPTION END ENDPOINT ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
+        EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPT ENCRYPTED ENCRYPTION END ENDPOINT ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXCLUDING EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
         EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED ENCODING EMPTY_FIELD_AS_NULL EUCLIDEAN EXTERNAL EXTERNAL_STORAGE_DEST
 
@@ -299,7 +299,7 @@ END_P SET_VAR DELIMITER
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GROUP_CONCAT GROUPING GTS
         GLOBAL_NAME GLOBAL_ALIAS
 
-        HANDLER HASH HELP HISTOGRAM HOST HOSTS HOUR HIDDEN HYBRID_HIST
+        HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOUR HIDDEN HYBRID_HIST
 
         ID IDC IDENTIFIED IGNORE_SERVER_IDS ILOG IMMEDIATE IMPORT INCLUDING INCR INDEXES INDEX_TABLE_ID INFO INITIAL_SIZE
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER
@@ -381,13 +381,14 @@ END_P SET_VAR DELIMITER
 
         ZONE ZONE_LIST ZONE_TYPE OPTIMIZER_COSTS
 
-        OVERWRITE
+        ORGANIZATION OVERWRITE
 //-----------------------------non_reserved keyword end---------------------------------------------
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
 %type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option lob_storage_clause lob_storage_parameter lob_storage_parameters lob_chunk_size
 %type <node> opt_force
+%type <node> index_or_heap
 %type <node> create_sequence_stmt alter_sequence_stmt drop_sequence_stmt opt_sequence_option_list sequence_option_list sequence_option simple_num
 %type <node> create_database_stmt drop_database_stmt alter_database_stmt use_database_stmt
 %type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor databases_expr opt_databases
@@ -459,6 +460,7 @@ END_P SET_VAR DELIMITER
 %type <node> truncate_table_stmt
 %type <node> lock_user_stmt lock_spec_mysql57
 %type <node> grant_stmt grant_privileges role_or_priv_list role_or_priv priv_level opt_privilege grant_options object_type
+%type <node> grant_proxy_stmt revoke_proxy_stmt
 %type <node> revoke_stmt opt_with_admin_option opt_ignore_unknown_user set_role_stmt default_set_role_clause set_role_clause
 %type <node> opt_limit opt_for_grant_user opt_using_role
 %type <node> parameterized_trim
@@ -2803,21 +2805,30 @@ MOD '(' expr ',' expr ')'
       } else if ($3->num_child_ == 2) {
         ParseNode* expr_param = $3->children_[1];
         ParseNode* expr_name = $3->children_[0];
-        if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
+        if (OB_ISNULL(expr_param) || OB_ISNULL(expr_name)) {
+          yyerror(NULL, result, "Incorrect arguments Using CAST (... AS ... ARRAY)\n");
+          YYABORT_PARSE_SQL_ERROR;
+        } else if ((OB_NOT_NULL(expr_name->str_value_)
+            && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
             && expr_param->num_child_ == 2) {
           path = expr_param->children_[1];
           data = expr_param->children_[0];
-        } else if ((OB_NOT_NULL(expr_name->str_value_)
-                   && strcasecmp(expr_name->str_value_, "JSON_UNQUOTE") == 0)
+        } else if (OB_NOT_NULL(expr_name->str_value_)
+                   && strcasecmp(expr_name->str_value_, "JSON_UNQUOTE") == 0
+                   && expr_param->num_child_ >= 1
                    && OB_NOT_NULL(expr_param->children_[0])) {
           ParseNode* param = expr_param->children_[0];
           if (param->type_ == T_FUN_SYS_JSON_VALUE) {
-            path = param->children_[1];
-            data = param->children_[0];
-          } else if (expr_param->children_[0]->num_child_ >= 2) {
-            expr_name = expr_param->children_[0]->children_[0];
-            expr_param = expr_param->children_[0]->children_[1];
-            if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
+            if (OB_NOT_NULL(param->children_)) {
+              path = param->children_[1];
+              data = param->children_[0];
+            }
+          } else if (param->num_child_ >= 2) {
+            expr_name = param->children_[0];
+            expr_param = param->children_[1];
+            if (OB_ISNULL(expr_param) || OB_ISNULL(expr_name)) {
+            } else if (OB_NOT_NULL(expr_name->str_value_)
+              && (strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
               && expr_param->num_child_ == 2) {
               path = expr_param->children_[1];
               data = expr_param->children_[0];
@@ -7723,6 +7734,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($3);
   $$ = NULL;
 }
+| ORGANIZATION opt_equal_mark index_or_heap
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORGANIZATION, 1, $3);
+}
 ;
 
 merge_insert_types:
@@ -8561,6 +8577,17 @@ int_or_decimal:
 INTNUM { $$ = $1; }
 | DECIMAL_VAL { $$ = $1; }
 
+index_or_heap:
+INDEX
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ORGANIZATION_INDEX);
+}
+| HEAP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ORGANIZATION_HEAP);
+}
+;
+
 /*tablegroup partition option*/
 opt_tg_partition_option:
 tg_hash_partition_option
@@ -8776,6 +8803,10 @@ TYPE COMP_EQ STRING_VALUE
 | COLLECT_STATISTICS_ON_CREATE COMP_EQ BOOL_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECT_STATISTICS_ON_CREATE, 1, $3);
+}
+| REGION COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REGION, 1, $3);
 }
 ;
 
@@ -17095,6 +17126,16 @@ role_with_host
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_TRIGGER;
 }
+| ENCRYPT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_ENCRYPT;
+}
+| DECRYPT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_DECRYPT;
+}
 ;
 
 opt_privilege:
@@ -17237,6 +17278,37 @@ opt_ignore_unknown_user:
 | IGNORE UNKNOWN USER
 {
   malloc_terminal_node($$, result->malloc_pool_, T_IGNORE_UNKNOWN_USER);
+}
+;
+
+/*****************************************************************************
+ *
+ *	grant/revoke proxy grammar
+ *
+ *****************************************************************************/
+grant_proxy_stmt:
+GRANT PROXY ON user_specification_without_password TO user_specification_without_password_list grant_options
+{
+  ParseNode *proxy_priv_node = NULL;
+  ParseNode *privlege_node = NULL;
+  ParseNode *proxy_user_list_node = NULL;
+  malloc_non_terminal_node(proxy_priv_node, result->malloc_pool_, T_PRIV_TYPE, 1, $2);
+  proxy_priv_node->value_ = OB_PRIV_PROXY;
+  malloc_non_terminal_node(privlege_node, result->malloc_pool_, T_LINK_NODE, 2, proxy_priv_node, $7);
+  merge_nodes(proxy_user_list_node, result, T_USERS, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_GRANT_PROXY, 3, privlege_node, $4, proxy_user_list_node);
+}
+;
+
+revoke_proxy_stmt:
+REVOKE PROXY ON user_specification_without_password FROM user_specification_without_password_list
+{
+  ParseNode *proxy_priv_node = NULL;
+  ParseNode *proxy_user_list_node = NULL;
+  malloc_non_terminal_node(proxy_priv_node, result->malloc_pool_, T_PRIV_TYPE, 1, $2);
+  proxy_priv_node->value_ = OB_PRIV_PROXY;
+  merge_nodes(proxy_user_list_node, result, T_USERS, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REVOKE_PROXY, 3, proxy_priv_node, $4, proxy_user_list_node);
 }
 ;
 
@@ -19988,6 +20060,14 @@ CHECKSUM TABLE opt_table_list opt_checksum_option
 {
   $$ = $1;
   malloc_terminal_node($$, result->malloc_pool_, T_LOAD_INDEX_INTO_CACHE);
+}
+| grant_proxy_stmt
+{
+  $$ = $1;
+}
+| revoke_proxy_stmt
+{
+  $$ = $1;
 }
 ;
 
@@ -23010,7 +23090,14 @@ NAME_OB
 {
   make_name_node($$, result->malloc_pool_, "password");
 }
-
+| ENCRYPT
+{
+  make_name_node($$, result->malloc_pool_, "encrypt");
+}
+| DECRYPT
+{
+  make_name_node($$, result->malloc_pool_, "decrypt");
+}
 ;
 
 column_label:
@@ -24349,6 +24436,7 @@ ACCESS_INFO
 |       GTS
 |       HANDLER
 |       HASH
+|       HEAP
 |       HELP
 |       HISTOGRAM
 |       HOST
@@ -24910,6 +24998,7 @@ ACCESS_INFO
 |       RB_ITERATE
 |       RB_OR_AGG
 |       RB_AND_AGG
+|       ORGANIZATION
 |       OVERWRITE
 |       OPTIMIZER_COSTS
 |       MICRO_INDEX_CLUSTERED
@@ -24938,6 +25027,8 @@ unreserved_keyword_ambiguous_roles:
 |       RESOURCE
 |       EXECUTE
 |       SHUTDOWN
+|       ENCRYPT
+|       DECRYPT
 ;
 
 /*注释掉的关键字有规约冲突暂时注释了,都是一些sql中常用的关键字,后面按需打开,增加这块代码逻辑是为了支持在mysql中允许以

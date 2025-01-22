@@ -1427,7 +1427,9 @@ int ObReferenceObjTable::get_or_add_def_obj_item(const uint64_t dep_obj_id,
     if (OB_FAIL(ref_obj_version_table_.get_refactored(ref_obj_key, dep_obj_item))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
-        CK (OB_NOT_NULL(buf = static_cast<char *>(allocator.alloc(sizeof(ObDependencyObjItem)))));
+        OV (OB_NOT_NULL(buf = static_cast<char *>(allocator.alloc(sizeof(ObDependencyObjItem)))),
+            OB_ALLOCATE_MEMORY_FAILED,
+            K(sizeof(ObDependencyObjItem)));
         OX (dep_obj_item = new(buf) ObDependencyObjItem);
         OZ (ref_obj_version_table_.set_refactored(ref_obj_key, dep_obj_item));
       } else {

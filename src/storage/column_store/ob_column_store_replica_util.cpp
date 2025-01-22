@@ -9,13 +9,13 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+ #define USING_LOG_PREFIX STORAGE
 
  #include "storage/tx_storage/ob_ls_service.h"
  #include "storage/tablet/ob_mds_schema_helper.h"
  #include "storage/column_store/ob_column_store_replica_util.h"
  #include "storage/compaction/ob_medium_compaction_func.h"
  #include "share/ls/ob_ls_table_operator.h"
- #define USING_LOG_PREFIX STORAGE
 
 namespace oceanbase
 {
@@ -330,7 +330,7 @@ int ObCSReplicaUtil::init_cs_replica_tablet_status(
         if (ObITable::is_row_store_major_sstable(sstable->get_key().table_type_)) {
           cs_replica_status = ObCSReplicaTabletStatus::NEED_CO_CONVERT_MERGE;
         } else {
-          cs_replica_status = ObCSReplicaTabletStatus::NORMAL;
+          cs_replica_status = ObCSReplicaTabletStatus::NORMAL_CS_REPLICA;
         }
       }
       ObTabletObjLoadHelper::free(arena_allocator, storage_schema);

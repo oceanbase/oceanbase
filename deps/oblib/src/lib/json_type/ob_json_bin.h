@@ -614,8 +614,10 @@ public:
   static OB_INLINE ObJBVerType get_array_vertype() { return J_ARRAY_V0; }
   static OB_INLINE ObJBVerType get_boolean_vertype() { return J_BOOLEAN_V0; }
   static OB_INLINE ObJBVerType get_date_vertype() { return J_DATE_V0; }
+  static OB_INLINE ObJBVerType get_mdate_vertype() { return J_MYSQL_DATE_V0; }
   static OB_INLINE ObJBVerType get_time_vertype() { return J_TIME_V0; }
   static OB_INLINE ObJBVerType get_datetime_vertype() { return J_DATETIME_V0; }
+  static OB_INLINE ObJBVerType get_mdatetime_vertype() { return J_MYSQL_DATETIME_V0; }
   static OB_INLINE ObJBVerType get_timestamp_vertype() { return J_TIMESTAMP_V0; }
   static OB_INLINE ObJBVerType get_opaque_vertype() { return J_OPAQUE_V0; }
 

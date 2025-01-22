@@ -930,9 +930,9 @@ int RegularCol::eval_value_col(ObRegCol &col_node, JtScanCtx* ctx, ObExpr* col_e
     ret = OB_ERR_BOOL_CAST_NUMBER;
     LOG_WARN("boolean cast number cast not support");
     SET_COVER_ERROR(ctx, ret);
-  } else if ((in->json_type() == ObJsonNodeType::J_INT
-              || in->json_type() == ObJsonNodeType::J_INT)
-            && (ob_is_datetime_tc(col_node.col_info_.data_type_.get_obj_type()))) {
+  } else if ((in->json_type() == ObJsonNodeType::J_INT || in->json_type() == ObJsonNodeType::J_INT)
+             && (ob_is_datetime_tc(col_node.col_info_.data_type_.get_obj_type())
+                 || ob_is_mysql_datetime_tc(col_node.col_info_.data_type_.get_obj_type()))) {
     char* res_ptr = ctx->buf;
     int len = snprintf(ctx->buf, sizeof(ctx->buf), "%ld", in->get_int());
     if (len > 0) {
@@ -1082,12 +1082,14 @@ int RegularCol::eval_unnest_col(ObRegCol &col_node, void* in, JtScanCtx* ctx, Ob
         res_datum.set_string((*arr)[idx]);
         break;
       }
-      case ObDoubleType: {
+      case ObDoubleType:
+      case ObUDoubleType: {
         ObArrayFixedSize<double> *arr = static_cast<ObArrayFixedSize<double> *>(arr_obj);
         res_datum.set_double((*arr)[idx]);
         break;
       }
-      case ObFloatType: {
+      case ObFloatType:
+      case ObUFloatType: {
         ObArrayFixedSize<float> *arr = static_cast<ObArrayFixedSize<float> *>(arr_obj);
         res_datum.set_float((*arr)[idx]);
         break;

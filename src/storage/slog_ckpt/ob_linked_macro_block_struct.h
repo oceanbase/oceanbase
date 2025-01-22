@@ -22,6 +22,7 @@ namespace oceanbase
 namespace blocksstable
 {
   class ObSSTableMacroInfo;
+  class ObIMacroBlockFlushCallback;
 }
 namespace storage
 {

@@ -95,7 +95,8 @@ class ObColumnSchemaV2;
 
 //match the default now func
 #define IS_DEFAULT_NOW_STR(data_type, def_str) \
-    ((ObDateTimeType == data_type || ObTimestampType == data_type) && (def_str == N_UPPERCASE_CUR_TIMESTAMP))
+    ((ObDateTimeType == data_type || ObTimestampType == data_type || ObMySQLDateTimeType == data_type) && \
+     (def_str == N_UPPERCASE_CUR_TIMESTAMP))
 
 #define IS_DEFAULT_NOW_OBJ(def_obj) \
   (ObExtendType == def_obj.get_type() && ObActionFlag::OP_DEFAULT_NOW_FLAG == def_obj.get_ext())
@@ -135,6 +136,8 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_VEC_VID_COLUMN_FLAG (INT64_C(1) << 26)
 #define GENERATED_VEC_VECTOR_COLUMN_FLAG (INT64_C(1) << 27)
 #define GENERATED_VEC_IVF_CENTER_ID_COLUMN_FLAG (INT64_C(1) << 28)
+#define STRING_LOB_COLUMN_FLAG (INT64_C(1) << 29)
+#define HEAP_TABLE_PRIMARY_KEY_FLAG (INT64_C(1) << 30)
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
@@ -373,11 +376,26 @@ enum ObIndexType
   INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL = 27,
   INDEX_TYPE_VEC_INDEX_ID_LOCAL = 28,
   INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL = 29,
+  // vec ivf
+  INDEX_TYPE_VEC_IVFFLAT_CENTROID_LOCAL = 30,
+  INDEX_TYPE_VEC_IVFFLAT_CID_VECTOR_LOCAL = 31,
+  INDEX_TYPE_VEC_IVFFLAT_ROWKEY_CID_LOCAL = 32,
+  INDEX_TYPE_VEC_IVFSQ8_CENTROID_LOCAL = 33,
+  INDEX_TYPE_VEC_IVFSQ8_META_LOCAL = 34,
+  INDEX_TYPE_VEC_IVFSQ8_CID_VECTOR_LOCAL = 35,
+  INDEX_TYPE_VEC_IVFSQ8_ROWKEY_CID_LOCAL = 36,
+  INDEX_TYPE_VEC_IVFPQ_CENTROID_LOCAL = 37,
+  INDEX_TYPE_VEC_IVFPQ_PQ_CENTROID_LOCAL = 38,
+  INDEX_TYPE_VEC_IVFPQ_CODE_LOCAL = 39,
+  INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL = 40,
+  // heap table primary key index
+  INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY = 41,
+
   /*
   * Attention!!! when add new index type,
   * need update func ObSimpleTableSchemaV2::should_not_validate_data_index_ckm()
   */
-  INDEX_TYPE_MAX = 30,
+  INDEX_TYPE_MAX = 42,
 };
 
 bool is_support_split_index_type(const ObIndexType index_type);
@@ -1021,6 +1039,7 @@ typedef enum {
   FOREIGN_KEY_SCHEMA = 40,  // not dependent schema
   ROUTINE_PRIV = 41,
   COLUMN_PRIV = 42,
+  CATALOG_SCHEMA = 43,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;
@@ -3651,6 +3670,7 @@ public:
   ObString next_time_expr_;
   ObString exec_env_;
   int64_t parallel_;
+  int64_t refresh_dop_;
 
   ObMVRefreshInfo() :
   refresh_method_(ObMVRefreshMethod::NEVER),
@@ -3658,7 +3678,8 @@ public:
   start_time_(),
   next_time_expr_(),
   exec_env_(),
-  parallel_(OB_INVALID_COUNT) {}
+  parallel_(OB_INVALID_COUNT),
+  refresh_dop_(0) {}
 
   void reset() {
     refresh_method_ = ObMVRefreshMethod::NEVER;
@@ -3667,6 +3688,7 @@ public:
     next_time_expr_.reset();
     exec_env_.reset();
     parallel_ = OB_INVALID_COUNT;
+    refresh_dop_ = 0;
   }
 
   bool operator == (const ObMVRefreshInfo &other) const {
@@ -3675,7 +3697,8 @@ public:
       && start_time_ == other.start_time_
       && next_time_expr_ == other.next_time_expr_
       && exec_env_ == other.exec_env_
-      && parallel_ == other.parallel_;
+      && parallel_ == other.parallel_
+      && refresh_dop_ == other.refresh_dop_;
   }
 
 
@@ -3684,7 +3707,8 @@ public:
       K_(start_time),
       K_(next_time_expr),
       K_(exec_env),
-      K_(parallel));
+      K_(parallel),
+      K_(refresh_dop));
 };
 
 class ObViewSchema : public ObSchema

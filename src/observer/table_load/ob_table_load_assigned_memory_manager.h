@@ -15,7 +15,6 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/lock/ob_mutex.h"
 #include "observer/table_load/ob_table_load_struct.h"
-#include "observer/table_load/ob_table_load_service.h"
 
 
 namespace oceanbase

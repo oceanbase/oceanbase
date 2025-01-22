@@ -121,6 +121,8 @@ public:
 
   virtual ObColumnHeader::Type get_type() const override { return type_; }
   virtual int store_fix_data(ObBufferWriter &buf_writer) override;
+  INHERIT_TO_STRING_KV("ObIColumnEncoder", ObIColumnEncoder, K_(type_store_size), K_(dict_fix_data_size),
+      K_(var_data_size), K_(dict_index_byte), K_(max_integer), KPC_(dict_meta_header), K_(count), K_(need_sort));
 private:
   int build_dict();
   int store_dict(const common::ObDatum &datum, char *buf, int64_t &len);

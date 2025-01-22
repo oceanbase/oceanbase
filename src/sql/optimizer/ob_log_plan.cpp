@@ -2554,7 +2554,7 @@ int ObLogPlan::init_rescan_info_for_query_ref(const ObLogPlan &parent_plan,
   is_rescan_subplan_ = parent_plan.is_rescan_subplan_ || is_rescan_subquery;
   disable_child_batch_rescan_ = parent_plan.disable_child_batch_rescan_
                                 || (is_rescan_subquery
-                                    && !get_optimizer_context().enable_experimental_batch_rescan());
+                                    && !get_optimizer_context().enable_spf_semi_anti_child_batch());
   return ret;
 }
 
@@ -2566,7 +2566,7 @@ int ObLogPlan::init_rescan_info_for_subquery_paths(const ObLogPlan &parent_plan,
   is_rescan_subplan_ = parent_plan.is_rescan_subplan_ || is_inner_path;
   disable_child_batch_rescan_ = parent_plan.disable_child_batch_rescan_
                                 || (is_semi_anti_join_inner_path
-                                    && !get_optimizer_context().enable_experimental_batch_rescan());
+                                    && !get_optimizer_context().enable_spf_semi_anti_child_batch());
   return ret;
 }
 
@@ -4059,7 +4059,7 @@ int ObLogPlan::allocate_subquery_path(SubQueryPath *subpath,
   } else {
     subplan_scan->set_subquery_id(subpath->subquery_id_);
     subplan_scan->set_child(ObLogicalOperator::first_child, root);
-    subplan_scan->set_inherit_sharding_index(0);
+    subplan_scan->set_inherit_sharding_index(subpath->inherit_sharding_index_);
     subplan_scan->get_subquery_name().assign_ptr(table_item->table_name_.ptr(),
                                                  table_item->table_name_.length());
     if (OB_FAIL(append(subplan_scan->get_filter_exprs(), subpath->filter_))) {
@@ -5234,14 +5234,14 @@ int ObLogPlan::perform_group_by_pushdown(ObLogicalOperator *op)
           LOG_WARN("failed to push back pushdown aggr", K(ret));
         }
       }
-      if (group_by->is_second_stage()) {
-        for (int64_t i = 0; i < group_by->get_distinct_aggr_batch().count(); ++i) {
+      if (OB_SUCC(ret) && group_by->is_second_stage()) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < group_by->get_distinct_aggr_batch().count(); ++i) {
           const ObDistinctAggrBatch &batch = group_by->get_distinct_aggr_batch().at(i);
-          for (int64_t j = 0; j < batch.mocked_aggrs_.count(); ++j) {
+          for (int64_t j = 0; OB_SUCC(ret) && j < batch.mocked_aggrs_.count(); ++j) {
             ObRawExpr *from = batch.mocked_aggrs_.at(j).first;
             ObRawExpr *to = batch.mocked_aggrs_.at(j).second;
 
-            for (int64_t k = 0; k < group_replaced_exprs_.count(); ++k) {
+            for (int64_t k = 0; OB_SUCC(ret) && k < group_replaced_exprs_.count(); ++k) {
               if (group_replaced_exprs_.at(k).first == from) {
                 group_replaced_exprs_.at(k).second = to;
                 if (OB_FAIL(group_replacer_.add_replace_expr(from, to))) {
@@ -12200,7 +12200,7 @@ int ObLogPlan::check_das_need_scan_with_domain_id(ObLogicalOperator *op)
     } else if (OB_UNLIKELY(scan->has_func_lookup() && (scan->is_tsc_with_doc_id() || scan->is_tsc_with_vid()))) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("functional lookup with dml on fulltext index / vector index not supported", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "filter that can not imply match_score not equal to 0 in dml");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "functional lookup with dml on fulltext index is");
     }
   }
   for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {

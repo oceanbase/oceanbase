@@ -12,10 +12,13 @@
 
 #define USING_LOG_PREFIX LIB_CHARSET
 #include "lib/charset/ob_charset.h"
+#include "lib/charset/ob_ctype.h"
 #include "lib/utility/serialization.h"
 #include "lib/ob_define.h"
 #include "lib/worker.h"
 #include "common/ob_common_utility.h"
+#include "sql/engine/expr/ob_expr_util.h"
+#include "lib/charset/str_uca_type.h"
 
 namespace oceanbase
 {
@@ -1061,7 +1064,8 @@ int ObCharset::like_range(ObCollationType collation_type,
                           char *min_str,
                           size_t *min_str_len,
                           char *max_str,
-                          size_t *max_str_len)
+                          size_t *max_str_len,
+                          size_t *prefix_len /*= NULL*/)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(collation_type <= CS_TYPE_INVALID ||
@@ -1099,6 +1103,7 @@ int ObCharset::like_range(ObCollationType collation_type,
 	//    上面的修改会引发这样的问题：'a\0' 会不在范围内，因为mysql的utf8特性使得'a\0' < 'a'，所以范围不能这么修改
 	//    具体的修正还是由存储层来做
     size_t res_size = *min_str_len < *max_str_len ? *min_str_len : *max_str_len;
+    size_t pre_len = 0;
     if (OB_ISNULL(cs->coll)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error. invalid argument(s)", K(cs), K(cs->coll));
@@ -1112,8 +1117,11 @@ int ObCharset::like_range(ObCollationType collation_type,
                                   min_str,
                                   max_str,
                                   min_str_len,
-                                  max_str_len)) {
+                                  max_str_len,
+                                  &pre_len)) {
       ret = OB_EMPTY_RANGE;
+    } else if (prefix_len != NULL) {
+      *prefix_len = pre_len;
     } else {
      // *min_str_len = real_len;
     }
@@ -1407,6 +1415,7 @@ int ObCharset::display_len(ObCollationType collation_type,
         int bytes = cs->cset->mb_wc(cs, &wc, buf + char_pos, buf + buf_size);
 
         if (bytes < 0) {
+          width = 1;
           found = true;
         } else {
           int w = 0;
@@ -3611,6 +3620,20 @@ bool ObCharset::is_cs_unicode(ObCollationType collation_type)
   return is_cs_unicode;
 }
 
+bool ObCharset::is_cs_uca(ObCollationType collation_type)
+{
+  bool is_cs_uca = false;
+  if (OB_UNLIKELY(collation_type <= CS_TYPE_INVALID ||
+                  collation_type >= CS_TYPE_MAX) ||
+                  OB_ISNULL(ObCharset::charset_arr[collation_type])) {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "unexpected error. invalid argument(s)", K(ret), K(collation_type), K(lbt()));
+  } else {
+    ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
+    is_cs_uca = (cs->uca != NULL) && (cs->uca->version == UCA_V900);
+  }
+  return is_cs_uca;
+}
+
 int ObCharset::get_replace_character(ObCollationType collation_type, int32_t &replaced_char_unicode)
 {
   int ret = OB_SUCCESS;
@@ -3877,7 +3900,7 @@ int ObCharset::init_charset_and_arr() {
   }
 
   if (OB_SUCC(ret)) {
-    for (int i = 0; OB_SUCC(ret) && i < array_elements(euro_collations); ++i) {
+    for (int i = 0; OB_SUCC(ret) && euro_collations[i] != nullptr; ++i) {
       ObCharsetInfo *cs = euro_collations[i];
       if (OB_FAIL(init_charset_info_coll_info(cs, loader))) {
         LOG_WARN("fail to init collation", K(ret));
@@ -3887,7 +3910,7 @@ int ObCharset::init_charset_and_arr() {
     }
   }
   if (OB_SUCC(ret)) {
-    for (int i = 0; OB_SUCC(ret) && i < array_elements(uca900_collations); ++i) {
+    for (int i = 0; OB_SUCC(ret) && uca900_collations[i] != nullptr; ++i) {
       ObCharsetInfo *cs = uca900_collations[i];
       if (OB_FAIL(init_charset_info_coll_info(cs, loader))) {
         LOG_WARN("fail to init collation", K(ret));

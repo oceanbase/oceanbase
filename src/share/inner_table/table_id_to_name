@@ -1195,6 +1195,7 @@
 # 12505: __all_virtual_temp_file
 # 12506: __all_virtual_ncomp_dll_v2
 # 12506: __all_ncomp_dll_v2  # BASE_TABLE_NAME
+# 12514: __all_virtual_ddl_diagnose_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2927,6 +2928,9 @@
 # 14990: __idx_12302_all_virtual_ash_i1
 # 14990: all_virtual_ash_i1  # INDEX_NAME
 # 14990: __all_virtual_ash  # DATA_BASE_TABLE_NAME
+# 14989: __idx_12514_all_virtual_ddl_diagnose_info_i1
+# 14989: all_virtual_ddl_diagnose_info_i1  # INDEX_NAME
+# 14989: __all_virtual_ddl_diagnose_info  # DATA_BASE_TABLE_NAME
 # 19999: __idx_15009_all_virtual_sql_audit_i1
 # 19999: all_virtual_sql_audit_i1  # INDEX_NAME
 # 19999: __all_virtual_sql_audit  # DATA_BASE_TABLE_NAME

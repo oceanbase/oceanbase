@@ -27,6 +27,7 @@
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_mds_scan_param_helper.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/compaction/ob_sstable_merge_info_mgr.h"
 
 namespace oceanbase
 {
@@ -417,7 +418,7 @@ int ObBasicTabletMergeCtx::prepare_merge_progress(
     progress->reset();
     LOG_WARN("failed to init merge progress", K(ret));
   } else {
-    LOG_INFO("succeed to init merge progress", K(ret), KPC(progress));
+    LOG_TRACE("succeed to init merge progress", K(ret), KPC(progress));
   }
   if (OB_FAIL(ret) && nullptr != progress) {
     progress->~ObPartitionMergeProgress();
@@ -480,15 +481,19 @@ int ObBasicTabletMergeCtx::check_merge_ctx_valid()
     if (OB_UNLIKELY(!tablet_handle_.is_valid()) || OB_ISNULL(tablet = tablet_handle_.get_obj())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid tablet", K(ret), K_(tablet_handle));
-    } else if (!tablet->is_row_store()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column store table should do co merge", K(ret), KPC(tablet));
     } else if (OB_ISNULL(base_table = static_param_.tables_handle_.get_table(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("base table is null", K(ret), K_(static_param));
     } else if (OB_UNLIKELY(!base_table->is_major_sstable() || base_table->is_co_sstable())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid base table type", K(ret), KPC(base_table));
+    } else if (!tablet->is_row_store()) {
+      if (ObCOMajorMergePolicy::is_valid_major_merge_type(get_co_major_merge_type())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column store table with valid co merge type should do co merge", K(ret), KPC(tablet), K(get_co_major_merge_type()));
+      } else {
+        LOG_INFO("column store table with invalid co merge type, should be delayed column transform", K(ret), KPC(tablet), K(get_co_major_merge_type()));
+      }
     }
   }
   return ret;
@@ -647,9 +652,7 @@ bool ObBasicTabletMergeCtx::need_swap_tablet(
       bret = (row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD
       || macro_count >= LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD);
     } else { // col_store
-      bret = cg_count > ALL_CG_IN_ONE_BATCH_CNT
-        || row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD_FOR_CS
-        || macro_count >= LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD_FOR_CS;
+      bret = true;
     }
   }
 #ifdef ERRSIM
@@ -750,7 +753,6 @@ int ObBasicTabletMergeCtx::generate_macro_id_list(char *buf, const int64_t buf_l
     if (macro_count < 40) {
       MacroBlockId macro_id;
       for (int64_t i = 0; OB_SUCC(ret) && OB_SUCC(iter.get_next_macro_id(macro_id)); ++i) {
-        LOG_INFO("print macro id", K(macro_id));
         const int64_t block_seq = is_local_exec_mode(get_exec_mode())
                                 ? (GCTX.is_shared_storage_mode() ? macro_id.tenant_seq() : macro_id.second_id())
                                 : macro_id.third_id();
@@ -880,7 +882,7 @@ int ObBasicTabletMergeCtx::init_static_param_and_desc()
                                 static_param_.encoding_granularity_))) {
     LOG_WARN("failed to init static desc", KR(ret), KPC(this));
   } else {
-    LOG_INFO("[SharedStorage] success to set exec mode", KR(ret), "exec_mode", exec_mode_to_str(static_desc_.exec_mode_));
+    LOG_TRACE("[SharedStorage] success to set exec mode", KR(ret), "exec_mode", exec_mode_to_str(static_desc_.exec_mode_));
   }
   return ret;
 }
@@ -1269,7 +1271,7 @@ int ObBasicTabletMergeCtx::cal_major_merge_param(
     // full merge, no need to check whether schema changes or not
   } else if (!progressive_merge_mgr_.need_calc_progressive_merge() && static_param_.data_version_ >= DATA_VERSION_4_3_3_0) {
     bool is_schema_changed = false;
-    if (OB_FAIL(ObMediumCompactionScheduleFunc::check_if_schema_changed(*get_tablet(), *get_schema(), is_schema_changed))) {
+    if (OB_FAIL(ObMediumCompactionScheduleFunc::check_if_schema_changed(*get_tablet(), *get_schema(), static_param_.data_version_, is_schema_changed))) {
       LOG_WARN("failed to check is schema changed", KR(ret), K_(static_param), KPC(get_schema()));
     } else if (is_schema_changed && !static_param_.is_schema_changed_) {
       ret = OB_ERR_UNEXPECTED;

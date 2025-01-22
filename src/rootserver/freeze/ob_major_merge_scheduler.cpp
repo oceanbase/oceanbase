@@ -831,6 +831,7 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging, con
     LOG_WARN("fail to get global merge start time", KR(ret), K_(tenant_id));
   } else {
     const int64_t MAX_NO_MERGE_INTERVAL = 36 * 3600 * 1000 * 1000L;  // 36 hours
+    const int64_t MAX_REFRESH_EPOCH_IN_MERGE_INTERVAL = 6 * 3600 * 1000 * 1000L; // 6 hours
     if ((global_last_merged_time < 0) || (global_merge_start_time < 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected global_last_merged_time and global_merge_start_time", KR(ret),
@@ -912,6 +913,12 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging, con
             }
           }
         }
+      }
+    }
+    if (OB_SUCC(ret) && !is_paused() && (start_service_time > 0) &&
+        is_merging && (now - max_merge_time) > MAX_REFRESH_EPOCH_IN_MERGE_INTERVAL) {
+      if (OB_FAIL(try_update_epoch_and_reload())) {
+        LOG_WARN("fail to try_update_epoch_and_reload", KR(ret), "cur_epoch", get_epoch());
       }
     }
   }

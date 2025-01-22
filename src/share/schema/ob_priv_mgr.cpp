@@ -85,6 +85,7 @@ const char *ObPrivMgr::priv_names_[] = {
     "ENCRYPT",                    // index 46
     "DECRYPT",                    // index 47
     "PROXY",                      // index 48
+    "EVENT",                      // index 49
 };
 
 ObPrivMgr::ObPrivMgr()

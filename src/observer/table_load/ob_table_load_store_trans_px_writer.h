@@ -16,6 +16,8 @@
 #include "lib/hash/ob_hashset.h"
 #include "storage/direct_load/ob_direct_load_batch_row_buffer.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
+#include "observer/table_load/ob_table_load_pre_sort_writer.h"
+#include "src/share/table/ob_table_load_row_array.h"
 
 namespace oceanbase
 {
@@ -108,7 +110,8 @@ private:
       : max_batch_size_(0),
         tablet_id_batch_vector_(nullptr),
         tablet_id_const_vector_(nullptr),
-        col_fixed_(nullptr)
+        col_fixed_(nullptr),
+        col_lob_storage_(nullptr)
     {
     }
     ~BatchCtx() {}
@@ -128,6 +131,8 @@ private:
     // for vectorized
     // shallow copy unfixed cols
     sql::ObBitVector *col_fixed_;
+    // expand const vector for lob storage cols
+    sql::ObBitVector *col_lob_storage_;
     // vectorized 1.0 : VEC_UNIFORM
     // vectorized 2.0 : nullptr(fixed), VEC_DISCRETE(unfixed)
     ObArray<ObIVector *> batch_vectors_;

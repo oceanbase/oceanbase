@@ -23,14 +23,19 @@ namespace common
 
 class ObTimer
 {
+  friend class TaskToken;
 public:
   ObTimer()
-      : is_inited_(false), is_stopped_(true), timer_service_(nullptr), run_wrapper_(nullptr)
+      : is_inited_(false),
+        is_stopped_(true),
+        timer_service_(nullptr),
+        run_wrapper_(nullptr)
   {
+    timer_name_[0] = '\0';
     timer_service_ = &(ObTimerService::get_instance());
   }
   ~ObTimer();
-  int init(const char* thread_name = nullptr,
+  int init(const char* timer_name = nullptr,
            const ObMemAttr &attr = ObMemAttr(OB_SERVER_TENANT_ID, "timer")); // init and start
   bool inited() const;
   int start();  // only start
@@ -42,7 +47,7 @@ public:
   {
     int64_t pos = 0;
     if (NULL != buf && buf_len > 0) {
-      databuff_printf(buf, buf_len, pos, "tasktype:%s", typeid(*this).name());
+      databuff_printf(buf, buf_len, pos, "timer_type:%s", typeid(*this).name());
     }
     return pos;
   }
@@ -59,6 +64,7 @@ private:
 private:
   bool is_inited_;
   bool is_stopped_;
+  char timer_name_[OB_THREAD_NAME_BUF_LEN];
   ObTimerService *timer_service_;
   lib::IRunWrapper *run_wrapper_;
 };

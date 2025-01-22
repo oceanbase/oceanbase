@@ -33,6 +33,8 @@ int ObPLAllocator1::init(ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
 
+  static const int BLOCK_SIZE = 2*1024;
+
   CK (OB_NOT_NULL(parent_allocator_));
   if (OB_SUCC(ret)) {
     if (OB_NOT_NULL(alloc)) {
@@ -42,9 +44,20 @@ int ObPLAllocator1::init(ObIAllocator *alloc)
       if (OB_ISNULL(allocator_)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memory for allocator", K(ret));
-      } else {
-        new(allocator_)ObVSliceAlloc(memattr_, 2 * 1024, alloc_mgr_);
+      } else if (typeid(*parent_allocator_) == typeid(ObPLAllocator1)) {
+        ObPLAllocator1 *pl_allocator = static_cast<ObPLAllocator1 *>(parent_allocator_);
+        CK (OB_NOT_NULL(pl_allocator));
+        OX (memattr_ = pl_allocator->get_attr());
+      } else if (typeid(*parent_allocator_) == typeid(ObWrapperAllocatorWithAttr)) {
+        ObWrapperAllocatorWithAttr *wrapper_allocator = static_cast<ObWrapperAllocatorWithAttr *>(parent_allocator_);
+        CK (OB_NOT_NULL(wrapper_allocator));
+        OX (memattr_ = wrapper_allocator->get_attr());
+      } else if (typeid(*parent_allocator_) == typeid(ObArenaAllocator)) {
+        ObArenaAllocator *arena_allocator = static_cast<ObArenaAllocator *>(parent_allocator_);
+        CK (OB_NOT_NULL(arena_allocator));
+        OX (memattr_ = arena_allocator->get_arena().get_page_allocator().get_attr());
       }
+      OX (new (allocator_)ObVSliceAlloc(memattr_, BLOCK_SIZE, alloc_mgr_));
     }
     OX (is_inited_ = true);
   }

@@ -670,12 +670,13 @@ int ObSSTableMetaBackupReader::init(const common::ObTabletID &tablet_id,
     linked_writer_ = linked_writer;
     ObTablet &tablet = *tablet_handle_->get_obj();
     bool is_major_compaction_mview_dep = false;
+    share::SCN mview_dep_scn;
     if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper_))) {
       LOG_WARN("failed to fetch table store from tablet", K(ret));
-    } else if (OB_FAIL(ls_backup_ctx.check_is_major_compaction_mview_dep_tablet(tablet_id, is_major_compaction_mview_dep))) {
+    } else if (OB_FAIL(ls_backup_ctx.check_is_major_compaction_mview_dep_tablet(tablet_id, mview_dep_scn, is_major_compaction_mview_dep))) {
       LOG_WARN("failed to check is mview dep tablet", K(ret), K(tablet_id));
     } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(
-        tablet_handle, backup_data_type, *table_store_wrapper_.get_member(), is_major_compaction_mview_dep, sstable_array_))) {
+        tablet_handle, backup_data_type, *table_store_wrapper_.get_member(), is_major_compaction_mview_dep, mview_dep_scn, sstable_array_))) {
       LOG_WARN("failed to get sstables by data type", K(ret), K(tablet_handle));
     } else {
       builder_mgr_ = &index_block_builder_mgr;

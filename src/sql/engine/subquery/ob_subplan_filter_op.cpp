@@ -198,7 +198,7 @@ int ObSubQueryIterator::rewind(const bool reset_onetime_plan /* = false */)
 {
   //根据subplan filter的语义，reset row iterator，其它的成员保持不变
   int ret = OB_SUCCESS;
-  if (onetime_plan_ && !reset_onetime_plan && !parent_->need_reset_onetime_expr()) {
+  if (onetime_plan_ && !reset_onetime_plan) {
     // for onetime expr
   } else if (init_plan_) {
     // for init plan
@@ -470,7 +470,6 @@ ObSubPlanFilterOp::ObSubPlanFilterOp(
   : ObOperator(exec_ctx, spec, input),
     iter_end_(false),
     max_group_size_(0),
-    need_reset_onetime_expr_(false),
     update_set_mem_(NULL),
     enable_left_px_batch_(false),
     current_group_(0),
@@ -567,10 +566,21 @@ int ObSubPlanFilterOp::rescan()
   }
 
   if (!MY_SPEC.enable_das_group_rescan_) {
+    // call each child's rescan when not batch rescan
     for (int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
       if (OB_FAIL(children_[i]->rescan())) {
         LOG_WARN("rescan child operator failed", K(ret),
                  "op", op_name(), "child", children_[i]->op_name());
+      }
+    }
+  } else {
+    for (int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
+      if (MY_SPEC.init_plan_idxs_.has_member(i) || MY_SPEC.one_time_idxs_.has_member(i)) {
+        // rescan for init plan and onetime expr when batch rescan
+        if (OB_FAIL(children_[i]->rescan())) {
+          LOG_WARN("rescan child operator failed", K(ret),
+                  "op", op_name(), "child", children_[i]->op_name());
+        }
       }
     }
   }
@@ -589,8 +599,6 @@ int ObSubPlanFilterOp::rescan()
     }
   }
   if (OB_SUCC(ret)) {
-    // reset onetime exprs for each spf rescan
-    ResetOneTimeExprGuard guard(*this);
     if (OB_FAIL(prepare_onetime_exprs())) {
       LOG_WARN("prepare onetime exprs failed", K(ret));
     } else if (OB_FAIL(child_->rescan())) {
@@ -1067,6 +1075,7 @@ int ObSubPlanFilterOp::handle_next_batch_with_group_rescan(const int64_t op_max_
     left_rows_iter_.reset();
     (void) brs_holder_.restore();
     current_group_ = 0;
+    last_store_row_mem_->get_arena_allocator().reset();
     if(OB_FAIL(init_das_batch_params())) {
       LOG_WARN("Failed to init das batch params", K(ret));
     }

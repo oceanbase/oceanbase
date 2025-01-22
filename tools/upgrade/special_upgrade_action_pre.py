@@ -25,11 +25,12 @@ def do_special_upgrade(conn, cur, timeout, user, passwd):
 #这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
   current_version = actions.fetch_observer_version(cur)
   target_version = actions.get_current_cluster_version()
-  # when upgrade across version, disable enable_ddl/major_freeze
+  # when upgrade across version, disable enable_ddl/major_freeze/direct_load
   if current_version != target_version:
     actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
     actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
     actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+    actions.set_parameter(cur, '_ob_enable_direct_load', 'False', timeout)
     # wait scheduler in storage to notice adaptive_compaction is switched to false
     time.sleep(60 * 2)
     query_cur = actions.QueryCursor(cur)

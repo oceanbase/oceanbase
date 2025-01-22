@@ -36,6 +36,8 @@ using namespace schema;
 using namespace sql;
 namespace pl {
 
+ObMutex ObPLCompiler::package_dep_info_lock_;
+
 int ObPLCompiler::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                                    const DependenyTableStore &dep_schema_objs)
 {
@@ -93,6 +95,7 @@ int ObPLCompiler::init_anonymous_ast(
   int ret = OB_SUCCESS;
   ObPLDataType pl_type;
   common::ObDataType data_type;
+  ObPLResolveCtx resolve_ctx(allocator, session_info, schema_guard, package_guard, sql_proxy, false);
 
   func_ast.set_name(ObPLResolver::ANONYMOUS_BLOCK);
   data_type.set_obj_type(common::ObNullType);
@@ -135,8 +138,15 @@ int ObPLCompiler::init_anonymous_ast(
         OX (new(nested_type)ObNestedTableType());
         OX (element_type.reset());
         OX (element_type.set_data_type(coll->get_element_type()));
-        if (OB_SUCC(ret) && element_type.is_obj_type()) {
+        if (OB_FAIL(ret)) {
+        } else if (coll->get_element_desc().is_obj_type()) {
           OZ (ObPLResolver::adjust_routine_param_type(element_type));
+        } else {
+          const ObUserDefinedType *user_type = nullptr;
+          OZ (resolve_ctx.get_user_type(coll->get_element_type().get_udt_id(), user_type, &allocator));
+          CK (OB_NOT_NULL(user_type));
+          OZ (func_ast.get_user_type_table().add_external_type(user_type));
+          OX (element_type = *user_type);
         }
         OX (nested_type->set_element_type(element_type));
         OX (nested_type->set_user_type_id(
@@ -252,6 +262,9 @@ int ObPLCompiler::compile(
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
+        int64_t cg_jit_mem = 0;
+        ObPLCGMallocCallback pmcb(cg_jit_mem);
+        lib::ObMallocCallbackGuard memory_guard(pmcb);
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
         uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : block_hash;
 
@@ -298,6 +311,7 @@ int ObPLCompiler::compile(
               || OB_FAIL(schema_guard_.get_schema_version(OB_SYS_TENANT_ID, sys_schema_version))) {
             LOG_WARN("fail to get schema version", K(ret), K(tenant_id));
           } else {
+            func.get_stat_for_update().pl_cg_mem_hold_ = cg_jit_mem;
             func.set_tenant_schema_version(tenant_schema_version);
             func.set_sys_schema_version(sys_schema_version);
           }
@@ -310,7 +324,7 @@ int ObPLCompiler::compile(
   }
   int64_t compile_end = ObTimeUtility::current_time();
   OX (func.get_stat_for_update().compile_time_ = compile_end - compile_start);
-
+  OX (session_info_.add_plsql_compile_time(compile_end - compile_start));
   LOG_INFO(">>>>>>>>Final Compile Anonymous Block Time: ", K(stmt_id), K(compile_end - compile_start));
   return ret;
 }
@@ -496,10 +510,13 @@ int ObPLCompiler::compile(
              func.get_di_helper(),
              lib::is_oracle_mode()) {
 #endif
+      int64_t cg_jit_mem = 0;
+      ObPLCGMallocCallback pmcb(cg_jit_mem);
+      lib::ObMallocCallbackGuard memory_guard(pmcb);
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
       ObRoutinePersistentInfo routine_storage(
-        MTL_ID(), routine.get_database_id(), session_info_.get_database_id(), func_ast.get_id());
+        MTL_ID(), routine.get_database_id(), session_info_.get_database_id(), func_ast.get_id(), routine.get_tenant_id());
       bool exist_same_name_obj_with_public_synonym = false;
       OZ (ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(schema_guard_,
                                                                             func_ast.get_dependency_table(),
@@ -532,6 +549,7 @@ int ObPLCompiler::compile(
         OZ (func.set_tenant_sys_schema_version(schema_guard_, session_info_.get_effective_tenant_id()));
         OX (func.set_ret_type(func_ast.get_ret_type()));
         OX (func.get_stat_for_update().schema_version_ = routine.get_schema_version());
+        OX (func.get_stat_for_update().pl_cg_mem_hold_ = cg_jit_mem);
       }
       OZ (check_dep_schema(schema_guard_, func.get_dependency_table()));
     } // end heap var
@@ -544,6 +562,7 @@ int ObPLCompiler::compile(
   LOG_INFO(">>>>>>>>Final Compile Routine Time: ", K(routine.get_routine_id()), K(routine.get_routine_name()), K(final_end - init_start));
 
   OX (func.get_stat_for_update().compile_time_ = final_end - init_start);
+  OX (session_info_.add_plsql_compile_time(final_end - init_start));
 
   ObErrorInfo error_info;
   error_info.set_tenant_id(routine.get_tenant_id());
@@ -767,16 +786,18 @@ int ObPLCompiler::analyze_package(const ObString &source,
   return ret;
 }
 
-int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &package_ast, ObPLPackage &package)
+int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &package_ast, ObPLPackage &package, bool &is_from_disk)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(session_info_.get_pl_engine()));
+  OX (is_from_disk = false);
   if (OB_SUCC(ret)) {
     WITH_CONTEXT(package.get_mem_context()) {
       ObRoutinePersistentInfo routine_storage(MTL_ID(),
                                         session_info_.get_database_id(),
                                         session_info_.get_database_id(),
-                                        package.get_id());
+                                        package.get_id(),
+                                        get_tenant_id_by_object_id(package.get_id()));
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
       bool exist_same_name_obj_with_public_synonym = false;
       OZ (ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(schema_guard_,
@@ -799,7 +820,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
         OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, env, package_ast, package, op));
       }
       if (op == ObRoutinePersistentInfo::ObPLOperation::SUCC) {
-        //do nothing
+        OX (is_from_disk = true);
       } else {
         // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
         ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, package.get_id() * 8);
@@ -813,7 +834,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
             OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, env, package_ast, package, op));
           }
           if (op == ObRoutinePersistentInfo::ObPLOperation::SUCC) {
-            //do nothing
+            OX (is_from_disk = true);
           } else {
             OZ (generate_package_routines(exec_env, package_ast.get_routine_table(), package));
             if (enable_persistent) {
@@ -882,6 +903,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
     OZ (ObPLPackageType::update_package_type_info(package_info, package_ast));
   }
 #endif
+  bool is_from_disk = false;
   {
     if (OB_SUCC(ret)) {
 #ifdef USE_MCJIT
@@ -896,6 +918,9 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                 package.get_di_helper(),
                 lib::is_oracle_mode()) {
 #endif
+        int64_t cg_jit_mem = 0;
+        ObPLCGMallocCallback pmcb(cg_jit_mem);
+        lib::ObMallocCallbackGuard memory_guard(pmcb);
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
 
         // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
@@ -907,22 +932,28 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
 
         OZ (cg.init());
         OZ (cg.generate(package));
+        OX (package.get_stat_for_update().pl_cg_mem_hold_ = cg_jit_mem);
       }
     }
 
-    OZ (generate_package(package_info.get_exec_env(), package_ast, package));
+    OZ (generate_package(package_info.get_exec_env(), package_ast, package, is_from_disk));
   }
 
   OX (package.set_can_cached(package_ast.get_can_cached()));
   OX (package_ast.get_serially_reusable() ? package.set_serially_reusable() : void(NULL));
   session_info_.set_for_trigger_package(saved_trigger_flag);
   OZ (check_dep_schema(schema_guard_, package.get_dependency_table()));
-  OZ (update_schema_object_dep_info(package_ast.get_dependency_table(),
-                                    package_info.get_tenant_id(),
-                                    package_info.get_owner_id(),
-                                    package_info.get_package_id(),
-                                    package_info.get_schema_version(),
-                                    package_info.get_object_type()));
+
+  if (OB_SUCC(ret) && !is_from_disk) {
+    ObMutexGuard guard(package_dep_info_lock_);
+    OZ (update_schema_object_dep_info(package_ast.get_dependency_table(),
+                                      package_info.get_tenant_id(),
+                                      package_info.get_owner_id(),
+                                      package_info.get_package_id(),
+                                      package_info.get_schema_version(),
+                                      package_info.get_object_type()));
+  }
+
   ObErrorInfo error_info;
   error_info.set_tenant_id(package_info.get_tenant_id());
   if (OB_SUCC(ret)) {
@@ -957,6 +988,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
 
   int64_t compile_end = ObTimeUtility::current_time();
   OX (package.get_stat_for_update().compile_time_ = compile_end - compile_start);
+  OX (session_info_.add_plsql_compile_time(compile_end - compile_start));
   OZ (package.set_tenant_sys_schema_version(schema_guard_, session_info_.get_effective_tenant_id()));
   if (package_info.is_for_trigger()) {
     CK (OB_NOT_NULL(trigger_info));

@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_OB_EXPR_LAST_REFRESH_SCN_H_
 
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {

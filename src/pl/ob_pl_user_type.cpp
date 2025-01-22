@@ -283,7 +283,7 @@ int ObUserDefinedType::destruct_objparam(ObIAllocator &alloc, ObObj &src, ObSQLS
       ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(src.get_ext());
       if (direct_use_alloc) {
         ObIAllocator *allocator = nullptr;
-        CK (OB_NOT_NULL(composite));
+        OV (OB_NOT_NULL(composite), OB_ERR_UNEXPECTED, lbt());
         OX (allocator = composite->get_allocator());
         OZ (SMART_CALL(ObUserDefinedType::destruct_obj(src, session)));
         if (OB_SUCC(ret) && OB_NOT_NULL(allocator)) {
@@ -292,8 +292,8 @@ int ObUserDefinedType::destruct_objparam(ObIAllocator &alloc, ObObj &src, ObSQLS
         }
         OX (alloc.free(composite));
       } else {
-        CK (OB_NOT_NULL(composite));
-        CK (OB_NOT_NULL(composite->get_allocator()));
+        OV (OB_NOT_NULL(composite), OB_ERR_UNEXPECTED, lbt());
+        OV (OB_NOT_NULL(composite->get_allocator()), OB_ERR_UNEXPECTED, lbt());
         OX (pl_allocator = dynamic_cast<ObPLAllocator1 *>(composite->get_allocator()));
         CK (OB_NOT_NULL(pl_allocator));
         CK (OB_NOT_NULL(parent_allocator = pl_allocator->get_parent_allocator()));
@@ -319,6 +319,38 @@ int ObUserDefinedType::destruct_objparam(ObIAllocator &alloc, ObObj &src, ObSQLS
     }
   }
   src.set_null();
+
+  return ret;
+}
+
+int ObUserDefinedType::reset_record(ObObj &src, ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+
+  ObPLRecord *record = reinterpret_cast<ObPLRecord*>(src.get_ext());
+  CK (OB_NOT_NULL(record));
+  if (OB_SUCC(ret) && OB_NOT_NULL(record->get_allocator())) {
+    ObPLAllocator1 *pl_allocator = dynamic_cast<ObPLAllocator1 *>(record->get_allocator());
+    CK (OB_NOT_NULL(pl_allocator));
+    for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
+      ObObj &obj = record->get_element()[i];
+      if (obj.is_pl_extend()) {
+        int8_t extend_type = obj.get_meta().get_extend_type();
+        if (PL_RECORD_TYPE == extend_type) {
+          OZ (SMART_CALL(reset_record(obj, session)));
+        } else if (PL_NESTED_TABLE_TYPE == extend_type ||
+                  PL_ASSOCIATIVE_ARRAY_TYPE == extend_type ||
+                  PL_VARRAY_TYPE == extend_type) {
+          OZ (SMART_CALL(destruct_obj(obj, session, true)));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected type", K(ret), K(obj), K(extend_type), KPC(record));
+        }
+      } else {
+        OZ (SMART_CALL(destruct_objparam(*pl_allocator, obj, session, true)));
+      }
+    }
+  }
 
   return ret;
 }
@@ -1806,7 +1838,7 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
 int ObRecordType::get_size(ObPLTypeSize type, int64_t &size) const
 {
   int ret = OB_SUCCESS;
-  size += get_data_offset(get_record_member_count());
+  size = get_data_offset(get_record_member_count());
   return ret;
 }
 
@@ -2278,6 +2310,7 @@ int ObRecordType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
 int ObOpaqueType::get_size(ObPLTypeSize type, int64_t &size) const
 {
   int ret = OB_SUCCESS;
+  size = 0;
   if (PL_TYPE_INIT_SIZE == type) {
     ObPLOpaque opaque;
     size += opaque.get_init_size();
@@ -2560,6 +2593,7 @@ int ObCollectionType::get_init_size(int64_t &size) const
 int ObCollectionType::get_size(ObPLTypeSize type, int64_t &size) const
 {
   int ret = OB_SUCCESS;
+  size = 0;
   if (PL_TYPE_ROW_SIZE == type) {
     OZ (get_element_type().get_size(type, size));
   } else if (PL_TYPE_INIT_SIZE == type) {
@@ -2816,7 +2850,12 @@ int ObCollectionType::deserialize(
     CK (OB_NOT_NULL(table->get_allocator()));
     if (OB_FAIL(ret)) {
     } else if (count <= 0) {
-      table->set_count(count);
+      if (table->get_count() > 0) {
+        ObObj tmp;
+        tmp.set_extend(reinterpret_cast<int64_t>(table), table->get_type());
+        OZ (ObUserDefinedType::destruct_obj(tmp, &resolve_ctx.session_info_, true));
+      }
+      OX (table->set_count(count));
     } else if (is_associative_array_type()) {
       ObPLAssocArray *assoc_table = static_cast<ObPLAssocArray *>(table);
       CK (OB_NOT_NULL(assoc_table));

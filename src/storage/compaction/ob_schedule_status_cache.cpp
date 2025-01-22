@@ -76,7 +76,7 @@ int ObLSStatusCache::init_for_major(
                         ObSuspectInfoType::SUSPECT_LS_CANT_MERGE,
                         weak_read_ts_.is_valid() ? weak_read_ts_.get_val_for_tx() : -1,
                         "ls_status", *this);
-      if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
         LOG_INFO("ls is not ready for compaction", KPC(this));
       }
     }
@@ -97,7 +97,7 @@ void ObLSStatusCache::check_ls_state(ObLS &ls, LSState &state)
 {
   if (ls.is_deleted() || ls.is_offline()) {
     state = OFFLINE_OR_DELETED;
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("ls is deleted or offline", K(ls), K(ls.is_deleted()), K(ls.is_offline()));
     }
   } else {
@@ -248,7 +248,7 @@ int ObTabletStatusCache::inner_init_state(
 
   if (OB_UNLIKELY(!tablet.is_data_complete())) {
     execute_state_ = DATA_NOT_COMPLETE;
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("tablet is not data complete, could not to merge now", K(ret), K(tablet_id));
     }
   } else if (last_major_snapshot <= 0) {
@@ -295,13 +295,13 @@ void ObTabletStatusCache::inner_init_could_schedule_new_round(
   } else if (ObTabletStatus::TRANSFER_OUT == user_data.tablet_status_
     || ObTabletStatus::TRANSFER_OUT_DELETED == user_data.tablet_status_) {
     new_round_state_ = DURING_TRANSFER;
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("tablet status is TRANSFER_OUT or TRANSFER_OUT_DELETED, merging is not allowed", K(user_data), K(tablet));
     }
   } else if (ObTabletStatus::SPLIT_SRC == user_data.tablet_status_
     || ObTabletStatus::SPLIT_SRC_DELETED == user_data.tablet_status_) {
     new_round_state_ = DURING_SPLIT;
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("tablet status is split, merging is not allowed", K(user_data), K(tablet));
     }
   } else if (OB_FAIL(check_medium_list(ls_id, tablet, normal_schedule))) {
@@ -362,7 +362,7 @@ int ObTabletStatusCache::check_medium_list(
           tablet_id, ls_id, medium_list_->get_wait_check_medium_scn()))) {
         LOG_WARN("failed to add tablet", K(tmp_ret), K(ls_id), K(tablet_id));
       } else {
-        LOG_INFO("success to add tablet into checker", KR(ret), K(ls_id), K(tablet_id));
+        LOG_TRACE("success to add tablet into checker", KR(ret), K(ls_id), K(tablet_id));
       }
     }
   } else if (!medium_list_->could_schedule_next_round(tablet.get_last_major_snapshot_version())) {
@@ -419,7 +419,7 @@ int ObTabletStatusCache::update_tablet_report_status(
   if (OB_UNLIKELY(tablet.get_tablet_meta().report_status_.found_cg_checksum_error_)) {
     //TODO(@DanLing) solve this situation, but how to deal with the COSSTable that without the all column group?
     ret = OB_CHECKSUM_ERROR;
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_ERROR("tablet found cg checksum error, skip to schedule merge", K(ret), K(tablet));
     }
   } else if (tablet_merge_finish_) {

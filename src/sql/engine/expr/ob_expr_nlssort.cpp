@@ -49,17 +49,23 @@ int ObExprNLSSort::calc_result_typeN(ObExprResType &type,
   if (OB_SUCC(ret)) {
     int32_t num_bytes = types[0].get_calc_length() * 
               (LS_BYTE == types[0].get_calc_accuracy().get_length_semantics() ? 1 : 4);
-    length = num_bytes;
-    if (param_num > 1 && types[1].is_literal() && types[1].get_param().is_string_type()) {
-      ObString param = types[1].get_param().get_string();
-      param.split_on('=');
-      ObString collation_name = param.trim();
-      if (collation_name.prefix_match("UCA0900_")) {
-         const ObCharsetInfo *cs = ObCharset::get_charset(CS_TYPE_UTF8MB4_ZH_0900_AS_CS);
-         length = cs->coll->strnxfrmlen(cs, num_bytes);
-      } else if (collation_name.prefix_match("SCHINESE_")) {
-         const ObCharsetInfo *cs = ObCharset::get_charset(CS_TYPE_GB18030_CHINESE_CI);
-         length = cs->coll->strnxfrmlen(cs, num_bytes);
+    const ObCharsetInfo *arg0_cs = ObCharset::get_charset(types[0].get_collation_type());
+    if (OB_ISNULL(arg0_cs)) {
+      LOG_WARN("failed to get collation of first param of nlssort", K(ret));
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      length = arg0_cs->coll->strnxfrmlen(arg0_cs, arg0_cs->mbmaxlen * num_bytes);
+      if (param_num > 1 && types[1].is_literal() && types[1].get_param().is_string_type()) {
+        ObString param = types[1].get_param().get_string();
+        param.split_on('=');
+        ObString collation_name = param.trim();
+        if (collation_name.prefix_match("UCA0900_")) {
+          const ObCharsetInfo *cs = ObCharset::get_charset(CS_TYPE_UTF8MB4_ZH_0900_AS_CS);
+          length = cs->coll->strnxfrmlen(cs, num_bytes);
+        } else if (collation_name.prefix_match("SCHINESE_")) {
+          const ObCharsetInfo *cs = ObCharset::get_charset(CS_TYPE_GB18030_CHINESE_CI);
+          length = cs->coll->strnxfrmlen(cs, num_bytes);
+        }
       }
     }
     LOG_DEBUG("nlssort deduce length", K(num_bytes));

@@ -18,6 +18,7 @@
 #include "lib/hash_func/murmur_hash.h"
 //#include "lib/thread_local/ob_tsi_factory.h"
 #include "lib/allocator/page_arena.h"
+#include "lib/allocator/ob_allocator.h"
 namespace oceanbase
 {
 namespace common

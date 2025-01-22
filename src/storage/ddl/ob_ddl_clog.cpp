@@ -501,6 +501,11 @@ ObDDLFinishLog::ObDDLFinishLog()
 {
 }
 
+void ObDDLFinishLog::reset()
+{
+  finish_info_.reset();
+}
+
 int ObDDLFinishLog::assign(const storage::ObDDLFinishLogInfo &other)
 {
   int ret = OB_SUCCESS;

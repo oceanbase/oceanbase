@@ -175,7 +175,8 @@ public:
 
   virtual void reuse() override;
   virtual int store_fix_data(ObBufferWriter &buf_writer) override;
-
+  INHERIT_TO_STRING_KV("ObIColumnEncoder", ObIColumnEncoder, K_(min_string_size), K_(max_string_size),
+      K_(sum_size), K_(null_cnt), K_(nope_cnt), KPC_(header));
 private:
   struct ColumnStoreFiller;
 

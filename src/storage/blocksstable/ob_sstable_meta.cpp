@@ -19,6 +19,7 @@
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/ob_macro_block_reader.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
+#include "storage/tablet/ob_tablet_create_sstable_param.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -759,7 +760,7 @@ int ObSSTableMeta::init(
   }
 
   if (OB_SUCC(ret)) {
-    if (param.is_ready_for_read_) {
+    if (param.is_ready_for_read()) {
       basic_meta_.status_ = SSTABLE_READY_FOR_READ;
     }
     is_inited_ = true;

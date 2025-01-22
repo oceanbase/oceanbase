@@ -103,7 +103,9 @@ struct ALL_VIRTUAL_PLAN_STAT_CDE {
     ERASE_TIME,
     COMPILE_TIME,
     PL_CG_MEM_HOLD,
-    PL_EVICT_VERSION
+    PL_EVICT_VERSION,
+    PLAN_STATUS,
+    ADAPTIVE_FEEDBACK_TIMES
   };
 };
 
@@ -252,7 +254,9 @@ struct ALL_VIRTUAL_PLAN_STAT_ORA_CDE {
     ERASE_TIME,
     COMPILE_TIME,
     PL_CG_MEM_HOLD,
-    PL_EVICT_VERSION
+    PL_EVICT_VERSION,
+    PLAN_STATUS,
+    ADAPTIVE_FEEDBACK_TIMES
   };
 };
 
@@ -1137,6 +1141,7 @@ public:
   static int all_virtual_function_io_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_temp_file_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ncomp_dll_v2_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ddl_diagnose_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -3106,6 +3111,7 @@ public:
   static int all_pkg_coll_type_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int wr_sql_plan_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ncomp_dll_v2_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_info_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ash_all_virtual_ash_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -4147,6 +4153,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_function_io_stat_schema,
   ObInnerTableSchema::all_virtual_temp_file_schema,
   ObInnerTableSchema::all_virtual_ncomp_dll_v2_schema,
+  ObInnerTableSchema::all_virtual_ddl_diagnose_info_schema,
+  ObInnerTableSchema::all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_info_i1_schema,
   ObInnerTableSchema::all_virtual_ash_all_virtual_ash_i1_schema,
   ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema,
   ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema,
@@ -6266,6 +6274,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_WR_SQL_PLAN_TID,
   OB_ALL_VIRTUAL_FUNCTION_IO_STAT_TID,
   OB_ALL_VIRTUAL_TEMP_FILE_TID,
+  OB_ALL_VIRTUAL_DDL_DIAGNOSE_INFO_TID,
+  OB_ALL_VIRTUAL_DDL_DIAGNOSE_INFO_ALL_VIRTUAL_DDL_DIAGNOSE_INFO_I1_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -9148,6 +9158,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_WR_SQL_PLAN_TNAME,
   OB_ALL_VIRTUAL_FUNCTION_IO_STAT_TNAME,
   OB_ALL_VIRTUAL_TEMP_FILE_TNAME,
+  OB_ALL_VIRTUAL_DDL_DIAGNOSE_INFO_TNAME,
+  OB_ALL_VIRTUAL_DDL_DIAGNOSE_INFO_ALL_VIRTUAL_DDL_DIAGNOSE_INFO_I1_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TNAME,
@@ -11135,6 +11147,8 @@ const uint64_t only_rs_vtables [] = {
   OB_ALL_VIRTUAL_UPGRADE_INSPECTION_TID,
   OB_ALL_VIRTUAL_LONG_OPS_STATUS_TID,
   OB_ALL_VIRTUAL_LS_REPLICA_TASK_PLAN_TID,
+  OB_ALL_VIRTUAL_DDL_DIAGNOSE_INFO_TID,
+  OB_ALL_VIRTUAL_DDL_DIAGNOSE_INFO_ALL_VIRTUAL_DDL_DIAGNOSE_INFO_I1_TID,
   OB_ALL_VIRTUAL_LS_REPLICA_TASK_PLAN_ORA_TID,  };
 
 const uint64_t cluster_distributed_vtables [] = {
@@ -14265,11 +14279,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 315;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 890;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 892;
 const int64_t OB_SYS_VIEW_COUNT = 1030;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2240;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2242;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2243;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2245;
 
 } // end namespace share
 } // end namespace oceanbase

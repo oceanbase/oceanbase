@@ -55,6 +55,8 @@
 #include "pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#include "share/resource_manager/ob_resource_mapping_rule_manager.h"
+#include "share/resource_manager/ob_resource_manager.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -790,6 +792,9 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
     if (NULL != out_ctx && NULL != out_ctx->get_physical_plan_ctx()) {
       phy_plan_ctx.set_timeout_timestamp(
           out_ctx->get_physical_plan_ctx()->get_timeout_timestamp());
+    }
+    if (expr != NULL && OB_FAIL(expr->fast_check_status())) {
+      LOG_WARN("check status failed", K(ret));
     }
     for (int i = 0; OB_SUCC(ret) && i < params.count(); i++) {
       if (OB_FAIL(phy_plan_ctx.get_param_store_for_update().push_back(params.at(i)))) {
@@ -1705,6 +1710,36 @@ bool ObSQLUtils::check_mysql50_prefix(ObString &db_name)
   return ret;
 }
 
+int ObSQLUtils::check_enable_mysql_compatible_dates(const sql::ObSQLSessionInfo *session,
+                                                    const bool is_ddl_scenario,
+                                                    bool &enabled)
+{
+  int ret = OB_SUCCESS;
+  enabled = false;
+  uint64_t data_version = 0;
+  if (!lib::is_mysql_mode()) {
+    // only support mysql dates in mysql mode now.
+  } else if (OB_ISNULL(session)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session is null", K(ret));
+  } else if ((const_cast<sql::ObSQLSessionInfo *>(session))->is_enable_mysql_compatible_dates()) {
+    if (is_ddl_scenario) {
+      uint64_t data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), data_version))) {
+        SQL_LOG(WARN, "fail to get data version", K(ret));
+      } else {
+        enabled = ((data_version >= MOCK_CLUSTER_VERSION_4_2_5_0 && data_version < CLUSTER_VERSION_4_3_0_0)
+           || data_version >= CLUSTER_VERSION_4_3_5_1);
+      }
+    } else {
+      enabled = ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_0
+                  && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0)
+                 || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_1);
+    }
+  }
+  return ret;
+}
+
 /***************************/
 /*   本处为不完全列举，是根据ObBasicStmt::virtual bool cause_implicit_commit()中提取出来 */
 /* 需要手动同步改列表     */
@@ -1976,6 +2011,9 @@ void ObSQLUtils::get_default_cast_mode(const stmt::StmtType &stmt_type,
     }
     if (is_no_zero_date(sql_mode)) {
       cast_mode |= CM_NO_ZERO_DATE;
+    }
+    if (is_no_zero_in_date(sql_mode)) {
+      cast_mode |= CM_NO_ZERO_IN_DATE;
     }
     if (is_time_truncate_fractional(sql_mode)) {
       cast_mode |= CM_TIME_TRUNCATE_FRACTIONAL;
@@ -3731,6 +3769,11 @@ void ObSQLUtils::init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &t
       type_ctx.set_tz_info_map(tz_map_wrap.get_tz_map());;
     }
     CHECK_COMPATIBILITY_MODE(session);
+    bool enable_mysql_compatible_dates = false;
+    if (OB_SUCCESS == check_enable_mysql_compatible_dates(session, false, /*is_ddl*/
+                                                          enable_mysql_compatible_dates)) {
+      type_ctx.set_enable_mysql_compatible_dates(enable_mysql_compatible_dates);
+    }
   } else {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "Molly couldn't get compatibility mode from session, use default", K(lbt()));
   }
@@ -6000,7 +6043,7 @@ int ObSQLUtils::check_column_with_res_mapping_rule(const ObResolverParams *resol
   const ObSchemaChecker *schema_checker = resolve_ctx->schema_checker_;
   const ParamStore *param_store = resolve_ctx->param_list_;
 
-  share::ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
+  ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
   uint64_t db_id = session_info->get_database_id();
   uint64_t tenant_id = session_info->get_effective_tenant_id();
   const ObObj &value = const_expr->get_value();

@@ -197,6 +197,7 @@ protected:
   int array_next_stored_row(const Store_Row *&sk_row);
   int imms_heap_next_stored_row(const Store_Row *&sr);
   int ems_heap_next_stored_row(const Store_Row *&sr);
+  int array_next_dump_stored_row(const Store_Row *&sk_row);
   int build_row(const common::ObIArray<ObExpr *> &exprs, const RowMeta &row_meta,
                 const int64_t row_size, ObEvalCtx &ctx, ObCompactRow *&stored_row);
   bool need_dump()

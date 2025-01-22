@@ -17,6 +17,7 @@
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/direct_load/ob_direct_load_mem_define.h"
 #include "storage/direct_load/ob_direct_load_external_multi_partition_row.h"
+#include "src/share/table/ob_table_load_row_array.h"
 
 namespace oceanbase
 {

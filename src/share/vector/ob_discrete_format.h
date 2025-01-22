@@ -48,10 +48,10 @@ public:
 
   OB_INLINE void set_payload(const int64_t idx,
                           const void *payload,
-                          const ObLength length) override;
+                          const ObLength length) override final;
   OB_INLINE void set_payload_shallow(const int64_t idx,
                                   const void *payload,
-                                  const ObLength length) override {
+                                  const ObLength length) override final {
     if (OB_UNLIKELY(nulls_->at(idx))) {
       unset_null(idx);
     }

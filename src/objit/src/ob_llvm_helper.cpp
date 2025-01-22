@@ -586,6 +586,8 @@ int ObLLVMHelper::init_llvm() {
   ObLLVMDIHelper di_helper(alloc);
   static char init_func_name[] = "pl_init_func";
 
+  OZ (core::ObNotifyLoaded::initGdbHelper());
+
   OZ (helper.init());
   OZ (di_helper.init(helper.get_jc()));
 

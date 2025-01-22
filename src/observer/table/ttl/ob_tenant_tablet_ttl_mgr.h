@@ -269,7 +269,7 @@ protected:
   OB_INLINE bool need_skip_run() { return ATOMIC_LOAD(&need_do_for_switch_); }
 protected:
   void mark_ttl_ctx_dirty(ObTTLTenantInfo& tenant_info, ObTTLTaskCtx& ctx);
-  int deep_copy_task(ObTTLTaskCtx* ctx, table::ObTTLTaskInfo& task_info, const table::ObTTLTaskParam &task_param);
+  int deep_copy_task(ObTTLTaskCtx* ctx, table::ObTTLTaskInfo& task_info, const table::ObTTLTaskParam &task_param, bool with_rowkey_copy = true);
   int try_schedule_remaining_tasks(const ObTTLTaskCtx *current_ctx);
 
 protected:

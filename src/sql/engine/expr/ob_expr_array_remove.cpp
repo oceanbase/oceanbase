@@ -60,9 +60,7 @@ int ObExprArrayRemove::calc_result_type2(ObExprResType &type,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
   } else if (type1.is_null()) {
-    if (OB_FAIL(ObArrayExprUtils::set_null_collection_type(exec_ctx, type))) {
-      LOG_WARN("failed to set null collection", K(ret));
-    }
+    type.set_null();
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1.get_type()), ob_obj_type_str(type2.get_type()));

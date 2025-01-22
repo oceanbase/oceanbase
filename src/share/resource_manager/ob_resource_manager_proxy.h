@@ -26,8 +26,18 @@ class ObString;
 class ObObj;
 class ObMySQLProxy;
 }
+namespace sql
+{
+class ObSQLSessionInfo;
+}
 namespace share
 {
+class ObPlanDirective;
+class ObResourceMappingRule;
+class ObResourceUserMappingRule;
+class ObResourceIdNameMappingRule;
+class ObResourceColumnMappingRule;
+class ObResourceMappingRuleManager;
 class ObResourceManagerProxy
 {
 public:

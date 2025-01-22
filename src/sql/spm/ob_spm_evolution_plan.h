@@ -119,6 +119,7 @@ private:
   static const int64_t DEFAULT_EVOLUTION_COUNT_THRESHOLD = 150;
   static const int64_t DEFAULT_EVOLUTION_TIMEOUT_THRESHOLD = 3 * 60 * 60 * 1000L * 1000L; //3 hours
   static const int64_t DEFAULT_ERROR_COUNT_THRESHOLD = 3;
+  static const int64_t EVOLVING_PLAN_TIMEOUT_THRESHOLD = 5000; // 5ms
 
   int online_evolve_get_plan_with_guard(ObPlanCacheCtx &ctx,
                                         ObPhysicalPlan *&plan);

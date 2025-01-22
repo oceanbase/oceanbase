@@ -23,6 +23,7 @@
 #include "share/ob_device_manager.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/engine/basic/ob_select_into_basic.h"
+#include "sql/engine/table/ob_file_prefetch_buffer.h"
 
 namespace oceanbase
 {
@@ -70,7 +71,7 @@ class ObOrcOutputStream : public orc::OutputStream {
     ObFileAppender *file_appender_;
     ObStorageAppender *storage_appender_;
     IntoFileLocation file_location_;
-    string url_;
+    std::string url_;
     int64_t pos_;
 };
 
@@ -101,8 +102,10 @@ private:
 
 class ObArrowFile : public arrow::io::RandomAccessFile {
 public:
-  ObArrowFile(ObExternalDataAccessDriver &file_reader, const char*file_name, arrow::MemoryPool *pool)
-    : file_reader_(file_reader), file_name_(file_name), pool_(pool)
+  ObArrowFile(ObExternalDataAccessDriver &file_reader, const char *file_name,
+              arrow::MemoryPool *pool, ObFilePrefetchBuffer &file_prefetch_buffer) :
+    file_reader_(file_reader),
+    file_name_(file_name), pool_(pool), file_prefetch_buffer_(file_prefetch_buffer)
   {}
   ~ObArrowFile() override {
     file_reader_.close();
@@ -127,6 +130,7 @@ private:
   const char* file_name_;
   arrow::MemoryPool *pool_;
   int64_t position_;
+  ObFilePrefetchBuffer &file_prefetch_buffer_;
 };
 
 class ObParquetOutputStream : public arrow::io::OutputStream

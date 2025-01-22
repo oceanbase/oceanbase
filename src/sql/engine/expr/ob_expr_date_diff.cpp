@@ -73,22 +73,27 @@ int ObExprDateDiff::eval_date_diff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   int ret = OB_SUCCESS;
   ObDatum *left = NULL;
   ObDatum *right = NULL;
-  int64_t date_left = 0;
-  int64_t date_right = 0;
+  int32_t date_left = 0;
+  int32_t date_right = 0;
   if (OB_FAIL(expr.args_[0]->eval(ctx, left))
       || OB_FAIL(expr.args_[1]->eval(ctx, right))) {
     LOG_WARN("fail to eval conv", K(ret), K(expr));
   } else if (left->is_null() || right->is_null()) {
     res_datum.set_null();
-  } else if (FALSE_IT(date_left = left->get_date())) {
-    // do nothing
-  } else if (FALSE_IT(date_right = right->get_date())) {
-    // do nothing
-  } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date_left ||
-                         ObTimeConverter::ZERO_DATE == date_right)) {
-    res_datum.set_null();
   } else {
-    res_datum.set_int(date_left - date_right);
+    if (ob_is_mysql_date_tc(expr.args_[0]->datum_meta_.type_)) {
+      date_left = ObTimeConverter::calc_date(left->get_mysql_date());
+      date_right = ObTimeConverter::calc_date(right->get_mysql_date());
+    } else {
+      date_left = left->get_date();
+      date_right = right->get_date();
+    }
+    if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date_left ||
+                      ObTimeConverter::ZERO_DATE == date_right)) {
+      res_datum.set_null();
+    } else {
+      res_datum.set_int(date_left - date_right);
+    }
   }
 
   return ret;
@@ -224,39 +229,49 @@ int ObExprDateDiff::eval_date_diff_vector(const ObExpr &expr, ObEvalCtx &ctx, co
     VectorFormat left_arg_format = expr.args_[0]->get_format(ctx);
     VectorFormat right_arg_format = expr.args_[1]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
+    ObObjTypeClass arg_tc = ob_obj_type_class(expr.args_[0]->datum_meta_.type_);
 
-#define DEF_DATE_DIFF_VECTOR(res_type)\
-    if (VEC_FIXED == left_arg_format && VEC_FIXED == right_arg_format) {\
-      ret = vector_date_diff<DateFixedVec, DateFixedVec, res_type, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_FIXED == left_arg_format && VEC_UNIFORM == right_arg_format) {\
-      ret = vector_date_diff<DateFixedVec, DateUniVec, res_type, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_FIXED == left_arg_format && VEC_UNIFORM_CONST == right_arg_format) {\
-      ret = vector_date_diff<DateFixedVec, DateUniCVec, res_type, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM == left_arg_format && VEC_FIXED == right_arg_format) {\
-      ret = vector_date_diff<DateUniVec, DateFixedVec, res_type, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM == left_arg_format && VEC_UNIFORM == right_arg_format) {\
-      ret = vector_date_diff<DateUniVec, DateUniVec, res_type, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM == left_arg_format && VEC_UNIFORM_CONST == right_arg_format) {\
-      ret = vector_date_diff<DateUniVec, DateUniCVec, res_type, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM_CONST == left_arg_format && VEC_FIXED == right_arg_format) {\
-      ret = vector_date_diff<DateUniCVec, DateFixedVec, res_type, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM_CONST == left_arg_format && VEC_UNIFORM == right_arg_format) {\
-      ret = vector_date_diff<DateUniCVec, DateUniVec, res_type, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM_CONST == left_arg_format && VEC_UNIFORM_CONST == right_arg_format) {\
-      ret = vector_date_diff<DateUniCVec, DateUniCVec, res_type, DateType>(expr, ctx, skip, bound);\
-    } else {\
-      ret = vector_date_diff<ObVectorBase, ObVectorBase, ObVectorBase, DateType>(expr, ctx, skip, bound);\
+#define DEF_DATE_DIFF_VECTOR(arg_type, res_type)\
+  if (VEC_FIXED == left_arg_format && VEC_FIXED == right_arg_format) {\
+    ret = vector_date_diff<CONCAT(arg_type, FixedVec), CONCAT(arg_type, FixedVec), res_type, CONCAT(arg_type, Type)>(expr, ctx, skip, bound);\
+  } else if (VEC_FIXED == left_arg_format && VEC_UNIFORM == right_arg_format) {\
+    ret = vector_date_diff<CONCAT(arg_type, FixedVec), CONCAT(arg_type, UniVec), res_type, CONCAT(arg_type, Type)>(expr, ctx, skip, bound);\
+  } else if (VEC_FIXED == left_arg_format && VEC_UNIFORM_CONST == right_arg_format) {\
+    ret = vector_date_diff<CONCAT(arg_type, FixedVec), CONCAT(arg_type, UniCVec), res_type, CONCAT(arg_type, Type)>(expr, ctx, skip, bound);\
+  } else if (VEC_UNIFORM == left_arg_format && VEC_FIXED == right_arg_format) {\
+    ret = vector_date_diff<CONCAT(arg_type, UniVec), CONCAT(arg_type, FixedVec), res_type, CONCAT(arg_type, Type)>(expr, ctx, skip, bound);\
+  } else if (VEC_UNIFORM == left_arg_format && VEC_UNIFORM == right_arg_format) {\
+    ret = vector_date_diff<CONCAT(arg_type, UniVec), CONCAT(arg_type, UniVec), res_type, CONCAT(arg_type, Type)>(expr, ctx, skip, bound);\
+  } else if (VEC_UNIFORM == left_arg_format && VEC_UNIFORM_CONST == right_arg_format) {\
+    ret = vector_date_diff<CONCAT(arg_type, UniVec), CONCAT(arg_type, UniCVec), res_type, CONCAT(arg_type, Type)>(expr, ctx, skip, bound);\
+  } else if (VEC_UNIFORM_CONST == left_arg_format && VEC_FIXED == right_arg_format) {\
+    ret = vector_date_diff<CONCAT(arg_type, UniCVec), CONCAT(arg_type, FixedVec), res_type, CONCAT(arg_type, Type)>(expr, ctx, skip, bound);\
+  } else if (VEC_UNIFORM_CONST == left_arg_format && VEC_UNIFORM == right_arg_format) {\
+    ret = vector_date_diff<CONCAT(arg_type, UniCVec), CONCAT(arg_type, UniVec), res_type, CONCAT(arg_type, Type)>(expr, ctx, skip, bound);\
+  } else if (VEC_UNIFORM_CONST == left_arg_format && VEC_UNIFORM_CONST == right_arg_format) {\
+    ret = vector_date_diff<CONCAT(arg_type, UniCVec), CONCAT(arg_type, UniCVec), res_type, CONCAT(arg_type, Type)>(expr, ctx, skip, bound);\
+  } else {\
+    ret = vector_date_diff<ObVectorBase, ObVectorBase, ObVectorBase, CONCAT(arg_type, Type)>(expr, ctx, skip, bound);\
+  }
+
+#define DISPATCH_DATE_DIFF_ARG_VECTOR(arg_type)\
+  if (VEC_FIXED == res_format) { \
+    DEF_DATE_DIFF_VECTOR(arg_type, DecInt64FixedVec)\
+  } else if (VEC_UNIFORM == res_format) {\
+    DEF_DATE_DIFF_VECTOR(arg_type, DecInt64UniVec)\
+  } else if (VEC_UNIFORM_CONST == res_format) {\
+    DEF_DATE_DIFF_VECTOR(arg_type, DecInt64UniCVec)\
+  } else {\
+    ret = vector_date_diff<ObVectorBase, ObVectorBase, ObVectorBase, CONCAT(arg_type, Type)>(expr, ctx, skip, bound);\
+  }
+
+    if (ObMySQLDateTC == arg_tc) {
+      DISPATCH_DATE_DIFF_ARG_VECTOR(MySQLDate)
+    } else if (ObDateTC == arg_tc) {
+      DISPATCH_DATE_DIFF_ARG_VECTOR(Date)
     }
 
-    if (VEC_FIXED == res_format) {
-      DEF_DATE_DIFF_VECTOR(DecInt64FixedVec)
-    } else if (VEC_UNIFORM == res_format) {
-      DEF_DATE_DIFF_VECTOR(DecInt64UniVec)
-    } else if (VEC_UNIFORM_CONST == res_format) {
-      DEF_DATE_DIFF_VECTOR(DecInt64UniCVec)
-    } else {
-      ret = vector_date_diff<ObVectorBase, ObVectorBase, ObVectorBase, DateType>(expr, ctx, skip, bound);
-    }
+#undef DISPATCH_DATE_DIFF_ARG_VECTOR
 #undef DEF_DATE_DIFF_VECTOR
 
     if (OB_FAIL(ret)) {

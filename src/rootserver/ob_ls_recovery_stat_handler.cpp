@@ -256,7 +256,7 @@ int ObLSRecoveryStatHandler::set_inner_readable_scn(const palf::LogConfigVersion
     } else {
       config_version_in_inner_ = config_version;
       const int64_t PRINT_INTERVAL = 1 * 1000 * 1000;
-      if (readable_scn_upper_limit_ > readable_scn && REACH_TENANT_TIME_INTERVAL(PRINT_INTERVAL)) {
+      if (readable_scn_upper_limit_ > readable_scn && REACH_THREAD_TIME_INTERVAL(PRINT_INTERVAL)) {
         const ObLSID ls_id = ls_->get_ls_id();
         LOG_INFO("readable scn fallback", K(ls_id), K(readable_scn_upper_limit_), K(readable_scn));
       }
@@ -433,13 +433,13 @@ int ObLSRecoveryStatHandler::check_member_change_valid_(
           is_valid = true;
           LOG_INFO("can change member list", K(server), K(readable_scn),
               K(readable_scn_upper_limit_), "ls_id", ls_->get_ls_id());
-        } else if (REACH_TENANT_TIME_INTERVAL(TIME_WAIT)) {
+        } else if (REACH_THREAD_TIME_INTERVAL(TIME_WAIT)) {
           LOG_INFO("server readable scn is not larger enough", K(server),
                    K(readable_scn), K(readable_scn_upper_limit_), "ls_id", ls_->get_ls_id());
         }
       }
     }  // end for
-    if (OB_SUCC(ret) && !found && REACH_TENANT_TIME_INTERVAL(TIME_WAIT)) {
+    if (OB_SUCC(ret) && !found && REACH_THREAD_TIME_INTERVAL(TIME_WAIT)) {
       is_valid = false;
       LOG_INFO("cannot find server readable scn", K(server), K(replicas_scn_),
           K(readable_scn_upper_limit_), "ls_id", ls_->get_ls_id());
@@ -827,7 +827,7 @@ int ObLSRecoveryStatHandler::check_member_change_valid_(
       LOG_INFO("can change member list", K(new_member_list), K(paxos_replica_num),
          "new readable_scn", readable_scn, "current readable_scn", readable_scn_upper_limit_,
          "ls_id", ls_->get_ls_id(), K(palf_stat));
-    } else if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000L)) {
+    } else if (REACH_THREAD_TIME_INTERVAL(1 * 1000 * 1000L)) {
       LOG_INFO("can not change member list",  K(new_member_list), K(paxos_replica_num),
           K(readable_scn), K(readable_scn_upper_limit_),
           "ls_id", ls_->get_ls_id(), K(palf_stat));

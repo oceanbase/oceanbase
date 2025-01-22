@@ -15,6 +15,7 @@
 
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "storage/backup/ob_backup_data_struct.h"
+#include "storage/backup/ob_backup_data_store.h"
 
 namespace oceanbase {
 namespace backup {

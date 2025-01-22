@@ -609,7 +609,7 @@ int ObSqlStatRecordUtil::get_cache_obj(ObSqlStatRecordKey &key, ObCacheObjGuard&
   int ret = OB_SUCCESS;
   sql::ObILibCacheCtx cache_ctx;
   ObPlanCache* lib_cache = nullptr;
-  ObReqTimeGuard req_timeinfo_guard;
+  observer::ObReqTimeGuard req_timeinfo_guard;
   if (OB_ISNULL(GCTX.omt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get multi tenant from GCTX", K(ret));
@@ -633,7 +633,7 @@ int ObSqlStatRecordUtil::create_cache_obj(ObSqlStatRecordKey &key, ObCacheObjGua
   sql::ObILibCacheCtx cache_ctx;
   ObPlanCache* lib_cache = nullptr;
   ObSqlStatRecordObj *cache_obj = nullptr;
-  ObReqTimeGuard req_timeinfo_guard;
+  observer::ObReqTimeGuard req_timeinfo_guard;
   if (OB_ISNULL(GCTX.omt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get multi tenant from GCTX", K(ret));

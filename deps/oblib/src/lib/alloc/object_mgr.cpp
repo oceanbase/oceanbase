@@ -48,7 +48,7 @@ void SubObjectMgr::free_object(AObject *object)
   abort_unless(block->is_valid());
   abort_unless(block->in_use_);
   abort_unless(block->obj_set_ != NULL);
-  ObjectSet *os = block->obj_set_;
+  ObjectSet *os = (ObjectSet *)block->obj_set_;
   abort_unless(&os_ == os);
   os->free_object(object);
 }
@@ -158,7 +158,7 @@ AObject *ObjectMgr::realloc_object(
     abort_unless(block->in_use_);
     abort_unless(block->obj_set_ != NULL);
 
-    ObjectSet *os = block->obj_set_;
+    ObjectSet *os = (ObjectSet *)block->obj_set_;
     abort_unless(os);
     if (os != NULL) {
       os->lock();
@@ -179,7 +179,7 @@ void ObjectMgr::free_object(AObject *obj)
   abort_unless(block->in_use_);
   abort_unless(block->obj_set_ != NULL);
 
-  ObjectSet *set = block->obj_set_;
+  ObjectSet *set = (ObjectSet *)block->obj_set_;
   set->free_object(obj);
   // TODO by fengshuo.fs: when object_set is empty, try free the sub_mgr of it.
 }
@@ -244,7 +244,7 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
   attr.label_ = common::ObModIds::OB_TENANT_CTX_ALLOCATOR;
   attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
   attr.ignore_version_ = true;
-  class SubObjectMgrWrapper : public IObjectMgr {
+  class SubObjectMgrWrapper {
   public:
     SubObjectMgrWrapper(SubObjectMgr& sub_mgr)
       : sub_mgr_(sub_mgr)
@@ -357,4 +357,103 @@ bool ObjectMgr::check_has_unfree(char *first_label, char *first_bt)
     }
   }
   return has_unfree;
+}
+
+ObjectMgrV2::ObjectMgrV2(const int64_t tenant_id, const int64_t ctx_id)
+  : IBlockMgr(tenant_id, ctx_id),
+    last_wash_ts_(0),
+    last_washed_size_(0)
+{
+  for (int i = 0; i < OBJECT_SET_CNT; ++i) {
+    obj_sets_[i].set_block_mgr(this);
+  }
+  ObTenantCtxAllocatorGuard ta =
+      ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+  for (int i =0; i < BLOCK_SET_CNT; ++i) {
+    blk_sets_[i]->set_tenant_ctx_allocator(*ta.ref_allocator());
+    blk_sets_[i]->set_chunk_mgr(&ta->get_chunk_mgr());
+  }
+}
+
+ABlock *ObjectMgrV2::alloc_block(uint64_t size, const ObMemAttr &attr)
+{
+  ABlock *block = NULL;
+  int32_t start = idx();
+  for (uint64_t i = 0; NULL == block && i < BLOCK_SET_CNT; i++) {
+    BlockSetV2 &bs = blk_sets_[(start + i) % BLOCK_SET_CNT];
+    if (bs->trylock()) {
+      block = bs->alloc_block(size, attr);
+      bs->unlock();
+    }
+  }
+  if (OB_ISNULL(block)) {
+    BlockSetV2 &bs = blk_sets_[start % BLOCK_SET_CNT];
+    bs->lock();
+    block = bs->alloc_block(size, attr);
+    bs->unlock();
+  }
+  return block;
+}
+
+void ObjectMgrV2::free_block(ABlock *block)
+{
+  abort_unless(block);
+  abort_unless(block->is_valid());
+  AChunk *chunk = block->chunk();
+  abort_unless(chunk);
+  abort_unless(chunk->is_valid());
+  BlockSet *bs = chunk->block_set_;
+  bs->lock();
+  bs->free_block(block);
+  bs->unlock();
+  // TODO by fengshuo.fs: when block_set is empty, try free the sub_mgr of it.
+}
+
+int64_t ObjectMgrV2::sync_wash(int64_t wash_size)
+{
+  int64_t washed_size = 0;
+  for (uint64_t i = 0; washed_size < wash_size && i < BLOCK_SET_CNT; i++) {
+    blk_sets_[i]->lock();
+    washed_size += blk_sets_[i]->sync_wash(wash_size - washed_size);
+    blk_sets_[i]->unlock();
+  }
+  UNUSED(ATOMIC_STORE(&last_washed_size_, washed_size));
+  UNUSED(ATOMIC_STORE(&last_wash_ts_, common::ObTimeUtility::current_time()));
+  return washed_size;
+}
+
+ObjectMgrV2::Stat ObjectMgrV2::get_stat()
+{
+  int64_t hold, payload, used;
+  hold = payload = used = 0;
+  for (uint64_t i = 0; i < BLOCK_SET_CNT; i++) {
+    hold += blk_sets_[i]->get_total_hold();
+    payload += blk_sets_[i]->get_total_payload();
+    used += blk_sets_[i]->get_total_used();
+  }
+  return Stat{
+      .hold_ = hold,
+      .payload_ = payload,
+      .used_ = used,
+      .last_washed_size_ = ATOMIC_LOAD(&last_washed_size_),
+      .last_wash_ts_ = ATOMIC_LOAD(&last_wash_ts_)
+      };
+}
+
+bool ObjectMgrV2::check_has_unfree()
+{
+  bool has_unfree = false;
+  for (uint64_t idx = 0; idx < BLOCK_SET_CNT && !has_unfree; idx++) {
+    blk_sets_[idx]->lock();
+    DEFER(blk_sets_[idx]->unlock());
+    has_unfree = blk_sets_[idx]->check_has_unfree();
+  }
+  return has_unfree;
+}
+
+void ObjectMgrV2::do_cleanup()
+{
+  for (uint64_t idx = 0; idx < OBJECT_SET_CNT; idx++) {
+    obj_sets_[idx].do_cleanup();
+  }
 }

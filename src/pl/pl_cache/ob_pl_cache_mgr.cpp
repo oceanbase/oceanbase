@@ -85,6 +85,8 @@ int ObPLCacheMgr::get_pl_cache(ObPlanCache *lib_cache, ObCacheObjGuard& guard, O
   if (OB_NOT_NULL(pc_ctx.session_info_) &&
       false == pc_ctx.session_info_->get_local_ob_enable_pl_cache()) {
     // do nothing
+  } else if (OB_FAIL(pc_ctx.adjust_definer_database_id())) {
+    LOG_WARN("reset db_id failed!", K(ret));
   } else if (OB_FAIL(get_pl_object(lib_cache, pc_ctx, guard))) {
     PL_CACHE_LOG(DEBUG, "fail to get plan", K(ret));
   } else if (OB_ISNULL(guard.get_cache_obj())) {
@@ -150,7 +152,7 @@ int ObPLCacheMgr::add_pl_cache(ObPlanCache *lib_cache, ObILibCacheObject *pl_obj
      PL_CACHE_LOG(WARN, "invalid physical plan", K(ret));
   } else if (lib_cache->get_mem_hold() > lib_cache->get_mem_limit()) {
      ret = OB_REACH_MEMORY_LIMIT;
-     PL_CACHE_LOG(DEBUG, "lib cache memory used reach the high water mark",
+     PL_CACHE_LOG(WARN, "lib cache memory used reach the high water mark",
      K(lib_cache->get_mem_used()), K(lib_cache->get_mem_limit()), K(ret));
   } else if (pl_object->get_mem_size() >= lib_cache->get_mem_high()) {
     // do nothing
@@ -176,6 +178,8 @@ int ObPLCacheMgr::add_pl_cache(ObPlanCache *lib_cache, ObILibCacheObject *pl_obj
     }
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(pc_ctx.key_.namespace_ = ns)) {
+    } else if (OB_FAIL(pc_ctx.adjust_definer_database_id())) {
+      LOG_WARN("reset db_id failed!", K(ret));
     } else if (OB_FAIL(add_pl_object(lib_cache, pc_ctx, pl_object))) {
       if (!is_not_supported_err(ret)
           && OB_SQL_PC_PLAN_DUPLICATE != ret) {

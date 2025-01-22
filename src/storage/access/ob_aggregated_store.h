@@ -36,7 +36,10 @@ static const double AGG_ROW_MODE_RATIO_THRESHOLD = 0.5;
 class ObCGAggCells : public ObAggGroupBase
 {
 public:
-  ObCGAggCells() : agg_cells_() {}
+  ObCGAggCells() : agg_cells_()
+  {
+    agg_cells_.set_attr(ObMemAttr(MTL_ID(), "PDAggStore"));
+  }
   virtual ~ObCGAggCells() { reset(); }
   void reset();
   bool check_finished() const;

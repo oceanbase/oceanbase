@@ -4444,7 +4444,7 @@ int ObTransformUtils::compute_set_stmt_property(const ObSelectStmt *stmt,
                                               check_helper.session_info_,
                                               stmt, set_exprs, equal_conds))) {
     LOG_WARN("failed to get equal set conditions", K(ret));
-  } else if (FALSE_IT(res_info.equal_sets_.reuse())) {
+  } else if (FALSE_IT(res_info.equal_sets_.reset())) {
   } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(check_helper.alloc_, equal_conds,
                                                         tmp_equal_sets, res_info.equal_sets_))) {
     LOG_WARN("failed to compute compute equal set", K(ret));
@@ -4598,7 +4598,7 @@ void ObTransformUtils::UniqueCheckInfo::reset()
 {
   table_set_.clear_all();
   const_exprs_.reuse();
-  equal_sets_.reuse();
+  equal_sets_.reset();
   fd_sets_.reuse();
   candi_fd_sets_.reuse();
   not_null_.reuse();
@@ -7847,7 +7847,7 @@ int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
 {
   int ret = OB_SUCCESS;
   int64_t set_size = 32;
-  hash::ObHashSet<uint64_t> expr_set;
+  hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> expr_set;
   if (OB_ISNULL(parent)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(parent));
@@ -7911,13 +7911,15 @@ int ObTransformUtils::remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
 }
 
 int ObTransformUtils::append_hashset(ObRawExpr *expr,
-                                     hash::ObHashSet<uint64_t> &expr_set)
+                                     hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set)
 {
   int ret = OB_SUCCESS;
   uint64_t key = reinterpret_cast<uint64_t>(expr);
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (OB_FAIL(expr->fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
   } else if (OB_HASH_EXIST == expr_set.exist_refactored(key)) {
     // do nothing
   } else if (OB_FAIL(expr_set.set_refactored(key))) {
@@ -7934,7 +7936,7 @@ int ObTransformUtils::append_hashset(ObRawExpr *expr,
 }
 
 int ObTransformUtils::find_hashset(ObRawExpr *expr,
-                                   hash::ObHashSet<uint64_t> &expr_set,
+                                   hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                                    ObIArray<ObRawExpr *> &common_exprs)
 {
   int ret = OB_SUCCESS;
@@ -7942,6 +7944,8 @@ int ObTransformUtils::find_hashset(ObRawExpr *expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (OB_FAIL(expr->fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
   } else if (OB_HASH_EXIST == expr_set.exist_refactored(key)) {
     if (OB_FAIL(add_var_to_array_no_dup(common_exprs, expr))) {
       LOG_WARN("failed to append expr", K(ret));
@@ -16707,7 +16711,7 @@ int ObTransformUtils::check_const_select(ObTransformerCtx *ctx,
   if (OB_ISNULL(ctx) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(ctx), K(stmt));
-  } else if (OB_FALSE_IT(ctx->equal_sets_.reuse())) {
+  } else if (OB_FALSE_IT(ctx->equal_sets_.reset())) {
   } else if (OB_FAIL(stmt->get_stmt_equal_sets(ctx->equal_sets_, alloc, true, true))) {
     LOG_WARN("failed to get stmt equal sets", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(stmt->get_condition_exprs(),
@@ -16723,7 +16727,7 @@ int ObTransformUtils::check_const_select(ObTransformerCtx *ctx,
     }
   }
   if (OB_SUCC(ret)) {
-    ctx->equal_sets_.reuse();
+    ctx->equal_sets_.reset();
   }
   return ret;
 }

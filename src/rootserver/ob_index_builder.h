@@ -98,7 +98,8 @@ public:
                               const int64_t group_id,
                               const uint64_t tenant_data_version,
                               common::ObIAllocator &allocator,
-                              ObDDLTaskRecord &task_record);
+                              ObDDLTaskRecord &task_record,
+                              const int64_t new_fetched_snapshot = 0);
   int submit_rebuild_index_task(common::ObMySQLTransaction &trans,
                                 const obrpc::ObRebuildIndexArg &arg,
                                 const share::schema::ObTableSchema *data_schema,

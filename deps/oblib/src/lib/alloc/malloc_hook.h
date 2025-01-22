@@ -12,7 +12,6 @@
 
 #ifndef MALLOC_HOOK_H
 #define MALLOC_HOOK_H
-#include "lib/alloc/alloc_struct.h"
 extern void init_malloc_hook();
 
 inline bool& in_hook()

@@ -1646,6 +1646,7 @@ int ObLSTabletService::update_tablet_restore_status(
     const ObTabletMapKey key(ls_->get_ls_id(), tablet_id);
     ObTablet *tablet = tablet_handle.get_obj();
     ObTabletHandle new_tablet_handle;
+    const bool current_has_transfer_table = tablet->tablet_meta_.has_transfer_table();
 
     if (OB_FAIL(tablet->tablet_meta_.ha_status_.get_restore_status(current_status))) {
       LOG_WARN("failed to get restore status", K(ret), KPC(tablet));
@@ -1684,6 +1685,8 @@ int ObLSTabletService::update_tablet_restore_status(
         if (OB_SUCCESS != (tmp_ret = tablet->tablet_meta_.ha_status_.set_restore_status(current_status))) {
           LOG_WARN("failed to set restore status", K(tmp_ret), K(current_status), KPC(tablet));
           ob_abort();
+        } else if (need_reset_transfer_flag) { //rollback has_transfer_table
+          tablet->tablet_meta_.transfer_info_.has_transfer_table_ = current_has_transfer_table;
         }
       }
     }
@@ -3071,55 +3074,6 @@ int ObLSTabletService::replay_set_ddl_info(
   return ret;
 }
 
-int ObLSTabletService::build_create_sstable_param_for_migration(
-    const blocksstable::ObMigrationSSTableParam &mig_param,
-    ObTabletCreateSSTableParam &param)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!mig_param.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(mig_param));
-  } else {
-    param.table_key_                     = mig_param.table_key_;
-    param.schema_version_                = mig_param.basic_meta_.schema_version_;
-    param.create_snapshot_version_       = mig_param.basic_meta_.create_snapshot_version_;
-    param.progressive_merge_round_       = mig_param.basic_meta_.progressive_merge_round_;
-    param.progressive_merge_step_        = mig_param.basic_meta_.progressive_merge_step_;
-    param.is_ready_for_read_             = false;
-    param.table_mode_                    = mig_param.basic_meta_.table_mode_;
-    param.index_type_                    = static_cast<share::schema::ObIndexType>(mig_param.basic_meta_.index_type_);
-    param.rowkey_column_cnt_             = mig_param.basic_meta_.rowkey_column_count_;
-    param.root_row_store_type_           = mig_param.basic_meta_.root_row_store_type_;
-    param.latest_row_store_type_         = mig_param.basic_meta_.latest_row_store_type_;
-    param.index_blocks_cnt_              = mig_param.basic_meta_.index_macro_block_count_;
-    param.data_blocks_cnt_               = mig_param.basic_meta_.data_macro_block_count_;
-    param.micro_block_cnt_               = mig_param.basic_meta_.data_micro_block_count_;
-    param.use_old_macro_block_count_     = mig_param.basic_meta_.use_old_macro_block_count_;
-    param.row_count_                     = mig_param.basic_meta_.row_count_;
-    param.column_cnt_                    = mig_param.basic_meta_.column_cnt_;
-    param.data_checksum_                 = mig_param.basic_meta_.data_checksum_;
-    param.occupy_size_                   = mig_param.basic_meta_.occupy_size_;
-    param.original_size_                 = mig_param.basic_meta_.original_size_;
-    param.max_merged_trans_version_      = mig_param.basic_meta_.max_merged_trans_version_;
-    param.ddl_scn_                       = mig_param.basic_meta_.ddl_scn_;
-    param.filled_tx_scn_                 = mig_param.basic_meta_.filled_tx_scn_;
-    param.contain_uncommitted_row_       = mig_param.basic_meta_.contain_uncommitted_row_;
-    param.compressor_type_               = mig_param.basic_meta_.compressor_type_;
-    param.encrypt_id_                    = mig_param.basic_meta_.encrypt_id_;
-    param.master_key_id_                 = mig_param.basic_meta_.master_key_id_;
-    MEMCPY(param.encrypt_key_, mig_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-    param.root_block_addr_.set_none_addr();
-    param.data_block_macro_meta_addr_.set_none_addr();;
-    param.table_backup_flag_             = mig_param.basic_meta_.table_backup_flag_;
-    param.table_shared_flag_             = mig_param.basic_meta_.table_shared_flag_;
-    param.co_base_snapshot_version_      = mig_param.basic_meta_.co_base_snapshot_version_;
-    if (OB_FAIL(param.column_checksums_.assign(mig_param.column_checksums_))) {
-      LOG_WARN("fail to assign column checksums", K(ret), K(mig_param));
-    }
-  }
-  return ret;
-}
-
 int ObLSTabletService::insert_rows(
     ObTabletHandle &tablet_handle,
     ObStoreCtx &ctx,
@@ -3297,7 +3251,9 @@ int ObLSTabletService::insert_row(
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
       row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-      const bool check_exist = !data_table.is_storage_index_table() || data_table.is_unique_index();
+      const bool check_exist = !data_table.is_storage_index_table() ||
+        data_table.is_unique_index() ||
+        ctx.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
       if (OB_FAIL(insert_row_to_tablet(check_exist,
                                        tablet_handle,
                                        run_ctx,
@@ -4468,8 +4424,16 @@ int ObLSTabletService::insert_tablet_rows(
 {
   int ret = OB_SUCCESS;
   ObRelativeTable &table = run_ctx.relative_table_;
-  const bool check_exists = !table.is_storage_index_table() || table.is_unique_index();
-
+#ifdef OB_BUILD_PACKAGE
+  const bool check_exists = !table.is_storage_index_table() ||
+    table.is_unique_index() ||
+    run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
+#else
+  const bool check_exists = !table.is_storage_index_table() ||
+    table.is_unique_index() ||
+    table.is_fts_index() ||
+    run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
+#endif
   // 1. Defensive checking of new rows.
   if (GCONF.enable_defensive_check()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
@@ -4503,6 +4467,12 @@ int ObLSTabletService::insert_tablet_rows(
         blocksstable::ObDatumRowkey &duplicate_rowkey = rows_info.get_conflict_rowkey();
         LOG_WARN("Rowkey already exist", K(ret), K(table), K(duplicate_rowkey),
                  K(rows_info.get_conflict_idx()));
+#ifndef OB_BUILD_PACKAGE
+        if (table.is_fts_index()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("unexpected error, duplicated row", K(ret), K(table));
+        }
+#endif
       } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("Failed to insert rows to tablet", K(ret), K(rows_info));
       }
@@ -5285,7 +5255,9 @@ int ObLSTabletService::process_data_table_row(
         }
       }
     } else {
-      const bool check_exist = !relative_table.is_storage_index_table() || relative_table.is_unique_index();
+      const bool check_exist = !relative_table.is_storage_index_table() ||
+        relative_table.is_unique_index() ||
+        ctx.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
       if (OB_FAIL(insert_row_without_rowkey_check_wrap(data_tablet,
                                                        run_ctx.dml_param_.data_row_for_lob_,
                                                        relative_table,
@@ -7070,6 +7042,7 @@ int ObLSTabletService::get_tablet_without_memtables(
     common::ObArenaAllocator &allocator,
     ObTabletHandle &handle)
 {
+  TIMEGUARD_INIT(GetStaticTablet, 1_s);
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -7080,14 +7053,14 @@ int ObLSTabletService::get_tablet_without_memtables(
   } else if (OB_ISNULL(t3m)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant meta mem mgr should not be null", K(ret), KP(t3m));
-  } else if (OB_FAIL(t3m->get_tablet_with_allocator(
+  } else if (CLICK_FAIL(t3m->get_tablet_with_allocator(
       priority, key, allocator, handle, force_alloc_new))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_TABLET_NOT_EXIST;
     } else {
       LOG_WARN("failed to get tablet with allocator", K(ret), K(priority), K(key));
     }
-  } else if (OB_FAIL(handle.get_obj()->clear_memtables_on_table_store())) {
+  } else if (CLICK_FAIL(handle.get_obj()->clear_memtables_on_table_store())) {
     LOG_WARN("failed to clear memtables on table store", K(ret), K(key));
   }
   return ret;

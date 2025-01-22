@@ -2272,6 +2272,12 @@ public:
                            const ObPLBlockNS &ns,
                            bool &flag,
                            ObPLIntegerRange &pl_integer_range) const;
+  virtual int replace_questionmark_variable_type(ObPLFunctionAST &func,
+                                  ObPLStmtBlock *&current_block,
+                                  common::ObIAllocator* allocator,
+                                  int64_t questionmark_idx,
+                                  int32_t into_nums,
+                                  int64_t cur_idx) const { return OB_SUCCESS; }
 
   TO_STRING_KV(K_(into), K_(not_null_flags), K_(pl_integer_ranges), K_(data_type), K_(bulk));
 
@@ -3225,7 +3231,12 @@ public:
   virtual ~ObPLFetchStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
-
+  int replace_questionmark_variable_type(ObPLFunctionAST &func,
+                                    ObPLStmtBlock *&current_block,
+                                    common::ObIAllocator* allocator,
+                                    int64_t questionmark_idx,
+                                    int32_t into_nums,
+                                    int64_t cur_idx) const override;
   inline uint64_t get_package_id() const { return pkg_id_; }
   inline uint64_t get_routine_id() const { return routine_id_; }
   inline int64_t get_index() const { return idx_; }

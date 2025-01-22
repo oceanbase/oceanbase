@@ -138,7 +138,7 @@ TEST_F(TestSSMicroCacheCommonMeta, physical_block)
   phy_block.reuse_version_ = 5;
   phy_block.update_gc_reuse_version(phy_block.reuse_version_);
   ASSERT_EQ(5, phy_block.gc_reuse_version_);
-  phy_block.update_valid_len(100);
+  phy_block.set_valid_len(100);
   ASSERT_EQ(100, phy_block.get_valid_len());
   phy_block.valid_len_ -= 50;
   ASSERT_EQ(50, phy_block.get_valid_len());
@@ -394,7 +394,7 @@ TEST_F(TestSSMicroCacheCommonMeta, super_block)
   // serialize & deserialize
   const int64_t buf_len = 1024;
   char buf[buf_len];
-  MEMSET(buf, buf_len, '\0');
+  MEMSET(buf, '\0', buf_len);
   int64_t pos = 0;
   ASSERT_EQ(OB_SUCCESS, super_block.serialize(buf, buf_len, pos));
   ASSERT_NE(0, pos);

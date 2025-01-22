@@ -339,21 +339,26 @@ bool ObBackupTableListMetaInfoDesc::is_valid() const
  *-----------------------------ObBackupMajorCompactionMViewDepTabletListDesc-----------------------
  */
 
-OB_SERIALIZE_MEMBER(ObBackupMajorCompactionMViewDepTabletListDesc, tablet_id_list_);
+OB_SERIALIZE_MEMBER(ObBackupMajorCompactionMViewDepTabletListDesc, tablet_id_list_, mview_dep_scn_list_);
 
 ObBackupMajorCompactionMViewDepTabletListDesc::ObBackupMajorCompactionMViewDepTabletListDesc()
   : ObExternBackupDataDesc(ObBackupFileType::BACKUP_MVIEW_DEP_TABLET_LIST_FILE, FILE_VERSION),
-    tablet_id_list_() {}
+    tablet_id_list_(),
+    mview_dep_scn_list_() {}
 
 bool ObBackupMajorCompactionMViewDepTabletListDesc::is_valid() const
 {
   int ret = OB_SUCCESS;
   bool bret = true;
-  ARRAY_FOREACH(tablet_id_list_, i) {
-    const ObTabletID &tablet_id = tablet_id_list_.at(i);
-    if (!tablet_id.is_valid()) {
-      bret = false;
-      break;
+  if (tablet_id_list_.count() != mview_dep_scn_list_.count()) {
+    bret = false;
+  } else {
+    ARRAY_FOREACH(tablet_id_list_, i) {
+      const ObTabletID &tablet_id = tablet_id_list_.at(i);
+      if (!tablet_id.is_valid()) {
+        bret = false;
+        break;
+      }
     }
   }
   return bret;
@@ -1298,13 +1303,13 @@ int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_a
         backup_set_desc.min_restore_scn_ = backup_set_file.min_restore_scn_;
         backup_set_desc.total_bytes_ = backup_set_file.stats_.output_bytes_;
         if (OB_FAIL(backup_set_map.get_refactored(backup_set_file.prev_full_backup_set_id_, value))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
+          if (OB_HASH_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("fail to get refactored", K(ret), K(backup_set_file));
           }
         } else if (OB_FAIL(backup_set_map.get_refactored(backup_set_file.prev_inc_backup_set_id_, value))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
+          if (OB_HASH_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("fail to get refactored", K(ret), K(backup_set_file));

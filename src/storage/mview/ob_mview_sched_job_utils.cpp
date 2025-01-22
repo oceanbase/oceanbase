@@ -472,6 +472,15 @@ int ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(
       } else {
         timestamp = tmp_timestamp;
       }
+    } else if (obj.is_mysql_datetime()) {
+      int64_t tmp_timestamp = 0;
+      if (OB_FAIL(ObTimeConverter::mdatetime_to_timestamp(
+          obj.get_mysql_datetime(), TZ_INFO(&session), tmp_timestamp))) {
+        LOG_WARN("failed to convert datetime to timestamp",
+            KR(ret), K(obj.get_mysql_datetime()));
+      } else {
+        timestamp = tmp_timestamp;
+      }
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid datetime expression", KR(ret), K(obj));

@@ -144,7 +144,7 @@ private:
 class ObMacroBlockWriter
 {
 public:
-  ObMacroBlockWriter(const bool is_need_macro_buffer = false);
+  explicit ObMacroBlockWriter(const bool is_need_macro_buffer = false);
   virtual ~ObMacroBlockWriter();
   virtual void reset();
   virtual int open(

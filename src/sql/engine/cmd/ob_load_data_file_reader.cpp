@@ -23,6 +23,7 @@
 #include "lib/compress/zstd_1_3_8/ob_zstd_wrapper.h"
 #include "lib/compress/ob_compress_util.h"
 #include "share/table/ob_table_load_define.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -296,7 +297,7 @@ int ObRandomOSSReader::read(char *buf, int64_t count, int64_t &read_size)
   int ret = OB_SUCCESS;
   ObBackupIoAdapter io_adapter;
   ObIOHandle io_handle;
-  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_IMPORT);
+  CONSUMER_GROUP_FUNC_GUARD(share::ObFunctionType::PRIO_IMPORT);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRandomOSSReader not init", KR(ret), KP(this));
@@ -394,8 +395,12 @@ ObPacketStreamFileReader::~ObPacketStreamFileReader()
       timeout_ts_ = ObTimeUtility::current_time() + wait_timeout;
     }
   }
+  LOG_INFO("load data local file reader exit", K(ret), K(eof_), K(timeout_ts_), K(ObTimeUtility::current_time()));
+  if (!eof_ && OB_NOT_NULL(session_) && OB_NOT_NULL(session_->get_cur_exec_ctx())) {
+    session_->get_cur_exec_ctx()->set_need_disconnect(true);
+    LOG_WARN("we'll close the connection as we can't read all of the file content", K(eof_));
+  }
   arena_allocator_.reset();
-  LOG_INFO("load data local file reader exit");
 }
 
 int ObPacketStreamFileReader::open(const ObString &filename,

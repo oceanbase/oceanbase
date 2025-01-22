@@ -66,13 +66,16 @@ int ObExprDateAdjust::calc_result_type3(ObExprResType &type,
     if (ObDateTimeType == date.get_type() || ObTimestampType == date.get_type()) {
       type.set_datetime();
       date.set_calc_type(ObDateTimeType);
-    } else if (ObDateType == date.get_type()) {
+    } else if (ObMySQLDateTimeType == date.get_type()) {
+      type.set_mysql_datetime();
+      date.set_calc_type(ObMySQLDateTimeType);
+    } else if (ObDateType == date.get_type() || ObMySQLDateType == date.get_type()) {
       if (DATE_UNIT_YEAR == unit_type || DATE_UNIT_MONTH == unit_type
           || DATE_UNIT_DAY == unit_type || DATE_UNIT_YEAR_MONTH == unit_type
           || DATE_UNIT_WEEK == unit_type || DATE_UNIT_QUARTER == unit_type) {
-        type.set_date();
+        type.set_type(date.get_type());
       } else {
-        type.set_datetime();
+        type.set_type(date.get_type() == ObMySQLDateType ? ObMySQLDateTimeType : ObDateTimeType);
       }
     } else if (ObTimeType == date.get_type()) {
       type.set_time();
@@ -102,9 +105,10 @@ int ObExprDateAdjust::calc_result_type3(ObExprResType &type,
             scale = OB_MAX_DATETIME_PRECISION;
           }
         }
-        if (date.is_datetime() || date.is_timestamp() || date.is_time()) {
+        if (date.is_datetime() || date.is_timestamp() || date.is_time()
+              || date.is_mysql_datetime()) {
           scale = std::max(date.get_scale(), scale);
-        } else if (date.is_date()) {
+        } else if (date.is_date() || date.is_mysql_date()) {
           if ((DATE_UNIT_DAY <= unit_type && unit_type <= DATE_UNIT_YEAR)
               || DATE_UNIT_YEAR_MONTH == unit_type) {
             scale = 0;
@@ -164,14 +168,17 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     } else {
       ObTime ob_time;
       ObDateSqlMode date_sql_mode;
+      ObDateSqlMode mysql_date_sql_mode;
       ObTimeConvertCtx cvrt_ctx(tz_info, false);
       date_sql_mode.init(sql_mode);
+      mysql_date_sql_mode.allow_invalid_dates_ = date_sql_mode.allow_invalid_dates_;
       if (is_json) { // json to string will add quote automatically, here should take off quote
         ObString str = date->get_string();
         if (str.length() >= 3) { // 2 quote and content length >= 1
           date->set_string(str.ptr() + 1, str.length() - 1);
         }
       }
+      bool need_check_date = ob_is_mysql_compact_dates_type(date_type);
       if (OB_FAIL(ob_datum_to_ob_time_with_date(*date, date_type, expr.args_[0]->datum_meta_.scale_,
                                             tz_info,
                                             ob_time,
@@ -190,6 +197,10 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         } else {
           LOG_WARN("datum to ob time failed", K(ret), K(date->get_string()), K(date_type));
         }
+      } else if (need_check_date
+                 && OB_FAIL(ObTimeConverter::validate_datetime(ob_time, mysql_date_sql_mode))) {
+        ret = OB_SUCCESS;
+        dt_val = ObTimeConverter::ZERO_DATETIME;
       } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, cvrt_ctx, dt_val))) {
         LOG_WARN("ob time to datetime failed", K(ret));
       }
@@ -229,6 +240,20 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         }
       } else if (ObDateTimeType == res_type) {
         expr_datum.set_datetime(res_dt_val);
+      } else if (ObMySQLDateType == res_type) {
+        ObMySQLDate mdate = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_mdate(res_dt_val, NULL, mdate))) {
+          LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
+        } else {
+          expr_datum.set_mysql_date(mdate);
+        }
+      } else if (ObMySQLDateTimeType == res_type) {
+        ObMySQLDateTime mdatetime = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(res_dt_val, mdatetime))) {
+          LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
+        } else {
+          expr_datum.set_mysql_datetime(mdatetime);
+        }
       } else {     //RETURN STRING TYPE
         ObObjType res_date;
         bool dt_flag = false;
@@ -341,11 +366,11 @@ int ObExprDateAdd::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, Ob
                                               K(rt_expr.args_[1]), K(rt_expr.args_[2]));
   } else {
     rt_expr.eval_func_ = ObExprDateAdd::calc_date_add;
-    const ObObjTypeClass arg_tc = ob_obj_type_class(rt_expr.args_[0]->datum_meta_.type_);
-    const ObObjTypeClass res_tc = ob_obj_type_class(rt_expr.datum_meta_.type_);
+    const ObObjType arg_type = rt_expr.args_[0]->datum_meta_.type_;
+    const ObObjType res_type = rt_expr.datum_meta_.type_;
     // The vectorization of other types for the expression not completed yet.
-    if ((ObDateTC == arg_tc || ObDateTimeTC == arg_tc)
-        && (ObDateTC == res_tc || ObDateTimeTC == res_tc)) {  // if arg_tc is dt/dtt, res_tc is dt/dtt, so it's no need actually
+    if ((ob_is_datetime_or_mysql_datetime_tc(arg_type) || ob_is_date_or_mysql_date(arg_type))
+        && (ob_is_datetime_or_mysql_datetime_tc(res_type) || ob_is_date_or_mysql_date(res_type))) {  // if arg_tc is dt/dtt, res_tc is dt/dtt, so it's no need actually
       rt_expr.eval_vector_func_ = ObExprDateAdd::calc_date_add_vector;
     }
   }
@@ -380,11 +405,11 @@ int ObExprDateSub::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, Ob
               K(rt_expr.args_[1]), K(rt_expr.args_[2]));
   } else {
     rt_expr.eval_func_ = ObExprDateSub::calc_date_sub;
-    const ObObjTypeClass arg_tc = ob_obj_type_class(rt_expr.args_[0]->datum_meta_.type_);
-    const ObObjTypeClass res_tc = ob_obj_type_class(rt_expr.datum_meta_.type_);
+    const ObObjType arg_type = rt_expr.args_[0]->datum_meta_.type_;
+    const ObObjType res_type = rt_expr.datum_meta_.type_;
     // The vectorization of other types for the expression not completed yet.
-    if ((ObDateTC == arg_tc || ObDateTimeTC == arg_tc)
-        && (ObDateTC == res_tc || ObDateTimeTC == res_tc)) {  // if arg_tc is dt/dtt, res_tc is dt/dtt, so it's no need actually
+    if ((ob_is_datetime_or_mysql_datetime_tc(arg_type) || ob_is_date_or_mysql_date(arg_type))
+        && (ob_is_datetime_or_mysql_datetime_tc(res_type) || ob_is_date_or_mysql_date(res_type))) { // if arg_tc is dt/dtt, res_tc is dt/dtt, so it's no need actually
       rt_expr.eval_vector_func_ = ObExprDateSub::calc_date_sub_vector;
     }
   }
@@ -493,10 +518,11 @@ int ObExprLastDay::calc_result_type1(ObExprResType &type,
     if (is_oracle_mode()) {
       type.set_datetime();
     } else {
-      type.set_date();
+      type.set_type(type_ctx.enable_mysql_compatible_dates() ? ObMySQLDateType : ObDateType);
     }
     type.set_scale(OB_MAX_DATE_PRECISION);
-    type1.set_calc_type(ObDateTimeType);
+    type1.set_calc_type(type_ctx.enable_mysql_compatible_dates() ?
+      ObMySQLDateTimeType : ObDateTimeType);
     type1.set_calc_scale(OB_MAX_DATETIME_PRECISION);
   }
   return ret;
@@ -536,16 +562,34 @@ int ObExprLastDay::calc_last_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
   } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
     LOG_WARN("get sql mode failed", K(ret));
   } else {
-    const ObObjType res_type = is_oracle_mode() ? ObDateTimeType : ObDateType;
-    int64_t ori_date_utc = param1->get_datetime();
-    int64_t res_date_utc = 0;
+    const ObObjType res_type = expr.datum_meta_.type_;
     ObDateSqlMode date_sql_mode;
     date_sql_mode.init(sql_mode);
     date_sql_mode.no_zero_in_date_ = is_no_zero_in_date(sql_mode);
     date_sql_mode.allow_incomplete_dates_ = !is_no_zero_in_date(sql_mode);
-    if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc,
-                res_type, date_sql_mode))) {
-      LOG_WARN("fail to calc last mday", K(ret), K(ori_date_utc), K(res_date_utc));
+    if (ObMySQLDateType == res_type) {
+      ObMySQLDate res_date;
+      if (OB_FAIL(ObTimeConverter::calc_last_mdate_of_the_month(param1->get_mysql_datetime(),
+                                                                res_date, date_sql_mode))) {
+        LOG_WARN("fail to calc last mday", K(ret), K(param1->get_mysql_datetime()));
+      } else {
+        expr_datum.set_mysql_date(res_date);
+      }
+    } else {
+      int64_t ori_date_utc = param1->get_datetime();
+      int64_t res_date_utc = 0;
+      if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc,
+                  res_type, date_sql_mode))) {
+        LOG_WARN("fail to calc last mday", K(ret), K(ori_date_utc), K(res_date_utc));
+      } else {
+        if (is_oracle_mode()) {
+          expr_datum.set_datetime(res_date_utc);
+        } else {
+          expr_datum.set_date(static_cast<int32_t>(res_date_utc));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
       if (!is_oracle_mode()) {
         uint64_t cast_mode = 0;
         ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
@@ -557,15 +601,8 @@ int ObExprLastDay::calc_last_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
           ret = OB_SUCCESS;
         }
       }
-    } else {
-      if (is_oracle_mode()) {
-        expr_datum.set_datetime(res_date_utc);
-      } else {
-        expr_datum.set_date(static_cast<int32_t>(res_date_utc));
-      }
     }
   }
-
   return ret;
 }
 
@@ -695,7 +732,9 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   const ObObjType res_type = expr.datum_meta_.type_;
+  const ObObjType date_type = expr.args_[0]->datum_meta_.type_;
   int64_t tz_offset = 0;
+  ObTime ob_time;
 
   for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
     if (skip.at(idx) || eval_flags.at(idx)) {
@@ -718,7 +757,20 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
     } else {
       int64_t res_dt_val = 0;
       int64_t dt_val = date * USECS_PER_DAY + usec;
-      if (OB_FAIL(ObTimeConverter::date_adjust(dt_val, interval_vec->get_string(idx),
+      bool need_check_date = ob_is_mysql_compact_dates_type(date_type);
+      ObDateSqlMode tmp_date_sql_mode;
+      tmp_date_sql_mode.allow_invalid_dates_ = date_sql_mode.allow_invalid_dates_;
+      if (need_check_date) {
+        if (OB_FAIL(ObTimeConverter::date_to_ob_time(date, ob_time))) {
+          LOG_WARN("date_to_ob_time fail", K(ret), K(date));
+        } else if (OB_FAIL(ObTimeConverter::validate_datetime(ob_time, tmp_date_sql_mode))) {
+          ret = OB_SUCCESS;
+          dt_val = ObTimeConverter::ZERO_DATETIME;
+        }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(ObTimeConverter::date_adjust(dt_val, interval_vec->get_string(idx),
                                                static_cast<ObDateUnitType>(unit_type_vec->get_int(idx)),
                                                res_dt_val, is_add, date_sql_mode))) {
         if (OB_UNLIKELY(OB_INVALID_DATE_VALUE == ret || OB_TOO_MANY_DATETIME_PARTS == ret)) {
@@ -741,6 +793,23 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
       } else if (ObDateTimeType == res_type) {
         res_vec->set_datetime(idx, res_dt_val);
         eval_flags.set(idx);
+      } else if (ObMySQLDateType == res_type) {
+        ObMySQLDate md_val = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_mdate(res_dt_val, NULL, md_val))) {
+          LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
+        } else {
+          res_vec->set_mysql_date(idx, md_val);
+          eval_flags.set(idx);
+        }
+      } else if (ObMySQLDateTimeType == res_type) {
+        ObMySQLDateTime mdatetime = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(res_dt_val, mdatetime))) {
+          LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
+        } else {
+          res_vec->set_mysql_datetime(idx, mdatetime);
+          eval_flags.set(idx);
+        }
+
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid type of result", K(ret));
@@ -836,15 +905,20 @@ int vector_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &sk
               (expr, ctx, skip, bound, IS_ADD, date_sql_mode);\
   }
 
-    if (ObDateTimeTC == arg_tc && ObDateTimeTC == res_tc) {
+    if (ObMySQLDateTimeTC == arg_tc && ObMySQLDateTimeTC == res_tc) {
+      DEF_DATE_ADD_WRAP(ObMySQLDateTime, MySQLDateTime, MySQLDateTime)
+    } else if (ObMySQLDateTC == arg_tc && ObMySQLDateTC == res_tc) {
+      DEF_DATE_ADD_WRAP(ObMySQLDate, MySQLDate, MySQLDate)
+    } else if (ObMySQLDateTC == arg_tc && ObMySQLDateTimeTC == res_tc) {
+      DEF_DATE_ADD_WRAP(ObMySQLDate, MySQLDate, MySQLDateTime)
+    } else if (ObDateTimeTC == arg_tc && ObDateTimeTC == res_tc) {
       DEF_DATE_ADD_WRAP(DateTimeType, DateTime, DateTime)
     } else if (ObDateTC == arg_tc && ObDateTC == res_tc) {
       DEF_DATE_ADD_WRAP(DateType, Date, Date)
     } else if (ObDateTC == arg_tc && ObDateTimeTC == res_tc) {
       DEF_DATE_ADD_WRAP(DateType, Date, DateTime)
     } else {
-      ret = vector_date_add<DateType, ObVectorBase, ObVectorBase, ObVectorBase, ObVectorBase>\
-                (expr, ctx, skip, bound, IS_ADD, date_sql_mode);
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("DATA TYPE NOT SUPPORTED", K(ret));
     }
 #undef DEF_DATE_ADD_WRAP

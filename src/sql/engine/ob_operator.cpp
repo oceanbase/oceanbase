@@ -19,6 +19,7 @@
 #include "common/ob_smart_call.h"
 #include "sql/engine/ob_exec_feedback_info.h"
 #include "observer/ob_server.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -63,9 +64,18 @@ int ObDynamicParamSetter::set_dynamic_param_vec2(ObEvalCtx &eval_ctx, const sql:
   } else {
     const char *payload = NULL;
     ObLength len = 0;
-    src_vec->get_payload(batch_idx, payload, len);
+    ObEvalCtx::TempAllocGuard alloc_guard(eval_ctx);
     ObDatum res;
-    if (src_vec->is_null(batch_idx)) {
+    if (src_->is_nested_expr() && !is_uniform_format(src_vec->get_format())) {
+      ObIAllocator *allocator = (0 == dst_->res_buf_off_) ? &eval_ctx.get_expr_res_alloc() : &alloc_guard.get_allocator();
+      if (OB_FAIL(ObArrayExprUtils::get_collection_payload(*allocator, eval_ctx, *src_, batch_idx, payload, len))) {
+        LOG_WARN("get nested collection payload failed", K(ret));
+      }
+    } else {
+      src_vec->get_payload(batch_idx, payload, len);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (src_vec->is_null(batch_idx)) {
       res.set_null();
     } else {
       res.ptr_ = payload;

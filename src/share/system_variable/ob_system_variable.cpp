@@ -57,6 +57,9 @@ char ObSpecialSysVarValues::version_[ObSpecialSysVarValues::VERSION_MAX_LEN];
 char ObSpecialSysVarValues::system_time_zone_str_[ObSpecialSysVarValues::SYSTEM_TIME_ZONE_MAX_LEN];
 char ObSpecialSysVarValues::default_coll_int_str_[ObSpecialSysVarValues::COLL_INT_STR_MAX_LEN];
 char ObSpecialSysVarValues::server_uuid_[ObSpecialSysVarValues::SERVER_UUID_MAX_LEN];
+char ObSpecialSysVarValues::server_pid_file_str_[MAX_PATH_SIZE];
+char ObSpecialSysVarValues::server_port_int_str_[ObSpecialSysVarValues::SERVER_PORT_INT_STR_MAX_LEN];
+char ObSpecialSysVarValues::server_socket_file_str_[MAX_PATH_SIZE];
 
 ObSpecialSysVarValues::ObSpecialSysVarValues()
 {
@@ -3349,6 +3352,59 @@ int ObCharsetSysVarPair::get_collation_var_by_charset_var(const ObString &cs_var
   return ret;
 }
 
+int ObPreProcessSysVars::init_config_sys_vars()
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+ // OB_SV_SERVER_PID_FILE
+  if (OB_SUCC(ret)) {
+    pos = 0;
+    char cur_work_path[MAX_PATH_SIZE];
+    if (OB_ISNULL(getcwd(cur_work_path, MAX_PATH_SIZE))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get work path failed", K(ret));
+    } else if (OB_FAIL(databuff_printf(ObSpecialSysVarValues::server_pid_file_str_,
+                                MAX_PATH_SIZE,
+                                pos,
+                                "%s/%s",
+                                cur_work_path,
+                                "run/observer.pid"))) {
+      LOG_ERROR("fail to print system_pid_file to buff", K(ret));
+    }
+  }
+
+ // OB_SV_SERVER_PORT
+  if (OB_SUCC(ret)) {
+    pos = 0;
+    int64_t mysql_port = GCONF.mysql_port;
+    if (OB_FAIL(databuff_printf(ObSpecialSysVarValues::server_port_int_str_,
+                                ObSpecialSysVarValues::SERVER_PORT_INT_STR_MAX_LEN,
+                                pos,
+                                "%ld",
+                                mysql_port))) {
+      LOG_ERROR("fail to print system_pid_file to buff", K(ret));
+    }
+  }
+
+ // OB_SV_SERVER_SOCKET_FILE
+  if (OB_SUCC(ret)) {
+    pos = 0;
+    char cur_work_path[MAX_PATH_SIZE];
+    if (OB_ISNULL(getcwd(cur_work_path, MAX_PATH_SIZE))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get work path failed", K(ret));
+    } else if (OB_FAIL(databuff_printf(ObSpecialSysVarValues::server_socket_file_str_,
+                                MAX_PATH_SIZE,
+                                pos,
+                                "%s/%s",
+                                cur_work_path,
+                                "run/sql.sock"))) {
+      LOG_ERROR("fail to print system_pid_file to buff", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObPreProcessSysVars::change_initial_value()
 {
   int ret = OB_SUCCESS;
@@ -3453,19 +3509,52 @@ int ObPreProcessSysVars::change_initial_value()
                                                ObSpecialSysVarValues::server_uuid_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_SERVER_UUID),
              K(ObSpecialSysVarValues::server_uuid_));
+  // OB_SV_PID_FILE
+  } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_PID_FILE,
+                                               ObSpecialSysVarValues::server_pid_file_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_PID_FILE),
+             K(ObSpecialSysVarValues::server_pid_file_str_));
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_PID_FILE,
+                                               ObSpecialSysVarValues::server_pid_file_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_PID_FILE),
+             K(ObSpecialSysVarValues::server_pid_file_str_));
+  // OB_SV_PORT
+  } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_PORT,
+                                               ObSpecialSysVarValues::server_port_int_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_PORT),
+             K(ObSpecialSysVarValues::server_port_int_str_));
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_PORT,
+                                               ObSpecialSysVarValues::server_port_int_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_PORT),
+             K(ObSpecialSysVarValues::server_port_int_str_));
+  // OB_SV_SOCKET
+  } else
+   if (OB_FAIL(ObSysVariables::set_value(OB_SV_SOCKET,
+                                               ObSpecialSysVarValues::server_socket_file_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_SOCKET),
+             K(ObSpecialSysVarValues::server_socket_file_str_));
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_SOCKET,
+                                               ObSpecialSysVarValues::server_socket_file_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_SOCKET),
+             K(ObSpecialSysVarValues::server_socket_file_str_));
   } else {
      LOG_INFO("succ to change_initial_value",
              "version_comment", ObSpecialSysVarValues::version_comment_,
              "system_time_zone_str", ObSpecialSysVarValues::system_time_zone_str_,
              "default_coll_int_str", ObSpecialSysVarValues::default_coll_int_str_,
-             "server_uuid", ObSpecialSysVarValues::server_uuid_);
+             "server_uuid", ObSpecialSysVarValues::server_uuid_,
+             "pid_file_str", ObSpecialSysVarValues::server_pid_file_str_,
+             "port", ObSpecialSysVarValues::server_port_int_str_,
+             "socket_file_str", ObSpecialSysVarValues::server_socket_file_str_);
   }
   return ret;
 }
 int ObPreProcessSysVars::init_sys_var()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObPreProcessSysVars::change_initial_value())) {
+  if (OB_FAIL(ObPreProcessSysVars::init_config_sys_vars())) {
+    LOG_ERROR("fail to initial config sys var", K(ret));
+  } else if (OB_FAIL(ObPreProcessSysVars::change_initial_value())) {
     LOG_ERROR("fail to change initial value", K(ret));
   } else if (OB_FAIL(ObSysVariables::init_default_values())) {
     LOG_ERROR("fail to init default values", K(ret));

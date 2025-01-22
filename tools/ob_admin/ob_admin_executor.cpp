@@ -47,7 +47,6 @@ ObAdminExecutor::ObAdminExecutor()
   mock_server_tenant_.set(&blocksstable::ObDecodeResourcePool::get_instance());
   share::ObTenantEnv::set_tenant(&mock_server_tenant_);
   omt::ObTenantConfigMgr::get_instance().add_tenant_config(OB_SYS_TENANT_ID);
-
   storage_env_.data_dir_ = data_dir_;
   storage_env_.sstable_dir_ = sstable_dir_;
   storage_env_.default_block_size_ = 2 * 1024 * 1024;
@@ -219,6 +218,9 @@ int ObAdminExecutor::set_sts_credential_key(const char *sts_credential)
   } else {
     if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
       STORAGE_LOG(WARN, "fail to init device env", KR(ret));
+    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
+                   &ObClusterVersionBaseMgr::get_instance()))) {
+      STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
     } else {
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
       if (OB_UNLIKELY(!tenant_config.is_valid())) {
@@ -232,6 +234,5 @@ int ObAdminExecutor::set_sts_credential_key(const char *sts_credential)
   }
   return ret;
 }
-
 }
 }

@@ -13,6 +13,9 @@
 #ifndef OCEANBASE_STORAGE_OB_LOB_LOCATION_UTIL_H_
 #define OCEANBASE_STORAGE_OB_LOB_LOCATION_UTIL_H_
 
+#include "storage/lob/ob_lob_access_param.h"
+#include "observer/ob_server_struct.h"
+
 namespace oceanbase
 {
 namespace storage

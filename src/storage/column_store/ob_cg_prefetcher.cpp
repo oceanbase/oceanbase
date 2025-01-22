@@ -223,6 +223,8 @@ int ObCGPrefetcher::locate_in_prefetched_data(bool &found)
   } else {
     filter_constant_type_.set_uncertain();
     max_filter_constant_id_ = is_reverse_scan_ ? query_index_range_.end_row_id_ + 1 : query_index_range_.start_row_id_ - 1;
+  }
+  if (!found || !is_prefetch_end_) {
     int cmp_ret = -1;
     int64_t max_data_prefetched_idx = MAX(micro_data_prewarm_idx_, micro_data_prefetch_idx_);
     const ObCSRowId start_row_idx = is_reverse_scan_ ? query_index_range_.end_row_id_ : query_index_range_.start_row_id_;
@@ -233,7 +235,10 @@ int ObCGPrefetcher::locate_in_prefetched_data(bool &found)
       if (is_reverse_scan_) {
         cmp_ret = -cmp_ret;
       }
-      if (0 == cmp_ret) {
+      if (cmp_ret < 0) {
+        cur_micro_data_fetch_idx_ = micro_data_idx;
+        cur_micro_data_read_idx_ = cur_micro_data_fetch_idx_;
+      } else if (cmp_ret == 0) {
         cur_micro_data_fetch_idx_ = micro_data_idx - 1;
         cur_micro_data_read_idx_ = cur_micro_data_fetch_idx_;
         if (is_reverse_scan_) {

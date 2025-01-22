@@ -20,6 +20,7 @@ namespace oceanbase
 {
 namespace common
 {
+const int64_t STANDARD_IOPS_SIZE = 16 * (1<<10);
 class QSchedCallback: public ITCHandler
 {
 public:

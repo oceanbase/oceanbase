@@ -55,14 +55,17 @@ TaskToken::TaskToken(
     ObTimerTask *task,
     const int64_t st,
     const int64_t dt)
-  : timer_(timer), task_(task), scheduled_time_(st), delay_(dt)
+  : timer_(timer), task_(task), scheduled_time_(st),
+    last_try_pop_time_(0), pushed_time_(0L), delay_(dt)
 {
-  char *buf = task_type_;
-  int buf_len = sizeof(task_type_);
-  if (task != NULL) {
-    strncpy(buf, typeid(*task).name(), buf_len);
+  task_type_[0] = '\0';
+  timer_name_[0] = '\0';
+  if (nullptr != task) {
+    ObTimerUtil::copy_buff(task_type_, sizeof(task_type_), typeid(*task).name());
   }
-  buf[buf_len - 1] = '\0';
+  if (nullptr != timer) {
+    ObTimerUtil::copy_buff(timer_name_, sizeof(timer_name_), timer->timer_name_);
+  }
 }
 
 TaskToken::TaskToken(const ObTimer *timer, ObTimerTask *task)
@@ -72,6 +75,8 @@ TaskToken::TaskToken(const ObTimer *timer, ObTimerTask *task)
 TaskToken::~TaskToken()
 {
   scheduled_time_ = 0L;
+  last_try_pop_time_ = 0L;
+  pushed_time_ = 0L;
   delay_ = 0L;
   task_ = nullptr;
   timer_ = nullptr;
@@ -80,11 +85,6 @@ TaskToken::~TaskToken()
 void ObTimerTaskThreadPool::handle(void *task_token)
 {
   TaskToken *token = reinterpret_cast<TaskToken *>(task_token);
-  const int64_t delay =
-    ObSysTime::now().toMicroSeconds() - token->scheduled_time_;
-  if (delay > 10 * 1000 * 1000) {
-    LOG_WARN_RET(OB_SUCCESS, "timer task too much delay", K(*token), K(delay));
-  }
   if (nullptr == token) {
     OB_LOG_RET(WARN, OB_ERR_NULL_VALUE, "TaskToken is NULL", K(ret));
   } else if (nullptr == token->task_) {
@@ -93,23 +93,74 @@ void ObTimerTaskThreadPool::handle(void *task_token)
     int64_t thread_id = 0L;
     bool do_timeout_check = token->task_->timeout_check();
     const int64_t start_time = ::oceanbase::common::ObTimeUtility::current_time();
+    const int64_t start_time_sys = ObSysTime::now().toMicroSeconds();
     if (do_timeout_check) {
       thread_id = GETTID();
       ObTimerMonitor::get_instance().start_task(thread_id, start_time, token->delay_, token->task_);
     }
-    token->task_->runTimerTask();
     THIS_WORKER.set_timeout_ts(INT64_MAX); // reset timeout to INT64_MAX
     ObCurTraceId::reset(); // reset trace_id
+    set_ext_tname(token);
+    token->task_->runTimerTask();
+    clear_ext_tname(); // reset ext_tname
     const int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time();
-    const int64_t elapsed_time = end_time - start_time;
+    const int64_t end_time_sys = ObSysTime::now().toMicroSeconds();
     if (do_timeout_check) {
       ObTimerMonitor::get_instance().end_task(thread_id, end_time);
     }
-    if (elapsed_time > ELAPSED_TIME_LOG_THREASHOLD) {
-      OB_LOG_RET(WARN,  OB_ERR_TOO_MUCH_TIME, "timer task cost too much time",
-          KP(token), KPC(token), KPC(token->task_), K(ret));
-    }
+    alarm_if_necessary(token, start_time_sys, end_time_sys);
     IGNORE_RETURN service_.schedule_task(token);
+  }
+}
+
+void ObTimerTaskThreadPool::alarm_if_necessary(
+    const TaskToken *token,
+    int64_t start_time,
+    int64_t end_time)
+{
+  if (nullptr != token) {
+    const int64_t delay_in_priority_queue = token->pushed_time_ - token->scheduled_time_;
+    const int64_t delay_in_thread_pool = start_time - token->pushed_time_;
+    const int64_t elapsed_time = end_time - start_time;
+    if (delay_in_priority_queue > ObTimerService::DELAY_IN_PRI_QUEUE_THREASHOLD) {
+      const int64_t threashold = ObTimerService::DELAY_IN_PRI_QUEUE_THREASHOLD;
+      OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "timer task too much delay in priority queue",
+          KPC(token), K(delay_in_priority_queue), K(threashold));
+    }
+    if (delay_in_thread_pool > DELAY_IN_THREAD_POOL_THREASHOLD) {
+      const int64_t threashold = DELAY_IN_THREAD_POOL_THREASHOLD;
+      OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "timer task too much delay in thread pool",
+          KPC(token), K(delay_in_thread_pool), K(threashold));
+    }
+    if (elapsed_time > ELAPSED_TIME_LOG_THREASHOLD) {
+      const int64_t threashold = ELAPSED_TIME_LOG_THREASHOLD;
+      OB_LOG_RET(WARN,  OB_ERR_TOO_MUCH_TIME, "timer task cost too much time",
+          KPC(token), K(elapsed_time), K(threashold));
+    }
+    if (token->delay_ > 0 && elapsed_time > token->delay_) {
+      OB_LOG_RET(WARN,  OB_ERR_TOO_MUCH_TIME, "timer task's elapsed_time is greater than period",
+          KPC(token), K(elapsed_time), "period", token->delay_);
+    }
+  }
+}
+
+void ObTimerTaskThreadPool::set_ext_tname(const TaskToken *token)
+{
+  if (nullptr != token) {
+    char *ext_tname = ob_get_extended_thread_name();
+    const char *tname = ob_get_tname();
+    if (nullptr != ext_tname && nullptr != tname) {
+      IGNORE_RETURN databuff_printf(ext_tname, OB_EXTENED_THREAD_NAME_BUF_LEN,
+          "%s_%s", tname, token->timer_name_);
+    }
+  }
+}
+
+void ObTimerTaskThreadPool::clear_ext_tname()
+{
+  char *ext_tname = ob_get_extended_thread_name();
+  if (nullptr != ext_tname) {
+    ext_tname[0] = '\0';
   }
 }
 
@@ -392,6 +443,8 @@ int ObTimerService::schedule_task(TaskToken *token)
           } else { // re-schedule
             int64_t time = ObSysTime::now().toMicroSeconds();
             token->scheduled_time_ = time + token->delay_;
+            token->last_try_pop_time_ = 0L;
+            token->pushed_time_ = 0L;
             VecIter pos;
             if (OB_FAIL(
                 priority_task_queue_.insert_unique(token, pos, compare_for_queue, token_unique))) {
@@ -468,13 +521,13 @@ void ObTimerService::mtl_destroy(ObTimerService *&timer_service)
   }
 }
 
-bool ObTimerService::has_running_task(const ObTimer *timer) const
+bool ObTimerService::has_running_task(const ObTimer *timer, const TaskToken *&running_task_token) const
 {
   bool found = false;
   if (nullptr != timer) {
-    found = find_task_in_set(running_task_set_, timer, nullptr);
+    found = find_task_in_set(running_task_set_, timer, nullptr, &running_task_token);
     if (!found) {
-      found = find_task_in_set(uncanceled_task_set_, timer, nullptr);
+      found = find_task_in_set(uncanceled_task_set_, timer, nullptr, &running_task_token);
     }
   }
   return found;
@@ -497,8 +550,20 @@ int ObTimerService::pop_task(int64_t now, TaskToken *&task_token, int64_t &st)
       st = token->scheduled_time_;
       need_continue = false;
     } else {
-      if (has_running_task(token->timer_)) {
+      const TaskToken *running_task_token = nullptr;
+      if (has_running_task(token->timer_, running_task_token)) {
         ++it;
+        const int64_t now = ObSysTime::now().toMicroSeconds();
+        const int64_t total_delay = now - token->scheduled_time_;
+        bool should_alarm = (total_delay > DELAY_IN_PRI_QUEUE_THREASHOLD)
+            && (now - token->last_try_pop_time_ > ALARM_INTERVAL);
+        if (should_alarm) {
+          const int64_t threashold = DELAY_IN_PRI_QUEUE_THREASHOLD;
+          OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME,
+              "timer task too much delay because the same timer has another running task",
+              KPC(token), KPC(running_task_token), K(total_delay), K(threashold), K_(tenant_id));
+          token->last_try_pop_time_ = now;
+        }
       } else {
         if (OB_FAIL(priority_task_queue_.remove(it))) {
           OB_LOG(WARN, "remove TaskToken from priority_task_queue failed", K_(tenant_id), K(ret));
@@ -551,6 +616,7 @@ void ObTimerService::run1()
             monitor_.timed_wait(ObSysTime(wait_time));
           } else {
             VecIter it = nullptr;
+            token->pushed_time_ = ObSysTime::now().toMicroSeconds();
             if (OB_FAIL(running_task_set_.insert_unique(token, it, compare_for_set, token_unique))) {
               OB_LOG(WARN, "push TaskToken into running_task_set failed",
                   KP(token), KPC(token), K_(tenant_id), K(ret));
@@ -595,18 +661,22 @@ bool ObTimerService::has_same_task_and_timer(
 bool ObTimerService::find_task_in_set(
       const ObSortedVector<TaskToken *> &token_set,
       const ObTimer *timer,
-      const ObTimerTask *task) const
+      const ObTimerTask *task_in,
+      const TaskToken **token_out) const
 {
   abort_unless(nullptr != timer);
   bool exist = false;
-  TaskToken target(timer, const_cast<ObTimerTask *>(task));
+  TaskToken target(timer, const_cast<ObTimerTask *>(task_in));
   VecIter it = std::lower_bound(
       token_set.begin(),
       token_set.end(),
       &target,
       compare_for_set);
   if (it != token_set.end()) {
-    exist = has_same_task_and_timer(*it, timer, task);
+    exist = has_same_task_and_timer(*it, timer, task_in);
+    if (exist && nullptr != token_out) {
+      *token_out = *it;
+    }
   }
   return exist;
 }

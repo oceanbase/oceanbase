@@ -213,9 +213,9 @@ ObRawExpr::~ObRawExpr()
 //ObUnaryRefExpr(即subquery ref)必须由SubPlanFilter产生
 //PSEUDO_COLUMN一般是由CTE或者层次查询产生
 //SYS_CONNECT_BY_PATH,CONNECT_BY_ROOT由cby nestloop join产生
-bool ObRawExpr::has_generalized_column() const
+bool ObRawExpr::has_generalized_column(bool ignore_column/* = false */) const
 {
-  return has_flag(CNT_COLUMN) || has_flag(CNT_AGG) || has_flag(CNT_SET_OP) || has_flag(CNT_SUB_QUERY)
+  return (!ignore_column && has_flag(CNT_COLUMN)) || has_flag(CNT_AGG) || has_flag(CNT_SET_OP) || has_flag(CNT_SUB_QUERY)
          || has_flag(CNT_WINDOW_FUNC) || has_flag(CNT_ROWNUM) || has_flag(CNT_PSEUDO_COLUMN)
          || has_flag(CNT_SEQ_EXPR) || has_flag(CNT_SYS_CONNECT_BY_PATH) || has_flag(CNT_CONNECT_BY_ROOT)
          || has_flag(CNT_OP_PSEUDO_COLUMN);
@@ -290,8 +290,6 @@ int ObRawExpr::assign(const ObRawExpr &other)
         LOG_WARN("failed to assign enum set values", K(ret));
       } else if (OB_FAIL(local_session_var_.assign(other.local_session_var_))) {
         LOG_WARN("fail to assign local session vars", K(ret));
-      } else if (OB_FAIL(attr_exprs_.assign(other.attr_exprs_))) {
-        LOG_WARN("failed to assign exprs", K(ret));
       }
     }
   }
@@ -533,7 +531,9 @@ int ObRawExpr::set_expr_name(const common::ObString &expr_name)
 int ObRawExpr::preorder_accept(ObRawExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(do_visit(visitor))) {
+  if (OB_FAIL(fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
+  } else if (OB_FAIL(do_visit(visitor))) {
     LOG_WARN("visit failed", K(ret),
         "type", get_expr_type(), "name", get_type_name(get_expr_type()));
   } else {
@@ -556,7 +556,9 @@ int ObRawExpr::preorder_accept(ObRawExprVisitor &visitor)
 int ObRawExpr::postorder_accept(ObRawExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  if (!skip_visit_child() && !visitor.skip_child(*this)) {
+  if (OB_FAIL(fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
+  } else if (!skip_visit_child() && !visitor.skip_child(*this)) {
     const int64_t cnt = get_param_count();
     for (int64_t i = 0; i < cnt && OB_SUCC(ret); i++) {
       ObRawExpr *e = get_param_expr(i);
@@ -697,13 +699,17 @@ bool ObRawExpr::is_domain_json_expr() const
 bool ObRawExpr::is_multivalue_define_json_expr() const
 {
   bool b_ret = false;
-  const ObRawExpr *sub_expr = nullptr;
+  const ObRawExpr *asis_expr = nullptr;
+  const ObRawExpr *multi_expr = nullptr;
   if (type_ == T_FUN_SYS_JSON_QUERY &&
       get_param_count() >= 13 &&
-      OB_NOT_NULL(sub_expr = get_param_expr(12)) &&
-      sub_expr->is_const_expr()) {
-    const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(sub_expr);
-    b_ret = const_expr->get_value().get_int() == 0;
+      OB_NOT_NULL(asis_expr = get_param_expr(8)) &&
+      asis_expr->is_const_expr() &&
+      OB_NOT_NULL(multi_expr = get_param_expr(12)) &&
+      multi_expr->is_const_expr()) {
+    const ObConstRawExpr *const_expr1 = static_cast<const ObConstRawExpr*>(asis_expr);
+    const ObConstRawExpr *const_expr2 = static_cast<const ObConstRawExpr*>(multi_expr);
+    b_ret = (const_expr1->get_value().get_int() == 1 && const_expr2->get_value().get_int() == 0);
   }
 
   return b_ret;
@@ -869,7 +875,9 @@ int ObRawExpr::calc_hash()
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count(); ++i) {
-    if (OB_ISNULL(get_param_expr(i))){
+    if (OB_FAIL(fast_check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    } else if (OB_ISNULL(get_param_expr(i))){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
     } else if (OB_FAIL(SMART_CALL(get_param_expr(i)->calc_hash()))) {
@@ -957,6 +965,24 @@ bool ObRawExpr::cnt_not_calculable_expr() const
   // NOTE: When adding rules here, please check whether ObRawExpr::is_vectorize_result()
   // need add the same rules.
   return has_generalized_column()
+         || has_flag(CNT_STATE_FUNC)
+         || has_flag(CNT_DYNAMIC_USER_VARIABLE)
+         || has_flag(CNT_ALIAS)
+         || has_flag(CNT_VALUES)
+         || has_flag(CNT_SEQ_EXPR)
+         || has_flag(CNT_SYS_CONNECT_BY_PATH)
+         || has_flag(CNT_RAND_FUNC)
+         || has_flag(CNT_SO_UDF)
+         || has_flag(CNT_PRIOR)
+         || has_flag(CNT_VOLATILE_CONST)
+         || has_flag(CNT_ASSIGN_EXPR);
+}
+
+bool ObRawExpr::cnt_not_calculable_expr_ignore_column() const
+{
+  // NOTE: When adding rules here, please check whether ObRawExpr::is_vectorize_result()
+  // need add the same rules.
+  return has_generalized_column(true)
          || has_flag(CNT_STATE_FUNC)
          || has_flag(CNT_DYNAMIC_USER_VARIABLE)
          || has_flag(CNT_ALIAS)
@@ -1202,6 +1228,16 @@ int ObRawExpr::extract_local_session_vars_recursively(ObIArray<const ObSessionSy
         LOG_WARN("fail to extract sysvar from params", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObRawExpr::fast_check_status(uint64_t n) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == expr_factory_)) {
+  } else if (OB_UNLIKELY((expr_factory_->inc_worker_check_status_times() & n) == n)) {
+    ret = THIS_WORKER.check_status();
   }
   return ret;
 }

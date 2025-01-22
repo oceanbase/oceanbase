@@ -20,6 +20,7 @@
 #include "rootserver/ob_index_builder.h"
 #include "storage/ddl/ob_ddl_lock.h"
 #include "share/ob_ddl_sim_point.h"
+#include "sql/resolver/ddl/ob_ddl_resolver.h"
 
 using namespace oceanbase::share;
 
@@ -100,12 +101,18 @@ int ObFtsIndexBuildTask::init(
         KPC(data_table_schema), KPC(index_schema), K(schema_version), K(parallelism),
         K(consumer_group_id), K(create_index_arg.is_valid()), K(create_index_arg),
         K(task_status), K(snapshot_version));
+  } else if (index_schema->is_rowkey_doc_id() && snapshot_version <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the snapshot version should be more than zero", K(ret), K(snapshot_version));
   } else if (OB_FAIL(deep_copy_index_arg(allocator_,
                                          create_index_arg,
                                          create_index_arg_))) {
     LOG_WARN("fail to copy create index arg", K(ret), K(create_index_arg));
   } else {
-    if (index_schema && index_schema->is_multivalue_index_aux()) {
+    LOG_INFO("create_index_arg.index_type_x", K(create_index_arg.index_type_), K(create_index_arg.index_key_));
+
+    if (INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL == create_index_arg.index_type_ ||
+        INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == create_index_arg.index_type_) {
       task_type_ = DDL_CREATE_MULTIVALUE_INDEX;
     }
     set_gmt_create(ObTimeUtility::current_time());
@@ -487,7 +494,8 @@ int ObFtsIndexBuildTask::prepare_aux_table(
       } else if (OB_FAIL(arg.create_index_arg_.assign(index_arg))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to assign create index arg", K(ret));
-      } else if (OB_FAIL(common_rpc-> to(obrpc::ObRpcProxy::myaddr_).
+      } else if (OB_FALSE_IT(arg.snapshot_version_ = snapshot_version_)) {
+      } else if (OB_FAIL(common_rpc->to(obrpc::ObRpcProxy::myaddr_).
                          timeout(ddl_rpc_timeout).create_aux_index(arg, res))) {
         LOG_WARN("generate fts aux index schema failed", K(ret), K(arg));
       } else if (res.schema_generated_) {
@@ -565,8 +573,7 @@ int ObFtsIndexBuildTask::prepare_aux_index_tables()
   int ret = OB_SUCCESS;
   bool state_finished = false;
   const ObIndexType doc_rowkey_type = ObIndexType::INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
-  const ObIndexType domain_index_aux_type = is_fts_task() ?
-    ObIndexType::INDEX_TYPE_FTS_INDEX_LOCAL : ObIndexType::INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL ;
+  const ObIndexType domain_index_aux_type = create_index_arg_.index_type_;
   const ObIndexType fts_doc_word_type = ObIndexType::INDEX_TYPE_FTS_DOC_WORD_LOCAL;
   ObDDLTaskStatus next_status;
   if(OB_UNLIKELY(!is_inited_)) {
@@ -662,6 +669,8 @@ int ObFtsIndexBuildTask::construct_create_index_arg(
     share::schema::is_multivalue_index_aux(index_type)) {
     if (OB_FAIL(construct_domain_index_aux_arg(arg))) {
       LOG_WARN("failed to construct fts index aux arg", K(ret));
+    } else {
+      arg.index_type_ = index_type;
     }
   } else if (is_fts_task() && share::schema::is_fts_doc_word_aux(index_type)) {
     if (OB_FAIL(construct_fts_doc_word_arg(arg))) {
@@ -708,12 +717,9 @@ int ObFtsIndexBuildTask::construct_domain_index_aux_arg(obrpc::ObCreateIndexArg 
   if (OB_FAIL(deep_copy_index_arg(allocator_, create_index_arg_, arg))) {
     LOG_WARN("failed to deep copy index arg", K(ret));
   } else if (is_fts_task()) {
-    arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
     if (OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_aux_index_name(arg, &allocator_))) {
       LOG_WARN("failed to generate index name", K(ret));
     }
-  } else {
-    arg.index_type_ = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
   }
   return ret;
 }

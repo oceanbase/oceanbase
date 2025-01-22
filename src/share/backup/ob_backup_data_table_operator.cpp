@@ -2437,13 +2437,16 @@ int ObBackupSkippedTabletOperator::move_skip_tablet_to_his(
   return ret;
 }
 
-int ObBackupMViewOperator::get_all_major_compaction_mview_dep_tablet_list(common::ObMySQLProxy &proxy,
-                                                                          const uint64_t tenant_id,
-                                                                          const share::SCN &snapshot,
-                                                                          common::ObIArray<common::ObTabletID> &tablet_list)
+int ObBackupMViewOperator::get_all_major_compaction_mview_dep_tablet_list(
+    common::ObMySQLProxy &proxy,
+    const uint64_t tenant_id,
+    const share::SCN &snapshot,
+    common::ObIArray<common::ObTabletID> &tablet_list,
+    common::ObIArray<share::SCN> &tablet_mview_dep_scn_list)
 {
   int ret = OB_SUCCESS;
   tablet_list.reset();
+  tablet_mview_dep_scn_list.reset();
   ObSqlString sql;
   int64_t affected_rows = -1;
   if (OB_INVALID_TENANT_ID == tenant_id || !snapshot.is_valid()) {
@@ -2452,12 +2455,11 @@ int ObBackupMViewOperator::get_all_major_compaction_mview_dep_tablet_list(common
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql.assign_fmt("select tablet_id from %s as of snapshot %ld where table_id in ("
-          " select p_obj from %s as of snapshot %ld"
-          " where mview_id in (select mview_id from %s as of snapshot %ld where refresh_mode=%ld) "
-          " union all "
-          " select data_table_id from %s as of snapshot %ld"
-          " where table_id in (select mview_id from %s as of snapshot %ld where refresh_mode=%ld))",
+      if (OB_FAIL(sql.assign_fmt("select t1.tablet_id tablet_id,t2.major_version major_version from %s as of snapshot %ld t1"
+            " join (select p_obj table_id,min(b.last_refresh_scn) major_version from %s as of snapshot %ld a"
+            " join %s as of snapshot %ld b on a.mview_id=b.mview_id where b.refresh_mode=%ld group by p_obj"
+            " union all (select a.data_table_id table_id,b.last_refresh_scn major_version from %s as of snapshot %ld a"
+            " join %s as of snapshot %ld b on a.table_id=b.mview_id and b.refresh_mode=%ld)) t2 on t1.table_id=t2.table_id",
           OB_ALL_TABLET_TO_LS_TNAME, snapshot.get_val_for_inner_table_field(),
           OB_ALL_MVIEW_DEP_TNAME, snapshot.get_val_for_inner_table_field(),
           OB_ALL_MVIEW_TNAME, snapshot.get_val_for_inner_table_field(), schema::ObMVRefreshMode::MAJOR_COMPACTION,
@@ -2480,9 +2482,16 @@ int ObBackupMViewOperator::get_all_major_compaction_mview_dep_tablet_list(common
             }
           } else {
             int64_t tablet_id = -1;
+            uint64_t scn_val = -1;
+            share::SCN major_scn;
             EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_TABLET_ID, tablet_id, int64_t);
+            EXTRACT_UINT_FIELD_MYSQL(*result, "major_version", scn_val, uint64_t);
             if (FAILEDx(tablet_list.push_back(ObTabletID(tablet_id)))) {
               LOG_WARN("failed to push back", K(ret), K(tablet_id));
+            } else if (OB_FAIL(major_scn.convert_for_inner_table_field(scn_val))) {
+              LOG_WARN("failed to convert for inner table field", K(ret));
+            } else if (OB_FAIL(tablet_mview_dep_scn_list.push_back(major_scn))) {
+              LOG_WARN("failed to push back", K(ret), K(major_scn));
             }
           }
         }

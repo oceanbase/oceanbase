@@ -67,9 +67,15 @@ void ObSliceAlloc::destroy()
       dlink = blk_list_.top();
     } else {
       blk->print_leak_slice();
-      _LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED,
-               "there was memory leak, stock=%d, total=%d, remain=%d",
-               blk->stock(), blk->total(), blk->remain());
+      if (attr_.label_.is_valid() && 0 == strncmp("Diagnostic", attr_.label_.str_, 10)) {
+        _LIB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED,
+            "there was memory leak, label=%s, stock=%d, total=%d, remain=%d", attr_.label_.str_,
+            blk->stock(), blk->total(), blk->remain());
+      } else {
+        _LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED,
+            "there was memory leak, stock=%d, total=%d, remain=%d", blk->stock(), blk->total(),
+            blk->remain());
+      }
       dlink = nullptr;  // break
     }
   }

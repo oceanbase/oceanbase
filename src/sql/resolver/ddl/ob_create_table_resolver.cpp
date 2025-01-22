@@ -660,7 +660,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
             // 当用户建表未指定主键时，内部实现为新无主键表，暂不支持用户指定TableOrganizationFormat
             if (0 == get_primary_key_size()) {
               // change default no pk to heap table
-              table_mode_.organization_mode_ = TOM_HEAP_ORGANIZED;
+              table_mode_.pk_exists_ = TOM_HEAP_ORGANIZED;
               table_mode_.pk_mode_ = TPKM_TABLET_SEQ_PK;
             }
             if (is_oracle_temp_table_) {
@@ -750,7 +750,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 
         // 4.0 new heap table has hidden primary key (tablet seq)
         if (OB_SUCC(ret) && 0 == get_primary_key_size()
-            && TOM_HEAP_ORGANIZED == table_mode_.organization_mode_) {
+            && TOM_HEAP_ORGANIZED == table_mode_.pk_exists_) {
           ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
           if (OB_FAIL(add_hidden_tablet_seq_col())) {
             SQL_RESV_LOG(WARN, "failed to add hidden primary key tablet seq", K(ret));
@@ -3182,6 +3182,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         ObCreateIndexArg &create_index_arg = create_index_stmt.get_create_index_arg();
         ObSArray<ObPartitionResolveResult> &resolve_results = create_table_stmt->get_index_partition_resolve_results();
         ObSArray<obrpc::ObCreateIndexArg> &index_arg_list = create_table_stmt->get_index_arg_list();
+        index_arg_.index_key_ = static_cast<int64_t>(index_keyname_);
         if (OB_FAIL(create_index_arg.assign(index_arg_))) {
           LOG_WARN("fail to assign create index arg", K(ret));
         } else if (is_index_part_specified) {
@@ -3339,11 +3340,15 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
       ParseNode *option_node = NULL;
       int32_t num = node->num_child_;
       bool is_format_exist = false;
+      bool have_external_file_format = false;
+      bool have_external_properties = false;
       for (int32_t i = 0; OB_SUCC(ret) && i < num; ++i) {
         option_node = node->children_[i];
         if (OB_NOT_NULL(option_node) && (T_EXTERNAL_FILE_FORMAT == option_node->type_ || T_EXTERNAL_PROPERTIES == option_node->type_)) {
           is_format_exist = true;
           ObExternalFileFormat format;
+          have_external_file_format = T_EXTERNAL_FILE_FORMAT == option_node->type_;
+          have_external_properties = T_EXTERNAL_PROPERTIES == option_node->type_;
           for (int32_t j = 0; OB_SUCC(ret) && j < option_node->num_child_; ++j) {
             if (OB_NOT_NULL(option_node->children_[j])
                 && T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[j]->type_) {
@@ -3355,6 +3360,11 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
             }
           }
         }
+      }
+      if (OB_SUCC(ret) && have_external_file_format && have_external_properties) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("FORMAT and PROPERTIES are mutually exclusive in external table", K(ret));
+        LOG_USER_ERROR(OB_ERR_UNEXPECTED, "FORMAT and PROPERTIES are mutually exclusive in external table");
       }
       if (OB_SUCC(ret) && !is_format_exist) {
         ret = OB_EXTERNAL_TABLE_FORMAT_ERROR;
@@ -3581,7 +3591,8 @@ int ObCreateTableResolver::add_inner_index_for_heap_gtt() {
         } else {
           if (!column->is_rowkey_column()
               && column->get_column_id() != OB_HIDDEN_SESSION_ID_COLUMN_ID
-              && column->get_column_id() != OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID) {
+              && column->get_column_id() != OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID
+              && !column->is_generated_column()) {
             ObString column_name = column->get_column_name_str();
             bool has_invalid_types = false;
             if (OB_FAIL(add_storing_column(column_name,

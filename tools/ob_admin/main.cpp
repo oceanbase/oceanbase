@@ -30,6 +30,7 @@
 #include "slog_tool/ob_admin_slog_executor.h"
 #include "io_bench/ob_admin_io_adapter_bench.h"
 #include "io_device/ob_admin_test_io_device_executor.h"
+#include "object_storage_driver_quality/ob_admin_object_storage_driver_quality.h"
 #include "lib/utility/ob_print_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "tools/ob_admin/shared_storage_tool/ob_admin_shared_storage_tool_executor.h"
@@ -162,6 +163,8 @@ int main(int argc, char *argv[])
       executor = new ObAdminIOAdapterBenchmarkExecutor();
     } else if (0 == strcmp("test_io_device", argv[1])) {
       executor = new ObAdminTestIODeviceExecutor();
+    } else if (0 == strcmp("io_driver_quality", argv[1])) {
+      executor = new ObAdminObjectStorageDriverQualityExecutor();
     } else if (0 == strncmp("-h", argv[1], 2) || 0 == strncmp("-S", argv[1], 2)) {
       executor = new ObAdminServerExecutor();
     } else {

@@ -46,7 +46,7 @@ public:
   void destroy();
 
   // for vec2.0
-  inline int init(const ObSortVecOpContext &ctx, lib::MemoryContext &mem_context);
+  int init(const ObSortVecOpContext &ctx, lib::MemoryContext &mem_context);
   int init(bool is_fetch_with_ties, const ObPushDownTopNFilterInfo *pd_topn_filter_info,
            uint64_t tenant_id, const ObIArray<ObSortFieldCollation> *sort_collations,
            ObExecContext *exec_ctx, lib::MemoryContext &mem_context, bool use_rich_format = false);

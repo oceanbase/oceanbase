@@ -14,6 +14,8 @@
 #define OCEANBASE_STORAGE_TENANT_RESTORE_INFO_MGR_H_
 
 #include "lib/lock/ob_mutex.h"
+#include "lib/task/ob_timer.h"
+#include "share/backup/ob_backup_struct.h"
 
 namespace oceanbase
 {

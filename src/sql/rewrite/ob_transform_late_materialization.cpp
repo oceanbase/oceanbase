@@ -16,6 +16,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_sort.h"
+#include "sql/optimizer/ob_log_join.h"
 
 namespace oceanbase
 {
@@ -568,7 +569,7 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
   ObTryTransHelper try_trans_helper;
   cost_based_trans_tried_ = true;
   trans_happened = false;
-  STOP_OPT_TRACE;
+  BEGIN_OPT_TRACE_EVA_COST;
   if (OB_ISNULL(ctx_) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("context is null", K(ret), K(ctx_), K(stmt));
@@ -607,7 +608,7 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
     }
     ctx_->in_accept_transform_ = false;
   }
-  RESUME_OPT_TRACE;
+  END_OPT_TRACE_EVA_COST;
 
   if (OB_FAIL(ret)) {
   } else if (!trans_happened) {
@@ -632,6 +633,35 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
               K(check_ctx));
     stmt = trans_stmt;
     reset_stmt_cost();
+  }
+  return ret;
+}
+
+int ObTransformLateMaterialization::replace_expr_skip_part(ObSelectStmt &select_stmt,
+                                                           ObIArray<ObRawExpr *> &old_col_exprs,
+                                                           ObIArray<ObRawExpr *> &new_col_exprs) {
+  int ret = OB_SUCCESS;
+  ObStmtExprReplacer replacer;
+  ObSEArray<ObRawExpr *, 8> part_exprs;
+  const ObIArray<ObDMLStmt::PartExprItem> &part_items = select_stmt.get_part_exprs();
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_items.count(); ++i) {
+    if (part_items.at(i).part_expr_ != NULL &&
+        OB_FAIL(part_exprs.push_back(part_items.at(i).part_expr_))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (part_items.at(i).subpart_expr_ != NULL &&
+               OB_FAIL(part_exprs.push_back(part_items.at(i).subpart_expr_))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    replacer.set_relation_scope();
+    replacer.set_recursive(false);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(replacer.add_replace_exprs(old_col_exprs, new_col_exprs, &part_exprs))) {
+      LOG_WARN("failed to add replace exprs", K(ret));
+    } else if (OB_FAIL(select_stmt.iterate_stmt_expr(replacer))) {
+      LOG_WARN("failed to iterate stmt expr", K(ret));
+    }
   }
   return ret;
 }
@@ -665,7 +695,7 @@ int ObTransformLateMaterialization::generate_late_materialization_stmt(
                                                   view_table->table_id_, old_col_exprs,
                                                   new_col_exprs))) {
     LOG_WARN("failed to extract replace column exprs", K(ret));
-  } else if (OB_FAIL(select_stmt->replace_relation_exprs(old_col_exprs, new_col_exprs))) {
+  } else if (OB_FAIL(replace_expr_skip_part(*select_stmt, old_col_exprs, new_col_exprs))) {
     LOG_WARN("failed to replace inner stmt expr", K(ret));
   } else if (OB_FAIL(generate_pk_join_conditions(table_item->ref_id_, table_item->table_id_,
                                                  old_col_exprs, new_col_exprs, *select_stmt))) {

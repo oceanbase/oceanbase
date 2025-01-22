@@ -21,6 +21,7 @@
 #include "lib/ob_name_def.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/privilege_check/ob_privilege_check.h"
 
 namespace oceanbase
 {
@@ -111,14 +112,30 @@ int ObExprAuditLogFunc::check_param_type(const ObExprResType &type) const
   return ret;
 }
 
-int ObExprAuditLogFunc::check_privilege(ObSQLSessionInfo &session,
+int ObExprAuditLogFunc::check_privilege(ObEvalCtx &ctx,
                                         bool &is_valid,
                                         ObString &error_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!session.has_user_super_privilege())) {
-    is_valid = false;
-    error_info = "Request ignored. SUPER needed to perform operation";
+  ObSqlCtx *sql_ctx = ctx.exec_ctx_.get_sql_ctx();
+  ObArenaAllocator alloc;
+  ObStmtNeedPrivs stmt_need_privs(alloc);
+  ObNeedPriv need_priv("", "", OB_PRIV_USER_LEVEL, OB_PRIV_SUPER, false);
+  if (OB_ISNULL(sql_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(stmt_need_privs.need_privs_.init(1))) {
+    LOG_WARN("failed to init", K(ret));
+  } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
+    LOG_WARN("failed to push back", K(ret));
+  } else if (OB_FAIL(ObPrivilegeCheck::check_privilege(*sql_ctx, stmt_need_privs))) {
+    if(OB_ERR_NO_PRIVILEGE == ret) {
+      ret = OB_SUCCESS;
+      is_valid = false;
+      error_info = "Request ignored. SUPER needed to perform operation";
+    } else {
+      LOG_WARN("failed to check privilege", K(ret));
+    }
   }
   return ret;
 }
@@ -273,7 +290,7 @@ int ObExprAuditLogSetFilter::eval_set_filter(const ObExpr &expr, ObEvalCtx &ctx,
     ObString error_info;
     ObSEArray<ObString, 2> params;
     bool is_valid = true;
-    if (OB_FAIL(check_privilege(*session, is_valid, error_info))) {
+    if (OB_FAIL(check_privilege(ctx, is_valid, error_info))) {
       LOG_WARN("failed to check privilege", K(ret));
     } else if (is_valid && OB_FAIL(parse_filter_name(arg0->get_string(), filter_name,
                                                      is_valid, error_info))) {
@@ -337,7 +354,7 @@ int ObExprAuditLogRemoveFilter::eval_remove_filter(const ObExpr &expr, ObEvalCtx
     ObString error_info;
     ObSEArray<ObString, 1> params;
     bool is_valid = true;
-    if (OB_FAIL(check_privilege(*session, is_valid, error_info))) {
+    if (OB_FAIL(check_privilege(ctx, is_valid, error_info))) {
       LOG_WARN("failed to check privilege", K(ret));
     } else if (is_valid && OB_FAIL(parse_filter_name(arg0->get_string(), filter_name,
                                                      is_valid, error_info))) {
@@ -417,7 +434,7 @@ int ObExprAuditLogSetUser::eval_set_user(const ObExpr &expr, ObEvalCtx &ctx, ObD
     ObString error_info;
     ObSEArray<ObString, 2> params;
     bool is_valid = true;
-    if (OB_FAIL(check_privilege(*session, is_valid, error_info))) {
+    if (OB_FAIL(check_privilege(ctx, is_valid, error_info))) {
       LOG_WARN("failed to check privilege", K(ret));
     } else if (is_valid && OB_FAIL(parse_user_name(arg0->get_string(), user_name, host,
                                                    is_valid, error_info))) {
@@ -500,7 +517,7 @@ int ObExprAuditLogRemoveUser::eval_remove_user(const ObExpr &expr, ObEvalCtx &ct
     ObString error_info;
     ObSEArray<ObString, 1> params;
     bool is_valid = true;
-    if (OB_FAIL(check_privilege(*session, is_valid, error_info))) {
+    if (OB_FAIL(check_privilege(ctx, is_valid, error_info))) {
       LOG_WARN("failed to check privilege", K(ret));
     } else if (is_valid && OB_FAIL(parse_user_name(arg0->get_string(), user_name, host,
                                                    is_valid, error_info))) {

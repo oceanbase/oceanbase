@@ -78,6 +78,9 @@ int ObMajorFreezeHelper::tablet_major_freeze(const ObTabletMajorFreezeParam &par
   } else if (GCTX.is_shared_storage_mode()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support tablet major freeze cmd in shared storage mode", KR(ret));
+  } else if (!GCONF.enable_major_freeze) {
+    ret = OB_MAJOR_FREEZE_NOT_ALLOW;
+    LOG_WARN("enable_major_freeze is off, refuse to to major_freeze", K(param), KR(ret));
   } else {
     LOG_INFO("tablet major freeze", K(ret), K(param));
     const int64_t start_time = ObTimeUtility::fast_current_time();

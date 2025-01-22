@@ -281,6 +281,7 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
       int overwrite = 1;
       hash_ret = next_wait_map_.set_refactored(sessid, wait_object, overwrite);
       if (OB_SUCCESS != hash_ret) {
+        ret = hash_ret;
         LOG_WARN("rewrite clear session req error",
                   K(hash_ret), K(sessid), K(req));
       }

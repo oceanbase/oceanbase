@@ -833,6 +833,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Create global index on temp table");
   } else {
     ObCreateIndexArg &index_arg = create_index_stmt->get_create_index_arg();
+    index_arg.index_key_ = static_cast<int64_t>(index_keyname_);
     if (is_oracle_temp_table_) { //oracle临时表是系统内部转成了分区表, 索引创建时全部是local
       index_scope_ = LOCAL_INDEX;
     }

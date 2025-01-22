@@ -196,7 +196,7 @@ public:
     const ObStorageColumnGroupSchema *cg_schema,
     const bool is_main_table) const;
 
-  OB_INLINE void collect_tnode_dml_stat(const ObTransNodeDMLStat tnode_stat);
+  void collect_tnode_dml_stat(const ObTransNodeDMLStat tnode_stat);
   void add_sstable_merge_info(ObSSTableMergeHistory &merge_history,
                               const share::ObDagId &dag_id,
                               const int64_t hash,
@@ -231,6 +231,7 @@ public:
   STATIC_PARAM_FUNC(int64_t, ls_rebuild_seq);
   STATIC_PARAM_FUNC(const storage::ObTablesHandleArray &, tables_handle);
   STATIC_PARAM_FUNC(const ObTabletMergeDagParam &, dag_param);
+  STATIC_PARAM_FUNC(const ObCOMajorMergePolicy::ObCOMajorMergeType &, co_major_merge_type);
   STATIC_PARAM_FUNC(const SCN &, merge_scn);
   PROGRESSIVE_FUNC(progressive_merge_round);
   PROGRESSIVE_FUNC(progressive_merge_num);
@@ -309,8 +310,6 @@ protected:
   int get_convert_compaction_info(); // for convert co major merge
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
-  static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD_FOR_CS = 300L * 1000L; // 30w
-  static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD_FOR_CS = 100L;
 public:
   ObCompactionMemoryContext mem_ctx_;
   ObStaticMergeParam static_param_;

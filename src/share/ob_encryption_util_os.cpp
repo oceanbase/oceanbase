@@ -26,10 +26,12 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
 using namespace common;
+using namespace sql;
 namespace share
 {
 
@@ -422,7 +424,7 @@ bool ObEncryptionUtil::is_ecb_mode(const ObCipherOpMode opmode)
          (opmode == ObCipherOpMode::ob_sm4_ecb);
 }
 
-int ObEncryptionUtil::get_cipher_op_mode(ObCipherOpMode &op_mode, ObSQLSessionInfo *session)
+int ObEncryptionUtil::get_cipher_op_mode(ObCipherOpMode &op_mode, const ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   int64_t encryption = -1;

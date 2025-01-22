@@ -2684,6 +2684,7 @@ int ObLSBackupDataTask::do_prepare_sstable_builders_(const ObBackupProviderItem 
   ObBackupTabletHandleRef *tablet_ref = NULL;
   ObArray<storage::ObSSTableWrapper> sstable_array;
   bool is_major_compaction_mview_dep_tablet = false;
+  share::SCN mview_dep_scn;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   if (!item.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -2695,9 +2696,10 @@ int ObLSBackupDataTask::do_prepare_sstable_builders_(const ObBackupProviderItem 
     LOG_WARN("failed to get tablet handle", K(ret), K(tablet_id));
   } else if (OB_FAIL(tablet_ref->tablet_handle_.get_obj()->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret), K(tablet_id));
-  } else if (OB_FAIL(ls_backup_ctx_->check_is_major_compaction_mview_dep_tablet(tablet_id, is_major_compaction_mview_dep_tablet))) {
+  } else if (OB_FAIL(ls_backup_ctx_->check_is_major_compaction_mview_dep_tablet(tablet_id, mview_dep_scn, is_major_compaction_mview_dep_tablet))) {
     LOG_WARN("failed to check is mview dep tablet", K(ret), K(tablet_id));
-  } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(tablet_ref->tablet_handle_, backup_data_type_, *table_store_wrapper.get_member(), is_major_compaction_mview_dep_tablet, sstable_array))) {
+  } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(tablet_ref->tablet_handle_, backup_data_type_,
+      *table_store_wrapper.get_member(), is_major_compaction_mview_dep_tablet, mview_dep_scn, sstable_array))) {
     LOG_WARN("failed to get sstables by data type", K(ret), KPC(tablet_ref), K_(backup_data_type));
   } else if (OB_FAIL(prepare_tablet_sstable_index_builders_(tablet_id, is_major_compaction_mview_dep_tablet, sstable_array))) {
     LOG_WARN("failed to prepare tablet sstable index builders", K(ret), K_(param), K(tablet_id), K(sstable_array));
@@ -2768,7 +2770,10 @@ int ObLSBackupDataTask::do_wait_index_builder_ready_(const common::ObTabletID &t
   bool exist = false;
   static const int64_t DEFAULT_SLEEP_US = 10_ms;
   while (OB_SUCC(ret)) {
-    if (OB_ISNULL(ls_backup_ctx_)) {
+    if (GCTX.is_shared_storage_mode() && table_key.is_ddl_dump_sstable()) {
+      // ddl sstable in shared storage mode has no index builder
+      break;
+    } else if (OB_ISNULL(ls_backup_ctx_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls back ctx should not be null", K(ret));
     } else if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
@@ -3156,6 +3161,7 @@ int ObLSBackupDataTask::do_wait_sstable_index_builder_ready_(ObTabletHandle &tab
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
   bool is_major_compaction_mview_dep = false;
+  share::SCN mview_dep_scn;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   common::ObArray<storage::ObSSTableWrapper> sstable_array;
   const ObTabletTableStore *table_store = nullptr;
@@ -3166,10 +3172,10 @@ int ObLSBackupDataTask::do_wait_sstable_index_builder_ready_(ObTabletHandle &tab
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(table_store_wrapper.get_member(table_store))) {
     LOG_WARN("failed to get table store", K(ret), KPC(tablet));
-  } else if (OB_FAIL(ls_backup_ctx_->check_is_major_compaction_mview_dep_tablet(tablet->get_tablet_id(), is_major_compaction_mview_dep))) {
+  } else if (OB_FAIL(ls_backup_ctx_->check_is_major_compaction_mview_dep_tablet(tablet->get_tablet_id(), mview_dep_scn, is_major_compaction_mview_dep))) {
     LOG_WARN("failed to check is mview dep tablet", K(ret), KPC(tablet));
   } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(
-      tablet_handle, backup_data_type_, *table_store_wrapper.get_member(), is_major_compaction_mview_dep, sstable_array))) {
+      tablet_handle, backup_data_type_, *table_store_wrapper.get_member(), is_major_compaction_mview_dep, mview_dep_scn, sstable_array))) {
     LOG_WARN("failed to get sstables by data type", K(ret), K(tablet_handle));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {

@@ -219,6 +219,10 @@ int ObXAService::xa_start_for_tm_promotion_(const int64_t flags,
         TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
         xa_ctx_mgr_.erase_xa_ctx(tx_id);
         xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
+        // moidfy tx_desc to plain trans
+        tx_desc->reset_xid();
+        tx_desc->set_xa_ctx(NULL);
+        tx_desc->dec_ref(1);
       }
     } else {
       //rollback record

@@ -144,11 +144,11 @@ struct ObDirectLoadSliceInfo final
 public:
   ObDirectLoadSliceInfo()
     : is_full_direct_load_(false), is_lob_slice_(false), ls_id_(), data_tablet_id_(), slice_id_(-1),
-      context_id_(0), src_tenant_id_(MTL_ID()), is_task_finish_(false)
+      context_id_(0), src_tenant_id_(MTL_ID()), is_task_finish_(false), total_slice_cnt_(-1)
     { }
   ~ObDirectLoadSliceInfo() = default;
   bool is_valid() const { return ls_id_.is_valid() && data_tablet_id_.is_valid() && slice_id_ >= 0 && context_id_ >= 0 && src_tenant_id_ > 0; }
-  TO_STRING_KV(K_(is_full_direct_load), K_(is_lob_slice), K_(ls_id), K_(data_tablet_id), K_(slice_id), K_(context_id), K_(src_tenant_id), K_(is_task_finish));
+  TO_STRING_KV(K_(is_full_direct_load), K_(is_lob_slice), K_(ls_id), K_(data_tablet_id), K_(slice_id), K_(context_id), K_(src_tenant_id), K_(is_task_finish), K_(total_slice_cnt));
 public:
   bool is_full_direct_load_;
   bool is_lob_slice_;
@@ -158,6 +158,7 @@ public:
   int64_t context_id_;
   uint64_t src_tenant_id_;
   bool is_task_finish_;
+  int64_t total_slice_cnt_;
 DISALLOW_COPY_AND_ASSIGN(ObDirectLoadSliceInfo);
 };
 
@@ -383,6 +384,7 @@ public:
       const int64_t context_id,
       const ObTabletSliceParam &tablet_slice_param,
       const int64_t lob_cols_cnt,
+      const int64_t total_slice_cnt,
       const bool is_skip_lob = false);
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) override
   {
@@ -391,7 +393,7 @@ public:
   }
   int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row) override;
   TO_STRING_KV(K_(is_inited), K_(ls_id), K_(current_tablet_id), K_(context_id), K_(macro_seq),
-      K_(lob_id_generator), K_(lob_id_cache), K_(lob_slice_id), K_(lob_cols_cnt), K_(is_skip_lob));
+      K_(lob_id_generator), K_(lob_id_cache), K_(lob_slice_id), K_(lob_cols_cnt), K_(is_skip_lob), K_(total_slice_cnt));
 public:
   int switch_to_new_lob_slice();
   int close_lob_sstable_slice();
@@ -413,6 +415,7 @@ private:
   int64_t lob_slice_id_;
   int64_t lob_cols_cnt_;
   bool is_skip_lob_;
+  int64_t total_slice_cnt_;
 };
 
 class ObLobMetaRowIterator : public ObIStoreRowIterator

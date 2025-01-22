@@ -285,7 +285,7 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
                          column_id == OB_HIDDEN_PK_INCREMENT_COLUMN_ID;
   int64_t global_ndv = 0;
   int64_t num_null = 0;
-  if (use_default_stat()) {
+  if (use_default_stat() || stat_parts_.empty()) {
     col_meta.set_default_meta(rows_);
   } else if (OB_ISNULL(ctx.get_opt_stat_manager()) || OB_ISNULL(ctx.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
@@ -298,7 +298,7 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
                                                                  rows_,
                                                                  scale_ratio_,
                                                                  stat))) {
-    LOG_WARN("failed to get column stats", K(ret));
+    LOG_WARN("failed to get column stats", K(ret), KPC(this));
   } else if (OB_FAIL(refine_column_stat(stat, rows_, col_meta))) {
     LOG_WARN("failed to refine column stat", K(ret));
   }
@@ -3274,7 +3274,7 @@ int ObOptSelectivity::check_is_special_distinct_expr(const OptSelectivityCtx &ct
         OB_ISNULL(param_expr = expr->get_param_expr(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expr", KPC(expr));
-    } else if (expr->get_data_type() != ObDateType) {
+    } else if (expr->get_data_type() != ObDateType && expr->get_data_type() != ObMySQLDateType) {
       is_special = false;
     } else if (OB_FAIL(ObObjCaster::is_cast_monotonic(param_expr->get_data_type(), expr->get_data_type(), is_special))) {
       LOG_WARN("check cast monotonic error", KPC(expr), K(ret));
@@ -3330,9 +3330,11 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
                                               est_type))) {
       LOG_WARN("failed to calculate substr ndv", K(ret));
     }
-  } else if (is_dense_time_expr_type(expr->get_expr_type()) ||
-             (T_FUN_SYS_CAST == expr->get_expr_type() && expr->get_data_type() == ObDateType) ||
-             T_FUN_SYS_EXTRACT == expr->get_expr_type()) {
+  } else if (is_dense_time_expr_type(expr->get_expr_type())
+             || (T_FUN_SYS_CAST == expr->get_expr_type()
+                 && (expr->get_data_type() == ObDateType
+                     || expr->get_data_type() == ObMySQLDateType))
+             || T_FUN_SYS_EXTRACT == expr->get_expr_type()) {
     if (T_FUN_SYS_EXTRACT == expr->get_expr_type()) {
       param_expr = expr->get_param_expr(1);
     } else {
@@ -3350,8 +3352,8 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
                                   max_value))) {
       LOG_WARN("failed to calculate expr min max", K(ret));
     } else if (min_value.is_min_value() || max_value.is_max_value() ||
-               !(min_value.is_integer_type() || min_value.is_number() || min_value.is_date()) ||
-               !(max_value.is_integer_type() || max_value.is_number() || max_value.is_date())) {
+               !(min_value.is_integer_type() || min_value.is_number() || min_value.is_date() || min_value.is_mysql_date()) ||
+               !(max_value.is_integer_type() || max_value.is_number() || max_value.is_date() || max_value.is_mysql_date())) {
       use_default = true;
     } else if (OB_FAIL(ObOptEstObjToScalar::convert_obj_to_double(&min_value, min_scalar)) ||
                OB_FAIL(ObOptEstObjToScalar::convert_obj_to_double(&max_value, max_scalar))) {
@@ -4687,6 +4689,8 @@ int ObOptSelectivity::calc_year_min_max(const OptTableMetas &table_metas,
     LOG_WARN("unexpected null", K(ret));
   } else if (ObDateTimeTC != expr->get_type_class() &&
              ObDateTC != expr->get_type_class() &&
+             ObMySQLDateTC != expr->get_type_class() &&
+             ObMySQLDateTimeTC != expr->get_type_class() &&
              ObOTimestampTC != expr->get_type_class()) {
     use_default = true;
   } else if (OB_FAIL(SMART_CALL(calc_expr_min_max(table_metas,

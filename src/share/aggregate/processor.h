@@ -56,22 +56,12 @@ public:
   int finish_adding_one_row();
 
   inline int add_one_row(const int32_t start_agg_id, const int32_t end_agg_id, AggrRowPtr row,
-                  const int64_t batch_idx, const int64_t batch_size, ObIVector **aggr_vectors,
-                  ObFixedArray<int64_t, common::ObIAllocator> implicit_aggr_in_3stage_indexes)
+                  const int64_t batch_idx, const int64_t batch_size, ObIVector **aggr_vectors)
   {
     int ret = OB_SUCCESS;
     ObIVector *data_vec = nullptr;
     ObEvalCtx &ctx = agg_ctx_.eval_ctx_;
     for (int col_id = start_agg_id; OB_SUCC(ret) && col_id < end_agg_id; col_id++) {
-      add_one_row_fn fn = add_one_row_fns_.at(col_id);
-      if (OB_FAIL(
-            fn(aggregates_.at(col_id), agg_ctx_, col_id, row, aggr_vectors[col_id], batch_idx, batch_size))) {
-        SQL_LOG(WARN, "add one row failed", K(ret));
-      }
-    }
-
-    for (int i = 0; OB_SUCC(ret) && i < implicit_aggr_in_3stage_indexes.count(); i++) {
-      int col_id = implicit_aggr_in_3stage_indexes.at(i);
       add_one_row_fn fn = add_one_row_fns_.at(col_id);
       if (OB_FAIL(
             fn(aggregates_.at(col_id), agg_ctx_, col_id, row, aggr_vectors[col_id], batch_idx, batch_size))) {

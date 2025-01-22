@@ -458,6 +458,8 @@ int ObComplementDataContext::init(
     direct_load_param.runtime_only_param_.table_id_ = param.dest_table_id_;
     direct_load_param.runtime_only_param_.schema_version_ = param.dest_schema_version_;
     direct_load_param.runtime_only_param_.task_cnt_ = param.concurrent_cnt_; // real slice count.
+    total_slice_cnt_ = param.ranges_.count();
+
     if (OB_ISNULL(tenant_direct_load_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected err", K(ret));
@@ -1328,7 +1330,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
   } else if (OB_ISNULL(scan)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret));
-  } else if (OB_FAIL(macro_start_seq.set_parallel_degree(task_id_))) {
+  } else if (OB_FAIL(ObDDLUtil::init_macro_block_seq(task_id_, macro_start_seq))) {
     LOG_WARN("set parallel degree failed", K(ret), K(task_id_));
   } else {
     int64_t affected_rows = 0;
@@ -1339,12 +1341,13 @@ int ObComplementWriteTask::append_row(ObScan *scan)
     slice_info.ls_id_ = param_->dest_ls_id_;
     slice_info.data_tablet_id_ = param_->dest_tablet_id_;
     slice_info.context_id_ = context_->context_id_;
+    slice_info.total_slice_cnt_ = context_->total_slice_cnt_;
     ObInsertMonitor insert_monitor(context_->row_scanned_, context_->row_inserted_, context_->cg_row_inserted_);
     ObDDLInsertRowIterator row_iter;
     ObTabletSliceParam tablet_slice_param(context_->concurrent_cnt_, task_id_);
     if (OB_FAIL(row_iter.init(param_->orig_tenant_id_, context_->ddl_agent_, scan,
-            param_->dest_ls_id_, param_->dest_tablet_id_, context_->context_id_, tablet_slice_param, context_->lob_cols_cnt_))) {
-      LOG_WARN("init ddl insert row iterator failed", K(ret));
+            param_->dest_ls_id_, param_->dest_tablet_id_, context_->context_id_, tablet_slice_param, context_->lob_cols_cnt_, context_->total_slice_cnt_))) {
+      LOG_WARN("init ddl insert row iterator failed", K(ret), K(context_->total_slice_cnt_));
     } else if (OB_FAIL(context_->ddl_agent_.open_sstable_slice(macro_start_seq, slice_info))) {
       LOG_WARN("open slice failed", K(ret), K(macro_start_seq), K(slice_info));
     } else if (OB_FAIL(context_->ddl_agent_.fill_sstable_slice(slice_info, &row_iter, affected_rows, &insert_monitor))) {

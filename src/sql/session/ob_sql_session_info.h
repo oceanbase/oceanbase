@@ -626,6 +626,7 @@ public:
       int init(uint64_t tenant_id)
       {
         int ret = OB_SUCCESS;
+        DISABLE_SQL_MEMLEAK_GUARD;
         if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mem_context_,
             lib::ContextParam().set_mem_attr(tenant_id, ObModIds::OB_PL)))) {
           SQL_ENG_LOG(WARN, "create memory entity failed");
@@ -723,6 +724,7 @@ public:
                                  _query_record_size_limit_(65536),
                                  enable_column_store_(false),
                                  enable_decimal_int_type_(false),
+                                 enable_mysql_compatible_dates_(false),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  sql_plan_management_mode_(0),
@@ -756,6 +758,7 @@ public:
     bool get_enable_decimal_int_type() const { return enable_decimal_int_type_; }
     int64_t get_sql_plan_management_mode() const { return sql_plan_management_mode_; }
     bool enable_enhanced_cursor_validation() const { return enable_enhanced_cursor_validation_; }
+    bool get_enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
     bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
     bool get_ob_sqlstat_enable() const { return _ob_sqlstat_enable_; }
   private:
@@ -780,6 +783,7 @@ public:
     int64_t _query_record_size_limit_;
     bool enable_column_store_;
     bool enable_decimal_int_type_;
+    bool enable_mysql_compatible_dates_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
@@ -1063,6 +1067,8 @@ public:
 
   void reset_plsql_exec_time() { plsql_exec_time_ = 0; }
   void add_plsql_exec_time(int64_t plsql_exec_time) { plsql_exec_time_ += plsql_exec_time; }
+  void reset_plsql_compile_time() { plsql_compile_time_ = 0; }
+  void add_plsql_compile_time(int64_t plsql_compile_time) { plsql_compile_time_ += plsql_compile_time; }
 
   CursorCache &get_cursor_cache() { return pl_cursor_cache_; }
   pl::ObPLCursorInfo *get_cursor(int64_t cursor_id);
@@ -1143,6 +1149,7 @@ public:
     }
   }
   ObAuditRecordData &get_raw_audit_record() { return audit_record_; }
+  const ObAuditRecordData &get_raw_audit_record() const { return audit_record_; }
   //在最最终需要push record到audit buffer中时使用该方法，
   //该方法会将一些session中能够拿到的并且重试过程中不会变化的
   //字段初始化
@@ -1428,6 +1435,15 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_print_sample_ppm();
   }
+  bool is_enable_mysql_compatible_dates()
+  {
+    return enable_mysql_compatible_dates();
+  }
+  bool get_enable_mysql_compatible_dates_from_config()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_enable_mysql_compatible_dates();
+  }
   bool is_enable_column_store()
   {
     cached_tenant_config_info_.refresh();
@@ -1517,6 +1533,7 @@ public:
   void set_is_lock_session(bool v) { is_lock_session_ = v; }
   bool is_lock_session() const { return is_lock_session_; }
   int64_t get_plsql_exec_time();
+  int64_t get_plsql_compile_time() { return plsql_compile_time_; }
   void update_pure_sql_exec_time(int64_t elapsed_time);
   const ObServiceNameString& get_service_name() const { return service_name_; }
   bool get_failover_mode() const { return failover_mode_; }
@@ -1644,6 +1661,7 @@ private:
   // if false == pl_can_retry_, we can only retry query in PL blocks locally
   bool pl_can_retry_; //标记当前执行的PL是否可以整体重试
   int64_t plsql_exec_time_;
+  int64_t plsql_compile_time_;
 
 #ifdef OB_BUILD_ORACLE_PL
   pl::debugger::ObPLDebugger *pl_debugger_; // 如果开启了debug, 该字段不为null

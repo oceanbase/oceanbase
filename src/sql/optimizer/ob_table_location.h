@@ -130,7 +130,8 @@ public:
     FUNC_VALUE,
     COLUMN_VALUE,
     PRE_RANGE_GRAPH,
-    LIST_VALUE
+    LIST_VALUE,
+    GATHER_STAT
   };
 
   ObPartLocCalcNode (common::ObIAllocator &allocator): node_type_(INVALID), allocator_(allocator)
@@ -533,8 +534,8 @@ public:
     has_dynamic_exec_param_(false),
     is_valid_temporal_part_range_(false),
     is_valid_temporal_subpart_range_(false),
-    is_part_range_get_(false),
-    is_subpart_range_get_(false),
+    is_part_range_precise_get_(false),
+    is_subpart_range_precise_get_(false),
     is_non_partition_optimized_(false),
     tablet_id_(ObTabletID::INVALID_TABLET_ID),
     object_id_(OB_INVALID_ID),
@@ -584,8 +585,8 @@ public:
     has_dynamic_exec_param_(false),
     is_valid_temporal_part_range_(false),
     is_valid_temporal_subpart_range_(false),
-    is_part_range_get_(false),
-    is_subpart_range_get_(false),
+    is_part_range_precise_get_(false),
+    is_subpart_range_precise_get_(false),
     is_non_partition_optimized_(false),
     tablet_id_(ObTabletID::INVALID_TABLET_ID),
     object_id_(OB_INVALID_ID),
@@ -826,8 +827,8 @@ public:
   inline bool is_part_or_subpart_all_partition() const
   {
     return (part_level_ == share::schema::PARTITION_LEVEL_ZERO) ||
-           (part_level_ == share::schema::PARTITION_LEVEL_ONE && (part_get_all_ || !is_part_range_get_)) ||
-           (part_level_ == share::schema::PARTITION_LEVEL_TWO && (subpart_get_all_ || part_get_all_ || !is_part_range_get_ || !is_subpart_range_get_));
+           (part_level_ == share::schema::PARTITION_LEVEL_ONE && (part_get_all_ || !is_part_range_precise_get_)) ||
+           (part_level_ == share::schema::PARTITION_LEVEL_TWO && (subpart_get_all_ || part_get_all_ || !is_part_range_precise_get_ || !is_subpart_range_precise_get_));
   }
 
   inline bool is_column_list_part(share::schema::ObPartitionFuncType part_type, bool is_col_expr)
@@ -1047,7 +1048,7 @@ private:
                              const common::ObIArray<ObRawExpr*> &filter_exprs,
                              ObPartLocCalcNode *&res_node,
                              bool &get_all,
-                             bool &is_range_get,
+                             bool &is_precise_get,
                              const common::ObDataTypeCastParams &dtc_params,
                              ObExecContext *exec_ctx,
                              ObQueryCtx *query_ctx,
@@ -1288,8 +1289,8 @@ private:
   //mysql enable partition pruning by query range if part expr is temporal func like year(date)
   bool is_valid_temporal_part_range_;
   bool is_valid_temporal_subpart_range_;
-  bool is_part_range_get_;
-  bool is_subpart_range_get_;
+  bool is_part_range_precise_get_;
+  bool is_subpart_range_precise_get_;
 
   bool is_non_partition_optimized_;
   ObTabletID tablet_id_;

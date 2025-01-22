@@ -86,6 +86,7 @@ default_enable_extended_rowid
 default_load_mode
 default_progressive_merge_num
 default_row_format
+default_table_organization
 default_table_store_format
 devname
 diag_syslog_per_error_limit
@@ -93,6 +94,7 @@ direct_load_allow_fallback
 disk_io_thread_count
 dtl_buffer_size
 dump_data_dictionary_to_log_interval
+enable_adaptive_plan_cache
 enable_async_syslog
 enable_auto_split
 enable_cgroup
@@ -193,8 +195,12 @@ obconfig_url
 observer_id
 ob_compaction_schedule_interval
 ob_enable_batched_multi_statement
+ob_enable_java_env
 ob_encoding_granularity
 ob_event_history_recycle_interval
+ob_java_connector_path
+ob_java_home
+ob_java_opts
 ob_proxy_readonly_transaction_routing_policy
 ob_query_switch_leader_retry_timeout
 ob_ratelimit_stat_period
@@ -278,6 +284,7 @@ tcp_keepcnt
 tcp_keepidle
 tcp_keepintvl
 tde_method
+temporary_file_max_disk_size
 tenant_sql_login_thread_count
 tenant_sql_net_thread_count
 tenant_task_queue_size
@@ -325,6 +332,7 @@ _enable_adaptive_auto_dop
 _enable_adaptive_compaction
 _enable_adaptive_merge_schedule
 _enable_add_fulltext_index_to_existing_table
+_enable_auth_switch
 _enable_backtrace_function
 _enable_balance_kill_transaction
 _enable_block_file_punch_hole
@@ -334,12 +342,14 @@ _enable_column_store
 _enable_compaction_diagnose
 _enable_compatible_monotonic
 _enable_convert_real_to_decimal
+_enable_das_batch_rescan_flag
 _enable_das_keep_order
 _enable_dblink_reuse_connection
 _enable_dbms_job_package
 _enable_dbms_lob_partial_update
 _enable_decimal_int_type
 _enable_defensive_check
+_enable_distributed_das_scan
 _enable_drop_and_add_index
 _enable_easy_keepalive
 _enable_enhanced_cursor_validation
@@ -354,7 +364,9 @@ _enable_insertup_replace_gts_opt
 _enable_in_range_optimization
 _enable_kv_feature
 _enable_log_cache
+_enable_malloc_v2
 _enable_memleak_light_backtrace
+_enable_mysql_compatible_dates
 _enable_newsort
 _enable_new_query_range_extraction
 _enable_new_sql_nio
@@ -396,6 +408,7 @@ _faststack_min_interval
 _faststack_req_queue_size_threshold
 _fast_commit_callback_count
 _follower_snapshot_read_retry_duration
+_force_enable_plan_tracing
 _force_explict_500_malloc
 _force_hash_groupby_dump
 _force_hash_join_spill
@@ -474,7 +487,10 @@ _parallel_max_active_sessions
 _parallel_min_message_pool
 _parallel_redo_logging_trigger
 _parallel_server_sleep_time
+_parquet_row_group_prebuffer_size
 _partition_wise_plan_enabled
+_pc_adaptive_effectiveness_ratio_threshold
+_pc_adaptive_min_exec_time_threshold
 _pdml_thread_cache_size
 _pipelined_table_function_memory_limit
 _preserve_order_for_pagination
@@ -522,7 +538,6 @@ _storage_meta_memory_limit_percentage
 _stream_rpc_max_wait_timeout
 _system_tenant_limit_mode
 _temporary_file_io_area_size
-_temporary_file_meta_memory_limit_percentage
 _trace_control_info
 _transfer_finish_trans_timeout
 _transfer_process_lock_tx_timeout
@@ -538,6 +553,7 @@ _tx_result_retention
 _tx_share_memory_limit_percentage
 _upgrade_stage
 _use_hash_rollup
+_use_odps_jni_connector
 _wait_interval_after_parallel_ddl
 _with_subquery
 _xa_gc_interval

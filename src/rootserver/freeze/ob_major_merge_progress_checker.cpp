@@ -656,7 +656,7 @@ int ObMajorMergeProgressChecker::deal_with_rest_data_table()
   bool exist_index_table = false;
   bool exist_data_table = false;
   if ((is_extra_check_round() && table_ids_.count() > 0  && table_ids_.count() < DEAL_REST_TABLE_CNT_THRESHOLD)
-      || REACH_TENANT_TIME_INTERVAL(DEAL_REST_TABLE_INTERVAL)) {
+      || REACH_THREAD_TIME_INTERVAL(DEAL_REST_TABLE_INTERVAL)) {
     ObTableCompactionInfo table_compaction_info;
     for (int64_t idx = 0; idx < table_ids_.count(); ++idx) {
       if (OB_FAIL(table_compaction_map_.get_refactored(table_ids_.at(idx), table_compaction_info))) {

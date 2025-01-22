@@ -307,7 +307,8 @@ ObTabletMergeDag::ObTabletMergeDag(
     compat_mode_(lib::Worker::CompatMode::INVALID),
     ctx_(nullptr),
     param_(),
-    allocator_("MergeDag", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::MERGE_NORMAL_CTX_ID)
+    allocator_("MergeDag", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::MERGE_NORMAL_CTX_ID),
+    min_sstable_end_scn_(-1)
 {
 }
 
@@ -322,6 +323,7 @@ ObTabletMergeDag::~ObTabletMergeDag()
     allocator_.free(ctx_);
     ctx_ = nullptr;
   }
+  min_sstable_end_scn_ = -1;
 }
 
 int ObTabletMergeDag::get_tablet_and_compat_mode()
@@ -380,6 +382,7 @@ int64_t ObTabletMergeDag::to_string(char* buf, const int64_t buf_len) const
 
     databuff_print_json_kv_comma(buf, buf_len, pos, "param", param_);
     databuff_print_json_kv_comma(buf, buf_len, pos, "compat_mode", compat_mode_);
+    databuff_print_json_kv_comma(buf, buf_len, pos, "min_sstable_end_scn", min_sstable_end_scn_);
     if (nullptr == ctx_) {
       databuff_print_json_kv_comma(buf, buf_len, pos, "ctx", ctx_);
     } else {
@@ -851,6 +854,8 @@ int ObTabletMergeDag::prepare_merge_ctx(bool &finish_flag)
     }
   } else if (OB_FAIL(ctx_->check_merge_ctx_valid())) {
     LOG_WARN("invalid merge ctx", KR(ret), K_(param), KPC_(ctx));
+  } else if (is_major_or_meta_merge_type(ctx_->get_merge_type()) && OB_FAIL(init_min_sstable_end_scn())) {
+    LOG_WARN("failed to init sstable min end scn", KR(ret), KPC_(ctx));
   }
   return ret;
 }
@@ -861,9 +866,15 @@ int ObTabletMergePrepareTask::process()
   ObBasicTabletMergeCtx *ctx = NULL;
   ObTaskController::get().switch_task(share::ObTaskType::DATA_MAINTAIN);
   bool finish_flag = false;
-
+#ifdef ERRSIM
   DEBUG_SYNC(MERGE_PARTITION_TASK);
   DEBUG_SYNC(AFTER_EMPTY_SHELL_TABLET_CREATE);
+  if (OB_NOT_NULL(merge_dag_->get_ctx()) && merge_dag_->get_ctx()->get_tablet_id().id() > ObTabletID::MIN_USER_TABLET_ID) {
+    if (is_major_merge_type(merge_dag_->get_ctx()->get_merge_type())) {
+      DEBUG_SYNC(MAJOR_MERGE_PREPARE_TASK_PROCESS);
+    }
+  }
+#endif
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -929,6 +940,36 @@ int ObTabletMergeDag::generate_merge_task(
       remove_task(*finish_task);
       finish_task = nullptr;
     }
+  }
+  return ret;
+}
+
+int ObTabletMergeDag::get_min_sstable_end_scn(SCN &min_end_scn)
+{
+  int ret = OB_SUCCESS;
+  if (min_sstable_end_scn_ > 0) {
+    if (OB_FAIL(min_end_scn.convert_for_tx(min_sstable_end_scn_))) {
+      LOG_WARN("failed to convert for tx", K(ret), K(min_sstable_end_scn_));
+    }
+  }
+  return ret;
+}
+
+int ObTabletMergeDag::init_min_sstable_end_scn()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(ctx_)) {
+    const ObTablesHandleArray &table_array = ctx_->static_param_.tables_handle_;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < table_array.get_count(); ++idx) {
+      ObSSTable *sstable = nullptr;
+      if (OB_ISNULL(sstable = static_cast<ObSSTable *>(table_array.get_table(idx)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("nullptr in sstable array", KR(ret));
+      } else if (sstable->is_multi_version_minor_sstable()) {
+        min_sstable_end_scn_ = sstable->get_end_scn().get_val_for_tx();
+        break;
+      }
+    } // for
   }
   return ret;
 }
@@ -1135,6 +1176,9 @@ int ObTabletMergeTask::process()
   }
   if (OB_NOT_NULL(ctx_) && ctx_->get_tablet_id().id() > ObTabletID::MIN_USER_TABLET_ID) {
     DEBUG_SYNC(MERGE_TASK_PROCESS);
+    if (is_major_merge_type(ctx_->get_merge_type())) {
+      DEBUG_SYNC(MAJOR_MERGE_TASK_PROCESS);
+    }
   }
   ret = SPECIFIED_SERVER_STOP_COMPACTION;
   if (OB_FAIL(ret)) {

@@ -27,14 +27,14 @@
 #include "storage/blocksstable/ob_sstable.h"
 #include "ob_storage_restore_struct.h"
 #include "ob_storage_ha_dag.h"
-#include "ob_physical_copy_ctx.h"
 
 namespace oceanbase
 {
 namespace storage
 {
 
-
+struct ObICopyTabletCtx;
+struct ObPhysicalCopyCtx;
 class ObTabletCopyFinishTask final : public share::ObITask
 {
 public:

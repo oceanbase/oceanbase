@@ -166,6 +166,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
   ObSqlCtx *sql_ctx = NULL;
   int64_t notify_idx = 0;
   int64_t unused_row_scan_cnt = 0;
+  int64_t ddl_task_id = MY_SPEC.plan_->get_ddl_task_id();
   ObInsertMonitor insert_monitor(unused_row_scan_cnt, op_monitor_info_.otherstat_2_value_, op_monitor_info_.otherstat_1_value_);
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
@@ -228,6 +229,19 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
     } else if (need_idempotent_autoinc_val && OB_FAIL(build_table_slice_info())) {
       LOG_WARN("fail to build table slice info", K(ret));
     }
+
+    /* get tablet slice info */
+    bool is_partition_table  = true;
+    common::hash::ObHashMap<int64_t, int64_t> tablet_slice_cnt_map;
+    if (OB_FAIL(ret)) {
+    } else if (!is_shared_storage_dempotent_mode(ddl_ctrl.direct_load_type_)) {
+    } else if (OB_FAIL(tablet_slice_cnt_map.create(participants_.count(), "SliceInfoM",
+                                                        ObModIds::OB_HASH_NODE, tenant_id))) {
+      LOG_WARN("fail to create hash table", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_task_tablet_slice_count(MTL_ID(), ddl_task_id, is_partition_table, tablet_slice_cnt_map))) {
+      LOG_WARN("failed to get tablet slice count", K(ret), K(ddl_task_id), K(MTL_ID()));
+    }
+
     for (notify_idx = 0; OB_SUCC(ret) && notify_idx < participants_.count();) {
       clear_evaluated_flag();
       bool is_current_slice_empty = false;
@@ -247,7 +261,19 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
         count_rows_finish_ && curr_tablet_idx_ < tablet_seq_caches_.count() && curr_tablet_idx_ >= 0 ?
           &tablet_seq_caches_.at(curr_tablet_idx_) : nullptr;
       ObDirectLoadMgrAgent ddl_agent;
-      if (OB_FAIL(ddl_agent.init(slice_info.context_id_, slice_info.ls_id_, slice_info.data_tablet_id_, ddl_ctrl.direct_load_type_))) {
+
+      if (!is_shared_storage_dempotent_mode(ddl_ctrl.direct_load_type_)) {
+      } else if (MY_SPEC.regenerate_heap_table_pk_) {
+        slice_info.total_slice_cnt_ = ctx_.get_sqc_handler()->get_sqc_ctx().get_task_count();
+      } else if (OB_FAIL(tablet_slice_cnt_map.get_refactored(is_partition_table ? slice_info.data_tablet_id_.id() : 0, slice_info.total_slice_cnt_))) {
+        LOG_WARN("failed to get tablet slice cnt", K(ret), K(is_partition_table), K(slice_info.data_tablet_id_));
+      } else if (slice_info.total_slice_cnt_ < 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("slice cnt should not less than 0", K(ret), K(is_partition_table), K(slice_info.data_tablet_id_));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ddl_agent.init(slice_info.context_id_, slice_info.ls_id_, slice_info.data_tablet_id_, ddl_ctrl.direct_load_type_))) {
         LOG_WARN("init agent failed", K(ret), K(slice_info));
       } else if (all_slices_empty || is_all_partition_finished_) {
         is_current_slice_empty = true;
@@ -264,7 +290,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
           K(row_tablet_id), K(is_all_partition_finished_), K(count_rows_finish_), K(curr_tablet_idx_), K(tablet_seq_caches_.count()), KPC(curr_tablet_seq_cache));
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(block_start_seq.set_parallel_degree(parallel_idx))) {
+      } else if (OB_FAIL(ObDDLUtil::init_macro_block_seq(parallel_idx, block_start_seq))) {
         LOG_WARN("set parallel index failed", K(ret), K(parallel_idx));
       } else if (OB_FAIL(ddl_agent.open_sstable_slice(block_start_seq, slice_info))) {
         LOG_WARN("create sstable slice writer failed", K(ret), K(block_start_seq), K(slice_info));
@@ -291,7 +317,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
           ObDDLInsertRowIterator row_iter;
           if (OB_FAIL(row_iter.init(tenant_id, ddl_agent, &slice_row_iter, notify_ls_id, notify_tablet_id,
                                     slice_info.context_id_, tablet_slice_param,
-                                    table_schema->get_lob_columns_count(), is_vec_data_complement_))) {
+                                    table_schema->get_lob_columns_count(), slice_info.total_slice_cnt_, is_vec_data_complement_))) {
             LOG_WARN("init ddl insert rot iterator failed", K(ret));
           } else if (OB_FAIL(ddl_agent.fill_sstable_slice(slice_info, &row_iter, affected_rows,
                                                           &insert_monitor))) {

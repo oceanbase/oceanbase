@@ -609,12 +609,14 @@ int ObArrayBinary::get_data_binary(char *res_buf, int64_t buf_len)
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "buf len isn't enough", K(ret), K(buf_len));
   } else if (data_container_ == NULL) {
-    uint32_t last_idx = length_ > 0 ? length_ - 1 : 0;
-    MEMCPY(res_buf + pos, reinterpret_cast<char *>(null_bitmaps_), sizeof(uint8_t) * length_);
-    pos += sizeof(uint8_t) * length_;
-    MEMCPY(res_buf + pos, reinterpret_cast<char *>(offsets_), sizeof(uint32_t) * length_);
-    pos += sizeof(uint32_t) * length_;
-    MEMCPY(res_buf + pos, data_, offsets_[last_idx]);
+    if (length_ > 0) {
+      uint32_t last_idx = length_ - 1;
+      MEMCPY(res_buf + pos, reinterpret_cast<char *>(null_bitmaps_), sizeof(uint8_t) * length_);
+      pos += sizeof(uint8_t) * length_;
+      MEMCPY(res_buf + pos, reinterpret_cast<char *>(offsets_), sizeof(uint32_t) * length_);
+      pos += sizeof(uint32_t) * length_;
+      MEMCPY(res_buf + pos, data_, offsets_[last_idx]);
+    }
   } else {
     MEMCPY(res_buf + pos, reinterpret_cast<char *>(data_container_->null_bitmaps_.get_data()), sizeof(uint8_t) * data_container_->null_bitmaps_.size());
     pos += sizeof(uint8_t) * data_container_->null_bitmaps_.size();
@@ -881,7 +883,7 @@ int ObArrayBinary::flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &at
     attrs[attr_idx].length_ = sizeof(uint32_t) * length_;
     attr_idx++;
     attrs[attr_idx].ptr_ = data_;
-    attrs[attr_idx].length_ = offsets_[length_ - 1];
+    attrs[attr_idx].length_ = length_ > 0 ? offsets_[length_ - 1] : 0;
     attr_idx++;
   }
   return ret;
@@ -1293,16 +1295,10 @@ int ObArrayNested::print_element(const ObCollectionTypeBase *elem_type, ObString
     }
     uint64_t last_length = format_str.length();
     for (int i = begin; i < begin + print_size && OB_SUCC(ret); i++) {
-      if (format_str.length() > last_length && OB_FAIL(format_str.append(delimiter))) {
+      if (this->null_bitmaps_[i]) {
+        // do nothing
+      } else if (format_str.length() > last_length && OB_FAIL(format_str.append(delimiter))) {
         OB_LOG(WARN, "fail to append delimiter to buffer", K(ret), K(delimiter));
-      } else if (this->null_bitmaps_[i]) {
-        // value is null
-        last_length = format_str.length();
-        if (!has_null_str) {
-          // do nothing
-        } else if (OB_FAIL(format_str.append(null_str))) {
-          OB_LOG(WARN, "fail to append null string to buffer", K(ret), K(null_str));
-        }
       } else {
         last_length = format_str.length();
         uint32_t start = offset_at(i, offsets_);

@@ -244,8 +244,18 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
           if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0) {
             fallback = true;
           } else {
-            rt_expr.eval_vector_func_ =
+            ObPartition * const* part_array = table_schema->get_part_array();
+            if (OB_ISNULL(part_array) || OB_ISNULL(part_array[0]) ||
+                OB_ISNULL(part_array[0]->get_high_bound_val().get_obj_ptr())) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("partition_array is null", K(ret));
+            } else if (part_expr->obj_meta_.get_type() !=
+                part_array[0]->get_high_bound_val().get_obj_ptr()->get_meta().get_type()) {
+              fallback = true;
+            } else {
+              rt_expr.eval_vector_func_ =
                 ObExprCalcPartitionBase::fast_calc_partition_level_one_vector;
+            }
           }
         } else if (table_schema->is_list_part()) {
           if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0) {
@@ -256,8 +266,25 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
             if (ob_is_json(part_expr_type) || ob_is_urowid(part_expr_type)) {
               fallback = true;
             } else {
-              rt_expr.eval_vector_func_ =
-                    ObExprCalcPartitionBase::fast_calc_partition_level_one_vector;
+              ObPartition * const* part_array = table_schema->get_part_array();
+              if (OB_ISNULL(part_array) || OB_ISNULL(part_array[0])) {
+                  ret = OB_INVALID_ARGUMENT;
+                  LOG_WARN("partition_array is null", K(ret));
+              } else {
+                const ObIArray<common::ObNewRow> &list_row_values =
+                    part_array[0]->get_list_row_values();
+                ObObj *list_part_obj = list_row_values.at(0).cells_;
+                if (OB_ISNULL(list_part_obj)) {
+                  ret = OB_INVALID_ARGUMENT;
+                  LOG_WARN("list_part_obj is null", K(ret));
+                } else if (part_expr->obj_meta_.get_type() !=
+                           list_part_obj->get_meta().get_type()) {
+                  fallback = true;
+                } else {
+                  rt_expr.eval_vector_func_ =
+                      ObExprCalcPartitionBase::fast_calc_partition_level_one_vector;
+                }
+              }
             }
           }
         } else {
@@ -1473,6 +1500,26 @@ int ObExprCalcPartitionBase::set_first_part_id(ObExecContext &ctx, const ObExpr 
       LOG_WARN("create expr op ctx failed", K(ret));
     } else {
       calc_part_ctx->first_part_id_ = first_part_id;
+    }
+  }
+  return ret;
+}
+
+int ObExprCalcPartitionBase::update_part_id_calc_type_for_upgrade(
+    ObExecContext &ctx,
+    const ObExpr &expr,
+    PartitionIdCalcType calc_type)
+{
+  int ret = OB_SUCCESS;
+  uint64_t expr_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+  if (ObExpr::INVALID_EXP_CTX_ID == expr_ctx_id) {
+    // 混跑要动态改partition_id_calc_type，434以下不会设置这个expr_ctx_id_
+    CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
+    if (OB_ISNULL(calc_part_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("extra info is null", K(ret));
+    } else {
+      calc_part_info->partition_id_calc_type_ = calc_type;
     }
   }
   return ret;

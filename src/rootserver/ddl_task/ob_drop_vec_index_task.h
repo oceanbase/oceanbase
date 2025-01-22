@@ -71,7 +71,7 @@ private:
   int prepare(const share::ObDDLTaskStatus &status);
   int check_and_wait_finish(const share::ObDDLTaskStatus &status);
   int release_snapshot(const int64_t snapshot_version);
-  int wait_trans_end(const ObDDLTaskStatus next_task_status);
+  int wait_trans_end(const share::ObDDLTaskStatus next_task_status);
   int obtain_snapshot(const share::ObDDLTaskStatus next_task_status);
   int drop_aux_index_table(const share::ObDDLTaskStatus &status);
   int drop_lob_meta_row(const share::ObDDLTaskStatus next_task_status);

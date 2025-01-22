@@ -39,11 +39,7 @@ int ObExprDate::cg_expr(ObExprCGCtx &op_cg_ctx,
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = ObExprDate::eval_date;
-
-  // The vectorization of other types for the expression not completed yet.
-  if (ObDateTC == ob_obj_type_class(rt_expr.args_[0]->datum_meta_.type_)) {
-    rt_expr.eval_vector_func_ = ObExprDate::eval_date_vector;
-  }
+  rt_expr.eval_vector_func_ = ObExprDate::eval_date_vector;
   return ret;
 }
 

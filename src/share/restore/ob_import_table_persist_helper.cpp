@@ -80,7 +80,7 @@ int ObImportTableJobPersistHelper::get_all_import_table_jobs(
     LOG_WARN("fail to assign sql", K(ret));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(proxy.read(res, exec_tenant_id, sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql), K(exec_tenant_id));
       } else if (OB_ISNULL(result = res.get_result())) {
@@ -124,7 +124,7 @@ int ObImportTableJobPersistHelper::advance_status(
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, job.get_tenant_id()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_RESULT, job.get_result().get_result_str()))) {
+  } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_RESULT, job.get_result().get_tables_import_result_str()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(job.get_result().get_comment_str())))) {
     LOG_WARN("failed to add column", K(ret));
@@ -206,7 +206,7 @@ int ObImportTableJobPersistHelper::get_import_table_job_history_by_initiator(com
     LOG_WARN("failed to append sql", K(ret), K(sql), K(initiator_tenant_id), K(initiator_job_id));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(proxy.read(res, exec_tenant_id, sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql), K(exec_tenant_id));
       } else if (OB_ISNULL(result = res.get_result())) {
@@ -244,7 +244,7 @@ int ObImportTableJobPersistHelper::get_import_table_job_by_initiator(common::ObI
     LOG_WARN("failed to append sql", K(ret), K(sql), K(initiator_tenant_id), K(initiator_job_id));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(proxy.read(res, exec_tenant_id, sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql), K(exec_tenant_id));
       } else if (OB_ISNULL(result = res.get_result())) {
@@ -394,7 +394,7 @@ int ObImportTableTaskPersistHelper::get_all_import_table_tasks_by_initiator(comm
     LOG_WARN("failed to append sql", K(ret), K(sql), K(job_id));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(proxy.read(res, exec_tenant_id, sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql), K(exec_tenant_id));
       } else if (OB_ISNULL(result = res.get_result())) {
@@ -437,7 +437,7 @@ int ObImportTableTaskPersistHelper::get_one_batch_unfinish_tasks(common::ObISQLC
     LOG_WARN("failed to append sql", K(ret), K(sql), K(job_id));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(proxy.read(res, exec_tenant_id, sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql), K(exec_tenant_id));
       } else if (OB_ISNULL(result = res.get_result())) {

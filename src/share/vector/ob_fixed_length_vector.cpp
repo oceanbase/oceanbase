@@ -217,6 +217,9 @@ template class ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_DEC_INT64>>;
 template class ObFixedLengthVector<int128_t, VectorBasicOp<VEC_TC_DEC_INT128>>;
 template class ObFixedLengthVector<int256_t, VectorBasicOp<VEC_TC_DEC_INT256>>;
 template class ObFixedLengthVector<int512_t, VectorBasicOp<VEC_TC_DEC_INT512>>;
+template class ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_MYSQL_DATETIME>>;
+template class ObFixedLengthVector<int32_t, VectorBasicOp<VEC_TC_MYSQL_DATE>>;
+
 
 } // end namespace common
 } // end namespace oceanbase

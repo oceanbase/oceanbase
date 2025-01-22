@@ -28,6 +28,7 @@
 #include "storage/compaction/ob_compaction_schedule_util.h"
 #include "storage/compaction/ob_medium_loop.h"
 #include "storage/compaction/ob_mview_compaction_util.h"
+#include "storage/column_store/ob_column_store_replica_util.h"
 
 namespace oceanbase
 {
@@ -156,13 +157,6 @@ public:
   void stop();
   void wait() { timer_task_mgr_.wait(); }
   int reload_tenant_config();
-  int64_t get_error_tablet_cnt() { return ATOMIC_LOAD(&error_tablet_cnt_); }
-  void clear_error_tablet_cnt() { ATOMIC_STORE(&error_tablet_cnt_, 0); }
-  void update_error_tablet_cnt(const int64_t delta_cnt)
-  {
-    // called when check tablet checksum error
-    (void)ATOMIC_AAF(&error_tablet_cnt_, delta_cnt);
-  }
   OB_INLINE bool schedule_ignore_error(const int ret)
   {
     return OB_ITER_END == ret
@@ -227,7 +221,8 @@ public:
   static int check_ready_for_major_merge(
       const ObLSID &ls_id,
       const storage::ObTablet &tablet,
-      const ObMergeType merge_type);
+      const ObMergeType merge_type,
+      ObCSReplicaTabletStatus &cs_replica_status);
   static int schedule_merge_dag(
       const share::ObLSID &ls_id,
       const storage::ObTablet &tablet,
@@ -287,7 +282,6 @@ private:
   ObFastFreezeChecker fast_freeze_checker_;
   ObCompactionScheduleIterator minor_ls_tablet_iter_;
   ObCompactionScheduleIterator gc_sst_tablet_iter_;
-  int64_t error_tablet_cnt_; // for diagnose
   ObProhibitScheduleMediumMap prohibit_medium_map_;
   ObTenantTabletSchedulerTaskMgr timer_task_mgr_;
   ObScheduleBatchSizeMgr batch_size_mgr_;

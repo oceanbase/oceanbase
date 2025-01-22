@@ -13,8 +13,12 @@
 #ifndef OCEANBASE_SHARE_TABLE_OB_TABLE_OBJECT_
 #define OCEANBASE_SHARE_TABLE_OB_TABLE_OBJECT_
 
+#include "common/object/ob_object.h"
+#include "common/ob_range.h"
+
 namespace oceanbase
 {
+using namespace common;
 namespace table
 {
 
@@ -45,7 +49,8 @@ enum ObTableObjType
   ObTableBlobType = 22,
   ObTableMediumBlobType = 23,
   ObTableLongBlobType = 24,
-  ObTableObjTypeMax = 25,
+  ObTableCharType = 25,
+  ObTableObjTypeMax = 26,
 };
 
 /*

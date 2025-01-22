@@ -230,7 +230,11 @@ int ObMultipleScanMerge::locate_blockscan_border()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null block row store", K(ret));
   } else if (1 == consumer_cnt_) {
-    border_key.set_max_rowkey();
+    if (access_ctx_->query_flag_.is_reverse_scan()) {
+      border_key.set_min_rowkey();
+    } else {
+      border_key.set_max_rowkey();
+    }
   } else {
     ObScanMergeLoserTreeItem item;
     // 1. push iters [1, consumer_cnt_] into loser tree
@@ -262,7 +266,11 @@ int ObMultipleScanMerge::locate_blockscan_border()
       consumer_cnt_ = 1;
       const ObScanMergeLoserTreeItem *top_item = nullptr;
       if (rows_merger_->empty()) {
-        border_key.set_max_rowkey();
+        if (access_ctx_->query_flag_.is_reverse_scan()) {
+          border_key.set_min_rowkey();
+        } else {
+          border_key.set_max_rowkey();
+        }
       } else if (OB_FAIL(rows_merger_->rebuild())) {
         LOG_WARN("loser tree rebuild fail", K(ret), K_(consumer_cnt));
       } else if (OB_FAIL(rows_merger_->top(top_item))) {

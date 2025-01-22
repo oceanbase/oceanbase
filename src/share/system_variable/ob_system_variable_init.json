@@ -11876,11 +11876,10 @@
     "data_type": "varchar",
     "info": "The path name of the file in which the server writes its process ID",
     "flags": "GLOBAL | READONLY | MYSQL_ONLY",
-    "publish_version": "42110",
+    "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "port": {
     "id": 10744,
@@ -11890,11 +11889,10 @@
     "data_type": "int",
     "info": "The number of the port on which the server listens for TCP/IP connections",
     "flags": "GLOBAL | READONLY | MYSQL_ONLY",
-    "publish_version": "42110",
+    "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "socket": {
     "id": 10745,
@@ -11904,20 +11902,68 @@
     "data_type": "varchar",
     "info": "the name of the socket file that is used for local client connections",
     "flags": "GLOBAL | READONLY | MYSQL_ONLY",
-    "publish_version": "42110",
+    "publish_version": "",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
-  "materialized_view_parallelism": {
+  "mview_refresh_dop": {
     "id": 10746,
-    "name": "materialized_view_parallelism",
+    "name": "mview_refresh_dop",
     "default_value": "0",
     "base_value": "0",
     "data_type": "int",
     "info": "The default refresh parallelism of materialized view",
     "flags": "GLOBAL | SESSION ",
+    "publish_version": "435",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
+  },
+  "enable_optimizer_rowgoal": {
+    "id": 10747,
+    "name": "enable_optimizer_rowgoal",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "enum",
+    "info": "Control whether the optimizer considers the impact of rowgoal (such as the LIMIT operator, etc.) during cardinality estimation.",
+    "flags": "GLOBAL | SESSION ",
+    "enum_names": [
+      "OFF",
+      "AUTO",
+      "ON"
+    ],
+    "publish_version": "435",
+    "info_cn": "控制优化器在基数估计时是否考虑行数目标（如 LIMIT 算子等）的影响",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "ob_ivf_nprobes": {
+    "id": 10748,
+      "name": "ob_ivf_nprobes",
+      "default_value": "8",
+      "base_value": "8",
+      "data_type": "uint",
+      "info": "The number of nearest cluster centers from the IVF vector index searched during this session.",
+      "flags": "SESSION",
+      "min_val": "1",
+      "max_val": "65536",
+      "publish_version": "435",
+      "info_cn": "",
+      "background_cn": "",
+      "ref_url": ""
+  },
+  "_current_default_catalog": {
+    "id": 10749,
+    "name": "_current_default_catalog",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "uint",
+    "info": "The default catalog for session.",
+    "flags": "SESSION | NEED_SERIALIZE | INVISIBLE",
+    "min_val": "0",
+    "max_val": "18446744073709551615",
     "publish_version": "435",
     "info_cn": "",
     "background_cn": "",

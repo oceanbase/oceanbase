@@ -28,6 +28,8 @@
 #include "share/external_table/ob_external_table_file_rpc_proxy.h"
 #include "sql/executor/ob_task_spliter.h"
 #include "sql/engine/table/ob_csv_table_row_iter.h"
+#include "share/config/ob_server_config.h"
+#include "sql/engine/table/ob_odps_jni_table_row_iter.h"
 
 namespace oceanbase
 {
@@ -443,7 +445,6 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
   int64_t parallel)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_CPP_ODPS
   const common::ObIArray<share::ObExternalFileInfo> &files = dfo.get_external_table_files();
   int64_t sqc_count = sqcs.count();
   int64_t sqc_idx = 0;
@@ -452,6 +453,7 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
   const ObTableScanSpec *scan_op = nullptr;
   const ObOpSpec *root_op = NULL;
   dfo.get_root(root_op);
+
   if (OB_ISNULL(root_op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
@@ -460,23 +462,64 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
   } else if (scan_ops.count() == 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty scan_ops", K(ret));
-  } else if (OB_FAIL(ObOdpsPartitionDownloaderMgr::fetch_row_count(MTL_ID(),
-                                                                    files,
-                                                                    scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
-                                                                    use_partition_gi))) {
-    LOG_WARN("failed to fetch row count", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!GCONF._use_odps_jni_connector) {
+#if defined(OB_BUILD_CPP_ODPS)
+      if (OB_FAIL(ObOdpsPartitionDownloaderMgr::fetch_row_count(
+              MTL_ID(), files,
+              scan_ops.at(0)
+                  ->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+              use_partition_gi))) {
+        LOG_WARN("failed to fetch row count", K(ret));
+      }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("ODPS CPP connector is not enabled", K(ret));
+#endif
+    } else {
+#if defined(OB_BUILD_JNI_ODPS)
+      if (OB_FAIL(ObOdpsPartitionJNIScannerMgr::fetch_row_count(
+              MTL_ID(), files,
+              scan_ops.at(0)
+                  ->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+              use_partition_gi))) {
+        LOG_WARN("failed to fetch row count", K(ret));
+      }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("ODPS JNI connector is not enabled", K(ret));
+#endif
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    /* do nothing */
   } else if (use_partition_gi) {
     sqc_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
       OZ (sqcs.at(sqc_idx++ % sqc_count)->get_access_external_table_files().push_back(files.at(i)));
     }
   } else {
+    /*
+    The main task of this conditional branch is to distribute several ODPS partitions as evenly as possible to SQC,
+    with each SQC performing a secondary even split on the assigned partitions.
+    When splitting partitions for SQC, only large partitions (those with more than 100,000 rows of data,
+    referred to as large partitions) are split;small partitions are directly distributed in a round-robin manner to each SQC.
+
+    step 1. pick up big partitions(alias file), calc row count sum of big partitions(called big_file_row_count),
+            calc avg row count expected assign to per sqc(called avg_row_count_to_sqc).
+    step 2. Assign avg_row_count_to_sqc rows to per sqc, use DROP_FACTOR to avoid a small tail of current partition assigned to next sqc.
+    step 3. Assgin small partitions to per sqc in round robin method.
+    step 4. Divide the partitions assigned to each SQC into smaller tasks, similar to the previous three steps.
+    */
     ObSEArray<share::ObExternalFileInfo, 8> temp_block_files;
     ObSEArray<int64_t, 8> sqc_row_counts;
     int64_t big_file_row_count = 0;
     int64_t small_file_count = 0;
     const int64_t SMALL_FILE_SIZE = 100000;
-    const double DROP_FACTOR = 0.05;
+    const double DROP_FACTOR = 0.2;
     for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
       if (OB_FAIL(sqc_row_counts.push_back(0))) {
         LOG_WARN("failed to init sqc_row_counts", K(i), K(ret));
@@ -518,9 +561,17 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
           if (remaining_row_count_in_file >= row_count_needed_to_sqc) {
             ObExternalFileInfo splited_file_info = files.at(file_idx);
             splited_file_info.row_start_ = file_start;
-            splited_file_info.row_count_ = row_count_needed_to_sqc;
-            row_count_assigned_to_sqc += row_count_needed_to_sqc;
-            file_start += row_count_needed_to_sqc;
+            if (remaining_row_count_in_file <= (1 + DROP_FACTOR) * row_count_needed_to_sqc) {
+              splited_file_info.row_count_ = remaining_row_count_in_file;
+              row_count_assigned_to_sqc += remaining_row_count_in_file;
+              file_start += remaining_row_count_in_file;
+              droped_row_count_on_last_loop = expected_row_count_to_sqc - row_count_assigned_to_sqc;
+              expected_row_count_to_sqc = row_count_assigned_to_sqc;
+            } else {
+              splited_file_info.row_count_ = row_count_needed_to_sqc;
+              row_count_assigned_to_sqc += row_count_needed_to_sqc;
+              file_start += row_count_needed_to_sqc;
+            }
             OZ (sqcs.at(sqc_idx)->get_access_external_table_files().push_back(splited_file_info));
           } else if (remaining_row_count_in_file > 0) {
             ObExternalFileInfo splited_file_info = files.at(file_idx);
@@ -528,23 +579,35 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
             splited_file_info.row_count_ = remaining_row_count_in_file;
             row_count_assigned_to_sqc += remaining_row_count_in_file;
             file_start += remaining_row_count_in_file;
+            if (remaining_row_count_in_file >= (1 - DROP_FACTOR) * row_count_needed_to_sqc) {
+              droped_row_count_on_last_loop = expected_row_count_to_sqc - row_count_assigned_to_sqc;
+              expected_row_count_to_sqc = row_count_assigned_to_sqc;
+            }
             OZ (sqcs.at(sqc_idx)->get_access_external_table_files().push_back(splited_file_info));
           } else { //remaining_row_count_in_file == 0
             ++file_idx;
             file_start = 0;
-            if (expected_row_count_to_sqc - row_count_assigned_to_sqc <= avg_row_count_to_sqc * DROP_FACTOR) {
-              droped_row_count_on_last_loop = expected_row_count_to_sqc - row_count_assigned_to_sqc;
-              expected_row_count_to_sqc = row_count_assigned_to_sqc;
-            }
           }
         }
       }
       sqc_row_counts.at(sqc_idx) = row_count_assigned_to_sqc;
       sqc_idx++;
-      LOG_TRACE("assigned big odps file to sqc", K(ret), K(sqc_row_counts), K(row_count_assigned_to_sqc), K(expected_row_count_to_sqc), K(avg_row_count_to_sqc), K(file_idx), K(sqc_idx), K(remaining_row_count_in_file));
+      LOG_TRACE("assigned big odps file to sqc", K(ret),
+                                                 K(sqc_row_counts),
+                                                 K(row_count_assigned_to_sqc),
+                                                 K(expected_row_count_to_sqc),
+                                                 K(avg_row_count_to_sqc),
+                                                 K(file_idx),
+                                                 K(sqc_idx),
+                                                 K(remaining_row_count_in_file));
     }
     const int64_t block_cnt = parallel / sqcs.count() * 3;
-    LOG_TRACE("split big odps file to sqc, going to split files to block in sqc", K(ret), K(sqc_row_counts), K(sqcs.count()), K(block_cnt), K(parallel), K(small_file_count));
+    LOG_TRACE("split big odps file to sqc, going to split files to block in sqc", K(ret),
+                                                                                  K(sqc_row_counts),
+                                                                                  K(sqcs.count()),
+                                                                                  K(block_cnt),
+                                                                                  K(parallel),
+                                                                                  K(small_file_count));
     for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
       ObIArray<share::ObExternalFileInfo> &sqc_files = sqcs.at(i)->get_access_external_table_files();
       if (sqc_files.empty() || sqc_row_counts.at(i) <= 0) {
@@ -574,16 +637,33 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
         while (OB_SUCC(ret) && row_count_assigned_to_block != expected_row_count_to_block) {
           if (file_idx >= sqc_files.count()) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("files in sqc iter end", K(i), K(block_idx), K(actual_block_cnt), K(row_count_assigned_to_block), K(expected_row_count_to_block), K(avg_row_count_to_block), K(block_row_tail), K(file_start), K(file_idx), K(sqc_files));
+            LOG_WARN("files in sqc iter end", K(i),
+                                              K(block_idx),
+                                              K(actual_block_cnt),
+                                              K(row_count_assigned_to_block),
+                                              K(expected_row_count_to_block),
+                                              K(avg_row_count_to_block),
+                                              K(block_row_tail),
+                                              K(file_start),
+                                              K(file_idx),
+                                              K(sqc_files));
           } else {
             int64_t remaining_row_count_in_file = sqc_files.at(file_idx).row_count_ - (file_start - sqc_files.at(file_idx).row_start_);
             int64_t row_count_needed_to_block = expected_row_count_to_block - row_count_assigned_to_block;
             if (remaining_row_count_in_file >= row_count_needed_to_block) {
               ObExternalFileInfo splited_file_info = sqc_files.at(file_idx);
               splited_file_info.row_start_ = file_start;
-              splited_file_info.row_count_ = row_count_needed_to_block;
-              row_count_assigned_to_block += row_count_needed_to_block;
-              file_start += row_count_needed_to_block;
+              if (remaining_row_count_in_file <= (1 + DROP_FACTOR) * row_count_needed_to_block) {
+                splited_file_info.row_count_ = remaining_row_count_in_file;
+                row_count_assigned_to_block += remaining_row_count_in_file;
+                file_start += remaining_row_count_in_file;
+                droped_row_count_on_last_loop = expected_row_count_to_block - row_count_assigned_to_block;
+                expected_row_count_to_block = row_count_assigned_to_block;
+              } else {
+                splited_file_info.row_count_ = row_count_needed_to_block;
+                row_count_assigned_to_block += row_count_needed_to_block;
+                file_start += row_count_needed_to_block;
+              }
               OZ (temp_block_files.push_back(splited_file_info));
             } else if (remaining_row_count_in_file > 0) {
               ObExternalFileInfo splited_file_info = sqc_files.at(file_idx);
@@ -591,14 +671,14 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
               splited_file_info.row_count_ = remaining_row_count_in_file;
               row_count_assigned_to_block += remaining_row_count_in_file;
               file_start += remaining_row_count_in_file;
+              if (remaining_row_count_in_file >= (1 - DROP_FACTOR) * row_count_needed_to_block) {
+                droped_row_count_on_last_loop = expected_row_count_to_block - row_count_assigned_to_block;
+                expected_row_count_to_block = row_count_assigned_to_block;
+              }
               OZ (temp_block_files.push_back(splited_file_info));
             } else { //remaining_row_count_in_file == 0
               ++file_idx;
               file_start = file_idx >= sqc_files.count() ? 0 : sqc_files.at(file_idx).row_start_;
-              if (expected_row_count_to_block - row_count_assigned_to_block <= avg_row_count_to_block * DROP_FACTOR) {
-                droped_row_count_on_last_loop = expected_row_count_to_block - row_count_assigned_to_block;
-                expected_row_count_to_block = row_count_assigned_to_block;
-              }
             }
           }
         }
@@ -639,12 +719,6 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
       }
     }
   }
-#else
-  int64_t sqc_idx = 0;
-  ret = OB_NOT_SUPPORTED;
-  LOG_WARN("not supported featue", K(ret));
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "odps external table");
-#endif
   return ret;
 }
 
@@ -913,57 +987,153 @@ int ObExternalTableUtils::collect_external_file_list(
   int ret = OB_SUCCESS;
 
   if (!properties.empty()) {
-#ifdef OB_BUILD_CPP_ODPS
-    // Since each partition information of an ODPS table obtained by the ODPS driver is a string,
-    // OceanBase treat partition string as an external table filename, one file corresponds to one odps partition,
-    // the number of files corresponds to the number of partitions.
-    sql::ObODPSTableRowIterator odps_driver;
-    sql::ObExternalFileFormat ex_format;
-    ex_format.format_type_ = sql::ObExternalFileFormat::ODPS_FORMAT;
-    if (OB_FAIL(ex_format.load_from_string(properties, allocator))) {
-      LOG_WARN("failed to load from string", K(ret));
-    } else if (OB_FAIL(odps_driver.init_tunnel(ex_format.odps_format_))) {
-      LOG_WARN("failed to init tunnel", K(ret));
-    } else if (OB_FAIL(odps_driver.pull_partition_info())) {
-      LOG_WARN("failed to pull partition info", K(ret));
-    } else if (odps_driver.is_part_table()) {
-      if (!is_partitioned_table) {
-        ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
-        LOG_WARN("remote odps table is partitioned table, but local odps external table is not partitioned table", K(ret));
-        LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, "remote odps table is partitioned table, but local odps external table is not partitioned table");
+    if (!GCONF._use_odps_jni_connector) {
+#if defined (OB_BUILD_CPP_ODPS)
+      // Since each partition information of an ODPS table obtained by the ODPS
+      // driver is a string, OceanBase treat partition string as an external
+      // table filename, one file corresponds to one odps partition, the number
+      // of files corresponds to the number of partitions.
+      sql::ObODPSTableRowIterator odps_driver;
+      sql::ObExternalFileFormat ex_format;
+      ex_format.format_type_ = sql::ObExternalFileFormat::ODPS_FORMAT;
+      if (OB_FAIL(ex_format.load_from_string(properties, allocator))) {
+        LOG_WARN("failed to load from string", K(ret));
+      } else if (OB_FAIL(odps_driver.init_tunnel(ex_format.odps_format_))) {
+        LOG_WARN("failed to init tunnel", K(ret));
+      } else if (OB_FAIL(odps_driver.pull_partition_info())) {
+        LOG_WARN("failed to pull partition info", K(ret));
+      } else if (odps_driver.is_part_table()) {
+        if (!is_partitioned_table) {
+          ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
+          LOG_WARN("remote odps table is partitioned table, but local odps "
+                   "external table is not partitioned table",
+                   K(ret));
+          LOG_USER_ERROR(
+              OB_EXTERNAL_ODPS_UNEXPECTED_ERROR,
+              "remote odps table is partitioned table, but local odps "
+              "external table is not partitioned table");
+        }
+        ObIArray<sql::ObODPSTableRowIterator::OdpsPartition> &part_list_info =
+            odps_driver.get_partition_info();
+        for (int64_t i = 0; OB_SUCC(ret) && i < part_list_info.count(); ++i) {
+          const char *part_spec_src = part_list_info.at(i).name_.c_str();
+          int64_t part_spec_src_len = STRLEN(part_spec_src);
+          char *part_spec = NULL;
+          if (OB_ISNULL(part_spec = reinterpret_cast<char *>(
+                            allocator.alloc(part_spec_src_len)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc mem", K(part_spec_src_len), K(ret));
+          } else {
+            MEMCPY(part_spec, part_spec_src, part_spec_src_len);
+            OZ(file_sizes.push_back(part_list_info.at(i).record_count_));
+            OZ(file_urls.push_back(ObString(part_spec_src_len, part_spec)));
+          }
+        }
+      } else {
+        ObIArray<sql::ObODPSTableRowIterator::OdpsPartition> &part_list_info =
+            odps_driver.get_partition_info();
+        if (is_partitioned_table) {
+          ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
+          LOG_WARN("remote odps table is not partitioned table, but local odps "
+                   "external table is partitioned table",
+                   K(ret));
+          LOG_USER_ERROR(
+              OB_EXTERNAL_ODPS_UNEXPECTED_ERROR,
+              "remote odps table is not partitioned table, but local "
+              "odps external table is partitioned table");
+        } else if (1 != part_list_info.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected count of partition info", K(ret),
+                   K(part_list_info.count()));
+        }
+        OZ(file_sizes.push_back(part_list_info.at(0).record_count_));
+        OZ(file_urls.push_back(ObString("")));
       }
-      ObIArray<sql::ObODPSTableRowIterator::OdpsPartition>& part_list_info = odps_driver.get_partition_info();
-      for (int64_t i = 0; OB_SUCC(ret) && i < part_list_info.count(); ++i) {
-        const char *part_spec_src = part_list_info.at(i).name_.c_str();
-        int64_t part_spec_src_len = STRLEN(part_spec_src);
-        char *part_spec = NULL;
-        if (OB_ISNULL(part_spec = reinterpret_cast<char *>(allocator.alloc(part_spec_src_len)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc mem", K(part_spec_src_len), K(ret));
+#else
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not support odps driver", K(ret));
+#endif
+    } else {
+#if defined (OB_BUILD_JNI_ODPS)
+      // Since each partition information of an ODPS table obtained by the ODPS
+      // driver is a string, OceanBase treat partition string as an external
+      // table filename, one file corresponds to one odps partition, the number
+      // of files corresponds to the number of partitions.
+      sql::ObExternalFileFormat ex_format;
+      sql::ObODPSJNITableRowIterator odps_jni_iter;
+      ex_format.format_type_ = sql::ObExternalFileFormat::ODPS_FORMAT;
+      if (is_oracle_mode()) {
+        ret = OB_ERR_UNSUPPORTED_TYPE;
+        LOG_WARN("Current not support to execute in oracle mode", K(ret));
+      } else if (OB_FAIL(ex_format.load_from_string(properties, allocator))) {
+        LOG_WARN("failed to load from string", K(ret));
+      } else if (OB_FAIL(odps_jni_iter.init_jni_schema_scanner(
+                     ex_format.odps_format_))) {
+        LOG_WARN("failed to init and open jni schema scanner", K(ret));
+      } else if (OB_FAIL(odps_jni_iter.pull_partition_info())) {
+        LOG_WARN("failed to pull columns info", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        if (odps_jni_iter.is_part_table()) {
+          // If remote odps table is partition table but local defined not
+          // partititon table.
+          if (!is_partitioned_table) {
+            ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
+            LOG_WARN("remote odps table is partitioned table, but local odps "
+                     "external table is not partitioned table",
+                     K(ret));
+            LOG_USER_ERROR(
+                OB_EXTERNAL_ODPS_UNEXPECTED_ERROR,
+                "remote odps table is partitioned table, but local odps "
+                "external table is not partitioned table");
+          } else {
+            ObIArray<sql::ObODPSJNITableRowIterator::OdpsJNIPartition>
+                &partition_specs = odps_jni_iter.get_partition_specs();
+            for (int64_t i = 0; OB_SUCC(ret) && i < partition_specs.count();
+                 ++i) {
+              ObString partition_spec = partition_specs.at(i).partition_spec_;
+              const char *part_spec_src = partition_spec.ptr();
+              int64_t part_spec_src_len = partition_spec.length();
+              char *part_spec = NULL;
+              if (OB_ISNULL(part_spec = reinterpret_cast<char *>(
+                                allocator.alloc(part_spec_src_len)))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("failed to alloc mem", K(part_spec_src_len), K(ret));
+              } else {
+                MEMCPY(part_spec, part_spec_src, part_spec_src_len);
+                OZ(file_sizes.push_back(partition_specs.at(i).record_count_));
+                OZ(file_urls.push_back(ObString(part_spec_src_len, part_spec)));
+              }
+            }
+          }
         } else {
-          MEMCPY(part_spec, part_spec_src, part_spec_src_len);
-          OZ(file_sizes.push_back(part_list_info.at(i).record_count_));
-          OZ (file_urls.push_back(ObString(part_spec_src_len, part_spec)));
+          ObIArray<sql::ObODPSJNITableRowIterator::OdpsJNIPartition>
+              &partition_specs = odps_jni_iter.get_partition_specs();
+          if (is_partitioned_table) {
+            ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
+            LOG_WARN(
+                "remote odps table is not partitioned table, but local odps "
+                "external table is partitioned table",
+                K(ret));
+            LOG_USER_ERROR(
+                OB_EXTERNAL_ODPS_UNEXPECTED_ERROR,
+                "remote odps table is not partitioned table, but local "
+                "odps external table is partitioned table");
+          } else if (1 != partition_specs.count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected count of partition info", K(ret),
+                     K(partition_specs.count()));
+          }
+          OZ(file_sizes.push_back(partition_specs.at(0).record_count_));
+          OZ(file_urls.push_back(ObString("")));
         }
       }
-    } else {
-      ObIArray<sql::ObODPSTableRowIterator::OdpsPartition>& part_list_info = odps_driver.get_partition_info();
-      if (is_partitioned_table) {
-        ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
-        LOG_WARN("remote odps table is not partitioned table, but local odps external table is partitioned table", K(ret));
-        LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, "remote odps table is not partitioned table, but local odps external table is partitioned table");
-      } else if (1 != part_list_info.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected count of partition info", K(ret), K(part_list_info.count()));
-      }
-      OZ(file_sizes.push_back(part_list_info.at(0).record_count_));
-      OZ (file_urls.push_back(ObString("")));
-    }
 #else
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
-    LOG_WARN("not support odps table in opensource", K(ret));
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
+      LOG_WARN("not support odps table in opensource", K(ret));
 #endif
+    }
   } else if (location.empty()) {
     //do nothing
   } else {

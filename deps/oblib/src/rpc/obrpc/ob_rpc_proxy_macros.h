@@ -10,11 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_RPC_OBRPC_OB_RPC_PROXY_MACROS_
-#define OCEANBASE_RPC_OBRPC_OB_RPC_PROXY_MACROS_
+// #ifndef OCEANBASE_RPC_OBRPC_OB_RPC_PROXY_MACROS_
+// #define OCEANBASE_RPC_OBRPC_OB_RPC_PROXY_MACROS_
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmacro-redefined"
 
 #include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
 
 #define OROP_ const ObRpcOpts &opts = ObRpcOpts()
 #define ORSSH_(pcode) SSHandle<pcode> &handle
@@ -36,6 +37,11 @@
 #define PRZ )(ORPR_UNDEF,
 #define PR11 )(ORPR11,
 
+#define RPC_FUNC_N(name) int name
+#define V_RPC_FUNC_N(name) virtual int name
+#define RPC_FUNC_N_(name) int name##_
+#define V_RPC_FUNC_N_(name) virtual int name##_
+
 #define OB_RPC_STRUCT(pcode, Input, Output)           \
   template <typename IGNORE>                          \
   struct ObRpc<pcode, IGNORE>                         \
@@ -53,6 +59,16 @@
     typedef Output Response;                    \
   };
 
+// for IMPLs only
+#ifdef OB_RPC_CLASS
+#define RPC_FUNC_N(name) int OB_RPC_CLASS::name
+#define V_RPC_FUNC_N(name) int OB_RPC_CLASS::name
+#define RPC_FUNC_N_(name) int OB_RPC_CLASS::name##_
+#define V_RPC_FUNC_N_(name) int OB_RPC_CLASS::name##_
+#define OROP_ const ObRpcOpts &opts
+#define OB_DEFINE_RPC_STRUCT(...)
+#endif
+
 #define RPC_CALL_DISPATCH(name, ...)                             \
   if (mock_proxy_) {                                             \
     mock_proxy_->set_server(dst_);                               \
@@ -63,7 +79,7 @@
 
 #define OB_DEFINE_RPC_SYNC(name, pcode, prio, Input, Output)    \
   OB_DEFINE_RPC_STRUCT(pcode, Input, Output)                    \
-  int name ## _(const Input& args, Output& result, OROP_)           \
+  RPC_FUNC_N_(name)(const Input& args, Output& result, OROP_)     \
   {                                                             \
     const static ObRpcPriority PR = prio;                       \
     int ret = common::OB_SUCCESS;                               \
@@ -77,35 +93,80 @@
     return ret;                                                 \
   }
 
-#define OB_DEFINE_RPC_S2_(name, pcode, prio, Input, Output)     \
-  OB_DEFINE_RPC_SYNC(name, pcode, prio, Input, Output);         \
-  virtual int name(const Input& args, Output& result, OROP_) {  \
-    RPC_CALL_DISPATCH(name, args, result, opts);                \
+
+#define OB_DECL_RPC_SYNC(name, pcode, prio, Input, Output)      \
+  OB_DEFINE_RPC_STRUCT(pcode, Input, Output)                    \
+  RPC_FUNC_N_(name)(const Input& args, Output& result, OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_SYNC OB_DECL_RPC_SYNC
+#endif
+
+#define OB_DEFINE_RPC_S2_(name, pcode, prio, Input, Output)       \
+  OB_DEFINE_RPC_SYNC(name, pcode, prio, Input, Output);           \
+  V_RPC_FUNC_N(name)(const Input& args, Output& result, OROP_) {  \
+    RPC_CALL_DISPATCH(name, args, result, opts);                  \
   }
+
+#define OB_DECL_RPC_S2_(name, pcode, prio, Input, Output)       \
+  OB_DEFINE_RPC_SYNC(name, pcode, prio, Input, Output);         \
+  V_RPC_FUNC_N(name)(const Input& args, Output& result, OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_S2_ OB_DECL_RPC_S2_
+#endif
+
 #define OB_DEFINE_RPC_S2(name, pcode, prio, Input, Output) OB_DEFINE_RPC_S2_(name, pcode, prio, EXPAND Input, Output)
 
 #define OB_DEFINE_RPC_S1_INPUT_(name, pcode, prio, Input) \
   OB_DEFINE_RPC_SYNC(name, pcode, prio, Input, NoneT);    \
-  virtual int name(const Input& args, OROP_) {            \
+  V_RPC_FUNC_N(name)(const Input& args, OROP_) {          \
     NoneT result;                                         \
     RPC_CALL_DISPATCH(name, args, opts);                  \
   }
+
+#define OB_DECL_RPC_S1_INPUT_(name, pcode, prio, Input)   \
+  OB_DEFINE_RPC_SYNC(name, pcode, prio, Input, NoneT);    \
+  V_RPC_FUNC_N(name)(const Input& args, OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_S1_INPUT_ OB_DECL_RPC_S1_INPUT_
+#endif
+
 #define OB_DEFINE_RPC_S1_INPUT(name, pcode, prio, Input) OB_DEFINE_RPC_S1_INPUT_(name, pcode, prio, EXPAND Input)
 #define OB_DEFINE_RPC_S1_OUTPUT(name, pcode, prio, Output)  \
   OB_DEFINE_RPC_SYNC(name, pcode, prio, NoneT, Output);     \
-  virtual int name(Output& result, OROP_) {                 \
+  V_RPC_FUNC_N(name)(Output& result, OROP_) {               \
     const NoneT args;                                       \
     RPC_CALL_DISPATCH(name, result, opts);                  \
   }
+
+#define OB_DECL_RPC_S1_OUTPUT(name, pcode, prio, Output)  \
+  OB_DEFINE_RPC_SYNC(name, pcode, prio, NoneT, Output);     \
+  V_RPC_FUNC_N(name)(Output& result, OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_S1_OUTPUT OB_DECL_RPC_S1_OUTPUT
+#endif
+
 #define OB_DEFINE_RPC_S1(name, pcode, prio, InOut) IF_IS_PAREN(InOut, OB_DEFINE_RPC_S1_INPUT, OB_DEFINE_RPC_S1_OUTPUT)(name, pcode, prio, InOut)
 
 #define OB_DEFINE_RPC_S0(name, pcode, prio)             \
   OB_DEFINE_RPC_SYNC(name, pcode, prio, NoneT, NoneT);  \
-  virtual int name(OROP_) {                             \
+  V_RPC_FUNC_N(name)(OROP_) {                           \
     const NoneT args;                                   \
     NoneT result;                                       \
     RPC_CALL_DISPATCH(name, opts);                      \
   }
+
+#define OB_DECL_RPC_S0(name, pcode, prio)               \
+  OB_DEFINE_RPC_SYNC(name, pcode, prio, NoneT, NoneT);  \
+  V_RPC_FUNC_N(name)(OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_S0 OB_DECL_RPC_S0
+#endif
+
 
 #define OB_DEFINE_RPC_S(prio, name, pcode, ...)                 \
   SELECT4(,                                                     \
@@ -118,7 +179,7 @@
 
 #define OB_DEFINE_RPC_STREAM(name, pcode, prio, Input, Output)          \
   OB_DEFINE_RPC_STRUCT(pcode, Input, Output);                           \
-  int name ##_(const Input& args, Output& result, ORSSH_(pcode), OROP_) { \
+  RPC_FUNC_N_(name)(const Input& args, Output& result, ORSSH_(pcode), OROP_) { \
     int ret = common::OB_SUCCESS;                                       \
     const static ObRpcPriority PR = prio;                               \
     ObRpcOpts newopts = opts;                                           \
@@ -130,26 +191,65 @@
     ret = rpc_call(pcode, args, result, &handle, newopts);              \
     return ret;                                                         \
   }
+
+#define OB_DECL_RPC_STREAM(name, pcode, prio, Input, Output)            \
+  OB_DEFINE_RPC_STRUCT(pcode, Input, Output);                           \
+  RPC_FUNC_N_(name)(const Input& args, Output& result, ORSSH_(pcode), OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_STREAM OB_DECL_RPC_STREAM
+#endif
+
 // define synchronized stream interface
 #define OB_DEFINE_RPC_SS2_(name, pcode, prio, Input, Output)            \
   OB_DEFINE_RPC_STREAM(name, pcode, prio, Input, Output);               \
-  virtual int name(const Input& args, Output& result, ORSSH_(pcode), OROP_) { \
+  V_RPC_FUNC_N(name)(const Input& args, Output& result, ORSSH_(pcode), OROP_) { \
     return name ##_(args, result, handle, opts);                               \
   }
+
+#define OB_DECL_RPC_SS2_(name, pcode, prio, Input, Output)              \
+  OB_DEFINE_RPC_STREAM(name, pcode, prio, Input, Output);               \
+  V_RPC_FUNC_N(name)(const Input& args, Output& result, ORSSH_(pcode), OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_SS2_ OB_DECL_RPC_SS2_
+#endif
+
 #define OB_DEFINE_RPC_SS2(name, pcode, prio, Input, Output) OB_DEFINE_RPC_SS2_(name, pcode, prio, EXPAND Input, Output)
-#define OB_DEFINE_RPC_SS1_INPUT_(name, pcode, prio, Input)     \
+#define OB_DEFINE_RPC_SS1_INPUT_(name, pcode, prio, Input)    \
   OB_DEFINE_RPC_STREAM(name, pcode, prio, Input, NoneT);      \
-  virtual int name(const Input& args, ORSSH_(pcode), OROP_) { \
+  V_RPC_FUNC_N(name)(const Input& args, ORSSH_(pcode), OROP_) { \
     NoneT result;                                             \
     return name ##_(args, result, handle, opts);              \
   }
+
+#define OB_DECL_RPC_SS1_INPUT_(name, pcode, prio, Input)      \
+  OB_DEFINE_RPC_STREAM(name, pcode, prio, Input, NoneT);      \
+  V_RPC_FUNC_N(name)(const Input& args, ORSSH_(pcode), OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_SS1_INPUT_ OB_DECL_RPC_SS1_INPUT_
+#endif
+
+
 #define OB_DEFINE_RPC_SS1_INPUT(name, pcode, prio, Input)  OB_DEFINE_RPC_SS1_INPUT_(name, pcode, prio, EXPAND Input)
-#define OB_DEFINE_RPC_SS1_OUTPUT(name, pcode, prio, Output) \
-  OB_DEFINE_RPC_STREAM(name, pcode, prio, NoneT, Output);   \
-  virtual int name(Output& result, ORSSH_(pcode), OROP_) {  \
-    NoneT args;                                             \
-    return name ##_(args, result, handle, opts);            \
+#define OB_DEFINE_RPC_SS1_OUTPUT(name, pcode, prio, Output)   \
+  OB_DEFINE_RPC_STREAM(name, pcode, prio, NoneT, Output);     \
+  V_RPC_FUNC_N(name)(Output& result, ORSSH_(pcode), OROP_) {  \
+    NoneT args;                                               \
+    return name ##_(args, result, handle, opts);              \
   }
+
+
+#define OB_DECL_RPC_SS1_OUTPUT(name, pcode, prio, Output)   \
+  OB_DEFINE_RPC_STREAM(name, pcode, prio, NoneT, Output);   \
+  V_RPC_FUNC_N(name)(Output& result, ORSSH_(pcode), OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_SS1_OUTPUT OB_DECL_RPC_SS1_OUTPUT
+#endif
+
+
 #define OB_DEFINE_RPC_SS1(name, pcode, prio, InOut)  IF_IS_PAREN(InOut, OB_DEFINE_RPC_SS1_INPUT, OB_DEFINE_RPC_SS1_OUTPUT)(name, pcode, prio, InOut)
 
 // Theoretically, stream rpc without argument or result is
@@ -174,9 +274,9 @@
     return name##_(args, cb, opts);          \
   }
 
-#define OB_DEFINE_RPC_ASYNC(name, pcode, prio, Input, Output)             \
+#define OB_DEFINE_RPC_ASYNC(name, pcode, prio, Input, Output)           \
   OB_DEFINE_RPC_STRUCT(pcode, Input, Output);                           \
-  int name##_(const Input& args, ORACB_(pcode), OROP_)                   \
+  RPC_FUNC_N_(name)(const Input& args, ORACB_(pcode), OROP_)            \
   {                                                                     \
     const static ObRpcPriority PR = prio;                               \
     int ret = common::OB_SUCCESS;                                       \
@@ -190,34 +290,78 @@
     return ret;                                                         \
   }
 
-#define OB_DEFINE_RPC_AP2_(name, pcode, prio, Input, Output)     \
-  OB_DEFINE_RPC_ASYNC(name, pcode, prio, Input, Output);        \
-  virtual int name(const Input& args, ORACB_(pcode), OROP_)  {  \
-    OB_RPC_ASYNC_DISPATCH(name, args, cb, opts);                \
+#define OB_DECL_RPC_ASYNC(name, pcode, prio, Input, Output)             \
+  OB_DEFINE_RPC_STRUCT(pcode, Input, Output);                           \
+  RPC_FUNC_N_(name)(const Input& args, ORACB_(pcode), OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_ASYNC OB_DECL_RPC_ASYNC
+#endif
+
+#define OB_DEFINE_RPC_AP2_(name, pcode, prio, Input, Output)       \
+  OB_DEFINE_RPC_ASYNC(name, pcode, prio, Input, Output);           \
+  V_RPC_FUNC_N(name)(const Input& args, ORACB_(pcode), OROP_)  {   \
+    OB_RPC_ASYNC_DISPATCH(name, args, cb, opts);                   \
   }
+
+
+#define OB_DECL_RPC_AP2_(name, pcode, prio, Input, Output)      \
+  OB_DEFINE_RPC_ASYNC(name, pcode, prio, Input, Output);        \
+  V_RPC_FUNC_N(name)(const Input& args, ORACB_(pcode), OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_AP2_ OB_DECL_RPC_AP2_
+#endif
+
 #define OB_DEFINE_RPC_AP2(name, pcode, prio, Input, Output) OB_DEFINE_RPC_AP2_(name, pcode, prio, EXPAND Input, Output)
 
-#define OB_DEFINE_RPC_AP1_INPUT_(name, pcode, prio, Input)       \
-  OB_DEFINE_RPC_ASYNC(name, pcode, prio, Input, NoneT);         \
-  virtual int name(const Input& args, ORACB_(pcode), OROP_)  {  \
-    OB_RPC_ASYNC_DISPATCH(name, args, cb, opts);                \
+#define OB_DEFINE_RPC_AP1_INPUT_(name, pcode, prio, Input)        \
+  OB_DEFINE_RPC_ASYNC(name, pcode, prio, Input, NoneT);           \
+  V_RPC_FUNC_N(name)(const Input& args, ORACB_(pcode), OROP_)  {  \
+    OB_RPC_ASYNC_DISPATCH(name, args, cb, opts);                  \
   }
+
+#define OB_DECL_RPC_AP1_INPUT_(name, pcode, prio, Input)        \
+  OB_DEFINE_RPC_ASYNC(name, pcode, prio, Input, NoneT);         \
+  V_RPC_FUNC_N(name)(const Input& args, ORACB_(pcode), OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_AP1_INPUT_ OB_DECL_RPC_AP1_INPUT_
+#endif
+
 #define OB_DEFINE_RPC_AP1_OUTPUT(name, pcode, prio, Output) \
   OB_DEFINE_RPC_ASYNC(name, pcode, prio, NoneT, Output);    \
-  virtual int name(ORACB_(pcode), OROP_)  {                 \
+  V_RPC_FUNC_N(name)(ORACB_(pcode), OROP_)  {                 \
     OB_RPC_ASYNC_DISPATCH(name, cb, opts);                  \
   }
+
+#define OB_DECL_RPC_AP1_OUTPUT(name, pcode, prio, Output) \
+  OB_DEFINE_RPC_ASYNC(name, pcode, prio, NoneT, Output);    \
+  V_RPC_FUNC_N(name)(ORACB_(pcode), OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_AP1_OUTPUT OB_DECL_RPC_AP1_OUTPUT
+#endif
+
 #define OB_DEFINE_RPC_AP1_INPUT(name, pcode, prio, InOut) OB_DEFINE_RPC_AP1_INPUT_(name, pcode, prio, EXPAND InOut)
 #define OB_DEFINE_RPC_AP1(name, pcode, prio, InOut)   IF_IS_PAREN(InOut, OB_DEFINE_RPC_AP1_INPUT, OB_DEFINE_RPC_AP1_OUTPUT)(name, pcode, prio, InOut)
 
 #define OB_DEFINE_RPC_AP0(name, pcode, prio)            \
   OB_DEFINE_RPC_ASYNC(name, pcode, prio, NoneT, NoneT); \
-  virtual int name(ORACB_(pcode), OROP_)  {             \
+  V_RPC_FUNC_N(name)(ORACB_(pcode), OROP_)  {             \
     OB_RPC_ASYNC_DISPATCH(name, cb, opts);              \
   }
 
+#define OB_DECL_RPC_AP0(name, pcode, prio)              \
+  OB_DEFINE_RPC_ASYNC(name, pcode, prio, NoneT, NoneT); \
+  V_RPC_FUNC_N(name)(ORACB_(pcode), OROP_)
+
+#ifdef OB_RPC_DECLARATIONS
+#define OB_DEFINE_RPC_AP0 OB_DECL_RPC_AP0
+#endif
+
 #define SELECT4(a, b, c, d, ...) d
-#define OB_DEFINE_RPC_AP(prio, name, pcode, ...)           \
+#define OB_DEFINE_RPC_AP(prio, name, pcode, ...)                  \
   SELECT4(,                                                       \
           ## __VA_ARGS__,                                         \
           OB_DEFINE_RPC_AP2,                                      \
@@ -225,5 +369,5 @@
           OB_DEFINE_RPC_AP0) (name, pcode, prio, ## __VA_ARGS__)
 
 #define RPC_AP(args...) _CONCAT(OB_DEFINE_RPC, _AP IGNORE_(args))
-
-#endif // _OB_RPC_PROXY_MACROS_H_
+#pragma GCC diagnostic pop
+// #endif // _OB_RPC_PROXY_MACROS_H_

@@ -98,6 +98,7 @@ struct ModulePageAllocator: public ObIAllocator
   void set_tenant_id(uint64_t tenant_id) {attr_.tenant_id_ = tenant_id;};
   void set_ctx_id(int64_t ctx_id) { attr_.ctx_id_ = ctx_id; }
   void set_attr(const lib::ObMemAttr &attr) { attr_ = attr; }
+  const lib::ObMemAttr &get_attr() const { return attr_; }
   uint64_t get_tenant_id() { return attr_.tenant_id_; }
   lib::ObLabel get_label() const { return attr_.label_; }
   void *alloc(const int64_t sz)
@@ -530,6 +531,7 @@ public: // API
   void set_tenant_id(uint64_t tenant_id) { page_allocator_.set_tenant_id(tenant_id); }
   void set_ctx_id(int64_t ctx_id) { page_allocator_.set_ctx_id(ctx_id); }
   void set_attr(const lib::ObMemAttr &attr) { page_allocator_.set_attr(attr); }
+  const PageAllocatorT &get_page_allocator() { return page_allocator_; }
   /** allocate sz bytes */
   CharT *_alloc(const int64_t sz)
   {

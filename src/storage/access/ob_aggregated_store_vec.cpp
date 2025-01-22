@@ -29,7 +29,9 @@ ObAggGroupVec::ObAggGroupVec()
     agg_type_flag_(),
     need_access_data_(false),
     need_get_row_ids_(false)
-{}
+{
+  agg_cells_.set_attr(ObMemAttr(MTL_ID(), "PDAggStore"));
+}
 
 ObAggGroupVec::ObAggGroupVec(ObColumnParam* col_param, sql::ObExpr* project_expr,
                              const int32_t col_offset, const int32_t col_index)
@@ -41,7 +43,9 @@ ObAggGroupVec::ObAggGroupVec(ObColumnParam* col_param, sql::ObExpr* project_expr
     agg_type_flag_(),
     need_access_data_(false),
     need_get_row_ids_(false)
-{}
+{
+  agg_cells_.set_attr(ObMemAttr(MTL_ID(), "PDAggStore"));
+}
 
 ObAggGroupVec::~ObAggGroupVec()
 {
@@ -169,6 +173,7 @@ ObAggregatedStoreVec::ObAggregatedStoreVec(
         need_access_data_(false),
         need_get_row_ids_(false)
 {
+  agg_groups_.set_attr(ObMemAttr(MTL_ID(), "PDAggStore"));
   is_vec2_ = true;
 }
 

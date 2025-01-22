@@ -23,6 +23,7 @@
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 #include "storage/ddl/ob_direct_load_struct.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"
@@ -199,6 +200,243 @@ int ObTabletCreateSSTableParam::inner_init_with_merge_res(const blocksstable::Ob
     LOG_WARN("fail to fill data block ids", K(ret), K(res.data_block_ids_));
   } else if (OB_FAIL(other_block_ids_.assign(res.other_block_ids_))) {
     LOG_WARN("fail to fill other block ids", K(ret), K(res.other_block_ids_));
+  }
+  return ret;
+}
+
+int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &tablet_id,
+                                                             const ObStorageSchema &storage_schema,
+                                                             const int64_t snapshot_version,
+                                                             const int64_t column_group_idx,
+                                                             const bool has_all_column_group)
+{
+  int ret = OB_SUCCESS;
+  set_init_value_for_column_store_();
+  if (OB_UNLIKELY(!storage_schema.is_valid() || !tablet_id.is_valid()
+      || OB_INVALID_VERSION == snapshot_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(storage_schema), K(snapshot_version));
+  } else if (OB_FAIL(storage_schema.get_encryption_id(encrypt_id_))) {
+    LOG_WARN("fail to get_encryption_id", K(ret), K(storage_schema));
+  } else {
+    master_key_id_ = storage_schema.get_master_key_id();
+    MEMCPY(encrypt_key_, storage_schema.get_encrypt_key_str(), storage_schema.get_encrypt_key_len());
+
+    const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    table_key_.table_type_ = 1 < storage_schema.get_column_group_count()
+                                 ? ObITable::TableType::COLUMN_ORIENTED_SSTABLE
+                                 : ObITable::TableType::MAJOR_SSTABLE;
+
+    table_key_.tablet_id_ = tablet_id;
+    table_key_.version_range_.snapshot_version_ = snapshot_version;
+    max_merged_trans_version_ = snapshot_version;
+
+    schema_version_ = storage_schema.get_schema_version();
+    create_snapshot_version_ = 0;
+    progressive_merge_round_ = storage_schema.get_progressive_merge_round();
+    progressive_merge_step_ = 0;
+
+    table_mode_ = storage_schema.get_table_mode_struct();
+    index_type_ = storage_schema.get_index_type();
+    rowkey_column_cnt_ = storage_schema.get_rowkey_column_num()
+            + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    root_block_addr_.set_none_addr();
+    data_block_macro_meta_addr_.set_none_addr();
+    root_row_store_type_ = (ObRowStoreType::ENCODING_ROW_STORE == storage_schema.get_row_store_type()
+        ? ObRowStoreType::SELECTIVE_ENCODING_ROW_STORE : storage_schema.get_row_store_type());
+    latest_row_store_type_ = storage_schema.get_row_store_type();
+    data_index_tree_height_ = 0;
+    index_blocks_cnt_ = 0;
+    data_blocks_cnt_ = 0;
+    micro_block_cnt_ = 0;
+    use_old_macro_block_count_ = 0;
+    data_checksum_ = 0;
+    occupy_size_ = 0;
+    ddl_scn_.set_min();
+    filled_tx_scn_.set_min();
+    tx_data_recycle_scn_.set_min();
+    original_size_ = 0;
+    compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+    table_backup_flag_.reset();
+    table_shared_flag_.reset();
+    sstable_logic_seq_ = 0;
+    row_count_ = 0;
+    recycle_version_ = 0;
+    root_macro_seq_ = 0;
+    nested_size_ = 0;
+    nested_offset_ = 0;
+    column_group_cnt_ = 1;
+    co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
+    full_column_cnt_ = 0;
+    is_co_table_without_cgs_ = false;
+    co_base_snapshot_version_ = 0;
+    if (OB_FAIL(storage_schema.get_store_column_count(column_cnt_, true/*is_full*/))) {
+      LOG_WARN("fail to get stored col cnt of table schema", K(ret), K(storage_schema));
+    } else if (FALSE_IT(column_cnt_ += multi_version_col_cnt)) {
+    } else if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(column_cnt_,
+        column_checksums_))) {
+      LOG_WARN("fail to fill column checksum for empty major", K(ret), K(column_cnt_));
+    }
+  }
+
+  if (OB_SUCC(ret) && column_group_idx >= 0) {
+    table_key_.column_group_idx_ = column_group_idx;
+    is_co_table_without_cgs_ = true;
+
+    if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(full_column_cnt_))) {
+      LOG_WARN("failed to get_stored_column_count_in_sstable", K(ret));
+    } else {
+      const ObStorageColumnGroupSchema &cg_schema = storage_schema.get_column_groups().at(column_group_idx);
+
+      if (cg_schema.is_all_column_group()) {
+        table_key_.table_type_ = ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
+        co_base_type_ = ObCOSSTableBaseType::ALL_CG_TYPE;
+      } else if (cg_schema.is_rowkey_column_group()) {
+        table_key_.table_type_ = has_all_column_group
+                                        ? ObITable::TableType::ROWKEY_COLUMN_GROUP_SSTABLE
+                                        : ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
+
+        co_base_type_ = has_all_column_group
+                              ? ObCOSSTableBaseType::ALL_CG_TYPE
+                              : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
+
+        rowkey_column_cnt_ = cg_schema.column_cnt_;
+        column_cnt_ = cg_schema.column_cnt_;
+      } else {
+        table_key_.table_type_ = ObITable::TableType::NORMAL_COLUMN_GROUP_SSTABLE;
+        rowkey_column_cnt_ = 0;
+        column_cnt_ = cg_schema.column_cnt_;
+      }
+
+      if (ObITable::TableType::COLUMN_ORIENTED_SSTABLE == table_key_.table_type_) {
+        column_group_cnt_ = storage_schema.get_column_group_count();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTabletID &tablet_id,
+                                                                   const share::SCN &start_scn,
+                                                                   const share::SCN &end_scn,
+                                                                   const blocksstable::ObSSTableBasicMeta &basic_meta)
+{
+  int ret = OB_SUCCESS;
+  set_init_value_for_column_store_();
+  table_key_.table_type_ = ObITable::TableType::MINOR_SSTABLE;
+  table_key_.tablet_id_ = tablet_id;
+  table_key_.scn_range_.start_scn_ = start_scn;
+  table_key_.scn_range_.end_scn_ = end_scn;
+  max_merged_trans_version_ = 0;
+
+  schema_version_ = basic_meta.schema_version_;
+  progressive_merge_round_ = basic_meta.progressive_merge_round_;
+  progressive_merge_step_ = basic_meta.progressive_merge_step_;
+  sstable_logic_seq_ = basic_meta.sstable_logic_seq_;
+  filled_tx_scn_ = basic_meta.filled_tx_scn_;
+  table_mode_ = basic_meta.table_mode_;
+  index_type_ = static_cast<share::schema::ObIndexType> (basic_meta.index_type_);
+  rowkey_column_cnt_ = basic_meta.rowkey_column_count_;
+  latest_row_store_type_ = basic_meta.latest_row_store_type_;
+  recycle_version_ = basic_meta.recycle_version_;
+  schema_version_ = basic_meta.schema_version_;
+  create_snapshot_version_ = basic_meta.create_snapshot_version_;
+  ddl_scn_ = basic_meta.ddl_scn_;
+  progressive_merge_round_ = basic_meta.progressive_merge_round_;
+  progressive_merge_step_ = basic_meta.progressive_merge_step_;
+  column_cnt_ = basic_meta.column_cnt_;
+  master_key_id_ = basic_meta.master_key_id_;
+  co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
+  MEMCPY(encrypt_key_, basic_meta.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+
+  root_block_addr_.set_none_addr();
+  data_block_macro_meta_addr_.set_none_addr();
+  root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  data_index_tree_height_ = 0;
+  index_blocks_cnt_ = 0;
+  data_blocks_cnt_ = 0;
+  micro_block_cnt_ = 0;
+  use_old_macro_block_count_ = 0;
+  row_count_ = 0;
+  data_checksum_ = 0;
+  occupy_size_ = 0;
+  ddl_scn_.set_min();
+  filled_tx_scn_ = end_scn;
+  tx_data_recycle_scn_.set_min();
+  original_size_ = 0;
+  compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  nested_offset_ = 0;
+  nested_size_ = 0;
+  root_macro_seq_ = 0;
+  full_column_cnt_ = 0;
+  column_group_cnt_ = 1;
+  return ret;
+}
+
+int ObTabletCreateSSTableParam::init_for_transfer_empty_minor_sstable(const common::ObTabletID &tablet_id,
+                                                                      const share::SCN &start_scn,
+                                                                      const share::SCN &end_scn,
+                                                                      const ObStorageSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  set_init_value_for_column_store_();
+  master_key_id_ = table_schema.get_master_key_id();
+  MEMCPY(encrypt_key_, table_schema.get_encrypt_key_str(), table_schema.get_encrypt_key_len());
+  const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  table_key_.table_type_ = ObITable::TableType::MINOR_SSTABLE;
+  table_key_.tablet_id_ = tablet_id;
+  table_key_.scn_range_.start_scn_ = start_scn;
+  table_key_.scn_range_.end_scn_ = end_scn;
+  max_merged_trans_version_ = 0;
+
+  schema_version_ = table_schema.get_schema_version();
+  create_snapshot_version_ = 0;
+  progressive_merge_round_ = table_schema.get_progressive_merge_round();
+  progressive_merge_step_ = 0;
+
+  table_mode_ = table_schema.get_table_mode_struct();
+  index_type_ = table_schema.get_index_type();
+  rowkey_column_cnt_ = table_schema.get_rowkey_column_num()
+          + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  root_block_addr_.set_none_addr();
+  data_block_macro_meta_addr_.set_none_addr();
+  root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  data_index_tree_height_ = 0;
+  index_blocks_cnt_ = 0;
+  data_blocks_cnt_ = 0;
+  micro_block_cnt_ = 0;
+  use_old_macro_block_count_ = 0;
+  column_cnt_ = table_schema.get_column_count() + multi_version_col_cnt;
+  data_checksum_ = 0;
+  occupy_size_ = 0;
+  ddl_scn_.set_min();
+  filled_tx_scn_ = end_scn;
+  tx_data_recycle_scn_.set_min();
+  original_size_ = 0;
+  compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  table_backup_flag_.reset();
+  table_shared_flag_.reset();
+  sstable_logic_seq_ = 0;
+  row_count_ = 0;
+  recycle_version_ = 0;
+  root_macro_seq_ = 0;
+  nested_offset_ = 0;
+  nested_size_ = 0;
+  column_group_cnt_ = 1;
+  co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
+  full_column_cnt_ = 0;
+  is_co_table_without_cgs_ = false;
+  co_base_snapshot_version_ = 0;
+
+  if (OB_FAIL(table_schema.get_encryption_id(encrypt_id_))) {
+    LOG_WARN("fail to get encryption id", K(ret), K(table_schema));
+  }
+
+  if (OB_SUCC(ret) && !is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid param", K(ret), K(*this));
   }
   return ret;
 }
@@ -514,6 +752,128 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
       }
     }
   }
+
+  if (OB_SUCC(ret)) {
+    if (!ddl_param.table_key_.is_co_sstable()) {
+      uncommitted_tx_id_ = ddl_param.trans_id_.get_id();
+    }
+  }
+  return ret;
+}
+
+
+int ObTabletCreateSSTableParam::init_for_ddl_mem(const ObITable::TableKey &table_key,
+                                                 const share::SCN &ddl_start_scn,
+                                                 const ObStorageSchema &storage_schema,
+                                                 ObBlockMetaTree &block_meta_tree)
+{
+  int ret = OB_SUCCESS;
+  set_init_value_for_column_store_();
+  int64_t column_count = 0;
+  const ObDataStoreDesc &data_desc = block_meta_tree.get_data_desc();
+  const int64_t root_block_size = sizeof(ObBlockMetaTree);
+
+  if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(column_count))) {
+    LOG_WARN("fail to get stored column count in sstable", K(ret));
+  } else {
+    table_key_ = table_key;
+    if (table_key.is_column_store_sstable()) {
+      if (table_key.is_normal_cg_sstable()) {
+        table_key_.table_type_ = ObITable::TableType::DDL_MEM_CG_SSTABLE;
+        rowkey_column_cnt_ = 0;
+        column_cnt_ = 1;
+      } else { // co sstable with all cg or rowkey cg
+        table_key_.table_type_ = ObITable::TableType::DDL_MEM_CO_SSTABLE;
+        rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+
+        // calculate column count
+        const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema.get_column_groups();
+        const int64_t cg_idx = table_key_.get_column_group_id();
+        if (cg_idx < 0 || cg_idx >= cg_schemas.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected column group index", K(ret), K(cg_idx));
+        } else if (cg_schemas.at(cg_idx).is_rowkey_column_group()) {
+          column_count = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+        } else {
+          if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(column_count))) {
+            LOG_WARN("fail to get stored column count in sstable", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          column_cnt_ = column_count;
+        }
+      }
+    } else {
+      if (table_key.table_type_ == ObITable::TableType::MINI_SSTABLE) {
+        table_key_.table_type_ = ObITable::TableType::DDL_MEM_MINI_SSTABLE;
+      } else {
+        table_key_.table_type_ = ObITable::TableType::DDL_MEM_SSTABLE;
+      }
+      rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+      column_cnt_ = column_count;
+    }
+    is_ready_for_read_ = true;
+    table_mode_ = storage_schema.get_table_mode_struct();
+    index_type_ = storage_schema.get_index_type();
+    schema_version_ = storage_schema.get_schema_version();
+    latest_row_store_type_ = storage_schema.get_row_store_type();
+    create_snapshot_version_ = table_key.get_snapshot_version();
+    max_merged_trans_version_ = table_key.get_snapshot_version();
+    ddl_scn_ = ddl_start_scn;
+    root_row_store_type_ = data_desc.get_row_store_type(); // for root block, not used for ddl memtable
+    data_index_tree_height_ = 2; // fixed tree height, because there is only one root block
+    contain_uncommitted_row_ = table_key.is_minor_sstable();
+    compressor_type_ = data_desc.get_compressor_type();
+    encrypt_id_ = data_desc.get_encrypt_id();
+    master_key_id_ = data_desc.get_master_key_id();
+    MEMCPY(encrypt_key_, data_desc.get_encrypt_key(), share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+    use_old_macro_block_count_ = 0; // all new, no reuse
+    index_blocks_cnt_ = 0; // index macro block count, the index is in memory, so be 0.
+    other_block_ids_.reset(); // other blocks contains only index macro blocks now, so empty.
+    filled_tx_scn_ = table_key.is_major_sstable() ? SCN::min_scn() : table_key.get_end_scn();
+    tx_data_recycle_scn_.set_min();
+    table_backup_flag_.reset();
+    table_shared_flag_.reset();
+    sstable_logic_seq_ = 0;
+    row_count_ = 0;
+    recycle_version_ = 0;
+    root_macro_seq_ = 0;
+    nested_size_ = 0;
+    nested_offset_ = 0;
+    data_blocks_cnt_ = 0;
+    micro_block_cnt_ = 0;
+    occupy_size_ = 0;
+    original_size_ = 0;
+    progressive_merge_round_ = 0;
+    progressive_merge_step_ = 0;
+    column_group_cnt_ = 1;
+    co_base_type_ = ObCOSSTableBaseType::INVALID_TYPE;
+    full_column_cnt_ = 0;
+    is_co_table_without_cgs_ = false;
+    co_base_snapshot_version_ = 0;
+
+    if (OB_SUCC(ret)) {
+      // set root block for data tree
+      if (OB_FAIL(root_block_addr_.set_mem_addr(0/*offset*/, root_block_size/*size*/))) {
+        LOG_WARN("set root block address for data tree failed", K(ret));
+      } else {
+        root_block_data_.type_ = ObMicroBlockData::DDL_BLOCK_TREE;
+        root_block_data_.buf_ = reinterpret_cast<char *>(&block_meta_tree);
+        root_block_data_.size_ = root_block_size;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      // set root block for secondary meta tree
+      if (OB_FAIL(data_block_macro_meta_addr_.set_mem_addr(0/*offset*/, root_block_size/*size*/))) {
+        LOG_WARN("set root block address for secondary meta tree failed", K(ret));
+      } else {
+        data_block_macro_meta_.type_ = ObMicroBlockData::DDL_BLOCK_TREE;
+        data_block_macro_meta_.buf_ = reinterpret_cast<char *>(&block_meta_tree);
+        data_block_macro_meta_.size_ = root_block_size;
+      }
+    }
+  }
   return ret;
 }
 
@@ -625,6 +985,109 @@ int ObTabletCreateSSTableParam::init_for_ss_ddl(blocksstable::ObSSTableMergeRes 
   return ret;
 }
 
+
+int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
+                                               const ObITable::TableKey &src_table_key,
+                                               const blocksstable::ObSSTableBasicMeta &basic_meta,
+                                               const int64_t schema_version,
+                                               const blocksstable::ObSSTableMergeRes &res)
+{
+  int ret = OB_SUCCESS;
+  set_init_value_for_column_store_();
+  table_key_ = src_table_key;
+  table_key_.tablet_id_ = dst_tablet_id;
+  sstable_logic_seq_ = basic_meta.sstable_logic_seq_;
+  filled_tx_scn_ = basic_meta.filled_tx_scn_;
+  table_mode_ = basic_meta.table_mode_;
+  index_type_ = static_cast<share::schema::ObIndexType> (basic_meta.index_type_);
+  rowkey_column_cnt_ = basic_meta.rowkey_column_count_;
+  latest_row_store_type_ = basic_meta.latest_row_store_type_;
+  recycle_version_ = basic_meta.recycle_version_;
+  schema_version_ = schema_version; // use new schema version.
+  create_snapshot_version_ = basic_meta.create_snapshot_version_;
+  ddl_scn_ = basic_meta.ddl_scn_;
+  progressive_merge_round_ = basic_meta.progressive_merge_round_;
+  progressive_merge_step_ = basic_meta.progressive_merge_step_;
+  co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
+
+  ddl_scn_.set_min();
+  nested_size_ = res.nested_size_;
+  nested_offset_ = res.nested_offset_;
+  max_merged_trans_version_ = res.max_merged_trans_version_;
+  column_cnt_ = res.data_column_cnt_;
+  full_column_cnt_ = 0;
+  tx_data_recycle_scn_.set_min();
+  column_group_cnt_ = 1;
+
+  if (OB_FAIL(inner_init_with_merge_res(res))) {
+    LOG_WARN("fail to inner init with merge res", K(ret), K(res));
+  }
+  if (OB_SUCC(ret) && table_key_.is_major_sstable()) {
+    if (OB_FAIL(column_checksums_.assign(res.data_column_checksums_))) {
+      LOG_WARN("fill column checksum failed", K(ret), K(res));
+    }
+  }
+  return ret;
+}
+
+int ObTabletCreateSSTableParam::init_for_lob_split(const ObTabletID &new_tablet_id,
+                                                   const ObITable::TableKey &table_key,
+                                                   const blocksstable::ObSSTableBasicMeta &basic_meta,
+                                                   const compaction::ObMergeType &merge_type,
+                                                   const int64_t schema_version,
+                                                   const int64_t dst_major_snapshot_version,
+                                                   const int64_t uncommitted_tx_id,
+                                                   const int64_t sstable_logic_seq,
+                                                   const blocksstable::ObSSTableMergeRes &res)
+{
+  int ret = OB_SUCCESS;
+  set_init_value_for_column_store_();
+  table_key_ = table_key;
+  table_key_.tablet_id_ = new_tablet_id;
+  if (is_major_merge(merge_type)) {
+    table_key_.version_range_.snapshot_version_ = dst_major_snapshot_version;
+  }
+  uncommitted_tx_id_ = uncommitted_tx_id;
+  schema_version_ = schema_version;
+
+  // init from basic_meta
+  table_mode_ = basic_meta.table_mode_;
+  index_type_ = static_cast<share::schema::ObIndexType>(basic_meta.index_type_);
+  rowkey_column_cnt_ = basic_meta.rowkey_column_count_;
+
+  create_snapshot_version_ = is_major_merge(merge_type) ? dst_major_snapshot_version : basic_meta.create_snapshot_version_;
+
+  sstable_logic_seq_ = sstable_logic_seq;
+  filled_tx_scn_ = basic_meta.filled_tx_scn_;
+  latest_row_store_type_ = basic_meta.latest_row_store_type_;
+  recycle_version_ = basic_meta.recycle_version_;
+  ddl_scn_ = basic_meta.ddl_scn_;
+  progressive_merge_round_ = basic_meta.progressive_merge_round_;
+  progressive_merge_step_ = basic_meta.progressive_merge_step_;
+  co_base_snapshot_version_ = basic_meta.co_base_snapshot_version_;
+
+  ddl_scn_.set_min();
+
+  // init from merge_res
+  column_cnt_ = res.data_column_cnt_;
+  max_merged_trans_version_ = res.max_merged_trans_version_;
+  nested_size_ = res.nested_size_;
+  nested_offset_ = res.nested_offset_;
+  full_column_cnt_ = 0;
+  tx_data_recycle_scn_.set_min();
+  column_group_cnt_ = 1;
+
+  if (OB_FAIL(inner_init_with_merge_res(res))) {
+    LOG_WARN("fail to inner init with merge res", K(ret), K(res));
+  }
+  if (OB_SUCC(ret) && table_key.is_major_sstable()) {
+    if (OB_FAIL(column_checksums_.assign(res.data_column_checksums_))) {
+      LOG_WARN("fill column checksum failed", K(ret), K(res));
+    }
+  }
+  return ret;
+}
+
 int ObTabletCreateSSTableParam::init_for_ha(
     const blocksstable::ObMigrationSSTableParam &sstable_param,
     const blocksstable::ObSSTableMergeRes &res)
@@ -722,7 +1185,7 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
   data_block_macro_meta_addr_.set_none_addr();
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
-    is_co_table_without_cgs_ = table_key_.is_ddl_sstable() ? false : true;
+    is_co_table_without_cgs_ = sstable_param.is_empty_cg_sstables_;
     full_column_cnt_ = sstable_param.full_column_cnt_;
     co_base_type_ = sstable_param.co_base_type_;
   }
@@ -786,6 +1249,8 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   rowkey_column_cnt_ = sstable_param.basic_meta_.rowkey_column_count_;
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
   table_backup_flag_ = sstable_param.basic_meta_.table_backup_flag_;
+  table_backup_flag_.set_has_backup();
+  table_backup_flag_.set_no_local();
   table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
   filled_tx_scn_ = sstable_param.basic_meta_.filled_tx_scn_;
   tx_data_recycle_scn_ = sstable_param.basic_meta_.tx_data_recycle_scn_;

@@ -407,6 +407,7 @@ int ObLogSequencer::handle_sequenced_trans_(
     PartTransTask *participant_list = trans_ctx->get_participant_objs();
     const bool is_dml_trans = participant_list->is_dml_trans();
     const bool is_ddl_trans = participant_list->is_ddl_trans();
+    const bool is_ls_op_trans = participant_list->is_ls_op_trans();
     const int64_t local_schema_version = participant_list->get_local_schema_version();
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
     ObLogTenantGuard guard;
@@ -449,7 +450,7 @@ int ObLogSequencer::handle_sequenced_trans_(
             // succ
             monitor.mark_and_get_cost("dml-done", true);
           } // while
-        } else if (is_ddl_trans){
+        } else if (is_ddl_trans || is_ls_op_trans) {
           trans_ctx->set_trans_redo_dispatched();
           // need sort_participants = on, which make sure the first PartTransTask of
           // participant_list is DDL_TRANS.
@@ -499,7 +500,7 @@ int ObLogSequencer::handle(void *data, const int64_t thread_index, volatile bool
           LOG_ERROR("handle_global_hb_part_trans_task_ fail", KR(ret), K(thread_index), KPC(part_trans_task));
         }
       }
-    } else if (part_trans_task->is_dml_trans() || part_trans_task->is_ddl_trans()) {
+    } else if (part_trans_task->is_dml_trans() || part_trans_task->is_ddl_trans() || part_trans_task->is_ls_op_trans()) {
       if (OB_FAIL(handle_part_trans_task_(*part_trans_task, stop_flag))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("handle_part_trans_task_ fail", KR(ret), K(thread_index), KPC(part_trans_task));
@@ -959,20 +960,24 @@ int ObLogSequencer::handle_ddl_trans_(ObLogTenant &tenant, TransCtx &trans_ctx, 
   } else if (OB_ISNULL(participant_list)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("participants of trans shoule not be null", KR(ret), K(trans_ctx));
-  } else if (OB_UNLIKELY(! participant_list->is_ddl_trans())) {
+  } else if (OB_LIKELY(participant_list->is_ddl_trans())) {
+    if (OB_FAIL(handle_multi_data_source_info_(tenant, trans_ctx, stop_flag))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("handle_multi_data_source_info_ failed", KR(ret), K(trans_ctx), K(stop_flag));
+      }
+    }
+  } else if (OB_UNLIKELY(participant_list->is_ls_op_trans())) {
+    participant_list->set_ref_cnt(1);
+  } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("expected to handle ddl_trans", KR(ret), KPC(participant_list), K(trans_ctx));
-  } else if (OB_FAIL(handle_multi_data_source_info_(tenant, trans_ctx, stop_flag))) {
-    if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("handle_multi_data_source_info_ failed", KR(ret), K(trans_ctx), K(stop_flag));
-    }
-  } else if (OB_FAIL(push_task_into_committer_(participant_list, participant_count, stop_flag, &tenant))) {
+  }
+
+  if (FAILEDx(push_task_into_committer_(participant_list, participant_count, stop_flag, &tenant))) {
     if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("push_task_into_committer_ fail", KR(ret), K(tenant_id), K(participant_list),
           K(participant_count), K(tenant));
     }
-  } else {
-    // succ
   }
 
   return ret;

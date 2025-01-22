@@ -186,7 +186,7 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
   return ret;
 }
 
-void ObTableQueryUtils::destroy_result_iterator(ObTableQueryResultIterator *result_iter)
+void ObTableQueryUtils::destroy_result_iterator(ObTableQueryResultIterator *&result_iter)
 {
   if (OB_NOT_NULL(result_iter)) {
     result_iter->~ObTableQueryResultIterator();

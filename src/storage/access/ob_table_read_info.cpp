@@ -1026,7 +1026,7 @@ int ObTenantCGReadInfoMgr::init()
 #define WAIT_CNT(cnt_str, cnt) \
     while (ATOMIC_LOAD(&cnt) > 0) { \
       usleep(1000L); \
-      if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) { \
+      if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) { \
         LOG_INFO("ObTenantCGReadInfoMgr wait release", cnt_str, ATOMIC_LOAD(&cnt)); \
       } \
     } // end of while
@@ -1283,7 +1283,7 @@ int ObTenantCGReadInfoMgr::construct_cg_read_info(
 void ObTenantCGReadInfoMgr::inner_print_log()
 {
   int ret = OB_SUCCESS;
-  if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+  if (REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
     LOG_INFO("ObTenantCGReadInfoMgr current status", "hold_cg_read_info_cnt", ATOMIC_LOAD(&hold_cg_read_info_cnt_));
   }
 }

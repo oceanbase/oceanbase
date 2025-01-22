@@ -16,6 +16,9 @@
 #include "common/storage/ob_io_device.h"
 #include "share/io/io_schedule/ob_io_schedule_v2.h"
 #include "share/io/ob_io_struct.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/io/ob_ss_io_request.h"
+#endif
 
 namespace oceanbase
 {
@@ -58,6 +61,8 @@ inline const char *get_resource_type_str(const ResourceType type)
 }  // namespace obrpc
 namespace common
 {
+int64_t get_norm_iops(const int64_t size, const double iops, const ObIOMode mode);
+int64_t get_norm_bw(const int64_t size, const ObIOMode mode);
 class ObTenantIOManager;
 #ifdef OB_BUILD_SHARED_STORAGE
 class ObSSIORequest;

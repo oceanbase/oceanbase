@@ -623,6 +623,7 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   audit_record.exec_timestamp_ = exec_timestamp;
   audit_record.exec_timestamp_.update_stage_time();
   audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+  audit_record.plsql_compile_time_ = session.get_plsql_compile_time();
   if (audit_record.pl_trace_id_.is_invalid() &&
         result_set.is_pl_stmt(result_set.get_stmt_type()) &&
         OB_NOT_NULL(ObCurTraceId::get_trace_id())) {

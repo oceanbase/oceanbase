@@ -225,12 +225,13 @@ public:
   OB_INLINE void set_block_row_range(
       const int64_t fetch_idx,
       const int64_t current,
-      const int64_t last)
+      const int64_t last,
+      const int64_t micro_row_count)
   {
     if (!is_reverse_scan_) {
       block_row_range_.set(get_data_start_id(fetch_idx) + current, get_data_start_id(fetch_idx) + last);
     } else {
-      block_row_range_.set(get_data_start_id(fetch_idx) + last, get_data_start_id(fetch_idx) + current);
+      block_row_range_.set(get_data_start_id(fetch_idx) + (micro_row_count - 1 - current), get_data_start_id(fetch_idx) + (micro_row_count - 1 - last));
     }
   }
   OB_INLINE common::ObIAllocator *get_allocator() { return allocator_; }

@@ -25,7 +25,7 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
-
+using namespace oceanbase::share;
 
 ObCompactionBufferBlock::ObCompactionBufferBlock()
   : header_(nullptr),

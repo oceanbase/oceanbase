@@ -13,6 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_location.h"
+#include "share/location_cache/ob_location_service.h"
+#include "observer/ob_server.h"
+#include "sql/das/ob_das_utils.h"
 
 namespace oceanbase
 {
@@ -111,8 +114,8 @@ int ObLobLocationUtil::lob_check_tablet_not_exist(ObLobAccessParam &param, uint6
 {
   int ret = OB_SUCCESS;
   bool tablet_exist = false;
-  schema::ObSchemaGetterGuard schema_guard;
-  const schema::ObTableSchema *table_schema = nullptr;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = nullptr;
   if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid schema service", KR(ret), K(GCTX.schema_service_));
@@ -162,11 +165,11 @@ int ObLobLocationUtil::lob_refresh_location(ObLobAccessParam &param, int last_er
   } else {
     // do location refresh
     ObArenaAllocator tmp_allocator("LobRefLoc", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
-    ObDASLocationRouter router(tmp_allocator);
+    sql::ObDASLocationRouter router(tmp_allocator);
     router.set_last_errno(last_err);
-    ObDASTableLocMeta loc_meta(tmp_allocator);
+    sql::ObDASTableLocMeta loc_meta(tmp_allocator);
     loc_meta.ref_table_id_ = extern_header->table_id_;
-    ObDASTabletLoc tablet_loc;
+    sql::ObDASTabletLoc tablet_loc;
     ObMemLobRetryInfo *retry_info = nullptr;
     ObMemLobLocationInfo *location_info = nullptr;
     if (last_err == OB_TABLET_NOT_EXIST && OB_FAIL(ObLobLocationUtil::lob_check_tablet_not_exist(param, extern_header->table_id_))) {

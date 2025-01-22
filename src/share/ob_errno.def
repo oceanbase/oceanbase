@@ -449,7 +449,7 @@ DEFINE_ERROR(OB_DISK_ERROR, -4375, -1, "HY000", "observer has disk error");
 DEFINE_ORACLE_ERROR(OB_UNIMPLEMENTED_FEATURE, -4376, -1, "HY000", "unimplemented feature", 3001, "unimplemented feature");
 DEFINE_ERROR_EXT(OB_ERR_DEFENSIVE_CHECK, -4377, -1, "HY000", "fatal internal error", "fatal internal error in [%.*s]");
 DEFINE_ERROR(OB_CLUSTER_NAME_HASH_CONFLICT, -4378, -1, "HY000", "cluster name conflict");
-DEFINE_ERROR(OB_HEAP_TABLE_EXAUSTED, -4379, -1, "HY000", "heap table has reached max row size, cannot insert anymore");
+DEFINE_ERROR_DEP(OB_HEAP_TABLE_EXAUSTED, -4379, -1, "HY000", "heap table has reached max row size, cannot insert anymore");
 DEFINE_ORACLE_ERROR(OB_ERR_INDEX_KEY_NOT_FOUND, -4380, -1, "HY000", "index key not found", 8102, "index key not found");
 DEFINE_ERROR(OB_UNSUPPORTED_DEPRECATED_FEATURE, -4381, -1, "HY000", "Not supported, deprecated %s feature");
 DEFINE_ORACLE_ERROR(OB_ERR_DUP_RESTART_SPEC, -4382,-1, "HY000", "duplicate RESTART specified", 64601, "duplicate RESTART specified");
@@ -1833,6 +1833,9 @@ DEFINE_ERROR(OB_LOG_ALREADY_SPLIT, -6283, -1, "HY000", "The big log entry has be
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA, -6284, ER_NOT_SUPPORTED_YET, "42000", "This version doesn't yet support 'references in JSON Schema.", "This version doesn't yet support 'references in JSON Schema.", 40441, "This version doesn't yet support 'references in JSON Schema.", "This version doesn't yet support 'references in JSON Schema.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_TYPE_OF_JSON_SCHEMA, -6285, ER_INVALID_JSON_TYPE, "22032", "Invalid JSON type in argument, should be object.", "Invalid JSON type in argument, should be object.", 40876, "invalid JSON schema document", "invalid JSON schema document");
 
+// for url_decode
+DEFINE_ERROR(INCORRECT_ARGUMENTS_TO_URL_DECODE, -6286, ER_WRONG_ARGUMENTS, "HY000", "Incorrect arguments to URL_DECODE, %s: %%%c%c");
+
 // for tx pending log
 DEFINE_ERROR(OB_TX_PENDING_LOG_OVERFLOW, -6288, -1, "HY000", "too many pending log in the trx");
 
@@ -2351,6 +2354,8 @@ DEFINE_ERROR_EXT_DEP(OB_BACKUP_ZONE_IDC_REGION_INVALID, -9133, -1, "HY000", "bac
 
 DEFINE_ERROR_DEP(OB_ERR_TMP_FILE_ALREADY_SEALED, -9134, -1, "HY000", "tmp file has already sealed");
 DEFINE_ERROR_DEP(OB_TMP_FILE_EXCEED_DISK_QUOTA, -9135, -1, "HY000", "tmp file exceeds disk quota");
+DEFINE_ERROR(OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE, -9136, -1, "HY000", "Backup missing mview dependent tablet sstable, sstable maybe recycled");
+DEFINE_ERROR_DEP(OB_ERR_DUPLICATE_INDEX, -9137, ER_DUP_INDEX, "HY000", "Duplicate index \'%s\' defined on the table \'%s.%s\'");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////
@@ -2693,6 +2698,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_CANNOT_RENAME_TRIGGER, -9803, -1, "HY000", "renaming 
 DEFINE_ORACLE_ERROR(OB_ERR_LOGON_TRIGGER, -9804, -1, "HY000", "client logon triggers cannot have BEFORE type", 30508, "client logon triggers cannot have BEFORE type");
 DEFINE_ORACLE_ERROR(OB_ERR_LOGOFF_TRIGGER, -9805, -1, "HY000", "client logoff triggers cannot have AFTER type", 30509, "client logoff triggers cannot have AFTER type");
 DEFINE_PLS_ERROR(OB_ERR_MALFORMED_WRAPPED_UNIT, -9806, -1, "HY000", "malformed or corrupted wrapped unit", 753, "malformed or corrupted wrapped unit");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_PLSQL_UNIT, -9807, -1, "HY000", "input to DBMS_DDL.WRAP is not a legal PL/SQL unit", 24230, "input to DBMS_DDL.WRAP is not a legal PL/SQL unit");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)
@@ -2832,6 +2838,8 @@ DEFINE_ERROR_EXT(OB_JNI_FORCE_CLOSE_JAVA_ENV_ERROR, -11075, -1, "HY000", "Forcef
 DEFINE_ERROR(OB_PLUGIN_VERSION_INCOMPATIBLE, -11076, -1, "HY000", "The plugin's version is incompatible with current server");
 DEFINE_ERROR(OB_PLUGIN_DLOPEN_FAILED, -11077, -1, "HY000", "Failed to open library");
 DEFINE_ERROR(OB_PLUGIN_ERROR, -11078, -1, "HY000", "Plugin internal error");
+DEFINE_ERROR_EXT(OB_CATALOG_EXIST, -11079, -1, "HY000", "Can't create catalog;catalog exists", "Can't create catalog '%.*s'; catalog exists");
+DEFINE_ERROR_EXT(OB_CATALOG_NOT_EXIST, -11080, -1, "HY000", "Catalog not exists", "Catalog '%.*s' doesn\'t exist");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

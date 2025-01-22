@@ -1339,7 +1339,7 @@ int ObTenantStorageMetaPersister::ss_replay_ls_pending_free_arr(
   } else if (OB_FAIL(ObStorageMetaIOUtil::read_storage_meta_object(
         deleting_opt, allocator, MTL_ID(), ls_epoch, deleting_tablets))) {
     LOG_WARN("fail to get deleting tablets", K(ret), K(deleting_opt), K(ls_id), K(ls_epoch));
-  } else if (pending_free_tablet_arr_map_.get_refactored(key, info)) {
+  } else if (OB_FAIL(pending_free_tablet_arr_map_.get_refactored(key, info))) {
     if (OB_HASH_NOT_EXIST == ret) {
       info = nullptr;
       ret = OB_SUCCESS;

@@ -2030,6 +2030,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                   }
                 }
                 if (OB_SUCC(ret)) {
+                  create_index_arg->index_key_ = static_cast<int64_t>(index_keyname_);
                   if (OB_FAIL(resolve_results.push_back(resolve_result))) {
                     LOG_WARN("fail to push back index_stmt_list", K(ret),
                         K(resolve_result));
@@ -5681,6 +5682,7 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node, ObColumnName
             SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
           } else if (OB_FAIL(add_udt_hidden_column(alter_table_stmt, alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter udt hidden column schema failed!", K(ret));
+          } else if (FALSE_IT(alter_table_stmt->set_sql_mode(session_info_->get_sql_mode()))) {
           }
         }
       }
@@ -5984,9 +5986,13 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
     for (int64_t i = 0; OB_SUCC(ret) && i < check_table_schemas.count(); i++) {
       const ObTableSchema &cur_table_schema = *check_table_schemas.at(i);
       const ObColumnSchemaV2 *column_schema = nullptr;
+      const ObPartitionOption &part_option = cur_table_schema.get_part_option();
+      const ObString &part_func_str = part_option.get_part_func_expr_str();
       bool is_partition_key = false;
       bool is_subpartition_key = false;
-      if (OB_ISNULL(column_schema = cur_table_schema.get_column_schema(alter_column_name))) {
+      if (part_func_str.empty()/*empty means no part key or system-defined part key*/) {
+        //do nothing
+      } else if (OB_ISNULL(column_schema = cur_table_schema.get_column_schema(alter_column_name))) {
         // do nothing, because the column does not exist in the schema.
       } else if (OB_FAIL(cur_table_schema.is_partition_key(*column_schema, is_partition_key,
                                                            false /* ignore_presetting_key */))) {
@@ -5998,11 +6004,13 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
         if (lib::is_oracle_mode() && !is_same) {
           ret = OB_ERR_MODIFY_PART_COLUMN_TYPE;
           SQL_RESV_LOG(WARN, "data type or len of a part column may not be changed", K(ret));
-        } else if (cur_table_schema.is_global_index_table()) {
+        } else if (cur_table_schema.is_global_index_table() && !is_same) {
           // FIXME YIREN (20221019), allow to alter part key of global index table by refilling part info when rebuilding it.
           ret = OB_OP_NOT_ALLOW;
-          LOG_WARN("alter part key column of global index table is disallowed", K(ret), KPC(column_schema), K(cur_table_schema));
+          LOG_WARN("alter the data type of part key column of global index table is disallowed", K(ret), KPC(column_schema), K(cur_table_schema));
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter part key of global index is");
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(check_alter_part_key_allowed(cur_table_schema, *column_schema, dst_col_schema, is_partition_key))) {
           LOG_WARN("check alter partition key allowed failed", K(ret));
         }
@@ -6610,7 +6618,8 @@ int ObAlterTableResolver::resolve_alter_column_not_null(share::schema::AlterColu
         LOG_WARN("drop not null constraint failed", K(ret));
       }
     } else {
-      column.add_not_null_cst();
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify column that is being validating");
     }
   } else if (ori_column.is_nullable() && !column.is_nullable() && !column.is_autoincrement()) {
     column.set_nullable(true);

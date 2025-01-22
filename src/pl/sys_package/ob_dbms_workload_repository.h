@@ -52,6 +52,8 @@ public:
     int64_t user_input_ash_begin_time;
     int64_t user_input_ash_end_time;
     mutable int64_t section_cnt_;
+    TO_STRING_KV(K(ash_begin_time), K(ash_end_time), K(sql_id), K(trace_id), K(wait_class), K(svr_ip), K(port),
+    K(tenant_id), K(is_html));
   };
 
 public:

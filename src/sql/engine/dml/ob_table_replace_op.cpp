@@ -234,7 +234,7 @@ OB_INLINE int ObTableReplaceOp::init_replace_rtdef()
     OZ(ObDMLService::init_ins_rtdef(dml_rtctx_, ins_rtdef, *ins_ctdef, trigger_clear_exprs_, fk_checkers_));
     OZ(ObDMLService::init_del_rtdef(dml_rtctx_, del_rtdef, *del_ctdef));
     if (OB_SUCC(ret)) {
-      ins_rtdef.das_rtdef_.table_loc_->is_writing_ = true;
+      ins_rtdef.das_rtdef_.table_loc_->is_writing_ = !(ins_ctdef->is_single_value_);
     }
   }
   return ret;

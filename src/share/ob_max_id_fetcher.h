@@ -80,6 +80,7 @@ enum ObMaxIdType
   OB_MAX_USED_SERVICE_NAME_ID_TYPE,
   OB_MAX_USED_STORAGE_ID_TYPE, /* used for storage id of zone storage */
   OB_MAX_USED_STORAGE_OP_ID_TYPE, /* used for storage op id of zone storage */
+  OB_MAX_USED_CATALOG_ID_TYPE,
   OB_MAX_ID_TYPE,
 };
 

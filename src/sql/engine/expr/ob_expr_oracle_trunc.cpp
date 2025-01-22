@@ -70,7 +70,7 @@ int ObExprOracleTrunc::calc_with_date(ObObj &result,
     LOG_DEBUG("succ to get ob_time", K(ob_time), K(source));
     int64_t dt = source.get_datetime();
     ObTimeConvertCtx cvrt_ctx(TZ_INFO(expr_ctx.my_session_), false);
-    if (OB_FAIL(ObExprTRDateFormat::trunc_new_obtime(ob_time, format.get_string()))) {
+    if (OB_FAIL(ObExprTRDateFormat::trunc_new_obtime(ob_time, format.get_string(), false))) {
       LOG_WARN("fail to calc datetime", K(ret), K(source), K(format));
     } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, cvrt_ctx, dt))) {
       LOG_WARN("fail to cast ob_time to datetime", K(ret), K(source), K(format));
@@ -133,11 +133,13 @@ int ObExprOracleTrunc::calc_result_typeN(ObExprResType &type,
         //for mysql mode
         if (ObDateTimeTC == params[0].get_type_class()) {
           result_type = ObDateTimeType;
+        } else if (ObMySQLDateTimeTC == params[0].get_type_class()) {
+          result_type = ObMySQLDateTimeType;
         } else if (ObIntTC == params[0].get_type_class() || ObUIntTC == params[0].get_type_class()) {
           result_type = ObNumberType;
         }
         if (params_count <= 1 && ObNumberType != result_type && ObFloatType != result_type && ObDoubleType != result_type &&
-            ObDateTimeType != result_type && result_type != ObDecimalIntType) {
+            ObDateTimeType != result_type && result_type != ObDecimalIntType && ObMySQLDateTimeType != result_type) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("unsupported type for ora_trunc", K(ret), K(result_type), K(params[0].get_type()));
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, "calculate result type for ora_trunc");
@@ -147,7 +149,7 @@ int ObExprOracleTrunc::calc_result_typeN(ObExprResType &type,
         // In mysql mode, the result type is the same as oracle mode while input is decimal int
         result_type = ObNumberType;
       }
-      if (ObDateTimeType == result_type) {
+      if (ObDateTimeType == result_type || ObMySQLDateTimeType == result_type) {
         type.set_scale(DEFAULT_SCALE_FOR_DATE);
         params[0].set_calc_type(result_type);
         type.set_type(result_type);
@@ -182,7 +184,8 @@ int calc_trunc_expr_datetime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_da
   if (OB_UNLIKELY(1 != expr.arg_cnt_ && 2 != expr.arg_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect arg cnt", K(ret), K(expr.arg_cnt_));
-  } else if (OB_UNLIKELY(arg_type != res_type || ObDateTimeType != arg_type)) {
+  } else if (OB_UNLIKELY(arg_type != res_type
+                         || (ObDateTimeType != arg_type && ObMySQLDateTimeType != arg_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected arg_type of res_type", K(ret), K(arg_type), K(res_type));
   } else if (OB_FAIL(expr.args_[0]->eval(ctx, x_datum))) {
@@ -227,7 +230,7 @@ int calc_trunc_expr_datetime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_da
                  expr.args_[0]->obj_meta_.has_lob_header()))) {
         LOG_WARN("failed to convert obj to ob time", K(ret), K(*x_datum));
       } else {
-        int64_t dt = 0;
+        ObMySQLDateTime mdt;
         ObTimeConvertCtx cvrt_ctx(TZ_INFO(session), false);
         if (expr.arg_cnt_ > 1 && !!(expr.args_[1]->is_static_const_)) {
           auto rt_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
@@ -242,15 +245,20 @@ int calc_trunc_expr_datetime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_da
             }
             LOG_DEBUG("new single format ctx", K(ret), KPC(single_fmt_ctx));
           }
-          OZ (ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ob_time, single_fmt_ctx->fmt_id_));
+          OZ(ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ob_time, single_fmt_ctx->fmt_id_,
+                                                            ObMySQLDateTimeType == res_type));
         } else {
-          OZ (ObExprTRDateFormat::trunc_new_obtime(ob_time, fmt_str));
+          OZ(ObExprTRDateFormat::trunc_new_obtime(ob_time, fmt_str,
+                                                  ObMySQLDateTimeType == res_type));
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, cvrt_ctx, dt))) {
+          ret = ObMySQLDateTimeType == res_type ?
+                  ObTimeConverter::ob_time_to_mdatetime(ob_time, mdt) :
+                  ObTimeConverter::ob_time_to_datetime(ob_time, cvrt_ctx, mdt.datetime_);
+          if (OB_FAIL(ret)) {
             LOG_WARN("fail to cast ob_time to datetime", K(ret), K(fmt_str), K(ob_time));
           } else {
-            res_datum.set_datetime(dt);
+            res_datum.set_datetime(mdt.datetime_);
           }
         }
       }
@@ -350,7 +358,8 @@ int ObExprOracleTrunc::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_ex
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  if (ObDateTimeType == rt_expr.args_[0]->datum_meta_.type_) {
+  if (ObDateTimeType == rt_expr.args_[0]->datum_meta_.type_
+      || ObMySQLDateTimeType == rt_expr.args_[0]->datum_meta_.type_) {
     rt_expr.eval_func_ = calc_trunc_expr_datetime;
   } else {
     rt_expr.eval_func_ = calc_trunc_expr_numeric;

@@ -346,8 +346,8 @@ TEST_F(TestSSLinkedPhyBlock, test_ckpt_writer)
 {
   LOG_INFO("TEST: start test_ckpt_writer");
   const uint64_t tenant_id = MTL_ID();
-  ObSSPhyBlockType blk_type = ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK;
-  ASSERT_EQ(true, phy_blk_mgr_.exist_free_block(blk_type));
+  const ObSSPhyBlockType blk_type = ObSSPhyBlockType::SS_MICRO_META_CKPT_BLK;
+
   // 1. check 'close()': need write_block() and write_segment()
   ObCompressorType compress_type = ObCompressorType::NONE_COMPRESSOR;
   ObSSLinkedPhyBlockItemWriter writer;

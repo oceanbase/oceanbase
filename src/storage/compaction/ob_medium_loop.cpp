@@ -14,6 +14,7 @@
 #include "storage/compaction/ob_server_compaction_event_history.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -166,7 +167,7 @@ void ObMediumLoop::add_event_and_diagnose(const ObScheduleTabletFunc &func)
 
     if (ls_tablet_iter_.is_scan_finish()) {
       loop_cnt_++;
-      if (REACH_TENANT_TIME_INTERVAL(ADD_LOOP_EVENT_INTERVAL)) {
+      if (REACH_THREAD_TIME_INTERVAL(ADD_LOOP_EVENT_INTERVAL)) {
         ADD_COMPACTION_EVENT(
           merge_version_,
           ObServerCompactionEvent::SCHEDULER_LOOP,

@@ -253,7 +253,6 @@ public:
   int64_t sync_wash();
 
 private:
-  typedef ABitSet ChunkBitMap;
 
 private:
   void *direct_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow);

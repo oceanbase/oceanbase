@@ -164,7 +164,7 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                                   const ObStmtScope &scope,
                                                   const bool is_root_condition,
                                                   const bool is_need_print,
-                                                  const bool is_in_pl,
+                                                  const bool is_in_pl_prepare,
                                                   const ObSQLSessionInfo *session_info,
                                                   const ParamStore *param_store,
                                                   const ObStmt *stmt,
@@ -186,6 +186,7 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
              || (T_OP_IN != op_type && T_OP_NOT_IN != op_type)
              || T_EXPR_LIST != in_list.type_
              || is_need_print
+             || is_in_pl_prepare
              || (NULL != stmt
                  && stmt->is_select_stmt()
                  && static_cast<const ObSelectStmt *>(stmt)->is_hierarchical_query())) {
@@ -419,6 +420,7 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
   const ParseNode *row_node = NULL;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(allocator) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got unexpected NULL ptr", K(ret));
@@ -431,6 +433,9 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
     LOG_WARN("get sys variables failed", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info, false,
+                       enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {
     if (lib::is_oracle_mode() && cur_resolver_->params_.is_expanding_view_) {
       // numeric constants should parsed with ObNumber in view expansion for oracle mode
@@ -460,6 +465,8 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
                                                  session_info->get_sql_mode(),
                                                  enable_decimal_int,
                                                  compat_type,
+                                                 enable_mysql_compatible_dates,
+                                                 session_info->get_local_ob_enable_plan_cache(),
                                                  is_from_pl))) {
         LOG_WARN("failed to resolve const", K(ret));
       } else if (OB_FAIL(table_def.access_objs_.push_back(obj_param))) {

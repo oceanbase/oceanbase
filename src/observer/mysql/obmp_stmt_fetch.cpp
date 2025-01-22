@@ -184,8 +184,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
     if (enable_perf_event) {
       audit_record.exec_record_.record_start();
     }
-    if (enable_sqlstat && OB_NOT_NULL(session.get_cur_exec_ctx()) &&
-        OB_NOT_NULL(session.get_cur_exec_ctx()->get_sql_ctx())) {
+    if (enable_sqlstat) {
       sqlstat_record.record_sqlstat_start_value();
       sqlstat_record.set_is_in_retry(session.get_is_in_retry());
       session.sql_sess_record_sql_stat_start_value(sqlstat_record);
@@ -240,9 +239,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
       audit_record.update_event_stage_state();
     }
 
-    if (enable_sqlstat && OB_NOT_NULL(session.get_cur_exec_ctx()) &&
-        OB_NOT_NULL(session.get_cur_exec_ctx()->get_sql_ctx())) {
-      ObSqlCtx *sql_ctx = session.get_cur_exec_ctx()->get_sql_ctx();
+    if (enable_sqlstat) {
       sqlstat_record.record_sqlstat_end_value();
       sqlstat_record.inc_fetch_cnt();
       ObString sql = ObString::make_empty_string();

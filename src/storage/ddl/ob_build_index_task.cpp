@@ -574,6 +574,9 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
         } else {
           LOG_INFO("get task id failed, but retry to get it", K(ret), K(tmp_ret), KPC(index_schema_));
         }
+      } else if (OB_UNLIKELY(task_id_ != info.task_id_)) {
+        keep_report_err_msg = false;
+        LOG_INFO("get task id mismatched, check whether index building task is cancled", K(ret), K(task_id_), K(info.task_id_));
       } else if (OB_SUCCESS != (tmp_ret = ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(
           ret, *index_schema_, info.trace_id_str_, info.task_id_, info.parent_task_id_, tablet_id_.id(), self_addr, *GCTX.sql_proxy_, "\0", report_ret_code))) {
         LOG_WARN("fail to generate index ddl error message", K(ret), K(tmp_ret), KPC(index_schema_), K(tablet_id_), K(self_addr));

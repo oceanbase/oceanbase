@@ -6501,7 +6501,7 @@ int ObDDLOperator::init_tenant_user(const uint64_t tenant_id,
     if ((!is_oracle_mode || is_user) &&
         pure_user_id != OB_ORA_LBACSYS_USER_ID &&
         pure_user_id != OB_ORA_AUDITOR_USER_ID) {
-      user.set_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT);
+      user.set_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT | OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT);
     }
     user.set_schema_version(OB_CORE_SCHEMA_VERSION);
     user.set_profile_id(OB_INVALID_ID);
@@ -13067,7 +13067,7 @@ int ObDDLOperator::get_target_auto_inc_sequence_value(const uint64_t tenant_id,
       LOG_WARN("failed to assign sql", K(ret), K(tenant_id), K(table_id), K(column_id));
     } else {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        ObMySQLResult *result = NULL;
+        common::sqlclient::ObMySQLResult *result = NULL;
         uint64_t sequence_table_id = OB_ALL_AUTO_INCREMENT_TID;
         if (OB_FAIL(trans.read(res, exec_tenant_id, sql.ptr()))) {
           LOG_WARN("failed to read data", K(ret));

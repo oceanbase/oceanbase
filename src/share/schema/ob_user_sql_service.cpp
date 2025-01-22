@@ -1080,12 +1080,19 @@ int ObUserSqlService::gen_user_dml(
     if ((user.get_priv_set() & OB_PRIV_CREATE_ROLE) != 0) { priv_others |= OB_PRIV_OTHERS_CREATE_ROLE; }
     if ((user.get_priv_set() & OB_PRIV_DROP_ROLE) != 0) { priv_others |= OB_PRIV_OTHERS_DROP_ROLE; }
     if ((user.get_priv_set() & OB_PRIV_TRIGGER) != 0) { priv_others |= OB_PRIV_OTHERS_TRIGGER; }
+    if ((user.get_priv_set() & OB_PRIV_ENCRYPT) != 0) { priv_others |= OB_PRIV_OTHERS_ENCRYPT; }
+    if ((user.get_priv_set() & OB_PRIV_DECRYPT) != 0) { priv_others |= OB_PRIV_OTHERS_DECRYPT; }
   }
   if (OB_FAIL(ret)) {
   } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
     if (priv_others != 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or DATA_VERSION_4_2_2_0", K(ret), K(user.get_priv(OB_PRIV_EXECUTE)), K(user.get_priv(OB_PRIV_ALTER_ROUTINE)), K(user.get_priv(OB_PRIV_CREATE_ROUTINE)));
+    }
+  } else if (!((MOCK_DATA_VERSION_4_2_5_1 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_1)) {
+    if ((priv_others & OB_PRIV_OTHERS_ENCRYPT) != 0 || (priv_others & OB_PRIV_OTHERS_DECRYPT) != 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_2_5_1 or DATA_VERSION_4_3_5_1", K(ret), K(user.get_priv(OB_PRIV_ENCRYPT)), K(user.get_priv(OB_PRIV_DECRYPT)));
     }
   } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
     LOG_WARN("add PRIV_OTHERS column failed", K(priv_others), K(ret));

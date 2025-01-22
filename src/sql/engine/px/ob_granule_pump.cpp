@@ -489,7 +489,7 @@ int ObGranulePump::fetch_pw_granule_from_shared_pool(ObIArray<ObGranuleTaskInfo>
     // 表示取不到下一个GI task的op的个数；
     // 理论上end_op_count只能等于0（表示gi任务还没有被消费完）或者等于`op_ids.count()`（表示gi任务全部被消费完）
     int64_t end_op_count = 0;
-    if (OB_FAIL(fetch_task_ret_)) {
+    if (OB_FAIL(get_fetch_task_ret())) {
       LOG_WARN("fetch task concurrently already failed", K(ret));
     } else if (no_more_task_from_shared_pool_) {
       ret = OB_ITER_END;
@@ -523,7 +523,7 @@ int ObGranulePump::fetch_pw_granule_from_shared_pool(ObIArray<ObGranuleTaskInfo>
 
     // 防御性代码：检查full partition wise的情况下，每一个op对应的GI task是否被同时消费完毕
     if (OB_FAIL(ret)) {
-      fetch_task_ret_ = ret;
+      set_fetch_task_ret(ret);
     } else if (OB_FAIL(check_pw_end(end_op_count, op_ids.count(), infos.count()))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("incorrect state", K(ret));
@@ -687,12 +687,31 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
     } else if (OB_ISNULL(tsc = scan_ops.at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret));
-#ifdef OB_BUILD_CPP_ODPS
-    } else if (OB_FAIL(odps_partition_downloader_mgr_.init_map(args.external_table_files_.count()))) {
-      LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret), K(args.external_table_files_.count()));
-    } else {
-      LOG_TRACE("succ to init odps table partition downloader", K(ret), K(is_odps_downloader_inited()));
+    }
+    if (OB_SUCC(ret)) {
+      if (!GCONF._use_odps_jni_connector) {
+#if defined(OB_BUILD_CPP_ODPS)
+        if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(args.external_table_files_.count()))) {
+          LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret), K(args.external_table_files_.count()));
+        } else {
+          LOG_TRACE("succ to init odps table partition downloader", K(ret), K(is_odps_downloader_inited()));
+        }
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support odps cpp external table", K(ret));
 #endif
+      } else {
+#if defined(OB_BUILD_JNI_ODPS)
+        if (OB_FAIL(odps_partition_jni_scanner_mgr_.init_map(
+                args.external_table_files_.count()))) {
+          LOG_WARN("init odps_partition_jni_scanner_mgr_ failed", K(ret),
+                   K(args.external_table_files_.count()));
+        }
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support odps jni external table", K(ret));
+#endif
+      }
     }
   }
   return ret;
@@ -742,9 +761,19 @@ int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_random
 void ObGranulePump::destroy()
 {
   gi_task_array_map_.reset();
-#ifdef OB_BUILD_CPP_ODPS
-  odps_partition_downloader_mgr_.reset();
+  if (!GCONF._use_odps_jni_connector) {
+#if defined (OB_BUILD_CPP_ODPS)
+    int ret = 0;
+    if (is_odps_downloader_inited()) {
+      LOG_TRACE("destroy odps_partition_downloader_mgr_", K(ret), KP(this), KP(&odps_partition_downloader_mgr_));
+      odps_partition_downloader_mgr_.reset();
+    }
 #endif
+  } else {
+#if defined (OB_BUILD_JNI_ODPS)
+    odps_partition_jni_scanner_mgr_.reset();
+#endif
+  }
   pump_args_.reset();
 }
 
@@ -1726,7 +1755,7 @@ int ObGranulePump::reset_gi_task()
     } else {
       is_taskset_reset_ = true;
       no_more_task_from_shared_pool_ = false;
-      fetch_task_ret_ = OB_SUCCESS;
+      set_fetch_task_ret(OB_SUCCESS);
       for (int64_t i = 0; i < gi_task_array_map_.count() && OB_SUCC(ret); ++i) {
         GITaskArrayItem &item = gi_task_array_map_.at(i);
         for(int64_t j = 0; j < item.taskset_array_.count() && OB_SUCC(ret); ++j) {

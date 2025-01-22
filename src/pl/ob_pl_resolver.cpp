@@ -2256,7 +2256,11 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
         TENANT_CONF(session_info.get_effective_tenant_id()));
     bool convert_real_to_decimal =
         (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
-    if (OB_FAIL(ObResolverUtils::resolve_data_type(*sp_data_type_node,
+    bool enable_mysql_compatible_dates = false;
+    if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info, false /*is_ddl*/,
+                              enable_mysql_compatible_dates))) {
+      LOG_WARN("fail to check enable mysql compatible dates", K(ret));
+    } else if (OB_FAIL(ObResolverUtils::resolve_data_type(*sp_data_type_node,
                                       ident_name,
                                       scalar_data_type,
                                       is_oracle_mode(),
@@ -2264,6 +2268,7 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
                                       session_info.get_session_nls_params(),
                                       session_info.get_effective_tenant_id(),
                                       false, // TODO
+                                      enable_mysql_compatible_dates,
                                       convert_real_to_decimal))) {
       LOG_WARN("resolve data type failed", K(ret));
     } else if (scalar_data_type.get_meta_type().is_string_or_lob_locator_type()
@@ -3482,11 +3487,13 @@ int ObPLResolver::adjust_routine_param_type(ObPLDataType &type)
           static_cast<int16_t>(default_accuracy.get_precision() + default_accuracy.get_scale()));
         data_type.set_scale(default_accuracy.get_scale());
       } break;
-      case ObDateTimeTC: {
+      case ObDateTimeTC:
+      case ObMySQLDateTimeTC: {
         data_type.set_precision(static_cast<int16_t>(default_accuracy.get_precision()));
         data_type.set_scale(0);
       } break;
-      case ObDateTC: {
+      case ObDateTC:
+      case ObMySQLDateTC: {
         data_type.set_precision(default_accuracy.get_precision());
         data_type.set_scale(default_accuracy.get_scale());
       } break;
@@ -4438,6 +4445,9 @@ int ObPLResolver::resolve_case(const ObStmtNodeTree *parse_tree, ObPLCaseStmt *s
         OZ (current_block_->get_namespace().get_pl_data_type_by_id(case_expr->get_result_type().get_udt_id(), user_type));
         CK (OB_NOT_NULL(user_type));
         OX (pl_data_type = *user_type);
+      } else if (case_expr->get_result_type().is_enum_or_set()) {
+        OX (pl_data_type.set_enum_set_ctx(&func.get_enum_set_ctx()));
+        OZ (pl_data_type.set_type_info(case_expr->get_enum_set_values()));
       }
       OZ (current_block_->get_namespace().add_symbol(
                                           ObString(""), // anonymous variable for holding case expr value
@@ -4453,6 +4463,10 @@ int ObPLResolver::resolve_case(const ObStmtNodeTree *parse_tree, ObPLCaseStmt *s
         case_var->set_value(val);
         case_var->set_result_type(case_expr->get_result_type());
         OZ (case_var->extract_info());
+        if (ob_is_enumset_tc(case_expr->get_data_type())) {
+          OZ (case_var->add_flag(IS_ENUM_OR_SET));
+          OZ (case_var->set_enum_set_values(case_expr->get_enum_set_values()));
+        }
       }
     }
 
@@ -4563,6 +4577,10 @@ int ObPLResolver::resolve_when(const ObStmtNodeTree *parse_tree, ObRawExpr *case
                                              case_expr_var,
                                              expr,
                                              cmp_expr));
+        if (OB_SUCC(ret) && is_mysql_mode()) {
+          ObRawExprWrapEnumSet enum_set_wrapper(expr_factory_, &resolve_ctx_.session_info_);
+          OZ (enum_set_wrapper.analyze_expr(cmp_expr));
+        }
         OX (expr = cmp_expr);
       }
 
@@ -10326,7 +10344,7 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
   //"case a when b xx when c xx" to "case when a == b then xx case when a == c then xx"
   if (OB_SUCC(ret)) {
     bool transformed = false;
-    OZ(ObTransformPreProcess::transform_expr(unit_ast.get_expr_factory(),
+    OZ (ObTransformPreProcess::transform_expr(expr_factory_,
                                               resolve_ctx_.session_info_, expr,
                                               transformed));
   }
@@ -12307,7 +12325,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
     if (!ObObjUDTUtil::ob_is_supported_sql_udt(expr->get_result_type().get_udt_id())) {
       OZ (formalize_expr(*expr)); // bugfix: 53193337, need get real type in that case
     }
-    OZ(ObTransformPreProcess::transform_expr(unit_ast.get_expr_factory(),
+    OZ (ObTransformPreProcess::transform_expr(expr_factory_,
                                               resolve_ctx_.session_info_, expr,
                                               transformed));
   }
@@ -15389,6 +15407,9 @@ int ObPLResolver::resolve_into(const ParseNode *into_node, ObPLInto &into, ObPLF
   CK (OB_LIKELY(T_SP_INTO_LIST == into_node->children_[0]->type_));
   if (OB_SUCC(ret)) {
     const ParseNode *into_list = into_node->children_[0];
+    if (1 == into_node->value_) {
+      into.set_bulk();
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < into_list->num_child_; ++i) {
       ObQualifiedName q_name;
       ObRawExpr* expr = NULL;
@@ -15396,6 +15417,17 @@ int ObPLResolver::resolve_into(const ParseNode *into_node, ObPLInto &into, ObPLF
       if (OB_FAIL(ret)) {
       } else if (T_SP_OBJ_ACCESS_REF == into_list->children_[i]->type_/*Oracle mode*/) {
         OZ (resolve_obj_access_idents(*into_list->children_[i], q_name.access_idents_, func));
+      } else if (lib::is_oracle_mode() && into.is_bulk()
+                  && T_QUESTIONMARK == into_list->children_[i]->type_) {
+        if (OB_FAIL(into.replace_questionmark_variable_type(func, current_block_, &resolve_ctx_.allocator_,
+                into_list->children_[i]->value_, into_list->num_child_, i))) {
+          LOG_WARN("Failed to convert questionmark var type from cursor ret type!", K(into), K(ret));
+        } else {
+          // build access_ident
+          ObObjAccessIdent access_ident(ObString(""), into_list->children_[i]->value_);
+          OX (access_ident.set_pl_var());
+          OZ (q_name.access_idents_.push_back(access_ident));
+        }
       } else if (T_QUESTIONMARK == into_list->children_[i]->type_ /*Oracle mode*/) {
         OZ (resolve_question_mark_node(into_list->children_[i], expr));
         CK (OB_NOT_NULL(expr));
@@ -15411,9 +15443,6 @@ int ObPLResolver::resolve_into(const ParseNode *into_node, ObPLInto &into, ObPLF
         LOG_USER_ERROR(OB_ERR_EXP_NOT_INTO_TARGET,
                        static_cast<int>(into_list->children_[i]->str_len_),
                        into_list->children_[i]->str_value_);
-      }
-      if (OB_SUCC(ret) && 1 == into_node->value_) {
-        into.set_bulk();
       }
       CK (OB_NOT_NULL(expr));
       OZ (func.add_expr(expr));

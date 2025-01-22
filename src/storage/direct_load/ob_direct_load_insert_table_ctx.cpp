@@ -54,6 +54,7 @@ ObDirectLoadInsertTableParam::ObDirectLoadInsertTableParam()
     is_column_store_(false),
     online_opt_stat_gather_(false),
     is_incremental_(false),
+    reuse_pk_(true),
     datum_utils_(nullptr),
     col_descs_(nullptr),
     cmp_funcs_(nullptr),
@@ -306,7 +307,7 @@ int ObDirectLoadInsertTabletContext::get_pk_interval(uint64_t count,
     if (OB_UNLIKELY(OB_EAGAIN != ret)) {
       LOG_WARN("fail to fetch from pk cache", KR(ret));
     } else {
-      if (OB_FAIL(refresh_pk_cache(origin_tablet_id_, pk_cache_))) {
+      if (OB_FAIL(refresh_pk_cache((param_->reuse_pk_ ? origin_tablet_id_ : tablet_id_), pk_cache_))) {
         LOG_WARN("fail to refresh pk cache", KR(ret));
       } else if (OB_FAIL(pk_cache_.fetch(count, pk_interval))) {
         LOG_WARN("fail to fetch from pk cache", KR(ret));
@@ -360,6 +361,7 @@ int ObDirectLoadInsertTabletContext::get_write_ctx(ObDirectLoadInsertTabletWrite
       LOG_WARN("fail to get pk interval", KR(ret), KP(this));
     } else {
       write_ctx.start_seq_.macro_data_seq_ = start_seq_.macro_data_seq_;
+      // the macro block may not be recycled when load data failed in shared storage mode, TODO(jianming)
       start_seq_.macro_data_seq_ += WRITE_BATCH_SIZE;
     }
   }
@@ -658,6 +660,7 @@ int ObDirectLoadInsertTabletContext::open_sstable_slice(const ObMacroDataSeq &st
     slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = slice_id;
     slice_info.context_id_ = context_id_;
+    slice_info.total_slice_cnt_ = param_->parallel_; //mock total slice cnt
     if (OB_FAIL(open())) {
       LOG_WARN("fail to open tablet direct load", KR(ret));
     } else if (OB_FAIL(ddl_agent_.open_sstable_slice(start_seq, slice_info))) {
@@ -687,6 +690,7 @@ int ObDirectLoadInsertTabletContext::open_lob_sstable_slice(const ObMacroDataSeq
     slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = slice_id;
     slice_info.context_id_ = context_id_;
+    slice_info.total_slice_cnt_ = param_->parallel_; //mock total slice cnt
     if (OB_FAIL(open())) {
       LOG_WARN("fail to open tablet direct load", KR(ret));
     } else if (OB_FAIL(ddl_agent_.open_sstable_slice(start_seq, slice_info))) {

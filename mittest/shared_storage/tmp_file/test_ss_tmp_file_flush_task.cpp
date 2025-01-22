@@ -153,14 +153,14 @@ TEST_F(TestSSTmpFileFlushTask, basic_flush)
   // 2. wait flushing sealed tmp file to object storage
   const int64_t start_us = ObTimeUtility::current_time();
   const int64_t timeout_us = 20 * 1000 * 1000L;
-  while ((file_manager->seal_queue_.size() != 0) ||
-         (flush_task.sealed_files_.count() != 0) ||
+  while ((file_manager->flush_queue_.size() != 0) ||
+         (flush_task.seg_files_.count() != 0) ||
          (flush_task.free_list_.get_curr_total() != ObSSTmpFileFlushTask::MAX_FLUSH_PARALLELISM)) {
     ob_usleep(1000);
     if (timeout_us + start_us < ObTimeUtility::current_time()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("waiting time is too long", KR(ret),
-          K(file_manager->seal_queue_.size()), K(flush_task.sealed_files_.count()),
+          K(file_manager->flush_queue_.size()), K(flush_task.seg_files_.count()),
           K(flush_task.async_read_list_.get_curr_total()), K(flush_task.async_write_list_.get_curr_total()));
       break;
     }

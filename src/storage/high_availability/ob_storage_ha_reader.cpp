@@ -39,7 +39,7 @@ ERRSIM_POINT_DEF(EN_ONLY_COPY_OLD_VERSION_MAJOR_SSTABLE);
 
 /******************CopyMacroBlockReadInfo*********************/
 ObICopyMacroBlockReader::CopyMacroBlockReadData::CopyMacroBlockReadData()
-  : data_type_(ObCopyMacroBlockHeader::DataType::MAX),
+  : data_type_(ObCopyMacroBlockDataType::MAX),
     is_reuse_macro_block_(false),
     macro_data_(),
     macro_meta_(nullptr),
@@ -55,7 +55,7 @@ ObICopyMacroBlockReader::CopyMacroBlockReadData::~CopyMacroBlockReadData()
 
 void ObICopyMacroBlockReader::CopyMacroBlockReadData::reset()
 {
-  data_type_ = ObCopyMacroBlockHeader::DataType::MAX;
+  data_type_ = ObCopyMacroBlockDataType::MAX;
   is_reuse_macro_block_ = false;
   macro_data_ = ObBufferReader(NULL, 0, 0);
   macro_meta_ = nullptr;
@@ -67,9 +67,9 @@ bool ObICopyMacroBlockReader::CopyMacroBlockReadData::is_valid() const
 {
   bool valid = false;
 
-  if (ObCopyMacroBlockHeader::DataType::MACRO_META_ROW == data_type_) {
+  if (ObCopyMacroBlockDataType::MACRO_META_ROW == data_type_) {
     valid = is_reuse_macro_block_ && OB_NOT_NULL(macro_meta_) && macro_meta_->is_valid();
-  } else if (ObCopyMacroBlockHeader::DataType::MACRO_DATA == data_type_) {
+  } else if (ObCopyMacroBlockDataType::MACRO_DATA == data_type_) {
     valid = !is_reuse_macro_block_ && macro_data_.is_valid();
   }
 
@@ -88,7 +88,7 @@ int ObICopyMacroBlockReader::CopyMacroBlockReadData::set_macro_meta(
   } else if (OB_FAIL(macro_meta.deep_copy(macro_meta_, allocator_))) {
     LOG_WARN("failed to deep copy macro meta", K(ret), K(macro_meta));
   } else {
-    data_type_ = ObCopyMacroBlockHeader::DataType::MACRO_META_ROW;
+    data_type_ = ObCopyMacroBlockDataType::MACRO_META_ROW;
     is_reuse_macro_block_ = is_reuse_macro_block;
   }
 
@@ -106,7 +106,7 @@ int ObICopyMacroBlockReader::CopyMacroBlockReadData::set_macro_data(
     LOG_WARN("set macro data get invalid argument", K(ret), K(data), K(is_reuse_macro_block));
   } else {
     macro_data_ = data;
-    data_type_ = ObCopyMacroBlockHeader::DataType::MACRO_DATA;
+    data_type_ = ObCopyMacroBlockDataType::MACRO_DATA;
     is_reuse_macro_block_ = is_reuse_macro_block;
   }
 
@@ -434,11 +434,11 @@ int ObCopyMacroBlockObReader::get_read_info_(const ObCopyMacroBlockHeader &heade
   int ret = OB_SUCCESS;
   read_data.reset();
 
-  if (header.data_type_ == ObCopyMacroBlockHeader::DataType::MACRO_DATA) {
+  if (header.data_type_ == ObCopyMacroBlockDataType::MACRO_DATA) {
     if (OB_FAIL(read_data.set_macro_data(data, header.is_reuse_macro_block_))) {
       LOG_WARN("failed to set macro data", K(ret), K(data), K(header));
     }
-  } else if (header.data_type_ == ObCopyMacroBlockHeader::DataType::MACRO_META_ROW) {
+  } else if (header.data_type_ == ObCopyMacroBlockDataType::MACRO_META_ROW) {
     ObDatumRow macro_meta_row;
     ObDataMacroBlockMeta macro_meta;
     MacroBlockId macro_id;
@@ -1196,7 +1196,7 @@ int ObCopyMacroBlockObProducer::get_next_macro_block(
         data.assign(meta_row_buf_.data(), occupy_size);
         copy_macro_block_header.occupy_size_ = occupy_size;
         copy_macro_block_header.is_reuse_macro_block_ = true;
-        copy_macro_block_header.data_type_ = ObCopyMacroBlockHeader::DataType::MACRO_META_ROW;
+        copy_macro_block_header.data_type_ = ObCopyMacroBlockDataType::MACRO_META_ROW;
       }
     } else {
       blocksstable::ObMacroBlockCommonHeader common_header;
@@ -1215,7 +1215,7 @@ int ObCopyMacroBlockObProducer::get_next_macro_block(
         data.assign(copy_macro_block_handle_[handle_idx_].read_handle_.get_buffer(), occupy_size);
         copy_macro_block_header.is_reuse_macro_block_ = false;
         copy_macro_block_header.occupy_size_ = occupy_size;
-        copy_macro_block_header.data_type_ = ObCopyMacroBlockHeader::DataType::MACRO_DATA;
+        copy_macro_block_header.data_type_ = ObCopyMacroBlockDataType::MACRO_DATA;
       }
     }
   }
@@ -2234,7 +2234,7 @@ int ObCopySSTableInfoRestoreReader::compare_storage_schema_(
   need_update = false;
   int64_t old_storage_schema_stored_col_cnt = 0;
   const int64_t new_storage_schema_stored_col_cnt = tablet_meta.tablet_meta_.storage_schema_.store_column_cnt_;
-  ObArenaAllocator temp_allocator("RestoreReader", MTL_ID());
+  ObArenaAllocator temp_allocator(common::ObMemAttr(MTL_ID(), "RestoreReader"));
   ObStorageSchema *schema_on_tablet = nullptr;
 
   if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(temp_allocator, schema_on_tablet))) {

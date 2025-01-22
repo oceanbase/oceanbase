@@ -152,6 +152,7 @@ int ObExprUserEnv::cg_expr(ObExprCGCtx &ctx, const ObRawExpr &raw_expr, ObExpr &
 int ObExprUserEnv::calc_user_env_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObDatum *arg = NULL;
   if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));

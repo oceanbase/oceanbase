@@ -19,8 +19,6 @@ namespace oceanbase
 namespace common
 {
 
-static const int64_t STANDARD_IOPS_SIZE = 16 * (1<<10);
-
 static void io_req_finish(ObIORequest& req, const ObIORetCode& ret_code)
 {
   if (OB_NOT_NULL(req.io_result_)) {
@@ -66,7 +64,17 @@ int QSchedCallback::handle(TCRequest* tc_req)
     LOG_INFO("submit_request cost too much time", K(ret), K(time_guard), K(req));
   }
   if (OB_FAIL(ret)) {
-    io_req_finish(req, ObIORetCode(ret));
+    if (ret == OB_EAGAIN) {
+      if (REACH_TIME_INTERVAL(1 * 1000L * 1000L)) {
+        LOG_INFO("device channel eagain", K(ret));
+      }
+      if (OB_FAIL(req.retry_io())) {
+        LOG_WARN("retry io failed", K(ret), K(req));
+        io_req_finish(req, ObIORetCode(ret));
+      }
+    } else {
+      io_req_finish(req, ObIORetCode(ret));
+    }
   }
   req.dec_ref("phyqueue_dec"); // ref for io queue
   return ret;
@@ -276,8 +284,8 @@ static void fill_qsched_req(ObIORequest& req, int qid)
 {
   req.qsched_req_.qid_ = qid;
   req.qsched_req_.bytes_ = req.get_align_size();
+  req.qsched_req_.norm_bytes_ = req.is_object_device_req() ? req.qsched_req_.bytes_ : get_norm_bw(req.qsched_req_.bytes_, req.get_mode());
 }
-
 int64_t ObTenantIOSchedulerV2::get_qindex(ObIORequest& req)
 {
   int ret = OB_SUCCESS;
@@ -287,7 +295,7 @@ int64_t ObTenantIOSchedulerV2::get_qindex(ObIORequest& req)
     index = static_cast<int64_t>(grp_key.mode_);
   } else if (!is_valid_group(grp_key.group_id_)) {
   } else if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->get_group_index(grp_key, (uint64_t&)index))) {
-    if (ret == OB_HASH_NOT_EXIST || ret == OB_STATE_NOT_MATCH) {
+    if (ret == OB_HASH_NOT_EXIST) {
       ret = OB_SUCCESS;
       if (REACH_TIME_INTERVAL(1 * 1000L * 1000L)) {
         LOG_INFO("get group index failed, but maybe it is ok", K(ret), K(grp_key), K(index)); // group is not build

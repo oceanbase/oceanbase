@@ -688,6 +688,24 @@ int ObTxCallbackList::tx_elr_preparing()
   return ret;
 }
 
+int ObTxCallbackList::tx_elr_revoke()
+{
+  int ret = OB_SUCCESS;
+  struct Functor final : public ObITxCallbackFunctor
+  {
+    int operator()(ObITransCallback *callback) {
+      callback->elr_trans_revoke();
+      return OB_SUCCESS;
+    }
+  } functor;
+  LockGuard guard(*this, LOCK_MODE::LOCK_ALL);
+  if (OB_FAIL(callback_(functor, guard.state_))) {
+    TRANS_LOG(WARN, "trans elr revoke failed", K(ret), K(functor));
+  }
+
+  return ret;
+}
+
 int ObTxCallbackList::tx_print_callback()
 {
   int ret = OB_SUCCESS;

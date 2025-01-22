@@ -87,6 +87,7 @@ public:
                K_(is_column_store),
                K_(online_opt_stat_gather),
                K_(is_incremental),
+               K_(reuse_pk),
                K_(trans_param),
                KP_(datum_utils),
                KP_(col_descs),
@@ -112,6 +113,7 @@ public:
   bool is_column_store_;
   bool online_opt_stat_gather_;
   bool is_incremental_;
+  bool reuse_pk_;
   ObDirectLoadTransParam trans_param_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;

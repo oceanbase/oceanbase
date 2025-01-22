@@ -157,6 +157,17 @@ private:
 
 class ObAutoSplitTaskPollingMgr
 {
+  struct GcTenantCacheOperator
+  {
+  public:
+    GcTenantCacheOperator(common::hash::ObHashSet<uint64_t> &existed_tenants_set)
+      : existed_tenants_set_(existed_tenants_set)
+      {}
+    int operator () (oceanbase::common::hash::HashMapPair<uint64_t, ObAutoSplitTaskCache*> &entry);
+  public:
+    common::hash::ObHashSet<uint64_t> &existed_tenants_set_;
+    ObSEArray<oceanbase::common::hash::HashMapPair<uint64_t, ObAutoSplitTaskCache*>, 1> needed_gc_tenant_caches_;
+  };
 public:
   ObAutoSplitTaskPollingMgr(const bool is_root_server)
     : is_root_server_(is_root_server), inited_(false), total_tasks_(0)
@@ -168,6 +179,8 @@ public:
   int push_tasks(const ObArray<ObAutoSplitTask> &task_array);
   inline bool is_busy() { return ATOMIC_LOAD(&total_tasks_) >= ObAutoSplitTaskPollingMgr::BUSY_THRESHOLD; }
   inline bool empty() { return ATOMIC_LOAD(&total_tasks_) == 0; };
+  int gc_deleted_tenant_caches();
+
 
 private:
   inline int64_t get_total_tenants() { return map_tenant_to_cache_.size(); }
@@ -216,6 +229,7 @@ private:
                                      const ObTabletID tablet_id,
                                      const share::schema::ObTableSchema *&table_schema,
                                      const share::schema::ObSimpleDatabaseSchema *&db_schema,
+                                     share::schema::ObSchemaGetterGuard &guard,
                                      obrpc::ObAlterTableArg &arg);
   int acquire_table_id_of_tablet_(const uint64_t tenant_id,
                                   const ObTabletID tablet_id,
@@ -237,11 +251,19 @@ private:
                                 const share::schema::ObTableSchema &table_schema,
                                 const ObTabletID split_source_tablet_id,
                                 const ObArray<ObNewRange> &ranges,
+                                const ObTimeZoneInfo *tz_info,
                                 share::schema::AlterTableSchema &alter_table_schema);
   int build_partition_(const uint64_t tenant_id, const uint64_t table_id,
                        const ObTabletID split_source_tablet_id,
                        const ObRowkey &high_bound_val,
+                       const ObTimeZoneInfo *tz_info,
                        share::schema::ObPartition &new_part);
+  int check_and_cast_high_bound(const ObRowkey &origin_high_bound_val,
+                                const ObTimeZoneInfo *tz_info,
+                                ObRowkey &cast_hight_bound_val,
+                                bool &need_cast,
+                                ObIAllocator &allocator);
+  int check_need_to_cast(const ObObj &obj, bool &need_to_cast);
 private:
   static const int32_t MAX_SPLIT_PARTITION_NUM = 2;
 };
@@ -258,6 +280,7 @@ public:
   int init() { return polling_mgr_.init(); }
   void reset() { polling_mgr_.reset(); }
   static int check_ls_migrating(const uint64_t tenant_id, const ObTabletID &tablet_id, bool &is_migrating);
+  int gc_deleted_tenant_caches();
 private:
   ObRsAutoSplitScheduler ()
     : polling_mgr_(true/*is_root_server*/)

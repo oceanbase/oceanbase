@@ -1089,6 +1089,11 @@
       const ObDataTypeCastParams dtc_params(&tz_info);               \
       bool no_dtc_params = (ob_is_bit_tc(data_type) || ob_is_enum_or_set_type(data_type)); \
       ObCastCtx cast_ctx(&allocator, no_dtc_params ? NULL : &dtc_params, CM_NONE, column.get_collation_type());\
+      if (ob_is_mysql_compact_dates_type(data_type)) { \
+        /* The default value validation has been finished in resolver stage. set cast mode to */ \
+        /* allow invalid dates for mysql compact type there. */ \
+        cast_ctx.set_allow_invalid_dates_cast_mode(); \
+      } \
       if (is_cur_default_value && column.is_default_expr_v2_column())\
       { \
         if (lib::is_mysql_mode()) { \
@@ -1232,6 +1237,11 @@
       const ObDataTypeCastParams dtc_params(&tz_info);               \
       bool no_dtc_params = (ob_is_bit_tc(data_type) || ob_is_enum_or_set_type(data_type)); \
       ObCastCtx cast_ctx(&allocator, no_dtc_params ? NULL : &dtc_params, CM_NONE, column.get_collation_type());\
+      if (ob_is_mysql_compact_dates_type(data_type)) {                                           \
+        /* The default value validation has been finished in resolver stage. set cast mode to */ \
+        /* allow invalid dates for mysql compact type there. */                                  \
+        cast_ctx.set_allow_invalid_dates_cast_mode();                                            \
+      }                                                                                          \
       if (is_cur_default_value && column.is_default_expr_v2_column())                            \
       {                                                                                          \
         if (lib::is_mysql_mode()) {                                                              \
@@ -1748,7 +1758,7 @@ public:
   }
   virtual int get_type(const int64_t col_idx, ObObjMeta &type) const = 0;
   virtual int get_col_meta(const int64_t col_idx, bool old_max_length,
-                           oceanbase::common::ObString &name, ObDataType &data_type) const = 0;
+                           oceanbase::common::ObString &name, oceanbase::common::ObDataType &data_type) const = 0;
   int format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length,
                                      oceanbase::common::ObObjType ob_type, oceanbase::common::ObCollationType cs_type,
                                      DblinkDriverProto link_type, bool old_max_length) const;

@@ -16,7 +16,7 @@ public:
   BytesLimiter(int id, const char* name): ITCLimiter(id, TCLIMIT_BYTES, name, 0) {}
   BytesLimiter(int id, const char* name, uint64_t storage_key): ITCLimiter(id, TCLIMIT_BYTES, name, storage_key) {}
   ~BytesLimiter() {}
-  int64_t get_cost(TCRequest* req) { return req->bytes_; }
+  int64_t get_cost(TCRequest* req) { return (req->norm_bytes_ == 0) ? req->bytes_ : req->norm_bytes_; }
 };
 
 class CountLimiter: public ITCLimiter

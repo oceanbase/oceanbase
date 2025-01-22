@@ -12,6 +12,7 @@
 
 #ifndef OCEANBASE_LOG_MINER_LOGGER_H_
 #define OCEANBASE_LOG_MINER_LOGGER_H_
+#include <cstdint>
 
 namespace oceanbase
 {

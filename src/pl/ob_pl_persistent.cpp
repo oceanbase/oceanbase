@@ -569,8 +569,11 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
             if (OB_SUCC(ret)) {
               bool match = false;
               int64_t tenant_schema_version = OB_INVALID_VERSION;
-              if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, tenant_schema_version))) {
-                LOG_WARN("fail to get schema version");
+              if (OB_INVALID_ID == tenant_id_belongs_) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected tenant id", K(ret));
+              } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_belongs_, tenant_schema_version))) {
+                LOG_WARN("fail to get schema version", K(ret), K(tenant_id_belongs_));
               } else if (merge_version == tenant_schema_version) {
                 match = true;
                 op = ObRoutinePersistentInfo::ObPLOperation::NONE;
@@ -592,7 +595,7 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
                 int8_t level = 0;
                 int16_t id = 0;
                 if (OB_FAIL(decode_dll(*session_info, schema_guard, exec_env, unit_ast, unit, binary.ptr(), binary.length(), pos, level, id))) {
-                  LOG_WARN("fail to decode dll", K(ret), K(level), K(id));
+                  LOG_WARN("fail to decode dll", K(ret), K(level), K(id), K(merge_version), K(tenant_schema_version));
                 } else if (0 != level || 0 != id) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("fail to decode dll", K(ret), K(level), K(id));

@@ -846,8 +846,8 @@ TEST_F(TestSSMicroMetaManager, test_clear_micro_meta_by_tablet_id)
       ASSERT_EQ(OB_SUCCESS,
           micro_meta_mgr.add_or_update_micro_block_meta(micro_key, micro_size, micro_crc, mem_blk_handle, real_add));
     }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   }
-  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(macro_cnt * micro_cnt * micro_size, cache_stat.micro_stat().total_micro_size_);
 
@@ -899,6 +899,82 @@ TEST_F(TestSSMicroMetaManager, test_clear_micro_meta_by_tablet_id)
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.clear_tablet_micro_meta(tablet_id3, remain_micro_cnt));
   ASSERT_EQ(micro_cnt / 2, remain_micro_cnt);
   ASSERT_EQ((macro_cnt - 3) * micro_cnt + micro_cnt / 2, cache_stat.micro_stat().valid_micro_cnt_);
+}
+
+// check that arc_info.p_ does not exceed arc_info.max_p_
+TEST_F(TestSSMicroMetaManager, test_arc_limit_p)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_arc_limit_p");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  micro_cache->stop();
+  micro_cache->wait();
+  micro_cache->destroy();
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 28))); // 256MB
+  ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+
+  ObArenaAllocator allocator;
+  ObSSMicroMetaManager &micro_meta_mgr = MTL(ObSSMicroCache *)->micro_meta_mgr_;
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSARCInfo &arc_info = micro_cache->micro_meta_mgr_.arc_info_;
+  const int64_t origin_p = arc_info.p_;
+  const int32_t block_size = phy_blk_mgr.block_size_;
+  const int64_t macro_blk_cnt = phy_blk_mgr.blk_cnt_info_.data_blk_.max_cnt_;
+
+  int64_t start_macro_id = 1;
+  const int64_t micro_size = (1L << 16);  // 64K
+  char *read_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, read_buf);
+  ObArray<TestSSCommonUtil::MicroBlockInfo> micro_block_info_arr;
+  for (int64_t epoch = 0 ; epoch < 2; epoch++) {
+    // 1. write some macro_blocks to object_storage
+    micro_block_info_arr.reuse();
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::prepare_micro_blocks(
+            macro_blk_cnt, block_size, micro_block_info_arr, start_macro_id, false, micro_size, micro_size));
+    ASSERT_LT(0, micro_block_info_arr.count());
+
+    start_macro_id += macro_blk_cnt;
+
+    // 2. make half micro_blocks go into T1 and the other half go into T2. At the same time, some micro_blocks will be
+    // evicted into B1 and B2.
+    for (int64_t i = 0; i < micro_block_info_arr.count(); ++i) {
+      TestSSCommonUtil::MicroBlockInfo &cur_info = micro_block_info_arr.at(i);
+      ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::get_micro_block(cur_info, read_buf));
+      if (i & 1) {
+        ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::get_micro_block(cur_info, read_buf));
+      }
+    }
+  }
+
+  ASSERT_EQ(origin_p, arc_info.p_);
+  const int64_t B1_size = arc_info.seg_info_arr_[ARC_B1].size();
+  ASSERT_LT(arc_info.max_p_ - arc_info.p_, B1_size);
+
+  // 3. collect all micro_blocks in B1
+  micro_block_info_arr.reuse();
+  ObSSMicroMetaManager::SSMicroMap &micro_map = micro_cache->micro_meta_mgr_.micro_meta_map_;
+  ObSSMicroMetaManager::SSMicroMap::BlurredIterator micro_iter_(micro_map);
+  micro_iter_.rewind();
+  while (OB_SUCC(ret)) {
+    const ObSSMicroBlockCacheKey *micro_key = nullptr;
+    ObSSMicroBlockMetaHandle micro_handle;
+    if (OB_FAIL(micro_iter_.next(micro_key, micro_handle))) {
+      ASSERT_EQ(OB_ITER_END, ret);
+    } else if (micro_handle()->is_in_l1() && micro_handle()->is_in_ghost()) {
+      const ObSSMicroBlockId &micro_id = micro_handle()->micro_key().micro_id_;
+      ASSERT_EQ(OB_SUCCESS, micro_block_info_arr.push_back(TestSSCommonUtil::MicroBlockInfo(micro_id)));
+    }
+  }
+
+  // 4. p_ will get larger when req hit micro_block in B1
+  for (int64_t i = 0; i < micro_block_info_arr.count(); ++i) {
+    TestSSCommonUtil::MicroBlockInfo &cur_info = micro_block_info_arr.at(i);
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::get_micro_block(cur_info, read_buf));
+  }
+
+  // 5. check that p does not exceed p_max
+  ASSERT_LE(arc_info.p_, arc_info.max_p_);
+  ASSERT_LE(arc_info.max_p_ - arc_info.p_, micro_size * 1);
 }
 
 }  // namespace storage

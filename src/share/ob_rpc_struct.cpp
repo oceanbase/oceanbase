@@ -352,6 +352,7 @@ int ObStartRedefTableArg::assign(const ObStartRedefTableArg &arg)
     ddl_type_ = arg.ddl_type_;
     trace_id_ = arg.trace_id_;
     sql_mode_ = arg.sql_mode_;
+    foreign_key_checks_ = arg.foreign_key_checks_;
     for (int64_t i = 0; OB_SUCC(ret) && i < common::ObNLSFormatEnum::NLS_MAX; i++) {
       nls_formats_[i].assign_ptr(arg.nls_formats_[i].ptr(), static_cast<int32_t>(arg.nls_formats_[i].length()));
     }
@@ -395,6 +396,9 @@ OB_DEF_SERIALIZE(ObStartRedefTableArg)
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      LST_DO_CODE(OB_UNIS_ENCODE, foreign_key_checks_);
+    }
   }
   return ret;
 }
@@ -436,6 +440,9 @@ OB_DEF_DESERIALIZE(ObStartRedefTableArg)
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, foreign_key_checks_);
+  }
   return ret;
 }
 
@@ -465,6 +472,9 @@ OB_DEF_SERIALIZE_SIZE(ObStartRedefTableArg)
         len += nls_formats_[i].get_serialize_size();
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, foreign_key_checks_);
   }
   if (OB_FAIL(ret)) {
     len = -1;
@@ -712,6 +722,7 @@ int ObCreateHiddenTableArg::assign(const ObCreateHiddenTableArg &arg)
     }
     OZ (tablet_ids_.assign(arg.tablet_ids_));
     need_reorder_column_id_ = arg.need_reorder_column_id_;
+    foreign_key_checks_ = arg.foreign_key_checks_;
   }
   return ret;
 }
@@ -722,7 +733,7 @@ int ObCreateHiddenTableArg::init(const uint64_t tenant_id, const uint64_t dest_t
                                  const ObTimeZoneInfo &tz_info, const common::ObString &local_nls_date,
                                  const common::ObString &local_nls_timestamp, const common::ObString &local_nls_timestamp_tz,
                                  const ObTimeZoneInfoWrap &tz_info_wrap, const ObIArray<ObTabletID> &tablet_ids,
-                                 const bool need_reorder_column_id)
+                                 const bool need_reorder_column_id, const bool foreign_key_checks)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -749,6 +760,7 @@ int ObCreateHiddenTableArg::init(const uint64_t tenant_id, const uint64_t dest_t
     tz_info_ = tz_info;
     // load data no need to reorder column id
     need_reorder_column_id_ = need_reorder_column_id;
+    foreign_key_checks_ = DATA_CURRENT_VERSION >= DATA_VERSION_4_3_5_1 ? (is_oracle_mode() || (is_mysql_mode() && foreign_key_checks)) : true;
   }
   return ret;
 }
@@ -784,7 +796,7 @@ OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
       OB_UNIS_ENCODE(tablet_ids_);
     }
     if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_ENCODE, need_reorder_column_id_);
+      LST_DO_CODE(OB_UNIS_ENCODE, need_reorder_column_id_, foreign_key_checks_);
     }
   }
   return ret;
@@ -829,7 +841,7 @@ OB_DEF_DESERIALIZE(ObCreateHiddenTableArg)
       OB_UNIS_DECODE(tablet_ids_);
     }
     if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_DECODE, need_reorder_column_id_);
+      LST_DO_CODE(OB_UNIS_DECODE, need_reorder_column_id_, foreign_key_checks_);
     }
   }
   return ret;
@@ -863,7 +875,7 @@ OB_DEF_SERIALIZE_SIZE(ObCreateHiddenTableArg)
       OB_UNIS_ADD_LEN(tablet_ids_);
     }
     if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_ADD_LEN, need_reorder_column_id_);
+      LST_DO_CODE(OB_UNIS_ADD_LEN, need_reorder_column_id_, foreign_key_checks_);
     }
   }
   if (OB_FAIL(ret)) {
@@ -3332,21 +3344,23 @@ DEF_TO_STRING(ObTableOption)
        K_(progressive_merge_num),
        K_(primary_zone),
        K_(row_store_type),
-       K_(store_format));
+       K_(store_format),
+       K_(enable_macro_block_bloom_filter));
   J_OBJ_END();
   return pos;
 }
 
 OB_SERIALIZE_MEMBER(ObTableOption,
-                                 block_size_,
-                                 replica_num_,
-                                 index_status_,
-                                 use_bloom_filter_,
-                                 compress_method_,
-                                 comment_,
-                                 progressive_merge_num_,
-                                 row_store_type_,
-                                 store_format_);
+                    block_size_,
+                    replica_num_,
+                    index_status_,
+                    use_bloom_filter_,
+                    compress_method_,
+                    comment_,
+                    progressive_merge_num_,
+                    row_store_type_,
+                    store_format_,
+                    enable_macro_block_bloom_filter_);
 
 DEF_TO_STRING(ObIndexOption)
 {
@@ -3362,14 +3376,16 @@ DEF_TO_STRING(ObIndexOption)
        K_(progressive_merge_num),
        K_(primary_zone),
        K_(parser_name),
+       K_(parser_properties),
        K_(index_attributes_set),
        K_(row_store_type),
-       K_(store_format));
+       K_(store_format),
+       K_(enable_macro_block_bloom_filter));
   J_OBJ_END();
   return pos;
 }
 
-OB_SERIALIZE_MEMBER((ObIndexOption, ObTableOption), parser_name_, index_attributes_set_);
+OB_SERIALIZE_MEMBER((ObIndexOption, ObTableOption), parser_name_, index_attributes_set_, parser_properties_);
 
 bool ObIndexArg::is_valid() const
 {
@@ -3489,7 +3505,14 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     index_cgs_,
                     vidx_refresh_info_,
                     is_rebuild_index_,
-                    is_index_scope_specified_);
+                    is_index_scope_specified_,
+                    is_offline_rebuild_,
+                    index_key_);
+
+OB_SERIALIZE_MEMBER((ObIndexOfflineDdlArg, ObDDLArg),
+                    arg_,
+                    task_id_,
+                    sub_task_trace_id_);
 
 int ObCreateAuxIndexArg::assign(const ObCreateAuxIndexArg &other)
 {
@@ -3499,6 +3522,7 @@ int ObCreateAuxIndexArg::assign(const ObCreateAuxIndexArg &other)
   } else {
     tenant_id_ = other.tenant_id_;
     data_table_id_ = other.data_table_id_;
+    snapshot_version_ = other.snapshot_version_;
   }
   return ret;
 }
@@ -3506,7 +3530,8 @@ int ObCreateAuxIndexArg::assign(const ObCreateAuxIndexArg &other)
 OB_SERIALIZE_MEMBER((ObCreateAuxIndexArg, ObDDLArg),
                     tenant_id_,
                     data_table_id_,
-                    create_index_arg_);
+                    create_index_arg_,
+                    snapshot_version_);
 OB_SERIALIZE_MEMBER(ObCreateAuxIndexRes,
                     aux_table_id_,
                     ddl_task_id_,
@@ -7217,15 +7242,17 @@ DEF_TO_STRING(ObSplitPartitionBatchArg)
 
 bool ObCheckpoint::is_valid() const
 {
-  return (ls_id_.is_valid() && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_max_scn_.is_valid_and_not_min());
+  return (ls_id_.is_valid() && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_next_scn_.is_valid_and_not_min());
 }
 
 bool ObCheckpoint::operator==(const obrpc::ObCheckpoint &r) const
 {
-  return ls_id_ == r.ls_id_ && cur_sync_scn_ == r.cur_sync_scn_ && cur_restore_source_max_scn_ == r.cur_restore_source_max_scn_;
+  return ls_id_ == r.ls_id_ && cur_sync_scn_ == r.cur_sync_scn_ && cur_restore_source_next_scn_ == r.cur_restore_source_next_scn_;
 }
 
-OB_SERIALIZE_MEMBER(ObCheckpoint, ls_id_, cur_sync_scn_, cur_restore_source_max_scn_);
+OB_SERIALIZE_MEMBER(ObCheckpoint, ls_id_, cur_sync_scn_,
+                    cur_restore_source_next_scn_ // FARM COMPAT WHITELIST FOR cur_restore_source_max_scn_
+                    );
 
 OB_SERIALIZE_MEMBER(ObGetWRSArg, tenant_id_, scope_, need_filter_);
 OB_SERIALIZE_MEMBER(ObGetWRSResult, self_addr_, err_code_);
@@ -7397,32 +7424,34 @@ int ObGetLSSyncScnArg::assign(const ObGetLSSyncScnArg &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObGetLSSyncScnRes, tenant_id_, ls_id_, cur_sync_scn_, cur_restore_source_max_scn_);
+OB_SERIALIZE_MEMBER(ObGetLSSyncScnRes, tenant_id_, ls_id_, cur_sync_scn_,
+                    cur_restore_source_next_scn_ // FARM COMPAT WHITELIST FOR cur_restore_source_max_scn_
+                    );
 
 bool ObGetLSSyncScnRes::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
          && ls_id_.is_valid()
          && cur_sync_scn_.is_valid_and_not_min()
-         && cur_restore_source_max_scn_.is_valid_and_not_min();
+         && cur_restore_source_next_scn_.is_valid_and_not_min();
 }
 int ObGetLSSyncScnRes::init(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const share::SCN &cur_sync_scn,
-    const share::SCN &cur_restore_source_max_scn)
+    const share::SCN &cur_restore_source_next_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
                   || !ls_id.is_valid()
                   || !cur_sync_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(cur_sync_scn), K(cur_restore_source_max_scn));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(cur_sync_scn), K(cur_restore_source_next_scn));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     cur_sync_scn_ = cur_sync_scn;
-    cur_restore_source_max_scn_ = cur_restore_source_max_scn;
+    cur_restore_source_next_scn_ = cur_restore_source_next_scn;
   }
   return ret;
 }
@@ -7434,7 +7463,7 @@ int ObGetLSSyncScnRes::assign(const ObGetLSSyncScnRes &other)
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
     cur_sync_scn_ = other.cur_sync_scn_;
-    cur_restore_source_max_scn_ = other.cur_restore_source_max_scn_;
+    cur_restore_source_next_scn_ = other.cur_restore_source_next_scn_;
   }
   return ret;
 }
@@ -10426,7 +10455,11 @@ int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo, tenant_data_version_, need_create_empty_major_, micro_index_clustered_, split_src_tablet_id_);
+OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo,
+                    tenant_data_version_,
+                    need_create_empty_major_,
+                    micro_index_clustered_,
+                    split_src_tablet_id_);
 
 bool ObBatchCreateTabletArg::is_inited() const
 {
@@ -13195,7 +13228,8 @@ int ObCollectMvMergeInfoResult::init(const ObMajorMVMergeInfo &mv_merge_info, co
   int ret = OB_SUCCESS;
   if (!mv_merge_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", KR(ret), K(mv_merge_info));
+    ret_ = ret;
+    LOG_WARN("invalid arguments", KR(ret), K(mv_merge_info), K(ret_));
   } else {
     mv_merge_info_ = mv_merge_info;
     ret_ = err_ret;

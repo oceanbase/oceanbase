@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/udt/ob_array_type.h"
+#include "sql/engine/expr/ob_expr_array_overlaps.h"
 
 
 namespace oceanbase

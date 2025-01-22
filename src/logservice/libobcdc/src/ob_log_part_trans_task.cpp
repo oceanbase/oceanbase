@@ -3519,11 +3519,11 @@ int PartTransTask::commit(
         } else if (OB_FAIL(ObLogLSOpProcessor::process_ls_op(
             tls_id_.get_tenant_id(),
             commit_log_lsn,
-            commit_log_submit_ts,
+            trans_commit_version,
             ls_attr))) {
           if (OB_ENTRY_NOT_EXIST != ret) {
             LOG_ERROR("ObLogLSOpProcessor process_ls_op failed", KR(ret), K(tls_id_), K(tx_id), K(commit_log_lsn),
-                K(commit_log_submit_ts), K(ls_attr));
+                K(trans_commit_version), K(commit_log_submit_ts), K(ls_attr));
           } else {
             if (is_data_dict_mode) {
               // In Data dictionary, it need to fetch the log of the baseline data dict before adding a tenant,

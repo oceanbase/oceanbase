@@ -159,6 +159,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       pl_context_(NULL),
       pl_can_retry_(true),
       plsql_exec_time_(0),
+      plsql_compile_time_(0),
 #ifdef OB_BUILD_ORACLE_PL
       pl_debugger_(NULL),
       pl_profiler_(NULL),
@@ -339,6 +340,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     pl_context_ = NULL;
     pl_can_retry_ = true;
     plsql_exec_time_ = 0;
+    plsql_compile_time_ = 0;
 #ifdef OB_BUILD_ORACLE_PL
     pl_debugger_ = NULL;
     pl_profiler_ = NULL;
@@ -1548,6 +1550,7 @@ ObDbmsCursorInfo *ObSQLSessionInfo::get_dbms_cursor(int64_t cursor_id)
 
 int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
 {
+  DISABLE_SQL_MEMLEAK_GUARD
 // open_cursors is 0 to indicate a special state, no limit is set
 #define NEED_CHECK_SESS_OPEN_CURSORS_LIMIT(v) (0 == v ? false : true)
   int ret = OB_SUCCESS;
@@ -3004,10 +3007,14 @@ int ObSQLSessionInfo::set_enable_role_array(const ObIArray<uint64_t> &role_id_ar
 void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
 {
   int tmp_ret = OB_SUCCESS;
-  const uint64_t effective_tenant_id = session_->get_effective_tenant_id();
   int64_t cur_ts = ObClockGenerator::getClock();
-  const bool change_tenant = (saved_tenant_info_ != effective_tenant_id);
-  if (change_tenant || cur_ts - last_check_ec_ts_ > 5000000) {
+  if (OB_ISNULL(session_)) {
+    tmp_ret = OB_ERR_UNEXPECTED;
+    LOG_WARN_RET(tmp_ret, "session_ is null");
+  } else if ((saved_tenant_info_ != session_->get_effective_tenant_id())
+             || cur_ts - last_check_ec_ts_ > 5000000) {
+    const uint64_t effective_tenant_id = session_->get_effective_tenant_id();
+    const bool change_tenant = (saved_tenant_info_ != effective_tenant_id);
     if (change_tenant) {
       LOG_DEBUG("refresh tenant config where tenant changed",
                   K_(saved_tenant_info), K(effective_tenant_id));
@@ -3066,6 +3073,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       enable_decimal_int_type_ = tenant_config->_enable_decimal_int_type;
       sql_plan_management_mode_ = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
         tenant_config->sql_plan_management_mode.get_value_string());
+      enable_mysql_compatible_dates_ = tenant_config->_enable_mysql_compatible_dates;
       enable_enum_set_subschema_ = tenant_config->_enable_enum_set_subschema;
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
@@ -3122,21 +3130,48 @@ int ObSQLSessionInfo::ps_use_stream_result_set(bool &use_stream) {
   return piece_cache_;
 }
 
+template <typename AllocatorT>
+static int write_str_reuse_buf(AllocatorT &allocator, const ObString &src, ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  const ObString::obstr_size_t src_len = src.length();
+  char *ptr = NULL;
+  if (src_len <= dst.size()) {
+    MEMCPY(dst.ptr(), src.ptr(), src_len);
+    dst.set_length(src_len);
+  } else {
+    allocator.free(dst.ptr());
+    if (OB_ISNULL(src.ptr()) || OB_UNLIKELY(0 >= src_len)) {
+      dst.assign(NULL, 0);
+    } else if (NULL ==
+                (ptr = static_cast<char *>(allocator.alloc(src_len)))) {
+      dst.assign(NULL, 0);
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), "size", src_len);
+    } else {
+      MEMCPY(ptr, src.ptr(), src_len);
+      dst.assign_buffer(ptr, src_len);
+      dst.set_length(src_len);
+    }
+  }
+  return ret;
+}
+
 int ObSQLSessionInfo::set_login_info(const share::schema::ObUserLoginInfo &login_info)
 {
   int ret = OB_SUCCESS;
-  OZ (ob_write_string(get_session_allocator(), login_info.tenant_name_, login_info_.tenant_name_));
-  OZ (ob_write_string(get_session_allocator(), login_info.user_name_, login_info_.user_name_));
-  OZ (ob_write_string(get_session_allocator(), login_info.client_ip_, login_info_.client_ip_));
-  OZ (ob_write_string(get_session_allocator(), login_info.passwd_, login_info_.passwd_));
-  OZ (ob_write_string(get_session_allocator(), login_info.db_, login_info_.db_));
-  OZ (ob_write_string(get_session_allocator(), login_info.scramble_str_, login_info_.scramble_str_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.tenant_name_, login_info_.tenant_name_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.user_name_, login_info_.user_name_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.client_ip_, login_info_.client_ip_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.passwd_, login_info_.passwd_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.db_, login_info_.db_));
+  OZ (write_str_reuse_buf(get_session_allocator(), login_info.scramble_str_, login_info_.scramble_str_));
   return ret;
 }
 
 int ObSQLSessionInfo::set_login_auth_data(const ObString &auth_data) {
   int ret = OB_SUCCESS;
-  OZ (ob_write_string(get_session_allocator(), auth_data, login_info_.passwd_));
+  OZ (write_str_reuse_buf(get_session_allocator(), auth_data, login_info_.passwd_));
   return ret;
 }
 
@@ -3590,7 +3625,10 @@ int ObSysVarEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const in
           ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_STATEMENT_TRACE_ID ||
           ObSysVariables::get_sys_var_id(j) == SYS_VAR_VERSION_COMMENT ||
           ObSysVariables::get_sys_var_id(j) == SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK ||
-          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_SYSTEM_TIME_ZONE) {
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_SYSTEM_TIME_ZONE ||
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_PID_FILE ||
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_PORT ||
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_SOCKET) {
         // no need sync sys var
         continue;
       }
@@ -3613,7 +3651,10 @@ int64_t ObSysVarEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
           ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_STATEMENT_TRACE_ID ||
           ObSysVariables::get_sys_var_id(j) == SYS_VAR_VERSION_COMMENT ||
           ObSysVariables::get_sys_var_id(j) == SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK ||
-          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_SYSTEM_TIME_ZONE) {
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_SYSTEM_TIME_ZONE ||
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_PID_FILE ||
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_PORT ||
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_SOCKET) {
       // no need sync sys var
       continue;
     }
@@ -3669,7 +3710,10 @@ int ObSysVarEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* curre
           ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_STATEMENT_TRACE_ID ||
           ObSysVariables::get_sys_var_id(j) == SYS_VAR_VERSION_COMMENT ||
           ObSysVariables::get_sys_var_id(j) == SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK ||
-          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_SYSTEM_TIME_ZONE) {
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_SYSTEM_TIME_ZONE ||
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_PID_FILE ||
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_PORT ||
+          ObSysVariables::get_sys_var_id(j) ==  SYS_VAR_SOCKET) {
         // no need sync sys var
         continue;
       }

@@ -24,11 +24,15 @@ namespace sql
 int ObExternalFileWriter::open_file()
 {
   int ret = OB_SUCCESS;
-  if (IntoFileLocation::REMOTE_OSS == file_location_) {
+  if (IntoFileLocation::SERVER_DISK != file_location_) {//OSS,COS,S3
     bool is_exist = false;
     ObBackupIoAdapter adapter;
-    // TODO @linyi.cl: for S3, should use OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER
-    const ObStorageAccessType access_type = OB_STORAGE_ACCESS_APPENDER;
+    ObStorageAccessType access_type = OB_STORAGE_ACCESS_APPENDER;
+    // for S3, should use OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER
+    // OSS,COS can also use multipart writer. need to check performance
+    if (IntoFileLocation::REMOTE_S3 == file_location_) {
+      access_type = OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER;
+    }
     if (OB_FAIL(adapter.is_exist(url_, &access_info_, is_exist))) {
       LOG_WARN("fail to check file exist", KR(ret), K(url_), K(access_info_));
     } else if (is_exist) {
@@ -39,15 +43,12 @@ int ObExternalFileWriter::open_file()
     } else {
       is_file_opened_ = true;
     }
-  } else if (IntoFileLocation::SERVER_DISK == file_location_) {
+  } else {//SERVER DISK
     if (OB_FAIL(file_appender_.create(url_, true))) {
       LOG_WARN("failed to create file", K(ret), K(url_));
     } else {
       is_file_opened_ = true;
     }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error. invalid file location", K(ret));
   }
   return ret;
 }

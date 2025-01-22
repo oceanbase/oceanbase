@@ -659,7 +659,8 @@ int ObAccessService::check_read_allowed_(
       } else if (OB_FAIL(ls->get_read_store_ctx(scan_param.snapshot_,
                                                 read_latest,
                                                 scan_param.tx_lock_timeout_,
-                                                ctx))) {
+                                                ctx,
+                                                scan_param.trans_desc_))) {
         LOG_WARN("get read store ctx fail", K(ret), K(read_latest), K(scan_param.snapshot_), K(ls_id));
       }
       if (OB_FAIL(ret)) {

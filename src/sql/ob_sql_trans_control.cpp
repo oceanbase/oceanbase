@@ -713,6 +713,7 @@ int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
   uint64_t tenant_id = -1;
   uint32_t sessid = -1;
   uint32_t tm_sessid = 0;
+  DISABLE_SQL_MEMLEAK_GUARD;
   common::ObDbLinkProxy *dblink_proxy = GCTX.dblink_proxy_;
   sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
@@ -908,6 +909,13 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
         local_single_ls_plan = true;
       } else {
         local_single_ls_plan = has_same_lsid(das_ctx, snapshot, first_ls_id);
+      }
+    }
+    // per-opt: set read elr for DML stmt
+    if (OB_SUCC(ret) && local_single_ls_plan && !plan->is_plain_select() && txs->get_tx_elr_util().is_can_tenant_elr()) {
+      if (tx_desc.get_cluster_version() >= CLUSTER_VERSION_4_3_5_0) {
+        // for compatible reason, support it when upgraded to 4.3.5.0+
+        snapshot.try_set_read_elr();
       }
     }
     if (OB_SUCC(ret) && !local_single_ls_plan) {

@@ -424,11 +424,20 @@ int ObTmpFileFlushTG::wash_(const int64_t expect_flush_size, const RUNNING_MODE 
 {
   int ret = OB_SUCCESS;
   int64_t flushing_task_cnt = 0;
+  int64_t current_flush_cnt = ATOMIC_LOAD(&flushing_block_num_);
   ObSpLinkQueue flushing_list;
-  if (OB_FAIL(flush_mgr_.flush(flushing_list, flush_monitor_, expect_flush_size, is_fast_flush_meta_))) {
-    STORAGE_LOG(WARN, "flush mgr fail to do flush", KR(ret), KPC(this));
-  } else if (OB_FAIL(handle_generated_flush_tasks_(flushing_list, flushing_task_cnt))) {
-    STORAGE_LOG(WARN, "fail to handle generated flush tasks", KR(ret), K(flushing_task_cnt), KPC(this));
+
+  if (OB_FAIL(flush_mgr_.flush(flushing_list, flush_monitor_, expect_flush_size,
+                               current_flush_cnt, is_fast_flush_meta_))) {
+    if (OB_TMP_FILE_EXCEED_DISK_QUOTA == ret) {
+      signal_io_finish(ret);
+    }
+  }
+
+  if (!flushing_list.is_empty()) { // ignore ret
+    if (OB_FAIL(handle_generated_flush_tasks_(flushing_list, flushing_task_cnt))) {
+      STORAGE_LOG(WARN, "fail to handle generated flush tasks", KR(ret), K(flushing_task_cnt), KPC(this));
+    }
   }
 
   bool idle_loop = flushing_task_cnt == 0;
@@ -530,11 +539,21 @@ int ObTmpFileFlushTG::special_flush_meta_tree_page_()
   int ret = OB_SUCCESS;
   ObSpLinkQueue flushing_list;
   int64_t flushing_task_cnt = 0;
+  int64_t current_flush_cnt = ATOMIC_LOAD(&flushing_block_num_);
   int64_t expect_flush_size = OB_STORAGE_OBJECT_MGR.get_macro_object_size();
-  if (OB_FAIL(flush_mgr_.flush(flushing_list, flush_monitor_, expect_flush_size, true/*is_flush_meta_tree*/))) {
-    STORAGE_LOG(ERROR, "flush mgr fail to do fast flush meta tree page", KR(ret), KPC(this));
-  } else if (OB_FAIL(handle_generated_flush_tasks_(flushing_list, flushing_task_cnt))) {
-    STORAGE_LOG(WARN, "fail to handle fast flush meta tasks", KR(ret), K(flushing_task_cnt), KPC(this));
+  if (OB_FAIL(flush_mgr_.flush(flushing_list, flush_monitor_, expect_flush_size,
+                               current_flush_cnt, true/*is_flush_meta_tree*/))) {
+    if (OB_TMP_FILE_EXCEED_DISK_QUOTA == ret) {
+      signal_io_finish(ret);
+    } else {
+      STORAGE_LOG(ERROR, "flush mgr fail to do fast flush meta tree page", KR(ret), KPC(this));
+    }
+  }
+
+  if (!flushing_list.is_empty()) { // ignore ret
+    if (OB_FAIL(handle_generated_flush_tasks_(flushing_list, flushing_task_cnt))) {
+      STORAGE_LOG(WARN, "fail to handle fast flush meta tasks", KR(ret), K(flushing_task_cnt), KPC(this));
+    }
   }
   return ret;
 }
@@ -971,6 +990,10 @@ int ObTmpFileSwapTG::do_work_()
   }
 
   if (OB_SUCC(ret)) {
+    if (TC_REACH_TIME_INTERVAL(ObTmpFilePageCacheController::REFRESH_CONFIG_INTERVAL)) {
+      pc_ctrl_.refresh_disk_usage_limit();
+    }
+
     if (OB_FAIL(shrink_wbp_if_needed_())) {
       STORAGE_LOG(WARN, "fail to flush for shrinking wbp", KR(ret), KPC(this));
     }
@@ -1047,8 +1070,9 @@ int ObTmpFileSwapTG::swap_fast_()
     wakeup_satisfied_jobs_(wakeup_job_cnt);
     wakeup_timeout_jobs_();
     int io_finished_ret = flush_tg_ref_.get_flush_io_finished_ret();
-    if (OB_SERVER_OUTOF_DISK_SPACE == io_finished_ret) {
-      wakeup_all_jobs_(OB_SERVER_OUTOF_DISK_SPACE);
+    if (OB_SERVER_OUTOF_DISK_SPACE == io_finished_ret ||
+        OB_TMP_FILE_EXCEED_DISK_QUOTA == io_finished_ret) {
+      wakeup_all_jobs_(io_finished_ret);
     }
 
     // do flush if could not evict enough pages

@@ -5675,6 +5675,14 @@ int ObValuesTableDef::deep_copy(const ObValuesTableDef &other,
         LOG_WARN("failed to push back obj", K(ret));
       }
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.column_types_.count(); ++i) {
+      ObExprResType tmp_type;
+      if (OB_FAIL(tmp_type.assign(other.column_types_.at(i)))) {
+        LOG_WARN("failed to assign tmp type", K(ret));
+      } else if (OB_FAIL(column_types_.push_back(tmp_type))) {
+        LOG_WARN("failed to push back column type", K(ret));
+      }
+    }
   }
   return ret;
 }

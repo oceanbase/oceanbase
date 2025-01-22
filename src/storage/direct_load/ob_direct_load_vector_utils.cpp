@@ -15,6 +15,10 @@
 #include "share/ob_tablet_autoincrement_param.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/blocksstable/ob_storage_datum.h"
+#include "share/vector/ob_fixed_length_vector.h"
+#include "share/vector/ob_continuous_vector.h"
+#include "share/vector/ob_discrete_vector.h"
+#include "share/vector/ob_uniform_vector.h"
 
 namespace oceanbase
 {
@@ -62,6 +66,8 @@ int ObDirectLoadVectorUtils::new_vector(VectorFormat format, VecValueTypeClass v
         FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT128);
         FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT256);
         FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT512);
+        FIXED_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATETIME);
+        FIXED_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATE);
 #undef FIXED_VECTOR_INIT_SWITCH
         default:
           ret = OB_ERR_UNEXPECTED;
@@ -179,6 +185,8 @@ int ObDirectLoadVectorUtils::new_vector(VectorFormat format, VecValueTypeClass v
           UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_GEO);
           UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_UDT);
           UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_COLLECTION);
+          UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATETIME);
+          UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATE);
           UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_ROARINGBITMAP);
 #undef UNIFORM_VECTOR_INIT_SWITCH
           default:
@@ -238,6 +246,8 @@ int ObDirectLoadVectorUtils::new_vector(VectorFormat format, VecValueTypeClass v
           UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_GEO);
           UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_UDT);
           UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_COLLECTION);
+          UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATETIME);
+          UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_MYSQL_DATE);
           UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_ROARINGBITMAP);
 #undef UNIFORM_CONST_VECTOR_INIT_SWITCH
           default:
@@ -534,6 +544,74 @@ int ObDirectLoadVectorUtils::shallow_copy_vector(ObIVector *src_vec,
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected vector format", KR(ret), K(src_format));
+        break;
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadVectorUtils::expand_const_vector(ObIVector *const_vec,
+                                                 ObIVector *dest_vec,
+                                                 const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == const_vec || nullptr == dest_vec || batch_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(const_vec), KP(dest_vec), K(batch_size));
+  } else if (OB_UNLIKELY(VEC_UNIFORM_CONST != const_vec->get_format())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not const vector", KR(ret), K(const_vec->get_format()));
+  } else {
+    const ObDatum &const_datum = static_cast<ObUniformBase *>(const_vec)->get_datums()[0];
+    if (OB_FAIL(expand_const_datum(const_datum, dest_vec, batch_size))) {
+      LOG_WARN("fail to expaned const datum", KR(ret), K(const_datum), KP(dest_vec), K(batch_size));
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadVectorUtils::expand_const_datum(const ObDatum &const_datum,
+                                                ObIVector *dest_vec,
+                                                const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(const_datum.is_ext() || nullptr == dest_vec || batch_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(const_datum), KP(dest_vec), K(batch_size));
+  } else {
+    const VectorFormat dest_format = dest_vec->get_format();
+    switch (dest_format) {
+      case VEC_DISCRETE: {
+        ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(dest_vec);
+        discrete_vec->reset_flag();
+        discrete_vec->get_nulls()->reset(batch_size);
+        if (const_datum.is_null()) {
+          discrete_vec->set_has_null();
+          discrete_vec->get_nulls()->set_all(batch_size);
+        } else {
+          ObLength *lens = discrete_vec->get_lens();
+          char **ptrs = discrete_vec->get_ptrs();
+          for (int64_t i = 0; i < batch_size; ++i) {
+            lens[i] = const_datum.len_;
+          }
+          for (int64_t i = 0; i < batch_size; ++i) {
+            ptrs[i] = const_cast<char *>(const_datum.ptr_);
+          }
+        }
+        break;
+      }
+      case VEC_UNIFORM:
+      {
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(dest_vec);
+        ObDatum *datums = uniform_vec->get_datums();
+        for (int64_t i = 0; i < batch_size; ++i) {
+          datums[i] = const_datum;
+        }
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected vector format", KR(ret), K(dest_format));
         break;
     }
   }

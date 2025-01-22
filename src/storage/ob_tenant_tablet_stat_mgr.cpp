@@ -316,11 +316,11 @@ bool ObTenantSysStat::is_small_tenant() const
   return bret;
 }
 
-int ObTenantSysStat::refresh(const uint64_t tenant_id)
+int ObTenantSysStat::refresh(const uint64_t tenant_id, const bool force_refresh /*=false*/)
 {
   int ret = OB_SUCCESS;
 
-  if (!REACH_TENANT_TIME_INTERVAL(300_s)) {
+  if (!REACH_THREAD_TIME_INTERVAL(300_s) && !force_refresh) {
   } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu(tenant_id, min_cpu_cnt_, max_cpu_cnt_))) {
     LOG_WARN("failed to get tenant cpu count", K(ret));
   } else {
@@ -571,7 +571,7 @@ void ObTenantSysLoadShedder::refresh_sys_load()
   if (load_shedding_factor_ > 1 &&
       ObTimeUtility::fast_current_time() < effect_time_ + SHEDDER_EXPIRE_TIME) {
     // do nothing
-  } else if (REACH_TENANT_TIME_INTERVAL(CPU_TIME_SAMPLING_INTERVAL)) {
+  } else if (REACH_THREAD_TIME_INTERVAL(CPU_TIME_SAMPLING_INTERVAL)) {
     load_shedding_factor_ = 1;
 
     int tmp_ret = OB_SUCCESS;
@@ -585,7 +585,7 @@ void ObTenantSysLoadShedder::refresh_sys_load()
       max_cpu_cnt_ = max_cpu_cnt;
     }
 
-    if (min_cpu_cnt_ > 0 && max_cpu_cnt_ > 0) {
+    if (min_cpu_cnt_ > 0 && max_cpu_cnt_ > SHEDDER_CPU_CNT_THRESHOLD) {
       (void) refresh_cpu_utility();
     }
   }
@@ -750,12 +750,12 @@ int ObTenantTabletStatMgr::report_stat(
   } else {
     uint64_t pending_cur = pending_cursor_;
     if (pending_cur - report_cursor_ >= DEFAULT_MAX_PENDING_CNT) { // first check full queue with dirty read
-      if (REACH_TENANT_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
+      if (REACH_THREAD_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
         LOG_INFO("report_queue is full, wait to process", K(report_cursor_), K(pending_cur), K(stat));
       }
     } else if (FALSE_IT(pending_cur = ATOMIC_FAA(&pending_cursor_, 1))) {
     } else if (pending_cur - report_cursor_ >= DEFAULT_MAX_PENDING_CNT) { // double check
-        if (REACH_TENANT_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
+        if (REACH_THREAD_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
         LOG_INFO("report_queue is full, wait to process", K(report_cursor_), K(pending_cur), K(stat));
       }
     } else {
@@ -1082,7 +1082,7 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (not_compat_for_queuing_mode(compat_version)) {
-    if (REACH_TENANT_TIME_INTERVAL(30 * 1000L * 1000L/*30s*/)) {
+    if (REACH_THREAD_TIME_INTERVAL(30 * 1000L * 1000L/*30s*/)) {
       LOG_INFO("compat_version not support buffer table mode, no need to refresh queuing mode", K(compat_version));
     }
   } else if (OB_ISNULL(schema_service)) {

@@ -54,16 +54,19 @@ protected:
   // function members
 protected:
   // data members
-  int64_t tenant_id_;
+  uint64_t tenant_id_;
   int64_t lower_mem_limit_;
   int64_t upper_mem_limit_;
 };
 
 TestKVCache::TestKVCache()
-  : tenant_id_(900),
+  : tenant_id_(190000),
     lower_mem_limit_(8 * 1024 * 1024),
     upper_mem_limit_(16 * 1024 * 1024)
 {
+  for (int64_t t = tenant_id_; t < tenant_id_ + 30; ++t) {
+    ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(t);
+  }
 }
 
 TestKVCache::~TestKVCache()
@@ -161,7 +164,7 @@ TEST(ObKVGlobalCache, normal)
   //invalid argument
   ret = ObKVGlobalCache::get_instance().init(&getter, -1);
   ASSERT_NE(OB_SUCCESS, ret);
-  uint64_t tenant_id_ = 900;
+  uint64_t tenant_id_ = 190000;
   int64_t washable_size = -1;
   ret = ObKVGlobalCache::get_instance().store_.get_washable_size(tenant_id_, washable_size);
   ASSERT_NE(OB_SUCCESS, ret);
@@ -337,7 +340,7 @@ TEST_F(TestKVCache, test_func)
   ASSERT_NE(OB_SUCCESS, ret);
   TestKey bad_key;
   bad_key.v_ = 900;
-  bad_key.tenant_id_ = OB_DEFAULT_TENANT_COUNT+1;
+  bad_key.tenant_id_ = OB_INVALID_ID;
   ret = cache.put(bad_key, value);
   ASSERT_NE(OB_SUCCESS, ret);
 
@@ -544,7 +547,7 @@ TEST_F(TestKVCache, test_wash)
 
 
   COMMON_LOG(INFO, "********** Start nonempty wash every tenant **********");
-  for (int64_t t = 900; t < 930; ++t) {
+  for (int64_t t = 190000; t < 190030; ++t) {
     key.tenant_id_ = t;
     ret = getter.add_tenant(t,
                             lower_mem_limit_,
@@ -561,7 +564,7 @@ TEST_F(TestKVCache, test_wash)
 
   COMMON_LOG(INFO, "********** Start nonempty wash all tenant **********");
   for (int64_t j = 0; j < 20; ++j) {
-    for (int64_t t = 900; t < 930; ++t) {
+    for (int64_t t = 190000; t < 190030; ++t) {
       key.tenant_id_ = t;
       ret = getter.add_tenant(t,
                               lower_mem_limit_,

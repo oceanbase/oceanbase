@@ -246,7 +246,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
     fts_index_aux_schema_(nullptr), aux_doc_word_schema_(nullptr),
     vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_domain_index_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
     tenant_data_version_(0),
-    ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false)
+    ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false), fts_snapshot_version_(0)
 {
 }
 
@@ -1135,6 +1135,7 @@ int ObDDLTask::convert_to_record(
   task_record.ret_code_ = get_ret_code();
   task_record.consensus_schema_version_ = get_consensus_schema_version();
   task_record.ddl_need_retry_at_executor_ = !is_ddl_retryable();
+  task_record.snapshot_version_ = get_snapshot_version();
   const ObString &ddl_stmt_str = get_ddl_stmt_str();
   if (serialize_param_size > 0) {
     char *buf = nullptr;
@@ -2284,6 +2285,8 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
       const int64_t check_count = need_check_tablets.count();
       ObArray<int> ret_codes;
       ObArray<int64_t> tmp_snapshots;
+      int64_t retry_ret_count = 0;
+      int64_t succ_count = 0;
       switch (wait_type_) {
         case WaitTransType::WAIT_SCHEMA_TRANS: {
           if (OB_FAIL(check_schema_trans_end(
@@ -2313,14 +2316,13 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
         LOG_WARN("check count not match", K(ret),
             K(check_count), K(ret_codes.count()), K(tmp_snapshots.count()));
       } else {
-        int64_t succ_count = 0;
         tablet_count = check_count;
         for (int64_t i = 0; OB_SUCC(ret) && i < check_count; ++i) {
           if (OB_SUCCESS == ret_codes.at(i) && tmp_snapshots.at(i) > 0) {
             snapshot_array_.at(tablet_pos_indexes.at(i)) = tmp_snapshots.at(i);
             ++succ_count;
           } else if (ObIDDLTask::in_ddl_retry_white_list(ret_codes.at(i))) {
-            // need retry
+            retry_ret_count += 1;
           } else if (OB_SUCCESS != ret_codes.at(i)) {
             ret = ret_codes.at(i);
             LOG_WARN("failed return code", K(ret), K(i), K(need_check_tablets.at(i)));
@@ -2334,8 +2336,13 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
       } else if (!need_wait_trans_end && !is_trans_end_) {
         // No need to wait trans end at the phase of obtain_snapshot,
         // and meanwhile the snapshot version can be obtained is sured.
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected", K(ret), K(need_check_tablets), K(ret_codes), K(tmp_snapshots));
+        if (check_count == (succ_count + retry_ret_count)) {
+          ret = OB_EAGAIN;
+          LOG_WARN("all failed ret code are in retry white list, task retry again", K(ret), K(ret_codes));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected", K(ret), K(need_check_tablets), K(ret_codes), K(tmp_snapshots));
+        }
       }
     }
   }
@@ -2381,7 +2388,8 @@ int ObDDLWaitTransEndCtx::get_snapshot(int64_t &snapshot_version)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(calc_snapshot_with_gts(tenant_id_, ddl_task_id_, max_snapshot, snapshot_version))) {
+      if (OB_FAIL(ObDDLUtil::calc_snapshot_with_gts(
+              snapshot_version, tenant_id_, ddl_task_id_, max_snapshot, INDEX_SNAPSHOT_VERSION_DIFF))) {
         LOG_WARN("calc snapshot with gts failed", K(ret), K(tenant_id_), K(max_snapshot), K(snapshot_version));
       } else if (OB_UNLIKELY(snapshot_version <= 0)) { // defensive check.
         ret = OB_ERR_UNEXPECTED;
@@ -2396,55 +2404,6 @@ bool ObDDLWaitTransEndCtx::is_wait_trans_type_valid(const WaitTransType wait_tra
 {
   return wait_trans_type > WaitTransType::MIN_WAIT_TYPE
     && wait_trans_type < WaitTransType::MAX_WAIT_TYPE;
-}
-
-int ObDDLWaitTransEndCtx::calc_snapshot_with_gts(
-    const uint64_t tenant_id,
-    const int64_t ddl_task_id,
-    const int64_t trans_end_snapshot,
-    int64_t &snapshot)
-{
-  int ret = OB_SUCCESS;
-  snapshot = 0;
-  SCN curr_ts;
-  bool is_external_consistent = false;
-  ObRootService *root_service = nullptr;
-  const int64_t timeout_us = ObDDLUtil::get_default_ddl_rpc_timeout();
-  ObFreezeInfoProxy freeze_info_proxy(tenant_id);
-  ObFreezeInfo frozen_status;
-  if (OB_UNLIKELY(tenant_id == common::OB_INVALID_ID)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(root_service = GCTX.root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("root service is null", K(ret), KP(root_service));
-  } else {
-    {
-      MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
-      // ignore return, MTL is only used in get_ts_sync, which will handle switch failure.
-      // for performance, everywhere calls get_ts_sync should ensure using correct tenant ctx
-      tenant_guard.switch_to(tenant_id);
-      if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id,
-                                        timeout_us,
-                                        curr_ts,
-                                        is_external_consistent))) {
-        LOG_WARN("fail to get gts sync", K(ret), K(tenant_id), K(timeout_us), K(curr_ts), K(is_external_consistent));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      snapshot = max(trans_end_snapshot, curr_ts.get_val_for_tx() - INDEX_SNAPSHOT_VERSION_DIFF);
-      if (OB_FAIL(freeze_info_proxy.get_freeze_info(
-          root_service->get_sql_proxy(), SCN::min_scn(), frozen_status))) {
-        LOG_WARN("get freeze info failed", K(ret));
-      } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, GET_FREEZE_INFO_FAILED))) {
-        LOG_WARN("ddl sim failure: get freeze info failed", K(ret), K(tenant_id), K(ddl_task_id));
-      } else {
-        const int64_t frozen_scn_val = frozen_status.frozen_scn_.get_val_for_tx();
-        snapshot = max(snapshot, frozen_scn_val);
-      }
-    }
-  }
-  return ret;
 }
 
 int ObDDLWaitTransEndCtx::get_snapshot_check_list(
@@ -4277,6 +4236,8 @@ int ObDDLTaskRecordOperator::insert_record(
                   || (tenant_data_version >= DATA_VERSION_4_3_5_0))
                  && OB_FAIL(dml.add_column("consensus_schema_version", record.consensus_schema_version_))) {
         LOG_WARN("fail to add consensus_schema_version", KR(ret), K_(record.consensus_schema_version));
+      } else if (OB_FAIL(dml.add_column("snapshot_version", record.snapshot_version_))) {
+        LOG_WARN("fail to add snapshot version", KR(ret), K_(record.snapshot_version));
       } else if (OB_FAIL(dml.splice_insert_sql(OB_ALL_DDL_TASK_STATUS_TNAME, sql_string))) {
         LOG_WARN("fail to generate sql string", KR(ret));
       }

@@ -38,6 +38,7 @@
 #include "share/backup/ob_backup_server_mgr.h"
 #include "rootserver/backup/ob_backup_table_list_mgr.h"
 #include "rootserver/backup/ob_backup_param_operator.h"
+#include "share/backup/ob_archive_persist_helper.h"
 
 using namespace oceanbase;
 using namespace omt;
@@ -633,6 +634,7 @@ int ObBackupSetTaskMgr::backup_meta_finish_()
       }
     }
   }
+  DEBUG_SYNC(AFTER_BACKUP_META_FINISH);
   return ret;
 }
 
@@ -841,6 +843,7 @@ int ObBackupSetTaskMgr::backup_major_compaction_mview_dep_tablet_list_()
   int ret = OB_SUCCESS;
   ObBackupMajorCompactionMViewDepTabletListDesc desc;
   common::ObArray<common::ObTabletID> mview_tablet_list;
+  common::ObArray<share::SCN> mview_dep_scn_list;
   share::SCN backup_scn;
   if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -848,10 +851,12 @@ int ObBackupSetTaskMgr::backup_major_compaction_mview_dep_tablet_list_()
   } else if (OB_FAIL(ObBackupDataScheduler::get_backup_scn(*sql_proxy_, set_task_attr_.tenant_id_, true/*is_backup_start*/, backup_scn))) {
     LOG_WARN("failed to get backup scn", K(ret), K(set_task_attr_));
   } else if (OB_FAIL(ObBackupMViewOperator::get_all_major_compaction_mview_dep_tablet_list(
-      *sql_proxy_, set_task_attr_.tenant_id_, backup_scn, mview_tablet_list))) {
+      *sql_proxy_, set_task_attr_.tenant_id_, backup_scn, mview_tablet_list, mview_dep_scn_list))) {
     LOG_WARN("failed to get all major compaction mveiw dep tablet list", K(ret), K(backup_scn));
   } else if (OB_FAIL(desc.tablet_id_list_.assign(mview_tablet_list))) {
     LOG_WARN("failed to assign tablet list", K(ret));
+  } else if (OB_FAIL(desc.mview_dep_scn_list_.assign(mview_dep_scn_list))) {
+    LOG_WARN("failed to assign major scn list", K(ret));
   } else if (OB_FAIL(store_.write_major_compaction_mview_dep_tablet_list(desc))) {
     LOG_WARN("failed to write mview dep tablet list", K(ret));
   }

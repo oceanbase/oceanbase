@@ -364,6 +364,12 @@ int ObSimpleDynamicThreadPool::init(const int64_t thread_num, const char* name, 
   return ret;
 }
 
+void ObSimpleDynamicThreadPool::stop()
+{
+  IGNORE_RETURN ObSimpleThreadPoolDynamicMgr::get_instance().unbind(this);
+  lib::ThreadPool::stop();
+}
+
 void ObSimpleDynamicThreadPool::destroy()
 {
   if (min_thread_cnt_ < max_thread_cnt_) {
@@ -437,7 +443,7 @@ int ObSimpleDynamicThreadPool::set_max_thread_count(int64_t max_thread_cnt)
 int ObSimpleDynamicThreadPool::set_thread_count_and_try_recycle(int64_t cnt)
 {
   int ret = OB_SUCCESS;
-  ret = Threads::set_thread_count(cnt);
+  ret = Threads::do_set_thread_count(cnt, true/*async_recycle*/);
   if (OB_SUCC(ret)) {
     ret = Threads::try_thread_recycle();
   }
@@ -623,6 +629,7 @@ int ObSimpleThreadPoolDynamicMgr::bind(ObSimpleDynamicThreadPool *pool)
   if (OB_FAIL(simple_thread_pool_list_.push_back(pool_stat))) {
     COMMON_LOG(WARN, "bind simple thread pool faild", KP(pool));
   } else {
+    pool->has_bind_ = true;
     COMMON_LOG(INFO, "bind simple thread pool success", K(*pool));
   }
   return ret;
@@ -634,6 +641,8 @@ int ObSimpleThreadPoolDynamicMgr::unbind(ObSimpleDynamicThreadPool *pool)
   if (OB_UNLIKELY(NULL == pool)) {
     ret = OB_INVALID_ARGUMENT;
      COMMON_LOG(WARN, "unbind pool failed");
+  } else if (!pool->has_bind_) {
+    // do-nothing
   } else {
     SpinWLockGuard guard(simple_thread_pool_list_lock_);
     int64_t idx = -1;
@@ -646,6 +655,7 @@ int ObSimpleThreadPoolDynamicMgr::unbind(ObSimpleDynamicThreadPool *pool)
     if ((-1 != idx) && OB_FAIL(simple_thread_pool_list_.remove(idx))) {
       COMMON_LOG(WARN, "failed to remove simple_thread_pool", K(ret), K(idx), KP(pool));
     } else {
+      pool->has_bind_ = false;
       COMMON_LOG(INFO, "try to unbind simple thread pool", K(*pool), K(idx));
     }
   }

@@ -417,8 +417,8 @@ private:
 
 private:
   ObSSTableIndexBuilder *sstable_builder_;
-  common::ObArenaAllocator task_allocator_;  // Used to apply for memory whose lifetime is task
-  common::ObArenaAllocator meta_row_allocator_; // Used to apply for memory whose lifetime is row
+  compaction::ObLocalArena task_allocator_;  // Used to apply for memory whose lifetime is task
+  compaction::ObLocalArena meta_row_allocator_; // Used to apply for memory whose lifetime is row
   ObBaseIndexBlockDumper macro_meta_dumper_;
   ObMicroBlockBufferHelper micro_helper_;
   ObIndexBlockRowDesc macro_row_desc_;
@@ -644,7 +644,6 @@ public:
   TO_STRING_KV(K(roots_.count()));
 
 public:
-  static bool check_version_for_small_sstable(const ObDataStoreDesc &index_desc);
   static int load_single_macro_block(
       const ObDataMacroBlockMeta &macro_meta,
       const int64_t nested_size,

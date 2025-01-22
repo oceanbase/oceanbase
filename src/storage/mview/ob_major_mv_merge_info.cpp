@@ -93,6 +93,20 @@ bool ObUpdateMergeScnArg::is_valid() const
   return merge_scn_.is_valid() && ls_id_.is_valid();
 }
 
+int ObUpdateMergeScnArg::init(const share::ObLSID &ls_id, const share::SCN &merge_scn)
+{
+  int ret = OB_SUCCESS;
+  if (!merge_scn.is_valid()||
+      !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(ls_id), K(merge_scn));
+  } else {
+    ls_id_ = ls_id;
+    merge_scn_ = merge_scn;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObUpdateMergeScnArg, ls_id_, merge_scn_);
 
 #define SET_MERGE_SCN(set_func) \
@@ -180,6 +194,36 @@ int ObMVNoticeSafeHelper::on_replay(
   return ret;
 }
 
+
+int ObMVMergeSCNHelper::on_register(
+      const char *buf,
+      const int64_t len,
+      mds::BufferCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  SET_MERGE_SCN(set_major_mv_merge_scn);
+  return ret;
+}
+
+int ObMVMergeSCNHelper::on_replay(
+      const char *buf,
+      const int64_t len,
+      const share::SCN scn,
+      mds::BufferCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantRole::Role tenant_role = MTL_GET_TENANT_ROLE_CACHE();
+  if (is_invalid_tenant(tenant_role)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tenant role cache is invalid", KR(ret));
+  } else if (is_standby_tenant(tenant_role)) {
+    LOG_INFO("new mview skip in standy tenant", KR(ret));
+  } else {
+    SET_MERGE_SCN(set_major_mv_merge_scn);
+  }
+  return ret;
+}
+
 int ObMVCheckReplicaHelper::get_and_update_merge_info(
       const share::ObLSID &ls_id,
       ObMajorMVMergeInfo &info)
@@ -226,8 +270,9 @@ int ObMVCheckReplicaHelper::get_and_update_merge_info(
       } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "tablet is NULL", KR(ret));
-      } else if (tablet->is_ls_inner_tablet()) {
-        // skip ls inner tablet
+      } else if (tablet->is_ls_inner_tablet() ||
+                 tablet->is_empty_shell()) {
+        // skip ls inner tablet or empty shell
       } else if (OB_FAIL(tablet->load_storage_schema(allocator, storage_schema))) {
         LOG_WARN("load storage schema failed", K(ret), K(ls_id), KPC(tablet));
       } else if (OB_ISNULL(storage_schema)) {

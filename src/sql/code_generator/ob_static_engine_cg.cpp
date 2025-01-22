@@ -380,6 +380,19 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
     }
   }
 
+  if (OB_SUCC(ret) && log_op_def::LOG_TABLE_SCAN == op.get_type()
+      && static_cast<ObLogTableScan *>(&op)->get_table_type() == share::schema::EXTERNAL_TABLE) {
+    ObDASScanCtDef &scan_ctdef = static_cast<ObTableScanSpec*>(spec)->tsc_ctdef_.scan_ctdef_;
+    ObExternalFileFormat::FormatType format_type = ObExternalFileFormat::INVALID_FORMAT;
+    if (OB_FAIL(ObSQLUtils::get_external_table_type(scan_ctdef.external_file_format_str_.str_,
+                                                    format_type))) {
+      LOG_WARN("fail to get external table format", K(ret));
+    } else if (ObExternalFileFormat::CSV_FORMAT != format_type && !spec->use_rich_format_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using non-rich vector format in external tables");
+    }
+  }
+
   return ret;
 }
 
@@ -3518,6 +3531,17 @@ int ObStaticEngineCG::generate_spec(ObLogForUpdate &op,
   return ret;
 }
 
+int ObStaticEngineCG::get_all_auto_inc_cids(const ObIArray<share::AutoincParam> &autoinc_params, ObIArray<uint64_t> &cids)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < autoinc_params.count(); i++) {
+    if (OB_FAIL(cids.push_back(autoinc_params.at(i).autoinc_col_id_))) {
+      LOG_WARN("fail to push auto_inc_cid", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, const bool)
 {
   int ret = OB_SUCCESS;
@@ -3622,6 +3646,39 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
         }
       }
     }
+
+    if (OB_SUCC(ret)) {
+      const ObDMLStmt *stmt = nullptr;
+      ObSEArray<uint64_t, 2> auto_inc_cids;
+      const ObInsertUpCtDef *insert_up_ctdef = spec.insert_up_ctdefs_.at(0);
+      if (OB_ISNULL(stmt = op.get_stmt())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (!stmt->is_insert_stmt()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (stmt->get_autoinc_params().empty()) {
+        // do nothing
+      } else if (OB_FAIL(get_all_auto_inc_cids(stmt->get_autoinc_params(), auto_inc_cids))) {
+        LOG_WARN("fail to get all auto_inc column ids", K(ret));
+      } else {
+        bool founded = false;
+        for (int64_t i = 0; !founded && OB_SUCC(ret) && i < ins_pri_dml_info->rowkey_cnt_; i++) {
+          ObColumnRefRawExpr *col_expr = ins_pri_dml_info->column_exprs_.at(i);
+          ObRawExpr *new_auto_inc_expr = ins_pri_dml_info->column_convert_exprs_.at(i);
+          uint64_t base_cid = OB_INVALID_ID;
+          if (OB_FAIL(dml_cg_service_.get_column_ref_base_cid(op, col_expr, base_cid))) {
+            LOG_WARN("fail to get base cid", K(ret));
+          } else if (!has_exist_in_array(auto_inc_cids, base_cid)) {
+            // do nothing
+          } else if (OB_FAIL(generate_rt_expr(*new_auto_inc_expr, spec.auto_inc_expr_))) {
+            LOG_WARN("fail to cg auto_inc_expr", K(ret));
+          } else {
+            founded = true;
+          }
+        }
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -3683,6 +3740,7 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
       }
     }
   }
+
   return ret;
 }
 
@@ -7594,45 +7652,26 @@ int ObStaticEngineCG::fill_aggr_infos(ObLogGroupBy &op,
   }
   //6.calc for implicit_aggr, if aggr_info.expr_ only in third stage, not in second stage,
   // must be calc in third stage.Normally caused by implicit aggr in filter.
-  if (spec.aggr_stage_ == ObThreeStageAggrStage::THIRD_STAGE) {
+  if (all_non_aggr_exprs.count() > 0 && spec.aggr_stage_ == ObThreeStageAggrStage::THIRD_STAGE) {
     ObOpSpec *child_spec = &spec;
-    bool find_second_spec = false;
-    while (!find_second_spec && child_spec->get_children() != NULL
+    bool find_first_spec = false;
+    while (!find_first_spec && child_spec->get_children() != NULL
             && child_spec->get_child_cnt() > 0) {
       if ((child_spec->type_ == PHY_VEC_HASH_GROUP_BY ||
            child_spec->type_ == PHY_HASH_GROUP_BY ||
            child_spec->type_ == PHY_VEC_MERGE_GROUP_BY ||
            child_spec->type_ == PHY_MERGE_GROUP_BY) &&
-           ((ObGroupBySpec*)child_spec)->aggr_stage_ == ObThreeStageAggrStage::SECOND_STAGE) {
-        find_second_spec = true;
+           ((ObGroupBySpec*)child_spec)->aggr_stage_ == ObThreeStageAggrStage::FIRST_STAGE) {
+        find_first_spec = true;
       } else {
         child_spec = child_spec->get_children()[0];
       }
     }
-    if (find_second_spec) {
-      if (OB_FAIL(spec.implicit_aggr_in_3stage_indexes_.prepare_allocate_and_keep_count(
-          spec.aggr_infos_.count()))) {
-        OB_LOG(WARN, "fail to prepare_allocate implicit_aggr_in_3stage_indexes_", K(ret));
-      } else {
-        ObGroupBySpec *second_stage_spec = (ObGroupBySpec*)child_spec;
-        for (int i = 0; i < spec.aggr_infos_.count(); i++) {
-          if (spec.aggr_infos_.at(i).is_implicit_first_aggr()) {
-            bool exist_in_second_stage = false;
-            for (int j = 0; !exist_in_second_stage && j < second_stage_spec->aggr_infos_.count(); j++) {
-              if (spec.aggr_infos_.at(i).expr_ == second_stage_spec->aggr_infos_.at(j).expr_) {
-                exist_in_second_stage = true;
-              }
-            }
-            if (!exist_in_second_stage) {
-              spec.implicit_aggr_in_3stage_indexes_.push_back(i);
-              LOG_TRACE("find implicit aggr need calc in 3stage", K(i));
-            }
-          }
-        }
-      }
+    if (find_first_spec) {
+      ((ObGroupBySpec*)child_spec)->need_last_group_in_3stage_ = true;
     } else {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot find second stage hashgroupby op", K(ret), K(find_second_spec));
+      LOG_WARN("cannot find first stage hashgroupby op", K(ret), K(find_first_spec));
     }
   }
   return ret;

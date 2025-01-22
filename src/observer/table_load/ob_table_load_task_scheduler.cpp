@@ -28,6 +28,7 @@ namespace observer
 {
 using namespace common;
 using namespace share;
+using namespace sql;
 using namespace storage;
 
 void ObTableLoadTaskThreadPoolScheduler::MyThreadPool::run1()
@@ -57,10 +58,12 @@ void ObTableLoadTaskThreadPoolScheduler::MyThreadPool::run1()
 ObTableLoadTaskThreadPoolScheduler::ObTableLoadTaskThreadPoolScheduler(int64_t thread_count,
                                                                        uint64_t table_id,
                                                                        const char *label,
+                                                                       ObSQLSessionInfo *session_info,
                                                                        int64_t session_queue_size)
   : allocator_("TLD_ThreadPool"),
     thread_count_(thread_count),
     session_queue_size_(session_queue_size),
+    session_info_(session_info),
     timeout_ts_(INT64_MAX),
     thread_pool_(this),
     worker_ctx_array_(nullptr),
@@ -231,6 +234,8 @@ void ObTableLoadTaskThreadPoolScheduler::after_running()
 void ObTableLoadTaskThreadPoolScheduler::run(uint64_t thread_idx)
 {
   int ret = OB_SUCCESS;
+  // set session info
+  THIS_WORKER.set_session(session_info_);
   // set thread name
   lib::set_thread_name(name_);
   // set trace id

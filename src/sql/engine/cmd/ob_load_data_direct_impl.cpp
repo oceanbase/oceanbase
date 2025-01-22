@@ -978,9 +978,11 @@ int ObLoadDataDirectImpl::FileLoadExecutor::inner_init(const LoadExecuteParam &e
     LOG_WARN("fail to init allocator", KR(ret));
   }
   // init task_scheduler_
-  else if (OB_ISNULL(task_scheduler_ =
-                         OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (execute_ctx_->allocator_),
-                                 worker_count_, execute_param_->table_id_, "Parse"))) {
+  else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (execute_ctx_->allocator_),
+                                               worker_count_,
+                                               execute_param_->table_id_,
+                                               "Parse",
+                                               execute_ctx.exec_ctx_.get_session_info()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
   } else if (OB_FAIL(task_scheduler_->init())) {
@@ -1901,9 +1903,11 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::init(const LoadExecuteParam &execu
           LOG_WARN("fail to init task controller", KR(ret), K(worker_count_));
         } else if (OB_FAIL(task_allocator_.init("TLD_TaskPool", execute_param_->tenant_id_))) {
           LOG_WARN("fail to init allocator", KR(ret));
-        } else if (OB_ISNULL(task_scheduler_ =
-                               OB_NEWx(ObTableLoadTaskThreadPoolScheduler, &allocator_,
-                                       worker_count_, execute_param_->table_id_, "Parse"))) {
+        } else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, &allocator_,
+                                                       worker_count_,
+                                                       execute_param_->table_id_,
+                                                       "Parse",
+                                                       execute_ctx.exec_ctx_.get_session_info()))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
         } else if (OB_FAIL(task_scheduler_->init())) {

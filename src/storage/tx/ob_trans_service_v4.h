@@ -77,7 +77,8 @@ int collect_tx_exec_result(ObTxDesc &tx,
 int get_read_store_ctx(const ObTxReadSnapshot &snapshot,
                        const bool read_latest,
                        const int64_t lock_timeout,
-                       ObStoreCtx &store_ctx);
+                       ObStoreCtx &store_ctx,
+                       ObTxDesc *tx_desc = NULL);
 int get_read_store_ctx(const share::SCN snapshot_version,
                        const int64_t lock_timeout,
                        ObStoreCtx &store_ctx);
@@ -93,7 +94,9 @@ int acquire_tx_ctx(const share::ObLSID &ls_id,
                    const ObTxDesc &tx,
                    ObPartTransCtx *&ctx,
                    ObLS *ls,
-                   const bool special);
+                   const bool special,
+                   const bool try_get,
+                   bool &exist);
 //handle msg
 int handle_trans_commit_request(ObTxCommitMsg &commit_req, obrpc::ObTransRpcResult &result);
 int handle_trans_commit_response(ObTxCommitRespMsg &commit_resp, obrpc::ObTransRpcResult &result);
@@ -239,12 +242,14 @@ int merge_rollback_downstream_parts_(ObTxDesc &tx,
                                     const ObIArray<ObTxLSEpochPair> &downstream_parts);
 int create_tx_ctx_(const share::ObLSID &ls_id,
                    const ObTxDesc &tx,
-                   ObPartTransCtx *&ctx);
+                   ObPartTransCtx *&ctx,
+                   bool &exist);
 int create_tx_ctx_(const share::ObLSID &ls_id,
                    ObLS *ls,
                    const ObTxDesc &tx,
                    ObPartTransCtx *&ctx,
-                   const bool special);
+                   const bool special,
+                   bool &exist);
 int get_tx_ctx_(const share::ObLSID &ls_id,
                 ObLS *ls,
                 const ObTransID &tx_id,

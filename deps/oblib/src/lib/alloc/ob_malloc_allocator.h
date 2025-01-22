@@ -163,6 +163,7 @@ public:
 public:
   bool force_explict_500_malloc_ = false;
   int pl_leaked_times_ = 0;
+  int di_leaked_times_ = 0;
   bool force_malloc_for_absent_tenant_ = false;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMallocAllocator);
@@ -269,7 +270,22 @@ public:
 
 extern int64_t mtl_id();
 
+class ObMallocHook
+{
+public:
+  static ObMallocHook &get_instance();
+  void *alloc(const int64_t size);
+  void free(void *ptr);
+private:
+  ObMallocHook();
+private:
+  char label_[AOBJECT_LABEL_SIZE + 1];
+  ObMemAttr attr_;
+  ObjectMgrV2 mgr_;
+};
+
 } // end of namespace lib
 } // end of namespace oceanbase
 
+extern void enable_malloc_v2(bool enable);
 #endif /* _OB_MALLOC_ALLOCATOR_H_ */

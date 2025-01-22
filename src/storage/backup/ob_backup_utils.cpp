@@ -84,7 +84,8 @@ int ObBackupUtils::calc_start_replay_scn(
 }
 
 int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tablet_handle, const share::ObBackupDataType &backup_data_type,
-    const storage::ObTabletTableStore &tablet_table_store, const bool is_major_compaction_mview_dep_tablet, common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
+    const storage::ObTabletTableStore &tablet_table_store, const bool is_major_compaction_mview_dep_tablet, const share::SCN &mview_dep_scn,
+    common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
 {
   int ret = OB_SUCCESS;
   sstable_array.reset();
@@ -98,7 +99,7 @@ int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tabl
   } else {
     if (OB_FAIL(fetch_minor_and_ddl_sstables_(tablet_handle, tablet_table_store, sstable_array))) {
       LOG_WARN("failed to fetch minor and ddl sstables", K(ret), K(tablet_handle), K(tablet_table_store));
-    } else if (OB_FAIL(fetch_major_sstables_(tablet_handle, tablet_table_store, is_major_compaction_mview_dep_tablet, sstable_array))) {
+    } else if (OB_FAIL(fetch_major_sstables_(tablet_handle, tablet_table_store, is_major_compaction_mview_dep_tablet, mview_dep_scn, sstable_array))) {
       LOG_WARN("failed to fetch major sstables", K(ret), K(tablet_handle), K(tablet_table_store));
     }
   }
@@ -164,7 +165,7 @@ int ObBackupUtils::fetch_minor_and_ddl_sstables_(const storage::ObTabletHandle &
 
 int ObBackupUtils::fetch_major_sstables_(const storage::ObTabletHandle &tablet_handle,
     const storage::ObTabletTableStore &tablet_table_store, const bool is_major_compaction_mview_dep_tablet,
-    common::ObIArray<ObSSTableWrapper> &sstable_array)
+    const share::SCN &mview_dep_scn, common::ObIArray<ObSSTableWrapper> &sstable_array)
 {
   int ret = OB_SUCCESS;
   const storage::ObSSTableArray *major_sstable_array_ptr = NULL;
@@ -190,8 +191,8 @@ int ObBackupUtils::fetch_major_sstables_(const storage::ObTabletHandle &tablet_h
     LOG_WARN("medium list is invalid for last major sstable", K(ret), KPC(medium_info_list),
         KPC(last_major_sstable_ptr), K(tablet_handle));
   } else if (is_major_compaction_mview_dep_tablet) {
-    if (OB_FAIL(major_sstable_array_ptr->get_all_table_wrappers(sstable_array))) {
-      LOG_WARN("failed to get all table wrappers", K(ret));
+    if (OB_FAIL(check_and_filter_major_sstables_for_mview_(mview_dep_scn, major_sstable_array_ptr, sstable_array))) {
+      LOG_WARN("failed to check and filter major sstable for mview", K(ret));
     }
   } else { // not mview dep tablet
     if (last_major_sstable_ptr->is_co_sstable()) {
@@ -204,6 +205,92 @@ int ObBackupUtils::fetch_major_sstables_(const storage::ObTabletHandle &tablet_h
       } else if (OB_FAIL(sstable_array.push_back(major_wrapper))) {
         LOG_WARN("failed to push back", K(ret), K(major_wrapper));
       }
+    }
+  }
+  return ret;
+}
+
+int ObBackupUtils::check_and_filter_major_sstables_for_mview_(
+    const share::SCN &mview_dep_scn,
+    const storage::ObSSTableArray *major_sstable_array_ptr,
+    common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_major_sstables_for_mview_(mview_dep_scn, major_sstable_array_ptr))) {
+    LOG_WARN("failed to check major sstable for mview", K(ret));
+  } else if (OB_FAIL(filter_major_sstables_for_mview_(mview_dep_scn, major_sstable_array_ptr, sstable_array))) {
+    LOG_WARN("failed to filter major sstables for mview", K(ret));
+  } else {
+    LOG_INFO("check and filter major sstable for mview", K(sstable_array));
+  }
+  return ret;
+}
+
+int ObBackupUtils::check_major_sstables_for_mview_(const share::SCN &mview_dep_scn,
+    const storage::ObSSTableArray *major_sstable_array_ptr)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<ObSSTableWrapper> tmp_sstable_array;
+  if (OB_ISNULL(major_sstable_array_ptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("major sstable array ptr should not be null", K(ret));
+  } else if (OB_FAIL(major_sstable_array_ptr->get_all_table_wrappers(tmp_sstable_array))) {
+    LOG_WARN("failed to get all table wrappers", K(ret), KPC(major_sstable_array_ptr));
+  } else {
+    bool exist = false;
+    ARRAY_FOREACH_X(tmp_sstable_array, idx, cnt, OB_SUCC(ret)) {
+      storage::ObSSTableWrapper &sstable_wrapper = tmp_sstable_array.at(idx);
+      ObSSTable *sstable_ptr = NULL;
+      if (OB_ISNULL(sstable_ptr = sstable_wrapper.get_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table should not be null", K(ret));
+      } else {
+        const ObITable::TableKey &table_key = sstable_ptr->get_key();
+        if (table_key.get_end_scn() == mview_dep_scn) {
+          exist = true;
+          break;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !exist) {
+      ret = OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE;
+      LOG_WARN("missing sstable for mview tablet", K(ret), K(mview_dep_scn), K(tmp_sstable_array));
+    }
+  }
+  return ret;
+}
+
+int ObBackupUtils::filter_major_sstables_for_mview_(
+    const share::SCN &mview_dep_scn,
+    const storage::ObSSTableArray *major_sstable_array_ptr,
+    common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<ObSSTableWrapper> tmp_sstable_array;
+  if (OB_ISNULL(major_sstable_array_ptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("major sstable array ptr should not be null", K(ret));
+  } else if (OB_FAIL(major_sstable_array_ptr->get_all_table_wrappers(tmp_sstable_array))) {
+    LOG_WARN("failed to get all table wrappers", K(ret));
+  } else {
+    ARRAY_FOREACH_X(tmp_sstable_array, idx, cnt, OB_SUCC(ret)) {
+      storage::ObSSTableWrapper &sstable_wrapper = tmp_sstable_array.at(idx);
+      ObSSTable *sstable_ptr = NULL;
+      if (OB_ISNULL(sstable_ptr = sstable_wrapper.get_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table should not be null", K(ret));
+      } else {
+        const ObITable::TableKey &table_key = sstable_ptr->get_key();
+        if (table_key.get_end_scn() < mview_dep_scn) {
+          // skip
+        } else if (OB_FAIL(sstable_array.push_back(sstable_wrapper))) {
+          LOG_WARN("failed to push back", K(ret), K(sstable_wrapper));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && sstable_array.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sstable array should not be empty", K(ret), K(mview_dep_scn), KPC(major_sstable_array_ptr));
     }
   }
   return ret;
@@ -1941,6 +2028,7 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   bool need_skip_tablet = false;
   bool is_major_compaction_mview_dep_tablet = false;
+  share::SCN mview_dep_scn;
   bool is_split_dst = false;
   if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1985,10 +2073,10 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
     LOG_WARN("failed to check tablet replica validity", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(backup_data_type));
   } else if (OB_FAIL(tablet_ref->tablet_handle_.get_obj()->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (OB_FAIL(ls_backup_ctx_->check_is_major_compaction_mview_dep_tablet(tablet_id, is_major_compaction_mview_dep_tablet))) {
+  } else if (OB_FAIL(ls_backup_ctx_->check_is_major_compaction_mview_dep_tablet(tablet_id, mview_dep_scn, is_major_compaction_mview_dep_tablet))) {
     LOG_WARN("failed to check is mview dep tablet", K(ret));
   } else if (OB_FAIL(fetch_tablet_sstable_array_(
-      tablet_id, tablet_ref->tablet_handle_, *table_store_wrapper.get_member(), backup_data_type, is_major_compaction_mview_dep_tablet, sstable_array))) {
+      tablet_id, tablet_ref->tablet_handle_, *table_store_wrapper.get_member(), backup_data_type, is_major_compaction_mview_dep_tablet, mview_dep_scn, sstable_array))) {
     LOG_WARN("failed to fetch tablet sstable array", K(ret), K(tablet_id), KPC(tablet_ref), K(backup_data_type));
   } else if (OB_FAIL(add_prepare_tablet_item_(tablet_id))) {
     LOG_WARN("failed to prepare tablet item", K(ret), K(tablet_id));
@@ -2388,14 +2476,15 @@ int ObBackupTabletProvider::hold_tablet_handle_(
 int ObBackupTabletProvider::fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id,
     const storage::ObTabletHandle &tablet_handle, const ObTabletTableStore &table_store,
     const share::ObBackupDataType &backup_data_type, const bool is_major_compaction_mview_dep_tablet,
-    common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
+    const share::SCN &mview_dep_scn, common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
 {
   int ret = OB_SUCCESS;
   sstable_array.reset();
   if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
-  } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(tablet_handle, backup_data_type, table_store, is_major_compaction_mview_dep_tablet, sstable_array))) {
+  } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(tablet_handle, backup_data_type, table_store,
+      is_major_compaction_mview_dep_tablet, mview_dep_scn, sstable_array))) {
     LOG_WARN("failed to get sstables by data type", K(ret), K(tablet_handle), K(backup_data_type), K(table_store));
   } else {
     LOG_INFO("fetch tablet sstable array", K(ret), K(tablet_id), K(backup_data_type), K(sstable_array));

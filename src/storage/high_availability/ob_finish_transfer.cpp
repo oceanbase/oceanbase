@@ -1136,7 +1136,7 @@ int ObTxFinishTransfer::record_server_event_(
           LOG_WARN("fail to write server event", K(ret), K(result), K(extra_info_str));
         }
       } else {
-        if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000)) {
           if (OB_FAIL(write_server_event_(result, extra_info_str, doing_status))) {
             LOG_WARN("fail to write server event", K(ret), K(result), K(extra_info_str));
           } else if (elapsed_us_from_start_scn > TASK_EXECUTE_LONG_WARNING_THRESHOLD) {

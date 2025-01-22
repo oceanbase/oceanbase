@@ -149,9 +149,7 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
 
   if (OB_FAIL(ret)) {
   } else if (is_null_res) {
-    if (OB_FAIL(ObArrayExprUtils::set_null_collection_type(exec_ctx, type))) {
-      LOG_WARN("failed to set null collection", K(ret));
-    }
+    type.set_null();
   } else {
     if (types_stack[0].get_type() == ObDecimalIntType || types_stack[0].get_type() == ObNumberType ||
         types_stack[0].get_type() == ObUNumberType) {
@@ -206,6 +204,9 @@ int ObExprArrayMap::eval_array_map(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   bool bret = false;
   ObSubSchemaValue value;
 
+  if (ob_is_null(expr.obj_meta_.get_type())) {
+    is_null_res = true;
+  }
   for (int64_t i = 1; i < expr.arg_cnt_ && OB_SUCC(ret) && !is_null_res; i++) {
     const uint16_t meta_id = expr.args_[i]->obj_meta_.get_subschema_id();
     arr_obj[i - 1] = NULL;
@@ -258,6 +259,12 @@ int ObExprArrayMap::eval_array_map(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
                 lambda_para->locate_datum_for_write(ctx).set_int(val);
                 break;
               }
+              case ObSmallIntType: {
+                ObArrayFixedSize<int16_t> *arr_ptr = static_cast<ObArrayFixedSize<int16_t> *>(arr_obj[para_idx]);
+                int16_t val = (*arr_ptr)[i];
+                lambda_para->locate_datum_for_write(ctx).set_int(val);
+                break;
+              }
               case ObInt32Type: {
                 ObArrayFixedSize<int32_t> *arr_ptr = static_cast<ObArrayFixedSize<int32_t> *>(arr_obj[para_idx]);
                 int32_t val = (*arr_ptr)[i];
@@ -276,12 +283,32 @@ int ObExprArrayMap::eval_array_map(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
                 lambda_para->locate_datum_for_write(ctx).set_uint(val);
                 break;
               }
+              case ObUFloatType:
               case ObFloatType: {
                 ObArrayFixedSize<float> *arr_ptr = static_cast<ObArrayFixedSize<float> *>(arr_obj[para_idx]);
                 float val = (*arr_ptr)[i];
                 lambda_para->locate_datum_for_write(ctx).set_float(val);
                 break;
               }
+              case ObUTinyIntType: {
+                ObArrayFixedSize<uint8_t> *arr_ptr = static_cast<ObArrayFixedSize<uint8_t> *>(arr_obj[para_idx]);
+                uint8_t val = (*arr_ptr)[i];
+                lambda_para->locate_datum_for_write(ctx).set_uint(val);
+                break;
+              }
+              case ObUSmallIntType: {
+                ObArrayFixedSize<uint16_t> *arr_ptr = static_cast<ObArrayFixedSize<uint16_t> *>(arr_obj[para_idx]);
+                uint16_t val = (*arr_ptr)[i];
+                lambda_para->locate_datum_for_write(ctx).set_uint(val);
+                break;
+              }
+              case ObUInt32Type: {
+                ObArrayFixedSize<uint32_t> *arr_ptr = static_cast<ObArrayFixedSize<uint32_t> *>(arr_obj[para_idx]);
+                uint32_t val = (*arr_ptr)[i];
+                lambda_para->locate_datum_for_write(ctx).set_uint(val);
+                break;
+              }
+              case ObUDoubleType:
               case ObDoubleType: {
                 ObArrayFixedSize<double> *arr_ptr = static_cast<ObArrayFixedSize<double> *>(arr_obj[para_idx]);
                 double val = (*arr_ptr)[i];
@@ -347,7 +374,7 @@ int ObExprArrayMap::eval_array_map(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   return ret;
 }
 
-int ObExprArrayMap::get_array_map_lambda_params(const ObRawExpr *raw_expr, ObArray<uint32_t> &param_idx,
+int ObExprArrayMap::get_array_map_lambda_params(const ObRawExpr *raw_expr, ObArray<uint32_t> &param_idx, int depth,
                                                 ObArray<ObExpr *> &param_exprs) const
 {
   int ret = OB_SUCCESS;
@@ -380,9 +407,12 @@ int ObExprArrayMap::get_array_map_lambda_params(const ObRawExpr *raw_expr, ObArr
       if (OB_ISNULL(child_expr = raw_expr->get_param_expr(i))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ret));
-      } else if (child_expr->get_expr_type() == T_FUNC_SYS_ARRAY_MAP) {
+      } else if (raw_expr->get_expr_type() == T_FUNC_SYS_ARRAY_MAP &&
+                 ((depth > 0 && i == 0) || // inner array_map shouldn't handle lambda func para
+                  ( depth == 0 && i > 0))) { // array_map shouldn't handle para other than lambda func para
         // do nothing
-      } else if (OB_FAIL(get_array_map_lambda_params(child_expr, param_idx, param_exprs))) {
+      } else if (OB_FAIL(get_array_map_lambda_params(child_expr, param_idx,
+        child_expr->get_expr_type() == T_FUNC_SYS_ARRAY_MAP ? depth + 1 : depth, param_exprs))) {
         LOG_WARN("construct array map info failed", K(ret));
       }
     }
@@ -407,7 +437,8 @@ int ObExprArrayMap::cg_expr(ObExprCGCtx &expr_cg_ctx,
     ObExprArrayMapInfo *var_params_info = static_cast<ObExprArrayMapInfo *>(extra_info);
     ObArray<ObExpr *> param_exprs;
     ObArray<uint32_t> param_idx;
-    if (OB_FAIL(get_array_map_lambda_params(&raw_expr, param_idx, param_exprs))) {
+    int depth = 0;
+    if (OB_FAIL(get_array_map_lambda_params(&raw_expr, param_idx, depth, param_exprs))) {
       LOG_WARN("get array map lambda params failed", K(ret));
     } else if (param_exprs.count() == 0) {
       // do nothing

@@ -30,6 +30,11 @@ namespace share
 {
 class ObLSID;
 class SCN;
+namespace schema
+{
+class ObTableSchema;
+class ObTableParam;
+}
 }
 
 namespace sql

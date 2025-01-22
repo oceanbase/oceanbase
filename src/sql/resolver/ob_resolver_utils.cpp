@@ -2623,7 +2623,10 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                                    const ObSQLMode sql_mode,
                                    bool enable_decimal_int_type,
                                    const ObCompatType compat_type,
-                                   bool is_from_pl /* false */)
+                                   const bool enable_mysql_compatible_dates,
+                                   bool use_plan_cache,
+                                   bool is_from_pl /* false */,
+                                   bool formalize_int_precision /* false */)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ < T_INVALID) || OB_UNLIKELY(node->type_ >= T_MAX_CONST)) {
@@ -2928,19 +2931,23 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
         int16_t min_int_precision = tenant_config.is_valid() ? tenant_config->_min_const_integer_precision : 1;
         int16_t formalized_prec = static_cast<int16_t>(node->str_len_);
         // for constant integers, reset precision to 4/8/16/20
-        if (!is_from_pl && lib::is_mysql_mode() && enable_decimal_int_type
+        if (!is_from_pl && lib::is_mysql_mode() && enable_decimal_int_type && use_plan_cache
             && !(ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type))) {
           int16_t node_prec = static_cast<int16_t>(node->str_len_);
-          if (node_prec <= 4) {
-            formalized_prec = 4;
-          } else if (node_prec <= 8) {
-            formalized_prec = 8;
-          } else if (node_prec <= 16) {
-            formalized_prec = 16;
+          if (formalize_int_precision) {
+            if (node_prec <= 4) {
+              formalized_prec = 4;
+            } else if (node_prec <= 8) {
+              formalized_prec = 8;
+            } else if (node_prec <= 16) {
+              formalized_prec = 16;
+            } else {
+              formalized_prec = 20;
+            }
+            formalized_prec = MAX(min_int_precision, formalized_prec);
           } else {
             formalized_prec = 20;
           }
-          formalized_prec = MAX(min_int_precision, formalized_prec);
         }
         val.set_precision(formalized_prec);
         val.set_length(static_cast<int16_t>(node->str_len_));
@@ -3056,9 +3063,6 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
     case T_BOOL: {
       val.set_is_boolean(true);
       val.set_bool(node->value_ == 1 ? true : false);
-      if (lib::is_mysql_mode()) {
-        val.meta_.set_int();
-      }
       val.set_scale(0);
       val.set_precision(1);
       val.set_length(1);
@@ -3079,14 +3083,26 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
     }
     case T_DATE: {
       ObString time_str(static_cast<int32_t>(node->str_len_), node->str_value_);
-      int32_t time_val = 0;
       ObDateSqlMode date_sql_mode;
       if (FALSE_IT(date_sql_mode.init(sql_mode))) {
-      } else if (OB_FAIL(ObTimeConverter::str_to_date(time_str, time_val, date_sql_mode))) {
-        ret = OB_ERR_WRONG_VALUE;
-        LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", to_cstring(time_str));
+      } else if (enable_mysql_compatible_dates) {
+        ObMySQLDate mdate;
+        if (OB_FAIL(ObTimeConverter::str_to_mdate(time_str, mdate, date_sql_mode))) {
+          ret = OB_ERR_WRONG_VALUE;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", to_cstring(time_str));
+        } else {
+          val.set_mysql_date(mdate);
+        }
       } else {
-        val.set_date(time_val);
+        int32_t time_val = 0;
+        if (OB_FAIL(ObTimeConverter::str_to_date(time_str, time_val, date_sql_mode))) {
+          ret = OB_ERR_WRONG_VALUE;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", to_cstring(time_str));
+        } else {
+          val.set_date(time_val);
+        }
+      }
+      if (OB_SUCC(ret)) {
         val.set_scale(0);
         val.set_param_meta(val.get_meta());
         literal_prefix = ObString::make_string(LITERAL_PREFIX_DATE);
@@ -3661,9 +3677,9 @@ bool ObResolverUtils::is_partition_range_column_type(const ObObjType type)
   return ob_is_float_tc(type) ||
          ob_is_double_tc(type) ||
          ob_is_decimal_int_tc(type) ||
-         ob_is_datetime_tc(type) ||
+         ob_is_datetime_or_mysql_datetime_tc(type) ||
          ob_is_string_tc(type) ||
-         ob_is_date_tc(type) ||
+         ob_is_date_or_mysql_date(type) ||
          ob_is_time_tc(type) ||
          ob_is_number_tc(type);
 }
@@ -3707,7 +3723,8 @@ bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
       ObObjTypeClass type_class = ob_obj_type_class(type);
       if (ObIntTC == type_class || ObUIntTC == type_class ||
         (ObDateTimeTC == type_class && ObTimestampType != type) || ObDateTC == type_class ||
-        ObStringTC == type_class || ObYearTC == type_class || ObTimeTC == type_class) {
+        ObStringTC == type_class || ObYearTC == type_class || ObTimeTC == type_class ||
+        ObMySQLDateTimeTC == type_class || ObMySQLDateTC == type_class) {
         bret = true;
       }else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type &&
                  GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_1 &&
@@ -3895,13 +3912,17 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
       if (OB_SUCC(ret) && !is_allow) {
         if (part_value_expr_type == part_column_expr_type) {
           is_allow = true;
-        } else if (ObDateTimeType == part_column_expr_type
-                  && ( ObDateType == part_value_expr_type
+        } else if (ob_is_datetime_or_mysql_datetime(part_value_expr_type)
+            && ob_is_datetime_or_mysql_datetime(part_column_expr_type)) {
+          // partition type allows conversion between mysqldatetime and datetime
+          is_allow = true;
+        } else if (ob_is_datetime_or_mysql_datetime(part_column_expr_type)
+                  && ( ob_is_date_or_mysql_date(part_value_expr_type)
                     || ObTimeType == part_value_expr_type)) {
           is_allow = true;
         } else if (ObTimestampType == part_column_expr_type) {
-          is_allow = (ObDateTimeType == part_value_expr_type) ||
-                     (ObDateType == part_value_expr_type) ||
+          is_allow = (ob_is_datetime_or_mysql_datetime(part_value_expr_type)) ||
+                     (ob_is_date_or_mysql_date(part_value_expr_type)) ||
                      (ObTimeType == part_value_expr_type);
         }
       }
@@ -3973,6 +3994,8 @@ int ObResolverUtils::deduce_expect_value_tc(const ObObjType part_column_expr_typ
     }
     case ObDateTimeType:
     case ObDateType:
+    case ObMySQLDateType:
+    case ObMySQLDateTimeType:
     case ObTimeType:
     case ObRawType:
     case ObTimestampLTZType:
@@ -5099,6 +5122,9 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
     }
     if (OB_SUCC(ret)) {
       //get type
+      ObExprTypeCtx type_ctx; // 用于将session等全局变量传入calc_result_type
+      type_ctx.set_raw_expr(expr);
+      ObSQLUtils::init_type_ctx(&session_info, type_ctx);
       if (OB_NOT_NULL(cast_expr)) {
         bool enable_decimalint = false;
         ObExprResType dst_type;
@@ -5112,7 +5138,7 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
           LOG_WARN("fail to check_enable_decimalint", K(ret));
         } else if (OB_FAIL(ObExprCast::get_cast_type(enable_decimalint,
                                                      const_cast_type_expr->get_result_type(),
-                                                     cast_expr->get_extra(), dst_type))) {
+                                                     cast_expr->get_extra(), type_ctx, dst_type))) {
           LOG_WARN("get cast dest type failed", K(ret));
         } else {
           if (dst_type.is_string_or_lob_locator_type() || dst_type.is_enum_or_set()) {
@@ -5150,6 +5176,10 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
             } else {
               file_column_expr->set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
             }
+          } else if (ob_is_mysql_date_tc(column_expr->get_data_type())) {
+            file_column_expr->set_data_type(ObDateType);
+          } else if (ob_is_mysql_datetime_tc(column_expr->get_data_type())) {
+            file_column_expr->set_data_type(ObDateTimeType);
           }
         }
       } else {
@@ -5252,6 +5282,11 @@ int ObResolverUtils::build_file_column_expr_for_odps(ObRawExprFactory &expr_fact
     file_column_expr->set_meta_type(column_schema->get_meta_type());
     file_column_expr->set_collation_level(CS_LEVEL_IMPLICIT);
     file_column_expr->set_accuracy(column_schema->get_accuracy());
+    if (ob_is_mysql_date_tc(column_schema->get_data_type())) {
+      file_column_expr->set_data_type(ObDateType);
+    } else if (ob_is_mysql_datetime_tc(column_schema->get_data_type())) {
+      file_column_expr->set_data_type(ObDateTimeType);
+    }
     if (OB_FAIL(file_column_expr->formalize(&session_info))) {
       LOG_WARN("failed to extract info", K(ret));
     } else {
@@ -6531,6 +6566,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
                                        const ObSessionNLSParams &nls_session_param,
                                        uint64_t tenant_id,
                                        const bool enable_decimal_int_type,
+                                       const bool enable_mysql_compatible_dates,
                                        const bool convert_real_type_to_decimal /*false*/)
 {
   int ret = OB_SUCCESS;
@@ -6757,12 +6793,20 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         // TODO@nijia.nj 这里precision应该算上小数点的一位, ob_schama_macro_define.h中也要做相应修改
         data_type.set_precision(static_cast<int16_t>(default_accuracy.get_precision() + scale));
         data_type.set_scale(scale);
+        // the datetime and timestamp type share the same type class, so we need to distinguish the
+        // datetime and check need convert mysql_datetime type here.
+        if (ObDateTimeType == data_type.get_obj_type() && enable_mysql_compatible_dates) {
+          data_type.set_obj_type(ObMySQLDateTimeType);
+        }
       }
       break;
     case ObDateTC:
       // nothing to do.
       data_type.set_precision(default_accuracy.get_precision());
       data_type.set_scale(default_accuracy.get_scale());
+      if (enable_mysql_compatible_dates) {
+        data_type.set_obj_type(ObMySQLDateType);
+      }
       break;
     case ObTimeTC:
       if (scale > OB_MAX_DATETIME_PRECISION) {
@@ -9790,6 +9834,11 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         }
         break;
       }
+      case T_REGION: {
+        format.odps_format_.region_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid file format option", K(ret), K(node->type_));
@@ -10070,8 +10119,10 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                                     const ObBitSet<> &neg_param_index,
                                     const ObBitSet<> &not_param_index,
                                     const ObBitSet<> &must_be_positive_idx,
+                                    const ObBitSet<> &formalize_prec_idx,
                                     const ObPCParam *pc_param,
                                     const int64_t param_idx,
+                                    const bool enable_mysql_compatible_dates,
                                     ObObjParam &obj_param,
                                     bool &is_param,
                                     const bool enable_decimal_int)
@@ -10120,7 +10171,11 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                        static_cast<ObCollationType>(server_collation), NULL,
                        session.get_sql_mode(),
                        enable_decimal_int,
-                       compat_type))) {
+                       compat_type,
+                       enable_mysql_compatible_dates,
+                       session.get_local_ob_enable_plan_cache(),
+                       false, /* is_from_pl */
+                       formalize_prec_idx.has_member(param_idx)))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (FALSE_IT(obj_param.set_raw_text_info(static_cast<int32_t>(raw_param->raw_sql_offset_),
                                                     static_cast<int32_t>(raw_param->text_len_)))) {

@@ -149,12 +149,12 @@ private:
   int get_data_size_with_related_tablets_(const ObTabletID &tablet_id, uint64_t &data_size);
   int add_part_to_bg_for_tablegroup_sharding_none_(
       const ObBalanceGroup &bg,
-      const ObArray<const ObSimpleTableSchemaV2*> &table_schemas,
+      const ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
       share::ObLSID &dest_ls_id,
       bool &in_new_pg);
   int get_global_indexes_of_tables_(
-      const ObArray<const ObSimpleTableSchemaV2 *> &table_schemas,
-      ObIArray<const ObSimpleTableSchemaV2 *> &global_index_schemas);
+      const ObArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
+      ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &global_index_schemas);
 private:
   static const int64_t MAP_BUCKET_NUM = 40960;
   static const int64_t SET_BUCKET_NUM = 1024;

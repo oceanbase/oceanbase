@@ -353,16 +353,17 @@ if (NOT OB_BUILD_OPENSOURCE)
   endif()
 endif()
 
+## oceanbase-libs
+list(APPEND CPACK_COMPONENTS_ALL libs)
+install(PROGRAMS
+  deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1
+  deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1.0.1
+  deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so
+  DESTINATION lib
+  COMPONENT libs
+)
+
 if(OB_BUILD_OPENSOURCE)
-  ## oceanbase-libs
-  list(APPEND CPACK_COMPONENTS_ALL libs)
-  install(PROGRAMS
-    deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1
-    deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1.0.1
-    deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so
-    DESTINATION lib
-    COMPONENT libs
-  )
   if(OB_BUILD_OBADMIN)
     ## oceanbase-utils
     list(APPEND CPACK_COMPONENTS_ALL utils)

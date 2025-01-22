@@ -251,37 +251,13 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
             // sync other server modify for this server! (from porxy or distribute plan)
             if (var_type.is_obj_type()) {
               OZ (ObUserDefinedType::destruct_objparam(package_state.get_pkg_allocator(), value, &(resolve_ctx.session_info_)));
+              // set basic type value inside symbol table to null
+              OZ (package_state.set_package_var_val(var_idx, value, resolve_ctx, false));
             } else {
-              OZ (ObUserDefinedType::destruct_obj(value, &(resolve_ctx.session_info_), true));
-              if (OB_SUCC(ret) && var_type.is_record_type() && PL_RECORD_TYPE == value.get_meta().get_extend_type()) {
-                const ObUserDefinedType *user_type = NULL;
-                const ObRecordType *record_type = NULL;
-                ObObj *member = NULL;
-                ObPLRecord *record = reinterpret_cast<ObPLRecord *>(value.get_ext());
-                CK (OB_NOT_NULL(record));
-                OZ (var_type.get_external_user_type(resolve_ctx, user_type), KPC(this));
-                CK (OB_NOT_NULL(user_type));
-                CK (OB_NOT_NULL(record_type = static_cast<const ObRecordType *>(user_type)));
-                for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_member_count(); ++i) {
-                  const ObRecordMember* record_member = record_type->get_record_member(i);
-                  const ObPLDataType* member_type = record_type->get_record_member_type(i);
-                  CK (OB_NOT_NULL(record_type->get_member(i)));
-                  OZ (record->get_element(i, member));
-                  CK (OB_NOT_NULL(member));
-                  CK (OB_NOT_NULL(record_member));
-                  CK (OB_NOT_NULL(member_type));
-                  if (OB_SUCC(ret)) {
-                    if (record_type->get_member(i)->is_obj_type()) {
-                      OX (new (member) ObObj(ObNullType));
-                    } else {
-                      int64_t init_size = OB_INVALID_SIZE;
-                      int64_t member_ptr = 0;
-                      OZ (record_type->get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
-                      OZ (record_type->get_member(i)->newx(*record->get_allocator(), &resolve_ctx, member_ptr));
-                      OX (member->set_extend(member_ptr, record_type->get_member(i)->get_type(), init_size));
-                    }
-                  }
-                }
+              if (var_type.is_record_type() && PL_RECORD_TYPE == value.get_meta().get_extend_type()) {
+                OZ (ObUserDefinedType::reset_record(value, NULL));
+              } else {
+                OZ (ObUserDefinedType::destruct_obj(value, &(resolve_ctx.session_info_), true));
               }
             }
             OZ (var_type.deserialize(resolve_ctx,

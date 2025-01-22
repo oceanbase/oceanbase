@@ -1216,6 +1216,8 @@ int ObTableExprCgService::write_datum(ObTableCtx &ctx,
   ObDatum &datum = expr.locate_datum_for_write(eval_ctx);
   if (OB_FAIL(datum.from_obj(obj))) {
     LOG_WARN("fail to convert object from datum", K(ret), K(obj));
+  } else if (OB_FAIL(adjust_date_datum(expr, obj, datum))) {
+    LOG_WARN("fail to adust date datum", K(ret), K(obj), K_(expr.datum_meta));
   } else if (is_lob_storage(obj.get_type()) && OB_FAIL(ob_adjust_lob_datum(datum, obj.get_meta(), expr.obj_meta_, allocator))) {
     // `ob_adjust_lob_datum()` will try to adjust datum form in_meta into out_meta
     LOG_WARN("fail to adjust lob datum", K(ret), K(datum), K(obj));
@@ -1224,6 +1226,27 @@ int ObTableExprCgService::write_datum(ObTableCtx &ctx,
     expr.get_eval_info(eval_ctx).projected_ = true;
   }
 
+  return ret;
+}
+
+int ObTableExprCgService::adjust_date_datum(const ObExpr &expr, const ObObj &obj, ObDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (obj.is_date() && ob_is_mysql_date_tc(expr.datum_meta_.type_)) {
+    ObMySQLDate mdate = 0;
+    if (OB_FAIL(ObTimeConverter::date_to_mdate(obj.get_date(), mdate))) {
+      LOG_WARN("fail to convert date to mysql date", K(ret), K(obj));
+    } else {
+      datum.set_mysql_date(mdate);
+    }
+  } else if (obj.is_datetime() && ob_is_mysql_datetime(expr.datum_meta_.type_)) {
+    ObMySQLDateTime mdatetime = 0;
+    if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(obj.get_datetime(), mdatetime))) {
+      LOG_WARN("fail to convert datetime to mysql datetime", K(ret), K(obj));
+    } else {
+      datum.set_mysql_datetime(mdatetime);
+    }
+  }
   return ret;
 }
 

@@ -19,7 +19,7 @@ namespace transaction {
   // override abort_cause_ because may be updated by async msg from TxCtx
 #define PRE_ENCODE_DYNAMIC_FOR_VERIFY \
   FLAG flags_ = { .v_ = 0 };          \
-  bool can_elr_ = false;              \
+  bool unused_can_elr_ = false;       \
   int abort_cause_ = 0;
 
 // only serialize isolation_ when Repeatable Read or SERIALIZABLE
@@ -148,7 +148,7 @@ TXN_FREE_ROUTE_MEMBERS(dynamic, PRE_ENCODE_DYNAMIC_FOR_VERIFY, PRE_DYNAMIC_DECOD
                        active_ts_,
                        active_scn_,
                        abort_cause_,
-                       can_elr_,
+                       unused_can_elr_,
                        flags_.for_serialize_v_);
 TXN_FREE_ROUTE_MEMBERS(parts,,,,
                        parts_,

@@ -17,7 +17,7 @@ namespace oceanbase
 namespace sql
 {
 
-static const int COMPILATION_UNIT = 8;
+static const int COMPILATION_UNIT = 7;
 
 #define DEF_COMPILATION_VARS(name, max_val, unit_idx)                                              \
   constexpr int name##_unit_size =                                                                 \

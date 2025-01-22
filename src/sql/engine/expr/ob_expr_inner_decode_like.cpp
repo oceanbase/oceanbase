@@ -111,11 +111,20 @@ int ObExprInnerDecodeLike::eval_inner_decode_like(const ObExpr &expr, ObEvalCtx 
       LOG_WARN("failed to check escape length", K(escape_str), K(escape_str.length()));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ESCAPE");
     } else {
+      // For a pattern like 'aaa%' that ends with `%`, we will extract a precise range with some special handling:
+      // We need to fill the end key of the like range with the maximum character
+      // up to the target column's length to match the semantics of `%`.
+      // However, when the target column length is less than the effective prefix length of the pattern,
+      // the pattern gets truncated, resulting in an imprecise range and incorrect results.
+      // So, we need to ensure that the effective prefix of the pattern is not truncated
+      // to guarantee that the range is always precise.
+      int32_t range_str_len = col_len;
       //convert character counts to len in bytes
-      col_len = static_cast<int32_t>(col_len * mbmaxlen);
-      size_t min_str_len = col_len;
-      size_t max_str_len = col_len;
+      range_str_len = static_cast<int32_t>(range_str_len * mbmaxlen);
+      size_t min_str_len = range_str_len;
+      size_t max_str_len = range_str_len;
       size_t res_len = 0;
+      size_t prefix_len = 0;
       int32_t start_flag = is_start->get_int();
       common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
       char *min_str_buf = NULL;
@@ -133,26 +142,59 @@ int ObExprInnerDecodeLike::eval_inner_decode_like(const ObExpr &expr, ObEvalCtx 
                                                static_cast<char*>(min_str_buf),
                                                &min_str_len,
                                                static_cast<char*>(max_str_buf),
-                                               &max_str_len))) {
+                                               &max_str_len,
+                                               &prefix_len))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("calc like range failed", K(ret), K(pattern_str), K(escape_str), K(cs_type));
       } else {
-        ObExprStrResAlloc res_alloc(expr, ctx);
-        char *buf = NULL;
-        if (is_start->get_int() == 1) {
-          res_buf = min_str_buf;
-          res_len = min_str_len;
-        } else {
-          res_buf = max_str_buf;
-          res_len = max_str_len;
+        if (prefix_len >= col_len && ObCharset::strlen_char(cs_type, min_str_buf, prefix_len) >= col_len) {
+          int32_t pattern_prefix_len = 0; // strlen_char of prefix
+          if (OB_FAIL(get_pattern_prefix_len(cs_type,
+                                            escape_str,
+                                            pattern_str,
+                                            pattern_prefix_len))) {
+            LOG_WARN("failed to get pattern prefix len", K(ret), K(pattern_str), K(escape_str));
+          } else {
+            range_str_len = max(col_len, pattern_prefix_len);
+            range_str_len = static_cast<int32_t>(range_str_len * mbmaxlen);
+            min_str_len = range_str_len;
+            max_str_len = range_str_len;
+            if (OB_ISNULL(min_str_buf = (char*)temp_allocator.alloc(min_str_len))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc memory failed", K(min_str_len));
+            } else if (OB_ISNULL(max_str_buf = (char*)temp_allocator.alloc(max_str_len))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc memory failed", K(max_str_len));
+            } else if (OB_FAIL(ObCharset::like_range(cs_type,
+                                                     pattern_str,
+                                                     *(escape_str.ptr()),
+                                                     static_cast<char*>(min_str_buf),
+                                                     &min_str_len,
+                                                     static_cast<char*>(max_str_buf),
+                                                     &max_str_len))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("calc like range failed", K(ret), K(pattern_str), K(escape_str), K(cs_type));
+            }
+          }
         }
-        buf =  (char*)res_alloc.alloc(res_len);
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("alloc memory failed", K(ret), K(min_str_len));
-        } else {
-          MEMCPY(buf, res_buf, res_len);
-          expr_datum.set_string(buf, res_len);
+        if (OB_SUCC(ret)) {
+          ObExprStrResAlloc res_alloc(expr, ctx);
+          char *buf = NULL;
+          if (is_start->get_int() == 1) {
+            res_buf = min_str_buf;
+            res_len = min_str_len;
+          } else {
+            res_buf = max_str_buf;
+            res_len = max_str_len;
+          }
+          buf =  (char*)res_alloc.alloc(res_len);
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc memory failed", K(ret), K(min_str_len));
+          } else {
+            MEMCPY(buf, res_buf, res_len);
+            expr_datum.set_string(buf, res_len);
+          }
         }
       }
     }
@@ -223,6 +265,47 @@ int ObExprInnerDecodeLike::cast_like_obj_if_needed(ObEvalCtx &ctx, const ObExpr 
     LOG_WARN("init datum caster failed", K(ret));
   } else if (OB_FAIL(ctx.datum_caster_->to_type(dst_expr.datum_meta_, pattern_expr, cm, cast_datum, ctx.get_batch_idx()))) {
     LOG_WARN("fail to dynamic cast", K(ret));
+  }
+  return ret;
+}
+
+int ObExprInnerDecodeLike::get_pattern_prefix_len(const ObCollationType &cs_type,
+                                                  const ObString &escape_str,
+                                                  const ObString &pattern_str,
+                                                  int32_t &pattern_prefix_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t mbmaxlen = 1;
+  pattern_prefix_len = 0;
+  if (OB_NOT_NULL(pattern_str.ptr()) && OB_NOT_NULL(escape_str.ptr()) && escape_str.length() == 1 &&
+      cs_type != CS_TYPE_INVALID && cs_type < CS_TYPE_MAX) {
+    if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(cs_type, mbmaxlen))) {
+      LOG_WARN("fail to get mbmaxlen", K(ret), K(cs_type));
+    } else {
+      ObArenaAllocator allocator;
+      size_t pattern_len = pattern_str.length();
+      pattern_len = static_cast<int32_t>(pattern_len * mbmaxlen);
+      size_t min_str_len = pattern_len;
+      size_t max_str_len = pattern_len;
+      size_t prefix_len = pattern_len;
+      char *min_str_buf = NULL;
+      char *max_str_buf = NULL;
+      if (OB_ISNULL(min_str_buf = (char *)allocator.alloc(min_str_len))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("no enough memory", K(ret), K(pattern_len));
+      } else if (OB_ISNULL(max_str_buf = (char *)allocator.alloc(max_str_len))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("no enough memory", K(ret), K(pattern_len));
+      } else if (OB_FAIL(ObCharset::like_range(cs_type, pattern_str, *(escape_str.ptr()),
+                                       min_str_buf, &min_str_len,
+                                       max_str_buf, &max_str_len,
+                                       &prefix_len))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to retrive like range", K(ret));
+      } else {
+        pattern_prefix_len = ObCharset::strlen_char(cs_type, min_str_buf, prefix_len);
+      }
+    }
   }
   return ret;
 }

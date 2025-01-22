@@ -117,7 +117,7 @@ public:
   static const int MAX_REFRESH_RETRY_THRESHOLD = 3;
 
   enum class VectorIndexAuxType : int8_t {
-    DELTA_BUF_INDEX = 0,
+    DOMAIN_INDEX = 0,   // FARM COMPAT WHITELIST
     INDEX_ID_INDEX = 1,
     MOCK_INDEX_1 = 2,
     MOCK_INDEX_2 = 3,

@@ -65,15 +65,21 @@ int ObExprArrayToString::calc_result_typeN(ObExprResType &type,
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid subschema type", K(ret), K(arr_meta.type_));
   }
-  if (OB_FAIL(ret)) {
-  } else if (!ob_is_varchar_char_type(delimiter_type->get_type(), delimiter_type->get_collation_type())
-             && !ob_is_null(delimiter_type->get_type())) {
+  if (OB_FAIL(ret) || ob_is_null(delimiter_type->get_type())) {
+    // do nothing
+  } else if (ob_is_varchar_char_type(delimiter_type->get_type(), delimiter_type->get_collation_type())) {
+    delimiter_type->set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+  } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "VARCHAR", ob_obj_type_str(delimiter_type->get_type()));
-  } else if (param_num == 3) {
+  }
+  if (OB_SUCC(ret) && param_num == 3) {
     ObExprResType *null_str_type = &types[2];
-    if (!ob_is_varchar_char_type(null_str_type->get_type(), delimiter_type->get_collation_type())
-        && !ob_is_null(null_str_type->get_type())) {
+    if (ob_is_null(null_str_type->get_type())) {
+      // do nothing
+    } else if (ob_is_varchar_char_type(null_str_type->get_type(), null_str_type->get_collation_type())) {
+      null_str_type->set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+    } else {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "VARCHAR", ob_obj_type_str(null_str_type->get_type()));
     }
@@ -81,7 +87,7 @@ int ObExprArrayToString::calc_result_typeN(ObExprResType &type,
 
   if (OB_SUCC(ret)) {
     type.set_type(ObLongTextType);
-    type.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
     type.set_collation_level(CS_LEVEL_IMPLICIT);
     type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObLongTextType]);
   }

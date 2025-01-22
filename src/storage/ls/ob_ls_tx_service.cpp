@@ -172,7 +172,8 @@ int ObLSTxService::revert_tx_ctx(ObTransCtx *ctx) const
 int ObLSTxService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
                                       const bool read_latest,
                                       const int64_t lock_timeout,
-                                      ObStoreCtx &store_ctx) const
+                                      ObStoreCtx &store_ctx,
+                                      ObTxDesc *tx_desc) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(trans_service_) || OB_ISNULL(mgr_)) {
@@ -183,7 +184,7 @@ int ObLSTxService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   } else {
     store_ctx.ls_id_ = ls_id_;
     store_ctx.is_read_store_ctx_ = true;
-    ret = trans_service_->get_read_store_ctx(snapshot, read_latest, lock_timeout, store_ctx);
+    ret = trans_service_->get_read_store_ctx(snapshot, read_latest, lock_timeout, store_ctx, tx_desc);
     if (OB_FAIL(ret)) {
       mgr_->end_readonly_request();
     } else {

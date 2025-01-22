@@ -517,7 +517,7 @@ int ObOptimizer::check_direct_load_enabled(const ObDMLStmt &stmt, const ObSQLSes
   int ret = OB_SUCCESS;
   if (stmt::T_INSERT == stmt.get_stmt_type()) {
     const ObInsertStmt &insert_stmt = static_cast<const ObInsertStmt &>(stmt);
-    if (insert_stmt.value_from_select() && !insert_stmt.is_external_table_overwrite()) {
+    if (insert_stmt.value_from_select() && !insert_stmt.is_external_table_overwrite() && !insert_stmt.is_ignore()) {
       ObDirectLoadOptimizerCtx &direct_load_optimize_ctx = ctx_.get_direct_load_optimizer_ctx();
       if (OB_FAIL(direct_load_optimize_ctx.init_direct_load_ctx(insert_stmt, ctx_))) {
         LOG_WARN("fail to init direct load ctx", K(ret));
@@ -638,6 +638,8 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
+  int64_t rowgoal_type = -1;
+  const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   if (OB_ISNULL(session_info = ctx_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info), K(ret));
@@ -661,7 +663,13 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("failed to init correlation model", K(ret));
   } else if (OB_FAIL(init_table_access_policy(stmt, *session_info))) {
     LOG_WARN("failed to init table access policy", K(ret));
-  }
+  } else if (OB_FAIL(opt_params.get_enum_sys_var(ObOptParamHint::ENABLE_OPTIMIZER_ROWGOAL,
+                                                 session_info,
+                                                 share::SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL,
+                                                 rowgoal_type))) {
+    LOG_WARN("failed to get hint param", K(ret));
+  } else if (FALSE_IT(ctx_.set_enable_opt_row_goal(rowgoal_type))) {
+  } else { /*do nothing*/ }
   return ret;
 }
 
@@ -694,6 +702,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool better_inlist_costing = false;
   bool enable_spf_batch_rescan = session.is_spf_mlj_group_rescan_enabled();
   bool enable_px_ordered_coord = GCONF._enable_px_ordered_coord;
+  int64_t das_batch_rescan_flag = tenant_config.is_valid() ? tenant_config->_enable_das_batch_rescan_flag : 0;
+  bool enable_distributed_das_scan = tenant_config.is_valid() ? tenant_config->_enable_distributed_das_scan : true;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   if (OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
@@ -752,9 +762,11 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to check partition wise plan enabled", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_PX_ORDERED_COORD, enable_px_ordered_coord))) {
     LOG_WARN("failed to get opt param enable px ordered coord", K(ret));
+  } else if (OB_FAIL(opt_params.get_integer_opt_param(ObOptParamHint::DAS_BATCH_RESCAN_FLAG, das_batch_rescan_flag))) {
+    LOG_WARN("failed to get das batch rescan flag", K(ret));
   } else {
     ctx_.init_batch_rescan_flags(enable_use_batch_nlj, enable_spf_batch_rescan,
-                                 query_ctx->optimizer_features_enable_version_);
+      query_ctx->optimizer_features_enable_version_, das_batch_rescan_flag);
     ctx_.set_storage_estimation_enabled(storage_estimation_enabled);
     ctx_.set_serial_set_order(force_serial_set_order);
     ctx_.set_has_multiple_link_stmt(link_stmt_count > 1);
@@ -770,6 +782,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_enable_better_inlist_costing(better_inlist_costing);
     ctx_.set_push_join_pred_into_view_enabled(push_join_pred_into_view_enabled);
     ctx_.set_enable_px_ordered_coord(enable_px_ordered_coord);
+    ctx_.set_enable_distributed_das_scan(enable_distributed_das_scan);
     if (!hash_join_enabled
         && !optimizer_sortmerge_join_enabled
         && !nested_loop_join_enabled) {

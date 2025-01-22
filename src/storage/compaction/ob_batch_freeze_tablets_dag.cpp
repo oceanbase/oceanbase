@@ -99,7 +99,7 @@ int ObBatchFreezeTabletsTask::inner_process()
     if (FAILEDx(share::dag_yield())) {
       LOG_WARN("failed to dag yield", K(ret));
     }
-    if (REACH_TENANT_TIME_INTERVAL(5_s)) {
+    if (REACH_THREAD_TIME_INTERVAL(5_s)) {
       weak_read_ts = ls->get_ls_wrs_handler()->get_ls_weak_read_ts().get_val_for_tx();
     }
   } // end for

@@ -64,7 +64,7 @@ private:
   int prepare(const share::ObDDLTaskStatus new_status);
   int rebuild_index_impl();
   int drop_index_impl();
-  int switch_index_name(const ObDDLTaskStatus next_task_status);
+  int switch_index_name(const share::ObDDLTaskStatus next_task_status);
   int create_and_wait_rebuild_task_finish(const share::ObDDLTaskStatus new_status);
   int create_and_wait_drop_task_finish(const share::ObDDLTaskStatus new_status);
   int succ();

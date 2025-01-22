@@ -66,6 +66,7 @@ private:
   int restore_wait_to_consistent_scn(const share::ObPhysicalRestoreJob &job_info);
   int check_tenant_replay_to_consistent_scn(const uint64_t tenant_id, const share::SCN &scn, bool &is_replay_finish);
   int set_restore_to_target_scn_(common::ObMySQLTransaction &sql_client, const share::ObPhysicalRestoreJob &job_info, const share::SCN &scn);
+  int restore_wait_quick_restore_finish(const share::ObPhysicalRestoreJob &job_info);
   int restore_wait_ls_finish(const share::ObPhysicalRestoreJob &job_info);
   int restore_wait_tenant_finish(const share::ObPhysicalRestoreJob &job_info);
 
@@ -84,7 +85,8 @@ private:
       share::PhysicalRestoreMod mod = share::PHYSICAL_RESTORE_MOD_RS);
   void record_rs_event(const share::ObPhysicalRestoreJob &job,
                        const share::PhysicalRestoreStatus next_status);
-  share::PhysicalRestoreStatus get_next_status(int return_ret, share::PhysicalRestoreStatus current_status);
+  share::PhysicalRestoreStatus get_next_status(
+    const share::ObRestoreProgressDisplayMode &display_mode, int return_ret, share::PhysicalRestoreStatus current_status);
   share::PhysicalRestoreStatus get_sys_next_status(share::PhysicalRestoreStatus current_status);
   
   int fill_restore_statistics(const share::ObPhysicalRestoreJob &job_info);
@@ -97,7 +99,7 @@ private:
       const common::ObIArray<share::ObLSAttr> &ls_attr_array);
   int check_all_ls_restore_finish_(const uint64_t tenant_id, TenantRestoreStatus &tenant_restore_status);
   int check_all_ls_restore_to_consistent_scn_finish_(const uint64_t tenant_id, TenantRestoreStatus &tenant_restore_status);
-  int check_all_ls_quick_restore_finish_(const uint64_t tenant_id, TenantRestoreStatus &tenant_restore_status);
+  int check_all_ls_quick_restore_finish_(const uint64_t tenant_id, const ObRestoreType &restore_type, TenantRestoreStatus &tenant_restore_status);
   int try_get_tenant_restore_history_(const share::ObPhysicalRestoreJob &job_info,
                                       share::ObHisRestoreJobPersistInfo &history_info,
                                       bool &restore_tenant_exist);

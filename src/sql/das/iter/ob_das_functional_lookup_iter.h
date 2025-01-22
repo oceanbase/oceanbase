@@ -14,6 +14,7 @@
 #define OBDEV_SRC_SQL_DAS_ITER_OB_DAS_FUNCTIONAL_LOOKUP_ITER_H_
 
 #include "sql/das/iter/ob_das_local_lookup_iter.h"
+#include "sql/das/iter/ob_das_scan_iter.h"
 
 namespace oceanbase
 {

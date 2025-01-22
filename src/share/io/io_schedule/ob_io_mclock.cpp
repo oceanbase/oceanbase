@@ -16,6 +16,7 @@
 #include "share/io/ob_io_manager.h"
 #include "share/io/ob_io_calibration.h"
 #include "lib/time/ob_time_utility.h"
+#include "lib/restore/ob_object_device.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -297,7 +298,7 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
           }
         } else {
           // min_iops of group
-          mclock->reservation_clock_.atom_update(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->reservation_ts_);
+          mclock->reservation_clock_.atom_update_reserve(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->reservation_ts_);
         }
         // iops/bandwidth weight of tenant & group, TODO fengshuo.fs: THIS IS NOT CORRECT
         mclock->proportion_clock_.atom_update(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->proportion_ts_);

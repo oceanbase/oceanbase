@@ -117,7 +117,8 @@ public:
     sql_mode_(0),
     tz_info_wrap_(),
     allocator_(lib::ObLabel("PrepAlterTblArg")),
-    nls_formats_{}
+    nls_formats_{},
+    foreign_key_checks_(true)
   {}
   ~ObPrepareAlterTableArgParam() = default;
   int init(const int64_t consumer_group_id,
@@ -129,7 +130,8 @@ public:
           const ObString &target_database_name,
           const ObTimeZoneInfo &tz_info,
           const ObTimeZoneInfoWrap &tz_info_wrap,
-          const ObString *nls_formats);
+          const ObString *nls_formats,
+          const bool foreign_key_checks);
   bool is_valid() const
   {
     return !orig_table_name_.empty() &&
@@ -145,7 +147,8 @@ public:
                 K_(orig_database_name),
                 K_(target_database_name),
                 K_(tz_info_wrap),
-                "nls_formats", common::ObArrayWrap<ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+                "nls_formats", common::ObArrayWrap<ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
+                K_(foreign_key_checks));
 public:
   int64_t consumer_group_id_;
   uint64_t session_id_;
@@ -158,6 +161,7 @@ public:
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   common::ObArenaAllocator allocator_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
+  bool foreign_key_checks_;
 };
 
 class ObRedefCallback
@@ -371,7 +375,8 @@ private:
       const share::ObDDLType task_type,
       const uint64_t tenant_data_version,
       ObIAllocator &allocator,
-      ObDDLTaskRecord &task_record);
+      ObDDLTaskRecord &task_record,
+      const int64_t snapshot_version = 0);
   int create_build_fts_index_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *data_table_schema,
@@ -382,7 +387,8 @@ private:
       const uint64_t tenant_data_version,
       const obrpc::ObCreateIndexArg *create_index_arg,
       ObIAllocator &allocator,
-      ObDDLTaskRecord &task_record);
+      ObDDLTaskRecord &task_record,
+      const int64_t snapshot_version = 0);
   int create_build_vec_index_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *data_table_schema,

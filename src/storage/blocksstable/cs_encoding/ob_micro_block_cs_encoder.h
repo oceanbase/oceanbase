@@ -97,7 +97,7 @@ public:
     return ctx_.column_cnt_;
   }
   virtual int64_t get_original_size() const override { return all_headers_size_ + estimate_size_; }
-  virtual void dump_diagnose_info() const override;
+  virtual void dump_diagnose_info() override;
 
 private:
   enum ObDataFormatType : uint8_t
@@ -225,6 +225,7 @@ private:
   bool is_inited_;
   bool need_block_level_compression_;
   bool is_all_column_force_raw_;
+  bool encoder_freezed_; // if encoder enable append data or build block
   uint32_t all_string_data_len_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockCSEncoder);

@@ -148,7 +148,7 @@ public:
     ObIMicroBlockWriter::reuse();
     checksum_helper_.reset();
   }
-  virtual void dump_diagnose_info() const { STORAGE_LOG(INFO, "IMicroBlockWriter", K(checksum_helper_)); }
+  virtual void dump_diagnose_info() { STORAGE_LOG(INFO, "IMicroBlockWriter", K(checksum_helper_)); }
   virtual int append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder)
   {
     int ret = OB_NOT_SUPPORTED;

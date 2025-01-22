@@ -433,7 +433,6 @@ public:
     RemoveIf<Function> remove_if(*this, fn);
     return map(remove_if);
   }
-
   const AllocHandle& get_alloc_handle() const { return alloc_handle_; }
 
 private:

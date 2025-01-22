@@ -32,7 +32,9 @@ int ObMockExecutor::execute(ObExecContext &exec_ctx, ObMockStmt &stmt)
       || stmt::T_DROP_SERVER == stmt.get_stmt_type()
       || stmt::T_CREATE_LOGFILE_GROUP == stmt.get_stmt_type()
       || stmt::T_ALTER_LOGFILE_GROUP == stmt.get_stmt_type()
-      || stmt::T_DROP_LOGFILE_GROUP == stmt.get_stmt_type()) {
+      || stmt::T_DROP_LOGFILE_GROUP == stmt.get_stmt_type()
+      || stmt::T_GRANT_PROXY == stmt.get_stmt_type()
+      || stmt::T_REVOKE_PROXY == stmt.get_stmt_type()) {
     LOG_USER_WARN(OB_NOT_SUPPORTED, "This statement is");
   } else if (stmt::T_FLUSH_MOCK_LIST == stmt.get_stmt_type()) {
     const ObIArray<stmt::StmtType> &type_list = stmt.get_stmt_type_list();

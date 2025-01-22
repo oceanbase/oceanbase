@@ -253,6 +253,7 @@ void ObTmpFileFlushManager::inner_advance_flush_level_without_checking_watermark
 int ObTmpFileFlushManager::flush(ObSpLinkQueue &flushing_queue,
                                  ObTmpFileFlushMonitor &flush_monitor,
                                  const int64_t expect_flush_size,
+                                 const int64_t current_flush_cnt,
                                  const bool is_flush_meta_tree)
 {
   int ret = OB_SUCCESS;
@@ -265,14 +266,14 @@ int ObTmpFileFlushManager::flush(ObSpLinkQueue &flushing_queue,
   } else if (OB_FAIL(flush_ctx_.prepare_flush_ctx(expect_flush_size, &flush_priority_mgr_, &flush_monitor))) {
     STORAGE_LOG(WARN, "fail to prepare flush iterator", KR(ret), K(flush_ctx_));
   } else {
-    if (OB_FAIL(flush_by_watermark_(flushing_queue, is_flush_meta_tree))) {
+    if (OB_FAIL(flush_by_watermark_(flushing_queue, current_flush_cnt, is_flush_meta_tree))) {
       STORAGE_LOG(DEBUG, "fail to flush by watermark", KR(ret), K(flush_ctx_));
     }
 
     if (!flushing_queue.is_empty()) {
       STORAGE_LOG(DEBUG, "ObTmpFileFlushManager flush finish", KR(ret), K(fast_flush_meta), K(flush_ctx_));
     }
-    if (OB_FAIL(ret) && !flushing_queue.is_empty()) {
+    if (OB_FAIL(ret) && ret != OB_TMP_FILE_EXCEED_DISK_QUOTA && !flushing_queue.is_empty()) {
       ret = OB_SUCCESS; // ignore error if generate at least 1 task
     }
     flush_ctx_.clear_flush_ctx(flush_priority_mgr_);
@@ -280,14 +281,19 @@ int ObTmpFileFlushManager::flush(ObSpLinkQueue &flushing_queue,
   return ret;
 }
 
-int ObTmpFileFlushManager::flush_by_watermark_(ObSpLinkQueue &flushing_queue, const bool is_flush_meta_tree)
+int ObTmpFileFlushManager::flush_by_watermark_(ObSpLinkQueue &flushing_queue,
+                                               const int64_t current_flush_cnt,
+                                               const bool is_flush_meta_tree)
 {
   int ret = OB_SUCCESS;
   bool fast_flush_meta = is_flush_meta_tree;
+  int64_t flushing_cnt = current_flush_cnt;
   while (OB_SUCC(ret) && !flush_ctx_.is_fail_too_many()
                       && (FlushCtxState::FSM_FINISHED != flush_ctx_.get_state() || fast_flush_meta)) {
     ObTmpFileFlushTask *flush_task = nullptr;
-    if (OB_FAIL(handle_alloc_flush_task_(fast_flush_meta, flush_task))) {
+    if (OB_FAIL(check_tmp_file_disk_usage_limit_(flushing_cnt++))) {
+      STORAGE_LOG(WARN, "tmp file exceeds disk quota", KR(ret), K(current_flush_cnt), K(is_flush_meta_tree));
+    } else if (OB_FAIL(handle_alloc_flush_task_(fast_flush_meta, flush_task))) {
       STORAGE_LOG(WARN, "fail to alloc flush task", KR(ret), K(flush_ctx_));
     } else {
       flush_ctx_.inc_create_flush_task_cnt();
@@ -336,6 +342,29 @@ int ObTmpFileFlushManager::flush_by_watermark_(ObSpLinkQueue &flushing_queue, co
           STORAGE_LOG(ERROR, "flush task is not in TFFT_INSERT_META_TREE state", KPC(flush_task));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObTmpFileFlushManager::check_tmp_file_disk_usage_limit_(const int64_t current_flush_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tmp file page cache controller is not inited", KR(ret));
+  } else {
+    int64_t disk_usage_limit = pc_ctrl_.get_disk_usage_limit();
+    int64_t used_page_num = 0;
+    int64_t tmp_file_block_num = 0;
+    int64_t current_disk_usage = 0;
+    if (OB_FAIL(tmp_file_block_mgr_.get_block_usage_stat(used_page_num, tmp_file_block_num))) {
+      STORAGE_LOG(WARN, "fail to get tmp file block usage stat", KR(ret));
+    } else if (FALSE_IT(current_disk_usage = (tmp_file_block_num + current_flush_cnt) * ObTmpFileGlobal::SN_BLOCK_SIZE)) {
+    } else if (disk_usage_limit > 0 && current_disk_usage > disk_usage_limit) {
+      ret = OB_TMP_FILE_EXCEED_DISK_QUOTA;
+      STORAGE_LOG(WARN, "tmp file exceeds disk usage limit",
+          KR(ret), K(current_disk_usage), K(disk_usage_limit), K(tmp_file_block_num), K(current_flush_cnt));
     }
   }
   return ret;

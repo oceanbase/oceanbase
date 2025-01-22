@@ -232,7 +232,7 @@ int ObPartitionMergeProgress::inner_init_estimated_vals()
   } else {
     avg_row_length_ = estimated_total_size_ * 1.0 / estimated_total_row_cnt_;
     update_estimated_finish_time(0/*cur scanned row cnt*/);
-    LOG_INFO("success to estimate initial vals", K(ret), "param", ctx_->static_param_, KPC(this));
+    LOG_TRACE("success to estimate initial vals", K(ret), "param", ctx_->static_param_, KPC(this));
   }
   return ret;
 }
@@ -254,7 +254,7 @@ int ObPartitionMergeProgress::update_merge_progress(
   } else if (scanned_row_cnt <= scanned_row_cnt_arr_[idx]) {
     // do nothing
   } else if (FALSE_IT(scanned_row_cnt_arr_[idx] = scanned_row_cnt)) {
-  } else if (REACH_TENANT_TIME_INTERVAL(UPDATE_INTERVAL)) {
+  } else if (REACH_THREAD_TIME_INTERVAL(UPDATE_INTERVAL)) {
     if (!ATOMIC_CAS(&is_updating_, false, true)) {
       latest_update_ts_ = ObTimeUtility::fast_current_time(); // only used for diagnose
 
@@ -314,7 +314,7 @@ void ObPartitionMergeProgress::update_estimated_finish_time(const int64_t cur_sc
     estimated_finish_time_ = MAX(estimated_finish_time_, current_time + rest_time + UPDATE_INTERVAL);
   }
   if (estimated_finish_time_ - start_time >= MAX_ESTIMATE_SPEND_TIME) {
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_ESTIMATE_WARN_INTERVAL)) {
+    if (REACH_THREAD_TIME_INTERVAL(PRINT_ESTIMATE_WARN_INTERVAL)) {
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN_RET(tmp_ret, "estimated finish time is too large", K(tmp_ret), KPC(this), K(start_time), K(current_time));
     }

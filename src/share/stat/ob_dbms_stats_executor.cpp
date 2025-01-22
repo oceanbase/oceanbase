@@ -28,10 +28,12 @@
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "observer/ob_inner_sql_connection.h"
 #include "src/observer/ob_server.h"
-
+#include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "lib/random/ob_random.h"
 namespace oceanbase {
 using namespace pl;
 namespace common {
+ERRSIM_POINT_DEF(ERRSIM_RANDOM_GATHER_STATS_OPTION);
 
 /**
  * @brief ObDbmsStatsUtils::gather_table_stats
@@ -322,6 +324,7 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   ObOptStatGatherParam gather_param;
   ObArenaAllocator allocator("SplitGatherStat", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
+  ObArenaAllocator tmp_allocator("SplitTmpStat", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
   const ObIArray<PartInfo> &partition_infos = stat_level == PARTITION_LEVEL ? param.part_infos_ : param.subpart_infos_;
   if (OB_UNLIKELY((stat_level != PARTITION_LEVEL && stat_level != SUBPARTITION_LEVEL) ||
                    !gather_helper.is_split_gather_ ||
@@ -371,10 +374,20 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
           }
         } else {
           int64_t idx_col = 0;
-          ObOptTableStat part_Stat;
-          ObSEArray<ObOptTableStat *, 1> all_tstats;
-          if (OB_FAIL(all_tstats.push_back(&part_Stat))) {
-            LOG_WARN("faile to push back", K(ret));
+          ObSEArray<ObOptTableStat *, 8> all_tstats;
+          for (int64_t i = 0; OB_SUCC(ret) && i < gather_partition_infos.count(); ++i) {
+            ObOptTableStat *opt_stat = NULL;
+            void *p = NULL;
+            if (OB_ISNULL(p = tmp_allocator.alloc(sizeof(ObOptTableStat)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to allocate opt table stat", K(ret));
+            } else if (OB_FALSE_IT(opt_stat = new(p) ObOptTableStat())) {
+            } else if (OB_FAIL(all_tstats.push_back(opt_stat))) {
+              LOG_WARN("faile to push back", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
+            // do nothing
           } else if (OB_FAIL(fetch_gather_table_snapshot_read(trans.get_connection(), gather_param.tenant_id_, gather_param.sepcify_scn_))) {
             LOG_WARN("failed to fetch gather table snapshot read", K(ret));
             ret = OB_SUCCESS;//if we failed to get the read snapshot, just skip, not specify the snapshot
@@ -428,6 +441,12 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
             } while(OB_SUCC(ret) && idx_col < param.column_params_.count());
           }
           gather_param.sepcify_scn_ = 0;//Try to ensure that the stat of a partition are collected in a snapshot
+          for (int64_t i = 0; i < all_tstats.count(); ++i) {
+            if (NULL != all_tstats.at(i)) {
+              all_tstats.at(i)->~ObOptTableStat();
+            }
+          }
+          tmp_allocator.reuse();
         }
       }
       extra_ratio += split_extra_ratio;
@@ -702,6 +721,7 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param,
                                                  GatherHelper &gather_helper)
 {
   int ret = OB_SUCCESS;
+  bool random_split_part = ERRSIM_RANDOM_GATHER_STATS_OPTION;
   int64_t origin_column_cnt = param.get_need_gather_column();
   int64_t column_cnt = origin_column_cnt > MAX_GATHER_COLUMN_COUNT_PER_QUERY ? MAX_GATHER_COLUMN_COUNT_PER_QUERY : origin_column_cnt;
   int64_t partition_cnt = param.subpart_stat_param_.need_modify_ ? param.subpart_infos_.count() :
@@ -784,6 +804,12 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param,
         gather_helper.gather_vectorize_ = gather_vectorize;
       }
     }
+  }
+  if (OB_SUCC(ret) && random_split_part) {
+    gather_helper.maximum_gather_col_cnt_ = ObRandom::rand(1, column_cnt);
+    gather_helper.maximum_gather_part_cnt_ = ObRandom::rand(1, partition_cnt);
+    gather_helper.is_split_gather_ = origin_partition_cnt != partition_cnt ||
+                                     column_cnt != origin_column_cnt;
   }
   LOG_TRACE("succeed to get the maximum num of part and column for stat gather", K(param), K(max_memory_used),
                                          K(max_wa_memory_size), K(tab_stat_size), K(col_histogram_size),

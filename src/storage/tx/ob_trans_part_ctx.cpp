@@ -2964,6 +2964,11 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
           mt_ctx_.set_trans_version(SCN::max_scn());
           TRANS_LOG(INFO, "clear local trans version when commit log on failure", K(ret), KPC(this));
         }
+        // revert ELR_COMMIT to RUNNING
+        if (ctx_tx_data_.get_state() == ObTxData::ELR_COMMIT) {
+          ctx_tx_data_.set_state(ObTxData::RUNNING);
+          mt_ctx_.elr_trans_revoke();
+        }
       }
       busy_cbs_.remove(log_cb);
       return_log_cb_(log_cb, true);

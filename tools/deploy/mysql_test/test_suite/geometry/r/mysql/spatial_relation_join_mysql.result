@@ -34,20 +34,20 @@ POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
 POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
 POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
 POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
-explain extended_noaddr select * from tgnoindex1, tgnoindex2 where st_intersects(tgnoindex1.g1, tgnoindex2.g2);
+explain basic select * from tgnoindex1, tgnoindex2 where st_intersects(tgnoindex1.g1, tgnoindex2.g2);
 Query Plan
-=========================================================
-|ID|OPERATOR           |NAME      |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------
-|0 |NESTED-LOOP JOIN   |          |8       |582         |
-|1 |├─TABLE FULL SCAN  |tgnoindex2|10      |3           |
-|2 |└─MATERIAL         |          |3       |3           |
-|3 |  └─TABLE FULL SCAN|tgnoindex1|3       |3           |
-=========================================================
+===================================
+|ID|OPERATOR           |NAME      |
+-----------------------------------
+|0 |NESTED-LOOP JOIN   |          |
+|1 |├─TABLE FULL SCAN  |tgnoindex2|
+|2 |└─MATERIAL         |          |
+|3 |  └─TABLE FULL SCAN|tgnoindex1|
+===================================
 Outputs & filters:
 -------------------------------------
   0 - output([tgnoindex1.g1], [tgnoindex2.g2]), filter(nil)
-      conds([BOOL(st_intersects(tgnoindex1.g1, tgnoindex2.g2))]), nl_params_(nil), use_batch=false
+      conds([st_intersects(tgnoindex1.g1, tgnoindex2.g2)]), nl_params_(nil), use_batch=false
   1 - output([tgnoindex2.g2]), filter(nil)
       access([tgnoindex2.g2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -57,57 +57,6 @@ Outputs & filters:
       access([tgnoindex1.g1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([tgnoindex1.__pk_increment]), range(MIN ; MAX)always true
-Used Hint:
--------------------------------------
-  /*+
-      
-  */
-Qb name trace:
--------------------------------------
-  stmt_id:0, stmt_type:T_EXPLAIN 
-  stmt_id:1, SEL$1
-Outline Data: 
--------------------------------------
-  /*+
-      BEGIN_OUTLINE_DATA
-      LEADING(@"SEL$1" ("test"."tgnoindex2"@"SEL$1" "test"."tgnoindex1"@"SEL$1"))
-      USE_NL(@"SEL$1" "test"."tgnoindex1"@"SEL$1")
-      USE_NL_MATERIALIZATION(@"SEL$1" "test"."tgnoindex1"@"SEL$1")
-      FULL(@"SEL$1" "test"."tgnoindex2"@"SEL$1")
-      FULL(@"SEL$1" "test"."tgnoindex1"@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('')
-      END_OUTLINE_DATA
-  */
-Optimization Info:
--------------------------------------
-  tgnoindex2:
-      table_rows:10
-      physical_range_rows:10
-      logical_range_rows:10
-      index_back_rows:0
-      output_rows:10
-      table_dop:1
-      dop_method:Table DOP
-      avaiable_index_name:[tgnoindex2]
-      stats info:[version=0, is_locked=0, is_expired=0]
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
-  tgnoindex1:
-      table_rows:3
-      physical_range_rows:3
-      logical_range_rows:3
-      index_back_rows:0
-      output_rows:3
-      table_dop:1
-      dop_method:Table DOP
-      avaiable_index_name:[tgnoindex1]
-      stats info:[version=0, is_locked=0, is_expired=0]
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
-  Plan Type:
-      LOCAL
-  Note:
-      Degree of Parallelisim is 1 because of table property
 create table tgeom1(g1 geometry not null srid 4326);
 create index gidx1 on tgeom1(g1);
 create table tgeom2(g2 geometry not null srid 4326);
@@ -142,15 +91,15 @@ POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
 POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
 POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
 POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
-explain extended_noaddr select * from tgeom1, tgeom2 where st_intersects(tgeom1.g1, tgeom2.g2);
+explain basic select * from tgeom1, tgeom2 where st_intersects(tgeom1.g1, tgeom2.g2);
 Query Plan
-======================================================================
-|ID|OPERATOR                     |NAME         |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |             |8       |108         |
-|1 |├─TABLE FULL SCAN            |tgeom1       |3       |3           |
-|2 |└─DISTRIBUTED TABLE FULL SCAN|tgeom2(gidx2)|3       |35          |
-======================================================================
+=====================================
+|ID|OPERATOR          |NAME         |
+-------------------------------------
+|0 |NESTED-LOOP JOIN  |             |
+|1 |├─TABLE FULL SCAN |tgeom1       |
+|2 |└─TABLE RANGE SCAN|tgeom2(gidx2)|
+=====================================
 Outputs & filters:
 -------------------------------------
   0 - output([tgeom1.g1], [tgeom2.g2]), filter(nil)
@@ -159,62 +108,10 @@ Outputs & filters:
       access([tgeom1.g1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([tgeom1.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([tgeom2.g2]), filter([BOOL(st_intersects(:0, tgeom2.g2))])
+  2 - output([tgeom2.g2]), filter([st_intersects(:0, tgeom2.g2)])
       access([tgeom2.__pk_increment], [tgeom2.g2]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([tgeom2.__cellid_16], [tgeom2.__mbr_16], [tgeom2.__pk_increment]), range(MIN ; MAX)
-Used Hint:
--------------------------------------
-  /*+
-      
-  */
-Qb name trace:
--------------------------------------
-  stmt_id:0, stmt_type:T_EXPLAIN 
-  stmt_id:1, SEL$1
-Outline Data: 
--------------------------------------
-  /*+
-      BEGIN_OUTLINE_DATA
-      LEADING(@"SEL$1" ("test"."tgeom1"@"SEL$1" "test"."tgeom2"@"SEL$1"))
-      USE_NL(@"SEL$1" "test"."tgeom2"@"SEL$1")
-      FULL(@"SEL$1" "test"."tgeom1"@"SEL$1")
-      INDEX(@"SEL$1" "test"."tgeom2"@"SEL$1" "gidx2")
-      USE_DAS(@"SEL$1" "test"."tgeom2"@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('')
-      END_OUTLINE_DATA
-  */
-Optimization Info:
--------------------------------------
-  tgeom1:
-      table_rows:3
-      physical_range_rows:3
-      logical_range_rows:3
-      index_back_rows:0
-      output_rows:3
-      table_dop:1
-      dop_method:Table DOP
-      avaiable_index_name:[gidx1, tgeom1]
-      pruned_index_name:[gidx1]
-      stats info:[version=0, is_locked=0, is_expired=0]
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
-  tgeom2:
-      table_rows:10
-      physical_range_rows:2
-      logical_range_rows:2
-      index_back_rows:2
-      output_rows:2
-      table_dop:1
-      dop_method:DAS DOP
-      avaiable_index_name:[gidx2, tgeom2]
-      stats info:[version=0, is_locked=0, is_expired=0]
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
-  Plan Type:
-      LOCAL
-  Note:
-      Degree of Parallelisim is 1 because of table property
 create table ptgeom1(c1 int, g1 geometry not null srid 4326) partition by hash(c1) partitions 3;
 create index pgidx1 on ptgeom1(g1) local;
 create table ptgeom2(c2 int, g2 geometry not null srid 4326) partition by hash(c2) partitions 3;
@@ -249,18 +146,21 @@ POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
 POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
 POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
 POLYGON((0 0,15 0,15 15,0 15,0 0))	POINT(12 12)
-explain extended_noaddr select * from ptgeom1, ptgeom2 where st_intersects(ptgeom1.g1, ptgeom2.g2);
+explain basic select * from ptgeom1, ptgeom2 where st_intersects(ptgeom1.g1, ptgeom2.g2);
 Query Plan
-============================================================================
-|ID|OPERATOR                         |NAME           |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------------
-|0 |PX COORDINATOR                   |               |8       |275         |
-|1 |└─EXCHANGE OUT DISTR             |:EX10000       |8       |262         |
-|2 |  └─NESTED-LOOP JOIN             |               |8       |233         |
-|3 |    ├─PX PARTITION ITERATOR      |               |3       |7           |
-|4 |    │ └─TABLE FULL SCAN          |ptgeom1        |3       |7           |
-|5 |    └─DISTRIBUTED TABLE FULL SCAN|ptgeom2(pgidx2)|3       |75          |
-============================================================================
+=========================================================
+|ID|OPERATOR                            |NAME           |
+---------------------------------------------------------
+|0 |PX COORDINATOR                      |               |
+|1 |└─EXCHANGE OUT DISTR                |:EX10001       |
+|2 |  └─NESTED-LOOP JOIN                |               |
+|3 |    ├─EXCHANGE IN DISTR             |               |
+|4 |    │ └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000       |
+|5 |    │   └─PX PARTITION ITERATOR     |               |
+|6 |    │     └─TABLE FULL SCAN         |ptgeom1        |
+|7 |    └─PX PARTITION ITERATOR         |               |
+|8 |      └─TABLE RANGE SCAN            |ptgeom2(pgidx2)|
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(ptgeom1.c1, ptgeom1.g1, ptgeom2.c2, ptgeom2.g2)]), filter(nil)
@@ -268,67 +168,19 @@ Outputs & filters:
       dop=1
   2 - output([ptgeom1.g1], [ptgeom1.c1], [ptgeom2.c2], [ptgeom2.g2]), filter(nil)
       conds(nil), nl_params_([ptgeom1.g1(:0)]), use_batch=false
-  3 - output([ptgeom1.c1], [ptgeom1.g1]), filter(nil)
+  3 - output([ptgeom1.g1], [ptgeom1.c1]), filter(nil)
+  4 - output([ptgeom1.g1], [ptgeom1.c1]), filter(nil)
+      dop=1
+  5 - output([ptgeom1.c1], [ptgeom1.g1]), filter(nil)
       force partition granule
-  4 - output([ptgeom1.c1], [ptgeom1.g1]), filter(nil)
+  6 - output([ptgeom1.c1], [ptgeom1.g1]), filter(nil)
       access([ptgeom1.c1], [ptgeom1.g1]), partitions(p[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([ptgeom1.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([ptgeom2.c2], [ptgeom2.g2]), filter([BOOL(st_intersects(:0, ptgeom2.g2))])
+  7 - output([ptgeom2.c2], [ptgeom2.g2]), filter(nil)
+      access all, force partition granule
+  8 - output([ptgeom2.c2], [ptgeom2.g2]), filter([st_intersects(:0, ptgeom2.g2)])
       access([ptgeom2.__pk_increment], [ptgeom2.c2], [ptgeom2.g2]), partitions(p[0-2])
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([ptgeom2.__cellid_17], [ptgeom2.__mbr_17], [ptgeom2.__pk_increment]), range(MIN ; MAX)
-Used Hint:
--------------------------------------
-  /*+
-      
-  */
-Qb name trace:
--------------------------------------
-  stmt_id:0, stmt_type:T_EXPLAIN 
-  stmt_id:1, SEL$1
-Outline Data: 
--------------------------------------
-  /*+
-      BEGIN_OUTLINE_DATA
-      LEADING(@"SEL$1" ("test"."ptgeom1"@"SEL$1" "test"."ptgeom2"@"SEL$1"))
-      USE_NL(@"SEL$1" "test"."ptgeom2"@"SEL$1")
-      PQ_DISTRIBUTE(@"SEL$1" "test"."ptgeom2"@"SEL$1" NONE ALL)
-      FULL(@"SEL$1" "test"."ptgeom1"@"SEL$1")
-      INDEX(@"SEL$1" "test"."ptgeom2"@"SEL$1" "pgidx2")
-      USE_DAS(@"SEL$1" "test"."ptgeom2"@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('')
-      END_OUTLINE_DATA
-  */
-Optimization Info:
--------------------------------------
-  ptgeom1:
-      table_rows:3
-      physical_range_rows:3
-      logical_range_rows:3
-      index_back_rows:0
-      output_rows:3
-      table_dop:1
-      dop_method:Table DOP
-      avaiable_index_name:[pgidx1, ptgeom1]
-      pruned_index_name:[pgidx1]
-      stats info:[version=0, is_locked=0, is_expired=0]
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
-  ptgeom2:
-      table_rows:10
-      physical_range_rows:2
-      logical_range_rows:2
-      index_back_rows:2
-      output_rows:2
-      table_dop:1
-      dop_method:DAS DOP
-      avaiable_index_name:[pgidx2, ptgeom2]
-      stats info:[version=0, is_locked=0, is_expired=0]
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
-  Plan Type:
-      DISTRIBUTED
-  Note:
-      Degree of Parallelisim is 1 because of table property
 drop table tgnoindex1, tgnoindex2, tgeom1, tgeom2, ptgeom1, ptgeom2;

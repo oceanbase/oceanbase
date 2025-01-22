@@ -227,7 +227,10 @@ template <> struct ObDatumTCCmp<ObUIntTC, ObIntTC> : public ObUnsignedSignedCmp 
 template <> struct ObDatumTCCmp<ObEnumSetTC, ObIntTC> : public ObUnsignedSignedCmp {};
 template <> struct ObDatumTCCmp<ObUIntTC, ObEnumSetTC> : public ObTCPayloadCmp<ObUIntTC> {};
 template <> struct ObDatumTCCmp<ObEnumSetTC, ObUIntTC> : public ObTCPayloadCmp<ObUIntTC> {};
-
+template <>
+struct ObDatumTCCmp<ObMySQLDateTC, ObMySQLDateTC> : public ObTCPayloadCmp<ObMySQLDateTC> {};
+template <>
+struct ObDatumTCCmp<ObMySQLDateTimeTC, ObMySQLDateTimeTC> : public ObTCPayloadCmp<ObMySQLDateTimeTC> {};
 
 // special process for extend and null class type.
 
@@ -406,6 +409,20 @@ struct ObDatumCollectionCmp : public ObDefined<>
   inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
   {
     return ObDatumCollectionCmpImpl::cmp(l, r, cmp_ret, HAS_LOB_HEADER);
+  }
+};
+
+struct ObDatumRoaringbitmapCmpImpl
+{
+  static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret, const bool is_lob);
+};
+
+template <bool HAS_LOB_HEADER>
+struct ObDatumRoaringbitmapCmp : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
+  {
+    return ObDatumRoaringbitmapCmpImpl::cmp(l, r, cmp_ret, HAS_LOB_HEADER);
   }
 };
 

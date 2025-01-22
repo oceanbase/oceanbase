@@ -19,6 +19,7 @@
 #include "observer/ob_server_struct.h" // GCTX
 #include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 #include "share/ls/ob_ls_status_operator.h" // ObLSStatus
+#include "share/ob_all_server_tracer.h"
 
 namespace oceanbase
 {
@@ -260,9 +261,29 @@ int ObLocationService::external_table_get(
     ObIArray<ObAddr> &locations)
 {
   UNUSED(table_id);
+  int ret = OB_SUCCESS;
   bool is_cache_hit = false;
   //using the locations from any distributed virtual table
-  return vtable_get(tenant_id, OB_ALL_VIRTUAL_PROCESSLIST_TID, 0, is_cache_hit, locations);
+  ObSEArray<ObAddr, 16> all_active_locations;
+  if (OB_FAIL(vtable_get(tenant_id, OB_ALL_VIRTUAL_PROCESSLIST_TID, 0, is_cache_hit, all_active_locations))) {
+    LOG_WARN("failed to get active server", K(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_active_locations.count(); ++i) {
+      bool is_stopped = false;
+      if (OB_FAIL(SVR_TRACER.is_server_stopped(all_active_locations.at(i), is_stopped))) {
+        LOG_WARN("failed to check is server stopped", K(ret), K(tenant_id), K(i), K(all_active_locations));
+      } else if (!is_stopped && OB_FAIL(locations.push_back(all_active_locations.at(i)))) {
+        LOG_WARN("failed to push back", K(ret), K(i), K(tenant_id));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (0 == locations.count() && OB_FAIL(locations.assign(all_active_locations))) {
+      LOG_WARN("failed to assign locations", K(ret));
+    }
+    LOG_TRACE("locations for external table", K(locations), K(ret));
+  }
+  return ret;
 }
 
 int ObLocationService::vtable_nonblock_renew(

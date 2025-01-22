@@ -30,6 +30,7 @@ class ObColumnParam;
 namespace common
 {
 class ObBitmap;
+struct ObVersionRange;
 }
 namespace sql
 {

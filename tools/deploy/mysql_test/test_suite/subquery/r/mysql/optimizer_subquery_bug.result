@@ -463,7 +463,7 @@ Query Plan
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
 |0 |HASH DISTINCT                |     |1       |6           |
-|1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
 |2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
 |4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -500,7 +500,7 @@ Query Plan
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
 |0 |HASH DISTINCT                |     |1       |6           |
-|1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
 |2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
 |4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -541,7 +541,7 @@ Query Plan
 |3 |│   └─TABLE FULL SCAN            |t3   |1       |3           |
 |4 |└─SUBPLAN SCAN                   |VIEW2|1       |6           |
 |5 |  └─HASH DISTINCT                |     |1       |6           |
-|6 |    └─NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|6 |    └─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
 |7 |      ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |8 |      │ └─SCALAR GROUP BY        |     |1       |3           |
 |9 |      │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -591,7 +591,7 @@ Query Plan
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
 |0 |HASH DISTINCT                |     |1       |6           |
-|1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
 |2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
 |4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -628,7 +628,7 @@ Query Plan
 ============================================================
 |ID|OPERATOR                   |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|0 |NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
 |1 |├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |2 |│ └─SCALAR GROUP BY        |     |1       |3           |
 |3 |│   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -902,7 +902,7 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_MIN(10)])
  11 - output(nil), filter(nil), rowset=256
       access(nil)
- 12 - output([1]), filter([cast(table100_bigint.col_char_20, DECIMAL(-1, -1)) > cast(0, DECIMAL(4, 0))]), rowset=256
+ 12 - output([1]), filter([cast(table100_bigint.col_char_20, DECIMAL(-1, -1)) > cast(0, DECIMAL(20, 0))]), rowset=256
       access([table100_bigint.col_char_20]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([table100_bigint.pk]), range(MIN ; MAX)always true

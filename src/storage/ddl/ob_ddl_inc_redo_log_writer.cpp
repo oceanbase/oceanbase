@@ -247,22 +247,24 @@ int ObDDLIncRedoLogWriter::write_inc_start_log_with_retry(
   int64_t start_ts = ObTimeUtility::fast_current_time();
   const int64_t timeout_us = ObDDLIncRedoLogWriter::DEFAULT_RETRY_TIMEOUT_US;
   int64_t retry_count = 0;
-  do {
+  while (OB_SUCC(ret)) {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("check status failed", K(ret));
+    } else if (ObTimeUtility::fast_current_time() - start_ts > timeout_us) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("already timeout", K(ret), K(start_ts));
     } else if (OB_FAIL(write_inc_start_log(lob_meta_tablet_id, tx_desc, start_scn))) {
       LOG_WARN("write inc ddl start log failed", K(ret));
-    }
-    if (ObDDLIncRedoLogWriter::need_retry(ret, false/*allow_remote_write*/)) {
-      usleep(1000L * 1000L); // 1s
-      ++retry_count;
-      LOG_WARN("retry write ddl inc start log", K(ret), K(ls_id_), K(tablet_id_), K(retry_count));
-      ret = OB_SUCCESS;
+      if (ObDDLIncRedoLogWriter::need_retry(ret, false/*allow_remote_write*/)) {
+        usleep(1000L * 1000L); // 1s
+        ++retry_count;
+        LOG_WARN("retry write ddl inc start log", K(ret), K(ls_id_), K(tablet_id_), K(retry_count));
+        ret = OB_SUCCESS;
+      }
     } else {
       break;
     }
-  } while (ObTimeUtility::fast_current_time() - start_ts < timeout_us);
-
+  }
   return ret;
 }
 
@@ -302,21 +304,24 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log_with_retry(
   int64_t start_ts = ObTimeUtility::fast_current_time();
   const int64_t timeout_us = ObDDLIncRedoLogWriter::DEFAULT_RETRY_TIMEOUT_US;
   int64_t retry_count = 0;
-  do {
+  while (OB_SUCC(ret)) {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("check status failed", K(ret));
+    } else if (ObTimeUtility::fast_current_time() - start_ts > timeout_us) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("already timeout", K(ret), K(start_ts));
     } else if (OB_FAIL(write_inc_commit_log(allow_remote_write, lob_meta_tablet_id, tx_desc))) {
       LOG_WARN("write inc ddl commit log failed", K(ret));
-    }
-    if (ObDDLIncRedoLogWriter::need_retry(ret, allow_remote_write)) {
-      usleep(1000L * 1000L); // 1s
-      ++retry_count;
-      LOG_WARN("retry write ddl commit log", K(ret), K(ls_id_), K(tablet_id_), K(retry_count));
+      if (ObDDLIncRedoLogWriter::need_retry(ret, false/*allow_remote_write*/)) {
+        usleep(1000L * 1000L); // 1s
+        ++retry_count;
+        LOG_WARN("retry write ddl inc commit log", K(ret), K(ls_id_), K(tablet_id_), K(retry_count));
+        ret = OB_SUCCESS;
+      }
     } else {
       break;
     }
-  } while (ObTimeUtility::fast_current_time() - start_ts < timeout_us);
-
+  }
   return ret;
 }
 

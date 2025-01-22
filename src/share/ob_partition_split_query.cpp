@@ -234,7 +234,7 @@ int ObPartitionSplitQuery::get_tablet_split_ranges(
         } else if (OB_FAIL(get_tablet_split_range(*tablet_handle_.get_obj(), datum_utils, split_info_, allocator, datum_range, is_empty_range))) {
           LOG_WARN("Fail to get tabelt split range", K(ret), K(split_info_));
         } else if (is_empty_range) {
-          LOG_INFO("Range after split is empty", K(ori_ranges.at(i)));
+          LOG_INFO("Range after split is empty", K(ori_ranges.count()), K(i), "tablet_id", tablet_handle_.get_obj()->get_tablet_meta().tablet_id_, K(ori_ranges.at(i)));
         } else if (OB_FAIL(datum_range.to_store_range(col_descs, allocator, tmp_range))) {
           LOG_WARN("fail to transfer to store range", K(ret), K(datum_range));
         } else if (OB_FALSE_IT(tmp_range.set_table_id(ori_ranges.at(i).get_table_id()))) {

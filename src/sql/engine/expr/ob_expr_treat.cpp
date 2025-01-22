@@ -109,6 +109,7 @@ static int treat_as_json_udt(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllo
   } else if(OB_ISNULL(pl_json_node = jsontype->get_data())) {
     res.set_null();
   } else {
+    DISABLE_SQL_MEMLEAK_GUARD;
     if (OB_FAIL(pl::ObPlJsonUtil::transform_JsonBase_2_PLJsonType(ctx.exec_ctx_,
       pl_json_node->get_ref_node() ? pl_json_node->get_ref_node() : pl_json_node->get_data_node(),
       new_jsontype))) {

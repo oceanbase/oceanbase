@@ -63,8 +63,7 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     enable_pre_sort_(false),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
-    last_heart_beat_ts_(0),
-    enable_heart_beat_check_(false),
+    last_heart_beat_ts_(ObTimeUtil::current_time()),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -177,9 +176,11 @@ int ObTableLoadStoreCtx::init(
     LOG_WARN("fail to create index_store_table_ctx_map", KR(ret));
   }
   // 初始化task_scheduler_
-  else if (OB_ISNULL(task_scheduler_ =
-                       OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
-                               ctx_->param_.session_count_, ctx_->param_.table_id_, "Store"))) {
+  else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
+                                               ctx_->param_.session_count_,
+                                               ctx_->param_.table_id_,
+                                               "Store",
+                                               ctx_->session_info_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
   } else if (OB_FAIL(task_scheduler_->init())) {

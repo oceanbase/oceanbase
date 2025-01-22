@@ -447,6 +447,7 @@ struct ObAuditRecordData {
   uint64_t total_memstore_read_row_count_;
   uint64_t total_ssstore_read_row_count_;
   int64_t *sql_memory_used_;
+  int64_t plsql_compile_time_;
 };
 
 } //namespace sql

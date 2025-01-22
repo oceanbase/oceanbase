@@ -42,18 +42,20 @@ int ObExprStrToDate::calc_result_type2(ObExprResType &type,
   UNUSED(type_ctx);
   UNUSED(date);
   int ret = OB_SUCCESS;
+  ObObjType res_type = type_ctx.enable_mysql_compatible_dates() ?
+      ObMySQLDateTimeType : ObDateTimeType;
   if (OB_UNLIKELY(ObNullTC == format.get_type_class())) {
-    type.set_datetime();
+    type.set_type(res_type);
     type.set_scale(MAX_SCALE_FOR_TEMPORAL);
     type.set_precision(DATETIME_MIN_LENGTH + MAX_SCALE_FOR_TEMPORAL);
   } else {
     ObObj format_obj = format.get_param();
     if (OB_UNLIKELY(format_obj.is_null())) {
-      type.set_datetime();
+      type.set_type(res_type);
       type.set_scale(MAX_SCALE_FOR_TEMPORAL);
       type.set_precision(DATETIME_MIN_LENGTH + MAX_SCALE_FOR_TEMPORAL);
     } else if (!format_obj.is_string_type()) {
-      type.set_datetime();
+      type.set_type(res_type);
       type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
       type.set_precision(DATETIME_MIN_LENGTH + DEFAULT_SCALE_FOR_INTEGER);
     } else {
@@ -142,13 +144,13 @@ int ObExprStrToDate::calc_result_type2(ObExprResType &type,
       }
 
       if (!has_time) {
-        type.set_date();
+        type.set_type(type_ctx.enable_mysql_compatible_dates() ? ObMySQLDateType : ObDateType);
         type.set_precision(static_cast<ObPrecision>(DATE_MIN_LENGTH + type.get_scale()));
       } else if (!has_date) {
         type.set_time();
         type.set_precision(static_cast<ObPrecision>(TIME_MIN_LENGTH + type.get_scale()));
       } else {
-        type.set_datetime();
+        type.set_type(res_type);
         type.set_precision(static_cast<ObPrecision>(DATETIME_MIN_LENGTH + type.get_scale()));
       }
 
@@ -220,6 +222,8 @@ int ObExprOracleToDate::set_my_result_from_ob_time(ObExprCtx &expr_ctx,
   return ret;
 }
 
+// If expr result type is ObMySQLDateType or ObMySQLDateTimeType, the value of `res_int` is
+// ObMySQLDateTime, otherwise it is datetime value.
 static int calc(const ObExpr &expr, ObEvalCtx &ctx, bool &is_null, int64_t &res_int)
 {
   int ret = OB_SUCCESS;
@@ -241,15 +245,25 @@ static int calc(const ObExpr &expr, ObEvalCtx &ctx, bool &is_null, int64_t &res_
   } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
     LOG_WARN("get sql mode failed", K(ret));
   } else {
+    const bool is_mysql_datetime = ob_is_mysql_compact_dates_type(expr.datum_meta_.type_);
     const ObString &date_str = date_datum->get_string();
     const ObString &fmt_str = fmt_datum->get_string();
     ObTimeConvertCtx cvrt_ctx(TZ_INFO(session), false);
     ObDateSqlMode date_sql_mode;
     date_sql_mode.no_zero_in_date_ = is_no_zero_in_date(sql_mode);
     date_sql_mode.allow_incomplete_dates_ = !is_no_zero_in_date(sql_mode);
+    date_sql_mode.allow_invalid_dates_ = is_allow_invalid_dates(sql_mode);
     if (FALSE_IT(date_sql_mode.init(sql_mode))) {
-    } else if (OB_FAIL(ObTimeConverter::str_to_datetime_format(date_str, fmt_str, cvrt_ctx, res_int,
-                                                               NULL, date_sql_mode))) {
+    } else if (is_mysql_datetime) {
+      ObMySQLDateTime res_mdt = 0;
+      ret = ObTimeConverter::str_to_mdatetime_format(date_str, fmt_str, cvrt_ctx, res_mdt, NULL,
+                                                     date_sql_mode);
+      res_int = res_mdt.datetime_;
+    } else {
+      ret = ObTimeConverter::str_to_datetime_format(date_str, fmt_str, cvrt_ctx, res_int, NULL,
+                                                    date_sql_mode);
+    }
+    if (OB_FAIL(ret)) {
       int tmp_ret = ret;
       ObCastMode def_cast_mode = CM_NONE;
       ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
@@ -260,8 +274,9 @@ static int calc(const ObExpr &expr, ObEvalCtx &ctx, bool &is_null, int64_t &res_
         if (OB_INVALID_DATE_FORMAT == tmp_ret) {
           ret = OB_SUCCESS;
           // if res type is not datetime, will call ObTimeConverter::datetime_to_time()
-          // or ObTimeConverter::datetime_to_date()
-          res_int = ObTimeConverter::ZERO_DATETIME;
+          // or ObTimeConverter::datetime_to_date/mdate()
+          res_int = is_mysql_datetime ?
+            ObTimeConverter::MYSQL_ZERO_DATETIME : ObTimeConverter::ZERO_DATETIME;
           print_user_warning(OB_INVALID_DATE_FORMAT, date_str);
         } else if (OB_INVALID_DATE_VALUE == tmp_ret || OB_INVALID_ARGUMENT == tmp_ret) {
           ret = OB_SUCCESS;
@@ -284,15 +299,24 @@ int calc_str_to_date_expr_date(const ObExpr &expr, ObEvalCtx &ctx,
   int ret = OB_SUCCESS;
   bool is_null = false;
   int64_t datetime_int = 0;
-  int32_t date_int = 0;
   if (OB_FAIL(calc(expr, ctx, is_null, datetime_int))) {
     LOG_WARN("calc str_to_date failed", K(ret), K(expr));
   } else if (is_null) {
     res_datum.set_null();
-  } else if (OB_FAIL(ObTimeConverter::datetime_to_date(datetime_int, NULL, date_int))) {
-    LOG_WARN("datetime_to_date failed", K(ret), K(datetime_int));
+  } else if (expr.datum_meta_.type_ == ObMySQLDateType) {
+    ObMySQLDate date_int = 0;
+    if (OB_FAIL(ObTimeConverter::mdatetime_to_mdate(datetime_int, date_int))) {
+      LOG_WARN("datetime_to_date failed", K(ret), K(datetime_int));
+    } else {
+      res_datum.set_mysql_date(date_int);
+    }
   } else {
-    res_datum.set_date(date_int);
+    int32_t date_int = 0;
+    if (OB_FAIL(ObTimeConverter::datetime_to_date(datetime_int, NULL, date_int))) {
+      LOG_WARN("datetime_to_date failed", K(ret), K(datetime_int));
+    } else {
+      res_datum.set_date(date_int);
+    }
   }
   return ret;
 }
@@ -338,11 +362,11 @@ int ObExprStrToDate::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  if (ObDateType == rt_expr.datum_meta_.type_) {
+  if (ob_is_date_or_mysql_date(rt_expr.datum_meta_.type_)) {
     rt_expr.eval_func_ = calc_str_to_date_expr_date;
   } else if (ObTimeType == rt_expr.datum_meta_.type_) {
     rt_expr.eval_func_ = calc_str_to_date_expr_time;
-  } else if (ObDateTimeType == rt_expr.datum_meta_.type_) {
+  } else if (ob_is_datetime_or_mysql_datetime(rt_expr.datum_meta_.type_)) {
     rt_expr.eval_func_ = calc_str_to_date_expr_datetime;
   } else {
     ret = OB_ERR_UNEXPECTED;

@@ -832,124 +832,6 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
   return ret;
 }
 
-template<typename RawExprType>
-int ObRawExprDeduceType::add_attr_exprs(const ObCollectionTypeBase *coll_meta, RawExprType &expr)
-{
-  int ret = OB_SUCCESS;
-  ObItemType expr_type = T_REF_COLUMN;
-  if (coll_meta->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
-    ObColumnRefRawExpr *attr_expr = NULL;
-    const ObCollectionArrayType *arr_meta = static_cast<const ObCollectionArrayType*>(coll_meta);
-    if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                 expr_type, ArrayAttr::ATTR_NULL_BITMAP,
-                                                 attr_expr))) {
-      LOG_WARN("failed to create nullbitmap attr expr", K(ret));
-    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-      LOG_WARN("failed to add attr expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                 expr_type, ArrayAttr::ATTR_OFFSETS,
-                                                 attr_expr))) {
-      LOG_WARN("failed to create offset attr expr", K(ret));
-    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-      LOG_WARN("failed to add attr expr", K(ret));
-    } else if (OB_FAIL(add_attr_exprs(arr_meta->element_type_, expr))) {
-      LOG_WARN("failed to add attr expr", K(ret));
-    }
-  } else if (coll_meta->type_id_ == ObNestedType::OB_BASIC_TYPE) {
-    ObColumnRefRawExpr *attr_expr = NULL;
-    const ObCollectionBasicType *elem_type = static_cast<const ObCollectionBasicType*>(coll_meta);
-    if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                 expr_type, ArrayAttr::ATTR_NULL_BITMAP,
-                                                 attr_expr))) {
-      LOG_WARN("failed to create nullbitmap attr expr", K(ret));
-    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-      LOG_WARN("failed to add attr expr", K(ret));
-    } else if (!is_fixed_length(elem_type->basic_meta_.get_obj_type())) {
-      if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                 expr_type, ArrayAttr::ATTR_OFFSETS,
-                                                 attr_expr))) {
-        LOG_WARN("failed to create nullbitmap attr expr", K(ret));
-      } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-        LOG_WARN("failed to add attr expr", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                        expr_type, ArrayAttr::ATTR_DATA,
-                                                        attr_expr))) {
-      LOG_WARN("failed to create nullbitmap attr expr", K(ret));
-    } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-      LOG_WARN("failed to add attr expr", K(ret));
-    }
-  }
-  return ret;
-}
-
-template<typename RawExprType>
-int ObRawExprDeduceType::construct_collecton_attr_expr(RawExprType &expr)
-{
-  int ret = OB_SUCCESS;
-  uint16_t subschema_id = expr.get_result_type().get_subschema_id();
-  ObExecContext *exec_ctx = const_cast<ObExecContext *>(my_session_->get_cur_exec_ctx());
-  ObSubSchemaValue value;
-  const ObSqlCollectionInfo *coll_info = NULL;
-  ObItemType expr_type = expr.get_expr_type();
-  bool need_set_values = expr.get_enum_set_values().empty();
-  bool need_construct_attrs = true;
-  if (expr.get_attr_count() > 0) {
-    // attrs constructed already, do nothing
-    need_construct_attrs = false;
-  } else if (expr.is_const_expr()) {
-    // is uniform format, do nothing
-    need_construct_attrs = false;
-  }
-  if (!need_set_values && !need_construct_attrs) {
-    // do nothing
-  } else if (OB_ISNULL(exec_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("exec ctx is null", K(ret));
-  } else if (OB_ISNULL(expr_factory_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null raw expr", K(ret));
-  } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, value))) {
-    LOG_WARN("failed to get subschema ctx", K(ret));
-  } else if (OB_ISNULL(value.value_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("subschema is null", K(ret));
-  } else {
-    coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_);
-    ObCollectionTypeBase *coll_meta = coll_info->collection_meta_;
-    ObColumnRefRawExpr *attr_expr = NULL;
-    if (coll_meta->type_id_ != ObNestedType::OB_ARRAY_TYPE && coll_meta->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected meta type", K(ret), K(coll_meta->type_id_));
-    } else if (OB_ISNULL(coll_meta)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("subschema is null", K(ret));
-    } else if (need_construct_attrs) {
-      if (OB_FAIL(ObRawExprUtils::create_attr_expr(expr_factory_, my_session_,
-                                                          T_REF_COLUMN, ArrayAttr::ATTR_LENGTH,
-                                                          attr_expr))) {
-        LOG_WARN("failed to create nullbitmap attr expr", K(ret));
-      } else if (OB_FAIL(expr.add_attr_expr(attr_expr))) {
-        LOG_WARN("failed to add attr expr", K(ret));
-      } else if (OB_FAIL(add_attr_exprs(reinterpret_cast<ObCollectionArrayType *>(coll_meta)->element_type_, expr))) {
-        LOG_WARN("failed to add attr expr", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && need_set_values) {
-      ObString def = coll_info->get_def_string();
-      ObSEArray<ObString, 1> enum_set_values;
-      if (OB_FAIL(enum_set_values.push_back(def))) {
-        LOG_WARN("failed to push back array", K(ret));
-      } else if (OB_FAIL(expr.set_enum_set_values(enum_set_values))) {
-        LOG_WARN("failed to set values", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObRawExprDeduceType::visit(ObOpRawExpr &expr)
 {
   int ret = OB_SUCCESS;
@@ -3809,6 +3691,9 @@ int ObRawExprDeduceType::set_array_agg_result_type(ObAggFunRawExpr &expr,
       if (OB_SUCC(ret)) {
         result_type.set_collection(subschema_id);
         expr.set_result_type(result_type);
+        if (OB_FAIL(construct_collecton_attr_expr(expr))) {
+          LOG_WARN("failed to construct collection attr expr", K(ret));
+        }
       }
     }
   }
@@ -4164,66 +4049,6 @@ int ObRawExprDeduceType::add_implicit_cast(ObAggFunRawExpr &parent,
   return ret;
 }
 
-template<typename RawExprType>
-int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
-                                           int64_t child_idx,
-                                           const ObExprResType &input_type,
-                                           const ObCastMode &cast_mode)
-{
-  int ret = OB_SUCCESS;
-  ObRawExpr *child_ptr = NULL;
-  if (OB_ISNULL(my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("my_session_ is NULL", K(ret));
-  } else if (OB_UNLIKELY(parent.get_param_count() <= child_idx)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("child_idx is invalid", K(ret), K(parent.get_param_count()), K(child_idx));
-  } else if (OB_ISNULL(child_ptr = parent.get_param_expr(child_idx))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child_ptr raw expr is NULL", K(ret));
-  } else {
-    ObRawExpr *new_expr = NULL;
-    OZ(try_add_cast_expr_above_for_deduce_type(*child_ptr, new_expr, input_type,
-                                               cast_mode));
-    CK(NULL != new_expr);
-    if (OB_SUCC(ret) && child_ptr != new_expr) { // cast expr added
-      ObObjTypeClass ori_tc = ob_obj_type_class(child_ptr->get_data_type());
-      ObObjTypeClass expect_tc = ob_obj_type_class(input_type.get_calc_type());
-      if (T_FUN_UDF == parent.get_expr_type()
-          && ObNumberTC == ori_tc
-          && ((ObTextTC == expect_tc && lib::is_oracle_mode()) || ObLobTC == expect_tc)) {
-        // oracle mode can not cast number to text, but mysql mode can
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("cast to lob type not allowed", K(ret));
-      }
-
-      // for consistent with mysql, if const cast as json, should regard as scalar, don't need parse
-      if (ObStringTC == ori_tc && ObJsonTC == expect_tc && IS_JSON_COMPATIBLE_OP(parent.get_expr_type())) {
-        uint64_t extra = new_expr->get_extra();
-        new_expr->set_extra(CM_SET_SQL_AS_JSON_SCALAR(extra));
-      }
-      OZ(parent.replace_param_expr(child_idx, new_expr));
-      if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {
-        ret = OB_SUCCESS;
-        LOG_DEBUG("ps prepare phase ignores type deduce error");
-      }
-      //add local vars to cast expr
-      if (OB_SUCC(ret)) {
-        if (solidify_session_vars_) {
-          if (OB_FAIL(new_expr->set_local_session_vars(NULL, my_session_, local_vars_id_))) {
-            LOG_WARN("fail to set session vars", K(ret), KPC(new_expr));
-          }
-        } else if (NULL != my_local_vars_) {
-          if (OB_FAIL(new_expr->set_local_session_vars(my_local_vars_, NULL, local_vars_id_))) {
-            LOG_WARN("fail to set local vars", K(ret), KPC(new_expr));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-};
-
 int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr,
                                                                  ObRawExpr *&new_expr,
                                                                  const ObExprResType &dst_type,
@@ -4258,8 +4083,10 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
               dst_type.get_calc_scale() != SCALE_UNKNOWN_YET) {
     cast_dst_type.set_accuracy(dst_type.get_calc_accuracy());
   } else if (lib::is_mysql_mode()
-             && ObDateTimeTC == child_res_type.get_type_class()
-             && ObDateTimeTC == dst_type.get_calc_meta().get_type_class()) {
+             && (ObDateTimeTC == child_res_type.get_type_class()
+                || ObMySQLDateTimeTC == child_res_type.get_type_class())
+             && (ObDateTimeTC == dst_type.get_calc_meta().get_type_class()
+                || ObMySQLDateTimeTC == dst_type.get_calc_meta().get_type_class())) {
     cast_dst_type.set_accuracy(child_res_type.get_accuracy());
   } else if (lib::is_mysql_mode() && ObDoubleTC == dst_type.get_calc_meta().get_type_class()) {
     if (ob_is_numeric_tc(child_res_type.get_type_class())) {

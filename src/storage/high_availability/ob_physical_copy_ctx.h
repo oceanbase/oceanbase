@@ -22,7 +22,6 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "ob_storage_ha_struct.h"
-#include "ob_storage_ha_macro_block_writer.h"
 #include "ob_storage_ha_reader.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "ob_storage_restore_struct.h"
@@ -33,15 +32,6 @@ namespace oceanbase
 {
 namespace storage
 {
-
-struct ObICopyTabletCtx
-{
-public:
-  virtual int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status) = 0;
-  virtual int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const = 0;
-  virtual int get_copy_tablet_record_extra_info(ObCopyTabletRecordExtraInfo *&extra_info) = 0;
-};
-
 class ObCopyTabletRecordExtraInfo final
 {
 public:
@@ -88,6 +78,14 @@ private:
   // The following 1 member variable are updated when tablet copy finish
   // restore action (when migration, it is RESTORE_NONE)
   ObTabletRestoreAction::ACTION restore_action_;
+};
+
+struct ObICopyTabletCtx
+{
+public:
+  virtual int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status) = 0;
+  virtual int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const = 0;
+  virtual int get_copy_tablet_record_extra_info(ObCopyTabletRecordExtraInfo *&extra_info) = 0;
 };
 
 struct ObPhysicalCopyCtx final

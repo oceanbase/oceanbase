@@ -151,7 +151,7 @@ void LogLoopThread::log_loop_()
     }
     ob_usleep(sleep_ts, true/*is_idle_sleep*/);
 
-    if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000)) {
+    if (REACH_THREAD_TIME_INTERVAL(5 * 1000 * 1000)) {
       PALF_LOG(INFO, "LogLoopThread round_cost_time(us)", K(round_cost_time));
     }
   }

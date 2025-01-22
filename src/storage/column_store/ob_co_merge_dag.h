@@ -142,6 +142,8 @@ public:
   virtual int gene_compaction_info(compaction::ObTabletCompactionProgress &progress) override;
   virtual int diagnose_compaction_info(compaction::ObDiagnoseTabletCompProgress &progress) override;
   virtual bool check_can_schedule() override;
+  virtual bool check_need_stop_dag(const int error_code) override;
+  virtual int decide_retry_strategy(const int error_code, ObDagRetryStrategy &retry_status);
   uint32_t get_start_cg_idx() const { return start_cg_idx_; }
   uint32_t get_end_cg_idx() const { return end_cg_idx_; }
   bool get_retry_create_task() const { return retry_create_task_; }
@@ -305,8 +307,10 @@ public:
     T *&dag,
     share::ObIDag *parent = nullptr,
     const bool add_scheduler_flag = true);
+  int init_min_sstable_end_scn();
+  int get_min_sstable_end_scn(SCN &min_end_scn); // return min_end_scn from ctx
   INHERIT_TO_STRING_KV("ObIDagNet", ObIDagNet, K_(is_inited), K_(merge_status), K_(finish_added),
-      K_(merge_batch_size), K_(batch_dag_cnt), K_(basic_param), KP_(finish_dag));
+      K_(merge_batch_size), K_(batch_dag_cnt), K_(basic_param), KP_(finish_dag), K_(min_sstable_end_scn));
 private:
   static const int64_t DELAY_SCHEDULE_FINISH_DAG_CG_CNT = 150;
   static const int64_t DEFAULT_MAX_RETRY_TIMES = 2;
@@ -356,6 +360,7 @@ private:
   ObCOTabletMergeCtx *co_merge_ctx_;
   ObCOMergeFinishDag *finish_dag_;
   ObStorageCompactionTimeGuard time_guard_;
+  int64_t min_sstable_end_scn_;
 };
 
 template<class T>
@@ -395,8 +400,8 @@ int ObCOMergeDagNet::create_dag(
 #endif
     }
     if (OB_SUCC(ret)) {
-      STORAGE_LOG(INFO, "success to create dag", K(ret), K_(basic_param), KP(dag),
-        "dag_type", ObIDag::get_dag_type_str(dag->get_type()), K(add_scheduler_flag), KP(parent));
+      STORAGE_LOG(INFO, "success to create dag", K(ret), K_(basic_param), KPC(dag),
+        "dag_type", ObIDag::get_dag_type_str(dag->get_type()), K(add_scheduler_flag), K(dag->get_indegree()));
     }
     if (OB_FAIL(ret) || !add_scheduler_flag) {
     } else if (OB_FAIL(MTL(share::ObTenantDagScheduler*)->add_dag(dag))) {

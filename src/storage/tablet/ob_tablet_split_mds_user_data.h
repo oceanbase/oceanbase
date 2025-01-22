@@ -19,7 +19,7 @@
 #include "share/scn.h"
 #include "common/ob_tablet_id.h"
 #include "storage/blocksstable/ob_datum_rowkey.h"
-
+#include "src/storage/ob_storage_schema.h"
 namespace oceanbase
 {
 namespace common

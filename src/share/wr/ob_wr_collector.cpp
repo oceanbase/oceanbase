@@ -535,13 +535,12 @@ int ObWrCollector::collect_ash()
             if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_ASH_INSERT_BATCH_SIZE) {
               collected_ash_row_count += dml_splicer.get_row_count();
               if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_TNAME, tenant_id))) {
-                if (ret == OB_ERR_PRIMARY_KEY_DUPLICATE) {
-                  ret = OB_SUCCESS;
+                if (OB_FAIL(check_if_ignore_errorcode(ret))) {
+                  LOG_WARN("failed to batch write to wr", KR(ret));
+                } else {
                   collected_ash_row_count -= dml_splicer.get_row_count();
                   dml_splicer.reset();
-                  LOG_WARN("failed to batch write to wr because of duplicated key", KR(ret));
-                } else {
-                  LOG_WARN("failed to batch write to wr", KR(ret));
+                  LOG_WARN("failed to batch write to wr but ignore error", KR(ret));
                 }
               }
             }
@@ -549,13 +548,12 @@ int ObWrCollector::collect_ash()
           if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0) {
             collected_ash_row_count += dml_splicer.get_row_count();
             if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_TNAME, tenant_id))) {
-              if (ret == OB_ERR_PRIMARY_KEY_DUPLICATE) {
-                ret = OB_SUCCESS;
+              if (OB_FAIL(check_if_ignore_errorcode(ret))) {
+                LOG_WARN("failed to batch write remaining part to wr", KR(ret));
+              } else {
                 collected_ash_row_count -= dml_splicer.get_row_count();
                 dml_splicer.reset();
-                LOG_WARN("failed to batch write to wr because of duplicated key", KR(ret));
-              } else {
-                LOG_WARN("failed to batch write to wr", KR(ret));
+                LOG_WARN("failed to batch write remaining part to wr but ignore error", KR(ret));
               }
             }
           }
@@ -1093,7 +1091,13 @@ int ObWrCollector::collect_sqlstat()
               if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_INSERT_SQL_STAT_BATCH_SIZE) {
                 collected_sqlstat_row_count += dml_splicer.get_row_count();
                 if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQLSTAT_TNAME, tenant_id))) {
-                  LOG_WARN("failed to batch write to wr", KR(ret));
+                  if (OB_FAIL(check_if_ignore_errorcode(ret))) {
+                    LOG_WARN("failed to batch write to wr", KR(ret));
+                  } else {
+                    collected_sqlstat_row_count -= dml_splicer.get_row_count();
+                    dml_splicer.reset();
+                    LOG_WARN("failed to batch write to wr but ignore error", KR(ret));
+                  }
                 }
               }
             }
@@ -1102,7 +1106,13 @@ int ObWrCollector::collect_sqlstat()
         if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0) {
           collected_sqlstat_row_count += dml_splicer.get_row_count();
           if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQLSTAT_TNAME, tenant_id))) {
-            LOG_WARN("failed to batch write remaining part to wr", KR(ret));
+            if (OB_FAIL(check_if_ignore_errorcode(ret))) {
+              LOG_WARN("failed to batch write remaining part to wr", KR(ret));
+            } else {
+              collected_sqlstat_row_count -= dml_splicer.get_row_count();
+              dml_splicer.reset();
+              LOG_WARN("failed to batch write remaining part to wr but ignore error", KR(ret));
+            }
           }
         }
       }
@@ -1461,13 +1471,23 @@ int ObWrCollector::collect_sql_plan()
         }
         if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_SQL_PLAN_BATCH_SIZE) {
           if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN_TNAME, tenant_id, need_insert_ignore))) {
-            LOG_WARN("failed to batch write to wr", KR(ret));
+            if (OB_FAIL(check_if_ignore_errorcode(ret))) {
+              LOG_WARN("failed to batch write to wr", KR(ret));
+            } else {
+              dml_splicer.reset();
+              LOG_WARN("failed to batch write to wr but ignore error", KR(ret));
+            }
           }
         }
       }
       if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0 &&
           OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN_TNAME, tenant_id, need_insert_ignore))) {
-        LOG_WARN("failed to batch write remaining part to wr", KR(ret));
+        if (OB_FAIL(check_if_ignore_errorcode(ret))) {
+          LOG_WARN("failed to batch write remaining part to wr", KR(ret));
+        } else {
+          dml_splicer.reset();
+          LOG_WARN("failed to batch write remaining part to wr but ignore error", KR(ret));
+        }
       }
     }
   }
@@ -1601,6 +1621,16 @@ int ObWrCollector::get_begin_interval_time(int64_t &begin_interval_time)
     } else if (OB_FAIL(result->get_int(0L, begin_interval_time))) {
       LOG_WARN("get column fail", KR(ret), K(sql));
     }
+  }
+  return ret;
+}
+
+int ObWrCollector::check_if_ignore_errorcode(int error_code)
+{
+  int ret = error_code;
+  if (error_code == OB_ERR_PRIMARY_KEY_DUPLICATE || error_code == OB_ERR_DATA_TRUNCATED ||
+      error_code == OB_ERR_INCORRECT_STRING_VALUE) {
+    ret = OB_SUCCESS;
   }
   return ret;
 }

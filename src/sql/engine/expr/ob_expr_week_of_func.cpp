@@ -53,8 +53,8 @@ int ObExprWeekOfYear::cg_expr(ObExprCGCtx &op_cg_ctx,
   } else {
     rt_expr.eval_func_ = ObExprWeekOfYear::calc_weekofyear;
     // The vectorization of other types for the expression not completed yet.
-    if ((ObDateTC == ob_obj_type_class(rt_expr.args_[0]->datum_meta_.type_))
-        || (ObDateTimeTC == ob_obj_type_class(rt_expr.args_[0]->datum_meta_.type_))) {
+    if (ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_)
+        || ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)) {
       rt_expr.eval_vector_func_ = ObExprWeekOfYear::calc_weekofyear_vector;
     }
   }
@@ -444,9 +444,9 @@ int ObExprWeek::cg_expr(ObExprCGCtx &op_cg_ctx,
     LOG_WARN("second child of week expr is null", K(ret), K(rt_expr.args_));
   } else {
     rt_expr.eval_func_ = ObExprWeek::calc_week;
-    ObObjTypeClass arg_tc = ob_obj_type_class(rt_expr.args_[0]->datum_meta_.type_);
     // The vectorization of other types for the expression not completed yet.
-    if ((ObDateTC == arg_tc || ObDateTimeTC == arg_tc)
+    if ((ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)
+         || ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_))
         && ((2 == rt_expr.arg_cnt_ && ObIntType == rt_expr.args_[1]->datum_meta_.type_)
             || 1 == rt_expr.arg_cnt_)) {
       rt_expr.eval_vector_func_ = ObExprWeek::calc_week_vector;
@@ -615,6 +615,28 @@ int vector_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &ski
   }
   return ret;
 }
+#define DISPATCH_WEEK_OF_YEAR_TYPE(TYPE)\
+if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {\
+  ret = vector_weekofyear<CONCAT(TYPE,FixedVec), IntegerFixedVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {\
+  ret = vector_weekofyear<CONCAT(TYPE,UniVec), IntegerFixedVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {\
+  ret = vector_weekofyear<CONCAT(TYPE,UniCVec), IntegerFixedVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {\
+  ret = vector_weekofyear<CONCAT(TYPE,FixedVec), IntegerUniVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {\
+  ret = vector_weekofyear<CONCAT(TYPE,UniVec), IntegerUniVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {\
+  ret = vector_weekofyear<CONCAT(TYPE,UniCVec), IntegerUniVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {\
+  ret = vector_weekofyear<CONCAT(TYPE,FixedVec), IntegerFixedVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {\
+  ret = vector_weekofyear<CONCAT(TYPE,UniVec), IntegerFixedVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {\
+  ret = vector_weekofyear<CONCAT(TYPE,UniCVec), IntegerFixedVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else {\
+  ret = vector_weekofyear<ObVectorBase, ObVectorBase, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+}
 int ObExprWeekOfYear::calc_weekofyear_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
@@ -628,50 +650,14 @@ int ObExprWeekOfYear::calc_weekofyear_vector(const ObExpr &expr, ObEvalCtx &ctx,
     VectorFormat arg_format = expr.args_[0]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     ObObjTypeClass arg_tc = ob_obj_type_class(expr.args_[0]->datum_meta_.type_);
-    if (ObDateTC == ob_obj_type_class(expr.args_[0]->datum_meta_.type_)) {
-      if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateFixedVec, IntegerFixedVec, DateType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateUniVec, IntegerFixedVec, DateType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateUniCVec, IntegerFixedVec, DateType>(expr, ctx, skip, bound);
-      } else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {
-        ret = vector_weekofyear<DateFixedVec, IntegerUniVec, DateType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
-        ret = vector_weekofyear<DateUniVec, IntegerUniVec, DateType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {
-        ret = vector_weekofyear<DateUniCVec, IntegerUniVec, DateType>(expr, ctx, skip, bound);
-      } else if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateFixedVec, IntegerFixedVec, DateType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateUniVec, IntegerFixedVec, DateType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateUniCVec, IntegerFixedVec, DateType>(expr, ctx, skip, bound);
-      } else {
-        ret = vector_weekofyear<ObVectorBase, ObVectorBase, DateType>(expr, ctx, skip, bound);
-      }
+    if (ObMySQLDateTC == ob_obj_type_class(expr.args_[0]->datum_meta_.type_)) {
+      DISPATCH_WEEK_OF_YEAR_TYPE(MySQLDate);
+    } else if (ObMySQLDateTimeTC == ob_obj_type_class(expr.args_[0]->datum_meta_.type_)) {
+      DISPATCH_WEEK_OF_YEAR_TYPE(MySQLDateTime);
+    } else if (ObDateTC == ob_obj_type_class(expr.args_[0]->datum_meta_.type_)) {
+      DISPATCH_WEEK_OF_YEAR_TYPE(Date);
     } else if (ObDateTimeTC == ob_obj_type_class(expr.args_[0]->datum_meta_.type_)) {
-      if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateTimeFixedVec, IntegerFixedVec, DateTimeType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateTimeUniVec, IntegerFixedVec, DateTimeType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateTimeUniCVec, IntegerFixedVec, DateTimeType>(expr, ctx, skip, bound);
-      } else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {
-        ret = vector_weekofyear<DateTimeFixedVec, IntegerUniVec, DateTimeType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
-        ret = vector_weekofyear<DateTimeUniVec, IntegerUniVec, DateTimeType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {
-        ret = vector_weekofyear<DateTimeUniCVec, IntegerUniVec, DateTimeType>(expr, ctx, skip, bound);
-      } else if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateTimeFixedVec, IntegerFixedVec, DateTimeType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateTimeUniVec, IntegerFixedVec, DateTimeType>(expr, ctx, skip, bound);
-      } else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {
-        ret = vector_weekofyear<DateTimeUniCVec, IntegerFixedVec, DateTimeType>(expr, ctx, skip, bound);
-      } else {
-        ret = vector_weekofyear<ObVectorBase, ObVectorBase, DateTimeType>(expr, ctx, skip, bound);
-      }
+      DISPATCH_WEEK_OF_YEAR_TYPE(DateTime);
     }
 
     if (OB_FAIL(ret)) {
@@ -680,6 +666,7 @@ int ObExprWeekOfYear::calc_weekofyear_vector(const ObExpr &expr, ObEvalCtx &ctx,
   }
   return ret;
 }
+#undef DISPATCH_WEEK_OF_YEAR_TYPE
 
 OB_INLINE int ObExprWeek::get_week_mode_value(int64_t mode_value, ObDTMode &mode)
 {
@@ -743,6 +730,7 @@ int ObExprWeek::vector_week(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVecto
     } else {
       DateType date = 0;
       DateType dt_yday = 0;
+      DateType wday = 0;
       YearType year = 0;
       UsecType usec = 0;
       WeekType week = 0;
@@ -764,7 +752,7 @@ int ObExprWeek::vector_week(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVecto
             if (OB_FAIL(ObExprWeek::get_week_mode_value(mode_value, mode))) {
               LOG_WARN("invalid mode", K(mode_value), K(mode), K(ret));
             } else {
-              DateType wday = WDAY_OFFSET[date % DAYS_PER_WEEK][EPOCH_WDAY];
+              wday = WDAY_OFFSET[date % DAYS_PER_WEEK][EPOCH_WDAY];
               ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
               if (year <= 0) {
                 res_vec->set_null(idx);
@@ -800,6 +788,41 @@ int ObExprWeek::vector_week(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVecto
   }
   return ret;
 }
+
+#define DISPATCH_WEEK_EXPR_VECTOR(mode_type, TYPE)\
+if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {\
+  ret = vector_week<CONCAT(TYPE,FixedVec), mode_type, IntegerFixedVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {\
+  ret = vector_week<CONCAT(TYPE,FixedVec), mode_type, IntegerUniVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_FIXED == arg_format && VEC_UNIFORM_CONST == res_format) {\
+  ret = vector_week<CONCAT(TYPE,FixedVec), mode_type, IntegerUniCVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {\
+  ret = vector_week<CONCAT(TYPE,UniVec), mode_type, IntegerFixedVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {\
+  ret = vector_week<CONCAT(TYPE,UniVec), mode_type, IntegerUniVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM == arg_format && VEC_UNIFORM_CONST == res_format) {\
+  ret = vector_week<CONCAT(TYPE,UniVec), mode_type, IntegerUniCVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {\
+  ret = vector_week<CONCAT(TYPE,UniCVec), mode_type, IntegerFixedVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {\
+  ret = vector_week<CONCAT(TYPE,UniCVec), mode_type, IntegerUniVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM_CONST == res_format) {\
+  ret = vector_week<CONCAT(TYPE,UniCVec), mode_type, IntegerUniCVec, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+} else {\
+  ret = vector_week<ObVectorBase, ObVectorBase, ObVectorBase, CONCAT(TYPE,Type)>(expr, ctx, skip, bound);\
+}
+
+#define DEF_WEEK_ARG_VECTOR(mode_type)\
+if (ObMySQLDateTC == arg_tc) {\
+  DISPATCH_WEEK_EXPR_VECTOR(mode_type, MySQLDate) \
+} else if (ObMySQLDateTimeTC == arg_tc) {\
+  DISPATCH_WEEK_EXPR_VECTOR(mode_type, MySQLDateTime)\
+} else if (ObDateTC == arg_tc) {\
+  DISPATCH_WEEK_EXPR_VECTOR(mode_type, Date)\
+} else if (ObDateTimeTC == arg_tc) {\
+  DISPATCH_WEEK_EXPR_VECTOR(mode_type, DateTime)\
+}
+
 int ObExprWeek::calc_week_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
@@ -818,70 +841,21 @@ int ObExprWeek::calc_week_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBit
     if (2 == expr.arg_cnt_) { // 短路计算
       mode_format = expr.args_[1]->get_format(ctx);
     }
-
-#define DEF_WEEk_VECTOR(mode_type)\
-  if (ObDateTC == arg_tc) {\
-    if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {\
-      ret = vector_week<DateFixedVec, mode_type, IntegerFixedVec, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {\
-      ret = vector_week<DateFixedVec, mode_type, IntegerUniVec, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_FIXED == arg_format && VEC_UNIFORM_CONST == res_format) {\
-      ret = vector_week<DateFixedVec, mode_type, IntegerUniCVec, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {\
-      ret = vector_week<DateUniVec, mode_type, IntegerFixedVec, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {\
-      ret = vector_week<DateUniVec, mode_type, IntegerUniVec, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM_CONST == res_format) {\
-      ret = vector_week<DateUniVec, mode_type, IntegerUniCVec, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {\
-      ret = vector_week<DateUniCVec, mode_type, IntegerFixedVec, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {\
-      ret = vector_week<DateUniCVec, mode_type, IntegerUniVec, DateType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM_CONST == res_format) {\
-      ret = vector_week<DateUniCVec, mode_type, IntegerUniCVec, DateType>(expr, ctx, skip, bound);\
-    } else {\
-      ret = vector_week<ObVectorBase, ObVectorBase, ObVectorBase, DateType>(expr, ctx, skip, bound);\
-    }\
-  } else if (ObDateTimeTC == arg_tc) {\
-    if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {\
-      ret = vector_week<DateTimeFixedVec, mode_type, IntegerFixedVec, DateTimeType>(expr, ctx, skip, bound);\
-    } else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {\
-      ret = vector_week<DateTimeFixedVec, mode_type, IntegerUniVec, DateTimeType>(expr, ctx, skip, bound);\
-    } else if (VEC_FIXED == arg_format && VEC_UNIFORM_CONST == res_format) {\
-      ret = vector_week<DateTimeFixedVec, mode_type, IntegerUniCVec, DateTimeType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {\
-      ret = vector_week<DateTimeUniVec, mode_type, IntegerFixedVec, DateTimeType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {\
-      ret = vector_week<DateTimeUniVec, mode_type, IntegerUniVec, DateTimeType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM_CONST == res_format) {\
-      ret = vector_week<DateTimeUniVec, mode_type, IntegerUniCVec, DateTimeType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {\
-      ret = vector_week<DateTimeUniCVec, mode_type, IntegerFixedVec, DateTimeType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {\
-      ret = vector_week<DateTimeUniCVec, mode_type, IntegerUniVec, DateTimeType>(expr, ctx, skip, bound);\
-    } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM_CONST == res_format) {\
-      ret = vector_week<DateTimeUniCVec, mode_type, IntegerUniCVec, DateTimeType>(expr, ctx, skip, bound);\
-    } else {\
-      ret = vector_week<ObVectorBase, ObVectorBase, ObVectorBase, DateTimeType>(expr, ctx, skip, bound);\
-    }\
-  }
-
     if (1 == expr.arg_cnt_) {
-      DEF_WEEk_VECTOR(ObVectorBase)
+      DEF_WEEK_ARG_VECTOR(ObVectorBase)
     } else if (2 == expr.arg_cnt_) {
       if (VEC_UNIFORM == mode_format) {
-        DEF_WEEk_VECTOR(IntegerUniVec)
+        DEF_WEEK_ARG_VECTOR(IntegerUniVec)
       } else if (VEC_FIXED == mode_format) {
-        DEF_WEEk_VECTOR(IntegerFixedVec)
+        DEF_WEEK_ARG_VECTOR(IntegerFixedVec)
       } else if (VEC_UNIFORM_CONST == mode_format) {
-        DEF_WEEk_VECTOR(IntegerUniCVec)
+        DEF_WEEK_ARG_VECTOR(IntegerUniCVec)
       } else {
         ret = vector_week<ObVectorBase, ObVectorBase, ObVectorBase, DateTimeType>(expr, ctx, skip, bound);
       }
     } else {
       ret = vector_week<ObVectorBase, ObVectorBase, ObVectorBase, DateTimeType>(expr, ctx, skip, bound);
     }
-#undef DEF_WEEk_VECTOR
 
     if (OB_FAIL(ret)) {
       LOG_WARN("expr calculation failed", K(ret));
@@ -890,6 +864,8 @@ int ObExprWeek::calc_week_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBit
   return ret;
 }
 
+#undef DEF_WEEK_ARG_VECTOR
+#undef DISPATCH_WEEK_EXPR_VECTOR
 #undef EPOCH_WDAY
 #undef BATCH_CALC_WITH_MODE
 #undef BATCH_CALC_WITHOUT_MODE

@@ -16,6 +16,7 @@
 #include "common/ob_common_types.h"
 #include "share/ob_simple_batch.h"
 #include "storage/blocksstable/ob_datum_range.h"
+#include "src/storage/access/ob_store_row_iterator.h"
 
 namespace oceanbase
 {
@@ -28,7 +29,7 @@ struct ObTableScanRange
 public:
   ObTableScanRange();
   ~ObTableScanRange() { reset(); }
-  int init(ObTableScanParam &scan_param, const bool is_tablet_spliting = false);
+  int init(ObTableScanParam &scan_param, const bool is_tablet_spliting);
   int init(ObTableScanParam &scan_param,
            const common::ObSimpleBatch &simple_batch,
            common::ObIAllocator &allocator);
@@ -59,6 +60,9 @@ private:
       const common::ObQueryFlag &scan_flag,
       const blocksstable::ObStorageDatumUtils *datum_utils);
   int init_ranges_in_skip_scan(
+      const ObTabletID &tablet_id,
+      const share::ObLSID &ls_id,
+      const bool is_tablet_spliting,
       const common::ObIArray<common::ObNewRange> &ranges,
       const common::ObIArray<common::ObNewRange> &skip_scan_ranges,
       const common::ObQueryFlag &scan_flag,

@@ -13,12 +13,9 @@
 #define USING_LOG_PREFIX LIB
 
 #include "lib/alloc/ob_tenant_ctx_allocator.h"
-#include "lib/alloc/ob_malloc_sample_struct.h"
-#include "lib/alloc/ob_malloc_time_monitor.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/utility/ob_print_utils.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "lib/utility/ob_sort.h"
 #include "lib/alloc/memory_dump.h"
 #include "lib/alloc/memory_sanity.h"
@@ -26,7 +23,6 @@
 #include "lib/oblog/ob_log.h"
 #include "common/ob_smart_var.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
-#include "common/errsim_module/ob_errsim_module_interface.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -36,9 +32,9 @@ void *ObTenantCtxAllocator::alloc(const int64_t size, const ObMemAttr &attr)
   abort_unless(attr.ctx_id_ == ctx_id_);
   void *ptr = NULL;
   if (OB_LIKELY(ObSubCtxIds::MAX_SUB_CTX_ID == attr.sub_ctx_id_)) {
-    ptr = inner_common_realloc(NULL, size, attr, *this, obj_mgr_);
+    ptr = common_realloc(NULL, size, attr, *this, obj_mgr_);
   } else if (OB_UNLIKELY(attr.sub_ctx_id_ < ObSubCtxIds::MAX_SUB_CTX_ID)) {
-    ptr = inner_common_realloc(NULL, size, attr, *this, obj_mgrs_[attr.sub_ctx_id_]);
+    ptr = common_realloc(NULL, size, attr, *this, obj_mgrs_[attr.sub_ctx_id_]);
   } else {
     LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "allocate memory with unexpected sub_ctx_id");
   }
@@ -54,7 +50,7 @@ int64_t ObTenantCtxAllocator::get_obj_hold(void *ptr)
 
 void* ObTenantCtxAllocator::realloc(const void *ptr, const int64_t size, const ObMemAttr &attr)
 {
-  void *nptr = inner_common_realloc(ptr, size, attr, *this, obj_mgr_);
+  void *nptr = common_realloc(ptr, size, attr, *this, obj_mgr_);
   return nptr;
 }
 
@@ -227,11 +223,7 @@ AChunk *ObTenantCtxAllocator::alloc_chunk(const int64_t size, const ObMemAttr &a
 
   if (OB_NOT_NULL(chunk)) {
     ObDisableDiagnoseGuard disable_diagnose_guard;
-    lib::ObMutexGuard guard(using_list_mutex_);
-    chunk->prev2_ = &using_list_head_;
-    chunk->next2_ = using_list_head_.next2_;
-    using_list_head_.next2_->prev2_ = chunk;
-    using_list_head_.next2_ = chunk;
+    using_list_.insert(chunk);
   }
 
   return chunk;
@@ -241,9 +233,7 @@ void ObTenantCtxAllocator::free_chunk(AChunk *chunk, const ObMemAttr &attr)
 {
   if (chunk != nullptr) {
     ObDisableDiagnoseGuard disable_diagnose_guard;
-    lib::ObMutexGuard guard(using_list_mutex_);
-    chunk->prev2_->next2_ = chunk->next2_;
-    chunk->next2_->prev2_ = chunk->prev2_;
+    using_list_.remove(chunk);
   }
   if (INTACT_ACHUNK_SIZE == chunk->hold() &&
       get_hold() - INTACT_ACHUNK_SIZE < idle_size_) {
@@ -340,12 +330,7 @@ int ObTenantCtxAllocator::set_idle(const int64_t set_size, const bool reserve/*=
 void ObTenantCtxAllocator::get_chunks(AChunk **chunks, int cap, int &cnt)
 {
   ObDisableDiagnoseGuard disable_diagnose_guard;
-  lib::ObMutexGuard guard(using_list_mutex_);
-  AChunk *cur = using_list_head_.next2_;
-  while (cur != &using_list_head_ && cnt < cap) {
-    chunks[cnt++] = cur;
-    cur = cur->next2_;
-  }
+  using_list_.get_chunks(chunks, cap, cnt);
 }
 
 int64_t ObTenantCtxAllocator::get_used() const
@@ -406,12 +391,7 @@ void ObTenantCtxAllocator::update_wash_stat(int64_t related_chunks, int64_t bloc
 
 void ObTenantCtxAllocator::on_alloc(AObject& obj, const ObMemAttr& attr)
 {
-  if (attr.label_.str_ != nullptr) {
-    STRNCPY(obj.label_, attr.label_.str_, sizeof(obj.label_));
-    obj.label_[sizeof(obj.label_) - 1] = '\0';
-  } else {
-    MEMSET(obj.label_, '\0', sizeof(obj.label_));
-  }
+  obj.set_label(attr.label_.str_);
   if (attr.alloc_extra_info_) {
     void *addrs[100] = {nullptr};
     ob_backtrace(addrs, ARRAYSIZEOF(addrs));
@@ -451,7 +431,7 @@ void ObTenantCtxAllocator::on_free(AObject &obj)
   SANITY_POISON(obj.data_, obj.alloc_bytes_);
   get_mem_leak_checker().on_free(obj);
 
-  IBlockMgr *blk_mgr = block->obj_set_->get_block_mgr();
+  IBlockMgr *blk_mgr = ((ObjectSet*)block->obj_set_)->get_block_mgr();
   abort_unless(NULL != blk_mgr);
 
   int64_t tenant_id = blk_mgr->get_tenant_id();
@@ -468,90 +448,6 @@ void ObTenantCtxAllocator::on_free(AObject &obj)
   }
 }
 
-template <typename T>
-void* ObTenantCtxAllocator::inner_common_realloc(const void *ptr, const int64_t size,
-                                           const ObMemAttr &attr, ObTenantCtxAllocator& ta,
-                                           T &allocator)
-{
-  ObDisableDiagnoseGuard disable_diagnose_guard;
-  SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
-  void *nptr = NULL;
-  if (!attr.label_.is_valid()) {
-    LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "OB_MOD_DO_NOT_USE_ME REALLOC", K(size));
-  }
-
-  AObject *obj = NULL; // original object
-  AObject *nobj = NULL; // newly allocated object
-  bool sample_allowed = false;
-  bool is_errsim = false;
-  if (NULL != ptr) {
-    obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
-    on_free(*obj);
-  }
-#ifdef ERRSIM
-  const ObErrsimModuleType type = THIS_WORKER.get_module_type();
-  if (is_errsim_module(ta.get_tenant_id(), type.type_)) {
-    //errsim alloc memory failed.
-    nobj = nullptr;
-    is_errsim = true;
-  }
-#endif
-  ObLightBacktraceGuard light_backtrace_guard(is_memleak_light_backtrace_enabled()
-      && ObCtxIds::GLIBC != attr.ctx_id_);
-  ObMemAttr inner_attr = attr;
-
-  int ret = OB_E(EventTable::EN_4) OB_SUCCESS;
-  if (OB_UNLIKELY(OB_FAIL(ret) || is_errsim)) {
-    AllocFailedCtx &afc = g_alloc_failed_ctx();
-    afc.reason_ = AllocFailedReason::ERRSIM_INJECTION;
-  } else {
-    BASIC_TIME_GUARD(time_guard, "ObMalloc");
-    DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, inner_attr));
-    sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, inner_attr);
-    inner_attr.alloc_extra_info_ = sample_allowed;
-    nobj = allocator.realloc_object(obj, size, inner_attr);
-    if(OB_ISNULL(nobj)) {
-      int64_t total_size = 0;
-      if (g_alloc_failed_ctx().need_wash_block()) {
-        total_size += ta.sync_wash();
-        BASIC_TIME_GUARD_CLICK("WASH_BLOCK_END");
-      } else if (g_alloc_failed_ctx().need_wash_chunk()) {
-        total_size += CHUNK_MGR.sync_wash();
-        BASIC_TIME_GUARD_CLICK("WASH_CHUNK_END");
-      }
-      if (total_size > 0) {
-        nobj = allocator.realloc_object(obj, size, inner_attr);
-      }
-    }
-  }
-
-  if (OB_UNLIKELY(NULL == nobj && NULL != obj)) {
-    SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
-  }
-
-  if (OB_NOT_NULL(nobj)) {
-    on_alloc(*nobj, inner_attr);
-    nptr = nobj->data_;
-  } else if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-#ifdef FATAL_ERROR_HANG
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      ObMemoryDump::get_instance().generate_mod_stat_task();
-      sleep(1);
-    }
-#endif
-    const char *msg = alloc_failed_msg();
-    LOG_DBA_WARN_V2(OB_LIB_ALLOCATE_MEMORY_FAIL, OB_ALLOCATE_MEMORY_FAILED, "[OOPS]: alloc failed reason is that ", msg);
-    _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
-                "ctx_limit=%ld, tenant_hold=%ld, tenant_limit=%ld",
-                inner_attr.tenant_id_, inner_attr.ctx_id_,
-                get_global_ctx_info().get_ctx_name(inner_attr.ctx_id_),
-                ta.get_hold(), ta.get_limit(), ta.get_tenant_hold(), ta.get_tenant_limit());
-    // 49 is the user defined signal to dump memory
-    raise(49);
-  }
-  return nptr;
-}
-
 void ObTenantCtxAllocator::common_free(void *ptr)
 {
   ObDisableDiagnoseGuard disable_diagnose_guard;
@@ -559,7 +455,7 @@ void ObTenantCtxAllocator::common_free(void *ptr)
   if (NULL != ptr) {
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
     on_free(*obj);
-    ObjectSet *os = obj->block()->obj_set_;
+    ObjectSet *os = (ObjectSet*)obj->block()->obj_set_;
     os->free_object(obj);
   }
 }

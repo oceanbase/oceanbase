@@ -788,6 +788,9 @@ public:
                                             const ObProxyInfo &proxied_info,
                                             ObIArray<uint64_t> &new_role_id_array,
                                             ObIArray<uint64_t> &new_role_id_option_array);
+  static int check_enable_mysql_compatible_dates(const sql::ObSQLSessionInfo *session,
+                                                 const bool is_ddl_scenario,
+                                                 bool &enabled);
 
   static int get_strong_partition_replica_addr(const ObCandiTabletLoc &phy_part_loc_info,
                                                ObAddr &selected_addr);

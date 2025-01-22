@@ -468,6 +468,10 @@ int ObOptEstObjToScalar::convert_obj_to_scalar(const ObObj *obj, double &scalar)
 {
   int ret = OB_SUCCESS;
   scalar = 0.0;
+  ObDateSqlMode date_sql_mode;
+  date_sql_mode.allow_invalid_dates_ = true;
+  int32_t date = 0;
+  int64_t datetime = 0;
 
   if (NULL == obj) {
     //NULL obj means a double 0.0 as scalar to return
@@ -578,6 +582,14 @@ int ObOptEstObjToScalar::convert_obj_to_scalar(const ObObj *obj, double &scalar)
           + obj->get_interval_ds().get_fs());
         break;
     }
+    case ObMySQLDateType:
+        ObTimeConverter::mdate_to_date(obj->get_mysql_date(), date, date_sql_mode);
+        scalar = static_cast<double>(date);
+        break;
+    case ObMySQLDateTimeType:
+        ObTimeConverter::mdatetime_to_datetime(obj->get_mysql_datetime(), datetime, date_sql_mode);
+        scalar = static_cast<double>(datetime);
+        break;
     case ObExtendType:                 // Min, Max, NOP etc.
     case ObUnknownType:                // For question mark(?) in prepared statement, no need to serialize
       //TODO:

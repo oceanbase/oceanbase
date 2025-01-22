@@ -202,7 +202,7 @@ OB_SERIALIZE_MEMBER(ObCopyMacroBlockRangeArg, tenant_id_, ls_id_, table_key_, da
 ObCopyMacroBlockHeader::ObCopyMacroBlockHeader()
   : is_reuse_macro_block_(false),
     occupy_size_(0),
-    data_type_(DataType::MACRO_DATA) // default value for compat, previous version won't contain data_type_ and will pass macro data all the time
+    data_type_(ObCopyMacroBlockDataType::MACRO_DATA) // default value for compat, previous version won't contain data_type_ and will pass macro data all the time
 {
 }
 
@@ -214,7 +214,7 @@ void ObCopyMacroBlockHeader::reset()
 
 bool ObCopyMacroBlockHeader::is_valid() const
 {
-  return occupy_size_ > 0 && data_type_ >= DataType::MACRO_DATA && data_type_ < DataType::MAX;
+  return occupy_size_ > 0 && data_type_ >= ObCopyMacroBlockDataType::MACRO_DATA && data_type_ < ObCopyMacroBlockDataType::MAX;
 }
 
 OB_SERIALIZE_MEMBER(ObCopyMacroBlockHeader, is_reuse_macro_block_, occupy_size_, data_type_);

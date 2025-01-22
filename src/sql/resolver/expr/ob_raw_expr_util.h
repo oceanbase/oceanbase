@@ -489,12 +489,44 @@ public:
   static int implict_cast_sql_udt_to_pl_udt(ObRawExprFactory *expr_factory,
                                             const ObSQLSessionInfo *session,
                                             ObRawExpr* &real_ref_expr);
+// 本函数原本被定义在CPP中，【因为UNITY合并编译单元的作用，而通过了编译，但模版代码的实现需要在头文件中定义】，因此关闭UNITY后导致observer无法通过编译
+// 为解决关闭UNITY后的编译问题，将其挪至头文件中
+// 但本函数使用了OZ、CK宏，这两个宏内部的log打印使用了LOG_WARN，要求必须定义USING_LOG_PREFIX
+// 由于这里是头文件，这将导致非常棘手的问题：
+// 1. 如果在本头文件之前没有定义USING_LOG_PREFIX，则必须重新定义USING_LOG_PREFIX（但宏被定义在头文件中将造成污染）
+// 2. 如果是在本文件中新定义的USING_LOG_PREFIX，则需要被清理掉，防止污染被传播到其他.h以及cpp中
+// 因此这里判断USING_LOG_PREFIX是否已定义，若已定义则放弃重新定义（这意味着日志并不总是被以“SQL_RESV”标识打印），同时也定义特殊标识
+// 若发现定义特殊标识，则在预处理过程中执行宏清理动作
+// 整个逻辑相当trick，是为了尽量少的修改代码逻辑，代码owner后续需要整改这里的逻辑
+#ifndef USING_LOG_PREFIX
+#define MARK_MACRO_DEFINED_BY_OB_RAW_EXPR_UTIL_H
+#define USING_LOG_PREFIX SQL_RESV
+#endif
   template<typename RawExprType>
   static int create_attr_expr(ObRawExprFactory *expr_factory,
                               const ObSQLSessionInfo *session,
                               ObItemType expr_type,
                               ArrayAttr attr_type,
-                              RawExprType* &attr_expr);
+                              RawExprType* &attr_expr) {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(expr_factory->create_raw_expr(expr_type, attr_expr))) {
+      LOG_WARN("create raw expr failed", K(ret));
+    } else if (OB_ISNULL(attr_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("attr expr is null");
+    } else if (OB_FAIL(attr_expr->add_flag(IS_ATTR_EXPR))) {
+      LOG_WARN("attr expr add flag failed");
+    } else if (attr_type == ArrayAttr::ATTR_LENGTH && FALSE_IT(attr_expr->set_data_type(ObUInt32Type))) {
+    } else if ((attr_type == ArrayAttr::ATTR_NULL_BITMAP || attr_type == ArrayAttr::ATTR_OFFSETS ||attr_type == ArrayAttr::ATTR_DATA) &&
+              FALSE_IT(attr_expr->set_data_type(ObVarcharType))) {
+    } else if (OB_FAIL(attr_expr->formalize(session))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    }
+    return ret;
+  }
+#ifdef MARK_MACRO_DEFINED_BY_OB_RAW_EXPR_UTIL_H
+#undef USING_LOG_PREFIX
+#endif
   // new engine: may create more cast exprs to handle non-system-collation string.
   //             e.g.: utf16->number: utf16->utf8->number (two cast expr)
   //                   utf8_bin->number: utf8->number (just one cat expr)
@@ -595,24 +627,12 @@ public:
                              const ObLocalSessionVar *local_vars = NULL,
                              int64_t local_var_id = OB_INVALID_INDEX_INT64);
 
-  static bool is_domain_expr_need_special_replace(ObRawExpr* qual_expr,
-                                                  ObRawExpr *depend_expr);
-  static int replace_domain_wrapper_expr(ObRawExpr *depend_expr,
-                                         ObColumnRefRawExpr *col_expr,
-                                         ObRawExprCopier& copier,
-                                         ObRawExprFactory& factory,
-                                         ObSQLSessionInfo *session_info,
-                                         ObRawExpr *&qual,
-                                         int64_t qual_idx,
-                                         ObRawExpr *&new_qual);
   static int replace_json_wrapper_expr_if_need(ObRawExpr* qual,
                                          int64_t qual_idx,
                                          ObRawExpr *depend_expr,
                                          ObRawExprFactory &expr_factory,
                                          ObSQLSessionInfo *session_info,
                                          bool& is_done_replace);
-
-  static int replace_qual_param_if_need(ObRawExpr* qual, int64_t qual_idx, ObColumnRefRawExpr *col_expr);
 
   static int build_pad_expr(ObRawExprFactory &expr_factory,
                             bool is_char,
@@ -681,6 +701,12 @@ public:
   static int build_const_date_expr(ObRawExprFactory &expr_factory,
                                    int64_t int_value,
                                    ObConstRawExpr *&expr);
+  static int build_const_mysql_datetime_expr(ObRawExprFactory &expr_factory,
+                                             int64_t int_value,
+                                              ObConstRawExpr *&expr);
+  static int build_const_mysql_date_expr(ObRawExprFactory &expr_factory,
+                                         int64_t int_value,
+                                         ObConstRawExpr *&expr);
   static int build_const_ym_expr(ObRawExprFactory &expr_factory,
                                  common::ObObjType type,
                                  const ObObj &obj,
@@ -1122,7 +1148,7 @@ public:
                               ObRawExpr *subpart_expr,
                               ObSysFunRawExpr *&rowid_expr);
   static int build_empty_rowid_expr(ObRawExprFactory &expr_factory,
-                                    uint64_t table_id,
+                                    const TableItem &table_item,
                                     ObRawExpr *&rowid_expr);
   static int build_to_outfile_expr(ObRawExprFactory &expr_factory,
                                    const ObSQLSessionInfo *session_info,
@@ -1327,7 +1353,6 @@ int64_t ObRawExprUtils::get_expr_idx(const common::ObIArray<T> &exprs, const ObR
   }
   return expr_idx;
 }
-
 }
 }
 

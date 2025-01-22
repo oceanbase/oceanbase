@@ -131,7 +131,7 @@ void TestSSHAPrewarmStruct::generate_phy_block(
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
   ObSSMemDataManager &mem_data_mgr = micro_cache->mem_data_mgr_;
   ObSSPersistMicroDataTask &persist_task = micro_cache->task_runner_.persist_task_;
-  const int64_t available_block_cnt = phy_blk_mgr.get_free_normal_block_cnt();
+  const int64_t available_block_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt();
   ASSERT_LT(write_blk_cnt, available_block_cnt);
   const int32_t micro_cnt = 20;
   const int64_t block_size = micro_cache->phy_block_size_;
@@ -209,7 +209,7 @@ TEST_F(TestSSHAPrewarmStruct, test_producer)
 
   const int64_t split_count = 2;
   ObArray<ObSSPhyBlockIdxRange> block_ranges;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.divide_normal_used_block_range(ls_id, split_count, block_ranges));
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.divide_cache_data_block_range(ls_id, split_count, block_ranges));
   ASSERT_EQ(split_count, block_ranges.count());
 
   ObArray<ObMigrationCacheJobInfo> job_infos;

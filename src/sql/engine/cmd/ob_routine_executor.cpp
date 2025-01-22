@@ -30,6 +30,7 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "share/config/ob_config_helper.h"
+#include "src/pl/pl_cache/ob_pl_cache_mgr.h"
 
 namespace oceanbase
 {
@@ -384,7 +385,8 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                     LOG_WARN("Failed to wrap expr ctx", K(ret));
                   } else {
                     const ObString var_name = expr->get_expr_items().at(1).get_obj().get_string();
-                    if (OB_FAIL(ObVariableSetExecutor::set_user_variable(params.at(i), var_name, expr_ctx))) {
+                    ObObj &value = ob_is_enum_or_set_type(params.at(i).get_type()) ? ctx.get_output_row()->cells_[idx - 1] : params.at(i);
+                    if (OB_FAIL(ObVariableSetExecutor::set_user_variable(value, var_name, expr_ctx))) {
                       LOG_WARN("set user variable failed", K(ret));
                     }
                   }

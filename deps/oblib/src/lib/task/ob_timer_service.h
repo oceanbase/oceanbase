@@ -34,6 +34,19 @@ namespace common
 {
 
 extern uint64_t mtl_get_id();
+
+class ObTimerUtil
+{
+public:
+    static void copy_buff(char *buf, int64_t buf_len, const char *value)
+    {
+      if (nullptr != buf && nullptr != value && '\0' != value[0] && buf_len > 0) {
+        strncpy(buf, value, buf_len);
+        buf[buf_len - 1] = '\0';
+      }
+    }
+};
+
 class ObTimerTask
 {
 public:
@@ -69,12 +82,16 @@ public:
   TaskToken(const TaskToken &other) = delete;
   TaskToken &operator=(const TaskToken &other) = delete;
   ~TaskToken();
-  TO_STRING_KV(KP(this), KP_(timer), KP_(task), K_(task_type), K_(scheduled_time), K_(delay));
+  TO_STRING_KV(KP(this), KP_(timer), KP_(task), K_(task_type),
+               K_(scheduled_time), K_(pushed_time), K_(delay));
 public:
   char task_type_[128];
+  char timer_name_[OB_THREAD_NAME_BUF_LEN];
   const ObTimer *timer_;
   ObTimerTask *task_;
   int64_t scheduled_time_;
+  int64_t last_try_pop_time_;
+  int64_t pushed_time_;
   int64_t delay_;
 };
 
@@ -88,9 +105,14 @@ public:
   ObTimerTaskThreadPool(const ObTimerTaskThreadPool &) = delete;
   ObTimerTaskThreadPool &operator=(const ObTimerTaskThreadPool &) = delete;
 private:
+  static void set_ext_tname(const TaskToken *token);
+  static void clear_ext_tname();
+  static void alarm_if_necessary(const TaskToken *token, int64_t start_time, int64_t end_time);
+private:
   ObTimerService &service_;
 private:
   static constexpr int64_t ELAPSED_TIME_LOG_THREASHOLD = 10 * 60 * 1000 * 1000; // 10 mins
+  static constexpr int64_t DELAY_IN_THREAD_POOL_THREASHOLD = 500 * 1000; // 500ms
 };
 
 class ObTimerService : public lib::ThreadPool
@@ -136,11 +158,12 @@ public:
   static void mtl_wait(ObTimerService *&timer_service);
   static void mtl_destroy(ObTimerService *&timer_service);
 private:
-  bool has_running_task(const ObTimer *timer) const;
+  bool has_running_task(const ObTimer *timer, const TaskToken *&running_task_token) const;
   bool find_task_in_set(
       const ObSortedVector<TaskToken *> &token_set,
       const ObTimer *timer,
-      const ObTimerTask *task) const;
+      const ObTimerTask *task_in,
+      const TaskToken **token_out = nullptr) const;
   int pop_task(int64_t now, TaskToken *&token, int64_t &st);
   void run1() final;
   static bool has_same_task_and_timer(
@@ -176,7 +199,10 @@ private:
   static constexpr int64_t CLOCK_SKEW_DELTA = 20L * 1000L;          // 20ms
   static constexpr int64_t CLOCK_ERROR_DELTA = 500L * 1000L;        // 500ms
   static constexpr int64_t DUMP_INTERVAL = 60L * 1000L * 1000L;     // 60s
+  static constexpr int64_t ALARM_INTERVAL = 60L * 1000L * 1000L;    // 1min
   using VecIter = ObSortedVector<TaskToken *>::iterator;
+public:
+  static constexpr int64_t DELAY_IN_PRI_QUEUE_THREASHOLD = 1L * 1000L * 1000L; // 1s
 };
 
 #define NEW_AND_SET_TIMER_SERVICE(id)                                                             \

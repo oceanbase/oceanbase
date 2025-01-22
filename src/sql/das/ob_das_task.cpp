@@ -109,6 +109,7 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
       OB_UNIS_ENCODE(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
     }
   }
+  OB_UNIS_ENCODE(detectable_id_);
   return ret;
 }
 
@@ -251,6 +252,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   if (need_subschema_ctx_) {
     OB_UNIS_DECODE(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
   }
+  OB_UNIS_DECODE(detectable_id_);
   return ret;
 }
 
@@ -315,6 +317,7 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
       OB_UNIS_ADD_LEN(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
     }
   }
+  OB_UNIS_ADD_LEN(detectable_id_);
   return len;
 }
 

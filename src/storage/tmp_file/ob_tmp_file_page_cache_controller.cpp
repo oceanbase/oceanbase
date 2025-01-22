@@ -127,6 +127,25 @@ int ObTmpFilePageCacheController::free_swap_job_(ObTmpFileSwapJob *swap_job)
   return ret;
 }
 
+// refresh tmp file disk usage limit from tenant config with timeout 10ms
+void ObTmpFilePageCacheController::refresh_disk_usage_limit()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tmp file page cache controller is not inited", KR(ret));
+  } else {
+    omt::ObTenantConfigGuard config(TENANT_CONF_TIL(MTL_ID(), ACCESS_TENANT_CONFIG_TIMEOUT_US));
+    if (!config.is_valid()) {
+      // do nothing
+    } else {
+      const int64_t max_disk_usage = config->temporary_file_max_disk_size;
+      int64_t disk_limit = max_disk_usage > 0 ? max_disk_usage : 0;
+      ATOMIC_SET(&disk_usage_limit_, disk_limit);
+    }
+  }
+}
+
 int ObTmpFilePageCacheController::invoke_swap_and_wait(int64_t expect_swap_size, int64_t timeout_ms)
 {
   int ret = OB_SUCCESS;
@@ -138,7 +157,10 @@ int ObTmpFilePageCacheController::invoke_swap_and_wait(int64_t expect_swap_size,
 
   void *task_buf = nullptr;
   ObTmpFileSwapJob *swap_job = nullptr;
-  if (OB_ISNULL(task_buf = task_allocator_.alloc(sizeof(ObTmpFileSwapJob)))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "tmp file page cache controller is not inited", KR(ret));
+  } else if (OB_ISNULL(task_buf = task_allocator_.alloc(sizeof(ObTmpFileSwapJob)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to allocate memory for swap job", KR(ret));
   } else if (FALSE_IT(swap_job = new (task_buf) ObTmpFileSwapJob())) {

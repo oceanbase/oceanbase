@@ -123,7 +123,6 @@ struct ObPlanCacheKey : public ObILibCacheKey
     hash_ret = common::murmurhash(&mode_, sizeof(PlanCacheMode), hash_ret);
     hash_ret = common::murmurhash(&flag_, sizeof(flag_), hash_ret);
     hash_ret = common::murmurhash(&namespace_, sizeof(ObLibCacheNameSpace), hash_ret);
-
     return hash_ret;
   }
 
@@ -171,7 +170,8 @@ struct ObPlanCacheKey : public ObILibCacheKey
       uint16_t is_weak_read_ : 1;
       uint16_t use_rich_vector_format_ : 1;
       uint16_t config_use_rich_format_ : 1;
-      uint16_t reserved_ : 13; // reserved
+      uint16_t enable_mysql_compatible_dates_ : 1;
+      uint16_t reserved_ : 12; // reserved
     };
   };
   uint64_t sys_var_config_hash_val_;
@@ -548,6 +548,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
 
   bool is_arraybinding_;
   bool exist_local_plan_;
+  common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator, true> formalize_prec_index_;
 };
 
 struct ObPlanCacheStat

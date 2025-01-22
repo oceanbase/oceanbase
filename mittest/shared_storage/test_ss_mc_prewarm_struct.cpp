@@ -117,7 +117,7 @@ void TestSSMCPrewarmStruct::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 26))); // 64M
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 27))); // 128M
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
 }
 

@@ -20,6 +20,7 @@
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
+#include "storage/direct_load/ob_direct_load_i_table.h"
 
 namespace oceanbase
 {
@@ -252,6 +253,10 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
                              allocator_.alloc(ObBitVector::memory_size(column_count_))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to new ObBitVector", KR(ret), K(column_count_));
+      } else if (OB_ISNULL(batch_ctx_->col_lob_storage_ = to_bit_vector(
+                             allocator_.alloc(ObBitVector::memory_size(column_count_))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObBitVector", KR(ret), K(column_count_));
       } else if (OB_FAIL(batch_ctx_->batch_vectors_.prepare_allocate(column_count_))) {
         LOG_WARN("fail to prepare allocate", KR(ret), K(column_count_));
       } else if (OB_FAIL(batch_ctx_->const_vectors_.prepare_allocate(column_count_))) {
@@ -260,6 +265,7 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
         LOG_WARN("fail to prepare allocate", KR(ret), K(column_count_));
       } else {
         batch_ctx_->col_fixed_->reset(column_count_);
+        batch_ctx_->col_lob_storage_->reset(column_count_);
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < column_count_; ++i) {
         const ObColDesc &col_desc = col_descs.at(i);
@@ -270,39 +276,44 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
                                                       col_desc.col_type_.get_scale(),
                                                       precision);
         const bool is_fixed = is_fixed_length_vec(value_tc);
+        const bool is_lob_storage = col_desc.col_type_.is_lob_storage();
         ObIVector *batch_vector = nullptr;
         ObIVector *const_vector = nullptr;
         if (is_fixed) {
           batch_ctx_->col_fixed_->set(i);
         }
+        if (is_lob_storage) {
+          batch_ctx_->col_lob_storage_->set(i);
+        }
         if (!use_rich_format) { // vectorized 1.0
           // 向量化1.0传入的是ObDatumVector, 需要转成ObVector, 都需要构造vector
           //  * fixed col不用浅拷贝, 不用分配vector成员内存
-          //  * unfixed col要浅拷贝, 需要分配vector成员内存
+          //  * unfixed col要浅拷贝, 需要分配vector成员内存, lob不用构造const_vector
           if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_UNIFORM,
                                                           value_tc,
                                                           allocator_,
                                                           batch_vector))) {
-          LOG_WARN("fail to new uniform vector", KR(ret), K(i), K(col_desc), K(value_tc));
+            LOG_WARN("fail to new uniform vector", KR(ret), K(i), K(col_desc), K(value_tc));
+          } else if (!is_fixed && OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(batch_vector,
+                                                                                  max_batch_size,
+                                                                                  allocator_))) {
+            LOG_WARN("fail to prepare uniform vector", KR(ret), K(i), K(col_desc), K(max_batch_size));
+          } else if (is_lob_storage) {
+            // lob不用构造const_vector
           } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_UNIFORM_CONST,
                                                                  value_tc,
                                                                  allocator_,
                                                                  const_vector))) {
             LOG_WARN("fail to new uniform const vector", KR(ret), K(i), K(col_desc), K(value_tc));
-          } else if (is_fixed) {
-          } else if (OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(batch_vector,
-                                                                     max_batch_size,
-                                                                     allocator_))) {
-            LOG_WARN("fail to prepare uniform vector", KR(ret), K(i), K(col_desc), K(max_batch_size));
-          } else if (OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(const_vector,
-                                                                     max_batch_size,
-                                                                     allocator_))) {
+          } else if (!is_fixed && OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(const_vector,
+                                                                                  max_batch_size,
+                                                                                  allocator_))) {
             LOG_WARN("fail to prepare uniform const vector", KR(ret), K(i), K(col_desc), K(max_batch_size));
           }
         } else { // vectorized 2.0
           // 向量化2.0传入的是ObVector
           //  * fixed col直接用传入的ObVector, 不用构造vector
-          //  * unfixed col需要浅拷贝, 需要构造vector并分配vector成员内存
+          //  * unfixed col需要浅拷贝, 需要构造vector并分配vector成员内存, lob不用构造const_vector
           if (is_fixed) {
           } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_DISCRETE,
                                                                  value_tc,
@@ -313,6 +324,8 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
                                                                      max_batch_size,
                                                                      allocator_))) {
             LOG_WARN("fail to prepare discrete vector", KR(ret), K(i), K(col_desc), K(max_batch_size));
+          } else if (is_lob_storage) {
+            // lob不用构造const_vector
           } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_UNIFORM_CONST,
                                                                  value_tc,
                                                                  allocator_,
@@ -472,6 +485,24 @@ int ObTableLoadStoreTransPXWriter::write_vector(ObIVector *tablet_id_vector,
     for (int64_t i = 0; OB_SUCC(ret) && i < column_count_; ++i) {
       if (batch_ctx_->col_fixed_->at(i)) {
         batch_ctx_->append_vectors_.at(i) = vectors.at(i);
+      } else if (batch_ctx_->col_lob_storage_->at(i)) {
+        ObIVector *vector = batch_ctx_->batch_vectors_.at(i);
+        if (VEC_UNIFORM_CONST != vectors.at(i)->get_format()) {
+          // 浅拷贝
+          if (OB_FAIL(ObDirectLoadVectorUtils::shallow_copy_vector(vectors.at(i),
+                                                                   vector,
+                                                                   batch_rows.size_))) {
+            LOG_WARN("fail to shallow copy vector", KR(ret), K(i));
+          }
+        } else {
+          // 展开
+          if (OB_FAIL(ObDirectLoadVectorUtils::expand_const_vector(vectors.at(i),
+                                                                   vector,
+                                                                   batch_rows.size_))) {
+            LOG_WARN("fail to expand const vector", KR(ret), K(i));
+          }
+        }
+        batch_ctx_->append_vectors_.at(i) = vector;
       } else { // 浅拷贝
         ObIVector *vector = VEC_UNIFORM_CONST != vectors.at(i)->get_format()
                               ? batch_ctx_->batch_vectors_.at(i)
@@ -531,14 +562,32 @@ int ObTableLoadStoreTransPXWriter::write_batch(const ObDatumVector &tablet_id_da
       (batch_rows.all_rows_active_ || 0 == batch_rows.skip_->accumulate_bit_cnt(batch_rows.size_));
     for (int64_t i = 0; i < column_count_; ++i) {
       const ObDatumVector &datum_vector = datum_vectors.at(i);
-      ObIVector *vector = datum_vector.is_batch() ? batch_ctx_->batch_vectors_.at(i)
-                                                  : batch_ctx_->const_vectors_.at(i);
-      if (batch_ctx_->col_fixed_->at(i)) {
-        static_cast<ObUniformBase *>(vector)->set_datums(datum_vector.datums_);
-      } else { // 浅拷贝
-        MEMCPY(static_cast<ObUniformBase *>(vector)->get_datums(),
-               datum_vector.datums_,
-               sizeof(ObDatum) * (datum_vector.is_batch() ? batch_rows.size_ : 1));
+      ObIVector *vector = nullptr;
+      if (batch_ctx_->col_lob_storage_->at(i)) {
+        vector = batch_ctx_->batch_vectors_.at(i);
+        if (datum_vector.is_batch()) {
+          // 浅拷贝
+          MEMCPY(static_cast<ObUniformBase *>(vector)->get_datums(),
+                datum_vector.datums_,
+                sizeof(ObDatum) * batch_rows.size_);
+        } else {
+          // 展开
+          if (OB_FAIL(ObDirectLoadVectorUtils::expand_const_datum(datum_vector.datums_[0],
+                                                                  vector,
+                                                                  batch_rows.size_))) {
+            LOG_WARN("fail to expand const vector", KR(ret), K(i));
+          }
+        }
+      } else {
+        vector = datum_vector.is_batch() ? batch_ctx_->batch_vectors_.at(i)
+                                         : batch_ctx_->const_vectors_.at(i);
+        if (batch_ctx_->col_fixed_->at(i)) {
+          static_cast<ObUniformBase *>(vector)->set_datums(datum_vector.datums_);
+        } else { // 浅拷贝
+          MEMCPY(static_cast<ObUniformBase *>(vector)->get_datums(),
+                 datum_vector.datums_,
+                 sizeof(ObDatum) * (datum_vector.is_batch() ? batch_rows.size_ : 1));
+        }
       }
       batch_ctx_->append_vectors_.at(i) = vector;
     }

@@ -48,13 +48,18 @@ int ObExprStringToArray::calc_result_typeN(ObExprResType &type,
   ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
   ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
 
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  }
   for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
-    if (!ob_is_varchar_char_type(types[i].get_type(), types[i].get_collation_type())
-        && !ob_is_null(types[i].get_type())) {
+    if (ob_is_null(types[i].get_type())) {
+      // do nothing
+    } else if (ob_is_varchar_char_type(types[i].get_type(), types[i].get_collation_type())) {
+      types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+    } else {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "VARCHAR", ob_obj_type_str(types[i].get_type()));
-    } else {
-      types[i].set_calc_collation_type(ObCharset::get_system_collation());
     }
   }
 

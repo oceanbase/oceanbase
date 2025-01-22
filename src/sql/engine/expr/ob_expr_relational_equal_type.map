@@ -55,24 +55,24 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType] =
   ObMaxType,            /* ObUserDefinedSqlType */
   ObDecimalIntType,     /* ObDecimalIntType     */
   ObMaxType,            /* ObCollectionSQLType  */
-  ObMaxType,            /* ObMySQLDateType      */
-  ObMaxType,            /* ObMySQLDateTimeType  */
+  ObMySQLDateType,      /* ObMySQLDateType      */
+  ObMySQLDateTimeType,  /* ObMySQLDateTimeType  */
   ObMaxType,            /* ObRoaringBitmapType  */
 };
 
 static constexpr ObObjType ORACLE_RELATIONAL_EQUAL_TYPE[ObMaxType] =
 {
   ObMaxType,            /* NullType             */
-  ObMaxType,            /* TinyIntType          */
-  ObMaxType,            /* SmallIntType         */
-  ObMaxType,            /* MediumIntType        */
-  ObMaxType,            /* Int32Type            */
-  ObMaxType,            /* IntType              */
-  ObMaxType,            /* UTinyIntType         */
-  ObMaxType,            /* USmallIntType        */
-  ObMaxType,            /* UMediumIntType       */
-  ObMaxType,            /* UInt32Type           */
-  ObMaxType,            /* UIntType             */
+  ObIntType,            /* TinyIntType          */
+  ObIntType,            /* SmallIntType         */
+  ObIntType,            /* MediumIntType        */
+  ObIntType,            /* Int32Type            */
+  ObIntType,            /* IntType              */
+  ObIntType,            /* UTinyIntType         */
+  ObIntType,            /* USmallIntType        */
+  ObIntType,            /* UMediumIntType       */
+  ObIntType,            /* UInt32Type           */
+  ObIntType,            /* UIntType             */
   ObFloatType,          /* FloatType            */
   ObDoubleType,         /* DoubleType           */
   ObMaxType,            /* UFloatType           */

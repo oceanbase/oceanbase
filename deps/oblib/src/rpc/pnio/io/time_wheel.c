@@ -56,27 +56,37 @@ bool pn_server_in_black(struct sockaddr* sa) {return 0;}
 #ifndef SERVER_IN_BLACK
 #define SERVER_IN_BLACK(sa) pn_server_in_black(sa)
 #endif
-void keepalive_check(pktc_t* io) {
+void keepalive_check(pktc_t* client_io, pkts_t* server_io) {
   static __thread int time_count = 0;
   time_count ++;
   if (time_count < (int)(1000000/TIME_WHEEL_SLOT_INTERVAL)) {
   } else {
     time_count = 0;
     // walks through pktc_t skmap, refresh tcp keepalive params and check server keepalive
-    dlink_for(&io->sk_list, p) {
+    dlink_for(&client_io->sk_list, p) {
       pktc_sk_t *sk = structof(p, pktc_sk_t, list_link);
       struct sockaddr_storage sock_addr;
       if (sk->conn_ok && SERVER_IN_BLACK((struct sockaddr*)make_sockaddr(&sock_addr, sk->dest))) {
         // mark the socket as waiting for destroy
         rk_info("socket dest server in blacklist, it will be destroyed, sock=(ptr=%p,dest=%d:%d)", sk, sk->dest.ip, sk->dest.port);
         sk->mask |= EPOLLERR;
-        eloop_fire(io->ep, (sock_t*)sk);
+        eloop_fire(client_io->ep, (sock_t*)sk);
       } else if(sk->user_keepalive_timeout != pnio_keepalive_timeout) {
         rk_info("user_keepalive_timeout has been reset, sock=(ptr=%p,dest=%d:%d), old=%ld, new=%ld",
           sk, sk->dest.ip, sk->dest.port, sk->user_keepalive_timeout, pnio_keepalive_timeout);
         update_socket_keepalive_params(sk->fd, pnio_keepalive_timeout);
         sk->user_keepalive_timeout = pnio_keepalive_timeout;
       }
+    }
+    // walks through pkts_t skmap, refresh tcp keepalive params
+    if (server_io->user_keepalive_timeout != pnio_keepalive_timeout) {
+      dlink_for(&server_io->sk_list, p) {
+        pkts_sk_t *sk = structof(p, pkts_sk_t, list_link);
+        rk_info("user_keepalive_timeout has been reset, sock_ptr=%p, old=%ld, new=%ld",
+          sk, server_io->user_keepalive_timeout, pnio_keepalive_timeout);
+        update_socket_keepalive_params(sk->fd, pnio_keepalive_timeout);
+      }
+      server_io->user_keepalive_timeout = pnio_keepalive_timeout;
     }
   }
 }
@@ -85,7 +95,9 @@ static int timerfd_handle_tw(timerfd_t* s) {
   time_wheel_t* tw = (time_wheel_t*)(s + 1);
   tw_check(tw);
   evfd_drain(s->fd);
-  keepalive_check(structof(s, pktc_t, cb_timerfd));
+  pktc_t* client_io = structof(s, pktc_t, cb_timerfd);
+  pkts_t* server_io = (pkts_t*)(client_io) - 1;
+  keepalive_check(client_io, server_io);
   return EAGAIN;
 }
 

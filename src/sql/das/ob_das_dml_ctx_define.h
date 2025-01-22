@@ -88,7 +88,9 @@ public:
       uint64_t is_access_vidx_as_master_table_  : 1;
       uint64_t is_update_partition_key_         : 1;
       uint64_t is_update_uk_                    : 1;
-      uint64_t reserved_                        : 55;
+      uint64_t is_update_pk_with_dop_           : 1; // update primary_table PK
+      uint64_t reserved_                        : 50; //add new flag before reserved_
+      uint64_t compat_version_                  : 4; //prohibited to insert new flags between compat_version_ and reserved_
     };
   };
 protected:
@@ -108,7 +110,9 @@ protected:
       table_param_(alloc),
       encrypt_meta_(alloc),
       flags_(0)
-  { }
+  {
+    compat_version_ = 1; //notify observer to use new flags after 4.2.5.2
+  }
 };
 
 typedef common::ObFixedArray<ObDASDMLBaseCtDef*, common::ObIAllocator> DASDMLCtDefArray;

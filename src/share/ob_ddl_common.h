@@ -209,6 +209,7 @@ enum ObDDLTaskStatus {
   WAIT_CENTROID_TABLE_COMPLEMENT = 43,
   GENERATE_PQ_CENTROID_TABLE_SCHEMA = 44,
   WAIT_PQ_CENTROID_TABLE_COMPLEMENT = 45,
+  LOAD_DICTIONARY = 46,
 
   FAIL = 99,
   SUCCESS = 100
@@ -322,6 +323,9 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA:
       str = "GENERATE_DOC_AUX_SCHEMA";
+      break;
+    case ObDDLTaskStatus::LOAD_DICTIONARY:
+      str = "LOAD_DICTIONARY";
       break;
     case ObDDLTaskStatus::WAIT_ROWKEY_DOC_TABLE_COMPLEMENT:
       str = "WAIT_ROWKEY_DOC_TABLE_COMPLEMENT";
@@ -738,9 +742,10 @@ public:
     const common::ObAddr &leader_addr,
     uint64_t &left_space_size);
   static int generate_partition_names(
-   const ObIArray<ObString> &partition_names_array,
-   common::ObIAllocator &allocator,
-   ObString &partition_names);
+    const ObIArray<ObString> &partition_names_array,
+    const bool is_oracle_mode,
+    common::ObIAllocator &allocator,
+    ObString &partition_names);
   static int check_target_partition_is_running(
    const ObString &running_sql_info,
    const ObString &partition_name,
@@ -761,6 +766,8 @@ public:
   static void get_ddl_rpc_timeout_for_database(const int64_t tenant_id, const int64_t database_id, int64_t &ddl_rpc_timeout_us);
   static int64_t get_default_ddl_rpc_timeout();
   static int64_t get_default_ddl_tx_timeout();
+
+  static int get_task_tablet_slice_count(const int64_t tenant_id, const int64_t task_id, bool &is_partition_table, common::hash::ObHashMap<int64_t, int64_t> &tablet_slice_count_map);
 
   static int get_data_information(
      const uint64_t tenant_id,
@@ -914,6 +921,7 @@ public:
   }
   static int get_global_index_table_ids(const schema::ObTableSchema &table_schema, ObIArray<uint64_t> &global_index_table_ids, share::schema::ObSchemaGetterGuard &schema_guard);
   static bool use_idempotent_mode(const int64_t data_format_version);
+  static int init_macro_block_seq(const int64_t parallel_idx, blocksstable::ObMacroDataSeq &start_seq);
   static bool is_mview_not_retryable(const int64_t data_format_version, const share::ObDDLType task_type);
   static int64_t get_real_parallelism(const int64_t parallelism, const bool is_mv_refresh);
   static int obtain_snapshot(
@@ -942,7 +950,26 @@ public:
       const int64_t start_idx,
       const int64_t end_idx,
       const ObIArray<ObTabletID> &tablet_ids);
-
+  static int hold_snapshot(
+      common::ObMySQLTransaction &trans,
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      const int64_t snapshot);
+  static int check_need_acquire_lob_snapshot(
+      const ObTableSchema *data_table_schema,
+      const ObTableSchema *index_table_schema,
+      bool &need_acquire);
+  static int obtain_snapshot(
+      common::ObMySQLTransaction &trans,
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      int64_t &new_fetched_snapshot);
+  static int calc_snapshot_with_gts(
+      int64_t &snapshot,
+      const uint64_t tenant_id,
+      const int64_t ddl_task_id = 0,
+      const int64_t trans_end_snapshot = 0,
+      const int64_t index_snapshot_version_diff = 0);
 private:
   static int hold_snapshot(
       common::ObMySQLTransaction &trans,

@@ -28,6 +28,7 @@
 #include "storage/multi_data_source/mds_unit.h"
 #include "storage/compaction/ob_medium_compaction_info.h"
 #include "storage/tx/ob_trans_define_v4.h"
+#include "storage/multi_data_source/mds_table_impl.h"
 
 #define USING_LOG_PREFIX STORAGE
 

@@ -67,6 +67,7 @@ struct TransformTreeCtx
   const ObIArray<FixedParamValue> *udr_fixed_params_;
   bool ignore_scale_check_;
   bool is_from_pl_;
+  ObItemType parent_type_;
   TransformTreeCtx();
 };
 
@@ -128,7 +129,8 @@ TransformTreeCtx::TransformTreeCtx() :
  assign_father_level_(ObSqlParameterization::NO_VALUES),
  udr_fixed_params_(NULL),
  ignore_scale_check_(false),
- is_from_pl_(false)
+ is_from_pl_(false),
+ parent_type_(T_INVALID)
 {
 }
 
@@ -185,6 +187,7 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
     ctx.mode_ = execution_mode;
     ctx.assign_father_level_ = NO_VALUES;
     ctx.is_from_pl_ = is_from_pl;
+    ctx.parent_type_ = T_INVALID;
 
     if (OB_FAIL(transform_tree(ctx, session))) {
       if (OB_NOT_SUPPORTED != ret) {
@@ -485,6 +488,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
   int64_t value_level = NO_VALUES;
   int64_t assign_level = NO_VALUES;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(ctx.top_node_)
       || OB_ISNULL(ctx.allocator_)
       || OB_ISNULL(ctx.sql_info_)
@@ -502,6 +506,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
     LOG_WARN("failed to get compat type", K(ret));
   } else if (NULL == ctx.tree_) {
     // do nothing
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info, false/*is_ddl*/,
+                       enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {
     ParseNode *func_name_node = NULL;
     if (T_WHERE_SCOPE == ctx.expr_scope_ && T_FUN_SYS == ctx.tree_->type_) {
@@ -550,6 +557,13 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
             ctx.paramlized_questionmask_count_++;
             is_fixed = false;
           }
+          // int constants in div/mul/add/sub
+          bool formalize_int_prec =
+            node->type_ == T_INT
+            && (ctx.parent_type_ == T_OP_DIV
+                || ctx.parent_type_ == T_OP_MUL
+                || ctx.parent_type_ == T_OP_ADD
+                || ctx.parent_type_ == T_OP_MINUS);
 
           ObString literal_prefix;
           int64_t server_collation = CS_TYPE_INVALID;
@@ -558,6 +572,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
             LOG_WARN("get sys variable failed", K(ret));
           } else if (OB_FAIL(add_param_flag(ctx.tree_, *ctx.sql_info_))) {
             SQL_PC_LOG(WARN, "fail to get neg flag", K(ret));
+          } else if (formalize_int_prec
+                     && OB_FAIL(ctx.sql_info_->formalize_prec_index_.add_member(ctx.sql_info_->total_))) {
+            LOG_WARN("add bitset member failed", K(ret));
           } else if (OB_FAIL(ObResolverUtils::resolve_const(node,
                               static_cast<stmt::StmtType>(ctx.sql_info_->sql_traits_.stmt_type_),
                               *(ctx.allocator_),
@@ -572,7 +589,10 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                               NULL, session_info.get_sql_mode(),
                               enable_decimal_int,
                               compat_type,
-                              ctx.is_from_pl_))) {
+                              enable_mysql_compatible_dates,
+                              session_info.get_local_ob_enable_plan_cache(),
+                              ctx.is_from_pl_,
+                              formalize_int_prec))) {
             SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
           } else {
             //对于字符串值，其T_VARCHAR型的parse node有一个T_VARCHAR类型的子node，该子node描述字符串的charset等信息。
@@ -784,6 +804,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
     //由于select中投影列不需要参数化，所以会导致正常parse识别有两个常量，
     //而fast parse只识别一个常量,所以在此加T_VARCHAR的判断, 使得两种parse均只能识别一个常量。
     bool not_param = ctx.not_param_;
+    ObItemType parent_type = ctx.parent_type_;
+    ctx.parent_type_ = root->type_;
     if (not_param) {
       ctx.sql_info_->ps_need_parameterized_ = false;
     }
@@ -935,6 +957,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
         }
       }
     } // for end
+    if (OB_SUCC(ret)) {
+      ctx.parent_type_ = parent_type;
+    }
     if (is_project_list_scope) {
       ctx.is_project_list_scope_ = false;
     }
@@ -1200,8 +1225,8 @@ int ObSqlParameterization::gen_special_param_info(SqlInfo &sql_info, ObPlanCache
       LOG_WARN("fail to assign fixed param idx", K(ret));
     } else if (OB_FAIL(pc_ctx.must_be_positive_index_.add_members2(sql_info.must_be_positive_index_))) {
       LOG_WARN("failed to add bitset members", K(ret));
-    } else {
-      // do nothing
+    } else if (OB_FAIL(pc_ctx.formalize_prec_index_.add_members2(sql_info.formalize_prec_index_))){
+      LOG_WARN("failed to add bitset members", K(ret));
     }
   }
 

@@ -11,6 +11,11 @@
  */
 
 #include "ob_expr_to_pinyin_tab.h"
+
+namespace oceanbase
+{
+namespace sql
+{
 PinyinPair PINYIN_TABLE[PINYIN_COUNT] = {
   {7239, 7243, "ā"},
   {7244, 7244, "á"},
@@ -1515,3 +1520,5 @@ PinyinPair PINYIN_TABLE[PINYIN_COUNT] = {
   {48538, 48573, "zuò"},
   {48574, 48574, "zuo"},
 };
+} // end namespace sql
+} // end namespace oceanbase

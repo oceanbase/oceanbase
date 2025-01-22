@@ -16,6 +16,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "rootserver/ob_ddl_operator.h"
+#include "rootserver/ob_ddl_service.h"
 
 namespace oceanbase
 {

@@ -716,7 +716,9 @@ int ObInitialMigrationTask::process()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 #ifdef ERRSIM
-  SERVER_EVENT_SYNC_ADD("storage_ha", "before_prepare_migration_task");
+  SERVER_EVENT_SYNC_ADD("storage_ha", "before_prepare_migration_task",
+                        "tenant_id", ctx_->tenant_id_,
+                        "ls_id", ctx_->arg_.ls_id_.id());
   DEBUG_SYNC(BEFORE_PREPARE_MIGRATION_TASK);
 #endif
 
@@ -790,6 +792,12 @@ int ObInitialMigrationTask::generate_migration_dags_()
     LOG_WARN("failed to init migration finish dag", K(ret));
   } else if (OB_FAIL(this->get_dag()->add_child(*start_migration_dag))) {
     LOG_WARN("failed to add start migration dag", K(ret), KPC(start_migration_dag));
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("storage_ha", "initial_migration_task_add_child_failed",
+                          "tenant_id", ctx_->tenant_id_,
+                          "ls_id", ctx_->arg_.ls_id_.id(),
+                          "ret", ret);
+#endif
   } else if (OB_FAIL(start_migration_dag->create_first_task())) {
     LOG_WARN("failed to create first task", K(ret));
   } else if (OB_FAIL(start_migration_dag->add_child(*migration_finish_dag))) {

@@ -762,6 +762,9 @@ private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> dml_table_ids_;
   bool direct_load_need_sort_;
   bool insertup_can_do_gts_opt_;
+  ObPxNodePolicy px_node_policy_;
+  common::ObFixedArray<common::ObAddr, common::ObIAllocator> px_node_addrs_;
+  int64_t px_node_count_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

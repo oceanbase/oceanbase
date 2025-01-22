@@ -212,7 +212,9 @@ int FixedCompare<Store_Row, has_addon>::init_basic_cmp_func(
   BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DEC_INT64, null_first);                                        \
   BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DEC_INT128, null_first);                                       \
   BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DEC_INT256, null_first);                                       \
-  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DEC_INT512, null_first);
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_DEC_INT512, null_first);                                       \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_MYSQL_DATE, null_first);                                       \
+  BASIC_SORT_CMP_FUNC_SWITCH(VEC_TC_MYSQL_DATETIME, null_first);
 
     const ObSortFieldCollation &sort_collation = cmp_sort_collations.at(i);
     const ObExpr *expr = cmp_sk_exprs.at(sort_collation.field_idx_);

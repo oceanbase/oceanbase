@@ -118,6 +118,7 @@ public:
   int check_exist_trans(bool &is_exist) const;
   int check_exist_committed_trans(bool &is_exist) const;
   int init_complete();
+  int init_partition_location_and_store_infos();
 private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadSegmentID &segment_id,
@@ -154,6 +155,15 @@ public:
     share::AutoincParam autoinc_param_;
   };
   SessionContext *session_ctx_array_;
+  struct StoreInfo
+  {
+    StoreInfo() : enable_heart_beat_(false) {}
+    ~StoreInfo() {}
+    ObAddr addr_;
+    bool enable_heart_beat_;
+    TO_STRING_KV(K_(addr), K_(enable_heart_beat));
+  };
+  common::ObArray<StoreInfo> store_infos_;
 private:
   struct SegmentCtx : public common::LinkHashValue<table::ObTableLoadSegmentID>
   {

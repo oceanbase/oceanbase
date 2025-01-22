@@ -42,7 +42,7 @@ public:
       const ObTableSchema &data_table_schema,
       const uint64_t index_table_id,
       const bool is_global_index,
-      const ObTableLockOwnerID lock_owner,
+      const transaction::tablelock::ObTableLockOwnerID lock_owner,
       ObMySQLTransaction &trans);
   static int lock_for_rebuild_index(
       const share::schema::ObTableSchema &data_table_schema,
@@ -82,8 +82,8 @@ public:
     const uint64_t tenant_id,
     const ObTableSchema &table_schema,
     const ObIArray<ObTabletID> &tablet_ids,
-    const ObTableLockOwnerID &lock_owner,
-    const ObTableLockOwnerID new_lock_owner,
+    const transaction::tablelock::ObTableLockOwnerID &lock_owner,
+    const transaction::tablelock::ObTableLockOwnerID new_lock_owner,
     const bool is_global_idx,
     ObMySQLTransaction &trans);
 
@@ -129,6 +129,10 @@ public:
       const uint64_t table_id,
       const ObIArray<ObTabletID> *hidden_tablet_ids_alone,
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
+      ObMySQLTransaction &trans);
+  static int lock_table_in_trans(
+      const ObTableSchema &table_schema,
+      const transaction::tablelock::ObTableLockMode lock_mode,
       ObMySQLTransaction &trans);
 
 private:

@@ -775,13 +775,35 @@ void ObSharedObjectReaderWriter::reset()
   is_inited_ = false;
 }
 
+int callback_do_write_io(const ObSharedObjectWriteInfo &write_info)
+{
+  int ret = OB_SUCCESS;
+  if (!write_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid write info", K(ret), K(write_info));
+  } else if (nullptr != write_info.write_callback_ && OB_FAIL(write_info.write_callback_->do_write_io())) {
+    LOG_WARN("fail to start  write callback", K(ret));
+  }
+  return ret;
+}
+
+int callback_do_write_io(const ObIArray<ObSharedObjectWriteInfo> &write_infos)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < write_infos.count(); ++i) {
+    if (OB_FAIL(callback_do_write_io(write_infos.at(i)))) {
+      LOG_WARN("failed to start write callback", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSharedObjectReaderWriter::async_write(
     const ObSharedObjectWriteInfo &write_info,
     const blocksstable::ObStorageObjectOpt &curr_opt,
     ObSharedObjectWriteHandle &shared_obj_handle)
 {
   int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(mutex_);
   ObSharedObjectWriteArgs write_args;
   ObMetaDiskAddr prev_addr;
   prev_addr.set_none_addr();
@@ -789,23 +811,29 @@ int ObSharedObjectReaderWriter::async_write(
   write_args.object_opt_ = curr_opt;
   ObSharedObjectHeader header;
   ObSharedObjectsWriteCtx tmp_write_ctx;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Not init", K(ret));
-  } else if (OB_UNLIKELY(!write_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(write_info));
-  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(do_switch(write_args.object_opt_))) {
-    LOG_WARN("fail to switch object for shared storage", K(ret), K(write_args));
+  {
+    lib::ObMutexGuard guard(mutex_);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("Not init", K(ret));
+    } else if (OB_UNLIKELY(!write_info.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arg", K(ret), K(write_info));
+    } else if (GCTX.is_shared_storage_mode() && OB_FAIL(do_switch(write_args.object_opt_))) {
+      LOG_WARN("fail to switch object for shared storage", K(ret), K(write_args));
+    }
+    if (FAILEDx(inner_write_block(
+        header,
+        write_info,
+        write_args,
+        shared_obj_handle,
+        tmp_write_ctx))) {
+      LOG_WARN("fail to write block", K(ret), K(write_info), K(write_args));
+    }
   }
-  if (FAILEDx(inner_write_block(
-      header,
-      write_info,
-      write_args,
-      shared_obj_handle,
-      tmp_write_ctx))) {
-    LOG_WARN("fail to write block", K(ret), K(write_info), K(write_args));
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(callback_do_write_io(write_info))) {
+    LOG_WARN("failed to start write callback", K(ret));
   }
   return ret;
 }
@@ -843,6 +871,11 @@ int ObSharedObjectReaderWriter::async_batch_write(
       }
     }
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(callback_do_write_io(write_infos))) {
+    LOG_WARN("failed to start write callback", K(ret));
+  }
   return ret;
 }
 
@@ -852,32 +885,38 @@ int ObSharedObjectReaderWriter::async_link_write(
     ObSharedObjectLinkHandle &shared_obj_handle)
 {
   int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(mutex_);
-  ObSharedObjectWriteArgs write_args;
-  ObSharedObjectsWriteCtx write_ctx;
-  write_args.object_opt_ = curr_opt;
-  write_args.need_flush_ = true;
-  write_args.need_align_ = need_align_;
-  write_args.is_linked_ = true;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Not init", K(ret));
-  } else if (OB_FAIL(shared_obj_handle.wait())) {
-    LOG_WARN("Fail to wait other blocks finish", K(ret), K(shared_obj_handle));
-  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(do_switch(write_args.object_opt_))) {
-    LOG_WARN("fail to switch object for shared storage", K(ret), K(write_args));
-  }
+  {
+    lib::ObMutexGuard guard(mutex_);
+    ObSharedObjectWriteArgs write_args;
+    ObSharedObjectsWriteCtx write_ctx;
+    write_args.object_opt_ = curr_opt;
+    write_args.need_flush_ = true;
+    write_args.need_align_ = need_align_;
+    write_args.is_linked_ = true;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("Not init", K(ret));
+    } else if (OB_FAIL(shared_obj_handle.wait())) {
+      LOG_WARN("Fail to wait other blocks finish", K(ret), K(shared_obj_handle));
+    } else if (GCTX.is_shared_storage_mode() && OB_FAIL(do_switch(write_args.object_opt_))) {
+      LOG_WARN("fail to switch object for shared storage", K(ret), K(write_args));
+    }
 
-  if (FAILEDx(inner_async_write(write_info, write_args, shared_obj_handle, write_ctx))) {
-    LOG_WARN("Fail to inner async write block", K(ret), K(write_info), K(write_args));
-  } else if (OB_FAIL(shared_obj_handle.write_ctx_.set_addr(write_ctx.addr_))) {
-    LOG_WARN("Fail to set addr to write ctx", K(ret), K(write_ctx));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < write_ctx.block_ids_.count(); ++i) {
-      if (OB_FAIL(shared_obj_handle.write_ctx_.add_object_id(write_ctx.block_ids_.at(i)))) {
-        LOG_WARN("Fail to add block id", K(ret), K(write_ctx));
+    if (FAILEDx(inner_async_write(write_info, write_args, shared_obj_handle, write_ctx))) {
+      LOG_WARN("Fail to inner async write block", K(ret), K(write_info), K(write_args));
+    } else if (OB_FAIL(shared_obj_handle.write_ctx_.set_addr(write_ctx.addr_))) {
+      LOG_WARN("Fail to set addr to write ctx", K(ret), K(write_ctx));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < write_ctx.block_ids_.count(); ++i) {
+        if (OB_FAIL(shared_obj_handle.write_ctx_.add_object_id(write_ctx.block_ids_.at(i)))) {
+          LOG_WARN("Fail to add block id", K(ret), K(write_ctx));
+        }
       }
     }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(callback_do_write_io(write_info))) {
+    LOG_WARN("failed to satrt write callback", K(ret));
   }
   return ret;
 }

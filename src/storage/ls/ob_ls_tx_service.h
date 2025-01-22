@@ -102,7 +102,8 @@ public:
   int get_read_store_ctx(const transaction::ObTxReadSnapshot &snapshot,
                          const bool read_latest,
                          const int64_t lock_timeout,
-                         ObStoreCtx &store_ctx) const;
+                         ObStoreCtx &store_ctx,
+                         transaction::ObTxDesc *tx_desc = NULL) const;
   int get_read_store_ctx(const share::SCN &snapshot_version,
                          const int64_t lock_timeout,
                          ObStoreCtx &store_ctx) const;

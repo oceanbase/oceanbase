@@ -18,6 +18,7 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "common/ob_clock_generator.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "lib/allocator/ob_malloc.h"
 
 namespace oceanbase
 {
@@ -26,9 +27,8 @@ namespace common
 using namespace obutil;
 using namespace lib;
 
-int ObTimer::init(const char* thread_name, const ObMemAttr &attr)
+int ObTimer::init(const char* timer_name, const ObMemAttr &attr)
 {
-  UNUSED(thread_name);
   UNUSED(attr);
   int ret = OB_SUCCESS;
   if (ObTimerService::get_instance().is_never_started()) {
@@ -42,6 +42,7 @@ int ObTimer::init(const char* thread_name, const ObMemAttr &attr)
   } else {
     is_inited_ = true;
     is_stopped_ = false;
+    ObTimerUtil::copy_buff(timer_name_, sizeof(timer_name_), timer_name);
   }
   return ret;
 }
@@ -99,6 +100,7 @@ void ObTimer::destroy()
     wait();
     is_inited_ = false;
     timer_service_ = nullptr;
+    timer_name_[0] = '\0';
   }
 }
 

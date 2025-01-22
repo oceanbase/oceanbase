@@ -12,6 +12,7 @@
 
 #include "lib/thread/threads.h"
 #include "lib/oblog/ob_log.h"
+#include "lib/allocator/ob_malloc.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;

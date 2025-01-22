@@ -296,7 +296,8 @@ bool ObS3Client::is_stopped() const
 bool ObS3Client::try_stop(const int64_t timeout)
 {
   bool is_stopped = true;
-  if (OB_SUCCESS == lock_.wrlock(timeout)) {
+  const int64_t abs_timeout_us = ObTimeUtility::current_time() + timeout;
+  if (OB_SUCCESS == lock_.wrlock(abs_timeout_us)) {
     if (is_inited_) {
       const int64_t cur_time_us = ObTimeUtility::current_time();
       if (ref_cnt_ <= 0
@@ -1380,6 +1381,10 @@ int ObStorageS3Writer::write_obj_(const char *obj_name, const char *buf, const i
     Aws::S3::Model::PutObjectOutcome outcome;
     if (OB_FAIL(s3_client_->put_object(request, outcome))) {
       OB_LOG(WARN, "failed to put s3 object", K(ret));
+#ifdef ERRSIM
+    } else if (OB_FAIL(EventTable::EN_OBJECT_STORAGE_CHECKSUM_ERROR)) {
+      ret = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
+#endif
     } else if (!outcome.IsSuccess()) {
       handle_s3_outcome(outcome, ret);
       OB_LOG(WARN, "failed to write object into s3",
@@ -1504,10 +1509,18 @@ int ObStorageS3Reader::pread_(char *buf,
         handle_s3_outcome(outcome, ret);
         OB_LOG(WARN, "failed to read object from s3",
             K(ret), K_(bucket), K_(object), K(range_read));
+      } else if (FALSE_IT(read_size = outcome.GetResult().GetContentLength())) {
+      } else if (OB_UNLIKELY(read_size > get_data_size)) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "returned data size is larger than expected",
+            K(ret), K_(has_meta), K_(file_length),
+            K(read_size), K(get_data_size), K(buf_size), K(offset), K_(bucket), K_(object));
       } else {
-        // For nohead reads, the returned size may be larger than buf_size,
-        // which may cause buffer overflow. Use the min function to prevent that.
-        read_size = MIN(outcome.GetResult().GetContentLength(), get_data_size);
+        if (OB_UNLIKELY(read_size < get_data_size)) {
+          OB_LOG(WARN, "returned data size is less than expected", K(ret),
+              K_(bucket), K_(object), K(offset), K(buf_size), K_(has_meta), K_(file_length));
+        }
+
         outcome.GetResult().GetBody().read(buf, read_size);
 
         // read size <= get_data_size <= buf_size

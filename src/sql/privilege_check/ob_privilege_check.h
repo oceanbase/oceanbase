@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SQL_PRIVILEGE_CHECK_OB_PRIVILEGE_CHECK_
 #define OCEANBASE_SQL_PRIVILEGE_CHECK_OB_PRIVILEGE_CHECK_
 
+#include <cstdint>
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_compatibility_control.h"
 #include "sql/resolver/ob_stmt_type.h"
@@ -100,7 +101,7 @@ public:
   static int check_read_only(const ObSqlCtx &ctx,
                              const stmt::StmtType stmt_type,
                              const bool has_global_variable,
-                             const ObStmtNeedPrivs &stmt_need_privs);
+                             const share::schema::ObStmtNeedPrivs &stmt_need_privs);
 private:
    ///Extract priv info needed by a single stmt, may be sub-query.
    ///called by recursive_stmt_need_priv

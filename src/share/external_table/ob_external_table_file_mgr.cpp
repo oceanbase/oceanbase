@@ -72,6 +72,7 @@ int ObExternalFileInfo::deep_copy(ObIAllocator &allocator, const ObExternalFileI
   }
   return ret;
 }
+
 int ObExternalTableFilesKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
 {
    int ret = OB_SUCCESS;
@@ -688,9 +689,21 @@ int ObExternalTableFileManager::calculate_odps_part_val_by_part_spec(const ObTab
               odps_part_row.get_cell(j).set_meta_type(part_col->get_meta_type());
               odps_part_row.get_cell(j).set_int(val);
             }
+          } else if (is_oracle_mode() && ObNumberType == part_key_type) {
+            number::ObNumber num;
+            if (OB_FAIL(num.from(part_spec.ptr(), part_spec.length(), allocator))) {
+              LOG_WARN("cast string to number failed", K(ret), K(part_spec),
+                       K(part_key_type));
+            } else {
+              LOG_INFO("cast string to number success", K(ret));
+              odps_part_row.get_cell(j).set_meta_type(part_col->get_meta_type());
+              odps_part_row.get_cell(j).set_number(num);
+            }
           } else {
+            // TODO(bitao): fix support to run in oracle mode and more types
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected part_key_type", K(part_key_type), K(j), K(ret));
+            LOG_WARN("unexpected part_key_type", K(part_spec), K(part_key_type),
+                     K(j), K(ret));
           }
         }
         if (OB_SUCC(ret) && OB_FAIL(part_vals.push_back(odps_part_row))) {
@@ -1280,8 +1293,8 @@ int ObExternalTableFileManager::fill_cache_from_inner_table(
   int64_t total_wait_secs = 0;
 
   while (OB_FAIL(fill_cache_locks_[bucket_id].lock(LOCK_TIMEOUT))
-         && OB_TIMEOUT == ret && !THIS_WORKER.is_timeout()) {
-    total_wait_secs += LOAD_CACHE_LOCK_CNT;
+         && OB_TIMEOUT == ret && OB_SUCC(THIS_WORKER.check_status())) {
+    total_wait_secs += (LOCK_TIMEOUT / 1000000);
     LOG_WARN("fill external table cache wait", K(total_wait_secs));
   }
   if (OB_SUCC(ret)) {

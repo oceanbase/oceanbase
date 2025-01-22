@@ -22,6 +22,7 @@
 #include "storage/direct_load/ob_direct_load_i_table.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
+#include "src/observer/table_load/ob_table_load_error_row_handler.h"
 
 namespace oceanbase
 {
@@ -289,6 +290,7 @@ int ObTableLoadStoreTableCtx::init_insert_table_ctx()
   insert_table_param.is_heap_table_ = schema_->is_heap_table_;
   insert_table_param.is_column_store_ = schema_->is_column_store_;
   insert_table_param.online_opt_stat_gather_ = store_ctx_->ctx_->param_.online_opt_stat_gather_ && !is_index_table_;
+  insert_table_param.reuse_pk_ = !ObDirectLoadInsertMode::is_overwrite_mode(store_ctx_->ctx_->param_.insert_mode_);
   insert_table_param.is_incremental_ = ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
   insert_table_param.trans_param_ = store_ctx_->trans_param_;
   insert_table_param.datum_utils_ = &(schema_->datum_utils_);

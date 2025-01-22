@@ -213,13 +213,8 @@ union ObTxPartFlag
   struct FlagBit
   {
     unsigned int is_dup_ls_ : 1;
-
-    FlagBit() { reset(); }
-
-    void reset() { is_dup_ls_ = 0; }
-
-    TO_STRING_KV(K(is_dup_ls_));
-
+    bool is_clean_          : 1; // no Write happended, even rollbacked
+    TO_STRING_KV(K_(is_dup_ls), K_(is_clean));
   } flag_bit_;
 
   ObTxPartFlag() { reset(); }
@@ -227,11 +222,13 @@ union ObTxPartFlag
   void reset()
   {
     flag_val_ = 0;
-    flag_bit_.reset();
   }
 
   bool is_dup_ls() const { return flag_bit_.is_dup_ls_ == 1; }
   void set_dup_ls() { flag_bit_.is_dup_ls_ = 1; }
+  bool is_clean() const { return flag_bit_.is_clean_; }
+  void set_clean() { flag_bit_.is_clean_ = true; }
+  void set_dirty() { flag_bit_.is_clean_ = false; }
 };
 
 struct ObTxPart
@@ -249,7 +246,8 @@ struct ObTxPart
   ObTxPartFlag flag_;     // used to describe some special attributes of a participant
   bool operator==(const ObTxPart &rhs) const { return id_ == rhs.id_ && addr_ == rhs.addr_; }
   bool operator!=(const ObTxPart &rhs) const { return !operator==(rhs); }
-  bool is_clean() const { return !first_scn_.is_valid() || (first_scn_ > last_scn_); }
+  bool is_clean() const { return flag_.is_clean(); }
+  bool is_without_valid_write() const { return !first_scn_.is_valid() || last_scn_ < first_scn_; }
   bool is_without_ctx() const { return is_without_ctx(epoch_); }
   static bool is_without_ctx(int64_t epoch) { return EPOCH_DEAD == epoch; }
   TO_STRING_KV(K_(id), K_(addr), K_(epoch), K_(first_scn), K_(last_scn), K_(last_touch_ts));
@@ -269,7 +267,7 @@ public:
   share::SCN version_;
   ObTransID tx_id_;
   ObTxSEQ scn_;
-  bool elr_;
+  bool elr_; // whether allowed read elr
 public:
   TO_STRING_KV(K_(version), K_(tx_id), K_(scn));
   ObTxSnapshot();
@@ -282,6 +280,7 @@ public:
   const ObTransID &tx_id() const { return tx_id_; }
   void set_tx_id(const ObTransID &tx_id) { tx_id_ = tx_id; }
   const ObTxSEQ &tx_seq() const { return scn_; }
+  void set_elr(const bool elr) { elr_ = elr; }
   bool is_elr() const { return elr_; }
   OB_UNIS_VERSION(1);
 };
@@ -332,7 +331,8 @@ public:
   const ObAddr get_snapshot_acquire_addr() const { return snapshot_acquire_addr_; }
   void reset();
   int assign(const ObTxReadSnapshot &);
-
+  void try_set_read_elr();
+  bool read_elr() const { return core_.is_elr(); }
   /**
    * only used for lob, other situation DONOT use
    *
@@ -670,7 +670,7 @@ protected:
   share::SCN commit_start_scn_;      // scn of starting to commit
   /* internal abort cause */
   int16_t abort_cause_;              // Tx Aborted cause
-  bool can_elr_;                     // can early lock release
+  bool unused_can_elr_;
 private:
   ObSEArray<uint64_t, 1> modified_tables_; // used in cursor test read uncommitted
 private:
@@ -715,13 +715,17 @@ private:
   int update_clean_part(const share::ObLSID &id,
                         const int64_t epoch,
                         const ObAddr &addr);
+  int add_clean_part_if_absent(const share::ObLSID &id,
+                               const int64_t epoch,
+                               const ObAddr &addr,
+                               const bool is_dup);
   int update_part(ObTxPart &p);
   int update_parts(const share::ObLSArray &parts);
   int switch_to_idle();
   int set_commit_cb(ObITxCallback *cb);
   bool execute_commit_cb();
 private:
-  int update_part_(ObTxPart &p, bool append = true);
+  int update_part_(ObTxPart &p, const bool append = true, const bool check_only_if_exist = false);
   int add_conflict_tx_(const ObTransIDAndAddr &conflict_tx);
   int merge_conflict_txs_(const ObIArray<ObTransIDAndAddr> &conflict_ids);
   int update_parts_(const ObTxPartList &list);
@@ -772,7 +776,6 @@ public:
                K_(flags_.INTERRUPTED),
                K_(flags_.BLOCK),
                K_(flags_.REPLICA),
-               K_(can_elr),
                K_(conflict_txs),
                K_(abort_cause),
                K_(commit_expire_ts),
@@ -846,14 +849,15 @@ public:
       && state_ <= State::SUB_ROLLBACKED;
   }
   bool is_aborted() const { return state_ == State::ABORTED; }
-  bool is_tx_timeout() { return ObClockGenerator::getClock() > expire_ts_; }
-  bool is_tx_commit_timeout() { return ObClockGenerator::getClock() > commit_expire_ts_;}
+  bool is_tx_timeout() { return expire_ts_ > 0 && ObClockGenerator::getClock() > expire_ts_; }
+  bool is_tx_commit_timeout() { return commit_expire_ts_ > 0 && ObClockGenerator::getClock() > commit_expire_ts_;}
   void set_xa_ctx(ObXACtx *xa_ctx);
   ObXACtx *get_xa_ctx() { return xa_ctx_; }
   void set_xid(const ObXATransID &xid) { xid_ = xid; }
   void set_sessid(const uint32_t session_id) { sess_id_ = session_id; }
   void set_assoc_sessid(const uint32_t session_id) { assoc_sess_id_ = session_id; }
   const ObXATransID &get_xid() const { return xid_; }
+  void reset_xid() { xid_.reset(); }
   bool is_xa_trans() const { return !xid_.empty(); }
   bool is_xa_tightly_couple() const { return xa_tightly_couple_; }
   void set_xa_start_addr(common::ObAddr &addr) { xa_start_addr_ = addr; }
@@ -882,8 +886,6 @@ public:
   void release_implicit_savepoint(const ObTxSEQ savepoint);
   ObTransTraceLog &get_tlog() { return tlog_; }
   bool is_xa_terminate_state_() const;
-  void set_can_elr(const bool can_elr) { can_elr_ = can_elr; }
-  bool is_can_elr() const { return can_elr_; }
   // for dblink
   ObGlobalTxType get_global_tx_type(const ObXATransID &xid) const;
   void set_global_tx_type(const ObGlobalTxType global_tx_type)
@@ -925,6 +927,8 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   int add_modified_tables(const ObIArray<uint64_t> &tables);
   bool has_modify_table(const uint64_t table_id) const;
   DISABLE_COPY_ASSIGN(ObTxDesc);
+  bool is_all_parts_clean() const;
+  bool is_all_parts_without_valid_write() const;
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;

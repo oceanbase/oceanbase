@@ -704,7 +704,7 @@ int ObMediumCompactionScheduleFunc::check_if_schema_changed(ObMediumCompactionIn
 {
   int ret = OB_SUCCESS;
   bool is_schema_changed = false;
-  if (OB_FAIL(check_if_schema_changed(*tablet_handle_.get_obj(), medium_info.storage_schema_, is_schema_changed))) {
+  if (OB_FAIL(check_if_schema_changed(*tablet_handle_.get_obj(), medium_info.storage_schema_, medium_info.data_version_, is_schema_changed))) {
     LOG_WARN("failed to get check if schema changed", K(ret), K(medium_info));
 #ifdef ERRSIM
   } else if (OB_UNLIKELY(EN_COMPACTION_SKIP_INIT_SCHEMA_CHANGED)) {
@@ -723,6 +723,7 @@ int ObMediumCompactionScheduleFunc::check_if_schema_changed(ObMediumCompactionIn
 int ObMediumCompactionScheduleFunc::check_if_schema_changed(
     const ObTablet &tablet,
     const ObStorageSchema &schema,
+    const uint64_t data_version,
     bool &is_schema_changed)
 {
   int ret = OB_SUCCESS;
@@ -737,8 +738,8 @@ int ObMediumCompactionScheduleFunc::check_if_schema_changed(
   } else if (OB_ISNULL(last_major)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null major sstable", KR(ret), KPC(last_major));
-  } else if (0 == last_major->get_data_macro_block_count()
-          && ObCompressorType::NONE_COMPRESSOR == tablet.get_last_major_compressor_type()) {
+  } else if (data_version >= DATA_VERSION_4_3_5_0
+          && 0 == last_major->get_data_macro_block_count()) {
     // empty major, no need to check whether schema changed
   } else if (OB_UNLIKELY(!schema.is_inited())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1433,7 +1434,7 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
     }
 
     if (is_medium_checker && affected_rows > 0) {
-      MTL(ObTenantTabletScheduler*)->update_error_tablet_cnt(affected_rows);
+      MTL(ObTenantMediumChecker*)->update_error_tablet_cnt(affected_rows);
     }
   }
   return ret;
@@ -1568,7 +1569,7 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
     LOG_WARN("failed to check if schema changed", K(ret));
   } else if (medium_info.is_schema_changed_) {
     // cannot skip merge
-  } else if (OB_FAIL(tablet.get_all_memtables(memtables))) {
+  } else if (OB_FAIL(tablet.get_memtables(memtables))) {
     LOG_WARN("failed to get all memtable", K(ret), K(tablet));
   } else if (!memtables.empty()) {
     // tablet has memtable, exist inc data to merge

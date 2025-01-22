@@ -34,6 +34,10 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
+#include "share/resource_manager/ob_resource_manager.h"
+#include "share/resource_manager/ob_resource_mapping_rule_manager.h"
+#include "share/resource_manager/ob_resource_col_mapping_rule_manager.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif

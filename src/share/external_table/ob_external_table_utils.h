@@ -18,10 +18,10 @@
 #include "lib/allocator/page_arena.h"
 #include "src/share/schema/ob_column_schema.h"
 #include "sql/engine/px/ob_dfo.h"
+#include "src/share/external_table/ob_external_table_file_mgr.h"
 
 namespace oceanbase
 {
-
 namespace common
 {
 class ObObj;

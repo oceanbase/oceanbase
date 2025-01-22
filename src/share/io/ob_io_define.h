@@ -102,7 +102,6 @@ enum ObIOModule {
 };
 
 const int64_t SYS_MODULE_CNT = SYS_MODULE_END_ID - SYS_MODULE_START_ID;
-static constexpr char BACKGROUND_CGROUP[] = "background";
 
 const char *get_io_sys_group_name(ObIOModule module);
 struct ObIOFlag final
@@ -607,6 +606,7 @@ public:
   ObIOGroupKey get_group_key() const;
   uint64_t get_sys_module_id() const;
   bool is_sys_module() const;
+  bool is_object_device_req() const;
   char *calc_io_buf();  // calc the aligned io_buf of raw_buf_, which interact with the operating system
   const ObIOFlag &get_flag() const;
   ObIOMode get_mode() const; // 2 mode
@@ -619,6 +619,7 @@ public:
   int prepare(char *next_buffer = nullptr, int64_t next_size = 0, int64_t next_offset = 0);
   int recycle_buffer();
   int re_prepare();
+  int retry_io();
   int try_alloc_buf_until_timeout(char *&io_buf);
   bool can_callback() const;
   void free_io_buffer();
@@ -627,7 +628,7 @@ public:
 
   int64_t get_remained_io_timeout_us();
 
-  TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_),
+  TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_), K(is_object_device_req()),
                K(trace_id_), K(retry_count_), K(tenant_io_mgr_), K_(storage_accesser),
                KPC(io_result_), K_(part_id));
 private:
@@ -743,6 +744,7 @@ private:
 
 private:
   ObIOResult *result_;
+  bool is_traced_;
 };
 
 struct ObTenantIOConfig final
@@ -808,6 +810,7 @@ struct ObAtomIOClock final
 {
   ObAtomIOClock() : iops_(0), last_ns_(0)
   {}
+  void atom_update_reserve(const int64_t current_ts, const double iops_scale, int64_t &deadline_ts);
   void atom_update(const int64_t current_ts, const double iops_scale, int64_t &deadline_ts);
   void compare_and_update(const int64_t current_ts, const double iops_scale, int64_t &deadline_ts);
   void reset();

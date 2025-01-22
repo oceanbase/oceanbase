@@ -394,6 +394,8 @@ erase_time	timestamp(6)	NO		NULL
 compile_time	bigint(20) unsigned	NO		NULL	
 pl_cg_mem_hold	bigint(20)	NO		NULL	
 pl_evict_version	bigint(20)	NO		NULL	
+plan_status	bigint(20)	NO		NULL	
+adaptive_feedback_times	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_plan_stat;
 IF(count(*) >= 0, 1, 0)
 1
@@ -998,6 +1000,8 @@ duplicate_read_consistency	bigint(20)	NO		0
 index_params	varchar(256)	NO			
 micro_index_clustered	tinyint(4)	NO		0	
 mv_mode	bigint(20)	NO		0	
+parser_properties	longtext	NO			
+enable_macro_block_bloom_filter	tinyint(4)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2853,6 +2857,8 @@ duplicate_read_consistency	bigint(20)	NO		0
 index_params	varchar(256)	NO			
 micro_index_clustered	tinyint(4)	NO		0	
 mv_mode	bigint(20)	NO		0	
+parser_properties	longtext	NO			
+enable_macro_block_bloom_filter	tinyint(4)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2950,6 +2956,8 @@ duplicate_read_consistency	bigint(20)	YES		0
 index_params	varchar(256)	YES			
 micro_index_clustered	tinyint(4)	YES		0	
 mv_mode	bigint(20)	YES		0	
+parser_properties	longtext	YES			
+enable_macro_block_bloom_filter	tinyint(4)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -6374,6 +6382,7 @@ interval_ts	bigint(20)	YES		NULL
 user_id	bigint(20)	YES		-1	
 database_id	bigint(20)	YES		-1	
 max_failures	bigint(20)	YES		0	
+func_type	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_scheduler_job;
 IF(count(*) >= 0, 1, 0)
 1
@@ -8985,6 +8994,7 @@ last_refresh_date	timestamp(6)	YES		NULL
 last_refresh_time	bigint(20)	YES		NULL	
 last_refresh_trace_id	varchar(64)	YES		NULL	
 schema_version	bigint(20)	NO		NULL	
+refresh_dop	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview;
 IF(count(*) >= 0, 1, 0)
 1
@@ -10475,6 +10485,7 @@ max_net_bandwidth	bigint(20)	NO		NULL
 max_net_bandwidth_display	varchar(128)	NO		NULL	
 real_net_bandwidth	bigint(20)	NO		NULL	
 real_net_bandwidth_display	varchar(128)	NO		NULL	
+norm_iops	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_group_io_stat;
 IF(count(*) >= 0, 1, 0)
 1
@@ -10940,3 +10951,16 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ncomp_dll_v2 limit 1;
+desc oceanbase.__all_virtual_ddl_diagnose_info;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+ddl_task_id	bigint(20)	NO	MUL	NULL	
+object_table_id	bigint(20)	NO		NULL	
+opname	varchar(64)	NO		NULL	
+create_time	timestamp(6)	NO		NULL	
+finish_time	timestamp(6)	NO		NULL	
+diagnose_info	varchar(1024)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ddl_diagnose_info;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ddl_diagnose_info limit 1;

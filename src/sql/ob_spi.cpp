@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL
+
 #include "ob_spi.h"
 #include "ob_sql.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
@@ -48,6 +49,7 @@
 #endif
 #include "pl/ob_pl_allocator.h"
 #include "pl/diagnosis/ob_pl_sql_audit_guard.h"
+
 namespace oceanbase
 {
 using namespace sqlclient;
@@ -176,10 +178,14 @@ int ObSPIResultSet::close_result_set()
   int ret = OB_SUCCESS;
   if (is_inited_) {
     WITH_CONTEXT(mem_context_) {
-      ret = result_set_->close();
+      if (result_set_->get_errcode() != OB_SUCCESS) {
+        IGNORE_RETURN result_set_->close(); // result set already failed before close, ignore error code.
+      } else {
+        ret = result_set_->close();
+      }
     }
   } else {
-    LOG_INFO("result set is not init", K(ret));
+    LOG_DEBUG("result set is not init", K(ret));
   }
   return ret;
 }
@@ -392,6 +398,7 @@ int ObSPIResultSet::start_trans(ObExecContext &ctx)
 {
   // cursor执行之前如果还没有事务, 则开始一个新的事务
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx);
   ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx);
   ObTaskExecutorCtx &task_exec_ctx = ctx.get_task_exec_ctx();
@@ -880,7 +887,7 @@ int ObSPIService::spi_calc_expr_at_idx(pl::ObPLExecCtx *ctx,
   CK (OB_LIKELY(0 <= expr_idx && expr_idx < ctx->func_->get_expressions().count()));
   const ObSqlExpression *expr = nullptr;
   OX (expr = ctx->func_->get_expressions().at(expr_idx));
-  OZ (spi_calc_expr(ctx, expr, result_idx, result));
+  OZ (SMART_CALL(spi_calc_expr(ctx, expr, result_idx, result)));
   return ret;
 }
 
@@ -917,6 +924,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
       CK (OB_NOT_NULL(pl_ctx));
       if (OB_SUCC(ret) && lib::is_mysql_mode() && !pl_ctx->is_function_or_trigger()) {
         if (ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
+          DISABLE_SQL_MEMLEAK_GUARD;
           const ObString expr_savepoint_name("PL expr savepoint");
           OZ (ObSqlTransControl::create_savepoint(*ctx->exec_ctx_, expr_savepoint_name));
           OX (has_implicit_savepoint = true);
@@ -940,6 +948,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
         if (OB_SUCCESS != ret && ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
           int tmp_ret = OB_SUCCESS;
           if (has_implicit_savepoint) {
+            DISABLE_SQL_MEMLEAK_GUARD;
             const ObString expr_savepoint_name("PL expr savepoint");
             if (OB_SUCCESS !=
                 (tmp_ret = ObSqlTransControl::rollback_savepoint(*ctx->exec_ctx_, expr_savepoint_name))) {
@@ -1506,6 +1515,7 @@ int ObSPIService::set_variable(ObPLExecCtx *ctx,
 
 void ObSPIService::adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result)
 {
+  DISABLE_SQL_MEMLEAK_GUARD;
   if (OB_NOT_NULL(ctx.get_my_session())
       && ctx.get_my_session()->get_pl_context()) {
     ctx.get_my_session()->set_pl_can_retry(false);
@@ -1517,6 +1527,7 @@ void ObSPIService::adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result)
 int ObSPIService::recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
@@ -1528,6 +1539,7 @@ int ObSPIService::recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int 
 int ObSPIService::recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, int &result)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   CK (OB_NOT_NULL(ctx.get_my_session()));
   if (OB_SUCC(ret) // 存在隐式的savepoint才做检查
       && OB_NOT_NULL(ctx.get_my_session()->get_pl_context())
@@ -1548,6 +1560,7 @@ int ObSPIService::recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, i
 int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollback)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   if (OB_SUCC(ret)) {
     ObSQLSessionInfo *my_session = ctx->exec_ctx_->get_my_session();
@@ -1603,6 +1616,7 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
           ctx->exec_ctx_->set_need_disconnect(false);
 #endif
         } else {
+          DISABLE_SQL_MEMLEAK_GUARD;
           // PL内部的提交使用同步提交
           OZ (sql::ObSqlTransControl::end_trans(*ctx->exec_ctx_, is_rollback, true));
           // 如果发生过提交禁止PL整体重试
@@ -3475,10 +3489,10 @@ int ObSPIService::spi_cursor_open_with_param_idx(ObPLExecCtx *ctx,
   MAKE_EXPR_BUFFER(alloc, actual_param_idx, cursor_param_count,
                     actual_param_exprs);
 
-  OZ(spi_cursor_open(ctx, sql, ps_sql, type, for_update, has_hidden_rowid,
-                      sql_param_exprs, sql_param_count, package_id, routine_id,
-                      cursor_index, formal_param_idxs, actual_param_exprs,
-                      cursor_param_count, skip_locked));
+  OZ (SMART_CALL(spi_cursor_open(ctx, sql, ps_sql, type, for_update, has_hidden_rowid,
+                                 sql_param_exprs, sql_param_count, package_id, routine_id,
+                                 cursor_index, formal_param_idxs, actual_param_exprs,
+                                 cursor_param_count, skip_locked)));
 
   return ret;
 }
@@ -3618,6 +3632,8 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
                                           int64_t orc_max_ret_rows)
 {
   int ret = OB_SUCCESS;
+
+  DISABLE_SQL_MEMLEAK_GUARD;
 
   HEAP_VAR(ObSPIResultSet, spi_result) {
     ObSPICursor* spi_cursor = NULL;
@@ -5864,13 +5880,14 @@ int ObSPIService::spi_copy_ref_cursor(ObPLExecCtx *ctx,
       // 到了这里先把returning状态重置，ref count先不加，等赋值成功再加
       OX (src_cursor->set_is_returning(false));
     }
-    if (src_cursor == dest_cursor) {
+    if (OB_FAIL(ret)) {
+    } else if (src_cursor == dest_cursor) {
       // 说明指向同一个内存，或者都为null， 这个时候应该不干，除了一个特殊的场景，即return场景，需要将count+1
       // 例如: c1 := c2; c1 := c2; c2 may null or not null;
       if (need_inc_ref_cnt) {
         OX (src_cursor->inc_ref_count());
       }
-    } else if (!src_cursor->isopen() && 0 == src_cursor->get_ref_count() && NULL == dest_cursor) {
+    } else if (OB_NOT_NULL(src_cursor) && !src_cursor->isopen() && 0 == src_cursor->get_ref_count() && NULL == dest_cursor) {
       // src cursor is already closed and do not has any ref
       // dest cursor is null do not need copy
     } else {
@@ -5993,6 +6010,7 @@ int ObSPIService::spi_destruct_obj(ObPLExecCtx *ctx,
 int ObSPIService::spi_interface_impl(pl::ObPLExecCtx *ctx, const char *interface_name)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   if (OB_UNLIKELY(nullptr == interface_name || nullptr == ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Argument passed in is NULL", K(ctx), K(interface_name), K(ret));
@@ -7155,6 +7173,9 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
           CK (OB_NOT_NULL(result_expr = into_exprs[i]));
           CK (is_obj_access_expression(*result_expr));
           OZ (spi_calc_expr(ctx, result_expr, OB_INVALID_INDEX, &result_address));
+          CK (result_address.is_pl_extend());
+          CK (result_address.get_meta().get_extend_type()>=PL_NESTED_TABLE_TYPE
+            && result_address.get_meta().get_extend_type()<= PL_VARRAY_TYPE);
           OX (composite_write = reinterpret_cast<ObPlCompiteWrite *>(result_address.get_ext()));
           CK (OB_NOT_NULL(composite_write));
           CK (OB_NOT_NULL(table = reinterpret_cast<ObPLCollection*>(composite_write->value_addr_)));
@@ -7220,8 +7241,24 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             }
           }
         }
+        // fetch row阶段可能会触发udf/trigger, udf/trigger内部触发package var的内存变化了, 导致bulk table记录的table地址异常
+        // 因此这里重新计算一次package var table地址
         for (int64_t i = 0; OB_SUCC(ret) && i < bulk_tables.count(); ++i) {
-          ObPLCollection *table = bulk_tables.at(i);
+          ObPLCollection *table = nullptr;
+          if (OB_NOT_NULL(into_exprs[i]) &&
+              into_exprs[i]->get_expr_items().count() > 1 &&
+              T_OP_GET_PACKAGE_VAR == into_exprs[i]->get_expr_items().at(1).get_item_type()) {
+            ObObjParam result_address;
+            ObPlCompiteWrite *composite_write = nullptr;
+            CK (is_obj_access_expression(*into_exprs[i]));
+            OZ (spi_calc_expr(ctx, into_exprs[i], OB_INVALID_INDEX, &result_address));
+            OX (composite_write = reinterpret_cast<ObPlCompiteWrite *>(result_address.get_ext()));
+            CK (OB_NOT_NULL(composite_write));
+            CK (OB_NOT_NULL(table = reinterpret_cast<ObPLCollection*>(composite_write->value_addr_)));
+            OX (bulk_tables.at(i) = table);
+          } else {
+            table = bulk_tables.at(i);
+          }
           CK (OB_NOT_NULL(table));
 #ifdef OB_BUILD_ORACLE_PL
           if (OB_SUCC(ret) && table->is_varray()) {
@@ -8398,7 +8435,10 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
               LOG_WARN("failed to copy pl extend", K(ret));
             } else {
               obj = tmp;
-              cursor->complex_objs_.push_back(tmp);
+              if (OB_FAIL(cursor->complex_objs_.push_back(tmp))) {
+                int tmp_ret = ObUserDefinedType::destruct_obj(tmp, cursor->session_info_);
+                LOG_WARN("fail to push back", K(ret), K(tmp_ret));
+              }
             }
           }
         }
@@ -8987,6 +9027,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
                                      const ObRoutineInfo *dblink_routine_info)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   const ObRoutineInfo *routine_info = NULL;
   const pl::ObPLDbLinkInfo *dblink_info = NULL;
   pl::ObPLPackageGuard *package_guard = NULL;
@@ -9014,6 +9055,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
                                      ObObj *result)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   sql::DblinkGetConnType conn_type = sql::DblinkGetConnType::DBLINK_POOL;
   ObSQLSessionInfo *session = NULL;
   uint64_t tenant_id = OB_INVALID_ID;
@@ -9061,6 +9103,12 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
       OX (param_value.set_param_meta());
       OX (param_value.set_accuracy(params.at(i).get_accuracy()));
       OZ (exec_params.push_back(param_value));
+      if (OB_FAIL(ret) && param_value.is_pl_extend()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(param_value))) {
+          LOG_WARN("destruct obj failed", K(ret), K(tmp_ret), K(param_value));
+        }
+      }
     }
     OZ (ObPLDblinkUtil::print_dblink_ps_call_stmt(allocator, dblink_info,
                                                   call_stmt, params, routine_info,
@@ -9075,7 +9123,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
       if (exec_params.at(i).is_pl_extend()) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(exec_params.at(i)))) {
-          LOG_WARN("destruct obj failed", K(ret), K(exec_params.at(i)));
+          LOG_WARN("destruct obj failed", K(ret), K(tmp_ret), K(exec_params.at(i)));
         }
       }
     }
@@ -9083,7 +9131,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
         && ob_is_extend(routine_info->get_ret_type()->get_obj_type())) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(tmp_result))) {
-        LOG_WARN("destruct obj failed", K(ret), K(tmp_result));
+        LOG_WARN("destruct obj failed", K(ret), K(tmp_ret), K(tmp_result));
       }
     }
     if (OB_SUCC(ret) && NULL != result && !result->is_null() && result->is_ext()) {
@@ -9303,7 +9351,7 @@ int ObSPIService::setup_cursor_snapshot_verify_(ObPLCursorInfo *cursor, ObSPIRes
       LOG_ERROR("for update cursor opened but not trans id invalid", K(ret), KPC(tx), K(snapshot));
     }
     need_register_snapshot = true;
-  } else if (cursor->is_streaming() && tx && tx->is_in_tx()) {
+  } else if (cursor->is_streaming() && tx && tx->is_in_tx() && !tx->is_all_parts_clean()) {
     if (exec_ctx.get_my_session()->enable_enhanced_cursor_validation()) {
       need_register_snapshot = false;
       LOG_TRACE("enable cursor open check read uncommitted");

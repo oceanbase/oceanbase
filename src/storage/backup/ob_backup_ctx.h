@@ -300,7 +300,7 @@ public:
     return tablet_holder_;
   }
 
-  int check_is_major_compaction_mview_dep_tablet(const common::ObTabletID &tablet_id, bool &is_major_compaction_mview_dep_tablet) const;
+  int check_is_major_compaction_mview_dep_tablet(const common::ObTabletID &tablet_id, share::SCN &mview_dep_scn, bool &is_major_compaction_mview_dep_tablet) const;
   void add_wait_reuse_across_sstable_time(int64_t cost_time);
 
 private:
@@ -346,7 +346,7 @@ public:
   share::SCN backup_tx_table_filled_tx_scn_;
   ObBackupTabletIndexBlockBuilderMgr index_builder_mgr_;
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  common::hash::ObHashSet<common::ObTabletID> mview_dep_tablet_set_;
+  common::hash::ObHashMap<common::ObTabletID, share::SCN> mview_dep_tablet_map_;
   int64_t wait_reuse_across_sstable_time_;
   mutable lib::ObMutex mv_mutex_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupCtx);

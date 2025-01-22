@@ -1083,7 +1083,9 @@ ObObjType ObExprAbs::calc_param_type(const ObObjType orig_param_type,
     case ObTextType:
     case ObTinyTextType:
     case ObMediumTextType:
-    case ObLongTextType: {
+    case ObLongTextType:
+    case ObMySQLDateType:
+    case ObMySQLDateTimeType: {
       calc_type = ObDoubleType;
       break;
     }

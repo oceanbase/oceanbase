@@ -29,7 +29,7 @@ using namespace oceanbase::common;
 int init_cos_env()
 {
   int ret = OB_SUCCESS;
-  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "OSS_GLOBAL_INIT", IO_HANDLED_SIZE_ZERO);
+  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "COS_GLOBAL_INIT", IO_HANDLED_SIZE_ZERO);
   return qcloud_cos::ObCosEnv::get_instance().init(ob_apr_abort_fn);
 }
 
@@ -1046,6 +1046,10 @@ int ObStorageCosWriter::write(const char *buf, const int64_t size)
   } else if (NULL == buf || size < 0) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "buf is NULL or size is invalid", K(ret), KP(buf), K(size));
+#ifdef ERRSIM
+  } else if (OB_FAIL(EventTable::EN_OBJECT_STORAGE_CHECKSUM_ERROR)) {
+    OB_LOG(WARN, "fake checksum error", K(ret));
+#endif
   } else {
     qcloud_cos::CosStringBuffer bucket_name = qcloud_cos::CosStringBuffer(
         handle_.get_bucket_name().ptr(), handle_.get_bucket_name().length());

@@ -251,6 +251,42 @@ int ObAllVirtualSSLocalCacheInfo::add_major_macro_cache_inst_()
   return ret;
 }
 
+int ObAllVirtualSSLocalCacheInfo::add_private_macro_cache_inst_()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (oceanbase::lib::is_diagnose_info_enabled()) {
+    ObSSLocalCacheInfoInst inst;
+    inst.cache_name_ = OB_SS_LOCAL_CACHE_PRIVATE_MACRO_NAME;
+    inst.priority_ = OB_LOCAL_CACHE_PRIVATE_MACRO_PRIORITY;
+
+    ObTenantDiskSpaceManager *disk_space_mgr = nullptr;
+    if (OB_ISNULL(disk_space_mgr = MTL(ObTenantDiskSpaceManager *))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "disk sapce manager is null", KR(ret));
+    } else {
+      const ObLocalCacheHitStat cache_stat = disk_space_mgr->get_private_macro_cache_stat();
+      inst.hold_size_ = 0;
+      inst.used_mem_size_ = 0;
+      inst.total_hit_bytes_ = cache_stat.cache_hit_bytes_;
+      inst.total_miss_bytes_ = cache_stat.cache_miss_bytes_;
+      inst.total_hit_cnt_ = cache_stat.cache_hit_cnt_;
+      inst.total_miss_cnt_ = cache_stat.cache_miss_cnt_;
+      inst.alloc_disk_size_ = disk_space_mgr->get_private_macro_disk_space_size();
+      inst.used_disk_size_ = disk_space_mgr->get_private_macro_alloc_size();
+
+      const int64_t total_req_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
+      inst.hit_ratio_ = (total_req_cnt <= 0) ? 0 : (static_cast<double>(inst.total_hit_cnt_) / total_req_cnt);
+    }
+
+    if (FAILEDx(inst_list_.push_back(inst))) {
+      SERVER_LOG(WARN, "fail to push back private macro cache inst", KR(ret), K(inst), K(inst_list_.count()));
+    }
+  }
+#endif
+  return ret;
+}
+
 int ObAllVirtualSSLocalCacheInfo::set_local_cache_insts_()
 {
   int ret = OB_SUCCESS;
@@ -266,6 +302,8 @@ int ObAllVirtualSSLocalCacheInfo::set_local_cache_insts_()
     SERVER_LOG(WARN, "fail to add tmp file cache inst", KR(ret));
   } else if (OB_FAIL(add_major_macro_cache_inst_())) {
     SERVER_LOG(WARN, "fail to add major macro cache inst", KR(ret));
+  } else if (OB_FAIL(add_private_macro_cache_inst_())) {
+    SERVER_LOG(WARN, "fail to add private macro cache inst", KR(ret));
   }
 #endif
   return ret;

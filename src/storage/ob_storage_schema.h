@@ -222,7 +222,7 @@ public:
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema,
       const int64_t copy_array_cnt);
-  int rebuild_column_array(
+  int refactor_storage_schema(
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema,
       const ObUpdateCSReplicaSchemaParam &update_param);
@@ -396,7 +396,7 @@ public:
   static const int32_t SS_ONE_BIT = 1;
   static const int32_t SS_HALF_BYTE = 4;
   static const int32_t SS_ONE_BYTE = 8;
-  static const int32_t SS_RESERVED_BITS = 16;
+  static const int32_t SS_RESERVED_BITS = 15;
 
   // STORAGE_SCHEMA_VERSION is for serde compatibility.
   // Currently we do not use "standard" serde function macro,
@@ -416,13 +416,14 @@ public:
     uint32_t info_;
     struct
     {
-      uint32_t version_             :SS_ONE_BYTE;
-      uint32_t compat_mode_         :SS_HALF_BYTE;
-      uint32_t is_use_bloomfilter_  :SS_ONE_BIT;
-      uint32_t column_info_simplified_ :SS_ONE_BIT;
-      uint32_t is_cs_replica_compat_ :SS_ONE_BIT; // for storage schema on tablet
-      uint32_t is_column_table_schema_ :SS_ONE_BIT;
-      uint32_t reserved_            :SS_RESERVED_BITS;
+      uint32_t version_                          : SS_ONE_BYTE;
+      uint32_t compat_mode_                      : SS_HALF_BYTE;
+      uint32_t is_use_bloomfilter_               : SS_ONE_BIT;
+      uint32_t column_info_simplified_           : SS_ONE_BIT;
+      uint32_t is_cs_replica_compat_             : SS_ONE_BIT; // for storage schema on tablet
+      uint32_t is_column_table_schema_           : SS_ONE_BIT;
+      uint32_t enable_macro_block_bloom_filter_  : SS_ONE_BIT;
+      uint32_t reserved_                         : SS_RESERVED_BITS;
     };
   };
   share::schema::ObTableType table_type_;

@@ -21,11 +21,11 @@
 #include "storage/multi_data_source/ob_mds_table_merge_dag.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
 #include "storage/ddl/ob_tablet_lob_split_task.h"
+#include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_tablet_refresh_dag.h"
 #include "storage/compaction/ob_verify_ckm_dag.h"
 #include "storage/compaction/ob_update_skip_major_tablet_dag.h"
-#include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "lib/utility/ob_sort.h"
 #endif
 

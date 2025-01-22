@@ -16,7 +16,7 @@
 #include <mysql.h>
 #include "lib/string/ob_string.h"
 #include "lib/allocator/ob_malloc.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
+// #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_prepared_param.h"
 #include "lib/mysqlclient/ob_mysql_prepared_result.h"
 
@@ -47,6 +47,7 @@ namespace common
 {
 namespace sqlclient
 {
+class ObMySQLConnection;
 struct ObBindParam
 {
   ObBindParam() : col_idx_(-1), buffer_type_(enum_field_types::MAX_NO_FIELD_TYPES), buffer_(nullptr),

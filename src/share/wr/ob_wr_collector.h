@@ -429,6 +429,7 @@ private:
   int update_last_snapshot_end_time();
   static bool is_can_retry(const int err);
 
+  int check_if_ignore_errorcode(int error_code);
   int64_t snap_id_;
   int64_t snapshot_begin_time_;
   int64_t snapshot_end_time_;

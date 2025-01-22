@@ -14,6 +14,7 @@
 
 #include "ob_vector_index_util.h"
 #include "storage/vector_index/ob_vector_index_sched_job_utils.h"
+#include "share/ob_vec_index_builder_util.h"
 
 namespace oceanbase
 {

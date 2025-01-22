@@ -1650,7 +1650,7 @@ int ObCompactionDiagnoseMgr::diagnose_no_dag(
 int ObCompactionDiagnoseMgr::diagnose_medium_scn_table()
 {
   int ret = OB_SUCCESS;
-  int64_t error_tablet_cnt = MTL(ObTenantTabletScheduler*)->get_error_tablet_cnt();
+  int64_t error_tablet_cnt = MTL(ObTenantMediumChecker*)->get_error_tablet_cnt();
   if (0 != error_tablet_cnt &&
       OB_FAIL(ADD_COMMON_DIAGNOSE_INFO(
           MEDIUM_MERGE,

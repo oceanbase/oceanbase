@@ -91,23 +91,23 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       sess_ref_seq_(0),
       block_allocator_(SMALL_BLOCK_SIZE, common::OB_MALLOC_NORMAL_BLOCK_SIZE - 32,
                        //这里减32是为了适配ObMalloc对齐规则, 防止超8k的内存分配
-                       ObMalloc(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION_SBLOCK))),
+                       ObMalloc(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION_SBLOCK)))),
       ps_session_info_allocator_(sizeof(ObPsSessionInfo), common::OB_MALLOC_NORMAL_BLOCK_SIZE - 32,
                                  //这里减32是为了适配ObMalloc对齐规则, 防止超8k的内存分配
-                                 ObMalloc(lib::ObMemAttr(orig_tenant_id_, "PsSessionInfo"))),
+                                 ObMalloc(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(orig_tenant_id_, "PsSessionInfo")))),
       cursor_info_allocator_(sizeof(pl::ObDbmsCursorInfo), common::OB_MALLOC_NORMAL_BLOCK_SIZE - 32,
-                             ObMalloc(lib::ObMemAttr(orig_tenant_id_, "SessCursorInfo"))),
+                             ObMalloc(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(orig_tenant_id_, "SessCursorInfo")))),
       package_info_allocator_(sizeof(pl::ObPLPackageState), common::OB_MALLOC_NORMAL_BLOCK_SIZE - 32,
-                              ObMalloc(lib::ObMemAttr(orig_tenant_id_, "SessPackageInfo"))),
-      sess_level_name_pool_(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
-      conn_level_name_pool_(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
+                              ObMalloc(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(orig_tenant_id_, "SessPackageInfo")))),
+      sess_level_name_pool_(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION)), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      conn_level_name_pool_(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION)), OB_MALLOC_NORMAL_BLOCK_SIZE),
       json_pl_mngr_(0),
       trans_flags_(),
       sql_scope_flags_(),
       need_reset_package_(false),
-      base_sys_var_alloc_(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
-      inc_sys_var_alloc1_(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
-      inc_sys_var_alloc2_(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      base_sys_var_alloc_(SET_IGNORE_MEM_VERSION(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION)), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      inc_sys_var_alloc1_(SET_IGNORE_MEM_VERSION(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION)), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      inc_sys_var_alloc2_(SET_IGNORE_MEM_VERSION(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION)), OB_MALLOC_NORMAL_BLOCK_SIZE),
       current_buf_index_(0),
       bucket_allocator_wrapper_(&block_allocator_),
       user_var_val_map_(SMALL_BLOCK_SIZE, ObWrapperAllocator(&block_allocator_), orig_tenant_id_),
@@ -132,8 +132,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       client_mode_(OB_MIN_CLIENT_MODE),
       changed_sys_vars_(),
       changed_user_vars_(),
-      changed_var_pool_(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
-      extra_info_allocator_(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      changed_var_pool_(SET_IGNORE_MEM_VERSION(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION)), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      extra_info_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION)), OB_MALLOC_NORMAL_BLOCK_SIZE),
       is_database_changed_(false),
       feedback_manager_(),
       trans_spec_status_(TRANS_SPEC_NOT_SET),
@@ -181,7 +181,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
   sess_bt_buff_[0] = '\0';
   inc_sys_var_alloc_[0] = &inc_sys_var_alloc1_;
   inc_sys_var_alloc_[1] = &inc_sys_var_alloc2_;
-  influence_plan_var_indexs_.set_attr(ObMemAttr(orig_tenant_id_, "PlanVaIdx"));
+  influence_plan_var_indexs_.set_attr(SET_IGNORE_MEM_VERSION(ObMemAttr(orig_tenant_id_, "PlanVaIdx")));
   thread_name_[0] = '\0';
 }
 
@@ -360,8 +360,9 @@ int ObBasicSessionInfo::reset_sys_vars()
   influence_plan_var_indexs_.reset();
   sys_vars_cache_.reset();
   sys_var_inc_info_.reset();
-  sys_var_in_pc_str_.reset();
-  is_first_gen_ = true;
+  if (!sys_var_in_pc_str_.empty()) {
+    sys_var_in_pc_str_.set_length(0);
+  }
   conn_level_name_pool_.reset();
   inc_sys_var_alloc1_.reset();
   inc_sys_var_alloc2_.reset();
@@ -1166,6 +1167,8 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
       LOG_INFO("fail to generate system config in pc str");
     } else {
       global_vars_version_ = 0;
+      set_enable_mysql_compatible_dates(
+        static_cast<ObSQLSessionInfo *>(this)->get_enable_mysql_compatible_dates_from_config());
     }
   }
   return ret;
@@ -1652,7 +1655,7 @@ int ObBasicSessionInfo::gen_sys_var_in_pc_str()
   } else {
     buf = sys_var_in_pc_str_.ptr();
     MEMSET(buf, 0, sys_var_in_pc_str_.length());
-    sys_var_in_pc_str_.reset();
+    sys_var_in_pc_str_.set_length(0);
   }
   int64_t sys_var_encode_max_size = get_sys_vars_encode_max_size();
   if (OB_FAIL(ret)) {
@@ -1664,7 +1667,7 @@ int ObBasicSessionInfo::gen_sys_var_in_pc_str()
       // expand MAX_SYS_VARS_STR_SIZE 3 times.
       for (int64_t i = 0; OB_SUCC(ret) && i < 3; ++i) {
         sys_var_encode_max_size = 2 * sys_var_encode_max_size;
-        if (NULL == (buf = (char *)conn_level_name_pool_.alloc(sys_var_encode_max_size))) {
+        if (NULL == (buf = (char *)sess_level_name_pool_.alloc(sys_var_encode_max_size))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to allocator memory", K(ret), K(sys_var_encode_max_size));
         } else if (OB_FAIL(sys_vars.serialize_sys_vars(buf, sys_var_encode_max_size, pos))) {
@@ -3944,6 +3947,11 @@ int ObBasicSessionInfo::get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search) const
   return get_uint64_sys_var(SYS_VAR_OB_HNSW_EF_SEARCH, ob_hnsw_ef_search);
 }
 
+int ObBasicSessionInfo::get_ob_ivf_nprobes(uint64_t &ob_ivf_nprobes) const
+{
+  return get_uint64_sys_var(SYS_VAR_OB_IVF_NPROBES, ob_ivf_nprobes);
+}
+
 int ObBasicSessionInfo::get_sql_quote_show_create(bool &sql_quote_show_create) const
 {
   return get_bool_sys_var(SYS_VAR_SQL_QUOTE_SHOW_CREATE, sql_quote_show_create);
@@ -4198,6 +4206,9 @@ bool ObBasicSessionInfo::is_sync_sys_var(share::ObSysVarClassType sys_var_id) co
     case SYS_VAR_OB_LAST_SCHEMA_VERSION:
     case SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK:
     case SYS_VAR_SYSTEM_TIME_ZONE:
+    case SYS_VAR_PID_FILE:
+    case SYS_VAR_PORT:
+    case SYS_VAR_SOCKET:
       not_need_serialize = true;
       break;
     default:
@@ -4569,7 +4580,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
               enable_rich_vector_format_,
-              enable_sql_plan_monitor_);
+              enable_sql_plan_monitor_,
+              current_default_catalog_);
   return ret;
 }
 
@@ -4601,7 +4613,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
               enable_rich_vector_format_,
-              enable_sql_plan_monitor_);
+              enable_sql_plan_monitor_,
+              current_default_catalog_);
   set_nls_date_format(nls_formats_[NLS_DATE]);
   set_nls_timestamp_format(nls_formats_[NLS_TIMESTAMP]);
   set_nls_timestamp_tz_format(nls_formats_[NLS_TIMESTAMP_TZ]);
@@ -4638,7 +4651,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
               enable_rich_vector_format_,
-              enable_sql_plan_monitor_);
+              enable_sql_plan_monitor_,
+              current_default_catalog_);
   return len;
 }
 
@@ -5253,6 +5267,8 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
   if (!is_deserialized_) {
     OZ (gen_sys_var_in_pc_str());
     OZ (gen_configs_in_pc_str());
+    set_enable_mysql_compatible_dates(
+      static_cast<ObSQLSessionInfo *>(this)->get_enable_mysql_compatible_dates_from_config());
   }
   return ret;
 }
@@ -6063,8 +6079,7 @@ int ObBasicSessionInfo::store_query_string_(const ObString &stmt, int64_t& buf_l
       buf_len = 0;
     }
     int64_t len = MAX(MIN_CUR_QUERY_LEN, truncated_len + 1);
-    char *buf = reinterpret_cast<char*>(ob_malloc(len, ObMemAttr(orig_tenant_id_,
-                                                                 ObModIds::OB_SQL_SESSION_QUERY_SQL)));
+    char *buf = reinterpret_cast<char*>(ob_malloc(len, SET_IGNORE_MEM_VERSION(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION_QUERY_SQL))));
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));

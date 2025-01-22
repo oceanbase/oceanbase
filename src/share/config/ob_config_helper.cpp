@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SHARE
 
 #include "share/config/ob_config_helper.h"
 #include "share/config/ob_config.h"
@@ -1590,6 +1591,23 @@ bool ObConfigEnableHashRollupChecker::check(const ObConfigItem &t) const
           || 0 == tmp_str.case_compare("forced")
           || 0 == tmp_str.case_compare("disabled"));
   return bret;
+}
+
+bool ObConfigJavaParamsChecker::check(const ObConfigItem &t) const
+{
+  bool bret = false;
+  // Only the ob_enable_java_env is true, then can pass to continue
+  if (GCONF.ob_enable_java_env) {
+    bret = true;
+  }
+  return bret;
+}
+
+bool ObConfigDefaultOrganizationChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("INDEX")
+      || 0 == tmp_str.case_compare("HEAP");
 }
 } // end of namepace common
 } // end of namespace oceanbase

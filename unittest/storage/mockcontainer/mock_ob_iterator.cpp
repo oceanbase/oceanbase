@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <sstream>
 #define private public
 #define protected public
 #include "mock_ob_iterator.h"

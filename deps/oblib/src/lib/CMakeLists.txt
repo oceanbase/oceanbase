@@ -10,7 +10,8 @@ ob_set_subtarget(oblib_lib ALONE
   geo/ob_geo_func_touches.cpp
   geo/ob_geo_func_equals.cpp
   geo/ob_geo_func_intersects.cpp
-  geo/ob_geo_func_symdifference.cpp
+  geo/ob_geo_func_symdifference1.cpp
+  geo/ob_geo_func_symdifference2.cpp
   geo/ob_geo_func_distance.cpp
   geo/ob_geo_func_crosses.cpp
   geo/ob_geo_func_overlaps.cpp

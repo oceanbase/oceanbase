@@ -37,6 +37,9 @@ enum ObDASIterType : uint32_t
   DAS_ITER_FUNC_LOOKUP,
   DAS_ITER_FUNC_DATA,
   DAS_ITER_MVI_LOOKUP,
+  DAS_ITER_HNSW_SCAN,
+  DAS_ITER_DOMAIN_ID_MERGE,
+  DAS_ITER_IVF_SCAN,
   // append DASIterType before me
   DAS_ITER_MAX
 };
@@ -67,6 +70,7 @@ enum ObDASIterTreeType : uint32_t
   ITER_TREE_INDEX_MERGE,
   ITER_TREE_FUNC_LOOKUP,
   ITER_TREE_MVI_LOOKUP,
+  ITER_TREE_VEC_LOOKUP,
   // append iter tree type before me
   ITER_TREE_MAX
 };

@@ -301,11 +301,20 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   init_arches();
   scramble_rand_.init(static_cast<uint64_t>(start_time_), static_cast<uint64_t>(start_time_ / 2));
 
+#if defined(__x86_64__)
+  if (OB_UNLIKELY(!is_arch_supported(ObTargetArch::AVX))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("unsupported CPU platform, AVX instructions are required.");
+  }
+#endif
+
   // start ObTimerService first, because some timers depend on it
-  if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
-    LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
-  } else if (OB_FAIL(ObTimerService::get_instance().start())) {
-    LOG_ERROR("start timer service failed", KR(ret));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
+      LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
+    } else if (OB_FAIL(ObTimerService::get_instance().start())) {
+      LOG_ERROR("start timer service failed", KR(ret));
+    }
   }
 
   // server parameters be inited here.
@@ -366,11 +375,13 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     }
 
     if (OB_SUCC(ret)) {
-      ::oceanbase::sql::init_sql_factories();
-      ::oceanbase::sql::init_sql_executor_singletons();
-      ::oceanbase::sql::init_sql_expr_static_var();
-
-      if (OB_FAIL(ObPreProcessSysVars::init_sys_var())) {
+      if (OB_FAIL(sql::init_sql_factories())) {
+        LOG_ERROR("init sql factories !", KR(ret));
+      } else if (OB_FAIL(sql::init_sql_executor_singletons())) {
+        LOG_ERROR("init sql executor singletons !", KR(ret));
+      } else if (OB_FAIL(sql::init_sql_expr_static_var())) {
+        LOG_ERROR("init sql expr static var !", KR(ret));
+      } else if (OB_FAIL(ObPreProcessSysVars::init_sys_var())) {
         LOG_ERROR("init PreProcessing system variable failed !", KR(ret));
       } else if (OB_FAIL(ObBasicSessionInfo::init_sys_vars_cache_base_values())) {
         LOG_ERROR("init session base values failed", KR(ret));
@@ -3178,7 +3189,7 @@ int ObServer::get_network_speed_from_sysfs(int64_t &network_speed)
   int tmp_ret = OB_SUCCESS;
   if (OB_FAIL(get_ethernet_speed(config_.devname.str(), network_speed))) {
     LOG_WARN("cannot get Ethernet speed, use default", K(tmp_ret), "devname", config_.devname.str());
-  } else if (network_speed < 0) {
+  } else if (network_speed <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid Ethernet speed, use default", "devname", config_.devname.str());
   }
@@ -3367,6 +3378,13 @@ int ObServer::reload_config()
     LOG_WARN("set cache priority fail, ", KR(ret));
   } else if (OB_FAIL(reload_bandwidth_throttle_limit(ethernet_speed_))) {
     LOG_WARN("failed to reload_bandwidth_throttle_limit", KR(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObStorageHADiagService::instance().reload_config())) {
+      LOG_WARN("failed to reload storage ha diag service config", K(ret));
+      ret = OB_SUCCESS; // ignore ret
+    }
   }
 
   return ret;

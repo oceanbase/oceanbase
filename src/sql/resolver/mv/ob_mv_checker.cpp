@@ -901,7 +901,7 @@ int ObMVChecker::check_match_major_refresh_mv(const ObSelectStmt &stmt, bool &is
     LOG_WARN("failed to check left table rowkey valid", KR(ret));
   } else if (is_match && OB_FAIL(check_broadcast_table_valid(stmt, right_table_schema, is_match))) {
     LOG_WARN("failed to check broadcast table valid", KR(ret));
-  } else if (is_match && OB_FAIL(check_column_store_valid(stmt, is_match))) {
+  } else if (is_match && OB_FAIL(check_column_store_valid(stmt, left_table_schema, right_table_schema, is_match))) {
     LOG_WARN("failed to check column store valid", KR(ret));
   } else if (is_match && FALSE_IT(is_match = !GCTX.is_shared_storage_mode())) {
   }
@@ -1085,18 +1085,36 @@ int ObMVChecker::check_broadcast_table_valid(const ObSelectStmt &stmt,
   return ret;
 }
 
-int ObMVChecker::check_column_store_valid(const ObSelectStmt &stmt, bool &is_valid)
+int ObMVChecker::check_column_store_valid(const ObSelectStmt &stmt,
+                                          const ObTableSchema *left_table_schema,
+                                          const ObTableSchema *right_table_schema,
+                                          bool &is_valid)
 {
   int ret = OB_SUCCESS;
   bool is_column_store = false;
   is_valid = true;
 
-  if (OB_FAIL(mv_container_table_schema_.get_is_column_store(is_column_store))) {
+  if (OB_ISNULL(left_table_schema) || OB_ISNULL(right_table_schema)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("table schema is null", KR(ret), K(left_table_schema), K(right_table_schema));
+  } else if (OB_FAIL(mv_container_table_schema_.get_is_column_store(is_column_store))) {
     LOG_WARN("failed to get is column store", KR(ret));
   } else if (is_column_store) {
     is_valid = false;
     LOG_INFO("[MAJ_REF_MV] mv container table is column store table",
              K(mv_container_table_schema_.get_table_name()));
+  } else if (OB_FAIL(left_table_schema->get_is_column_store(is_column_store))) {
+    LOG_WARN("failed to get is column store", KR(ret));
+  } else if (is_column_store) {
+    is_valid = false;
+    LOG_INFO("[MAJ_REF_MV] left table is column store table",
+             K(left_table_schema->get_table_name()));
+  } else if (OB_FAIL(right_table_schema->get_is_column_store(is_column_store))) {
+    LOG_WARN("failed to get is column store", KR(ret));
+  } else if (is_column_store) {
+    is_valid = false;
+    LOG_INFO("[MAJ_REF_MV] right table is column store table",
+             K(right_table_schema->get_table_name()));
   }
 
   return ret;

@@ -133,15 +133,15 @@ int ObDBMSSchedJobUtils::check_is_valid_repeat_interval(const ObString &str, boo
     ObString interval_str = repeat_expr.split_on('=').trim_space_only();
     ObString repeat_num_str = repeat_expr.trim_space_only();
     const int MAX_REPTAT_NUM_LEN = 16;
-    if (!repeat_num_str.is_numeric() || MAX_REPTAT_NUM_LEN <= repeat_num_str.length()) {
+    if (!repeat_num_str.is_numeric()) {
       ret = OB_NOT_SUPPORTED;
     } else {
       char repeat_num_buf[MAX_REPTAT_NUM_LEN];
       int64_t pos = repeat_num_str.to_string(repeat_num_buf, MAX_REPTAT_NUM_LEN);
-      int64_t repeat_num = atoi(repeat_num_buf);
+      int64_t repeat_num = atoll(repeat_num_buf);
       if (0 >= repeat_num) {
         ret = OB_NOT_SUPPORTED;
-      } else if (is_limit_interval_num && 8000 <= repeat_num) {
+      } else if (pos < repeat_num_str.length() || (is_limit_interval_num && 8000 <= repeat_num)) {
         ret = OB_INVALID_ARGUMENT_NUM;
       } else if (0 != freq_str.case_compare("FREQ") || 0 != interval_str.case_compare("INTERVAL") ||
                 (0 != repeat_type_str.case_compare("SECONDLY") && 0 != repeat_type_str.case_compare("MINUTELY") &&
@@ -386,9 +386,6 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
   //check job owner
   } else if (job_info.powner_.empty() || job_info.lowner_.empty() || job_info.cowner_.empty()) {
     ret = OB_INVALID_ARGUMENT;
-  //check job action
-  } else if (job_info.job_action_.empty()) { //oracle 可以为空
-    ret = OB_INVALID_ARGUMENT;
   //check job class
   } else if (job_info.job_class_.empty() || OB_FAIL(check_is_valid_name(job_info.job_class_))) {
     ret = OB_INVALID_ARGUMENT;
@@ -517,7 +514,7 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
   } else if (0 == job_attribute_name.case_compare("enabled")) {
     if (OB_FAIL(dml.add_column("enabled", job_attribute_value.get_bool()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_bool()));
-    } else if (job_attribute_value.get_bool() && job_info.state_.case_compare("BROKEN")) {
+    } else if (job_attribute_value.get_bool() && (0 == job_info.state_.case_compare("BROKEN"))) {
       if (OB_FAIL(dml.add_column("state", "SCHEDULED"))) {
         LOG_WARN("add state column failed", KR(ret), K(job_info.state_));
       } else if (OB_FAIL(dml.add_column("failures", 0))) {
@@ -680,7 +677,7 @@ int ObDBMSSchedJobUtils::calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &j
     } else {
       char repeat_num_buf[MAX_REPTAT_NUM_LEN];
       int64_t pos = repeat_num_str.to_string(repeat_num_buf, MAX_REPTAT_NUM_LEN);
-      repeat_num = atoi(repeat_num_buf);
+      repeat_num = atoll(repeat_num_buf);
       if (0 >= repeat_num) { //未加参数检查前的 job 可能会有这种错误
         next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
       } else {
@@ -707,11 +704,22 @@ int ObDBMSSchedJobUtils::calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &j
         }
 
         if (OB_SUCC(ret)) {
-          int64_t repeat_interval_ts = freq_num * repeat_num * 1000000LL;
-          int64_t N = (now - job_info.start_date_) / repeat_interval_ts;
-          next_run_time = job_info.start_date_ + (N + 1) * repeat_interval_ts;
-          //未开始执行时，重新计算下次执行时间应该还是 start_date
-          next_run_time = max(next_run_time, job_info.start_date_);
+          if (INT64_MAX / repeat_num < freq_num * 1000000LL) { //乘法溢出处理
+            next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+          } else {
+            int64_t repeat_interval_ts = repeat_num * freq_num * 1000000LL;
+            int64_t N = (now - job_info.start_date_) / repeat_interval_ts;
+            int64_t increment = (N + 1) * repeat_interval_ts;
+            next_run_time = increment + job_info.start_date_;
+            if (next_run_time < increment ||  next_run_time < job_info.start_date_) { //加法溢出处理
+              next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+            } else if (ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE <= next_run_time) {
+                next_run_time = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
+            } else {
+              //未开始执行时，重新计算下次执行时间应该还是 start_date
+              next_run_time = max(next_run_time, job_info.start_date_);
+            }
+          }
         }
       }
     }

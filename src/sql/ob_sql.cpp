@@ -107,6 +107,7 @@ using namespace rpc::frame;
 using namespace obrpc;
 using namespace share;
 using namespace share::schema;
+using namespace pl;
 
 namespace sql
 {
@@ -1473,6 +1474,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
                              ParamStore *params)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObString cur_query;
   ObString trimed_stmt = const_cast<ObString &>(sql).trim();
   ObSqlCtx &context = pl_prepare_result.sql_ctx_;
@@ -1731,6 +1733,7 @@ int ObSql::handle_pl_execute(const ObString &sql,
                              bool is_dynamic_sql)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   int get_plan_err = OB_SUCCESS;
   TimeoutGuard timeout_guard(session);
   LinkExecCtxGuard link_guard(result.get_session(), result.get_exec_context());
@@ -2139,6 +2142,7 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
   int64_t server_collation = CS_TYPE_INVALID;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (raw_params.empty()) {
     // do nothing
   } else if (raw_params_idx.count() != raw_params.count()) {
@@ -2154,6 +2158,9 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
     LOG_WARN("get sys variable failed", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(&session, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session, false /*is_ddl*/,
+                       enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   }
   for (int i = 0; OB_SUCC(ret) && i < raw_params.count(); ++i) {
     value.reset();
@@ -2176,8 +2183,9 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
                                                       session.get_actual_nls_length_semantics(),
                                                       static_cast<ObCollationType>(server_collation),
                                                       NULL, session.get_sql_mode(),
-                                                      enable_decimal_int,
-                                                      compat_type))) {
+                                                      enable_decimal_int, compat_type,
+                                                      enable_mysql_compatible_dates,
+                                                      session.get_local_ob_enable_plan_cache()))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (OB_FAIL(add_param_to_param_store(value, fixed_param_store))) {
       LOG_WARN("failed to add param to param store", K(ret), K(value), K(fixed_param_store));
@@ -2884,8 +2892,7 @@ OB_NOINLINE int ObSql::handle_large_query(int tmp_ret,
     }
     //实际编译时间判断是否为大请求
     if (OB_SUCC(ret) && is_large_query == false) {
-      if (OB_PC_LOCK_CONFLICT == tmp_ret
-          || (0 != lqt && elapsed_time > lqt)) {
+      if (0 != lqt && elapsed_time > lqt) {
         is_large_query = true;
         lq_from_plan = false;
       }
@@ -4165,13 +4172,6 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
         || OB_BATCHED_MULTI_STMT_ROLLBACK == ret
         || OB_NEED_SWITCH_CONSUMER_GROUP == ret) {
       /*do nothing*/
-    } else if (!(PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_)
-               && OB_PC_LOCK_CONFLICT == ret
-               && !session->is_inner()) {
-      //不是ps模式, 不是inner sql, 且plan cache锁超时, 后面会放入大查询队列列,
-      //是ps模式或inner sql, 则不能丢队列, 走硬解析,
-      //ps暂不支持丢入大查询丢列, TODO shengle 后面单独添加,
-      //inner sql不能丢入大查询队列, 因为有可能上层查询已有数据返回客户端
     } else {
       get_plan_err = ret;
       int tmp_ret = OB_SUCCESS;
@@ -5225,11 +5225,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
       LOG_WARN("get null physical plan", K(ret), K(result.get_physical_plan()), K(baseline_item));
     } else if (result.get_physical_plan()->get_plan_hash_value() == baseline_item->get_plan_hash_value()) {
       pc_ctx.need_evolution_ = true;
-      if (spm_ctx.cur_baseline_not_enable_) {
-        spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ACCEPT_BASELINE_PLAN;
-      } else {
-        spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN;
-      }
+      spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN;
       if (OB_FAIL(pc_add_plan(pc_ctx, result, outline_state, plan_cache, plan_added))) {
         LOG_WARN("fail to add plan to plan cache", K(ret));
       } else if (!plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
@@ -5399,7 +5395,8 @@ int ObSql::before_resolve_array_params(ObPlanCacheCtx &pc_ctx,
                                        ParamStore *&ab_params,
                                        ObBitSet<> &neg_param_index,
                                        ObBitSet<> &not_param_index,
-                                       ObBitSet<> &must_be_positive_index)
+                                       ObBitSet<> &must_be_positive_index,
+                                       ObBitSet<> &formalize_prec_index)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ab_params = static_cast<ParamStore *>(pc_ctx.allocator_.alloc(sizeof(ParamStore))))) {
@@ -5418,6 +5415,8 @@ int ObSql::before_resolve_array_params(ObPlanCacheCtx &pc_ctx,
     LOG_WARN("failed to assign bit sets", K(ret));
   } else if (OB_FAIL(must_be_positive_index.add_members2(pc_ctx.must_be_positive_index_))) {
     LOG_WARN("failed to assign bit sets", K(ret));
+  } else if (OB_FAIL(formalize_prec_index.add_members2(pc_ctx.formalize_prec_index_))) {
+    LOG_WARN("failed to assign bit sets", K(ret));
   }
   return ret;
 }
@@ -5429,6 +5428,7 @@ int ObSql::resolve_ins_multi_row_params(ObPlanCacheCtx &pc_ctx, const ObStmt &st
   ObBitSet<> neg_param_index;
   ObBitSet<> not_param_index;
   ObBitSet<> must_be_positive_index;
+  ObBitSet<> formalize_prec_idx;
   int64_t query_num = pc_ctx.sql_ctx_.get_insert_batch_row_cnt();
   int64_t param_num = 0;
   if (OB_ISNULL(plan_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
@@ -5442,7 +5442,8 @@ int ObSql::resolve_ins_multi_row_params(ObPlanCacheCtx &pc_ctx, const ObStmt &st
                                                  ab_params,
                                                  neg_param_index,
                                                  not_param_index,
-                                                 must_be_positive_index))) {
+                                                 must_be_positive_index,
+                                                 formalize_prec_idx))) {
     LOG_WARN("fail to prepare resolve params info", K(ret), K(query_num), K(param_num));
   } else if (OB_FAIL(ObPlanCacheValue::resolve_insert_multi_values_param(pc_ctx,
                                                                          stmt.get_stmt_type(),
@@ -5450,6 +5451,7 @@ int ObSql::resolve_ins_multi_row_params(ObPlanCacheCtx &pc_ctx, const ObStmt &st
                                                                          neg_param_index,
                                                                          not_param_index,
                                                                          must_be_positive_index,
+                                                                         formalize_prec_idx,
                                                                          param_num,
                                                                          *ab_params))) {
     LOG_WARN("failed to check multi-stmt param type", K(ret));
@@ -5464,6 +5466,7 @@ int ObSql::resolve_multi_query_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt
   ObBitSet<> neg_param_index;
   ObBitSet<> not_param_index;
   ObBitSet<> must_be_positive_index;
+  ObBitSet<> formalize_prec_index;
   int64_t query_num = pc_ctx.sql_ctx_.get_batch_params_count();
   int64_t param_num = 0;
   if (OB_ISNULL(plan_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
@@ -5477,7 +5480,8 @@ int ObSql::resolve_multi_query_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt
                                                  ab_params,
                                                  neg_param_index,
                                                  not_param_index,
-                                                 must_be_positive_index))) {
+                                                 must_be_positive_index,
+                                                 formalize_prec_index))) {
     LOG_WARN("fail to prepare resolve params info", K(ret), K(query_num), K(param_num));
   } else if (OB_FAIL(ObPlanCacheValue::check_multi_stmt_param_type(pc_ctx,
                                                                    stmt.get_stmt_type(),
@@ -5485,6 +5489,7 @@ int ObSql::resolve_multi_query_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt
                                                                    neg_param_index,
                                                                    not_param_index,
                                                                    must_be_positive_index,
+                                                                   formalize_prec_index,
                                                                    *ab_params))) {
     LOG_WARN("failed to check multi-stmt param type", K(ret));
   }

@@ -2060,7 +2060,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.f1)})}]), 
-      column_values([T_HIDDEN_PK], [column_conv(DATE,PS:(10,0),NOT NULL,__values.f1)])
+      column_values([T_HIDDEN_PK], [column_conv(MYSQL_DATE,PS:(10,0),NOT NULL,__values.f1)])
   1 - output([__values.f1]), filter(nil)
       values({'2000-01-01'}, {'0000-00-00'})
 insert into t1 values('2000-01-01'),('0000-00-00');
@@ -2076,7 +2076,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.f1)})}]),
-      update([t1.f1=column_conv(DATE,PS:(10,0),NOT NULL,'2002-02-02')])
+      update([t1.f1=column_conv(MYSQL_DATE,PS:(10,0),NOT NULL,'2002-02-02')])
   1 - output([t1.__pk_increment], [t1.f1]), filter([t1.f1 = '0000-00-00']), rowset=16
       access([t1.__pk_increment], [t1.f1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
@@ -2239,8 +2239,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]), 
       column_values([column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t1.request_id.nextval(), INT UNSIGNED(-1, 0)))], [column_conv(VARCHAR,utf8mb4_general_ci,
-      length:12,NULL,__values.user_id)], [column_conv(DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,NULL,
-      cast(NULL, VARCHAR(1048576)))])
+      length:12,NULL,__values.user_id)], [column_conv(MYSQL_DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,
+      NULL,cast(NULL, VARCHAR(1048576)))])
   1 - output([__values.user_id]), filter(nil)
       values({'user1'})
 INSERT INTO t1 (user_id) VALUES ('user1');
@@ -2257,8 +2257,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]), 
       column_values([column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t1.request_id.nextval(), INT UNSIGNED(-1, 0)))], [column_conv(VARCHAR,utf8mb4_general_ci,
-      length:12,NULL,__values.user_id)], [column_conv(DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,NULL,
-      cast(NULL, VARCHAR(1048576)))])
+      length:12,NULL,__values.user_id)], [column_conv(MYSQL_DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,
+      NULL,cast(NULL, VARCHAR(1048576)))])
   1 - output([__values.user_id]), filter(nil)
       values({'user1'})
 INSERT INTO t1 (user_id) VALUES ('user1');
@@ -2275,8 +2275,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]), 
       column_values([column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t1.request_id.nextval(), INT UNSIGNED(-1, 0)))], [column_conv(VARCHAR,utf8mb4_general_ci,
-      length:12,NULL,__values.user_id)], [column_conv(DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,NULL,
-      cast(NULL, VARCHAR(1048576)))])
+      length:12,NULL,__values.user_id)], [column_conv(MYSQL_DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,
+      NULL,cast(NULL, VARCHAR(1048576)))])
   1 - output([__values.user_id]), filter(nil)
       values({'user1'})
 INSERT INTO t1 (user_id) VALUES ('user1');
@@ -2293,8 +2293,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]), 
       column_values([column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t1.request_id.nextval(), INT UNSIGNED(-1, 0)))], [column_conv(VARCHAR,utf8mb4_general_ci,
-      length:12,NULL,__values.user_id)], [column_conv(DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,NULL,
-      cast(NULL, VARCHAR(1048576)))])
+      length:12,NULL,__values.user_id)], [column_conv(MYSQL_DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,
+      NULL,cast(NULL, VARCHAR(1048576)))])
   1 - output([__values.user_id]), filter(nil)
       values({'user1'})
 INSERT INTO t1 (user_id) VALUES ('user1');
@@ -2311,8 +2311,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.request_id, t1.user_id, t1.time_stamp, t1.ip_address)})}]), 
       column_values([column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t1.request_id.nextval(), INT UNSIGNED(-1, 0)))], [column_conv(VARCHAR,utf8mb4_general_ci,
-      length:12,NULL,__values.user_id)], [column_conv(DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,NULL,
-      cast(NULL, VARCHAR(1048576)))])
+      length:12,NULL,__values.user_id)], [column_conv(MYSQL_DATETIME,PS:(19,0),NOT NULL,'0000-00-00 00:00:00')], [column_conv(VARCHAR,utf8mb4_general_ci,length:15,
+      NULL,cast(NULL, VARCHAR(1048576)))])
   1 - output([__values.user_id]), filter(nil)
       values({'user1'})
 INSERT INTO t1 (user_id) VALUES ('user1');
@@ -2597,7 +2597,7 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t2: ({t2: (t2.__pk_increment, t2.a, t2.b, t2.c, t2.d)})}]),
       update([t2.d=column_conv(CHAR,utf8mb4_general_ci,length:2,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(10, VARCHAR(1048576))), CHAR(1048576)))])
-  1 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(4, 0))]), rowset=16
+  1 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(20, 0))]), rowset=16
       access([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), partitions(p0)
       limit(5), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
@@ -2620,7 +2620,7 @@ Outputs & filters:
       update([t2.d=column_conv(CHAR,utf8mb4_general_ci,length:2,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(10, VARCHAR(1048576))), CHAR(1048576)))])
   1 - output([t2.__pk_increment], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       sort_keys([t2.a, ASC], [t2.c, ASC]), topn(5)
-  2 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(4, 0))]), rowset=16
+  2 - output([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), filter([cast(t2.b, DECIMAL(-1, -1)) = cast(10, DECIMAL(20, 0))]), rowset=16
       access([t2.__pk_increment], [t2.d], [t2.a], [t2.b], [t2.c]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true

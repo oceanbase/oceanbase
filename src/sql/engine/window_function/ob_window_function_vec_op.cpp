@@ -18,6 +18,7 @@
 #include "share/aggregate/processor.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/datahub/components/ob_dh_winbuf.h"
+#include "src/sql/engine/window_function/ob_window_function_op.h"
 
 #define SWAP_STORES(left, right)                                                                   \
   do {                                                                                             \
@@ -2114,6 +2115,8 @@ int ObWindowFunctionVecOp::output_stored_rows(const int64_t out_processed_cnt,
                       VEC_TC_FIXED_DOUBLE,
                       VEC_TC_DATETIME,
                       VEC_TC_DATE,
+                      VEC_TC_MYSQL_DATETIME,
+                      VEC_TC_MYSQL_DATE,
                       VEC_TC_TIME,
                       VEC_TC_YEAR,
                       VEC_TC_BIT,

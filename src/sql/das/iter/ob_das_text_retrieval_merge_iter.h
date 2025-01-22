@@ -24,6 +24,7 @@ namespace sql
 struct ObDASIRScanCtDef;
 struct ObDASIRScanRtDef;
 class ObDASTextRetrievalIterator;
+class ObDASTextRetrievalIter;
 
 static const int64_t OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT = 256;
 
@@ -107,9 +108,9 @@ public:
   virtual int do_table_scan() override;
   virtual int rescan() override;
   void set_doc_id_idx_tablet_id(const ObTabletID &tablet_id) { doc_id_idx_tablet_id_ = tablet_id; }
-  void set_ls_id(const ObLSID &ls_id) { ls_id_ = ls_id; }
+  void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
   storage::ObTableScanParam &get_doc_agg_param() { return whole_doc_agg_param_; }
-  int set_related_tablet_ids(const ObLSID &ls_id, const ObDASFTSTabletID &related_tablet_ids);
+  int set_related_tablet_ids(const share::ObLSID &ls_id, const ObDASFTSTabletID &related_tablet_ids);
   virtual int set_merge_iters(const ObIArray<ObDASIter *> &retrieval_iters);
   const ObIArray<ObString> &get_query_tokens() { return query_tokens_; }
   bool is_taat_mode() { return RetrievalProcType::TAAT == processing_type_; }

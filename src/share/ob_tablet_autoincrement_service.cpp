@@ -17,6 +17,7 @@
 #include "rootserver/ob_root_service.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_rpc_struct.h"
+#include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "share/scn.h"
 #include "storage/tablet/ob_tablet.h"
@@ -117,7 +118,9 @@ int ObTabletAutoincMgr::clear_cache_if_fallback_for_mlog(
   }
   return ret;
 }
-int ObTabletAutoincMgr::fetch_interval(const ObTabletAutoincParam &param, ObTabletCacheInterval &interval) {
+
+int ObTabletAutoincMgr::fetch_interval(const ObTabletAutoincParam &param, ObTabletCacheInterval &interval)
+{
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -152,7 +155,8 @@ int ObTabletAutoincMgr::fetch_interval(const ObTabletAutoincParam &param, ObTabl
   return ret;
 }
 
-int ObTabletAutoincMgr::fetch_interval_without_cache(const ObTabletAutoincParam &param, ObTabletCacheInterval &interval) {
+int ObTabletAutoincMgr::fetch_interval_without_cache(const ObTabletAutoincParam &param, ObTabletCacheInterval &interval)
+{
   int ret = OB_SUCCESS;
   lib::ObMutexGuard guard(mutex_);
   ObTabletCacheNode node;
@@ -202,9 +206,14 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
                                                       false,/*force_renew*/
                                                       leader_addr))) {
         LOG_WARN("get leader failed", K(ret), K(arg.ls_id_));
-      } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).timeout(rpc_timeout).fetch_tablet_autoinc_seq_cache(arg, res))) {
+      } else if (GCTX.self_addr() == leader_addr) {
+        if (OB_FAIL(ObTabletAutoincSeqRpcHandler::get_instance().fetch_tablet_autoinc_seq_cache(arg, res))) {
+          LOG_WARN("fail to fetch autoinc cache for tablets", K(ret), K(retry_times), K(arg), K(rpc_timeout));
+        }
+      } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).by(param.tenant_id_).timeout(rpc_timeout).fetch_tablet_autoinc_seq_cache(arg, res))) {
         LOG_WARN("fail to fetch autoinc cache for tablets", K(ret), K(retry_times), K(arg), K(rpc_timeout));
-      } else {
+      }
+      if (OB_SUCC(ret)) {
         finish = true;
       }
       if (OB_FAIL(ret)) {
@@ -230,20 +239,6 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
       if (node.cache_end_ == 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get autoinc cache", K(ret));
-      } else if (tablet_id.is_user_normal_rowid_table_tablet() && node.cache_end_ > OB_MAX_AUTOINC_SEQ_VALUE) {
-        ret = OB_HEAP_TABLE_EXAUSTED;
-        LOG_DBA_ERROR_V2(OB_SHARE_PRIMARY_KEY_SEQUENCE_EXHAUSTED, OB_HEAP_TABLE_EXAUSTED,
-                         "The hidden primary key sequence has exhausted. ",
-                         "tablet_id is ", tablet_id.id(), " and current_seq is ", node.cache_end_, ". ",
-                         "[suggestion] If you need a larger key range, ",
-                         "you can connect cluster by current tenant and execute sql command: ",
-                         "alter table {database_name}.{table_name} set enable_extended_rowid = true; ",
-                         "If you don't know the {database_name} or {table_name}, you can get them by executing sql command: ",
-                         "(Mysql mode): ",
-                         "select distinct database_name, table_name from oceanbase.DBA_OB_TABLE_LOCATIONS where tablet_id = ", tablet_id.id(), "; ",
-                         "(Oracle mode): ",
-                         "select distinct database_name, table_name from sys.DBA_OB_TABLE_LOCATIONS where tablet_id = ", tablet_id.id(), "; ");
-        LOG_WARN("tablet autoinc seq has reached max", K(ret), K(node));
       } else {
         LOG_INFO("fetch new range success", K(tablet_id), K(node));
       }
@@ -309,11 +304,10 @@ void ObTabletAutoincrementService::release_mgr(ObTabletAutoincMgr *autoinc_mgr)
   return;
 }
 
-int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq)
+int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq, const int64_t auto_increment_cache_size)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sequence_load);
   int ret = OB_SUCCESS;
-  const int64_t auto_increment_cache_size = 10000; //TODO(shuangcan): fix me
   ObTabletAutoincParam param;
   param.tenant_id_ = tenant_id;
   ObTabletAutoincMgr *autoinc_mgr = nullptr;
@@ -324,9 +318,6 @@ int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, cons
     LOG_WARN("failed to acquire mgr", K(ret));
   } else {
     ObTabletCacheInterval interval(tablet_id, 1/*cache size*/);
-    lib::ObMutex &mutex = init_node_mutexs_[tablet_id.id() % INIT_NODE_MUTEX_NUM];
-    lib::ObMutexGuard guard(mutex);
-    lib::DisableSchedInterGuard sched_guard;
     if (OB_ISNULL(autoinc_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("autoinc mgr is unexpected null", K(ret));
@@ -349,7 +340,7 @@ int ObTabletAutoincrementService::get_autoinc_seq_for_mlog(
     uint64_t &autoinc_seq)
 {
   int ret = OB_SUCCESS;
-  const int64_t auto_increment_cache_size = 10000; //TODO(shuangcan): fix me
+  const int64_t auto_increment_cache_size = ObTabletAutoincrementService::DEFAULT_CACHE_SIZE;
   ObTabletAutoincParam param;
   param.tenant_id_ = tenant_id;
   ObTabletAutoincMgr *autoinc_mgr = nullptr;
@@ -415,9 +406,6 @@ int ObTabletAutoincrementService::get_autoinc_seq_for_mlog(
     LOG_WARN("failed to acquire mgr", K(ret));
   } else {
     ObTabletCacheInterval interval(tablet_id, 1/*cache size*/);
-    lib::ObMutex &mutex = init_node_mutexs_[tablet_id.id() % INIT_NODE_MUTEX_NUM];
-    lib::ObMutexGuard guard(mutex);
-    lib::DisableSchedInterGuard sched_guard;
     if (OB_ISNULL(autoinc_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("autoinc mgr is unexpected null", K(ret));
