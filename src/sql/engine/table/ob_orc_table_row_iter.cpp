@@ -490,6 +490,12 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
       } else {
         func = &DataLoader::load_dec64_vec;
       }
+    } else if (type_kind == orc::TypeKind::INT
+               || type_kind == orc::TypeKind::LONG
+               || type_kind == orc::TypeKind::SHORT
+               || type_kind == orc::TypeKind::BYTE
+               || type_kind == orc::TypeKind::BOOLEAN) {
+      func = &DataLoader::load_int64_to_number_vec;
     } else {
       func = NULL;
     }
@@ -1269,6 +1275,95 @@ int ObOrcTableRowIterator::DataLoader::load_dec64_vec()
       }
     }
   }
+  return ret;
+}
+
+int ObOrcTableRowIterator::DataLoader::to_numeric(const int64_t idx, const int64_t int_value)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+  if (ObDecimalIntType == file_col_expr_->datum_meta_.type_) {
+    ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
+    ObDecimalInt *decint = NULL;
+    int32_t int_bytes = 0;
+    if (OB_FAIL(wide::from_integer(int_value, tmp_alloc_g.get_allocator(), decint,
+                                   int_bytes, file_col_expr_->datum_meta_.precision_))) {
+      LOG_WARN("fail to from integer", K(ret));
+    } else {
+      vec->set_decimal_int(idx, decint, int_bytes);
+    }
+  } else if (ObNumberType == file_col_expr_->datum_meta_.type_) {
+    ObDiscreteBase *vec = static_cast<ObDiscreteBase *>(file_col_expr_->get_vector(eval_ctx_));
+    number::ObNumber res_nmb;
+    if (OB_FAIL(res_nmb.from(int_value, tmp_alloc_g.get_allocator()))) {
+      LOG_WARN("fail to from number", K(ret));
+    } else {
+      vec->set_number(idx, res_nmb);
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not supported type", K(file_col_expr_->datum_meta_));
+  }
+  return ret;
+}
+
+int ObOrcTableRowIterator::DataLoader::load_int64_to_number_vec()
+{
+  int ret = OB_SUCCESS;
+  int64_t values_cnt = 0;
+  row_count_ = 0;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+  CK (OB_NOT_NULL(file_col_expr_));
+  if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret)) {
+      if (batch_) {
+        row_count_ = batch_->numElements;
+        orc::StructVectorBatch *root = dynamic_cast<orc::StructVectorBatch *>(batch_.get());
+        if (OB_ISNULL(root)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("dynamic cast orc column vector batch failed", K(ret));
+        }
+        CK (root->fields.size() > 0);
+        CK (idxs_.count() > 0);
+        if (OB_SUCC(ret)) {
+          orc::StructVectorBatch *cb = root;
+          for (int64_t i = 0; OB_SUCC(ret) && i < idxs_.count() - 1; i++) {
+            CK (root->fields.size() > idxs_.at(i));
+            if (OB_SUCC(ret)) {
+              cb = dynamic_cast<orc::StructVectorBatch *>(cb->fields[idxs_.at(i)]);
+              CK (cb != nullptr);
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          orc::LongVectorBatch *long_batch = dynamic_cast<orc::LongVectorBatch *>(root->fields[idxs_.at(idxs_.count() - 1)]);
+          if (!long_batch) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("dynamic cast orc type failed", K(ret));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < row_count_; i++) {
+              CK (OB_NOT_NULL(long_batch->notNull.data()));
+              if (OB_SUCC(ret)) {
+                const uint8_t* valid_bytes = reinterpret_cast<const uint8_t*>(long_batch->notNull.data()) + i;
+                if (OB_ISNULL(valid_bytes)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("orc not null batch valid bytes is null", K(ret));
+                } else if (*valid_bytes == 1) {
+                  OZ (to_numeric(i, long_batch->data[i]));
+                } else {
+                  file_col_expr_->get_vector(eval_ctx_)->set_null(i);
+                }
+              }
+            }
+          }
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("read orc next batch failed", K(ret));
+      }
+    }
+  }
+  LOG_DEBUG("load int64 to number vec", K(ret), K(row_count_));
   return ret;
 }
 
