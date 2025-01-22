@@ -85,7 +85,8 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   /* the following ObMaxIdType will be persisted. */
   { "ob_max_used_service_name_id", "max used service name id"},
   { "ob_max_used_storage_id", "max used storage id"},
-  { "ob_max_used_storage_op_id", "max used storage op id"}
+  { "ob_max_used_storage_op_id", "max used storage op id"},
+  { "ob_max_used_catalog_id", "max used catalog id"}
 };
 
 lib::ObMutex ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];

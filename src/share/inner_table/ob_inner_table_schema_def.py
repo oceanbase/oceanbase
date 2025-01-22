@@ -72931,8 +72931,8 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_pkg_coll_type'])
 
-# 101113 __idx_537_idx_catalog_name
-# 101114 __idx_539_idx_catalog_priv_catalog_name
+# 101113: __idx_537_idx_catalog_name
+# 101114: __idx_539_idx_catalog_priv_catalog_name
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
