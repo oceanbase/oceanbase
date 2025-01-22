@@ -133,7 +133,7 @@ private:
 
 class ObTransformUtils
 {
-  private:
+  public:
   struct UniqueCheckInfo
   {
     UniqueCheckInfo() {}

@@ -1267,7 +1267,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   }
   OZ( resolve_query_options(parse_tree.children_[PARSE_SELECT_DISTINCT]) );
   if (OB_SUCC(ret) && is_only_full_group_by_on(session_info_->get_sql_mode())) {
-    OZ( standard_group_checker_.init() );
+    OZ( standard_group_checker_.init(select_stmt, session_info_, params_.schema_checker_) );
   }
   OZ( search_connect_group_by_clause(parse_tree, start_with, connect_by, group_by, having) );
   if (OB_SUCC(ret) && OB_NOT_NULL(group_by)) {
@@ -2811,9 +2811,7 @@ int ObSelectResolver::resolve_star_for_table_groups(ObStarExpansionInfo &star_ex
             LOG_WARN("add select item to select stmt failed", K(ret));
           } else if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
             //如果是only full group by，所有target list中的列都必须检查是否满足group约束
-            if (OB_FAIL(standard_group_checker_.add_unsettled_column(target_list.at(i).expr_))) {
-              LOG_WARN("add unsettled column failed", K(ret));
-            } else if (OB_FAIL(standard_group_checker_.add_unsettled_expr(target_list.at(i).expr_))) {
+            if (OB_FAIL(standard_group_checker_.add_unsettled_expr(target_list.at(i).expr_))) {
               LOG_WARN("add unsettled expr failed", K(ret));
             }
             //同上
@@ -2841,9 +2839,7 @@ int ObSelectResolver::resolve_star_for_table_groups(ObStarExpansionInfo &star_ex
               LOG_WARN("add_select_item failed", K(ret), K(item));
             } else if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
               //如果是only full group by，所有target list中的列都必须检查是否满足group约束
-              if (OB_FAIL(standard_group_checker_.add_unsettled_column(item.expr_))) {
-                LOG_WARN("add unsettled column failed", K(ret));
-              } else if (OB_FAIL(standard_group_checker_.add_unsettled_expr(item.expr_))) {
+              if (OB_FAIL(standard_group_checker_.add_unsettled_expr(item.expr_))) {
                 LOG_WARN("add unsettled expr failed", K(ret));
               }
               //对于select * from t1 group by c1, c2;这样的语句，*展开就是column，所以表达式以及表达式引用到的列都是自己
@@ -2858,7 +2854,6 @@ int ObSelectResolver::resolve_star_for_table_groups(ObStarExpansionInfo &star_ex
             LOG_WARN("add select item to select stmt failed", K(ret));
           } else if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
             //如果是only full group by，所有target list中的列都必须检查是否满足group约束
-            OZ( standard_group_checker_.add_unsettled_column(target_list.at(i).expr_) );
             OZ( standard_group_checker_.add_unsettled_expr(target_list.at(i).expr_) );
           }
         }
@@ -3135,8 +3130,6 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
           } else if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
             //如果是only full group by，所有target list中的列都必须检查是否满足group约束
             if (is_column_name_equal) {    // target column not equal with current column without judge
-            } else if (OB_FAIL(standard_group_checker_.add_unsettled_column(target_list.at(j).expr_))) {
-              LOG_WARN("add unsettled column failed", K(ret));
             } else if (OB_FAIL(standard_group_checker_.add_unsettled_expr(target_list.at(j).expr_))) {
               LOG_WARN("add unsettled expr to standard group checker failed", K(ret));
             }
@@ -5556,12 +5549,6 @@ int ObSelectResolver::resolve_table_column_ref(const ObQualifiedName &q_name, Ob
   int ret = OB_SUCCESS;
   if (OB_FAIL(resolve_table_column_expr(q_name, real_ref_expr))) {
     LOG_WARN("resolve table column expr failed", K(ret), K(q_name), K(lbt()));
-  } else if (column_need_check_group_by(q_name)) {
-    //任何一个表达式引用到的本层的列，都必须记录到standard group checker中，并进行only full group by检查
-    // In Oracle mode, it will add all referenced columns, but group by checker will check every expression recursively intead of one by one column
-    if (OB_FAIL(standard_group_checker_.add_unsettled_column(real_ref_expr))) {
-      LOG_WARN("add unsettled column failed", K(ret));
-    }
   }
   return ret;
 }
@@ -6046,31 +6033,6 @@ int ObSelectResolver::resolve_column_ref_for_subquery(
   return ret;
 }
 
-inline bool ObSelectResolver::column_need_check_group_by(const ObQualifiedName &q_name) const
-{
-  bool bret = true;
-  if (OB_ISNULL(session_info_)) {
-    bret = false;
-  } else if (!is_only_full_group_by_on(session_info_->get_sql_mode())) {
-    bret = false;
-  } else if (T_FIELD_LIST_SCOPE != current_scope_ && T_ORDER_SCOPE != current_scope_) {
-    bret = false;
-  } else if (q_name.parent_aggr_level_ >= 0 && current_level_ <= q_name.parent_aggr_level_) {
-    //aggr_level不为-1说明该column一定存在aggr function中 current_level_ > aggr_level说明
-    //引用的current level低于aggr_level
-    //即使aggr没有发生上推，current level的column也不会影响aggr的聚集情况，不受聚集的约束
-    //这样能够确保这样的column一定不在aggr中，或者在aggr中，但是不受aggr约束，需要检查group by的合法性
-    //因此这里会存在误判的可能，因为aggr function还没有被上推，被需要检查，但是没有检查的列，
-    //在上推的分析过程中会再次将其加入到standard group checker中
-    //例如:select c1, (select (select count(t2.c1+t1.c1) from t3) from t2) from t1;
-    //在这个例子中,count()属于第二层,这里认为t2.c1和t1.c1都不需要check group by,
-    //但是在aggre上推分析过程中发现，t2.c1位于count()中，不需要检查,t1.c1需要检查，这里误判了，
-    //在聚集上推分析中会加入到standard group checker中
-    bret = false;
-  }
-  return bret;
-}
-
 int ObSelectResolver::wrap_alias_column_ref(
   const ObQualifiedName &q_name,
   ObRawExpr *&real_ref_expr)
@@ -6272,15 +6234,9 @@ int ObSelectResolver::add_unsettled_column(ObRawExpr *column_expr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session_info_)) {
-
     ret = OB_NOT_INIT;
     LOG_WARN("session_info is null");
-  } else if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
-    if (OB_FAIL(standard_group_checker_.add_unsettled_column(column_expr))) {
-      LOG_WARN("add unsettled column to standard group checker failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret) && T_HAVING_SCOPE == current_scope_) {
+  } else if (T_HAVING_SCOPE == current_scope_) {
     if (OB_FAIL(check_column_ref_in_group_by_or_field_list(column_expr))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "check column ref in group by failed", K(ret));
     }

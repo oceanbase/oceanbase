@@ -207,7 +207,7 @@ c1	ST_Astext(c2)	ST_Astext(c4)
 10	POINT(160 160)	POLYGON((5010 5010,5020 5020,5030 5030,5040 5030,5020 5010,5010 5010))
 SET sql_mode = 'ONLY_FULL_GROUP_BY';
 SELECT c1,ST_Astext(c2),ST_Astext(c4) FROM tab GROUP BY c2;
-ERROR 42000: 'test.tab.c1' is not in GROUP BY
+ERROR 42000: nonaggregated column 'test.tab.c1' is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 SET sql_mode = ' ';
 drop table tab;
 CREATE TABLE FF01 (A INT,B GEOMETRY);

@@ -2749,7 +2749,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ON_RENAME__USER_ERROR_MSG "Error on rename of \'%s.%s\' to \'%s.%s\'"
 #define OB_ERR_WRONG_KEY_COLUMN__USER_ERROR_MSG "The used storage engine can't index column '%.*s'"
 #define OB_ERR_BAD_FIELD_ERROR__USER_ERROR_MSG "Unknown column '%.*s' in '%.*s'"
-#define OB_ERR_WRONG_FIELD_WITH_GROUP__USER_ERROR_MSG "\'%.*s\' is not in GROUP BY"
+#define OB_ERR_WRONG_FIELD_WITH_GROUP__USER_ERROR_MSG "nonaggregated column \'%.*s\' is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by"
 #define OB_ERR_CANT_CHANGE_TX_CHARACTERISTICS__USER_ERROR_MSG "Transaction characteristics can't be changed while a transaction is in progress"
 #define OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION__USER_ERROR_MSG "Cannot execute statement in a READ ONLY transaction."
 #define OB_ERR_MIX_OF_GROUP_FUNC_AND_FIELDS__USER_ERROR_MSG "Mixing of GROUP columns (MIN(),MAX(),COUNT(),...) with no GROUP columns is illegal if there is no GROUP BY clause"

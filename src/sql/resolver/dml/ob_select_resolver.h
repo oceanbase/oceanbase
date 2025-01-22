@@ -249,7 +249,6 @@ protected:
   int resolve_query_options(const ParseNode *node);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
   virtual int resolve_column_ref_for_subquery(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
-  inline bool column_need_check_group_by(const ObQualifiedName &q_name) const;
   int check_column_ref_in_group_by_or_field_list(const ObRawExpr *column_ref) const;
   int wrap_alias_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   virtual int check_need_use_sys_tenant(bool &use_sys_tenant) const;

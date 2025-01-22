@@ -3547,6 +3547,73 @@ int ObOptimizerUtil::split_child_exprs(const ObFdItem *fd_item,
   return ret;
 }
 
+int ObOptimizerUtil::deduce_determined_exprs(ObIArray<ObRawExpr *> &determined_exprs,
+                                             const ObDMLStmt *stmt,
+                                             const ObFdItemSet &fd_item_set,
+                                             const EqualSets &equal_sets,
+                                             const ObIArray<ObRawExpr *> &const_exprs)
+{
+  int ret = OB_SUCCESS;
+  bool need_contine = true;
+  ObSEArray<bool, 1> fd_is_determined;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (OB_FAIL(fd_is_determined.prepare_allocate(fd_item_set.count(), false))) {
+    LOG_WARN("failed to prepare allocate", K(ret), K(fd_item_set.count()));
+  }
+  while (OB_SUCC(ret) && need_contine) {
+    need_contine = false;
+    for (int64_t fd_idx = 0; OB_SUCC(ret) && fd_idx < fd_item_set.count(); ++fd_idx) {
+      if (fd_is_determined.at(fd_idx)) {
+        // do nothing
+      } else if (OB_ISNULL(fd_item_set.at(fd_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null fd item", K(ret), K(fd_idx));
+      } else if (OB_FAIL(is_exprs_contain_fd_parent(determined_exprs,
+                                                    *fd_item_set.at(fd_idx),
+                                                    equal_sets,
+                                                    const_exprs,
+                                                    fd_is_determined.at(fd_idx)))) {
+        LOG_WARN("failed to check is exprs contain fd parent", K(ret));
+      } else if (fd_is_determined.at(fd_idx)) {
+        need_contine = true;
+        if (fd_item_set.at(fd_idx)->is_expr_fd_item()) {
+          ObExprFdItem *expr_fd = static_cast<ObExprFdItem*>(fd_item_set.at(fd_idx));
+          if (OB_FAIL(append_exprs_no_dup(determined_exprs, expr_fd->get_child_exprs()))) {
+            LOG_WARN("failed to append exprs", K(ret));
+          }
+        } else {
+          ObTableFdItem *table_fd = static_cast<ObTableFdItem*>(fd_item_set.at(fd_idx));
+          ObSEArray<TableItem*, 4> child_tables;
+          ObSEArray<ObRawExpr*, 4> child_exprs;
+          if (OB_FAIL(stmt->relids_to_table_items(table_fd->get_child_tables(),
+                                                  child_tables))) {
+            LOG_WARN("failed to get table items", K(ret));
+          } else if (OB_FAIL(stmt->get_column_exprs(child_tables, child_exprs))) {
+            LOG_WARN("failed to get column exprs", K(ret));
+          } else if (OB_FAIL(append_exprs_no_dup(determined_exprs, child_exprs))) {
+            LOG_WARN("failed to append exprs", K(ret));
+          }
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < equal_sets.count(); ++i) {
+    if (OB_ISNULL(equal_sets.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null equal set", K(ret), K(i));
+    } else if (overlap_exprs(determined_exprs, *equal_sets.at(i))) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < equal_sets.at(i)->count(); ++j) {
+        if (OB_FAIL(add_var_to_array_no_dup(determined_exprs, equal_sets.at(i)->at(j)))) {
+          LOG_WARN("failed to append array no dup", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::is_expr_is_determined(const ObIArray<ObRawExpr *> &exprs,
                                            const ObFdItemSet &fd_item_set,
                                            const EqualSets &equal_sets,
