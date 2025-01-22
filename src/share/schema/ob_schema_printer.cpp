@@ -4380,8 +4380,13 @@ int ObSchemaPrinter::print_routine_param_type(const ObRoutineParam *param,
   } else {
     if (lib::is_mysql_mode()) {
       int64_t type_pos = 0;
+      uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX);
       char type_str[OB_MAX_SYS_PARAM_NAME_LENGTH];
       bzero(type_str, OB_MAX_SYS_PARAM_NAME_LENGTH);
+      if (ObGeometryTC == param->get_param_type().get_type_class()) {
+        CK (OB_NOT_NULL(param_type));
+        OX (sub_type = param_type->int32_values_[1]);
+      }
       OZ (ob_sql_type_str(type_str,
                           OB_MAX_SYS_PARAM_NAME_LENGTH,
                           type_pos,
@@ -4390,7 +4395,8 @@ int ObSchemaPrinter::print_routine_param_type(const ObRoutineParam *param,
                           param->get_param_type().get_precision(),
                           param->get_param_type().get_scale(),
                           param->get_param_type().get_collation_type(),
-                          param->get_extended_type_info()));
+                          param->get_extended_type_info(),
+                          sub_type));
       OZ (databuff_printf(buf, buf_len, pos, " %s", type_str));
     } else {
       ObString type_str;
@@ -4721,6 +4727,7 @@ int ObSchemaPrinter::print_routine_definition_v2_mysql(
   ObString host_name;
 
   ParseNode *create_node = nullptr;
+  ParseNode *return_node = nullptr;
   ParseNode *body_node = nullptr;
 
   bool is_ansi_quote = false;
@@ -4783,7 +4790,9 @@ int ObSchemaPrinter::print_routine_definition_v2_mysql(
     OZ (databuff_printf(buf, buf_len, pos, " RETURNS"));
     OX (return_type =
            static_cast<const ObRoutineParam *>(routine_info.get_ret_info()));
-    OZ (print_routine_param_type(return_type, nullptr, buf, buf_len, pos, tz_info),
+    OX (return_node = create_node->children_[3]);
+    CK (OB_NOT_NULL(return_node));
+    OZ (print_routine_param_type(return_type, return_node, buf, buf_len, pos, tz_info),
         K(buf), K(buf_len), K(routine_info));
   }
 
