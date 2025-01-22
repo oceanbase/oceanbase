@@ -32,6 +32,42 @@
 #include <string>
 
 #include "core/ob_jit_memory_manager.h"
+#include "lib/hash/ob_hashmap.h"
+
+// This must be kept in sync with gdb/gdb/jit.h .
+extern "C" {
+
+  typedef enum {
+    JIT_NOACTION = 0,
+    JIT_REGISTER_FN,
+    JIT_UNREGISTER_FN
+  } jit_actions_t;
+
+  struct jit_code_entry {
+    struct jit_code_entry *next_entry;
+    struct jit_code_entry *prev_entry;
+    const char *symfile_addr;
+    uint64_t symfile_size;
+  };
+
+  struct jit_descriptor {
+    uint32_t version;
+    // This should be jit_actions_t, but we want to be specific about the
+    // bit-width.
+    uint32_t action_flag;
+    struct jit_code_entry *relevant_entry;
+    struct jit_code_entry *first_entry;
+  };
+
+  // We put information about the JITed function in this global, which the
+  // debugger reads.  Make sure to specify the version statically, because the
+  // debugger checks the version before we can set it during runtime.
+  extern struct jit_descriptor __jit_debug_descriptor;
+
+  // Debuggers puts a breakpoint in this function.
+  extern void __jit_debug_register_code();
+
+}
 
 namespace oceanbase {
 namespace jit {
@@ -84,10 +120,15 @@ typedef ::llvm::JITSymbol ObJITSymbol;
 typedef ::llvm::JITEventListener ObJitEventListener;
 #ifdef CPP_STANDARD_20
 typedef ::llvm::orc::DefinitionGenerator ObJitDefinitionGenerator;
+using ObObjectKey = ObJitEventListener::ObjectKey;
+using ObSymbolDef = ::llvm::orc::ExecutorSymbolDef;
+using ObExecutorAddr = ::llvm::orc::ExecutorAddr;
 #else
 typedef ::llvm::orc::SymbolResolver ObSymbolResolver;
-typedef ::llvm::orc::VModuleKey ObVModuleKey;
 typedef ::llvm::orc::JITDylib::DefinitionGenerator ObJitDefinitionGenerator;
+using ObObjectKey = ::llvm::orc::VModuleKey;
+using ObSymbolDef = ::llvm::JITEvaluatedSymbol;
+using ObExecutorAddr = ::llvm::JITTargetAddress;
 #endif
 
 class ObNotifyLoaded: public ObJitEventListener
@@ -98,16 +139,29 @@ public:
       : Allocator(Allocator), DebugBuf(DebugBuf), DebugLen(DebugLen), SoObject(SoObject) {}
   virtual ~ObNotifyLoaded() {}
 
-#ifdef CPP_STANDARD_20
-  void notifyObjectLoaded(ObJitEventListener::ObjectKey Key,
+  void notifyObjectLoaded(ObObjectKey Key,
                           const object::ObjectFile &Obj,
                           const RuntimeDyld::LoadedObjectInfo &Info) override;
-#else
-  void notifyObjectLoaded(ObVModuleKey Key,
-                          const object::ObjectFile &Obj,
-                          const RuntimeDyld::LoadedObjectInfo &Info) override;
-#endif
+  void notifyFreeingObject(ObObjectKey Key) override;
 
+  static int initGdbHelper();
+
+private:
+  void registerDebugInfoToGdb(ObObjectKey Key);
+  void deregisterDebugInfoFromGdb(ObObjectKey Key);
+
+private:
+  using KeyEntryMap = common::hash::ObHashMap<
+                        ObObjectKey, jit_code_entry,
+                        common::hash::NoPthreadDefendMode,
+                        common::hash::hash_func<ObObjectKey>,
+                        common::hash::equal_to<ObObjectKey>,
+                        common::hash::SimpleAllocer<common::hash::ObHashTableNode<
+                          common::hash::HashMapPair<ObObjectKey, jit_code_entry>>>,
+                        common::hash::NormalPointer,
+                        common::ObMalloc,
+                        2>;
+  static std::pair<lib::ObMutex, KeyEntryMap> AllGdbReg;
 private:
   common::ObIAllocator &Allocator;
   char* &DebugBuf;
@@ -132,11 +186,7 @@ public:
 
       if (res != symbol_table.end()) {
         Error err = JD.define(orc::absoluteSymbols(
-#ifdef CPP_STANDARD_20
-                      {{sym.first, ExecutorSymbolDef(ExecutorAddr(res->second), {})}}));
-#else
-                      {{sym.first, JITEvaluatedSymbol(res->second, {})}}));
-#endif
+                      {{sym.first, ObSymbolDef(ObExecutorAddr(res->second), {})}}));
 
         if (err) {
           StringRef name = *sym.first;
