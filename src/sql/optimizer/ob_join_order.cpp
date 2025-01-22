@@ -17802,7 +17802,13 @@ int ObJoinOrder::get_matched_inv_index_tid(ObMatchFunRawExpr *match_expr,
         LOG_WARN("failed to check fulltext index match column", K(ret));
       } else if (found_matched_index && inv_idx_schema->can_read_index() && inv_idx_schema->is_index_visible()) {
         inv_idx_tid = index_info.table_id_;
+      } else {
+        found_matched_index = false;
       }
+    }
+    if (OB_SUCC(ret) && OB_INVALID_ID == inv_idx_tid) {
+      ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
+      LOG_WARN("all fulltext index not found", K(ret));
     }
   }
   return ret;
