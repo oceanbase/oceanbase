@@ -10909,6 +10909,8 @@ int ObTransformUtils::check_correlated_exprs_can_pullup_for_set(const ObQueryRef
   if (subquery.get_set_op() != ObSelectStmt::UNION || subquery.is_recursive_union()) {
     //TODO: pullup correlated exprs for intersect and minus
     can_pullup = !subquery.is_set_distinct();
+  } else if (subquery.has_order_by()) {
+    can_pullup = false;
   }
   ObSEArray<ObRawExpr*, 4> left_select_exprs;
   ObSEArray<ObRawExpr*, 4> right_select_exprs;
