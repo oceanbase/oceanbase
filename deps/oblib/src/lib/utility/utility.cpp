@@ -2013,5 +2013,43 @@ bool glibc_prereq(int major, int minor)
   return (cur_major > major) || (cur_major == major && cur_minor >= minor);
 }
 
+const char *get_transparent_hugepage_status()
+{
+  char buf[32];
+  const char *status = "unknown";
+  FILE *file = fopen("/sys/kernel/mm/transparent_hugepage/enabled", "r");
+  if (NULL != file) {
+    if (NULL != fgets(buf, sizeof(buf), file)) {
+      if (NULL != STRSTR(buf, "[never]")) {
+        status = "never";
+      } else if (NULL != STRSTR(buf, "[always]")) {
+        status = "always";
+      } else if (NULL != STRSTR(buf, "[madvise]")) {
+        status = "madvise";
+      }
+    }
+    fclose(file);
+  }
+
+  return status;
+}
+
+int read_one_int(const char *file_name, int64_t &value)
+{
+  int ret = OB_SUCCESS;
+  FILE *fp = fopen(file_name, "r");
+  if (fp != nullptr) {
+    if (1 != fscanf(fp, "%ld", &value)) {
+      ret = OB_IO_ERROR;
+      LOG_ERROR("Failed to read integer from file", K(ret));
+    }
+    fclose(fp);
+  } else {
+    ret = OB_FILE_NOT_EXIST;
+    LOG_WARN("File does not exist", K(ret));
+  }
+  return ret;
+}
+
 } // end namespace common
 } // end namespace oceanbase

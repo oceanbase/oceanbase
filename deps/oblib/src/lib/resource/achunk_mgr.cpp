@@ -388,6 +388,10 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   int64_t total_maps = normal_maps + large_maps + huge_maps;
   int64_t total_unmaps = normal_unmaps + large_unmaps + huge_unmaps;
 
+  int64_t max_map_count = 0;
+  (void)read_one_int("/proc/sys/vm/max_map_count", max_map_count);
+  const char *thp_status = get_transparent_hugepage_status();
+
   ret = databuff_printf(buf, buf_len, pos,
       "[CHUNK_MGR] limit=%'15ld hold=%'15ld total_hold=%'15ld used=%'15ld freelists_hold=%'15ld"
       " total_maps=%'15ld total_unmaps=%'15ld large_maps=%'15ld large_unmaps=%'15ld huge_maps=%'15ld huge_unmaps=%'15ld"
@@ -404,6 +408,12 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
         sanity_min_addr, sanity_max_addr, get_global_addr());
   }
 #endif
+  if (OB_SUCC(ret)) {
+    ret = databuff_printf(buf, buf_len, pos,
+        " [OS_PARAMS] vm.max_map_count=%'15ld transparent_hugepages=%15s",
+        max_map_count, thp_status);
+  }
+
   if (OB_SUCC(ret)) {
     int64_t hold = 0, count = 0, pushes = 0, pops = 0;
     for (int i = 0; i <= MAX_NORMAL_ACHUNK_INDEX; ++i) {
