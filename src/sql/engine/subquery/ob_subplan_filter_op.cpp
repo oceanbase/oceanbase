@@ -708,7 +708,10 @@ int ObSubPlanFilterOp::inner_open()
             LOG_WARN("failed to init hash map for idx", K(i), K(ret));
           } else if (OB_FAIL(iter->init_probe_row(MY_SPEC.exec_param_array_[i - 1].count()))) {
             LOG_WARN("failed to init probe row", K(ret));
-          } else if (children_[i]->is_vectorized() && OB_FAIL(iter->init_batch_rows_holder(children_[i]->get_spec().output_, children_[i]->get_eval_ctx()))) {
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (children_[i]->is_vectorized() && OB_FAIL(iter->init_batch_rows_holder(children_[i]->get_spec().output_, children_[i]->get_eval_ctx()))) {
             LOG_WARN("failed to init batch rows holder", K(ret));
           }
         }
