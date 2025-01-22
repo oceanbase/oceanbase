@@ -119,7 +119,7 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), src_arr))) {
     LOG_WARN("construct array obj failed", K(ret));
   } else if (OB_FALSE_IT(idx = idx_datum->get_int() - 1)) {
-  } else if (idx < 0 || idx > src_arr->size() - 1 || idx > UINT32_MAX) {
+  } else if (idx < 0 || idx >= src_arr->size() || idx > UINT32_MAX) {
     res.set_null();
   } else if (src_arr->get_format() !=  ArrayFormat::Vector && src_arr->is_null(idx)) {
     res.set_null();
@@ -200,7 +200,7 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) {
         LOG_WARN("construct array obj failed", K(ret));
       } else if (OB_FALSE_IT(idx = idx_array.at(j)->get_int() - 1)) {
-      } else if (idx < 0 || idx > src_arr->size() - 1 || idx > UINT32_MAX) {
+      } else if (idx < 0 || idx >= src_arr->size() || idx > UINT32_MAX) {
         res_datum.at(j)->set_null();
       } else if (src_arr->get_format() !=  ArrayFormat::Vector && src_arr->is_null(idx)) {
         res_datum.at(j)->set_null();
@@ -306,7 +306,7 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
       }
       if (OB_FAIL(ret) || is_null_res) {
       } else if (OB_FALSE_IT(arr_idx = idx_vec->get_int(idx) - 1)) {
-      } else if (arr_idx < 0 || arr_idx > src_arr->size() - 1 || arr_idx > UINT32_MAX) {
+      } else if (arr_idx < 0 || arr_idx >= src_arr->size() || arr_idx > UINT32_MAX) {
         is_null_res = true;
       } else if (src_arr->get_format() != ArrayFormat::Vector && src_arr->is_null(arr_idx)) {
         is_null_res = true;
