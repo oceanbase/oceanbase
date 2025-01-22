@@ -1696,9 +1696,9 @@ int ObRestoreUtil::check_backup_set_version_match_(share::ObBackupSetFileDesc &b
     LOG_WARN("cluster version are not exist", K(ret), K(backup_file_desc));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "cluster version of backup set");
   } else if (!ObUpgradeChecker::check_data_version_exist(backup_file_desc.tenant_compatible_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("data version are not exist", K(ret), K(backup_file_desc));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant compatible of backup set");
+    ret = OB_CLUSTER_VERSION_NOT_COMPATIBLE;
+    LOG_WARN("cluster version is not compatible", K(ret), K(backup_file_desc));
+    LOG_USER_ERROR(OB_CLUSTER_VERSION_NOT_COMPATIBLE);
   } else if (GET_MIN_CLUSTER_VERSION() < backup_file_desc.cluster_version_) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("restore from higher cluster version is not allowed", K(ret));
@@ -1995,13 +1995,19 @@ int ObRestoreUtil::get_restore_tenant_cpu_count(
   if (FAILEDx(unit_op.get_unit_configs(unit_config_ids, configs))) {
     LOG_WARN("failed to get unit configs", K(ret));
   }
-  double max_cpu = OB_MAX_CPU_NUM;
-  ARRAY_FOREACH(configs, i) {
-    max_cpu = std::min(max_cpu, configs.at(i).max_cpu());
-  }
-  if (OB_SUCC(ret)) {
+
+  if (OB_FAIL(ret)) {
+  } else if (configs.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get empty unit config", K(ret));
+  } else {
+    double max_cpu = configs.at(0).max_cpu();
+    ARRAY_FOREACH(configs, i) {
+      max_cpu = std::min(max_cpu, configs.at(i).max_cpu());
+    }
     cpu_count = max_cpu;
   }
+
   return ret;
 }
 
