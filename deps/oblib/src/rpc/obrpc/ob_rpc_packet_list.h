@@ -1246,6 +1246,10 @@ PCODE_DEF(OB_TX_SBY_STATE_RESULT, 0x1642)
 // parallel create tenant
 // PCODE_DEF(OB_PARALLEL_CREATE_NORMAL_TENANT, 0x1646)
 
+// for shared storage
+// PCODE_DEF(OB_SSWRITER_LOCATION_REQ, 0x1647)
+// PCODE_DEF(OB_SSWRITER_LOCATION_RESP, 0x1648)
+
 //**** 注意：在此行之前增加新的RPC ID ******
 //
 //占位须知：
