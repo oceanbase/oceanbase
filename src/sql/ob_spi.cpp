@@ -886,7 +886,7 @@ int ObSPIService::spi_calc_expr_at_idx(pl::ObPLExecCtx *ctx,
   CK (OB_LIKELY(0 <= expr_idx && expr_idx < ctx->func_->get_expressions().count()));
   const ObSqlExpression *expr = nullptr;
   OX (expr = ctx->func_->get_expressions().at(expr_idx));
-  OZ (spi_calc_expr(ctx, expr, result_idx, result));
+  OZ (SMART_CALL(spi_calc_expr(ctx, expr, result_idx, result)));
   return ret;
 }
 
@@ -3542,10 +3542,10 @@ int ObSPIService::spi_cursor_open_with_param_idx(ObPLExecCtx *ctx,
   MAKE_EXPR_BUFFER(alloc, actual_param_idx, cursor_param_count,
                     actual_param_exprs);
 
-  OZ(spi_cursor_open(ctx, sql, ps_sql, type, for_update, has_hidden_rowid,
-                      sql_param_exprs, sql_param_count, package_id, routine_id,
-                      cursor_index, formal_param_idxs, actual_param_exprs,
-                      cursor_param_count, skip_locked));
+  OZ (SMART_CALL(spi_cursor_open(ctx, sql, ps_sql, type, for_update, has_hidden_rowid,
+                                 sql_param_exprs, sql_param_count, package_id, routine_id,
+                                 cursor_index, formal_param_idxs, actual_param_exprs,
+                                 cursor_param_count, skip_locked)));
 
   return ret;
 }
