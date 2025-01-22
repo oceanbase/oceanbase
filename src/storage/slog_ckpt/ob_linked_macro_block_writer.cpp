@@ -230,6 +230,7 @@ int ObLinkedMacroBlockItemWriter::init(const bool need_disk_addr, const ObMemAtt
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLinkedMacroBlockItemWriter has already been inited", K(ret));
+  } else if (FALSE_IT(allocator_.set_attr(mem_attr))) {
   } else if (OB_FAIL(block_writer_.init())) {
     LOG_WARN("fail to init meta block writer", K(ret));
   } else if (OB_ISNULL(io_buf_ = static_cast<char *>(allocator_.alloc(macro_block_size)))) {
@@ -239,7 +240,6 @@ int ObLinkedMacroBlockItemWriter::init(const bool need_disk_addr, const ObMemAtt
   } else if (OB_FAIL(common_header_.set_attr(ObMacroBlockCommonHeader::LinkedBlock))) {
     LOG_WARN("fail to set type for common header", K(ret), K(common_header_));
   } else {
-    allocator_.set_attr(mem_attr);
     need_disk_addr_ = need_disk_addr;
     io_buf_size_ = macro_block_size;
     io_buf_pos_ = ObMacroBlockCommonHeader::get_serialize_size() + linked_header_.get_serialize_size();
@@ -264,6 +264,7 @@ int ObLinkedMacroBlockItemWriter::init_for_object(
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLinkedMacroBlockItemWriter has already been inited", K(ret));
+  } else if (FALSE_IT(allocator_.set_attr(mem_attr))) {
   } else if (OB_UNLIKELY(0 == tablet_id || (snapshot_version > 0 && start_macro_seq < 0))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(snapshot_version), K(start_macro_seq));
@@ -276,7 +277,6 @@ int ObLinkedMacroBlockItemWriter::init_for_object(
   } else if (OB_FAIL(common_header_.set_attr(ObMacroBlockCommonHeader::LinkedBlock))) {
     LOG_WARN("fail to set type for common header", K(ret), K(common_header_));
   } else {
-    allocator_.set_attr(mem_attr);
     need_disk_addr_ = false;
     io_buf_size_ = macro_block_size;
     io_buf_pos_ = ObMacroBlockCommonHeader::get_serialize_size() + linked_header_.get_serialize_size();
