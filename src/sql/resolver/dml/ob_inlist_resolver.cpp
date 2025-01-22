@@ -163,7 +163,7 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                                   const ObStmtScope &scope,
                                                   const bool is_root_condition,
                                                   const bool is_need_print,
-                                                  const bool is_in_pl,
+                                                  const bool is_in_pl_prepare,
                                                   const ObSQLSessionInfo *session_info,
                                                   const ParamStore *param_store,
                                                   const ObStmt *stmt,
@@ -184,6 +184,7 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
              || (T_OP_IN != op_type && T_OP_NOT_IN != op_type)
              || T_EXPR_LIST != in_list.type_
              || is_need_print
+             || is_in_pl_prepare
              || (NULL != stmt
                  && stmt->is_select_stmt()
                  && static_cast<const ObSelectStmt *>(stmt)->is_hierarchical_query())) {

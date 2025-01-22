@@ -4413,12 +4413,18 @@ int ObRawExprResolverImpl::resolve_right_branch_of_in_op(const ParseNode *node,
   if (OB_ISNULL(node)|| OB_ISNULL(left_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
-  } else if (OB_FAIL(ObInListResolver::check_inlist_rewrite_enable(*node, op_type, *left_expr,
-                     ctx_.current_scope_, is_root_condition, ctx_.is_need_print_,
-                     NULL != ctx_.secondary_namespace_ ||
-                     ctx_.is_for_dynamic_sql_ || ctx_.is_for_dbms_sql_,
-                     ctx_.session_info_, ctx_.param_list_, ctx_.stmt_, is_question_mark,
-                     is_enable_rewrite))) {
+  } else if (OB_FAIL(ObInListResolver::check_inlist_rewrite_enable(*node,
+            op_type,
+            *left_expr,
+            ctx_.current_scope_,
+            is_root_condition,
+            ctx_.is_need_print_,
+            NULL != ctx_.secondary_namespace_,
+            ctx_.session_info_,
+            ctx_.param_list_,
+            ctx_.stmt_,
+            is_question_mark,
+            is_enable_rewrite))) {
     LOG_WARN("failed to check inlist rewrite enable", K(ret));
   } else if (is_enable_rewrite) {
     ObQueryRefRawExpr *sub_query_expr = NULL;
