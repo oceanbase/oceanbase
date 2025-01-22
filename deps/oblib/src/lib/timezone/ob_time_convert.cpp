@@ -1037,7 +1037,7 @@ int ObTimeConverter::datetime_to_double(int64_t value, const ObTimeZoneInfo *tz_
   if (OB_FAIL(datetime_to_ob_time(value, tz_info, ob_time))) {
     LOG_WARN("failed to convert seconds to ob time", K(ret));
   } else {
-    dbl = static_cast<double>(ob_time_to_int(ob_time, DT_TYPE_MYSQL_DATETIME))
+    dbl = static_cast<double>(ob_time_to_int(ob_time, DT_TYPE_DATETIME))
           + ob_time.parts_[DT_USEC] / static_cast<double>(USECS_PER_SEC);
   }
   return ret;
@@ -1050,7 +1050,7 @@ int ObTimeConverter::mdatetime_to_double(ObMySQLDateTime value, double &dbl)
   if (OB_FAIL(mdatetime_to_ob_time(value, ob_time))) {
     LOG_WARN("failed to convert seconds to ob time", K(ret));
   } else {
-    dbl = static_cast<double>(ob_time_to_int(ob_time, DT_TYPE_DATETIME))
+    dbl = static_cast<double>(ob_time_to_int(ob_time, DT_TYPE_MYSQL_DATETIME))
           + ob_time.parts_[DT_USEC] / static_cast<double>(USECS_PER_SEC);
   }
   return ret;
@@ -1694,6 +1694,8 @@ int ObTimeConverter::mdatetime_to_year(ObMySQLDateTime mdt_value, uint8_t &y_val
   int ret = OB_SUCCESS;
   if (ZERO_YEAR == mdt_value.year()) {
     y_value = ZERO_YEAR;
+  } else if (OB_FAIL(validate_year(mdt_value.year()))) {
+    LOG_WARN("year integer is invalid or out of range", K(ret));
   } else {
     y_value = static_cast<uint8_t>(mdt_value.year() - YEAR_BASE_YEAR);
   }

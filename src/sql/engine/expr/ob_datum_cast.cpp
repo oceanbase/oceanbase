@@ -8926,8 +8926,8 @@ CAST_FUNC_NAME(time, date)
       } else if (OB_FAIL(ObTimeConverter::datetime_to_date(datetime_value, NULL, out_val))) {
         LOG_WARN("date to datetime failed", K(ret), K(datetime_value));
       } else {
-          res_datum.set_date(out_val);
-        }
+        res_datum.set_date(out_val);
+      }
     }
   }
   return ret;
