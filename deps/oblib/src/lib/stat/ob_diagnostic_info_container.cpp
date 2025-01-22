@@ -156,6 +156,8 @@ int ObDiagnosticInfos::get_session_diag_info(int64_t session_id, ObDISessionColl
   } else {
     tmp_di->get_event_stats().accumulate_to(diag_info.base_value_.get_event_stats());
     diag_info.base_value_.get_add_stat_stats().add(tmp_di->get_add_stat_stats());
+    diag_info.session_id_ = session_id;
+    diag_info.base_value_.set_tenant_id(tmp_di->get_tenant_id());
   }
   return ret;
 }
@@ -205,7 +207,7 @@ int ObRunningDiagnosticInfoContainer::init(int cpu_cnt)
       }
       if (OB_SUCC(ret)) {
         is_inited_ = true;
-        LOG_INFO("Successfully init diagnostic info collector", K(slot_num));
+        LOG_INFO("Successfully init running diagnostic info container", K(slot_num));
       } else {
         ob_free(buffer_);
         buffer_ = nullptr;
@@ -535,6 +537,7 @@ void ObDiagnosticInfoContainer::purge_tenant_summary(int64_t tenant_id)
         [tenant_id](const ObDiagnosticKey &key, ObDiagnosticInfoCollector *collector) -> bool {
       bool bret = false;
       if (key.get_tenant_id() == tenant_id) {
+        LOG_INFO("target di collector need to be purged", K(tenant_id), K(key), KPC(collector));
         bret = true;
       }
       return bret;

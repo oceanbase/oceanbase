@@ -162,7 +162,7 @@ public:
   friend class ObDiagnosticInfoContainer;
   explicit ObBaseDiagnosticInfoSummary(
       DiagnosticInfoValueAlloc<ObDiagnosticInfoCollector, ObDiagnosticKey> value_alloc)
-      : collectors_(value_alloc), mutex_(ObLatchIds::DI_COLLECTOR_LOCK), cpu_cnt_(1)
+      : collectors_(value_alloc), mutex_(ObLatchIds::DI_COLLECTOR_LOCK), cpu_cnt_(1), is_inited_(false)
   {}
 
   ~ObBaseDiagnosticInfoSummary()
@@ -178,7 +178,7 @@ public:
   int get_tenant_event(int64_t tenant_id, ObWaitEventStatArray &arr);
   int get_tenant_add_stats(int64_t tenant_id, ObStatEventAddStatArray &arr);
   int get_tenant_latch_stat(int64_t tenant_id, ObLatchStatArray &arr);
-  int for_each_group(std::function<void(int64_t, const ObDiagnoseTenantInfo &)> fn);
+  int for_each_group(int64_t tenant_id, std::function<void(int64_t, const ObDiagnoseTenantInfo &)> fn);
 
   int get_group_event(int64_t group_id, ObWaitEventStatArray &arr);
   int get_group_add_stats(int64_t group_id, ObStatEventAddStatArray &arr);
@@ -197,6 +197,7 @@ private:
   SummaryMap collectors_;
   lib::ObMutex mutex_;
   int64_t cpu_cnt_;
+  bool is_inited_;
 };
 
 } /* namespace common */
