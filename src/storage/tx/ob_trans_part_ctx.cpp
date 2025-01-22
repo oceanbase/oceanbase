@@ -1820,17 +1820,31 @@ int ObPartTransCtx::submit_redo_log_for_freeze(const uint32_t freeze_clock)
   bool submitted = false;
   bool need_submit = fast_check_need_submit_redo_for_freeze_();
   if (need_submit) {
-    CtxLockGuard guard(lock_);
-    tg.click();
-    ret = submit_redo_log_for_freeze_(submitted, freeze_clock);
-    tg.click();
-    if (submitted) {
-      REC_TRANS_TRACE_EXT2(tlog_, submit_log_for_freeze, OB_Y(ret),
-                          OB_ID(used), tg.get_diff(), OB_ID(ctx_ref), get_ref());
-    }
-    if (OB_TRANS_HAS_DECIDED == ret || OB_BLOCK_FROZEN == ret) {
-      ret = OB_SUCCESS;
-    }
+    static const int64_t MAX_SLEEP_US = 1 * 1000;
+    int64_t retry_cnt = 0;
+    int64_t sleep_us = 0;
+    do {
+      {
+        CtxLockGuard guard(lock_);
+        tg.click();
+        ret = submit_redo_log_for_freeze_(submitted, freeze_clock);
+        tg.click();
+        if (submitted) {
+          REC_TRANS_TRACE_EXT2(tlog_, submit_log_for_freeze, OB_Y(ret),
+                              OB_ID(used), tg.get_diff(), OB_ID(ctx_ref), get_ref());
+        }
+        if (OB_TRANS_HAS_DECIDED == ret || OB_BLOCK_FROZEN == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+      if (OB_EAGAIN == ret) {
+        retry_cnt++;
+        sleep_us = retry_cnt * 100;
+        sleep_us = sleep_us > MAX_SLEEP_US ? MAX_SLEEP_US : sleep_us;
+        ob_usleep(sleep_us);
+      }
+    } while (OB_EAGAIN == ret);
+
   }
 
   return ret;
@@ -4071,7 +4085,7 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
                    base_scn,
                    log_cb,
                    true, /*nonblock*/
-                   timeout_us))) {
+                   ATOMIC_LOAD(&is_submitting_redo_log_for_freeze_) ? 0 : timeout_us))) {
     busy_cbs_.add_last(log_cb);
     log_cb->set_log_size(log_block.get_size());
     ObTxLogCbPool::start_syncing_with_stat(log_cb->get_group_ptr(), log_block.get_size());
