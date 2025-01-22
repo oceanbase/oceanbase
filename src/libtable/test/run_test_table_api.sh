@@ -58,6 +58,7 @@ mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_with_filter; cre
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_and_mutate; create table if not exists query_and_mutate (C1 bigint primary key, C2 bigint, C3 varchar(100), C4 double default 0);" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists atomic_batch_ops; create table if not exists atomic_batch_ops (C1 bigint, C2 varchar(128), C3 varbinary(1024) default null, C4 bigint not null default -1, primary key(C1), UNIQUE KEY idx_c2c4 (C2, C4));" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists auto_increment_defensive_test; create table if not exists auto_increment_defensive_test (C1 bigint AUTO_INCREMENT primary key) PARTITION BY KEY(C1) PARTITIONS 16;" $db
+mysql -h $HOST -P $PORT -u $user -e "drop table if exists obkv_datetime_test; create table if not exists obkv_datetime_test (C1 bigint, C2 datetime(6), primary key(C1), KEY idx_c2 (C2));" $db
 
 # INDEX idx1(C1, C2)
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists execute_query_test; create table if not exists execute_query_test (PK1 bigint, PK2 bigint, C1 bigint, C2 varchar(100), C3 bigint, PRIMARY KEY(PK1, PK2));" $db
@@ -120,6 +121,7 @@ mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_async_multi_task
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_with_filter; create table if not exists query_with_filter (C1 bigint primary key, C2 bigint, C3 varchar(100), C4 double default 0);" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_and_mutate; create table if not exists query_and_mutate (C1 bigint primary key, C2 bigint, C3 varchar(100), C4 double default 0);" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists atomic_batch_ops; create table if not exists atomic_batch_ops (C1 bigint, C2 varchar(128), C3 varbinary(1024) default null, C4 bigint not null default -1, primary key(C1), UNIQUE KEY idx_c2c4 (C2, C4));" $db
+mysql -h $HOST -P $PORT -u $user -e "drop table if exists obkv_datetime_test; create table if not exists obkv_datetime_test (C1 bigint, C2 datetime(6), primary key(C1), KEY idx_c2 (C2));" $db
 
 # INDEX idx1(C1, C2)
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists execute_query_test; create table if not exists execute_query_test (PK1 bigint, PK2 bigint, C1 bigint, C2 varchar(100), C3 bigint, PRIMARY KEY(PK1, PK2));" $db

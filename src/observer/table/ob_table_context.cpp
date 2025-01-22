@@ -830,8 +830,22 @@ int ObTableCtx::generate_key_range(const ObIArray<ObString> &scan_ranges_columns
             } else if (OB_ISNULL(columns_infos.at(k))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("column info is NULL", K(ret), K(k));
-            }else if (OB_FAIL(adjust_column_type(*columns_infos.at(k), obj))) {
+            } else if (OB_FAIL(adjust_column_type(*columns_infos.at(k), obj))) {
               LOG_WARN("fail to adjust column type", K(ret), K(columns_infos.at(k)), K(obj));
+            } else if (ob_is_mysql_date_tc(columns_infos.at(k)->type_.get_type()) && ob_is_date_tc(obj.get_type())) {
+              ObMySQLDate mdate = 0;
+              if (OB_FAIL(ObTimeConverter::date_to_mdate(obj.get_date(), mdate))) {
+                LOG_WARN("fail to convert date to mysql date", K(ret), K(obj));
+              } else {
+                obj.set_mysql_date(mdate);
+              }
+            } else if (ob_is_mysql_datetime(columns_infos.at(k)->type_.get_type()) && ob_is_datetime(obj.get_type())) {
+              ObMySQLDateTime mdatetime = 0;
+              if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(obj.get_datetime(), mdatetime))) {
+                LOG_WARN("fail to convert datetime to mysql datetime", K(ret), K(obj));
+              } else {
+                obj.set_mysql_datetime(mdatetime);
+              }
             }
           }
         }
