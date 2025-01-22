@@ -534,6 +534,14 @@ int ObTabletFinishTransferOutHelper::on_replay(
                                    true/*clean_related_info*/,
                                    ObStorageHADiagTaskType::TRANSFER_FINISH_OUT,
                                    diagnose_result_msg);
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("tx finish transfer out on_replay failed", K(ret), K(scn), K(tx_finish_transfer_out_info));
+    ret = OB_EAGAIN;
+  } else {
+    LOG_INFO("[TRANSFER] finish tx finish transfer out on_replay success", K(scn), K(tx_finish_transfer_out_info),
+        "cost_ts", ObTimeUtil::current_time() - start_ts);
+  }
   return ret;
 }
 
@@ -610,13 +618,9 @@ int ObTabletFinishTransferOutHelper::on_replay_success_(
 #endif
   DEBUG_SYNC(AFTER_ON_REDO_FINISH_TRANSFER_OUT);
   CLICK();
-  if (OB_FAIL(ret)) {
-    LOG_WARN("tx finish transfer out on_replay_success_ failed", K(ret), K(scn), K(tx_finish_transfer_out_info));
-    ret = OB_EAGAIN;
-  } else {
+
+  if (OB_SUCC(ret)) {
     ls->get_tablet_gc_handler()->set_tablet_persist_trigger();
-    LOG_INFO("[TRANSFER] finish tx finish transfer out on_replay_success_", K(scn), K(tx_finish_transfer_out_info),
-        "cost_ts", ObTimeUtil::current_time() - start_ts);
   }
 
   return ret;
@@ -1203,6 +1207,14 @@ int ObTabletFinishTransferInHelper::on_replay(
                                    false/*clean_related_info*/,
                                    ObStorageHADiagTaskType::TRANSFER_FINISH_IN,
                                    diagnose_result_msg);
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("tx finish transfer in on_replay failed", K(ret), K(scn), K(tx_finish_transfer_in_info));
+    ret = OB_EAGAIN;
+  } else {
+    LOG_INFO("[TRANSFER] finish tx finish transfer in on_replay success", K(scn), K(tx_finish_transfer_in_info),
+        "cost_ts", ObTimeUtil::current_time() - start_ts);
+  }
   return ret;
 }
 
@@ -1257,15 +1269,6 @@ int ObTabletFinishTransferInHelper::on_replay_success_(
       }
     }
   }
-
-  if (OB_FAIL(ret)) {
-    LOG_WARN("tx finish transfer in on_replay_success_ failed", K(ret), K(scn), K(tx_finish_transfer_in_info));
-    ret = OB_EAGAIN;
-  } else {
-    LOG_INFO("[TRANSFER] finish tx finish transfer in on_replay_success_", K(scn), K(tx_finish_transfer_in_info),
-        "cost_ts", ObTimeUtil::current_time() - start_ts);
-  }
-
   return ret;
 }
 
