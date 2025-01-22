@@ -2824,6 +2824,8 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
         LOG_WARN("failed to check foreign key check ctdef", K(ret));
       } else if (OB_FAIL(dml_ctdef.fk_args_.push_back(fk_arg))) {
         LOG_WARN("failed to add foreign key arg", K(fk_arg), K(ret));
+      } else {
+        cg_.phy_plan_->set_has_nested_sql(true);
       }
     } else {
       if (OB_FAIL(dml_ctdef.fk_args_.push_back(fk_arg))) {

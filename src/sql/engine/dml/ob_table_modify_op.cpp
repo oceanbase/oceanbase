@@ -157,12 +157,24 @@ int ForeignKeyHandle::value_changed(ObTableModifyOp &op,
   return ret;
 }
 
-int ForeignKeyHandle::check_exist(ObTableModifyOp &modify_op, const ObForeignKeyArg &fk_arg,
-                         const ObExprPtrIArray &row, ObForeignKeyChecker *fk_checker, bool expect_zero)
+int ForeignKeyHandle::check_exist(ObTableModifyOp &modify_op,
+                                  const ObForeignKeyArg &fk_arg,
+                                  const ObExprPtrIArray &row,
+                                  ObForeignKeyChecker *fk_checker,
+                                  bool expect_zero)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_FOREIGN_KEY_CONSTRAINT_CHECK);
-  if (!expect_zero) {
+  // insertup and merge_into currently have a core problem when checking foreign keys through das_scan_task.
+  // Because both insertup and merge_into have both INSERT and UPDATE semantics,
+  // the data may come from the new_row of INSERT or the new_row of UPDATE during the operation.
+  // Earlier versions did not consider this problem, so there is a possibility of core
+  bool is_merge_or_insertup = false;
+  ObPhyOperatorType op_type = modify_op.get_spec().get_type();
+  if (op_type == PHY_INSERT_ON_DUP || op_type == PHY_MERGE) {
+    is_merge_or_insertup = true;
+  }
+  if (!expect_zero && !is_merge_or_insertup) {
     ret = check_exist_scan_task(modify_op, fk_arg, row, fk_checker);
   } else {
     if (OB_FAIL(check_exist_inner_sql(modify_op, fk_arg, row, expect_zero, true))) {
@@ -180,6 +192,9 @@ int ForeignKeyHandle::check_exist_scan_task(ObTableModifyOp &modify_op, const Ob
   int ret = OB_SUCCESS;
   bool has_result = false;
   if (OB_ISNULL(fk_checker)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("foreign key checker is nullptr", K(ret));
+  } else if (!fk_arg.use_das_scan_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("foreign key checker is nullptr", K(ret));
   } else if (OB_FAIL(fk_checker->do_fk_check_single_row(fk_arg.columns_, row, has_result))) {
