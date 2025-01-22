@@ -399,7 +399,9 @@ void ObTenantCtxAllocator::on_alloc(AObject& obj, const ObMemAttr& attr)
     MEMCPY(obj.bt(), (char*)addrs, AOBJECT_BACKTRACE_SIZE);
     obj.on_malloc_sample_ = true;
   }
-  obj.ignore_version_ = attr.ignore_version() || ObMemVersionNode::tl_ignore_node;
+  obj.ignore_version_ = attr.ignore_version()
+      || ObMemVersionNode::tl_ignore_node
+      || ObCtxIds::GLIBC == attr.ctx_id_;
   if (!obj.ignore_version_) {
     obj.version_ = ObMemVersionNode::tl_node->version_;
   }
