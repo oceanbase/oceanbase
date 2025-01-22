@@ -3070,6 +3070,13 @@ int ObServer::reload_config()
     LOG_WARN("failed to reload_bandwidth_throttle_limit", KR(ret));
   }
 
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObStorageHADiagService::instance().reload_config())) {
+      LOG_WARN("failed to reload storage ha diag service config", K(ret));
+      ret = OB_SUCCESS; // ignore ret
+    }
+  }
+
   return ret;
 }
 

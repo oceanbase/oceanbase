@@ -2013,6 +2013,10 @@ DEF_TIME(_standby_max_replay_gap_time, OB_TENANT_PARAMETER, "900s", "[10s,)",
 DEF_TIME(_ha_diagnose_history_recycle_interval, OB_CLUSTER_PARAMETER, "7d", "[2m, 180d]",
          "The recycle interval time of diagnostic history data. Range: [2m, 180d]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_TIME(_errsim_ha_diagnose_history_recycle_interval, OB_CLUSTER_PARAMETER, "0", "[0s, 180d]",
+         "The recycle interval time of diagnostic history data. Range: [0s, 180d]",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_TIME(errsim_transfer_diagnose_server_wait_time, OB_CLUSTER_PARAMETER, "5m", "[1s,1h]",
         "the wakeup wait time of the transfer diagnose server. "
         "Range: [0s, 1h]",

@@ -34,7 +34,8 @@ ObStorageHADiagService::ObStorageHADiagService()
     task_keys_(),
     lock_(),
     err_diag_end_timestamp_(0),
-    perf_diag_end_timestamp_(0)
+    perf_diag_end_timestamp_(0),
+    idle_interval_ms_(0)
 {
 }
 
@@ -55,6 +56,10 @@ int ObStorageHADiagService::init(common::ObMySQLProxy *sql_proxy)
       LOG_WARN("failed to init hash map", K(ret));
     } else {
       sql_proxy_ = sql_proxy;
+      idle_interval_ms_ = 5 * 60 * 1000L;
+#ifdef ERRSIM
+      idle_interval_ms_ = GCONF.errsim_transfer_diagnose_server_wait_time / 1000;
+#endif
       is_inited_ = true;
     }
   }
@@ -118,12 +123,37 @@ int ObStorageHADiagService::start()
   return ret;
 }
 
+int ObStorageHADiagService::reload_config()
+{
+  int64_t ret = OB_SUCCESS;
+#ifdef ERRSIM
+  const int64_t idle_interval_ms = GCONF.errsim_transfer_diagnose_server_wait_time / 1000;
+  bool need_wakeup = false;
+  {
+    ObThreadCondGuard cond_guard(thread_cond_);
+    if (idle_interval_ms_ != idle_interval_ms) {
+      COMMON_LOG(INFO, "reload idle_interval_ms", "old", idle_interval_ms_, "new", idle_interval_ms);
+      idle_interval_ms_ = idle_interval_ms;
+      need_wakeup = true;
+    }
+  }
+
+  if (need_wakeup) {
+    wakeup();
+  }
+
+#endif
+  return ret;
+}
+
+
 void ObStorageHADiagService::run1()
 {
   int ret = OB_SUCCESS;
   lib::set_thread_name("ObStorageHADiagService");
   uint64_t data_version = 0;
   while (!has_set_stop()) {
+    LOG_TRACE("do ObStorageHADiagService");
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
@@ -150,12 +180,8 @@ void ObStorageHADiagService::run1()
     if (has_set_stop() || wakeup_cnt_ > 0) {
       wakeup_cnt_ = 0;
     } else {
-      int64_t wait_time_ms = 5 * 60 * 1000L;
-#ifdef ERRSIM
-      wait_time_ms = GCONF.errsim_transfer_diagnose_server_wait_time / 1000;
-#endif
       ObBKGDSessInActiveGuard inactive_guard;
-      thread_cond_.wait(wait_time_ms);
+      thread_cond_.wait(idle_interval_ms_);
     }
   }
 }
@@ -299,7 +325,16 @@ int ObStorageHADiagService::do_clean_history_(const ObStorageHADiagModule module
   int64_t delete_index = 0;
   while (OB_SUCC(ret)) {
     const int64_t now = ObTimeUtility::current_time();
-    const int64_t delete_timestamp = now - GCONF._ha_diagnose_history_recycle_interval;
+    int64_t delete_timestamp = now - GCONF._ha_diagnose_history_recycle_interval;
+
+#ifdef ERRSIM
+    const int64_t errsim_interval = GCONF._errsim_ha_diagnose_history_recycle_interval;
+    if (0 != errsim_interval) {
+      delete_timestamp = now - errsim_interval;
+    }
+#endif
+
+
     if (OB_FAIL(op_.get_batch_row_keys(*sql_proxy_, OB_SYS_TENANT_ID,
         module, end_timestamp, timestamp_array))) {
       LOG_WARN("failed to get row keys", K(ret), K(end_timestamp), K(timestamp_array));

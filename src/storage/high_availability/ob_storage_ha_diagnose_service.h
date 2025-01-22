@@ -34,6 +34,7 @@ public:
   void wakeup();
   void stop();
   void wait();
+  int reload_config();
   int start();
 
 public:
@@ -96,6 +97,7 @@ private:
   SpinRWLock lock_;
   int64_t err_diag_end_timestamp_;
   int64_t perf_diag_end_timestamp_;
+  int64_t idle_interval_ms_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHADiagService);
 };
 
