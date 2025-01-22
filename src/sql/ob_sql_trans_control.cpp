@@ -1492,7 +1492,8 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, co
       // use first occurred error
       ret = save_ret != OB_SUCCESS ? save_ret : ret;
     }
-    {
+
+    if (!session->is_real_inner_session()) {
       int tmp_ret = OB_SUCCESS;
       lockwaitmgr::ObLockWaitMgr *lock_wait_mgr = MTL(lockwaitmgr::ObLockWaitMgr*);
       if (OB_ISNULL(lock_wait_mgr)) {

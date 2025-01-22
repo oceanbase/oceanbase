@@ -196,7 +196,7 @@ void ObLockWaitMgr::remove_placeholder_node(Node *node)
     CriticalGuard(get_qs());
     err = remove_node_(node, tmp_node);
     if (err != 0) {
-      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "remove placeholder unexpected error",
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "remove placeholder unexpected error",
         K(err), KPC(node), KP(tmp_node));
     }
     TRANS_LOG(INFO, "remove placeholder", K(err), KPC(node), KP(tmp_node));
