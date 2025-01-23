@@ -59,6 +59,8 @@ int set_meta_obj_limit(uint64_t tenant_id, int64_t meta_obj_pct_lmt);
 // set rpc memory limit for specified tenant.
 // - rpc_pct_lmt: percentage limitation of tenant rpc memory.
 int set_rpc_limit(uint64_t tenant_id, int64_t rpc_pct_lmt);
+
+int set_req_chunkmgr_parallel(uint64_t tenant_id, uint64_t ctx_id, int32_t parallel);
 } // end of namespace lib
 } // end of namespace oceanbase
 

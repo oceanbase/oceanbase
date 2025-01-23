@@ -21,7 +21,6 @@
 #include "lib/resource/ob_resource_mgr.h"
 #include "lib/allocator/ob_tc_malloc.h"
 #include <signal.h>
-
 namespace oceanbase
 {
 
@@ -63,6 +62,7 @@ private:
 class ReqChunkMgr : public IChunkMgr
 {
 public:
+  static constexpr int32_t MAX_PARALLEL = 64;
   ReqChunkMgr(ObTenantCtxAllocator &ta)
     : ta_(ta), parallel_(CTX_ATTR(ta_.get_ctx_id()).parallel_)
   {
@@ -94,7 +94,7 @@ public:
   }
   void reclaim_chunks()
   {
-    for (int i = 0; i < parallel_; i++) {
+    for (int i = 0; i < MAX_PARALLEL; i++) {
       AChunk *chunk = ATOMIC_TAS(&chunks_[i], NULL);
       if (chunk != NULL) {
         ta_.free_chunk(chunk,
@@ -105,7 +105,7 @@ public:
   int64_t n_chunks() const
   {
     int64_t n = 0;
-    for (int i = 0; i < parallel_; i++) {
+    for (int i = 0; i < MAX_PARALLEL; i++) {
       AChunk *chunk = ATOMIC_LOAD(&chunks_[i]);
       if (chunk != NULL) {
         n++;
@@ -113,10 +113,73 @@ public:
     }
     return n;
   }
+  void set_parallel(int32_t parallel)
+  {
+    int32_t min_parallel = CTX_ATTR(ta_.get_ctx_id()).parallel_;
+    if (parallel < min_parallel) {
+      parallel_ = min_parallel;
+    } else if (parallel > MAX_PARALLEL) {
+      parallel_ = MAX_PARALLEL;
+    } else {
+      parallel_ = parallel;
+    }
+  }
 private:
   ObTenantCtxAllocator &ta_;
-  const int parallel_;
-  AChunk *chunks_[32];
+  int32_t parallel_;
+  AChunk *chunks_[MAX_PARALLEL];
+};
+
+class AChunkUsingList
+{
+public:
+  static const uint64_t NWAY = 64;
+  uint64_t get_index(AChunk *chunk)
+  {
+    return (((uint64_t)chunk>>21) * 0xdeece66d + 0xb) % NWAY;
+  }
+  void insert(AChunk *chunk)
+  {
+    uint64_t index = get_index(chunk);
+    lib::ObMutexGuard guard(slots_[index].mutex_);
+    AChunk &head = slots_[index].head_;
+    chunk->prev2_ = &head;
+    chunk->next2_ = head.next2_;
+    head.next2_->prev2_ = chunk;
+    head.next2_ = chunk;
+  }
+  void remove(AChunk *chunk)
+  {
+    uint64_t index = get_index(chunk);
+    lib::ObMutexGuard guard(slots_[index].mutex_);
+    chunk->prev2_->next2_ = chunk->next2_;
+    chunk->next2_->prev2_ = chunk->prev2_;
+  }
+  void get_chunks(AChunk **chunks, int cap, int &cnt)
+  {
+    for (int i = 0; i < NWAY; ++i) {
+      lib::ObMutexGuard guard(slots_[i].mutex_);
+      AChunk &head = slots_[i].head_;
+      AChunk *cur = head.next2_;
+      while (cur != &head && cnt < cap) {
+        chunks[cnt++] = cur;
+        cur = cur->next2_;
+      }
+    }
+  }
+private:
+  struct Slot {
+    Slot()
+      : mutex_(common::ObLatchIds::CHUNK_USING_LIST_LOCK),
+        head_()
+    {
+      mutex_.enable_record_stat(false);
+      head_.prev2_ = &head_;
+      head_.next2_ = &head_;
+    }
+    ObMutex mutex_;
+    AChunk head_;
+  } slots_[NWAY];
 };
 
 public:
@@ -131,18 +194,14 @@ public:
                NULL),
       idle_size_(0), head_chunk_(), chunk_cnt_(0),
       chunk_freelist_mutex_(common::ObLatchIds::CHUNK_FREE_LIST_LOCK),
-      using_list_mutex_(common::ObLatchIds::CHUNK_USING_LIST_LOCK),
-      using_list_head_(), wash_related_chunks_(0), washed_blocks_(0), washed_size_(0),
+      wash_related_chunks_(0), washed_blocks_(0), washed_size_(0),
       chunk_mgr_(*this), req_chunk_mgr_(*this)
   {
     MEMSET(&head_chunk_, 0, sizeof(AChunk));
-    using_list_head_.prev2_ = &using_list_head_;
-    using_list_head_.next2_ = &using_list_head_;
     ObMemAttr attr;
     attr.tenant_id_  = tenant_id;
     attr.ctx_id_ = ctx_id;
     chunk_freelist_mutex_.enable_record_stat(false);
-    using_list_mutex_.enable_record_stat(false);
     for (int i = 0; i < ObSubCtxIds::MAX_SUB_CTX_ID; ++i) {
       new (obj_mgrs_ + i) ObjectMgr(*this,
                                     CTX_ATTR(ctx_id).enable_no_log_,
@@ -281,6 +340,7 @@ public:
   }
   void update_wash_stat(int64_t related_chunks, int64_t blocks, int64_t size);
   void reset_req_chunk_mgr() { req_chunk_mgr_.reclaim_chunks(); }
+  void set_req_chunkmgr_parallel(int32_t parallel) { req_chunk_mgr_.set_parallel(parallel); }
 private:
   int64_t inc_ref_cnt(int64_t cnt) { return ATOMIC_FAA(&ref_cnt_, cnt); }
   int64_t get_ref_cnt() const { return ATOMIC_LOAD(&ref_cnt_); }
@@ -321,8 +381,7 @@ private:
   // Temporarily useless, leave debug
   int64_t chunk_cnt_;
   ObMutex chunk_freelist_mutex_;
-  ObMutex using_list_mutex_;
-  AChunk using_list_head_;
+  AChunkUsingList using_list_;
   int64_t wash_related_chunks_;
   int64_t washed_blocks_;
   int64_t washed_size_;

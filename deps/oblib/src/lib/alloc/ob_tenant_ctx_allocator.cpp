@@ -227,11 +227,7 @@ AChunk *ObTenantCtxAllocator::alloc_chunk(const int64_t size, const ObMemAttr &a
 
   if (OB_NOT_NULL(chunk)) {
     ObDisableDiagnoseGuard disable_diagnose_guard;
-    lib::ObMutexGuard guard(using_list_mutex_);
-    chunk->prev2_ = &using_list_head_;
-    chunk->next2_ = using_list_head_.next2_;
-    using_list_head_.next2_->prev2_ = chunk;
-    using_list_head_.next2_ = chunk;
+    using_list_.insert(chunk);
   }
 
   return chunk;
@@ -241,9 +237,7 @@ void ObTenantCtxAllocator::free_chunk(AChunk *chunk, const ObMemAttr &attr)
 {
   if (chunk != nullptr) {
     ObDisableDiagnoseGuard disable_diagnose_guard;
-    lib::ObMutexGuard guard(using_list_mutex_);
-    chunk->prev2_->next2_ = chunk->next2_;
-    chunk->next2_->prev2_ = chunk->prev2_;
+    using_list_.remove(chunk);
   }
   if (INTACT_ACHUNK_SIZE == chunk->hold() &&
       get_hold() - INTACT_ACHUNK_SIZE < idle_size_) {
@@ -340,12 +334,7 @@ int ObTenantCtxAllocator::set_idle(const int64_t set_size, const bool reserve/*=
 void ObTenantCtxAllocator::get_chunks(AChunk **chunks, int cap, int &cnt)
 {
   ObDisableDiagnoseGuard disable_diagnose_guard;
-  lib::ObMutexGuard guard(using_list_mutex_);
-  AChunk *cur = using_list_head_.next2_;
-  while (cur != &using_list_head_ && cnt < cap) {
-    chunks[cnt++] = cur;
-    cur = cur->next2_;
-  }
+  using_list_.get_chunks(chunks, cap, cnt);
 }
 
 int64_t ObTenantCtxAllocator::get_used() const

@@ -188,5 +188,21 @@ int set_rpc_limit(uint64_t tenant_id, int64_t rpc_pct_lmt)
   return set_ctx_limit(tenant_id, common::ObCtxIds::RPC_CTX_ID, rpc_lmt);
 }
 
+int set_req_chunkmgr_parallel(uint64_t tenant_id, uint64_t ctx_id, int32_t parallel)
+{
+  int ret = OB_SUCCESS;
+  ObMallocAllocator *ma = ObMallocAllocator::get_instance();
+  if (!OB_ISNULL(ma)) {
+    ObTenantCtxAllocatorGuard ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
+    if (OB_NOT_NULL(ta)) {
+      ta->set_req_chunkmgr_parallel(parallel);
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+    }
+  } else {
+    ret = OB_NOT_INIT;
+  }
+  return ret;
+}
 } // end of namespace lib
 } // end of namespace oceanbase
