@@ -5596,6 +5596,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
       && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
     can_join_filter_material = true;
   }
+  int64_t last_valid_join_filter_info_idx = -1;
   if (OB_SUCC(ret)) {
     for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
       bool right_has_exchange = false;
@@ -5709,6 +5710,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
 
         if (OB_SUCC(ret) && can_join_filter_material) {
           valied_join_filter_count++;
+          last_valid_join_filter_info_idx = i;
           join_filter_create->get_jf_material_control_info().enable_material_ = true;
           if (join_filter_create->get_join_exprs().count()
               != static_cast<ObLogJoin *>(this)->get_equal_join_conditions().count()) {
@@ -5770,6 +5772,12 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           hash_id++;
         }
       }
+    }
+
+    // add full hash join key left exprs to join filter
+    const JoinFilterInfo &info = infos.at(last_valid_join_filter_info_idx);
+    if (OB_FAIL(join_filter_create->set_all_join_key_left_exprs(info.all_join_key_left_exprs_))) {
+      LOG_WARN("failed to set_all_join_key_left_exprs");
     }
   }
   return ret;

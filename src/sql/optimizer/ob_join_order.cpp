@@ -10891,6 +10891,12 @@ int ObJoinOrder::find_possible_join_filter_tables(const Path &left_path,
                        right_exprs,
                        join_filter_infos))) {
       LOG_WARN("failed to find subquery possible join filter table", K(ret));
+    } else {
+      for (int64_t i = 0; i < join_filter_infos.count() && OB_SUCC(ret); ++i) {
+        if (OB_FAIL(join_filter_infos.at(i).all_join_key_left_exprs_.assign(left_exprs))) {
+          LOG_WARN("failed to assign all_join_key_left_exprs");
+        }
+      }
     }
   }
   return ret;
