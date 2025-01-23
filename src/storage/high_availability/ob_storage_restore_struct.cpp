@@ -322,6 +322,28 @@ int ObTabletRestoreAction::trans_restore_action_to_restore_status(
   return ret;
 }
 
+bool ObTabletRestoreAction::is_restore_status_match(
+      const ACTION &action, const ObTabletRestoreStatus::STATUS &status)
+{
+  bool b_ret = false;
+  if (!is_valid(action) || !ObTabletRestoreStatus::is_valid(status)) {
+    b_ret = false;
+  } else if (is_restore_all(action)) {
+    b_ret = status == ObTabletRestoreStatus::EMPTY;
+  } else if (is_restore_minor(action)) {
+    b_ret = status == ObTabletRestoreStatus::EMPTY;
+  } else if (is_restore_major(action)) {
+    b_ret = status == ObTabletRestoreStatus::MINOR_AND_MAJOR_META;
+  } else if (is_restore_tablet_meta(action)) {
+    b_ret =  status == ObTabletRestoreStatus::PENDING;
+  } else if (is_restore_remote_sstable(action)) {
+    b_ret = status == ObTabletRestoreStatus::EMPTY;
+  } else if (is_restore_replace_remote_sstable(action)) {
+    b_ret = status == ObTabletRestoreStatus::REMOTE;
+  }
+  return b_ret;
+}
+
 bool ObTabletRestoreAction::need_restore_mds_sstable(const ACTION &action)
 {
   return ACTION::RESTORE_MINOR == action

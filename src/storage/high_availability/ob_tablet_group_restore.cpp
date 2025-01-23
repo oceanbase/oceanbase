@@ -935,8 +935,8 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
         ret = OB_ERR_UNEXPECTED;
          LOG_WARN("tablet restore status is invalid", K(ret), K(tablet_id), K(action_restore_status),
              K(tablet_restore_status), K(ctx_->arg_));
-      } else if (ObTabletRestoreStatus::is_undefined(tablet_restore_status)) {
-        LOG_INFO("tablet restore status is undefined, skip restore it", K(ret));
+      } else if (!ObTabletRestoreAction::is_restore_status_match(ctx_->arg_.action_, tablet_restore_status)) {
+        LOG_INFO("tablet restore status does not match restore action, skip restore it", K(ctx_->arg_), K(tablet_restore_status));
       } else if (OB_FAIL(ObTabletRestoreStatus::check_can_change_status(tablet_restore_status,
           action_restore_status, can_change))) {
         LOG_WARN("failed to check can change status", K(ret), K(tablet_restore_status),
@@ -2234,6 +2234,8 @@ int ObTabletRestoreTask::process()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   bool is_exist = false;
+  ObTablet *tablet = nullptr;
+  ObTabletRestoreStatus::STATUS current_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
   LOG_INFO("start do tablet restore task", KPC(tablet_restore_ctx_));
 
@@ -2242,6 +2244,13 @@ int ObTabletRestoreTask::process()
     LOG_WARN("tablet restore task do not init", K(ret), KPC(tablet_restore_ctx_));
   } else if (ha_dag_net_ctx_->is_failed()) {
     //do nothing
+  } else if (OB_ISNULL(tablet = tablet_restore_ctx_->tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet is null", K(ret), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(tablet->get_tablet_meta().ha_status_.get_restore_status(current_status))) {
+    LOG_WARN("fail to get tablet restore status", K(ret), KPC(tablet));
+  } else if (!ObTabletRestoreAction::is_restore_status_match(tablet_restore_ctx_->action_, current_status)) {
+    LOG_INFO("tablet restore does not match restore action, skip restore it", KPC(tablet_restore_ctx_), K(current_status));
   } else if (OB_FAIL(get_src_info_())) {
     LOG_WARN("failed to get src info", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(try_update_tablet_())) {
