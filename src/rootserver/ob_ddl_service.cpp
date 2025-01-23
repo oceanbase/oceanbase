@@ -23932,6 +23932,7 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
   ObSEArray<uint64_t, 10> table_ids;
   ObTableLockOwnerID new_owner_id;
   ObDDLSQLTransaction trans(schema_service_);
+  common::ObArenaAllocator allocator_for_restore(lib::ObLabel("RestoreSplit"));
   if (OB_UNLIKELY(!alter_table_arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("alter_table_arg is invalid", K(ret), K(alter_table_arg));
@@ -24077,7 +24078,6 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
             LOG_WARN("fail to create hidden table", K(ret));
           } else {
             LOG_INFO("create hidden table success!", K(ret));
-            common::ObArenaAllocator allocator_for_restore(lib::ObLabel("RestoreSplit"));
             alter_table_arg.task_id_ = new_task_id;
             ObCreateDDLTaskParam param(tenant_id,
                                       ObDDLType::DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION,
