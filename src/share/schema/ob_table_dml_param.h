@@ -129,6 +129,7 @@ private:
   uint64_t spatial_mbr_col_id_; // mbr column id in index table_schema.
   common::ObString index_name_;
   common::ObString fts_parser_name_;
+  common::ObString fts_parser_properties_;
   //generated storage param from columns_ids_ in ObTableModify, for performance improvement
   Columns columns_;
   ColumnMap col_map_;

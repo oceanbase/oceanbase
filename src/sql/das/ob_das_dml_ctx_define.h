@@ -89,7 +89,8 @@ public:
       uint64_t is_update_partition_key_         : 1;
       uint64_t is_update_uk_                    : 1;
       uint64_t is_update_pk_with_dop_           : 1; // update primary_table PK
-      uint64_t reserved_                        : 50; //add new flag before reserved_
+      uint64_t is_main_table_in_fts_ddl_        : 1; // main table is in fts ddl for mode of unstable ftparser.
+      uint64_t reserved_                        : 49; //add new flag before reserved_
       uint64_t compat_version_                  : 4; //prohibited to insert new flags between compat_version_ and reserved_
     };
   };

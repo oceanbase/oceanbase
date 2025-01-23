@@ -39,6 +39,7 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     spatial_mbr_col_id_(OB_INVALID_ID),
     index_name_(),
     fts_parser_name_(),
+    fts_parser_properties_(),
     columns_(allocator),
     col_map_(allocator),
     pk_name_(),
@@ -77,6 +78,7 @@ void ObTableSchemaParam::reset()
   spatial_mbr_col_id_ = OB_INVALID_ID;
   index_name_.reset();
   fts_parser_name_.reset();
+  fts_parser_properties_.reset();
   columns_.reset();
   col_map_.clear();
   pk_name_.reset();
@@ -545,6 +547,9 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   }
   OB_UNIS_ENCODE(vec_dim_);
   OB_UNIS_ENCODE(vec_vector_col_id_);
+  if (FAILEDx(fts_parser_properties_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize fts parser properties", K(ret));
+  }
   return ret;
 }
 
@@ -676,6 +681,14 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   }
   OB_UNIS_DECODE(vec_dim_);
   OB_UNIS_DECODE(vec_vector_col_id_);
+  if (OB_SUCC(ret) && pos < data_len) {
+    ObString tmp_properties;
+    if (OB_FAIL(tmp_properties.deserialize(buf, data_len, pos))) {
+      LOG_WARN("fail to deserialize fts parser properties", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, tmp_properties, fts_parser_properties_))) {
+      LOG_WARN("fail to copy fts parser properties", K(ret), K(tmp_properties));
+    }
+  }
   return ret;
 }
 
@@ -727,6 +740,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   len += vec_index_param_.get_serialize_size();
   OB_UNIS_ADD_LEN(vec_dim_);
   OB_UNIS_ADD_LEN(vec_vector_col_id_);
+  len += fts_parser_properties_.get_serialize_size();
   return len;
 }
 
