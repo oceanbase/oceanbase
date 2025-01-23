@@ -915,8 +915,11 @@ bool ObSQLSessionMgr::CheckSessionFunctor::operator()(sql::ObSQLSessionMgr::Key 
     int64_t cur_time = common::ObTimeUtility::current_time();
     int64_t query_timeout = 0;
     ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
-    if (sess_info->get_ddl_info().is_ddl() || sess_info->is_real_inner_session() || OB_NOT_NULL(sess_info->get_pl_context())) {
-      //do nothing
+    if (ObStmt::is_ddl_stmt(sess_info->get_stmt_type(), true) ||
+        sess_info->get_ddl_info().is_ddl() ||
+        sess_info->is_real_inner_session() ||
+        OB_NOT_NULL(sess_info->get_pl_context())) {
+      //filter out DDL and PL statements, because they are not subject to query timeout control.
     } else if (OB_FAIL(sess_info->get_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout))) {
       LOG_WARN("failed to get sesion variable", K(ret));
     } else if (sess_info->get_query_start_time() > 0 &&
