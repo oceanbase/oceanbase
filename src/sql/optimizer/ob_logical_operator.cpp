@@ -483,6 +483,28 @@ int ObLogicalOperator::add_child(const ObIArray<ObLogicalOperator*> &child_ops)
   return ret;
 }
 
+int ObLogicalOperator::is_dfo_contains_partition_wise(bool &contain_partition_wise) const
+{
+  int ret = OB_SUCCESS;
+  contain_partition_wise = false;
+  if (LOG_EXCHANGE == get_type()) {
+    // do nothing
+  } else if (is_partition_wise()) {
+    contain_partition_wise = true;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !contain_partition_wise && i < get_num_of_child(); ++i) {
+      const ObLogicalOperator *child_op = get_child(i);
+      if (OB_ISNULL(child_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child op is null", K(ret), K(i), K(get_num_of_child()), K(get_type()));
+      } else if (OB_FAIL(SMART_CALL(child_op->is_dfo_contains_partition_wise(contain_partition_wise)))) {
+        LOG_WARN("failed to check child is dfo partition wise", K(ret), K(i), K(get_num_of_child()), K(get_type()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogicalOperator::set_op_ordering(const common::ObIArray<OrderItem> &op_ordering)
 {
   int ret = OB_SUCCESS;

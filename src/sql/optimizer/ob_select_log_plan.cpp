@@ -1141,7 +1141,8 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                       need_sort || sort_exprs.empty(),
                                       should_pullup_gi))) {
         LOG_WARN("failed to check can pullup gi", K(ret));
-      } else if (OB_FALSE_IT(is_partition_gi = top->is_partition_wise())) {
+      } else if (OB_FAIL(top->is_dfo_contains_partition_wise(is_partition_gi))) {
+        LOG_WARN("failed to check dfo partition wise", K(ret));
       } else if (OB_FALSE_IT(top_is_local_order = top->get_is_local_order() && !should_pullup_gi)) {
       } else if ((need_sort || top_is_local_order) && !sort_exprs.empty() &&
                  OB_FAIL(allocate_sort_as_top(top,
@@ -1716,7 +1717,8 @@ int ObSelectLogPlan::create_merge_distinct_plan(ObLogicalOperator *&top,
       bool is_partition_gi = false;
       if (OB_FAIL(check_can_pullup_gi(*top, false, need_sort, should_pullup_gi))) {
         LOG_WARN("failed to check can pullup gi", K(ret));
-      } else if (OB_FALSE_IT(is_partition_gi = top->is_partition_wise())) {
+      } else if (OB_FAIL(top->is_dfo_contains_partition_wise(is_partition_gi))) {
+        LOG_WARN("failed to check dfo partition wise", K(ret));
       } else if (OB_FALSE_IT(top_is_local_order = top->get_is_local_order() && !should_pullup_gi)) {
       } else if ((need_sort || top_is_local_order) &&
                  OB_FAIL(allocate_sort_as_top(top,
@@ -1763,39 +1765,39 @@ int ObSelectLogPlan::create_merge_distinct_plan(ObLogicalOperator *&top,
 }
 
 int ObSelectLogPlan::allocate_distinct_as_top(ObLogicalOperator *&top,
-              const AggregateAlgo algo,
-              const ObIArray<ObRawExpr*> &distinct_exprs,
-              const double total_ndv,
-              const bool is_partition_wise,
-              const bool is_pushed_down,
-              const bool is_partition_gi)
+                                              const AggregateAlgo algo,
+                                              const ObIArray<ObRawExpr*> &distinct_exprs,
+                                              const double total_ndv,
+                                              const bool is_partition_wise,
+                                              const bool is_pushed_down,
+                                              const bool is_partition_gi)
 {
-int ret = OB_SUCCESS;
-ObLogDistinct *distinct_op = NULL;
-if (OB_ISNULL(top)) {
-ret = OB_ERR_UNEXPECTED;
-LOG_WARN("get unexpected null", K(top), K(ret));
-} else if (OB_ISNULL(distinct_op = static_cast<ObLogDistinct*>(get_log_op_factory().
-           allocate(*this, LOG_DISTINCT)))) {
-ret = OB_ALLOCATE_MEMORY_FAILED;
-LOG_ERROR("failed to allocate distinct operator", K(ret));
-} else {
-distinct_op->set_child(ObLogicalOperator::first_child, top);
-distinct_op->set_algo_type(algo);
-distinct_op->set_push_down(is_pushed_down);
-distinct_op->set_is_partition_gi(is_partition_gi);
-distinct_op->set_total_ndv(total_ndv);
-distinct_op->set_is_partition_wise(is_partition_wise);
-distinct_op->set_force_push_down(FORCE_GPD & get_optimizer_context().get_aggregation_optimization_settings());
-if (OB_FAIL(distinct_op->set_distinct_exprs(distinct_exprs))) {
-LOG_WARN("failed to set group by columns", K(ret));
-} else if (OB_FAIL(distinct_op->compute_property())) {
-LOG_WARN("failed to compute property", K(ret));
-} else {
-top = distinct_op;
-}
-}
-return ret;
+  int ret = OB_SUCCESS;
+  ObLogDistinct *distinct_op = NULL;
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(top), K(ret));
+  } else if (OB_ISNULL(distinct_op = static_cast<ObLogDistinct*>(get_log_op_factory().
+             allocate(*this, LOG_DISTINCT)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("failed to allocate distinct operator", K(ret));
+  } else {
+    distinct_op->set_child(ObLogicalOperator::first_child, top);
+    distinct_op->set_algo_type(algo);
+    distinct_op->set_push_down(is_pushed_down);
+    distinct_op->set_is_partition_gi(is_partition_gi);
+    distinct_op->set_total_ndv(total_ndv);
+    distinct_op->set_is_partition_wise(is_partition_wise);
+    distinct_op->set_force_push_down(FORCE_GPD & get_optimizer_context().get_aggregation_optimization_settings());
+    if (OB_FAIL(distinct_op->set_distinct_exprs(distinct_exprs))) {
+      LOG_WARN("failed to set group by columns", K(ret));
+    } else if (OB_FAIL(distinct_op->compute_property())) {
+      LOG_WARN("failed to compute property", K(ret));
+    } else {
+      top = distinct_op;
+    }
+  }
+  return ret;
 }
 
 int ObSelectLogPlan::generate_raw_plan_for_set()

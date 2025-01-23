@@ -1044,6 +1044,7 @@ public:
   inline uint64_t get_op_id() const { return op_id_; }
   inline void set_op_id(uint64_t op_id) { op_id_ = op_id; }
   inline bool is_partition_wise() const { return is_partition_wise_; }
+  int is_dfo_contains_partition_wise(bool &contain_partition_wise) const;
   inline void set_is_partition_wise(bool is_partition_wise)
   { is_partition_wise_ = is_partition_wise; }
   inline bool is_fully_partition_wise() const
