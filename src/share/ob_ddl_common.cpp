@@ -70,6 +70,51 @@ const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
     case ObDDLType::DDL_DROP_INDEX:
       ret_name = "DDL_DROP_INDEX";
       break;
+    case ObDDLType::DDL_CREATE_FTS_INDEX:
+      ret_name = "DDL_CREATE_FTS_INDEX";
+      break;
+    case ObDDLType::DDL_CREATE_MLOG:
+      ret_name = "DDL_CREATE_MLOG";
+      break;
+    case ObDDLType::DDL_DROP_MLOG:
+      ret_name = "DDL_DROP_MLOG";
+      break;
+    case ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX:
+      ret_name = "DDL_CREATE_PARTITIONED_LOCAL_INDEX";
+      break;
+    case ObDDLType::DDL_DROP_LOB:
+      ret_name = "DDL_DROP_LOB";
+      break;
+    case ObDDLType::DDL_DROP_FTS_INDEX:
+      ret_name = "DDL_DROP_FTS_INDEX";
+      break;
+    case ObDDLType::DDL_DROP_MULVALUE_INDEX:
+      ret_name = "DDL_DROP_MULVALUE_INDEX";
+      break;
+    case ObDDLType::DDL_DROP_VEC_INDEX:
+      ret_name = "DDL_DROP_VEC_INDEX";
+      break;
+    case ObDDLType::DDL_CREATE_VEC_INDEX:
+      ret_name = "DDL_CREATE_VEC_INDEX";
+      break;
+    case ObDDLType::DDL_CREATE_MULTIVALUE_INDEX:
+      ret_name = "DDL_CREATE_MULTIVALUE_INDEX";
+      break;
+    case ObDDLType::DDL_REBUILD_INDEX:
+      ret_name = "DDL_REBUILD_INDEX";
+      break;
+    case ObDDLType::DDL_AUTO_SPLIT_BY_RANGE:
+      ret_name = "DDL_AUTO_SPLIT_BY_RANGE";
+      break;
+    case ObDDLType::DDL_AUTO_SPLIT_NON_RANGE:
+      ret_name = "DDL_AUTO_SPLIT_NON_RANGE";
+      break;
+    case ObDDLType::DDL_MANUAL_SPLIT_BY_RANGE:
+      ret_name = "DDL_MANUAL_SPLIT_BY_RANGE";
+      break;
+    case ObDDLType::DDL_MANUAL_SPLIT_NON_RANGE:
+      ret_name = "DDL_MANUAL_SPLIT_NON_RANGE";
+      break;
     case ObDDLType::DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS:
       ret_name = "DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS";
       break;
@@ -78,7 +123,6 @@ const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
       break;
     case ObDDLType::DDL_DROP_TABLE:
       ret_name = "DDL_DROP_TABLE";
-      break;
     case ObDDLType::DDL_TRUNCATE_TABLE:
       ret_name = "DDL_TRUNCATE_TABLE";
       break;
@@ -93,6 +137,12 @@ const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
       break;
     case ObDDLType::DDL_TRUNCATE_SUB_PARTITION:
       ret_name = "DDL_TRUNCATE_SUB_PARTITION";
+      break;
+    case ObDDLType::DDL_RENAME_PARTITION:
+      ret_name = "DDL_RENAME_PARTITION";
+      break;
+    case ObDDLType::DDL_RENAME_SUB_PARTITION:
+      ret_name = "DDL_RENAME_SUB_PARTITION";
       break;
     case ObDDLType::DDL_DOUBLE_TABLE_OFFLINE:
       ret_name = "DDL_DOUBLE_TABLE_OFFLINE";
@@ -133,6 +183,24 @@ const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
     case ObDDLType::DDL_DIRECT_LOAD_INSERT:
       ret_name = "DDL_DIRECT_LOAD_INSERT";
       break;
+    case ObDDLType::DDL_TABLE_RESTORE:
+      ret_name = "DDL_TABLE_RESTORE";
+      break;
+    case ObDDLType::DDL_MVIEW_COMPLETE_REFRESH:
+      ret_name = "DDL_MVIEW_COMPLETE_REFRESH";
+      break;
+    case ObDDLType::DDL_CREATE_MVIEW:
+      ret_name = "DDL_CREATE_MVIEW";
+      break;
+    case ObDDLType::DDL_ALTER_COLUMN_GROUP:
+      ret_name = "DDL_ALTER_COLUMN_GROUP";
+      break;
+    case ObDDLType::DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION:
+      ret_name = "DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION";
+      break;
+    case ObDDLType::DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION:
+      ret_name = "DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION";
+      break;
     case ObDDLType::DDL_NORMAL_TYPE:
       ret_name = "DDL_NORMAL_TYPE";
       break;
@@ -142,8 +210,20 @@ const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
     case ObDDLType::DDL_CHANGE_COLUMN_NAME:
       ret_name = "DDL_CHANGE_COLUMN_NAME";
       break;
-    case ObDDLType::DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION:
-      ret_name = "DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION";
+    case ObDDLType::DDL_DROP_COLUMN_INSTANT:
+      ret_name = "DDL_DROP_COLUMN_INSTANT";
+      break;
+    case ObDDLType::DDL_ALTER_PARTITION_AUTO_SPLIT_ATTRIBUTE:
+      ret_name = "DDL_ALTER_PARTITION_AUTO_SPLIT_ATTRIBUTE";
+      break;
+    case ObDDLType::DDL_ADD_COLUMN_INSTANT:
+      ret_name = "DDL_ADD_COLUMN_INSTANT";
+      break;
+    case ObDDLType::DDL_COMPOUND_INSTANT:
+      ret_name = "DDL_COMPOUND_INSTANT";
+      break;
+    case ObDDLType::DDL_ALTER_COLUMN_GROUP_DELAYED:
+      ret_name = "DDL_ALTER_COLUMN_GROUP_DELAYED";
       break;
     default:
       break;
@@ -3538,7 +3618,6 @@ int64_t ObDDLUtil::get_real_parallelism(const int64_t parallelism, const bool is
   }
   return real_parallelism;
 }
-
 int ObDDLUtil::get_no_logging_param(const int64_t tenant_id, bool &is_no_logging)
 {
   int ret = OB_SUCCESS;
@@ -3549,6 +3628,815 @@ int ObDDLUtil::get_no_logging_param(const int64_t tenant_id, bool &is_no_logging
     LOG_WARN("tenant config is invalid", K(ret), K(tenant_id));
   } else {
     is_no_logging = tenant_config->_no_logging;
+  }
+  return ret;
+}
+
+int ObSqlMonitorStats::init(const uint64_t tenant_id, const int64_t task_id, const ObDDLType ddl_type)
+{
+  int ret = OB_SUCCESS;
+  if (tenant_id == OB_INVALID_ID || task_id <= 0 || ddl_type == DDL_INVALID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id_), K(task_id_), K(ddl_type));
+  } else {
+    tenant_id_ = tenant_id;
+    task_id_ = task_id;
+    ddl_type_ = ddl_type;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObSqlMonitorStats::clean_invalid_data(const int64_t execution_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (execution_id > execution_id_ && ddl_type_ != ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX) {
+    reuse();
+  }
+  execution_id_ = OB_MAX(execution_id, execution_id_);
+
+  return ret;
+}
+
+int ObSqlMonitorStatsCollector::init(ObMySQLProxy *sql_proxy)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString select_sql_monitor_sql;
+  ObSqlString cond_sql;
+  int64_t task_id_tmp = 0;
+  uint64_t tenant_id_tmp = 0;
+  sql_proxy_ = sql_proxy;
+  if (scan_task_id_.count() == 0 || scan_tenant_id_.count() == 0 || OB_ISNULL(sql_proxy_) || !sql_proxy_->is_inited()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("empty scan task id", K(ret), K(scan_task_id_.count()), K(scan_tenant_id_.count()), KP(sql_proxy_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < scan_task_id_.count() && i < scan_tenant_id_.count(); ++i) {
+    task_id_tmp = scan_task_id_.at(i);
+    tenant_id_tmp = scan_tenant_id_.at(i);
+    if (task_id_tmp > 0 && tenant_id_tmp != OB_INVALID_ID) {
+      if (i == 0) {
+        if (OB_FAIL(cond_sql.assign_fmt("(TENANT_ID=%lu AND OTHERSTAT_5_VALUE='%ld') " ,tenant_id_tmp, task_id_tmp))) {
+          LOG_WARN("failed to assign sql", K(ret));
+        }
+      } else if (OB_FAIL(cond_sql.append_fmt("OR (TENANT_ID=%lu AND OTHERSTAT_5_VALUE='%ld') " ,tenant_id_tmp, task_id_tmp))) {
+          LOG_WARN("failed to assign sql", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(select_sql_monitor_sql.assign_fmt(
+        "SELECT TENANT_ID, TRACE_ID, THREAD_ID, OUTPUT_ROWS, FIRST_CHANGE_TIME, LAST_CHANGE_TIME, LAST_REFRESH_TIME, PLAN_OPERATION, OTHERSTAT_5_VALUE AS TASK_ID,  "
+        "OTHERSTAT_1_VALUE, OTHERSTAT_2_VALUE, OTHERSTAT_6_VALUE, OTHERSTAT_7_ID, OTHERSTAT_7_VALUE, OTHERSTAT_8_VALUE, OTHERSTAT_9_VALUE, OTHERSTAT_10_VALUE FROM %s "
+        "WHERE PLAN_OPERATION in ('PHY_STAT_COLLECTOR', 'PHY_SORT', 'PHY_VEC_SORT', 'PHY_PX_MULTI_PART_SSTABLE_INSERT') AND OTHERSTAT_5_ID = '%d' AND (%s) ORDER BY OTHERSTAT_5_VALUE DESC, TENANT_ID DESC, THREAD_ID ASC",
+        OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, sql::ObSqlMonitorStatIds::DDL_TASK_ID, cond_sql.ptr()))) {
+      LOG_WARN("failed to assign sql", K(ret), K(select_sql_monitor_sql));
+    } else {
+      sqlclient::ObMySQLResult *scan_result = nullptr;
+      char op_type_str[OB_MAX_OPERATOR_NAME_LENGTH] = "";
+      SMART_VAR(ObMySQLProxy::MySQLResult, scan_res) {
+        if (!select_sql_monitor_sql.is_valid() || OB_ISNULL(sql_proxy_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("assign get invalid argument", K(ret), K(select_sql_monitor_sql), KP(sql_proxy_));
+        } else if (OB_FAIL(sql_proxy_->read(scan_res, common::OB_SYS_TENANT_ID, select_sql_monitor_sql.ptr()))) {
+          LOG_WARN("fail to execute sql", K(ret), K(select_sql_monitor_sql));
+        } else if (OB_ISNULL(scan_result = scan_res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+        } else {
+          while (OB_SUCC(ret)) {
+            if (OB_FAIL(scan_result->next())) {
+              if (OB_ITER_END == ret) {
+                ret = OB_SUCCESS;
+                break;
+              } else {
+                LOG_WARN("failed to get next row", K(ret));
+              }
+            } else {
+              int op_type_len = 0;
+              EXTRACT_STRBUF_FIELD_MYSQL(*scan_result, "PLAN_OPERATION", op_type_str, OB_MAX_OPERATOR_NAME_LENGTH, op_type_len);
+              if (OB_FAIL(ret)) {
+                LOG_WARN("failed to extract str buf field", K(ret), K(op_type_str));
+              } else if (strcmp(op_type_str, "PHY_STAT_COLLECTOR") == 0) { // scan monitor node
+                if (OB_FAIL(get_scan_monitor_stats_batch(scan_result))) {
+                  LOG_WARN("fail to execute sql", K(ret));
+                }
+              } else if (strcmp(op_type_str, "PHY_SORT") == 0 || strcmp(op_type_str, "PHY_VEC_SORT") == 0) { // sort monitor node
+                if (OB_FAIL(get_sort_monitor_stats_batch(scan_result))) {
+                  LOG_WARN("fail to execute sql", K(ret));
+                }
+              } else if (strcmp(op_type_str, "PHY_PX_MULTI_PART_SSTABLE_INSERT") == 0) { // insert monitor node
+                if (OB_FAIL(get_insert_monitor_stats_batch(scan_result))) {
+                  LOG_WARN("fail to execute sql", K(ret));
+                }
+              } else {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected op type", K(ret), K(op_type_str));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    scan_index_id_ = 0;
+    sort_index_id_ = 0;
+    insert_index_id_ = 0;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObSqlMonitorStatsCollector::get_scan_monitor_stats_batch(sqlclient::ObMySQLResult *scan_result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scan_result)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("scan result is null", K(ret));
+  } else {
+    char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
+    common::ObCurTraceId::TraceId inner_sql_trace_id;
+    ScanMonitorNodeInfo scan_node_info;
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "TASK_ID", scan_node_info.task_id_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "TENANT_ID", scan_node_info.tenant_id_, uint64_t);
+    EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*scan_result, "FIRST_CHANGE_TIME", scan_node_info.first_change_time_);
+    EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*scan_result, "LAST_CHANGE_TIME", scan_node_info.last_change_time_);
+    EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*scan_result, "LAST_REFRESH_TIME", scan_node_info.last_refresh_time_);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OUTPUT_ROWS", scan_node_info.output_rows_, int64_t);
+    int trace_id_len = 0;
+    EXTRACT_STRBUF_FIELD_MYSQL(*scan_result, "TRACE_ID", trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE, trace_id_len);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to extract field from mysql", K(ret));
+    } else if (OB_FAIL(inner_sql_trace_id.parse_from_buf(trace_id_str))) {
+      LOG_WARN("failed to parse trace id from buf", KR(ret), K(trace_id_str));
+    } else if (FALSE_IT(scan_node_info.execution_id_ = inner_sql_trace_id.get_execution_id())) {
+    } else if (OB_FAIL(scan_res_.push_back(scan_node_info))) {
+      LOG_WARN("failed to push back sort monitor node info", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSqlMonitorStatsCollector::get_sort_monitor_stats_batch(sqlclient::ObMySQLResult *scan_result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scan_result)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("scan result is null", K(ret));
+  } else {
+    char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
+    common::ObCurTraceId::TraceId inner_sql_trace_id;
+    SortMonitorNodeInfo sort_node_info;
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "TASK_ID", sort_node_info.task_id_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "TENANT_ID", sort_node_info.tenant_id_, uint64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "THREAD_ID", sort_node_info.thread_id_, int64_t);
+    EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*scan_result, "FIRST_CHANGE_TIME", sort_node_info.first_change_time_);
+    EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*scan_result, "LAST_CHANGE_TIME", sort_node_info.last_change_time_);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OUTPUT_ROWS", sort_node_info.output_rows_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_1_VALUE", sort_node_info.row_sorted_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_6_VALUE", sort_node_info.dump_size_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_7_VALUE", sort_node_info.row_count_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_7_ID", sort_node_info.row_count_id_, int16_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_8_VALUE", sort_node_info.sort_expected_round_count_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_9_VALUE", sort_node_info.merge_sort_start_time_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_10_VALUE", sort_node_info.compress_type_, int64_t);
+    int trace_id_len = 0;
+    EXTRACT_STRBUF_FIELD_MYSQL(*scan_result, "TRACE_ID", trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE, trace_id_len);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to extract field from mysql", K(ret));
+    } else if (OB_FAIL(inner_sql_trace_id.parse_from_buf(trace_id_str))) {
+      LOG_WARN("failed to parse trace id from buf", KR(ret), K(trace_id_str));
+    } else if (FALSE_IT(sort_node_info.execution_id_ = inner_sql_trace_id.get_execution_id())) {
+    } else if (OB_FAIL(sort_res_.push_back(sort_node_info))) {
+      LOG_WARN("failed to push back sort monitor node info", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSqlMonitorStatsCollector::get_insert_monitor_stats_batch(sqlclient::ObMySQLResult *scan_result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scan_result)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("scan result is null", K(ret));
+  } else {
+    char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
+    common::ObCurTraceId::TraceId inner_sql_trace_id;
+    InsertMonitorNodeInfo insert_node_info;
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "TASK_ID", insert_node_info.task_id_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "TENANT_ID", insert_node_info.tenant_id_, uint64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "THREAD_ID", insert_node_info.thread_id_, int64_t);
+    EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*scan_result, "LAST_REFRESH_TIME", insert_node_info.last_refresh_time_);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_1_VALUE", insert_node_info.cg_row_inserted_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_2_VALUE", insert_node_info.sstable_row_inserted_, int64_t);
+    int trace_id_len = 0;
+    EXTRACT_STRBUF_FIELD_MYSQL(*scan_result, "TRACE_ID", trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE, trace_id_len);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to extract field from mysql", K(ret));
+    } else if (OB_FAIL(inner_sql_trace_id.parse_from_buf(trace_id_str))) {
+      LOG_WARN("failed to parse trace id from buf", KR(ret), K(trace_id_str));
+    } else if (FALSE_IT(insert_node_info.execution_id_ = inner_sql_trace_id.get_execution_id())) {
+    } else if (OB_FAIL(insert_res_.push_back(insert_node_info))) {
+      LOG_WARN("failed to push back sort monitor node info", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSqlMonitorStatsCollector::get_next_sql_plan_monitor_stat(ObSqlMonitorStats &sql_monitor_stats)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = sql_monitor_stats.tenant_id_;
+  task_id_ = sql_monitor_stats.task_id_;
+  ddl_type_ = sql_monitor_stats.ddl_type_;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(tenant_id_ == OB_INVALID_ID || task_id_ <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id_), K(task_id_));
+  } else if (OB_FAIL(get_next_scanned_stats(sql_monitor_stats))) {
+    LOG_WARN("get next scanned stats failed", K(ret));
+  } else if (!sql_monitor_stats.is_empty_ && OB_FAIL(get_next_sorted_stats(sql_monitor_stats))) {
+    LOG_WARN("get next sorted stats failed", K(ret));
+  } else if (!sql_monitor_stats.is_empty_ && OB_FAIL(get_next_inserted_stats(sql_monitor_stats))) {
+    LOG_WARN("get next inserted stats failed", K(ret));
+  }
+  return ret;
+}
+
+int ObSqlMonitorStatsCollector::get_next_scanned_stats(ObSqlMonitorStats &sql_monitor_stats)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  }
+  for (; OB_SUCC(ret) && scan_index_id_ < scan_res_.count(); scan_index_id_++) {
+    const ScanMonitorNodeInfo &scan_monitor_node = scan_res_.at(scan_index_id_);
+    const uint64_t tenant_id = scan_monitor_node.tenant_id_;
+    const int64_t task_id = scan_monitor_node.task_id_;
+    const int64_t execution_id = scan_monitor_node.execution_id_;
+    if (next_ddl_monitor_node(tenant_id, task_id)) {
+      break;
+    } else if (previous_ddl_monitor_node(tenant_id, task_id)) {
+    } else if (outdated_monitor_node(execution_id)) {
+    } else if (OB_FAIL(sql_monitor_stats.clean_invalid_data(execution_id))) {
+      LOG_WARN("failed to clean invalid data", K(ret), K(execution_id));
+    } else if (scan_monitor_node.output_rows_ == 0) {
+    } else if (OB_FAIL(sql_monitor_stats.scan_node_.push_back(scan_monitor_node))) {
+      LOG_WARN("failed to push back scan node", K(ret));
+    } else {
+      execution_id_ = sql_monitor_stats.execution_id_;
+      sql_monitor_stats.is_empty_ = false;
+    }
+  }
+  return ret;
+}
+
+int ObSqlMonitorStatsCollector::get_next_sorted_stats(ObSqlMonitorStats &sql_monitor_stats)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  }
+  for (; OB_SUCC(ret) && sort_index_id_ < sort_res_.count(); sort_index_id_++) {
+    const SortMonitorNodeInfo &sort_monitor_node = sort_res_.at(sort_index_id_);
+    const uint64_t tenant_id = sort_monitor_node.tenant_id_;
+    const int64_t task_id = sort_monitor_node.task_id_;
+    const int64_t execution_id = sort_monitor_node.execution_id_;
+    if (next_ddl_monitor_node(tenant_id, task_id)) {
+      break;
+    } else if (previous_ddl_monitor_node(tenant_id, task_id)) {
+    } else if (outdated_monitor_node(execution_id)) {
+    } else if (OB_FAIL(sql_monitor_stats.sort_node_.push_back(sort_monitor_node))) {
+      LOG_WARN("failed to push back sort node", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSqlMonitorStatsCollector::get_next_inserted_stats(ObSqlMonitorStats &sql_monitor_stats)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  }
+  for (; OB_SUCC(ret) && insert_index_id_ < insert_res_.count(); insert_index_id_++) {
+    const InsertMonitorNodeInfo &insert_monitor_node = insert_res_.at(insert_index_id_);
+    const uint64_t tenant_id = insert_monitor_node.tenant_id_;
+    const int64_t task_id = insert_monitor_node.task_id_;
+    const int64_t execution_id = insert_monitor_node.execution_id_;
+    if (next_ddl_monitor_node(tenant_id, task_id)) {
+      break;
+    } else if (previous_ddl_monitor_node(tenant_id, task_id)) {
+    } else if (outdated_monitor_node(execution_id)) {
+    } else if (OB_FAIL(sql_monitor_stats.insert_node_.push_back(insert_monitor_node))) {
+      LOG_WARN("failed to push back insert node", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::init(const uint64_t tenant_id, const int64_t task_id, const ObDDLType ddl_type, const int64_t execution_id)
+{
+  int ret = OB_SUCCESS;
+  if (tenant_id == OB_INVALID_ID || task_id <= 0 || ddl_type == DDL_INVALID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id_), K(task_id_), K(ddl_type));
+  } else {
+    tenant_id_ = tenant_id;
+    task_id_ = task_id;
+    ddl_type_ = ddl_type;
+    finish_ddl_ = execution_id < -1 ? true : false;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::diagnose(const ObSqlMonitorStats &sql_monitor_stats)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(calculate_sql_plan_monitor_node_info(sql_monitor_stats))) {
+    LOG_INFO("failed to calculate sql plan monitor node info", K(ret));
+  } else if (is_skip_case()) {
+    ret = OB_EMPTY_RESULT;
+  } else if (ddl_type_ == ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX && execution_id_ > 1) {
+    if (OB_FAIL(local_index_diagnose())) {
+      LOG_WARN("failed to diagnose local index", K(ret));
+    }
+  } else if (finish_ddl_) {
+    if (OB_FAIL(finish_ddl_diagnose())) {
+      LOG_WARN("failed to diagnose finish ddl", K(ret));
+    }
+  } else if (is_empty_) { // before scan
+  } else if (OB_FAIL(running_ddl_diagnose())) {
+    LOG_WARN("failed to diagnose running ddl", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::process_sql_monitor_and_generate_longops_message(const ObSqlMonitorStats &sql_monitor_stats, const int64_t target_cg_cnt, ObDDLTaskStatInfo &stat_info, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(calculate_sql_plan_monitor_node_info(sql_monitor_stats))) {
+    LOG_INFO("failed to calculate sql plan monitor node info", K(ret));
+  } else if (OB_FAIL(diagnose_stats_analysis())) {
+    LOG_WARN("failed to diagnose stats analysis ", K(ret));
+  } else if (OB_FAIL(generate_session_longops_message(target_cg_cnt, stat_info, pos))) {
+    LOG_WARN("failed to generate session longops message", K(ret), K(target_cg_cnt), K(stat_info), K(pos));
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::calculate_sql_plan_monitor_node_info(const ObSqlMonitorStats &sql_monitor_stats)
+{
+  int ret = OB_SUCCESS;
+  if (FALSE_IT(execution_id_ = sql_monitor_stats.execution_id_)) {
+  } else if (sql_monitor_stats.is_empty_) {
+  } else if (OB_FAIL(calculate_scan_monitor_node_info(sql_monitor_stats))) {
+    LOG_WARN("failed to calculate scan monitor node info", K(ret));
+  } else if (OB_FAIL(calculate_sort_and_insert_info(sql_monitor_stats))) {
+    LOG_WARN("failed to calculate sort and insert info", K(ret));
+  } else {
+    is_empty_ = false;
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::calculate_scan_monitor_node_info(const ObSqlMonitorStats &sql_monitor_stats)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < sql_monitor_stats.scan_node_.count(); ++i) {
+    const ScanMonitorNodeInfo &scan_monitor_node = sql_monitor_stats.scan_node_.at(i);
+    row_scanned_ += scan_monitor_node.output_rows_;
+    max_row_scan_ = OB_MAX(max_row_scan_, scan_monitor_node.output_rows_);
+    min_row_scan_ = OB_MIN(min_row_scan_, scan_monitor_node.output_rows_);
+    scan_start_time_ = OB_MAX(scan_start_time_, scan_monitor_node.first_change_time_);
+    scan_end_time_ = OB_MAX(scan_end_time_, scan_monitor_node.last_change_time_);
+    if (scan_monitor_node.last_refresh_time_ == 0) {
+      scan_thread_num_++;
+    }
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::calculate_sort_and_insert_info(const ObSqlMonitorStats &sql_monitor_stats)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < sql_monitor_stats.sort_node_.count(); ++i) {
+    const SortMonitorNodeInfo &sort_monitor_node = sql_monitor_stats.sort_node_.at(i);
+    parallelism_++;
+    int64_t row_sorted_tmp = sort_monitor_node.row_sorted_;
+    if (row_sorted_tmp == 0) {
+      continue;
+    }
+    real_parallelism_++;
+    int64_t row_count_tmp = 0;
+    if (sort_monitor_node.row_count_id_ != sql::ObSqlMonitorStatIds::ROW_COUNT) {
+      row_count_tmp = sort_monitor_node.output_rows_;
+    } else {
+      row_count_tmp = sort_monitor_node.row_count_;
+    }
+    if (row_count_tmp == 0) {
+      continue;
+    } else if (OB_FAIL(calculate_inmem_sort_info(row_sorted_tmp, row_count_tmp, sort_monitor_node.first_change_time_, sort_monitor_node.thread_id_))) { // inmem sort
+      LOG_WARN("failed to calculate inmem sort info", K(ret));
+    } else if (OB_FAIL(calculate_merge_sort_info(row_count_tmp, row_sorted_tmp, sort_monitor_node))) {
+      LOG_WARN("failed to calculate merge sort info", K(ret));
+    } else if (OB_FAIL(calculate_insert_info(row_count_tmp, sort_monitor_node, sql_monitor_stats))) {
+      LOG_WARN("failed to calculate insert info", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::calculate_inmem_sort_info(
+    const int64_t row_sorted,
+    const int64_t row_count,
+    const int64_t first_change_time,
+    const int64_t thread_id)
+{
+  int ret = OB_SUCCESS;
+  if (0 == row_sorted || 0 == row_count) {
+  } else if (row_sorted <= row_count) {
+    row_sorted_ += row_sorted;
+    if (0 == first_change_time) {
+      double inmem_sort_progress_tmp = static_cast<double>(row_sorted) / row_count;
+      if (inmem_sort_progress_tmp > 0) {
+        int64_t spend_time = ObTimeUtility::fast_current_time() - scan_end_time_;
+        double inmem_sort_remain_time = spend_time / inmem_sort_progress_tmp - spend_time;
+        inmem_sort_thread_num_++;
+        inmem_sort_remain_time_ = OB_MAX(inmem_sort_remain_time_, inmem_sort_remain_time);
+        if (inmem_sort_progress_tmp <= inmem_sort_progress_) {
+          inmem_sort_spend_time_ = spend_time;
+          inmem_sort_slowest_thread_id_ = thread_id;
+          min_inmem_sort_row_ = row_sorted;
+          inmem_sort_progress_ = inmem_sort_progress_tmp;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::calculate_merge_sort_info(
+    const int64_t row_count,
+    const int64_t row_sorted,
+    const SortMonitorNodeInfo &sort_monitor_node)
+{
+  int ret = OB_SUCCESS;
+  dump_size_ += sort_monitor_node.dump_size_;
+  compress_type_ = sort_monitor_node.compress_type_;
+  if (row_sorted > row_count && row_count > 0) {
+    int64_t real_merge_count = row_sorted - row_count;
+    row_sorted_ += row_count;
+    row_merge_sorted_ += real_merge_count;
+    int64_t expected_round_tmp = sort_monitor_node.sort_expected_round_count_;
+    if (expected_round_tmp > 0 && sort_monitor_node.first_change_time_ == 0) { // first_change_time_ > 0 means sort phase has finished
+      double merge_sort_progress_tmp = static_cast<double>(real_merge_count) / (row_count * expected_round_tmp);
+      int64_t spend_time = ObTimeUtility::fast_current_time() - sort_monitor_node.merge_sort_start_time_;
+      if (merge_sort_progress_tmp > 0) {
+        double merge_sort_remain_time = spend_time / merge_sort_progress_tmp - spend_time;
+        merge_sort_thread_num_++;
+        merge_sort_remain_time_ = OB_MAX(merge_sort_remain_time_, merge_sort_remain_time);
+        if (merge_sort_progress_tmp <= merge_sort_progress_) {
+          merge_sort_spend_time_ = spend_time;
+          merge_sort_slowest_thread_id_ = sort_monitor_node.thread_id_;
+          min_merge_sort_row_ = real_merge_count;
+          merge_sort_progress_ = merge_sort_progress_tmp;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::calculate_insert_info(
+    const int64_t row_count,
+    const SortMonitorNodeInfo &sort_info,
+    const ObSqlMonitorStats &sql_monitor_stats)
+{
+  int ret = OB_SUCCESS;
+  int64_t thread_id = sort_info.thread_id_;
+  int64_t change_time = sort_info.first_change_time_;
+  if (row_count > row_max_) {
+    row_max_ = row_count;
+    row_max_thread_ = thread_id;
+  }
+
+  if (row_min_ == 0 || row_count < row_min_) {
+    row_min_ = row_count;
+    row_min_thread_ = thread_id;
+  }
+  if (change_time > 0) {
+    sort_end_time_ = OB_MAX(sort_end_time_, change_time);
+    while (OB_SUCC(ret) && thread_index_ < sql_monitor_stats.insert_node_.count()) {
+      const InsertMonitorNodeInfo &insert_monitor_node = sql_monitor_stats.insert_node_.at(thread_index_);
+      uint64_t thread_id_tmp = insert_monitor_node.thread_id_;
+      if (thread_id_tmp < thread_id || (thread_id_tmp == thread_id && insert_monitor_node.execution_id_ < sort_info.execution_id_)) {
+      } else if (thread_id_tmp > thread_id || insert_monitor_node.execution_id_ > sort_info.execution_id_ ) {
+        break;
+      } else {
+        int64_t row_inserted_file_tmp = insert_monitor_node.sstable_row_inserted_;
+        row_inserted_file_ += row_inserted_file_tmp;
+        row_inserted_cg_ += insert_monitor_node.cg_row_inserted_;
+
+        int64_t finish_time_tmp = insert_monitor_node.last_refresh_time_;
+        if (finish_time_tmp > insert_end_time_) {
+          insert_end_time_ = finish_time_tmp;
+          slowest_thread_id_ = thread_id_tmp;
+        }
+        if (0 == row_inserted_file_tmp || 0 == row_count) {
+        } else if (row_inserted_file_tmp < row_count) {
+          double insert_progress_tmp = static_cast<double>(row_inserted_file_tmp) / row_count;
+          int64_t spend_time = ObTimeUtility::fast_current_time() - change_time;
+          if (insert_progress_tmp > 0) {
+            double remain_time = spend_time / insert_progress_tmp - spend_time;
+            insert_thread_num_++;
+            insert_remain_time_ = OB_MAX(insert_remain_time_, remain_time);
+            if (insert_progress_tmp <= insert_progress_) {
+              insert_spend_time_ = spend_time;
+              insert_slowest_thread_id_ = thread_id_tmp;
+              min_insert_row_ = row_inserted_file_tmp;
+              insert_progress_ = insert_progress_tmp;
+            }
+          }
+        }
+      }
+     thread_index_++;
+    }
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::local_index_diagnose()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(databuff_printf(diagnose_message_, common::OB_DIAGNOSE_INFO_LENGTH, pos_,
+                              "build local index batch num: %ld, "
+                              "THREAD_INFO: { parallel_num : %ld, row_max: %ld, row_max_thread_id: %ld, row_min: %ld, row_min_thread_id: %ld }",
+                              execution_id_, parallelism_, row_max_, row_max_thread_, row_min_, row_min_thread_))) {
+    LOG_WARN("failed to print message", K(ret), K(diagnose_message_), K(pos_));
+  } else if (is_thread_without_data()
+             && OB_FAIL(databuff_printf(diagnose_message_, common::OB_DIAGNOSE_INFO_LENGTH, pos_,
+                                        ", DIAGNOSE_CASE:{ The number of threads with data is less than the dop. real_parallelism: %ld }",
+                                        real_parallelism_))) {
+    LOG_WARN("failed to print diagnose message", K(diagnose_message_), K(pos_), K(ret));
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::finish_ddl_diagnose()
+{
+  int ret = OB_SUCCESS;
+  double scan_time = OB_MAX(0.0, static_cast<double>(scan_end_time_ - scan_start_time_) / (1000 * 1000));
+  double sort_time = OB_MAX(0.0, static_cast<double>(sort_end_time_ - scan_end_time_) / (1000 * 1000));
+  double insert_time = OB_MAX(0.0, static_cast<double>(insert_end_time_ - sort_end_time_) / (1000 * 1000));
+  if (execution_id_ > 1 && OB_FAIL(databuff_printf(diagnose_message_, common::OB_DIAGNOSE_INFO_LENGTH, pos_, "try count: %ld, ", execution_id_))) {
+    LOG_WARN("failed to print ddl try count message", K(ret));
+  } else if (OB_FAIL(databuff_printf(diagnose_message_, common::OB_DIAGNOSE_INFO_LENGTH, pos_,
+                                     "THREAD_INFO: { parallel_num : %ld, row_max: %ld, row_max_thread_id: %ld, row_min: %ld, row_min_thread_id: %ld slowest_thread_id: %ld }, "
+                                     "TIME_INFO: { scan_time: %.3fs, sort_time: %.3fs, insert_time: %.3fs }",
+                                     parallelism_, row_max_, row_max_thread_, row_min_, row_min_thread_, slowest_thread_id_,
+                                     scan_time, sort_time, insert_time))) {
+    LOG_WARN("failed to print message", K(ret));
+  } else if (OB_FAIL(check_diagnose_case())) {
+    LOG_WARN("failed to check diagnose case", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::running_ddl_diagnose()
+{
+  int ret = OB_SUCCESS;
+  if (execution_id_ > 1 && OB_FAIL(databuff_printf(diagnose_message_, common::OB_DIAGNOSE_INFO_LENGTH, pos_, "try count: %ld, ", execution_id_))) {
+    LOG_WARN("failed to print ddl try count message", K(ret));
+  } else if (real_parallelism_ == 0) {
+    if (OB_FAIL(databuff_printf(diagnose_message_, common::OB_DIAGNOSE_INFO_LENGTH, pos_, "Scanning"))) {
+      LOG_WARN("failed to print message", K(ret));
+    }
+  } else if (OB_FAIL(databuff_printf(diagnose_message_, common::OB_DIAGNOSE_INFO_LENGTH, pos_,
+                                     "THREAD_INFO: { parallel_num : %ld, row_max: %ld, row_max_thread_id: %ld, row_min: %ld, row_min_thread_id: %ld }",
+                                     parallelism_, row_max_, row_max_thread_, row_min_, row_min_thread_))) {
+    LOG_WARN("failed to print thread info message", K(ret));
+  } else if (OB_FAIL(check_diagnose_case())) {
+    LOG_WARN("failed to check diagnose case", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::check_diagnose_case()
+{
+  int ret = OB_SUCCESS;
+  if (is_data_skew() || is_thread_without_data()) {
+    if (OB_FAIL(databuff_printf(diagnose_message_, common::OB_DIAGNOSE_INFO_LENGTH, pos_, ", DIAGNOSE_CASE: {"))) {
+      LOG_WARN("failed to print diagnose message", K(ret));
+    } else if (OB_SUCC(ret)
+              && is_data_skew()
+              && OB_FAIL(databuff_printf(diagnose_message_, common::OB_DIAGNOSE_INFO_LENGTH, pos_,
+                                        " The data skew is significant, with a low sampling rate or uneven sampling."))) {
+      LOG_WARN("failed to print diagnose message", K(ret));
+    } else if (OB_SUCC(ret)
+              && is_thread_without_data()
+              && OB_FAIL(databuff_printf(diagnose_message_, common::OB_DIAGNOSE_INFO_LENGTH, pos_,
+                                          " The number of threads with data is less than the dop. real_parallelism: %ld.",
+                                          real_parallelism_))) {
+      LOG_WARN("failed to print diagnose message", K(ret));
+    }  else if (OB_SUCC(ret)
+              && OB_FAIL(databuff_printf(diagnose_message_, common::OB_DIAGNOSE_INFO_LENGTH, pos_,
+                                          " }"))) {
+      LOG_WARN("failed to print diagnose message", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::diagnose_stats_analysis()
+{
+  int ret = OB_SUCCESS;
+  if (row_scanned_ == 0) {
+    state_ = RedefinitionState::BEFORESCAN;
+  } else if (scan_thread_num_ > 0 || row_sorted_ == 0) {
+    parallelism_ = scan_thread_num_;
+    state_ = RedefinitionState::SCAN;
+    scan_spend_time_ = ObTimeUtility::fast_current_time() - scan_start_time_;
+  } else {
+    parallelism_ = inmem_sort_thread_num_ + merge_sort_thread_num_ + insert_thread_num_;
+    if (inmem_sort_thread_num_ > 0) {
+      state_ = RedefinitionState::INMEM_SORT;
+    } else if (merge_sort_thread_num_ > 0) {
+      state_ = RedefinitionState::MERGE_SORT;
+    } else if (insert_thread_num_ > 0){
+      state_ = RedefinitionState::INSERT;
+    } else {
+      state_ = RedefinitionState::DDL_DIAGNOSE_V1;
+    }
+  }
+  return ret;
+}
+
+ObDDLTaskStatInfo::ObDDLTaskStatInfo()
+  : start_time_(0), finish_time_(0), time_remaining_(0), percentage_(0), op_name_(), target_(), message_()
+{
+}
+
+int ObDDLTaskStatInfo::init(const char *&ddl_type_str, const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  MEMSET(op_name_, 0, common::MAX_LONG_OPS_NAME_LENGTH);
+  MEMSET(target_, 0, common::MAX_LONG_OPS_TARGET_LENGTH);
+  if (OB_FAIL(databuff_printf(op_name_, common::MAX_LONG_OPS_NAME_LENGTH, "%s", ddl_type_str))) {
+    LOG_WARN("failed to print ddl type str", K(ret));
+  } else if (OB_FAIL(databuff_printf(target_, common::MAX_LONG_OPS_TARGET_LENGTH, "%lu", table_id))) {
+    LOG_WARN("failed to print ddl table name", K(ret), K(table_id));
+  } else {
+    start_time_ = ObTimeUtility::current_time();
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::generate_session_longops_message(const int64_t target_cg_cnt, ObDDLTaskStatInfo &stat_info, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (ddl_type_ == share::ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX
+      && execution_id_ > 1
+      && OB_FAIL(databuff_printf(stat_info.message_,
+                                 MAX_LONG_OPS_MESSAGE_LENGTH,
+                                 pos,
+                                 "build local index batch num: %ld, ",
+                                 execution_id_))) {
+    LOG_WARN("failed to print", K(ret));
+  } else if (state_ == RedefinitionState::DDL_DIAGNOSE_V1 || target_cg_cnt > 1) {
+    if (OB_FAIL(generate_session_longops_message_v1(target_cg_cnt, stat_info, pos))) {
+      LOG_WARN("failed to print", K(ret));
+    }
+  } else {
+    switch (state_) {
+      case RedefinitionState::BEFORESCAN: {
+        if (OB_FAIL(databuff_printf(stat_info.message_,
+                                    MAX_LONG_OPS_MESSAGE_LENGTH,
+                                    pos,
+                                    "STATUS: REPLICA BUILD, BEFORE-SCAN"))) {
+          LOG_WARN("failed to print", K(ret));
+        }
+        break;
+      }
+
+      case RedefinitionState::SCAN: {
+        if (OB_FAIL(databuff_printf(stat_info.message_,
+                                    MAX_LONG_OPS_MESSAGE_LENGTH,
+                                    pos,
+                                    "STATUS: REPLICA BUILD, SCANNING, PARALLELISM: %ld, "
+                                    "ROW_COUNT_INFO:{ ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED: %ld }, "
+                                    "SCAN_INFO:{ SCAN_TIME_ELAPSED: %.3fs, MAX_THREAD_ROW_SCANNED: %ld, MIN_THREAD_ROW_SCANNED: %ld }",
+                                    parallelism_,
+                                    row_scanned_, row_sorted_ + row_merge_sorted_, row_inserted_file_,
+                                    scan_spend_time_ / (1000 * 1000), max_row_scan_, min_row_scan_))) {
+          LOG_WARN("failed to print", K(ret));
+        }
+        break;
+      }
+
+      case RedefinitionState::INMEM_SORT: {
+        if (OB_FAIL(databuff_printf(stat_info.message_,
+                                    MAX_LONG_OPS_MESSAGE_LENGTH,
+                                    pos,
+                                    "STATUS: REPLICA BUILD, SORT_PHASE1, PARALLELISM: %ld, SORT_PHASE1_THREAD_NUM: %ld, "
+                                    "ROW_COUNT_INFO:{ ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED: %ld }, "
+                                    "SORT_PHASE1_PROGRESS_INFO:{ SORT_PHASE1_TIME_ELAPSED: %.3fs, SORT_PHASE1_PROGRESS: %.2f%%, SORT_PHASE1_TIME_REMAINING: %.3fs }, "
+                                    "SLOWEST_THREAD_INFO:{ THREAD_ID: %ld, SORTED_ROW_COUNT: %ld }",
+                                    parallelism_, inmem_sort_thread_num_,
+                                    row_scanned_, row_sorted_ + row_merge_sorted_, row_inserted_file_,
+                                    inmem_sort_spend_time_ / (1000 * 1000), inmem_sort_progress_ * 100, inmem_sort_remain_time_ / (1000 * 1000),
+                                    inmem_sort_slowest_thread_id_, min_inmem_sort_row_))) {
+          LOG_WARN("failed to print", K(ret));
+        }
+        break;
+      }
+      case RedefinitionState::MERGE_SORT: {
+        if (OB_FAIL(databuff_printf(stat_info.message_,
+                                    MAX_LONG_OPS_MESSAGE_LENGTH,
+                                    pos,
+                                    "STATUS: REPLICA BUILD, SORT_PHASE2, PARALLELISM: %ld, SORT_PHASE2_THREAD_NUM: %ld, "
+                                    "ROW_COUNT_INFO:{ ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED: %ld }, "
+                                    "SORT_PHASE2_PROGRESS_INFO:{ SORT_PHASE2_TIME_ELAPSED: %.3fs, SORT_PHASE2_PROGRESS: %.2f%%, SORT_PHASE2_TIME_REMAINING: %.3fs }, "
+                                    "SLOWEST_THREAD_INFO:{ THREAD_ID: %ld, SORTRD_ROW_COUNT: %ld }, "
+                                    "TEMP_FILE_INFO:{ DUMP_SIZE: %ld, COMPRESS_TYPE: %s }",
+                                    parallelism_, merge_sort_thread_num_,
+                                    row_scanned_, row_sorted_ + row_merge_sorted_, row_inserted_file_,
+                                    merge_sort_spend_time_ / (1000 * 1000), merge_sort_progress_ * 100, merge_sort_remain_time_/ (1000 * 1000),
+                                    merge_sort_slowest_thread_id_, min_merge_sort_row_,
+                                    dump_size_, all_compressor_name[compress_type_]))) {
+          LOG_WARN("failed to print", K(ret));
+        }
+        break;
+      }
+      case RedefinitionState::INSERT: {
+        if (OB_FAIL(databuff_printf(stat_info.message_,
+                                    MAX_LONG_OPS_MESSAGE_LENGTH,
+                                    pos,
+                                    "STATUS: REPLICA BUILD, INSERT, PARALLELISM: %ld, INSERT_THREAD: %ld, "
+                                    "ROW_COUNT_INFO:{ ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED: %ld }, "
+                                    "INSERT_PROGRESS_INFO:{ INSERT_TIME_ELAPSED: %.3fs, INSERT_PROGRESS: %.2f%%, INSERT_TIME_REMAINING: %.3fs }, "
+                                    "SLOWEST_THREAD_INFO:{ THREAD_ID: %ld, INSERTED_ROW_COUNT: %ld }",
+                                    parallelism_, insert_thread_num_,
+                                    row_scanned_, row_sorted_ + row_merge_sorted_, row_inserted_file_,
+                                    insert_spend_time_ / (1000 * 1000), insert_progress_ * 100, insert_remain_time_ / (1000 * 1000),
+                                    insert_slowest_thread_id_, min_insert_row_))) {
+          LOG_WARN("failed to print", K(ret));
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("not expected status", K(ret), K(state_), K(*this));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::generate_session_longops_message_v1(const int64_t target_cg_cnt, ObDDLTaskStatInfo &stat_info, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (target_cg_cnt > 1) {
+    if (OB_FAIL(databuff_printf(stat_info.message_,
+                                MAX_LONG_OPS_MESSAGE_LENGTH,
+                                pos,
+                                "STATUS: REPLICA BUILD, PARALLELISM: %ld, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED_INTO_TMP_FILE: %ld, ROW_INSERTED: %ld out of %ld column group rows",
+                                ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
+                                row_scanned_,
+                                row_sorted_ + row_merge_sorted_,
+                                row_inserted_file_,
+                                row_inserted_cg_,
+                                row_scanned_ * target_cg_cnt))) {
+      LOG_WARN("failed to print", K(ret));
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(stat_info.message_,
+                                MAX_LONG_OPS_MESSAGE_LENGTH,
+                                pos,
+                                "STATUS: REPLICA BUILD, PARALLELISM: %ld, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED: %ld",
+                                ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
+                                row_scanned_,
+                                row_sorted_ + row_merge_sorted_,
+                                row_inserted_file_))) {
+    LOG_WARN("failed to print", K(ret));
+    }
   }
   return ret;
 }
@@ -4421,4 +5309,11 @@ void ObDDLEventInfo::copy_event(const ObDDLEventInfo &other)
   parent_trace_id_ = other.parent_trace_id_;
   trace_id_ = other.trace_id_;
   event_ts_ = other.event_ts_;
+}
+
+void ObDDLEventInfo::set_inner_sql_id(const int64_t execution_id)
+{
+  parent_trace_id_ = *ObCurTraceId::get_trace_id();
+  ObCurTraceId::set_inner_sql_id(execution_id);
+  trace_id_ = *ObCurTraceId::get_trace_id();
 }

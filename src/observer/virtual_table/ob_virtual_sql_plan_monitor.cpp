@@ -780,10 +780,10 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
       CASE_OTHERSTAT(4);
       CASE_OTHERSTAT(5);
       CASE_OTHERSTAT(6);
-      CASE_OTHERSTAT_RESERVED(7);
-      CASE_OTHERSTAT_RESERVED(8);
-      CASE_OTHERSTAT_RESERVED(9);
-      CASE_OTHERSTAT_RESERVED(10);
+      CASE_OTHERSTAT(7);
+      CASE_OTHERSTAT(8);
+      CASE_OTHERSTAT(9);
+      CASE_OTHERSTAT(10);
       case THREAD_ID: {
         int64_t thread_id = node.get_thread_id();
         cells[cell_idx].set_int(thread_id);

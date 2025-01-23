@@ -658,24 +658,6 @@ private:
   bool is_task_span_flushed_;
 };
 
-struct ObDDLTaskStatInfo final
-{
-public:
-  ObDDLTaskStatInfo();
-  ~ObDDLTaskStatInfo() = default;
-  int init(const char *&ddl_type_str, const uint64_t table_id);
-  TO_STRING_KV(K_(start_time), K_(finish_time), K_(time_remaining), K_(percentage),
-               K_(op_name), K_(target), K_(message));
-public:
-  int64_t start_time_;
-  int64_t finish_time_;
-  int64_t time_remaining_;
-  int64_t percentage_;
-  char op_name_[common::MAX_LONG_OPS_NAME_LENGTH];
-  char target_[common::MAX_LONG_OPS_TARGET_LENGTH];
-  char message_[common::MAX_LONG_OPS_MESSAGE_LENGTH];
-};
-
 class ObDDLTask : public common::ObDLinkBase<ObDDLTask>
 {
 public:
@@ -801,29 +783,6 @@ public:
       K_(dst_tenant_id), K_(dst_schema_version), K_(is_pre_split), K_(is_unique_index), K_(is_global_index), K_(consensus_schema_version), K(is_no_logging_));  static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
   static const int64_t DEFAULT_TASK_IDLE_TIME_US = 10L * 1000L; // 10ms
 protected:
-  int gather_redefinition_stats(const uint64_t tenant_id,
-                                const int64_t task_id,
-                                ObMySQLProxy &sql_proxy,
-                                int64_t &row_scanned,
-                                int64_t &row_sorted,
-                                int64_t &row_inserted_cg,
-                                int64_t &row_inserted_file);
-  int gather_scanned_rows(
-      const uint64_t tenant_id,
-      const int64_t task_id,
-      ObMySQLProxy &sql_proxy,
-      int64_t &row_scanned);
-  int gather_sorted_rows(
-      const uint64_t tenant_id,
-      const int64_t task_id,
-      ObMySQLProxy &sql_proxy,
-      int64_t &row_sorted);
-  int gather_inserted_rows(
-      const uint64_t tenant_id,
-      const int64_t task_id,
-      ObMySQLProxy &sql_proxy,
-      int64_t &row_inserted_cg,
-      int64_t &row_inserted_file);
   int copy_longops_stat(share::ObLongopsValue &value);
   virtual bool is_error_need_retry(const int ret_code)
   {
@@ -869,7 +828,7 @@ protected:
   int64_t err_code_occurence_cnt_; // occurence count for all error return codes not in white list.
   share::ObDDLLongopsStat *longops_stat_;
   uint64_t gmt_create_;
-  ObDDLTaskStatInfo stat_info_;
+  share::ObDDLTaskStatInfo stat_info_;
   int64_t delay_schedule_time_;
   int64_t next_schedule_ts_;
   int64_t execution_id_; // guarded by lock_

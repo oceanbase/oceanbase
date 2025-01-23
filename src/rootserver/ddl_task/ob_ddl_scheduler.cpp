@@ -2594,6 +2594,8 @@ int ObDDLScheduler::recover_task()
         LOG_WARN("failed to check is recover table aux tenant", K(ret), K(cur_record));
       } else if (is_recover_table_aux_tenant) {
         LOG_INFO("tenant is recover table aux tenant, skip schedule ddl task", K(cur_record));
+      } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service_->get_sql_proxy(), cur_record.tenant_id_))) {
+        LOG_INFO("unnormal tenant status", K(ret));
       } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), cur_record.tenant_id_))) {
         LOG_WARN("start transaction failed", K(ret));
       } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans,

@@ -245,6 +245,7 @@
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
 #include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
 #include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
+#include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
 
 namespace oceanbase
 {
@@ -2477,7 +2478,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
 
             if (OB_SUCC(ret)) {
-              if (OB_FAIL(ddl_diagnose_info->init())) {
+              if (OB_FAIL(ddl_diagnose_info->init(GCTX.sql_proxy_))) {
                 SERVER_LOG(WARN, "fail to init ddl diagnose info iterator, ", K(ret));
               } else {
                 vt_iter = static_cast<ObVirtualTableIterator *>(ddl_diagnose_info);

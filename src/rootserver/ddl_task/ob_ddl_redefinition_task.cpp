@@ -97,6 +97,8 @@ int ObDDLRedefinitionSSTableBuildTask::process()
   ObTabletID unused_tablet_id;
   ObAddr unused_addr;
   ObTraceIdGuard trace_id_guard(trace_id_);
+  ObDDLEventInfo ddl_event_info;
+  ddl_event_info.set_inner_sql_id(execution_id_);
   ObSqlString sql_string;
   ObSchemaGetterGuard schema_guard;
   const ObSysVariableSchema *sys_variable_schema = nullptr;

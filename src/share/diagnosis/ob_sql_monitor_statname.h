@@ -54,13 +54,18 @@ SQL_MONITOR_STATNAME_DEF(MEMORY_DUMP, sql_monitor_statname::CAPACITY, "memory du
 // GI
 SQL_MONITOR_STATNAME_DEF(FILTERED_GRANULE_COUNT, sql_monitor_statname::INT, "filtered granule count", "filtered granule count in GI op")
 SQL_MONITOR_STATNAME_DEF(TOTAL_GRANULE_COUNT, sql_monitor_statname::INT, "total granule count", "total granule count in GI op")
-// sort
+// DDL
+SQL_MONITOR_STATNAME_DEF(DDL_TASK_ID, sql_monitor_statname::INT, "ddl task id", "sort ddl task id")
+// SORT
 SQL_MONITOR_STATNAME_DEF(SORT_SORTED_ROW_COUNT, sql_monitor_statname::INT, "sorted row count", "sorted row count in sort op")
 SQL_MONITOR_STATNAME_DEF(SORT_MERGE_SORT_ROUND, sql_monitor_statname::INT, "merge sort round", "merge sort round in sort op")
 SQL_MONITOR_STATNAME_DEF(SORT_INMEM_SORT_TIME, sql_monitor_statname::INT, "in memory sort time", "time taken by in memory sort")
 SQL_MONITOR_STATNAME_DEF(SORT_DUMP_DATA_TIME, sql_monitor_statname::INT, "sort dump data time", "time taken by dump data")
+SQL_MONITOR_STATNAME_DEF(ROW_COUNT, sql_monitor_statname::INT, "row count", "row count in sort op")
+SQL_MONITOR_STATNAME_DEF(SORT_EXPECTED_ROUND_COUNT, sql_monitor_statname::INT, "expected sort round count", "expected sort round count in sort op")
+SQL_MONITOR_STATNAME_DEF(MERGE_SORT_START_TIME, sql_monitor_statname::INT, "merge sort start time", "merge sort start time")
+SQL_MONITOR_STATNAME_DEF(COMPRESS_TYPE, sql_monitor_statname::INT, "COMPRESS_TYPE", "COMPRESS_TYPE")
 // SSTABLE INSERT
-SQL_MONITOR_STATNAME_DEF(DDL_TASK_ID, sql_monitor_statname::INT, "ddl task id", "sort ddl task id")
 SQL_MONITOR_STATNAME_DEF(SSTABLE_INSERT_ROW_COUNT, sql_monitor_statname::INT, "sstable insert row count", "sstable insert row count")
 SQL_MONITOR_STATNAME_DEF(SSTABLE_INSERT_CG_ROW_COUNT, sql_monitor_statname::INT, "sstable insert cg_row count", "sstable insert cg row count")
 // Table Scan stat

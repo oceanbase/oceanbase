@@ -77,12 +77,20 @@ public:
       otherstat_4_value_(0),
       otherstat_5_value_(0),
       otherstat_6_value_(0),
+      otherstat_7_value_(0),
+      otherstat_8_value_(0),
+      otherstat_9_value_(0),
+      otherstat_10_value_(0),
       otherstat_1_id_(0),
       otherstat_2_id_(0),
       otherstat_3_id_(0),
       otherstat_4_id_(0),
       otherstat_5_id_(0),
       otherstat_6_id_(0),
+      otherstat_7_id_(0),
+      otherstat_8_id_(0),
+      otherstat_9_id_(0),
+      otherstat_10_id_(0),
       enable_rich_format_(false),
       workarea_mem_(0),
       workarea_max_mem_(0),
@@ -151,12 +159,20 @@ public:
   int64_t otherstat_4_value_;
   int64_t otherstat_5_value_;
   int64_t otherstat_6_value_;
+  int64_t otherstat_7_value_;
+  int64_t otherstat_8_value_;
+  int64_t otherstat_9_value_;
+  int64_t otherstat_10_value_;
   int16_t otherstat_1_id_;
   int16_t otherstat_2_id_;
   int16_t otherstat_3_id_;
   int16_t otherstat_4_id_;
   int16_t otherstat_5_id_;
   int16_t otherstat_6_id_;
+  int16_t otherstat_7_id_;
+  int16_t otherstat_8_id_;
+  int16_t otherstat_9_id_;
+  int16_t otherstat_10_id_;
   bool enable_rich_format_;
   int64_t workarea_mem_;
   int64_t workarea_max_mem_;

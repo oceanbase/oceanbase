@@ -287,6 +287,8 @@ int ObSortOp::process_sort_batch()
         LOG_WARN("fail to scan all rows before inmem sort", K(ret));
       }
     }
+    op_monitor_info_.otherstat_7_id_ = ObSqlMonitorStatIds::ROW_COUNT;
+    op_monitor_info_.otherstat_7_value_ = sort_row_count_;
     OZ(sort_impl_.sort());
     sort_impl_.collect_memory_dump_info(op_monitor_info_);
   } else {
@@ -395,6 +397,8 @@ int ObSortOp::scan_all_then_sort_batch()
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
+    op_monitor_info_.otherstat_7_id_ = ObSqlMonitorStatIds::ROW_COUNT;
+    op_monitor_info_.otherstat_7_value_ = sort_row_count_;
     if (OB_SUCC(ret)) {
       if (OB_FAIL(cache_store.finish_add_row(false))) {
         LOG_WARN("fail to finish add row", K(ret));
