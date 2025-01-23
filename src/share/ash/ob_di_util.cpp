@@ -33,7 +33,8 @@ int ObDiagnosticInfoUtil::get_the_diag_info(int64_t session_id, ObDISessionColle
   } else {
     ids.push_back(MTL_ID());
   }
-  for (int64_t i = 0; i < ids.size(); ++i) {
+  bool is_break = false;
+  for (int64_t i = 0; i < ids.size() && !is_break; ++i) {
     uint64_t tenant_id = ids[i];
     if (!is_virtual_tenant_id(tenant_id)) {
       MTL_SWITCH(tenant_id)
@@ -42,11 +43,13 @@ int ObDiagnosticInfoUtil::get_the_diag_info(int64_t session_id, ObDISessionColle
                 MTL(ObDiagnosticInfoContainer *)->get_session_diag_info(session_id, diag_info))) {
           if (OB_ENTRY_NOT_EXIST != ret) {
             LOG_WARN("failed to get diagnostic session info", K(ret), K(session_id));
+            is_break = true;
             break;
           } else {
             // iter next possible tenant
           }
         } else {
+          is_break = true;
           // until success.
           break;
         }
