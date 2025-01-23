@@ -593,7 +593,7 @@ void ObIOUsage::accumulate(ObIORequest &req)
     const int mode_index = static_cast<int>(req.get_mode());
     if (usage_index >= io_stats_.count() || mode_index >= static_cast<int>(ObIOMode::MAX_MODE)) {
       if (REACH_TIME_INTERVAL(100000)) {
-        LOG_ERROR("invalid index or mode", K(usage_index), K(mode_index), K(req));
+        LOG_WARN("invalid index or mode", K(usage_index), K(mode_index), K(req));
       }
     } else {
       io_stats_.at(usage_index).at(mode_index).accumulate(1, req.io_size_, device_delay);
