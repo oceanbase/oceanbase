@@ -4556,20 +4556,22 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
                                                     ObLogicalOperator &subplan_root,
                                                     const uint64_t table_id,
                                                     ObShardingInfo *&output_strong_sharding,
-                                                    ObIArray<ObShardingInfo*> &output_weak_sharding)
+                                                    ObIArray<ObShardingInfo*> &output_weak_sharding,
+                                                    bool &is_inherited_sharding)
 {
   int ret = OB_SUCCESS;
   ObOptimizerContext &opt_ctx = plan.get_optimizer_context();
   ObShardingInfo *input_strong_sharding = subplan_root.get_strong_sharding();
   const ObIArray<ObShardingInfo*> &input_weak_sharding = subplan_root.get_weak_sharding();
-
+  is_inherited_sharding = false;
   if (NULL != input_strong_sharding &&
       OB_FAIL(convert_subplan_scan_sharding_info(plan,
                                                  subplan_root,
                                                  table_id,
                                                  true,
                                                  input_strong_sharding,
-                                                 output_strong_sharding))) {
+                                                 output_strong_sharding,
+                                                 is_inherited_sharding))) {
     LOG_WARN("failed to convert sharding info", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < input_weak_sharding.count(); i++) {
@@ -4582,7 +4584,8 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
                                                             table_id,
                                                             false,
                                                             input_weak_sharding.at(i),
-                                                            temp_sharding))) {
+                                                            temp_sharding,
+                                                            is_inherited_sharding))) {
         LOG_WARN("failed to convert sharding info", K(ret));
       } else if (NULL != temp_sharding && OB_FAIL(output_weak_sharding.push_back(temp_sharding))) {
         LOG_WARN("failed to push back sharding", K(ret));
@@ -4590,6 +4593,7 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
     }
     if (OB_SUCC(ret) && NULL == output_strong_sharding && output_weak_sharding.empty()) {
       output_strong_sharding = opt_ctx.get_distributed_sharding();
+      is_inherited_sharding = false;
     }
   }
   return ret;
@@ -4600,7 +4604,8 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
                                                     const uint64_t table_id,
                                                     bool is_strong,
                                                     ObShardingInfo *input_sharding,
-                                                    ObShardingInfo *&output_sharding)
+                                                    ObShardingInfo *&output_sharding,
+                                                    bool &is_inherited_sharding)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 8> part_exprs;
@@ -4610,11 +4615,13 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
   ObIAllocator &allocator = plan.get_allocator();
   ObRawExprFactory &expr_factory = plan.get_optimizer_context().get_expr_factory();
   output_sharding = NULL;
+  is_inherited_sharding = false;
   if (OB_ISNULL(input_sharding) || OB_ISNULL(plan.get_stmt()) || OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(input_sharding), K(ret));
   } else if (input_sharding->is_single() || input_sharding->is_distributed_without_partitioning()) {
     output_sharding = input_sharding;
+    is_inherited_sharding = true;
   } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
                                                                 subplan_root.get_output_equal_sets(),
                                                                 table_id,
@@ -4650,6 +4657,7 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
       /*do nothing*/
     } else if (is_strong && !is_converted) {
       output_sharding = plan.get_optimizer_context().get_distributed_sharding();
+      is_inherited_sharding = false;
     } else {
       ObShardingInfo *temp_sharding = NULL;
       if (OB_ISNULL(temp_sharding =
@@ -4660,8 +4668,6 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
         temp_sharding = new (temp_sharding) ObShardingInfo();
         if (OB_FAIL(temp_sharding->copy_without_part_keys(*input_sharding))) {
           LOG_WARN("failed to copy sharding info", K(ret));
-        } else if (!is_converted) {
-          /*do nothing*/
         } else if (OB_FAIL(temp_sharding->get_partition_keys().assign(part_exprs))) {
           LOG_WARN("failed to assign exprs", K(ret));
         } else if (OB_FAIL(temp_sharding->get_sub_partition_keys().assign(subpart_exprs))) {
@@ -4670,6 +4676,7 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
           LOG_WARN("failed to assign part funcs", K(ret));
         } else {
           output_sharding = temp_sharding;
+          is_inherited_sharding = true;
           LOG_TRACE("succeed to convert subplan scan sharding", K(*output_sharding));
         }
       }
@@ -8874,6 +8881,7 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
   } else {
     int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
     const ObDMLStmt *parent_stmt = get_plan()->get_stmt();
+    bool is_inherited_sharding = false;
     if (OB_FAIL(convert_subplan_scan_order_item(*get_plan(),
                                                 *root,
                                                 table_id,
@@ -8883,7 +8891,8 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
                                                           *root,
                                                           table_id,
                                                           path->strong_sharding_,
-                                                          path->weak_sharding_))) {
+                                                          path->weak_sharding_,
+                                                          is_inherited_sharding))) {
       LOG_WARN("failed to convert subplan scan sharding info", K(ret));
     } else if (OB_FAIL(check_all_interesting_order(path->get_ordering(),
                                                    parent_stmt,
@@ -8903,6 +8912,7 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
       path->parallel_ = root->get_parallel();
       path->server_cnt_ = root->get_server_cnt();
       path->available_parallel_ = root->get_available_parallel();
+      path->inherit_sharding_index_ = is_inherited_sharding ? 0 : -1;
       if (OB_FAIL(path->server_list_.assign(root->get_server_list()))) {
         LOG_WARN("failed to assign subquery path server list", K(ret));
       }

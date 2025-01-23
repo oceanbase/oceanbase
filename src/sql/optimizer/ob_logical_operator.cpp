@@ -1008,6 +1008,7 @@ int ObLogicalOperator::compute_property(Path *path)
     set_op_parallel_rule(path->op_parallel_rule_);
     set_available_parallel(path->available_parallel_),
     set_server_cnt(path->server_cnt_);
+    set_inherit_sharding_index(path->inherit_sharding_index_);
     if (OB_FAIL(server_list_.assign(path->server_list_))) {
       LOG_WARN("failed to assign path's server list to op", K(ret));
     } else if (OB_FAIL(ambient_card_.assign(path->parent_->get_ambient_card()))) {
