@@ -1,8 +1,5 @@
 CREATE OR REPLACE PACKAGE BODY dbms_mview
 
-  -- ------------------------------------------------------------------------
-  -- purge_log
-
   PROCEDURE do_purge_log(
     IN     master_name            VARCHAR(65535),
     IN     purge_log_parallel     INT            DEFAULT 1);
@@ -15,9 +12,6 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview
     COMMIT;
     CALL do_purge_log(master_name, purge_log_parallel);
   END;
-
-  -- ------------------------------------------------------------------------
-  -- refresh
 
   PROCEDURE do_refresh(
     IN     mv_name                VARCHAR(65535),

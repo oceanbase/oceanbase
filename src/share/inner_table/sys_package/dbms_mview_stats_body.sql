@@ -1,24 +1,15 @@
 CREATE OR REPLACE PACKAGE BODY dbms_mview_stats IS
 
-  -- ------------------------------------------------------------------------
-  -- purge_refresh_stats
-
   PROCEDURE purge_refresh_stats(
     mv_list                   IN     VARCHAR2,
     retention_period          IN     NUMBER);
   PRAGMA INTERFACE(C, DBMS_MVIEW_STATS_PURGE_REFRESH_STATS);
-
-  -- ------------------------------------------------------------------------
-  -- set_mvref_stats_params
 
   PROCEDURE set_mvref_stats_params(
     mv_list                   IN     VARCHAR2,
     collection_level          IN     VARCHAR2        := NULL,
     retention_period          IN     NUMBER          := NULL);
   PRAGMA INTERFACE(C, DBMS_MVIEW_STATS_SET_MVREF_STATS_PARAMS);
-
-  -- ------------------------------------------------------------------------
-  -- set_system_default
 
   PROCEDURE do_set_system_default(
     parameter_name            IN     VARCHAR2,

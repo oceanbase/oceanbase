@@ -24,9 +24,6 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     END LOOP;
   END;
 
-  -- ------------------------------------------------------------------------
-  -- purge_log
-
   PROCEDURE do_purge_log(
     master                IN     VARCHAR2,
     num                   IN     BINARY_INTEGER := 1,
@@ -44,9 +41,6 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     COMMIT;
     do_purge_log(master, num, flag, purge_log_parallel);
   END;
-
-  -- ------------------------------------------------------------------------
-  -- refresh
 
   PROCEDURE do_refresh(
     list                   IN     VARCHAR2,
