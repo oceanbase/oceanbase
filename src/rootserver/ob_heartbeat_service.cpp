@@ -713,7 +713,8 @@ int ObHeartbeatService::end_trans_and_refresh_server_(
           K(server), K(commit));
     }
     //ignore error of refresh and on server_status_change
-    if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
+    bool allow_broadcast = true;
+    if (OB_TMP_FAIL(SVR_TRACER.refresh(allow_broadcast))) {
       LOG_WARN("fail to refresh server tracer", KR(ret), KR(tmp_ret));
     }
     if (OB_ISNULL(GCTX.root_service_)) {

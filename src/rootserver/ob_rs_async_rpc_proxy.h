@@ -98,6 +98,7 @@ RPC_F(obrpc::OB_FLUSH_LS_ARCHIVE, obrpc::ObFlushLSArchiveArg, obrpc::Int64, ObFl
 RPC_F(obrpc::OB_REFRESH_SERVICE_NAME, obrpc::ObRefreshServiceNameArg, obrpc::ObRefreshServiceNameRes, ObRefreshServiceNameProxy);
 RPC_F(obrpc::OB_CAL_STANDBY_TENANT_PHY_RESOURCE, obrpc::ObGetTenantResArg, obrpc::ObTenantLogicalRes, ObGetTenantResProxy);
 RPC_F(obrpc::OB_KILL_QUERY_CLIENT_SESSION, obrpc::ObKillQueryClientSessionArg, obrpc::Int64, ObKillQueryClientSessionProxy);
+RPC_F(obrpc::OB_ALL_SERVER_TRACER_BROADCAST, obrpc::ObRefreshTenantInfoArg, obrpc::Int64, ObAllServerTracerProxy);
 
 }//end namespace rootserver
 }//end namespace oceanbase

@@ -74,6 +74,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcCheckServerEmptyWithResultP, gctx_);
     RPC_PROCESSOR(ObRpcPrepareServerForAddingServerP, gctx_);
     RPC_PROCESSOR(ObRpcCheckServerMachineStatusP, gctx_);
+    RPC_PROCESSOR(ObAllServerTracerP, gctx_);
     RPC_PROCESSOR(ObRpcCheckDeploymentModeP, gctx_);
 #ifdef OB_BUILD_TDE_SECURITY
     RPC_PROCESSOR(ObRpcWaitMasterKeyInSyncP, gctx_);

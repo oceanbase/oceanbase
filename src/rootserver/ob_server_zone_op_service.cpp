@@ -1141,7 +1141,8 @@ void ObServerZoneOpService::end_trans_and_on_server_change_(
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
-  if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
+  bool allow_broadcast = true;
+  if (OB_TMP_FAIL(SVR_TRACER.refresh(allow_broadcast))) {
     LOG_WARN("fail to refresh server tracer", KR(ret), KR(tmp_ret));
   }
   bool no_on_server_change = ALL_SERVER_LIST_ERROR ? true : false;

@@ -616,6 +616,7 @@ int ObTabletLSService::clear_expired_cache()
     ret = OB_NOT_INIT;
     LOG_WARN("service not init", KR(ret));
   } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.schema_service_ is null", KR(ret));
   } else if (!GCTX.schema_service_->is_tenant_refreshed(OB_SYS_TENANT_ID)) {
     ret = OB_NEED_RETRY;

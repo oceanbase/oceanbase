@@ -222,9 +222,7 @@ public:
       ObLSTableOperator &ls_pt,
       schema::ObMultiVersionSchemaService &schema_service,
       common::ObMySQLProxy &sql_proxy,
-      ObIAliveServerTracer &server_tracer,
       ObRsMgr &rs_mgr,
-      obrpc::ObCommonRpcProxy &rpc_proxy,
       obrpc::ObSrvRpcProxy &srv_rpc_proxy);
   int start();
   void stop();

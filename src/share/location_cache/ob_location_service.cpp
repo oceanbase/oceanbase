@@ -31,7 +31,8 @@ ObLocationService::ObLocationService()
     : inited_(false),
       stopped_(false),
       ls_location_service_(),
-      tablet_ls_service_()
+      tablet_ls_service_(),
+      vtable_location_service_()
 {
 }
 
@@ -307,9 +308,7 @@ int ObLocationService::init(
     ObLSTableOperator &ls_pt,
     schema::ObMultiVersionSchemaService &schema_service,
     common::ObMySQLProxy &sql_proxy,
-    ObIAliveServerTracer &server_tracer,
     ObRsMgr &rs_mgr,
-    obrpc::ObCommonRpcProxy &rpc_proxy,
     obrpc::ObSrvRpcProxy &srv_rpc_proxy)
 {
   int ret = OB_SUCCESS;
@@ -320,7 +319,7 @@ int ObLocationService::init(
     LOG_WARN("ls_location_service init failed", KR(ret));
   } else if (OB_FAIL(tablet_ls_service_.init(schema_service, sql_proxy, srv_rpc_proxy))) {
     LOG_WARN("tablet_ls_service init failed", KR(ret));
-  } else if (OB_FAIL(vtable_location_service_.init(server_tracer, rs_mgr, rpc_proxy))) {
+  } else if (OB_FAIL(vtable_location_service_.init(rs_mgr))) {
     LOG_WARN("vtable_location_service init failed", KR(ret));
   } else {
     inited_ = true;

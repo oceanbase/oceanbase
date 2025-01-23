@@ -228,7 +228,7 @@ void ObTabletLocationRefreshMgr::dump_statistic()
     const ObTransferRefreshInfo &transfer_task = inc_task_infos_.at(i);
     if (transfer_task.get_status().is_unknown_status()) {
       unknown_task_cnt++;
-    } else if (transfer_task.get_status().is_done_status()) {
+    } else if (transfer_task.get_status().is_doing_status()) {
       doing_task_cnt++;
     } else if (transfer_task.get_status().is_done_status()) {
       done_task_cnt++;

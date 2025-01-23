@@ -831,7 +831,7 @@ DEF_NAME(id, "id")
 
     // location cache related
     DEF_NAME_PAIR(renew_loc_by_sql, "renew loc by sql")
-    DEF_NAME_PAIR(fetch_vtable_loc, "fetch vtable loc")
+    DEF_NAME_PAIR(renew_vtable_loc, "renew vtable loc")
     DEF_NAME_PAIR(renew_loc_by_rpc, "renew loc by rpc")
     DEF_NAME_PAIR(storage_estimation, "storage_row_estimation")
 

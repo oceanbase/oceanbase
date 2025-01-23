@@ -3485,6 +3485,17 @@ int ObTabletLocationReceiveP::process()
   return OB_SUCCESS;
 }
 
+int ObAllServerTracerP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(SVR_TRACER.refresh())) {
+    LOG_WARN("failed to refresh all_server_tracer", KR(ret));
+  } else {
+    LOG_INFO("SVR_TRACER.refresh succeed");
+  }
+  return ret;
+}
+
 int ObCancelGatherStatsP::process()
 {
   int ret = OB_SUCCESS;

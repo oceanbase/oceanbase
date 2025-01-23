@@ -460,9 +460,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(location_service_.init(lst_operator_,
                                               schema_service_,
                                               sql_proxy_,
-                                              server_tracer_,
                                               rs_mgr_,
-                                              rs_rpc_proxy_,
                                               srv_rpc_proxy_))) {
       LOG_ERROR("init location service failed", KR(ret));
     } else if (OB_FAIL(init_autoincrement_service())) {
