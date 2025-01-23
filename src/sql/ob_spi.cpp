@@ -2826,12 +2826,14 @@ int ObSPIService::prepare_dynamic_sql_params(ObPLExecCtx *ctx,
   for (int64_t i = 0; OB_SUCC(ret) && i < exec_param_cnt; ++i) {
     CK (OB_NOT_NULL(params[i]));
     if (OB_SUCC(ret)) {
+      bool need_free_on_fail = false;
       ObObjParam new_param = *params[i];
       if (params[i]->is_pl_extend()) {
         if (params[i]->get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
           new_param.set_int_value(0);
           if (!ob_is_xml_pl_type(params[i]->get_type(), params[i]->get_udt_id())) {
             OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, *params[i], new_param, true));
+            OX (need_free_on_fail = true);
           } else {
             uint64_t udt_id = params[i]->get_udt_id();
             const ObDataTypeCastParams dtc_params = sql::ObBasicSessionInfo::create_dtc_params(ctx->exec_ctx_->get_my_session());
@@ -2856,6 +2858,9 @@ int ObSPIService::prepare_dynamic_sql_params(ObPLExecCtx *ctx,
       }
       OX (new_param.set_need_to_check_type(true));
       OZ (exec_params->push_back(new_param), K(new_param));
+      if (OB_FAIL(ret) && need_free_on_fail) {
+        int tmp = pl::ObUserDefinedType::destruct_obj(new_param, ctx->exec_ctx_->get_my_session());
+      }
     }
   }
   OZ (store_params_string(ctx, spi_result, exec_params));
