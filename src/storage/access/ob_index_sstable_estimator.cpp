@@ -328,7 +328,7 @@ int ObIndexBlockScanEstimator::estimate_excluded_border_result(const bool is_mul
             if (0 == border_micro_index_info.get_row_count()) {
               ret = common::OB_INVALID_ARGUMENT;
               STORAGE_LOG(WARN, "Border micro index row count should not be 0", K(ret));
-            } else if (is_major) {
+            } else if (((is_left && border_micro_index_info.is_data_block()) || !is_left) && is_major) {
               ratio = (result.total_row_count_ - result.excluded_row_count_) / border_micro_index_info.get_row_count();
             }
             if (OB_ITER_END == ret && ratio < RANGE_ROWS_IN_AND_BORDER_RATIO_THRESHOLD) {
