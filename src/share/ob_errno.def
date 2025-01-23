@@ -2674,7 +2674,6 @@ DEFINE_ORACLE_ERROR(OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR, -9781, ER_NO_P
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CHARACTER, -9782, -1, "HY000", "invalid character", 911, "invalid character");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE, -9783, -1, "HY000", "cannot ENABLE ON QUERY COMPUTATION for the materialized view", "cannot ENABLE ON QUERY COMPUTATION for the materialized view `%s`.`%s`", 32361, "cannot ENABLE ON QUERY COMPUTATION for the materialized view", "cannot ENABLE ON QUERY COMPUTATION for the materialized view %s.%s");
 DEFINE_PLS_ERROR_EXT(OB_ERR_CURSOR_ATTR_APPLY, -9784, -1, "HY000", "cursor attribute may not be applied to non-cursor", "cursor attribute may not be applied to non-cursor %.*s", 324, "cursor attribute may not be applied to non-cursor", "cursor attribute may not be applied to non-cursor %.*s");
-
 DEFINE_ORACLE_ERROR(OB_UTL_TCP_BUFFER_TOO_SMALL, -9785, -1, "HY000", "buffer too small", 29258, "buffer too small");
 DEFINE_ORACLE_ERROR(OB_UTL_TCP_END_OF_INPUT, -9786, -1, "HY000", "end-of-input reached", 29259, "end-of-input reached");
 DEFINE_ORACLE_ERROR_EXT(OB_UTL_TCP_NETWORK_ERROR, -9787, -1, "HY000", "network error:", "network error: %.*s", 29260, "network error:", "network error: %.*s");
@@ -2684,7 +2683,6 @@ DEFINE_ORACLE_ERROR(OB_UTL_TCP_TRANSFER_TIMEOUT, -9790, -1, "HY000", "transfer t
 DEFINE_ORACLE_ERROR(OB_UTL_TCP_NETWORK_ACCCESS_DENIED, -9791, -1, "HY000", "network access denied by access control list (ACL)", 24247, "network access denied by access control list (ACL)");
 DEFINE_ORACLE_ERROR(OB_ERR_UTL_TCP_TOO_MANY_CONNS, -9792, -1, "HY000", "too many open connections", 30678, "too many open connections");
 DEFINE_ORACLE_ERROR(OB_UTL_TCP_SECURITY_VIOLATION, -9793, -1, "HY000", "security violation", 53203, "security violation");
-
 DEFINE_ORACLE_ERROR(OB_UTL_SMTP_INVALID_OPERATION, -9794, -1, "HY000", "invalid SMTP operation", 29277, "invalid SMTP operation");
 DEFINE_ORACLE_ERROR_EXT(OB_UTL_SMTP_TRANSIENT_ERROR, -9795, -1, "HY000", "SMTP transient error:", "SMTP transient error: %.*s", 29278, "SMTP transient error:", "SMTP transient error: %.*s");
 DEFINE_ORACLE_ERROR_EXT(OB_UTL_SMTP_PERMANENT_ERROR, -9796, -1, "HY000", "SMTP permanent error:", "SMTP permanent error: %.*s", 29279, "SMTP permanent error:", "SMTP permanent error: %.*s");

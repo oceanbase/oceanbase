@@ -724,6 +724,8 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
     } else if (OB_FAIL(schema_guard.get_trigger_ids_in_database(tenant_id, database_id, trigger_ids))) {
       LOG_WARN("get trigger infos in database failed", KR(ret), K(tenant_id), K(database_id));
     } else {
+      bool is_oracle_mode = false;
+      OZ (ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode));
       for (int64_t i = 0; OB_SUCC(ret) && i < trigger_ids.count(); i++) {
         const ObTriggerInfo *tg_info = NULL;
         const uint64_t trigger_id = trigger_ids.at(i);
@@ -734,6 +736,15 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
         } else if (OB_ISNULL(tg_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("trigger info is NULL", K(ret));
+        } else if (tg_info->is_system_type()) {
+          ObArray<const ObUserInfo *> user_array;
+          CK (is_oracle_mode);
+          OZ (schema_guard.get_user_info(tenant_id, db_schema.get_database_name_str(), user_array));
+          OV (1 == user_array.count(), OB_ERR_UNEXPECTED, user_array.count());
+          CK (OB_NOT_NULL(user_array.at(0)));
+          if (OB_SUCC(ret) && user_array.at(0)->get_user_id() != tg_info->get_base_object_id()) {
+            OZ (drop_trigger(*tg_info, trans, NULL));
+          }
         } else {
           const ObSimpleTableSchemaV2 * tbl_schema = NULL;
           OZ (schema_guard.get_simple_table_schema(tenant_id, tg_info->get_base_object_id(), tbl_schema));
@@ -10003,13 +10014,32 @@ int ObDDLOperator::create_trigger(ObTriggerInfo &trigger_info,
   OZ (schema_service->get_trigger_sql_service().create_trigger(trigger_info, is_replace,
                                                               trans, ddl_stmt_str),
       trigger_info.get_trigger_name(), is_replace);
-  if (!trigger_info.is_system_type() && is_update_table_schema_version) {
+  if (OB_FAIL(ret)) {
+  } else if (!is_update_table_schema_version) {
+  } else {
     uint64_t base_table_id = trigger_info.get_base_object_id();
     OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version));
     OX (table_schema_version = new_schema_version);
-    OZ (schema_service->get_table_sql_service().update_data_table_schema_version(
-        trans, tenant_id, base_table_id, false/*in offline ddl white list*/, new_schema_version),
-        base_table_id, trigger_info.get_trigger_name());
+    if (OB_FAIL(ret)) {
+    } else if (trigger_info.is_dml_type()) {
+      OZ (schema_service->get_table_sql_service().update_data_table_schema_version(
+          trans, tenant_id, base_table_id, false/*in offline ddl white list*/, new_schema_version),
+          base_table_id, trigger_info.get_trigger_name());
+    } else if (trigger_info.is_system_type()) {
+      const ObUserInfo *user_info = NULL;
+      ObSchemaGetterGuard schema_guard;
+      OZ (schema_service_.get_tenant_schema_guard(tenant_id, schema_guard));
+      OZ (schema_guard.get_user_info(tenant_id, base_table_id, user_info));
+      OV (OB_NOT_NULL(user_info));
+      if (OB_SUCC(ret)) {
+        common::ObArray<ObUserInfo> user_array;
+        OZ (user_array.push_back(*user_info));
+        OZ (schema_service->get_user_sql_service().update_user_schema_version(tenant_id,
+                                                                              user_array,
+                                                                              ddl_stmt_str,
+                                                                              trans));
+      }
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (0 == dep_infos.count()) {
@@ -10071,11 +10101,27 @@ int ObDDLOperator::drop_trigger(const ObTriggerInfo &trigger_info,
   OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
                 share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info.get_trigger_id()),
                 trigger_info.get_database_id()));
-  if (OB_SUCC(ret) && !trigger_info.is_system_type() && is_update_table_schema_version) {
+  if (OB_FAIL(ret)) {
+  } else if (!is_update_table_schema_version) {
+  } else {
     uint64_t base_table_id = trigger_info.get_base_object_id();
-    OZ (schema_service->get_table_sql_service().update_data_table_schema_version(trans,
-        tenant_id, base_table_id, in_offline_ddl_white_list),
-        base_table_id, trigger_info.get_trigger_name());
+    if (trigger_info.is_dml_type()) {
+      OZ (schema_service->get_table_sql_service().update_data_table_schema_version(trans,
+          tenant_id, base_table_id, in_offline_ddl_white_list),
+          base_table_id, trigger_info.get_trigger_name());
+    } else if (trigger_info.is_system_type()) {
+      const ObUserInfo *user_info = NULL;
+      ObSchemaGetterGuard schema_guard;
+      common::ObArray<ObUserInfo> user_array;
+      OZ (schema_service_.get_tenant_schema_guard(tenant_id, schema_guard));
+      OZ (schema_guard.get_user_info(tenant_id, base_table_id, user_info));
+      OV (OB_NOT_NULL(user_info));
+      OZ (user_array.push_back(*user_info));
+      OZ (schema_service->get_user_sql_service().update_user_schema_version(tenant_id,
+                                                                            user_array,
+                                                                            ddl_stmt_str,
+                                                                            trans));
+    }
   }
   if (OB_SUCC(ret)) {
     ObErrorInfo error_info;
@@ -10102,11 +10148,25 @@ int ObDDLOperator::alter_trigger(ObTriggerInfo &trigger_info,
   OZ (schema_service->get_trigger_sql_service().alter_trigger(trigger_info, new_schema_version,
                                                               trans, ddl_stmt_str),
       trigger_info.get_trigger_name());
-  if (OB_SUCC(ret) && !trigger_info.is_system_type() && is_update_table_schema_version) {
+  if (OB_SUCC(ret) && is_update_table_schema_version) {
       uint64_t base_table_id = trigger_info.get_base_object_id();
-      OZ (schema_service->get_table_sql_service().update_data_table_schema_version(
-          trans, tenant_id, base_table_id, false/*in offline ddl white list*/),
-          base_table_id, trigger_info.get_trigger_name());
+      if (trigger_info.is_dml_type()) {
+        OZ (schema_service->get_table_sql_service().update_data_table_schema_version(
+            trans, tenant_id, base_table_id, false/*in offline ddl white list*/),
+            base_table_id, trigger_info.get_trigger_name());
+      } else if (trigger_info.is_system_type()) {
+        const ObUserInfo *user_info = NULL;
+        ObSchemaGetterGuard schema_guard;
+        common::ObArray<ObUserInfo> user_array;
+        OZ (schema_service_.get_tenant_schema_guard(tenant_id, schema_guard));
+        OZ (schema_guard.get_user_info(tenant_id, base_table_id, user_info));
+        OV (OB_NOT_NULL(user_info));
+        OZ (user_array.push_back(*user_info));
+        OZ (schema_service->get_user_sql_service().update_user_schema_version(tenant_id,
+                                                                              user_array,
+                                                                              ddl_stmt_str,
+                                                                              trans));
+      }
   }
   OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(
       trans, tenant_id, share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info.get_trigger_id()),

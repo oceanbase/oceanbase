@@ -4680,6 +4680,13 @@ int ObSchemaServiceSQLImpl::fetch_all_user_info(
                                                user_keys,
                                                users_size))) {
         LOG_WARN("fetch proxy user info failed", K(ret));
+      } else if (OB_FAIL(fetch_trigger_list(schema_status,
+                                            tenant_id,
+                                            user_array.at(0).get_user_id(),
+                                            schema_version,
+                                            sql_client,
+                                            user_array.at(0)))) {
+        LOG_WARN("fetch trigger list failed", K(ret));
       }
     }
   }
@@ -7370,12 +7377,13 @@ int ObSchemaServiceSQLImpl::fetch_all_encrypt_info(
   return ret;
 }
 
+template <typename T>
 int ObSchemaServiceSQLImpl::fetch_trigger_list(const ObRefreshSchemaStatus &schema_status,
                                                const uint64_t tenant_id,
                                                const uint64_t table_id,
                                                const int64_t schema_version,
                                                ObISQLClient &sql_client,
-                                               ObTableSchema &table_schema)
+                                               T &schema)
 {
   int ret = OB_SUCCESS;
   ObMySQLResult *result = NULL;
@@ -7404,10 +7412,10 @@ int ObSchemaServiceSQLImpl::fetch_trigger_list(const ObRefreshSchemaStatus &sche
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get result", K(ret));
     } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_trigger_list(tenant_id, *result,
-                                                                    table_schema.get_trigger_list()))) {
+                                                                    schema.get_trigger_list()))) {
       LOG_WARN("failed to retrieve trigger list", K(ret));
     } else {
-      LOG_DEBUG("TRIGGER", K(table_schema.get_trigger_list()));
+      LOG_DEBUG("TRIGGER", K(schema.get_trigger_list()));
     }
   }
   return ret;

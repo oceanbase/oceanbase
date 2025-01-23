@@ -1273,8 +1273,13 @@ struct ObSchemaObjVersion
   inline bool operator !=(const ObSchemaObjVersion &other) const { return !operator ==(other); }
   ObSchemaType get_schema_type() const
   {
+    return get_schema_type(object_type_);
+  }
+
+  static  ObSchemaType get_schema_type(ObDependencyTableType object_type)
+  {
     ObSchemaType ret_type = OB_MAX_SCHEMA;
-    switch (object_type_) {
+    switch (object_type) {
       case DEPENDENCY_TABLE:
       case DEPENDENCY_VIEW:
         ret_type = TABLE_SCHEMA;
@@ -1311,6 +1316,7 @@ struct ObSchemaObjVersion
     }
     return ret_type;
   }
+
   static ObObjectType get_schema_object_type(ObDependencyTableType object_type)
   {
     ObObjectType ret_type = ObObjectType::MAX_TYPE;
@@ -4665,7 +4671,9 @@ public:
     user_flags_.proxy_activated_flag_ = flag;
   }
   inline ObProxyActivatedFlag get_proxy_activated_flag() { return (ObProxyActivatedFlag)(user_flags_.proxy_activated_flag_); }
-
+  inline common::ObIArray<uint64_t> &get_trigger_list() { return trigger_list_; }
+  inline const common::ObIArray<uint64_t> &get_trigger_list() const { return trigger_list_; }
+  inline void reset_trigger_list() { trigger_list_.reset(); }
 private:
   int add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info);
   int assign_proxy_info_array_(ObProxyInfo **src_arr,

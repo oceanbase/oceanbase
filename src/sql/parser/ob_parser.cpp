@@ -1040,7 +1040,8 @@ int ObParser::parse(const ObString &query,
                     const bool is_batched_multi_stmt_split_on,
                     const bool no_throw_parser_error,
                     const bool is_pl_inner_parse,
-                    const bool is_dbms_sql)
+                    const bool is_dbms_sql,
+                    const bool is_parse_dynamic_sql)
 {
   int ret = OB_SUCCESS;
 
@@ -1102,7 +1103,7 @@ int ObParser::parse(const ObString &query,
   }
 
   parse_result.pl_parse_info_.is_inner_parse_ = is_pl_inner_parse;
-
+  parse_result.pl_parse_info_.is_parse_dynamic_sql_ = is_parse_dynamic_sql;
   if (INS_MULTI_VALUES == parse_mode) {
     void *buffer = nullptr;
     if (OB_ISNULL(buffer = allocator_->alloc(sizeof(InsMultiValuesResult)))) {

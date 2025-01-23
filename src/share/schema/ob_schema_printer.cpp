@@ -4240,7 +4240,7 @@ int ObSchemaPrinter::print_udt_body_definition(const uint64_t tenant_id,
                       udt_info->get_type_name().length(),
                       udt_info->get_type_name().ptr()));
     OZ (print_object_definition(udt_body_info, buf, buf_len, pos));
-    OZ (databuff_printf(buf, buf_len, pos, "\nEND;\n"));
+    OZ (databuff_printf(buf, buf_len, pos, "\n"));
     body_exist = true;
   }
   SHARE_SCHEMA_LOG(DEBUG, "print user define type schema", K(ret), K(*udt_info));
@@ -5002,16 +5002,17 @@ int ObSchemaPrinter::print_trigger_definition(const ObTriggerInfo &trigger_info,
   int ret = OB_SUCCESS;
   const ObDatabaseSchema *database_schema = NULL;
   if (lib::is_oracle_mode()) {
-    if (!trigger_info.is_system_type()) {
-      OZ (schema_guard_.get_database_schema(trigger_info.get_tenant_id(),
-          trigger_info.get_database_id(), database_schema));
-      CK (OB_NOT_NULL(database_schema));
-      OZ (BUF_PRINTF("CREATE OR REPLACE TRIGGER \"%.*s\".\"%.*s\"",
-                    database_schema->get_database_name_str().length(),
-                    database_schema->get_database_name_str().ptr(),
-                    trigger_info.get_trigger_name().length(),
-                    trigger_info.get_trigger_name().ptr()),
-          trigger_info.get_trigger_name());
+    OZ (schema_guard_.get_database_schema(trigger_info.get_tenant_id(),
+        trigger_info.get_database_id(), database_schema));
+    CK (OB_NOT_NULL(database_schema));
+    OZ (BUF_PRINTF("CREATE OR REPLACE TRIGGER \"%.*s\".\"%.*s\"",
+                  database_schema->get_database_name_str().length(),
+                  database_schema->get_database_name_str().ptr(),
+                  trigger_info.get_trigger_name().length(),
+                  trigger_info.get_trigger_name().ptr()),
+        trigger_info.get_trigger_name());
+    if (OB_FAIL(ret)) {
+    } else if (!trigger_info.is_system_type()) {
       if (trigger_info.is_simple_dml_type()) {
         OZ (print_simple_trigger_definition(trigger_info, buf, buf_len, pos, get_ddl),
             trigger_info.get_trigger_name());
@@ -5020,9 +5021,8 @@ int ObSchemaPrinter::print_trigger_definition(const ObTriggerInfo &trigger_info,
             trigger_info.get_trigger_name());
       }
     } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support print trigger type", K(trigger_info.get_trigger_type()), K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support print this trigger type");
+      OZ (print_system_trigger_definition(trigger_info, buf, buf_len, pos, get_ddl),
+            trigger_info.get_trigger_name());
     }
   } else {
     OZ (BUF_PRINTF("CREATE DEFINER = %.*s %.*s",
@@ -5154,6 +5154,27 @@ int ObSchemaPrinter::print_compound_instead_trigger_definition(const ObTriggerIn
       trigger_info.get_trigger_body());
   CK (OB_NOT_NULL(parse_result.result_tree_) && OB_NOT_NULL(parse_result.result_tree_->children_[0]));
   OZ (BUF_PRINTF(" %.*s", (int)(parse_result.result_tree_->children_[0]->str_len_),
+                 parse_result.result_tree_->children_[0]->str_value_));
+  if (OB_SUCC(ret) && get_ddl) {
+    OZ (print_trigger_status(trigger_info, buf, buf_len, pos));
+  }
+  return ret;
+}
+
+int ObSchemaPrinter::print_system_trigger_definition(const ObTriggerInfo &trigger_info,
+                                                     char *buf, int64_t buf_len, int64_t &pos,
+                                                     bool get_ddl) const
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc;
+  sql::ObParser parser(alloc, trigger_info.get_sql_mode());
+  ParseResult parse_result;
+  OV (trigger_info.is_system_type());
+  OZ (parser.parse(trigger_info.get_trigger_body(), parse_result, TRIGGER_MODE,
+                  false, false, true),
+      trigger_info.get_trigger_body());
+  CK (OB_NOT_NULL(parse_result.result_tree_) && OB_NOT_NULL(parse_result.result_tree_->children_[0]));
+  OZ (BUF_PRINTF("\n%.*s", (int)(parse_result.result_tree_->children_[0]->str_len_),
                  parse_result.result_tree_->children_[0]->str_value_));
   if (OB_SUCC(ret) && get_ddl) {
     OZ (print_trigger_status(trigger_info, buf, buf_len, pos));

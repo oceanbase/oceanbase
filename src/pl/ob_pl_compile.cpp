@@ -113,14 +113,57 @@ int ObPLCompiler::init_anonymous_ast(
       } else
 #endif
       if (!is_mocked_anonymous_array_id(param.get_udt_id())) {
-        const ObUserDefinedType *user_type = NULL;
-        OZ (ObResolverUtils::get_user_type(&allocator,
-                                           &session_info,
-                                           &sql_proxy,
-                                           &schema_guard,
-                                           package_guard,
-                                           param.get_udt_id(),
-                                           user_type));
+        const ObUserDefinedType *user_type = nullptr;
+        // try schema type first
+        if (OB_FAIL(resolve_ctx.get_user_type(param.get_udt_id(), user_type, &allocator))) {
+          LOG_WARN("failed to ObResolverUtils::get_user_type", K(ret), K(param.get_udt_id()), KPC(user_type));
+        } else if (OB_NOT_NULL(user_type)) {
+          // schema type, add it to dependencies recursively
+          if (OB_FAIL(func_ast.get_user_type_table().add_external_type(user_type))) {
+            LOG_WARN("failed to add_external_type", K(ret), KPC(user_type));
+          } else if (OB_FAIL(SMART_CALL(func_ast.add_dependency_object(resolve_ctx, *user_type)))) {
+            LOG_WARN("failed to add_dependency_object", K(ret), KPC(user_type));
+          }
+        } else {
+          // not schema type, try AST
+          if (OB_NOT_NULL(user_type = func_ast.get_user_type_table().get_type(param.get_udt_id()))) {
+            // do nothing
+
+          // try parent type if it is inner mock PL
+          } else if (OB_NOT_NULL(session_info.get_pl_context())
+                       && session_info.get_pl_context()->get_is_inner_mock()
+                       && OB_NOT_NULL(session_info.get_pl_context()->get_current_ctx())) {
+            const ObPLFunction *parent = session_info.get_pl_context()->get_current_ctx()->func_;
+
+            CK (OB_NOT_NULL(parent));
+
+            // iterate parent type table to find the param udt
+            for (int64_t i = 0; OB_SUCC(ret) && i < parent->get_type_table().count(); ++i) {
+              const ObUserDefinedType *type = parent->get_type_table().at(i);
+              if (OB_NOT_NULL(type) && type->get_user_type_id() == param.get_udt_id()) {
+                user_type = type;
+                break;
+              }
+            }
+
+            // if the param udt is found, add all parent types to current anonymous block AST
+            if (OB_SUCC(ret) && OB_NOT_NULL(user_type)) {
+              for (int64_t i = 0; OB_SUCC(ret) && i < parent->get_type_table().count(); ++i) {
+                const ObUserDefinedType *type = parent->get_type_table().at(i);
+
+                OZ (func_ast.get_user_type_table().add_type(type));
+                OZ (func_ast.get_user_type_table().add_external_type(type));
+              }
+            }
+          }
+
+          // if a param type is a local type, current anonymous block can't be cached
+          // because different types may have the same local type id
+          if (OB_SUCC(ret) && OB_NOT_NULL(user_type) && user_type->is_local_type()) {
+            func_ast.set_can_cached(false);
+          }
+        }
+
         CK (OB_NOT_NULL(user_type));
         OX (pl_type.reset());
         OX (pl_type = *user_type);
@@ -325,7 +368,7 @@ int ObPLCompiler::compile(
   int64_t compile_end = ObTimeUtility::current_time();
   OX (func.get_stat_for_update().compile_time_ = compile_end - compile_start);
   OX (session_info_.add_plsql_compile_time(compile_end - compile_start));
-  LOG_INFO(">>>>>>>>Final Compile Anonymous Block Time: ", K(stmt_id), K(compile_end - compile_start));
+  LOG_INFO(">>>>>>>>Final Compile Anonymous Block Time: ", K(ret), K(stmt_id), K(compile_end - compile_start));
   return ret;
 }
 

@@ -390,9 +390,16 @@ public:
   }
   OB_INLINE void set_is_opaque() { typecode_ = UDT_TYPE_OPAQUE; }
   OB_INLINE bool is_opaque() const { return UDT_TYPE_OPAQUE == typecode_; }
+  OB_INLINE bool is_obj_type() const
+  {
+    return UDT_TYPE_OBJECT == typecode_ ||
+             UDT_TYPE_OBJECT_BODY == typecode_;
+  }
 
   int deep_copy_name(common::ObIAllocator &allocator, const common::ObString &src, common::ObString &dst) const;
-  int transform_to_pl_type(common::ObIAllocator &allocator, const pl::ObUserDefinedType *&pl_type) const;
+  int transform_to_pl_type(common::ObIAllocator &allocator,
+                           ObSchemaGetterGuard &schema_guard,
+                           const pl::ObUserDefinedType *&pl_type) const;
   int transform_to_pl_type(const ObUDTTypeAttr* attr_info, pl::ObPLDataType &pl_type) const;
   int transform_to_pl_type(const ObUDTCollectionType *coll_info, pl::ObPLDataType &pl_type) const;
 
@@ -533,6 +540,7 @@ public:
     return bret;
   }
 
+  int check_dependency_valid(ObSchemaGetterGuard &schema_guard) const;
   
   TO_STRING_KV(K_(tenant_id),
                K_(database_id),

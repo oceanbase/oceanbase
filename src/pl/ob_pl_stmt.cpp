@@ -91,7 +91,7 @@ int ObPLSymbolTable::delete_symbol(int64_t symbol_idx)
   return ret;
 }
 
-int ObPLUserTypeTable::add_type(ObUserDefinedType *user_defined_type)
+int ObPLUserTypeTable::add_type(const ObUserDefinedType *user_defined_type)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(user_types_.push_back(user_defined_type))) {
@@ -937,7 +937,7 @@ int ObPLUDTNS::get_user_type(uint64_t type_id,
   CK (OB_NOT_NULL(allocator));
   OZ (schema_guard_.get_udt_info(tenant_id, type_id, udt_info));
   OV (OB_NOT_NULL(udt_info), OB_ERR_OBJECT_INVALID, ret, tenant_id, type_id);
-  OZ (udt_info->transform_to_pl_type(*allocator, user_type));
+  OZ (udt_info->transform_to_pl_type(*allocator, schema_guard_, user_type));
   CK (OB_NOT_NULL(user_type));
   return ret;
 }
@@ -2129,7 +2129,7 @@ int ObPLExternalNS::resolve_external_type_by_name(const ObString &db_name, const
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(udt_info->transform_to_pl_type(resolve_ctx_.allocator_, type))) {
+      } else if (OB_FAIL(udt_info->transform_to_pl_type(resolve_ctx_.allocator_, resolve_ctx_.schema_guard_, type))) {
         LOG_WARN("failed to transform to pl type from udt info", K(ret));
       } else if (OB_ISNULL(type)) {
         ret = OB_ERR_UNEXPECTED;
@@ -4613,6 +4613,113 @@ int ObPLCompileUnitAST::add_dependency_objects(
 int ObPLCompileUnitAST::add_dependency_object(const share::schema::ObSchemaObjVersion &obj_version)
 {
   return add_dependency_object_impl(get_dependency_table(), obj_version);
+}
+
+int ObPLCompileUnitAST::add_dependency_object(ObPLResolveCtx &resolve_ctx,
+                                              const ObPLDataType &type)
+{
+  int ret = OB_SUCCESS;
+
+  if (type.is_user_type()) {
+    ObSchemaObjVersion obj_version;
+
+    if (type.is_package_type()) {
+      const ObSimplePackageSchema *package_info = nullptr;
+      const uint64_t package_id = extract_package_id(type.get_user_type_id());
+      const uint64_t tenant_id = get_tenant_id_by_object_id(package_id);
+
+      if (OB_FAIL(resolve_ctx.schema_guard_.get_simple_package_info(tenant_id, package_id, package_info))) {
+        LOG_WARN("failed to get_simple_package_info",
+                 K(ret), K(type), K(tenant_id), K(package_id), KPC(package_info));
+      } else if (OB_ISNULL(package_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL pacakge info", K(ret), K(type), K(tenant_id), K(package_id));
+      } else {
+        obj_version.object_id_ = package_id;
+        obj_version.object_type_ = DEPENDENCY_PACKAGE;
+        obj_version.version_ = package_info->get_schema_version();
+
+        if (OB_FAIL(add_dependency_object(obj_version))) {
+          LOG_WARN("failed to add_dependency_object", K(ret), K(type), KPC(package_info), K(obj_version));
+        }
+      }
+    } else if (type.is_udt_type()) {
+      const ObUDTTypeInfo *udt_info = nullptr;
+      const uint64_t udt_id = type.get_user_type_id();
+      const uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
+
+      if (OB_FAIL(resolve_ctx.schema_guard_.get_udt_info(tenant_id, udt_id, udt_info))) {
+        LOG_WARN("failed to get_udt_info", K(ret), K(type), K(tenant_id), K(udt_id), KPC(udt_info));
+      } else if (OB_ISNULL(udt_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL udt info", K(ret), K(type), K(tenant_id), K(udt_id));
+      } else {
+        obj_version.object_id_ = udt_id;
+        obj_version.object_type_ = DEPENDENCY_TYPE;
+        obj_version.version_ = udt_info->get_schema_version();
+
+        if (OB_FAIL(add_dependency_object(obj_version))) {
+          LOG_WARN("failed to add_dependency_object", K(ret), K(type), KPC(udt_info), K(obj_version));
+        }
+      }
+    } else if (type.is_rowtype_type()) {
+      const ObSimpleTableSchemaV2 *table_schema = nullptr;
+      const uint64_t table_id = type.get_user_type_id();
+      const uint64_t tenant_id = get_tenant_id_by_object_id(table_id);
+
+      if (OB_FAIL(resolve_ctx.schema_guard_.get_simple_table_schema(tenant_id, table_id, table_schema))) {
+        LOG_WARN("failed to get_simple_table_schema", K(ret), K(type), K(tenant_id), K(table_id), KPC(table_schema));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL udt info", K(ret), K(type), K(tenant_id), K(table_id));
+      } else {
+        obj_version.object_id_ = table_id;
+        obj_version.object_type_ = DEPENDENCY_TABLE;
+        obj_version.version_ = table_schema->get_schema_version();
+
+        if (OB_FAIL(add_dependency_object(obj_version))) {
+          LOG_WARN("failed to add_dependency_object", K(ret), K(type), KPC(table_schema), K(obj_version));
+        }
+      }
+    } else {
+      // do nothing
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (type.is_collection_type() || type.is_record_type()) {
+      const ObUserDefinedType *user_type = nullptr;
+      uint64_t id = type.get_user_type_id();
+
+      if (OB_ISNULL(user_type = get_user_type_table().get_external_type(id))) {
+        if (OB_FAIL(resolve_ctx.get_user_type(id, user_type, &resolve_ctx.allocator_))) {
+          LOG_WARN("failed to get_user_type", K(ret), K(type), K(id), KPC(user_type));
+        } else if (OB_ISNULL(user_type)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected NULL user_type", K(ret), K(type), K(id), KPC(user_type));
+        } else if (OB_FAIL(get_user_type_table().add_external_type(user_type))) {
+          LOG_WARN("failed to add_external_type", K(ret), KPC(user_type));
+        }
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < user_type->get_member_count(); ++i) {
+        const ObPLDataType *curr = user_type->get_member(i);
+
+        if (OB_ISNULL(curr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected NULL ObPLDataType", K(ret), K(type), KPC(user_type), K(i), KPC(curr));
+        } else if (curr->is_user_type()) {
+          if (OB_FAIL(SMART_CALL(add_dependency_object(resolve_ctx, *curr)))) {
+            LOG_WARN("failed to add_dependency_object", K(ret), K(type), KPC(user_type), K(i), KPC(curr));
+          }
+        }
+      }
+    } else {
+      // do nothing
+    }
+  }
+
+  return ret;
 }
 
 int ObPLCompileUnitAST::add_dependency_object_impl(const ObPLDependencyTable &dep_tbl,

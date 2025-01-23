@@ -116,8 +116,8 @@ int ObCreateTriggerExecutor::execute(ObExecContext &ctx, ObCreateTriggerStmt &st
     if (with_res) {
       arg.based_schema_object_infos_.reset();
       OZ (arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(arg.trigger_info_.get_base_object_id(),
-                                                                           TABLE_SCHEMA,
-                                                                           res.table_schema_version_)));
+                                                   arg.trigger_info_.is_dml_type() ? TABLE_SCHEMA : USER_SCHEMA,
+                                                   res.table_schema_version_)));
       OZ (arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(arg.trigger_info_.get_trigger_id(),
                                                                            TRIGGER_SCHEMA,
                                                                            res.trigger_schema_version_)));

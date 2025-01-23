@@ -974,10 +974,10 @@ int ObCreateIndexResolver::add_based_udt_info(const share::schema::ObTableSchema
         } else if (OB_ISNULL(udt_info)) {
           ret = OB_ERR_OBJECT_NOT_EXIST;
           LOG_WARN("udt not exist", KR(ret), K(tenant_id), K(udt_id));
-        } else if (OB_FAIL(ob_udt_check_and_add_ddl_dependency(udt_id, UDT_SCHEMA,
-                                                               udt_info->get_schema_version(),
-                                                               udt_info->get_tenant_id(),
-                                                               arg))) {
+        } else if (OB_FAIL(ob_add_ddl_dependency(udt_id, UDT_SCHEMA,
+                                                 udt_info->get_schema_version(),
+                                                 udt_info->get_tenant_id(),
+                                                 arg))) {
           LOG_WARN("fail to push back udt info", KR(ret), K(udt_id), K(tenant_id));
         }
       }

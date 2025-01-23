@@ -425,7 +425,9 @@
 #include "ob_expr_array_remove.h"
 #include "ob_expr_array_map.h"
 #include "ob_expr_calc_odps_size.h"
+#include "ob_expr_mysql_proc_info.h"
 #include "ob_expr_get_mysql_routine_parameter_type_str.h"
+#include "ob_expr_ora_login_user.h"
 #include "ob_expr_priv_st_geohash.h"
 #include "ob_expr_priv_st_makepoint.h"
 #include "ob_expr_to_pinyin.h"
@@ -1291,7 +1293,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprTokenize::eval_tokenize,                                      /* 758 */
   ObExprEnhancedAesEncrypt::eval_aes_encrypt,                         /* 759 */
   ObExprEnhancedAesDecrypt::eval_aes_decrypt,                         /* 760 */
-  NULL, // ObExprMysqlProcInfo::eval_mysql_proc_info                       /* 761 */
+  ObExprMysqlProcInfo::eval_mysql_proc_info,                          /* 761 */
   ObExprArrayOverlaps::eval_array_overlaps,                           /* 762 */
   ObExprArrayContainsAll::eval_array_contains_all,                    /* 763 */
   ObExprInnerIsTrue::decimal_int_is_true_start,                       /* 764 */
@@ -1306,7 +1308,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprArrayRemove::eval_array_remove_ObString,                      /* 773 */
   ObExprArrayRemove::eval_array_remove_array,                         /* 774 */
   ObExprArrayMap::eval_array_map,                                     /* 775 */
-  NULL, // ObExprOraLoginUser::eval_ora_login_user,                   /* 776 */
+  ObExprOraLoginUser::eval_ora_login_user,                            /* 776 */
   ObExprArrayToString::eval_array_to_string,                          /* 777 */
   ObExprStringToArray::eval_string_to_array,                          /* 778 */
   ObExprArrayAppend::eval_array_append,                               /* 779 */

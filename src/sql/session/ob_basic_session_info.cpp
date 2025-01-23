@@ -6385,6 +6385,17 @@ int ObBasicSessionInfo::set_session_state_(ObSQLSessionState state)
   return ret;
 }
 
+void ObBasicSessionInfo::set_session_state_for_trigger(ObSQLSessionState state)
+{
+  bool is_state_change = is_active_state_change(thread_data_.state_, state);
+  thread_data_.state_ = state;
+  int64_t current_time = ::oceanbase::common::ObTimeUtility::current_time();
+  if (is_state_change) {
+    thread_data_.retry_active_time_ += (current_time - thread_data_.cur_state_start_time_);
+  }
+  thread_data_.cur_state_start_time_ = current_time;
+}
+
 // check the status of the session
 // ATTENTION: the function only focus on the state
 // will cause the query and session to be killed.

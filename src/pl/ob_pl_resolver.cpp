@@ -34,6 +34,7 @@
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "share/schema/ob_trigger_info.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
+#include "ob_pl_compile.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_warning.h"
 #include "pl/ob_pl_udt_object_manager.h"
@@ -2475,7 +2476,7 @@ int ObPLResolver::fill_record_type(
       uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
       OZ (schema_guard.get_udt_info(tenant_id, udt_id, udt_info));
       CK (OB_NOT_NULL(udt_info));
-      OZ (udt_info->transform_to_pl_type(allocator, user_type));
+      OZ (udt_info->transform_to_pl_type(allocator, schema_guard, user_type));
       OX (pl_type = *user_type);
     } else {
       OX (data_type.set_meta_type(expr->get_result_type()));
@@ -2583,7 +2584,7 @@ int ObPLResolver::build_record_type_by_table_schema(ObSchemaGetterGuard &schema_
           uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
           OZ (schema_guard.get_udt_info(tenant_id, udt_id, udt_info));
           CK (OB_NOT_NULL(udt_info));
-          OZ (udt_info->transform_to_pl_type(allocator, user_type));
+          OZ (udt_info->transform_to_pl_type(allocator, schema_guard, user_type));
           CK (OB_NOT_NULL(user_type));
           OX (pl_type = *user_type);
         } else {
@@ -9953,20 +9954,13 @@ int ObPLResolver::check_collection_expr_illegal(const ObRawExpr *expr, bool &is_
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr left or right children is null", K(ret));
     } else {
-      if (T_OBJ_ACCESS_REF == left->get_expr_type()
-          && T_OBJ_ACCESS_REF == right->get_expr_type()) {
-        const ObObjAccessRawExpr *l = static_cast<const ObObjAccessRawExpr *>(left);
-        const ObObjAccessRawExpr *r = static_cast<const ObObjAccessRawExpr *>(right);
-        is_obj_acc = true;
-        if ((ObObjAccessIdx::get_final_type(l->get_access_idxs()).is_varray_type()
-            || ObObjAccessIdx::get_final_type(r->get_access_idxs()).is_varray_type())
-            || (ObObjAccessIdx::get_final_type(l->get_access_idxs()).is_associative_array_type()
-            || ObObjAccessIdx::get_final_type(r->get_access_idxs()).is_associative_array_type())) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not supported varray or associative array compared.", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "varray or associative array compared");
-        }
-      }
+      const ObExprResType &left_type = left->get_result_type();
+      const ObExprResType &right_type = right->get_result_type();
+      is_obj_acc |= left_type.is_ext() && PL_NESTED_TABLE_TYPE == left_type.get_extend_type()
+                       && right_type.is_ext() && PL_NESTED_TABLE_TYPE == right_type.get_extend_type()
+                       && left_type.get_udt_id() == right_type.get_udt_id();
+      is_obj_acc |= left_type.is_null() && right_type.is_ext() && PL_NESTED_TABLE_TYPE == right_type.get_extend_type();
+      is_obj_acc |= left_type.is_ext() && PL_NESTED_TABLE_TYPE == left_type.get_extend_type() && right_type.is_null();
     }
   }
   return ret;
@@ -10747,6 +10741,14 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
       if (NULL == params.package_guard_) {
         OZ (package_guard->init());
       }
+      OZ (ObPLCompiler::init_anonymous_ast(func_ast,
+                                            *(params.allocator_),
+                                            *(params.session_info_),
+                                            *(params.sql_proxy_),
+                                            *(params.schema_checker_->get_schema_guard()),
+                                            *package_guard,
+                                            params.param_list_,
+                                            params.is_prepare_protocol_));
       OZ (resolver.init(func_ast));
       // build first namespace
       OZ (resolver.make_block(func_ast, NULL, null_block));
@@ -12611,6 +12613,7 @@ int ObPLResolver::resolve_udf_info(
           tenant_id, package_routine_info->get_pkg_id(), udt_info));
         CK (OB_NOT_NULL(udt_info));
         OZ (ObPLUDTObjectManager::check_overload_default_cons(udf_info,
+                                                              resolve_ctx_.schema_guard_,
                                                               package_routine_info,
                                                               udt_info));
       }
@@ -12708,6 +12711,7 @@ int ObPLResolver::resolve_udf_info(
 
           // to check is this overload the default constructor
           OZ (ObPLUDTObjectManager::check_overload_default_cons(udf_info,
+                                                                resolve_ctx_.schema_guard_,
                                                                 schema_routine_info,
                                                                 udt_info));
         }
@@ -18104,7 +18108,7 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
     } else if (OB_FAIL(schema_guard_.get_udt_info(tenant_id, type_id, udt_info))) {
       LOG_WARN("get udt info failed", K(ret), K(type_id));
     } else if (OB_NOT_NULL(udt_info)) {
-      OZ (udt_info->transform_to_pl_type(*alloc, user_type), type_id);
+      OZ (udt_info->transform_to_pl_type(*alloc, schema_guard_, user_type), type_id);
     } else {
       ret = OB_SUCCESS;
       const ObTableSchema* table_schema = NULL;

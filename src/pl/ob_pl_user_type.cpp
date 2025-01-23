@@ -476,14 +476,14 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool 
               }
               if (keep_composite_attr) {
                 pl_allocator->free(collection->get_data());
-                collection->set_data(NULL);
+                collection->set_data(NULL, 0);
                 collection->set_count(-1);
                 collection->set_first(OB_INVALID_INDEX);
                 collection->set_last(OB_INVALID_INDEX);
               } else {
                 pl_allocator->free(collection->get_data());
                 pl_allocator->~ObPLAllocator1();
-                collection->set_data(NULL);
+                collection->set_data(NULL, 0);
                 collection->set_null();
                 collection->set_count(-1);
                 collection->set_allocator(nullptr);
@@ -1476,13 +1476,9 @@ int ObRecordType::generate_assign_with_null(ObPLCodeGenerator &generator,
   int ret = OB_SUCCESS;
   ObLLVMValue isnull_ptr;
   ObLLVMValue dest_elem;
-  ObLLVMValue llvm_null_obj;
   ObObj null_obj;
   null_obj.set_null();
-  ObLLVMValue null_obj_ptr;
   const ObPLDataType *member_type = NULL;
-  OZ (generator.generate_obj(null_obj, null_obj_ptr));
-  OZ (generator.get_helper().create_load("load_null_obj", null_obj_ptr, llvm_null_obj));
   for (int64_t i = 0; OB_SUCC(ret) && i < get_record_member_count(); ++i) {
     dest_elem.reset();
     if (OB_FAIL(generator.extract_element_ptr_from_record(dest,
@@ -1523,7 +1519,7 @@ int ObRecordType::generate_assign_with_null(ObPLCodeGenerator &generator,
           LOG_WARN("failed to create call", K(ret));
         } else if (OB_FAIL(generator.check_success(ret_err))) {
           LOG_WARN("failed to check success", K(ret));
-        } else if (OB_FAIL(generator.get_helper().create_store(llvm_null_obj, dest_elem))) {
+        } else if (OB_FAIL(generator.store_obj(null_obj, dest_elem))) {
           LOG_WARN("failed to create store", K(ret));
         }
       }
@@ -1615,12 +1611,9 @@ int ObRecordType::generate_alloc_complex_addr(ObPLCodeGenerator &generator,
   ObLLVMValue extend_ptr;
   ObLLVMValue ret_err;
   ObLLVMValue var_type, type_id;
-  ObLLVMType ptr_type;
-  ObLLVMValue stack;
+  ObPLCGBufferGuard buffer_guard(generator);
 
-  OZ (generator.get_helper().stack_save(stack));
-  OZ (generator.get_helper().get_llvm_type(ObIntType, ptr_type));
-  OZ (generator.get_helper().create_alloca("alloc_composite_addr", ptr_type, extend_ptr));
+  OZ (buffer_guard.get_int_buffer(extend_ptr));
   OZ (args.push_back(generator.get_vars().at(generator.CTX_IDX)));
   OZ (generator.get_helper().get_int8(type, var_type));
   OZ (args.push_back(var_type));
@@ -1642,7 +1635,6 @@ int ObRecordType::generate_alloc_complex_addr(ObPLCodeGenerator &generator,
                               s->get_block()->in_warning()));
 
   OZ (generator.get_helper().create_load("load_extend_ptr", extend_ptr, value));
-  OZ (generator.get_helper().stack_restore(stack));
   return ret;
 }
 
@@ -1669,12 +1661,9 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
   ObDataType meta;
   const ObRecordMember *member = NULL;
   int64_t result_idx = OB_INVALID_INDEX;
-  ObLLVMValue result;
   ObLLVMValue obobj_res;
   ObLLVMValue ptr_elem;
   ObObj null_obj;
-  ObLLVMValue null_obj_ptr;
-  ObLLVMValue null_obj_value;
 
   //设置composite和count
   OZ (generator.get_helper().get_int32(type_, type_value));
@@ -1697,10 +1686,11 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
   OZ (generator.generate_debug("generate_default_value", value));
   //设置meta和数据
   null_obj.set_null();
-  OZ (generator.generate_obj(null_obj, null_obj_ptr));
-  OZ (generator.get_helper().create_load("load_null_obj", null_obj_ptr, null_obj_value));
   CK (OB_NOT_NULL(stmt));
   for (int64_t i = 0; OB_SUCC(ret) && i < get_record_member_count(); ++i) {
+    ObLLVMValue result;
+    ObPLCGBufferGuard buffer_guard(generator);
+
     member = get_record_member(i);
     CK (OB_NOT_NULL(member));
 
@@ -1719,9 +1709,10 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
       OZ (generator.store_data_type(meta, meta_ptr));
     }
 
+    OZ (buffer_guard.get_objparam_buffer(result));
+
     //设置数据
     if (OB_SUCC(ret)) {
-      obobj_res = null_obj_value;
       if (OB_INVALID_INDEX != member->get_default()) {
         if (OB_NOT_NULL(member->get_default_expr())) {
           OZ (generator.generate_expr(member->get_default(), *stmt, result_idx, result));
@@ -1763,7 +1754,7 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
                                                   member->member_type_.get_not_null(),
                                                   result));
           } else {
-            OZ (generator.get_helper().create_store(obobj_res, ptr_elem));
+            OZ (generator.store_obj(null_obj, ptr_elem));
           }
           if (OB_SUCC(ret) && !member->member_type_.is_obj_type()) { // process complex null value
             ObLLVMBasicBlock null_branch;
@@ -2749,15 +2740,23 @@ int ObCollectionType::get_serialize_size(
     const ObPLResolveCtx &resolve_ctx, char *&src, int64_t &size) const
 {
   int ret = OB_SUCCESS;
-  ObPLNestedTable *table = reinterpret_cast<ObPLNestedTable *>(src);
+  ObPLCollection *table = reinterpret_cast<ObPLCollection *>(src);
   char *data = NULL;
   CK (OB_NOT_NULL(table));
 
   OX (size += static_cast<ObPLComposite*>(table)->get_serialize_size());
   OX (size += table->get_element_desc().get_serialize_size());
   OX (size += serialization::encoded_length(table->get_count()));
-  OX (size += serialization::encoded_length(table->get_first()));
-  OX (size += serialization::encoded_length(table->get_last()));
+  if (is_associative_array_type() && (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_5_1 ||
+     (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1))) {
+    ObPLAssocArray *assoc_table = static_cast<ObPLAssocArray *>(table);
+    CK (OB_NOT_NULL(assoc_table));
+    OX (size += serialization::encoded_length(assoc_table->get_first()));
+    OX (size += serialization::encoded_length(assoc_table->get_last()));
+  } else {
+    OX (size += serialization::encoded_length(table->get_pure_first()));
+    OX (size += serialization::encoded_length(table->get_pure_last()));
+  }
 
   OX (data = reinterpret_cast<char*>(table->get_data()));
   for (int64_t i = 0; OB_SUCC(ret) && i < table->get_count(); ++i) {
@@ -2783,7 +2782,7 @@ int ObCollectionType::serialize(
   OZ (serialization::encode(dst, dst_len, dst_pos, v));
 
   int ret = OB_SUCCESS;
-  ObPLNestedTable *table = reinterpret_cast<ObPLNestedTable *>(src);
+  ObPLCollection *table = reinterpret_cast<ObPLCollection *>(src);
 
   CK (OB_NOT_NULL(table));
 
@@ -2792,8 +2791,16 @@ int ObCollectionType::serialize(
   OX (static_cast<ObPLComposite*>(table)->serialize(dst, dst_len, dst_pos));
   OX (table->get_element_desc().serialize(dst, dst_len, dst_pos));
   ENCODE(table->get_count());
-  ENCODE(table->get_first());
-  ENCODE(table->get_last());
+  if (is_associative_array_type() && (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_5_1 ||
+     (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1))) {
+    ObPLAssocArray *assoc_table = static_cast<ObPLAssocArray *>(table);
+    CK (OB_NOT_NULL(assoc_table));
+    ENCODE(assoc_table->get_first());
+    ENCODE(assoc_table->get_last());
+  } else {
+    ENCODE(table->get_pure_first());
+    ENCODE(table->get_pure_last());
+  }
 
   if (OB_SUCC(ret)) {
     char *data = reinterpret_cast<char *>(table->get_data());
@@ -3198,7 +3205,7 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
             table->set_count(n + 1);
             table->set_first(1);
             table->set_last(n + 1);
-            table->set_data(reinterpret_cast<ObObj*>(table_data));
+            table->set_data(reinterpret_cast<ObObj*>(table_data), n + 1);
             ObObj tmp;
             tmp.set_extend(reinterpret_cast<int64_t>(table), table->get_type());
             ObUserDefinedType::destruct_obj(tmp, nullptr, true);
@@ -3213,7 +3220,7 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
         table->set_first(1);
         table->set_last(count);
         table->set_not_null(element_type_.get_not_null());
-        table->set_data(reinterpret_cast<ObObj*>(table_data));
+        table->set_data(reinterpret_cast<ObObj*>(table_data), max_count);
         table->set_column_count(field_cnt);
         elem_desc.set_pl_type(element_type_.get_type());
         elem_desc.set_not_null(element_type_.get_not_null());
@@ -3292,7 +3299,7 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
       dst_table->set_first(OB_INVALID_INDEX);
       dst_table->set_last(OB_INVALID_INDEX);
     }
-    dst_table->set_data(reinterpret_cast<ObObj*>(table_data));
+    dst_table->set_data(reinterpret_cast<ObObj*>(table_data), src_table->get_count());
 
     ObElemDesc elem_desc;
     elem_desc.set_pl_type(element_type_.get_type());
@@ -3590,10 +3597,11 @@ int ObAssocArrayType::get_serialize_size(
   char *key = NULL;
   int64_t *sort = NULL;
   int64_t key_sort_cnt = 0; // 紧密数组, key和sort是null
+  ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   CK (OB_NOT_NULL(assoc_table));
   OZ (ObCollectionType::get_serialize_size(resolve_ctx, src, size));
   OX (key = reinterpret_cast<char *>(assoc_table->get_key()));
-  OX (sort = assoc_table->get_sort());
+  OZ (assoc_table->get_compatible_sort(allocator, sort));
   OX (key_sort_cnt = OB_NOT_NULL(key) ? assoc_table->get_count() : 0);
   OX (size += serialization::encoded_length(key_sort_cnt));
   for (int64_t i = 0; OB_SUCC(ret) && i < key_sort_cnt; ++i) {
@@ -3615,10 +3623,11 @@ int ObAssocArrayType::serialize(
   char *key = NULL;
   int64_t *sort = NULL;
   int64_t key_sort_cnt = 0;
+  ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   CK (OB_NOT_NULL(assoc_table));
   OZ (ObCollectionType::serialize(resolve_ctx, src, dst, dst_len, dst_pos));
   OX (key = reinterpret_cast<char *>(assoc_table->get_key()));
-  OX (sort = assoc_table->get_sort());
+  OZ (assoc_table->get_compatible_sort(allocator, sort));
   OX (key_sort_cnt = OB_NOT_NULL(key) ? assoc_table->get_count() : 0);
   OZ (serialization::encode(dst, dst_len, dst_pos, key_sort_cnt));
   for (int64_t i = 0; OB_SUCC(ret) && i < key_sort_cnt; ++i) {
@@ -4326,8 +4335,8 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
   if (OB_SUCC(ret)) {
     void* data = NULL;
     int64_t k = 0;
-    if (src->get_count() > 0) {
-      data = coll_allocator->alloc(src->get_count() * sizeof(ObObj));
+    if (src->get_inner_capacity() > 0) {
+      data = coll_allocator->alloc(src->get_inner_capacity() * sizeof(ObObj));
       if (OB_ISNULL(data)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for collection",
@@ -4335,6 +4344,9 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
       }
       CK (OB_NOT_NULL(new_objs = reinterpret_cast<ObObj*>(data)));
       CK (OB_NOT_NULL(old_objs = reinterpret_cast<ObObj*>(src->get_data())));
+      for (int64_t i = 0; OB_SUCC(ret) && i < src->get_inner_capacity(); ++i) {
+        new (new_objs + i) ObObj();
+      }
       int64_t i = 0;
       for (; OB_SUCC(ret) && i < src->get_count(); ++i) {
         ObObj old_obj = old_objs[i];
@@ -4392,8 +4404,8 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
           set_last(k);
 #ifdef OB_BUILD_ORACLE_PL
         } else if (PL_ASSOCIATIVE_ARRAY_TYPE == src->get_type()) {
-          set_first(static_cast<ObPLAssocArray *>(src)->get_first());
-          set_last(static_cast<ObPLAssocArray *>(src)->get_last());
+          set_first(static_cast<ObPLAssocArray *>(src)->get_pure_first());
+          set_last(static_cast<ObPLAssocArray *>(src)->get_pure_last());
 #endif
         } else {
           set_first(src->get_first());
@@ -4401,14 +4413,14 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
         }
 #ifdef OB_BUILD_ORACLE_PL
       } else if (PL_ASSOCIATIVE_ARRAY_TYPE == src->get_type()) {
-        set_first(static_cast<ObPLAssocArray *>(src)->get_first());
-        set_last(static_cast<ObPLAssocArray *>(src)->get_last());
+        set_first(static_cast<ObPLAssocArray *>(src)->get_pure_first());
+        set_last(static_cast<ObPLAssocArray *>(src)->get_pure_last());
 #endif
       } else {
-        set_first(src->get_first());
-        set_last(src->get_last());
+        set_first(src->is_inited() ? src->get_first() : OB_INVALID_INDEX);
+        set_last(src->is_inited() ? src->get_last() : OB_INVALID_INDEX);
       }
-      set_data(new_objs);
+      set_data(new_objs, src->get_inner_capacity());
     }
   }
   return ret;
@@ -4424,8 +4436,8 @@ int ObPLCollection::assign(ObPLCollection *src, ObIAllocator *allocator)
   CK (OB_NOT_NULL(src) && src->is_collection());
   if (OB_SUCC(ret)) {
     void* data = NULL;
-    if (src->get_count() > 0) {
-      data = coll_allocator->alloc(src->get_count() * sizeof(ObObj));
+    if (src->get_inner_capacity() > 0) {
+      data = coll_allocator->alloc(src->get_inner_capacity() * sizeof(ObObj));
       if (OB_ISNULL(data)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for collection",
@@ -4437,6 +4449,9 @@ int ObPLCollection::assign(ObPLCollection *src, ObIAllocator *allocator)
         new (&new_objs[i])ObObj();
         OZ (ObPLComposite::assign_element(old_objs[i], new_objs[i], *coll_allocator));
       }
+      for (int64_t i = src->get_count(); OB_SUCC(ret) && i < src->get_inner_capacity(); ++i) {
+        new (&new_objs[i])ObObj();
+      }
     }
     if (OB_SUCC(ret)) {
       set_allocator(coll_allocator);
@@ -4445,9 +4460,9 @@ int ObPLCollection::assign(ObPLCollection *src, ObIAllocator *allocator)
       set_is_null(src->is_null());
       set_element_desc(src->get_element_desc());
       set_count(src->get_count());
-      set_first(src->get_first());
-      set_last(src->get_last());
-      set_data(new_objs);
+      set_first(src->get_pure_first());
+      set_last(src->get_pure_last());
+      set_data(new_objs, src->get_inner_capacity());
     }
   }
   return ret;
@@ -4674,8 +4689,8 @@ int ObPLCollection::get_serialize_size(int64_t &size)
   int ret = OB_SUCCESS;
   CK (is_inited());
   OX (size += serialization::encoded_length(get_count()));
-  OX (size += serialization::encoded_length(get_first()));
-  OX (size += serialization::encoded_length(get_last()));
+  OX (size += serialization::encoded_length(get_pure_first()));
+  OX (size += serialization::encoded_length(get_pure_last()));
   if (OB_SUCC(ret)) {
       char *data = reinterpret_cast<char *>(get_data());
       for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
@@ -4691,8 +4706,8 @@ int ObPLCollection::serialize(char* buf, const int64_t len, int64_t& pos)
   int ret = OB_SUCCESS;
   CK (is_inited());
   OZ (serialization::encode(buf, len, pos, get_count()));
-  OZ (serialization::encode(buf, len, pos, get_first()));
-  OZ (serialization::encode(buf, len, pos, get_last()));
+  OZ (serialization::encode(buf, len, pos, get_pure_first()));
+  OZ (serialization::encode(buf, len, pos, get_pure_last()));
 
   if (OB_SUCC(ret)) {
     char *data = reinterpret_cast<char *>(get_data());
@@ -4707,19 +4722,31 @@ int ObPLCollection::serialize(char* buf, const int64_t len, int64_t& pos)
 void ObPLCollection::print() const
 {
   int ret = OB_SUCCESS;
+  const int64_t *sort_array = nullptr;
+  const ObObj *key_array = nullptr;
   LOG_INFO("ObPLCollection Header", K(this), K(*this));
+
+#ifdef OB_BUILD_ORACLE_PL
+  if (is_associative_array()) {
+    sort_array = static_cast<const ObPLAssocArray*>(this)->get_sort();
+    key_array = static_cast<const ObPLAssocArray*>(this)->get_key();
+  }
+#endif // OB_BUILD_ORACLE_PL
+
   for (int64_t i = 0; i < count_; ++i) {
     ObObj &obj = data_[i];
+    const ObObj *key = key_array != nullptr ? &(key_array[i]) : nullptr;
+    const int64_t sort = sort_array != nullptr ? sort_array[i] : OB_INVALID_INDEX;
     if (obj.is_pl_extend()) {
       ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(obj.get_ext());
-      LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K(*composite));
+      LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K(sort), KPC(key), K(*composite));
       OX (composite->print());
     } else if (obj.is_varchar_or_char() && obj.get_data_length() > 100) {
-      LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K("xxx...xxx"));
+      LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K(sort), KPC(key), K("xxx...xxx"));
     } else if (obj.is_invalid_type()) {
-      LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K("deleted element"), K(obj));
+      LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K(sort), KPC(key), K("deleted element"), K(obj));
     } else {
-      LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K(obj));
+      LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K(sort), KPC(key), K(obj));
     }
   }
 }
@@ -5049,7 +5076,10 @@ int ObPLAssocArray::last(ObObj &result)
   } else if (NULL == get_key()) {
     result.set_int(last);
   } else {
-    CK (OB_NOT_NULL(get_key(last - 1)));
+    OV (OB_NOT_NULL(get_key(last - 1)), OB_ERR_UNEXPECTED, KPC(this), K(last_), K(last));
+    if (OB_FAIL(ret)) {
+      this->print();
+    }
     OX (result = *(get_key(last - 1)));
   }
   return ret;
@@ -5062,6 +5092,7 @@ int ObPLAssocArray::prior(int64_t idx, ObObj &result)
     OZ (ObPLCollection::prior(idx, result));
   } else if (OB_NOT_NULL(get_key()) && OB_NOT_NULL(get_sort())) {
     bool need_search = false;
+    result.set_null();
     if (IndexRangeType::LESS_THAN_FIRST == idx) {
       result.set_null();
     } else if (IndexRangeType::LARGE_THAN_LAST == idx) {
@@ -5079,25 +5110,20 @@ int ObPLAssocArray::prior(int64_t idx, ObObj &result)
       LOG_WARN("unexpected assoc array", K(ret), K(idx));
     }
     if (OB_SUCC(ret) && need_search) {
-      int64_t search = idx - 1;
-      do {
-        for (int64_t i = 0; i < get_count(); ++i) {
-          if (get_sort()[i] == search) {
-            search = i;
-            break;
-          }
-        }
-        if (search == (idx - 1)) {
-          for (int64_t i = 0; i < get_count(); ++i) {
-            LOG_WARN("debug assoc sort: ", K(i), K(get_sort()[i]));
-          }
-          result.set_null();
+      int64_t search = OB_INVALID_INDEX;
+      for (int64_t i = 0; i < get_count(); ++i) {
+        if (get_sort()[i] == (idx - 1)) {
+          search = i;
           break;
-        } else {
-          OZ (is_elem_deleted(search, need_search));
-          OX (idx = (search + 1));
         }
-      } while (OB_SUCC(ret) && need_search);
+      }
+      CK (search != OB_INVALID_INDEX);
+      OX (search = (search - 1));
+      while (OB_SUCC(ret) && need_search && search >= 0) {
+        OX (idx = get_sort()[search] + 1);
+        OZ (is_elem_deleted(idx - 1, need_search));
+        OX (search = (search - 1));
+      }
     }
     if (OB_SUCC(ret) && !need_search && idx >= 1 && idx <= get_count()) {
       CK (OB_NOT_NULL(get_key(idx - 1)));
@@ -5117,6 +5143,7 @@ int ObPLAssocArray::next(int64_t idx, ObObj &result)
     OZ (ObPLCollection::next(idx, result));
   } else if (OB_NOT_NULL(get_key()) && OB_NOT_NULL(get_sort())) {
     bool need_search = false;
+    result.set_null();
     if (IndexRangeType::LARGE_THAN_LAST == idx) {
       result.set_null();
     } else if (IndexRangeType::LESS_THAN_FIRST == idx) {
@@ -5139,15 +5166,23 @@ int ObPLAssocArray::next(int64_t idx, ObObj &result)
     }
     CK (idx <= get_count());
     if (OB_SUCC(ret) && need_search) {
-      do {
-        int64_t search = get_sort()[idx - 1];
-        if (OB_INVALID_INDEX == search) {
-          result.set_null();
+      int64_t search = OB_INVALID_INDEX;
+      for (int64_t i = 0; i < get_count(); ++i) {
+        if (get_sort()[i] == (idx - 1)) {
+          search = i;
           break;
         }
-        OZ (is_elem_deleted(search, need_search));
-        OX (idx = search + 1);
-      } while (OB_SUCC(ret) && need_search);
+      }
+      CK (search != OB_INVALID_INDEX && search < get_count());
+      int64_t i = 0;
+      OX (search = search + 1);
+      OX (i++);
+      while (OB_SUCC(ret) && need_search && search < get_count()) {
+        OX (idx = get_sort(search) + 1);
+        OZ (is_elem_deleted(idx - 1, need_search));
+        OX (search = search + 1);
+        OX (i++);
+      }
     }
     if (OB_SUCC(ret) && !need_search && idx > 0 && idx <= get_count()) {
       CK (OB_NOT_NULL(get_key(idx - 1)));
@@ -5186,18 +5221,18 @@ int ObPLAssocArray::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
   CK (OB_NOT_NULL(src));
   CK (src->is_associative_array());
   OZ (ObPLCollection::deep_copy(src, allocator, ignore_del_element));
-  if (OB_SUCC(ret) && src->get_count() > 0) {
+  if (OB_SUCC(ret) && src->get_inner_capacity() > 0) {
     ObPLAssocArray *src_aa = static_cast<ObPLAssocArray*>(src);
     CK (OB_NOT_NULL(src_aa));
     if (OB_FAIL(ret)) {
     } else if (NULL != src_aa->get_key() && NULL != src_aa->get_sort()) {
       CK (OB_NOT_NULL(get_allocator()));
-      OX (key = static_cast<ObObj*>(get_allocator()->alloc(src->get_count() * sizeof(ObObj))));
+      OX (key = static_cast<ObObj*>(get_allocator()->alloc(src->get_inner_capacity() * sizeof(ObObj))));
       OV (OB_NOT_NULL(key), OB_ALLOCATE_MEMORY_FAILED);
       for (int64_t i = 0; OB_SUCC(ret) && i < src->get_count(); ++i) {
         new(key + i)ObObj(ObNullType);
       }
-      OX (sort = static_cast<int64_t*>(get_allocator()->alloc(src->get_count() * sizeof(int64_t))));
+      OX (sort = static_cast<int64_t*>(get_allocator()->alloc(src->get_inner_capacity() * sizeof(int64_t))));
       OV (OB_NOT_NULL(sort), OB_ALLOCATE_MEMORY_FAILED);
       for (int64_t i = 0; OB_SUCC(ret) && i < src->get_count(); ++i) {
         OZ (deep_copy_obj(*get_allocator(), *(src_aa->get_key(i)), key[i]));
@@ -5231,110 +5266,84 @@ int ObPLAssocArray::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
 int ObPLAssocArray::update_first()
 {
   int ret = OB_SUCCESS;
-  if (!is_inited()) {
-    ret = OB_ERR_COLLECION_NULL;
-    LOG_WARN("pl collection is not inited", K(ret));
-  } else if (0 > get_count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("collection is empty", K(get_count()), K(ret));
+  CK (is_inited());
+  CK (get_count() > 0);
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(get_key()) && OB_ISNULL(get_sort())) {
+    update_first_impl();
   } else {
-    if (OB_ISNULL(get_key()) && OB_ISNULL(get_sort())) {
-      update_first_impl();
-    } else if (OB_NOT_NULL(get_key()) && OB_NOT_NULL(get_sort())){
-      int64_t first = first_ - 1;
-      if (OB_INVALID_INDEX == first_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid firt property", K(first), K(last_));
-      } else {
-        bool is_deleted = false;
-        int64_t i = 0;
-        do {
-          if (OB_FAIL(is_elem_deleted(first, is_deleted))) {
-            LOG_WARN("test element deleted failed.", K(ret));
-          } else {
-            if (is_deleted) {
-              OX (first = get_sort()[first]);
-              //这是最后一个了，都没有找到，就不存在.
-              if (0 > first) {
-                OX (set_first(OB_INVALID_INDEX));
-                break;
-              }
-            } else {
-              OX (set_first(first + 1));
-              break;
-            }
-            ++i;
-          }
-        } while (i < count_ && OB_SUCC(ret));
-        if (i >= count_) {
-          OX(set_first(OB_INVALID_INDEX));
+    int64_t first = OB_INVALID_INDEX;
+    bool is_deleted = false;
+    int64_t i = first_ - 1;
+    CK (OB_NOT_NULL(get_key()) && OB_NOT_NULL(get_sort()));
+    CK (first_ > 0 && first_ <= get_count());
+    do {
+      OX (first = get_sort()[i]);
+      OZ (is_elem_deleted(first, is_deleted));
+      if (OB_FAIL(ret)) {
+      } else if (is_deleted) {
+        i += 1;
+        if (i >= get_count()) {
+          OX (set_first(OB_INVALID_INDEX));
+          break;
         }
+      } else {
+        first_ = i + 1;
+        break;
       }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("illegal status of assocative array.", K(count_));
-    }
+    } while (i < get_count() && OB_SUCC(ret));
   }
   return ret;
 }
 
-
 int ObPLAssocArray::update_last()
 {
   int ret = OB_SUCCESS;
-   if (!is_inited()) {
-    ret = OB_ERR_COLLECION_NULL;
-    LOG_WARN("pl collection is not inited", K(ret));
-  } else if (0 > get_count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("collection is empty", K(get_count()), K(ret));
+  CK (is_inited());
+  CK (get_count() > 0);
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(get_key()) && OB_ISNULL(get_sort())) {
+    update_last_impl();
   } else {
-    if (OB_ISNULL(get_key()) && OB_ISNULL(get_sort())) {
-      update_last_impl();
-    } else if (OB_NOT_NULL(get_key()) && OB_NOT_NULL(get_sort())){
-      int64_t last = last_ - 1;
-      if (OB_INVALID_INDEX == last_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid last property", K(ret), K(last), K(first_), K(count_));
-      } else {
-        bool is_deleted = false;
-        int64_t i = 0;
-        int64_t tmp_last = last;
-        do {
-          if (OB_FAIL(is_elem_deleted(tmp_last, is_deleted))) {
-            LOG_WARN("test element deleted failed.", K(ret));
-          } else {
-            if (is_deleted) {
-              for (int j = 0; OB_SUCC(ret) && j < count_; ++j) {
-                if (get_sort()[j] == tmp_last) {
-                  tmp_last = j;
-                  break;
-                }
-              }
-              // 没有前面的元素，可能只有一个
-              if (tmp_last == last) {
-                if (1 == count_) {
-                  OX (set_last(OB_INVALID_INDEX));
-                } else {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("illegal assoc array status", K(count_), K(first_), K(last_));
-                }
-                break;
-              }
-            } else {
-              OX (set_last(tmp_last + 1));
-              break;
-            }
-            ++i;
-          }
-        } while (i < count_ && OB_SUCC(ret));
-        if (i >= count_) {
-          OX(set_last(OB_INVALID_INDEX));
+    int64_t last = OB_INVALID_INDEX;
+    bool is_deleted = false;
+    int64_t i = last_ - 1;
+    CK (OB_NOT_NULL(get_key()) && OB_NOT_NULL(get_sort()));
+    CK (last_ > 0 && last_ <= get_count());
+    do {
+      OX (last = get_sort()[i]);
+      OZ (is_elem_deleted(last, is_deleted));
+      if (OB_FAIL(ret)) {
+      } else if (is_deleted) {
+        i -= 1;
+        if (i < 0) {
+          OX (set_last(OB_INVALID_INDEX));
+          break;
         }
+      } else {
+        last_ = i + 1;
+        break;
       }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("illegal status of assocative array.", K(count_));
+    } while (i >= 0 && OB_SUCC(ret));
+  }
+  return ret;
+}
+
+int ObPLAssocArray::update_first_last(int64_t new_update)
+{
+  int ret = OB_SUCCESS;
+  CK (is_inited());
+  CK (get_count() > 0);
+  CK (OB_NOT_NULL(get_key()) && OB_NOT_NULL(get_sort()));
+  OX (new_update = new_update + 1);
+  if (OB_SUCC(ret)) {
+    if ((first_ != OB_INVALID_INDEX && new_update < first_)
+        || OB_INVALID_INDEX == first_) {
+      set_first(new_update);
+    }
+    if ((last_ != OB_INVALID_INDEX && new_update > last_)
+        || OB_INVALID_INDEX == last_) {
+      set_last(new_update);
     }
   }
   return ret;
@@ -5342,24 +5351,28 @@ int ObPLAssocArray::update_last()
 
 int64_t ObPLAssocArray::get_first()
 {
-  return first_;
+  return (get_sort() != NULL && first_ != OB_INVALID_INDEX && first_ >= 1 && first_ <= get_count()) ? get_sort()[first_ - 1] + 1 : first_;
 }
 
 int64_t ObPLAssocArray::get_last()
 {
-  return last_;
+  return (get_sort() != NULL && last_ != OB_INVALID_INDEX && last_ >= 1 && last_ <= get_count()) ? get_sort()[last_ - 1] + 1 : last_;
 }
 
 int ObPLAssocArray::get_serialize_size(int64_t &size)
 {
   int ret = OB_SUCCESS;
   int64_t key_sort_cnt = 0; // 紧密数组, key和sort是null
+  ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  int64_t* compatible_sort = NULL;
+  OZ (get_compatible_sort(allocator, compatible_sort));
   OZ (ObPLCollection::get_serialize_size(size));
   OX (key_sort_cnt = OB_NOT_NULL(get_key()) ? get_count() : 0);
   OX (size += serialization::encoded_length(key_sort_cnt));
   for (int64_t i = 0; OB_SUCC(ret) && i < key_sort_cnt; ++i) {
+    CK (OB_NOT_NULL(compatible_sort));
     OZ (size += get_key(i)->get_serialize_size());
-    OX (size += serialization::encoded_length(get_sort(i)));
+    OX (size += serialization::encoded_length(compatible_sort[i]));
   }
   return ret;
 }
@@ -5404,6 +5417,244 @@ int ObPLAssocArray::deserialize(common::ObIAllocator &allocator,
       OZ (serialization::decode(buf, len, pos, get_sort()[i]));
     }
   }
+  return ret;
+}
+
+int ObPLAssocArray::compare_key(const ObObj &key1, const ObObj &key2, int &comp_ret)
+{
+  int ret = OB_SUCCESS;
+
+  ObCollationType cs_type = key1.get_collation_type();
+  OV ((key1.is_int32() && key2.is_int32())
+      || (key1.is_varchar() && key2.is_varchar()
+          && key1.get_collation_type() == key2.get_collation_type()
+          && key1.get_collation_type() != ObCollationType::CS_TYPE_INVALID),
+    OB_ERR_UNEXPECTED, K(key1), K(key2));
+
+  if (OB_FAIL(ret)) {
+  } else if (key1.is_int32()) {
+    comp_ret = key1.get_int32() == key2.get_int32() ? 0 : key1.get_int32() > key2.get_int32() ? 1 : -1;
+  } else {
+    int val = ObCharset::strcmpsp(cs_type,
+                                  key1.v_.string_, key1.val_len_,
+                                  key2.v_.string_, key2.val_len_,
+                                  is_calc_with_end_space(key1.get_type(), key2.get_type(), lib::is_oracle_mode(), cs_type, cs_type));
+    comp_ret = val == 0 ? 0 : val > 0 ? 1 : -1;
+  }
+  return ret;
+}
+
+int ObPLAssocArray::search_key(const ObObj &key, int64_t &index, int64_t &search_end, int64_t sort_count)
+{
+  int ret = OB_SUCCESS;
+  index = OB_INVALID_INDEX;
+  search_end = OB_INVALID_INDEX;
+  if (OB_NOT_NULL(this->get_key())) {
+    int64_t low = 0;
+    int64_t high = sort_count - 1;
+    while (low <= high) {
+      int64_t mid = (high + low) / 2;
+      ObObj& cur_key = this->get_key()[this->get_sort()[mid]];
+      int comp_ret = 0;
+      OZ (compare_key(key, cur_key, comp_ret), K(mid));
+      if (OB_FAIL(ret)) {
+        this->print();
+        break;
+      } else if (-1 == comp_ret) { // less
+        high = mid - 1;
+        search_end = mid;
+      } else if (1 == comp_ret) { // greater
+        low = mid + 1;
+        search_end = mid + 1;
+      } else {
+        index = this->get_sort()[mid];
+        search_end = mid;
+        break;
+      }
+    }
+  } else if (sort_count > 0) {
+    int32_t key_int;
+    CK (key.is_int32());
+    OX (key_int = key.get_int32() - 1);
+    if (OB_SUCC(ret) && key_int >= 0 && key_int < sort_count) {
+      index = key_int;
+      search_end = key_int;
+    }
+  }
+  return ret;
+}
+
+int ObPLAssocArray::get_compatible_sort(ObIAllocator &allocator, int64_t *&compatible_sort)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(get_sort()) && (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_5_1 ||
+     (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1))) {
+    compatible_sort = reinterpret_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * get_count()));
+    if (OB_ISNULL(compatible_sort)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for sort array", K(ret), KPC(this));
+    }
+    OX (MEMSET(compatible_sort, 0, sizeof(int64_t) * get_count()));
+    OX (compatible_sort[get_sort()[get_count() - 1]] = OB_INVALID_INDEX);
+    for (int64_t i = get_count() - 2; OB_SUCC(ret) && i >= 0; --i) {
+      OX (compatible_sort[get_sort()[i]] = get_sort()[i + 1]);
+    }
+  } else {
+    compatible_sort = get_sort();
+  }
+  return ret;
+}
+
+int ObPLAssocArray::rebuild_sort(ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  if (obj.is_pl_extend()) {
+    switch (obj.get_meta().get_extend_type()) {
+      case PL_NESTED_TABLE_TYPE:
+      case PL_ASSOCIATIVE_ARRAY_TYPE:
+      case PL_VARRAY_TYPE: {
+        ObPLCollection *coll = reinterpret_cast<ObPLCollection *>(obj.get_ext());
+        if (OB_NOT_NULL(coll)) {
+          for (int64_t i = 0; i < coll->get_count(); ++i) {
+            CK (OB_NOT_NULL(coll->get_data()));
+            OZ (SMART_CALL(rebuild_sort(coll->get_data()[i])));
+          }
+          if (coll->is_associative_array()) {
+            ObPLAssocArray *assoc_array = static_cast<ObPLAssocArray *>(coll);
+            CK (OB_NOT_NULL(assoc_array));
+            OZ (assoc_array->rebuild_sort());
+          }
+        }
+      } break;
+      case PL_RECORD_TYPE: {
+        ObPLRecord *record = reinterpret_cast<ObPLRecord *>(obj.get_ext());
+        if (OB_NOT_NULL(record)) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
+            ObObj elem;
+            OZ (record->get_element(i, elem));
+            OZ (SMART_CALL(rebuild_sort(elem)));
+          }
+        }
+      } break;
+      default: {
+        // do nothing ...
+      } break;
+    }
+  }
+  return ret;
+}
+
+int ObPLAssocArray::rebuild_sort()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(get_sort())) {
+    CK (OB_NOT_NULL(get_sort()) && OB_NOT_NULL(get_key()));
+    OX (MEMSET(get_sort(), 0, sizeof(int64_t) * get_count()));
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
+      int64_t index = OB_INVALID_INDEX;
+      int64_t search_end = OB_INVALID_INDEX;
+      OZ (search_key(get_key()[i], index, search_end, i));
+      CK (OB_INVALID_INDEX == index);
+      if (OB_FAIL(ret)) {
+        this->print();
+      }
+      OZ (insert_sort(get_key()[i], i, search_end, i));
+    }
+    if (get_count() > 0) {
+      OX (first_ = 1);
+      OX (last_ = get_count());
+      OZ (update_first());
+      OZ (update_last());
+    }
+  }
+  return ret;
+}
+
+int ObPLAssocArray::insert_sort(
+  const ObObj &key, int64_t key_position, int64_t &sort_position, int64_t sort_count)
+{
+  int ret = OB_SUCCESS;
+  int64_t key_index = OB_INVALID_INDEX;
+  ObObj key_value;
+  if (sort_position == OB_INVALID_INDEX) { // no sort and no key, insert to first position
+    CK (0 == sort_count);
+    CK (0 == key_position);
+    OX (this->get_sort()[0] = key_position);
+  } else if (sort_position == sort_count) { // last position
+    CK (key_position == sort_count);
+    OX (this->get_sort()[sort_position] = key_position);
+  } else { // mid position
+    int comp_ret = 0;
+    OX (key_index = this->get_sort()[sort_position]);
+    OX (key_value = this->get_key()[key_index]);
+    OZ (compare_key(key, key_value, comp_ret));
+    OV (comp_ret == -1, OB_ERR_UNEXPECTED, K(key), KPC(this), K(sort_position));
+#ifndef NDEBUG
+    if (OB_FAIL(ret)) {
+      this->print();
+    }
+#endif
+    // already extend sort memory on extend_assoc_array, so can move memory safety.
+    OX (MEMMOVE(this->get_sort() + sort_position + 1, this->get_sort() + sort_position, sizeof(int64_t) * (sort_count - sort_position)));
+    OX (this->get_sort()[sort_position] = key_position);
+    if (OB_SUCC(ret)) { // first_ and last_ is sort array position, if move sort memory, need to update first_, last_
+      if (first_ > sort_position) {
+        first_ += 1;
+      }
+      if (last_ > sort_position) {
+        last_ += 1;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPLAssocArray::reserve_assoc_key()
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(get_allocator()));
+  CK (get_count() != 0);
+  CK (OB_ISNULL(get_key()) && OB_ISNULL(get_sort()));
+
+#define RESERVE_ASSOC_ARRAY(TYPE, PROPERTY) \
+  do { \
+    if (OB_SUCC(ret)) { \
+      TYPE *addr = static_cast<TYPE *>(get_allocator()->alloc(sizeof(TYPE) * get_count())); \
+      if (OB_ISNULL(addr)) { \
+        ret = OB_ALLOCATE_MEMORY_FAILED; \
+        LOG_WARN("alloc failed", KPC(this), K(get_count()), K(sizeof(TYPE)), K(ret)); \
+      } else { \
+        set_##PROPERTY(addr); \
+      } \
+    } \
+  } while(0)
+
+  if (OB_SUCC(ret)) {
+    RESERVE_ASSOC_ARRAY(ObObj, key);
+
+    RESERVE_ASSOC_ARRAY(int64_t, sort);
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
+      OX (get_key(i)->set_int32(i + 1));
+      OZ (set_sort(i, i));
+    }
+    OX (set_first(1));
+    OX (set_last(get_count()));
+
+    if (OB_FAIL(ret)) {
+      if (nullptr != get_key()) {
+        get_allocator()->free(get_key());
+      }
+      if (nullptr != get_sort()) {
+        get_allocator()->free(get_sort());
+      }
+      set_key(nullptr);
+      set_sort(nullptr);
+    }
+  }
+
+#undef RESERVE_ASSOC_ARRAY
   return ret;
 }
 

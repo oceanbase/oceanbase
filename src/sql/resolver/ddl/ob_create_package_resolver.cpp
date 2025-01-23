@@ -194,6 +194,7 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
                                                     create_package_arg.dependency_infos_,
                                                     ObObjectType::PACKAGE,
                                                     0, dep_attr, dep_attr));
+            OZ (ob_add_ddl_dependency(package_ast.get_dependency_table(), create_package_arg));
           }
           if (OB_SUCC(ret)) {
             ObErrorInfo &error_info = create_package_arg.error_info_;
@@ -707,6 +708,7 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
                                                 stmt->get_create_package_arg().dependency_infos_,
                                                 ObObjectType::PACKAGE_BODY,
                                                 0, dep_attr, dep_attr));
+            OZ (ob_add_ddl_dependency(package_body_ast.get_dependency_table(), stmt->get_create_package_arg()));
           }
         }
       } // end of WIHT_CONTEXT

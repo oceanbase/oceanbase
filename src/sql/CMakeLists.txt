@@ -551,6 +551,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_array_remove.cpp
   engine/expr/ob_expr_extract_cert_expired_time.cpp
   engine/expr/ob_expr_transaction_id.cpp
+  engine/expr/ob_expr_ora_login_user.cpp
   engine/expr/ob_expr_inner_row_cmp_val.cpp
   engine/expr/ob_expr_last_refresh_scn.cpp
   engine/expr/ob_expr_json_utils.cpp
@@ -606,6 +607,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_st_within.cpp
   engine/expr/ob_expr_sql_mode_convert.cpp
   engine/expr/ob_expr_can_access_trigger.cpp
+  engine/expr/ob_expr_mysql_proc_info.cpp
   engine/expr/ob_expr_get_mysql_routine_parameter_type_str.cpp
   engine/expr/ob_expr_prefix_pattern.cpp
   engine/expr/ob_expr_sys_makexml.cpp

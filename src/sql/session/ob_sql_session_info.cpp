@@ -275,6 +275,7 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
     sequence_currval_map_.clear();
     dblink_sequence_id_map_.clear();
     contexts_map_.clear();
+    sock_fd_map_.clear();
   }
   return ret;
 }
@@ -336,6 +337,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     package_state_map_.reuse();
     sequence_currval_map_.reuse();
     dblink_sequence_id_map_.reuse();
+    sock_fd_map_.reuse();
     curr_session_context_size_ = 0;
     pl_context_ = NULL;
     pl_can_retry_ = true;
@@ -779,6 +781,10 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
       // unexpectedly when inner session exists
       if (is_user_session() && OB_FAIL(ObPLUtlFile::close_all(session_id))) {
         LOG_WARN("failed to close all fd in utl file", K(ret), K(session_id));
+      }
+
+      if (is_user_session() && OB_FAIL(ObPLUtlTcp::close_all_conns(sock_fd_map_))) {
+        LOG_WARN("failed to close all utl_tcp connections", K(ret), K(session_id));
       }
     }
 #endif

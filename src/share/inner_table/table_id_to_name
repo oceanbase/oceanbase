@@ -475,7 +475,6 @@
 # 12009: user
 # 12010: db
 # 12013: __all_virtual_lock_wait_stat
-# 12030: proc
 # 12031: __tenant_virtual_collation
 # 12032: __tenant_virtual_charset
 # 12033: __all_virtual_tenant_memstore_allocator_info
@@ -2386,6 +2385,7 @@
 # 21621: V$OB_FUNCTION_IO_STAT
 # 21622: DBA_OB_TEMP_FILES
 # 21623: CDB_OB_TEMP_FILES
+# 21628: proc
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS

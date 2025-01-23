@@ -499,51 +499,115 @@ int ObExprInOrNotIn::calc_result_typeN(ObExprResType &type,
  *    b. NULL if none of them is TRUE, and at least one of them is NULL
  *    c. FALSE if all of them are FALSE
 */
-// forbid composite types in IN expr before composite types comparison is refactored
 int ObExprInOrNotIn::eval_pl_udt_in(const ObExpr &expr,
                                     ObEvalCtx &ctx,
                                     ObDatum &expr_datum)
 {
-  int ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "IN expr for composite types is");
-  LOG_WARN("IN expr for composite types is not supported", K(expr));
-  // CollectionPredRes res = CollectionPredRes::COLL_PRED_INVALID;
-  // ObDatum *left = NULL;
-  // ObDatum *right = NULL;
-  // pl::ObPLCollection *coll = NULL;
-  // bool is_any_result_null = false;
-  // OZ(expr.args_[0]->eval(ctx, left));
-  // if (OB_SUCC(ret)) {
-  //   coll = reinterpret_cast<pl::ObPLCollection *>(left->get_ext());
-  //   const ObExpr *row = expr.args_[1];
-  //   for (int64_t i = 0; OB_SUCC(ret) && i < row->arg_cnt_; ++i) {
-  //     OZ(row->args_[i]->eval(ctx, right));
-  //     CollectionPredRes eq_cmp_res = COLL_PRED_INVALID;
-  //     if (OB_SUCC(ret)) {
-  //       if (OB_FAIL(ObRelationalExprOperator::pl_udt_compare2(
-  //                   eq_cmp_res, *left->extend_obj_, *right->extend_obj_,
-  //                   ctx.exec_ctx_, CO_EQ))) {
-  //         LOG_WARN("failed to compare to nest table", K(ret));
-  //       } else {
-  //         res = static_cast<CollectionPredRes>(eq_cmp_res);
-  //         if (COLL_PRED_TRUE == res) {
-  //           break;
-  //         } else if (COLL_PRED_NULL == res) {
-  //           is_any_result_null = true;
-  //         }
-  //       }
-  //     }
-  //     if (OB_SUCC(ret)) {
-  //       if (COLL_PRED_TRUE == res) {
-  //         set_datum_result(T_OP_IN == expr.type_, true, false, expr_datum);
-  //       } else if (is_any_result_null) {
-  //         set_datum_result(T_OP_IN == expr.type_, false, true, expr_datum);
-  //       } else {
-  //         set_datum_result(T_OP_IN == expr.type_, false, false, expr_datum);
-  //       }
-  //     }
-  //   }
-  // }
+  int ret = OB_SUCCESS;
+
+  static constexpr char CMP_PL[] = "declare\n"
+                                   "cmp boolean := FALSE;\n"
+                                   "begin\n"
+                                   "cmp := (:lhs = :rhs);\n"
+                                   ":result := cmp;\n"
+                                   "end;";
+
+  ObDatum *val = nullptr;
+  ObDatum *curr = nullptr;
+  const ObExpr *list = nullptr;
+
+  ObObj lhs;
+  ObObj rhs;
+  ObObj result;
+
+  pl::ObPLComposite *left = nullptr;
+  pl::ObPLComposite *right = nullptr;
+
+  bool is_equal = false;
+  bool has_null = false;
+
+  CK (OB_NOT_NULL(GCTX.pl_engine_));
+  CK (2 == expr.arg_cnt_);
+  CK (OB_NOT_NULL(expr.args_[0]));
+  OZ (expr.args_[0]->eval(ctx, val));
+  CK (OB_NOT_NULL(val));
+  OZ (val->to_obj(lhs, expr.args_[0]->obj_meta_));
+  CK (OB_NOT_NULL(left = reinterpret_cast<pl::ObPLComposite*>(lhs.get_ext())))
+  OX (list = expr.args_[1]);
+  CK (OB_NOT_NULL(list));
+
+  if (OB_SUCC(ret)) {
+    ObArenaAllocator alloc;
+    ParamStore params((ObWrapperAllocator(alloc)));
+
+    ObBitSet<> out_args;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < list->arg_cnt_; ++i) {
+      result.set_bool(false);
+      params.reuse();
+
+      if (OB_FAIL(list->args_[i]->eval(ctx, curr))) {
+        LOG_WARN("failed to eval IN list expr", K(ret), K(i), KPC(list));
+      } else if (OB_ISNULL(curr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL datum", K(ret), K(i), KPC(list));
+      } else if (OB_FAIL(curr->to_obj(rhs, list->args_[i]->obj_meta_))) {
+        LOG_WARN("failed to convert IN list datum to obj",
+                 K(ret), K(i), KPC(list), KPC(curr), K(rhs));
+      } else if (OB_ISNULL(right = reinterpret_cast<pl::ObPLComposite*>(rhs.get_ext()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL udt", K(ret), K(i), KPC(list), K(rhs));
+      } else if (OB_UNLIKELY(left->get_id() != right->get_id())) {
+        ret = OB_ERR_CALL_WRONG_ARG;
+
+        static const ObString err_arg = "IN or NOT IN clause";
+        LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, err_arg.length(), err_arg.ptr());
+        LOG_WARN("failed to eval_pl_udt_in", K(ret), KPC(left), KPC(right));
+      } else if (OB_FAIL(params.push_back(lhs))) {
+        LOG_WARN("failed to push back lhs", K(ret), K(lhs), K(params));
+      } else if (OB_FAIL(params.push_back(rhs))) {
+        LOG_WARN("failed to push back rhs", K(ret), K(rhs), K(params));
+      } else if (OB_FAIL(params.push_back(result))) {
+        LOG_WARN("failed to push back result", K(ret), K(result), K(params));
+      } else {
+        params.at(0).set_udt_id(left->get_id());
+        params.at(0).set_param_meta();
+
+        params.at(1).set_udt_id(right->get_id());
+        params.at(1).set_param_meta();
+
+        params.at(2).set_param_meta();
+      }
+
+      if (OB_SUCC(ret)) {
+        is_equal = false;
+        out_args.reuse();
+
+        if (OB_FAIL(ObExprMultiSet::eval_composite_relative_anonymous_block(ctx.exec_ctx_,
+                                                                            CMP_PL,
+                                                                            params,
+                                                                            out_args))) {
+          LOG_WARN("failed to execute PS anonymous bolck",
+                   K(ret), K(i), K(lhs), K(rhs), K(params));
+        } else if (out_args.num_members() != 1 || !out_args.has_member(2)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected out args",
+                   K(ret), K(i), K(lhs), K(rhs), K(params), K(out_args));
+        } else if (params.at(2).is_null()) {
+          has_null = true;
+        } else if (OB_FAIL(params.at(2).get_bool(is_equal))) {
+          LOG_WARN("failed to get bool result from out arg", K(ret), K(i), K(params));
+        } else if (is_equal) {
+          break;
+        } else {
+          // do nothing
+        }
+      }
+    }
+
+    OX (set_datum_result(T_OP_IN == expr.type_, is_equal, has_null, expr_datum));
+  }
+
   return ret;
 }
 

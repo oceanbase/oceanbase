@@ -1403,7 +1403,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_PROC_TID: {
+          case OB_ALL_VIRTUAL_PROC_OLD_TID: {
             ObMySQLProcTable *mysql_proc_table = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObMySQLProcTable, mysql_proc_table))) {
               mysql_proc_table->set_tenant_id(real_tenant_id);

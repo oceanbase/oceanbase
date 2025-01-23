@@ -2437,7 +2437,7 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
           OZ (process_array_element(i, *local_allocator, pl_array->buffer, *current_obj, tz_info));
         }
         if (OB_SUCC(ret)) {
-          coll->set_data(new_data);
+          coll->set_data(new_data, array_size);
           coll->set_count(array_size);
           coll->set_first(1);
           coll->set_last(array_size);
@@ -2527,7 +2527,7 @@ int ObMySQLProcStatement::process_array_out_param(const pl::ObCollectionType *co
             }
           } // end for array_size
           if (OB_SUCC(ret)) {
-            coll->set_data(new_data);
+            coll->set_data(new_data, array_size);
             coll->set_count(array_size);
             coll->set_first(1);
             coll->set_last(array_size);

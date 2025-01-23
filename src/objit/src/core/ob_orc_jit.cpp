@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_CG
+#define USING_LOG_PREFIX PL
 #include "core/ob_orc_jit.h"
 
 #include <iostream>
@@ -47,6 +47,7 @@
 #else
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
 #endif
+#include "core/ob_pl_ir_compiler.h"
 
 using namespace llvm;
 using namespace llvm::orc;
@@ -91,6 +92,17 @@ int ObOrcJit::init()
       ObjLinkingLayer->registerJITEventListener(NotifyLoaded);
       return ObjLinkingLayer;
     });
+
+    ObEngineBuilder.setCompileFunctionCreator(
+      [this] (JITTargetMachineBuilder JTMB)
+          -> Expected<std::unique_ptr<IRCompileLayer::IRCompiler>> {
+        auto tm = JTMB.createTargetMachine();
+        if (!tm) {
+          return tm.takeError();
+        }
+        return std::make_unique<ObPLIRCompiler>(*this, std::move(*tm));
+      }
+    );
 
     auto tm_builder_wrapper = JITTargetMachineBuilder::detectHost();
 

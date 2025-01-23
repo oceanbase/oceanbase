@@ -25760,6 +25760,31 @@ int ObDDLService::drop_trigger_in_drop_table(ObMySQLTransaction &trans,
   return ret;
 }
 
+int ObDDLService::drop_trigger_in_drop_user(ObMySQLTransaction &trans,
+                                            ObDDLOperator &ddl_operator,
+                                            ObSchemaGetterGuard &schema_guard,
+                                            const uint64_t tenant_id,
+                                            const uint64_t user_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t trigger_id = OB_INVALID_ID;
+  const ObTriggerInfo *trigger_info = NULL;
+  const ObUserInfo *user_info = NULL;
+  OZ (schema_guard.get_user_info(tenant_id, user_id, user_info));
+  OV (OB_NOT_NULL(user_info));
+  if (OB_SUCC(ret)) {
+    const ObIArray<uint64_t> &trigger_id_list = user_info->get_trigger_list();
+    for (int64_t i = 0; OB_SUCC(ret) && i < trigger_id_list.count(); i++) {
+      OX (trigger_id = trigger_id_list.at(i));
+      OZ (schema_guard.get_trigger_info(tenant_id, trigger_id, trigger_info), trigger_id);
+      OV (OB_NOT_NULL(trigger_info), OB_ERR_UNEXPECTED, trigger_id);
+      OV (!trigger_info->is_in_recyclebin(), OB_ERR_UNEXPECTED, trigger_id);
+      OZ (ddl_operator.drop_trigger(*trigger_info, trans, NULL));
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::flashback_table_from_recyclebin_in_trans(const ObTableSchema &table_schema,
                                            const uint64_t new_db_id,
                                            const ObString &new_table_name,
@@ -34416,6 +34441,8 @@ int ObDDLService::drop_user_in_trans(const uint64_t tenant_id,
     if (OB_INVALID_ID == user_id) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("User id is invalid", K(ret), K(user_id));
+    } else if (OB_FAIL(drop_trigger_in_drop_user(trans, ddl_operator, schema_guard, tenant_id, user_id))) {
+      LOG_WARN("failed to drop triggers", K(ret), K(tenant_id), K(user_id));
     } else if (OB_FAIL(ddl_operator.drop_user(tenant_id, user_id, (0 == i) ? ddl_stmt_str : NULL, trans))) {
       LOG_WARN("failed to drop user", K(ret), K(tenant_id), K(user_id));
     } else {
@@ -38238,11 +38265,18 @@ int ObDDLService::create_trigger(const ObCreateTriggerArg &arg,
   uint64_t tenant_id = OB_INVALID_ID;
   uint64_t trigger_database_id = OB_INVALID_ID;
   uint64_t base_object_id = OB_INVALID_ID;
-  ObSchemaType base_object_type = OB_MAX_SCHEMA;
+  ObSchemaType base_object_type = static_cast<ObSchemaType>(arg.trigger_info_.get_base_object_type());
   const ObString &trigger_database = arg.trigger_database_;
   const ObString &base_object_database = arg.base_object_database_;
   const ObString &base_object_name = arg.base_object_name_;
-  if (OB_FAIL(new_trigger_info.assign(arg.trigger_info_))) {
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(arg.trigger_info_.get_tenant_id(), data_version))) {
+     LOG_WARN("failed to get data version", K(ret));
+  } else if (arg.trigger_info_.is_system_type() && (data_version < MOCK_DATA_VERSION_4_2_5_1 ||
+            (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_5_1))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "system trigger is");
+  } else if (OB_FAIL(new_trigger_info.assign(arg.trigger_info_))) {
     LOG_WARN("assign trigger_info failed", K(ret));
   } else if (FALSE_IT(tenant_id = new_trigger_info.get_tenant_id())) {
   } else {
@@ -38346,6 +38380,8 @@ int ObDDLService::drop_trigger(const ObDropTriggerArg &arg)
     LOG_WARN("variable is not init");
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("get schema guard in inner table failed", K(ret));
+  } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+    LOG_WARN("check parallel ddl conflict failed", K(ret));
   } else if (OB_FAIL(get_database_id(schema_guard, tenant_id,
                                      trigger_database, trigger_database_id))) {
     LOG_WARN("get database id failed", K(ret));
@@ -38422,6 +38458,7 @@ int ObDDLService::alter_trigger(const ObAlterTriggerArg &arg,
   OZ (check_inner_stat());
   OX (tenant_id = arg.exec_tenant_id_);
   OZ (get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard));
+  OZ (check_parallel_ddl_conflict(schema_guard, arg));
   OZ (schema_guard.get_schema_version(tenant_id, refreshed_schema_version));
   if (OB_SUCC(ret)) {
     ObDDLSQLTransaction trans(schema_service_);
@@ -40669,24 +40706,40 @@ int ObDDLService::get_object_info(ObSchemaGetterGuard &schema_guard,
 {
   int ret = OB_SUCCESS;
   uint64_t database_id = OB_INVALID_ID;
-  const ObTableSchema *table_schema = NULL;
-  if (OB_FAIL(get_database_id(schema_guard, tenant_id, object_database, database_id))) {
-    LOG_WARN("failed to get database id", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_id,
-                                                   object_name, false, table_schema))) {
-    LOG_WARN("failed to get table schema", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_BAD_TABLE;
-    LOG_WARN("table schema is invalid", K(ret), K(object_name), K(object_name));
-  } else if (table_schema->is_in_recyclebin()) {
-    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
-    LOG_WARN("table is in recyclebin", K(ret), K(object_name), K(object_name));
-  } else if (!table_schema->is_user_table() && !table_schema->is_user_view()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("trigger only support create on user table or user view now", K(ret));
+  if (TABLE_SCHEMA == object_type || VIEW_SCHEMA == object_type) {
+    const ObTableSchema *table_schema = NULL;
+    if (OB_FAIL(get_database_id(schema_guard, tenant_id, object_database, database_id))) {
+      LOG_WARN("failed to get database id", K(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_id,
+                                                    object_name, false, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(tenant_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_BAD_TABLE;
+      LOG_WARN("table schema is invalid", K(ret), K(object_name), K(object_name));
+    } else if (table_schema->is_in_recyclebin()) {
+      ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+      LOG_WARN("table is in recyclebin", K(ret), K(object_name), K(object_name));
+    } else if (!table_schema->is_user_table() && !table_schema->is_user_view()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("trigger only support create on user table or user view now", K(ret));
+    } else {
+      object_type = table_schema->is_user_table() ? TABLE_SCHEMA : VIEW_SCHEMA;
+      object_id = table_schema->get_table_id();
+    }
+  } else if (USER_SCHEMA == object_type || DATABASE_SCHEMA == object_type) {
+    const ObUserInfo *user_info = NULL;
+    ObString host_name("%");
+    if (OB_FAIL(schema_guard.get_user_info(tenant_id, object_name, host_name, user_info))) {
+      LOG_WARN("get user info failed", K(ret), K(object_name), K(tenant_id));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_ERR_BAD_TABLE;
+      LOG_WARN("user_info is NULL", K(ret), K(object_name), K(tenant_id));
+    } else {
+      object_id = user_info->get_user_id();
+    }
   } else {
-    object_type = table_schema->is_user_table() ? TABLE_SCHEMA : VIEW_SCHEMA;
-    object_id = table_schema->get_table_id();
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("object_type is invalid", K(ret), K(object_type));
   }
   return ret;
 }
@@ -42144,12 +42197,22 @@ int ObDDLService::adjust_trigger_action_order(share::schema::ObSchemaGetterGuard
 
   bool is_oracle_mode = false;
   const uint64_t tenant_id = trigger_info.get_tenant_id();
-  const ObTableSchema *table_schema = NULL;
+  common::ObSArray<uint64_t> trg_list;
   OZ (ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode));
-  OZ (schema_guard.get_table_schema(tenant_id, trigger_info.get_base_object_id(), table_schema));
-  OV (OB_NOT_NULL(table_schema));
   if (OB_SUCC(ret)) {
-    const common::ObIArray<uint64_t> &trg_list = table_schema->get_trigger_list();
+    if (trigger_info.is_dml_type()) {
+      const ObTableSchema *table_schema = NULL;
+      OZ (schema_guard.get_table_schema(tenant_id, trigger_info.get_base_object_id(), table_schema));
+      OV (OB_NOT_NULL(table_schema));
+      OZ (trg_list.assign(table_schema->get_trigger_list()));
+    } else if (trigger_info.is_system_type()) {
+      const ObUserInfo *user_info = NULL;
+      OZ (schema_guard.get_user_info(tenant_id, trigger_info.get_base_object_id(), user_info));
+      OV (OB_NOT_NULL(user_info));
+      OZ (trg_list.assign(user_info->get_trigger_list()));
+    }
+  }
+  if (OB_SUCC(ret)) {
     const ObTriggerInfo *old_trg_info = NULL;
     int64_t new_action_order = 0; // the old trigger's new action order
     if (is_create_trigger) {
@@ -42164,7 +42227,7 @@ int ObDDLService::adjust_trigger_action_order(share::schema::ObSchemaGetterGuard
         if (OB_FAIL(ret)) {
         } else if (is_oracle_mode) {
           OZ (recursive_check_trigger_ref_cyclic(schema_guard, trigger_info, trg_list,
-                                                 trigger_info.get_trigger_name(), trigger_info.get_ref_trg_name()));
+                                                trigger_info.get_trigger_name(), trigger_info.get_ref_trg_name()));
           if (OB_SUCC(ret)) {
             if (NULL != ref_trg_info) {
               uint64_t ref_db_id = OB_INVALID_ID;

@@ -152,6 +152,8 @@ private:
   int set_service_name(const uint64_t tenant_id, sql::ObSQLSessionInfo &session,
       const ObString &service_name, const bool failover_mode);
   int get_proxy_user_name(ObString &real_user);
+  int execute_trigger(const uint64_t tenant_id,
+                      sql::ObSQLSessionInfo &session);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPConnect);
   obmysql::OMPKHandshakeResponse hsr_;

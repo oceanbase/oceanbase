@@ -9458,7 +9458,9 @@ int ObTransformPreProcess::transform_cast_multiset_for_expr(ObDMLStmt &stmt,
       } else if (OB_ISNULL(dest_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected dest_info", K(ret), KPC(dest_info));
-      } else if (OB_FAIL(dest_info->transform_to_pl_type(*ctx_->allocator_, pl_type))) {
+      } else if (OB_FAIL(dest_info->transform_to_pl_type(*ctx_->allocator_,
+                                                         *ctx_->schema_checker_->get_schema_mgr(),
+                                                         pl_type))) {
         LOG_WARN("failed to get pl type", K(ret));
       } else if (OB_ISNULL(coll_type = static_cast<const pl::ObCollectionType *>(pl_type)) ||
                  OB_UNLIKELY(!pl_type->is_collection_type())) {
@@ -9560,7 +9562,9 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObDMLStmt &stmt,
   } else if (OB_ISNULL(elem_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected info", K(ret), KPC(elem_info));
-  } else if (OB_FAIL(elem_info->transform_to_pl_type(*ctx_->allocator_, pl_type))) {
+  } else if (OB_FAIL(elem_info->transform_to_pl_type(*ctx_->allocator_,
+                                                     *ctx_->schema_checker_->get_schema_mgr(),
+                                                     pl_type))) {
     LOG_WARN("failed to get pl type", K(ret));
   } else if (OB_ISNULL(object_type = static_cast<const pl::ObRecordType *>(pl_type)) ||
              OB_UNLIKELY(!pl_type->is_record_type())) {

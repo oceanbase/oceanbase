@@ -243,11 +243,11 @@ cnt
 1
 desc information_schema.ROUTINES;
 Field	Type	Null	Key	Default	Extra
-SPECIFIC_NAME	varchar(64)	NO		NULL	
+SPECIFIC_NAME	varchar(64)	NO			
 ROUTINE_CATALOG	varchar(512)	NO			
-ROUTINE_SCHEMA	varchar(64)	NO		NULL	
-ROUTINE_NAME	varchar(64)	NO		NULL	
-ROUTINE_TYPE	varchar(9)	NO		NULL	
+ROUTINE_SCHEMA	varchar(64)	NO			
+ROUTINE_NAME	varchar(64)	NO			
+ROUTINE_TYPE	varchar(9)	NO			
 DATA_TYPE	varchar(64)	NO			
 CHARACTER_MAXIMUM_LENGTH	bigint(20)	NO			
 CHARACTER_OCTET_LENGTH	bigint(20)	NO			
@@ -271,9 +271,9 @@ LAST_ALTERED	datetime	YES
 SQL_MODE	text	NO			
 ROUTINE_COMMENT	longtext	NO			
 DEFINER	varchar(93)	NO			
-CHARACTER_SET_CLIENT	varchar(32)	NO		NULL	
-COLLATION_CONNECTION	varchar(32)	NO		NULL	
-DATABASE_COLLATION	varchar(32)	NO		NULL	
+CHARACTER_SET_CLIENT	varchar(32)	NO			
+COLLATION_CONNECTION	varchar(32)	NO			
+DATABASE_COLLATION	varchar(32)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ROUTINES limit 1);
 cnt
 1
@@ -11047,6 +11047,31 @@ LAST_ACCESS_TIME	timestamp(6)	NO		NULL
 LAST_MODIFY_TIME	timestamp(6)	NO		NULL	
 BIRTH_TIME	timestamp(6)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_TEMP_FILES limit 1);
+cnt
+1
+desc mysql.proc;
+Field	Type	Null	Key	Default	Extra
+DB	varchar(128)	NO			
+NAME	varchar(128)	NO			
+TYPE	varchar(10)	NO			
+SPECIFIC_NAME	varchar(128)	NO			
+LANGUAGE	varchar(4)	NO			
+SQL_DATA_ACCESS	varchar(32)	NO			
+IS_DETERMINISTIC	varchar(4)	NO			
+SECURITY_TYPE	varchar(10)	NO			
+PARAM_LIST	longblob	NO			
+RETURNS	longblob	NO			
+BODY	longblob	NO			
+DEFINER	varchar(77)	NO			
+CREATED	timestamp(6)	NO			
+MODIFIED	timestamp(6)	NO			
+SQL_MODE	text	NO			
+COMMENT	varchar(4096)	NO			
+CHARACTER_SET_CLIENT	varchar(128)	NO			
+COLLATION_CONNECTION	varchar(128)	NO			
+DB_COLLATION	varchar(128)	NO			
+BODY_UTF8	longblob	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.proc limit 1);
 cnt
 1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from

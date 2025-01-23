@@ -364,11 +364,13 @@ public:
                                            ObSchemaChecker *schema_checker,
                                            ObObj &extend_result,
                                            obrpc::ObDDLArg &ddl_arg);
-  static int ob_udt_check_and_add_ddl_dependency(const uint64_t schema_id,
-                                                 const ObSchemaType schema_type,
-                                                 const int64_t schema_version,
-                                                 const uint64_t schema_tenant_id,
-                                                 obrpc::ObDDLArg &ddl_arg);
+  static int ob_add_ddl_dependency(const uint64_t schema_id,
+                                   const ObSchemaType schema_type,
+                                   const int64_t schema_version,
+                                   const uint64_t schema_tenant_id,
+                                   obrpc::ObDDLArg &ddl_arg);
+  static int ob_add_ddl_dependency(const pl::ObPLDependencyTable & dependency_table,
+                                   obrpc::ObDDLArg &ddl_arg);
   static int add_udt_default_dependency(ObRawExpr *expr,
                                         ObSchemaChecker *schema_checker,
                                         obrpc::ObDDLArg &ddl_arg);

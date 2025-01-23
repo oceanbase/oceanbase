@@ -716,20 +716,22 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
   ObSEArray<jit::ObLLVMValue, 4> args;
   jit::ObLLVMValue llvm_value;
   jit::ObLLVMValue dest_type;
+  ObPLCGBufferGuard buffer_guard(generator);
 
   OZ (args.push_back(generator.get_vars()[generator.CTX_IDX]));
   OZ (args.push_back(allocator));
   OZ (args.push_back(src));
   OZ (args.push_back(dest));
+  OZ (buffer_guard.get_data_type_buffer(dest_type));
   if (is_composite_type()) {
     ObDataType obj_type;
     ObObjMeta meta;
     meta.set_ext();
     obj_type.set_meta_type(meta);
     obj_type.set_udt_id(user_type_id_);
-    OZ (generator.generate_data_type(obj_type, dest_type));
+    OZ (generator.store_data_type(obj_type, dest_type));
   } else {
-    OZ (generator.generate_data_type(obj_type_, dest_type));
+    OZ (generator.store_data_type(obj_type_, dest_type));
   }
   OZ (args.push_back(dest_type));
   OZ (generator.get_helper().get_int64(package_id, llvm_value));
@@ -740,7 +742,9 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
       LOG_WARN("failed to create call", K(ret));
     } else if (OB_FAIL(generator.check_success(ret_err, location, in_notfound, in_warning))) {
       LOG_WARN("failed to check success", K(ret));
-    } else { /*do nothing*/ }
+    } else {
+      dest_type.reset();
+    }
   }
   return ret;
 }
@@ -755,7 +759,7 @@ int ObPLDataType::generate_construct(ObPLCodeGenerator &generator,
   int ret = OB_SUCCESS;
   if (is_obj_type()) {
     ObObj obj(get_obj_type());
-    OZ (generator.generate_obj(obj, value));
+    OZ (generator.store_obj(obj, value));
   } else {
     ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const ObUserDefinedType *user_type = NULL;
@@ -937,6 +941,15 @@ int ObPLDataType::deserialize(
   }
   OZ (deserialize(
     resolve_ctx, allocator, src, src_len, src_pos, dst));
+
+#ifdef OB_BUILD_ORACLE_PL
+  if (OB_SUCC(ret) && is_user_type() && (version < MOCK_CLUSTER_VERSION_4_2_5_1 ||
+      (version >= CLUSTER_VERSION_4_3_0_0 && version < CLUSTER_VERSION_4_3_5_1))) {
+    CK (result.is_ext());
+    OZ (ObPLAssocArray::rebuild_sort(result));
+  }
+#endif // OB_BUILD_ORACLE_PL
+
   LOG_DEBUG("deserialize pl package variable obj", K(ret), K(result));
   return ret;
 }
@@ -1092,7 +1105,7 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
     } else if (OB_ISNULL(udt_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("udt info is null", K(ret), K(get_user_type_id()));
-    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, user_type))) {
+    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, schema_guard, user_type))) {
       LOG_WARN("failed to transform to pl type", K(ret), KPC(udt_info));
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1159,7 +1172,7 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     } else if (OB_ISNULL(udt_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("udt info is null", K(ret));
-    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, user_type))) {
+    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, schema_guard, user_type))) {
       LOG_WARN("failed to transform to pl type", K(ret));
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;

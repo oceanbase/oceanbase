@@ -10876,40 +10876,9 @@ def_table_schema(
 # 12015: __all_virtual_replica_task # abandoned in 4.0
 # 12016: __all_virtual_partition_location # abandoned in 4.0
 
-def_table_schema(
-   owner = 'linlin.xll',
-   database_id    = 'OB_MYSQL_SCHEMA_ID',
-   table_name    = 'proc',
-   table_id      = '12030',
-   table_type = 'VIRTUAL_TABLE',
-   gm_columns = [],
-   rowkey_columns = [
-   ],
-   in_tenant_space = True,
+# 12030: proc  # abandoned in 4.2.5.1, replaced by 21628
 
-   normal_columns = [
-   ('db', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
-   ('name', 'varchar:OB_MAX_ROUTINE_NAME_LENGTH'),
-   ('type', 'varchar:10'),
-   ('specific_name', 'varchar:OB_MAX_INFOSCHEMA_TABLE_NAME_LENGTH'),
-   ('language', 'varchar:4', 'false', 'SQL'),
-   ('sql_data_access', 'varchar:32', 'false', 'CONTAINS_SQL'),
-   ('is_deterministic', 'varchar:4', 'false', 'NO'),
-   ('security_type', 'varchar:10', 'false', 'DEFINER'),
-   ('param_list', 'longblob', 'true'),
-   ('returns', 'longblob', 'true'),
-   ('body', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', ''),
-   ('definer', 'varchar:77', 'false', ''),
-   ('created', 'timestamp'),
-   ('modified', 'timestamp',),
-   ('sql_mode', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', ''),
-   ('comment', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', ''),
-   ('character_set_client', 'varchar:MAX_CHARSET_LENGTH'),
-   ('collation_connection', 'varchar:MAX_CHARSET_LENGTH'),
-   ('db_collation', 'varchar:MAX_CHARSET_LENGTH'),
-   ('body_utf8', 'varchar:OB_MAX_VARCHAR_LENGTH'),
-   ],
-)
+
 
 def_table_schema(
     owner = 'jim.wjh',
@@ -39970,7 +39939,58 @@ def_table_schema(
 # 21627: V$OB_LOGSTORE_SERVICE_INFO
 
 
-# 21628: proc
+def_table_schema(
+    owner           = 'xinning.lf',
+    tablegroup_id   = 'OB_INVALID_ID',
+    table_name      = 'proc',
+    table_id        = '21628',
+    database_id     = 'OB_MYSQL_SCHEMA_ID',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+    SELECT
+      D.DATABASE_NAME AS DB,
+      R.ROUTINE_NAME AS NAME,
+      CAST((CASE R.ROUTINE_TYPE
+        WHEN 1 THEN 'PROCEDURE'
+        WHEN 2 THEN 'FUNCTION' END) AS CHAR(10)) AS TYPE,
+      R.ROUTINE_NAME AS SPECIFIC_NAME,
+      CAST('SQL' AS CHAR(4)) AS LANGUAGE,
+      CAST((CASE WHEN (R.FLAG & 32768) = 32768 THEN 'NO_SQL'
+                WHEN (R.FLAG & 65536) = 65536 THEN 'READS_SQL_DATA'
+                WHEN (R.FLAG & 131072) = 131072 THEN 'MODIFIES_SQL_DATA'
+                ELSE 'CONTAINS_SQL' END) AS CHAR(32)) AS SQL_DATA_ACCESS,
+      CAST((CASE WHEN (R.FLAG & 4) = 4 THEN 'YES' ELSE 'NO' END) AS CHAR(4)) AS IS_DETERMINISTIC,
+      CAST((CASE WHEN (R.FLAG & 16) = 16 THEN 'INVOKER' ELSE 'DEFINER' END) AS CHAR(10)) AS SECURITY_TYPE,
+      MYSQL_PROC_INFO('PARAM_LIST', R.ROUTINE_BODY, R.EXEC_ENV, R.ROUTINE_ID, NULL, NULL, NULL, NULL, NULL) AS PARAM_LIST,
+      CASE R.ROUTINE_TYPE
+        WHEN 1 THEN ''
+        WHEN 2 THEN MYSQL_PROC_INFO('RETURNS', R.ROUTINE_BODY, R.EXEC_ENV, R.ROUTINE_ID, RP.PARAM_TYPE, RP.PARAM_LENGTH, RP.PARAM_PRECISION, RP.PARAM_SCALE, RP.PARAM_COLL_TYPE)
+        END AS RETURNS,
+      MYSQL_PROC_INFO('BODY', R.ROUTINE_BODY, R.EXEC_ENV, R.ROUTINE_ID, NULL, NULL, NULL, NULL, NULL) AS BODY,
+      CAST(CONCAT('''', REPLACE(R.PRIV_USER, '@', '''@''' ), '''') AS CHAR(77)) AS DEFINER,
+      R.GMT_CREATE AS CREATED,
+      R.GMT_MODIFIED AS MODIFIED,
+      CAST(MYSQL_PROC_INFO('SQL_MODE', R.ROUTINE_BODY, R.EXEC_ENV, R.ROUTINE_ID, NULL, NULL, NULL, NULL, NULL) AS CHAR(8192)) AS SQL_MODE,
+      NVL(R.COMMENT, '') AS COMMENT,
+      CAST(MYSQL_PROC_INFO('CHARACTER_SET_CLIENT', R.ROUTINE_BODY, R.EXEC_ENV, R.ROUTINE_ID, NULL, NULL, NULL, NULL, NULL) AS CHAR(128)) AS CHARACTER_SET_CLIENT,
+      CAST(MYSQL_PROC_INFO('COLLATION_CONNECTION', R.ROUTINE_BODY, R.EXEC_ENV, R.ROUTINE_ID, NULL, NULL, NULL, NULL, NULL) AS CHAR(128)) AS COLLATION_CONNECTION,
+      CAST(MYSQL_PROC_INFO('DB_COLLATION', R.ROUTINE_BODY, R.EXEC_ENV, R.ROUTINE_ID, NULL, NULL, NULL, NULL, NULL) AS CHAR(128)) AS DB_COLLATION,
+      MYSQL_PROC_INFO('BODY', R.ROUTINE_BODY, R.EXEC_ENV, R.ROUTINE_ID, NULL, NULL, NULL, NULL, NULL) AS BODY_UTF8
+      FROM
+        ((SELECT * FROM oceanbase.__all_routine) R
+          LEFT JOIN oceanbase.__all_database D ON R.DATABASE_ID = D.DATABASE_ID
+          LEFT JOIN oceanbase.__all_routine_param RP ON R.routine_id = RP.routine_id AND RP.param_position = 0)
+      WHERE
+        D.IN_RECYCLEBIN = 0
+      AND
+        R.ROUTINE_TYPE IN (1, 2)
+  """.replace("\n", " ")
+)
+
 # 21629: DBA_OB_OBJECT_BALANCE_WEIGHT
 # 21630: CDB_OB_OBJECT_BALANCE_WEIGHT
 
@@ -54110,6 +54130,48 @@ SELECT DB1.DATABASE_NAME AS OWNER,
        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB2
        ON TBL.DATABASE_ID = DB2.DATABASE_ID
         AND DB2.TENANT_ID = EFFECTIVE_TENANT_ID()
+  UNION ALL
+  SELECT DB1.DATABASE_NAME AS OWNER,
+       TRG.TRIGGER_NAME AS TRIGGER_NAME,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 192), 64, 'BEFORE EVENT',
+                                                   128, 'AFTER EVENT',
+                                                   'UNDEFINED')
+            AS VARCHAR2(16)) AS TRIGGER_TYPE,
+       CAST(DECODE(BITAND(TRG.TRIGGER_EVENTS, 8), 8, 'LOGON ') ||
+            DECODE(BITAND(TRG.TRIGGER_EVENTS, 16), 16,
+                   DECODE(SIGN(BITAND(TRG.TRIGGER_EVENTS, 15)), 1, 'OR LOGOFF ',
+                                                                   'LOGOFF '))
+            AS VARCHAR2(246)) AS TRIGGERING_EVENT,
+       US.USER_NAME AS TABLE_OWNER,
+       DECODE(trg.base_object_type, 2, 'SCHEMA', 3, 'DATABASE', 'UNDEFINED') AS BASE_OBJECT_TYPE,
+       NULL AS TABLE_NAME,
+       CAST(NULL AS VARCHAR2(4000)) AS COLUMN_NAME,
+       CAST(CONCAT('REFERENCING', CONCAT(CONCAT(' NEW AS ', REF_NEW_NAME), CONCAT(' OLD AS ', REF_OLD_NAME)))
+            AS VARCHAR2(422)) AS REFERENCING_NAMES,
+       WHEN_CONDITION AS WHEN_CLAUSE,
+       CAST(decode(BITAND(TRG.trigger_flags, 1), 1, 'ENABLED', 'DISABLED') AS VARCHAR2(8)) AS STATUS,
+       TRIGGER_BODY AS DESCRIPTION,
+       CAST('PL/SQL' AS VARCHAR2(11)) AS ACTION_TYPE,
+       NVL(TO_CLOB(TRIGGER_BODY), TRIGGER_BODY_V2) AS TRIGGER_BODY,
+       CAST('NO' AS VARCHAR2(7)) AS CROSSEDITION,
+       CAST('NO' AS VARCHAR2(3)) AS BEFORE_STATEMENT,
+       CAST('NO' AS VARCHAR2(3)) AS BEFORE_ROW,
+       CAST('NO' AS VARCHAR2(3)) AS AFTER_ROW,
+       CAST('NO' AS VARCHAR2(3)) AS AFTER_STATEMENT,
+       CAST('NO' AS VARCHAR2(3)) AS INSTEAD_OF_ROW,
+       CAST('NO' AS VARCHAR2(3)) AS FIRE_ONCE,
+       CAST('NO' AS VARCHAR2(3)) AS APPLY_SERVER_ONLY
+  FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG
+       INNER JOIN
+       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB1
+       ON TRG.DATABASE_ID = DB1.DATABASE_ID
+          AND TRG.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND DB1.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND (TRG.DATABASE_ID = USERENV('SCHEMAID')
+              OR USER_CAN_ACCESS_OBJ(1, abs(nvl(TRG.BASE_OBJECT_ID,0)), TRG.DATABASE_ID) = 1)
+       INNER JOIN
+          SYS.ALL_VIRTUAL_USER_REAL_AGENT US
+       ON TRG.BASE_OBJECT_ID = US.USER_ID
 """.replace("\n", " ")
 )
 
@@ -54179,6 +54241,46 @@ SELECT DB1.DATABASE_NAME AS OWNER,
        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB2
        ON TBL.DATABASE_ID = DB2.DATABASE_ID
         AND DB2.TENANT_ID = EFFECTIVE_TENANT_ID()
+  UNION ALL
+  SELECT DB1.DATABASE_NAME AS OWNER,
+       TRG.TRIGGER_NAME AS TRIGGER_NAME,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 192), 64, 'BEFORE EVENT',
+                                                   128, 'AFTER EVENT',
+                                                   'UNDEFINED')
+            AS VARCHAR2(16)) AS TRIGGER_TYPE,
+       CAST(DECODE(BITAND(TRG.TRIGGER_EVENTS, 8), 8, 'LOGON ') ||
+            DECODE(BITAND(TRG.TRIGGER_EVENTS, 16), 16,
+                   DECODE(SIGN(BITAND(TRG.TRIGGER_EVENTS, 15)), 1, 'OR LOGOFF ',
+                                                                   'LOGOFF '))
+            AS VARCHAR2(246)) AS TRIGGERING_EVENT,
+       US.USER_NAME AS TABLE_OWNER,
+       DECODE(trg.base_object_type, 2, 'SCHEMA', 3, 'DATABASE', 'UNDEFINED') AS BASE_OBJECT_TYPE,
+       NULL AS TABLE_NAME,
+       CAST(NULL AS VARCHAR2(4000)) AS COLUMN_NAME,
+       CAST(CONCAT('REFERENCING', CONCAT(CONCAT(' NEW AS ', REF_NEW_NAME), CONCAT(' OLD AS ', REF_OLD_NAME)))
+            AS VARCHAR2(422)) AS REFERENCING_NAMES,
+       WHEN_CONDITION AS WHEN_CLAUSE,
+       CAST(decode(BITAND(TRG.trigger_flags, 1), 1, 'ENABLED', 'DISABLED') AS VARCHAR2(8)) AS STATUS,
+       TRIGGER_BODY AS DESCRIPTION,
+       CAST('PL/SQL' AS VARCHAR2(11)) AS ACTION_TYPE,
+       NVL(TO_CLOB(TRIGGER_BODY), TRIGGER_BODY_V2) AS TRIGGER_BODY,
+       CAST('NO' AS VARCHAR2(7)) AS CROSSEDITION,
+       CAST('NO' AS VARCHAR2(3)) AS BEFORE_STATEMENT,
+       CAST('NO' AS VARCHAR2(3)) AS BEFORE_ROW,
+       CAST('NO' AS VARCHAR2(3)) AS AFTER_ROW,
+       CAST('NO' AS VARCHAR2(3)) AS AFTER_STATEMENT,
+       CAST('NO' AS VARCHAR2(3)) AS INSTEAD_OF_ROW,
+       CAST('NO' AS VARCHAR2(3)) AS FIRE_ONCE,
+       CAST('NO' AS VARCHAR2(3)) AS APPLY_SERVER_ONLY
+  FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG
+       INNER JOIN
+       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB1
+       ON TRG.DATABASE_ID = DB1.DATABASE_ID
+          AND TRG.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND DB1.TENANT_ID = EFFECTIVE_TENANT_ID()
+       INNER JOIN
+          SYS.ALL_VIRTUAL_USER_REAL_AGENT US
+       ON TRG.BASE_OBJECT_ID = US.USER_ID
 """.replace("\n", " ")
 )
 
@@ -54245,6 +54347,41 @@ SELECT TRG.TRIGGER_NAME AS TRIGGER_NAME,
        ON TBL.DATABASE_ID = DB2.DATABASE_ID
         AND DB2.TENANT_ID = EFFECTIVE_TENANT_ID()
  WHERE TRG.DATABASE_ID = USERENV('SCHEMAID')
+ UNION ALL
+ SELECT TRG.TRIGGER_NAME AS TRIGGER_NAME,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 192), 64, 'BEFORE EVENT',
+                                                   128, 'AFTER EVENT',
+                                                   'UNDEFINED')
+            AS VARCHAR2(16)) AS TRIGGER_TYPE,
+       CAST(DECODE(BITAND(TRG.TRIGGER_EVENTS, 8), 8, 'LOGON ') ||
+            DECODE(BITAND(TRG.TRIGGER_EVENTS, 16), 16,
+                   DECODE(SIGN(BITAND(TRG.TRIGGER_EVENTS, 15)), 1, 'OR LOGOFF ',
+                                                                   'LOGOFF '))
+            AS VARCHAR2(246)) AS TRIGGERING_EVENT,
+       US.USER_NAME AS TABLE_OWNER,
+       DECODE(trg.base_object_type, 2, 'SCHEMA', 3, 'DATABASE', 'UNDEFINED') AS BASE_OBJECT_TYPE,
+       NULL AS TABLE_NAME,
+       CAST(NULL AS VARCHAR2(4000)) AS COLUMN_NAME,
+       CAST(CONCAT('REFERENCING', CONCAT(CONCAT(' NEW AS ', REF_NEW_NAME), CONCAT(' OLD AS ', REF_OLD_NAME)))
+            AS VARCHAR2(422)) AS REFERENCING_NAMES,
+       WHEN_CONDITION AS WHEN_CLAUSE,
+       CAST(decode(BITAND(TRG.trigger_flags, 1), 1, 'ENABLED', 'DISABLED') AS VARCHAR2(8)) AS STATUS,
+       TRIGGER_BODY AS DESCRIPTION,
+       CAST('PL/SQL' AS VARCHAR2(11)) AS ACTION_TYPE,
+       NVL(TO_CLOB(TRIGGER_BODY), TRIGGER_BODY_V2) AS TRIGGER_BODY,
+       CAST('NO' AS VARCHAR2(7)) AS CROSSEDITION,
+       CAST('NO' AS VARCHAR2(3)) AS BEFORE_STATEMENT,
+       CAST('NO' AS VARCHAR2(3)) AS BEFORE_ROW,
+       CAST('NO' AS VARCHAR2(3)) AS AFTER_ROW,
+       CAST('NO' AS VARCHAR2(3)) AS AFTER_STATEMENT,
+       CAST('NO' AS VARCHAR2(3)) AS INSTEAD_OF_ROW,
+       CAST('NO' AS VARCHAR2(3)) AS FIRE_ONCE,
+       CAST('NO' AS VARCHAR2(3)) AS APPLY_SERVER_ONLY
+  FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG
+       INNER JOIN
+          SYS.ALL_VIRTUAL_USER_REAL_AGENT US
+       ON TRG.BASE_OBJECT_ID = US.USER_ID
+  WHERE TRG.DATABASE_ID = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
 

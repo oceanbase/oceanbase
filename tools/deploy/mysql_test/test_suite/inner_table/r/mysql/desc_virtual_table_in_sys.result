@@ -2241,32 +2241,6 @@ IF(count(*) >= 0, 1, 0)
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_lock_wait_stat limit 1;
-desc mysql.proc;
-Field	Type	Null	Key	Default	Extra
-db	varchar(128)	NO		NULL	
-name	varchar(128)	NO		NULL	
-type	varchar(10)	NO		NULL	
-specific_name	varchar(64)	NO		NULL	
-language	varchar(4)	NO		SQL	
-sql_data_access	varchar(32)	NO		CONTAINS_SQL	
-is_deterministic	varchar(4)	NO		NO	
-security_type	varchar(10)	NO		DEFINER	
-param_list	longblob	YES		NULL	
-returns	longblob	YES		NULL	
-body	varchar(1048576)	NO			
-definer	varchar(77)	NO			
-created	timestamp(6)	NO		NULL	
-modified	timestamp(6)	NO		NULL	
-sql_mode	varchar(1048576)	NO			
-comment	varchar(1048576)	NO			
-character_set_client	varchar(128)	NO		NULL	
-collation_connection	varchar(128)	NO		NULL	
-db_collation	varchar(128)	NO		NULL	
-body_utf8	varchar(1048576)	NO		NULL	
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from mysql.proc;
-IF(count(*) >= 0, 1, 0)
-1
-select /*+QUERY_TIMEOUT(60000000)*/ * from mysql.proc limit 1;
 desc oceanbase.__tenant_virtual_collation;
 Field	Type	Null	Key	Default	Extra
 collation_type	bigint(20)	NO		0	

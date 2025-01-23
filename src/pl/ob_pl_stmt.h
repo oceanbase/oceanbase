@@ -333,7 +333,7 @@ public:
   inline const ObRefCursorType &get_sys_refcursor_type() const { return sys_refcursor_type_; }
 #endif
   const common::ObIArray<const ObUserDefinedType *> &get_types() const { return user_types_; }
-  int add_type(ObUserDefinedType *user_defined_type);
+  int add_type(const ObUserDefinedType *user_defined_type);
   const ObUserDefinedType *get_type(const common::ObString &type_name) const;
   const ObUserDefinedType *get_type(uint64_t type_id) const;
   const ObUserDefinedType *get_type(int64_t idx) const;
@@ -1657,6 +1657,7 @@ public:
   int add_dependency_objects(
                   const common::ObIArray<share::schema::ObSchemaObjVersion> &dependency_objects);
   int add_dependency_object(const share::schema::ObSchemaObjVersion &obj_version);
+  int add_dependency_object(ObPLResolveCtx &resolve_ctx, const ObPLDataType &type);
   static int add_dependency_object_impl(const ObPLDependencyTable &dep_tbl,
                                         const share::schema::ObSchemaObjVersion &obj_version);
   static int add_dependency_object_impl(ObPLDependencyTable &dep_tbl,

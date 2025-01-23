@@ -489,7 +489,9 @@
 #include "sql/engine/expr/ob_expr_array_remove.h"
 #include "sql/engine/expr/ob_expr_array_map.h"
 #include "sql/engine/expr/ob_expr_calc_odps_size.h"
+#include "sql/engine/expr/ob_expr_mysql_proc_info.h"
 #include "sql/engine/expr/ob_expr_get_mysql_routine_parameter_type_str.h"
+#include "sql/engine/expr/ob_expr_ora_login_user.h"
 #include "sql/engine/expr/ob_expr_priv_st_geohash.h"
 #include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
 #include "sql/engine/expr/ob_expr_to_pinyin.h"
@@ -1030,6 +1032,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprScnToTimestamp);
     REG_OP(ObExprSqlModeConvert);
     REG_OP(ObExprCanAccessTrigger);
+    REG_OP(ObExprMysqlProcInfo);
 #if  defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
     // convert input value into an OceanBase error number and throw out as exception
     REG_OP(ObExprErrno);
@@ -1536,6 +1539,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprTempTableSSID);
   REG_OP_ORCL(ObExprJsonObjectStar);
   REG_OP_ORCL(ObExprTransactionId);
+  REG_OP_ORCL(ObExprOraLoginUser);
   REG_OP_ORCL(ObExprInnerRowCmpVal);
   REG_OP_ORCL(ObExprLastRefreshScn);
   REG_OP_ORCL(ObExprTopNFilter);

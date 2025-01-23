@@ -1205,7 +1205,7 @@ int ObExprCast::cg_cast_multiset(ObExprCGCtx &op_cg_ctx,
   } else if (OB_ISNULL(dest_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null udt info", K(ret));
-  } else if (OB_FAIL(dest_info->transform_to_pl_type(alloc, pl_type))) {
+  } else if (OB_FAIL(dest_info->transform_to_pl_type(alloc, *op_cg_ctx.schema_guard_, pl_type))) {
     LOG_WARN("failed to get pl type", K(ret));
   } else if (!pl_type->is_collection_type() ||
              OB_ISNULL(coll_type = static_cast<const pl::ObCollectionType *>(pl_type))) {

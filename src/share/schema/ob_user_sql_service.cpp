@@ -1177,7 +1177,6 @@ int ObUserSqlService::update_user_schema_version(
   return ret;
 }
 
-
 } //end of schema
 } //end of share
 } //end of oceanbase

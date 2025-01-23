@@ -2702,9 +2702,11 @@ int ObShowResolver::resolve_show_from_trigger(const ParseNode *from_tg_node,
         real_tenant_id, show_database_name, show_tg_name);
     OV (OB_NOT_NULL(tg_info), OB_ERR_TRIGGER_NOT_EXIST);
     OX (show_tg_id = tg_info->get_trigger_id());
-    OZ (schema_checker_->get_table_schema(real_tenant_id, tg_info->get_base_object_id(), table));
-    CK (OB_NOT_NULL(table));
-    OX (show_table_name = table->get_table_name());
+    if (OB_SUCC(ret) && !tg_info->is_system_type()) {
+      OZ (schema_checker_->get_table_schema(real_tenant_id, tg_info->get_base_object_id(), table));
+      CK (OB_NOT_NULL(table));
+      OX (show_table_name = table->get_table_name());
+    }
   }
   return ret;
 }

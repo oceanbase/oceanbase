@@ -542,14 +542,18 @@ int ObUDTTypeInfo::transform_to_pl_type(const ObUDTTypeAttr* attr_info, pl::ObPL
   return ret;
 }
 
-int ObUDTTypeInfo::transform_to_pl_type(common::ObIAllocator &allocator, const pl::ObUserDefinedType *&pl_type) const
+int ObUDTTypeInfo::transform_to_pl_type(common::ObIAllocator &allocator,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        const pl::ObUserDefinedType *&pl_type) const
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
   pl::ObUserDefinedType *local_pl_type = NULL;
   pl_type = NULL;
 #ifdef OB_BUILD_ORACLE_PL
-  if (is_collection()) {
+  if (OB_FAIL(check_dependency_valid(schema_guard))) {
+    LOG_WARN("failed to check_dependency_valid", K(ret));
+  } else if (is_collection()) {
     pl::ObCollectionType *table_type = NULL;
     pl::ObPLDataType elem_type;
     if (OB_ISNULL(ptr = allocator.alloc(is_varray() ? sizeof(pl::ObVArrayType) : sizeof(pl::ObCollectionType)))) {
@@ -649,6 +653,62 @@ int ObUDTTypeInfo::copy_udt_info_in_require(const ObUDTTypeInfo &old_info)
     local_methods_ = old_info.get_local_methods();
     local_attrs_ = old_info.get_local_attrs();
   }
+
+  return ret;
+}
+
+int ObUDTTypeInfo::check_dependency_valid(ObSchemaGetterGuard &schema_guard) const
+{
+  int ret = OB_SUCCESS;
+
+#define CHECK_ELEM_MATCH(elem_id, type_info)                                                                           \
+  do {                                                                                                                 \
+    const ObUDTTypeInfo *elem_info = nullptr;                                                                          \
+    if (OB_INVALID_ID == (elem_id)) {                                                                                  \
+      ret = OB_ERR_UNEXPECTED;                                                                                         \
+      LOG_WARN("unexpected invalid element type id", K(ret), K(*this), KPC(type_info));                                \
+    } else if (OB_SYS_TENANT_ID == pl::get_tenant_id_by_object_id(elem_id)) {                                          \
+      /* do nothing */                                                                                                 \
+    } else if (OB_FAIL(schema_guard.get_udt_info(tenant_id_, elem_id, elem_info))) {                                   \
+      LOG_WARN("failed to get_udt_info", K(ret), K(*this), K(elem_id), KPC(elem_info));                                \
+    } else if (OB_ISNULL(elem_info)) {                                                                                 \
+      /* dependency is dropped, the object must be invalid, do nothing */                                              \
+    } else if ((type_info)->is_coll_type() && !elem_info->is_collection() ||                                           \
+               (type_info)->is_obj_type() && !elem_info->is_obj_type()) {                                              \
+        ret = OB_ERR_OBJECT_INVALID;                                                                                   \
+        LOG_WARN("original element type is replaced by another type",                                                  \
+                 K(ret), K(*this), K(elem_id), KPC(type_info), K((type_info)->get_typecode()), KPC(elem_info));        \
+        LOG_USER_WARN(OB_ERR_OBJECT_INVALID, get_type_name().length(), get_type_name().ptr());                         \
+    }                                                                                                                  \
+  } while (0)
+
+  if (is_collection()) {
+    if (OB_ISNULL(coll_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL coll_info_ of collection type", K(ret), K(*this));
+    } else if (coll_info_->is_base_type()) {
+      // do nothing
+    } else {
+      CHECK_ELEM_MATCH(coll_info_->get_elem_type_id(), coll_info_);
+    }
+  } else if (is_obj_type()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_attrs().count(); ++i) {
+      const ObUDTTypeAttr *curr = get_attrs().at(i);
+
+      if (OB_ISNULL(curr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL attr", K(ret), K(i), K(*this));
+      } else if (curr->is_base_type()) {
+        // do nothing
+      } else {
+        CHECK_ELEM_MATCH(curr->get_type_attr_id(), curr);
+      }
+    }
+  } else {
+    // do nothing
+  }
+
+#undef CHECK_ELEM_MATCH
 
   return ret;
 }

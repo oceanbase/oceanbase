@@ -453,6 +453,26 @@ typedef common::hash::ObHashMap<uint64_t, pl::ObPLPackageState *,
                                 common::hash::NoPthreadDefendMode> ObPackageStateMap;
 typedef common::hash::ObHashMap<uint64_t, share::ObSequenceValue,
                                 common::hash::NoPthreadDefendMode> ObSequenceCurrvalMap;
+
+#define OB_UTL_TCP_DEFAULT_TX_TIMEOUT -1  //wait indefinitely
+struct ObSockFdParam
+{
+  ObSockFdParam()
+  : session_id_(OB_INVALID_ID), m_addr_info_(NULL), tx_timeout_(OB_UTL_TCP_DEFAULT_TX_TIMEOUT), collation_(CS_TYPE_INVALID)
+  {}
+
+  ObSockFdParam(const int64_t session_id, void* m_addr_info, const int32_t tx_timeout, const ObCollationType coll_type)
+  : session_id_(session_id), m_addr_info_(m_addr_info), tx_timeout_(tx_timeout), collation_(coll_type)
+  {}
+
+  int64_t  session_id_;
+  void*    m_addr_info_;
+  int32_t  tx_timeout_;
+  ObCollationType collation_;
+
+  TO_STRING_KV(K_(session_id), K_(m_addr_info), K_(collation));
+};
+typedef common::hash::ObHashMap<int64_t, ObSockFdParam, common::hash::NoPthreadDefendMode> ObSockFdMap;
 struct ObDBlinkSequenceIdKey{
   ObDBlinkSequenceIdKey()
   :dblink_id_(OB_INVALID_ID)
@@ -1285,6 +1305,7 @@ public:
   ObDBlinkSequenceIdMap  &get_dblink_sequence_id_map() { return dblink_sequence_id_map_; }
   void set_current_dblink_sequence_id(int64_t id) { current_dblink_sequence_id_ = id; }
   int64_t get_current_dblink_sequence_id() const { return current_dblink_sequence_id_; }
+  ObSockFdMap &get_sock_fd_map() { return sock_fd_map_; }
   void set_client_non_standard(bool client_non_standard) { client_non_standard_ = client_non_standard; }
   bool client_non_standard() { return client_non_standard_; }
   int set_audit_filter_name(const common::ObString &filter_name);
@@ -1651,6 +1672,7 @@ private:
   ObPackageStateMap package_state_map_;
   ObSequenceCurrvalMap sequence_currval_map_;
   ObDBlinkSequenceIdMap dblink_sequence_id_map_;
+  ObSockFdMap sock_fd_map_;
   ObContextsMap contexts_map_;
   int64_t curr_session_context_size_;
 

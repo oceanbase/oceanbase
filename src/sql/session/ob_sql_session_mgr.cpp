@@ -33,6 +33,7 @@
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "sql/engine/dml/ob_trigger_handler.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -782,6 +783,7 @@ int ObSQLSessionMgr::disconnect_session(ObSQLSessionInfo &session)
   ObSQLSessionInfo::LockGuard query_lock_guard(session.get_query_lock());
   ObSQLSessionInfo::LockGuard data_lock_guard(session.get_thread_data_lock());
   bool need_disconnect = false;
+  (void) TriggerHandle::calc_system_trigger_logoff(session);
   session.set_query_start_time(ObTimeUtility::current_time());
   // 调用这个函数之前会在ObSMHandler::on_disconnect中调session.set_session_state(SESSION_KILLED)，
   if (session.is_in_transaction()) {

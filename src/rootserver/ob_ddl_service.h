@@ -3113,6 +3113,12 @@ private:
   int reorder_column_after_add_column_instant_(const ObTableSchema &orig_table_schema,
                                                ObTableSchema &new_table_schema);
 
+  int drop_trigger_in_drop_user(ObMySQLTransaction &trans,
+                                ObDDLOperator &ddl_operator,
+                                ObSchemaGetterGuard &schema_guard,
+                                const uint64_t tenant_id,
+                                const uint64_t user_id);
+
 private:
   bool inited_;
   volatile bool stopped_;

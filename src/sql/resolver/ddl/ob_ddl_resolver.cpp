@@ -3504,11 +3504,11 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
             } else if (OB_ISNULL(udt_info)) {
               ret = OB_ERR_OBJECT_NOT_EXIST;
               LOG_WARN("udt not exist", KR(ret), K(tenant_id), K(udt_id));
-            } else if (OB_FAIL(ob_udt_check_and_add_ddl_dependency(udt_id,
-                                                                   UDT_SCHEMA,
-                                                                   udt_info->get_schema_version(),
-                                                                   udt_info->get_tenant_id(),
-                                                                   *ddl_arg))) {
+            } else if (OB_FAIL(ob_add_ddl_dependency(udt_id,
+                                                     UDT_SCHEMA,
+                                                     udt_info->get_schema_version(),
+                                                     udt_info->get_tenant_id(),
+                                                     *ddl_arg))) {
               LOG_WARN("failed to add udt type ddl dependency", K(ret), K(udt_info));
             }
           }
@@ -7059,17 +7059,14 @@ int ObDDLResolver::check_udt_default_value(ObObj &default_value,
                                        extend_result, ddl_arg);
 }
 
-int ObDDLResolver::ob_udt_check_and_add_ddl_dependency(const uint64_t schema_id,
-                                                       const ObSchemaType schema_type,
-                                                       const int64_t schema_version,
-                                                       const uint64_t schema_tenant_id,
-                                                       obrpc::ObDDLArg &ddl_arg)
+int ObDDLResolver::ob_add_ddl_dependency(const uint64_t schema_id,
+                                         const ObSchemaType schema_type,
+                                         const int64_t schema_version,
+                                         const uint64_t schema_tenant_id,
+                                         obrpc::ObDDLArg &ddl_arg)
 {
   int ret = OB_SUCCESS;
-  if (schema_id == OB_INVALID_ID) { // do nothing
-  } else if (schema_version == OB_INVALID_VERSION) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error default dependency item", K(ret), K(schema_id), K(schema_type), K(schema_version));
+  if (schema_id == OB_INVALID_ID || schema_version == OB_INVALID_VERSION) { // do nothing
   } else {
     // check duplicate
     bool found_same_schema = false;
@@ -7102,6 +7099,22 @@ int ObDDLResolver::ob_udt_check_and_add_ddl_dependency(const uint64_t schema_id,
                   K(schema_id), K(schema_type), K(schema_version), K(schema_tenant_id));
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLResolver::ob_add_ddl_dependency(const pl::ObPLDependencyTable & dependency_table,
+                                                               obrpc::ObDDLArg &ddl_arg)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < dependency_table.count(); i++) {
+    const ObSchemaObjVersion& schema_obj = dependency_table.at(i);
+    uint64_t tenant_id = pl::get_tenant_id_by_object_id(schema_obj.get_object_id());
+    OZ (ob_add_ddl_dependency(schema_obj.get_object_id(),
+                              schema_obj.get_schema_type(),
+                              schema_obj.get_version(),
+                              tenant_id,
+                              ddl_arg));
   }
   return ret;
 }
@@ -7168,11 +7181,11 @@ int ObDDLResolver::add_udt_default_dependency(ObRawExpr *expr,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema_version validation failed", K(ret),
         K(tenant_id), K(object_id), K(schema_type), K(schema_version), K(schema_check_version));
-      } else if (OB_FAIL(ob_udt_check_and_add_ddl_dependency(object_id,
-                                                             schema_type,
-                                                             schema_version,
-                                                             tenant_id,
-                                                             ddl_arg))) {
+      } else if (OB_FAIL(ob_add_ddl_dependency(object_id,
+                                               schema_type,
+                                               schema_version,
+                                               tenant_id,
+                                               ddl_arg))) {
         LOG_WARN("failed to add udt type ddl dependency",
                  K(ret), K(object_id), K(schema_type), K(schema_version), K(tenant_id));
       }

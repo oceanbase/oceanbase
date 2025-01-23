@@ -260,7 +260,7 @@ int ObSMUtils::cell_str(
           } else if (OB_ISNULL(udt_info)) {
             ret = OB_ERR_UNEXPECTED;
             OB_LOG(WARN, "udt info is null", K(ret));
-          } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, user_type))) {
+          } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *schema_guard, user_type))) {
             OB_LOG(WARN, "faild to transform to pl type", K(ret));
           } else if (OB_ISNULL(user_type)) {
             ret = OB_ERR_UNEXPECTED;
@@ -323,7 +323,7 @@ int ObSMUtils::cell_str(
                 } else if (OB_ISNULL(udt_info)) {
                   ret = OB_ERR_UNEXPECTED;
                   OB_LOG(WARN,"udt info is null", K(ret), K(udt_id));
-                }  else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, elem_user_type))) {
+                }  else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, *schema_guard, elem_user_type))) {
                   OB_LOG(WARN,"failed to transform to pl type", K(ret), KPC(udt_info));
                 } else if (OB_ISNULL(elem_user_type)) {
                   ret = OB_ERR_UNEXPECTED;
@@ -376,7 +376,7 @@ int ObSMUtils::cell_str(
             }
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, user_type))) {
+          } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *schema_guard, user_type))) {
             OB_LOG(WARN, "faild to transform to pl type", K(ret));
           } else if (OB_ISNULL(user_type)) {
             ret = OB_ERR_UNEXPECTED;
@@ -670,7 +670,7 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
   } else if (NULL == udt_info) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "faild to get udt info.", K(ret));
-  } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, user_type))) {
+  } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *schema_guard, user_type))) {
     OB_LOG(WARN, "faild to transform to pl type", K(ret));
   } else if (NULL == user_type) {
     ret = OB_ERR_UNEXPECTED;

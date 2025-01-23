@@ -1205,6 +1205,7 @@
 #define N_RB_ITERATE                        "rb_iterate"
 #define N_RB_SELECT                         "rb_select"
 #define N_RB_BUILD                          "rb_build"
+#define N_MYSQL_PROC_INFO                   "mysql_proc_info"
 #define N_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR   "get_mysql_routine_parameter_type_str"
 #define N_ORA_LOGIN_USER                    "ora_login_user"
 #define N_CALC_ODPS_SIZE                  "calc_odps_size"

@@ -199,7 +199,7 @@ void mock_write_sdo_elem_info(ObArray<uint64_t> &elem_info, common::ObIAllocator
   elem_array->set_capacity(elem_cnt);
   elem_array->set_column_count(elem_cnt);
   elem_array->set_count(elem_cnt);
-  elem_array->set_data(array_data);
+  elem_array->set_data(array_data, elem_cnt);
   elem_desc.set_pl_type(PL_VARRAY_TYPE);
   elem_desc.set_not_null(false);
   elem_desc.set_field_count(elem_cnt);
@@ -236,7 +236,7 @@ void mock_write_sdo_ordinates(ObArray<double> &ordinate, common::ObIAllocator &c
   elem_array->set_capacity(ori_size);
   elem_array->set_column_count(ori_size);
   elem_array->set_count(ori_size);
-  elem_array->set_data(array_data);
+  elem_array->set_data(array_data, ori_size);
   elem_desc.set_pl_type(PL_VARRAY_TYPE);
   elem_desc.set_not_null(false);
   elem_desc.set_field_count(ori_size);

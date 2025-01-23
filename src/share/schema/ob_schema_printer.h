@@ -430,6 +430,9 @@ public:
   int print_compound_instead_trigger_definition(const ObTriggerInfo &trigger_info,
                                                 char *buf, int64_t buf_len, int64_t &pos,
                                                 bool get_ddl) const;
+  int print_system_trigger_definition(const ObTriggerInfo &trigger_info,
+                                      char *buf, int64_t buf_len, int64_t &pos,
+                                      bool get_ddl) const;
   int print_trigger_status(const ObTriggerInfo &trigger_info, char *buf, int64_t buf_len, int64_t &pos) const;
   int print_trigger_base_object(const ObTriggerInfo &trigger_info,
                                 char *buf, int64_t buf_len, int64_t &pos) const;

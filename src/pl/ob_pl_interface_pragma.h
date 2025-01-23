@@ -65,6 +65,8 @@
 #include "pl/sys_package/ob_xml_type.h"
 #include "pl/sys_package/ob_sdo_geom.h"
 #include "pl/sys_package/ob_dbms_profiler.h"
+#include "pl/sys_package/ob_utl_tcp.h"
+#include "pl/sys_package/ob_utl_smtp.h"
 #endif
 #include "pl/sys_package/ob_dbms_xplan.h"
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
@@ -292,6 +294,7 @@
   INTERFACE_DEF(INTERFACE_GET_TIME, "GET_TIME", (DbmsUtilityHelper::get_time))
   INTERFACE_DEF(INTERFACE_INVALIDATE, "INVALIDATE", (DbmsUtilityHelper::invalidate))
   INTERFACE_DEF(INTERFACE_VALIDATE, "VALIDATE", (DbmsUtilityHelper::validate))
+  INTERFACE_DEF(INTERFACE_PSDANAM, "PSDANAM", (DbmsUtilityHelper::psdanam))
   // end dbms_utility
 
 #endif
@@ -569,6 +572,20 @@
   INTERFACE_DEF(INTERFACE_UTL_FILE_FRENAME, "UTL_FILE_FRENAME", (ObPLUtlFile::frename))
   INTERFACE_DEF(INTERFACE_UTL_FILE_FIS_OPEN, "UTL_FILE_FIS_OPEN", (ObPLUtlFile::fis_open))
   //end of utl_file
+
+  //start of utl_tcp
+  INTERFACE_DEF(INTERFACE_UTL_TCP_OPEN_CONNECTION, "UTL_TCP_OPEN_CONNECTION", (ObPLUtlTcp::open_connection))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_CLOSE_CONNECTION, "UTL_TCP_CLOSE_CONNECTION", (ObPLUtlTcp::close_connection))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_CLOSE_ALL_CONNECTIONS, "UTL_TCP_CLOSE_ALL_CONNECTIONS", (ObPLUtlTcp::close_all_connections))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_WRITE_LINE, "UTL_TCP_WRITE_LINE", (ObPLUtlTcp::write_line))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_WRITE_TEXT, "UTL_TCP_WRITE_TEXT", (ObPLUtlTcp::write_text))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_WRITE_RAW, "UTL_TCP_WRITE_RAW", (ObPLUtlTcp::write_raw))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_READ_LINE, "UTL_TCP_READ_LINE", (ObPLUtlTcp::read_line))
+  INTERFACE_DEF(INTERFACE_UTL_TCP_READ_TEXT, "UTL_TCP_READ_TEXT", (ObPLUtlTcp::read_text))
+
+  //start of utl_smtp
+  INTERFACE_DEF(INTERFACE_UTL_SMTP_RAISE, "UTL_SMTP_RAISE", (ObPLUtlSmtp::raise))
+  INTERFACE_DEF(INTERFACE_UTL_SMTP_ESCAPE_DOT, "UTL_SMTP_ESCAPE_DOT", (ObPLUtlSmtp::escape_dot))
 
   //start of dbms_sys_error
   INTERFACE_DEF(INTERFACE_SYS_ERROR_KKXERE0, "KKXERE0", (ObDBMSSysError::ere0))

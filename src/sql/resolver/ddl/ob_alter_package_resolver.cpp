@@ -170,6 +170,11 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                           share::schema::PACKAGE_TYPE,
                                           compatible_mode,
                                           package_spec_info));
+    OZ (ob_add_ddl_dependency(package_spec_info->get_package_id(),
+                              PACKAGE_SCHEMA,
+                              package_spec_info->get_schema_version(),
+                              package_spec_info->get_tenant_id(),
+                              pkg_arg));
     OZ (package_spec_ast.init(db_name,
                               package_spec_info->get_package_name(),
                               PL_PACKAGE_SPEC,
@@ -240,6 +245,12 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
         OZ (error_info.delete_error(package_spec_info));
       }
     } else {
+      CK (OB_NOT_NULL(package_body_info));
+      OZ (ob_add_ddl_dependency(package_body_info->get_package_id(),
+                                PACKAGE_SCHEMA,
+                                package_body_info->get_schema_version(),
+                                package_body_info->get_tenant_id(),
+                                pkg_arg));
       bool body_has_error = false;
       OZ (package_body_ast.init(db_name,
                                 package_name,
@@ -298,6 +309,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                                   pkg_arg.dependency_infos_,
                                                   ObObjectType::PACKAGE_BODY,
                                                   0, dep_attr, dep_attr));
+          OZ (ob_add_ddl_dependency(package_body_ast.get_dependency_table(), pkg_arg));
         }
       }
       COLLECT_PACKAGE_INFO(pkg_arg, package_body_info);

@@ -2190,13 +2190,13 @@ int ObMPStmtExecute::get_pl_type_by_type_info(ObIAllocator &allocator,
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "Get PL type by type info is not supported in CE version");
 #else
   const share::schema::ObUDTTypeInfo *udt_info = NULL;
-  if (OB_ISNULL(type_info)) {
+  if (OB_ISNULL(type_info) || OB_ISNULL(ctx_.schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("type info is null", K(ret), K(type_info));
+    LOG_WARN("type info or schema_guard is null", K(ret), K(type_info), K(ctx_.schema_guard_));
   } else if (!type_info->is_elem_type_) {
     if (type_info->package_name_.empty()) {
       OZ (get_udt_by_name(type_info->relation_name_, type_info->type_name_, udt_info));
-      OZ (udt_info->transform_to_pl_type(allocator, pl_type));
+      OZ (udt_info->transform_to_pl_type(allocator, *ctx_.schema_guard_, pl_type));
     } else {
       OZ (get_package_type_by_name(allocator, type_info, pl_type));
     }
@@ -2209,7 +2209,7 @@ int ObMPStmtExecute::get_pl_type_by_type_info(ObIAllocator &allocator,
       elem_type.set_data_type(type_info->elem_type_);
     } else if (OB_FAIL(get_udt_by_name(type_info->relation_name_, type_info->type_name_, udt_info))) {
       LOG_WARN("failed to get udt info", K(ret), K(type_info->relation_name_), K(type_info->type_name_));
-    } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, elem_type_ptr))) {
+    } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, *ctx_.schema_guard_, elem_type_ptr))) {
       LOG_WARN("failed to transform udt to pl type", K(ret));
     } else if (OB_ISNULL(elem_type_ptr)) {
       ret = OB_ERR_UNEXPECTED;

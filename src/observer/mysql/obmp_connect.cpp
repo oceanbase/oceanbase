@@ -48,6 +48,7 @@
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "lib/utility/ob_backtrace.h"
 #include "rpc/obmysql/packet/ompk_auth_switch.h"
+#include "sql/engine/dml/ob_trigger_handler.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -405,6 +406,9 @@ int ObMPConnect::process()
       conn->set_auth_phase();
       conn->set_logined(true);
       session->get_autocommit(autocommit);
+    }
+    if (FAILEDx(execute_trigger(tenant_id, *session))) {
+      LOG_WARN("execute trigger failed");
     }
 
     int proc_ret = ret;
@@ -2551,6 +2555,22 @@ int ObMPConnect::set_service_name(const uint64_t tenant_id, ObSQLSessionInfo &se
     LOG_WARN("fail to set service_name", KR(ret), K(service_name), K(tenant_id));
   } else if (OB_FAIL(session.check_service_name_and_failover_mode(tenant_id))) {
     LOG_WARN("fail to execute check_service_name_and_failover_mode", KR(ret), K(service_name), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObMPConnect::execute_trigger(const uint64_t tenant_id,
+                                 sql::ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_ISNULL(gctx_.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(gctx_.schema_service_));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard failed", K(ret));
+  } else if (OB_FAIL(TriggerHandle::calc_system_trigger_logon(session))) {
+    LOG_WARN("calc system trigger failed", K(ret));
   }
   return ret;
 }

@@ -3210,10 +3210,10 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             OX (c_expr = static_cast<ObConstRawExpr*>(original_expr));
           }
         } else if (val.get_unknown() >= ctx_.param_list_->count()) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_NOT_ALL_VARIABLE_BIND;
           LOG_WARN("question mark index out of param list count",
                    "index", val.get_unknown(), "param_count", ctx_.param_list_->count());
-        } else { //execute stmt阶段，注：这里没有设置c_expr的accuracy会不会有问题
+        } else { //带参数prepare or execute stmt阶段，注：这里没有设置c_expr的accuracy会不会有问题
           const ObObjParam &param = ctx_.param_list_->at(val.get_unknown());
           c_expr->set_is_literal_bool(param.is_boolean());
           if (param.is_ext()) {

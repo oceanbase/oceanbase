@@ -2301,7 +2301,7 @@ int ObPL::execute(ObExecContext &ctx,
       CK (OB_NOT_NULL(ctx.get_my_session()));
       OZ (ObPLContext::check_routine_legal(*routine, in_function,
                                           ctx.get_my_session()->is_for_trigger_package()));
-      OZ (check_trigger_arg(params, *routine));
+      OZ (check_trigger_arg(params, *routine, stack_ctx, ctx));
       if (OB_SUCC(ret) && ctx.get_my_session()->is_pl_debug_on()) {
         int tmp_ret = OB_SUCCESS;
         bool need_check = true;
@@ -2870,33 +2870,46 @@ int ObPL::insert_error_msg(int errcode)
   return ret;
 }
 
-int ObPL::check_trigger_arg(ParamStore &params, const ObPLFunction &func)
+int ObPL::check_trigger_arg(ParamStore &params, const ObPLFunction &func, ObPLContext &pl_ctx, ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
   if (TriggerHandle::is_trigger_body_routine(func.get_package_id(), func.get_routine_id(), func.get_proc_type())) {
-    const int64_t param_cnt = TriggerHandle::get_routine_param_count(func.get_routine_id());
-    OV (params.count() == param_cnt, OB_ERR_UNEXPECTED, K(params.count()), K(param_cnt));
-    for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; i++) {
-      const ObPLDataType &data_type = func.get_variables().at(i);
-      CK (data_type.is_record_type());
-      CK (params.at(i).is_ext());
-      if (OB_SUCC(ret)) {
-        uint64_t udt_id = data_type.get_user_type_id();
-        const ObUserDefinedType *udt = NULL;
-        OV (OB_INVALID_ID != udt_id);
-        for (int64_t j = 0; OB_SUCC(ret) && OB_ISNULL(udt) && j < func.get_type_table().count(); j++) {
-          OV (OB_NOT_NULL(func.get_type_table().at(j)));
-          if (OB_SUCC(ret) && func.get_type_table().at(j)->get_user_type_id() == udt_id) {
-            udt = func.get_type_table().at(j);
-          }
-        }
-        OV (OB_NOT_NULL(udt));
-        OV (udt->is_record_type());
+    const ObTriggerInfo *trg_info = NULL;
+    CK (OB_NOT_NULL(ctx.get_sql_ctx()));
+    CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
+    if (OB_SUCC(ret)) {
+      OZ (ctx.get_sql_ctx()->schema_guard_->get_trigger_info(func.get_tenant_id(),
+                                                        ObTriggerInfo::get_package_trigger_id(func.get_package_id()),
+                                                        trg_info));
+      CK (OB_NOT_NULL(trg_info));
+      OX (pl_ctx.set_is_system_trigger(trg_info->is_system_type()));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!pl_ctx.is_system_trigger()) {
+      const int64_t param_cnt = TriggerHandle::get_routine_param_count(func.get_routine_id());
+      OV (params.count() == param_cnt, OB_ERR_UNEXPECTED, K(params.count()), K(param_cnt));
+      for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; i++) {
+        const ObPLDataType &data_type = func.get_variables().at(i);
+        CK (data_type.is_record_type());
+        CK (params.at(i).is_ext());
         if (OB_SUCC(ret)) {
-          ObPLRecord *record = reinterpret_cast<ObPLRecord *>(params.at(i).get_ext());
-          CK (OB_NOT_NULL(record));
-          CK (record->get_count() == (static_cast<const ObRecordType *>(udt))->get_member_count());
-          OX (params.at(i).set_udt_id(udt_id));
+          uint64_t udt_id = data_type.get_user_type_id();
+          const ObUserDefinedType *udt = NULL;
+          OV (OB_INVALID_ID != udt_id);
+          for (int64_t j = 0; OB_SUCC(ret) && OB_ISNULL(udt) && j < func.get_type_table().count(); j++) {
+            OV (OB_NOT_NULL(func.get_type_table().at(j)));
+            if (OB_SUCC(ret) && func.get_type_table().at(j)->get_user_type_id() == udt_id) {
+              udt = func.get_type_table().at(j);
+            }
+          }
+          OV (OB_NOT_NULL(udt));
+          OV (udt->is_record_type());
+          if (OB_SUCC(ret)) {
+            ObPLRecord *record = reinterpret_cast<ObPLRecord *>(params.at(i).get_ext());
+            CK (OB_NOT_NULL(record));
+            CK (record->get_count() == (static_cast<const ObRecordType *>(udt))->get_member_count());
+            OX (params.at(i).set_udt_id(udt_id));
+          }
         }
       }
     }

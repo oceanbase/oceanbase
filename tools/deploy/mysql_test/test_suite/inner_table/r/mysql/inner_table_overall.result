@@ -416,7 +416,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12009	user	2	201003	1
 12010	db	2	201003	1
 12013	__all_virtual_lock_wait_stat	2	201001	1
-12030	proc	2	201003	1
 12031	__tenant_virtual_collation	2	201001	1
 12032	__tenant_virtual_charset	2	201001	1
 12033	__all_virtual_tenant_memstore_allocator_info	2	201001	1
@@ -1324,6 +1323,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21621	V$OB_FUNCTION_IO_STAT	1	201001	1
 21622	DBA_OB_TEMP_FILES	1	201001	1
 21623	CDB_OB_TEMP_FILES	1	201001	1
+21628	proc	1	201003	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

@@ -686,7 +686,7 @@ int ObSql::get_composite_type_field_name(ObSchemaGetterGuard &schema_guard,
   } else if (NULL == udt_info) {
     ret = OB_NOT_SUPPORTED;
     OB_LOG(WARN, "udt info is null.", K(type_id), K(ret));
-  } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, user_type))) {
+  } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, schema_guard, user_type))) {
     OB_LOG(WARN, "faild to transform to pl type", K(ret));
   } else if (NULL == user_type) {
     ret = OB_NOT_SUPPORTED;
@@ -816,9 +816,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
         }
-        if (context->session_info_->is_varparams_sql_prepare()) {
-          // question mark expr has no valid result type in prepare stage
-        } else if (expr->get_result_type().is_user_defined_sql_type() ||
+        if (expr->get_result_type().is_user_defined_sql_type() ||
             expr->get_result_type().is_collection_sql_type() ||
             ((PC_PS_MODE == mode || PC_PL_MODE == mode) && expr->get_result_type().is_geometry() && lib::is_oracle_mode())) {//oracle gis ps protocol
           uint16_t subschema_id = expr->get_result_type().get_subschema_id();
@@ -1545,7 +1543,8 @@ int ObSql::handle_pl_prepare(const ObString &sql,
           } else if (OB_FAIL(sess.store_query_string(sql))) {
             LOG_WARN("store query string fail", K(ret));
           } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode,
-                                          false, false, true, pl_prepare_ctx.is_dbms_sql_))) {
+                                          false, false, true, pl_prepare_ctx.is_dbms_sql_,
+                                          pl_prepare_ctx.is_parser_dynamic_sql_))) {
             LOG_WARN("generate syntax tree failed", K(ret),
                      "sql", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : sql);
           } else if (is_mysql_mode() && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
@@ -1556,7 +1555,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
           }
           context.is_sensitive_ |= parse_result.contain_sensitive_data_;
 
-          if (OB_SUCC(ret) && pl_prepare_ctx.is_dynamic_sql_ && !pl_prepare_ctx.is_dbms_sql_) {
+          if (OB_SUCC(ret) && pl_prepare_ctx.is_dbms_sql_) {
             ps_status_guard.is_varparams_sql_prepare(parse_result.question_mark_ctx_.count_ > 0 ? true : false);
           }
           if (OB_FAIL(ret)) {
@@ -1598,6 +1597,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
               parse_result.input_sql_ = parse_result.no_param_sql_;
               parse_result.input_sql_len_ = parse_result.no_param_sql_len_;
             }
+            pl_prepare_result.question_mark_cnt_ = parse_result.question_mark_ctx_.count_;
             if (OB_FAIL(generate_stmt(parse_result, NULL, context, allocator, result, basic_stmt))) {
               LOG_WARN("generate stmt failed", K(ret));
             } else if (OB_ISNULL(basic_stmt)) {
