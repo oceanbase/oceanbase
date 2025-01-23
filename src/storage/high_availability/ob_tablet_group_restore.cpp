@@ -812,7 +812,8 @@ int ObInitialTabletGroupRestoreTask::process()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  if (ObTabletRestoreAction::is_restore_major(ctx_->arg_.action_)) {
+  if (ObTabletRestoreAction::is_restore_major(ctx_->arg_.action_)
+      || ObTabletRestoreAction::is_restore_replace_remote_sstable(ctx_->arg_.action_)) {
     SERVER_EVENT_SYNC_ADD("storage_ha", "before_initial_tablet_group_restore",
                         "ls_id", ctx_->arg_.ls_id_);
     DEBUG_SYNC(BEFORE_LEADER_RESTORE_GROUP_TABLET);
