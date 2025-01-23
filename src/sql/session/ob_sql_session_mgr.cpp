@@ -915,7 +915,7 @@ bool ObSQLSessionMgr::CheckSessionFunctor::operator()(sql::ObSQLSessionMgr::Key 
     int64_t cur_time = common::ObTimeUtility::current_time();
     int64_t query_timeout = 0;
     ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
-    if (sess_info->get_ddl_info().is_ddl() || sess_info->is_real_inner_session()) {
+    if (sess_info->get_ddl_info().is_ddl() || sess_info->is_real_inner_session() || OB_NOT_NULL(sess_info->get_pl_context())) {
       //do nothing
     } else if (OB_FAIL(sess_info->get_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout))) {
       LOG_WARN("failed to get sesion variable", K(ret));
@@ -929,6 +929,8 @@ bool ObSQLSessionMgr::CheckSessionFunctor::operator()(sql::ObSQLSessionMgr::Key 
                                       K(sess_info->is_user_session()),
                                       "session_state", ObString::make_string(sess_info->get_session_state_str()),
                                       K(sess_info->get_current_query_string()));
+      //dump stack of all threads of observer
+      IGNORE_RETURN faststack();
     }
   }
   return OB_SUCCESS == ret;

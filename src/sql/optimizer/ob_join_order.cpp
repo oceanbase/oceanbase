@@ -18356,7 +18356,7 @@ int ObJoinOrder::get_valid_hint_index_list(const ObIArray<uint64_t> &hint_index_
                                            const bool is_link_table,
                                            ObSqlSchemaGuard *schema_guard,
                                            PathHelper &helper,
-                                           ObIArray<uint64_t> &valid_hint_index_ids) const
+                                           ObIArray<uint64_t> &valid_hint_index_ids)
 {
   int ret = OB_SUCCESS;
   const bool has_match_expr_on_table = helper.match_expr_infos_.count() > 0;
@@ -18373,30 +18373,46 @@ int ObJoinOrder::get_valid_hint_index_list(const ObIArray<uint64_t> &hint_index_
     } else if (OB_ISNULL(index_hint_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr to index hint table schema", K(ret), K(tid));
-    } else if (index_hint_table_schema->is_fts_index()
-        && !has_match_expr_on_index(tid, helper.match_expr_infos_)) {
-      // skip index hint on fulltext index without match expr on fulltext index
     } else if (index_hint_table_schema->is_global_index_table() && has_match_expr_on_table) {
-      // scan with both global index and fulltext index is not supported yet
+      //scan with both global index and fulltext index is not supported yet
+    } else if (index_hint_table_schema->is_fts_index()) {
+      bool is_valid = true;
+      if (OB_FAIL(has_valid_match_filter_on_index(helper, tid, is_valid))) {
+        LOG_WARN("failed to check has valid match filter on index", K(ret));
+      } else if (!is_valid) {
+        //do nothing
+      } else if (OB_FAIL(valid_hint_index_ids.push_back(tid))) {
+        LOG_WARN("failed to append valid hint index list", K(ret), K(tid));
+      }
     } else if (OB_FAIL(valid_hint_index_ids.push_back(tid))) {
       LOG_WARN("failed to append valid hint index list", K(ret), K(tid));
     }
   }
-
   return ret;
 }
 
-bool ObJoinOrder::has_match_expr_on_index(const uint64_t index_id,
-                                          const ObIArray<MatchExprInfo> &match_expr_infos) const
+int ObJoinOrder::has_valid_match_filter_on_index(PathHelper &helper, uint64_t tid, bool &is_valid)
 {
-  bool bret = false;
-  for (int64_t i = 0; !bret && i < match_expr_infos.count(); ++i) {
-    const MatchExprInfo &match_info = match_expr_infos.at(i);
-    if (match_info.inv_idx_id_ == index_id) {
-      bret = true;
+  int ret = OB_SUCCESS;
+  ObSEArray<ObMatchFunRawExpr*, 4> match_exprs;
+  ObSEArray<ObRawExpr*, 4> match_filters;
+  is_valid = false;
+  if (OB_FAIL(extract_scan_match_expr_candidates(helper.filters_, match_exprs, match_filters))) {
+    LOG_WARN("failed to extract scan match expr candidates", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_valid && i < match_exprs.count(); ++i) {
+      const MatchExprInfo *tmp_match_expr_info = NULL;
+      if (OB_FAIL(find_match_expr_info(helper.match_expr_infos_, match_exprs.at(i), tmp_match_expr_info))) {
+        LOG_WARN("failed to find match expr info", K(ret));
+      } else if (OB_ISNULL(tmp_match_expr_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (tmp_match_expr_info->inv_idx_id_ == tid) {
+        is_valid = true;
+      }
     }
   }
-  return bret;
+  return ret;
 }
 
 int ObJoinOrder::get_better_index_prefix(const ObIArray<ObRawExpr*> &range_exprs,

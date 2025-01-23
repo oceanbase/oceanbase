@@ -2959,8 +2959,8 @@ struct NullAwareAntiJoinInfo {
                                   const bool is_link_table,
                                   ObSqlSchemaGuard *schema_guard,
                                   PathHelper &helper,
-                                  ObIArray<uint64_t> &valid_hint_index_ids) const;
-    bool has_match_expr_on_index(const uint64_t index_id, const ObIArray<MatchExprInfo> &match_expr_infos) const;
+                                  ObIArray<uint64_t> &valid_hint_index_ids);
+    int has_valid_match_filter_on_index(PathHelper &helper, uint64_t tid, bool &is_valid);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:
