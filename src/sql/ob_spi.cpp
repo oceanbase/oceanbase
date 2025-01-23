@@ -1722,6 +1722,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
   if (OB_SUCC(ret)) {
     HEAP_VAR(ObSPIResultSet, spi_result) {
 
+      ObPLPartitionHitGuard ph_guard(*ctx);
       ObSQLSessionInfo *session = ctx->exec_ctx_->get_my_session();
       stmt::StmtType stmt_type = static_cast<stmt::StmtType>(type);
       ObString sqlstr(sql);
@@ -1847,7 +1848,8 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
       }
 
       // 记录第一条SQL执行PartitionHit信息, 并对PartitionHit进行Freeze, 防止后续的SQL冲掉
-      if (OB_SUCC(ret)) {
+      // Nested sql won't freeze `partition_hit_`, because need set `partition_hit_` when the top sql close.
+      if (OB_SUCC(ret) && ph_guard.can_freeze_) {
         if (OB_NOT_NULL(spi_result.get_result_set()->get_physical_plan())) {
           session->partition_hit().freeze();
         }
@@ -9498,6 +9500,29 @@ ObSPIExecEnvGuard::~ObSPIExecEnvGuard()
     session_info_.set_query_start_time(query_start_time_bk_);
   }
 }
+
+ObPLPartitionHitGuard::ObPLPartitionHitGuard(ObPLExecCtx &pl_exec_ctx) : pl_exec_ctx_(pl_exec_ctx)
+{
+  old_partition_hit_ = true;
+  can_freeze_ = true;
+  if (OB_NOT_NULL(pl_exec_ctx_.exec_ctx_->get_pl_stack_ctx())
+      && OB_NOT_NULL(pl_exec_ctx_.exec_ctx_->get_my_session())
+      && pl_exec_ctx_.exec_ctx_->get_pl_stack_ctx()->in_nested_sql_ctrl()) {
+    old_partition_hit_ = pl_exec_ctx_.exec_ctx_->get_my_session()->partition_hit().get_bool();
+    can_freeze_ = false;
+  }
+}
+
+ObPLPartitionHitGuard::~ObPLPartitionHitGuard()
+{
+  if (!can_freeze_
+      && OB_NOT_NULL(pl_exec_ctx_.exec_ctx_->get_pl_stack_ctx())
+      && OB_NOT_NULL(pl_exec_ctx_.exec_ctx_->get_my_session())
+      && pl_exec_ctx_.exec_ctx_->get_pl_stack_ctx()->in_nested_sql_ctrl()) {
+    pl_exec_ctx_.exec_ctx_->get_my_session()->partition_hit().try_set_bool(old_partition_hit_);
+  }
+}
+
 
 }
 }
