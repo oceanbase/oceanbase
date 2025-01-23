@@ -2130,7 +2130,8 @@ int ObDDLOperator::alter_table_drop_aux_column(
                 new_schema_version,
                 trans,
                 *aux_table_schema,
-                *delete_column_schema))) {
+                *delete_column_schema,
+                false/*need_record_ddl_operation*/))) {
               RS_LOG(WARN, "failed to delete non-aux column!",
                   "table schema", *aux_table_schema, K(ret));
             } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
@@ -2159,6 +2160,7 @@ int ObDDLOperator::update_prev_id_for_delete_column(const ObTableSchema &origin_
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = origin_table_schema.get_tenant_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
+  const bool need_del_stats = false;
   // When a transaction currently add/drop column: origin_table_schema don't update prev&next column ID, so it need fetch from new table.
   ObColumnSchemaV2 *new_origin_col = new_table_schema.get_column_schema(ori_column_schema.get_column_name());
   ObSchemaService *schema_service = schema_service_.get_schema_service();
@@ -2170,19 +2172,21 @@ int ObDDLOperator::update_prev_id_for_delete_column(const ObTableSchema &origin_
     LOG_WARN("Failed to get column from new table schema", K(ret));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(new_table_schema.delete_column_update_prev_id(new_origin_col))) {
+    LOG_WARN("delete column update prev id failed", KR(ret));
   } else {
     ObColumnSchemaV2 *next_col = new_table_schema.get_column_schema_by_prev_next_id(new_origin_col->get_next_column_id());
     if (OB_ISNULL(next_col)) {
       // do nothing since local_column is tail column
     } else {
-      next_col->set_prev_column_id(new_origin_col->get_prev_column_id());
       next_col->set_schema_version(new_schema_version);
       if (OB_FAIL(schema_service->get_table_sql_service().update_single_column(
           trans,
           origin_table_schema,
           new_table_schema,
           *next_col,
-          true /* record_ddl_operation */))) {
+          true /* record_ddl_operation */,
+          need_del_stats))) {
         LOG_WARN("Failed to update single column", K(ret), K(next_col->get_column_name_str()));
       }
     }
@@ -2675,7 +2679,8 @@ int ObDDLOperator::split_table_partitions(const ObTableSchema &orig_table_schema
             } else if (FALSE_IT(column_schema->set_schema_version(new_schema_version))) {
             } else if (OB_FAIL(schema_service->get_table_sql_service()
                                     .update_single_column(trans, orig_table_schema, new_table_schema,
-                                                          *column_schema, false /* record_ddl_operation */))) {
+                                                          *column_schema, false, /* record_ddl_operation */
+                                                          false /*need_del_stats*/))) {
               LOG_WARN("update single column failed", KR(ret), K(orig_table_schema),
                                                       K(new_table_schema), KPC(column_schema));
             }
@@ -3250,27 +3255,28 @@ int ObDDLOperator::insert_single_column(ObMySQLTransaction &trans,
 }
 
 int ObDDLOperator::delete_single_column(ObMySQLTransaction &trans,
+                                        const int64_t new_schema_version,
                                         ObTableSchema &new_table_schema,
                                         const ObString &column_name)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = new_table_schema.get_tenant_id();
-  int64_t new_schema_version = OB_INVALID_VERSION;
   ObColumnSchemaV2 *orig_column = NULL;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_VERSION == new_schema_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret));
   } else if (OB_ISNULL(orig_column = new_table_schema.get_column_schema(column_name))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get column schema from table failed", K(column_name));
   } else if (OB_FAIL(new_table_schema.delete_column(column_name))) {
     //drop column will do some check on the new table schema
     RS_LOG(WARN, "failed to drop column schema", K(ret), K(column_name));
-  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service->get_table_sql_service().delete_single_column(
-      new_schema_version, trans, new_table_schema, *orig_column))) {
+      new_schema_version, trans, new_table_schema, *orig_column, false/*need_record_ddl_operation*/))) {
     RS_LOG(WARN, "failed to delete column", K(orig_column), K(ret));
   }
   return ret;
@@ -3488,7 +3494,7 @@ int ObDDLOperator::alter_table_drop_foreign_key(const ObTableSchema &table_schem
     } else if (OB_FAIL(table_sql_service->drop_foreign_key(
                        new_schema_version, trans, table_schema, foreign_key_info, parent_table_in_offline_ddl_white_list))) {
       LOG_WARN("failed to drop foreign key", K(ret), K(foreign_key_name));
-    } else if (foreign_key_info->is_parent_table_mock_) {
+    } else if (nullptr != foreign_key_info && foreign_key_info->is_parent_table_mock_) {
       parent_table_mock_foreign_key_info = foreign_key_info;
     }
   }
@@ -3760,16 +3766,21 @@ int ObDDLOperator::alter_table_rename_index(
     const uint64_t database_id,
     const obrpc::ObRenameIndexArg &rename_index_arg,
     const ObIndexStatus *new_index_status,
+    const bool is_in_deleting,
     common::ObMySQLTransaction &trans,
     schema::ObTableSchema &new_index_table_schema)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", KR(ret));
+  } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret));
   } else {
     RS_LOG(INFO, "start alter table rename index", K(rename_index_arg));
-    const ObTableSchema *index_table_schema = NULL;
+    const ObTableSchema *index_table_schema = nullptr;
     ObString index_table_name;
     ObString new_index_table_name;
     ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
@@ -3785,7 +3796,7 @@ int ObDDLOperator::alter_table_rename_index(
                                                       data_table_id,
                                                       new_index_name,
                                                       new_index_table_name))) {
-      RS_LOG(WARN, "build_index_table_name failed", K(data_table_id), K(index_name), K(ret));
+      RS_LOG(WARN, "build_index_table_name failed", KR(ret), K(data_table_id), K(new_index_name));
     } else {
       const bool is_index = true;
       if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
@@ -3793,9 +3804,12 @@ int ObDDLOperator::alter_table_rename_index(
                                                 index_table_name,
                                                 is_index,
                                                 index_table_schema))) {
-        LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_id), K(index_table_schema));
+        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(database_id), K(index_table_name));
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table schema is NULL", KR(ret), K(tenant_id), K(database_id), K(index_table_name));
       } else if (OB_FAIL(inner_alter_table_rename_index_(tenant_id, index_table_schema, new_index_table_name,
-              new_index_status, trans, new_index_table_schema))) {
+              new_index_status, is_in_deleting, trans, new_index_table_schema))) {
         LOG_WARN("fail to alter table rename index", K(ret), K(tenant_id), KPC(index_table_schema),
             K(new_index_table_name));
       } else if (is_fts_index_aux(index_table_schema->get_index_type())) {
@@ -3806,6 +3820,7 @@ int ObDDLOperator::alter_table_rename_index(
                                                        index_name,
                                                        new_index_name,
                                                        new_index_status,
+                                                       is_in_deleting,
                                                        schema_guard,
                                                        trans,
                                                        allocator))) {
@@ -3820,6 +3835,7 @@ int ObDDLOperator::alter_table_rename_index(
                                                        index_name,
                                                        new_index_name,
                                                        new_index_status,
+                                                       is_in_deleting,
                                                        schema_guard,
                                                        trans,
                                                        allocator))) {
@@ -3832,6 +3848,7 @@ int ObDDLOperator::alter_table_rename_index(
                                                        index_name,
                                                        new_index_name,
                                                        new_index_status,
+                                                       is_in_deleting,
                                                        schema_guard,
                                                        trans,
                                                        allocator))) {
@@ -3852,6 +3869,7 @@ int ObDDLOperator::alter_table_rename_built_in_index_(
     const ObString &index_name,
     const ObString &new_index_name,
     const ObIndexStatus *new_index_status,
+    const bool is_in_deleting,
     share::schema::ObSchemaGetterGuard &schema_guard,
     common::ObMySQLTransaction &trans,
     ObArenaAllocator &allocator)
@@ -3913,6 +3931,7 @@ int ObDDLOperator::alter_table_rename_built_in_index_(
                                                        origin_table_schema,
                                                        new_index_table_name,
                                                        new_index_status,
+                                                       is_in_deleting,
                                                        trans,
                                                        new_table_schema))) {
       LOG_WARN("fail to alter table rename index", K(ret), K(tenant_id), KPC(origin_table_schema), K(new_table_schema));
@@ -3926,6 +3945,7 @@ int ObDDLOperator::alter_table_rename_index_with_origin_index_name(
     const uint64_t index_table_id,
     const ObString &new_index_name, // Attention!!! origin index name, don't use table name. For example, __idx_500005_{index_name}, please using index_name!!!
     const ObIndexStatus &new_index_status,
+    const bool is_in_deleting,
     common::ObMySQLTransaction &trans,
     share::schema::ObTableSchema &new_index_table_schema)
 {
@@ -3951,7 +3971,7 @@ int ObDDLOperator::alter_table_rename_index_with_origin_index_name(
                                                            new_index_table_name))) {
     LOG_WARN("fail to build new index name", K(ret), K(new_index_name), KPC(index_table_schema));
   } else if (OB_FAIL(inner_alter_table_rename_index_(tenant_id, index_table_schema, new_index_table_name, &new_index_status,
-          trans, new_index_table_schema))) {
+             is_in_deleting, trans, new_index_table_schema))) {
     LOG_WARN("fail to alter table rename index", K(ret), K(tenant_id), KPC(index_table_schema),
         K(new_index_table_name), K(new_index_status));
   }
@@ -3963,6 +3983,7 @@ int ObDDLOperator::inner_alter_table_rename_index_(
     const share::schema::ObTableSchema *index_table_schema,
     const ObString &new_index_name,
     const ObIndexStatus *new_index_status,
+    const bool is_in_deleting,
     common::ObMySQLTransaction &trans,
     share::schema::ObTableSchema &new_index_table_schema)
 {
@@ -3990,6 +4011,7 @@ int ObDDLOperator::inner_alter_table_rename_index_(
     if (nullptr != new_index_status) {
       new_index_table_schema.set_index_status(*new_index_status);
     }
+    new_index_table_schema.set_is_in_deleting(is_in_deleting);
     new_index_table_schema.set_name_generated_type(GENERATED_TYPE_USER);
     if (OB_FAIL(new_index_table_schema.set_table_name(new_index_name))) {
       RS_LOG(WARN, "failed to set new table name!", K(new_index_table_schema), K(ret));
@@ -4726,7 +4748,8 @@ int ObDDLOperator::update_table_attribute(ObTableSchema &new_table_schema,
 int ObDDLOperator::update_single_column(common::ObMySQLTransaction &trans,
                                         const ObTableSchema &origin_table_schema,
                                         const ObTableSchema &new_table_schema,
-                                        ObColumnSchemaV2 &column_schema)
+                                        ObColumnSchemaV2 &column_schema,
+                                        const bool need_del_stats)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = origin_table_schema.get_tenant_id();
@@ -4742,7 +4765,7 @@ int ObDDLOperator::update_single_column(common::ObMySQLTransaction &trans,
     const ObColumnSchemaV2 *orig_column_schema = origin_table_schema.get_column_schema(column_schema.get_column_id());
     if (OB_FAIL(schema_service_impl->get_table_sql_service().update_single_column(
               trans, origin_table_schema, new_table_schema, column_schema,
-              true /* record_ddl_operation */))) {
+              true /* record_ddl_operation */, need_del_stats))) {
       RS_LOG(WARN, "failed to update single column", K(ret));
     }
   }
@@ -4808,6 +4831,22 @@ int ObDDLOperator::update_single_column_group(common::ObMySQLTransaction &trans,
   return ret;
 }
 
+int ObDDLOperator::update_column_and_column_group(common::ObMySQLTransaction &trans,
+                                                  const ObTableSchema &origin_table_schema,
+                                                  const ObTableSchema &new_table_schema,
+                                                  ObColumnSchemaV2 &column_schema,
+                                                  const bool need_del_stats)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(update_single_column(trans, origin_table_schema, new_table_schema,
+                                   column_schema, need_del_stats))) {
+    LOG_WARN("fail to update single column", KR(ret), K(column_schema), K(origin_table_schema), K(new_table_schema));
+  } else if (OB_FAIL(update_single_column_group(trans, origin_table_schema, column_schema))) {
+    LOG_WARN("fail to update single column group", KR(ret), K(column_schema), K(origin_table_schema));
+  }
+  return ret;
+}
+
 int ObDDLOperator::batch_update_system_table_columns(
     common::ObMySQLTransaction &trans,
     const share::schema::ObTableSchema &orig_table_schema,
@@ -4821,6 +4860,7 @@ int ObDDLOperator::batch_update_system_table_columns(
   const uint64_t table_id = new_table_schema.get_table_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
+  const bool need_del_stats = false;
   if (OB_ISNULL(schema_service_impl)) {
     ret = OB_ERR_SYS;
     LOG_WARN("schema_service_impl must not null", KR(ret));
@@ -4848,7 +4888,7 @@ int ObDDLOperator::batch_update_system_table_columns(
         LOG_WARN("fail to get column", KR(ret), K(tenant_id), K(table_id), K(column_id));
       } else if (FALSE_IT(new_column->set_schema_version(new_schema_version))) {
       } else if (OB_FAIL(schema_service_impl->get_table_sql_service().update_single_column(
-                 trans, orig_table_schema, new_table_schema, *new_column, false))) {
+                 trans, orig_table_schema, new_table_schema, *new_column, false, need_del_stats))) {
         LOG_WARN("fail to insert column", KR(ret), K(tenant_id), K(table_id), K(column_id));
       }
     } // end for
@@ -10918,6 +10958,7 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
       }
       // There are no other indexes, delete the hidden column.
       if (OB_SUCC(ret) && !exist_index) {
+        int64_t new_schema_version = OB_INVALID_VERSION;
         if (index_col->is_multivalue_generated_array_column() || index_col->is_multivalue_generated_column()) {
           // multivalue array column not in the index schema, need do delete as well do real delete in drop_inner_generated_domain_extra_column
           if (OB_FAIL(drop_inner_generated_domain_extra_column(trans, data_table, *index_col, new_data_table_schema))) {
@@ -10926,8 +10967,10 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
         // if generate column is not the last column // 1. update prev_column_id // 2. update inner table
         } else if (OB_FAIL(update_prev_id_for_delete_column(*data_table, new_data_table_schema, *index_col, trans))) {
           LOG_WARN("failed to update column previous id for delete column", K(ret));
-        } else if (OB_FAIL(delete_single_column(trans, new_data_table_schema, index_col->get_column_name_str()))) {
-          LOG_WARN("delete index inner generated column failed", K(new_data_table_schema), K(*index_col));
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+        } else if (OB_FAIL(delete_single_column(trans, new_schema_version, new_data_table_schema, index_col->get_column_name_str()))) {
+          LOG_WARN("delete index inner generated column failed", KR(ret), K(new_data_table_schema), K(*index_col));
         }
       }
     }
@@ -10965,6 +11008,7 @@ int ObDDLOperator::drop_inner_generated_domain_extra_column(
   const uint64_t tenant_id = ori_data_schema->get_tenant_id();
   const ObColumnSchemaV2 *budy_col = NULL;
   bool is_match = false;
+  int64_t new_schema_version = OB_INVALID_VERSION;
 
   if (OB_ISNULL(ori_data_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -10984,13 +11028,17 @@ int ObDDLOperator::drop_inner_generated_domain_extra_column(
   // delete budy column
   } else if (OB_FAIL(update_prev_id_for_delete_column(*ori_data_schema, new_data_table_schema, *budy_col, trans))) {
     LOG_WARN("failed to update column previous id for delete column", K(ret));
-  } else if (OB_FAIL(delete_single_column(trans, new_data_table_schema, budy_col->get_column_name_str()))) {
-    LOG_WARN("delete index inner generated column failed", K(new_data_table_schema), K(*budy_col));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(delete_single_column(trans, new_schema_version, new_data_table_schema, budy_col->get_column_name_str()))) {
+    LOG_WARN("delete index inner generated column failed", KR(ret), K(new_data_table_schema), K(*budy_col));
   // delete index column
   } else if (OB_FAIL(update_prev_id_for_delete_column(*ori_data_schema, new_data_table_schema, ori_column_schema, trans))) {
     LOG_WARN("failed to update column previous id for delete column", K(ret));
-  } else if (OB_FAIL(delete_single_column(trans, new_data_table_schema, ori_column_schema.get_column_name_str()))) {
-    LOG_WARN("delete index inner generated column failed", K(new_data_table_schema), K(*budy_col));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(delete_single_column(trans, new_schema_version, new_data_table_schema, ori_column_schema.get_column_name_str()))) {
+    LOG_WARN("delete index inner generated column failed", KR(ret), K(new_data_table_schema), K(*budy_col));
   }
 
   return ret;
@@ -11193,6 +11241,7 @@ int ObDDLOperator::revise_not_null_constraint_info(
   const ObTableSchema *ori_table_schema = NULL;
   ObSEArray<const ObColumnSchemaV2 *, 16> not_null_cols;
   const bool update_object_status_ignore_version = false;
+  const bool need_del_stats = false;
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
@@ -11289,7 +11338,7 @@ int ObDDLOperator::revise_not_null_constraint_info(
                   trans, cst, only_history,need_to_deal_with_cst_cols, do_cst_revise))) {
           LOG_WARN("add single constraint failed", K(ret), K(cst));
         } else if (OB_FAIL(schema_service->get_table_sql_service().update_single_column(
-          trans, *ori_table_schema, *ori_table_schema, new_col_schema, false))) {
+          trans, *ori_table_schema, *ori_table_schema, new_col_schema, false, need_del_stats))) {
           LOG_WARN("update single column failed", K(ret));
         }
       }

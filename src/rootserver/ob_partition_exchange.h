@@ -42,6 +42,9 @@ public:
   virtual ~ObPartitionExchange();
   int check_and_exchange_partition(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res, ObSchemaGetterGuard &schema_guard);
 
+  // direct load promise that the two tables of partition exchange are consistent
+  static int check_exchange_partition_for_direct_load(ObSchemaGetterGuard &schema_guard, const ObTableSchema *table_schema);
+
 protected:
   int check_partition_exchange_conditions_(const obrpc::ObExchangePartitionArg &arg, const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode, ObSchemaGetterGuard &schema_guard);
   int do_exchange_partition_(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res, const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode, ObSchemaGetterGuard &schema_guard);
@@ -175,7 +178,7 @@ protected:
   int compare_column_extended_type_info_(const common::ObIArray<common::ObString> &l_extended_type_info,
                                          const common::ObIArray<common::ObString> &r_extended_type_info,
                                          bool &is_equal);
-  bool in_supported_table_type_white_list_(const ObTableSchema &table_schema);
+  static bool in_supported_table_type_white_list_(const ObTableSchema &table_schema);
   // generate corresponding auxiliary table mapping that need to exchange partitions
   bool in_find_same_aux_table_retry_white_list_(const int ret_code);
   int generate_auxiliary_table_mapping_(const ObTableSchema &base_data_table_schema,

@@ -371,10 +371,12 @@ int ObSetCommentHelper::alter_schema_()
   } else if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id_, new_schema_version))) {
     LOG_WARN("fail to gen new schema version", KR(ret), K_(tenant_id));
   } else {
+    const bool need_del_stat = false;
     for (uint64_t column_idx = 0; OB_SUCC(ret) && column_idx < arg_.column_name_list_.size(); column_idx++) {
       new_column_schemas_.at(column_idx)->set_schema_version(new_schema_version);
       if (OB_FAIL(schema_service_impl->get_table_sql_service().update_single_column(
-                trans_, *orig_table_schema_, *new_table_schema_, *new_column_schemas_.at(column_idx), false /* record ddl operation*/))) {
+                trans_, *orig_table_schema_, *new_table_schema_,
+                *new_column_schemas_.at(column_idx), false /* record ddl operation*/, need_del_stat))) {
         LOG_WARN("fail to update single column", KR(ret));
       }
     }

@@ -740,7 +740,7 @@ int ObTableLoadTransStoreWriter::init_column_schemas_and_lob_info()
   for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
     const ObColumnSchemaV2 *column_schema =
       table_schema->get_column_schema(column_descs.at(i).col_id_);
-    if (column_schema->is_hidden()) {
+    if (ObColumnSchemaV2::is_hidden_pk_column_id(column_schema->get_column_id())) {
     } else if (OB_FAIL(column_schemas_.push_back(column_schema))) {
       LOG_WARN("failed to push back column schema", K(ret), K(i), KPC(column_schema));
     }
@@ -994,7 +994,11 @@ int ObTableLoadTransStoreWriter::cast_column(
   ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
   ObObj out_obj;
   if (column_schema->is_autoincrement()) {
-    if (obj.is_null() || obj.is_nop_value()) {
+    // mysql模式还不支持快速删列, 先加个拦截
+    if (OB_UNLIKELY(column_schema->is_unused())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected unused identity column", KR(ret), KPC(column_schema));
+    } else if (obj.is_null() || obj.is_nop_value()) {
       out_obj = obj;
     } else if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx,
                                                       column_schema,
@@ -1008,7 +1012,11 @@ int ObTableLoadTransStoreWriter::cast_column(
       }
     }
   } else if (column_schema->is_identity_column()) {
-    if (column_schema->is_tbl_part_key_column()) {
+    // identity列在快速删除的时候会抹去identity属性
+    if (OB_UNLIKELY(column_schema->is_unused())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected unused identity column", KR(ret), KPC(column_schema));
+    } else if (column_schema->is_tbl_part_key_column()) {
       // 自增列是分区键, 在分区计算的时候就已经确定值了
       out_obj = obj;
     } else {

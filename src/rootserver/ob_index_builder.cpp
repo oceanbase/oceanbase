@@ -411,8 +411,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
 
         if (OB_FAIL(ret) || has_other_domain_index) {
         } else if (need_rename_index && OB_FAIL(ddl_service_.rename_dropping_index_name(
-                                                      table_schema->get_table_id(),
-                                                      table_schema->get_database_id(),
+                                                      *index_table_schema,
                                                       is_inner_and_fts_or_mulvalue_or_vector_index,
                                                       arg,
                                                       schema_guard,

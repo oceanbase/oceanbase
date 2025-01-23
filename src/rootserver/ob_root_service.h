@@ -546,6 +546,7 @@ public:
   int drop_tablegroup(const obrpc::ObDropTablegroupArg &arg);
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
   int create_mlog(const obrpc::ObCreateMLogArg &arg, obrpc::ObCreateMLogRes &res);
+  int drop_lob(const obrpc::ObDropLobArg &arg);
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
   int rebuild_vec_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
   int clone_tenant(const obrpc::ObCloneTenantArg &arg, obrpc::ObCloneTenantRes &res);

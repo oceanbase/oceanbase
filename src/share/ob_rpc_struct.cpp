@@ -3557,6 +3557,7 @@ DEF_TO_STRING(ObAlterIndexArg)
 }
 
 OB_SERIALIZE_MEMBER((ObAlterIndexArg, ObIndexArg), index_visibility_);
+OB_SERIALIZE_MEMBER((ObDropLobArg, ObDDLArg), tenant_id_, session_id_, data_table_id_, aux_lob_meta_table_id_);
 
 DEF_TO_STRING(ObDropIndexArg) {
   int64_t pos = 0;

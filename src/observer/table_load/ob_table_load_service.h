@@ -60,6 +60,10 @@ public:
                                        const storage::ObDirectLoadMode::Type load_mode,
                                        const storage::ObDirectLoadLevel::Type load_level,
                                        const common::ObIArray<uint64_t> &column_ids);
+  static int check_support_direct_load_for_columns(const share::schema::ObTableSchema *table_schema,
+                                                   const storage::ObDirectLoadMode::Type load_mode);
+  static int check_support_direct_load_for_default_value(const share::schema::ObTableSchema *table_schema,
+                                                         const common::ObIArray<uint64_t> &column_ids);
   static int check_support_direct_load_for_partition_level(ObSchemaGetterGuard &schema_guard,
                                                            const ObTableSchema *table_schema,
                                                            const ObDirectLoadMethod::Type method,

@@ -59,7 +59,7 @@ eval select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from $da
 
 if ($query_type == 2)
 {
-eval select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from $database_name.$table_name;
+eval select /*+QUERY_TIMEOUT(1000000000)*/ IF(count(*) >= 0, 1, 0) from $database_name.$table_name;
 }
 
 inc $idx;

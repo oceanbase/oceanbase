@@ -321,6 +321,11 @@ int assign(const ObColumnSchemaV2 &src_schema);
 
   inline static bool is_hidden_pk_column_id(const uint64_t column_id);
   inline bool is_unused() const { return column_flags_ & UNUSED_COLUMN_FLAG; }
+  inline void set_unused()
+  {
+    set_is_hidden(true);
+    add_column_flag(UNUSED_COLUMN_FLAG);
+  }
 
   //other methods
   int64_t get_convert_size(void) const;

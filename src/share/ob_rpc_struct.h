@@ -1388,6 +1388,53 @@ public:
   DECLARE_VIRTUAL_TO_STRING;
 };
 
+struct ObDropLobArg: public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDropLobArg():
+      ObDDLArg(),
+      tenant_id_(common::OB_INVALID_ID),
+      session_id_(common::OB_INVALID_ID),
+      data_table_id_(common::OB_INVALID_ID),
+      aux_lob_meta_table_id_(common::OB_INVALID_ID)
+  {}
+  virtual ~ObDropLobArg() {}
+  void reset()
+  {
+    ObDDLArg::reset();
+    tenant_id_ = common::OB_INVALID_ID;
+    session_id_ = common::OB_INVALID_ID;
+    data_table_id_ = common::OB_INVALID_ID;
+    aux_lob_meta_table_id_ = common::OB_INVALID_ID;
+  }
+  bool is_valid() const
+  {
+    return common::OB_INVALID_ID != tenant_id_
+      && common::OB_INVALID_ID != data_table_id_
+      && common::OB_INVALID_ID != aux_lob_meta_table_id_;
+  }
+  int assign(const ObDropLobArg &other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObDDLArg::assign(other))) {
+      SHARE_LOG(WARN, "fail to assign ddl arg", KR(ret));
+    } else {
+      tenant_id_ = other.tenant_id_;
+      session_id_ = other.session_id_;
+      data_table_id_ = other.data_table_id_;
+      aux_lob_meta_table_id_ = other.aux_lob_meta_table_id_;
+    }
+    return ret;
+  }
+public:
+  uint64_t tenant_id_;
+  uint64_t session_id_;
+  uint64_t data_table_id_;
+  uint64_t aux_lob_meta_table_id_;
+  INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg, K_(tenant_id), K_(session_id), K_(data_table_id), K_(aux_lob_meta_table_id));
+};
+
 struct ObDropIndexArg: public ObIndexArg
 {
   OB_UNIS_VERSION(1);

@@ -227,7 +227,7 @@ POSITION_IN_UNIQUE_CONSTRAINT	bigint(0) unsigned	NO
 REFERENCED_TABLE_SCHEMA	varchar(64)	NO			
 REFERENCED_TABLE_NAME	varchar(64)	NO			
 REFERENCED_COLUMN_NAME	varchar(64)	NO			
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from information_schema.KEY_COLUMN_USAGE;
+select /*+QUERY_TIMEOUT(1000000000)*/ IF(count(*) >= 0, 1, 0) from information_schema.KEY_COLUMN_USAGE;
 IF(count(*) >= 0, 1, 0)
 1
 desc information_schema.ENGINES;
@@ -2955,7 +2955,7 @@ UNUSABLE_BEFORE	varchar(128)	NO
 UNUSABLE_BEGINNING	varchar(128)	NO			
 COLLATION	varchar(100)	NO			
 COLLATED_COLUMN_ID	bigint(0)	NO			
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_TAB_COLS_V$;
+select /*+QUERY_TIMEOUT(1000000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_TAB_COLS_V$;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.CDB_TAB_COLS;
@@ -3005,7 +3005,7 @@ UNUSABLE_BEFORE	varchar(128)	NO
 UNUSABLE_BEGINNING	varchar(128)	NO			
 COLLATION	varchar(100)	NO			
 COLLATED_COLUMN_ID	bigint(0)	NO			
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_TAB_COLS;
+select /*+QUERY_TIMEOUT(1000000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_TAB_COLS;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.CDB_INDEXES;
@@ -3088,7 +3088,7 @@ COLUMN_LENGTH	bigint(20)	NO
 CHAR_LENGTH	bigint(20)	NO			
 DESCEND	varchar(4)	NO			
 COLLATED_COLUMN_ID	bigint(0)	NO			
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_IND_COLUMNS;
+select /*+QUERY_TIMEOUT(1000000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_IND_COLUMNS;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.CDB_PART_TABLES;
@@ -3283,7 +3283,7 @@ OBJECT_TYPE	varchar(5)	NO
 COLUMN_NAME	text	NO			
 COLUMN_POSITION	bigint(20)	NO			
 COLLATED_COLUMN_ID	bigint(0)	NO			
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_PART_KEY_COLUMNS;
+select /*+QUERY_TIMEOUT(1000000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_PART_KEY_COLUMNS;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.CDB_SUBPART_KEY_COLUMNS;
@@ -3295,7 +3295,7 @@ OBJECT_TYPE	varchar(5)	NO
 COLUMN_NAME	text	NO			
 COLUMN_POSITION	bigint(21)	NO			
 COLLATED_COLUMN_ID	bigint(0)	NO			
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_SUBPART_KEY_COLUMNS;
+select /*+QUERY_TIMEOUT(1000000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_SUBPART_KEY_COLUMNS;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.CDB_PART_INDEXES;
@@ -3454,7 +3454,7 @@ NOTES	varchar(80)	NO
 AVG_COL_LEN	bigint(21)	NO			
 HISTOGRAM	varchar(15)	NO			
 SCOPE	varchar(7)	NO			
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_TAB_COL_STATISTICS;
+select /*+QUERY_TIMEOUT(1000000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.CDB_TAB_COL_STATISTICS;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.DBA_OBJECTS;
@@ -4620,7 +4620,7 @@ NOTES	varchar(80)	NO
 AVG_COL_LEN	decimal(10,0)	NO		NULL	
 HISTOGRAM	varchar(15)	NO			
 SCOPE	varchar(7)	NO			
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.DBA_TAB_COL_STATISTICS;
+select /*+QUERY_TIMEOUT(1000000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.DBA_TAB_COL_STATISTICS;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.DBA_PART_COL_STATISTICS;

@@ -239,10 +239,14 @@ int ObLoadDataDirectImpl::Logger::log_error_line(const ObString &file_name, int6
         LOG_WARN("fail to append log", KR(tmp_ret), K(pos), K(line_no), K(err_no), K(err_msg));
       }
     }
-    if (inc_error_count() > max_error_rows_) {
+    const int64_t error_cnt = inc_error_count();
+    if (0 == max_error_rows_) {
+      ret = err_code;
+      LOG_WARN("parse error", KR(ret));
+    } else if (error_cnt > max_error_rows_) {
       ret = OB_ERR_TOO_MANY_ROWS;
       LOG_WARN("error row count reaches its maximum value", KR(ret), K(max_error_rows_),
-               K(err_cnt_));
+               K(error_cnt));
     }
   }
   return ret;
@@ -1931,17 +1935,26 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::check_support_direct_load()
   const uint64_t table_id = execute_param_->table_id_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
-  bool has_lob_column = false;
   if (OB_FAIL(
         ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  }
-  // check has lob column
-  else if (OB_FAIL(ObTableLoadSchema::check_has_lob_column(table_schema, has_lob_column))) {
-    LOG_WARN("fail to check has lob column", KR(ret));
-  } else if (has_lob_column) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("direct-load backup does not support table has lob column", KR(ret));
+  } else {
+    for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+         OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
+      ObColumnSchemaV2 *column_schema = *iter;
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid column schema", K(column_schema));
+      } else if (column_schema->is_unused()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("backup direct-load does not support table has unused column", KR(ret), KPC(column_schema));
+        FORWARD_USER_ERROR_MSG(ret, "backup direct-load does not support table has unused column");
+      } else if (column_schema->get_meta_type().is_lob_storage()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("backup direct-load does not support table has lob column", KR(ret), KPC(column_schema));
+        FORWARD_USER_ERROR_MSG(ret, "backup direct-load does not support table has lob column");
+      }
+    }
   }
   return ret;
 }

@@ -13896,10 +13896,11 @@ int ObRlsPolicySchema::rebuild_with_table_schema(const ObRlsPolicySchema &src_sc
   OX (tmp_column_cnt = column_cnt_);
   OX (column_cnt_ = 0);
   for (int64_t i = 0; OB_SUCC(ret) && i < tmp_column_cnt; ++i) {
+    const ObColumnSchemaV2 *column_schema = nullptr;
     if (OB_ISNULL(sec_column_array_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rls sec column is null", KR(ret));
-    } else if (NULL == table_schema.get_column_schema(sec_column_array_[i]->get_column_id())) {
+    } else if (NULL == (column_schema = table_schema.get_column_schema(sec_column_array_[i]->get_column_id())) || column_schema->is_unused()) {
       // do nothing
     } else {
       sec_column_array_[column_cnt_++] = sec_column_array_[i];
