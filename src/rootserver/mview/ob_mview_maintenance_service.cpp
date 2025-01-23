@@ -377,6 +377,7 @@ int ObMViewMaintenanceService::fetch_mv_refresh_scns(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_GET_WRONG_CACHE);
 int ObMViewMaintenanceService::get_mview_refresh_info(const ObIArray<uint64_t> &src_mview_ids,
                                                       ObMySQLProxy *sql_proxy,
                                                       const share::SCN &read_snapshot,
@@ -421,6 +422,19 @@ int ObMViewMaintenanceService::get_mview_refresh_info(const ObIArray<uint64_t> &
       LOG_WARN("fail to get mview last refresh info", K(ret), K(src_mview_ids), K(tenant_id));
     }
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret) && OB_FAIL(ERRSIM_GET_WRONG_CACHE)) {
+    LOG_WARN("errsim get wrong cache", K(ret), K(mview_refresh_scns));
+    const uint64_t two_day_ns = 172800000000000; // 2 * 24 * 60 * 60 * 1000 * 1000 * 1000;
+    for (int idx = 0; idx < mview_refresh_scns.count(); idx++) {
+      if (mview_refresh_scns.at(idx) > two_day_ns) {
+        mview_refresh_scns.at(idx) -= two_day_ns;
+      }
+      LOG_INFO("reduce mview refresh scn", K(idx), K(mview_refresh_scns.at(idx)));
+    }
+    ret = OB_SUCCESS;
+  }
+#endif
   if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
     LOG_INFO("get_mview_refresh_info", K(ret), K(src_mview_ids), K(mview_ids),
             K(tenant_id), K(hit_cache),
