@@ -122,6 +122,10 @@ else()
 endif()
 message(STATUS "Cpack Components:${CPACK_COMPONENTS_ALL}")
 
+# refs https://stackoverflow.com/questions/48711342/what-does-the-cpack-preinstall-target-do
+# see https://cmake.org/cmake/help/latest/module/CPack.html
+set(CPACK_CMAKE_GENERATOR "Ninja") # this disables a rebuild i.e. "CPack: - Run preinstall target for..." which seems to be only done for "Unix Makefiles"
+
 # install cpack to make everything work
 include(CPack)
 
