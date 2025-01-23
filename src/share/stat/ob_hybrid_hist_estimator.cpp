@@ -211,6 +211,8 @@ int ObHybridHistEstimator::estimate_no_sample_col_hydrid_hist(ObIAllocator &allo
     LOG_WARN("failed to add no sample hybrid hist stat items", K(ret));
   } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_))) {
     LOG_WARN("failed to fill hints", K(ret));
+  } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
+    LOG_WARN("failed to fill parallel info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
                                                                param.max_duration_time_,
                                                                duration_time))) {
