@@ -466,6 +466,7 @@ int ObLSRestoreHandler::update_state_handle_()
           state_handler_ = nullptr;
         }
         state_handler_ = new_state_handler;
+        result_mgr_.reset();
       }
     }
 
@@ -3183,6 +3184,16 @@ ObLSRestoreResultMgr::ObLSRestoreResultMgr()
 {
 }
 
+void ObLSRestoreResultMgr::reset()
+{
+  lib::ObMutexGuard guard(mtx_);
+  result_ = OB_SUCCESS;
+  retry_cnt_ = 0;
+  last_err_ts_ = 0;
+  trace_id_.reset();
+  failed_type_ = RestoreFailedType::MAX_FAILED_TYPE;
+}
+
 bool ObLSRestoreResultMgr::can_retry() const
 {
   int64_t max_retry_cnt = OB_MAX_RESTORE_RETRY_TIMES;
@@ -3210,14 +3221,13 @@ void ObLSRestoreResultMgr::set_result(const int result, const share::ObTaskId &t
 {
   // update result_ conditions:
   // 1. result_ is OB_SUCCESS;
-  // 2. result_ is retrieable err, but input result is non retrieable err.
+  // 2. result_ is retrieable err, which can be updated by newer retryable err or non-retryable err
   lib::ObMutexGuard guard(mtx_);
   if (OB_EAGAIN == result
      || OB_IO_LIMIT == result) {
   } else {
     if (retry_cnt_ >= OB_MAX_RESTORE_RETRY_TIMES) { // avoiding overwrite error code
-    } else if ((!can_retrieable_err(result) && can_retrieable_err(result_))
-        || OB_SUCCESS == result_) {
+    } else if (can_retrieable_err(result_) || OB_SUCCESS == result_) {
       result_ = result;
       trace_id_.set(trace_id);
       failed_type_ = failed_type;

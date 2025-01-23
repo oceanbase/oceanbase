@@ -104,6 +104,7 @@ public:
   void set_result(const int result, const share::ObTaskId &trace_id, const RestoreFailedType &failed_type);
   int get_comment_str(const ObLSID &ls_id, const ObAddr &addr, ObHAResultInfo::Comment &comment) const;
   bool can_retrieable_err(const int err) const;
+  void reset();
 
   TO_STRING_KV(K_(result), K_(retry_cnt), K_(trace_id), K_(failed_type));
 private:
