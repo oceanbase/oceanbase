@@ -212,6 +212,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
   //                                        ::oceanbase::storage::ObMViewMdsOpCtx, \
   //                                        40,\
   //                                        MVIEW_MDS_OP)
+  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletDDLCompleteMdsHelper,\
+  //                                         ::oceanbase::storage::mds::MdsCtx,\
+  //                                         41,\
+  //                                         DDL_COMPLETE_MDS)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
