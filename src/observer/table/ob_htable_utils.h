@@ -36,6 +36,7 @@ public:
   virtual int64_t get_timestamp() const = 0;
   virtual common::ObString get_value() const = 0;
   virtual common::ObString get_family() const = 0;
+  virtual int get_ttl(int64_t &ttl) const = 0;
   enum class Type
   {
     FIRST_ON_ROW = 0 /*virtual cell which present the first cell on row*/,
@@ -78,6 +79,7 @@ public:
   virtual int64_t get_timestamp() const override;
   virtual common::ObString get_value() const override;
   virtual common::ObString get_family() const override;
+  virtual int get_ttl(int64_t &ttl) const override;
 
   void set_value(ObString value) const;
   void set_family(const ObString family);
@@ -99,6 +101,7 @@ public:
   virtual int64_t get_timestamp() const override {return cell_.get_timestamp(); };
   virtual common::ObString get_value() const override;
   virtual Type get_type() const override { return cell_.get_type(); }
+  virtual int get_ttl(int64_t &ttl) const override { return cell_.get_ttl(ttl); }
 private:
   const ObHTableCell& cell_;
   bool len_as_val_;
@@ -114,6 +117,7 @@ public:
   virtual common::ObString get_qualifier() const override { return common::ObString(); }
   virtual common::ObString get_value() const override { return common::ObString(); }
   virtual common::ObString get_family() const override { return common::ObString(); }
+  virtual int get_ttl(int64_t &ttl) const override { return OB_SUCCESS; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHTableEmptyCell);
 };
@@ -194,6 +198,7 @@ public:
   virtual common::ObString get_qualifier() const override;
   virtual int64_t get_timestamp() const override;
   virtual common::ObString get_value() const override;
+  virtual int get_ttl(int64_t &ttl) const override;
   virtual common::ObString get_family() const override { return common::ObString(); }
   virtual Type get_type() const { return Type::NORMAL; }
   int get_value(ObString &str) const;
@@ -215,6 +220,7 @@ public:
   virtual common::ObString get_qualifier() const override;
   virtual int64_t get_timestamp() const override;
   virtual common::ObString get_value() const override;
+  virtual int get_ttl(int64_t &ttl) const override;
   virtual common::ObString get_family() const override { return common::ObString(); }
   bool last_get_is_null() const { return last_get_is_null_; }
   virtual Type get_type() const { return Type::NORMAL; }
@@ -443,7 +449,7 @@ public:
   // for increment, append, and check operation in check_and_xxx
   static int lock_htable_row(uint64_t table_id, const ObTableQuery &htable_query, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
   static int lock_redis_key(uint64_t table_id, const ObString &lock_key, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
-  static int check_htable_schema(const share::schema::ObTableSchema &table_schema);
+  static bool is_htable_schema(const share::schema::ObTableSchema &table_schema);
   static OB_INLINE bool is_tablegroup_req(const ObString &table_name, ObTableEntityType entity_type)
   {
     return entity_type == ObTableEntityType::ET_HKV && table_name.find('$') == nullptr;

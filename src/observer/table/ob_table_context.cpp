@@ -18,6 +18,7 @@
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "ob_table_aggregation.h"
+#include "src/share/table/ob_table_util.h"
 
 using namespace oceanbase::common;
 
@@ -656,9 +657,9 @@ int ObTableCtx::adjust_rowkey()
 int ObTableCtx::adjust_properties()
 {
   int ret = OB_SUCCESS;
-  bool need_adjust_prop = (ObTableOperationType::Type::GET == operation_type_ ||
+  bool skip_adjust_prop = (ObTableOperationType::Type::GET == operation_type_ ||
                           ObTableOperationType::Type::DEL == operation_type_);
-  if (need_adjust_prop) {
+  if (skip_adjust_prop) {
     // do nothing
   } else if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
@@ -672,10 +673,10 @@ int ObTableCtx::adjust_properties()
       ObObj &prop_obj = const_cast<ObObj &>(prop_objs.at(i));
       const ObTableColumnInfo *col_info = nullptr;
       if (OB_FAIL(schema_cache_guard_->get_column_info(col_name, col_info))) {
+        LOG_WARN("fail to get column schema", K(ret), K(col_name));
         ret = OB_ERR_BAD_FIELD_ERROR;
         const ObString &table = simple_table_schema_->get_table_name_str();
         LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, col_name.length(), col_name.ptr(), table.length(), table.ptr());
-        LOG_WARN("fail to get column schema", K(ret), K(col_name));
       } else if (OB_ISNULL(col_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column info is NULL", K(ret), K(i));
@@ -739,22 +740,7 @@ int ObTableCtx::check_is_cs_replica_query(bool &is_cs_replica_query) const
   return ret;
 }
 
-bool ObTableCtx::has_exist_in_columns(const ObIArray<ObString> &columns,
-                                      const ObString &name,
-                                      int64_t *idx /* =nullptr */) const
-{
-  bool exist = false;
-  int64_t num = columns.count();
-  for (int64_t i = 0; i < num && !exist; i++) {
-    if (0 == name.case_compare(columns.at(i))) {
-      exist = true;
-      if (idx != NULL) {
-        *idx = i;
-      }
-    }
-  }
-  return exist;
-}
+
 
 /*
   genreate key range when do scan.
@@ -1025,7 +1011,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
           } else if (is_index_scan_ && !is_index_back_ && OB_ISNULL(index_schema_->get_column_schema(column_name))) {
             is_index_back_ = true;
           }
-        } else if (has_exist_in_columns(select_columns, col_info->column_name_)
+        } else if (ObTableUtils::has_exist_in_columns(select_columns, col_info->column_name_)
             || (is_ttl_table_ && has_exist_in_array(ttl_columns, col_info->column_name_))) {
           if (OB_FAIL(select_col_ids_.push_back(col_info->column_id_))) {
             LOG_WARN("fail to add column id", K(ret));

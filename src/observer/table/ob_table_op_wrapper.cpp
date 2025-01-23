@@ -33,9 +33,6 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
                                            ObTableOperationResult &op_result)
 {
   int ret = OB_SUCCESS;
-  ObTableOperation op;
-  op.set_type(tb_ctx.get_opertion_type());
-  op.set_entity(tb_ctx.get_entity());
   ObTableApiExecutor *executor = nullptr;
   if (OB_ISNULL(spec)) {
     ret = OB_ERR_UNEXPECTED;
@@ -414,8 +411,6 @@ int ObHTableDeleteExecutor::get_next_row()
   if (OB_ISNULL(ops)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("batch operation is null", K(ret));
-  } else if (OB_FAIL(build_select_column(query))) {
-    LOG_WARN("fail to build select column", K(ret));
   } else {
     ObHTableFilter &filter = query.htable_filter();
     for (int64_t i = 0; OB_SUCC(ret) && i < ops->count(); i++) {
@@ -440,8 +435,6 @@ int ObHTableDeleteExecutor::get_next_row_by_entity()
   if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity of operation is null", K(ret));
-  } else if (OB_FAIL(build_select_column(query))) {
-    LOG_WARN("fail to build query range", K(ret));
   } else {
     ObHTableFilter &filter = query.htable_filter();
     if (OB_FAIL(build_range(*entity, query))) {
@@ -513,23 +506,6 @@ int ObHTableDeleteExecutor::build_range(const ObITableEntity &entity, ObTableQue
       }
     }
   }
-
-  return ret;
-}
-
-int ObHTableDeleteExecutor::build_select_column(ObTableQuery &query)
-{
-  int ret = OB_SUCCESS;
-  // generate select column
-  if (OB_FAIL(query.add_select_column(ObHTableConstants::ROWKEY_CNAME_STR))) {
-    LOG_WARN("fail to add K", K(ret));
-  } else if (OB_FAIL(query.add_select_column(ObHTableConstants::CQ_CNAME_STR))) {
-    LOG_WARN("fail to add Q", K(ret));
-  } else if (OB_FAIL(query.add_select_column(ObHTableConstants::VERSION_CNAME_STR))) {
-    LOG_WARN("fail to add T", K(ret));
-  } else if (OB_FAIL(query.add_select_column(ObHTableConstants::VALUE_CNAME_STR))) {
-    LOG_WARN("fail to add V", K(ret));
-  } else {}
 
   return ret;
 }

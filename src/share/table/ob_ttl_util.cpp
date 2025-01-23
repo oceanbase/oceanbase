@@ -23,6 +23,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "share/location_cache/ob_location_service.h"
+#include "observer/table/ob_htable_utils.h"
 
 using namespace oceanbase::share;
 
@@ -753,8 +754,8 @@ int ObTTLUtil::parse_kv_attributes_hbase(json::Value *ast, int32_t &max_versions
 
 // "Redis": {"is_ttl": true, "model": "hash"}
 int ObTTLUtil::parse_kv_attributes_redis(json::Value *ast,
-                                         bool &is_redis_ttl_,
-                                         table::ObRedisModel &redis_model_)
+                                         bool &is_redis_ttl,
+                                         table::ObRedisModel &redis_model)
 {
   int ret = OB_SUCCESS;
   if (NULL == ast) {
@@ -764,20 +765,20 @@ int ObTTLUtil::parse_kv_attributes_redis(json::Value *ast,
       if (elem->name_.case_compare("IsTTL") == 0) {
         json::Value *ttl_val = elem->value_;
         if (NULL != ttl_val) {
-          is_redis_ttl_ = (ttl_val->get_type() == json::JT_TRUE);
+          is_redis_ttl = (ttl_val->get_type() == json::JT_TRUE);
         }
       } else if (elem->name_.case_compare("Model") == 0) {
         json::Value *model_val = elem->value_;
         if (NULL != model_val && model_val->get_type() == json::JT_STRING) {
           ObString model_str = model_val->get_string();
           if (model_str.case_compare("HASH") == 0) {
-            redis_model_ = table::ObRedisModel::HASH;
+            redis_model = table::ObRedisModel::HASH;
           } else if (model_str.case_compare("LIST") == 0) {
-            redis_model_ = table::ObRedisModel::LIST;
+            redis_model = table::ObRedisModel::LIST;
           } else if (model_str.case_compare("SET") == 0) {
-            redis_model_ = table::ObRedisModel::SET;
+            redis_model = table::ObRedisModel::SET;
           } else if (model_str.case_compare("ZSET") == 0) {
-            redis_model_ = table::ObRedisModel::ZSET;
+            redis_model = table::ObRedisModel::ZSET;
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not supported kv attribute", K(ret), K(model_str));
@@ -825,9 +826,9 @@ int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, int32_t &max_v
           LOG_WARN("fail to parse hbase kv attributes");
         }
       } else if (kv->name_.case_compare("REDIS") == 0) {
-        bool is_redis_ttl_ = false;
-        table::ObRedisModel redis_model_ = table::ObRedisModel::INVALID;
-        if (OB_FAIL(parse_kv_attributes_redis(kv->value_, is_redis_ttl_, redis_model_))) {
+        bool is_redis_ttl = false;
+        table::ObRedisModel redis_model = table::ObRedisModel::INVALID;
+        if (OB_FAIL(parse_kv_attributes_redis(kv->value_, is_redis_ttl, redis_model))) {
           LOG_WARN("fail to parse redis kv attributes");
         } else {
           max_versions = INT32_MIN;
@@ -1250,11 +1251,12 @@ int ObTTLUtil::check_is_htable_ttl_(const ObTableSchema &table_schema, bool &is_
 {
   int ret = OB_SUCCESS;
   is_ttl_table = false;
-  if (!table_schema.get_kv_attributes().empty()) {
-    // htable ttl table should have at least one of max_version and time_to_live
-    int32_t time_to_live = 0;
-    int32_t max_version = 0;
-    if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), max_version, time_to_live))) {
+  int32_t max_version = 0;
+  int32_t time_to_live = 0;
+  if (table::ObHTableUtils::is_htable_schema(table_schema)) {
+    if (OB_NOT_NULL(table_schema.get_column_schema(table::ObHTableConstants::TTL_CNAME_STR))) {
+      is_ttl_table = true;
+    } else if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), max_version, time_to_live))) {
       LOG_WARN("fail to parse kv attributes", KR(ret), "kv_attributes", table_schema.get_kv_attributes());
     } else if (time_to_live > 0 || max_version > 0) {
       is_ttl_table = true;

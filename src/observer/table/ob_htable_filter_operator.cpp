@@ -367,13 +367,30 @@ ObHTableScanMatcher::ObHTableScanMatcher(const table::ObHTableFilter &htable_fil
      column_tracker_(column_tracker),
      hfilter_(NULL),
      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-     curr_row_()
+     curr_row_(),
+     need_verify_cell_ttl_(false),
+     now_(ObHTableUtils::current_time_millis())
 {}
+
+int ObHTableScanMatcher::is_cell_ttl_expired(const ObHTableCell &cell, bool &is_expired)
+{
+  int ret = OB_SUCCESS;
+  is_expired = false;
+  int64_t ttl_time = INT64_MAX;
+  int64_t cell_ts = -cell.get_timestamp();
+  if (OB_FAIL(cell.get_ttl(ttl_time))) {
+    LOG_WARN("failed to get ttl", K(ret), K(cell));
+  } else if (now_ - cell_ts > ttl_time) {
+    is_expired = true;
+  }
+  return ret;
+}
 
 int ObHTableScanMatcher::pre_check(const ObHTableCell &cell, ObHTableMatchCode &match_code, bool &need_match_column)
 {
   int ret = OB_SUCCESS;
   need_match_column = false;
+  bool is_expired = false;
   if (is_curr_row_empty()) {
     // Since the curCell is null it means we are already sure that we have moved over to the next
     // row
@@ -391,9 +408,11 @@ int ObHTableScanMatcher::pre_check(const ObHTableCell &cell, ObHTableMatchCode &
     if (OB_FAIL(column_tracker_->get_next_column_or_row(cell, match_code))) {
       LOG_WARN("failed to get next column or row", K(ret), K(cell));
     }
-  }
-  // @todo check if the cell is expired by cell TTL
-  else {
+  } else if (need_verify_cell_ttl_ && OB_FAIL(is_cell_ttl_expired(cell, is_expired))) {
+    LOG_WARN("failed to check cell ttl expired", K(ret), K(cell));
+  } else if (is_expired) {
+    match_code = ObHTableMatchCode::SKIP;
+  } else {
     // continue
     need_match_column = true;
   }
@@ -578,6 +597,7 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
       matcher_(NULL),
       has_more_cells_(true),
       is_inited_(false),
+      need_verify_cell_ttl_(false),
       htable_filter_(query.get_htable_filter()),
       hfilter_(NULL),
       limit_per_row_per_cf_(htable_filter_.get_max_results_per_column_family()),
@@ -613,7 +633,9 @@ int ObHTableRowIterator::next_cell()
   int ret = child_op_->get_next_row(ob_row);
   if (OB_SUCCESS == ret) {
     curr_cell_.set_ob_row(ob_row);
-    try_record_expired_rowkey(curr_cell_);
+    if (OB_FAIL(try_record_expired_rowkey(curr_cell_))) {
+      LOG_WARN("failed to record expired rowkey", K(ret));
+    }
     LOG_DEBUG("[yzfdebug] fetch next cell", K_(curr_cell));
   } else if (OB_ITER_END == ret) {
     has_more_cells_ = false;
@@ -1080,45 +1102,36 @@ void ObHTableRowIterator::set_hfilter(table::hfilter::Filter *hfilter)
   }
 }
 
-void ObHTableRowIterator::set_ttl(int32_t ttl_value)
-{
-  time_to_live_ = ttl_value;
+void ObHTableRowIterator::set_need_verify_cell_ttl(bool need_verify_cell_ttl) {
+  need_verify_cell_ttl_ = need_verify_cell_ttl;
+  matcher_impl_.set_need_verify_cell_ttl(need_verify_cell_ttl);
 }
 
-void ObHTableRowIterator::try_record_expired_rowkey(const ObHTableCellEntity &cell)
+int ObHTableRowIterator::try_record_expired_rowkey(const ObHTableCellEntity &cell)
 {
-  if (time_to_live_ > 0 && !is_cur_row_expired_ && OB_NOT_NULL(column_tracker_) &&
-      column_tracker_->is_expired(cell.get_timestamp())) {
-    is_cur_row_expired_ = true;
-    if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
-      ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
-      if (!tb_ctx.is_index_scan()) {
-        MTL(ObHTableRowkeyMgr *)
-            ->record_htable_rowkey(tb_ctx.get_ls_id(), tb_ctx.get_table_id(), tb_ctx.get_tablet_id(), cell.get_rowkey());
+  int ret = OB_SUCCESS;
+  if (!is_cur_row_expired_) {
+    if (need_verify_cell_ttl_ && OB_NOT_NULL(matcher_) && OB_FAIL(matcher_->is_cell_ttl_expired(cell, is_cur_row_expired_))) {
+      LOG_WARN("failed to is cell ttl expired", K(ret));
+    } else if (is_cur_row_expired_ || (time_to_live_ > 0 && OB_NOT_NULL(column_tracker_) &&
+                                          column_tracker_->is_expired(cell.get_timestamp()))) {
+      is_cur_row_expired_ = true;
+      if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
+        ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
+        if (!tb_ctx.is_index_scan()) {
+          MTL(ObHTableRowkeyMgr *)
+              ->record_htable_rowkey(
+                  tb_ctx.get_ls_id(), tb_ctx.get_table_id(), tb_ctx.get_tablet_id(), cell.get_rowkey());
+        }
       }
     }
   }
+  return ret;
 }
 
 void ObHTableRowIterator::try_record_expired_rowkey(const int32_t versions, const ObString &rowkey)
 {
   if (max_version_ > 0 && !is_cur_row_expired_ && versions > max_version_) {
-    is_cur_row_expired_ = true;
-    if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
-      ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
-      if (!tb_ctx.is_index_scan()) {
-        MTL(ObHTableRowkeyMgr*)->record_htable_rowkey(tb_ctx.get_ls_id(),
-                                                      tb_ctx.get_table_id(),
-                                                      tb_ctx.get_tablet_id(),
-                                                      rowkey);
-      }
-    }
-  }
-}
-
-void ObHTableRowIterator::try_record_expired_rowkey(const ObString &rowkey)
-{
-  if (!is_cur_row_expired_ && OB_NOT_NULL(column_tracker_) && column_tracker_->check_column_expired()) {
     is_cur_row_expired_ = true;
     if (OB_NOT_NULL(child_op_) && OB_NOT_NULL(child_op_->get_scan_executor())) {
       ObTableCtx &tb_ctx = child_op_->get_scan_executor()->get_table_ctx();
@@ -1232,7 +1245,9 @@ int ObHTableReversedRowIterator::next_cell()
   } else if (FALSE_IT(curr_cell_.set_ob_row(ob_row))) {
   } else if (0 == ObHTableUtils::compare_rowkey(cell_clone.get_rowkey(), curr_cell_.get_rowkey())) {
     // same rowkey
-    try_record_expired_rowkey(curr_cell_);
+    if (OB_FAIL(try_record_expired_rowkey(curr_cell_))) {
+      LOG_WARN("failed to try record expired rowkey", K(ret));
+    }
   } else {
     if (OB_FAIL(seek_or_skip_to_next_row(cell_clone))) {
       if (OB_ITER_END != ret) {

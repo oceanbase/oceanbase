@@ -208,6 +208,7 @@ public:
   transaction::ObTxDesc* get_trans_desc() {return trans_desc_;}
   int64_t &get_row_count() { return row_count_; }
   void set_trans_desc(transaction::ObTxDesc *trans_desc) { trans_desc_ = trans_desc; }
+
 private:
   bool in_use_;
   uint64_t timeout_ts_;

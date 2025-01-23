@@ -381,6 +381,21 @@ int ObTableEntity::set_rowkey(const ObRowkey &rowkey)
   return ret;
 }
 
+int ObTableEntity::set_rowkey(const ObString &rowkey_name, const ObObj &rowkey_obj) {
+  int ret = OB_SUCCESS;
+  if (rowkey_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("rowkey name should not be empty string", K(ret), K(rowkey_name));
+  } else {
+    if (OB_FAIL(rowkey_names_.push_back(rowkey_name))) {
+      LOG_WARN("failed to add prop name", K(ret), K(rowkey_name));
+    } else if (OB_FAIL(rowkey_.push_back(rowkey_obj))) {
+      LOG_WARN("failed to add prop value", K(ret), K(rowkey_obj));
+    }
+  }
+  return ret;
+}
+
 int ObTableEntity::set_rowkey(const ObITableEntity &other)
 {
   int ret = OB_SUCCESS;
@@ -1697,11 +1712,13 @@ const char* const ObHTableConstants::ROWKEY_CNAME = "K";
 const char* const ObHTableConstants::CQ_CNAME = "Q";
 const char* const ObHTableConstants::VERSION_CNAME = "T";
 const char* const ObHTableConstants::VALUE_CNAME = "V";
+const char* const ObHTableConstants::TTL_CNAME = "TTL";
 
 const ObString ObHTableConstants::ROWKEY_CNAME_STR = ObString::make_string(ROWKEY_CNAME);
 const ObString ObHTableConstants::CQ_CNAME_STR = ObString::make_string(CQ_CNAME);
 const ObString ObHTableConstants::VERSION_CNAME_STR = ObString::make_string(VERSION_CNAME);
 const ObString ObHTableConstants::VALUE_CNAME_STR = ObString::make_string(VALUE_CNAME);
+const ObString ObHTableConstants::TTL_CNAME_STR = ObString::make_string(TTL_CNAME);
 
 ObHTableFilter::ObHTableFilter()
     :is_valid_(false),
@@ -1948,6 +1965,39 @@ void ObTableQueryResult::rewind()
   buf_.get_position() = 0;
 }
 
+int ObTableQueryResult::get_htable_all_entity(ObIArray<ObITableEntity*> &entities)
+{
+  int ret = OB_SUCCESS;
+  curr_idx_ = 0;
+  buf_.free();
+  while (OB_SUCC(ret) && curr_idx_ < row_count_) {
+    ObITableEntity *entity = nullptr;
+    if (OB_ISNULL(entity = OB_NEWx(ObTableEntity, &allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc entity", K(ret));
+    } else {
+      ObObj value;
+      const int64_t N = properties_names_.count();
+      for (int i = 0; OB_SUCC(ret) && i < N; ++i) {
+        if (OB_FAIL(value.deserialize(buf_.get_data(), buf_.get_capacity(), buf_.get_position()))) {
+          LOG_WARN("failed to deserialize obj", K(ret), K_(buf));
+        } else if (i < ObHTableConstants::HTABLE_ROWKEY_SIZE) {
+          if (OB_FAIL(entity->set_rowkey_value(i, value))) {
+            LOG_WARN("failed to set entity rowkey value", K(ret), K(i), K(value));
+          }
+        } else if (OB_FAIL(entity->set_property(properties_names_.at(i), value))) {
+          LOG_WARN("failed to set entity property", K(ret), K(i), K(value));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      curr_idx_++;
+      entities.push_back(entity);
+    }
+  }
+  return ret;
+}
+
 int ObTableQueryResult::get_next_entity(const ObITableEntity *&entity)
 {
   int ret = OB_SUCCESS;
@@ -2024,6 +2074,23 @@ int ObTableQueryResult::deep_copy_property_names(const ObIArray<ObString> &other
   for (int64_t i = 0; OB_SUCC(ret) && i < other.count(); i++) {
     if (OB_FAIL(ob_write_string(prop_name_allocator_, other.at(i), properties_names_.at(i)))) {
       LOG_WARN("failed to write string", K(ret), K(other.at(i)));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableQueryResult::append_property_names(const ObIArray<ObString> &property_names)
+{
+  int ret = OB_SUCCESS;
+  int curr_count = properties_names_.count();
+  if (OB_FAIL(properties_names_.prepare_allocate(curr_count + property_names.count()))) {
+    LOG_WARN("failed to prepare allocate properties names", K(ret), K(property_names));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < property_names.count(); i++) {
+    if (OB_FAIL(ob_write_string(prop_name_allocator_, property_names.at(i), properties_names_.at(curr_count + i)))) {
+      LOG_WARN("failed to write string", K(ret), K(property_names.at(i)));
     }
   }
 

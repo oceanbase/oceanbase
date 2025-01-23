@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_query_common.h"
 #include "ob_htable_filter_operator.h"
+#include "src/share/table/ob_table_util.h"
 
 namespace oceanbase
 {
@@ -25,7 +26,7 @@ int ObTableQueryUtils::check_htable_query_args(const ObTableQuery &query,
   int ret = OB_SUCCESS;
   const ObIArray<ObString> &select_columns = tb_ctx.get_query_col_names();
   int64_t N = select_columns.count();
-  if (N != 4 && N != 5) { // htable maybe has prefix generated column
+  if (N < 4 || N > 6) { // htable maybe has prefix generated column or TTL column
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("TableQuery with htable_filter should select 4 columns", K(ret), K(N));
   }
@@ -65,7 +66,6 @@ int ObTableQueryUtils::generate_htable_result_iterator(ObIAllocator &allocator,
                                                        ObTableQueryResultIterator *&result_iter)
 {
   int ret = OB_SUCCESS;
-  bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
   ObString kv_attributes;
 
   ObHTableFilterOperator *htable_result_iter = nullptr;
@@ -95,6 +95,12 @@ int ObTableQueryUtils::generate_htable_result_iterator(ObIAllocator &allocator,
       }
       if (desc.get_max_version() > 0) {
         htable_result_iter->set_max_version(desc.get_max_version());
+      }
+      const ObIArray<ObString> &select_columns = query.get_select_columns();
+      if ((select_columns.empty() ||
+              ObTableUtils::has_exist_in_columns(select_columns, ObHTableConstants::TTL_CNAME_STR)) &&
+          schema_cache_guard->get_schema_flags().has_hbase_ttl_column_) {
+        htable_result_iter->set_need_verify_cell_ttl(true);
       }
     }
   }

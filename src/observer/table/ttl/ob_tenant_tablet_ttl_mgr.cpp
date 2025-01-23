@@ -444,10 +444,7 @@ int ObTabletTTLScheduler::check_and_generate_tablet_tasks()
 {
   int ret = OB_SUCCESS;
   ObTimeGuard guard("ObTabletTTLScheduler::check_and_generate_tablet_tasks", TTL_NORMAL_TIME_THRESHOLD);
-  bool can_ttl = false;
   ObTabletHandle tablet_handle;
-  ObSEArray<const schema::ObTableSchema *, 64> table_schema_arr;
-  const schema::ObTableSchema *table_schema = nullptr;
   ObSEArray<uint64_t, DEFAULT_TABLE_ARRAY_SIZE> table_id_array;
   hash::ObHashMap<uint64_t, table::ObTTLTaskParam> param_map; // table_id, task param
   ObMemAttr bucket_attr(tenant_id_, "TTLTaskParBuck");
@@ -491,7 +488,7 @@ int ObTabletTTLScheduler::check_and_generate_tablet_tasks()
           ObTTLTaskParam ttl_param;
           if (OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
             LOG_WARN("fail to get tablet ids", KR(ret), K(table_id));
-          } else if (OB_FAIL(get_ttl_para_from_schema(table_schema, ttl_param))) {
+          } else if (OB_FAIL(get_ttl_param_from_schema(table_schema, ttl_param))) {
             LOG_WARN("fail to get ttl para");
           } else if (OB_FAIL(param_map.set_refactored(table_id, ttl_param))) {
             LOG_WARN("fail to push back table ttl param pairs", KR(ret));
@@ -762,24 +759,21 @@ int ObTabletTTLScheduler::check_tenant_memory()
   return ret;
 }
 
-int ObTabletTTLScheduler::get_ttl_para_from_schema(const schema::ObTableSchema *table_schema,
+int ObTabletTTLScheduler::get_ttl_param_from_schema(const schema::ObTableSchema *table_schema,
                                                    ObTTLTaskParam &param)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema is null", KR(ret));
-  } else if (!table_schema->get_kv_attributes().empty()) {
-    if (OB_FAIL(ObHTableUtils::check_htable_schema(*table_schema))) {
-      LOG_WARN("fail to check htable schema", KR(ret), K(table_schema->get_table_name()));
-    } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema->get_kv_attributes(), param.max_version_, param.ttl_))) {
-      LOG_WARN("fail to parse kv attributes", KR(ret), K(table_schema->get_kv_attributes()));
-    } else if (param.max_version_ != INT32_MIN && param.ttl_ != INT32_MIN) {
+  } else {
+    if (ObHTableUtils::is_htable_schema(*table_schema)) {
       param.is_htable_ = true;
+      if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema->get_kv_attributes(), param.max_version_, param.ttl_))) {
+        LOG_WARN("fail to parse kv attributes", KR(ret));
+      }
       LOG_DEBUG("success to find a hbase ttl partition", KR(ret), K(param));
     }
-  } else if (!table_schema->get_ttl_definition().empty()) {
-    LOG_DEBUG("success to find a table ttl partition", KR(ret), K(param));
   }
 
   if (OB_SUCC(ret)) {

@@ -21,6 +21,7 @@
 #include "lib/utility/utility.h"
 #include "lib/allocator/ob_pooled_allocator.h"
 #include "lib/hash/ob_hashmap.h"
+#include "ob_htable_utils.h"
 
 namespace oceanbase
 {
@@ -140,7 +141,8 @@ union ObTableSchemaFlags{
     bool is_ttl_table_          : 1;
     bool is_partitioned_table_  : 1;
     bool has_lob_column_        : 1;
-    uint64_t reserved_          : 57;
+    bool has_hbase_ttl_column_  : 1;
+    uint64_t reserved_          : 56;
   };
 };
 
@@ -275,6 +277,7 @@ public:
   int get_column_ids(ObIArray<uint64_t> &column_ids);
   int has_generated_column(bool &has_generated_column);
   int is_ttl_table(bool &is_ttl_table);
+  int has_hbase_ttl_column(bool &is_enable);
   int is_partitioned_table(bool &is_partitioned_table);
   int has_global_index(bool &has_gloabl_index);
   int get_kv_attributes(ObString& kv_attributes);

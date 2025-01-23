@@ -62,7 +62,6 @@ public:
   uint64_t max_version_cnt_;
   uint64_t ttl_cnt_;
   uint64_t scan_cnt_;
-  bool is_last_row_ttl_; // false indicate row del by max version
   bool is_hbase_table_;
   ObNewRow *last_row_;
   common::ObTableTTLChecker ttl_checker_;

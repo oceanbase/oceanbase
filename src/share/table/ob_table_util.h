@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_TABLE_OB_TABLE_UTIL_
 
 #include "lib/string/ob_string.h"
+#include "lib/container/ob_iarray.h"
 
 using namespace oceanbase::common;
 
@@ -28,6 +29,8 @@ public:
   static const ObString &get_kv_normal_trace_info() { return KV_NORMAL_TRACE_INFO; }
   static const ObString &get_kv_ttl_trace_info() { return KV_TTL_TRACE_INFO; }
   static bool is_kv_trace_info(const ObString &trace_info);
+  static bool has_exist_in_columns(const ObIArray<ObString> &columns, const ObString &name);
+
 private:
   static const ObString KV_NORMAL_TRACE_INFO;
   static const ObString KV_TTL_TRACE_INFO;

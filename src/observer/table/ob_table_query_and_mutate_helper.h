@@ -111,19 +111,14 @@ private:
   int init_tb_ctx(table::ObTableCtx &ctx,
                   table::ObTableOperationType::Type op_type,
                   const table::ObITableEntity &entity);
-  int refresh_query_range(const ObObj &new_q_obj);
-  int generate_new_value(const ObNewRow *old_row,
+  int generate_new_value(const table::ObITableEntity *old_entity,
                          const table::ObITableEntity &src_entity,
                          bool is_increment,
                          table::ObTableEntity &new_entity);
-  int add_to_results(const ObObj &rk,
-                     const ObObj &cq,
-                     const ObObj &ts,
-                     const ObObj &value);
-  int get_old_row(table::ObTableApiSpec &scan_spec, ObNewRow *&row);
+  int add_to_results(const table::ObTableEntity &new_entity);
   int execute_htable_delete(const table::ObTableOperation &table_operation, table::ObTableCtx *&tb_ctx);
   int execute_htable_put(const table::ObTableOperation &table_operation, table::ObTableCtx *&tb_ctx);
-  int execute_htable_increment(table::ObTableApiSpec &scan_spec);
+  int execute_htable_inc_or_append(table::ObTableQueryResult *result);
   int execute_htable_insert(const table::ObITableEntity &new_entity);
   int execute_htable_mutation(table::ObTableQueryResultIterator *result_iterator);
   int execute_table_mutation(table::ObTableQueryResultIterator *result_iterator);

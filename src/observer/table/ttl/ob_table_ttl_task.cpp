@@ -601,7 +601,6 @@ ObTableTTLDeleteRowIterator::ObTableTTLDeleteRowIterator()
       max_version_cnt_(0),
       ttl_cnt_(0),
       scan_cnt_(0),
-      is_last_row_ttl_(true),
       is_hbase_table_(false),
       last_row_(nullptr),
       rowkey_cnt_(0),
@@ -724,13 +723,20 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
           if (max_version_ > 0 && cur_version_ > max_version_) {
             max_version_cnt_++;
             cur_del_rows_++;
-            is_last_row_ttl_ = false;
             is_expired = true;
           } else if (time_to_live_ms_ > 0 && (cell_ts + time_to_live_ms_ < ObHTableUtils::current_time_millis())) {
             ttl_cnt_++;
             cur_del_rows_++;
-            is_last_row_ttl_ = true;
             is_expired = true;
+          } else if (row->get_count() > ObHTableConstants::COL_IDX_TTL) {
+            int64_t cell_ttl_time = INT64_MAX;
+            if (OB_FAIL(cell.get_ttl(cell_ttl_time))) {
+              LOG_WARN("fail to get ttl", KR(ret));
+            } else if (cell_ttl_time < ObHTableUtils::current_time_millis() - cell_ts) {
+              ttl_cnt_++;
+              cur_del_rows_++;
+              is_expired = true;
+            }
           }
         } else {
           // NOTE: For relation table, the row expired if and only if
@@ -741,7 +747,6 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
           } else if (is_expired) {
             ttl_cnt_++;
             cur_del_rows_++;
-            is_last_row_ttl_ = true;
           }
         }
       }

@@ -68,7 +68,20 @@ int ObKvSchemaCacheObj::cons_table_info(const ObTableSchema *table_schema)
     auto_inc_cache_size_ = table_schema->get_auto_increment_cache_size();
     set_is_ttl_table(!table_schema->get_ttl_definition().empty());
     set_is_partitioned_table(table_schema->is_partitioned_table());
-    if (flags_.is_ttl_table_ ) {
+    if (ObHTableUtils::is_htable_schema(*table_schema)) {
+      uint64_t data_version = 0;
+      if (OB_NOT_NULL(table_schema->get_column_schema(ObHTableConstants::TTL_CNAME_STR))) {
+        flags_.has_hbase_ttl_column_ = true;
+        if (GET_MIN_DATA_VERSION(MTL_ID(), data_version)) {
+          LOG_WARN("get data version failed", K(ret));
+        } else if (data_version < DATA_VERSION_4_3_5_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support ttl column with data version less than 4_3_5_1", K(ret), K(data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl column with data version less than 4_3_5_1");
+        }
+      }
+    }
+    if (OB_SUCC(ret) && flags_.is_ttl_table_) {
       if (OB_FAIL(ob_write_string(allocator_, table_schema->get_ttl_definition(), ttl_definition_))) {
         LOG_WARN("fail to copy ttl definaitions", K(ret));
       }
@@ -491,6 +504,18 @@ int ObKvSchemaCacheGuard::is_ttl_table(bool &is_ttl_table)
     LOG_WARN("fail to get cache obj", K(ret));
   } else {
     is_ttl_table = cache_obj->get_schema_flags().is_ttl_table_;
+  }
+  return ret;
+}
+
+int ObKvSchemaCacheGuard::has_hbase_ttl_column(bool &has_ttl_column)
+{
+  int ret = OB_SUCCESS;
+  ObKvSchemaCacheObj *cache_obj = nullptr;
+  if (OB_FAIL(get_cache_obj(cache_obj))) {
+    LOG_WARN("fail to get cache obj", K(ret));
+  } else {
+    has_ttl_column = cache_obj->get_schema_flags().has_hbase_ttl_column_;
   }
   return ret;
 }

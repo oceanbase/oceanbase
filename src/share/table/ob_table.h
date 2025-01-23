@@ -207,6 +207,7 @@ public:
   virtual ~ObTableEntity();
   virtual ObTableEntityType get_entity_type() { return ObTableEntityType::ET_KV; }
   virtual int set_rowkey(const ObRowkey &rowkey) override;
+  virtual int set_rowkey(const ObString &prop_name, const ObObj &rowkey_obj);
   virtual int set_rowkey(const ObITableEntity &other) override;
   virtual int set_rowkey_value(int64_t idx, const ObObj &value) override;
   virtual int add_rowkey_value(const ObObj &value) override;
@@ -230,6 +231,7 @@ public:
   virtual void set_is_same_properties_names(bool is_same_properties_names) override;
   virtual void reset() override;
   virtual ObRowkey get_rowkey() const override;
+  OB_INLINE virtual const ObIArray<ObString>& get_rowkey_names() const { return rowkey_names_; }
   OB_INLINE virtual const ObIArray<ObString>& get_properties_names() const { return properties_names_; }
   OB_INLINE virtual const ObIArray<ObObj>& get_properties_values() const { return properties_values_; }
   OB_INLINE virtual const ObIArray<ObObj>& get_rowkey_objs() const { return rowkey_; };
@@ -480,8 +482,7 @@ public:
   ~ObTableTTLOperation() {}
   bool is_valid() const
   {
-    return common::OB_INVALID_TENANT_ID != tenant_id_ && common::OB_INVALID_ID != table_id_ &&
-           (!is_htable_ || max_version_ > 0 || time_to_live_ > 0) && del_row_limit_ > 0;
+    return common::OB_INVALID_TENANT_ID != tenant_id_ && common::OB_INVALID_ID != table_id_ && del_row_limit_ > 0;
   }
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(max_version),  K_(time_to_live), K_(is_htable), K_(del_row_limit), K_(start_rowkey));
 public:
@@ -752,16 +753,19 @@ public:
   static const char* const CQ_CNAME;
   static const char* const VERSION_CNAME;
   static const char* const VALUE_CNAME;
+  static const char* const TTL_CNAME;
   static const ObString ROWKEY_CNAME_STR;
   static const ObString CQ_CNAME_STR;
   static const ObString VERSION_CNAME_STR;
   static const ObString VALUE_CNAME_STR;
+  static const ObString TTL_CNAME_STR;
 
   // create table t1$cf1 (K varbinary(1024), Q varchar(256), T bigint, V varbinary(1024), primary key(K, Q, T));
   static const int64_t COL_IDX_K = 0;
   static const int64_t COL_IDX_Q = 1;
   static const int64_t COL_IDX_T = 2;
   static const int64_t COL_IDX_V = 3;
+  static const int64_t COL_IDX_TTL = 4;
   static const int64_t HTABLE_ROWKEY_SIZE = 3;
 private:
   ObHTableConstants() = delete;
@@ -1238,6 +1242,7 @@ public:
   void reset_except_property();
   void rewind();
   virtual int get_next_entity(const ObITableEntity *&entity) override;
+  virtual int get_htable_all_entity(ObIArray<ObITableEntity*> &entities);
   int add_property_name(const ObString &name);
   int assign_property_names(const common::ObIArray<common::ObString> &other);
   // for aggregation
@@ -1246,6 +1251,7 @@ public:
   virtual int add_row(const common::ObNewRow &row);
   virtual int add_row(const common::ObIArray<ObObj> &row);
   int add_all_property(const ObTableQueryResult &other);
+  int append_property_names(const ObIArray<ObString> &property_names);
   int add_all_row(const ObTableQueryResult &other);
   int add_all_row(ObTableQueryIterableResultBase &other);
   void save_row_count_only(const int row_count) { reset(); row_count_ += row_count; }

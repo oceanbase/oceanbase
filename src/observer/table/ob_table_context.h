@@ -682,9 +682,6 @@ private:
   int adjust_column_type(const ObTableColumnInfo &column_info, ObObj &ob);
   int adjust_rowkey();
   int adjust_properties();
-  bool has_exist_in_columns(const common::ObIArray<common::ObString>& columns,
-                            const common::ObString &name,
-                            int64_t *idx = nullptr) const;
   // 获取索引表的tablet_id
   int get_related_tablet_id(const share::schema::ObTableSchema &index_schema,
                             common::ObTabletID &related_tablet_id);

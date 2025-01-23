@@ -243,7 +243,7 @@ int ObTableLSExecuteP::HTableLSExecuteIter::init()
       }
     }
     if (OB_ISNULL(simple_schema)) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("get null simple_schema", K(ret), K(ls_op.get_table_id()));
     } else {
       outer_exectute_process_.simple_table_schema_ = simple_schema;

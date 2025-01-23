@@ -86,7 +86,6 @@ int ObTableQueryAndMutateP::check_arg()
     LOG_WARN("should have at least one mutation operation", K(ret), K(mutations));
   } else {
     // these options are meaningless for QueryAndMutate users but we should control them internally
-    query.set_batch(1);  // mutate for each row
     query.set_max_result_size(-1);
 
     hfilter.set_max_versions(1);
@@ -162,11 +161,14 @@ int ObTableQueryAndMutateP::try_process()
   int64_t affected_rows = 0;
   const bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
   stat_event_type_ = get_process_type(is_hkv, arg_.query_and_mutate_.get_mutations().at(0).type());
+  if (ObTableProccessType::TABLE_API_HBASE_INCREMENT != stat_event_type_ &&
+      ObTableProccessType::TABLE_API_HBASE_APPEND != stat_event_type_) {
+    arg_.query_and_mutate_.get_query().set_batch(1);
+  }
   ObHTableLockHandle *lock_handle = nullptr;
   ObLSID ls_id;
   bool exist_global_index = false;
   table_id_ = arg_.table_id_;
-  stat_event_type_ = get_process_type(is_hkv, arg_.query_and_mutate_.get_mutations().at(0).type());
 
   if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));

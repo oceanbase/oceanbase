@@ -1385,7 +1385,10 @@ int ObTableExprCgService::build_refresh_values(ObTableCtx &ctx,
       for (int64_t i = 0; i < prop_names.count() && OB_SUCC(ret); i++) {
         int64_t idx = -1;
         if (OB_FAIL(schema_cache_guard->get_column_info_idx(prop_names.at(i), idx))) {
-          LOG_WARN("fail to get column info", K(ret), K(prop_names.at(i)), K(i));
+          LOG_WARN("fail to get column schema", K(ret), K(prop_names.at(i)));
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          const ObString &table = schema_cache_guard->get_table_name_str();
+          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, prop_names.at(i).length(), prop_names.at(i).ptr(), table.length(), table.ptr());
         } else if (idx > refresh_value_array.count() || idx < 0) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("idx is not a invalid value", K(ret), K(idx), K(refresh_value_array.count()));

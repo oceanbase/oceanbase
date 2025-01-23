@@ -126,7 +126,6 @@ public:
 
 private:
   int build_range(const ObITableEntity &entity, ObTableQuery &query);
-  int build_select_column(ObTableQuery &query);
   int query_and_delete(const ObTableQuery &query);
   int delete_rows(ObTableQueryResult &result);
   int generate_filter(const ObITableEntity &entity,
