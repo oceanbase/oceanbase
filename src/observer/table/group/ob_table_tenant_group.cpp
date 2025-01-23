@@ -185,7 +185,6 @@ int ObTableGroupCommitMgr::ObTableGroupTriggerTask::trigger_expire_group()
 
 void ObTableGroupCommitMgr::ObTableGroupInfoTask::runTimerTask()
 {
-  update_ops_task();
   clean_expired_group_task();
   update_group_info_task();
 }
@@ -234,29 +233,6 @@ void ObTableGroupCommitMgr::ObTableGroupInfoTask::clean_expired_group_task()
   } // end while
 }
 
-void ObTableGroupCommitMgr::ObTableGroupInfoTask::update_ops_task()
-{
-  int ret = OB_SUCCESS;
-  // only use to record ops count currently and self-adaptive strategy is coming soon
-  if (ObTableGroupUtils::is_group_commit_config_enable()) {
-    ObTableGroupOpsCounter &ops = group_mgr_.get_ops_counter();
-    if (TABLEAPI_GROUP_COMMIT_MGR->get_last_ops() >= DEFAULT_ENABLE_GROUP_COMMIT_OPS &&
-        TABLEAPI_GROUP_COMMIT_MGR->is_group_commit_disable()) {
-      TABLEAPI_GROUP_COMMIT_MGR->set_group_commit_disable(false);
-      LOG_INFO("enable group commit");
-    } else if (TABLEAPI_GROUP_COMMIT_MGR->get_last_ops() < DEFAULT_ENABLE_GROUP_COMMIT_OPS &&
-              !TABLEAPI_GROUP_COMMIT_MGR->is_group_commit_disable()) {
-      TABLEAPI_GROUP_COMMIT_MGR->set_group_commit_disable(true);
-      LOG_INFO("disable group commit");
-    }
-    int64_t cur_read_op_ops = ops.get_read_ops();
-    int64_t cur_write_op_ops = ops.get_write_ops();
-    group_mgr_.set_last_write_ops(cur_write_op_ops);
-    group_mgr_.set_last_read_ops(cur_read_op_ops);
-    ops.reset_ops(); // reset ops counter per second
-  }
-}
-
 void ObTableGroupCommitMgr::ObTableGroupInfoTask::update_group_info_task()
 {
   int ret = OB_SUCCESS;
@@ -289,6 +265,40 @@ void ObTableGroupCommitMgr::ObTableGroupInfoTask::update_group_info_task()
   }
 }
 
+void ObTableGroupCommitMgr::ObTableGroupOpsTask::runTimerTask()
+{
+  update_ops_task();
+}
+
+void ObTableGroupCommitMgr::ObTableGroupOpsTask::update_ops_task()
+{
+  int ret = OB_SUCCESS;
+  // only use to record ops count currently and self-adaptive strategy is coming soon
+  if (ObTableGroupUtils::is_group_commit_config_enable()) {
+    ObTableGroupOpsCounter &ops = group_mgr_.get_ops_counter();
+    int64_t enable_threshold = group_mgr_.get_enable_ops_threshold();
+    if (TABLEAPI_GROUP_COMMIT_MGR->get_last_ops() >= enable_threshold &&
+        TABLEAPI_GROUP_COMMIT_MGR->is_group_commit_disable()) {
+      TABLEAPI_GROUP_COMMIT_MGR->set_group_commit_disable(false);
+      LOG_INFO("enable group commit", K(TABLEAPI_GROUP_COMMIT_MGR->get_last_ops()), K(enable_threshold));
+    } else if (TABLEAPI_GROUP_COMMIT_MGR->get_last_ops() < enable_threshold &&
+              !TABLEAPI_GROUP_COMMIT_MGR->is_group_commit_disable()) {
+      TABLEAPI_GROUP_COMMIT_MGR->set_group_commit_disable(true);
+      LOG_INFO("disable group commit", K(TABLEAPI_GROUP_COMMIT_MGR->get_last_ops()), K(enable_threshold));
+    }
+    if (TABLEAPI_GROUP_COMMIT_MGR->get_failed_groups().count() >= DEFAULT_DISABLE_MAX_FAILED_GROUP_SIZE) {
+       TABLEAPI_GROUP_COMMIT_MGR->set_group_commit_disable(true);
+      LOG_INFO("disable group commit due to too much failed groups", K(TABLEAPI_GROUP_COMMIT_MGR->get_failed_groups().count()),
+                K(TABLEAPI_GROUP_COMMIT_MGR->is_group_commit_disable()));
+    }
+    int64_t cur_read_op_ops = ops.get_read_ops();
+    int64_t cur_write_op_ops = ops.get_write_ops();
+    group_mgr_.set_last_write_ops(cur_write_op_ops);
+    group_mgr_.set_last_read_ops(cur_read_op_ops);
+    ops.reset_ops(); // reset ops counter per second
+  }
+}
+
 int ObTableGroupCommitMgr::start_timer()
 {
   int ret = OB_SUCCESS;
@@ -298,11 +308,11 @@ int ObTableGroupCommitMgr::start_timer()
       LOG_WARN("fail to set timer's run wrapper", KR(ret));
     } else if (OB_FAIL(timer_.init("TableGroupCommitMgr"))) {
       LOG_WARN("fail to init kv group commit timer", KR(ret));
-    } else if (OB_FAIL(timer_.schedule(statis_and_trigger_task_,
+    } else if (OB_FAIL(timer_.schedule(group_trigger_task_,
                                        ObTableGroupTriggerTask::TASK_SCHEDULE_INTERVAL,
                                        true))) {
       LOG_WARN("fail to schedule group commit statis and trigger task", KR(ret));
-    } else if (OB_FAIL(timer_.schedule(group_size_and_ops_task_,
+    } else if (OB_FAIL(timer_.schedule(group_info_task_,
                                        ObTableGroupInfoTask::TASK_SCHEDULE_INTERVAL,
                                        true))) {
       LOG_WARN("fail to schedule group commit ops and group size task", KR(ret));
@@ -340,6 +350,7 @@ int ObTableGroupCommitMgr::init()
       } else if (OB_FAIL(group_info_map_.set_refactored(key.hash_, fail_group_info))) {
         LOG_WARN("fail to set fail group info to map", K(ret));
       } else {
+        enable_ops_threshold_ = get_enable_ops_threshold();
         is_inited_ = true;
       }
     }
@@ -351,7 +362,17 @@ int ObTableGroupCommitMgr::init()
 int ObTableGroupCommitMgr::start()
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("successfully to start ObTableGroupCommitMgr");
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("table group commit mgr not init", KR(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(),
+                                     group_ops_task_,
+                                     ObTableGroupOpsTask::TASK_SCHEDULE_INTERVAL,
+                                     true))) {
+    LOG_WARN("fail to schedule group ops task", K(ret));
+  } else {
+    LOG_INFO("successfully to start ObTableGroupCommitMgr");
+  }
   return ret;
 }
 
@@ -528,6 +549,17 @@ int64_t ObTableGroupCommitMgr::get_group_size(bool is_read) const
     batch_size = batch_size > 1 ? batch_size : 1;
   }
   return batch_size;
+}
+
+int64_t ObTableGroupCommitMgr::get_enable_ops_threshold() const
+{
+  int64_t enable_ops_threshold = enable_ops_threshold_;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    enable_ops_threshold = tenant_config->_enable_kv_group_commit_ops;
+    enable_ops_threshold = enable_ops_threshold >= 0 ? enable_ops_threshold : enable_ops_threshold_;
+  }
+  return enable_ops_threshold;
 }
 
 int ObTableGroupCommitMgr::create_and_add_ls_group(const ObTableGroupCtx &ctx)

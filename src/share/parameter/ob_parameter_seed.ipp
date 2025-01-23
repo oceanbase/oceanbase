@@ -2330,7 +2330,7 @@ DEF_BOOL(_enable_unit_gc_wait, OB_CLUSTER_PARAMETER, "True",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // obkv group commit
-DEF_INT(kv_group_commit_batch_size, OB_TENANT_PARAMETER, "1", "(0,)",
+DEF_INT(kv_group_commit_batch_size, OB_TENANT_PARAMETER, "10", "(0,)",
         "Used to specify the batch size of each group commit batch in OBKV."
         " Values: 1 means sinlge operaion in each batch, equally to disable group commit."
         " When batch size is greater than 1, it means group commit is enable and used as its batch size. ",
@@ -2340,6 +2340,11 @@ DEF_STR_WITH_CHECKER(kv_group_commit_rw_mode, OB_TENANT_PARAMETER, "ALL",
         "Used to specify the read/write operation types when group commit is enable. "
         "Values: 'ALL' means enable all operations, 'READ' mean only enable read operation in group commit, 'WRITE'  means only write operations in group commit.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_enable_kv_group_commit_ops, OB_TENANT_PARAMETER, "10000", "[0,)",
+    "Used to control the minimum OPS threshold that triggers the group commit execution when this feature is enabled in OBKV;. Range: [0, +∞) in integer. Especially, 10000 means default value",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(ob_vector_memory_limit_percentage, OB_TENANT_PARAMETER, "0",
         "[0,100)",
         "Used to control the upper limit percentage of memory resources that the vector_index module can use. Range:[0, 100)",

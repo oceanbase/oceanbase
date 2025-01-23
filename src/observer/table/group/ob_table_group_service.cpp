@@ -205,6 +205,14 @@ int ObTableGroupService::process(ObTableGroupCtx &ctx, ObTableGroupCommitSingleO
   bool add_failed_group = true;
   bool had_do_response = false;
   ObTableGroupCommitKey *key = ctx.key_;
+  // check the group commit if is started in each process
+  if (!TABLEAPI_GROUP_COMMIT_MGR->is_timer_enable() &&
+      TABLEAPI_GROUP_COMMIT_MGR->check_and_enable_timer()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(TABLEAPI_GROUP_COMMIT_MGR->start_timer())) {
+      LOG_WARN("fail to start group commit timer", K(tmp_ret));
+    }
+  }
 
   if (OB_ISNULL(key)) {
     ret = OB_INVALID_ARGUMENT;

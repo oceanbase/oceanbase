@@ -384,6 +384,8 @@ int ObTableApiUtil::expand_all_columns(const ObIArray<ObTableColumnInfo *>& col_
     if (OB_ISNULL(col_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column info is NULL", K(ret), K(i));
+    } else if (col_info->is_fulltext_column()) {
+      // skip and do nothing
     } else if (OB_FAIL(cnames.push_back(col_info->column_name_))) {
       LOG_WARN("fail to push back column name", K(ret));
     }

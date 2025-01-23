@@ -868,7 +868,8 @@ private:
 
 enum class ParamType : int8_t {
     HBase = 0,
-    Redis = 1
+    Redis = 1,
+    FTS = 2,
 };
 
 class ObKVParamsBase
@@ -885,6 +886,27 @@ public:
   virtual int64_t to_string(char* buf, const int64_t buf_len) const = 0;
 protected:
   ParamType param_type_;
+};
+
+class ObFTSParam : public ObKVParamsBase
+{
+public:
+  ObFTSParam()
+    : ObKVParamsBase()
+  {
+    param_type_ = ParamType::FTS;
+  }
+  virtual ~ObFTSParam() {}
+  virtual int deep_copy(ObIAllocator &allocator, ObKVParamsBase *ob_params) const override;
+  OB_INLINE int32_t get_caching() const { return 0; } // unused
+  OB_INLINE ParamType get_param_type() { return param_type_; }
+  OB_INLINE common::ObString &get_search_text() { return search_text_; }
+  NEED_SERIALIZE_AND_DESERIALIZE;
+
+  VIRTUAL_TO_STRING_KV(K_(param_type),
+                       K_(search_text));
+private:
+  ObString search_text_;
 };
 
 class ObHBaseParams : public ObKVParamsBase
@@ -949,6 +971,12 @@ public:
     int ret = OB_SUCCESS;
     if (param_type == ParamType::HBase) {
       params = OB_NEWx(ObHBaseParams, allocator_);
+      if (params == nullptr) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        RPC_WARN("alloc params memory failed", K(ret));
+      }
+    } else if (param_type == ParamType::FTS) {
+      params = OB_NEWx(ObFTSParam, allocator_);
       if (params == nullptr) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         RPC_WARN("alloc params memory failed", K(ret));

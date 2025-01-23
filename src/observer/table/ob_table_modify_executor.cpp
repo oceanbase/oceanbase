@@ -698,7 +698,7 @@ int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRo
         if (OB_ISNULL(expr)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("expr is null", K(ret));
-        } else if (assign.column_info_->is_generated_column_) {
+        } else if (assign.column_info_->is_generated_column()) {
           // do nothing, generated column not need to fill
         } else if (assign.is_inc_or_append_) {
           // the dependent expr of inc or append column are old_row expr and delta expr
@@ -927,7 +927,7 @@ int ObTableApiModifyExecutor::stored_row_to_exprs(const ObChunkDatumStore::Store
     LOG_WARN("datum count mismatch", K(ret), K(row.cnt_), K(exprs.count()), K(column_infos.count()));
   } else {
     for (uint32_t i = 0; i < row.cnt_; ++i) {
-      if (column_infos.at(i)->is_generated_column_) {
+      if (column_infos.at(i)->is_generated_column() && !column_infos.at(i)->is_doc_id_column()) {
         // generate column need to clear the evaluated flag
         exprs.at(i)->clear_evaluated_flag(ctx);
       } else {

@@ -21,6 +21,7 @@
 #include "lib/utility/utility.h"
 #include "lib/allocator/ob_pooled_allocator.h"
 #include "lib/hash/ob_hashmap.h"
+#include "share/schema/ob_schema_utils.h"
 #include "ob_htable_utils.h"
 
 namespace oceanbase
@@ -38,9 +39,7 @@ struct ObTableColumnInfo
         column_name_(),
         default_value_(),
         auto_filled_timestamp_(false),
-        is_generated_column_(false),
-        is_stored_generated_column_(false),
-        is_virtual_generated_column_(false),
+        column_flags_(NON_CASCADE_FLAG),
         is_auto_increment_(false),
         is_nullable_(true),
         is_tbl_part_key_column_(false),
@@ -60,9 +59,7 @@ struct ObTableColumnInfo
     column_name_.reset();
     default_value_.reset();
     auto_filled_timestamp_ = false;
-    is_generated_column_ = false;
-    is_stored_generated_column_ = false;
-    is_virtual_generated_column_ = false;
+    column_flags_ = NON_CASCADE_FLAG;
     is_auto_increment_ = false;
     is_nullable_ = false;
     is_tbl_part_key_column_ = false;
@@ -80,9 +77,7 @@ struct ObTableColumnInfo
                K_(column_name),
                K_(default_value),
                K_(auto_filled_timestamp),
-               K_(is_generated_column),
-               K_(is_stored_generated_column),
-               K_(is_virtual_generated_column),
+               K_(column_flags),
                K_(is_auto_increment),
                K_(is_nullable),
                K_(rowkey_position),
@@ -90,15 +85,24 @@ struct ObTableColumnInfo
                K_(generated_expr_str),
                K_(cascaded_column_ids));
 
+  OB_INLINE bool has_column_flag(int64_t flag) const { return column_flags_ & flag; }
+  OB_INLINE int64_t get_column_flags() const { return column_flags_; }
+  OB_INLINE bool is_virtual_generated_column() const { return column_flags_ & VIRTUAL_GENERATED_COLUMN_FLAG; }
+  OB_INLINE bool is_stored_generated_column() const { return column_flags_ & STORED_GENERATED_COLUMN_FLAG; }
+  OB_INLINE bool is_generated_column() const { return (is_virtual_generated_column() || is_stored_generated_column()); }
+  OB_INLINE bool is_fulltext_column() const { return ObSchemaUtils::is_fulltext_column(column_flags_); }
+  OB_INLINE bool is_doc_id_column() const { return ObSchemaUtils::is_doc_id_column(column_flags_); }
+  OB_INLINE bool is_word_segment_column() const { return ObSchemaUtils::is_word_segment_column(column_flags_); }
+  OB_INLINE bool is_word_count_column() const { return ObSchemaUtils::is_word_count_column(column_flags_); }
+  OB_INLINE bool is_doc_length_column() const { return ObSchemaUtils::is_doc_length_column(column_flags_); }
+
   uint64_t col_idx_;
   uint64_t column_id_;
   uint64_t table_id_;
   common::ObString column_name_;
   common::ObObj default_value_;
   bool auto_filled_timestamp_;
-  bool is_generated_column_;
-  bool is_stored_generated_column_;
-  bool is_virtual_generated_column_;
+  int64_t column_flags_;
   bool is_auto_increment_;
   bool is_nullable_;
   bool is_tbl_part_key_column_;
@@ -141,8 +145,9 @@ union ObTableSchemaFlags{
     bool is_ttl_table_          : 1;
     bool is_partitioned_table_  : 1;
     bool has_lob_column_        : 1;
+    bool has_fts_index_         : 1;
     bool has_hbase_ttl_column_  : 1;
-    uint64_t reserved_          : 56;
+    uint64_t reserved_          : 55;
   };
 };
 

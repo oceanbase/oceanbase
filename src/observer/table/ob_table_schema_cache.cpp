@@ -123,6 +123,9 @@ int ObKvSchemaCacheObj::cons_index_info(ObSchemaGetterGuard *schema_guard,
           LOG_WARN("fail to push back local index tids", K(ret));
         } else {
           flags_.has_local_index_ = true;
+          if (index_schema->is_fts_index()) {
+            flags_.has_fts_index_ = true;
+          }
         }
       } else if (index_schema->is_global_index_table()) {
         if (OB_FAIL(global_index_tids_.push_back(tids[i]))) {
@@ -193,9 +196,7 @@ int ObKvSchemaCacheObj::cons_columns_array(const ObTableSchema *table_schema)
         col_info->col_idx_ = i;
         col_info->column_id_ = col_schema->get_column_id();
         col_info->table_id_ = col_schema->get_table_id();
-        col_info->is_generated_column_ = col_schema->is_generated_column();
-        col_info->is_stored_generated_column_ = col_schema->is_stored_generated_column();
-        col_info->is_virtual_generated_column_ = col_schema->is_virtual_generated_column();
+        col_info->column_flags_ = col_schema->get_column_flags();
         col_info->is_auto_increment_ = col_schema->is_autoincrement();
         col_info->is_nullable_ = col_schema->is_nullable();
         col_info->is_tbl_part_key_column_ = col_schema->is_tbl_part_key_column();
@@ -244,7 +245,7 @@ int ObKvSchemaCacheObj::cons_columns_array(const ObTableSchema *table_schema)
           }
 
           if (OB_FAIL(ret)) {
-          } else if (col_info->is_generated_column_) {
+          } else if (col_info->is_generated_column()) {
             col_info->cascaded_column_ids_.set_allocator(&allocator_);
             if (OB_FAIL(col_schema->get_cascaded_column_ids(cascaded_column_ids))) {
               LOG_WARN("fail to get cascaded column ids", K(ret), K(i));
@@ -267,8 +268,8 @@ int ObKvSchemaCacheObj::cons_columns_array(const ObTableSchema *table_schema)
         if (!flags_.has_auto_inc_ && col_info->is_auto_increment_) {
           set_has_auto_inc(col_info->is_auto_increment_);
         }
-        if (!flags_.has_generated_column_ && col_info->is_generated_column_) {
-          set_has_generated_column(col_info->is_generated_column_);
+        if (!flags_.has_generated_column_ && col_info->is_generated_column()) {
+          set_has_generated_column(col_info->is_generated_column());
         }
         if (!flags_.has_lob_column_ && is_lob_storage(col_info->type_.get_type())) {
           set_has_lob_column(true);

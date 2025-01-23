@@ -332,7 +332,6 @@ int ObTableApiReplaceExecutor::cache_insert_row()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cache insert row is null", K(ret));
   }
-
   return ret;
 }
 

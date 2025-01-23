@@ -208,6 +208,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_mode_control.cpp
   table/ob_htable_rowkey_mgr.cpp
   table/ob_table_client_info_mgr.cpp
+  table/fts/ob_table_fts_cg_service.cpp
 )
 
 ob_set_subtarget(ob_server table_load

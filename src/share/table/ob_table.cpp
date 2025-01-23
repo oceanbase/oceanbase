@@ -3560,6 +3560,25 @@ int ObHBaseParams::deep_copy(ObIAllocator &allocator, ObKVParamsBase *hbase_para
   return ret;
 }
 
+OB_SERIALIZE_MEMBER_SIMPLE(ObFTSParam,
+                           search_text_);
+
+int ObFTSParam::deep_copy( ObIAllocator &allocator, ObKVParamsBase *fts_params) const
+{
+  int ret = OB_SUCCESS;
+  if (fts_params == nullptr || fts_params->get_param_type() != ParamType::FTS) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected hbase adress", K(ret), KPC(fts_params));
+  } else {
+    ObFTSParam *param = static_cast<ObFTSParam*>(fts_params);
+    ObString &search_text = param->get_search_text();
+    if (OB_FAIL(ob_write_string(allocator, search_text_, search_text))) {
+      LOG_WARN("fail to deep copy search text", K(ret), K(search_text_));
+    }
+  }
+  return ret;
+}
+
 OB_DEF_DESERIALIZE(ObKVParams)
 {
   int ret = OB_SUCCESS;
@@ -3573,6 +3592,10 @@ OB_DEF_DESERIALIZE(ObKVParams)
         }
       } else if (param_type == static_cast<int8_t>(ParamType::Redis)) {
         if (OB_FAIL(alloc_ob_params(ParamType::Redis, ob_params_))) {
+          RPC_WARN("alloc ob_params_ memory failed", K(ret));
+        }
+      } else if (param_type == static_cast<int8_t>(ParamType::FTS)) {
+        if (OB_FAIL(alloc_ob_params(ParamType::FTS, ob_params_))) {
           RPC_WARN("alloc ob_params_ memory failed", K(ret));
         }
       } else {

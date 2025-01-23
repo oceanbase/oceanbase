@@ -31,6 +31,7 @@ public:
   static int process_trigger();
   static int process_one_by_one(ObTableGroupCommitOps &group);
 private:
+  static bool is_timer_thread_start();
   static int process_failed_group();
   static int process_other_group();
   static int process_expired_group();

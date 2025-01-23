@@ -68,9 +68,7 @@ int ObTableQueryAsyncSession::init()
 
 void ObTableQueryAsyncSession::set_timout_ts()
 {
-  if (session_type_ == ObTableEntityType::ET_HKV) {
-    timeout_ts_ = ObTimeUtility::current_time() + lease_timeout_period_;
-  }
+  timeout_ts_ = ObTimeUtility::current_time() + lease_timeout_period_;
 }
 
 int ObTableQueryAsyncSession::deep_copy_select_columns(const common::ObIArray<common::ObString> &query_cols_names_,

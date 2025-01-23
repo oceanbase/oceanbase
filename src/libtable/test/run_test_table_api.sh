@@ -18,6 +18,8 @@ echo run test...
 rm -f libobtable.log.*
 # table api
 mysql -h $HOST -P $PORT -u $user -e "alter system set _enable_defensive_check = true;"
+# disable group commit
+mysql -h $HOST -P $PORT -u $user -e "alter system set kv_group_commit_batch_size = 1;"
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists batch_execute_test; create table if not exists batch_execute_test (C1 bigint primary key, C2 bigint, C3 varchar(100)) PARTITION BY KEY(C1) PARTITIONS 16" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists complex_batch_execute_test; create table if not exists complex_batch_execute_test (C1 bigint primary key, C2 bigint, C3 varchar(100)) PARTITION BY KEY(C1) PARTITIONS 16" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists all_single_operation_test; create table if not exists all_single_operation_test (C1 bigint primary key, C2 bigint, C3 varchar(100)) PARTITION BY KEY(C1) PARTITIONS 16" $db

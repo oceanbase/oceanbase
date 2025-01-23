@@ -63,12 +63,13 @@ class ObTableGroupCommitMgr final
 {
 public:
   static const int64_t DEFAULT_GROUP_SIZE = 32;
-  static const int64_t DEFAULT_ENABLE_GROUP_COMMIT_OPS = 1000;
+  static const int64_t DEFAULT_ENABLE_OPS_THRESHOLD = 10000;
+  static const int64_t DEFAULT_DISABLE_MAX_FAILED_GROUP_SIZE = 1000;
   friend class ObTableGroupInfoTask;
 
   ObTableGroupCommitMgr()
       : is_inited_(false),
-        is_group_commit_disable_(false),
+        is_group_commit_disable_(true),
         allocator_(MTL_ID()),
         group_allocator_("TbGroupAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         op_allocator_("TbOpAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
@@ -77,14 +78,17 @@ public:
         group_info_map_(),
         failed_groups_(failed_groups_allocator_),
         expired_groups_(),
-        statis_and_trigger_task_(*this),
-        group_size_and_ops_task_(*this),
+        group_trigger_task_(*this),
+        group_info_task_(*this),
+        group_ops_task_(*this),
         group_factory_(group_allocator_),
         op_factory_(op_allocator_),
         put_op_group_size_(0),
         get_op_group_size_(0),
         last_write_ops_(0),
-        last_read_ops_(0)
+        last_read_ops_(0),
+        enable_ops_threshold_(DEFAULT_ENABLE_OPS_THRESHOLD),
+        is_timer_enable_(false)
   {}
   virtual ~ObTableGroupCommitMgr() {}
   TO_STRING_KV(K_(is_inited),
@@ -95,7 +99,9 @@ public:
                K_(put_op_group_size),
                K_(get_op_group_size),
                K_(last_write_ops),
-               K_(last_read_ops));
+               K_(last_read_ops),
+               K_(enable_ops_threshold),
+               K_(is_timer_enable));
 public:
   static int mtl_init(ObTableGroupCommitMgr *&mgr) { return mgr->init(); }
   int start();
@@ -124,7 +130,14 @@ public:
   OB_INLINE ObTableExpiredGroups& get_expired_groups() { return expired_groups_; }
   OB_INLINE ObTableGroupFactory<ObTableGroupCommitOps>& get_group_factory() { return group_factory_; }
   OB_INLINE ObTableGroupFactory<ObTableGroupCommitSingleOp>& get_op_factory() { return op_factory_; }
+  OB_INLINE bool check_and_enable_timer()
+  {
+    bool is_time_enable = ATOMIC_CAS(&is_timer_enable_, false, true);
+    return is_time_enable == false;
+  }
+  OB_INLINE bool is_timer_enable() { return ATOMIC_LOAD(&is_timer_enable_);}
   int64_t get_group_size(bool is_read) const;
+  int64_t get_enable_ops_threshold() const;
   int create_and_add_ls_group(const ObTableGroupCtx &ctx);
 private:
   int clean_group_map();
@@ -159,10 +172,22 @@ public:
     {}
     virtual void runTimerTask(void) override;
     void update_group_info_task();
-    void update_ops_task();
     void clean_expired_group_task();
   private:
     bool need_update_group_info_;
+    ObTableGroupCommitMgr &group_mgr_;
+  };
+
+  class ObTableGroupOpsTask : public common::ObTimerTask
+  {
+  public:
+    static const int64_t TASK_SCHEDULE_INTERVAL = 1000 * 1000; // 1s
+    ObTableGroupOpsTask(ObTableGroupCommitMgr &mgr)
+        : group_mgr_(mgr)
+    {}
+    virtual void runTimerTask(void) override;
+    void update_ops_task();
+  private:
     ObTableGroupCommitMgr &group_mgr_;
   };
 private:
@@ -178,14 +203,17 @@ private:
   ObTableFailedGroups failed_groups_;
   ObTableExpiredGroups expired_groups_;
   ObTableGroupOpsCounter ops_counter_;
-  ObTableGroupTriggerTask statis_and_trigger_task_;
-  ObTableGroupInfoTask group_size_and_ops_task_;
+  ObTableGroupTriggerTask group_trigger_task_;
+  ObTableGroupInfoTask group_info_task_;
+  ObTableGroupOpsTask group_ops_task_;
   ObTableGroupFactory<ObTableGroupCommitOps> group_factory_;
   ObTableGroupFactory<ObTableGroupCommitSingleOp> op_factory_;
   ObTableAtomicValue<int64_t> put_op_group_size_;
   ObTableAtomicValue<int64_t> get_op_group_size_;
   int64_t last_write_ops_;
   int64_t last_read_ops_;
+  int64_t enable_ops_threshold_;
+  bool is_timer_enable_;
 };
 
 } // end namespace table
