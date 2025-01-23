@@ -6066,7 +6066,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
       const ObString &part_func_str = part_option.get_part_func_expr_str();
       bool is_partition_key = false;
       bool is_subpartition_key = false;
-      if (part_func_str.empty()/*empty means no part key or system-defined part key*/) {
+      if (part_option.is_range_part() && part_func_str.empty()/*if true then we got system-defined part key*/) {
         //do nothing
       } else if (OB_ISNULL(column_schema = cur_table_schema.get_column_schema(alter_column_name))) {
         // do nothing, because the column does not exist in the schema.
