@@ -321,7 +321,7 @@ int ObSMUtils::cell_str(
                 if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, udt_info))) {
                   OB_LOG(WARN,"failed to get udt info", K(ret), K(tenant_id), K(udt_id));
                 } else if (OB_ISNULL(udt_info)) {
-                  ret = OB_ERR_UNEXPECTED;
+                  ret = OB_ERR_EXPRESSION_WRONG_TYPE;
                   OB_LOG(WARN,"udt info is null", K(ret), K(udt_id));
                 }  else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, *schema_guard, elem_user_type))) {
                   OB_LOG(WARN,"failed to transform to pl type", K(ret), KPC(udt_info));
