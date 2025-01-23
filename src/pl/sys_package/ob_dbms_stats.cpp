@@ -1174,14 +1174,20 @@ int ObDbmsStats::parse_degree_option(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   number::ObNumber num_degree;
+  int64_t max_degree = INT32_MAX;
+  int64_t min_degree = 1;
   if (degree.is_null()) {
     stat_param.degree_ = 1;
   } else if (OB_FAIL(degree.get_number(num_degree))) {
     LOG_WARN("failed to get degree", K(ret), K(degree));
   } else if (OB_FAIL(num_degree.extract_valid_int64_with_trunc(stat_param.degree_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_degree));
-  } else if (stat_param.degree_ < 1) {
-    stat_param.degree_ = 1;
+  } else if (stat_param.degree_ > max_degree) {
+    stat_param.degree_ = max_degree;
+  } else if (stat_param.degree_ < min_degree) {
+    stat_param.degree_ = min_degree;
+  } else {
+    //do nothing
   }
   return ret;
 }
@@ -4238,10 +4244,8 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
   if (OB_SUCC(ret)) {
     if (degree.is_null()) {
       stat_options |= StatOptionFlags::OPT_DEGREE;
-    } else if (OB_FAIL(degree.get_number(num_degree))) {
-      LOG_WARN("failed to get degree", K(ret));
-    } else if (OB_FAIL(num_degree.extract_valid_int64_with_trunc(param.degree_))) {
-      LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_degree));
+    } else if (OB_FAIL(parse_degree_option(ctx, degree, param))) {
+      LOG_WARN("parse degree param failed", K(ret));
     }
   }
 
