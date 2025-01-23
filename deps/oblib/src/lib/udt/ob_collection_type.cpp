@@ -134,7 +134,7 @@ bool ObCollectionArrayType::has_same_super_type(const ObCollectionArrayType &oth
   } else if (get_compatiable_type_id() != other.get_compatiable_type_id()) {
     // return false
   } else if (OB_NOT_NULL(element_type_) && OB_NOT_NULL(other.element_type_)) {
-    if (element_type_->type_id_ != other.element_type_->type_id_) {
+    if (element_type_->get_compatiable_type_id() != other.element_type_->get_compatiable_type_id()) {
     } else if (element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
       bret = static_cast<ObCollectionBasicType*>(element_type_)->has_same_super_type(*static_cast<ObCollectionBasicType*>(other.element_type_));
     } else {
