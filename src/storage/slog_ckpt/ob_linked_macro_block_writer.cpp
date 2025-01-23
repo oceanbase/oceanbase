@@ -155,6 +155,7 @@ int ObLinkedMacroBlockItemWriter::init(const bool need_disk_addr)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObPGMetaWriter has already been inited", K(ret));
+  } else if (FALSE_IT(allocator_.set_attr(common::ObMemAttr(MTL_ID(), "ObjLinkWriter")))) {
   } else if (OB_FAIL(block_writer_.init())) {
     LOG_WARN("fail to init meta block writer", K(ret));
   } else if (OB_ISNULL(io_buf_ = static_cast<char *>(allocator_.alloc(macro_block_size)))) {
