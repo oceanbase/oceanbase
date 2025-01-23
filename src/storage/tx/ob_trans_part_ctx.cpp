@@ -6083,7 +6083,11 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
     const bool contain_mds_transfer_out = is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT)
                            || is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_PREPARE)
                            || is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_V2);
-    const bool need_kill_tx = contain_mds_table_lock || contain_mds_transfer_out;
+    const bool contain_mds_tablet_transfer_in = is_contain_mds_type_(ObTxDataSourceType::TRANSFER_IN_ABORTED)
+                           || is_contain_mds_type_(ObTxDataSourceType::FINISH_TRANSFER_IN);
+    const bool need_kill_tx = contain_mds_table_lock
+                           || contain_mds_transfer_out
+                           || contain_mds_tablet_transfer_in;
     bool kill_by_append_mode_initial_scn = false;
     if (append_mode_initial_scn.is_valid()) {
       kill_by_append_mode_initial_scn = exec_info_.max_applying_log_ts_ <= append_mode_initial_scn;
@@ -6091,21 +6095,21 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
 
     if (ObTxState::INIT == exec_info_.state_) {
       if (exec_info_.data_complete_ && !contain_mds_table_lock && !contain_mds_transfer_out
-          && !kill_by_append_mode_initial_scn) {
+          && !kill_by_append_mode_initial_scn && !contain_mds_tablet_transfer_in) {
         if (OB_FAIL(mt_ctx_.replay_to_commit(false /*is_resume*/))) {
           TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
         }
       } else {
-        TRANS_LOG(WARN, "txn data incomplete, will be aborted", K(contain_mds_table_lock),
-                  K(contain_mds_transfer_out), K(kill_by_append_mode_initial_scn),
-                  K(append_mode_initial_scn), KPC(this));
+        TRANS_LOG(WARN, "txn data incomplete, will be aborted",
+                  K(contain_mds_table_lock), K(contain_mds_transfer_out), K(contain_mds_tablet_transfer_in),
+                  K(need_kill_tx), K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
         if (has_persisted_log_()) {
           if (ObPartTransAction::COMMIT == part_trans_action_
               || get_upstream_state() >= ObTxState::REDO_COMPLETE) {
 
             TRANS_LOG(WARN, "abort self instantly with a tx_commit request",
-                      K(contain_mds_table_lock), K(contain_mds_transfer_out), K(need_kill_tx),
-                      K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
+                      K(contain_mds_table_lock), K(contain_mds_transfer_out), K(contain_mds_tablet_transfer_in),
+                      K(need_kill_tx), K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
             if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
               //Temporary fix:
               //The transaction cannot be killed temporarily, waiting for handle_timeout to retry abort.
