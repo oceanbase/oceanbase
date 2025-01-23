@@ -241,6 +241,7 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define LAST_BARRIER_DATA_VERSION DATA_VERSION_4_2_1_0
 
 #define PROXY_VERSION_4_2_3_0 (oceanbase::common::cal_version(4, 2, 3, 0))
+#define PROXY_VERSION_4_3_0_0 (oceanbase::common::cal_version(4, 3, 0, 0))
 #define PROXY_VERSION_4_3_3_0 (oceanbase::common::cal_version(4, 3, 3, 0))
 // should check returned ret
 #define GET_MIN_DATA_VERSION(tenant_id, data_version) (oceanbase::common::ObClusterVersion::get_instance().get_tenant_data_version((tenant_id), (data_version)))

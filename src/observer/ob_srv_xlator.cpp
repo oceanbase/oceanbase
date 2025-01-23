@@ -220,26 +220,44 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
           processor = p;
         }
       } else if (pkt.get_cmd() == obmysql::COM_PROCESS_INFO) {
-        char *buf = (&co_ep_rpcp_buf)->obmp_query_buffer_;
-        ObMPProcessInfo *p = new (buf) ObMPProcessInfo(gctx_);
-        if (OB_ISNULL(p)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-        } else if (OB_FAIL(p->init())) {
-          SERVER_LOG(ERROR, "Init ObMPProcessInfo fail", K(ret));
-          p->~ObMPProcessInfo();
+        ObSMConnection *conn = reinterpret_cast<ObSMConnection* >(
+            SQL_REQ_OP.get_sql_session(&req));
+        if (OB_ISNULL(conn)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(conn), K(ret));
+        } else if (conn->is_proxy_ && conn->proxy_version_ < PROXY_VERSION_4_3_0_0) {
+          NEW_MYSQL_PROCESSOR(ObMPDefault, gctx_);
         } else {
-          processor = p;
+          char *buf = (&co_ep_rpcp_buf)->obmp_query_buffer_;
+          ObMPProcessInfo *p = new (buf) ObMPProcessInfo(gctx_);
+          if (OB_ISNULL(p)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+          } else if (OB_FAIL(p->init())) {
+            SERVER_LOG(ERROR, "Init ObMPProcessInfo fail", K(ret));
+            p->~ObMPProcessInfo();
+          } else {
+            processor = p;
+          }
         }
       } else if (pkt.get_cmd() == obmysql::COM_PROCESS_KILL) {
-        char *buf = (&co_ep_rpcp_buf)->obmp_query_buffer_;
-        ObMPProcessKill *p = new (buf) ObMPProcessKill(gctx_);
-        if (OB_ISNULL(p)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-        } else if (OB_FAIL(p->init())) {
-          SERVER_LOG(ERROR, "Init ObMPProcessKill fail", K(ret));
-          p->~ObMPProcessKill();
+        ObSMConnection *conn = reinterpret_cast<ObSMConnection* >(
+            SQL_REQ_OP.get_sql_session(&req));
+        if (OB_ISNULL(conn)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(conn), K(ret));
+        } else if (conn->is_proxy_ && conn->proxy_version_ < PROXY_VERSION_4_3_0_0) {
+          NEW_MYSQL_PROCESSOR(ObMPDefault, gctx_);
         } else {
-          processor = p;
+          char *buf = (&co_ep_rpcp_buf)->obmp_query_buffer_;
+          ObMPProcessKill *p = new (buf) ObMPProcessKill(gctx_);
+          if (OB_ISNULL(p)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+          } else if (OB_FAIL(p->init())) {
+            SERVER_LOG(ERROR, "Init ObMPProcessKill fail", K(ret));
+            p->~ObMPProcessKill();
+          } else {
+            processor = p;
+          }
         }
       } else {
         switch (pkt.get_cmd()) {
