@@ -590,6 +590,11 @@ int ObTableLoadCoordinatorCtx::init_partition_ids(const ObIArray<ObTabletID> &ta
         LOG_WARN("fail to search tablet ids set", KR(ret));
       }
     }
+    if (OB_SUCC(ret) && OB_UNLIKELY(partition_ids_.count() != tablet_ids.count())) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partition ids count is not equal to tablet ids count, schema maybe change, need retry",
+                KR(ret), K(partition_ids_), K(tablet_ids));
+    }
   }
   return ret;
 }
