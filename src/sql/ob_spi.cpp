@@ -11,43 +11,24 @@
  */
 
 #define USING_LOG_PREFIX SQL
-
 #include "ob_spi.h"
 #include "ob_sql.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "ob_sql_utils.h"
 #include "observer/ob_inner_sql_connection_pool.h"
-#include "observer/ob_inner_sql_connection.h"
-#include "observer/ob_inner_sql_result.h"
-#include "observer/ob_server_struct.h"
-#include "observer/mysql/ob_query_retry_ctrl.h"
 #include "observer/mysql/ob_sync_cmd_driver.h"
 #include "observer/mysql/obmp_stmt_execute.h"
-#include "sql/parser/ob_parser.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/expr/ob_expr_pl_integer_checker.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_allocator.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/engine/expr/ob_expr_obj_access.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/ob_result_set.h"
-#include "sql/parser/parse_node.h"
 #include "pl/ob_pl_exception_handling.h"
-#include "sql/plan_cache/ob_ps_cache.h"
-#include "storage/tx/ob_trans_service.h"
-#include "pl/sys_package/ob_dbms_sql.h"
-#include "pl/ob_pl.h"
 #include "sql/dblink/ob_tm_service.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/dblink/ob_pl_dblink_util.h"
 #include "pl/ob_pl_profiler.h"
 #include "pl/ob_pl_call_stack_trace.h"
 #endif
-#include "pl/ob_pl_allocator.h"
 #include "pl/diagnosis/ob_pl_sql_audit_guard.h"
 
 namespace oceanbase

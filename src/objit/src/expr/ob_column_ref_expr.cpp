@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX JIT
 #include "objit/expr/ob_column_ref_expr.h"
-#include "lib/oblog/ob_log.h"
 #include "expr/ob_expr_visitor.h"
 
 namespace oceanbase {

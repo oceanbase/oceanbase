@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/rc/ob_tenant_base.h"
 #include "ob_fuse_row_cache_fetcher.h"
-#include "storage/memtable/ob_memtable_interface.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 
 using namespace oceanbase::storage;

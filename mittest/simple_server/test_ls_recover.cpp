@@ -14,20 +14,14 @@
  */
 
 #include <gtest/gtest.h>
-#include <stdlib.h>
 #define USING_LOG_PREFIX STORAGE
 #define protected public
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
 #include "env/ob_simple_server_restart_helper.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "logservice/ob_garbage_collector.h"
-#include "logservice/palf/palf_env_impl.h"
-#include "storage/access/ob_rows_info.h"
 #include "storage/init_basic_struct.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 #undef private
 #undef protected

@@ -11,11 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "share/ob_common_rpc_proxy.h"
 #include "sql/resolver/cmd/ob_alter_system_stmt.h"
 #include "sql/engine/cmd/ob_restore_executor.h"
 #include "sql/engine/ob_exec_context.h"
-#include "observer/ob_inner_sql_connection_pool.h"
 #include "rootserver/restore/ob_restore_util.h"
 
 namespace oceanbase

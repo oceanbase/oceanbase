@@ -11,13 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
-#include "common/ob_smart_call.h"
+#include "ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "lib/charset/ob_charset.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/engine/ob_exec_context.h"
 

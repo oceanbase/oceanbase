@@ -14,20 +14,11 @@
 
 #include "sql/executor/ob_remote_scheduler.h"
 #include "sql/executor/ob_remote_job_control.h"
-#include "sql/executor/ob_task_spliter_factory.h"
 #include "sql/executor/ob_remote_job_executor.h"
 #include "sql/executor/ob_remote_task_executor.h"
 #include "sql/executor/ob_local_job_executor.h"
 #include "sql/executor/ob_local_task_executor.h"
-#include "sql/executor/ob_job.h"
-#include "share/partition_table/ob_partition_location.h"
 #include "sql/executor/ob_job_parser.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "share/ob_define.h"
-#include "lib/utility/utility.h"
-#include "sql/engine/ob_exec_context.h"
-#include "rpc/obrpc/ob_rpc_net_handler.h"
 
 namespace oceanbase
 {

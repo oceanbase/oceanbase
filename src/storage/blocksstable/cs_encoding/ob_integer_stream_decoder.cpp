@@ -13,7 +13,6 @@
 
 #include "ob_integer_stream_decoder.h"
 #include "ob_cs_decoding_util.h"
-#include "lib/wide_integer/ob_wide_integer.h"
 
 namespace oceanbase
 {

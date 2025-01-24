@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_tablet_creator.h"
-//#include "ob_freeze_info_manager.h"
 #include "storage/tx/ob_trans_service.h"
-#include "ob_root_service.h"
-#include "lib/allocator/page_arena.h"
-#include "share/ob_share_util.h"
-#include "observer/ob_inner_sql_connection.h"
 #include "rootserver/ob_split_partition_helper.h"
-#include "storage/tx/ob_tx_log.h"
 
 namespace oceanbase
 {

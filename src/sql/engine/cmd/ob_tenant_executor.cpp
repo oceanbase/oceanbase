@@ -13,19 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_tenant_executor.h"
 
-#include "lib/container/ob_se_array_iterator.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "share/ob_unit_getter.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/ob_get_compat_mode.h"
-#include "share/ls/ob_ls_operator.h"
-#include "share/ob_leader_election_waiter.h"
-#include "share/ls/ob_ls_status_operator.h"       //ObLSStatusInfo, ObLSStatusOperator
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ddl/ob_create_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_drop_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_lock_tenant_stmt.h"
@@ -34,13 +22,9 @@
 #include "sql/resolver/ddl/ob_purge_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/resolver/cmd/ob_create_restore_point_stmt.h"
 #include "sql/resolver/cmd/ob_drop_restore_point_stmt.h"
-#include "sql/engine/expr/ob_expr_frame_info.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "observer/ob_inner_sql_connection_pool.h"
-#include "share/ls/ob_ls_status_operator.h"
 namespace oceanbase
 {
 using namespace common;

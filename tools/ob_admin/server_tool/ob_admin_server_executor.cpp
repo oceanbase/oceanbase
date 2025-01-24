@@ -11,19 +11,11 @@
  */
 
 #include "ob_admin_server_executor.h"
-#include <getopt.h>
-#include <stddef.h>
-#include <algorithm>
-#include <iostream>
-#include <sstream>
-#include <iterator>
 #include <iomanip>
 #include "observer/ob_srv_network_frame.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_encrypt_kms.h"
 #endif
-#include "lib/utility/ob_print_utils.h"
-#include "ob_admin_routine.h"
 using namespace std;
 using namespace oceanbase::common;
 using namespace oceanbase::tools;

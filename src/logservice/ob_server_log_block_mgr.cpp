@@ -12,28 +12,10 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_server_log_block_mgr.h"
-#include <fcntl.h>                              // IO operation
-#include <type_traits>                          // decltype
 #include <regex>                                // std::regex
-#include "lib/lock/ob_spin_lock.h"              // ObSpinLockGuard
-#include "lib/ob_define.h"                      // OB_MAX_FILE_NAME_LENGTH
-#include "lib/time/ob_time_utility.h"           // ObTimeUtility
-#include "lib/utility/ob_macro_utils.h"         // OB_UNLIKELY
-#include "lib/utility/ob_utility.h"             // lower_align
-#include "lib/utility/serialization.h"          // serialization
-#include "lib/file/file_directory_utils.h"      // FileDirectoryUtils
-#include "lib/checksum/ob_crc64.h"              // ob_crc64
-#include "lib/utility/utility.h"                // ObTimeGuard
-#include "lib/container/ob_se_array_iterator.h" // ObSEArrayIterator
-#include "lib/thread/ob_thread_name.h"          // set_thread_name
-#include "palf/log_block_pool_interface.h"      // ILogBlockPool
-#include "palf/log_define.h"                    // block_id_to_string
 #include "observer/ob_server.h"                 // OBSERVER
 #include "observer/ob_server_utils.h"           // get_log_disk_info_in_config
-#include "share/unit/ob_unit_resource.h"        // UNIT_MIN_LOG_DISK_SIZE
-#include "share/ob_errno.h"                     // errno
 #include "logservice/ob_log_service.h"          // ObLogService
-#include "logservice/palf/log_io_utils.h"       // renameat_with_retry
 
 #define BYTE_TO_MB(byte) (byte+1024*1024-1)/1024/1024
 

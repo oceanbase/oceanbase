@@ -12,28 +12,14 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/table_load/ob_table_load_store_ctx.h"
+#include "ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
-#include "observer/table_load/ob_table_load_data_row_handler.h"
-#include "observer/table_load/ob_table_load_merger.h"
 #include "observer/table_load/ob_table_load_store_trans.h"
-#include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
-#include "observer/table_load/ob_table_load_utils.h"
 #include "observer/table_load/ob_table_load_store_table_ctx.h"
 #include "observer/table_load/ob_table_load_merger_manager.h"
 #include "observer/table_load/ob_table_load_open_insert_table_ctx_manager.h"
-#include "share/ob_autoincrement_service.h"
-#include "share/sequence/ob_sequence_cache.h"
-#include "sql/engine/cmd/ob_load_data_utils.h"
-#include "storage/direct_load/ob_direct_load_data_block.h"
-#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
-#include "storage/direct_load/ob_direct_load_mem_context.h"
-#include "storage/direct_load/ob_direct_load_sstable_data_block.h"
-#include "storage/direct_load/ob_direct_load_sstable_index_block.h"
-#include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
-#include "storage/direct_load/ob_direct_load_tmp_file.h"
 #include "observer/table_load/ob_table_load_pre_sorter.h"
 
 namespace oceanbase

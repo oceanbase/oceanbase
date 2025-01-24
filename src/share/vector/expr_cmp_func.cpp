@@ -13,14 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "expr_cmp_func.h"
-#include "share/vector/vector_basic_op.h"
-#include "share/datum/ob_datum_util.h"
-#include "share/vector/ob_discrete_format.h"
-#include "share/vector/ob_continuous_format.h"
-#include "share/vector/ob_uniform_format.h"
-#include "share/vector/ob_fixed_length_format.h"
-#include "sql/engine/ob_serializable_function.h"
-#include "sql/engine/expr/ob_array_expr_utils.h"
 
 #define NULL_FIRST_IDX 0
 #define NULL_LAST_IDX  1

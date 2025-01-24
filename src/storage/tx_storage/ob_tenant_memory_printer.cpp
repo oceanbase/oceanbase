@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/utility/ob_print_utils.h"
-#include "lib/alloc/memory_dump.h"
-#include "lib/alloc/ob_malloc_time_monitor.h"
-#include "observer/omt/ob_multi_tenant.h"                  // ObMultiTenant
-#include "share/ob_tenant_mgr.h"                           // get_virtual_memory_used
 #include "storage/tx_storage/ob_tenant_freezer.h"          // ObTenantFreezer
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
-#include "deps/oblib/src/lib/alloc/malloc_hook.h"
 
 namespace oceanbase
 {

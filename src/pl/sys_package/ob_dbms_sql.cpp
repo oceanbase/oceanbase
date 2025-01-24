@@ -12,12 +12,10 @@
 
 #define USING_LOG_PREFIX PL
 
-#include "pl/sys_package/ob_dbms_sql.h"
-#include "pl/ob_pl_exception_handling.h"
+#include "ob_dbms_sql.h"
 #include "pl/ob_pl_package.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/parser/ob_parser.h"
-#include "sql/ob_spi.h"
 #include "sql/engine/expr/ob_expr_pl_associative_index.h"
 
 namespace oceanbase

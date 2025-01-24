@@ -13,12 +13,7 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include "lib/geo/ob_geo_dispatcher.h"
-#include "lib/geo/ob_geo_func_union.h"
-#include "lib/geo/ob_geo_tree.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/geo/ob_geo_utils.h"
+#include "ob_geo_func_union.h"
 #include "lib/geo/ob_geo_func_utils.h"
 
 using namespace oceanbase::common;

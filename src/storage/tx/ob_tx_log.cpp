@@ -11,12 +11,7 @@
  */
 
 #include "storage/tx/ob_tx_log.h"
-#include "logservice/ob_log_base_header.h"
-#include "logservice/ob_log_base_type.h"
 #include "storage/memtable/ob_memtable_mutator.h"
-#include "storage/blocksstable/ob_row_reader.h"
-#include "storage/tx/ob_multi_data_source_printer.h"
-#include "common/cell/ob_cell_reader.h"
 
 namespace oceanbase
 {

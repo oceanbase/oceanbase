@@ -12,10 +12,9 @@
  */
 
 #define USING_LOG_PREFIX LIB
-#include "lib/geo/ob_wkt_parser.h"
+#include "ob_wkt_parser.h"
 #include "lib/function/ob_function.h"
 #include "common/ob_smart_call.h"
-#include "lib/utility/ob_hang_fatal_error.h"
 #include "lib/geo/ob_geo_utils.h"
 
 namespace oceanbase

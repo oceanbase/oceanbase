@@ -9,7 +9,6 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/compaction/ob_tenant_status_cache.h"
-#include "lib/oblog/ob_log_module.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #include "share/ob_server_struct.h"
 

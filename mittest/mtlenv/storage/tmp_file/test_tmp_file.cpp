@@ -16,11 +16,6 @@
 #define protected public
 #define private public
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "storage/tmp_file/ob_tmp_file_global.h"
-#include "storage/tmp_file/ob_tmp_file_meta_tree.h"
-#include "storage/tmp_file/ob_tmp_file_io_handle.h"
 
 namespace oceanbase
 {

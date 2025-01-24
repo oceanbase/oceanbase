@@ -11,9 +11,6 @@
  */
 
 #include "ob_log_restore_allocator.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include <cstdint>
 
 namespace oceanbase
 {

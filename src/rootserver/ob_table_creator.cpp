@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_table_creator.h"
-#include "rootserver/ob_root_service.h"
 #include "share/tablet/ob_tablet_to_table_history_operator.h" // ObTabletToTableHistoryOperator
-#include "share/scn.h"
 
 namespace oceanbase
 {

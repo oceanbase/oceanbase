@@ -11,21 +11,8 @@
  */
 
 #include "ob_mvcc_trans_ctx.h"
-#include "ob_mvcc_ctx.h"
-#include "ob_mvcc_row.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/memtable/ob_memtable_context.h"
-#include "storage/memtable/ob_memtable_data.h"
-#include "storage/memtable/ob_memtable_util.h"
-#include "storage/memtable/ob_memtable_mutator.h"
-#include "lib/atomic/atomic128.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
-#include "storage/tx/ob_trans_ctx.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_tx_stat.h"
-#include "ob_mvcc_ctx.h"
-#include "storage/memtable/ob_memtable_interface.h"
 
 namespace oceanbase
 {

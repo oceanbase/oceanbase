@@ -13,14 +13,10 @@
 #define USING_LOG_PREFIX RS_RESTORE
 
 #include "ob_restore_common_util.h"
-#include "share/ls/ob_ls_status_operator.h" //ObLSStatusOperator
-#include "share/ls/ob_ls_operator.h"//ObLSAttr
 #include "rootserver/ob_ls_service_helper.h"
 #include "rootserver/standby/ob_tenant_role_transition_service.h"
 #include "src/share/ob_schema_status_proxy.h"
-#include "src/share/ob_rpc_struct.h"
 #include "rootserver/ob_ddl_service.h"
-#include "src/share/ob_rpc_struct.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif

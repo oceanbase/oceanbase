@@ -13,19 +13,11 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_granule_iterator_op.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_granule_pump.h"
-#include "sql/executor/ob_task_spliter.h"
-#include "sql/engine/dml/ob_table_insert_op.h"
-#include "sql/engine/expr/ob_expr_join_filter.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
+#include "src/sql/engine/dml/ob_table_modify_op.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_msg.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-
 
 namespace oceanbase
 {

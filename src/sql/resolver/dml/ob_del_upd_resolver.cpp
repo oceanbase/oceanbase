@@ -11,17 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "common/ob_smart_call.h"
-#include "share/ob_define.h"
-#include "sql/resolver/dml/ob_del_upd_resolver.h"
+#include "ob_del_upd_resolver.h"
 #include "sql/resolver/dml/ob_default_value_utils.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/resolver/dml/ob_delete_stmt.h"
-#include "sql/resolver/dml/ob_merge_stmt.h"
-#include "sql/resolver/dml/ob_insert_all_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/resolver/ob_stmt_type.h"
 #include "pl/ob_pl_resolver.h"
 #include "sql/parser/parse_malloc.h"
 #include "sql/resolver/dml/ob_merge_resolver.h"

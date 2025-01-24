@@ -10,14 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <iostream>
-#include <sstream>
-#include <iterator>
-#include <string.h>
-#include <sys/types.h>
-#include <pwd.h>
-#include <malloc.h>
-#include "share/ob_define.h"
 #include "dumpsst/ob_admin_dumpsst_executor.h"
 #include "io_bench/ob_admin_io_executor.h"
 #include "server_tool/ob_admin_server_executor.h"
@@ -31,7 +23,6 @@
 #include "io_bench/ob_admin_io_adapter_bench.h"
 #include "io_device/ob_admin_test_io_device_executor.h"
 #include "object_storage_driver_quality/ob_admin_object_storage_driver_quality.h"
-#include "lib/utility/ob_print_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "tools/ob_admin/shared_storage_tool/ob_admin_shared_storage_tool_executor.h"
 #endif

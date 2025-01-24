@@ -11,8 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/optimizer/ob_conflict_detector.h"
-#include "sql/optimizer/ob_log_plan.h"
+#include "ob_conflict_detector.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "sql/rewrite/ob_transform_utils.h"
 

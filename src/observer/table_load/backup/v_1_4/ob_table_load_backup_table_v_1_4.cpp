@@ -16,7 +16,6 @@
 #include "observer/table_load/backup/v_1_4/ob_table_load_backup_partition_scanner_v_1_4.h"
 #include "observer/table_load/backup/v_1_4/ob_table_load_backup_util_v_1_4.h"
 #include "observer/table_load/backup/ob_table_load_backup_file_util.h"
-#include <cstring>
 
 namespace oceanbase
 {

@@ -13,15 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_micro_block_cs_encoder.h"
-#include "lib/container/ob_array_iterator.h"
-#include "ob_cs_encoding_util.h"
-#include "ob_icolumn_cs_encoder.h"
-#include "ob_integer_column_encoder.h"
-#include "ob_integer_stream_encoder.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_task_define.h"
-#include "storage/ob_i_store.h"
 
 namespace oceanbase
 {

@@ -12,12 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_server_struct.h"
-#include "lib/thread_local/ob_tsi_factory.h"
-#include "lib/ob_define.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/ob_web_service_root_addr.h"
-#include "share/ob_lease_struct.h"
-#include "common/ob_version_def.h"
 namespace oceanbase
 {
 namespace share

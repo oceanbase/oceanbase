@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_migrate_unit_finish_checker.h"
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "share/ls/ob_ls_status_operator.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "ob_unit_manager.h"
-#include "ob_zone_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

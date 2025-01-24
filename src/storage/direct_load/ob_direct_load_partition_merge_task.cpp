@@ -18,11 +18,9 @@
 #include "storage/direct_load/ob_direct_load_data_insert.h"
 #include "storage/direct_load/ob_direct_load_data_fuse.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
-#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_insert_table_row_iterator.h"
 #include "storage/direct_load/ob_direct_load_insert_table_row_writer.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table.h"
-#include "storage/direct_load/ob_direct_load_origin_table.h"
 
 namespace oceanbase
 {

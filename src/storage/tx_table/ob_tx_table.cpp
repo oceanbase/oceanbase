@@ -11,27 +11,10 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/tx_table/ob_tx_table.h"
 
-#include "share/ob_ls_id.h"
-#include "share/schema/ob_table_schema.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/memtable/mvcc/ob_mvcc_ctx.h"
-#include "storage/access/ob_store_row_iterator.h"
-#include "storage/tx/ob_trans_ctx_mgr.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_tx_data_functor.h"
-#include "storage/tx/ob_keep_alive_ls_handler.h"
-#include "storage/tx_storage/ob_ls_map.h"
+#include "ob_tx_table.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_table/ob_tx_data_cache.h"
-#include "storage/tx_table/ob_tx_table_define.h"
-#include "storage/tx_table/ob_tx_table_iterator.h"
-#include "storage/tx_table/ob_tx_table_interface.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_iterator.h"
 
 namespace oceanbase {
 using namespace share;

@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "ob_das_task_result.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "sql/das/ob_das_define.h"
 #include "sql/das/ob_data_access_service.h"
-#include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/ob_exec_context.h"
 namespace oceanbase
 {

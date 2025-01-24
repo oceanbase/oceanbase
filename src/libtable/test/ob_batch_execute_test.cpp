@@ -11,20 +11,10 @@
  */
 
 #include <gtest/gtest.h>
-#include <thread>
 #define private public
 #define protected public
 #include "libobtable.h"
-#include "lib/utility/ob_test_util.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/lds/ob_lds_constructor.hpp"
-#include "share/table/ob_table_rpc_struct.h"
-#include "common/row/ob_row.h"
-#include "observer/table/ob_htable_utils.h"
 #include "observer/table/ob_htable_filter_operator.h"
-#include "observer/table/ob_table_service.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include <thread>
 #undef private
 #undef protected
 using namespace oceanbase::common;

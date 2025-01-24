@@ -11,7 +11,6 @@
  */
 
 #include "ob_cdc_req.h"
-#include "lib/utility/ob_unify_serialize.h"
 
 namespace oceanbase
 {

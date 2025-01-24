@@ -10,13 +10,6 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
-#include "lib/file/file_directory_utils.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "logservice/palf/log_define.h"
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
-#include "lib/utility/ob_defer.h"
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 

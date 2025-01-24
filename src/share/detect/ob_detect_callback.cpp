@@ -11,9 +11,8 @@
  */
 #define USING_LOG_PREFIX SHARE
 
-#include "share/detect/ob_detect_callback.h"
-#include "share/detect/ob_detect_manager.h"
-#include "sql/dtl/ob_dtl_basic_channel.h"
+#include "ob_detect_callback.h"
+#include "src/share/detect/ob_detect_rpc_proxy.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/dtl/ob_dtl_rpc_channel.h"
 

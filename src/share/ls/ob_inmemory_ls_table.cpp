@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE_PT
 
 #include "ob_inmemory_ls_table.h"    // for ObInMemoryLSTable's functions
-#include "lib/container/ob_se_array.h"       // for array-related functions: at(), count()
 
 namespace oceanbase
 {

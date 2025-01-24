@@ -12,7 +12,6 @@
  */
 
 #include "lib/geo/ob_geo_dispatcher.h"
-#include "lib/geo/ob_geo_ibin.h"
 #include "ob_geo_func_testx.h"
 #include "ob_geo_func_testy.h"
 

@@ -13,7 +13,6 @@
  */
 
 #include "ob_log_start_schema_matcher.h"
-#include "ob_log_utils.h"                    // ob_cdc_malloc
 #include "ob_log_instance.h"
 #include "lib/string/ob_string.h"
 

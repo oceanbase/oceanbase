@@ -15,12 +15,9 @@
 #define private public
 #define protected public
 #include "share/vector_index/ob_plugin_vector_index_serialize.h"
-#include "common/data_buffer.h"
 #undef private
 #undef protected
 
-#include <iostream>
-#include <regex>
 
 namespace oceanbase {
 namespace common {

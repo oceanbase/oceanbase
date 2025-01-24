@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/oblog/ob_log_module.h"
-#include "lib/oblog/ob_log.h"
 #include "share/ob_force_print_log.h"
 #include "share/ob_plugin_helper.h"
 

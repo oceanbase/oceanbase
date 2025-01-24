@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_vector_util.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
-#include <random>
 
 
 namespace oceanbase {

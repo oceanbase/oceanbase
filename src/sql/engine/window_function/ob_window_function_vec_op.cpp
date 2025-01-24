@@ -11,14 +11,8 @@
  */
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/ob_sort.h"
 #include "ob_window_function_vec_op.h"
-#include "share/aggregate/iaggregate.h"
-#include "share/aggregate/processor.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "sql/engine/px/datahub/components/ob_dh_winbuf.h"
-#include "src/sql/engine/window_function/ob_window_function_op.h"
 
 #define SWAP_STORES(left, right)                                                                   \
   do {                                                                                             \

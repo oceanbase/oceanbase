@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/rewrite/ob_equal_analysis.h"
-#include "sql/engine/expr/ob_expr_operator.h"
 #include "common/ob_smart_call.h"
 namespace oceanbase
 {

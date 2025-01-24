@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/ob_define.h"
 #include "logservice/palf/log_io_utils.h"
 
 namespace oceanbase

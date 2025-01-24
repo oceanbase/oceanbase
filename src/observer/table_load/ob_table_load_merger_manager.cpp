@@ -14,7 +14,6 @@
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_merger.h"
 #include "observer/table_load/ob_table_load_store_table_ctx.h"
-#include "share/table/ob_table_load_sql_statistics.h"
 
 #define USING_LOG_PREFIX SERVER
 namespace oceanbase

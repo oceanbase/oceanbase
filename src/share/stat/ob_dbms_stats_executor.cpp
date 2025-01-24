@@ -12,24 +12,17 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "share/stat/ob_dbms_stats_executor.h"
-#include "share/stat/ob_basic_stats_estimator.h"
-#include "share/stat/ob_hybrid_hist_estimator.h"
-#include "share/stat/ob_opt_column_stat_cache.h"
-#include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_incremental_stat_estimator.h"
 #include "share/stat/ob_dbms_stats_history_manager.h"
 #include "share/stat/ob_dbms_stats_lock_unlock.h"
 #include "share/stat/ob_index_stats_estimator.h"
 #include "pl/sys_package/ob_dbms_stats.h"
-#include "share/stat/ob_opt_stat_gather_stat.h"
 #include "share/stat/ob_dbms_stats_gather.h"
 #include "observer/omt/ob_tenant.h"
-#include "observer/ob_inner_sql_connection_pool.h"
-#include "observer/ob_inner_sql_connection.h"
 #include "src/observer/ob_server.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "src/share/stat/ob_opt_stat_monitor_manager.h"
 #include "lib/random/ob_random.h"
+
 namespace oceanbase {
 using namespace pl;
 namespace common {

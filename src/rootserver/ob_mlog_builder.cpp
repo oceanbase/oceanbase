@@ -12,10 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_mlog_builder.h"
-#include "rootserver/ob_ddl_service.h"
 #include "rootserver/ob_root_service.h"
 #include "storage/ddl/ob_ddl_lock.h"
-#include "share/schema/ob_schema_utils.h"
 
 namespace oceanbase
 {

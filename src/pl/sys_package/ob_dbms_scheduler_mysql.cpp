@@ -12,21 +12,10 @@
 
 #define USING_LOG_PREFIX PL
 
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
 #include "observer/ob_inner_sql_connection_pool.h"
-#include "observer/ob_inner_sql_connection.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_schema_utils.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_executor.h"
 #include "ob_dbms_scheduler_mysql.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
-#include "storage/ob_common_id_utils.h"
 namespace oceanbase
 {
 

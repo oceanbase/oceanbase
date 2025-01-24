@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_tx_ls_state_mgr.h"
-#include "storage/tx_storage/ob_ls_service.h"
+#include "ob_tx_ls_state_mgr.h"
+#include "src/storage/tx_storage/ob_ls_map.h"
 
 #define LOAD_CUR_STATE_CONTAINER         \
   TxLSStateContainer ls_state_container; \

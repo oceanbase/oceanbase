@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/rc/ob_tenant_base.h"
-#include "share/schema/ob_table_param.h"
 #include "ob_sstable_sec_meta_iterator.h"
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
-#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
 {

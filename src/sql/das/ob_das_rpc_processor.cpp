@@ -11,15 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "lib/signal/ob_signal_struct.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/das/ob_data_access_service.h"
-#include "sql/das/ob_das_utils.h"
-#include "sql/engine/ob_exec_context.h"
-#include "observer/ob_server_struct.h"
-#include "storage/tx/ob_trans_service.h"
-#include "observer/ob_srv_network_frame.h"
-#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {

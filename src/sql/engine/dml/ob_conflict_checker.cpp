@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/dml/ob_conflict_checker.h"
-#include "sql/das/ob_das_dml_ctx_define.h"
-#include "sql/engine/dml/ob_dml_ctx_define.h"
-#include "sql/engine/dml/ob_table_modify_op.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/das/ob_data_access_service.h"
 #include "sql/das/ob_das_utils.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

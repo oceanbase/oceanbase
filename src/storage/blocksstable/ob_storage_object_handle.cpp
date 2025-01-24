@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/blocksstable/ob_storage_object_handle.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/io/ob_io_manager.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_storage_object_rw_info.h"
-#include "storage/backup/ob_backup_data_struct.h"
+#include "ob_storage_object_handle.h"
 #include "storage/backup/ob_backup_device_wrapper.h"
 #include "share/ob_io_device_helper.h"
 #ifdef OB_BUILD_SHARED_STORAGE

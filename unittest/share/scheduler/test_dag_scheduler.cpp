@@ -12,18 +12,10 @@
 
 #define USING_LOG_PREFIX TEST
 #include <getopt.h>
-#include <unistd.h>
 #include <gtest/gtest.h>
 #define protected public
 #define private public
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "share/scheduler/ob_sys_task_stat.h"
-#include "lib/atomic/ob_atomic.h"
-#include "observer/omt/ob_tenant_node_balancer.h"
-#include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/compaction/ob_tenant_compaction_progress.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "lib/random/ob_random.h"
 

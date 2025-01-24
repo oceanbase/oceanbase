@@ -12,31 +12,15 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/expr/ob_expr_operator.h"
-#include <math.h>
-#include "lib/oblog/ob_log.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
+#include "ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/engine/expr/ob_expr_less_than.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/expr/ob_expr_add.h"
 #include "sql/engine/expr/ob_expr_minus.h"
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
 #include "sql/engine/expr/ob_expr_null_safe_equal.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_infix_expression.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
-#include "lib/timezone/ob_oracle_format_models.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "share/vector/expr_cmp_func.h"
 #include "sql/engine/expr/ob_expr_func_round.h"
-#include "sql/engine/expr/ob_array_expr_utils.h"
-#include "share/schema/ob_schema_struct.h"
 
 #include "common/object/ob_object.h"
 #include "sql/engine/expr/ob_expr_multiset.h"

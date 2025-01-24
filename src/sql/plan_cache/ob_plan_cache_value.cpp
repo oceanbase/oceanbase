@@ -12,22 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "ob_plan_cache_value.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/stat/ob_opt_stat_manager.h"
-#include "sql/parser/parse_malloc.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "sql/ob_sql_context.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/plan_cache/ob_pcv_set.h"
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_plan_set.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/udr/ob_udr_mgr.h"
 #include "sql/udr/ob_udr_utils.h"
-#include "share/ob_duplicate_scope_define.h"
-#include "pl/ob_pl_stmt.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "sql/plan_cache/ob_values_table_compression.h"
 

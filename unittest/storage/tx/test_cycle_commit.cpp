@@ -11,12 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include <vector>
 #define private public
 #define protected public
 #include "ob_mock_2pc_ctx.h"
-#include "lib/random/ob_random.h"
-#include "lib/function/ob_function.h"
 
 namespace oceanbase
 {

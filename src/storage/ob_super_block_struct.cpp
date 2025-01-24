@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ob_super_block_struct.h"
+#include "ob_super_block_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/ob_object_manager.h" // INVALID_TABLET_VERSION
 
 namespace oceanbase
 {

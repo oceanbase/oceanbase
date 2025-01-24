@@ -12,46 +12,22 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "common/rowkey/ob_store_rowkey.h"
 
-#include "storage/memtable/ob_memtable.h"
 
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/worker.h"
-#include "share/rc/ob_context.h"
+#include "ob_memtable.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
 
-#include "storage/memtable/mvcc/ob_mvcc_engine.h"
-#include "storage/memtable/mvcc/ob_mvcc_iterator.h"
-#include "storage/memtable/mvcc/ob_mvcc_row.h"
 
-#include "storage/memtable/ob_memtable_compact_writer.h"
-#include "storage/memtable/ob_memtable_iterator.h"
-#include "storage/memtable/ob_memtable_mutator.h"
-#include "storage/memtable/ob_memtable_util.h"
-#include "storage/memtable/ob_memtable_context.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
-#include "storage/memtable/ob_concurrent_control.h"
 #include "storage/memtable/ob_row_compactor.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "storage/access/ob_rows_info.h"
-#include "storage/access/ob_sstable_row_lock_checker.h"
+#include "src/storage/access/ob_sstable_row_getter.h"
 
-#include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/access/ob_row_sample_iterator.h"
-#include "storage/concurrency_control/ob_trans_stat_row.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 #include "logservice/ob_log_service.h"

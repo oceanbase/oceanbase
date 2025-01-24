@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "storage/meta_mem/ob_tablet_leak_checker.h"
 
 namespace oceanbase

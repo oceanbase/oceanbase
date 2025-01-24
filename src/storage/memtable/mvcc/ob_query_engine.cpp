@@ -11,7 +11,6 @@
  */
 
 #include "storage/memtable/mvcc/ob_query_engine.h"
-#include "storage/memtable/ob_memtable_data.h"
 #include "common/ob_store_range.h"
 #include "storage/blocksstable/ob_row_reader.h"
 

@@ -11,7 +11,6 @@
  */
 
 #include "ob_all_virtual_macro_block_marker_status.h"
-#include "lib/utility/ob_print_utils.h"
 #include "observer/ob_server.h"
 
 namespace oceanbase

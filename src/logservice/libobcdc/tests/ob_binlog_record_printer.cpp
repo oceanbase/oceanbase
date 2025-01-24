@@ -44,11 +44,8 @@
 
 #include "ob_binlog_record_printer.h"
 
-#include "rpc/obmysql/ob_mysql_global.h"  // MYSQL_TYPE_*
 #include "lib/file/file_directory_utils.h"
-#include "lib/time/ob_time_utility.h"     // ObTimeUtility
 
-#include "ob_log_utils.h"                 // calc_md5_cstr
 #include "ob_log_binlog_record.h"         // ObLogBR
 #include "ob_log_part_trans_task.h"       // PartTransTask
 

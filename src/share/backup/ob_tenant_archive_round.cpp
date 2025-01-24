@@ -13,15 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_tenant_archive_round.h"
 #include "storage/tx/ob_ts_mgr.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
-#include "lib/oblog/ob_log_module.h"
-#include "common/ob_smart_var.h"
-#include "share/backup/ob_tenant_archive_mgr.h"
-#include "share/ob_tenant_info_proxy.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "share/ls/ob_ls_i_life_manager.h"
-#include "share/scn.h"
 
 using namespace oceanbase;
 using namespace share;

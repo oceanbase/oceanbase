@@ -16,11 +16,6 @@
 #define private public
 #define protected public
 
-#include "lib/ob_errno.h"
-#include "lib/allocator/ob_concurrent_fifo_allocator.h"
-#include "lib/container/ob_array.h"
-#include "lib/hash/ob_linear_hash_map.h"
-#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_basic_op.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_struct.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h"
 

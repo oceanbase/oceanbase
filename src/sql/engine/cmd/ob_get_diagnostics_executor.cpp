@@ -11,16 +11,8 @@
  */
 
 #define USING_LOG_PREFIX  SQL_ENG
-#include <utility>
 #include "sql/engine/cmd/ob_get_diagnostics_executor.h"
-#include "sql/resolver/cmd/ob_get_diagnostics_stmt.h"
 #include "observer/ob_inner_sql_connection_pool.h"
-#include "observer/ob_inner_sql_connection.h"
-#include "observer/ob_inner_sql_result.h"
-#include "share/ob_define.h"
-#include "sql/session/ob_session_val_map.h"
-#include "pl/ob_pl.h"
-#include "share/ob_lob_access_utils.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;

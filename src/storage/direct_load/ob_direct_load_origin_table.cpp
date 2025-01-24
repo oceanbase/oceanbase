@@ -12,10 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_origin_table.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ob_relative_table.h"
 
 namespace oceanbase
 {

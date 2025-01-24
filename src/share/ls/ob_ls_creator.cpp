@@ -10,24 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_timeout_ctx.h"
-#include "share/ob_share_util.h"
 #define USING_LOG_PREFIX SHARE
 #include "ob_ls_creator.h"
-#include "share/ob_rpc_struct.h" //ObLSCreatorArg, ObSetMemberListArgV2
-#include "share/ls/ob_ls_status_operator.h" //ObLSStatusOperator
-#include "share/ls/ob_ls_operator.h" //ObLSHistoryOperator
-#include "share/ls/ob_ls_table.h"
 #include "share/ls/ob_ls_table_operator.h"
-#include "share/ls/ob_ls_info.h"
-#include "share/ob_tenant_info_proxy.h"
-#include "rootserver/ob_root_utils.h" //majority
-#include "share/ob_unit_table_operator.h" //ObUnitTableOperator
-#include "logservice/leader_coordinator/table_accessor.h"
-#include "logservice/palf/palf_base_info.h"//palf::PalfBaseInfo
-#include "share/scn.h"
 #include "share/ls/ob_ls_life_manager.h"
-#include "rootserver/ob_root_utils.h"//notify_switch_leader
 #ifdef OB_BUILD_ARBITRATION
 #include "share/arbitration_service/ob_arbitration_service_info.h" // for ObArbitrationServiceInfo
 #include "share/arbitration_service/ob_arbitration_service_table_operator.h" // for ObArbitrationServiceTableOperator

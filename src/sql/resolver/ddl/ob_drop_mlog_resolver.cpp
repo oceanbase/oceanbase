@@ -14,8 +14,6 @@
 
 #include "sql/resolver/ddl/ob_drop_mlog_resolver.h"
 #include "sql/resolver/ddl/ob_drop_mlog_stmt.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/parser/ob_parser_utils.h"
 
 namespace oceanbase
 {

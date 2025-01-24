@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX CLOG
 #define USING_LOG_PREFIX CLOG
 #include "ob_admin_parser_group_entry.h"
-#include "lib/ob_errno.h"
 #include "logservice/palf/log_entry.h"
 namespace oceanbase
 {

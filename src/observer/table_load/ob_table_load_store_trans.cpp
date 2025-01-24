@@ -13,10 +13,8 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_store_trans.h"
-#include "observer/table_load/ob_table_load_store.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
-#include "sql/engine/cmd/ob_load_data_utils.h"
 #include "storage/direct_load/ob_direct_load_i_table.h"
 
 namespace oceanbase

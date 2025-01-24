@@ -14,9 +14,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/vector_index/ob_vector_index_refresh.h"
-#include "share/ob_errno.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/engine/ob_exec_context.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 

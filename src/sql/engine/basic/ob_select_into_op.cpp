@@ -24,12 +24,7 @@
 #include <memory>
 
 #include "ob_select_into_op.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "share/ob_device_manager.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "lib/charset/ob_charset_string_helper.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"

@@ -11,17 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/ob_share_util.h"
-#include "common/ob_timeout_ctx.h"
-#include "lib/worker.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_cluster_version.h" // for GET_MIN_DATA_VERSION
 #ifdef OB_BUILD_ARBITRATION
+#include "ob_share_util.h"
 #include "share/arbitration_service/ob_arbitration_service_utils.h" // ObArbitrationServiceUtils
 #endif
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "observer/omt/ob_tenant_config_mgr.h" // ObTenantConfigGuard
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "observer/ob_server_struct.h"
 

@@ -13,14 +13,9 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_partition_calc.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/table_load/ob_table_load_obj_cast.h"
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_stat.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {

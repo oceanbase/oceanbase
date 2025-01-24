@@ -14,13 +14,11 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include "lib/string/ob_string.h"                // ObString
 #include "ob_log_reader.h"
 #include "ob_log_instance.h"                     // TCTX
 #include "ob_log_dml_parser.h"                   // IObLogDmlParser
 #include "ob_log_store_service.h"                // IObStoreService
 #include "ob_log_utils.h"                        // get_timestamp
-#include "ob_log_factory.h"                      // ReadLogBuf, ReadLogBufFactory
 #include "ob_log_trace_id.h"                     // ObLogTraceIdGuard
 #include "ob_cdc_auto_config_mgr.h"              // CDC_CFG_MGR
 

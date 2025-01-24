@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_serializable_function.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
-#include "lib/hash_func/murmur_hash.h"
 #include "sql/engine/expr/ob_expr.h"
 
 namespace oceanbase

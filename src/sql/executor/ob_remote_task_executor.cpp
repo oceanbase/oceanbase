@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "lib/signal/ob_signal_struct.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/executor/ob_executor_rpc_impl.h"
 #include "sql/executor/ob_remote_task_executor.h"
-#include "sql/executor/ob_task.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "storage/tx/ob_trans_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

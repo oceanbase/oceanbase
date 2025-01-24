@@ -10,14 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <float.h>
 #define USING_LOG_PREFIX COMMON
-#include "lib/ob_define.h"
-#include "common/object/ob_obj_type.h"
+#include "ob_obj_type.h"
 #include "common/object/ob_object.h"
-#include "common/ob_accuracy.h"
-#include "lib/charset/ob_charset.h"
-#include "lib/string/ob_string.h"
 namespace oceanbase
 {
 namespace common

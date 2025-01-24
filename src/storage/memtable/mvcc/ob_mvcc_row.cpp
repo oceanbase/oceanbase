@@ -11,25 +11,9 @@
  */
 
 #include "ob_mvcc_row.h"
-#include "common/ob_tablet_id.h"
-#include "lib/ob_errno.h"
-#include "ob_mvcc_ctx.h"
-#include "storage/ob_i_store.h"
-#include "storage/memtable/ob_memtable_data.h"
 #include "storage/memtable/ob_row_compactor.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/time/ob_tsc_timestamp.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "observer/ob_server.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/memtable/ob_memtable_context.h"
-#include "storage/memtable/ob_concurrent_control.h"
-#include "storage/tx/ob_trans_ctx.h"
-#include "storage/tx/ob_trans_event.h"
-#include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
-#include "storage/blocksstable/ob_datum_row.h"
 #include "storage/access/ob_rows_info.h"
 
 namespace oceanbase

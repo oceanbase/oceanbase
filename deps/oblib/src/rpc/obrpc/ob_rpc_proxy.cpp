@@ -14,10 +14,6 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 
-#include "lib/worker.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/trace/ob_trace.h"
-#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {

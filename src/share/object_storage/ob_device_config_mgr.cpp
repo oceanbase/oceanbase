@@ -13,14 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/object_storage/ob_device_config_mgr.h"
-#include <sys/statvfs.h>
-#include "lib/file/file_directory_utils.h"
-#include "lib/function/ob_function.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_device_manager.h"
-#include "share/object_storage/ob_device_config_parser.h"
-#include "share/object_storage/ob_device_manifest.h"
-#include "share/object_storage/ob_object_storage_struct.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_dir_manager.h"
 #endif

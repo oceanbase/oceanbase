@@ -13,7 +13,6 @@
 
 #include "ob_string_stream_decoder.h"
 #include "ob_cs_decoding_util.h"
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 
 namespace oceanbase
 {

@@ -11,9 +11,8 @@
  */
 #define USING_LOG_PREFIX STORAGE
 
+#include "ob_direct_load_sstable.h"
 #include "storage/direct_load/ob_direct_load_sstable_scanner.h"
-#include "storage/direct_load/ob_direct_load_sstable.h"
-#include "observer/table_load/ob_table_load_stat.h"
 
 namespace oceanbase
 {

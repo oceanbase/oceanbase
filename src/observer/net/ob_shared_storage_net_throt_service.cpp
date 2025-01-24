@@ -10,13 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "observer/net/ob_shared_storage_net_throt_service.h"
-#include "observer/ob_server_struct.h"
+#include "ob_shared_storage_net_throt_service.h"
 #include "observer/ob_srv_network_frame.h"
-#include "share/rc/ob_tenant_base.h"
 #include "src/rootserver/ob_root_service.h"
-#include "src/rootserver/ob_zone_storage_manager.h"
-#include "src/share/io/ob_io_manager.h"
 #include "src/share/backup/ob_backup_connectivity.h"
 #include "src/share/object_storage/ob_zone_storage_table_operation.h"
 #define USING_LOG_PREFIX RS

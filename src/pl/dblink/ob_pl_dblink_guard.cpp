@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX PL
 
 #include "ob_pl_dblink_guard.h"
-#include "share/rc/ob_tenant_base.h"
-#include "pl/ob_pl_type.h"
-#include "sql/dblink/ob_dblink_utils.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "pl/ob_pl_stmt.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "lib/oracleclient/ob_oci_metadata.h"

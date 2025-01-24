@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_client_info_mgr.h"
-#include "lib/json/ob_json.h"
 
 using namespace oceanbase;
 using namespace oceanbase::table;

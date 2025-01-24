@@ -11,11 +11,7 @@
  */
 
 #include "ob_macro_block_checker.h"
-#include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
 #include "storage/blocksstable/ob_macro_block_bare_iterator.h"
-#include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
-#include "storage/blocksstable/ob_macro_block_reader.h"
-#include "storage/blocksstable/ob_micro_block_reader.h"
 
 namespace oceanbase
 {

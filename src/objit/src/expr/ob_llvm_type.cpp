@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX JIT
 
 #include "core/jit_context.h"
-#include "lib/oblog/ob_log.h"
 #include "ob_llvm_type.h"
 namespace oceanbase {
 namespace jit {

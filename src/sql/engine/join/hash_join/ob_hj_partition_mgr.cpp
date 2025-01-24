@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/join/hash_join/ob_hj_partition_mgr.h"
-#include "sql/engine/join/ob_partition_store.h"
 
 namespace oceanbase
 {

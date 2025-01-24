@@ -12,16 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_row_scanner.h"
-#include "storage/ob_i_store.h"
-#include "storage/ob_row_fuse.h"
-#include "storage/access/ob_block_row_store.h"
 #include "storage/access/ob_aggregate_base.h"
 #include "storage/access/ob_block_batched_row_store.h"
-#include "storage/access/ob_index_sstable_estimator.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_scanner.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "storage/tx/ob_tx_data_functor.h"
 #include "storage/compaction/ob_compaction_trans_cache.h"
 
 namespace oceanbase

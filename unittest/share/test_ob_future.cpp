@@ -15,9 +15,6 @@
 #include "lib/future/ob_future.h"
 #include <gtest/gtest.h>
 #include <thread>
-#include <iostream>
-#include <vector>
-#include <chrono>
 
 namespace oceanbase {
 namespace unittest {

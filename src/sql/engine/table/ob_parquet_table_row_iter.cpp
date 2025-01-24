@@ -16,7 +16,6 @@
 #include "sql/engine/expr/ob_expr_get_path.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/ob_exec_context.h"
 #include <parquet/api/reader.h>
 
 namespace oceanbase

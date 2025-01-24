@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_index_block_dual_meta_iterator.h"
-#include "storage/blocksstable/ob_macro_block_bare_iterator.h"
 
 namespace oceanbase {
 using namespace storage;

@@ -11,23 +11,13 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "share/ob_errno.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/ob_task_define.h"
-#include "share/ob_force_print_log.h"
 #include "ob_storage_rpc.h"
 #include "storage/high_availability/ob_storage_ha_reader.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "logservice/ob_log_service.h"
-#include "logservice/ob_log_handler.h"
-#include "storage/restore/ob_ls_restore_handler.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
-#include "lib/thread/thread.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/prewarm/ob_replica_prewarm_struct.h"
 #endif

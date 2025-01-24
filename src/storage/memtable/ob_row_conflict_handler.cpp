@@ -11,11 +11,7 @@
  */
 #define USING_LOG_PREFIX TRANS
 #include "ob_row_conflict_handler.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/memtable/mvcc/ob_mvcc_iterator.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
-#include "storage/tx_table/ob_tx_table_guards.h"
 #include "storage/access/ob_rows_info.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 

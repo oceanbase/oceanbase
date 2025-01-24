@@ -12,31 +12,12 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/schema/ob_schema_mgr.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
-#include "lib/hash/ob_hashset.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_print_utils.h"
-#include "common/ob_timeout_ctx.h"
-#include "observer/ob_server_struct.h" // for GCTX
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_share_util.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_srv_rpc_proxy.h" // ObSrvRpcProxy
 #include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "share/ls/ob_ls_operator.h" // ObLSAttrOperator
-#include "share/balance/ob_balance_task_table_operator.h" // ObBalanceTaskTableOperator
 #include "share/schema/ob_part_mgr_util.h"
-#include "share/ob_debug_sync.h" // DEBUG_SYNC
 #include "storage/tablelock/ob_lock_utils.h" // ObLSObjLockUtil
-#include "share/ls/ob_ls_table.h" // ObLSTable
-#include "share/ls/ob_ls_table_operator.h" // ObLSTableOperator
 #include "share/location_cache/ob_location_service.h" // ObLocationService
-#include "share/ob_rpc_struct.h" // ObCreateDupLSArg & ObCreateDupLSResult
 #include "rootserver/ob_root_service.h"
-#include "rootserver/parallel_ddl/ob_tablet_balance_allocator.h"
 
 namespace oceanbase
 {

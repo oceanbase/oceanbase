@@ -11,14 +11,8 @@
  */
 #define USING_LOG_PREFIX STORAGE
 #include "ob_virtual_cg_scanner.h"
-#include "storage/access/ob_table_access_context.h"
-#include "storage/access/ob_aggregate_base.h"
 #include "storage/access/ob_aggregated_store.h"
 #include "storage/access/ob_aggregated_store_vec.h"
-#include "storage/access/ob_vector_store.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/lob/ob_lob_manager.h"
 
 namespace oceanbase
 {

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_fuse_row_cache.h"
-#include "lib/stat/ob_diagnose_info.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;

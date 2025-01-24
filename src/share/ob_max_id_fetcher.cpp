@@ -14,16 +14,6 @@
 
 #include "share/ob_max_id_fetcher.h"
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "common/ob_zone.h"
-#include "common/object/ob_object.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/ob_schema_status_proxy.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_sql_client_decorator.h"
 

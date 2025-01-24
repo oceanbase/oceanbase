@@ -15,9 +15,6 @@
 #include "sql/engine/sort/ob_sort_op.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
-#include "sql/engine/window_function/ob_window_function_op.h"
-#include "sql/engine/aggregate/ob_hash_groupby_vec_op.h"
-#include "share/ob_rpc_struct.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
 
 namespace oceanbase

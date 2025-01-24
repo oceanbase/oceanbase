@@ -10,25 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_dbms_stats_utils.h"
-#include "share/stat/ob_opt_column_stat.h"
-#include "share/stat/ob_opt_osg_column_stat.h"
-#include "share/object/ob_obj_cast.h"
 #include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_opt_table_stat.h"
-#include "share/schema/ob_schema_struct.h"
-#include "sql/engine/ob_exec_context.h"
-#include "share/stat/ob_stat_item.h"
-#include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/ob_result_set.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
-#include "share/stat/ob_dbms_stats_preferences.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "share/stat/ob_dbms_stats_executor.h"
-#include "lib/utility/ob_fast_convert.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 
 #ifdef OB_BUILD_ORACLE_PL

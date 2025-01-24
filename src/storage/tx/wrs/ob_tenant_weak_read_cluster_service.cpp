@@ -12,14 +12,7 @@
 
 #define USING_LOG_PREFIX  TRANS
 
-#include "share/inner_table/ob_inner_table_schema_constants.h"  // OB_ALL_WEAK_READ_SERVICE_TNAME
-#include "lib/mysqlclient/ob_mysql_result.h"                    // ObMySQLResult
-#include "lib/stat/ob_latch_define.h"
 #include "ob_weak_read_util.h"
-#include "rpc/obrpc/ob_rpc_net_handler.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "logservice/ob_log_service.h"
 

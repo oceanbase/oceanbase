@@ -13,11 +13,7 @@
 
 #include "share/detect/ob_detect_manager_utils.h"
 #include "share/detect/ob_detect_manager.h"
-#include "sql/engine/px/ob_dfo.h"
-#include "share/interrupt/ob_global_interrupt_call.h"
-#include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
 #include "sql/engine/px/ob_px_scheduler.h"
 
 using namespace oceanbase::sql;

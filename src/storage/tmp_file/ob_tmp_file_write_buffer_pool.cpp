@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/config/ob_server_config.h"
 #include "share/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "storage/tmp_file/ob_tmp_file_write_buffer_pool.h"
 #include "storage/blocksstable/ob_block_manager.h"
 

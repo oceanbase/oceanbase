@@ -13,11 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_table_access_param.h"
-#include "ob_dml_param.h"
 #include "storage/ob_relative_table.h"
 #include "storage/tablet/ob_tablet.h"
 #include "share/schema/ob_table_dml_param.h"
-#include "sql/engine/expr/ob_expr.h"
 
 namespace oceanbase
 {

@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX PL
 
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_exception_handling.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/schema/ob_package_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
 
 namespace oceanbase
 {

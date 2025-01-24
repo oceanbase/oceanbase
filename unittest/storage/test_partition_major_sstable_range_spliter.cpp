@@ -18,7 +18,6 @@
 
 #include "storage/ob_partition_range_spliter.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 
 namespace oceanbase
 {

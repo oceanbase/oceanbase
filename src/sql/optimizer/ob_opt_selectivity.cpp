@@ -11,28 +11,13 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/optimizer/ob_opt_selectivity.h"
-#include <math.h>
-#include "common/object/ob_obj_compare.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/session/ob_basic_session_info.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/rewrite/ob_query_range.h"
+#include "ob_opt_selectivity.h"
 #include "sql/rewrite/ob_query_range_define.h"
-#include "sql/optimizer/ob_opt_est_utils.h"
-#include "sql/optimizer/ob_optimizer.h"
-#include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_opt_column_stat_cache.h"
-#include "sql/optimizer/ob_logical_operator.h"
-#include "sql/optimizer/ob_join_order.h"
-#include "common/ob_smart_call.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "sql/optimizer/ob_access_path_estimation.h"
 #include "sql/optimizer/ob_sel_estimator.h"
-#include "sql/optimizer/ob_opt_est_utils.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 namespace oceanbase

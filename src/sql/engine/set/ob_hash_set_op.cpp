@@ -14,7 +14,6 @@
 
 #include "sql/engine/set/ob_hash_set_op.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/basic/ob_hash_partitioning_infrastructure_op.h"
 
 namespace oceanbase
 {

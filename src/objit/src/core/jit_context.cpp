@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX JIT
 #include "core/jit_context.h"
-#include "lib/ob_errno.h"
 
 namespace oceanbase
 {

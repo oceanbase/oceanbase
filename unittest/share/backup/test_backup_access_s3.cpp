@@ -11,12 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
-#include "lib/restore/ob_storage.h"
-#include "lib/restore/ob_storage_s3_base.h"
 #include "share/backup/ob_backup_io_adapter.h"
 
-#include "lib/allocator/page_arena.h"
 #include "test_backup_access_s3.h"
 
 using namespace oceanbase::common;

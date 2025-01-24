@@ -15,18 +15,11 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define protected public
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "share/ob_ls_id.h"
-#include "share/unit/ob_unit_info.h"
-#include "share/ls/ob_ls_status_operator.h"
-#include "rootserver/ob_primary_ls_service.h"
 
 
 

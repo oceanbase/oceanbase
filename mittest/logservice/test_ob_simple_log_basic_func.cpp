@@ -13,21 +13,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
-#include "io/easy_connection.h"
-#include "lib/file/file_directory_utils.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/utility.h"
-#include <cstdio>
-#include <signal.h>
-#include "lib/utility/ob_defer.h"
-#include "share/ob_errno.h"
 #define private public
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/lsn_allocator.h"
-#include "share/scn.h"
-#include "logservice/palf/log_rpc_processor.h"
 #include "env/ob_simple_log_cluster_env.h"
 
 #undef private

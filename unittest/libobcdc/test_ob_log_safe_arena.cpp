@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/oblog/ob_log.h"
 #include <gtest/gtest.h>
 #include "ob_log_safe_arena.h"
 #include <thread>

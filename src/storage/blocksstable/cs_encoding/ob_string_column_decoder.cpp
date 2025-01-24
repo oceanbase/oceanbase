@@ -13,8 +13,6 @@
 
 #include "ob_string_column_decoder.h"
 #include "ob_string_stream_decoder.h"
-#include "ob_integer_stream_decoder.h"
-#include "ob_cs_encoding_util.h"
 #include "ob_cs_decoding_util.h"
 #include "ob_string_stream_vector_decoder.h"
 

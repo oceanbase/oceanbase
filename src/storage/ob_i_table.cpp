@@ -11,16 +11,10 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/ob_i_table.h"
-#include "share/ob_force_print_log.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/memtable/ob_memtable.h"
+#include "ob_i_table.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tx_table/ob_tx_ctx_memtable.h"
-#include "storage/tx_table/ob_tx_data_memtable.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 using namespace oceanbase;

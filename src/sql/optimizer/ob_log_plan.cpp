@@ -11,40 +11,21 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include <stdint.h>
-#include "lib/utility/utility.h"
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/hash/ob_hashset.h"
-#include "share/ob_server_locality_cache.h"
-#include "share/stat/ob_opt_column_stat_cache.h"
+#include "ob_log_plan.h"
 #include "share/stat/ob_opt_stat_manager.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/ob_sql_trans_control.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_table_scan.h"
-#include "sql/optimizer/ob_log_join.h"
-#include "sql/optimizer/ob_intersect_route_policy.h"
-#include "sql/optimizer/ob_join_order.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
 #include "sql/optimizer/ob_log_join_filter.h"
 #include "sql/optimizer/ob_log_sort.h"
 #include "sql/optimizer/ob_log_group_by.h"
 #include "sql/optimizer/ob_log_window_function.h"
-#include "sql/optimizer/ob_log_distinct.h"
 #include "sql/optimizer/ob_log_window_function.h"
 #include "sql/optimizer/ob_log_limit.h"
 #include "sql/optimizer/ob_log_sequence.h"
-#include "sql/optimizer/ob_log_set.h"
 #include "sql/optimizer/ob_log_subplan_scan.h"
 #include "sql/optimizer/ob_log_subplan_filter.h"
 #include "sql/optimizer/ob_log_material.h"
 #include "sql/optimizer/ob_log_select_into.h"
 #include "sql/optimizer/ob_log_count.h"
-#include "sql/optimizer/ob_opt_est_cost.h"
-#include "sql/optimizer/ob_optimizer.h"
-#include "sql/optimizer/ob_log_del_upd.h"
 #include "sql/optimizer/ob_log_expr_values.h"
 #include "sql/optimizer/ob_log_function_table.h"
 #include "sql/optimizer/ob_log_json_table.h"
@@ -53,28 +34,13 @@
 #include "sql/optimizer/ob_log_values.h"
 #include "sql/optimizer/ob_log_temp_table_insert.h"
 #include "sql/optimizer/ob_log_temp_table_access.h"
-#include "sql/optimizer/ob_log_temp_table_transformation.h"
-#include "sql/optimizer/ob_px_resource_analyzer.h"
-#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
-#include "common/ob_smart_call.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/optimizer/ob_log_err_log.h"
-#include "sql/optimizer/ob_log_update.h"
-#include "sql/optimizer/ob_log_insert.h"
-#include "sql/optimizer/ob_log_delete.h"
-#include "sql/optimizer/ob_log_del_upd.h"
-#include "sql/optimizer/ob_log_insert_all.h"
 #include "sql/optimizer/ob_log_merge.h"
 #include "sql/optimizer/ob_log_stat_collector.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/optimizer/ob_update_log_plan.h"
 #include "sql/optimizer/ob_insert_log_plan.h"
-#include "sql/resolver/dml/ob_sql_hint.h"
 #include "sql/optimizer/ob_log_for_update.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/ob_optimizer_trace_impl.h"
 #include "sql/optimizer/ob_explain_note.h"
-#include "share/ob_lob_access_utils.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_define.h"
 #endif
@@ -94,7 +60,6 @@ using share::schema::ObColumnSchemaV2;
 using share::schema::ObSchemaGetterGuard;
 
 #include "sql/optimizer/ob_join_property.map"
-
 ERRSIM_POINT_DEF(EN_FORCE_GBY_PUSHDOWN_STORAGE, "force pushdown group by to storage layer");
 
 static const char *ExplainColumnName[] =

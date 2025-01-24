@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/vector_index/cmd/ob_vector_refresh_index_executor.h"
-#include "lib/utility/ob_print_utils.h"
-#include "sql/engine/ob_exec_context.h"
 #include "storage/vector_index/ob_vector_index_refresh.h"
 #include "pl/ob_pl.h"
 #include "share/ob_vec_index_builder_util.h"

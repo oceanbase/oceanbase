@@ -12,18 +12,8 @@
 
 #define USING_LOG_PREFIX PL
 
-#include "pl/ob_pl_package_state.h"
+#include "ob_pl_package_state.h"
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_package_manager.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/serialization.h"
-#include "lib/string/ob_string.h"
-#include "observer/mysql/obmp_utils.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/engine/ob_exec_context.h"
-#include "pl/ob_pl_resolver.h"
 namespace oceanbase
 {
 using namespace common;

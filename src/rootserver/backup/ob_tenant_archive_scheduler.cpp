@@ -12,21 +12,11 @@
 
 #define USING_LOG_PREFIX ARCHIVE
 #include "rootserver/backup/ob_tenant_archive_scheduler.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/ob_unit_manager.h"
 #include "storage/tx/ob_ts_mgr.h"
-#include "lib/ob_define.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/ob_srv_rpc_proxy.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/backup/ob_archive_store.h"
 #include "share/backup/ob_backup_connectivity.h"
-#include "share/ls/ob_ls_i_life_manager.h"
 #include "share/ls/ob_ls_operator.h"
-#include "share/scn.h"
-#include "share/ob_debug_sync.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
 
 using namespace oceanbase;

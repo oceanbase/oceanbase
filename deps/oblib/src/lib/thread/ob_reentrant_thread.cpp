@@ -15,8 +15,6 @@
 #include "lib/thread/ob_reentrant_thread.h"
 #include "lib/thread/ob_thread_name.h"
 
-#include <sys/ptrace.h>
-#include "lib/ob_define.h"
 
 namespace oceanbase
 {

@@ -14,12 +14,6 @@
 
 #include "ob_tablet_autoinc_seq_rpc_handler.h"
 #include "logservice/ob_log_service.h"
-#include "rootserver/ob_root_service.h"
-#include "share/location_cache/ob_location_service.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_tablet_autoincrement_param.h"
-#include "share/scn.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/multi_data_source/mds_ctx.h"
 
 using namespace oceanbase::share;

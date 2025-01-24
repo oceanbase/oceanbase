@@ -13,22 +13,11 @@
 #define USING_LOG_PREFIX  SQL_RESV
 
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/ddl/ob_create_table_stmt.h" // share CREATE TABLE stmt
-#include "sql/resolver/dml/ob_select_stmt.h" // resolve select clause
-#include "sql/resolver/dml/ob_dml_stmt.h" // PartExprItem
-#include "sql/ob_sql_context.h"
 #include "sql/printer/ob_select_stmt_printer.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/ddl/ob_create_table_resolver.h"
-#include "lib/json/ob_json_print_utils.h"  // for SJ
-#include "lib/hash/ob_hashset.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "sql/resolver/mv/ob_mv_checker.h"
 #include "observer/virtual_table/ob_table_columns.h"
 #include "sql/rewrite/ob_transformer_impl.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "common/ob_store_format.h"
 
 namespace oceanbase
 {

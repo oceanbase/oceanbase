@@ -11,17 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include <string.h>
-#include "objit/common/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_hex.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "share/object/ob_obj_cast.h"
-#include "lib/oblog/ob_log.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "ob_expr_util.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_func_round.h"
 
 using namespace oceanbase::common;

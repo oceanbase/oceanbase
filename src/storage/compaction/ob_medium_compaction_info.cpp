@@ -11,8 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/compaction/ob_medium_compaction_info.h"
-#include "storage/compaction/ob_partition_merge_policy.h"
+#include "ob_medium_compaction_info.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase

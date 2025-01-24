@@ -13,18 +13,9 @@
 #define USING_LOG_PREFIX PL
 
 #include "pl/ob_pl_compile.h"
-#include "lib/container/ob_iarray.h"
-#include "lib/string/ob_sql_string.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "share/schema/ob_routine_info.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "parser/ob_pl_parser.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "pl/ob_pl_resolver.h"
+#include "src/sql/resolver/ob_resolver_utils.h"
 #include "pl/ob_pl_code_generator.h"
 #include "pl/ob_pl_package.h"
-#include "lib/alloc/malloc_hook.h"
-#include "pl/ob_pl_persistent.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_package_type.h"
 #endif

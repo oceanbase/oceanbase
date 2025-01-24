@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_table_session_pool.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;

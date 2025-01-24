@@ -11,11 +11,8 @@
  */
 
 #include "ob_trans_service.h"
-#include "common/storage/ob_sequence.h"
 #include "ob_trans_part_ctx.h"
-#include "wrs/ob_i_weak_read_service.h"
-#include "storage/tx/ob_tx_log.h"
-#include "storage/tx/wrs/ob_weak_read_service.h"
+#include "src/storage/tx/wrs/ob_i_weak_read_service.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
 #include "ob_xa_service.h"
 #include "observer/omt/ob_tenant.h"

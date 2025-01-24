@@ -10,17 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdio>
-#include "lib/ob_errno.h"
-#include "lib/net/ob_addr.h" // ObAddr
-#include "logservice/palf/log_define.h"
-#include "lib/checksum/ob_crc64.h"          // ob_crc64
 #include "lib/checksum/ob_parity_check.h"          // ob_crc64
 #define private public
-#include "logservice/palf/log_group_entry_header.h"
 #include "logservice/palf/log_entry.h"
-#include "logservice/palf/log_entry_header.h"
-#include "share/scn.h"
 #include "logservice/ob_log_base_header.h"  // ObLogBaseHeader
 #include "logservice/palf/log_group_buffer.h"
 #include "logservice/palf/log_group_entry.h"
@@ -30,11 +22,7 @@
 #undef private
 
 #include <gtest/gtest.h>
-#include <vector>
-#include <utility>
-#include <algorithm>
 #include <random>
-#include <map>
 
 namespace oceanbase
 {

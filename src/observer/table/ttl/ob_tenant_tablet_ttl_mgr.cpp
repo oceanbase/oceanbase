@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_tenant_tablet_ttl_mgr.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "observer/table/ob_htable_filter_operator.h"
-#include "observer/table/ob_htable_utils.h"
-#include "storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "observer/table/ttl/ob_table_ttl_task.h"
-#include "observer/table/ob_table_service.h"
-#include "share/table/ob_table_config_util.h"
 
 namespace oceanbase
 {

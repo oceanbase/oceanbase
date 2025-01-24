@@ -12,9 +12,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/detect/ob_detect_manager.h"
-#include "lib/ob_running_mode.h"
-#include "share/rc/ob_context.h"
-#include "lib/lock/ob_spin_lock.h"
 
 namespace oceanbase {
 namespace common {

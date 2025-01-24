@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_rebuild_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "share/ls/ob_ls_table_operator.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
 #include "observer/ob_server.h"
-#include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "ob_storage_ha_utils.h"

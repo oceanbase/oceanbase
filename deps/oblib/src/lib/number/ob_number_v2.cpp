@@ -12,15 +12,7 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/number/ob_number_v2.h"
-#include "lib/ob_define.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/serialization.h"
-#include "lib/worker.h"
-#include <assert.h>
-#include <type_traits>
 #include "lib/charset/ob_dtoa.h"
-#include <algorithm>
-#include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_fast_convert.h"
 #include "lib/utility/ob_hang_fatal_error.h"
 

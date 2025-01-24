@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/tablet/ob_tablet_create_sstable_param.h"
 
-#include "lib/oblog/ob_log_module.h"
-#include "share/schema/ob_table_schema.h"
-#include "storage/blocksstable/ob_macro_block_struct.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
+#include "ob_tablet_create_sstable_param.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 #include "storage/ddl/ob_direct_load_struct.h"

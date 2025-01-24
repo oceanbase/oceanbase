@@ -12,20 +12,10 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/oblog/ob_log.h"
 #include "ob_lob_manager.h"
-#include "share/ob_tablet_autoincrement_service.h"
-#include "lib/objectpool/ob_server_object_pool.h"
 #include "observer/ob_server.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "storage/lob/ob_lob_persistent_iterator.h"
 #include "storage/lob/ob_lob_location.h"
-#include "storage/lob/ob_lob_retry.h"
-#include "storage/lob/ob_lob_remote.h"
 #include "storage/lob/ob_lob_handler.h"
-#include "sql/das/ob_das_utils.h"
-#include "storage/lob/ob_lob_persistent_iterator.h"
 #include "storage/lob/ob_lob_locator_struct.h"
 #include "storage/lob/ob_lob_tablet_dml.h"
 

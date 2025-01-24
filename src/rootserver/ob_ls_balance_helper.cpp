@@ -12,14 +12,7 @@
 #define USING_LOG_PREFIX BALANCE
 #include "rootserver/ob_ls_balance_helper.h"
 #include "rootserver/ob_primary_ls_service.h"//fetch max ls id
-#include "lib/mysqlclient/ob_mysql_transaction.h"//trans
-#include "observer/ob_server_struct.h"//GCTX
-#include "share/schema/ob_schema_getter_guard.h"//ObSchemaGetGuard
-#include "share/schema/ob_multi_version_schema_service.h"//ObMultiSchemaService
-#include "share/schema/ob_table_schema.h"//ObTableSchema
-#include "share/ob_balance_define.h"  // ObBalanceTaskID, ObBalanceJobID
-#include "storage/tx/ob_unique_id_service.h" // ObUniqueIDService
-#include "storage/ob_common_id_utils.h"     // ObCommonIDUtils
+#include "src/storage/tx/ob_trans_service.h"
 #include "ob_ls_balance_helper.h"
 
 #define ISTAT(fmt, args...) FLOG_INFO("[LS_BALANCE] " fmt, ##args)

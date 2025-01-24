@@ -13,15 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "share/table/ob_ttl_util.h"
-#include "share/ob_max_id_fetcher.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/ob_server_status.h"
-#include "share/schema/ob_schema_utils.h"
-#include "rootserver/ob_root_service.h"
-#include "rootserver/ob_tenant_info_loader.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "share/location_cache/ob_location_service.h"
 #include "observer/table/ob_htable_utils.h"
 

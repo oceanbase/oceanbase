@@ -12,13 +12,10 @@
 
 #define USING_LOG_PREFIX RPC_FRAME
 
-#include "io/easy_io.h"
 #include "rpc/frame/ob_net_easy.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 
-#include "lib/ob_define.h"
 #include "lib/utility/utility.h"
-#include "lib/file/file_directory_utils.h"
 #include "lib/thread/ob_thread_name.h"
 
 using namespace oceanbase::rpc;

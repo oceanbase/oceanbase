@@ -13,19 +13,8 @@
 
 #define USING_LOG_PREFIX SQL
 
-#include "sql/optimizer/ob_logical_operator.h"
-#include "sql/engine/ob_physical_plan.h"
 #include "observer/ob_inner_sql_connection_pool.h"
-#include "observer/ob_inner_sql_connection.h"
-#include "sql/resolver/ddl/ob_explain_stmt.h"
-#include "sql/optimizer/ob_log_values.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_del_upd_log_plan.h"
-#include "lib/time/Time.h"
-#include "pl/sys_package/ob_dbms_xplan.h"
-#include "lib/json/ob_json.h"
-#include "ob_plan_info_manager.h"
-#include "lib/rc/ob_rc.h"
 #include "ob_sql_plan.h"
 using namespace oceanbase::common;
 using namespace oceanbase::json;

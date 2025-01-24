@@ -13,16 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/ob_dml_running_ctx.h"
-#include "lib/allocator/ob_allocator.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/schema/ob_table_dml_param.h"
-#include "share/schema/ob_table_param.h"
-#include "storage/memtable/ob_memtable_interface.h"
-#include "storage/access/ob_dml_param.h"
 #include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_binding_helper.h"
-#include "storage/tablet/ob_tablet_split_mds_helper.h"
-#include "storage/ob_value_row_iterator.h"
 #include "storage/memtable/ob_memtable_context.h"
 
 namespace oceanbase

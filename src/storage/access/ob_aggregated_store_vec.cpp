@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/aggregate/iaggregate.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "ob_aggregated_store_vec.h"
 

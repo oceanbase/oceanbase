@@ -10,19 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/thread/ob_thread_name.h"
 #define USING_LOG_PREFIX SERVER
 
-#include <string>
-#include <functional>
 
-#include "easy_define.h"
-#include "io/easy_io_struct.h"
-#include "io/easy_connection.h"
-#include "rpc/frame/ob_net_easy.h"
 #include "observer/mysql/obsm_handler.h"
-#include "lib/queue/ob_link_queue.h"
-#include "lib/lock/ob_scond.h"
 
 
 using namespace oceanbase;

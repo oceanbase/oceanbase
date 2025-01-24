@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "rpc/obrpc/ob_rpc_processor.h"
 #include "ob_blacklist_req_processor.h"
 #include "share/ob_server_blacklist.h"
 

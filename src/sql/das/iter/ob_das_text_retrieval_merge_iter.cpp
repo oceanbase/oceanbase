@@ -15,8 +15,6 @@
 #include "ob_das_text_retrieval_merge_iter.h"
 #include "ob_das_text_retrieval_iter.h"
 #include "sql/das/ob_das_ir_define.h"
-#include "share/text_analysis/ob_text_analyzer.h"
-#include "storage/fts/ob_fts_plugin_helper.h"
 
 namespace oceanbase
 {

@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_all_virtual_dag.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "lib/utility/ob_print_utils.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

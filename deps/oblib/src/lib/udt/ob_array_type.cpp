@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_array_type.h"
-#include "lib/ob_errno.h"
 
 namespace oceanbase {
 namespace common {

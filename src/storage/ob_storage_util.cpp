@@ -11,14 +11,8 @@
  */
 
 #include "ob_storage_util.h"
-#include "lib/worker.h"
-#include "share/datum/ob_datum.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/vector/ob_discrete_format.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
-#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {

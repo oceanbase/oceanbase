@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_tablet_builder.h"
-#include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/tablet/ob_tablet_common.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "share/scn.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/ob_storage_schema_util.h"
 
 namespace oceanbase

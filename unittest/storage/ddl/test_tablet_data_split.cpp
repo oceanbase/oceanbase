@@ -12,14 +12,11 @@
 
 #define UNITTEST_DEBUG
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define private public
 #define protected public
 
-#include "share/ob_rpc_struct.h"
-#include "share/ob_ddl_common.h"
 #include "storage/ddl/ob_tablet_split_task.h"
 
 namespace oceanbase

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE_FTS
 
-#include "lib/string/ob_string.h"
 #include "ob_ngram_ft_parser.h"
 
 using namespace oceanbase::common;

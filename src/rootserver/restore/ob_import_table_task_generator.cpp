@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 
+#include "ob_import_table_task_generator.h"
 #include "ob_recover_table_initiator.h"
-#include "lib/hash/ob_hashset.h"
-#include "lib/charset/ob_charset.h"
-#include "share/ob_rpc_struct.h"
-#include "share/backup/ob_backup_data_table_operator.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "ob_restore_util.h"
-#include "share/restore/ob_recover_table_persist_helper.h"
-#include "sql/parser/parse_node.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
 #include "share/restore/ob_import_util.h"
 

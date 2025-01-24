@@ -11,11 +11,8 @@
  */
 
 #define USING_LOG_PREFIX COMMON
-#include <regex>
 #include "ob_vec_index_builder_util.h"
 #include "ob_index_builder_util.h"
-#include "sql/resolver/ddl/ob_ddl_resolver.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 
 namespace oceanbase

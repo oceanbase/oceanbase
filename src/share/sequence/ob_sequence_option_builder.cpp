@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_errno.h"
 #include "ob_sequence_option_builder.h"
 #include "share/sequence/ob_sequence_option.h"
 

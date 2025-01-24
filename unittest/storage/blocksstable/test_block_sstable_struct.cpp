@@ -11,12 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include "storage/blocksstable/ob_data_buffer.h"
 #define protected public
 #define private public
-#include "storage/blocksstable/ob_macro_block_common_header.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/ob_micro_block_header.h"
 
 namespace oceanbase
 {

@@ -12,15 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_sort.h"
-#include "ob_optimizer_context.h"
-#include "ob_opt_est_cost.h"
-#include "ob_optimizer_util.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "ob_log_exchange.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/optimizer/ob_join_order.h"
-#include "share/ob_order_perserving_encoder.h"
-#include "common/ob_smart_call.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/vector/ob_fixed_length_vector.h"
-#include "lib/wide_integer/ob_wide_integer.h"
 
 namespace oceanbase
 {

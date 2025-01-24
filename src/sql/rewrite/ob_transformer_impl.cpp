@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "sql/rewrite/ob_transformer_impl.h"
-#include "common/ob_common_utility.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/rewrite/ob_transform_view_merge.h"
 #include "sql/rewrite/ob_transform_min_max.h"
 #include "sql/rewrite/ob_transform_where_subquery_pullup.h"
@@ -53,8 +50,6 @@
 #include "sql/rewrite/ob_transform_mv_rewrite_prepare.h"
 #include "sql/rewrite/ob_transform_late_materialization.h"
 #include "sql/rewrite/ob_transform_distinct_aggregate.h"
-#include "common/ob_smart_call.h"
-#include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

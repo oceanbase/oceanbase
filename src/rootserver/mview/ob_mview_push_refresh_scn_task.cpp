@@ -12,16 +12,10 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "rootserver/mview/ob_mview_push_refresh_scn_task.h"
-#include "share/ob_errno.h"
 #include "share/schema/ob_mview_info.h"
-#include "share/schema/ob_mview_refresh_stats_params.h"
 #include "share/ob_global_stat_proxy.h"
-#include "share/ob_freeze_info_proxy.h"
 #include "share/backup/ob_backup_data_table_operator.h"
-#include "storage/mview/ob_mview_refresh_stats_purge.h"
 #include "observer/ob_inner_sql_connection.h"
 #include "share/ob_all_server_tracer.h"
 

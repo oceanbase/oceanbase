@@ -14,10 +14,6 @@
 
 #include "mock_access_service.h"
 
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/ob_errno.h"
-#include "storage/access/ob_dml_param.h"
 
 using namespace oceanbase::storage;
 

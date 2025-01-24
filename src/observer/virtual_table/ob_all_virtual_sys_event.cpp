@@ -11,7 +11,6 @@
  */
 
 #include "ob_all_virtual_sys_event.h"
-#include "share/ob_tenant_mgr.h"
 #include "share/ash/ob_di_util.h"
 
 using namespace oceanbase::common;

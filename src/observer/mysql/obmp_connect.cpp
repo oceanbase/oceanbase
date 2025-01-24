@@ -12,33 +12,10 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include <stdlib.h>
 #include "util/easy_mod_stat.h"
 #include "observer/mysql/obmp_connect.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/net/ob_net_util.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "common/object/ob_object.h"
-#include "common/ob_string_buf.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_cluster_version.h"
-#include "share/ob_get_compat_mode.h"
-#include "share/resource_manager/ob_resource_manager.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-#include "rpc/obmysql/packet/ompk_error.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/ob_sql.h"
 #include "observer/ob_server.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/omt/ob_tenant.h"
-#include "observer/ob_req_time_service.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"      //ObWeakReadUtil
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/monitor/ob_security_audit_utils.h"
@@ -46,7 +23,6 @@
 #endif
 #include "sql/privilege_check/ob_privilege_check.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
-#include "lib/utility/ob_backtrace.h"
 #include "rpc/obmysql/packet/ompk_auth_switch.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
 

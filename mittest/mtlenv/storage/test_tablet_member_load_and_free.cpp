@@ -13,26 +13,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 
 #define USING_LOG_PREFIX STORAGE
 
 #define private public
 #define protected public
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/time/ob_time_utility.h"
-#include "share/ob_ls_id.h"
-#include "common/ob_tablet_id.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_get_mod.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_persister.h"
-#include "mtlenv/mock_tenant_module_env.h"
 #include "unittest/storage/test_tablet_helper.h"
 #include "unittest/storage/test_dml_common.h"
-#include "unittest/storage/schema_utils.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;

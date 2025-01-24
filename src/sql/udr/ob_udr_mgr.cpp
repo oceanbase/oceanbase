@@ -12,15 +12,8 @@
 
 
 #define USING_LOG_PREFIX SQL_QRR
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/thread/thread_mgr.h"
 #include "lib/rc/ob_rc.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/alloc/alloc_func.h"
 #include "observer/ob_server.h"
-#include "share/ob_define.h"
-#include "lib/time/ob_time_utility.h"
 #include "sql/udr/ob_udr_mgr.h"
 
 namespace oceanbase

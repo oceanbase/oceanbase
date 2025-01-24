@@ -12,9 +12,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/cmd/ob_load_data_storage_info.h"
-#include "lib/allocator/page_arena.h"
-#include "share/ob_errno.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

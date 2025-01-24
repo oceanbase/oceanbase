@@ -12,20 +12,9 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_lost_replica_checker.h"
 
-#include "lib/time/ob_time_utility.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/container/ob_se_array.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
+#include "ob_lost_replica_checker.h"
 #include "share/ls/ob_ls_table_iterator.h"//ObTenantLSTableIterator
-#include "share/ls/ob_ls_info.h"//ObLSInfo
-#include "share/ob_all_server_tracer.h"
-#include "share/ob_unit_table_operator.h"
-#include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_service.h"
 namespace oceanbase
 {

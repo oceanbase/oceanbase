@@ -10,10 +10,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "observer/virtual_table/ob_all_virtual_tablet_compaction_info.h"
-#include "observer/ob_server.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 
 namespace oceanbase

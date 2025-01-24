@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_str_dict_column_encoder.h"
-#include "ob_cs_encoding_util.h"
 #include "ob_string_stream_encoder.h"
-#include "ob_column_datum_iter.h"
-#include "storage/blocksstable/ob_imicro_block_writer.h"
-#include "lib/codec/ob_codecs.h"
 
 namespace oceanbase
 {

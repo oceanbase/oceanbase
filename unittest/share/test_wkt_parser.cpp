@@ -14,7 +14,6 @@
 #define private public
 #define protected public
 #include "lib/geo/ob_wkt_parser.h"
-#include "lib/utility/ob_print_utils.h"
 #include "lib/geo/ob_geo_ibin.h"
 #include "lib/geo/ob_geo_3d.h"
 #undef private

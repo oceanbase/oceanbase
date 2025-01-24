@@ -12,7 +12,6 @@
 
 #include "lib/thread/ob_work_queue.h"
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 using namespace oceanbase::common;
 class TestWorkQueue: public ::testing::Test
 {

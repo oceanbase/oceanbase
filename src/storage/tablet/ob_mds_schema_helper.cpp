@@ -12,15 +12,7 @@
 
 #include "storage/tablet/ob_mds_schema_helper.h"
 
-#include "lib/ob_errno.h"
-#include "lib/worker.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/oblog/ob_log.h"
-#include "common/object/ob_object.h"
 #include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_table_param.h"
 
 #define USING_LOG_PREFIX STORAGE
 

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX RS
 #include "ob_all_virtual_ls_replica_task_plan.h"
 #include "rootserver/ob_disaster_recovery_worker.h"
-#include "share/ob_all_server_tracer.h"
 
 namespace oceanbase
 {

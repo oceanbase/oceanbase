@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX TRANS
 #include "ob_xa_trans_event.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "share/ob_force_print_log.h"
 
 namespace oceanbase
 {

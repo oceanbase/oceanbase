@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "ob_protected_memtable_mgr_handle.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/ob_protected_memtable_mgr_handle.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::memtable;

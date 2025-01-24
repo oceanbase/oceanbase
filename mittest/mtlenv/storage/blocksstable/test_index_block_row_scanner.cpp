@@ -17,9 +17,8 @@
 #define private public
 #define protected public
 
-#include "storage/blocksstable/index_block/ob_index_block_row_scanner.h"
+#include "src/storage/ob_i_store.h"
 #include "ob_index_block_data_prepare.h"
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {

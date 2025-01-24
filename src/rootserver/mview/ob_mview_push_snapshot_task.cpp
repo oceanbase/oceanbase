@@ -12,16 +12,10 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "rootserver/mview/ob_mview_push_snapshot_task.h"
-#include "share/ob_errno.h"
 #include "share/schema/ob_mview_info.h"
-#include "share/schema/ob_mview_refresh_stats_params.h"
 #include "share/ob_global_stat_proxy.h"
-#include "share/ob_snapshot_table_proxy.h"
-#include "storage/mview/ob_mview_refresh_stats_purge.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 
 namespace oceanbase {

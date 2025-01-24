@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ob_stmt_resolver.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "common/ob_field.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_context.h"
-#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {

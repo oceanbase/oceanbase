@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_decoder.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/access/ob_pushdown_aggregate.h"
 #include "storage/access/ob_pushdown_aggregate_vec.h"
-#include "storage/access/ob_table_access_context.h"
 
 namespace oceanbase
 {

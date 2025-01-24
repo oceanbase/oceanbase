@@ -12,13 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/container/ob_array.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "share/ob_simple_mem_limit_getter.h"
 #include <gtest/gtest.h>
 #define private public
 #include "blocksstable/ob_data_file_prepare.h"
-#include "storage/slog_ckpt/ob_linked_macro_block_reader.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
 #undef private
 

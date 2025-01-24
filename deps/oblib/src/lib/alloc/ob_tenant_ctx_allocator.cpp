@@ -12,17 +12,13 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include "lib/alloc/ob_tenant_ctx_allocator.h"
+#include "ob_tenant_ctx_allocator.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
-#include "lib/allocator/ob_tc_malloc.h"
-#include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_sort.h"
 #include "lib/alloc/memory_dump.h"
 #include "lib/alloc/memory_sanity.h"
 #include "lib/alloc/ob_malloc_callback.h"
-#include "lib/oblog/ob_log.h"
 #include "common/ob_smart_var.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

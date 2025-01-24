@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include <cmath>
 #include "sql/engine/expr/ob_expr_bm25.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 

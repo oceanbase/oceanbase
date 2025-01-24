@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "share/io/ob_io_manager.h"
-#include "share/io/ob_io_define.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/ob_running_mode.h"
-#include "share/rc/ob_tenant_base.h"
-#include "logservice/leader_coordinator/ob_failure_detector.h"
-#include "share/errsim_module/ob_errsim_module_interface_imp.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "ob_io_manager.h"
 #include "observer/ob_server.h"
 #include "src/share/io/io_schedule/ob_io_schedule_v2.h"
-#include "share/ob_io_device_helper.h"
 #include "lib/restore/ob_object_device.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/io/ob_ss_io_request.h"

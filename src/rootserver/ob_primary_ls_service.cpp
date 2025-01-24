@@ -12,18 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_primary_ls_service.h"
-#include "lib/profile/ob_trace_id.h"
-#include "share/ob_errno.h"
-#include "share/ls/ob_ls_creator.h" //ObLSCreator
-#include "share/ls/ob_ls_life_manager.h"//ObLSLifeAgentManager
-#include "share/ls/ob_ls_table_operator.h"//ls_opt
-#include "share/ob_share_util.h"//ObShareUtil
-#include "observer/ob_server_struct.h"//GCTX
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
-#include "logservice/palf/palf_base_info.h"//PalfBaseInfo
-#include "rootserver/ob_ls_service_helper.h"//ObTenantLSInfo
-#include "rootserver/ob_ls_recovery_reportor.h"//update_ls_recovery
+#include "src/storage/tx_storage/ob_ls_map.h"
 #include "rootserver/ob_tenant_info_loader.h"
 
 namespace oceanbase

@@ -12,7 +12,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define USING_LOG_PREFIX SHARE
@@ -20,10 +19,8 @@
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "share/transfer/ob_transfer_task_operator.h" // ObTransferTaskOperator
-#include "lib/allocator/page_arena.h"
 
 namespace oceanbase
 {

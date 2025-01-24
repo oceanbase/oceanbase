@@ -11,7 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/stat/ob_diagnose_info.h"
+#include "deps/oblib/src/lib/ob_errno.h"
 
 using namespace oceanbase;
 using namespace common;

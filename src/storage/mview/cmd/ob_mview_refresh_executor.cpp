@@ -17,7 +17,6 @@
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "storage/mview/ob_mlog_purge.h"
 #include "storage/mview/ob_mview_refresh.h"
-#include "storage/mview/ob_mview_transaction.h"
 
 namespace oceanbase
 {

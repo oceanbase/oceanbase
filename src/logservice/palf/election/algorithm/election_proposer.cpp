@@ -11,18 +11,8 @@
  */
 
 
-#include "logservice/palf/election/message/election_message.h"
-#include "ob_role.h"
-#include "share/ob_occam_time_guard.h"
 #include "election_proposer.h"
-#include "common/ob_clock_generator.h"
 #include "election_impl.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string_holder.h"
-#include "logservice/palf/election/interface/election_msg_handler.h"
-#include "logservice/palf/election/utils/election_common_define.h"
-#include "logservice/palf/election/utils/election_member_list.h"
-#include "logservice/palf/palf_callback.h"
 
 namespace oceanbase
 {

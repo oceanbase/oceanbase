@@ -12,19 +12,9 @@
 
 #define USING_LOG_PREFIX TRANS
 
-#include "lib/hash/ob_hashmap.h"
-#include "lib/worker.h"
-#include "lib/list/ob_list.h"
-#include "lib/container/ob_array.h"
-#include "lib/profile/ob_perf_event.h"
+#include "ob_trans_ctx_mgr_v4.h"
 #include "observer/ob_server.h"
-#include "storage/ob_storage_log_type.h"
-#include "ob_trans_factory.h"
 #include "ob_trans_functor.h"
-#include "ob_dup_table.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx/ob_trans_ctx_mgr_v4.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase

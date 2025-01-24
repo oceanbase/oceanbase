@@ -11,19 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/ob_das_location_router.h"
-#include "sql/das/ob_das_define.h"
-#include "share/ob_ls_id.h"
-#include "observer/ob_server_struct.h"
-#include "share/location_cache/ob_location_service.h"
+#include "ob_das_location_router.h"
 #include "share/schema/ob_part_mgr_util.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_utils.h"
-#include "sql/das/ob_das_utils.h"
-#include "sql/ob_sql_context.h"
 #include "storage/tx/wrs/ob_black_list.h"
 #include "storage/tx/ob_trans_service.h"
-#include "lib/rc/context.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase

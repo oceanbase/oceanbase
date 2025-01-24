@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/oblog/ob_log.h"
 #include "sql/engine/expr/ob_expr_user_can_access_obj.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "objit/common/ob_item_type.h"
-#include "common/data_buffer.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
-#include "share/schema/ob_synonym_mgr.h"
-#include "share/ob_get_compat_mode.h"
-#include "lib/worker.h"
 
 namespace oceanbase
 {

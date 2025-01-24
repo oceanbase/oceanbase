@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_rle_decoder.h"
-#include "ob_dict_decoder.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/access/ob_pushdown_aggregate.h"
-#include "ob_bit_stream.h"
 
 namespace oceanbase
 {

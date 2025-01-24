@@ -12,7 +12,6 @@
 */
 
 #include "lib/charset/ob_dtoa.h"
-#include "lib/charset/ob_mysql_global.h"
 
 #include <fast_float/fast_float.h>
 

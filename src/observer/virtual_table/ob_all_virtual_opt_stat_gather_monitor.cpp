@@ -11,7 +11,6 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_opt_stat_gather_monitor.h"
-#include "observer/ob_server_utils.h"
 
 namespace oceanbase
 {

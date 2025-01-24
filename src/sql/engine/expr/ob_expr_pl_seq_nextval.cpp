@@ -14,12 +14,7 @@
 
 #include "sql/engine/expr/ob_expr_pl_seq_nextval.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "share/sequence/ob_sequence_cache.h"
-#include "share/schema/ob_schema_getter_guard.h"
 
 namespace oceanbase
 {

@@ -14,14 +14,11 @@
 #include "ob_backup_clean_scheduler.h"
 #include "ob_backup_clean_ls_task_mgr.h"
 #include "ob_backup_clean_task_mgr.h"
-#include "ob_backup_schedule_task.h"
 #include "ob_backup_task_scheduler.h"
 #include "share/backup/ob_backup_clean_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
-#include "rootserver/ob_root_utils.h"
 #include "share/backup/ob_backup_helper.h"
 #include "share/backup/ob_archive_persist_helper.h"
-#include "share/backup/ob_backup_store.h"
 
 namespace oceanbase
 {

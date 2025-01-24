@@ -11,7 +11,6 @@
  */
 
 #include "ob_all_virtual_tablet_store_stat.h"
-#include "share/ob_errno.h"
 
 namespace oceanbase
 {

@@ -10,32 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <iostream>
-#include <fstream>
-#include <streambuf>
-#include <random>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <cstring>
 #include <string>
-#include <vector>
-#include <random>
-#include <errno.h>
 #include <gtest/gtest.h>
-#include <gmock/gmock.h>
 #define USING_LOG_PREFIX STORAGE
 #define protected public
 #define private public
 #include "src/storage/ob_i_table.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "src/storage/ddl/ob_ddl_redo_log_writer.h"
-#include "unittest/storage/init_basic_struct.h"
 #include "unittest/storage/test_tablet_helper.h"
-#include "storage/ddl/ob_ddl_replay_executor.h"
-#include "storage/tablet/ob_tablet_persister.h"
-#include "storage/blocksstable/ob_macro_block_writer.h"
-#include "storage/blocksstable/ob_data_store_desc.h"
-#include "storage/ddl/ob_ddl_struct.h"
 
 namespace oceanbase
 {

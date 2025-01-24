@@ -11,23 +11,12 @@
  */
 
 #include <fstream>
-#include <iterator>
-#include "lib/stat/ob_session_stat.h"
 #define private public
-#include "lib/utility/ob_test_util.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/ob_resolver.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/json/ob_json_print_utils.h"  // for SJ
-#include "sql/resolver/ob_schema_checker.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
-#include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/system_variable/ob_system_variable.h"
 #include "ob_restore_schema.h"
-#include "../../share/schema/mock_schema_service.h"
-//#include <iostream>
-//#include <string>
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

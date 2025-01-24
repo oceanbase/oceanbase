@@ -12,12 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_partition_pre_split.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_print_utils.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "pl/sys_package/ob_dbms_space.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/ob_index_builder_util.h"

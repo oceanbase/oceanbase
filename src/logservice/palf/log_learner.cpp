@@ -11,7 +11,6 @@
  */
 
 #include "log_learner.h"
-#include "lib/time/ob_time_utility.h"
 
 namespace oceanbase
 {

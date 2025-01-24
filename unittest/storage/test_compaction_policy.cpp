@@ -12,28 +12,13 @@
 
 #define UNITTEST_DEBUG
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define private public
 #define protected public
 
-#include "storage/ob_i_table.h"
 #include "storage/schema_utils.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_table_store.h"
-#include "storage/compaction/ob_partition_merge_policy.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "mtlenv/mock_tenant_module_env.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "storage/test_dml_common.h"
-#include "storage/mockcontainer/mock_ob_iterator.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
-#include "storage/ob_storage_schema.h"
-#include "share/scn.h"
 #include "storage/test_schema_prepare.h"
 #include "storage/test_tablet_helper.h"
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"

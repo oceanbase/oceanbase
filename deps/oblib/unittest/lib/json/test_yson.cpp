@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/json/ob_yson.h"
-#include "lib/utility/ob_print_utils.h"
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 #include "lib/utility/utility.h"
 using namespace oceanbase::common;
 using namespace oceanbase::yson;

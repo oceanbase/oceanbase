@@ -8,12 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/compaction/ob_tablet_merge_info.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
+#include "ob_tablet_merge_info.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/tx_table/ob_tx_data_memtable.h"
 
 namespace oceanbase
 {

@@ -12,18 +12,14 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_complete_migration.h"
-#include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "ob_storage_ha_utils.h"
-#include "storage/tablet/ob_tablet.h"
 #include "ob_storage_ha_utils.h"
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
-#include "observer/omt/ob_tenant.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/high_availability/ob_ls_warmup_migration.h"
 #endif

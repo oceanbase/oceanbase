@@ -11,19 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "share/schema/ob_schema_utils.h"
-#include "lib/oblog/ob_log.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_server_schema_service.h"
-#include "share/ob_cluster_role.h"
-#include "share/ob_get_compat_mode.h"
+#include "ob_schema_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/ob_server_struct.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "share/ob_fts_index_builder_util.h"
 namespace oceanbase

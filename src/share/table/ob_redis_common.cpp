@@ -11,10 +11,8 @@
  */
 #define USING_LOG_PREFIX SERVER
 
-#include "share/table/ob_redis_common.h"
-#include "share/table/ob_redis_parser.h"
+#include "ob_redis_common.h"
 #include "observer/table/redis/ob_redis_command_factory.h"
-#include "lib/utility/ob_fast_convert.h"
 
 namespace oceanbase
 {

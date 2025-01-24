@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <vector>
 #include <thread>
 
 #include "lib/hash/ob_multi_mod_ref_mgr.h"

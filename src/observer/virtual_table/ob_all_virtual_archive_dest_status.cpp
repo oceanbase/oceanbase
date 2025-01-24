@@ -14,16 +14,7 @@
 
 #include "ob_all_virtual_archive_dest_status.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "observer/ob_server_struct.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "ob_all_virtual_ls_archive_stat.h"
 #include "logservice/archiveservice/ob_archive_service.h"
-#include "share/backup/ob_archive_struct.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common::sqlclient;

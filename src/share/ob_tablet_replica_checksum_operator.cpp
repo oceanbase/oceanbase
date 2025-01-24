@@ -13,17 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_tablet_replica_checksum_operator.h"
-#include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "share/schema/ob_table_param.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/schema/ob_column_schema.h"
-#include "observer/ob_server_struct.h"
-#include "share/tablet/ob_tablet_info.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_service_epoch_proxy.h"
-#include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"

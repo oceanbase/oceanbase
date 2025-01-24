@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/cmd/ob_mview_stats_set_mvref_stats_params_executor.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 

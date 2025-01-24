@@ -11,10 +11,6 @@
  */
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_filter.h"
-#include "ob_table_rpc_processor.h"
-#include "htable_filter_tab.hxx"
-#include "htable_filter_lex.hxx"
-#include "ob_table_aggregation.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::table;

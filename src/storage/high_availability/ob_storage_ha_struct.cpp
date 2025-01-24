@@ -12,16 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_struct.h"
-#include "storage/ls/ob_ls_meta_package.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_common.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/ls/ob_ls_tablet_service.h"
 #include "logservice/ob_log_service.h"
 #include "share/transfer/ob_transfer_task_operator.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase

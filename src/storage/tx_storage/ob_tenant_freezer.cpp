@@ -12,19 +12,11 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/utility/utility.h"
-#include "lib/oblog/ob_log.h"
+#include "ob_tenant_freezer.h"
 #include "observer/ob_srv_network_frame.h"
-#include "observer/omt/ob_tenant_config_mgr.h"  // ObTenantConfigGuard
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_share_util.h"
-#include "share/rc/ob_tenant_module_init_ctx.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 

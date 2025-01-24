@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_index_resolver.h"
-#include "share/ob_index_builder_util.h"
 #include "share/ob_fts_index_builder_util.h"
-#include "share/schema/ob_table_schema.h"
-#include "sql/resolver/ddl/ob_create_index_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
 #include "share/ob_vec_index_builder_util.h"
-#include "share/vector_index/ob_plugin_vector_index_util.h"
 
 namespace oceanbase
 {

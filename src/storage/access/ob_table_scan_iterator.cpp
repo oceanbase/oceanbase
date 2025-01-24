@@ -12,24 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include <sys/resource.h>
-#include <sys/time.h>
-#include "common/object/ob_obj_compare.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "storage/access/ob_multiple_scan_merge.h"
 #include "storage/access/ob_table_scan_iterator.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/access/ob_index_sstable_estimator.h"
 #include "storage/access/ob_sample_iter_helper.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_split_mds_helper.h"
 
 namespace oceanbase
 {

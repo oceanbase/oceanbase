@@ -12,15 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ls/ob_ls.h"
-#include "storage/ddl/ob_ddl_struct.h"
+#include "ob_ddl_struct.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/ob_i_table.h"
 
 using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;

@@ -11,12 +11,8 @@
  */
 
 #define USING_LOG_PREFIX LIB_CHARSET
-#include "lib/charset/ob_charset.h"
-#include "lib/charset/ob_ctype.h"
-#include "lib/utility/serialization.h"
-#include "lib/ob_define.h"
+#include "ob_charset.h"
 #include "lib/worker.h"
-#include "common/ob_common_utility.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "lib/charset/str_uca_type.h"
 

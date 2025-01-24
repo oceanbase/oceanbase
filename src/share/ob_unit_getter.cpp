@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_unit_getter.h"
-#include "share/ob_get_compat_mode.h"
+#include "ob_unit_getter.h"
 #include "share/ob_server_struct.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"

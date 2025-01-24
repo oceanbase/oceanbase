@@ -11,27 +11,7 @@
  */
 
 
-#include "share/ob_errno.h"
-#include "share/ob_occam_time_guard.h"
-#include "share/rc/ob_tenant_base.h"
 #include "table_accessor.h"
-#include "lib/hash/ob_hash.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string_holder.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/utility.h"
-#include "observer/ob_server_struct.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_ls_id.h"
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <unistd.h>
-#include "share/schema/ob_schema_utils.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
 {

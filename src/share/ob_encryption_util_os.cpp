@@ -13,19 +13,9 @@
 #ifndef OB_BUILD_TDE_SECURITY
 
 #define USING_LOG_PREFIX SHARE
-#include "share/ob_encryption_util.h"
 #include <openssl/md4.h>
 #include <openssl/md5.h>
 #include <openssl/sha.h>
-#include "share/ob_encryption_struct.h"
-#include "lib/alloc/alloc_assist.h"
-#include "share/ob_errno.h"
-#include "lib/atomic/atomic128.h"
-#include "lib/string/ob_string.h"
-#include "lib/random/ob_random.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase

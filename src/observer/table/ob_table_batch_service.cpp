@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_batch_service.h"
-#include "ob_table_rpc_processor_util.h"
 #include "ob_table_op_wrapper.h"
-#include "observer/ob_req_time_service.h"
-#include "ob_htable_utils.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;

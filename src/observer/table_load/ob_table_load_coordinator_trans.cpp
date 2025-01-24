@@ -15,7 +15,6 @@
 #include "observer/table_load/ob_table_load_coordinator_trans.h"
 #include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/table_load/ob_table_load_trans_bucket_writer.h"
-#include "sql/engine/cmd/ob_load_data_utils.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 
 namespace oceanbase

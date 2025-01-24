@@ -11,13 +11,8 @@
  */
 
 #include "ob_query_iterator_factory.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/objectpool/ob_resource_pool.h"
-#include "storage/access/ob_multiple_scan_merge.h"
-#include "storage/access/ob_multiple_get_merge.h"
 #include "storage/access/ob_table_scan_iterator.h"
 #include "ob_value_row_iterator.h"
-#include "ob_col_map.h"
 
 namespace oceanbase
 {

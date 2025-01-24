@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_column_encoding_struct.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "ob_cs_encoding_util.h"
 
 

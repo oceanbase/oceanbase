@@ -11,8 +11,6 @@
  */
 
 #include "ob_data_buffer.h"
-#include <malloc.h>
-#include "lib/allocator/ob_malloc.h"
 #include "share/rc/ob_tenant_base.h"
 using namespace oceanbase;
 using namespace common;

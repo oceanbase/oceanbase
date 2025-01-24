@@ -14,16 +14,7 @@
 
 #include "observer/mysql/obmp_init_db.h"
 
-#include "lib/worker.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "observer/mysql/obmp_utils.h"
-#include "observer/mysql/ob_query_retry_ctrl.h"
+#include "src/sql/monitor/flt/ob_flt_control_info_mgr.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::obmysql;

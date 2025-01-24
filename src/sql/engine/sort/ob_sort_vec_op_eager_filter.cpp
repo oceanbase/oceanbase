@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/sort/ob_sort_vec_op_eager_filter.h"
+#include "ob_sort_vec_op_eager_filter.h"
 namespace oceanbase {
 namespace sql {
 

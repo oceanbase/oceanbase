@@ -14,24 +14,9 @@
 
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/ob_force_print_log.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "share/ob_force_print_log.h"
-#include "storage/blocksstable/ob_imicro_block_writer.h"
-#include "storage/blocksstable/ob_macro_block_struct.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
-#include "storage/ls/ob_ls.h"
-#include "share/ob_ls_id.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
-#include "storage/blocksstable/ob_data_store_desc.h"
 
 namespace oceanbase
 {

@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SQL
-#include "share/external_table/ob_external_table_file_task.h"
+#include "ob_external_table_file_task.h"
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
 
 namespace oceanbase

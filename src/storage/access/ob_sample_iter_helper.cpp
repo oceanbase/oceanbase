@@ -11,8 +11,6 @@
  */
 
 #include "storage/access/ob_sample_iter_helper.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/access/ob_multiple_multi_scan_merge.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 #define USING_LOG_PREFIX STORAGE

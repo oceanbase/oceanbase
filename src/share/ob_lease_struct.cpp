@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_lease_struct.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/ob_serialization_helper.h"
 namespace oceanbase
 {
 using namespace common;

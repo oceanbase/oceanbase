@@ -13,7 +13,6 @@
 #include "observer/table/ob_htable_filter_parser.h"
 #include "observer/table/ob_htable_filters.h"
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 #include "lib/json/ob_json_print_utils.h"  // for SJ
 #include <fstream>
 using namespace oceanbase::common;

@@ -12,15 +12,10 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include "lib/net/ob_addr.h"
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
+#include "ob_addr.h"
 #include "lib/utility/utility.h"
 #include "lib/net/ob_net_util.h"
-#include "include/easy_define.h"
 
 namespace oceanbase
 {

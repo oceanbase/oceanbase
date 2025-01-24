@@ -8,15 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX COMMON
-#include "share/compaction/ob_compaction_locality_cache.h"
+#include "ob_compaction_locality_cache.h"
 #include "src/storage/compaction/ob_medium_compaction_func.h"
-#include "src/storage/compaction/ob_compaction_util.h"
-#include "src/storage/tx_storage/ob_ls_service.h"
-#include "src/share/ob_zone_merge_info.h"
-#include "observer/ob_server_struct.h"
-#include "src/share/ob_zone_merge_table_operator.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
 
 namespace oceanbase
 {

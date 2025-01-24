@@ -14,9 +14,6 @@
 
 #include "observer/table_load/ob_table_load_parallel_merge_ctx.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
-#include "observer/table_load/ob_table_load_data_row_handler.h"
-#include "observer/table_load/ob_table_load_service.h"
-#include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task.h"
@@ -24,7 +21,6 @@
 #include "storage/direct_load/ob_direct_load_multiple_sstable_builder.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_compactor.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_scan_merge.h"
-#include "storage/direct_load/ob_direct_load_multiple_sstable_scanner.h"
 #include "storage/direct_load/ob_direct_load_range_splitter.h"
 #include "observer/table_load/ob_table_load_store_table_ctx.h"
 

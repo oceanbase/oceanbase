@@ -16,11 +16,7 @@
 #define protected public
 #define private public
 #include "storage/blocksstable/cs_encoding/ob_integer_stream_encoder.h"
-#include "storage/blocksstable/cs_encoding/ob_integer_stream_decoder.h"
-#include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
 #include "storage/blocksstable/cs_encoding/ob_cs_decoding_util.h"
-#include "lib/codec/ob_fast_delta.h"
-#include <iostream>
 #include <random>
 
 namespace oceanbase

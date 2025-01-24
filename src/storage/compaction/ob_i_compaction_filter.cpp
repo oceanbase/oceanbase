@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 
 #include "ob_i_compaction_filter.h"
-#include "storage/ob_i_store.h"
 
 namespace oceanbase
 {

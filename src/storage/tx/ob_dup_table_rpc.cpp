@@ -10,10 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_dup_table_rpc.h"
+#include "ob_dup_table_rpc.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_dup_table.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

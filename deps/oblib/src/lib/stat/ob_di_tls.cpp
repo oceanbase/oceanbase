@@ -9,8 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
-#include "lib/stat/ob_di_tls.h"
+#include "ob_di_tls.h"
 
 namespace oceanbase
 {

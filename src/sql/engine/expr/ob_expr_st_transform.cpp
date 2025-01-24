@@ -14,11 +14,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "lib/geo/ob_geo_func_register.h"
 #include "ob_expr_st_transform.h"
-#include "lib/geo/ob_srs_info.h"
-#include "observer/omt/ob_tenant_srs.h"
-#include "lib/geo/ob_geo_normalize_visitor.h"
-#include "lib/geo/ob_geo_wkb_size_visitor.h"
-#include "lib/geo/ob_geo_wkb_visitor.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 
 using namespace oceanbase::common;

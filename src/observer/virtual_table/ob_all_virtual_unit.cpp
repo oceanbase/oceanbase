@@ -12,12 +12,8 @@
 
 #include "observer/virtual_table/ob_all_virtual_unit.h"
 #include "observer/ob_server.h"
-#include "observer/omt/ob_tenant_meta.h"
-#include "observer/omt/ob_multi_tenant.h" 
 #include "observer/omt/ob_tenant.h"
-#include "share/ob_unit_getter.h"
 #include "logservice/ob_log_service.h"
-#include "share/ob_server_struct.h"  // GCTX
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif

@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/charset/ob_mysql_global.h"
-#include "lib/charset/ob_ctype.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/charset/ob_gb18030_2022_tab.h"
 #include "lib/charset/ob_cypte_gb18030_tab.h"

@@ -13,7 +13,6 @@
 
 #include "ob_tenant_event_history_table_operator.h"
 
-#include "lib/oblog/ob_log_module.h"              // LOG_*
 namespace oceanbase
 {
 namespace rootserver

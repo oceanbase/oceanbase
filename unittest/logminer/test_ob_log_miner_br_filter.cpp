@@ -10,11 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "gtest/gtest.h"
-#include "lib/oblog/ob_log.h"
 #include "ob_log_miner_br_filter.h"
 #include "ob_log_miner_filter_condition.h"
-#include "ob_log_miner_br.h"
 #include "ob_log_miner_test_utils.h"
 
 

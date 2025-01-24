@@ -11,32 +11,15 @@
  */
 
 #include "ob_garbage_collector.h"
-#include "palf_handle_guard.h"
-#include "ob_log_handler.h"
 #include "ob_log_service.h"
 #include "ob_switch_leader_adapter.h"
-#include "common_util/ob_log_time_utils.h"
 #include "archiveservice/ob_archive_service.h"
-#include "share/scn.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
-#include "storage/high_availability/ob_storage_ha_struct.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/slog/ob_storage_logger.h"
-#include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_ts_mgr.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "share/location_cache/ob_location_service.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/ls/ob_ls_life_manager.h"
-#include "share/ob_debug_sync.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "rootserver/ob_ls_recovery_reportor.h"      // ObLSRecoveryReportor
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
-#include "share/ob_occam_time_guard.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
-#include "lib/wait_event/ob_wait_event.h"
 
 namespace oceanbase
 {

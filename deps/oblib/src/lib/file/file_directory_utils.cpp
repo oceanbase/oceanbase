@@ -12,27 +12,10 @@
 
 #include "lib/file/file_directory_utils.h"
 
-#include "lib/ob_define.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/ob_errno.h"
 #include "common/ob_smart_call.h"
 #include "lib/utility/ob_hang_fatal_error.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <string.h>
-#include <assert.h>
-#include <errno.h>
 #include <dirent.h>
-#include <sys/wait.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <unistd.h>
 #include <sys/statvfs.h>
 
 

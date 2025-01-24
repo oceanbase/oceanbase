@@ -15,7 +15,6 @@
 #include "observer/table_load/ob_table_load_parallel_merge_table_compactor.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
-#include "storage/direct_load/ob_direct_load_multiple_sstable.h"
 #include "src/observer/table_load/ob_table_load_store_table_ctx.h"
 
 namespace oceanbase

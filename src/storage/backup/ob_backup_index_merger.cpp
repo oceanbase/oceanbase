@@ -12,15 +12,10 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/backup/ob_backup_index_merger.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/backup/ob_backup_io_adapter.h"
+#include "ob_backup_index_merger.h"
 #include "storage/backup/ob_backup_factory.h"
 #include "storage/backup/ob_backup_operator.h"
-#include "common/storage/ob_device_common.h"
-#include "share/backup/ob_backup_path.h"
 
-#include <algorithm>
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

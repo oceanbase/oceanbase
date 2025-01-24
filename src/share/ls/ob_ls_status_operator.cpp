@@ -14,21 +14,7 @@
 
 #include "ob_ls_status_operator.h"
 
-#include "share/ob_errno.h"
-#include "share/config/ob_server_config.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "lib/string/ob_sql_string.h"
-#include "common/ob_timeout_ctx.h"
-#include "share/ob_share_util.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ls/ob_ls_log_stat_info.h" // ObLSLogStatInfo
-#include "share/ob_server_table_operator.h"
-#include "rootserver/ob_zone_manager.h" // ObZoneManager
 #include "rootserver/ob_root_utils.h" // majority
-#include "logservice/palf/log_define.h" // INVALID_PROPOSAL_ID
-#include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
-#include "share/scn.h" // SCN
-#include "share/ls/ob_ls_operator.h" //ObLSFlag
 #include "share/ls/ob_ls_status_operator.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"//OBCG_DEFAULT
 

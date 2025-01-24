@@ -11,9 +11,7 @@
  */
 
 #include "lib/alloc/alloc_failed_reason.h"
-#include <sys/sysinfo.h>
 #include <unistd.h>
-#include <stdio.h>
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/alloc/memory_dump.h"

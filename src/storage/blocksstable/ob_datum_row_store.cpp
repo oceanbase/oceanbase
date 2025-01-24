@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "ob_datum_row_store.h"
-#include "lib/utility/utility.h"
 namespace oceanbase
 {
 namespace blocksstable

@@ -14,10 +14,8 @@
 
 #include "ob_anonymous_block_resolver.h"
 #include "ob_anonymous_block_stmt.h"
-#include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_compile.h"
-#include "sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {

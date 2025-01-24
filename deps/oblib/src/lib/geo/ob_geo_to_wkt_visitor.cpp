@@ -10,13 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
-#include <cstdint>
 #define USING_LOG_PREFIX LIB
 #include "ob_geo_to_wkt_visitor.h"
-#include "ob_srs_info.h"
-#include "lib/number/ob_number_v2.h"
-#include "lib/charset/ob_dtoa.h"
 #include "lib/utility/ob_fast_convert.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "rpc/obmysql/ob_mysql_global.h"

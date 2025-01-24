@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/connect_by/ob_nl_cnnt_by_with_index_op.h"
-#include "common/rowkey/ob_rowkey.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/basic/ob_material_op.h"
 #include "sql/engine/basic/ob_material_vec_op.h"
 

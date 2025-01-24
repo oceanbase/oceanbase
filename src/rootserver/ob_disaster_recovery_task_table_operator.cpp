@@ -11,11 +11,6 @@
  */
 #define USING_LOG_PREFIX RS
 #include "ob_disaster_recovery_task_table_operator.h"
-#include "lib/container/ob_se_array.h"                         // ObSEArray
-#include "lib/mysqlclient/ob_isql_client.h"                    // for ObISQLClient
-#include "lib/oblog/ob_log_module.h"                           // for LOG_WARN
-#include "lib/string/ob_sql_string.h"                          // for ObSqlString
-#include "share/inner_table/ob_inner_table_schema_constants.h" // for xxx_TNAME
 
 namespace oceanbase
 {

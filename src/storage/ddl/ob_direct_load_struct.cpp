@@ -13,25 +13,14 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_direct_load_struct.h"
-#include "share/ob_ddl_checksum.h"
 #include "share/ob_ddl_error_message_table_operator.h"
-#include "share/ob_ddl_common.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/compaction/ob_column_checksum_calculator.h"
-#include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "sql/engine/pdml/static/ob_px_sstable_insert_op.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/lob/ob_lob_util.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/ob_storage_schema_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/das/ob_das_utils.h"
-#include "sql/engine/basic/chunk_store/ob_compact_store.h"
 #include "storage/ddl/ob_direct_load_mgr_agent.h"
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 
 using namespace oceanbase;

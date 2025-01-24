@@ -11,25 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "sql/session/ob_sql_session_mgr.h"
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_resource_limit.h"
-#include "io/easy_io.h"
-#include "rpc/ob_rpc_define.h"
-#include "sql/ob_sql_trans_control.h"
-#include "observer/mysql/obsm_handler.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "observer/ob_server_struct.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
+#include "ob_sql_session_mgr.h"
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
-#include "sql/session/ob_user_resource_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "lib/ash/ob_active_session_guard.h"

@@ -11,10 +11,8 @@
  */
 
 #include "mds_dump_kv_wrapper.h"
-#include "mds_dump_node.h"
 #include "mds_dump_obj_printer.h"
 #include "src/storage/tablet/ob_mds_schema_helper.h"
-#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {

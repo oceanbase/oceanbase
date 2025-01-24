@@ -14,6 +14,7 @@
 
 #include "lib/cpu/ob_cpu_topology.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/container/ob_bit_set.h"
 
 namespace oceanbase {
 namespace common {

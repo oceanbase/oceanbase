@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/json/ob_json_print_utils.h"
-#include "lib/ob_define.h"
 
 namespace oceanbase
 {

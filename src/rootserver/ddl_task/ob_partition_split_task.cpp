@@ -14,14 +14,9 @@
 
 #include "ob_partition_split_task.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "common/ob_tablet_id.h"
 #include "share/ob_ddl_checksum.h"
-#include "share/ob_ddl_common.h"
 #include "rootserver/ob_root_service.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "share/ob_freeze_info_proxy.h"
+#include "src/storage/tx_storage/ob_ls_map.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
 
 using namespace oceanbase::rootserver;

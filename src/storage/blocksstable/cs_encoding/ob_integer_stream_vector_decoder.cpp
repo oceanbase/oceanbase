@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_integer_stream_vector_decoder.h"
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 #include "ob_cs_decoding_util.h"
 #include "storage/blocksstable/encoding/ob_icolumn_decoder.h"
 

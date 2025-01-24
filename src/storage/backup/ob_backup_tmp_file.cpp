@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/backup/ob_backup_tmp_file.h"
-#include "lib/oblog/ob_log_module.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::tmp_file;

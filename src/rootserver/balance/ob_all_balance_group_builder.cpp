@@ -11,14 +11,11 @@
  */
 #define USING_LOG_PREFIX BALANCE
 
-#include "share/ob_balance_define.h"                  // need_balance_table()
-#include "share/tablet/ob_tablet_to_ls_iterator.h"    // ObTenantTabletToLSIterator
+#include "ob_all_balance_group_builder.h"
 #include "share/tablet/ob_tablet_table_iterator.h"    // ObTenantTabletMetaIterator
 #include "share/schema/ob_part_mgr_util.h"            // ObPartitionSchemaIter
-#include "share/schema/ob_schema_mgr_cache.h"         // ObSchemaMgrItem
 
 #include "rootserver/ob_partition_balance.h"         // ObPartitionHelper
-#include "ob_all_balance_group_builder.h"
 
 #define ISTAT(fmt, args...) FLOG_INFO("[BALANCE_GROUP_BUILDER] " fmt, K_(mod), ##args)
 #define WSTAT(fmt, args...) FLOG_WARN("[BALANCE_GROUP_BUILDER] " fmt, K_(mod), ##args)

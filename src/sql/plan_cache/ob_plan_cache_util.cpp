@@ -12,15 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_PC
 
-#include "sql/plan_cache/ob_plan_cache_util.h"
-#include "sql/plan_cache/ob_plan_set.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_i_tablet_scan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/executor/ob_task_executor.h"
-#include "sql/ob_phy_table_location.h"
-#include "sql/optimizer/ob_phy_table_location_info.h"
+#include "ob_plan_cache_util.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 using namespace oceanbase::share;

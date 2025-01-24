@@ -7,9 +7,8 @@
  * in the COPYING file in the root directory of this source tree).
  */
 
-#include "zstd_ldm.h"
 
-#include "debug.h"
+#include "zstd_ldm.h"
 #include "zstd_fast.h"          /* ZSTD_fillHashTable() */
 #include "zstd_double_fast.h"   /* ZSTD_fillDoubleHashTable() */
 

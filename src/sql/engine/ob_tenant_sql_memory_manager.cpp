@@ -13,16 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_tenant_sql_memory_manager.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/system_variable/ob_system_variable_alias.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "lib/alloc/alloc_func.h"
-#include "lib/rc/ob_rc.h"
-#include "observer/ob_server_struct.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "share/cache/ob_kv_storecache.h"
 
 namespace oceanbase {
 

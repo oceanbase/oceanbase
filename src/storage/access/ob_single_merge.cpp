@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_single_merge.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/tablet/ob_tablet_meta.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tx/ob_defensive_check_mgr.h"
 #include "storage/column_store/ob_co_sstable_row_getter.h"
-#include "storage/concurrency_control/ob_data_validation_service.h"
+#include "src/storage/ls/ob_ls.h"
 
 namespace oceanbase
 {

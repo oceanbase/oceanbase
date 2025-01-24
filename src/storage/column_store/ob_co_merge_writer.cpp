@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 
 #include "ob_co_merge_writer.h"
-#include "storage/column_store/ob_co_merge_ctx.h"
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
 
 namespace oceanbase
 {

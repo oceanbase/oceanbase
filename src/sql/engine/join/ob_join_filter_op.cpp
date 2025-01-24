@@ -12,25 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/join/ob_join_filter_op.h"
-#include "lib/utility/utility.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/expr/ob_sql_expression.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_px_data_ch_provider.h"
-#include "sql/engine/expr/ob_expr_join_filter.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/dtl/ob_dtl.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
-#include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "sql/engine/px/p2p_datahub/ob_runtime_filter_vec_msg.h"
 #include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 #include "sql/engine/join/ob_partition_store.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "sql/engine/join/ob_join_filter_store_row.h"
 
 
 using namespace oceanbase;

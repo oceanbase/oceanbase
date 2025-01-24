@@ -11,12 +11,6 @@
  */
 
 #include "palf_handle.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/ob_errno.h"
-#include "palf_callback.h"
-#include "palf_callback_wrapper.h"
-#include "palf_iterator.h"
-#include "palf_handle_impl.h"
 
 namespace oceanbase
 {

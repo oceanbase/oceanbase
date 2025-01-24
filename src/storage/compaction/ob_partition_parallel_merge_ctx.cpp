@@ -11,16 +11,8 @@
  */
 
 #include "ob_partition_parallel_merge_ctx.h"
-#include "storage/memtable/ob_memtable.h"
-#include "share/config/ob_server_config.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "storage/ob_partition_range_spliter.h"
 #include "ob_tablet_merge_ctx.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/compaction/ob_medium_compaction_mgr.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 

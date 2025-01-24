@@ -11,15 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 #include "lib/restore/ob_storage.h"
-#include "lib/restore/ob_storage_s3_base.h"
-#include "lib/allocator/page_arena.h"
 #include "test_storage_s3.h"
-#include "lib/container/ob_array_serialization.h"
-#include <thread>
 
-#include <aws/core/auth/AWSCredentials.h>
 
 using namespace oceanbase::common;
 

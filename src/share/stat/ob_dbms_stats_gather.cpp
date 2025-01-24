@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "share/stat/ob_dbms_stats_gather.h"
-#include "share/stat/ob_basic_stats_estimator.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
-#include "share/stat/ob_opt_column_stat_cache.h"
-#include "share/stat/ob_opt_stat_manager.h"
 #include "share/stat/ob_dbms_stats_utils.h"
-#include "share/stat/ob_incremental_stat_estimator.h"
-#include "share/stat/ob_dbms_stats_history_manager.h"
-#include "share/stat/ob_dbms_stats_lock_unlock.h"
 #include "share/stat/ob_index_stats_estimator.h"
-#include "pl/sys_package/ob_dbms_stats.h"
-#include "share/stat/ob_opt_stat_gather_stat.h"
 #include "share/stat/ob_min_max_estimator.h"
 namespace oceanbase {
 using namespace pl;

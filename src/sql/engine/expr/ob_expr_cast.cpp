@@ -11,22 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "share/object/ob_obj_cast.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_cast.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "lib/geo/ob_geometry_cast.h"
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
-#include "pl/ob_pl_user_type.h"
-#include "pl/ob_pl_allocator.h"
-#include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_resolver.h"
 #include "sql/engine/expr/vector_cast/vector_cast.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1

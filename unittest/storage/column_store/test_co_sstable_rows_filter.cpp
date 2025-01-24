@@ -11,28 +11,14 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define private public
 #define protected public
 
-#include "lib/allocator/page_arena.h"
-#include "lib/container/ob_se_array.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
-#include "sql/engine/expr/ob_expr.h"
-#include "sql/engine/ob_exec_context.h"
-#include "storage/access/ob_table_access_context.h"
 #include "storage/access/ob_vector_store.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/column_store/ob_cg_scanner.h"
 #include "storage/column_store/ob_cg_tile_scanner.h"
-#include "storage/ob_i_table.h"
-#include "storage/ob_storage_struct.h"
-#include "storage/ob_storage_schema.h"
-#include "storage/schema_utils.h"
-#include "storage/tablet/ob_table_store_util.h"
 #include "storage/column_store/ob_co_sstable_rows_filter.h"
 
 namespace oceanbase

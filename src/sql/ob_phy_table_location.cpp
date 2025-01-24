@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX SQL
 
-#include "sql/ob_phy_table_location.h"
+#include "ob_phy_table_location.h"
 #include "sql/optimizer/ob_phy_table_location_info.h"
-#include "observer/ob_server_struct.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 namespace oceanbase

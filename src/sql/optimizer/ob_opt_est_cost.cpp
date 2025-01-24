@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 
-#include "sql/optimizer/ob_opt_est_cost.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/optimizer/ob_optimizer_context.h"
+#include "ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
-#include "sql/optimizer/ob_optimizer.h"
-#include "storage/access/ob_table_scan_range.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "sql/optimizer/ob_opt_selectivity.h"
 #include "ob_opt_est_parameter_normal.h"
 #include "ob_opt_est_parameter_vector.h"
 #include "share/stat/ob_opt_stat_manager.h"

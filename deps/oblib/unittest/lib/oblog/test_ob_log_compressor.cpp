@@ -12,19 +12,13 @@
 
 #define USING_LOG_PREFIX LIB
 #include <gtest/gtest.h>
-#include <utime.h>
-#include <string>
-#include <fstream>
 #include <dirent.h>
-#include <regex.h>
 
 #define protected public
 #define private public
 
 #include "lib/oblog/ob_log_compressor.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/compress/ob_compressor_pool.h"
-#include "common/ob_clock_generator.h"
 
 using namespace oceanbase::lib;
 namespace oceanbase {

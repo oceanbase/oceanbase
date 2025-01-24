@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_SESSION
 
-#include "sql/session/ob_local_session_var.h"
+#include "ob_local_session_var.h"
 #include "sql/session/ob_basic_session_info.h"
 
 using namespace oceanbase::common;

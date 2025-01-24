@@ -11,15 +11,10 @@
  */
 
 #define USING_LOG_PREFIX BALANCE
-#include "share/schema/ob_schema_getter_guard.h"
 #include "share/tablet/ob_tablet_table_iterator.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "share/schema/ob_schema_struct.h"
-#include "rootserver/ob_balance_group_ls_stat_operator.h"
 #include "rootserver/ob_ls_service_helper.h"
 #include "rootserver/ob_partition_balance.h"
 #include "storage/ob_common_id_utils.h"
-#include "observer/ob_server_struct.h"//GCTX
 
 
 namespace oceanbase

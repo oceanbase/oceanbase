@@ -11,13 +11,8 @@
  */
 
 #include "ob_bloom_filter_cache.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "lib/atomic/ob_atomic.h"
 #include "storage/access/ob_rows_info.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "ob_datum_rowkey.h"
 #include "storage/access/ob_empty_read_bucket.h"
 
 namespace oceanbase

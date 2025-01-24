@@ -12,15 +12,11 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tx_storage/ob_empty_shell_task.h"
-#include "lib/literals/ob_literals.h"
-#include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
+#include "lib/literals/ob_literals.h"    // ObLSIterator
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService
-#include "storage/tablet/ob_tablet.h" // ObTablet
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "share/ob_tenant_info_proxy.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
-#include "share/ob_force_print_log.h"
 
 namespace oceanbase
 {

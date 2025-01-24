@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "share/schema/ob_schema_struct.h"
 #include "sql/resolver/ob_resolver.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/dml/ob_insert_resolver.h"
 #include "sql/resolver/dml/ob_merge_resolver.h"
 #include "sql/resolver/dml/ob_update_resolver.h"
@@ -54,12 +52,10 @@
 #include "sql/resolver/ddl/ob_create_outline_resolver.h"
 #include "sql/resolver/ddl/ob_alter_outline_resolver.h"
 #include "sql/resolver/ddl/ob_drop_outline_resolver.h"
-#include "sql/resolver/ddl/ob_create_routine_resolver.h"
 #include "sql/resolver/ddl/ob_drop_routine_resolver.h"
 #include "sql/resolver/ddl/ob_trigger_resolver.h"
 #include "sql/resolver/ddl/ob_optimize_resolver.h"
 #include "sql/resolver/ddl/ob_create_standby_tenant_resolver.h"
-#include "ddl/ob_create_routine_resolver.h"
 #include "ddl/ob_drop_routine_resolver.h"
 #include "ddl/ob_alter_routine_resolver.h"
 #include "sql/resolver/ddl/ob_create_package_resolver.h"
@@ -97,7 +93,6 @@
 #include "sql/resolver/cmd/ob_resource_resolver.h"
 #include "sql/resolver/cmd/ob_variable_set_resolver.h"
 #include "sql/resolver/cmd/ob_show_resolver.h"
-#include "sql/resolver/cmd/ob_alter_system_resolver.h"
 #include "sql/resolver/cmd/ob_help_resolver.h"
 #include "sql/resolver/cmd/ob_kill_resolver.h"
 #include "sql/resolver/cmd/ob_set_names_resolver.h"
@@ -133,7 +128,6 @@
 #include "sql/resolver/ddl/ob_create_directory_resolver.h"
 #include "sql/resolver/ddl/ob_drop_directory_resolver.h"
 #include "pl/ob_pl_package.h"
-#include "sql/resolver/ddl/ob_create_context_resolver.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
 #include "sql/resolver/cmd/ob_tenant_snapshot_resolver.h"
 #include "sql/resolver/cmd/ob_tenant_clone_resolver.h"

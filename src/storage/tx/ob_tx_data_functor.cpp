@@ -10,18 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_tx_data_functor.h"
-#include "lib/rowid/ob_urowid.h"
-#include "storage/tx/ob_committer_define.h"
-#include "storage/ob_i_store.h"
-#include "storage/tx/ob_trans_define.h"
+#include "ob_tx_data_functor.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/memtable/ob_memtable_context.h"
-#include "observer/ob_server_struct.h"
-#include "logservice/leader_coordinator/ob_failure_detector.h"
 #include "observer/virtual_table/ob_all_virtual_tx_data.h"
-#include "logservice/ob_garbage_collector.h"
 #include "storage/high_availability/ob_tablet_group_restore.h"
 
 namespace oceanbase

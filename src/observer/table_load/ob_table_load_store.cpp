@@ -13,25 +13,15 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_store.h"
-#include "observer/table_load/ob_table_load_merger.h"
-#include "observer/table_load/ob_table_load_service.h"
-#include "observer/table_load/ob_table_load_stat.h"
-#include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_store_trans.h"
 #include "observer/table_load/ob_table_load_store_trans_px_writer.h"
-#include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
-#include "observer/table_load/ob_table_load_utils.h"
 #include "observer/table_load/ob_table_load_store_table_ctx.h"
 #include "observer/table_load/ob_table_load_merger_manager.h"
 #include "observer/table_load/ob_table_load_pre_sorter.h"
-#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "share/table/ob_table_load_dml_stat.h"
-#include "observer/table_load/ob_table_load_pre_sort_writer.h"
+#include "src/observer/virtual_table/ob_all_virtual_dml_stats.h"
 
 namespace oceanbase
 {

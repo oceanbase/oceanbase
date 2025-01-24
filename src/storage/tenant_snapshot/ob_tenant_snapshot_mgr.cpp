@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/tenant_snapshot/ob_ls_snapshot_defs.h"
-#include "storage/tenant_snapshot/ob_ls_snapshot_mgr.h"
-#include "storage/tenant_snapshot/ob_tenant_snapshot_defs.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_mgr.h"
 
 namespace oceanbase

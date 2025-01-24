@@ -12,15 +12,12 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 
-#include "lib/geo/ob_s2adapter.h"
+#include "ob_das_domain_utils.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "lib/json_type/ob_json_bin.h"
-#include "sql/das/ob_das_domain_utils.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_dml_vec_iter.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/omt/ob_tenant_srs.h"
-#include "storage/blocksstable/ob_datum_row_utils.h"
 
 using namespace oceanbase::common;
 

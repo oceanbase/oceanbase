@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/rc/ob_tenant_base.h"
 #define USING_LOG_PREFIX  SQL_ENG
 
 //#define TEST_MODE
@@ -18,33 +17,14 @@
 
 #include "sql/engine/cmd/ob_load_data_impl.h"
 
-#include <math.h>
-#include "observer/omt/ob_multi_tenant.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "storage/access/ob_dml_param.h"
-#include "sql/parser/ob_parser.h"
 #include "sql/resolver/ob_resolver.h"
 #include "sql/resolver/dml/ob_insert_stmt.h"
 #include "sql/plan_cache/ob_sql_parameterization.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/code_generator/ob_code_generator.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/cmd/ob_load_data_utils.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/das/ob_das_location_router.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/ob_tenant_memstore_info_operator.h"
-#include "sql/resolver/ob_schema_checker.h"
-#include "observer/ob_inner_sql_connection_pool.h"
-#include "observer/ob_inner_sql_result.h"
-#include "share/ob_device_manager.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "share/config/ob_config_helper.h"
 #include "src/observer/mysql/ob_query_driver.h"
 
 using namespace oceanbase::sql;

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX OBLOG
 #include "ob_log_ls_mgr.h"
-#include "ob_log_config.h"                            // TCONF
 #include "ob_log_tenant.h"                            // ObLogTenant
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [LSMgr] " fmt, ##args)

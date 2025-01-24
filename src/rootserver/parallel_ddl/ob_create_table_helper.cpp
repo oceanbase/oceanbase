@@ -12,21 +12,17 @@
 
 #define USING_LOG_PREFIX RS
 #include "rootserver/parallel_ddl/ob_create_table_helper.h"
-#include "rootserver/parallel_ddl/ob_index_name_checker.h"
 #include "rootserver/ob_index_builder.h"
 #include "rootserver/ob_lob_meta_builder.h"
 #include "rootserver/ob_lob_piece_builder.h"
 #include "rootserver/ob_table_creator.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
-#include "share/ob_rpc_struct.h"
 #include "share/ob_index_builder_util.h"
-#include "share/ob_debug_sync_point.h"
 #include "share/sequence/ob_sequence_option_builder.h" // ObSequenceOptionBuilder
 #include "share/schema/ob_table_sql_service.h"
 #include "share/schema/ob_security_audit_sql_service.h"
 #include "share/schema/ob_sequence_sql_service.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/resolver/ob_resolver_utils.h"
 

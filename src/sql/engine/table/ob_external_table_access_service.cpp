@@ -11,16 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "ob_external_table_access_service.h"
 
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/engine/expr/ob_expr.h"
-#include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
+#include "ob_external_table_access_service.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_device_manager.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "sql/engine/table/ob_parquet_table_row_iter.h"
 #ifdef OB_BUILD_CPP_ODPS
 #include "sql/engine/table/ob_odps_table_row_iter.h"

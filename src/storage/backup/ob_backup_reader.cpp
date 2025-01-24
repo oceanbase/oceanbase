@@ -12,19 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/backup/ob_backup_reader.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/random/ob_random.h"
+#include "ob_backup_reader.h"
 #include "storage/backup/ob_backup_factory.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "observer/ob_server_event_history_table_operator.h"
-#include "storage/blockstore/ob_shared_object_reader_writer.h"
-#include "storage/tablet/ob_mds_schema_helper.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;

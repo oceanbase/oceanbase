@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_concat_ws.h"
-#include <string.h>
-#include "sql/engine/expr/ob_expr_add.h"
-#include "lib/oblog/ob_log.h"
-#include "objit/common/ob_item_type.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 

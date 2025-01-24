@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/meta_store/ob_server_storage_meta_service.h"
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tenant_snapshot/ob_ls_snapshot_defs.h"
-#include "storage/tenant_snapshot/ob_tenant_snapshot_defs.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_task.h"
-#include "storage/tenant_snapshot/ob_tenant_snapshot_meta_table.h"
-#include "lib/lock/mutex.h"
 
 namespace oceanbase
 {

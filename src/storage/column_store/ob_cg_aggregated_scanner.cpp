@@ -9,7 +9,6 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE
 #include "ob_cg_aggregated_scanner.h"
-#include "storage/access/ob_aggregate_base.h"
 #include "storage/access/ob_aggregated_store.h"
 #include "storage/access/ob_aggregated_store_vec.h"
 

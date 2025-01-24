@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_thread_mgr.h"
-#include "share/schema/ob_multi_version_schema_service.h"
+#include "ob_tenant_tablet_stat_mgr.h"
 #include "share/schema/ob_tenant_schema_service.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
-#include "storage/access/ob_global_iterator_pool.h"
-#include "observer/ob_server_struct.h"
-#include "src/storage/tablet/ob_tablet.h"
 #include "observer/ob_server.h"
-#include <sys/sysinfo.h>
 
 using namespace oceanbase;
 using namespace oceanbase::common;

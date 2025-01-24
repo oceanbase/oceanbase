@@ -12,25 +12,10 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ddl/ob_ddl_struct.h"
-#include "storage/ddl/ob_tablet_ddl_kv.h"
-#include "share/scn.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/blocksstable/ob_macro_block_struct.h"
-#include "storage/blocksstable/ob_object_manager.h"
-#include "share/ob_force_print_log.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "ob_tablet_ddl_kv.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/blocksstable/ob_datum_rowkey.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/ddl/ob_tablet_ddl_kv_multi_version_row_iterator.h"
 #include "storage/access/ob_sstable_multi_version_row_iterator.h"
 #ifdef OB_BUILD_SHARED_STORAGE

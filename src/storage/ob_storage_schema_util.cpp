@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_storage_schema_util.h"
-#include "ob_storage_schema.h"
-#include "lib/allocator/page_arena.h"
-#include "storage/ob_storage_struct.h"
-#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

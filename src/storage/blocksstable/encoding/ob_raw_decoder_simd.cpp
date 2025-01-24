@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "ob_encoding_query_util.h"
 #include "ob_raw_decoder.h"
 
 namespace oceanbase {

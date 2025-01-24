@@ -15,11 +15,6 @@
 #define protected public
 
 #include "mtlenv/mock_tenant_module_env.h"
-#include <storage/ob_i_table.h>
-#include "storage/blocksstable/ob_bloom_filter_cache.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/access/ob_empty_read_bucket.h"
 
 namespace oceanbase
 {

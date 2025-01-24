@@ -11,22 +11,13 @@
  */
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/column_store/ob_co_merge_dag.h"
+#include "ob_co_merge_dag.h"
 #include "storage/column_store/ob_column_oriented_merger.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "storage/compaction/ob_tenant_medium_checker.h"
-#include "storage/ob_storage_schema.h"
-#include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/column_store/ob_co_merge_ctx.h"
-#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {

@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_accuracy.h"
+#include "ob_accuracy.h"
 #include "lib/number/ob_number_v2.h"
 
 namespace oceanbase

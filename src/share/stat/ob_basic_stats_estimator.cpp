@@ -11,12 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "share/stat/ob_basic_stats_estimator.h"
-#include "share/stat/ob_opt_table_stat.h"
-#include "share/stat/ob_opt_column_stat.h"
+#include "ob_basic_stats_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "sql/optimizer/ob_storage_estimator.h"
-#include "pl/sys_package/ob_dbms_stats.h"
 #include "share/stat/ob_topk_hist_estimator.h"
 namespace oceanbase
 {

@@ -18,8 +18,6 @@
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "share/ob_autoincrement_service.h"
-#include "share/sequence/ob_sequence_cache.h"
 #include "observer/table_load/ob_table_load_empty_insert_tablet_ctx_manager.h"
 
 namespace oceanbase

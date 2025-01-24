@@ -12,27 +12,10 @@
 
 #define USING_LOG_PREFIX PALF
 #include "ob_log_handler.h"
-#include "ob_append_callback.h"
 #include "ob_switch_leader_adapter.h"
-#include "common/ob_role.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "logservice/applyservice/ob_log_apply_service.h"
-#include "logservice/replayservice/ob_log_replay_service.h"
-#include "logservice/rcservice/ob_role_change_service.h"
-#include "logservice/logrpc/ob_log_rpc_req.h"
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/lsn.h"
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
 #include "logservice/ob_log_compression.h"
 #endif
-#include "logservice/palf/palf_env.h"
-#include "logservice/palf/log_group_entry.h"
-#include "logservice/palf/palf_options.h"
-#include "share/ob_define.h"
-#include "share/scn.h"
-#include "storage/tx/ob_ts_mgr.h"
 #include "logservice/ob_log_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 // shared log start

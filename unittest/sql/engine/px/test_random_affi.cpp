@@ -17,7 +17,6 @@ using namespace std;
 #include <gtest/gtest.h>
 
 #include "sql/ob_sql_init.h"
-#include "sql/engine/px/ob_px_util.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

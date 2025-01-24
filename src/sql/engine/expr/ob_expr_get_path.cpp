@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_get_path.h"
-#include "lib/string/ob_string.h"
 namespace oceanbase
 {
 using namespace common;

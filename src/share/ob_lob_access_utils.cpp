@@ -13,13 +13,8 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "share/ob_lob_access_utils.h"
-#include "lib/objectpool/ob_server_object_pool.h"
-#include "common/sql_mode/ob_sql_mode.h"
-#include "storage/lob/ob_lob_util.h"
-#include "storage/tx/ob_trans_define_v4.h"
+#include "ob_lob_access_utils.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/lob/ob_lob_manager.h"
 
 namespace oceanbase
 {

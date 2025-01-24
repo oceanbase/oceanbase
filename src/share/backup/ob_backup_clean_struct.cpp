@@ -10,13 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_backup_clean_struct.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/hash_func/murmur_hash.h"
 using namespace oceanbase;
 using namespace share;
 

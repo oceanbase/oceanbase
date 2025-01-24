@@ -12,22 +12,11 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_upgrade_utils.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_service_epoch_proxy.h"
-#include "observer/ob_server_struct.h"
-#include "rootserver/ob_root_service.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ls/ob_ls_status_operator.h"//get max ls id
-#include "share/ob_tenant_info_proxy.h"//update max ls id
 #include "ob_upgrade_utils.h"
-#include "share/config/ob_config_helper.h"
+#include "share/ob_service_epoch_proxy.h"
+#include "rootserver/ob_root_service.h"
+#include "src/pl/ob_pl.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
-#include "share/stat/ob_dbms_stats_preferences.h"
 #include "share/ncomp_dll/ob_flush_ncomp_dll_task.h"
 
 namespace oceanbase

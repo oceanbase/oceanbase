@@ -12,16 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "deps/oblib/src/lib/oblog/ob_log_module.h"
 #include "ob_raw_decoder.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "ob_bit_stream.h"
-#include "ob_integer_array.h"
-#include "ob_row_index.h"
 #include "ob_vector_decode_util.h"
 #include "common/ob_target_specific.h"
-#include "lib/hash/ob_hashset.h"
-#include "sql/engine/expr/ob_expr_cmp_func.h"
 
 namespace oceanbase
 {

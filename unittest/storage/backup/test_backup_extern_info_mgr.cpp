@@ -11,11 +11,8 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <string>
 #include <gtest/gtest.h>
 #include "test_backup.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "share/io/ob_io_manager.h"
 #include "share/ob_device_manager.h"
 #include "storage/backup/ob_backup_extern_info_mgr.h"
 #define private public

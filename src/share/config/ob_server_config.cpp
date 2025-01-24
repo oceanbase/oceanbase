@@ -11,23 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SHARE_CONFIG
-#include <string>
-#include <sstream>
 
-#include "share/config/ob_server_config.h"
-#include "common/ob_common_utility.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/utility/utility.h"
-#include "lib/net/ob_net_util.h"
-#include "common/ob_record_header.h"
-#include "common/ob_zone.h"
+#include "ob_server_config.h"
 #include "observer/ob_server.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/unit/ob_unit_resource.h"     // ObUnitResource
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "share/ob_rpc_struct.h"
-#include "observer/ob_server_struct.h"
 extern "C" {
 #include "ussl-hook.h"
 #include "auth-methods.h"

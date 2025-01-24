@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX SQL
 #include "ob_px_admission.h"
-#include "share/config/ob_server_config.h"
-#include "observer/mysql/obmp_query.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "observer/omt/ob_th_worker.h"
 #include "observer/omt/ob_tenant.h"
 #include "ob_px_target_mgr.h"
-#include "ob_px_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

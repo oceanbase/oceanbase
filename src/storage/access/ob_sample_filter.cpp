@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sample_filter.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/ob_errno.h"
 #include "ob_index_tree_prefetcher.h"
-#include "storage/blocksstable/ob_micro_block_row_scanner.h"
 
 namespace oceanbase
 {

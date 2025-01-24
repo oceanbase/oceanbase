@@ -12,26 +12,13 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/net/ob_addr.h"
-#include "lib/hash/ob_hashset.h"
-#include "lib/container/ob_array.h"
+#include "ob_px_util.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
-#include "sql/dtl/ob_dtl.h"
-#include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/px/ob_px_scheduler.h"
 #include "sql/executor/ob_task_spliter.h"
-#include "observer/ob_server_struct.h"
-#include "sql/engine/px/exchange/ob_receive_op.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "sql/engine/px/ob_granule_iterator_op.h"
-#include "sql/engine/px/exchange/ob_px_receive_op.h"
-#include "sql/engine/expr/ob_expr.h"
 #include "share/schema/ob_part_mgr_util.h"
-#include "sql/engine/dml/ob_table_insert_op.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "common/ob_smart_call.h"
 #include "storage/ob_locality_manager.h"
-#include "share/external_table/ob_external_table_file_mgr.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
 #include "share/external_table/ob_external_table_utils.h"
 

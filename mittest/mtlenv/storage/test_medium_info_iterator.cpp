@@ -20,7 +20,6 @@
 
 #include "mtlenv/storage/medium_info_common.h"
 #include "storage/tablet/ob_mds_scan_param_helper.h"
-#include "storage/tablet/ob_mds_range_query_iterator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

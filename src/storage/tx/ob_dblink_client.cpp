@@ -9,13 +9,7 @@
 // See the Mulan PubL v2 for more details.
 
 #include "storage/tx/ob_dblink_client.h"
-#include "share/ob_define.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "observer/ob_server_struct.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/utility/ob_print_utils.h"
 #ifdef OB_BUILD_ORACLE_PL
-#include "pl/sys_package/ob_dbms_xa.h"
 #include "pl/ob_pl_stmt.h"
 #endif
 

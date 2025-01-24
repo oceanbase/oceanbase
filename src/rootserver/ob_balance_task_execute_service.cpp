@@ -12,26 +12,13 @@
 
 #define USING_LOG_PREFIX BALANCE
 #include "ob_balance_task_execute_service.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"//trans
-#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
-#include "share/schema/ob_schema_struct.h"//ObTenantInfo
-#include "share/schema/ob_multi_version_schema_service.h"//ObMultiVersionSchemaService
-#include "share/schema/ob_part_mgr_util.h"//ObPartitionSchemaIter
-#include "share/ob_unit_table_operator.h" //ObUnitTableOperator
 #include "share/balance/ob_balance_job_table_operator.h"//ObBalanceJob
 #include "share/balance/ob_transfer_partition_task_table_operator.h"//set transfer
-#include "share/ob_primary_zone_util.h"//get_primary_zone
-#include "share/rc/ob_tenant_base.h"//MTL
-#include "share/ls/ob_ls_operator.h"//ls_op
 #include "share/ls/ob_ls_status_operator.h"//status_op
-#include "share/ls/ob_ls_table_operator.h"//lst_operator->get
 #include "share/location_cache/ob_location_service.h"//get_leader
-#include "share/rpc/ob_async_rpc_proxy.h"//wait_all
 #include "share/transfer/ob_transfer_task_operator.h"//get_history_task
 #include "rootserver/ob_tenant_transfer_service.h"//transfer
 #include "rootserver/balance/ob_ls_all_part_builder.h"   // ObLSAllPartBuilder
-#include "rootserver/ob_root_utils.h"//get_rs_default_timeout_ctx
-#include "observer/ob_server_struct.h"//GCTX
 
 #define ISTAT(fmt, args...) FLOG_INFO("[BALANCE_EXECUTE] " fmt, ##args)
 #define WSTAT(fmt, args...) FLOG_WARN("[BALANCE_EXECUTE] " fmt, ##args)

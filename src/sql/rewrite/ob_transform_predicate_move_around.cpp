@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_predicate_move_around.h"
-//#include "sql/rewrite/ob_stmt_comparer.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/rewrite/ob_predicate_deduce.h"
-#include "share/schema/ob_table_schema.h"
-#include "common/ob_smart_call.h"
 #include "sql/resolver/expr/ob_shared_expr_resolver.h"
 
 using namespace oceanbase::sql;

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_global_iterator_pool.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {

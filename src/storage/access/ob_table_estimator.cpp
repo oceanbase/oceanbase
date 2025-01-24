@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_table_estimator.h"
-#include "storage/tablet/ob_table_store_util.h"
-#include "storage/tablet/ob_tablet.h"
 #include "ob_index_sstable_estimator.h"
-#include "storage/memtable/mvcc/ob_mvcc_engine.h"
 #include "storage/memtable/mvcc/ob_mvcc_iterator.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase

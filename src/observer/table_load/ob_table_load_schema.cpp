@@ -14,8 +14,6 @@
 
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_utils.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "storage/lob/ob_lob_meta.h"
 

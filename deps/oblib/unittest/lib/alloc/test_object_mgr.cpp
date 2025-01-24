@@ -11,12 +11,8 @@
  */
 
 #define private public
-#include "lib/resource/achunk_mgr.h"
-#include "lib/resource/ob_resource_mgr.h"
-#include "lib/alloc/object_mgr.h"
 #undef private
 #include "lib/allocator/ob_malloc.h"
-#include "lib/utility/ob_test_util.h"
 #include "lib/coro/testing.h"
 #include <gtest/gtest.h>
 

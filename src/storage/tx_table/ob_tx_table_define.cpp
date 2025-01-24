@@ -10,8 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx_table/ob_tx_table_define.h"
-#include "share/rc/ob_tenant_base.h"
+#include "ob_tx_table_define.h"
 #include "storage/tx_table/ob_tx_data_table.h"
 
 namespace oceanbase

@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/tablet/ob_tablet_table_iterator.h"
-#include "share/tablet/ob_tablet_info.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "observer/ob_server_struct.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 
 namespace oceanbase

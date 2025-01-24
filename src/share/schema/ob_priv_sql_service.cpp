@@ -12,18 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_priv_sql_service.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_user_sql_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "sql/resolver/ob_schema_checker.h"
-#include "share/ob_max_id_fetcher.h" // ObMaxIdFetcher
 #include "sql/ob_sql_utils.h"
 
 

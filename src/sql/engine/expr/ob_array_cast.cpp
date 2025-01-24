@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_array_cast.h"
-#include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_parse.h"
 #include "src/share/object/ob_obj_cast_util.h"
 

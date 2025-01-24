@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/tmp_file/ob_tmp_file_thread_wrapper.h"
-#include "share/ob_thread_mgr.h"
-#include "storage/blocksstable/ob_block_manager.h"
+#include "ob_tmp_file_thread_wrapper.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
-#include "storage/tmp_file/ob_tmp_file_page_cache_controller.h"
 #include "storage/tmp_file/ob_sn_tmp_file_manager.h"
 
 namespace oceanbase

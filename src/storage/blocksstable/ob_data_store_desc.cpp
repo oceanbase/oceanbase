@@ -8,9 +8,7 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #include "storage/blocksstable/ob_data_store_desc.h"
-#include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
-#include "share/schema/ob_column_schema.h"
 #include "observer/ob_server_struct.h"
 
 namespace oceanbase

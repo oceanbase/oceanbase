@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_sys_view_bigint_param.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

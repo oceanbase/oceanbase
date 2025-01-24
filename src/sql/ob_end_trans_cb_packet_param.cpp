@@ -10,10 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "sql/ob_end_trans_cb_packet_param.h"
-#include "lib/alloc/alloc_assist.h"
+#include "ob_end_trans_cb_packet_param.h"
 #include "sql/ob_result_set.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

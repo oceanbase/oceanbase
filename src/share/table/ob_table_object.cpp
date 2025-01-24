@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include <cstdint>
 #include "ob_table_object.h"
-#include "lib/utility/ob_unify_serialize.h"
 #include "common/object/ob_obj_funcs.h"
 
 namespace oceanbase

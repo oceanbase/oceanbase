@@ -12,14 +12,12 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 
-#include "sql/resolver/expr/ob_raw_expr.h"
+#include "ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
 #include "sql/resolver/expr/ob_raw_expr_deduce_type.h"
 #include "sql/resolver/expr/ob_expr_relation_analyzer.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_logical_operator.h"
-#include "common/object/ob_object.h"
-#include "common/ob_smart_call.h"
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
 #include "sql/engine/expr/ob_expr_udf.h"
 #include "sql/engine/expr/ob_expr_pl_get_cursor_attr.h"
@@ -27,9 +25,6 @@
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
 #include "sql/engine/expr/ob_expr_collection_construct.h"
 #include "sql/engine/expr/ob_expr_object_construct.h"
-#include "sql/engine/expr/ob_pl_expr_subquery.h"
-#include "share/config/ob_server_config.h"
-#include "sql/resolver/expr/ob_raw_expr_copier.h"
 #include "sql/engine/expr/ob_expr_sql_udt_construct.h"
 #include "sql/engine/expr/ob_expr_priv_attribute_access.h"
 

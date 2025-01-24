@@ -11,11 +11,6 @@
  */
 
 #include "ob_information_referential_constraints_table.h"
-#include "lib/container/ob_array_serialization.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_schema_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;

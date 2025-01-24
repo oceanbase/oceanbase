@@ -11,8 +11,6 @@
  */
 
 #include "ob_batch_proxy.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_cluster_version.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 
 namespace oceanbase

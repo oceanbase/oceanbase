@@ -12,18 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_query_async_processor.h"
-#include "ob_table_rpc_processor_util.h"
-#include "observer/ob_service.h"
-#include "ob_table_end_trans_cb.h"
-#include "sql/optimizer/ob_table_location.h"  // ObTableLocation
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/stat/ob_session_stat.h"
-#include "observer/ob_server.h"
-#include "lib/string/ob_strings.h"
-#include "lib/rc/ob_rc.h"
-#include "storage/tx/ob_trans_service.h"
-#include "ob_table_cg_service.h"
-#include "ob_htable_filter_operator.h"
+#include "src/observer/table/ob_table_cache.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;

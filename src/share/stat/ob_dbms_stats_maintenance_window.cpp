@@ -12,14 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/time/ob_time_utility.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "sql/session/ob_basic_session_info.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "lib/timezone/ob_timezone_info.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 #include "observer/ob_sql_client_decorator.h"
 

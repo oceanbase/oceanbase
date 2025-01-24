@@ -13,9 +13,7 @@
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_trans_service.h"
-#include "src/storage/tx/ob_ts_mgr.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
-#include "share/ob_io_device_helper.h"
 
 namespace oceanbase
 {

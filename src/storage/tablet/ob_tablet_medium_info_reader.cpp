@@ -11,12 +11,7 @@
  */
 
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
-#include "lib/ob_errno.h"
-#include "storage/compaction/ob_medium_compaction_info.h"
-#include "storage/tablet/ob_mds_scan_param_helper.h"
-#include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_mds_data.h"
 
 #define USING_LOG_PREFIX STORAGE
 

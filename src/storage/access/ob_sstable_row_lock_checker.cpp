@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sstable_row_lock_checker.h"
-#include "storage/access/ob_rows_info.h"
-#include "storage/tx/ob_trans_define.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::blocksstable;

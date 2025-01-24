@@ -12,10 +12,7 @@
 
 #include "storage/multi_data_source/ob_mds_compaction_filter.h"
 
-#include "lib/ob_errno.h"
-#include "storage/multi_data_source/adapter_define/mds_dump_node.h"
-#include "storage/multi_data_source/mds_table_handle.h"
-#include "storage/compaction/ob_medium_compaction_info.h"
+#include "src/storage/multi_data_source/mds_table_impl.h"
 
 #define USING_LOG_PREFIX MDS
 

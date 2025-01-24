@@ -11,28 +11,13 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <utility>
-#include "storage/restore/ob_ls_restore_handler.h"
-#include "lib/lock/ob_mutex.h"
-#include "common/ob_member.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/backup/ob_backup_restore_util.h"
-#include "share/backup/ob_backup_path.h"
-#include "storage/ob_storage_rpc.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "share/ls/ob_ls_table_operator.h"
-#include "share/ls/ob_ls_status_operator.h"
+#include "ob_ls_restore_handler.h"
 #include "logservice/ob_log_service.h"
 #include "storage/high_availability/ob_ls_restore.h"
-#include "storage/high_availability/ob_tablet_group_restore.h"
 #include "storage/high_availability/ob_storage_ha_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "share/restore/ob_physical_restore_table_operator.h"
-#include "storage/backup/ob_backup_data_store.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "share/restore/ob_restore_persist_helper.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
 using namespace oceanbase;

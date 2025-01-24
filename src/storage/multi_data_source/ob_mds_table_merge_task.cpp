@@ -11,18 +11,8 @@
  */
 
 #include "storage/multi_data_source/ob_mds_table_merge_task.h"
-#include "lib/ob_errno.h"
-#include "common/ob_smart_var.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ls/ob_ls_get_mod.h"
-#include "storage/tablet/ob_tablet_common.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
-#include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag.h"
-#include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 #define USING_LOG_PREFIX MDS

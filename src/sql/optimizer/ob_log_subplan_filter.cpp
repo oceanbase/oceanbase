@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_subplan_filter.h"
-#include "sql/optimizer/ob_opt_est_cost.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_table_scan.h"
-#include "common/ob_smart_call.h"
-#include "sql/optimizer/ob_opt_selectivity.h"
-#include "sql/optimizer/ob_join_order.h"
 #include "sql/optimizer/ob_log_granule_iterator.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

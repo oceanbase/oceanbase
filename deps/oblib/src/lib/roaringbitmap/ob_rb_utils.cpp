@@ -13,12 +13,7 @@
  */
 
 #define USING_LOG_PREFIX LIB
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_sort.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_fast_convert.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
-#include "lib/roaringbitmap/ob_rb_bin.h"
 #include "roaring/roaring_array.h"
 
 namespace oceanbase

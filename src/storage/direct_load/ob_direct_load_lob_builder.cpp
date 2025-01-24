@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_lob_builder.h"
-#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 

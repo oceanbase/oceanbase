@@ -14,10 +14,6 @@
 
 #include "ob_expr_convert.h"
 
-#include "lib/charset/ob_charset.h"
-#include "sql/engine/expr/ob_expr_cast.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/ob_exec_context.h"
 

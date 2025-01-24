@@ -11,8 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "share/ob_define.h"
-#include "deps/oblib/src/lib/container/ob_array_iterator.h"
 #include "logservice/libobcdc/src/ob_log_utils.h"
 
 using namespace oceanbase;

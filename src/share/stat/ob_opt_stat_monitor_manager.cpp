@@ -11,22 +11,11 @@
  */
 
 #define USING_LOG_PREFIX COMMON
-#include "share/stat/ob_opt_stat_monitor_manager.h"
-#include "share/stat/ob_stat_define.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/thread/thread_mgr.h"
+#include "ob_opt_stat_monitor_manager.h"
 #include "sql/ob_sql_init.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_schema_utils.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "storage/ob_locality_manager.h"
 #include "lib/rc/ob_rc.h"
 #include "observer/ob_server.h"
-#include "pl/sys_package/ob_dbms_stats.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase

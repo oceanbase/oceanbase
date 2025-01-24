@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_purge_resolver.h"
-#include "share/ob_define.h"
 
 namespace oceanbase
 {

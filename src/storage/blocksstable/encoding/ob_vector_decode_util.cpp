@@ -11,7 +11,6 @@
  */
 
 #include "ob_vector_decode_util.h"
-
 namespace oceanbase
 {
 namespace blocksstable

@@ -9,7 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "lib/charset/ob_charset.h"
 namespace oceanbase
 {
 namespace common

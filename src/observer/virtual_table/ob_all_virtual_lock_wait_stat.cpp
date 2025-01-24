@@ -14,8 +14,6 @@
 
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "observer/ob_server_utils.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::common;

@@ -12,10 +12,9 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "share/io/io_schedule/ob_io_mclock.h"
+#include "ob_io_mclock.h"
 #include "share/io/ob_io_manager.h"
 #include "share/io/ob_io_calibration.h"
-#include "lib/time/ob_time_utility.h"
 #include "lib/restore/ob_object_device.h"
 
 using namespace oceanbase::lib;

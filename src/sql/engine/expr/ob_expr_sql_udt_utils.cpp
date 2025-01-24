@@ -12,14 +12,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_errno.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "pl/ob_pl.h"
-#include "pl/ob_pl_user_type.h"
 #include "src/pl/ob_pl_resolver.h"
-#include "lib/udt/ob_array_type.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

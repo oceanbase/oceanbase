@@ -15,7 +15,6 @@
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "share/ob_ddl_common.h"
 #include "sql/ob_sql_utils.h"
-#include "sql/parser/parse_node.h"
 #include "storage/ob_common_id_utils.h"
 
 namespace oceanbase

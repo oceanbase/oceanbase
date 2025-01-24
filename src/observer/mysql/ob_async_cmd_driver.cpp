@@ -14,11 +14,7 @@
 
 #include "ob_async_cmd_driver.h"
 
-#include "lib/profile/ob_perf_event.h"
-#include "obsm_row.h"
-#include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "observer/mysql/obmp_query.h"
-#include "observer/mysql/obmp_stmt_prexecute.h"
 
 namespace oceanbase
 {

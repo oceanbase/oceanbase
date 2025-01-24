@@ -12,17 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_tenant_sql_service.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_isql_client.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"  // for ObTenantSnapshotUtil
-#include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/ob_zone_merge_table_operator.h"
-#include "share/ob_share_util.h" // for ObShareUtils
 #include "sql/ob_sql_utils.h"
 #include "rootserver/ob_rs_job_table_operator.h"
 

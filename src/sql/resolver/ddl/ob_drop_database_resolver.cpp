@@ -14,9 +14,6 @@
 #include "sql/resolver/ddl/ob_drop_database_resolver.h"
 
 #include "sql/resolver/ddl/ob_drop_database_stmt.h"
-#include "sql/resolver/ddl/ob_database_resolver.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
 
 /**
  *  DROP DATABASE database_name

@@ -14,9 +14,8 @@
 
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
-#include "ob_log_file_buffer_pool.h"
-#include "ob_log_utils.h"
 #include "ob_log_fetch_log_rpc_result.h"
+#include "ob_log_file_buffer_pool.h"
 
 
 namespace oceanbase

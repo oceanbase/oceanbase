@@ -13,15 +13,9 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_s2adapter.h"
-#include "lib/geo/ob_geo_func_utils.h"
 #include "lib/geo/ob_geo_func_envelope.h"
-#include "lib/geo/ob_geo_utils.h"
-#include "lib/geo/ob_geo_bin.h"
-#include "lib/geo/ob_geo_ibin.h"
 #include "lib/geo/ob_geo_3d.h"
 
-#include <vector>
-#include <memory>
 namespace oceanbase {
 namespace common {
 

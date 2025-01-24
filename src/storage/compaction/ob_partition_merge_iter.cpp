@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_partition_merge_iter.h"
-#include "ob_tablet_merge_task.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "storage/access/ob_table_read_info.h"
 #include "ob_tablet_merge_ctx.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_mview_compaction_util.h"
 #include "observer/ob_inner_sql_result.h"
 

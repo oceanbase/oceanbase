@@ -11,13 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/optimizer/ob_px_resource_analyzer.h"
-#include "sql/optimizer/ob_logical_operator.h"
+#include "ob_px_resource_analyzer.h"
 #include "sql/optimizer/ob_log_exchange.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_del_upd.h"
 #include "sql/optimizer/ob_log_join_filter.h"
-#include "common/ob_smart_call.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

@@ -9,9 +9,7 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/compaction/ob_schedule_tablet_func.h"
-#include "storage/ls/ob_ls.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
-#include "storage/compaction/ob_schedule_dag_func.h"
 namespace oceanbase
 {
 using namespace storage;

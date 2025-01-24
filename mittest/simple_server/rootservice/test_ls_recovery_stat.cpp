@@ -15,19 +15,11 @@
 
 #define USING_LOG_PREFIX RS
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define  private public
 #define  protected public
 
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "rootserver/ob_ls_recovery_stat_handler.h"//
-#include "share/ob_ls_id.h"
-#include "share/unit/ob_unit_info.h"
-#include "share/ls/ob_ls_status_operator.h"
-#include "share/ls/ob_ls_i_life_manager.h"
 
 namespace oceanbase
 {

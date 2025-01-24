@@ -11,34 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "common/ob_smart_call.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "share/ob_i_tablet_scan.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "sql/ob_sql_define.h"
-#include "sql/optimizer/ob_table_location.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/ob_sql_trans_control.h"
-#include "sql/resolver/dml/ob_update_stmt.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
+#include "ob_table_location.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
-#include "sql/rewrite/ob_query_range_provider.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/engine/expr/ob_sql_expression.h"
 #include "sql/engine/expr/ob_expr_func_part_hash.h"
-#include "sql/engine/expr/ob_expr_column_conv.h"
-#include "storage/access/ob_dml_param.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/optimizer/ob_log_plan.h"
-#include "sql/engine/cmd/ob_table_executor.h"
-#include "sql/resolver/ddl/ob_alter_table_stmt.h"
-#include "sql/printer/ob_raw_expr_printer.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/ob_sql_context.h"
-#include "sql/das/ob_das_location_router.h"
-#include "sql/dblink/ob_dblink_utils.h"
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::sql;

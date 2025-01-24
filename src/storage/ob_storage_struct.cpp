@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_struct.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/ob_rpc_struct.h"
 #include "storage/tx/ob_trans_ctx_mgr.h"
-#include "storage/ob_storage_schema.h"
-#include "storage/blocksstable/ob_sstable.h"
 
 using namespace oceanbase;
 using namespace storage;

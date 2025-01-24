@@ -9,15 +9,7 @@
 // See the Mulan PubL v2 for more details.
 //
 #include "ob_xa_service.h"
-#include "ob_xa_ctx.h"
 #include "ob_trans_service.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"   // ObMySQLProxy
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/rc/ob_tenant_module_init_ctx.h"
-#include "observer/ob_srv_network_frame.h"
 
 namespace oceanbase
 {

@@ -12,31 +12,10 @@
 
 #define USING_LOG_PREFIX RS_LB
 
-#include "ob_disaster_recovery_worker.h"
 
-#include "lib/ob_define.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "share/ls/ob_ls_table_operator.h"
-#include "share/ls/ob_ls_status_operator.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_task_define.h"
-#include "share/ob_define.h"
-#include "storage/high_availability/ob_storage_ha_dag.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "observer/ob_server_struct.h"
+#include "ob_disaster_recovery_worker.h"
 #include "ob_disaster_recovery_task_table_operator.h"
-#include "rootserver/ob_disaster_recovery_task.h"
-#include "rootserver/ob_disaster_recovery_info.h"
-#include "rootserver/ob_disaster_recovery_task_mgr.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/ob_unit_manager.h"
 #include "rootserver/ob_root_service.h"
-#include "rootserver/ob_balance_info.h"
 
 namespace oceanbase
 {

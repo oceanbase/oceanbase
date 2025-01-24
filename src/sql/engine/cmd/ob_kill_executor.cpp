@@ -13,17 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/resolver/cmd/ob_kill_stmt.h"
 #include "sql/engine/cmd/ob_kill_executor.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/cmd/ob_kill_session_arg.h"
-#include "lib/net/ob_addr.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
-#include "share/ob_rpc_struct.h"
 namespace oceanbase
 {
 using namespace common;

@@ -10,14 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/utility/ob_macro_utils.h"
 #define USING_LOG_PREFIX SHARE
-#include "share/backup/ob_archive_store.h"
-#include "share/backup/ob_backup_path.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "lib/restore/ob_storage.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/utility.h"
+#include "ob_archive_store.h"
 #include "share/backup/ob_archive_path.h"
 #include "share/backup/ob_archive_checkpoint_mgr.h"
 

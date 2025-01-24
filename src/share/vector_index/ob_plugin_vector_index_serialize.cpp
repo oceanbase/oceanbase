@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_plugin_vector_index_serialize.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "storage/lob/ob_lob_manager.h"
-#include "deps/oblib/src/lib/vector/ob_vector_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "storage/access/ob_table_scan_iterator.h"
 

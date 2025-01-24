@@ -11,11 +11,8 @@
  */
 
 #include "ob_rows_info.h"
-#include "storage/ob_storage_struct.h"
 #include "storage/ob_relative_table.h"
-#include "storage/ob_storage_schema.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
-#include "ob_store_row_iterator.h"
 
 namespace oceanbase
 {

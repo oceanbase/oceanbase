@@ -13,11 +13,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/datahub/components/ob_dh_join_filter_count_row.h"
-#include "sql/engine/px/datahub/ob_dh_msg_ctx.h"
-#include "sql/engine/px/ob_dfo.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/datahub/ob_dh_msg.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/px/ob_px_scheduler.h"
 
 using namespace oceanbase::sql;

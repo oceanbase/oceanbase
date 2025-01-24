@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_mview_compaction_util.h"
-#include "ob_tablet_merge_task.h"
 #include "ob_basic_tablet_merge_ctx.h"
-#include "observer/ob_server_struct.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/session/ob_sql_session_mgr.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "observer/ob_inner_sql_result.h"

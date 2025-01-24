@@ -13,16 +13,7 @@
 #define USING_LOG_PREFIX RPC_TEST
 
 #include <gtest/gtest.h>
-#include "rpc/ob_request.h"
-#include "rpc/frame/ob_net_easy.h"
-#include "rpc/frame/ob_req_deliver.h"
-#include "rpc/obrpc/ob_rpc_handler.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
-#include "rpc/obrpc/ob_rpc_processor.h"
-#include "rpc/obrpc/ob_rpc_session_handler.h"
-#include "common/data_buffer.h"
-#include "lib/random/ob_random.h"
 
 using namespace oceanbase;
 using namespace oceanbase::rpc::frame;

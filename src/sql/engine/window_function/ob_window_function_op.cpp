@@ -12,22 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/window_function/ob_window_function_op.h"
-#include "lib/utility/utility.h"
-#include "share/object/ob_obj_cast.h"
-#include "common/row/ob_row_util.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/expr/ob_sql_expression.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_func_ceil.h"
-#include "sql/engine/expr/ob_expr_add.h"
-#include "sql/engine/expr/ob_expr_minus.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_truncate.h"
-#include "sql/engine/px/ob_px_sqc_proxy.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "sql/engine/px/datahub/components/ob_dh_range_dist_wf.h"
 
 namespace oceanbase
 {

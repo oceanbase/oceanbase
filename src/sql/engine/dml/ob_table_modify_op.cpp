@@ -12,21 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/dml/ob_table_modify_op.h"
+#include "ob_table_modify_op.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/dml/ob_table_insert_op.h"
-#include "sql/engine/dml/ob_table_update_op.h"
-#include "sql/engine/basic/ob_expr_values_op.h"
-#include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/executor/ob_task_spliter.h"
-#include "sql/das/ob_das_utils.h"
-#include "storage/ob_i_store.h"
-#include "lib/mysqlclient/ob_isql_client.h"
 #include "observer/ob_inner_sql_connection_pool.h"
-#include "lib/worker.h"
-#include "share/ob_debug_sync.h"
-#include "sql/engine/dml/ob_fk_checker.h"
 
 namespace oceanbase
 {

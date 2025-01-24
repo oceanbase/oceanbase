@@ -11,7 +11,7 @@
  */
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/direct_load/ob_direct_load_multiple_sstable.h"
+#include "ob_direct_load_multiple_sstable.h"
 #include "storage/direct_load/ob_direct_load_multiple_datum_range.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_index_block_meta_scanner.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_rowkey_scanner.h"

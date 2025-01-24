@@ -12,14 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/cmd/ob_show_resolver.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_priv_type.h"
-#include "share/schema/ob_schema_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_context.h"
-#include "sql/parser/ob_parser.h"
-#include "lib/charset/ob_charset.h"
-#include "observer/ob_server_struct.h"
 #include "sql/resolver/dcl/ob_grant_resolver.h"
 #include "observer/virtual_table/ob_tenant_all_tables.h"
 #include "storage/tx/ob_xa_define.h"

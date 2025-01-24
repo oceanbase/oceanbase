@@ -18,7 +18,6 @@
 #include "sql/engine/basic/ob_material_op.h"
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
 #include "sql/engine/basic/ob_material_vec_op.h"
-#include "sql/engine/aggregate/ob_hash_groupby_vec_op.h"
 #include "sql/engine/basic/ob_monitoring_dump_op.h"
 
 namespace oceanbase

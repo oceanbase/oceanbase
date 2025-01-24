@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <string>
 
 #include "common/ob_timeout_ctx.h"
 

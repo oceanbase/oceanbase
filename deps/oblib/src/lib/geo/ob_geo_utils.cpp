@@ -11,37 +11,25 @@
  * This file contains implementation support for the geometry utils abstraction.
  */
 
-#include "lib/geo/ob_geo.h"
-#include "lib/geo/ob_srs_info.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include <cstdint>
 #define USING_LOG_PREFIX LIB
 
-#include "lib/geo/ob_geo_utils.h"
-#include "lib/geo/ob_geo_tree.h"
+#include "ob_geo_utils.h"
 #include "lib/geo/ob_geo_wkb_visitor.h"
 #include "lib/geo/ob_geo_wkb_size_visitor.h"
 #include "lib/geo/ob_geo_to_wkt_visitor.h"
 #include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_func_common.h"
 #include "lib/geo/ob_geo_func_envelope.h"
 #include "lib/geo/ob_geo_wkb_check_visitor.h"
 #include "lib/geo/ob_geo_normalize_visitor.h"
-#include "lib/geo/ob_geo_coordinate_range_visitor.h"
-#include "lib/geo/ob_sdo_geo_object.h"
-#include "lib/oblog/ob_log_module.h"
 #include "lib/udt/ob_udt_type.h"
 #include "lib/geo/ob_sdo_geo_func_to_wkb.h"
 #include "lib/geo/ob_wkb_byte_order_visitor.h"
-#include "lib/utility/ob_print_utils.h"
 #include "lib/geo/ob_geo_3d.h"
 #include "lib/geo/ob_geo_check_empty_visitor.h"
 #include "lib/geo/ob_geo_box_clip_visitor.h"
 #include "lib/geo/ob_geo_affine_visitor.h"
 #include "lib/geo/ob_geo_simplify_visitor.h"
 #include "lib/geo/ob_geo_grid_visitor.h"
-#include "lib/geo/ob_geo_cache.h"
 #include "lib/geo/ob_geo_cache_polygon.h"
 #include "lib/geo/ob_geo_cache_point.h"
 #include "lib/geo/ob_geo_cache_linestring.h"

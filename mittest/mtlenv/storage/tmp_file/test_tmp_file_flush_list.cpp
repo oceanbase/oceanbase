@@ -11,12 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
-#include <unordered_map>
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "lib/random/ob_random.h"
-#include "storage/tmp_file/ob_tmp_file_global.h"
-#include "storage/tmp_file/ob_tmp_file_flush_priority_manager.h"
 
 namespace oceanbase
 {

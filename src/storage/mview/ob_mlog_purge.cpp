@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/ob_mlog_purge.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_errno.h"
 #include "share/schema/ob_mview_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/ob_mview_refresh_helper.h"

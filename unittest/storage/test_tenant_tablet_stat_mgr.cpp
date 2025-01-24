@@ -10,16 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <thread>
 
 #define USING_LOG_PREFIX STORAGE
 #define protected public
 #define private public
 
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {

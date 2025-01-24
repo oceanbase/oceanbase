@@ -13,11 +13,6 @@
 #include "ob_backup_io_adapter.h"
 #include "share/ob_device_manager.h"
 #include "lib/restore/ob_object_device.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/ob_errno.h"
-#include "share/config/ob_server_config.h"
 #include "share/io/ob_io_manager.h"
  
 namespace oceanbase

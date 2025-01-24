@@ -9,22 +9,10 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "lib/ob_errno.h"
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
 #define protected public
-#include "share/deadlock/ob_deadlock_key_wrapper.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
-#include "share/deadlock/test/test_key.h"
-#include <string>
-#include <iostream>
-#include <thread>
-#include <chrono>
-#include <algorithm>
-#include "share/deadlock/ob_lcl_scheme/ob_lcl_batch_sender_thread.h"
-#include "share/deadlock/ob_lcl_scheme/ob_lcl_message.h"
-#include "storage/tx/ob_trans_define_v4.h"
 
 namespace oceanbase {
 namespace unittest {

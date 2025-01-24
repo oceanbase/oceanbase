@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_group_execute.h"
-#include "observer/ob_req_time_service.h"
 #include "observer/table/ob_table_move_response.h"
 
 using namespace oceanbase::observer;

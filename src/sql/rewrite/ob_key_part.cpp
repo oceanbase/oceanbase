@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_REWRITE
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/rewrite/ob_key_part.h"
-#include "sql/rewrite/ob_query_range.h"
+#include "ob_key_part.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/engine/expr/ob_datum_cast.h"

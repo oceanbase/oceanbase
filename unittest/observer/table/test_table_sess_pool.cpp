@@ -10,14 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define private public  // 获取私有成员
 #define protected public  // 获取私有成员
 #include "observer/table/ob_table_session_pool.h"
-#include "lib/utility/ob_test_util.h"
-#include "share/ob_thread_pool.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "share/rc/ob_tenant_base.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

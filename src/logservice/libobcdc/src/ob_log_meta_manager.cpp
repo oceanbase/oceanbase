@@ -20,16 +20,11 @@
 #include "observer/mysql/obsm_utils.h"            // ObSMUtils
 #include "rpc/obmysql/ob_mysql_global.h"          // obmysql
 #include "share/schema/ob_table_schema.h"         // ObTableSchema, ObSimpleTableSchemaV2
-#include "share/schema/ob_column_schema.h"        // ObColumnSchemaV2
-#include "logservice/data_dictionary/ob_data_dict_struct.h"
 #include "lib/udt/ob_array_utils.h"               // ObArrayUtil
 
 #include "ob_log_schema_getter.h"                 // ObLogSchemaGuard, DBSchemaInfo, TenantSchemaInfo
-#include "ob_log_utils.h"                         // print_mysql_type, ob_cdc_malloc
-#include "ob_obj2str_helper.h"                    // ObObj2strHelper
 #include "ob_log_adapt_string.h"                  // ObLogAdaptString
 #include "ob_log_config.h"                        // TCONF
-#include "ob_log_instance.h"                      // TCTX
 #include "ob_log_schema_cache_info.h"             // TableSchemaInfo
 #include "ob_log_timezone_info_getter.h"          // IObCDCTimeZoneInfoGetter
 

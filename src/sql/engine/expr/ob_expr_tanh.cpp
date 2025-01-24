@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_tanh.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "objit/common/ob_item_type.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
-#include <math.h>
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

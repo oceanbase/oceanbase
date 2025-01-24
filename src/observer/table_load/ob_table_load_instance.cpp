@@ -14,16 +14,9 @@
 
 #include "observer/table_load/ob_table_load_instance.h"
 #include "observer/table_load/ob_table_load_coordinator.h"
-#include "observer/table_load/ob_table_load_exec_ctx.h"
 #include "observer/table_load/ob_table_load_index_long_wait.h"
 #include "observer/table_load/ob_table_load_redef_table.h"
-#include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
-#include "share/ls/ob_ls_operator.h"
-#include "share/table/ob_table_load_define.h"
-#include "sql/engine/ob_exec_context.h"
-#include "storage/ob_common_id_utils.h"
-#include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 
 namespace oceanbase

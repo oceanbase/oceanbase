@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_general_table_compactor.h"
-#include "observer/table_load/ob_table_load_service.h"
-#include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task.h"

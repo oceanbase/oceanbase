@@ -11,15 +11,6 @@
  */
 #define USING_LOG_PREFIX SHARE
 #include "ob_storage_io_usage_proxy.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_errno.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_schema_utils.h"
 #include "share/ob_server_struct.h"
 
 

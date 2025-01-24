@@ -17,8 +17,6 @@
 #include <gmock/gmock.h>
 #define private public
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
 #include "share/backup/ob_backup_tablet_reorganize_helper.h"
 

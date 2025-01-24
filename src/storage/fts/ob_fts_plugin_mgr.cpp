@@ -12,9 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE_FTS
 
+#include "ob_fts_plugin_mgr.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_force_print_log.h"
-#include "storage/fts/ob_fts_plugin_mgr.h"
 #include "storage/fts/ob_fts_stop_word.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
 

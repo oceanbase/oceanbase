@@ -14,16 +14,14 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include "ob_log_instance.h"
 
+#include "ob_log_instance.h"
 #include "lib/oblog/ob_log_module.h"        // LOG_ERROR
-#include "lib/file/file_directory_utils.h"  // FileDirectoryUtils
 #include "share/io/ob_io_manager.h"         // ObIOManager
 #include "share/ob_device_manager.h"        // ObDeviceManager
 #include "share/ob_version.h"               // build_version
 #include "share/system_variable/ob_system_variable.h" // ObPreProcessSysVars
 #include "share/ob_time_utility2.h"         // ObTimeUtility2
-#include "share/ob_get_compat_mode.h"
 #include "sql/ob_sql_init.h"                // init_sql_factories
 #include "observer/omt/ob_tenant_timezone_mgr.h"  // OTTZ_MGR
 #include "common/ob_clock_generator.h"
@@ -36,14 +34,11 @@
 #include "ob_log_sql_server_provider.h"   // ObLogSQLServerProvider (for cluster sync mode)
 #include "ob_cdc_tenant_sql_server_provider.h"  // ObCDCTenantSQLServerProvider(for cluster sync mode)
 #include "ob_cdc_tenant_endpoint_provider.h"    // ObCDCEndpointProvider (for tenant sync mode)
-#include "ob_log_schema_getter.h"         // ObLogSchemaGetter
 #include "ob_log_timezone_info_getter.h"  // ObCDCTimeZoneInfoGetter
 #include "ob_log_committer.h"             // ObLogCommitter
 #include "ob_log_formatter.h"             // ObLogFormatter
 #include "ob_cdc_lob_data_merger.h"       // ObCDCLobDataMerger
-#include "ob_log_batch_buffer.h"          // ObLogBatchBuffer
 #include "ob_log_storager.h"              // ObLogStorager
-#include "ob_log_reader.h"                // ObLogReader
 #include "ob_log_sequencer1.h"            // ObLogSequencer
 #include "ob_log_part_trans_parser.h"     // ObLogPartTransParser
 #include "ob_log_dml_parser.h"            // ObLogDmlParser

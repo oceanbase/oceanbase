@@ -12,37 +12,16 @@
 
 #define USING_LOG_PREFIX SQL_SESSION
 
-#include "sql/session/ob_basic_session_info.h"
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/timezone/ob_oracle_format_models.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "common/ob_smart_call.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_sys_variable_mgr.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/plan_cache/ob_plan_cache_util.h"
+#include "ob_basic_session_info.h"
 #include "sql/plan_cache/ob_prepare_stmt_struct.h"
-#include "sql/ob_sql_trans_util.h"
-#include "observer/ob_server_struct.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "storage/tx/wrs/ob_weak_read_util.h"       //ObWeakReadUtil
-#include "storage/tx/ob_trans_service.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "share/ob_label_security.h"
 #include "share/system_variable/ob_nls_system_variable.h"
-#include "share/rc/ob_tenant_base.h"
-#include "pl/sys_package/ob_dbms_sql.h"
 #include "pl/ob_pl_package_state.h"
 #ifdef OB_BUILD_ORACLE_PL
-#include "pl/opaque/ob_pl_json_type.h"
 #endif
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
-#include "share/ob_compatibility_control.h"
-#include "sql/ob_optimizer_trace_impl.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 
 using namespace oceanbase::common;

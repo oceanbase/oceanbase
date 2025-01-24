@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "threads.h"
-#include "common/ob_common_utility.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/ob_hang_fatal_error.h"
-#include "lib/thread/protected_stack_allocator.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/worker.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"

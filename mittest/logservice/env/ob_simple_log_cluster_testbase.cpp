@@ -11,26 +11,20 @@
  */
 
 #include "ob_simple_log_cluster_testbase.h"
-#include "common/ob_member_list.h"
 #include "ob_mittest_utils.h"
 #include "lib/alloc/memory_dump.h"
-#include "lib/alloc/alloc_func.cpp"
-#include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/allocator/ob_libeasy_mem_pool.h"
-#include "lib/hash/ob_hashset.h"
 #define private public
 #define protected public
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "share/object_storage/ob_device_config_mgr.h"
 #include "share/backup/ob_backup_io_adapter.h"
-#include "share/io/ob_io_define.h"
 #include "src/share/ob_device_manager.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "log/ob_shared_log_utils.h"
 #endif
 #undef protected
 #undef private
-#include <algorithm>
 #include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
 
 namespace oceanbase

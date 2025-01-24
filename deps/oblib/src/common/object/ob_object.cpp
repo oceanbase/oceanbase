@@ -10,25 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "ob_object.h"
 #include <string.h>
-#include <algorithm>
-#include <math.h>  // for fabs, fabsf
 #define USING_LOG_PREFIX COMMON
-#include "common/object/ob_object.h"
-#include "lib/utility/serialization.h"
-#include "lib/utility/utility.h"
-#include "lib/checksum/ob_crc64.h"
 #include "common/object/ob_obj_compare.h"
-#include "common/ob_action_flag.h"
-#include "lib/hash_func/murmur_hash.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/number/ob_number_v2.h"
-#include "lib/utility/ob_hang_fatal_error.h"
 #include "lib/string/ob_sql_string.h"
-#include "lib/worker.h"
 #include "common/object/ob_obj_funcs.h"
-#include "lib/charset/ob_charset.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

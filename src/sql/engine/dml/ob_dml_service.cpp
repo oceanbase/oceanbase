@@ -12,25 +12,18 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/das/ob_data_access_service.h"
-#include "sql/engine/dml/ob_table_modify_op.h"
 #include "sql/das/ob_das_insert_op.h"
 #include "sql/das/ob_das_delete_op.h"
 #include "sql/das/ob_das_update_op.h"
 #include "sql/das/ob_das_lock_op.h"
-#include "sql/das/ob_das_def_reg.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "sql/engine/dml/ob_err_log_service.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "storage/tx/ob_trans_service.h"
 #include "pl/ob_pl.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/engine/dml/ob_fk_checker.h"
-#include "storage/lob/ob_lob_manager.h"
+
 namespace oceanbase
 {
 using namespace common;

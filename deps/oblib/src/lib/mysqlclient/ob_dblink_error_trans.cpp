@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
-#include "share/ob_errno.h"
 
 int __attribute__((weak)) get_oracle_errno(int index)
 {

@@ -16,7 +16,6 @@
 #include "ob_ls_prepare_migration.h"
 #include "ob_ls_complete_migration.h"
 #include "ob_storage_ha_service.h"
-#include "share/ls/ob_ls_table_operator.h"
 #include "share/ob_io_device_helper.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "ob_rebuild_service.h"

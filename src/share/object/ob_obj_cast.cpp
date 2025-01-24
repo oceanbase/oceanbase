@@ -12,42 +12,21 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "share/object/ob_obj_cast.h"
-#include <math.h>
-#include <float.h>
-#include "lib/charset/ob_dtoa.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "rpc/obmysql/ob_mysql_util.h"
-#include "lib/worker.h"
+#include "ob_obj_cast.h"
 #include "share/object/ob_obj_cast_util.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/ob_json_access_utils.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "observer/omt/ob_tenant_srs.h"
-#include "lib/json_type/ob_json_tree.h"
-#include "lib/json_type/ob_json_bin.h"
-#include "lib/json_type/ob_json_base.h"
-#include "lib/json_type/ob_json_parse.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
-#include "share/ob_lob_access_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/expr/ob_array_cast.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_type_to_str.h"
-#include "sql/engine/ob_exec_context.h"
-#include "lib/charset/ob_charset.h"
 #include "lib/geo/ob_geometry_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "src/storage/lob/ob_lob_manager.h"
-#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_sdo_geometry.h"
 #endif
-#include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_parser.h"

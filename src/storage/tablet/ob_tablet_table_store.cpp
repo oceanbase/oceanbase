@@ -13,20 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 #define PRINT_TS(x) (ObPrintTableStore(x))
 
-#include "storage/compaction/ob_partition_merge_policy.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_table_store.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/tablet/ob_tablet_table_store_iterator.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/memtable/ob_memtable.h"
-#include "share/scn.h"
-#include "lib/container/ob_array_iterator.h"
-#include "storage/meta_mem/ob_tablet_pointer.h"
+#include "ob_tablet_table_store.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
-#include "storage/high_availability/ob_tablet_ha_status.h"
 #include "storage/ddl/ob_direct_load_struct.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/compaction/ob_schedule_dag_func.h"

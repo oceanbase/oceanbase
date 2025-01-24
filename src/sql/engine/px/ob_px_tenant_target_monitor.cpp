@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 #include "ob_px_tenant_target_monitor.h"
-#include "lib/oblog/ob_log_module.h"
-#include "ob_px_rpc_processor.h"
 #include "share/ob_rpc_share.h"
-#include "share/schema/ob_schema_utils.h"
-#include "storage/tx/ob_trans_service.h"
 #include "logservice/ob_log_service.h"
-#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {

@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL
 
 #include "ob_end_trans_callback.h"
-#include "lib/ob_name_id_def.h"
-#include "lib/profile/ob_perf_event.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 using namespace oceanbase::transaction;

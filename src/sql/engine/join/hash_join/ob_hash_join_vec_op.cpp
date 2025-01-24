@@ -14,14 +14,8 @@
 
 #include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "share/diagnosis/ob_sql_monitor_statname.h"
 #include "sql/engine/join/ob_join_filter_op.h"
-#include "sql/engine/join/ob_join_filter_partition_splitter.h"
 
 namespace oceanbase
 {

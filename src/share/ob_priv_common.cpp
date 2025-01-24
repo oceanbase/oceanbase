@@ -14,8 +14,6 @@
 
 #include "share/ob_priv_common.h"
 #include "ob_define.h"
-#include "lib/charset/ob_charset.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {

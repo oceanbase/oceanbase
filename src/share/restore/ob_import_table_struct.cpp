@@ -11,9 +11,7 @@
  */
 #define USING_LOG_PREFIX SHARE
 #include "ob_import_table_struct.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/restore/ob_import_util.h"
-//#include "share/schema/ob_column_schema.h"
 
 using namespace oceanbase;
 using namespace share;

@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_object_manager.h"
-#include "ob_block_manager.h"
-#include "share/ob_io_device_helper.h"
-#include "storage/meta_store/ob_tenant_seq_generator.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"

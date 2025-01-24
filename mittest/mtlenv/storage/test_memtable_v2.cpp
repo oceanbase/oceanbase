@@ -17,13 +17,9 @@
 #define private public
 #define protected public
 #include "storage/memtable/ob_memtable.h"
-#include "share/rc/ob_tenant_base.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/tx/ob_mock_tx_ctx.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/init_basic_struct.h"
-#include "share/ob_master_key_getter.h"
 
 namespace oceanbase
 {

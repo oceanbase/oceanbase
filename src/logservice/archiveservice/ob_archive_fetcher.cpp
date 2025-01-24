@@ -10,37 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdint>
-#include "lib/oblog/ob_log_module.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "logservice/palf/lsn.h"
 #include "ob_archive_fetcher.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/thread/ob_thread_name.h"        // lib::set_thread_name
 #include "logservice/ob_log_service.h"        // ObLogService
-#include "logservice/palf/log_group_entry.h"  // LogGroupEntry
-#include "logservice/palf_handle_guard.h"     // PalfHandleGuard
 #include "ob_archive_allocator.h"             // ObArchiveAllocator
-#include "ob_archive_define.h"                // ArchiveWorkStation
 #include "ob_archive_sender.h"                // ObArchiveSender
 #include "ob_ls_mgr.h"                        // ObArchiveLSMgr
-#include "ob_archive_task.h"                  // ObArchive.*Task
-#include "ob_ls_task.h"                       // ObLSArchiveTask
-#include "ob_archive_round_mgr.h"             // ObArchiveRoundMgr
-#include "ob_archive_util.h"
 #include "ob_archive_sequencer.h"             // ObArchivesSequencer
-#include "objit/common/ob_item_type.h"        // print
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
-#include "share/ob_debug_sync.h"              // DEBUG_SYNC
-#include "share/ob_debug_sync_point.h"        // LOG_ARCHIVE_PUSH_LOG
-#include "share/ob_errno.h"
-#include "share/ob_ls_id.h"
-#include "share/ob_tenant_info_proxy.h"       // ObAllTenantInfo
-#include "share/scn.h"
 #include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase

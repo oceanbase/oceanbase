@@ -14,8 +14,6 @@
 
 #include "storage/direct_load/ob_direct_load_partition_del_lob_task.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
-#include "storage/direct_load/ob_direct_load_lob_meta_row_iter.h"
-#include "storage/lob/ob_lob_meta.h"
 
 namespace oceanbase
 {

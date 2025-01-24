@@ -8,10 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/column_store/ob_co_merge_ctx.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
+#include "ob_co_merge_ctx.h"
 #include "storage/column_store/ob_co_merge_dag.h"
-#include "storage/tablet/ob_tablet.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_refresh_tablet_util.h"
 #include "storage/compaction/ob_merge_ctx_func.h"

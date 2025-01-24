@@ -14,7 +14,6 @@
 
 #include "ob_working_set_mgr.h"
 
-#include "ob_kvcache_inst_map.h"
 
 namespace oceanbase
 {

@@ -12,16 +12,10 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_unit_table_operator.h"
 
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_unit_getter.h"
-#include "observer/ob_server_struct.h"
+#include "ob_unit_table_operator.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "common/ob_timeout_ctx.h"
-#include "rootserver/ob_root_utils.h"
+#include "src/share/ob_common_rpc_proxy.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // ObTenantSnapshotUtil
 
 namespace oceanbase

@@ -15,15 +15,8 @@
 #include "ob_dbms_sched_job_utils.h"
 #include "ob_dbms_sched_job_executor.h"
 
-#include "lib/oblog/ob_log.h"
-#include "lib/mysqlclient/ob_isql_connection.h"
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
-#include "share/schema/ob_schema_getter_guard.h"
 
 #include "observer/ob_inner_sql_connection_pool.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
 
 namespace oceanbase

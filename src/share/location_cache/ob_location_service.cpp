@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX SHARE_LOCATION
 
 #include "share/location_cache/ob_location_service.h"
-#include "share/config/ob_server_config.h" // GCONF
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
-#include "observer/ob_server_struct.h" // GCTX
-#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 #include "share/ls/ob_ls_status_operator.h" // ObLSStatus
 #include "share/ob_all_server_tracer.h"
 

@@ -13,28 +13,10 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_pointer.h"
-#include "storage/multi_data_source/mds_table_mgr.h"
-#include "lib/function/ob_function.h"
-#include "share/rc/ob_tenant_module_init_ctx.h"
-#include "share/leak_checker/obj_leak_checker.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_meta.h"
-#include "storage/tablet/ob_tablet_memtable_mgr.h"
-#include "storage/tablet/ob_tablet_multi_source_data.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
-#include "storage/tx_table/ob_tx_data_memtable.h"
-#include "storage/tx_table/ob_tx_ctx_memtable.h"
+#include "ob_tenant_meta_mem_mgr.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/memtable/mvcc/ob_query_engine.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
-#include "share/ob_thread_define.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
-#include "storage/ob_disk_usage_reporter.h"
 
 namespace oceanbase
 {

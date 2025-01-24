@@ -13,17 +13,8 @@
 #define USING_LOG_PREFIX  SQL_ENG
 
 #include "sql/engine/expr/ob_expr_oracle_to_char.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/timezone/ob_oracle_format_models.h"
-#include "lib/ob_name_def.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/number/ob_number_v2.h"
-#include "lib/charset/ob_dtoa.h"
-#include "ob_expr_util.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_number_format_models.h"
-#include "sql/engine/expr/ob_expr_extra_info_factory.h"
 
 namespace oceanbase
 {

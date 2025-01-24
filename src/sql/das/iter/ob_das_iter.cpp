@@ -12,7 +12,7 @@
 
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/iter/ob_das_iter.h"
+#include "ob_das_iter.h"
 #include "sql/das/iter/ob_das_doc_id_merge_iter.h"
 #include "sql/das/iter/ob_das_vid_merge_iter.h"
 #include "src/sql/engine/ob_exec_context.h"

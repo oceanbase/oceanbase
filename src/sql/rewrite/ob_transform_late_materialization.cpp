@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_late_materialization.h"
-#include "sql/rewrite/ob_transform_utils.h"
-#include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_sort.h"
 #include "sql/optimizer/ob_log_join.h"

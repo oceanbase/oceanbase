@@ -13,8 +13,6 @@
 #include "storage/high_availability/ob_cs_replica_migration.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "share/ob_debug_sync_point.h"
 
 namespace oceanbase
 {

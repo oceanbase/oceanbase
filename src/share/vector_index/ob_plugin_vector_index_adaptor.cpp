@@ -13,17 +13,9 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_plugin_vector_index_adaptor.h"
-#include "ob_plugin_vector_index_serialize.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "share/schema/ob_table_dml_param.h"
 #include "storage/access/ob_table_scan_iterator.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/das/ob_das_dml_vec_iter.h"
-#include "lib/vector/ob_vector_util.h"
-#include "lib/random/ob_random.h"
-#include "lib/roaringbitmap/ob_roaringbitmap.h"
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 
 namespace oceanbase

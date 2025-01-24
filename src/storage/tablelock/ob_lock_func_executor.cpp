@@ -13,18 +13,7 @@
 #define USING_LOG_PREFIX TABLELOCK
 #include "storage/tablelock/ob_lock_func_executor.h"
 
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "lib/alloc/alloc_assist.h"
-#include "observer/ob_inner_sql_connection.h"
-#include "share/ob_table_access_helper.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/ob_end_trans_callback.h"
-#include "sql/ob_sql_trans_control.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "storage/ob_common_id_utils.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_table_lock_live_detector.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"

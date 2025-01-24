@@ -15,22 +15,11 @@
 
 #include "ob_column_oriented_sstable.h"
 #include "ob_co_sstable_row_getter.h"
-#include "ob_co_sstable_row_scanner.h"
 #include "ob_co_sstable_row_multi_getter.h"
 #include "ob_co_sstable_row_multi_scanner.h"
-#include "ob_cg_scanner.h"
-#include "ob_cg_tile_scanner.h"
 #include "ob_cg_aggregated_scanner.h"
 #include "ob_cg_group_by_scanner.h"
 #include "ob_virtual_cg_scanner.h"
-#include "storage/ob_storage_struct.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "common/ob_tablet_id.h"
-#include "share/schema/ob_table_schema.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/access/ob_sstable_row_multi_scanner.h"
-#include "storage/blocksstable/index_block/ob_ddl_index_block_row_iterator.h"
-#include "storage/tablet/ob_tablet_table_store.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

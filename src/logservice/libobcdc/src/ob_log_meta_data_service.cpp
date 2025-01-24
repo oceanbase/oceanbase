@@ -9,7 +9,6 @@
 // See the Mulan PubL v2 for more details.
 
 #define USING_LOG_PREFIX OBLOG
-#include "lib/utility/ob_macro_utils.h"  // RETRY_FUNC
 #include "ob_log_meta_data_service.h"
 #include "ob_log_instance.h"
 #include "ob_log_fetching_mode.h"

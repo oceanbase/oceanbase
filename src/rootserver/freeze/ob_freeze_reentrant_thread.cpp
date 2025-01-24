@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX RS_COMPACTION
 
 #include "rootserver/freeze/ob_freeze_reentrant_thread.h"
-#include "share/ob_service_epoch_proxy.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "logservice/ob_log_handler.h"
 
 namespace oceanbase
 {

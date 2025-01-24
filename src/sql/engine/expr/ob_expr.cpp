@@ -13,17 +13,8 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr.h"
-#include "share/vector/ob_fixed_length_vector.h"
-#include "share/vector/ob_continuous_vector.h"
-#include "share/vector/ob_uniform_vector.h"
-#include "share/vector/ob_discrete_vector.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/engine/expr/ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 
 

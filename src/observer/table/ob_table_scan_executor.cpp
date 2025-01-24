@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_scan_executor.h"
-#include "ob_table_context.h"
 #include "sql/das/ob_das_utils.h"
 #include "ob_table_global_index_lookup_executor.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"

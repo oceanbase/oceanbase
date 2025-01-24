@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
 #include "sql/resolver/mv/ob_mv_checker.h"
 #include "sql/optimizer/ob_optimizer_util.h"

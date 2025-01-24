@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX PL_CACHE
 #define LONG_COMPILE_TIME 10000000
-#include "ob_pl_cache.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/rc/ob_tenant_base.h"     //MTL
+#include "ob_pl_cache.h"  //MTL
 #include "pl/ob_pl_stmt.h"
 namespace oceanbase
 {

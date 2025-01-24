@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/tablet/ob_tablet_table_store_iterator.h"
+#include "ob_tablet_table_store_iterator.h"
 #include "storage/tablet/ob_tablet_table_store.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 
 namespace oceanbase
 {

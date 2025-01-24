@@ -10,14 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_occam_time_guard.h"
 #include "election_acceptor.h"
-#include "common/ob_clock_generator.h"
 #include "election_impl.h"
-#include "lib/net/ob_addr.h"
-#include "logservice/palf/election/interface/election_priority.h"
-#include "logservice/palf/election/utils/election_common_define.h"
-#include "logservice/palf/election/utils/election_event_recorder.h"
 
 namespace oceanbase
 {

@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_compaction_memory_pool.h"
-#include "lib/oblog/ob_log_module.h"
 #include "share/ob_force_print_log.h"
 #include "share/ob_thread_mgr.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/compaction/ob_compaction_memory_context.h"
 
 using namespace oceanbase;

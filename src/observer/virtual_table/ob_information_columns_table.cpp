@@ -12,18 +12,9 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/virtual_table/ob_information_columns_table.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "observer/virtual_table/ob_table_columns.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_lob_access_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/resolver/dml/ob_select_resolver.h"
+#include "src/sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/ob_sql.h"
 
 namespace oceanbase

@@ -13,25 +13,11 @@
 #define USING_LOG_PREFIX PL
 
 #include "core/jit_context.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/IR/GlobalVariable.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/Support/TargetSelect.h"
-
-#include "share/ob_define.h"
 #include "objit/ob_llvm_helper.h"
-#include "objit/ob_llvm_di_helper.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/container/ob_se_array.h"
-#include "share/rc/ob_tenant_base.h"
-#include "lib/alloc/malloc_hook.h"
-#include "pl/ob_pl_allocator.h"
+
+#include "src/pl/ob_pl.h"
 
 using namespace llvm;
 

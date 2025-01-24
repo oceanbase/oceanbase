@@ -12,23 +12,10 @@
 
 #define USING_LOG_PREFIX WR
 
-#include "deps/oblib/src/lib/thread/thread_mgr.h"
-#include "lib/oblog/ob_log.h"
 #include "observer/ob_srv_network_frame.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "share/wr/ob_wr_task.h"
-#include "share/ob_thread_mgr.h"
-#include "share/ob_errno.h"
-#include "deps/oblib/src/lib/mysqlclient/ob_mysql_proxy.h"
-#include "deps/oblib/src/lib/mysqlclient/ob_mysql_result.h"
-#include "observer/ob_server_struct.h"
-#include "lib/string/ob_sql_string.h"  // ObSqlString
-#include "share/rc/ob_tenant_base.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/wr/ob_wr_snapshot_rpc_processor.h"
 #include "share/wr/ob_wr_stat_guard.h"
 #include "share/location_cache/ob_location_service.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "ob_wr_collector.h"
 
 using namespace oceanbase::common::sqlclient;

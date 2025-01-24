@@ -13,13 +13,6 @@
 #define USING_LOG_PREFIX LIB_XML2
 
 #include "lib/xml/ob_xml.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/ob_define.h"
-#include "common/object/ob_object.h"
-#include "libxslt/transform.h"
 #include "libxslt/xsltutils.h"
 
 namespace oceanbase

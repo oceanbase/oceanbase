@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/virtual_table/ob_tenant_virtual_concurrent_limit_sql.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "common/row/ob_row.h"
-#include "lib/utility/utility.h"
 #include "common/ob_smart_call.h"
 namespace oceanbase
 {

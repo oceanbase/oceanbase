@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_ls_execute_processor.h"
-#include "ob_table_rpc_processor_util.h"
-#include "share/table/ob_table.h"
 #include "ob_table_query_and_mutate_helper.h"
-#include "ob_table_end_trans_cb.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::table;

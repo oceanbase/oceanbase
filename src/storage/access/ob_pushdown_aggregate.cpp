@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_pushdown_aggregate.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/aggregate/ob_aggregate_util.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/blocksstable/ob_micro_block_reader.h"
-#include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
-#include "storage/lob/ob_lob_manager.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 

@@ -12,16 +12,9 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "share/schema/ob_column_schema.h"
-#include "share/cache/ob_kvcache_pointer_swizzle.h"
 #include "ob_index_block_row_scanner.h"
-#include "ob_index_block_row_struct.h"
 #include "storage/access/ob_rows_info.h"
-#include "storage/ddl/ob_tablet_ddl_kv.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
-#include "storage/blocksstable/index_block/ob_ddl_index_block_row_iterator.h"
+#include "src/storage/tx_storage/ob_ls_map.h"
 
 namespace oceanbase
 {

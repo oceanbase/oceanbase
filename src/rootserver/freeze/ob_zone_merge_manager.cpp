@@ -12,22 +12,12 @@
 
 #define USING_LOG_PREFIX RS_COMPACTION
 
-#include "rootserver/freeze/ob_zone_merge_manager.h"
 
-#include "share/config/ob_server_config.h"
-#include "share/ob_freeze_info_proxy.h"
+#include "ob_zone_merge_manager.h"
 #include "share/ob_zone_merge_table_operator.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_cluster_version.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_service_epoch_proxy.h"
-#include "lib/container/ob_array_wrap.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/freeze/ob_major_freeze_util.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_compaction_util.h"
 #include "share/ls/ob_ls_table_operator.h"

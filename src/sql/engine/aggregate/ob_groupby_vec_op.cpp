@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include "ob_groupby_vec_op.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/aggregate/ob_groupby_op.h"
-#include "sql/engine/basic/ob_compact_row.h"
 
 namespace oceanbase
 {

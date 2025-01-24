@@ -11,19 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include <algorithm>
 #include "observer/virtual_table/ob_tenant_all_tables.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_schema_printer.h"
 #include "share/ob_autoincrement_service.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/ob_server_struct.h"
-#include "common/ob_store_format.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "deps/oblib/src/lib/mysqlclient/ob_mysql_result.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

@@ -11,10 +11,9 @@
  */
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "ob_partition_merge_fuser.h"
 
+#include "ob_partition_merge_fuser.h"
 #include "ob_tablet_merge_ctx.h"
-#include "sql/ob_sql_utils.h"
 #include "storage/column_store/ob_column_oriented_merge_fuser.h"
 
 namespace oceanbase

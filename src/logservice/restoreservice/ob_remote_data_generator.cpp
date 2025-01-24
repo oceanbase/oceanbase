@@ -11,21 +11,11 @@
  */
 
 #define USING_LOG_PREFIX CLOG
-#include "lib/ob_errno.h"
-#include "share/ob_errno.h"
 #include "ob_remote_data_generator.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "logservice/ob_log_service.h"                    // ObLogService
-#include "logservice/palf/log_group_entry.h"              // LogGroupEntry
 #include "logservice/archiveservice/ob_archive_file_utils.h"     // ObArchiveFileUtils
 #include "share/backup/ob_archive_path.h"           // ObArchivePathUtil
-#include "logservice/archiveservice/ob_archive_define.h"         // ObArchiveFileHeader
-#include "logservice/archiveservice/ob_archive_util.h"       // ObArchiveFileUtils
-#include "share/backup/ob_backup_path.h"                // ObBackupPath
-#include "ob_log_restore_rpc.h"                           // proxy
-#include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_archive_path.h"           // ObArchivePathUtil
-#include "src/share/backup/ob_archive_store.h"      // ObArchiveStore
 
 namespace oceanbase
 {

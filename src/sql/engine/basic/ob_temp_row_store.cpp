@@ -13,12 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_temp_row_store.h"
-#include "sql/engine/basic/ob_temp_block_store.h"
-#include "share/vector/ob_fixed_length_vector.h"
-#include "share/vector/ob_continuous_vector.h"
-#include "share/vector/ob_uniform_vector.h"
-#include "share/vector/ob_discrete_vector.h"
-#include "share/ob_define.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase

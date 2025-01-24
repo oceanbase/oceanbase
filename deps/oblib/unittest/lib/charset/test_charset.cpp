@@ -10,10 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <pthread.h>
-#include <stdio.h>
-#include <time.h>
-#include <sys/time.h>
 #include <codecvt>
 #include "gtest/gtest.h"
 
@@ -21,14 +17,7 @@
 #define private public
 
 #include "lib/allocator/page_arena.h"
-#include "lib/charset/ob_charset.h"
-#include "lib/charset/ob_template_helper.h"
-#include "lib/string/ob_string.h"
-#include "lib/utility/ob_print_utils.h"
-#include "unicode_map.h"
 #include "common/data_buffer.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/charset/mb_wc.h"
 #include "lib/charset/ob_charset_string_helper.h"
 #define USING_LOG_PREFIX SQL
 

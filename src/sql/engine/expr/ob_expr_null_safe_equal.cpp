@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_null_safe_equal.h"
-#include "common/object/ob_obj_compare.h"
-#include "sql/engine/expr/ob_expr_equal.h"
 #include "sql/session/ob_sql_session_info.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 

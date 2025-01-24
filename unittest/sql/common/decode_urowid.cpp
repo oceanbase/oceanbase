@@ -11,19 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "lib/rowid/ob_urowid.h"
-#include "lib/container/ob_array.h"
-#include "lib/number/ob_number_v2.h"
-#include "lib/timezone/ob_timezone_info.h"
-#include "lib/encode/ob_base64_encode.h"
 #include "common/object/ob_object.h"
-#include "share/ob_errno.h"
 
 #include <gtest/gtest.h>
-#include <cstdlib>
-#include <iostream>
 #include <string>
-#include <cstring>
 
 using std::cout;
 using std::endl;

@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "ob_plan_cache_callback.h"
-#include "sql/plan_cache/ob_plan_cache_value.h"
-#include "sql/plan_cache/ob_plan_cache.h"
 
 using namespace oceanbase;
 using namespace oceanbase::sql;

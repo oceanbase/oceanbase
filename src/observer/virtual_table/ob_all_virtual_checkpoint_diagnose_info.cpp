@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_all_virtual_checkpoint_diagnose_info.h"
-#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 #include "src/observer/virtual_table/ob_all_virtual_checkpoint_diagnose_info.h"
 
 namespace oceanbase

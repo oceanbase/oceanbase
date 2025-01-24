@@ -15,7 +15,6 @@
 #include <gtest/gtest.h>
 #define protected public
 #define private public
-#include "lib/string/ob_sql_string.h"
 #include "storage/blocksstable/index_block/ob_index_block_aggregator.h"
 #include "ob_row_generate.h"
 

@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX OBLOG
 
 #include "ob_external_server_blacklist.h"
-#include "share/ob_define.h"
 #include "share/rc/ob_tenant_base.h"   // mtl_malloc
-#include "lib/string/ob_string.h"      // ObString
 
 namespace oceanbase
 {

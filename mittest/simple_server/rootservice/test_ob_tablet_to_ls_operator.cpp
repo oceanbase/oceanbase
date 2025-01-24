@@ -15,15 +15,9 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "share/tablet/ob_tablet_to_ls_operator.cpp"
-#include "lib/string/ob_sql_string.h" // ObSqlString
-#include "lib/mysqlclient/ob_mysql_proxy.h" // ObISqlClient, SMART_VAR
-#include "observer/ob_sql_client_decorator.h" // ObSQLClientRetryWeak
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {

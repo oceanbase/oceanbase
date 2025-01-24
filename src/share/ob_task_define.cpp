@@ -13,14 +13,8 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_task_define.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/oblog/ob_syslog_rate_limiter.h"
-#include "lib/oblog/ob_log.h"
 #include <numeric>
-#include "lib/thread/thread_pool.h"
-#include "lib/hash/ob_hashmap.h"
 #include "lib/thread/ob_thread_name.h"
-#include "share/ob_define.h"
 #include "share/config/ob_server_config.h"
 
 using namespace oceanbase::lib;

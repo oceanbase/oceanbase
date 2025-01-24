@@ -14,8 +14,8 @@
 
 #define USING_LOG_PREFIX OBLOG_PARSER
 
-#include "ob_log_part_trans_parser.h"
 
+#include "ob_log_part_trans_parser.h"
 #include "lib/allocator/page_arena.h"   // PageArena
 #include "ob_log_part_trans_task.h"     // PartTransTask
 #include "ob_log_binlog_record_pool.h"  // IObLogBRPool

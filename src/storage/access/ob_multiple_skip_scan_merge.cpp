@@ -9,7 +9,6 @@
 // See the Mulan PubL v2 for more details.
 
 #include "ob_multiple_skip_scan_merge.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {

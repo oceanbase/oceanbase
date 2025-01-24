@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_sys_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
-#include "share/schema/ob_schema_struct.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/ob_global_context_operator.h"
 

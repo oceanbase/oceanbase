@@ -11,16 +11,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/ob_define.h"
-#include "sql/engine/join/ob_join_filter_partition_splitter.h"
-#include "sql/engine/join/ob_partition_store.h"
-#include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
-#include "sql/engine/ob_sql_mem_mgr_processor.h"
-#include "sql/engine/ob_io_event_observer.h"
+#include "ob_join_filter_partition_splitter.h"
 #include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
-#include "sql/engine/join/ob_join_filter_store_row.h"
 #include "sql/engine/join/ob_join_filter_op.h"
-#include "src/sql/engine/ob_sql_mem_mgr_processor.h"
 
 
 namespace oceanbase

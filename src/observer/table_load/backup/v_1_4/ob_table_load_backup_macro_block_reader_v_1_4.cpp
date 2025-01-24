@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/backup/v_1_4/ob_table_load_backup_macro_block_reader_v_1_4.h"
-#include "observer/table_load/backup/ob_table_load_backup_file_util.h"
 
 namespace oceanbase
 {

@@ -10,41 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include <cstdint>
 #define USING_LOG_PREFIX TRANS
-#include "ob_trans_part_ctx.h"
 
-#include "common/storage/ob_sequence.h"
-#include "lib/profile/ob_perf_event.h"
-#include "lib/utility/serialization.h"
-#include "lib/container/ob_array_helper.h"
-#include "ob_trans_ctx_mgr.h"
-#include "ob_ts_mgr.h"
-#include "ob_tx_log.h"
-#include "ob_tx_msg.h"
+#include "ob_trans_part_ctx.h"
 #include "ob_tx_redo_submitter.h"
-#include "lib/worker.h"
-#include "share/rc/ob_context.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/tablelock/ob_lock_memtable.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_leak_checker.h"
-#include "storage/tx/ob_multi_data_source_printer.h"
-#include "share/ob_alive_server_tracer.h"
-#include "storage/multi_data_source/runtime_utility/mds_factory.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 #define NEED_MDS_REGISTER_DEFINE
 #include "storage/multi_data_source/compile_utility/mds_register.h"
 #undef NEED_MDS_REGISTER_DEFINE
-#include "storage/tablet/ob_tablet_transfer_tx_ctx.h"
-#include "storage/tx/ob_ctx_tx_data.h"
-#include "storage/multi_data_source/runtime_utility/mds_tlocal_info.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "logservice/ob_log_service.h"
 #include "storage/ddl/ob_ddl_inc_clog_callback.h"

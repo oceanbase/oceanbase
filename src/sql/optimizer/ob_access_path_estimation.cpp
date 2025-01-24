@@ -12,15 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_access_path_estimation.h"
-#include "sql/optimizer/ob_join_order.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "sql/optimizer/ob_storage_estimator.h"
-#include "share/stat/ob_opt_stat_manager.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "ob_opt_est_parameter_normal.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "share/stat/ob_dbms_stats_utils.h"
-#include "rootserver/ob_root_service.h"
 #include "sql/optimizer/ob_sel_estimator.h"
 namespace oceanbase {
 using namespace share::schema;

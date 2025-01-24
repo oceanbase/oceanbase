@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "lib/utility/serialization.h"
-#include "sql/executor/ob_task.h"
-#include "sql/executor/ob_job.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_des_exec_context.h"
+#include "ob_task.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/json/ob_yson.h"
 
 using namespace oceanbase::common;
 

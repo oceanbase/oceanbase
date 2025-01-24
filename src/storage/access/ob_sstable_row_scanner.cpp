@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sstable_row_scanner.h"
-#include "ob_sstable_index_filter.h"
-#include "ob_block_row_store.h"
-#include "ob_aggregate_base.h"
 #include "ob_aggregated_store.h"
 #include "ob_aggregated_store_vec.h"
-#include "storage/access/ob_store_row_iterator.h"
-#include "storage/blocksstable/ob_datum_row.h"
 #include "storage/blocksstable/ob_micro_block_row_lock_checker.h"
-#include "storage/column_store/ob_co_sstable_rows_filter.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "lib/stat/ob_diagnose_info.h"
 
 namespace oceanbase
 {

@@ -11,19 +11,9 @@
  */
 
 #define USING_LOG_PREFIX RPC_FRAME
-#include "io/easy_io.h"
-#include "lib/ob_define.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/oblog/ob_warning_buffer.h"
-#include "lib/compress/ob_compressor_pool.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/trace/ob_trace_event.h"
 #include "lib/trace/ob_trace.h"
 #include "common/data_buffer.h"
 #include "common/ob_tenant_data_version_mgr.h"
-#include "rpc/obrpc/ob_rpc_req_context.h"
 #include "rpc/obrpc/ob_rpc_stream_cond.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
 #include "rpc/obrpc/ob_rpc_stat.h"

@@ -12,9 +12,7 @@
 #define USING_LOG_PREFIX SQL
 
 #include "processor.h"
-#include "share/aggregate/iaggregate.h"
 #include "share/aggregate/single_row.h"
-#include "share/aggregate/aggr_extra.h"
 
 namespace oceanbase
 {

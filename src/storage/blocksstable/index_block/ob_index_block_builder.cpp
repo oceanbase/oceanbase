@@ -13,20 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_index_block_builder.h"
-#include "ob_index_block_macro_iterator.h"
-#include "lib/checksum/ob_crc64.h"
-#include "lib/utility/utility.h"
-#include "share/ob_encryption_util.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "share/ob_force_print_log.h"
-#include "share/schema/ob_column_schema.h"
-#include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
-#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
-#include "storage/blocksstable/ob_imacro_block_flush_callback.h"
-#include "storage/blocksstable/ob_macro_block_writer.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
-#include "storage/ob_storage_struct.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"

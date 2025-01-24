@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "ob_domain_index_builder_util.h"
-#include "src/rootserver/ob_ddl_service.h"
 #include "src/rootserver/ob_root_service.h"
 
 namespace oceanbase

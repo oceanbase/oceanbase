@@ -16,7 +16,6 @@
 #include "sql/resolver/dcl/ob_alter_role_stmt.h"
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "objit/common/ob_item_type.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

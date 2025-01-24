@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/px/p2p_datahub/ob_pushdown_topn_filter_msg.h"
+#include "ob_pushdown_topn_filter_msg.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
-#include "sql/engine/sort/ob_sort_vec_op.h"
-#include "sql/engine/basic/ob_compact_row.h"
-#include "sql/engine/sort/ob_sort_vec_op_context.h"
-#include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 

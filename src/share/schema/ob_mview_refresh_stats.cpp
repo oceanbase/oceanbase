@@ -14,8 +14,6 @@
 
 #include "share/schema/ob_mview_refresh_stats.h"
 #include "observer/ob_server_struct.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_schema_utils.h"
 
 namespace oceanbase
 {

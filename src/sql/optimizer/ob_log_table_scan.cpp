@@ -12,20 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_table_scan.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "sql/optimizer/ob_table_partition_info.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/plan_cache/ob_plan_set.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
-#include "share/schema/ob_schema_utils.h"
-#include "sql/rewrite/ob_transform_utils.h"
-#include "sql/optimizer/ob_join_order.h"
 #include "sql/optimizer/ob_log_join.h"
-#include "sql/dblink/ob_dblink_utils.h"
 #include "share/vector_index/ob_vector_index_util.h"
 
 using namespace oceanbase::sql;

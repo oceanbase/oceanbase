@@ -11,8 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include <string.h>
-#include "share/ob_define.h"
 #include "share/ob_locality_priority.h"
 
 namespace oceanbase

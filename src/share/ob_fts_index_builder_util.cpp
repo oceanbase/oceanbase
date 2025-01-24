@@ -15,11 +15,7 @@
 #include "ob_fts_index_builder_util.h"
 #include "ob_index_builder_util.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "storage/fts/ob_fts_plugin_helper.h"
-#include "storage/fts/ob_fts_plugin_mgr.h"
 
 namespace oceanbase
 {

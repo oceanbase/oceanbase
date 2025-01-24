@@ -11,14 +11,8 @@
  */
 
 #define USING_LOG_PREFIX PL
-#include "pl/sys_package/ob_dbms_application.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "pl/sys_package/ob_dbms_monitor.h"
-#include "lib/number/ob_number_v2.h"
 
 using namespace oceanbase::sql;
 

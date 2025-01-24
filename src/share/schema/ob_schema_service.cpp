@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_schema_service.h"
-#include "common/sql_mode/ob_sql_mode.h"
 #include "lib/utility/ob_fast_convert.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/serialization.h"
-#include "lib/oblog/ob_log_module.h"
-#include "ob_schema_macro_define.h"
-#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {

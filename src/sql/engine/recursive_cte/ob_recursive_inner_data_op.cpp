@@ -11,10 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "ob_recursive_union_all_op.h"
-#include "sql/engine/ob_exec_context.h"
-#include "lib/allocator/ob_malloc.h"
 #include "ob_recursive_inner_data_op.h"
+#include "ob_recursive_union_all_op.h"
 
 namespace oceanbase
 {

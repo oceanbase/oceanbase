@@ -14,22 +14,11 @@
 #include "ob_admin_utils.h"
 #include "../ob_admin_common_utils.h"
 
-#include <cstring>
-#include <cstdlib>
-#include <iostream>
-#include <iomanip>
-#include <unistd.h>
-#include "share/ob_rpc_struct.h"
 #include "share/ob_io_device_helper.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h"
-#include "logservice/palf/log_define.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/shared_storage/micro_cache/ob_ss_micro_cache_common_meta.h"
-#include "close_modules/shared_storage/storage/shared_storage/micro_cache/ob_ss_micro_cache_util.h"
 #endif
 using namespace std;
 
-#include "lib/time/ob_time_utility.h"           // ObTimeUtility
 #define ADMIN_WARN(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
 #define DEF_COMMAND(t, cmd, v...)                       \
   namespace oceanbase {                                 \

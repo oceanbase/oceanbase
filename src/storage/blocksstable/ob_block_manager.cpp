@@ -12,31 +12,14 @@
 
 #define USING_LOG_PREFIX STORAGE_BLKMGR
 
-#include "storage/blocksstable/ob_block_manager.h"
-#include "common/storage/ob_io_device.h"
-#include "lib/file/file_directory_utils.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/worker.h"
-#include "observer/ob_server_struct.h"
+#include "ob_block_manager.h"
 #include "observer/ob_server_utils.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_io_device_helper.h"
-#include "share/ob_unit_getter.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/resource_manager/ob_resource_manager.h"
-#include "storage/blocksstable/ob_macro_block_struct.h"
-#include "storage/blocksstable/ob_object_manager.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
-#include "storage/blocksstable/ob_sstable_meta.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/ob_super_block_struct.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
-#include "lib/worker.h"
 #include "storage/backup/ob_backup_device_wrapper.h"
 
 using namespace oceanbase::common;

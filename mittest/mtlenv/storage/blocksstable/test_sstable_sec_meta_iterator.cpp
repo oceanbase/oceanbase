@@ -18,9 +18,6 @@
 #define protected public
 
 #include "storage/ob_partition_range_spliter.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
-#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
-#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "ob_index_block_data_prepare.h"
 
 namespace oceanbase

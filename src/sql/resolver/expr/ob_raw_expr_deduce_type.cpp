@@ -11,26 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "lib/container/ob_iarray.h"
-#include "lib/container/ob_fixed_array.h"
-#include "share/object/ob_obj_cast.h"
 #include "share/object/ob_obj_cast_util.h"
 #include "sql/resolver/expr/ob_raw_expr_deduce_type.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/ob_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_version.h"
-#include "sql/engine/expr/ob_expr_dll_udf.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_case.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "sql/engine/expr/ob_expr_between.h"
-#include "sql/engine/expr/ob_expr_cast.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
-#include "share/ob_lob_access_utils.h"
 #include "sql/parser/ob_parser.h"
 
 namespace oceanbase

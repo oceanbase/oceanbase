@@ -12,13 +12,9 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_ls_recovery_stat_handler.h" // ObLSRecoveryStatHandler
-#include "lib/utility/ob_macro_utils.h" // OB_FAIL
-#include "lib/oblog/ob_log_module.h"  // LOG_*
-#include "lib/utility/ob_print_utils.h" // TO_STRING_KV
+#include "ob_ls_recovery_stat_handler.h"
 #include "logservice/ob_log_service.h" // ObLogService
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
-#include "rootserver/ob_ls_recovery_reportor.h" // ObLSRecoveryReportor
 #include "rootserver/ob_ls_service_helper.h"//ObLSServiceHelper
 
 namespace oceanbase

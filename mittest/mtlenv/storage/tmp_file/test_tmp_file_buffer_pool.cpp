@@ -12,10 +12,7 @@
 #include "mittest/mtlenv/storage/tmp_file/ob_tmp_file_test_helper.h"
 #include "mittest/mtlenv/storage/tmp_file/mock_ob_tmp_file.h"
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "storage/tmp_file/ob_tmp_file_write_buffer_pool.h"
-#include "lib/random/ob_random.h"
 
 
 namespace oceanbase

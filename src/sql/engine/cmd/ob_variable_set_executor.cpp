@@ -12,31 +12,11 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "share/ob_i_sql_expression.h"
-#include "share/ob_schema_status_proxy.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/object/ob_obj_cast.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/code_generator/ob_column_index_provider.h"
-#include "sql/ob_sql_trans_control.h"
-#include "sql/ob_end_trans_callback.h"
-#include "sql/printer/ob_select_stmt_printer.h"
-#include "lib/timezone/ob_oracle_format_models.h"
 #include "observer/ob_server.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "sql/engine/cmd/ob_set_names_executor.h"
-#include "sql/privilege_check/ob_privilege_check.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;

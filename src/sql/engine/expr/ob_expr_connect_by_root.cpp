@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_connect_by_root.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "share/ob_i_sql_expression.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

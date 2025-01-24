@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_bit_left_shift.h"
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

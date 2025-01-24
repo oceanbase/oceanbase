@@ -12,20 +12,13 @@
 
 #include "ob_admin_dump_backup_data_executor.h"
 
-#include "src/share/io/ob_io_manager.h"
 #include "src/share/ob_device_manager.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "lib/container/ob_array.h"
-#include "storage/blocksstable/ob_data_buffer.h"
 #include "../dumpsst/ob_admin_dumpsst_print_helper.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
 #include "rootserver/backup/ob_backup_table_list_mgr.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
 
-#include <algorithm>
-#include <functional>
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;

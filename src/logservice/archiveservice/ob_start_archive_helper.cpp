@@ -11,18 +11,7 @@
  */
 
 #include "ob_start_archive_helper.h"
-#include "lib/ob_define.h"                  // OB_INVALID_FILE_ID
-#include "lib/ob_errno.h"
-#include "ob_archive_define.h"
-#include "logservice/ob_log_handler.h"
 #include "logservice/ob_log_service.h"      // ObLogService
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/log_group_entry.h"
-#include "logservice/palf/palf_iterator.h"
-#include "logservice/palf_handle_guard.h"   // PalfHandleGuard
-#include "ob_archive_util.h"                // cal
-#include "storage/tx_storage/ob_ls_map.h"
-#include <cstdint>
 
 namespace oceanbase
 {

@@ -11,15 +11,10 @@
  */
 
 #define USING_LOG_PREFIX CLOG
-#include <getopt.h>
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "ob_admin_log_tool_executor.h"
 #include "dump/ob_admin_dump_block.h"
-#include "logservice/palf/log_group_entry.h"
 #include "cmd_args_parser.h"
 #include <fstream>
-#include <iostream>
 
 
 namespace oceanbase

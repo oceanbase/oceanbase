@@ -12,21 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/tablet/ob_tablet_binding_helper.h"
+#include "ob_tablet_binding_helper.h"
 #include "storage/tablet/ob_tablet_binding_replay_executor.h"
-#include "lib/ob_abort.h"
-#include "lib/lock/ob_tc_rwlock.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "share/ob_rpc_struct.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/multi_data_source/mds_ctx.h"
-#include "storage/tablet/ob_tablet_common.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::obrpc;

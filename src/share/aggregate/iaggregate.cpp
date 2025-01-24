@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "iaggregate.h"
-#include "share/datum/ob_datum_util.h"
 #include "share/aggregate/first_row.h"
 
 namespace oceanbase

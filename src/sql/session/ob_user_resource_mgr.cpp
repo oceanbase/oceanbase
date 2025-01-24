@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX SQL_SESSION
 
 #include "sql/session/ob_user_resource_mgr.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/thread/thread_mgr.h"
-#include "share/ob_get_compat_mode.h"
 #include "ob_sql_session_info.h"
-#include "share/ob_thread_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

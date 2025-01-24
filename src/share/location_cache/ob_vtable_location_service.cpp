@@ -12,13 +12,9 @@
 
 #define USING_LOG_PREFIX SHARE_LOCATION
 
-#include "share/location_cache/ob_vtable_location_service.h"
-#include "share/location_cache/ob_location_struct.h" // ObVTableLocationCacheKey/Value
+#include "ob_vtable_location_service.h"
 #include "share/cache/ob_cache_name_define.h" // OB_VTABLE_CACHE_NAME
 #include "share/ob_common_rpc_proxy.h" // ObCommonRpcProxy
-#include "share/ob_rs_mgr.h" // ObRsMgr
-#include "share/ob_alive_server_tracer.h" // ObIAliveServerTracer
-#include "share/ob_share_util.h" //ObShareUtil
 #include "share/ob_all_server_tracer.h" // ObAllServerTracer(SVR_TRACER)
 
 namespace oceanbase

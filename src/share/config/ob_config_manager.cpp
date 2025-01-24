@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/config/ob_config_manager.h"
 
-#include "lib/file/file_directory_utils.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/thread/thread_mgr.h"
-#include "share/ob_cluster_version.h"
-#include "lib/worker.h"
+#include "ob_config_manager.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_server.h"
 
 namespace oceanbase

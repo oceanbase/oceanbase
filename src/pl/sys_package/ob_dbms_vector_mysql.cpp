@@ -12,7 +12,8 @@
 
 #define USING_LOG_PREFIX PL
 
-#include "pl/sys_package/ob_dbms_vector_mysql.h"
+#include "ob_dbms_vector_mysql.h"
+#include "src/pl/ob_pl.h"
 #include "storage/vector_index/cmd/ob_vector_refresh_index_executor.h"
 
 namespace oceanbase

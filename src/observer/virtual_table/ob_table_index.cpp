@@ -11,11 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include "lib/container/ob_array_serialization.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "observer/virtual_table/ob_table_index.h"
 

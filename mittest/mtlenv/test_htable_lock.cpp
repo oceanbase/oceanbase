@@ -16,9 +16,6 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "observer/table/ob_htable_lock_mgr.h"
-#include "lib/utility/ob_test_util.h"
-#include "share/ob_thread_pool.h"
 #include "mock_tenant_module_env.h"
 
 using namespace oceanbase;

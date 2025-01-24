@@ -13,15 +13,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
 #define private public
 #define protected public
-#include "logservice/ob_ls_adapter.h"
-#include "share/scn.h"
 #include "env/ob_simple_log_cluster_env.h"
-#include "logservice/palf/palf_iterator.h"
 #undef private
 #undef protected
 

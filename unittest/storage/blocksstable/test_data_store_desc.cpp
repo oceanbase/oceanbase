@@ -10,15 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define protected public
 #define private public
 
 #include "storage/blocksstable/ob_macro_block.h"
 #include "storage/test_schema_prepare.h"
-#include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 
 namespace oceanbase
 {

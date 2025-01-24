@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_update_rs_list_task.h"
 
-#include "lib/profile/ob_trace_id.h"
-#include "share/config/ob_server_config.h"
-#include "share/ls/ob_ls_table_operator.h"
-#include "share/ob_root_addr_agent.h"
-#include "share/ob_debug_sync.h"
-#include "share/ob_all_server_tracer.h"
-#include "rootserver/ob_root_utils.h"
+#include "ob_update_rs_list_task.h"
 #include "rootserver/ob_root_service.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

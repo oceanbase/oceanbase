@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_dml_param.h"
-#include "share/schema/ob_column_schema.h"
-#include "storage/ob_i_store.h"
 #include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase

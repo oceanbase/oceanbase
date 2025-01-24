@@ -13,22 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/slog_ckpt/ob_tenant_storage_checkpoint_writer.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/slog/ob_storage_log_reader.h"
-#include "storage/slog/ob_storage_logger.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
-#include "storage/tx/ob_timestamp_service.h"
-#include "storage/tx/ob_trans_id_service.h"
-#include "storage/tx/ob_dup_table_base.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "sql/das/ob_das_id_service.h"
-#include "storage/tablet/ob_tablet_persister.h"
-#include "storage/blockstore/ob_shared_object_reader_writer.h"
-#include "observer/omt/ob_tenant.h"
 
 namespace oceanbase
 {

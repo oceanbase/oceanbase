@@ -13,14 +13,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define USING_LOG_PREFIX STORAGE
 #define protected public
 #define private public
 
 #include "storage/tx/wrs/ob_black_list.h"
 #include "env/ob_simple_cluster_test_base.h"  // ObSimpleClusterTestBase
-#include "lib/mysqlclient/ob_mysql_result.h"  // ReadResult
 
 namespace oceanbase
 {

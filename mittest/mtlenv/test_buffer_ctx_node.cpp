@@ -14,27 +14,11 @@
  */
 
 #define UNITTEST_DEBUG
-#include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "storage/multi_data_source/mds_writer.h"
-#include "storage/multi_data_source/mds_ctx.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
-#include "storage/multi_data_source/compile_utility/map_type_index_in_tuple.h"
-#include "storage/multi_data_source/adapter_define/mds_dump_node.h"
-#include <thread>
-#include <iostream>
-#include <vector>
-#include <chrono>
-#include "storage/multi_data_source/runtime_utility/mds_factory.h"
-#include "common/ob_clock_generator.h"
-#include "storage/multi_data_source/mds_node.h"
-#include "storage/multi_data_source/mds_table_handle.h"
-#include "storage/tablet/ob_tablet_meta.h"
+#include "src/storage/ob_storage_struct.h"
 #define MIT_TESTCASE_LABEL
 #include "mtlenv/mock_tenant_module_env.h"
-#include "observer/ob_server.h"
 namespace oceanbase {
 namespace storage
 {

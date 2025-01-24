@@ -12,17 +12,12 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_server_zone_op_service.h"
 
+#include "ob_server_zone_op_service.h"
 #include "share/ob_zone_table_operation.h"
 #include "share/ob_service_epoch_proxy.h"
 #include "share/ob_max_id_fetcher.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"  // ObMySQLTransaction
-#include "lib/utility/ob_tracepoint.h" // ERRSIM
 #include "rootserver/ob_root_service.h" // callback
-#include "share/ob_all_server_tracer.h"
-#include "share/ob_errno.h"
-#include "rootserver/ob_server_manager.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/object_storage/ob_zone_storage_table_operation.h"
 #endif

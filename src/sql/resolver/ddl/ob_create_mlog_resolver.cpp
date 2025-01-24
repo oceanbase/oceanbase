@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "sql/resolver/ddl/ob_create_mlog_resolver.h"
-#include "sql/resolver/ddl/ob_create_mlog_stmt.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/parser/ob_parser_utils.h"
-#include "lib/json/ob_json_print_utils.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
-#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {

@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/dml/ob_fk_checker.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr.h"
+#include "ob_fk_checker.h"
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 

@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include <mysql.h>
-#include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/mysqlclient/ob_mysql_statement.h"
 #include "lib/mysqlclient/ob_server_connection_pool.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"

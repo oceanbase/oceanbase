@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 
-#include <type_traits>
-#include "sql/engine/expr/ob_expr_in.h"
-#include "sql/engine/expr/ob_expr_equal.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_coll_pred.h"
+#include "ob_expr_in.h"
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
 #include "share/vector/expr_cmp_func.h"

@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <vector>
 #define private public
 #define protected public
 #define UNITTEST

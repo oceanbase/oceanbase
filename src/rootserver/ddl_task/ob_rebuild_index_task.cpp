@@ -13,11 +13,9 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_rebuild_index_task.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_ddl_sim_point.h"
 #include "rootserver/ob_root_service.h"
-#include "lib/timezone/ob_timezone_info.h"                     // for  ObTimeZoneInfoWrap
 #include "observer/omt/ob_tenant_timezone_mgr.h"               // for OTTZ_MGR
 #include "share/vector_index/ob_vector_index_util.h"
 #include "src/storage/ddl/ob_ddl_lock.h"

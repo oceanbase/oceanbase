@@ -10,17 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <vector>
-#include <memory>
-#include <limits>
 #include <random>
-#include <cmath>
-#include <string>
 
 #include "gtest/gtest.h"
 
-#include "lib/codec/ob_composite_codec.h"
-#include "lib/codec/ob_simd_fixed_pfor.h"
 #include "lib/codec/ob_double_delta_zigzag_rle.h"
 #include "lib/codec/ob_delta_zigzag_rle.h"
 #include "lib/codec/ob_delta_zigzag_pfor.h"

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "lib/stat/ob_session_stat.h"
-#include "lib/ob_lib_config.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 
 namespace oceanbase

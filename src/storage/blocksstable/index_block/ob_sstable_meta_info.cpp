@@ -12,13 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/allocator/ob_allocator.h"
-#include "storage/blocksstable/index_block/ob_sstable_meta_info.h"
+#include "ob_sstable_meta_info.h"
 #include "storage/blocksstable/ob_macro_block_reader.h"
-#include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/index_block/ob_index_block_row_scanner.h"
-#include "storage/blocksstable/cs_encoding/ob_cs_micro_block_transformer.h"
-#include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_reader.h"
 #include "storage/tablet/ob_tablet_create_sstable_param.h"

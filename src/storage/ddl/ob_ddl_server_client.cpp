@@ -13,16 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ddl_server_client.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_ddl_common.h"
 #include "share/ob_ddl_sim_point.h"
-#include "storage/ddl/ob_ddl_heart_beat_task.h"
-#include "lib/ob_define.h"
-#include "lib/mysqlclient/ob_isql_client.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
-#include "rootserver/ddl_task/ob_table_redefinition_task.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase

@@ -10,14 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "easy_define.h"
-#include "util/easy_string.h"
-#include "io/easy_baseth_pool.h"
-#include "util/easy_time.h"
+#include "ob_easy_log.h"
 #include "io/easy_io.h"
 #include "io/easy_log.h"
 #include <pthread.h>
-#include "lib/ob_define.h"
 #include "lib/profile/ob_trace_id.h"
 namespace oceanbase
 {

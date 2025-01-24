@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_storage.h"
-#include "lib/ob_errno.h"             // OB_INVALID_ARGUMENT
-#include "lib/stat/ob_session_stat.h" // Session
-#include "log_reader_utils.h"         // ReadBuf
 #include "palf_handle_impl.h"         // LogCache
-#include "share/scn.h"
 #include "log_io_adapter.h"           // LogIOAdapter
 
 namespace oceanbase

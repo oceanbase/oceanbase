@@ -11,19 +11,12 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "gtest/gtest.h"
 #define private public
 #define protected public
 
-#include "lib/ob_errno.h"
-#include "storage/backup/ob_backup_tmp_file.h"
-#include "storage/backup/ob_backup_data_struct.h"
-#include "storage/backup/ob_backup_iterator.h"
+#include "src/share/backup/ob_backup_io_adapter.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "test_backup.h"
 #include "test_backup_include.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "lib/string/ob_string.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
 using namespace oceanbase;

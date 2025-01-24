@@ -10,11 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_share_throttle_define.h"
 
+#include "ob_share_throttle_define.h"
 #include "share/throttle/ob_throttle_info.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "lib/alloc/alloc_func.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 
 

@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_join_filter.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_log_granule_iterator.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

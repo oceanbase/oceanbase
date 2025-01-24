@@ -12,28 +12,11 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_log_service.h"
-#include "lib/file/file_directory_utils.h"
-#include "lib/ob_errno.h"
 #include "ob_server_log_block_mgr.h"
-#include "palf/log_block_pool_interface.h"
-#include "rpc/frame/ob_req_transport.h"
-#include "rpc/obrpc/ob_net_keepalive.h"       // ObNetKeepAlive
-#include "share/ob_ls_id.h"
-#include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
-#include "share/ob_tenant_info_proxy.h"
-#include "share/ob_unit_getter.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
-#include "share/rpc/ob_batch_rpc.h"
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "observer/ob_srv_network_frame.h"
-#include "logservice/palf_handle_guard.h"
 #include "storage/ob_file_system_router.h"
-#include "palf/palf_env.h"
-#include "palf/palf_callback.h"
-#include "palf/palf_options.h"
 #include "logservice/ob_net_keepalive_adapter.h"            // ObNetKeepAliveAdapter
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "log/ob_shared_log_utils.h"      // ObSharedLogUtils

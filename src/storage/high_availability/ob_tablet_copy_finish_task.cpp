@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/high_availability/ob_tablet_copy_finish_task.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "observer/report/ob_tablet_table_updater.h"
-#include "share/ob_cluster_version.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_refresh_tablet_util.h"

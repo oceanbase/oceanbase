@@ -18,7 +18,6 @@
 #include "ob_log_sequencer1.h"          // IObLogSequencer
 #include "ob_log_committer.h"           // IObLogCommitter
 #include "ob_log_instance.h"            // IObLogErrHandler, TCTX
-#include "ob_log_schema_getter.h"       // IObLogSchemaGetter
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
 #include "ob_log_config.h"              // TCONF
 #include "ob_log_trace_id.h"            // ObLogTraceIdGuard

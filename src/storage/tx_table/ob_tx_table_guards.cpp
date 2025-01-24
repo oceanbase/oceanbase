@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX STORAGE
-#include "storage/tx_table/ob_tx_table_guards.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "storage/tx_table/ob_tx_table_interface.h"
+#include "ob_tx_table_guards.h"
 #include "storage/tx_table/ob_tx_table.h"
 
 #define PRINT_ERROR_LOG(tx_id, ret, this)                           \

@@ -10,48 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "io/easy_connection.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string_holder.h"
-#include "logservice/leader_coordinator/failure_event.h"
-#include "logservice/leader_coordinator/ob_failure_detector.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_table_access_helper.h"
-#include "share/rc/ob_tenant_base.h"
 #define USING_LOG_PREFIX RS
 
-#include "ob_system_admin_util.h"
 
-#include "lib/time/ob_time_utility.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/config/ob_server_config.h"
-#include "share/config/ob_config_manager.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/ob_cluster_version.h"
-#include "share/ob_upgrade_utils.h"
-#include "share/ob_share_util.h" // ObShareUtil
-#include "storage/ob_file_system_router.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "observer/omt/ob_multi_tenant.h"
+#include "ob_system_admin_util.h"
 #include "observer/ob_srv_network_frame.h"
-#include "ob_server_manager.h"
-#include "ob_ddl_operator.h"
-#include "ob_zone_manager.h"
-#include "ob_ddl_service.h"
-#include "ob_unit_manager.h"
-#include "ob_root_inspection.h"
 #include "ob_root_service.h"
-#include "storage/ob_file_system_router.h"
 #include "logservice/leader_coordinator/table_accessor.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
-#include "observer/ob_service.h"
 namespace oceanbase
 {
 using namespace common;

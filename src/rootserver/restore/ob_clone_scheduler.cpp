@@ -13,22 +13,16 @@
 #define USING_LOG_PREFIX RS_RESTORE
 
 #include "ob_clone_scheduler.h"
-#include "share/ls/ob_ls_operator.h"
 #include "share/ob_max_id_fetcher.h"
 #include "rootserver/ob_common_ls_service.h"
 #include "rootserver/restore/ob_restore_common_util.h"
-#include "share/restore/ob_log_restore_source_mgr.h"
 #include "share/backup/ob_archive_persist_helper.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
-#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
 #include "rootserver/ob_ddl_service.h"
-#include "storage/tablelock/ob_lock_inner_connection_util.h"
-#include "observer/ob_inner_sql_connection.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
-#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {

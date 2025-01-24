@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_balance_ls_primary_zone.h"
-#include "lib/profile/ob_trace_id.h"
-#include "share/ob_errno.h"
-#include "share/schema/ob_schema_struct.h"//ObTenantSchema
-#include "share/schema/ob_schema_service.h"//ObMultiSchemaService
 #include "share/ls/ob_ls_life_manager.h"//ObLSLifeAgentManager
-#include "share/ls/ob_ls_status_operator.h"//ObLSStatusOperator
 #include "share/ob_primary_zone_util.h"//ObPrimaryZoneUtil
 #include "observer/ob_server_struct.h"//GCTX
 #include "rootserver/ob_tenant_thread_helper.h"//get_zone_priority

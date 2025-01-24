@@ -14,10 +14,8 @@
 
 #include "ob_tenant_clone_util.h"
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
-#include "share/restore/ob_tenant_clone_table_operator.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_global_stat_proxy.h" // for ObGlobalStatProxy
-#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::share;

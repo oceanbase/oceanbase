@@ -10,10 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_define.h"
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
-#include "lib/alloc/ob_malloc_allocator.h"
+#include "deps/oblib/src/lib/alloc/ob_tenant_ctx_allocator.h"
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 

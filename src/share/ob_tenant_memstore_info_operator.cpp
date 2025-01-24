@@ -14,11 +14,9 @@
 
 #include "share/ob_tenant_memstore_info_operator.h"
 
-#include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/unit/ob_unit_info.h"
-#include "share/inner_table/ob_inner_table_schema.h"
+#include "src/share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
 {

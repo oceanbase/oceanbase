@@ -12,17 +12,6 @@
 
 #define USING_LOG_PREFIX PL
 #include "ob_dbms_limit_calculator_mysql.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_all_server_tracer.h"
-#include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
-#include "share/ob_unit_table_operator.h"
-#include "share/ob_all_server_tracer.h"
-#include "share/ob_rpc_struct.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"//ObGetTenantResProxy
-#include "share/ls/ob_ls_status_operator.h"//ObLSStatusOperator
 #include "share/balance/ob_balance_job_table_operator.h"//balance_job
 #include "rootserver/ob_tenant_balance_service.h"//gather_stat_primary_zone_num_and_units
 

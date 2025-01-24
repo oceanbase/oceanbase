@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_direct_load_mgr_agent.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/direct_load/ob_direct_load_insert_table_row_iterator.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
 

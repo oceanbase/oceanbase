@@ -10,11 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <errno.h>
 #include <gtest/gtest.h>
 #define protected public
 #define private public
-#include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/blocksstable/ob_object_manager.h"
 
 

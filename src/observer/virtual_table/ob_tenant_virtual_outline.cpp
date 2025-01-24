@@ -14,8 +14,6 @@
 
 #include "observer/virtual_table/ob_tenant_virtual_outline.h"
 #include "share/schema/ob_schema_getter_guard.h"
-#include "common/row/ob_row.h"
-#include "lib/utility/utility.h"
 namespace oceanbase
 {
 namespace observer

@@ -15,7 +15,6 @@
 #include "ob_event_history_table_operator.h"
 #include "share/config/ob_server_config.h"
 #include "share/deadlock/ob_deadlock_inner_table_service.h"
-#include "share/ob_debug_sync_point.h"
 #include "share/ob_debug_sync.h"
 
 namespace oceanbase

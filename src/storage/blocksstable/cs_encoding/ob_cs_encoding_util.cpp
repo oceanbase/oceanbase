@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_cs_encoding_util.h"
-#include "lib/wide_integer/ob_wide_integer_cmp_funcs.h"
 
 namespace oceanbase
 {

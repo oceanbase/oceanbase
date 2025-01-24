@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_row_getter.h"
-#include "ob_macro_block_reader.h"
-#include "index_block/ob_index_block_row_scanner.h"
 #include "storage/access/ob_sstable_row_getter.h"
-#include "storage/access/ob_index_tree_prefetcher.h"
-#include "storage/blocksstable/ob_sstable.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/blocksstable/cs_encoding/ob_micro_block_cs_decoder.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "lib/stat/ob_diagnose_info.h"
 
 namespace oceanbase
 {

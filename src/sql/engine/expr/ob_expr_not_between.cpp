@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "common/object/ob_obj_compare.h"
 #include "sql/engine/expr/ob_expr_not_between.h"
-#include "sql/engine/expr/ob_expr_less_than.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase

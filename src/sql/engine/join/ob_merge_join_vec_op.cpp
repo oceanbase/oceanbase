@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/join/ob_merge_join_vec_op.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase {
 using namespace common;

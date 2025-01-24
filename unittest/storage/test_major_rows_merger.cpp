@@ -14,12 +14,8 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/compaction/ob_partition_rows_merger.h"
-#include "lib/container/ob_se_array.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/blocksstable/ob_multi_version_sstable_test.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/test_tablet_helper.h"
 #include "mtlenv/storage/test_merge_basic.h"
 

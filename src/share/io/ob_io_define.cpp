@@ -12,16 +12,8 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "lib/stat/ob_diagnose_info.h"
-#include "share/io/ob_io_define.h"
-#include "share/io/ob_io_struct.h"
-#include "share/io/ob_io_manager.h"
-#include "share/resource_manager/ob_resource_manager.h"
-#include "lib/time/ob_time_utility.h"
-#include "storage/blocksstable/ob_macro_block_id.h"
-#include "lib/restore/ob_object_device.h"
+#include "ob_io_define.h"
 #include "storage/backup/ob_backup_factory.h"
-#include "deps/oblib/src/lib/stat/ob_session_stat.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

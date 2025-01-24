@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_geo_vertex_collect_visitor.h"
-#include "lib/geo/ob_geo_utils.h"
 
 namespace oceanbase {
 namespace common {

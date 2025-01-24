@@ -13,16 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_reader.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/scn.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
-#include "storage/access/ob_table_read_info.h"
-#include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/backup/ob_backup_factory.h"
 #include "observer/omt/ob_tenant.h"
-#include "common/storage/ob_device_common.h"
 #include "storage/backup/ob_backup_meta_cache.h"
 
 namespace oceanbase

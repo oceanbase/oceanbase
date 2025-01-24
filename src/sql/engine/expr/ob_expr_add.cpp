@@ -11,17 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/expr/ob_expr_add.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_macro_utils.h"
+#include "ob_expr_add.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/engine/expr/ob_batch_eval_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/engine/expr/ob_array_expr_utils.h"
 
 
 namespace oceanbase

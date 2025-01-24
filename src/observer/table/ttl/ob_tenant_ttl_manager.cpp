@@ -14,9 +14,6 @@
 
 #include "observer/table/ttl/ob_tenant_ttl_manager.h"
 #include "share/ob_max_id_fetcher.h"
-#include "share/table/ob_ttl_util.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/table/ob_table_config_util.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;

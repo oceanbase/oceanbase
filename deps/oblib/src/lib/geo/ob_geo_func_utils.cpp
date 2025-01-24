@@ -14,9 +14,6 @@
 #define USING_LOG_PREFIX LIB
 
 #include "lib/geo/ob_geo_func_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "common/ob_smart_call.h"
-#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

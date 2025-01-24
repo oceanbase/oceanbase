@@ -10,14 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "ob_log_request_handler.h"
-#include "ob_log_rpc_req.h"
 #include "logservice/ob_log_service.h"
-#include "logservice/ob_log_handler.h"
-#include "logservice/logrpc/ob_log_rpc_proxy.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "logservice/ob_reconfig_checker_adapter.h"
-#include "logservice/palf/log_define.h"
-#include "logservice/replayservice/ob_log_replay_service.h"
 
 namespace oceanbase
 {

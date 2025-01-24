@@ -10,17 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tablet/ob_tablet_delete_mds_helper.h"
-#include "lib/worker.h"
-#include "common/ob_tablet_id.h"
-#include "share/scn.h"
-#include "share/ob_rpc_struct.h"
-#include "storage/multi_data_source/buffer_ctx.h"
-#include "storage/multi_data_source/mds_ctx.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_map_key.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
+#include "ob_tablet_delete_mds_helper.h"
 #include "storage/tablet/ob_tablet_delete_replay_executor.h"
 #include "storage/tx_storage/ob_ls_service.h"
 

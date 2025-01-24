@@ -13,25 +13,12 @@
 #define USING_LOG_PREFIX TABLELOCK
 
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "storage/compaction/ob_tablet_merge_task.h" // ObTabletMergeDagParam
 #include "storage/tablelock/ob_table_lock_iterator.h"
-#include "storage/ls/ob_ls.h"                        // ObLS
-#include "storage/ls/ob_freezer.h"                   // ObFreezer
-#include "storage/ob_i_store.h"                      // ObStoreCtx
 #include "storage/memtable/ob_lock_wait_mgr.h"
-#include "storage/memtable/ob_memtable_context.h"    // ObMemtableCtx
-#include "storage/tablelock/ob_mem_ctx_table_lock.h"
-#include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablelock/ob_table_lock_deadlock.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h"
-#include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

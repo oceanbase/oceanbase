@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "sql/resolver/ddl/ob_create_tablegroup_resolver.h"
-#include "sql/resolver/ddl/ob_tablegroup_resolver.h"
-#include "sql/resolver/ob_stmt_resolver.h"
-#include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

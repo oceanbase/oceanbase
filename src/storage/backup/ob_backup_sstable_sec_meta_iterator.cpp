@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/backup/ob_backup_sstable_sec_meta_iterator.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/high_availability/ob_storage_restore_struct.h"
-#include "storage/tablet/ob_tablet_create_sstable_param.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
+#include "ob_backup_sstable_sec_meta_iterator.h"
+#include "src/storage/ls/ob_ls.h"
 #include "storage/backup/ob_backup_meta_cache.h"
 
 using namespace oceanbase::common;

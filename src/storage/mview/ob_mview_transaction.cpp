@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/ob_mview_transaction.h"
-#include "observer/ob_inner_sql_connection.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 
 namespace oceanbase

@@ -12,31 +12,15 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_disaster_recovery_task_mgr.h"
 
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/lock/ob_mutex.h"
-#include "lib/lock/ob_tc_rwlock.h"                   // for common::RWLock
-#include "lib/profile/ob_trace_id.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "observer/ob_server_struct.h"
+#include "ob_disaster_recovery_task_mgr.h"
 #include "ob_disaster_recovery_task_executor.h"
 #include "ob_disaster_recovery_task_table_operator.h"
-#include "ob_rs_event_history_table_operator.h"
-#include "rootserver/ob_disaster_recovery_task.h"    // for ObDRTaskType
-#include "rootserver/ob_disaster_recovery_task.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // for ObTenantSnapshotUtil
 #include "storage/tablelock/ob_lock_inner_connection_util.h" // for ObInnerConnectionLockUtil
 #include "observer/ob_inner_sql_connection.h"
-#include "rootserver/ob_root_balancer.h"
-#include "share/config/ob_server_config.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "src/rootserver/ob_root_utils.h"
 #include "share/ob_all_server_tracer.h"
-#include "share/ob_debug_sync.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_share_util.h"                     // for ObShareUtil
-#include "share/ob_srv_rpc_proxy.h"
-#include "sql/executor/ob_executor_rpc_proxy.h"
 
 namespace oceanbase
 {

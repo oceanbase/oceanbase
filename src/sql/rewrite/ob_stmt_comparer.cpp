@@ -15,9 +15,6 @@
 #include "ob_stmt_comparer.h"
 #include "ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/ob_sql_context.h"
-#include "common/ob_smart_call.h"
-#include "objit/expr/ob_iraw_expr.h"
 
 
 using namespace oceanbase::sql;

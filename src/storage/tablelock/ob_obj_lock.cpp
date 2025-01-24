@@ -12,19 +12,9 @@
 
 #define USING_LOG_PREFIX TABLELOCK
 
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
+#include "ob_obj_lock.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
-#include "storage/tx/ob_trans_deadlock_adapter.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tablelock/ob_obj_lock.h"
-#include "storage/tablelock/ob_table_lock_common.h"
-#include "storage/tablelock/ob_mem_ctx_table_lock.h"
-#include "storage/tablelock/ob_table_lock_iterator.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tablelock/ob_table_lock_deadlock.h"
 #include "storage/tx_storage/ob_ls_service.h"

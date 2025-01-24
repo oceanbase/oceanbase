@@ -13,28 +13,14 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_migration.h"
 #include "observer/ob_server.h"
-#include "ob_physical_copy_task.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/tablet/ob_tablet_common.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "storage/column_store/ob_column_store_replica_util.h"
-#include "logservice/ob_log_service.h"
-#include "lib/hash/ob_hashset.h"
-#include "lib/time/ob_time_utility.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "ob_storage_ha_utils.h"
-#include "storage/tablet/ob_tablet.h"
-#include "share/ls/ob_ls_table_operator.h"
 #include "ob_rebuild_service.h"
-#include "share/ob_cluster_version.h"
-#include "ob_storage_ha_utils.h"
 #include "ob_storage_ha_src_provider.h"
 #include "ob_cs_replica_migration.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #endif
 
 namespace oceanbase

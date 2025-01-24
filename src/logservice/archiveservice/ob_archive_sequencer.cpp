@@ -11,21 +11,12 @@
  */
 
 #include "ob_archive_sequencer.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "ob_ls_mgr.h"                    // ObArchiveLSMgr
 #include "logservice/ob_log_service.h"    // ObLogService
-#include "ob_archive_define.h"            // ArchiveWorkStation
-#include "ob_ls_task.h"                   // ObLSArchiveTask
 #include "ob_archive_task.h"              // ObArchiveLogFetchTask
 #include "ob_archive_fetcher.h"           // ObArchiveFetcher
 #include "ob_archive_round_mgr.h"         // ObArchiveRoundMgr
-#include "logservice/palf_handle_guard.h" // PalfHandleGuard
-#include "share/backup/ob_archive_struct.h"
-#include <cstdint>
 #include "lib/ash/ob_active_session_guard.h"
-
 
 namespace oceanbase
 {

@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_dag.h"
-#include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/scn.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_cs_replica_migration.h"
 
 namespace oceanbase

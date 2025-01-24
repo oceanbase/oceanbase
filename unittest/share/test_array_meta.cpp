@@ -14,17 +14,11 @@
 #define private public
 #define protected public
 #include "lib/hash/ob_hashset.h"
-#include "lib/udt/ob_collection_type.h"
 #include "lib/udt/ob_array_utils.h"
-#include "lib/json_type/ob_json_tree.h"
-#include "lib/json_type/ob_json_bin.h"
-#include "lib/json_type/ob_json_parse.h"
 #include "sql/engine/expr/ob_array_cast.h"
 #undef private
 #undef protected
 
-#include <iostream>
-#include <regex>
 
 namespace oceanbase {
 namespace common {

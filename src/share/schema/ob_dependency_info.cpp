@@ -11,19 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "share/schema/ob_dependency_info.h"
-#include "ob_schema_getter_guard.h"
-#include "lib/container/ob_tuple.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_schema_utils.h"
-#include "observer/ob_server_struct.h"
+#include "ob_dependency_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
-#include "share/schema/ob_schema_struct.h"
 #include "rootserver/ob_ddl_operator.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
 {

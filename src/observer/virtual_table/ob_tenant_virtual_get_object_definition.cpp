@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_tenant_virtual_get_object_definition.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_schema_printer.h"
-#include "sql/session/ob_sql_session_info.h"
 
-#include "share/schema/ob_table_schema.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

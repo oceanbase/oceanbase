@@ -13,14 +13,9 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "ob_transform_join_elimination.h"
-#include "common/ob_common_utility.h"
-#include "common/ob_smart_call.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_errno.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/rewrite/ob_stmt_comparer.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "share/schema/ob_table_schema.h"
 #include "sql/rewrite/ob_equal_analysis.h"
 #include "sql/rewrite/ob_transform_utils.h"
 # include "sql/resolver/dml/ob_merge_stmt.h"

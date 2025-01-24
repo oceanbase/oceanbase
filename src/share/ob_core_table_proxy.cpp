@@ -14,16 +14,10 @@
 
 #include "share/ob_core_table_proxy.h"
 
-#include <algorithm>
-#include "lib/container/ob_array_helper.h"
 #include "lib/container/ob_array_iterator.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/time/ob_time_utility.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "inner_table/ob_inner_table_schema.h"
 #include "share/ob_debug_sync.h"
-#include "lib/timezone/ob_time_convert.h"
 #include "share/ob_tenant_id_schema_version.h"
 
 namespace oceanbase

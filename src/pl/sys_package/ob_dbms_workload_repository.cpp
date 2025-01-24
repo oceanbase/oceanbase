@@ -12,22 +12,14 @@
 
 #define USING_LOG_PREFIX PL
 
+#include "ob_dbms_workload_repository.h"
 #include "observer/ob_srv_network_frame.h"  // ObSrvNetworkFrame
-#include "observer/ob_server_struct.h"
 #include "share/wr/ob_wr_task.h"
-#include "share/wr/ob_wr_rpc_proxy.h"
-#include "share/wr/ob_wr_snapshot_rpc_processor.h"
 #include "share/wr/ob_wr_stat_guard.h"
-#include "pl/sys_package/ob_dbms_workload_repository.h"
-#include "lib/string/ob_strings.h"
-#include "share/ob_time_utility2.h"
-#include <cstring>
-#include <stdio.h>
-#include "share/ob_lob_access_utils.h"
-#include "lib/timezone/ob_time_convert.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/ob_version.h"
 #include <sys/utsname.h>
+#include "src/pl/ob_pl.h"
 
 namespace oceanbase
 {

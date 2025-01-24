@@ -11,21 +11,9 @@
  */
 
 #include "storage/tablet/ob_tablet_create_mds_helper.h"
-#include "common/ob_tablet_id.h"
-#include "share/scn.h"
-#include "share/ob_ls_id.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_table_schema.h"
-#include "storage/ls/ob_ls_get_mod.h"
 #include "storage/multi_data_source/ob_tablet_create_mds_ctx.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_map_key.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tablet/ob_batch_create_tablet_pretty_arg.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tablet/ob_tablet_create_replay_executor.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 #define USING_LOG_PREFIX MDS

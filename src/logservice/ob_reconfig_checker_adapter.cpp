@@ -11,10 +11,7 @@
  */
 
 #include "ob_reconfig_checker_adapter.h"
-#include "logservice/palf/log_define.h"
 #include "rootserver/mview/ob_collect_mv_merge_info_task.h"
-#include "share/ob_rpc_struct.h"
-#include "storage/mview/ob_major_mv_merge_info.h"
 
 namespace oceanbase
 {

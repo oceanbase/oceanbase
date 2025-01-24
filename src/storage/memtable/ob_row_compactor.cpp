@@ -10,15 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/config/ob_server_config.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "ob_row_compactor.h"
-#include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/memtable/ob_memtable.h"
-#include "storage/memtable/ob_memtable_data.h"
-#include "storage/memtable/ob_memtable_compact_writer.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "storage/blocksstable/ob_row_reader.h"
 #include "storage/blocksstable/ob_row_writer.h"
 
 namespace oceanbase

@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/charset/ob_mysql_global.h"
 #include "lib/charset/ob_ctype.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "lib/charset/ob_ctype_ascii_tab.h"
 
 static ObCharsetHandler ob_charset_ascii_handler = {

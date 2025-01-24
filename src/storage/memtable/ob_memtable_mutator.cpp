@@ -10,16 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/memtable/ob_memtable_mutator.h"
 
+#include "ob_memtable_mutator.h"
 #include "lib/atomic/atomic128.h"
-#include "lib/utility/serialization.h"
-#include "lib/checksum/ob_crc64.h"
-#include "lib/utility/ob_tracepoint.h"
 
 #include "storage/memtable/ob_memtable_context.h"     // ObTransRowFlag
-#include "storage/tx/ob_clog_encrypter.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

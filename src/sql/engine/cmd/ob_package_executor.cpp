@@ -15,10 +15,6 @@
 #include "sql/resolver/ddl/ob_create_package_stmt.h"
 #include "sql/resolver/ddl/ob_alter_package_stmt.h"
 #include "sql/resolver/ddl/ob_drop_package_stmt.h"
-#include "sql/engine/ob_exec_context.h"
-#include "pl/ob_pl.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_rpc_struct.h"
 #include "pl/ob_pl_resolver.h"
 
 namespace oceanbase

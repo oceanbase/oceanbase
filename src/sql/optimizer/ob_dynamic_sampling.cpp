@@ -11,20 +11,11 @@
  */
 
 #define USING_LOG_PREFIX COMMON
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/utility.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "ob_dynamic_sampling.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_basic_stats_estimator.h"
-#include "share/stat/ob_opt_ds_stat_cache.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
-#include "sql/optimizer/ob_optimizer_context.h"
-#include "sql/optimizer/ob_opt_selectivity.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_access_path_estimation.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

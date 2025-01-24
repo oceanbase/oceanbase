@@ -16,18 +16,11 @@
 
 #define private public
 #define protected public
-#include "lib/ob_errno.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "test_ss_common_util.h"
-#include "storage/shared_storage/micro_cache/ob_ss_micro_meta_manager.h"
-#include "storage/shared_storage/micro_cache/ob_ss_physical_block_manager.h"
-#include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_struct.h"
 #include "storage/shared_storage/ob_ss_micro_cache_io_helper.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_writer.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_linked_phy_block_reader.h"
-#include "lib/compress/ob_compressor.h"
-#include "lib/compress/ob_compressor_pool.h"
 
 namespace oceanbase
 {

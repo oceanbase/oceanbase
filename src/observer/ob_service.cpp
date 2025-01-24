@@ -12,97 +12,46 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/ob_service.h"
 
-#include <new>
-#include <string.h>
-#include <cmath>
 
-#include "share/ob_define.h"
-#include "lib/ob_running_mode.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/thread_local/ob_tsi_factory.h"
-#include "lib/utility/utility.h"
-#include "lib/time/ob_tsc_timestamp.h"
+#include "ob_service.h"
 #include "lib/alloc/memory_dump.h"
 
-#include "common/ob_member_list.h"
-#include "common/ob_zone.h"
-#include "common/ob_tenant_data_version_mgr.h"
 #include "share/ob_version.h"
 
-#include "share/ob_ddl_common.h"
 #include "share/ob_version.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "share/deadlock/ob_deadlock_inner_table_service.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/ob_zone_table_operation.h"
-#include "share/tablet/ob_tablet_info.h" // for ObTabletReplica
 #include "share/ob_tablet_replica_checksum_operator.h" // ObTabletReplicaChecksumItem
-#include "share/rc/ob_tenant_base.h"
 
-#include "storage/ob_i_table.h"
-#include "storage/tx/ob_trans_service.h"
 #include "sql/optimizer/ob_storage_estimator.h"
-#include "sql/optimizer/ob_opt_est_cost.h"
-#include "sql/optimizer/ob_join_order.h"
 #include "rootserver/ob_bootstrap.h"
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "rootserver/ob_tenant_event_history_table_operator.h" // TENANT_EVENT_INSTANCE
 #include "observer/ob_server.h"
-#include "observer/ob_dump_task_generator.h"
-#include "observer/ob_server_schema_updater.h"
 #include "ob_server_event_history_table_operator.h"
-#include "share/ob_alive_server_tracer.h"
-#include "storage/ddl/ob_tablet_split_task.h"
 #include "storage/ddl/ob_tablet_lob_split_task.h"
-#include "storage/ddl/ob_complement_data_task.h" // complement data for drop column
-#include "storage/ddl/ob_ddl_clog.h"
 #include "storage/ddl/ob_delete_lob_meta_row_task.h" // delete lob meta row for drop vec index
-#include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_build_index_task.h"
-#include "storage/ddl/ob_ddl_redo_log_writer.h"
-#include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_checkpoint_service.h"
-#include "storage/ls/ob_ls.h"
 #include "logservice/ob_log_service.h"        // ObLogService
-#include "logservice/palf_handle_guard.h"     // PalfHandleGuard
 #include "logservice/archiveservice/ob_archive_service.h"
-#include "share/scn.h"     // PalfHandleGuard
 #include "storage/backup/ob_backup_handler.h"
 #include "storage/backup/ob_ls_backup_clean_mgr.h"
-#include "storage/ob_file_system_router.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
-#include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ob_ddl_sim_point.h" // for DDL_SIM
-#include "storage/backup/ob_backup_utils.h"
-#include "observer/report/ob_tenant_meta_checker.h"//ObTenantMetaChecker
 #include "rootserver/backup/ob_backup_task_scheduler.h" // ObBackupTaskScheduler
-#include "rootserver/backup/ob_backup_schedule_task.h" // ObBackupScheduleTask
-#include "rootserver/ob_ls_recovery_stat_handler.h"//get_all_ls_replica_readbable_scn
 #include "rootserver/ob_service_name_command.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
-#include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/ob_heartbeat_handler.h"
-#include "storage/slog/ob_storage_logger_manager.h"
 #include "storage/high_availability/ob_transfer_lock_utils.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
 #include "storage/column_store/ob_column_store_replica_util.h"
-#include "rootserver/ob_ls_recovery_stat_handler.h"//get_all_replica_min_readable_scn
 
 namespace oceanbase
 {

@@ -11,22 +11,7 @@
  */
 
 #include "ob_ts_mgr.h"
-#include "share/ob_errno.h"
-#include "share/ob_define.h"
-#include "share/ob_cluster_version.h"
-#include "share/scn.h"
-#include "ob_trans_event.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/location_cache/ob_location_service.h"
-#include "lib/string/ob_string.h"
-#include "lib/allocator/page_arena.h"
-#include "common/object/ob_object.h"
 #include "ob_gts_rpc.h"
-#include "storage/tx/ob_trans_factory.h"
-#include "lib/thread/ob_thread_name.h"
-#include "ob_location_adapter.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {

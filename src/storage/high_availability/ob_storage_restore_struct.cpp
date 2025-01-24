@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_restore_struct.h"
 #include "storage/restore/ob_ls_restore_args.h"
-#include "storage/backup/ob_backup_data_store.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/backup/ob_backup_connectivity.h"
-#include "storage/backup/ob_backup_data_struct.h"
 #include "storage/backup/ob_backup_factory.h"
 #include "storage/backup/ob_backup_meta_cache.h"
 namespace oceanbase

@@ -17,10 +17,7 @@
 #include <gmock/gmock.h>
 #define private public
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 #include "storage/high_availability/ob_transfer_lock_info_operator.h"
-#include "share/transfer/ob_transfer_info.h"
 
 namespace oceanbase
 {

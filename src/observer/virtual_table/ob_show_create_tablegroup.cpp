@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_show_create_tablegroup.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_schema_printer.h"
 #include "sql/session/ob_sql_session_info.h"
 

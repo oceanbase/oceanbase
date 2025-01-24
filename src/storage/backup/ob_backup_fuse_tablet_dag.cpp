@@ -11,12 +11,10 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/backup/ob_backup_fuse_tablet_ctx.h"
 #include "storage/backup/ob_backup_fuse_tablet_dag.h"
 #include "storage/backup/ob_backup_fuse_tablet_task.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "observer/ob_server.h"
-#include "share/ob_get_compat_mode.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::storage;

@@ -11,8 +11,6 @@
  */
 
 #include "common/log/ob_log_entry.h"
-#include "lib/checksum/ob_crc64.h"
-#include "lib/utility/utility.h"
 
 using namespace oceanbase::common;
 

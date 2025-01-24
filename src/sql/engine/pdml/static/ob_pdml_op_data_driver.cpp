@@ -14,11 +14,7 @@
 
 #include "sql/engine/pdml/static/ob_pdml_op_data_driver.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/px/datahub/ob_dh_msg.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "sql/engine/px/ob_px_sqc_proxy.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

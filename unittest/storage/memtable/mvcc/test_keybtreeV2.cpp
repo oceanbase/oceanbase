@@ -11,17 +11,7 @@
  */
 
 #include "storage/memtable/mvcc/ob_keybtree.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/random/ob_random.h"
-#include "common/object/ob_object.h"
 #include <gtest/gtest.h>
-#include <thread>
-#include <algorithm>
-#include <iostream>
-#include <vector>
-#include <unordered_set>
-#include <atomic>
 
 namespace oceanbase {
 namespace unittest {

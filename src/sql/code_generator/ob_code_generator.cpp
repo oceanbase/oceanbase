@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_CG
 
 #include "sql/code_generator/ob_code_generator.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {

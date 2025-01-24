@@ -12,11 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "share/ob_json_access_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_tokenize.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
-#include "storage/fts/ob_fts_struct.h"
 
 namespace oceanbase
 {

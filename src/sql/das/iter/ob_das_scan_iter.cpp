@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_scan_iter.h"
-#include "sql/das/ob_das_scan_op.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "src/sql/engine/ob_exec_context.h"
 

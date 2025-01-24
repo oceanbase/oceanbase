@@ -11,23 +11,13 @@
  */
 
 #define USING_LOG_PREFIX SQL_CG
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/code_generator/ob_dml_cg_service.h"
+#include "ob_dml_cg_service.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
-#include "share/system_variable/ob_system_variable.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/engine/dml/ob_dml_ctx_define.h"
-#include "share/config/ob_server_config.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
-#include "sql/engine/dml/ob_conflict_checker.h"
-#include "sql/optimizer/ob_log_insert.h"
 #include "sql/optimizer/ob_log_for_update.h"
 #include "sql/optimizer/ob_log_merge.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_update.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif

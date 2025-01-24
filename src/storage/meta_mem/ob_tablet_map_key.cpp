@@ -12,7 +12,6 @@
 
 #include "storage/meta_mem/ob_tablet_map_key.h"
 #include "share/transfer/ob_transfer_info.h" // OB_INVALID_TRANSFER_SEQ
-#include "lib/hash_func/murmur_hash.h"
 
 namespace oceanbase
 {

@@ -14,7 +14,6 @@
 #include "ob_table_group_common.h"
 #include "ob_table_tenant_group.h"
 #include "observer/ob_server.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

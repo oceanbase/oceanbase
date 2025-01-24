@@ -11,18 +11,11 @@
  */
 
 #include "log_group_entry_header.h"       // LogGroupEntryHeader
-#include "lib/checksum/ob_crc64.h"        // ob_crc64
-#include "lib/checksum/ob_crc16.h"        // ob_crc16
 #include "lib/checksum/ob_parity_check.h" // parity_check
-#include "lib/utility/utility.h"          // !FALSE_IT
-#include "lib/oblog/ob_log_module.h"      // LOG*
-#include "share/scn.h"                    // SCN
 #include "share/ob_cluster_version.h"     // GET_MIN_DATA_VERSION
 #include "share/rc/ob_tenant_base.h"      // MTL_ID
-#include "log_define.h"                   // is_valid_log_id...
 #include "log_writer_utils.h"             // LogWriteBuf
 #include "log_entry.h"                    // LogEntry
-#include "log_entry_header.h"             // LogEntryHeader
 
 namespace oceanbase
 {

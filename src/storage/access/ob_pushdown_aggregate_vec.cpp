@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/aggregate/count.h"
-#include "share/aggregate/min_max.h"
-#include "share/aggregate/sum.h"
-#include "share/aggregate/first_row.h"
 #include "ob_pushdown_aggregate_vec.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 

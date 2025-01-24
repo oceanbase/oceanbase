@@ -13,17 +13,10 @@
 
 #include "storage/meta_store/ob_server_storage_meta_replayer.h"
 #include "storage/meta_store/ob_storage_meta_io_util.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "storage/meta_store/ob_server_storage_meta_persister.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ls/ob_ls_tablet_service.h"
 #include "storage/high_availability/ob_transfer_service.h"
-#include "storage/blocksstable/ob_object_manager.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/shared_storage/ob_disk_space_manager.h"
-#include "storage/tx_storage/ob_tablet_gc_service.h"
 #endif
 
 namespace oceanbase

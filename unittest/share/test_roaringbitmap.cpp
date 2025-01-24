@@ -12,16 +12,10 @@
 
 #include <gtest/gtest.h>
 #define private public
-#include "lib/roaringbitmap/ob_roaringbitmap.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
-#include "lib/utility/ob_macro_utils.h"
 
 #undef private
 
-#include <sys/time.h>
-#include <stdexcept>
-#include <exception>
-#include <typeinfo>
 
 namespace oceanbase {
 namespace common {

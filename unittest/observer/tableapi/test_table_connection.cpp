@@ -9,12 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
 #include "observer/table/ob_table_connection_mgr.h"
-#include "lib/time/ob_time_utility.h"
-#include "rpc/ob_request.h"
 #include "rpc/frame/ob_net_easy.cpp"
 #include "share/ob_thread_pool.h"
 #include "lib/container/ob_array.h"

@@ -2486,7 +2486,7 @@ START_TIME	timestamp(6)	YES
 MODIFY_TIME	timestamp(6)	YES			
 TENANT_ID	bigint(20)	YES		NULL	
 SQL_TEXT	longtext	YES		NULL	
-EXTRA_INFO	varchar(512)	YES		NULL	
+EXTRA_INFO	varchar(4096)	YES		NULL	
 RS_SVR_IP	varchar(46)	NO		NULL	
 RS_SVR_PORT	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TENANT_JOBS limit 1);
@@ -2504,7 +2504,7 @@ MODIFY_TIME	timestamp(6)	YES
 TENANT_ID	bigint(20)	YES		NULL	
 UNIT_ID	bigint(20)	YES		NULL	
 SQL_TEXT	longtext	YES		NULL	
-EXTRA_INFO	varchar(512)	YES		NULL	
+EXTRA_INFO	varchar(4096)	YES		NULL	
 RS_SVR_IP	varchar(46)	NO		NULL	
 RS_SVR_PORT	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_UNIT_JOBS limit 1);
@@ -2522,7 +2522,7 @@ MODIFY_TIME	timestamp(6)	YES
 SVR_IP	varchar(46)	YES		NULL	
 SVR_PORT	bigint(20)	YES		NULL	
 SQL_TEXT	longtext	YES		NULL	
-EXTRA_INFO	varchar(512)	YES		NULL	
+EXTRA_INFO	varchar(4096)	YES		NULL	
 RS_SVR_IP	varchar(46)	NO		NULL	
 RS_SVR_PORT	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SERVER_JOBS limit 1);

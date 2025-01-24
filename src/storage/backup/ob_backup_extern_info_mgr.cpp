@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/backup/ob_backup_extern_info_mgr.h"
-#include "common/ob_smart_var.h"
-#include "common/storage/ob_device_common.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "share/backup/ob_backup_path.h"
-#include "storage/backup/ob_backup_data_store.h"
+#include "src/storage/backup/ob_backup_extern_info_mgr.h"
 #include "storage/backup/ob_backup_restore_util.h"
 
 using namespace oceanbase::common;

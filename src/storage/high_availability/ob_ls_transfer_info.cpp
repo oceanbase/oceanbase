@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_transfer_info.h"
-#include "common/ob_version_def.h"
 #include "share/ob_cluster_version.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 

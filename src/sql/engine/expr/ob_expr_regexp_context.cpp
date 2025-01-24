@@ -11,16 +11,8 @@
  */
 
 #define USING_LOG_PREFIX LIB
-#include <stdlib.h>
-#include <locale.h>
-#include <cstring>
-#include "lib/oblog/ob_log.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/charset/ob_charset.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
 namespace oceanbase
 {
 using namespace common;

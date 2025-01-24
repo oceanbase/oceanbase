@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_lob_meta_builder.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/ob_index_builder_util.h"
 
 namespace oceanbase
 {

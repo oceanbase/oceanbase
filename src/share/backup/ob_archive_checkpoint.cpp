@@ -11,15 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/backup/ob_archive_checkpoint.h"
+#include "ob_archive_checkpoint.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/backup/ob_tenant_archive_round.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
 #include "share/ob_ddl_common.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
+
 using namespace oceanbase;
 using namespace common;
 using namespace share;

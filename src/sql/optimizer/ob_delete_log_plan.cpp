@@ -13,15 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_delete_log_plan.h"
 #include "sql/optimizer/ob_log_delete.h"
-#include "sql/optimizer/ob_log_group_by.h"
-#include "sql/optimizer/ob_log_link_dml.h"
-#include "ob_log_operator_factory.h"
-#include "ob_log_table_scan.h"
-#include "ob_log_sort.h"
-#include "ob_log_limit.h"
-#include "ob_log_table_scan.h"
-#include "ob_join_order.h"
-#include "ob_opt_est_cost.h"
 /**
  * DELETE syntax from MySQL 5.7
  *

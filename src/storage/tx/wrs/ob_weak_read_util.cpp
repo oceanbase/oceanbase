@@ -11,11 +11,6 @@
  */
 
 #include "ob_weak_read_util.h"
-#include "observer/omt/ob_tenant_config_mgr.h"  // ObTenantConfigGuard
-#include <algorithm>
-#include <stdarg.h>
-#include <stdint.h>
-#include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx/ob_timestamp_service.h"
 namespace oceanbase
 {

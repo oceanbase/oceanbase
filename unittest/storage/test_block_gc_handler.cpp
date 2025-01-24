@@ -15,8 +15,6 @@
 #define protected public
 #define private public
 
-// #include "storage/blocksstable/ob_data_file_prepare.h"
-// #include "share/ob_simple_mem_limit_getter.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
 #include "storage/ls/ob_ls.h"
 namespace oceanbase

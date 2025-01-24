@@ -1,7 +1,4 @@
-#include <pthread.h>
 #include <sys/socket.h>
-#include <sys/prctl.h>
-#include "io/easy_io_struct.h"
 #include "io/easy_log.h"
 #include "io/easy_baseth_pool.h"
 #include "io/easy_connection.h"

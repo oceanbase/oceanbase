@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_channel_loop.h"
-#include "share/interrupt/ob_global_interrupt_call.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "share/diagnosis/ob_sql_monitor_statname.h"
-#include "observer/omt/ob_th_worker.h"
-#include "share/ob_occam_time_guard.h"
 #include "sql/engine/px/ob_px_util.h"
 
 using namespace oceanbase::common;

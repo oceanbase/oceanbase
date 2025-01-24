@@ -12,19 +12,12 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 
-#include "sql/engine/cmd/ob_load_data_parser.h"
-#include "sql/resolver/cmd/ob_load_data_stmt.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_print_utils.h"
+#include "ob_load_data_parser.h"
 #include "lib/string/ob_hex_utils_base.h"
-#include "deps/oblib/src/lib/list/ob_dlist.h"
-#include "share/schema/ob_column_schema.h"
-#include "src/share/ob_encryption_util.h"
 #include "src/sql/engine/ob_exec_context.h"
 #if defined (OB_BUILD_CPP_ODPS) || defined (OB_BUILD_JNI_ODPS)
 #include "share/ob_encryption_util.h"
 #endif
-#include "lib/utility/ob_print_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

@@ -11,9 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <assert.h>
 #include "sql/optimizer/ob_skyline_prunning.h"
-#include "lib/allocator/page_arena.h"
 
 
 using namespace oceanbase::sql;

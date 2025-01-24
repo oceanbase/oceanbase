@@ -11,10 +11,6 @@
  */
 
 #include "ob_kvcache_map.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/ob_running_mode.h"
-#include "share/config/ob_server_config.h"
-#include "common/ob_clock_generator.h"
 #include "storage/blocksstable/ob_micro_block_cache.h"
 
 namespace oceanbase

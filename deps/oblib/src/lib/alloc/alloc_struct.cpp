@@ -11,11 +11,7 @@
  */
 
 #include "lib/alloc/alloc_struct.h"
-#include "lib/ob_define.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/coro/co_var.h"
 #include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_fast_convert.h"
 
 namespace oceanbase
 {

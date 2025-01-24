@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 
 #include "ob_phy_table_location_info.h"
-#include "observer/ob_server_struct.h"
 #include "sql/das/ob_das_location_router.h"
 #include "storage/tx/wrs/ob_black_list.h"
 using namespace oceanbase::common;

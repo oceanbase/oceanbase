@@ -11,8 +11,6 @@
  */
 
 #include "lib/allocator/ob_allocator_v2.h"
-#include "lib/alloc/alloc_failed_reason.h"
-#include "lib/alloc/memory_sanity.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 
 using namespace oceanbase::lib;

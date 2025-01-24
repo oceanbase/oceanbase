@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX RPC_OBRPC
 #include "rpc/obrpc/ob_rpc_translator.h"
 
-#include "rpc/ob_request.h"
-#include "rpc/frame/ob_req_processor.h"
-#include "rpc/obrpc/ob_rpc_stream_cond.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::rpc;

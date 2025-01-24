@@ -10,12 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tablet/ob_i_tablet_mds_interface.h"
 
-#include "lib/oblog/ob_log.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/tablet/ob_mds_row_iterator.h"
+#include "ob_i_tablet_mds_interface.h"
 #include "storage/tablet/ob_mds_scan_param_helper.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_tablet_medium_info_mds_node_filter.h"

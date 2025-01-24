@@ -13,18 +13,9 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_iterate_virtual_table.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/ob_i_tablet_scan.h"
-#include "share/ob_max_id_fetcher.h"
-#include "share/ob_schema_status_proxy.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_utils.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_inner_sql_result.h"
 #include "observer/ob_sql_client_decorator.h"
 
-#include "pl/ob_pl_stmt.h"
 
 namespace oceanbase
 {

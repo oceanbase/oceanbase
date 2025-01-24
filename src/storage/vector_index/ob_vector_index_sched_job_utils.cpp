@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/vector_index/ob_vector_index_sched_job_utils.h"
-#include "common/object/ob_object.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/string/ob_string.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_schema_getter_guard.h"
 
 namespace oceanbase {

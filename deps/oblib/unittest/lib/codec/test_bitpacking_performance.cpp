@@ -10,26 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <vector>
-#include <memory>
-#include <limits>
 #include <random>
-#include <cmath>
-#include <string>
 
 #include "gtest/gtest.h"
 
-#include "lib/codec/ob_composite_codec.h"
-#include "lib/codec/ob_simd_fixed_pfor.h"
-#include "lib/codec/ob_double_delta_zigzag_rle.h"
-#include "lib/codec/ob_delta_zigzag_rle.h"
-#include "lib/codec/ob_delta_zigzag_pfor.h"
-#include "lib/codec/ob_double_delta_zigzag_pfor.h"
-#include "lib/codec/ob_universal_compression.h"
 #include "lib/codec/ob_xor_fixed_pfor.h"
-#include "lib/codec/ob_tiered_codec.h"
-#include "lib/codec/ob_generated_scalar_bp_func.h"
-#include "lib/codec/ob_generated_unalign_simd_bp_func.h"
 
 namespace oceanbase
 {

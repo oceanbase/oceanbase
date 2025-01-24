@@ -11,18 +11,10 @@
  */
 
 #include "ob_ls_meta_recorder.h"
-#include "lib/checksum/ob_crc64.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"             // ObTimeUtility
-#include "lib/utility/ob_macro_utils.h"
 #include "ob_archive_service.h"                   // ObArchiveService
-#include "share/backup/ob_archive_piece.h"        // ObArchivePiece
-#include "ob_archive_define.h"
-#include "ob_archive_round_mgr.h"                 // ObArchiveRoundMgr
 #include "ob_archive_file_utils.h"
 #include "ob_ls_meta_record_task.h"               // *Task
 #include "share/backup/ob_archive_path.h"         // get.*path
-#include "share/rc/ob_tenant_base.h"              // mtl_
 
 #define ADD_LS_RECORD_TASK(CLASS, type) \
 { \

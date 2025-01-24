@@ -13,7 +13,6 @@
 
 #include "storage/direct_load/ob_direct_load_multiple_sstable_scan_merge.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
-#include "storage/blocksstable/ob_datum_range.h"
 #include "storage/direct_load/ob_direct_load_multiple_datum_range.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_scanner.h"
 

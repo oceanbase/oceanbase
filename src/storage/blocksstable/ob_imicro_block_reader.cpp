@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_imicro_block_reader.h"
 #include "index_block/ob_index_block_row_struct.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
 
 namespace oceanbase
 {

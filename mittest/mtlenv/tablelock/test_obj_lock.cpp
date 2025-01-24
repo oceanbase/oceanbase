@@ -21,7 +21,6 @@
 #define UNITTEST
 
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/tablelock/ob_obj_lock.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "table_lock_common_env.h"
 #include "table_lock_tx_common_env.h"

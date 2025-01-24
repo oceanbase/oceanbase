@@ -14,13 +14,9 @@
 
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "common/ob_timeout_ctx.h"
-#include "lib/stat/ob_session_stat.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_task.h"
-#include "share/ob_share_util.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/resource_manager/ob_resource_manager.h"
 
 namespace oceanbase
 {

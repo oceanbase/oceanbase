@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/rc/context.h"
-#include "lib/lds/ob_lds_constructor.hpp"
-#include "lib/lock/ob_mutex.h"
-#include "lib/rc/ob_rc.h"
-#include "lib/coro/co_var.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

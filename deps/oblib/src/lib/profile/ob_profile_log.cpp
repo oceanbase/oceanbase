@@ -10,17 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/uio.h>
-#include <new>
-#include <pthread.h>
 #include "lib/profile/ob_profile_log.h"
-#include "lib/ob_define.h"
 
 namespace oceanbase
 {

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/backup/ob_backup_index_block_builder_mgr.h"
-#include "storage/blocksstable/ob_sstable.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 

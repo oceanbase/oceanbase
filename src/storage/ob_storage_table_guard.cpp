@@ -12,18 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ob_storage_table_guard.h"
+#include "ob_storage_table_guard.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "share/throttle/ob_throttle_common.h"
-#include "share/throttle/ob_share_throttle_define.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/ob_i_table.h"
-#include "storage/ob_relative_table.h"
-#include "storage/tablet/ob_table_store_util.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
-#include "storage/tx_storage/ob_tenant_freezer.h"
 
 namespace oceanbase
 {

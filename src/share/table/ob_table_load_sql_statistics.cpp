@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX CLIENT
 
 #include "ob_table_load_sql_statistics.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {

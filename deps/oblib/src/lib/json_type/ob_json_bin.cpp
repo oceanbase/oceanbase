@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX LIB
-#include "common/object/ob_obj_type.h"
 #include "ob_json_bin.h"
 #include "ob_json_tree.h"
 #include "ob_json_diff.h"

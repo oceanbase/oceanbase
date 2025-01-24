@@ -11,13 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/resolver/dml/ob_sql_hint.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
+#include "ob_sql_hint.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "common/ob_smart_call.h"
-#include "sql/monitor/ob_sql_plan.h"
 
 namespace oceanbase
 {

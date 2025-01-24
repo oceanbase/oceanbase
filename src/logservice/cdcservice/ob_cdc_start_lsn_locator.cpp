@@ -11,11 +11,9 @@
  */
 
 #define USING_LOG_PREFIX EXTLOG
-#include "share/scn.h"
 #include "ob_cdc_start_lsn_locator.h"
 #include "ob_cdc_util.h"
 #include "logservice/ob_log_service.h"          // ObLogService
-#include "logservice/restoreservice/ob_remote_log_source_allocator.h" // ObResSrcAlloctor::alloc
 
 namespace oceanbase
 {

@@ -10,11 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tablet/ob_tablet_split_mds_user_data.h"
 
-#include "storage/access/ob_table_read_info.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/ls/ob_ls_tablet_service.h"
+#include "ob_tablet_split_mds_user_data.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/tablet/ob_tablet_split_mds_helper.h"
 

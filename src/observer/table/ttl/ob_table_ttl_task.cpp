@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_ttl_task.h"
-#include "share/table/ob_table_ttl_common.h"
-#include "share/table/ob_table.h"
-#include "observer/table/ob_table_op_wrapper.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "observer/table/ob_table_query_common.h"
 #include "observer/table/ob_table_query_and_mutate_processor.h"
-#include "lib/utility/utility.h"
-#include "share/table/ob_table_util.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::transaction;

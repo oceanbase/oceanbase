@@ -17,38 +17,12 @@
 #define private public
 #define protected public
 #define UNITTEST
-#include "lib/container/ob_iarray.h"
 #include "storage/memtable/ob_memtable_interface.h"
-#include "storage/blocksstable/ob_data_file_prepare.h"
-#include "storage/blocksstable/ob_row_generate.h"
-#include "observer/ob_service.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/memtable/ob_memtable_iterator.h"
-#include "storage/memtable/ob_memtable_mutator.h"
 
-#include "common/cell/ob_cell_reader.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/container/ob_se_array.h"
 
-#include "storage/ob_i_store.h"
-#include "storage/ob_i_table.h"
-#include "storage/compaction/ob_sstable_merge_info_mgr.h"
-#include "storage/compaction/ob_partition_merge_iter.h"
 #include "storage/compaction/ob_partition_merger.h"
-#include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "storage/blocksstable/ob_multi_version_sstable_test.h"
 
-#include "storage/memtable/utils_rowkey_builder.h"
-#include "storage/memtable/utils_mock_row.h"
-#include "storage/tx/ob_mock_tx_ctx.h"
-#include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx/ob_trans_ctx_mgr_v4.h"
-#include "storage/tx/ob_tx_data_define.h"
-#include "share/scn.h"
-#include "src/storage/column_store/ob_column_oriented_sstable.h"
 #include "mtlenv/storage/test_merge_basic.h"
 
 namespace oceanbase

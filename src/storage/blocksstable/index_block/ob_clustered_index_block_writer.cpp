@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/blocksstable/index_block/ob_clustered_index_block_writer.h"
+#include "ob_clustered_index_block_writer.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
 
 namespace oceanbase
 {

@@ -12,8 +12,6 @@
 
 #include "lib/encode/ob_quoted_printable_encode.h"
 
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
 #include "lib/oblog/ob_log.h"
 
 namespace oceanbase

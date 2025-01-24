@@ -12,21 +12,10 @@
 
 #define USING_LOG_PREFIX RPC_OBMYSQL
 
-#include <math.h>
 #include "rpc/obmysql/ob_mysql_util.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/charset/ob_dtoa.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/rowid/ob_urowid.h"
-#include "common/object/ob_object.h"
 #include "lib/json_type/ob_json_bin.h"
-#include "lib/json_type/ob_json_base.h"
 #include "lib/geo/ob_geo_bin.h"
 #include "lib/xml/ob_xml_util.h"
-#include "lib/xml/ob_xml_bin.h"
 using namespace oceanbase::common;
 
 namespace oceanbase

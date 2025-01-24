@@ -9,26 +9,10 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/compaction/ob_medium_compaction_func.h"
-#include "storage/compaction/ob_medium_compaction_mgr.h"
-#include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "storage/compaction/ob_partition_merge_policy.h"
-#include "share/tablet/ob_tablet_info.h"
 #include "share/tablet/ob_tablet_table_operator.h"
-#include "share/ob_ls_id.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "logservice/ob_log_service.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "storage/ob_partition_range_spliter.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "src/storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/column_store/ob_column_store_replica_util.h"
-#include "storage/tablet/ob_tablet_medium_info_reader.h"
-#include "storage/compaction/ob_schedule_dag_func.h"
-#include "observer/ob_server_event_history_table_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #endif

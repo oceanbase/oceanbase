@@ -13,9 +13,6 @@
 #include "ob_orc_table_row_iter.h"
 #include "sql/engine/expr/ob_expr_get_path.h"
 #include "share/external_table/ob_external_table_utils.h"
-#include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/ob_exec_context.h"
-#include "src/share/external_table/ob_external_table_file_mgr.h"
 
 
 namespace oceanbase

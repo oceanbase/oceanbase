@@ -15,18 +15,11 @@
 #include "rootserver/freeze/ob_freeze_info_detector.h"
 
 #include "rootserver/freeze/ob_major_merge_info_manager.h"
-#include "share/ob_freeze_info_manager.h"
 #include "rootserver/ob_root_utils.h"
-#include "lib/profile/ob_trace_id.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_global_stat_proxy.h"
-#include "observer/ob_server_struct.h"
-#include "share/rc/ob_tenant_base.h"
 #include "rootserver/ob_thread_idling.h"
-#include "share/ob_rpc_struct.h"
 #include "share/ob_service_epoch_proxy.h"
-#include "share/ob_zone_merge_info.h"
 
 namespace oceanbase
 {

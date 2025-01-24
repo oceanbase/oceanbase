@@ -11,16 +11,8 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_server.h"
-#include "observer/omt/ob_multi_tenant.h"
 
-#include "observer/omt/ob_tenant_node_balancer.h"     // ObTenantNodeBalancer
-#include "share/io/ob_io_manager.h"                   // ObIOManager
-#include "share/io/ob_io_struct.h"                    // device_health_status_to_str
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_service.h"
-#include "logservice/ob_server_log_block_mgr.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif

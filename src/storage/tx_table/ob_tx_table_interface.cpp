@@ -10,11 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx_table/ob_tx_table_interface.h"
 
-#include "storage/tx/ob_tx_data_functor.h"
+#include "ob_tx_table_interface.h"
 #include "storage/tx_table/ob_tx_table.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase {
 namespace storage {

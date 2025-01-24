@@ -13,9 +13,7 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "lib/oblog/ob_log_module.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/access/ob_global_iterator_pool.h"
 namespace oceanbase
 {
 

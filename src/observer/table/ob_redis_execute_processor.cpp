@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_redis_execute_processor.h"
 #include "ob_table_move_response.h"
-#include "redis/cmd/ob_redis_cmd.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;

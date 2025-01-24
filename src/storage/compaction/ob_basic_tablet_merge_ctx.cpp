@@ -8,25 +8,17 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/compaction/ob_basic_tablet_merge_ctx.h"
+#include "ob_basic_tablet_merge_ctx.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
-#include "storage/compaction/ob_compaction_suggestion.h"
-#include "storage/compaction/ob_sstable_merge_history.h"
-#include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
-#include "storage/blocksstable/ob_data_store_desc.h"
 #include "storage/ob_storage_schema_util.h"
 #include "storage/ob_gc_upper_trans_helper.h"
 #include "ob_medium_list_checker.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_mds_scan_param_helper.h"
-#include "observer/ob_server_event_history_table_operator.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
 
 namespace oceanbase

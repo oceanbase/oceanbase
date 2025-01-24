@@ -10,16 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #include "sql/test_sql_utils.h"
-#include "lib/utility/ob_test_util.h"
-#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr_print_visitor.h"
 #include "sql/ob_sql_init.h"
-#include "lib/json/ob_json_print_utils.h"
-#include "share/ob_cluster_version.h"
-#include <fstream>
 #define private public
 #include "observer/ob_server.h"
 #undef private

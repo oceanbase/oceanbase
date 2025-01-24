@@ -11,7 +11,6 @@
  */
 #define USING_LOG_PREFIX BALANCE
 
-#include "share/transfer/ob_transfer_info.h"      // ObTransferPartInfo
 
 #include "ob_tenant_ls_balance_group_info.h"
 

@@ -11,7 +11,6 @@
  */
 
 #include "ob_all_virtual_storage_meta_memory_status.h"
-#include "observer/ob_server.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

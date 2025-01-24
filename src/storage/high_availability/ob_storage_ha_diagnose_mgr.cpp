@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_diagnose_mgr.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {

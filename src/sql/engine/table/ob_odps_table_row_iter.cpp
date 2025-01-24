@@ -12,8 +12,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "ob_parquet_table_row_iter.h"
-#include "lib/charset/ob_charset.h"
+#include "ob_odps_table_row_iter.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "src/share/external_table/ob_external_table_utils.h"
 #include "src/sql/engine/expr/ob_datum_cast.h"

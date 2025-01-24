@@ -10,13 +10,9 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
-#include <cstdio>
-#include <gtest/gtest.h>
-#include <signal.h>
 #define private public
 #define protected public
 #include "env/ob_simple_log_cluster_env.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"
 #undef private
 #undef protected
 

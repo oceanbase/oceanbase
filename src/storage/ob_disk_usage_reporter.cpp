@@ -12,20 +12,11 @@
 
 #include "storage/ob_disk_usage_reporter.h"
 
-#include "share/ob_disk_usage_table_operator.h"
-#include "observer/omt/ob_multi_tenant.h"
 
-#include "share/rc/ob_tenant_base.h"
-#include "storage/blocksstable/ob_macro_block_id.h"
-#include "storage/slog/ob_storage_logger_manager.h"
 #include "logservice/ob_log_service.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "lib/function/ob_function.h"
 #include "logservice/ob_server_log_block_mgr.h"
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
-#include "storage/tmp_file/ob_tmp_file_manager.h"
 
 namespace oceanbase
 {

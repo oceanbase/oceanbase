@@ -12,26 +12,10 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "common/row/ob_row.h"
-#include "common/ob_store_format.h"
-#include "lib/compress/ob_compressor_pool.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_task_define.h"
-#include "share/schema/ob_table_schema.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
-#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
-#include "storage/blocksstable/ob_macro_block_writer.h"
+#include "ob_macro_block_writer.h"
+#include "src/storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
-#include "storage/ddl/ob_ddl_redo_log_writer.h"
-#include "storage/ob_i_store.h"
-#include "storage/compaction/ob_sstable_merge_history.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
-#include "storage/blocksstable/cs_encoding/ob_cs_encoding_util.h"
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
+#include "src/storage/ddl/ob_ddl_clog.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_major_pre_warmer.h"
 #endif

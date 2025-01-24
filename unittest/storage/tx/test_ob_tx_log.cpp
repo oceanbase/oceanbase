@@ -14,8 +14,6 @@
 #include <gtest/gtest.h>
 #define private public
 #include "storage/tx/ob_tx_log.h"
-#include "logservice/ob_log_base_header.h"
-#include "lib/container/ob_array_helper.h"
 void ob_abort (void) __THROW {}
 namespace oceanbase
 {

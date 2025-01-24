@@ -11,15 +11,7 @@
  */
 
 #include "mds_factory.h"
-#include "lib/ob_errno.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/multi_data_source/buffer_ctx.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tx/ob_multi_data_source.h"
 #include "storage/multi_data_source/compile_utility/compile_mapper.h"
-#include "mds_tenant_service.h"
-#include <type_traits>
 
 namespace oceanbase
 {

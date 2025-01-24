@@ -16,9 +16,6 @@
 #define protected public
 #define private public
 #include "ob_cs_encoding_test_base.h"
-#include "storage/blocksstable/cs_encoding/ob_cs_encoding_util.h"
-#include "storage/blocksstable/cs_encoding/ob_micro_block_cs_decoder.h"
-#include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
 
 namespace oceanbase
 {

@@ -12,29 +12,12 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_raw_expr_resolver_impl.h"
-#include "common/ob_smart_call.h"
-#include "common/ob_common_utility.h"
-#include "ob_raw_expr_info_extractor.h"
-#include "sql/parser/sql_parser_base.h"
-#include "sql/resolver/ob_column_ref.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/parser/ob_parser_utils.h"
-#include "sql/engine/expr/ob_expr_case.h"
 #include "lib/json/ob_json_print_utils.h"
-#include "lib/string/ob_sql_string.h"
-#include "pl/ob_pl_type.h"
 #include "pl/ob_pl_resolver.h"
-#include "common/ob_smart_call.h"
-#include "share/schema/ob_udt_info.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_udt_object_manager.h"
 #endif
-#include "sql/resolver/ob_stmt.h"
-#include "sql/resolver/dml/ob_del_upd_stmt.h"
-#include "deps/oblib/src/lib/json_type/ob_json_path.h"
-#include "share/resource_manager/ob_resource_manager.h"
 #include "sql/resolver/dml/ob_inlist_resolver.h"
 
 namespace oceanbase

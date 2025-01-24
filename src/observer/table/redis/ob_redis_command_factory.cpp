@@ -14,7 +14,6 @@
 #include "ob_redis_command_factory.h"
 #include "share/datum/ob_datum_util.h"
 #include "ob_redis_command_reg.h"
-#include "share/table/ob_redis_common.h"
 
 using namespace oceanbase::table;
 using namespace oceanbase::common;

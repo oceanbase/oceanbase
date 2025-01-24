@@ -10,17 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <utime.h>
-#include <dirent.h>
 
 #include "ob_storage_file.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/utility/utility.h"
 #include "lib/utility/ob_sort.h"
 
 namespace oceanbase

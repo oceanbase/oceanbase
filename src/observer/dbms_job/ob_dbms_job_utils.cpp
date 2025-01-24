@@ -14,22 +14,6 @@
 
 #include "ob_dbms_job_utils.h"
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/string/ob_string.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
-#include "lib/worker.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/ob_server_struct.h"
 
 

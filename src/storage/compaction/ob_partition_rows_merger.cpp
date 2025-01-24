@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 
 #include "storage/compaction/ob_partition_rows_merger.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/compaction/ob_mview_compaction_util.h"
 

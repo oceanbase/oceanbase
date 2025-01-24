@@ -20,12 +20,9 @@
 
 #include "env/ob_simple_cluster_test_base.h"
 #include "multi_replica/env/ob_multi_replica_util.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
 #include "share/schema/ob_tenant_schema_service.h"
-#include "share/schema/ob_part_mgr_util.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase
 {

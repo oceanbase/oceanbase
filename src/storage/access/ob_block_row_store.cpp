@@ -12,16 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_block_row_store.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
-#include "storage/ob_i_store.h"
-#include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
-#include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
-#include "storage/access/ob_table_access_context.h"
-#include "share/ob_partition_split_query.h"
-#include "storage/ob_storage_struct.h"
 
 namespace oceanbase
 {

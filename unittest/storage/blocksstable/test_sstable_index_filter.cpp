@@ -14,11 +14,7 @@
 #define private public
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 
-#include "share/schema/ob_table_param.h"
 #include "sql/engine/ob_exec_context.h"
-#include "storage/access/ob_sstable_index_filter.h"
-#include "storage/access/ob_table_access_param.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 
 namespace oceanbase
 {

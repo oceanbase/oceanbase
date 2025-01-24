@@ -12,50 +12,20 @@
 
 #define USING_LOG_PREFIX SERVER_OMT
 
-#include "ob_multi_tenant.h"
 
-#include "lib/oblog/ob_log.h"
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/ob_running_mode.h"
-#include "lib/file/file_directory_utils.h"
-#include "lib/objectpool/ob_server_object_pool.h"
-#include "share/ob_tenant_mgr.h"
+#include "ob_multi_tenant.h"
 #include "observer/ob_server.h"
-#include "observer/ob_server_struct.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "ob_tenant.h"
-#include "rpc/ob_request.h"
 #include "rpc/obmysql/ob_sql_nio_server.h"
-#include "storage/tx/ob_ts_mgr.h"
-#include "storage/ob_disk_usage_reporter.h"
-#include "storage/slog/ob_storage_logger.h"
 #include "share/schema/ob_tenant_schema_service.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
 #include "observer/mysql/obsm_conn_callback.h"
 #include "sql/dtl/ob_dtl_fc_server.h"
-#include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/das/ob_das_id_service.h"
-#include "sql/das/ob_data_access_service.h"
-#include "sql/engine/ob_tenant_sql_memory_manager.h"
-#include "sql/engine/px/ob_px_admission.h"
-#include "share/ob_get_compat_mode.h"
-#include "storage/tx/wrs/ob_tenant_weak_read_service.h"   // ObTenantWeakReadService
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"   // ObSharedMemAllocMgr
-#include "share/allocator/ob_tenant_mutil_allocator.h"
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
 #include "share/ob_global_autoinc_service.h"
-#include "lib/thread/ob_thread_name.h"
-#include "logservice/ob_log_service.h"
 #include "logservice/archiveservice/ob_archive_service.h"    // ObArchiveService
 #include "logservice/data_dictionary/ob_data_dict_service.h" // ObDataDictService
 #include "ob_tenant_mtl_helper.h"
-#include "storage/blocksstable/ob_decode_resource_pool.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/tx/ob_xa_service.h"
 #include "storage/tx/ob_tx_loop_worker.h"
@@ -63,43 +33,23 @@
 #include "storage/tx/ob_standby_timestamp_service.h"
 #include "storage/tx/ob_timestamp_access.h"
 #include "storage/tx/ob_trans_id_service.h"
-#include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_unique_id_service.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#include "storage/compaction/ob_tenant_medium_checker.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "storage/ob_file_system_router.h"
-#include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "storage/tx_storage/ob_checkpoint_service.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/fts/ob_fts_plugin_mgr.h"
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
-#include "storage/tx/ob_id_service.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"
-#include "storage/compaction/ob_compaction_tablet_diagnose.h"
-#include "storage/compaction/ob_compaction_suggestion.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
-#include "storage/compaction/ob_compaction_memory_pool.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "storage/tablelock/ob_table_lock_service.h"
-#include "storage/ob_file_system_router.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h" // ObTenantSSTableMergeInfoMgr
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/access/ob_table_scan_iterator.h"
-#include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
-#include "share/io/ob_io_manager.h"
-#include "share/ob_ddl_sim_point.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/omt/ob_tenant_srs.h"
 #include "observer/report/ob_tenant_meta_checker.h"
-#include "observer/report/ob_tablet_table_updater.h"
 #include "storage/high_availability/ob_storage_ha_service.h"
 #include "rootserver/ob_tenant_info_loader.h"//ObTenantInfoLoader
 #include "rootserver/ob_tenant_balance_service.h"//ObTenantBalanceService
@@ -107,19 +57,14 @@
 #include "rootserver/ob_standby_schema_refresh_trigger.h"//ObStandbySchemaRefreshTrigger
 #include "rootserver/ob_tenant_info_loader.h"//ObTenantInfoLoader
 #include "rootserver/ob_create_standby_from_net_actor.h" // ObCreateStandbyFromNetActor
-#include "rootserver/ob_primary_ls_service.h"//ObLSService
 #include "rootserver/standby/ob_recovery_ls_service.h"//ObRecoveryLSService
 #include "rootserver/ob_common_ls_service.h"//ObCommonLSService
 #include "rootserver/restore/ob_restore_service.h" //ObRestoreService
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "rootserver/ob_balance_task_execute_service.h" //ObBalanceTaskExecuteService
-#include "rootserver/backup/ob_backup_service.h" //ObBackupDataService and ObBackupCleanService
 #include "rootserver/backup/ob_backup_task_scheduler.h" // ObBackupTaskScheduler
 #include "rootserver/backup/ob_archive_scheduler_service.h" // ObArchiveSchedulerService
 #include "observer/dbms_scheduler/ob_dbms_sched_service.h" // ObDBMSSchedService
-#include "logservice/leader_coordinator/ob_leader_coordinator.h"
-#include "storage/lob/ob_lob_manager.h"
-#include "share/deadlock/ob_deadlock_detector_mgr.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_scheduler.h"
 #include "rootserver/restore/ob_clone_scheduler.h"
 #ifdef OB_BUILD_SPM
@@ -132,25 +77,16 @@
 #include "lib/oracleclient/ob_oci_environment.h"
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
 #endif
-#include "lib/mysqlclient/ob_tenant_oci_envs.h"
 #include "sql/udr/ob_udr_mgr.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
-#include "storage/tx_storage/ob_tablet_gc_service.h"
-#include "share/ob_occam_time_guard.h"
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "observer/table_load/ob_table_load_service.h"
-#include "observer/table_load/resource/ob_table_load_resource_service.h"
-#include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_ps_cache.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/detect/ob_detect_manager.h"
 #include "storage/access/ob_empty_read_bucket.h"
-#include "storage/access/ob_global_iterator_pool.h"
 #include "observer/table/ttl/ob_ttl_service.h"
-#include "sql/dtl/ob_dtl_interm_result_manager.h"
-#include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
 #ifdef ERRSIM
 #include "share/errsim_module/ob_tenant_errsim_module_mgr.h"
@@ -167,19 +103,14 @@
 #include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
 #else
 #endif
-#include "observer/table/ob_htable_lock_mgr.h"
-#include "observer/table/ob_table_session_pool.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 #include "storage/restore/ob_tenant_restore_info_mgr.h"
 #include "share/io/ob_storage_io_usage_reporter.h"
-#include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
-#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
-#include "storage/tmp_file/ob_tmp_file_manager.h" // ObTenantTmpFileManager
 #include "storage/restore/ob_tenant_restore_info_mgr.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
@@ -191,7 +122,6 @@
 #include "observer/table/group/ob_table_tenant_group.h"
 #include "observer/table/ob_table_client_info_mgr.h"
 #include "observer/table/ob_table_query_async_processor.h"
-#include "observer/table/ob_htable_rowkey_mgr.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;

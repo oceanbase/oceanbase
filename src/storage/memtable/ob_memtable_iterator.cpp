@@ -14,19 +14,9 @@
 
 #include "storage/memtable/ob_memtable_iterator.h"
 
-#include "share/object/ob_obj_cast.h"
-#include "common/ob_common_types.h"
 
-#include "storage/memtable/ob_memtable_interface.h"
-#include "storage/memtable/ob_memtable_data.h"
-#include "storage/memtable/mvcc/ob_mvcc_engine.h"
-#include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
-#include "storage/tx/ob_trans_define.h"
-#include "ob_memtable_context.h"
 #include "ob_memtable.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {

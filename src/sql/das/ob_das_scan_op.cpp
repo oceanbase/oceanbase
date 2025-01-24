@@ -11,14 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/ob_das_scan_op.h"
+#include "ob_das_scan_op.h"
 #include "sql/das/ob_das_extra_data.h"
 #include "sql/das/ob_vector_index_lookup_op.h"
-#include "sql/das/ob_das_utils.h"
-#include "sql/engine/table/ob_table_scan_op.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/ob_des_exec_context.h"
-#include "storage/access/ob_table_scan_iterator.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
 #include "sql/das/iter/ob_das_iter_utils.h"
 

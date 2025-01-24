@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX OBLOG
 
 #include "ob_log_systable_queryer.h"
-#include "lib/mysqlclient/ob_isql_client.h"  // ObISQLClient
-#include "lib/mysqlclient/ob_mysql_result.h" // ObMySQLResult
-#include "lib/string/ob_sql_string.h"      // ObSqlString
 #include "share/inner_table/ob_inner_table_schema_constants.h" // OB_***_TNAME
-#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::share;
 namespace oceanbase

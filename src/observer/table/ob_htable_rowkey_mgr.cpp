@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_htable_rowkey_mgr.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/table/ob_ttl_util.h"
 
 using namespace oceanbase::share;

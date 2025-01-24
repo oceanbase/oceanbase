@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX CLIENT
 #include "ob_table.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "ob_table_object.h"
 #include "observer/table/ob_htable_utils.h"

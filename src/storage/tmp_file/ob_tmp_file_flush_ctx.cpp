@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/ob_errno.h"   // KR
 #include "storage/tmp_file/ob_tmp_file_flush_ctx.h"
 
 namespace oceanbase

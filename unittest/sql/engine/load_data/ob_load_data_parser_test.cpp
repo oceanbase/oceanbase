@@ -13,11 +13,8 @@
 #define USING_LOG_PREFIX SQL
 
 #include <gtest/gtest.h>
-//#include "lib/utility/ob_test_util.h"
-//#include "sql/engine/test_engine_util.h"
 #include "sql/ob_sql_init.h"
 #include "sql/engine/cmd/ob_load_data_impl.h"
-#include "sql/engine/cmd/ob_load_data_parser.h"
 
 static char *file_path = NULL;
 

@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_partition_merge_progress.h"
-#include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "storage/compaction/ob_tablet_merge_task.h"
-#include "share/scheduler/ob_sys_task_stat.h"
-#include "storage/access/ob_table_estimator.h"
-#include "storage/access/ob_index_sstable_estimator.h"
 #include "ob_tenant_compaction_progress.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/column_store/ob_co_merge_dag.h"
-#include "storage/memtable/ob_memtable.h"
 
 namespace oceanbase
 {

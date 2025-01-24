@@ -11,11 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_CG
-#include "sql/code_generator/ob_tsc_cg_service.h"
+#include "ob_tsc_cg_service.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "sql/engine/table/ob_table_scan_op.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "src/share/vector_index/ob_vector_index_util.h"
 namespace oceanbase
 {

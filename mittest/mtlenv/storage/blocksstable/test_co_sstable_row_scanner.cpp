@@ -10,17 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #define private public
 #define protected public
 
-#include "lib/random/ob_random.h"
 #include "storage/access/ob_sstable_row_multi_scanner.h"
-#include "storage/column_store/ob_co_prefetcher.h"
-#include "storage/column_store/ob_co_sstable_row_scanner.h"
-#include "storage/tablet/ob_tablet.h"
 #include "ob_index_block_data_prepare.h"
-#include "lib/container/ob_se_array.h"
 
 
 namespace oceanbase

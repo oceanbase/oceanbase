@@ -14,19 +14,12 @@
 
 #include "ob_query_driver.h"
 #include "ob_mysql_result_set.h"
-#include "obmp_base.h"
 #include "obsm_row.h"
 #include "rpc/obmysql/packet/ompk_row.h"
 #include "rpc/obmysql/packet/ompk_resheader.h"
 #include "rpc/obmysql/packet/ompk_field.h"
 #include "rpc/obmysql/packet/ompk_eof.h"
-#include <string.h>
-#include "share/ob_lob_access_utils.h"
-#include "lib/charset/ob_charset.h"
-#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "observer/mysql/obmp_stmt_prexecute.h"
-#include "lib/xml/ob_multi_mode_interface.h"
-#include "lib/xml/ob_xml_util.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 
 namespace oceanbase

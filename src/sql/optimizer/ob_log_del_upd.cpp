@@ -11,15 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/resolver/expr/ob_raw_expr.h"
+#include "ob_log_del_upd.h"
 #include "sql/optimizer/ob_del_upd_log_plan.h"
-#include "sql/optimizer/ob_log_del_upd.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_exchange.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "common/ob_smart_call.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_log_join.h"
 
 using namespace oceanbase;

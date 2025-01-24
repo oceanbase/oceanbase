@@ -11,9 +11,6 @@
  */
 
 #include "lib/utility/ob_hang_fatal_error.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_print_utils.h"
-#include "common/ob_common_utility.h"
 #include "common/ob_clock_generator.h"
 #include "lib/utility/utility.h"
 

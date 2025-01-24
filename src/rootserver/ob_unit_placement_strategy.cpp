@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_unit_placement_strategy.h"
-#include "lib/charset/ob_mysql_global.h"  // for DBL_MAX
-#include "ob_root_utils.h"                // resource_type_to_str
 
 using namespace oceanbase::common;
 using namespace oceanbase::rootserver;

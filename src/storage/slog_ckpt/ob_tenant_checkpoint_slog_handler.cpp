@@ -12,28 +12,14 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
-#include "storage/slog_ckpt/ob_tenant_storage_checkpoint_reader.h"
-#include "storage/slog_ckpt/ob_tenant_storage_checkpoint_writer.h"
+#include "ob_tenant_checkpoint_slog_handler.h"
 #include "storage/slog_ckpt/ob_tablet_replay_create_handler.h"
-#include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
-#include "storage/ob_super_block_struct.h"
 #include "storage/slog/ob_storage_log_reader.h"
-#include "storage/slog/ob_storage_log_replayer.h"
-#include "storage/slog/ob_storage_log.h"
-#include "storage/slog/ob_storage_logger_manager.h"
-#include "storage/slog/ob_storage_logger.h"
-#include "storage/tx/ob_timestamp_service.h"
-#include "storage/tx/ob_trans_id_service.h"
-#include "storage/tx/ob_dup_table_base.h"
 #include "observer/omt/ob_tenant.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "sql/das/ob_das_id_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/slog_ckpt/ob_tenant_meta_snapshot_handler.h"
 
 namespace oceanbase

@@ -11,23 +11,15 @@
  */
 
 #include "ob_storage.h"
-#include "lib/restore/ob_i_storage.h"
 #include "lib/restore/ob_object_device.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/utility/ob_sort.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/container/ob_array_iterator.h"
-#include "common/ob_smart_var.h"
 #include "common/storage/ob_device_common.h"
-#include "common/storage/ob_io_device.h"
-#include "lib/atomic/ob_atomic.h"
+#include "lib/utility/ob_sort.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
 namespace common
 {
-
 const char *OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS", "LOCAL", "S3", "LOCAL_CACHE"};
 
 void print_access_storage_log(

@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/charset/ob_mysql_global.h"
 #include "lib/charset/ob_ctype.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "lib/charset/ob_ctype_tis620_tab.h"
 #include "lib/allocator/ob_malloc.h"
 

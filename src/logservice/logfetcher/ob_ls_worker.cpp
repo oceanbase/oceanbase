@@ -14,14 +14,11 @@
 
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
-#include "ob_ls_worker.h"
 
+#include "ob_ls_worker.h"
 #include "lib/thread/thread_mgr.h"      // MTL
-#include "ob_log_timer.h"               // ObLogFixedTimer
 #include "ob_log_fetcher_err_handler.h" // IObLogErrHandler
 #include "ob_log_ls_fetch_ctx.h"        // LSFetchCtx
-#include "ob_log_fetcher_idle_pool.h"   // IObLogFetcherIdlePool
-#include "ob_log_fetcher_dead_pool.h"   // IObLogFetcherDeadPool
 #include "ob_log_fetcher.h"             // get_fs_container_mgr
 
 namespace oceanbase

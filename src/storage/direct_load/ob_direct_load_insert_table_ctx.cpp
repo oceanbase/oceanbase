@@ -13,15 +13,10 @@
 
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "share/table/ob_table_load_dml_stat.h"
-#include "share/table/ob_table_load_sql_statistics.h"
 #include "share/stat/ob_stat_item.h"
-#include "storage/direct_load/ob_direct_load_origin_table.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
-#include "storage/lob/ob_lob_meta.h"
 
 namespace oceanbase
 {

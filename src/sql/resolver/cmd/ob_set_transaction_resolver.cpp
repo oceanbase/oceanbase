@@ -14,8 +14,7 @@
 
 #include "sql/resolver/cmd/ob_set_transaction_resolver.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
+#include "src/sql/resolver/ob_resolver_utils.h"
 #include "sql/ob_trans_character.h"
 using namespace oceanbase::common;
 using namespace oceanbase::transaction;

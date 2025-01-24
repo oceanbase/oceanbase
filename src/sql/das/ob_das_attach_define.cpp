@@ -15,8 +15,6 @@
  */
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_attach_define.h"
-#include "sql/das/ob_das_scan_op.h"
-#include "sql/das/ob_das_factory.h"
 namespace oceanbase {
 namespace sql {
 

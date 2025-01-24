@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_multiset.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/ob_exec_context.h"
-#include "lib/hash/ob_hashmap.h"
-#include "pl/ob_pl_user_type.h"
-#include "pl/ob_pl_allocator.h"
-#include "lib/utility/utility.h"
+#include "src/pl/ob_pl.h"
 
 namespace oceanbase
 {

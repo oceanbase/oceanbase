@@ -12,25 +12,10 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_tenant_thread_helper.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/thread/thread_mgr.h"//TG
-#include "share/ob_errno.h"
-#include "share/schema/ob_schema_struct.h"//ObTenantInfo
-#include "share/schema/ob_schema_service.h"//ObMultiSchemaService
-#include "share/schema/ob_schema_getter_guard.h"//ObSchemaGetterGuard
-#include "share/ob_share_util.h"//ObShareUtil
-#include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
 #include "share/restore/ob_physical_restore_table_operator.h"//restore_job
 #include "share/restore/ob_tenant_clone_table_operator.h" // clone_job
-#include "share/restore/ob_physical_restore_info.h"//restore_info
 #include "share/ob_primary_zone_util.h"//get_ls_primary_zone_priority
-#include "observer/ob_server_struct.h"//GCTX
-#include "share/ls/ob_ls_recovery_stat_operator.h" //ObLSRecoveryStatOperator
-#include "logservice/ob_log_service.h"//get_palf_role
-#include "src/logservice/palf_handle_guard.h"//palf_handle
-#include "share/scn.h"//SCN
-
-#include "ob_tenant_info_loader.h"  // ObTenantInfoLoader
+#include "src/logservice/applyservice/ob_log_apply_service.h"
 #include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase

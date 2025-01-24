@@ -11,10 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/ob_phy_operator_type.h"
-#include "lib/atomic/ob_atomic.h"
-#include "share/ob_define.h"
-#include "lib/oblog/ob_log.h"
 #include "sql/engine/ob_operator_reg.h"
 
 using namespace oceanbase::sql;

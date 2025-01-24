@@ -14,7 +14,6 @@
 #include "sql/das/iter/ob_das_global_lookup_iter.h"
 #include "sql/das/iter/ob_das_merge_iter.h"
 #include "sql/das/ob_das_attach_define.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

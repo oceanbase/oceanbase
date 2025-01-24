@@ -12,13 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_lob_locator.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
-#include "common/sql_mode/ob_sql_mode.h"
-#include "storage/lob/ob_lob_manager.h"
-#include "storage/lob/ob_lob_util.h"
-#include "storage/tx/ob_trans_define_v4.h"
-#include "storage/tx/ob_trans_service.h"
-#include "share/ob_lob_access_utils.h"
 #include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
 

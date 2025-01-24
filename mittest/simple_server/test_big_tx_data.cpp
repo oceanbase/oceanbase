@@ -13,22 +13,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <chrono>
-#include <gtest/gtest.h>
-#include <thread>
 #define protected public
 #define private public
-#include "share/ob_table_access_helper.h"
-#include "lib/ob_define.h"
-#include "observer/ob_server_struct.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/ls/ob_ls_meta.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "env/ob_simple_cluster_test_base.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include <iostream>
+#include "src/storage/tx_storage/ob_ls_map.h"
 
 #include "rewrite_function_for_test_big_tx_data.cpp"
 

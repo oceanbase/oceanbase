@@ -11,14 +11,8 @@
  */
 
 #define USING_LOG_PREFIX LIB
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
 
 #include "lib/charset/ob_charset.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_print_utils.h"
 #include "lib/net/ob_net_util.h"
 
 using namespace oceanbase::common;

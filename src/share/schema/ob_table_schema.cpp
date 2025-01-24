@@ -12,29 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_schema.h"
-#include <algorithm>
-//#include <stdlib.h>
-#include "lib/objectpool/ob_pool.h"
-#include "share/ob_define.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_storage_format.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/ob_replica_info.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_primary_zone_util.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_cluster_version.h"
-#include "share/ob_get_compat_mode.h"
-#include "share/ob_encryption_util.h"
-#include "storage/ob_storage_schema.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
-#include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/blocksstable/index_block/ob_index_block_util.h"
-#include "share/schema/ob_part_mgr_util.h"
 namespace oceanbase
 {
 namespace share

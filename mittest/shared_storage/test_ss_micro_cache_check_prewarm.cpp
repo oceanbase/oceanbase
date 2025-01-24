@@ -16,14 +16,8 @@
 
 #define private public
 #define protected public
-#include "lib/ob_errno.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "test_ss_common_util.h"
-#include "storage/shared_storage/micro_cache/task/ob_ss_micro_cache_task_runner.h"
-#include "storage/shared_storage/micro_cache/ob_ss_micro_meta_manager.h"
-#include "storage/shared_storage/micro_cache/ob_ss_physical_block_manager.h"
-#include "storage/shared_storage/ob_ss_micro_cache.h"
 
 namespace oceanbase
 {

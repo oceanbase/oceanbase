@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_sys_privilege_check.h"
 
-#include "share/object/ob_obj_cast.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;

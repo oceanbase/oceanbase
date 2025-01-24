@@ -11,11 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include <string.h>
-#include "objit/common/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_ip2int.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
-#include "share/object/ob_obj_cast.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

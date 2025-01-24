@@ -11,48 +11,13 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "sql/ob_result_set.h"
-#include "lib/oblog/ob_trace_log.h"
-#include "lib/charset/ob_charset.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "rpc/obmysql/ob_mysql_global.h"
+#include "ob_result_set.h"
 #include "rpc/obmysql/ob_mysql_field.h"
-#include "lib/oblog/ob_log_module.h"
-#include "engine/ob_physical_plan.h"
-#include "sql/parser/parse_malloc.h"
-#include "share/system_variable/ob_system_variable.h"
-#include "share/system_variable/ob_system_variable_alias.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/ob_cmd.h"
 #include "sql/engine/px/ob_px_admission.h"
 #include "sql/engine/cmd/ob_table_direct_insert_service.h"
-#include "sql/executor/ob_executor.h"
-#include "sql/executor/ob_cmd_executor.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/cmd/ob_call_procedure_stmt.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
-#include "sql/ob_sql_trans_util.h"
-#include "sql/ob_end_trans_callback.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/profile/ob_perf_event.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "share/ob_cluster_version.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_event.h"
-#include "pl/ob_pl_user_type.h"
-#include "pl/ob_pl_stmt.h"
-#include "observer/ob_server_struct.h"
-#include "storage/tx/wrs/ob_weak_read_service.h"       // ObWeakReadService
-#include "storage/tx/wrs/ob_i_weak_read_service.h"     // WRS_LEVEL_SERVER
-#include "storage/tx/wrs/ob_weak_read_util.h"          // ObWeakReadUtil
-#include "observer/ob_req_time_service.h"
-#include "sql/dblink/ob_dblink_utils.h"
+#include "src/sql/plan_cache/ob_plan_cache.h"
 #include "sql/dblink/ob_tm_service.h"
 #include "storage/tx/ob_xa_ctx.h"
-#include "sql/engine/dml/ob_link_op.h"
-#include <cctype>
-#include "sql/engine/expr/ob_expr_last_refresh_scn.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
 
 using namespace oceanbase::sql;

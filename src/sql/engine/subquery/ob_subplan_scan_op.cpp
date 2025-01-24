@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_subplan_scan_op.h"
-#include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase

@@ -11,8 +11,6 @@
  */
 
 #include "lib/random/ob_random.h"
-#include <stdlib.h>
-#include <math.h>
 
 namespace oceanbase
 {

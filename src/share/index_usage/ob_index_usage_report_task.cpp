@@ -10,13 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "ob_index_usage_info_mgr.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/rc/ob_tenant_base.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/ob_server_struct.h"
-#include "share/schema/ob_schema_utils.h"
 
 #define USING_LOG_PREFIX SERVER
 

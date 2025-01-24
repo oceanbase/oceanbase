@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX COMMON_MYSQLP
 
-#include "lib/mysqlclient/ob_isql_connection.h"
-#include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 
 namespace oceanbase

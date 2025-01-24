@@ -12,14 +12,9 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/mysql/ob_query_retry_ctrl.h"
-#include "sql/ob_sql_context.h"
-#include "sql/resolver/ob_stmt.h"
+#include "ob_query_retry_ctrl.h"
 #include "pl/ob_pl.h"
-#include "storage/tx/ob_trans_define.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
-#include "observer/mysql/ob_mysql_result_set.h"
-#include "observer/ob_server_struct.h"
 #include "observer/mysql/obmp_query.h"
 
 namespace oceanbase

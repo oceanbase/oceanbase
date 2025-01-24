@@ -13,19 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "share/scheduler/ob_partition_auto_split_helper.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/container/ob_array.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_schema_printer.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/system_variable/ob_system_variable_alias.h"
-#include "share/ob_rpc_struct.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_service.h"
-#include "storage/ob_storage_rpc.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/resolver/ob_resolver_utils.h"
 

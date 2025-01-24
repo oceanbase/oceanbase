@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX COMMON
-#include "deps/oblib/src/common/object/ob_obj_type.h"
 #include "test_op_engine.h"
 #include "ob_fake_table_scan_vec_op.h"
 #include "data_generator.h"

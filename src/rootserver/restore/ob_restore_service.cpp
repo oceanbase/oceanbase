@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_restore_service.h"
-#include "ob_recover_table_job_scheduler.h"
-#include "share/restore/ob_import_table_struct.h"
-#include "share/restore/ob_recover_table_persist_helper.h"
 
 using namespace oceanbase;
 using namespace rootserver;

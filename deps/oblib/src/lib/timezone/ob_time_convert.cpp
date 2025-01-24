@@ -12,20 +12,10 @@
 
 #define USING_LOG_PREFIX  LIB_TIME
 
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/timezone/ob_timezone_info.h"
+#include "ob_time_convert.h"
 #include "lib/timezone/ob_oracle_format_models.h"
-#include <ctype.h>
-#include <math.h>
-#include "lib/ob_define.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_fast_convert.h"
-#include "lib/utility/utility.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_bit_set.h"
 #include "rpc/obmysql/ob_mysql_util.h"
-#include "common/object/ob_object.h"
-//#include "lib/timezone/ob_timezone_util.h"
 #include "lib/locale/ob_locale_type.h"
 
 #define STRING_WITH_LEN(X) (X), ((sizeof(X) - 1))

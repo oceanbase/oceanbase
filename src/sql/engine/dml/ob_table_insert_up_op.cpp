@@ -13,14 +13,10 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_table_insert_up_op.h"
-#include "sql/engine/ob_operator_reg.h"
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/das/ob_das_insert_op.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/engine/dml/ob_fk_checker.h"
 
 namespace oceanbase
 {

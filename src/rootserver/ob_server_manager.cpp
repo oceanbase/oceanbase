@@ -16,23 +16,9 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_server_manager.h"
 
-#include "share/ob_define.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/ob_debug_sync.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_max_id_fetcher.h"
-#include "share/ob_disk_usage_table_operator.h"
-#include "rootserver/ob_unit_manager.h"
-#include "rootserver/ob_zone_manager.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "common/storage/ob_freeze_define.h"
-#include "rootserver/ob_rs_job_table_operator.h"
+#include "ob_server_manager.h"
 #include "observer/ob_server.h"
-#include "rootserver/ob_root_service.h"
 #include "storage/ob_file_system_router.h"
 #include "rootserver/ob_heartbeat_service.h"
 namespace oceanbase

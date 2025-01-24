@@ -12,41 +12,21 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/utility/ob_tracepoint.h"
 #include "sql/engine/cmd/ob_alter_system_executor.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "observer/ob_server.h"
 #include "sql/resolver/cmd/ob_bootstrap_stmt.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/scheduler/ob_sys_task_stat.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "observer/ob_server_event_history_table_operator.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/rc/ob_context.h"
-#include "observer/ob_server_struct.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "share/arbitration_service/ob_arbitration_service_utils.h" //ObArbitrationServiceUtils
 #endif
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
-#include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "observer/omt/ob_tenant.h" //ObTenant
 #include "rootserver/freeze/ob_major_freeze_helper.h" //ObMajorFreezeHelper
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
-#include "rpc/obmysql/ob_sql_sock_session.h"
-#include "sql/plan_cache/ob_plan_cache.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/plan_cache/ob_ps_cache.h"
-#include "share/restore/ob_tenant_clone_table_operator.h" //ObCancelCloneJobReason
-#include "share/table/ob_ttl_util.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 
 #include "rootserver/ob_service_name_command.h"

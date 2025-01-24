@@ -11,23 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "lib/utility/ob_tracepoint.h"
-#include "common/ob_smart_call.h"
-#include "sql/optimizer/ob_optimizer.h"
+#include "ob_optimizer.h"
 #include "sql/optimizer/ob_explain_note.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_select_log_plan.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_logical_operator.h"
-#include "common/ob_smart_call.h"
-#include "sql/ob_optimizer_trace_impl.h"
-#include "sql/engine/cmd/ob_table_direct_insert_service.h"
-#include "sql/dblink/ob_dblink_utils.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
-#include "sql/optimizer/ob_log_temp_table_insert.h"
-#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
-#include "share/stat/ob_opt_system_stat.h"
 #include "sql/optimizer/ob_opt_cost_model_parameter.h"
 #include "src/share/stat/ob_opt_stat_manager.h"
 

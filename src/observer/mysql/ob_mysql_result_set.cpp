@@ -11,13 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include "observer/mysql/ob_mysql_result_set.h"
 
+#include "ob_mysql_result_set.h"
 #include "observer/mysql/obsm_utils.h"
-#include "lib/container/ob_array.h"
-#include "rpc/obmysql/ob_mysql_field.h"
 #include "observer/ob_server.h"
-#include "share/ob_lob_access_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::observer;

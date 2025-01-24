@@ -16,7 +16,6 @@
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_store.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
-#include "sql/engine/ob_des_exec_context.h"
 #include "observer/table_load/ob_table_load_empty_insert_tablet_ctx_manager.h"
 
 namespace oceanbase

@@ -9,9 +9,7 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX RS_COMPACTION
 #include "rootserver/freeze/ob_major_merge_progress_util.h"
-#include "share/tablet/ob_tablet_info.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "observer/ob_server_struct.h"
 #include "share/transfer/ob_transfer_task_operator.h"
 #include "share/compaction/ob_schedule_batch_size_mgr.h"
 #include "src/share/ob_tablet_replica_checksum_operator.h"

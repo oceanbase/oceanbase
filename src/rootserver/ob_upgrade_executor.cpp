@@ -15,11 +15,9 @@
 #include "rootserver/ob_upgrade_executor.h"
 #include "rootserver/ob_ls_service_helper.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" //ObTenantSnapshotUtil
-#include "observer/ob_server_struct.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
-#include "share/ob_tenant_info_proxy.h" //ObAllTenantInfoProxy
 #include "observer/ob_service.h"
 
 namespace oceanbase
@@ -315,7 +313,7 @@ int ObUpgradeExecutor::execute(
     // NOTICE: don't add any `else if` after set_execute_mark_().
   } else {
     const uint64_t tenant_id = (1 == tenant_ids.count()) ?  tenant_ids.at(0) : 0;
-    const int64_t BUF_LEN = common::MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+    const int64_t BUF_LEN = common::MAX_ROOTSERVICE_JOB_EXTRA_INFO_LENGTH;
     char extra_buf[BUF_LEN] = {'\0'};
     int64_t job_id = OB_INVALID_ID;
     uint64_t current_data_version = 0;

@@ -13,24 +13,10 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_direct_insert_sstable_ctx_new.h"
-#include "share/ob_ddl_checksum.h"
-#include "share/ob_ddl_error_message_table_operator.h"
-#include "share/ob_ddl_common.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "sql/engine/pdml/static/ob_px_sstable_insert_op.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "sql/engine/px/ob_sub_trans_ctrl.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/compaction/ob_column_checksum_calculator.h"
-#include "storage/compaction/ob_tenant_freeze_info_mgr.h"
-#include "storage/ddl/ob_direct_load_struct.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/ddl/ob_ddl_redo_log_writer.h"
-#include "storage/ddl/ob_ddl_inc_redo_log_writer.h"
-#include "storage/lob/ob_lob_util.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/ddl/ob_direct_load_mgr.h"
 #endif

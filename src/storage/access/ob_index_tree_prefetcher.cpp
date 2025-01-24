@@ -11,14 +11,8 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "lib/statistic_event/ob_stat_event.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "share/rc/ob_tenant_base.h"
 #include "ob_index_tree_prefetcher.h"
-#include "ob_sstable_index_filter.h"
 #include "storage/access/ob_aggregate_base.h"
-#include "storage/access/ob_rows_info.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
 
 namespace oceanbase
 {

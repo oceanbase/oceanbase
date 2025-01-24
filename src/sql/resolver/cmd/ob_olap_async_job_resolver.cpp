@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/cmd/ob_olap_async_job_resolver.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include <inttypes.h>
 
 namespace oceanbase
 {

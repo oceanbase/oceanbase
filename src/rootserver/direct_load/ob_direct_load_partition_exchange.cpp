@@ -14,7 +14,6 @@
 
 #include "rootserver/direct_load/ob_direct_load_partition_exchange.h"
 #include "rootserver/ob_ddl_service.h"
-#include "rootserver/ob_ddl_operator.h"
 
 namespace oceanbase
 {

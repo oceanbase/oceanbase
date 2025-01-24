@@ -12,19 +12,14 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/table_load/ob_table_load_service.h"
+#include "ob_table_load_service.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/table_load/ob_table_load_client_task.h"
-#include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
-#include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_store.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
-#include "observer/table_load/ob_table_load_utils.h"
 #include "rootserver/ob_partition_exchange.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/schema/ob_table_schema.h"
 
 namespace oceanbase
 {

@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
+#include "ob_adaptive_bypass_ctrl.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 
 

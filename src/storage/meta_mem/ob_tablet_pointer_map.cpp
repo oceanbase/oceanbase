@@ -10,10 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/meta_mem/ob_tablet_pointer_map.h"
-#include "storage/tablet/ob_tablet.h"
+#include "ob_tablet_pointer_map.h"
 #include "storage/meta_store/ob_storage_meta_io_util.h"
-#include "storage/blocksstable/ob_object_manager.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 

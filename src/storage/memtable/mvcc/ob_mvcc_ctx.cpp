@@ -10,16 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/memtable/mvcc/ob_mvcc_ctx.h"
-#include "storage/memtable/ob_memtable_key.h"
-#include "storage/memtable/ob_memtable_data.h"
-#include "storage/memtable/ob_memtable.h"
-#include "common/storage/ob_sequence.h"
+#include "ob_mvcc_ctx.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/memtable/ob_memtable_util.h"
-#include "storage/tablelock/ob_table_lock_callback.h"
-#include "storage/lob/ob_ext_info_callback.h"
-#include "storage/ls/ob_freezer.h"
 namespace oceanbase
 {
 using namespace common;

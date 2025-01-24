@@ -10,14 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #define private public
 #define protected public
 
-#include "lib/random/ob_random.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/column_store/ob_cg_prefetcher.h"
 #include "storage/column_store/ob_cg_scanner.h"
 #include "ob_index_block_data_prepare.h"
 

@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_drop_dblink_resolver.h"
 
-#include "sql/ob_sql_utils.h"
-#include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/resolver/ddl/ob_drop_dblink_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {

@@ -11,11 +11,7 @@
  */
 
 #include "lib/time/ob_time_utility.h"
-#include "lib/time/ob_tsc_timestamp.h"
-#include "lib/ob_abort.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_print_utils.h"
-#include <ctime>
 
 using namespace oceanbase;
 using namespace oceanbase::common;

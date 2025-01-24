@@ -13,9 +13,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_redis_list_operator.h"
-#include "src/share/table/ob_table.h"
-#include "lib/utility/ob_fast_convert.h"
-#include "src/share/table/ob_redis_parser.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;

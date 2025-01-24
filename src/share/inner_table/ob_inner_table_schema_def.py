@@ -1307,7 +1307,7 @@ def_table_schema(
         ('rs_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
         ('rs_svr_port', 'int', 'false'),
         ('sql_text', 'longtext', 'true'),
-        ('extra_info', 'varchar:MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH', 'true'),
+        ('extra_info', 'varchar:MAX_ROOTSERVICE_JOB_EXTRA_INFO_LENGTH', 'true'),
         ('resource_pool_id', 'int', 'true'),
         ('tablegroup_id', 'int', 'true'),
         ('tablegroup_name', 'varchar:OB_MAX_TABLEGROUP_NAME_LENGTH', 'true'),

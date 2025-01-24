@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "share/ob_ddl_common.h"
-#include "observer/ob_inner_sql_connection.h"
 #include "storage/ddl/ob_ddl_lock.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "storage/tablelock/ob_lock_utils.h"
 

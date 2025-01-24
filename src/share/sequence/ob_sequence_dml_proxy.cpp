@@ -12,23 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_sequence_dml_proxy.h"
-#include "lib/string/ob_string.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/number/ob_number_v2.h"
-#include "common/ob_timeout_ctx.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/sequence/ob_sequence_cache.h"
-#include "share/sequence/ob_sequence_option_builder.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
-#include "share/ob_schema_status_proxy.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_sql_client_decorator.h"
 
 using namespace oceanbase::common;

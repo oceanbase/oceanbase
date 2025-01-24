@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
-#include "storage/blocksstable/ob_data_store_desc.h"
+#include "ob_sstable_private_object_cleaner.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE

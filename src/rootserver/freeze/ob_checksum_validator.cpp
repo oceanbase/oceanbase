@@ -12,22 +12,9 @@
 
 #define USING_LOG_PREFIX RS_COMPACTION
 
-#include "rootserver/freeze/ob_checksum_validator.h"
-#include "rootserver/freeze/ob_zone_merge_manager.h"
-#include "rootserver/freeze/ob_major_freeze_util.h"
+#include "ob_checksum_validator.h"
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
-#include "rootserver/ob_root_utils.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_isql_client.h"
-#include "lib/time/ob_time_utility.h"
 #include "share/ob_service_epoch_proxy.h"
-#include "share/ob_tablet_replica_checksum_operator.h"
-#include "share/ob_tablet_checksum_operator.h"
-#include "share/ob_tablet_meta_table_compaction_operator.h"
-#include "share/ob_zone_merge_info.h"
-#include "share/ob_freeze_info_manager.h"
-#include "rootserver/freeze/ob_fts_checksum_validate_util.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 
 namespace oceanbase

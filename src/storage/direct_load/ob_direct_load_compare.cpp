@@ -12,10 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_compare.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/direct_load/ob_direct_load_datum.h"
 #include "storage/direct_load/ob_direct_load_external_multi_partition_row.h"
-#include "storage/direct_load/ob_direct_load_external_row.h"
 
 namespace oceanbase
 {

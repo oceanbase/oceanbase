@@ -14,7 +14,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <iostream>
 #define protected public
 #define private public
 
@@ -22,9 +21,7 @@
 #include "rootserver/ob_tenant_balance_service.h"
 #include "share/balance/ob_balance_job_table_operator.h"
 #include "mittest/env/ob_simple_server_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_tx_loop_worker.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase
 {

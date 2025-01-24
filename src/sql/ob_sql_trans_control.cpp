@@ -10,39 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_clock_generator.h"
-#include "lib/ob_errno.h"
-#include "share/rc/ob_tenant_base.h"
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "share/ob_schema_status_proxy.h"   // ObSchemaStatusProxy
-#include "share/schema/ob_tenant_schema_service.h"
-#include "sql/ob_sql_trans_control.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/parser/parse_malloc.h"
-#include "sql/resolver/ob_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_trans_util.h"
-#include "sql/ob_end_trans_callback.h"
-#include "lib/oblog/ob_trace_log.h"
-#include "storage/tx/ob_trans_service.h"
+#include "ob_sql_trans_control.h"
 #include "storage/tx/ob_xa_service.h"
-#include "storage/tx/ob_trans_define.h"
 #include "storage/tablelock/ob_table_lock_service.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/executor/ob_task_spliter.h"
-#include "lib/profile/ob_perf_event.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
-#include "storage/tx/wrs/ob_weak_read_util.h"        //ObWeakReadUtil
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ls/ob_ls_get_mod.h"
-#include "storage/tablet/ob_tablet.h"
-#include "sql/das/ob_das_dml_ctx_define.h"
-#include "share/deadlock/ob_deadlock_detector_mgr.h"
 #include "sql/dblink/ob_tm_service.h"
-#include "sql/engine/cmd/ob_table_direct_insert_ctx.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 
 #ifdef CHECK_SESSION

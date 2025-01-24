@@ -14,11 +14,7 @@
 #include "rootserver/ob_transfer_partition_task.h"
 #include "rootserver/ob_bootstrap.h"
 #include "rootserver/ob_tenant_balance_service.h"//gather_ls_status
-#include "share/schema/ob_schema_utils.h"//batch_get_latest_table_schemas
-#include "share/tablet/ob_tablet_info.h" //ObTabletTablePair/ObTabletLSPair
-#include "share/ls/ob_ls_status_operator.h"//ObLSStatusInfo
-#include "share/transfer/ob_transfer_info.h" //ObTransferPartList
-#include "share/tablet/ob_tablet_to_ls_iterator.h"//batch_get_tablet_to_ls
+#include "src/share/tablet/ob_tablet_to_ls_operator.h"
 #include "storage/ob_common_id_utils.h" //gen_unique_id
 
 

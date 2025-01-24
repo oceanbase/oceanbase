@@ -13,19 +13,9 @@
 #define USING_LOG_PREFIX LIB
 
 #include "thread.h"
-#include "threads.h"
-#include <pthread.h>
-#include <sys/syscall.h>
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/ob_running_mode.h"
-#include "lib/allocator/ob_page_manager.h"
 #include "lib/rc/context.h"
-#include "lib/thread_local/ob_tsi_factory.h"
 #include "lib/thread/protected_stack_allocator.h"
-#include "lib/utility/ob_defer.h"
 #include "lib/utility/ob_hang_fatal_error.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/stat/ob_session_stat.h"

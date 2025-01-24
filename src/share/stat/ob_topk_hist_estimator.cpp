@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_topk_hist_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
-#include <stdint.h>
 
 namespace oceanbase
 {

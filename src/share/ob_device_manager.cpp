@@ -10,14 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/storage/ob_device_common.h"
-#include "lib/oblog/ob_log.h"
 #include "lib/restore/ob_object_device.h"
 #include "ob_device_manager.h"
 #include "share/config/ob_server_config.h"
 #include "share/io/ob_io_manager.h"
 #include "share/ob_local_device.h"
-#include "deps/oblib/src/lib/thread/thread.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_local_cache_device.h"
 #endif

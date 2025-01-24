@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_src_provider.h"
-#include "share/location_cache/ob_location_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/high_availability/ob_storage_ha_utils.h"
+#include "src/storage/ls/ob_ls.h"
 #include "storage/ob_locality_manager.h"
 
 namespace oceanbase {

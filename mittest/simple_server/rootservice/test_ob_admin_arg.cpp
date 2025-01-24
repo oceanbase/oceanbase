@@ -15,10 +15,8 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/ob_errno.h"
 #include "rootserver/ob_admin_drtask_util.h" // ObAdminDRTaskUtil
 
 namespace oceanbase

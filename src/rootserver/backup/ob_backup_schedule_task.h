@@ -274,7 +274,7 @@ private:
       share::ObTaskId &trace_id) final override;
   virtual bool execute_on_sys_server_() const { return false; }
   virtual bool fallback_to_sys_server_when_needed_() const { return false; }
-  int get_ls_replica_array_(ObLSInfo &ls_info);
+  int get_ls_replica_array_(share::ObLSInfo &ls_info);
   bool check_replica_in_black_server_(const share::ObLSReplica &replica, const ObIArray<common::ObAddr> &black_servers);
 public:
   INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(incarnation_id), K_(backup_set_id),

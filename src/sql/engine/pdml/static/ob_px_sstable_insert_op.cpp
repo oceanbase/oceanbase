@@ -13,11 +13,8 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/pdml/static/ob_px_sstable_insert_op.h"
-#include "common/ob_tablet_id.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "storage/ddl/ob_direct_load_mgr_agent.h"
-#include "storage/ddl/ob_ddl_seq_generator.h"
-#include "rootserver/ddl_task/ob_ddl_task.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

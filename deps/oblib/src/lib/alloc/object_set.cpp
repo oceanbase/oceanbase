@@ -11,13 +11,6 @@
  */
 
 #include "object_set.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/alloc/ob_tenant_ctx_allocator.h"
-#include "lib/alloc/alloc_failed_reason.h"
-#include "lib/ob_abort.h"
-#include "lib/ob_define.h"
-#include "lib/utility/utility.h"
-#include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/rc/context.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/alloc/ob_malloc_time_monitor.h"

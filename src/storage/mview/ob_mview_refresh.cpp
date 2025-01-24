@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/ob_mview_refresh.h"
-#include "share/ob_errno.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "storage/mview/ob_mview_refresh_helper.h"
 #include "storage/mview/ob_mview_refresh_stats_collect.h"

@@ -10,23 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 
 #define USING_LOG_PREFIX STORAGE
 
 #define private public
 #define protected public
 
-#include "common/ob_tablet_id.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include "storage/blocksstable/ob_sstable_meta.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/blocksstable/ob_block_manager.h"
+#include "src/share/io/io_schedule/ob_io_mclock.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/schema_utils.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/tablet/ob_tablet_meta.h"
 #include "storage/test_tablet_helper.h"
 
 namespace oceanbase

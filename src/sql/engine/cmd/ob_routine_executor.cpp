@@ -12,24 +12,13 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_routine_executor.h"
-#include "sql/resolver/ddl/ob_create_routine_stmt.h"
 #include "sql/resolver/ddl/ob_drop_routine_stmt.h"
 #include "sql/resolver/ddl/ob_alter_routine_stmt.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
 #include "sql/resolver/cmd/ob_anonymous_block_stmt.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/expr/ob_expr_info_flag.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/ob_spi.h"
-#include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_resolver.h"
-#include "pl/ob_pl_stmt.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_rpc_struct.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
-#include "share/config/ob_config_helper.h"
 #include "src/pl/pl_cache/ob_pl_cache_mgr.h"
 
 namespace oceanbase

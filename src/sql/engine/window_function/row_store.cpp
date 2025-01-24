@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "row_store.h"
-#include "sql/engine/basic/ob_temp_row_store.h"
 #include "sql/engine/window_function/ob_window_function_vec_op.h"
 
 namespace oceanbase

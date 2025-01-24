@@ -13,18 +13,11 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_index_build_task.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_ddl_checksum.h"
-#include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_fts_index_builder_util.h"
-#include "storage/ddl/ob_ddl_lock.h"
-#include "share/ob_ddl_common.h"
 #include "share/ob_ddl_sim_point.h"
 #include "rootserver/ob_root_service.h"
-#include "share/scn.h"
 #include "share/schema/ob_mlog_info.h"
-#include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;

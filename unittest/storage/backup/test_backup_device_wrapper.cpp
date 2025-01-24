@@ -15,9 +15,6 @@
 #include "storage/backup/ob_backup_device_wrapper.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/ob_device_manager.h"
-#include "lib/restore/ob_object_device.h"
-#include "common/storage/ob_device_common.h"
-#include "share/ob_ls_id.h"
 #define private public
 #define protected public
 

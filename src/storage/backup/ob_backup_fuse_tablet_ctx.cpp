@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/backup/ob_backup_fuse_tablet_ctx.h"
-#include "lib/stat/ob_latch_define.h"
 
 namespace oceanbase
 {

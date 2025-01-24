@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_aggregation.h"
-#include "common/row/ob_row.h"
-#include "common/object/ob_obj_compare.h"
 #include "sql/engine/expr/ob_expr_add.h" // for ObExprAdd::is_add_out_of_range
 
 using namespace oceanbase::common;

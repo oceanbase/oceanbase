@@ -14,8 +14,6 @@
 
 #define ASSERT_OK(x) ASSERT_EQ(OB_SUCCESS, (x))
 #include <gtest/gtest.h>
-#include <algorithm>
-#include <thread>
 #define private public
 #define protected public
 #include "share/scheduler/ob_partition_auto_split_helper.h"

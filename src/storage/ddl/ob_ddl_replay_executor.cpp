@@ -13,16 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ddl_replay_executor.h"
-#include "storage/ddl/ob_ddl_clog.h"
-#include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/ls/ob_ls.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/blockstore/ob_shared_object_reader_writer.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/compaction/ob_refresh_tablet_util.h"
 #endif

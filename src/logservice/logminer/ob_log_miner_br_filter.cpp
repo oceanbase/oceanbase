@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX LOGMNR
 
 #include "ob_log_miner_br_filter.h"
-#include "ob_log_miner_br.h"
 #include "ob_log_miner_br_producer.h"
 #include "ob_log_miner_br_converter.h"
 #include "ob_log_miner_logger.h"

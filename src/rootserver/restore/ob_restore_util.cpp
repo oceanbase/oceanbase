@@ -13,22 +13,9 @@
 #define USING_LOG_PREFIX RS_RESTORE
 
 #include "ob_restore_util.h"
-#include "lib/lock/ob_mutex.h"
 #include "share/restore/ob_restore_uri_parser.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "share/backup/ob_backup_path.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "storage/backup/ob_backup_restore_util.h"
-#include "share/backup/ob_archive_store.h"
-#include "share/restore/ob_restore_persist_helper.h"//ObRestorePersistHelper ObRestoreProgressPersistInfo
-#include "logservice/palf/palf_base_info.h"//PalfBaseInfo
-#include "storage/ls/ob_ls_meta_package.h"//ls_meta
 #include "share/backup/ob_archive_path.h"
 #include "share/ob_upgrade_utils.h"
-#include "share/ob_unit_table_operator.h"
 #include "share/ob_max_id_fetcher.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/restore/ob_restore_progress_display_mode.h"

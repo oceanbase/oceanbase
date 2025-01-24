@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/sequence/ob_sequence_op.h"
-#include "lib/utility/utility.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/dml/ob_link_op.h"
 
 namespace oceanbase
 {

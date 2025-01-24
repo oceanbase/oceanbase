@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_tablet_reorganize_history_table_operator.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/location_cache/ob_location_service.h"
-#include "observer/ob_server_struct.h"
-#include "lib/string/ob_sql_string.h"
 
 namespace oceanbase
 {

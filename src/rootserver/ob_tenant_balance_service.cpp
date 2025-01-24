@@ -12,24 +12,12 @@
 
 #define USING_LOG_PREFIX BALANCE
 #include "ob_tenant_balance_service.h"
-#include "share/schema/ob_schema_getter_guard.h"//ObSchemaGetGuard
-#include "share/schema/ob_schema_struct.h"//ObTenantInfo
-#include "share/schema/ob_multi_version_schema_service.h"//ObMultiSchemaService
-#include "share/ob_unit_table_operator.h" //ObUnitTableOperator
-#include "share/balance/ob_balance_job_table_operator.h"//ObBalanceJob
-#include "share/balance/ob_balance_task_table_operator.h"//ObBalanceTask
-#include "share/ob_primary_zone_util.h"//get_primary_zone
-#include "share/rc/ob_tenant_base.h"//MTL
 #include "rootserver/ob_ls_balance_helper.h"//ObLSBalanceTaskHelper
 #include "rootserver/ob_ls_service_helper.h"//ObLSServiceHelper
 #include "rootserver/ob_transfer_partition_task.h"//ObTransferPartitionHelper
-#include "rootserver/ob_balance_ls_primary_zone.h"//ObBalanceLSPrimaryZone
 #include "observer/ob_server_struct.h"//GCTX
-#include "rootserver/ob_partition_balance.h" // partition balance
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" //ObTenantSnapshotUtil
 #include "storage/tablelock/ob_lock_utils.h" // ObInnerTableLockUtil
-#include "share/ob_cluster_version.h"
-#include "share/ob_share_util.h" // ObShareUtil
 #include "share/transfer/ob_transfer_task_operator.h"
 
 #define ISTAT(fmt, args...) FLOG_INFO("[TENANT_BALANCE] " fmt, ##args)

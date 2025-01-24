@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
-#include "common/row/ob_row_iterator.h"
-#include "sql/engine/ob_exec_context.h"
-#include "pl/ob_pl_stmt.h"
-#include "pl/ob_pl_user_type.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/ob_spi.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
 

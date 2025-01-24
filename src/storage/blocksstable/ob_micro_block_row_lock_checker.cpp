@@ -14,8 +14,6 @@
 #include "ob_micro_block_row_lock_checker.h"
 #include "storage/access/ob_rows_info.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/memtable/ob_memtable_interface.h"
-#include "storage/tx_table/ob_tx_table.h"
 
 namespace oceanbase {
 namespace blocksstable {

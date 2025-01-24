@@ -11,8 +11,6 @@
  */
 
 #include "ob_remote_log_source_allocator.h"
-#include "ob_remote_log_source.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

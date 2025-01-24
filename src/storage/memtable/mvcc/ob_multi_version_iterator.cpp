@@ -11,19 +11,9 @@
  */
 
 #define USING_LOG_PREFIX TRANS
-#include "lib/stat/ob_diagnose_info.h"
 
-#include "storage/memtable/mvcc/ob_multi_version_iterator.h"
-#include "storage/memtable/mvcc/ob_mvcc_acc_ctx.h"
-#include "storage/memtable/mvcc/ob_query_engine.h"
-#include "storage/memtable/ob_memtable_data.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_ctx_mgr.h"
+#include "ob_multi_version_iterator.h"
 #include "storage/memtable/ob_memtable_iterator.h"
-#include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_tx_data_functor.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {

@@ -12,18 +12,10 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/backup/ob_backup_index_store.h"
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_iarray.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/backup/ob_backup_io_adapter.h"
+#include "ob_backup_index_store.h"
 #include "share/backup/ob_backup_data_table_operator.h"
-#include "storage/backup/ob_backup_iterator.h"
-#include "share/backup/ob_backup_path.h"
-#include "storage/backup/ob_backup_data_struct.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
+#include "src/storage/backup/ob_backup_ctx.h"
 
-#include <algorithm>
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;

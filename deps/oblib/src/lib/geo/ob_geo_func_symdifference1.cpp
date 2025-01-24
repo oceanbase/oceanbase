@@ -14,6 +14,8 @@
 #define USING_LOG_PREFIX LIB
 
 #include "ob_geo_func_symdifference_helper.ipp"
+#include "lib/geo/ob_geo_func_utils.h"
+
 using namespace oceanbase::common;
 namespace oceanbase
 {

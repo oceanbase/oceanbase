@@ -11,7 +11,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_longops_mgr.h"
-#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {

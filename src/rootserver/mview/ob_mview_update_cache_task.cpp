@@ -10,9 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX RS
-#include "rootserver/mview/ob_mview_update_cache_task.h"
+#include "ob_mview_update_cache_task.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
-#include "share/schema/ob_schema_struct.h" // ObMvRefreshMode
 
 namespace oceanbase
 {

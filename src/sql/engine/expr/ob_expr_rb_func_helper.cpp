@@ -12,9 +12,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_errno.h"
-#include "sql/engine/expr/ob_expr_cast.h"
-#include "sql/engine/expr/ob_datum_cast.h"
 #include "ob_expr_rb_func_helper.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
 

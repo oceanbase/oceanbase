@@ -11,14 +11,10 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "lib/random/ob_random.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/coro/testing.h"
 #include "lib/container/ob_se_array.h"
-#include "lib/allocator/page_arena.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;

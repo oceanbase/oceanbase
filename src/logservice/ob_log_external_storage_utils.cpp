@@ -10,15 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "ob_log_external_storage_utils.h"
-#include "lib/utility/ob_macro_utils.h"                       // DISALLOW_COPY_AND_ASSIGN
-#include "lib/utility/ob_print_utils.h"                       // TO_STRING_KV
-#include "lib/string/ob_string.h"                             // ObString
-#include "lib/restore/ob_object_device.h"                     // ObObjectDevice
 #include "share/ob_device_manager.h"                          // ObDeviceManager
-#include "share/backup/ob_backup_struct.h"                    // ObBackupStorageInfo
 #include "share/backup/ob_backup_io_adapter.h"                // ObBackupIOAdapter
-#include "share/rc/ob_tenant_base.h"                          // mtl_malloc
-#include "share/io/ob_io_define.h"                            // ObIOModule
 namespace oceanbase
 {
 namespace common

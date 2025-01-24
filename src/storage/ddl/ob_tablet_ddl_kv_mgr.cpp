@@ -13,18 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_tablet_ddl_kv_mgr.h"
-#include "share/scn.h"
-#include "share/ob_force_print_log.h"
-#include "storage/ddl/ob_ddl_struct.h"
-#include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
-#include "storage/compaction/ob_schedule_dag_func.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;

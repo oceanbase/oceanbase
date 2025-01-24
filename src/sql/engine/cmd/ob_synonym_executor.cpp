@@ -12,15 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_synonym_executor.h"
-#include "share/object/ob_obj_cast.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/ob_common_rpc_proxy.h"
 #include "sql/resolver/ddl/ob_create_synonym_stmt.h"
 #include "sql/resolver/ddl/ob_drop_synonym_stmt.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
 
 namespace oceanbase
 {

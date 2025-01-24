@@ -14,9 +14,7 @@
 #include "sql/rewrite/ob_transform_simplify_expr.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/rewrite/ob_stmt_comparer.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "common/ob_smart_call.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/resolver/expr/ob_shared_expr_resolver.h"
 

@@ -11,8 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_PARSER
-#include "sql/parser/parse_malloc.h"
-#include <string.h>
+#include "parse_malloc.h"
 #include <lib/alloc/alloc_assist.h>
 #include "lib/charset/ob_ctype.h"
 #include "sql/parser/parse_define.h"

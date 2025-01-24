@@ -12,16 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "ob_sql_parameterization.h"
-#include "share/schema/ob_schema_struct.h"
 #include "lib/json/ob_json_print_utils.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/parser/ob_fast_parser.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "sql/parser/parse_malloc.h"
-#include "sql/ob_sql_utils.h"
-#include "common/ob_smart_call.h"
-#include <algorithm>
 
 using namespace oceanbase;
 using namespace sql;

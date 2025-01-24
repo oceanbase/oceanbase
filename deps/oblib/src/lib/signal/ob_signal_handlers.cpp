@@ -12,21 +12,14 @@
 
 #define USING_LOG_PREFIX COMMON
 #define _GNU_SOURCE 1
-#include "lib/signal/ob_signal_handlers.h"
-#include <sys/prctl.h>
+#include "ob_signal_handlers.h"
 #include <dirent.h>
-#include <unistd.h>
-#include <fstream>
 #include <sys/wait.h>
-#include "lib/profile/ob_trace_id.h"
 #include "lib/utility/utility.h"
 #include "lib/signal/ob_libunwind.h"
-#include "lib/signal/ob_signal_struct.h"
-#include "lib/signal/ob_signal_utils.h"
 #include "lib/signal/ob_signal_worker.h"
 #include "lib/utility/ob_hang_fatal_error.h"
 #include "common/ob_common_utility.h"
-#include <unistd.h>
 
 namespace oceanbase
 {

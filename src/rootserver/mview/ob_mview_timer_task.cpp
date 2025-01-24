@@ -13,13 +13,8 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/mview/ob_mview_timer_task.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/ob_errno.h"
-#include "share/ob_snapshot_table_proxy.h"
-#include "share/schema/ob_mview_info.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "share/ob_global_stat_proxy.h"
-#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {

@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_sort_op_impl.h"
-#include "sql/engine/ob_operator.h"
-#include "sql/engine/ob_tenant_sql_memory_manager.h"
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
-#include "lib/container/ob_iarray.h"
 #include "sql/engine/px/p2p_datahub/ob_pushdown_topn_filter_msg.h"
 
 namespace oceanbase

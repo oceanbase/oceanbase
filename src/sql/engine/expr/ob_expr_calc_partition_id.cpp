@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_calc_partition_id.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_func_part_hash.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "share/vector/expr_cmp_func.h"
 
 namespace oceanbase

@@ -11,14 +11,7 @@
  */
 
 #include "ob_storage_schema.h"
-#include "blocksstable/ob_block_sstable_struct.h"
-#include "storage/compaction/ob_sstable_merge_history.h"
-#include "share/ob_encryption_util.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_schema_struct.h"
-#include "storage/ob_storage_struct.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
-#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {

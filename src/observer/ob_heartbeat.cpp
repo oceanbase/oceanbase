@@ -12,23 +12,12 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/ob_heartbeat.h"
 
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_lease_struct.h"
-#include "share/config/ob_server_config.h"
-#include "share/config/ob_config_manager.h"
+#include "ob_heartbeat.h"
 #include "share/ob_version.h"
 #include "share/ob_zone_table_operation.h"
-#include "storage/blocksstable/ob_block_manager.h"
 #include "storage/ob_file_system_router.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/omt/ob_tenant_node_balancer.h"
-#include "observer/ob_server_schema_updater.h"
 #include "observer/ob_server.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "common/ob_timeout_ctx.h"
-#include "storage/slog/ob_storage_logger_manager.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif

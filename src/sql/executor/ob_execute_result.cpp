@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "sql/executor/ob_execute_result.h"
-#include "lib/ash/ob_active_session_guard.h"
-#include "sql/engine/ob_operator.h"
+#include "ob_execute_result.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_array_expr_utils.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

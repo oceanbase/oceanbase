@@ -19,8 +19,6 @@
 #include "share/io/ob_io_manager.h"         // ObIOManager
 #include "share/ob_device_manager.h"        // ObDeviceManager
 #include "ob_log_miner_args.h"
-#include "ob_log_miner_file_manager.h"
-#include "ob_log_miner_utils.h"
 #include "ob_log_miner_logger.h"
 #include "ob_log_miner_record_converter.h"
 #include "ob_log_miner_timezone_getter.h"

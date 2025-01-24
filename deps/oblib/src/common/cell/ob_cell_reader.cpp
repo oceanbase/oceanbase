@@ -11,7 +11,6 @@
  */
 
 #include "common/cell/ob_cell_reader.h"
-#include "common/cell/ob_cell_writer.h"
 
 namespace oceanbase
 {

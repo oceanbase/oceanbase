@@ -14,47 +14,11 @@
 
 #include "rootserver/ob_bootstrap.h"
 
-#include "share/ob_define.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/utility/ob_print_utils.h"
-#include "common/data_buffer.h"
-#include "common/ob_role.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "common/ob_member_list.h"
-#include "share/ob_max_id_fetcher.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_ddl_sql_service.h"
 #include "share/ob_zone_table_operation.h"
-#include "share/ob_tenant_id_schema_version.h"
 #include "share/ob_global_stat_proxy.h"
-#include "share/ob_server_status.h"
-#include "lib/worker.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_primary_zone_util.h"
-#include "share/ob_schema_status_proxy.h"
-#include "share/ob_ls_id.h"
-#include "share/ls/ob_ls_table_operator.h"
-#include "storage/ob_file_system_router.h"
-#include "share/backup/ob_backup_struct.h"
 #include "share/ls/ob_ls_creator.h"//ObLSCreator
 #include "share/ls/ob_ls_life_manager.h"//ObLSLifeAgentManager
-#include "share/ob_all_server_tracer.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"
-#include "rootserver/ob_ddl_operator.h"
-#include "rootserver/ob_locality_util.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"
-#include "rootserver/ob_server_zone_op_service.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_freeze_info_manager.h"
 #include "rootserver/ob_table_creator.h"
-#include "share/scn.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "rootserver/ob_root_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
@@ -1438,7 +1402,7 @@ int ObBootstrap::gen_multiple_zone_deployment_sys_tenant_locality_str(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("zone list count unexpected", K(ret));
   } else {
-    const int64_t BUFF_SIZE = 256; // 256 is enough for sys tenant
+    const int64_t BUFF_SIZE = 32 * MAX_ZONE_LENGTH; // 4096
     char locality_str[BUFF_SIZE] = "";
     bool first = true;
     int64_t pos = 0;

@@ -13,8 +13,6 @@
 #include "obsm_row.h"
 
 #include "observer/mysql/obsm_utils.h"
-#include "common/ob_accuracy.h"
-#include "share/schema/ob_schema_getter_guard.h"
 
 using namespace oceanbase::share::schema;
 using namespace oceanbase::common;

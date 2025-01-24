@@ -13,7 +13,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #define USING_LOG_PREFIX STORAGE
@@ -22,27 +21,9 @@
 #define private public
 
 #include "storage/schema_utils.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/mock_ob_meta_report.h"
-#include "storage/mock_disk_usage_report.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/slog/ob_storage_logger_manager.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "share/rc/ob_tenant_base.h"
-#include "lib/file/file_directory_utils.h"
-#include "share/ob_device_manager.h"
-#include "share/ob_local_device.h"
-#include "share/schema/ob_tenant_schema_service.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
-#include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_dml_common.h"
 #include "storage/test_tablet_helper.h"
-#include "storage/tablet/ob_tablet_persister.h"
 #include "unittest/storage/slog/simple_ob_storage_redo_module.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 namespace oceanbase
 {

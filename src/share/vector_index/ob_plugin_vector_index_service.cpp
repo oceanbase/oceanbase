@@ -12,9 +12,6 @@
 #define USING_LOG_PREFIX SERVER
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
-#include "share/table/ob_ttl_util.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {

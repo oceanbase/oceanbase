@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_location.h"
-#include "share/location_cache/ob_location_service.h"
 #include "observer/ob_server.h"
 #include "sql/das/ob_das_utils.h"
 

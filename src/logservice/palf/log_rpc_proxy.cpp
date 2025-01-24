@@ -11,7 +11,6 @@
  */
 
 #include "log_rpc_proxy.h"                                 // LogRpcProxy
-#include "share/rc/ob_tenant_base.h"
 #include "observer/ob_srv_network_frame.h"
 
 namespace oceanbase

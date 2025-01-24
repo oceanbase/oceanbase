@@ -12,14 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_update_op.h"
-#include "share/ob_scanner.h"
-#include "sql/engine/px/ob_px_util.h"
+#include "src/sql/engine/px/ob_dfo.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/das/ob_das_utils.h"
-#include "sql/das/ob_das_domain_utils.h"
-#include "storage/tx_storage/ob_access_service.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 namespace common

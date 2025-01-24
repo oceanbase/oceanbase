@@ -10,13 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #include <gtest/gtest.h>
-#include <random>
-#include <string>
-#include <unistd.h>
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
 #include "logservice/ob_log_service.h"
-#include "log/ob_shared_log_service.h"
 
 namespace oceanbase
 {

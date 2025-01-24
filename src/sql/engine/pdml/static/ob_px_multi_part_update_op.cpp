@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_px_multi_part_update_op.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/tx_storage/ob_access_service.h"
 #include "sql/engine/dml/ob_dml_service.h"
 
 using namespace oceanbase::common;

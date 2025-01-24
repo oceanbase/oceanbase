@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "sql/resolver/ddl/ob_truncate_table_resolver.h"
-#include "share/ob_define.h"
-#include "share/ob_rpc_struct.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {

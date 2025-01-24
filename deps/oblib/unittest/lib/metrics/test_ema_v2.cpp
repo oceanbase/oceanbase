@@ -11,12 +11,8 @@
  */
 
 #include "lib/utility/utility.h"
-#include "lib/ob_define.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/oblog/ob_log_module.h"
 #include "lib/metrics/ob_ema_v2.h"
 #include <gtest/gtest.h>
-#include <cmath>
 using namespace oceanbase::common;
 
 bool eq(double a, double b)

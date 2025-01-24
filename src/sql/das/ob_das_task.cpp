@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/ob_das_task.h"
-#include "sql/das/ob_das_scan_op.h"
-#include "sql/ob_sql_trans_control.h"
+#include "ob_das_task.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/engine/px/ob_px_util.h"
 

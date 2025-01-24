@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/mview/ob_mview_maintenance_service.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/ob_errno.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/schema/ob_schema_struct.h" // ObMvRefreshMode
 
 namespace oceanbase
 {

@@ -12,21 +12,12 @@
 
 #define USING_LOG_PREFIX SERVER_OMT
 
+#include "ob_cgroup_ctrl.h"
 #include "lib/file/file_directory_utils.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
-#include "lib/oblog/ob_log.h"
-#include "share/ob_errno.h"
-#include "share/config/ob_server_config.h"
 #include "share/io/ob_io_manager.h"
-#include "share/resource_manager/ob_resource_plan_info.h"
 #include "share/resource_manager/ob_resource_manager.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "observer/omt/ob_tenant.h"
-#include "observer/omt/ob_multi_tenant.h"
 
-#include <stdlib.h>
-#include <stdio.h>
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

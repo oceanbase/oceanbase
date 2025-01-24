@@ -12,10 +12,8 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "win_expr.h"
-#include "share/aggregate/iaggregate.h"
 #include "sql/engine/window_function/ob_window_function_vec_op.h"
 #include "sql/engine/expr/ob_expr_truncate.h"
-#include "lib/timezone/ob_time_convert.h"
 
 namespace oceanbase
 {

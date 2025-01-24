@@ -11,17 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_PC
-#include "sql/plan_cache/ob_cache_object.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "share/schema/ob_schema_getter_guard.h"
+#include "ob_cache_object.h"
 #include "share/ob_truncated_string.h"
-#include "sql/engine/expr/ob_sql_expression.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
 #include "pl/ob_pl.h"
 
-#include <cstring>
 
 namespace oceanbase
 {

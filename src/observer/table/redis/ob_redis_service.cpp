@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_redis_service.h"
 #include "ob_redis_command_factory.h"
-#include "observer/table/ob_htable_utils.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;

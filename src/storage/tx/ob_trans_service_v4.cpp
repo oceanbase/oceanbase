@@ -10,35 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/utility/ob_macro_utils.h"
-#include "ob_trans_service.h"
-#include "ob_trans_define.h"
-#include "lib/profile/ob_perf_event.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/ob_name_id_def.h"
-#include "lib/ob_running_mode.h"
-#include "rpc/ob_request.h"
-#include "ob_trans_ctx.h"
-#include "ob_trans_factory.h"
-#include "ob_trans_functor.h"
-#include "ob_tx_msg.h"
-#include "ob_tx_log_adapter.h"
-#include "ob_trans_part_ctx.h"
-#include "ob_trans_result.h"
+#include "src/storage/tx/ob_trans_part_ctx.h"
 #include "observer/ob_server.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "storage/ob_i_store.h"
-#include "wrs/ob_i_weak_read_service.h"           // ObIWeakReadService
-#include "sql/session/ob_basic_session_info.h"
-#include "wrs/ob_weak_read_util.h"               // ObWeakReadUtil
-#include "storage/memtable/ob_memtable_context.h"
-#include "common/storage/ob_sequence.h"
-#include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/ls/ob_ls.h"
-#include "ob_xa_service.h"
 
 /*  interface(s)  */
 namespace oceanbase {

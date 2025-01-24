@@ -11,15 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "lib/ob_errno.h"
-#include "ob_multi_version_schema_service.h"
 #include "ob_table_param.h"
-#include "ob_table_schema.h"
-#include "observer/ob_server.h"
-#include "storage/ob_storage_schema.h"
-#include "storage/access/ob_table_read_info.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
-#include "share/ob_lob_access_utils.h"
 
 namespace oceanbase
 {

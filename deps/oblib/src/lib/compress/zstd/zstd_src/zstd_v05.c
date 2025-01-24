@@ -57,8 +57,6 @@ extern "C" {
 /*-****************************************
 *  Dependencies
 ******************************************/
-#include <stddef.h>    /* size_t, ptrdiff_t */
-#include <string.h>    /* memcpy */
 
 
 /*-****************************************
@@ -596,7 +594,6 @@ extern "C" {
 /* *****************************************
 *  Includes
 ******************************************/
-#include <stddef.h>    /* size_t, ptrdiff_t */
 
 
 /*-****************************************
@@ -1211,8 +1208,6 @@ MEM_STATIC unsigned FSEv05_endOfDState(const FSEv05_DState_t* DStatePtr)
 *  Includes
 ****************************************************************/
 #include <stdlib.h>     /* malloc, free, qsort */
-#include <string.h>     /* memcpy, memset */
-#include <stdio.h>      /* printf (debug) */
 
 
 
@@ -1828,8 +1823,6 @@ size_t HUFv05_decompress1X4_usingDTable(void* dst, size_t maxDstSize, const void
 *  Includes
 ****************************************************************/
 #include <stdlib.h>     /* malloc, free, qsort */
-#include <string.h>     /* memcpy, memset */
-#include <stdio.h>      /* printf (debug) */
 
 
 /* **************************************************************
@@ -2665,8 +2658,6 @@ size_t HUFv05_decompress (void* dst, size_t dstSize, const void* cSrc, size_t cS
 *  Dependencies
 *********************************************************/
 #include <stdlib.h>      /* calloc */
-#include <string.h>      /* memcpy, memmove */
-#include <stdio.h>       /* debug only : printf */
 
 
 /*-*******************************************************

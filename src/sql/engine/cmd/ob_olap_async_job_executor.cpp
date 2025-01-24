@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_olap_async_job_executor.h"
-#include <chrono>
-#include <ctime>
-#include <iomanip>
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
 #include "sql/resolver/cmd/ob_olap_async_job_stmt.h"
 #include "sql/engine/ob_exec_context.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 namespace oceanbase
 {
 using namespace common;

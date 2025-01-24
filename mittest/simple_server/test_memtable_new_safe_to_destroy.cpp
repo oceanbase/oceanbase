@@ -11,17 +11,13 @@
  */
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <iostream>
 #define protected public
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
 #include "mittest/env/ob_simple_server_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_tx_loop_worker.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tx/ob_trans_submit_log_cb.h"
 
 
 static const char *TEST_FILE_NAME = "test_memtable_new_safe_to_destroy";

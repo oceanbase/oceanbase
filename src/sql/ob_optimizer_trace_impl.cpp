@@ -11,26 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "lib/utility/ob_utility.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "sql/ob_optimizer_trace_impl.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
+#include "ob_optimizer_trace_impl.h"
 #include "share/ob_version.h"
-#include "sql/resolver/ddl/ob_explain_stmt.h"
-#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_values.h"
-#include "sql/optimizer/ob_join_order.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "lib/file/file_directory_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/optimizer/ob_dynamic_sampling.h"
 #include "sql/optimizer/ob_skyline_prunning.h"
 #include "sql/optimizer/ob_access_path_estimation.h"
 

@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_vector_store.h"
 #include "ob_aggregated_store_vec.h"
-#include "sql/engine/ob_exec_context.h"
-#include "storage/ob_i_store.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
-#include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
 #include "storage/access/ob_pushdown_aggregate.h"
 
 namespace oceanbase

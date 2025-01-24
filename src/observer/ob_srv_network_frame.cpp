@@ -14,24 +14,16 @@
 #include "observer/ob_srv_network_frame.h"
 #include "rpc/obmysql/ob_sql_nio_server.h"
 #include "observer/mysql/obsm_conn_callback.h"
-#include "rpc/obrpc/ob_poc_rpc_server.h"
-#include "src/share/rc/ob_tenant_base.h"
 
-#include "share/config/ob_server_config.h"
 #include "share/ob_rpc_share.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_rpc_intrusion_detect.h"
 #include "observer/net/ob_rpc_reverse_keepalive.h"
 #include "storage/ob_locality_manager.h"
-#include "lib/ssl/ob_ssl_config.h"
-#include "src/share/io/ob_io_manager.h"
 extern "C" {
 #include "ussl-hook.h"
 #include "auth-methods.h"
 SSL_CTX* ussl_get_server_ctx(int ctx_id);
 }
-#include <sys/types.h>
-#include <sys/stat.h>
 #include "storage/ob_locality_manager.h"
 #ifdef OB_USE_BABASSL
 #include "share/ob_encrypt_kms.h"

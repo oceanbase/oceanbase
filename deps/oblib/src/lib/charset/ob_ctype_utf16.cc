@@ -12,9 +12,7 @@
  */ 
 
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/str_uca_type.h"
 #include "lib/charset/ob_dtoa.h"
-#include "lib/charset/ob_template_helper.h"
 
 #define OB_UTF16_HIGH_HEAD(x)  ((((uchar) (x)) & 0xFC) == 0xD8)
 #define OB_UTF16_LOW_HEAD(x)   ((((uchar) (x)) & 0xFC) == 0xDC)

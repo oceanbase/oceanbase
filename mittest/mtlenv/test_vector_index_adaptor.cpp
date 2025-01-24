@@ -16,22 +16,12 @@
 #define private public
 #define protected public
 
-#include "lib/string/ob_sql_string.h"
-#include "roaring/roaring64.h"
-#include "share/vector_index/ob_plugin_vector_index_adaptor.h"
-#include "share/vector_index/ob_plugin_vector_index_serialize.h"
 #include "storage/ob_i_store.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "lib/oblog/ob_log_module.h"
 
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/vector/ob_vector_util.h"
 
 #undef private
 #undef protected
-#include <random>
-#include<iostream>
 
 namespace oceanbase {
 

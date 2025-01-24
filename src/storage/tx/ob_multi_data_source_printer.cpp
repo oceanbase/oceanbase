@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_multi_data_source_printer.h"
+#include "ob_multi_data_source_printer.h"
 #include "storage/tx/ob_multi_data_source.h"
 #include "storage/tx/ob_committer_define.h"
 

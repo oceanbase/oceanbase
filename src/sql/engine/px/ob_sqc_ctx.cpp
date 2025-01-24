@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/ob_sqc_ctx.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 
 using namespace oceanbase::sql;
 

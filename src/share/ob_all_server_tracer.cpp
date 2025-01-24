@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_all_server_tracer.h"
-#include "lib/thread/thread_mgr.h"
-#include "lib/alloc/alloc_assist.h"
 #include "observer/ob_server_struct.h"
 #include "share/ob_rpc_struct.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"     // ObAllServerTracerProxy

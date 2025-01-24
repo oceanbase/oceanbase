@@ -12,15 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_op_wrapper.h"
-#include "ob_table_modify_executor.h"
-#include "share/table/ob_table.h"
-#include "ob_table_scan_executor.h"
-#include "ob_htable_utils.h"
-#include "ob_htable_filter_operator.h"
-#include "ob_table_insert_up_executor.h"
-#include "ttl/ob_table_ttl_executor.h"
 #include "ob_table_query_common.h"
-#include "ob_table_audit.h"
 
 using namespace oceanbase::sql::stmt;
 

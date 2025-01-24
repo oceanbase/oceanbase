@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_micro_block_info.h"
-#include "storage/blocksstable/cs_encoding/ob_cs_micro_block_transformer.h"
-#include "share/rc/ob_tenant_base.h"
 #include "ob_index_block_tree_cursor.h"
 
 namespace oceanbase

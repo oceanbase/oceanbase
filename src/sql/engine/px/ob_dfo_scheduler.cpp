@@ -11,17 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/container/ob_se_array.h"
-#include "share/ob_rpc_share.h"
-#include "share/schema/ob_part_mgr_util.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
 #include "sql/engine/px/ob_dfo_scheduler.h"
-#include "sql/engine/px/ob_px_scheduler.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/engine/px/ob_px_rpc_processor.h"
 #include "sql/engine/px/ob_px_sqc_async_proxy.h"
-#include "share/ob_server_blacklist.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include "ob_px_coord_op.h"
 

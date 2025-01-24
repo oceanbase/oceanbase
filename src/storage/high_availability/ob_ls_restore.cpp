@@ -13,16 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_restore.h"
 #include "observer/ob_server.h"
-#include "ob_physical_copy_task.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "share/backup/ob_backup_connectivity.h"
-#include "storage/backup/ob_backup_data_store.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/high_availability/ob_storage_ha_reader.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_create_mds_helper.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase

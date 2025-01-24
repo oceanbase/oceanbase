@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include <gtest/gtest.h>
-#include "lib/container/ob_array_iterator.h"
 #define private public
 #include "share/backup/ob_backup_path.h"
 #ifdef OB_BUILD_TDE_SECURITY

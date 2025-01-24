@@ -12,13 +12,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_range_splitter.h"
-#include "storage/blocksstable/ob_sstable.h"
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
-#include "storage/direct_load/ob_direct_load_multiple_sstable.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_index_block_meta_scanner.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
-#include "storage/direct_load/ob_direct_load_sstable.h"
-#include "storage/direct_load/ob_direct_load_sstable_scanner.h"
 #include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase

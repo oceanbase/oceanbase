@@ -12,9 +12,7 @@
 
 
 #define USING_LOG_PREFIX SQL_QRR
-#include "lib/utility/ob_print_utils.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "common/ob_smart_call.h"
 #include "sql/plan_cache/ob_sql_parameterization.h"
 #include "sql/udr/ob_udr_analyzer.h"
 

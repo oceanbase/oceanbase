@@ -11,7 +11,6 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_transaction_freeze_checkpoint.h"
-#include "storage/checkpoint/ob_freeze_checkpoint.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::common;

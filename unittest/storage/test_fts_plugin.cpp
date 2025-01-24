@@ -17,12 +17,7 @@
 #define protected public
 #define private   public
 
-#include "lib/ob_plugin.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/fts/ob_fts_plugin_helper.h"
-#include "storage/fts/ob_fts_plugin_mgr.h"
 #include "storage/fts/ob_whitespace_ft_parser.h"
-#include "storage/fts/ob_fts_stop_word.h"
 #include "sql/das/ob_das_utils.h"
 
 namespace oceanbase

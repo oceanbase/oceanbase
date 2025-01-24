@@ -12,13 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_xa_executor.h"
-#include "share/ob_errno.h"
-#include "share/ob_define.h"
-#include "sql/resolver/xa/ob_xa_stmt.h"
-#include "sql/ob_sql_trans_control.h"
-#include "storage/tx/ob_trans_define.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/executor/ob_task_executor_ctx.h"
 #include "storage/tx/ob_xa_service.h"
 #include "pl/ob_pl.h"
 

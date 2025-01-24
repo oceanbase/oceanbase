@@ -11,7 +11,6 @@
  */
 
 #include "ob_imicro_block_writer.h"
-#include "lib/utility/utility.h"
 #include  "ob_row_writer.h"
 namespace oceanbase
 {

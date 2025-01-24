@@ -11,26 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/optimizer/ob_log_insert.h"
 #include "sql/optimizer/ob_log_select_into.h"
 #include "sql/optimizer/ob_insert_log_plan.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
-#include "sql/optimizer/ob_select_log_plan.h"
 #include "sql/optimizer/ob_log_expr_values.h"
-#include "sql/optimizer/ob_log_group_by.h"
-#include "sql/optimizer/ob_log_table_scan.h"
-#include "sql/engine/expr/ob_expr_column_conv.h"
-#include "sql/optimizer/ob_log_subplan_filter.h"
 #include "sql/optimizer/ob_log_insert_all.h"
-#include "sql/optimizer/ob_log_link_dml.h"
-#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
-#include "sql/ob_optimizer_trace_impl.h"
-#include "common/ob_smart_call.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
-#include "share/system_variable/ob_sys_var_class_type.h"
-#include "share/stat/ob_stat_define.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 using namespace oceanbase;

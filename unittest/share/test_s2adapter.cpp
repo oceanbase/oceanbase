@@ -11,14 +11,11 @@
  */
 
 #include <gtest/gtest.h>
-#include <boost/geometry.hpp>
 #define private public
 #include "lib/json_type/ob_json_common.h"
 #include "lib/geo/ob_s2adapter.h"
 #include "lib/utility/ob_test_util.h"
 
-#include <vector>
-#include <iostream>
 #undef private
 
 namespace oceanbase {

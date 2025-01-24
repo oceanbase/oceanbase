@@ -11,11 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <signal.h>
-#include "storage/blocksstable/ob_data_buffer.h"
-#include "common/object/ob_object.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "share/redolog/ob_log_definition.h"
 
 namespace oceanbase
 {

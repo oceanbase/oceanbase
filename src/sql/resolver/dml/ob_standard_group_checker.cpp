@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_standard_group_checker.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 namespace oceanbase

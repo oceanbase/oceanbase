@@ -11,37 +11,17 @@
  */
 #define USING_LOG_PREFIX SERVER
 
-#include "share/interrupt/ob_interrupt_rpc_proxy.h"
 #include "observer/ob_srv_xlator.h"
 
-#include "share/ob_tenant_mgr.h"
-#include "share/schema/ob_schema_service_rpc_proxy.h"
 #include "share/ratelimit/ob_rl_rpc.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "share/rpc/ob_batch_processor.h"
-#include "share/rpc/ob_blacklist_req_processor.h"
-#include "share/rpc/ob_blacklist_resp_processor.h"
 #include "share/deadlock/ob_deadlock_detector_rpc.h"
-#include "sql/executor/ob_executor_rpc_processor.h"
-#include "sql/engine/cmd/ob_kill_executor.h"
-#include "sql/engine/cmd/ob_load_data_rpc.h"
 #include "sql/engine/px/ob_px_rpc_processor.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_process.h"
 #include "sql/das/ob_das_id_rpc.h"
-#include "sql/dtl/ob_dtl_rpc_processor.h"
 #include "storage/tablelock/ob_table_lock_rpc_processor.h"
-#include "sql/engine/px/ob_px_bloom_filter.h"
-#include "storage/tx/ob_trans_rpc.h"
-#include "storage/tx/ob_gts_rpc.h"
 #include "storage/tx/ob_gti_rpc.h"
-#include "storage/tx/ob_dup_table_rpc.h"
-#include "storage/tx/ob_ts_response_handler.h"
 #include "storage/tx/wrs/ob_weak_read_service_rpc_define.h"  // weak_read_service
-#include "observer/ob_rpc_processor_simple.h"
-#include "observer/ob_srv_task.h"
 
-#include "observer/table/ob_table_rpc_processor.h"
 #include "observer/table/ob_table_execute_processor.h"
 #include "observer/table/ob_table_batch_execute_processor.h"
 #include "observer/table/ob_table_query_processor.h"
@@ -50,9 +30,7 @@
 #include "observer/table/ob_table_direct_load_processor.h"
 #include "observer/table/ob_table_ls_execute_processor.h"
 #include "observer/table/ob_redis_execute_processor.h"
-#include "storage/ob_storage_rpc.h"
 
-#include "logservice/restoreservice/ob_log_restore_rpc_define.h"
 #include "rootserver/freeze/ob_major_freeze_rpc_define.h"        // ObTenantMajorFreezeP
 #include "storage/tx/ob_xa_rpc.h"
 

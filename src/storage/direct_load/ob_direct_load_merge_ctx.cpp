@@ -12,20 +12,14 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/direct_load/ob_direct_load_merge_ctx.h"
-#include "observer/table_load/ob_table_load_store_ctx.h"
+#include "ob_direct_load_merge_ctx.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "storage/direct_load/ob_direct_load_external_table.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table.h"
-#include "storage/direct_load/ob_direct_load_multiple_heap_table_index_block.h"
-#include "storage/direct_load/ob_direct_load_multiple_sstable.h"
 #include "storage/direct_load/ob_direct_load_range_splitter.h"
 #include "storage/direct_load/ob_direct_load_partition_del_lob_task.h"
 #include "storage/direct_load/ob_direct_load_partition_merge_task.h"
 #include "storage/direct_load/ob_direct_load_partition_rescan_task.h"
-#include "storage/direct_load/ob_direct_load_tmp_file.h"
 #include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
-#include "observer/table_load/ob_table_load_schema.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/direct_load/ob_direct_load_sstable.h"
 

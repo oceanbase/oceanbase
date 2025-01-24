@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_backup_table_list_mgr.h"
-#include "storage/tmp_file/ob_tmp_file_manager.h"
-#include "storage/backup/ob_backup_data_store.h"
-#include "share/backup/ob_backup_io_adapter.h"
 
 namespace oceanbase
 {

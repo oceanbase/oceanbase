@@ -11,15 +11,11 @@
  */
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_context.h"
-#include "ob_table_service.h"
 #include "ob_table_cg_service.h" // for generate_table_loc_meta
-#include "sql/das/ob_das_define.h" // for ObDASTableLocMeta
-#include "lib/utility/utility.h"
-#include "share/ob_lob_access_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "ob_table_aggregation.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "src/share/table/ob_table_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 

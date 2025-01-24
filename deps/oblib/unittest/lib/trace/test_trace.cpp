@@ -14,9 +14,7 @@
 #include <thread>
 
 #include "lib/trace/ob_trace.h"
-#include "lib/ob_define.h"
 
-#include <iostream>
 
 using namespace oceanbase;
 

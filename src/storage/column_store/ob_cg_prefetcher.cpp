@@ -10,7 +10,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_cg_prefetcher.h"
-#include "ob_i_cg_iterator.h"
 #include "storage/access/ob_aggregate_base.h"
 
 namespace oceanbase {

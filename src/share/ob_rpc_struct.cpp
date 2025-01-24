@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_rpc_struct.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/backup/ob_backup_struct.h"
-#include "lib/utility/ob_serialization_helper.h"
-#include "lib/utility/ob_print_utils.h"
-#include "common/ob_store_format.h"
-#include "observer/ob_server_struct.h"
+#include "ob_rpc_struct.h"
 #include "storage/tx/ob_trans_service.h"
-#include "share/ls/ob_ls_status_operator.h"
 
 namespace oceanbase
 {

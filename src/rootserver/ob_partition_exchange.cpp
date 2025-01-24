@@ -12,23 +12,12 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_partition_exchange.h"
-#include "share/ob_define.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "ob_ddl_service.h"
 #include "ob_root_service.h"
 #include "observer/ob_sql_client_decorator.h" // ObSQLClientRetryWeak
-#include "share/ob_ddl_common.h"
-#include "share/ob_debug_sync.h"
-#include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/tablet/ob_tablet_to_table_history_operator.h" // ObTabletToTableHistoryOperator
-#include "share/tablet/ob_tablet_table_operator.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
-#include "sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {

@@ -13,17 +13,10 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include <cstdlib>
-#include <ctime>
-#include "share/ob_tenant_mgr.h"
 #include "../unittest/storage/blocksstable/ob_data_file_prepare.h"
 #include "../unittest/storage/blocksstable/ob_row_generate.h"
-#include "observer/table_load/ob_table_load_partition_location.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include "share/table/ob_table_load_define.h"
 #include "storage/direct_load/ob_direct_load_sstable_scanner.h"
 #include "storage/direct_load/ob_direct_load_sstable_compactor.h"
-#include "storage/ob_i_store.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
 namespace oceanbase

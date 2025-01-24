@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_redef_table.h"
-#include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_schema.h"
-#include "observer/table_load/ob_table_load_struct.h"
-#include "share/ob_common_rpc_proxy.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "storage/ddl/ob_ddl_server_client.h"
 

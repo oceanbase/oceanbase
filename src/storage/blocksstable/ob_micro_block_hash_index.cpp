@@ -10,11 +10,8 @@
 
 #include "ob_macro_block.h"
 #include "ob_micro_block_hash_index.h"
-#include "ob_imicro_block_reader.h"
-#include "ob_imicro_block_writer.h"
-#include "share/ob_define.h"
-#include "share/schema/ob_table_schema.h"
 #include "ob_data_store_desc.h"
+#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {

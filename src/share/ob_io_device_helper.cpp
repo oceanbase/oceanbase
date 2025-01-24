@@ -11,18 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include <errno.h>
 #include <sys/vfs.h>
 #include <sys/statvfs.h>
 #include "common/storage/ob_io_device.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_device_manager.h"
-#include "share/ob_errno.h"
-#include "share/ob_force_print_log.h"
 #include "share/ob_io_device_helper.h"
-#include "observer/ob_server_struct.h"
 #include "common/ob_smart_call.h"
 
 using namespace oceanbase::common;

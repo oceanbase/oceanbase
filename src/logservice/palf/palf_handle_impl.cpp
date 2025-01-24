@@ -12,20 +12,8 @@
 
 #define USING_LOG_PREFIX PALF
 #include "palf_handle_impl.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"                              // OB_SUCCESS...
-#include "lib/ob_lib_config.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_print_utils.h"                   // PALF_LOG
-#include "common/ob_member_list.h"                        // ObMemberList
-#include "common/ob_role.h"                               // ObRole
-#include "fetch_log_engine.h"
 #include "log_engine.h"                                // LogEngine
-#include "election/interface/election_priority.h"
-#include "palf_iterator.h"                             // Iterator
 #include "palf_env_impl.h"                             // IPalfEnvImpl::
-#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {

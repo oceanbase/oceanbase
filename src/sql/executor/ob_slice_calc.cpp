@@ -14,14 +14,6 @@
 
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/executor/ob_slice_calc.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/engine/px/exchange/ob_transmit_op.h"
-#include "share/schema/ob_table_schema.h"
-#include "common/row/ob_row.h"
-#include "lib/ob_define.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "storage/ddl/ob_ddl_seq_generator.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
 using namespace oceanbase::sql;

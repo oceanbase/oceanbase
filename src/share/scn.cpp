@@ -12,7 +12,6 @@
 
 #include "scn.h"
 #include "share/ob_table_range.h"
-#include "lib/utility/ob_macro_utils.h"         // OB_UNLIKELY
 #include "lib/json/ob_yson.h"
 namespace oceanbase
 {

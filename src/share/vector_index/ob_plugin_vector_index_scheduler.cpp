@@ -10,14 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SERVER
-#include "share/vector_index/ob_plugin_vector_index_scheduler.h"
+#include "ob_plugin_vector_index_scheduler.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_vector_index_util.h"
-#include "share/table/ob_ttl_util.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {

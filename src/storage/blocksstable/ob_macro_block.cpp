@@ -10,24 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_store_format.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "ob_block_manager.h"
 #include "ob_macro_block.h"
-#include "ob_micro_block_hash_index.h"
-#include "observer/ob_server_struct.h"
-#include "share/ob_encryption_util.h"
-#include "share/ob_force_print_log.h"
-#include "share/ob_task_define.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/compaction/ob_tenant_freeze_info_mgr.h"
-#include "storage/compaction/ob_sstable_merge_history.h"
 #include "storage/backup/ob_backup_data_struct.h"
-#include "index_block/ob_index_block_row_struct.h"
-#include "ob_macro_block_struct.h"
-#include "ob_macro_block_handle.h"
-#include "storage/blocksstable/ob_data_store_desc.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include "sql/printer/ob_delete_stmt_printer.h"
-#include "sql/ob_sql_context.h"
 namespace oceanbase
 {
 using namespace common;

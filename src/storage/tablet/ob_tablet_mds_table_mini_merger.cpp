@@ -10,16 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <stdint.h>
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
-#include "storage/multi_data_source/adapter_define/mds_dump_kv_wrapper.h"
-#include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
 
 #define USING_LOG_PREFIX MDS
 

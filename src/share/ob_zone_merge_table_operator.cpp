@@ -14,10 +14,6 @@
 
 #include "share/ob_zone_merge_table_operator.h"
 
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/string/ob_sql_string.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_dml_sql_splicer.h"

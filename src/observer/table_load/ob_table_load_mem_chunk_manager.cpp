@@ -11,13 +11,8 @@
  */
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/table_load/ob_table_load_mem_chunk_manager.h"
-#include "observer/table_load/ob_table_load_stat.h"
-#include "observer/table_load/ob_table_load_store_ctx.h"
-#include "observer/table_load/ob_table_load_struct.h"
+#include "ob_table_load_mem_chunk_manager.h"
 #include "observer/table_load/ob_table_load_task.h"
-#include "storage/direct_load/ob_direct_load_mem_context.h"
-#include "share/table/ob_table_load_define.h"
 #include "src/observer/table_load/ob_table_load_task_scheduler.h"
 #include "src/observer/table_load/ob_table_load_pre_sorter.h"
 #include "src/observer/table_load/ob_table_load_pre_sorter.h"

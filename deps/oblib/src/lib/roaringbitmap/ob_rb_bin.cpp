@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX LIB
-#include "lib/ob_errno.h"
 #include "lib/roaringbitmap/ob_rb_bin.h"
 #include "roaring/roaring_array.h"
 

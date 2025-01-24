@@ -11,7 +11,6 @@
  */
 
 #include "ob_datum_rowkey.h"
-#include "ob_datum_range.h"
 #include "share/schema/ob_table_param.h"
 #include "storage/blocksstable/ob_datum_rowkey_vector.h"
 

@@ -14,12 +14,6 @@
 
 #include "sql/executor/ob_direct_receive_op.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/executor/ob_executor_rpc_impl.h"
-#include "share/ob_scanner.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/monitor/ob_exec_stat_collector.h"
 using namespace oceanbase::common;
 
 namespace oceanbase

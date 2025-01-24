@@ -14,11 +14,7 @@
 
 #include "share/ob_freeze_info_manager.h"
 
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/utility/utility.h"
-#include "share/ob_common_rpc_proxy.h"
 #include "share/ob_global_stat_proxy.h"
-#include "observer/ob_server_struct.h"
 
 
 namespace oceanbase

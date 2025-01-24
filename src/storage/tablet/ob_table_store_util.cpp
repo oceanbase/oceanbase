@@ -13,19 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_table_store_util.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
-#include "lib/container/ob_array_iterator.h"
-#include "storage/tablet/ob_tablet_memtable_mgr.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_table_store.h"
-#include "observer/ob_server_struct.h"
-#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
-#include "share/scn.h"
 
 
 using namespace oceanbase;

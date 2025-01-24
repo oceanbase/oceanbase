@@ -12,19 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_partition_sql_helper.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/ob_partition_modify.h"
-#include "share/ob_rpc_struct.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "share/schema/ob_schema_utils.h"
-#include "lib/timezone/ob_timezone_info.h"
-#include "share/ob_time_zone_info_manager.h"
-#include "observer/ob_server_struct.h"
+#include "src/observer/omt/ob_tenant_node_balancer.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 
 namespace oceanbase

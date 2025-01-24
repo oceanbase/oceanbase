@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_execute_executor.h"
-#include "sql/resolver/prepare/ob_execute_stmt.h"
 #include "sql/ob_sql.h"
-#include "sql/engine/ob_exec_context.h"
-#include "observer/ob_server_struct.h"
-#include "observer/virtual_table/ob_virtual_table_iterator_factory.h"
-#include "sql/resolver/ob_schema_checker.h"
-#include "observer/mysql/ob_sync_cmd_driver.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
 #include "observer/mysql/obmp_stmt_execute.h"

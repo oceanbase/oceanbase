@@ -10,12 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
 #define private public
 #define protected public
 
-#include "lib/random/ob_random.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/column_store/ob_co_prefetcher.h"
 #include "ob_index_block_data_prepare.h"
 

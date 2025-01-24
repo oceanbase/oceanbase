@@ -15,12 +15,9 @@
 #include "observer/table_load/ob_table_load_merger.h"
 #include "observer/table_load/ob_table_load_data_row_handler.h"
 #include "observer/table_load/ob_table_load_index_row_handler.h"
-#include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
 #include "observer/table_load/ob_table_load_index_table_projector.h"
 #include "storage/direct_load/ob_direct_load_sstable_data_block.h"
 #include "storage/direct_load/ob_direct_load_mem_context.h"
-#include "storage/direct_load/ob_direct_load_i_table.h"
-#include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
 #include "src/observer/table_load/ob_table_load_error_row_handler.h"
 

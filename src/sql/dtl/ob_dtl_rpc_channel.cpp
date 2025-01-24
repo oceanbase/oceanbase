@@ -12,15 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_rpc_channel.h"
-#include "share/interrupt/ob_global_interrupt_call.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/lock/ob_thread_cond.h"
-#include "common/row/ob_row.h"
-#include "sql/dtl/ob_dtl_rpc_proxy.h"
-#include "sql/dtl/ob_dtl.h"
-#include "sql/dtl/ob_dtl_flow_control.h"
 #include "sql/dtl/ob_dtl_channel_agent.h"
-#include "share/rc/ob_context.h"
 #include "sql/dtl/ob_dtl_channel_watcher.h"
 
 using namespace oceanbase::common;

@@ -13,29 +13,9 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_ls_operator.h"
-#include "share/ob_errno.h"
-#include "share/ob_share_util.h"
-#include "share/config/ob_server_config.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/string/ob_fixed_length_string.h"//ObFixedLengthString
-#include "common/ob_timeout_ctx.h"
-#include "lib/utility/ob_unify_serialize.h" //OB_SERIALIZE_MEMBER
-#include "observer/ob_inner_sql_connection.h"//ObInnerSQLConnection
-#include "observer/ob_inner_sql_connection_pool.h"//ObInnerSQLConnectionPool
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" //ObTenantSnapshotUtil
-#include "share/rc/ob_tenant_base.h"//MTL_WITH_CHECK_TENANT
-#include "storage/tx/ob_trans_define.h"//MonotonicTs
-#include "storage/tx/ob_ts_mgr.h"//GET_GTS
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tablelock/ob_lock_utils.h" // ObLSObjLockUtil
-#include "share/ob_max_id_fetcher.h"//ObMaxIdFetcher
-#include "share/ob_global_stat_proxy.h"//get gc
-#include "logservice/palf/log_define.h"//SCN
-#include "share/scn.h"//SCN
-#include "share/ls/ob_ls_status_operator.h"
 #include "rootserver/mview/ob_replica_safe_check_task.h" //ObReplicaSafeCheckTask
 
 using namespace oceanbase;

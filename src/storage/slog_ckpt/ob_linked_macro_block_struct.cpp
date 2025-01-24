@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/ob_errno.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
 
 

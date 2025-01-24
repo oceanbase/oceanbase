@@ -19,8 +19,6 @@
  * IN THE SOFTWARE.
  */
 #include "packet/http/http_parser.h"
-#include <assert.h>
-#include <stddef.h>
 #include <ctype.h>
 #include "easy_define.h"
 

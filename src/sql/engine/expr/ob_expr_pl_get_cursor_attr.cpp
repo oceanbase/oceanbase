@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_pl_get_cursor_attr.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
-#include "pl/ob_pl_type.h"
 
 namespace oceanbase
 {

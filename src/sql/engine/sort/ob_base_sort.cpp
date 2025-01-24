@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/sort/ob_base_sort.h"
-#include "common/object/ob_obj_compare.h"
-#include "common/row/ob_row_util.h"
-#include "share/ob_cluster_version.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

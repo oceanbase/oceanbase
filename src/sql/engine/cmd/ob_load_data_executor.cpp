@@ -14,12 +14,8 @@
 
 #include "sql/engine/cmd/ob_load_data_executor.h"
 
-#include "lib/oblog/ob_log_module.h"
-#include "sql/engine/cmd/ob_load_data_impl.h"
 #include "sql/engine/cmd/ob_load_data_direct_impl.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
-#include "sql/optimizer/ob_optimizer.h"
 
 namespace oceanbase
 {

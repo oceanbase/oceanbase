@@ -14,9 +14,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_plugin_vector_index_util.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "share/ob_unit_getter.h"
 
 namespace oceanbase
 {

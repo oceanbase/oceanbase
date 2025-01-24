@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_MONITOR
 #include "sql/monitor/ob_phy_operator_monitor_info.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/ob_name_def.h"
 #include "share/ob_time_utility2.h"
 
 using namespace oceanbase::common;

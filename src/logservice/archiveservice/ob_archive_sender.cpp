@@ -11,38 +11,13 @@
  */
 
 #include "ob_archive_sender.h"
-#include <algorithm>
-#include <cstdint>
-#include "lib/alloc/alloc_assist.h"
-#include "lib/ob_errno.h"
-#include "lib/restore/ob_storage.h"
-#include "lib/string/ob_string.h"    // ObString
-#include "lib/thread/threads.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/backup/ob_archive_piece.h"    // ObArchivePiece
-#include "lib/thread/ob_thread_name.h"
 #include "logservice/palf/log_io_context.h"  // LogIOContext
-#include "share/backup/ob_archive_struct.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/ob_debug_sync.h"
-#include "share/ob_errno.h"
-#include "share/ob_ls_id.h"          // ObLSID
-#include "share/rc/ob_tenant_base.h"    // MTL_ID
 #include "observer/ob_server_struct.h"                   // GCTX
 #include "ob_ls_mgr.h"               // ObArchiveLSMgr
-#include "ob_archive_round_mgr.h"    // ObArchiveRoundMgr
-#include "ob_archive_define.h"
 #include "ob_archive_allocator.h"    // ObArchiveAllocator
-#include "ob_archive_define.h"       // ARCHIVE_N
-#include "ob_archive_util.h"         // cal_archive_file_id
-#include "ob_archive_task.h"         // ObArchiveSendTask
-#include "ob_ls_task.h"              // ObLSArchiveTask
 #include "ob_archive_task_queue.h"   // ObArchiveTaskStatus
 #include "ob_archive_io.h"           // ObArchiveIO
-#include "share/backup/ob_backup_path.h"   // ObBackupPath
 #include "share/backup/ob_archive_path.h"   // ObArchivePathUtil
-#include "share/scn.h"   // ObArchivePathUtil
 
 namespace oceanbase
 {

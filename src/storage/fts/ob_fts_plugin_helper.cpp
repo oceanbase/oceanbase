@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE_FTS
 
-#include "lib/alloc/alloc_assist.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/utility.h"
-#include "share/rc/ob_tenant_base.h"
-#include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "src/sql/engine/expr/ob_expr_operator.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
 #include "storage/fts/ob_fts_stop_word.h"
 

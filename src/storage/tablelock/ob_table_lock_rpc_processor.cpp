@@ -15,9 +15,6 @@
 #include "storage/tx_storage/ob_access_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_table_lock_service.h"
-#include "storage/tablelock/ob_table_lock_rpc_struct.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tx/ob_clog_encrypt_info.h" // TODO: remove with old trans interface
 #include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase

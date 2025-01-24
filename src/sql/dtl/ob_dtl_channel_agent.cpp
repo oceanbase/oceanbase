@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_channel_agent.h"
-#include "sql/dtl/ob_dtl_channel.h"
-#include "sql/dtl/ob_dtl_basic_channel.h"
-#include "sql/dtl/ob_dtl_rpc_channel.h"
-#include "sql/engine/px/ob_px_row_store.h"
-#include "common/row/ob_row.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

@@ -11,7 +11,6 @@
  */
 
 #include "ob_xa_define.h"
-#include "ob_xa_ctx.h"
 #include "ob_xa_ctx_mgr.h"
 
 namespace oceanbase

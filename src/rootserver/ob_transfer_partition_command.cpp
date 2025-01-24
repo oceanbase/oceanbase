@@ -13,15 +13,9 @@
 
 #include "ob_transfer_partition_command.h"
 
-#include "lib/oblog/ob_log_module.h"                 // LOG_*
-#include "share/ob_balance_define.h"                 // need_balance_table()
 #include "share/balance/ob_transfer_partition_task_table_operator.h"
 #include "share/balance/ob_balance_job_table_operator.h"//ObBalanceJobTableOperator
-#include "share/transfer/ob_transfer_task_operator.h"//ObTransferTask
-#include "share/ob_tenant_info_proxy.h"
 #include "rootserver/standby/ob_standby_service.h"
-#include "observer/omt/ob_tenant_config_mgr.h" // ObTenantConfigGuard
-#include "share/ls/ob_ls_i_life_manager.h"//START/END_TRANSACTION
 #include "storage/tablelock/ob_lock_utils.h"//table_lock
 
 

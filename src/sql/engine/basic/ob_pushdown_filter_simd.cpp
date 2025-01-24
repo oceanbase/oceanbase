@@ -16,7 +16,6 @@
 #include <immintrin.h>
 #endif
 
-#include <stdlib.h>
 #include "ob_pushdown_filter.h"
 
 namespace oceanbase

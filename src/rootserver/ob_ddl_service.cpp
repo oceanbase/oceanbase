@@ -11,102 +11,39 @@
  */
 
 #define USING_LOG_PREFIX RS
-#include "rootserver/ob_ddl_service.h"
 
-#include "lib/oblog/ob_log.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/string/ob_strings.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/hash/ob_placement_hashset.h"
-#include "lib/hash/ob_placement_hashmap.h"
-#include "lib/hash/ob_hashmap.h"
-#include "lib/worker.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "common/ob_timeout_ctx.h"
-#include "common/rowkey/ob_rowkey.h"
-#include "share/ob_define.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_part_mgr_util.h"
+#include "ob_ddl_service.h"
 #include "share/schema/ob_schema_printer.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_ddl_sql_service.h"
-#include "share/schema/ob_security_audit_sql_service.h"
-#include "share/schema/ob_user_sql_service.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
-#include "share/ob_autoincrement_service.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_primary_zone_util.h"
-#include "share/ob_replica_info.h"
 #include "share/ob_index_builder_util.h"
-#include "share/ob_fts_index_builder_util.h"
 #include "share/sequence/ob_sequence_ddl_proxy.h"
-#include "share/ob_schema_status_proxy.h"
-#include "share/ob_tenant_mgr.h"
-#include "lib/worker.h"
-#include "share/ob_schema_status_proxy.h"
 #include "share/ob_global_stat_proxy.h"
-#include "share/ob_freeze_info_proxy.h"
 #include "share/ob_service_epoch_proxy.h"
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
-#include "sql/resolver/ob_stmt_type.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_modify_column_name.h"
-#include "sql/printer/ob_raw_expr_printer.h"
-#include "share/ob_all_server_tracer.h"
-#include "ob_zone_manager.h"
-#include "rootserver/ob_schema2ddl_sql.h"
-#include "rootserver/ob_unit_manager.h"
 #include "rootserver/ob_index_builder.h"
-#include "rootserver/ob_zone_unit_provider.h"
-#include "rootserver/ob_rs_job_table_operator.h"
 #include "rootserver/ob_ddl_sql_generator.h"
-#include "rootserver/ddl_task/ob_ddl_task.h"
 #include "rootserver/ob_ddl_help.h"
-#include "rootserver/ob_locality_util.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_vertical_partition_builder.h"
-#include "rootserver/ddl_task/ob_constraint_task.h"
-#include "rootserver/ddl_task/ob_ddl_retry_task.h"
-#include "share/ob_freeze_info_manager.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
-#include "rootserver/ob_alter_primary_zone_checker.h"
 #include "rootserver/ob_tenant_thread_helper.h"//get_zone_priority
-#include "lib/utility/ob_tracepoint.h"
-#include "observer/ob_server_struct.h"
-#include "storage/tx/ob_ts_mgr.h"
-#include "storage/tx/ob_i_ts_source.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "share/ob_unit_replica_counter.h"
-#include "sql/ob_sql_utils.h"
+#include "src/sql/engine/px/ob_dfo.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "rootserver/ob_tablet_creator.h"
 #include "rootserver/ob_table_creator.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
-#include "share/ob_share_util.h"
-#include "share/ob_leader_election_waiter.h"
 #include "rootserver/ob_tablet_drop.h"
-#include "share/schema/ob_context_mgr.h"
 #include "share/schema/ob_context_ddl_proxy.h"
 #include "share/ob_global_context_operator.h"
 #include "share/ls/ob_ls_creator.h"
-#include "share/ls/ob_ls_operator.h"
 #include "ob_lob_meta_builder.h"
 #include "ob_lob_piece_builder.h"
 #include "share/ls/ob_ls_life_manager.h"//ObLSLifeAgentManager
-#include "share/restore/ob_physical_restore_table_operator.h"//ObPhysicalRestoreTableOperator
-#include "storage/tablelock/ob_table_lock_rpc_client.h"
 #include "storage/ddl/ob_ddl_lock.h"
-#include "rootserver/restore/ob_restore_util.h"//insert_user_tenant_restore_job
-#include "logservice/palf/palf_base_info.h"//PalfBaseInfo
 #include "logservice/data_dictionary/ob_data_dict_storager.h" // ObDataDictStorage
-#include "share/scn.h"
-#include "share/backup/ob_backup_config.h" // ObBackupConfigParserMgr
 #include "share/schema/ob_mlog_info.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "share/arbitration_service/ob_arbitration_service_table_operator.h"
@@ -116,24 +53,17 @@
 #include "pl/sys_package/ob_dbms_audit_mgmt.h" // ObDbmsAuditMgmt
 #endif
 #include "share/backup/ob_log_restore_config.h"//ObLogRestoreSourceServiceConfigParser
-#include "storage/tx_storage/ob_ls_map.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
 #include "share/schema/ob_mview_info.h"
-#include "storage/mview/ob_mview_sched_job_utils.h"
 #include "storage/vector_index/ob_vector_index_sched_job_utils.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 #include "rootserver/ob_split_partition_helper.h"
 #include "rootserver/mview/ob_mview_dependency_service.h"
 #include "rootserver/parallel_ddl/ob_ddl_helper.h"
 #include "storage/ddl/ob_ddl_alter_auto_part_attr.h"
-#include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "share/tablet/ob_tablet_to_table_history_operator.h"
 #include "src/share/ob_vec_index_builder_util.h"
-#include "share/vector_index/ob_vector_index_util.h"
 #include "rootserver/direct_load/ob_direct_load_partition_exchange.h"
-#include "storage/column_store/ob_column_store_replica_util.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 
 
@@ -32494,7 +32424,7 @@ int ObDDLService::record_tenant_locality_event_history(
     // ALTER_LOCALITY, ROLLBACK_ALTER_LOCALITY(only 4.2), NOP_LOCALITY_OP
     job_type =  ObRsJobType::JOB_TYPE_INVALID == job_type ?
                 ObRsJobType::JOB_TYPE_ALTER_TENANT_LOCALITY : job_type;
-    const int64_t extra_info_len = common::MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+    const int64_t extra_info_len = common::MAX_ROOTSERVICE_JOB_EXTRA_INFO_LENGTH;
     HEAP_VAR(char[extra_info_len], extra_info) {
       memset(extra_info, 0, extra_info_len);
       int64_t pos = 0;

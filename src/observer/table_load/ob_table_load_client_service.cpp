@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "observer/table_load/ob_table_load_client_service.h"
+#include "ob_table_load_client_service.h"
 #include "observer/table_load/ob_table_load_client_task.h"
-#include "observer/table_load/ob_table_load_manager.h"
 #include "observer/table_load/ob_table_load_service.h"
 
 namespace oceanbase

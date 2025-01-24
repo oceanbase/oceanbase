@@ -19,12 +19,8 @@
 #include "sql/optimizer/ob_log_update.h"
 #include "sql/optimizer/ob_log_exchange.h"
 #include "sql/optimizer/ob_log_link_dml.h"
-#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/dblink/ob_dblink_utils.h"
-#include "sql/engine/cmd/ob_table_direct_insert_service.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase;
 using namespace sql;

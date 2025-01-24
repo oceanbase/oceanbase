@@ -13,29 +13,16 @@
 #define USING_LOG_PREFIX BALANCE_TRANSFER
 
 #include "rootserver/ob_tenant_transfer_service.h"
-#include "observer/ob_server_struct.h" //GCTX
-#include "lib/mysqlclient/ob_mysql_proxy.h" // ObISqlClient, SMART_VAR
-#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
-#include "share/ls/ob_ls_info.h" // MemberList
 #include "share/transfer/ob_transfer_task_operator.h" // ObTransferTaskOperator
-#include "share/schema/ob_multi_version_schema_service.h"  // ObMultiSchemaService
 #include "share/schema/ob_part_mgr_util.h" // ObPartitionSchemaIter
 #include "share/tablet/ob_tablet_to_ls_operator.h" // ObTabletToLSOperator
-#include "share/ob_rpc_struct.h" // ObStartTransferTaskArg
-#include "share/ob_balance_define.h" // ObBalanceTaskID
-#include "share/location_cache/ob_location_service.h"   // location_service_
-#include "share/ob_srv_rpc_proxy.h" // srv_rpc_proxy_
 #include "share/ob_global_merge_table_operator.h" // ObGlobalMergeTableOperator
 #include "share/ob_zone_merge_info.h" // ObGlobalMergeInfo
 #include "share/ob_freeze_info_proxy.h" // ObFreezeInfoProxy
 #include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy
-#include "share/ob_share_util.h" // ObShareUtil
-#include "storage/ob_common_id_utils.h" // ObCommonIDUtils
 #include "storage/tablelock/ob_table_lock_service.h" // ObTableLockService
-#include "observer/ob_inner_sql_connection.h" // ObInnerSQLConnection
 #include "storage/ddl/ob_ddl_lock.h" // ObDDLLock
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
-//#include "storage/high_availability/ob_transfer_struct.h"
 
 namespace oceanbase
 {

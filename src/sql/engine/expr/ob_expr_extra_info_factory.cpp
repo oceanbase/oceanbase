@@ -14,7 +14,6 @@
 
 #include "ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/engine/expr/ob_expr_type_to_str.h"
 #include "sql/engine/expr/ob_expr_dll_udf.h"
 #include "sql/engine/expr/ob_expr_collection_construct.h"
@@ -24,7 +23,6 @@
 #include "sql/engine/expr/ob_expr_pl_integer_checker.h"
 #include "sql/engine/expr/ob_expr_udf.h"
 #include "sql/engine/expr/ob_expr_object_construct.h"
-#include "sql/engine/expr/ob_expr_multiset.h"
 #include "sql/engine/expr/ob_expr_coll_pred.h"
 #include "sql/engine/expr/ob_expr_output_pack.h"
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
@@ -35,7 +33,6 @@
 #include "sql/engine/expr/ob_expr_lrpad.h"
 #include "sql/engine/expr/ob_expr_last_refresh_scn.h"
 #include "sql/engine/expr/ob_expr_json_schema_valid.h"
-#include "sql/engine/expr/ob_expr_json_schema_validation_report.h"
 #include "sql/engine/expr/ob_expr_json_utils.h"
 #include "sql/engine/expr/ob_expr_get_path.h"
 #include "sql/engine/expr/ob_expr_array_map.h"

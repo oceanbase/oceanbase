@@ -13,15 +13,11 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_table_ctx.h"
-#include "lib/allocator/ob_malloc.h"
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_trans_ctx.h"
-#include "observer/table_load/ob_table_load_utils.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_des_exec_context.h"
 
 namespace oceanbase

@@ -12,42 +12,12 @@
 
 #define USING_LOG_PREFIX RS
 
+
+
 #include "ob_unit_manager.h"
-
-#include <cmath>
-#include <float.h>
-
-#include "lib/string/ob_sql_string.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/ob_unit_getter.h"
-#include "share/ob_unit_stat.h"
-#include "share/ob_debug_sync.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_schema_status_proxy.h"
-#include "share/ob_dml_sql_splicer.h"
 #include "share/ob_max_id_fetcher.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_tenant_memstore_info_operator.h"
-#include "share/ob_rpc_struct.h"
-#include "storage/ob_file_system_router.h"
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_node_balancer.h"
-#include "rootserver/ob_balance_info.h"
-#include "rootserver/ob_zone_manager.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/ob_unit_placement_strategy.h"
-#include "rootserver/ob_rs_job_table_operator.h"
 #include "rootserver/ob_root_service.h"
-#include "rootserver/ob_root_balancer.h"
-#include "rootserver/ob_server_manager.h"
-#include "storage/ob_file_system_router.h"
-#include "share/ob_all_server_tracer.h"
 #include "rootserver/ob_heartbeat_service.h"
 
 namespace oceanbase
@@ -2005,7 +1975,7 @@ int ObUnitManager::create_alter_resource_tenant_unit_num_rs_job(
 {
   int ret = OB_SUCCESS;
   job_id = 0;
-  const int64_t extra_info_len = common::MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+  const int64_t extra_info_len = common::MAX_ROOTSERVICE_JOB_EXTRA_INFO_LENGTH;
   HEAP_VAR(char[extra_info_len], extra_info) {
     memset(extra_info, 0, extra_info_len);
     int64_t pos = 0;

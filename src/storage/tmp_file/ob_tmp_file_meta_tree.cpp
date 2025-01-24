@@ -11,7 +11,6 @@
  */
 
 #include "ob_tmp_file_meta_tree.h"
-#include "storage/tmp_file/ob_tmp_file_cache.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 
 namespace oceanbase

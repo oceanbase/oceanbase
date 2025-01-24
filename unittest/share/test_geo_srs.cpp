@@ -11,15 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include <boost/geometry.hpp>
 #define private public
-#include "lib/geo/ob_srs_info.h"
-#include "lib/geo/ob_srs_wkt_parser.h"
-#include "lib/random/ob_random.h"
-#include "observer/omt/ob_tenant_srs.h"
-#include "share/schema/ob_multi_version_schema_service.h"
+#include "src/share/schema/ob_server_schema_service.h"
 #undef private
-#include <sys/time.h>
 namespace oceanbase {
 using namespace oceanbase::share::schema;
 using namespace omt;

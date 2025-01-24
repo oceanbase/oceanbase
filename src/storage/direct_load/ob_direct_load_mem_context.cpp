@@ -12,8 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/direct_load/ob_direct_load_mem_context.h"
-#include "storage/direct_load/ob_direct_load_mem_loader.h"
+#include "ob_direct_load_mem_context.h"
+#include "src/storage/direct_load/ob_direct_load_mem_worker.h"
 #include "storage/direct_load/ob_direct_load_mem_dump.h"
 namespace oceanbase
 {

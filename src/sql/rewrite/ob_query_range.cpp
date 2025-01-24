@@ -11,20 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL_REWRITE
-#include "lib/timezone/ob_time_convert.h"
-#include "lib/container/ob_array_serialization.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "lib/rc/ob_rc.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/rewrite/ob_query_range.h"
-#include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "ob_query_range.h"
 #include "sql/engine/expr/ob_expr_like.h"
-#include "common/ob_smart_call.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "observer/omt/ob_tenant_srs.h"
-#include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "sql/engine//expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_json_utils.h"
 
 //if cnd is true get full range key part which is always true

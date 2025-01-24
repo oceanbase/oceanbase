@@ -11,14 +11,7 @@
  */
 
 #include "ob_redo_log_generator.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "ob_memtable_key.h"
-#include "ob_memtable.h"
-#include "ob_memtable_data.h"
-#include "ob_memtable_context.h"
-#include "mvcc/ob_tx_callback_functor.h"
 #include "storage/tx/ob_trans_part_ctx.h"
-#include "storage/tablelock/ob_table_lock_callback.h"
 
 namespace oceanbase
 {

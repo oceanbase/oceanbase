@@ -10,11 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <cstdlib>
 
 #include "gtest/gtest.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/allocator/ob_concurrent_fifo_allocator.h"
 
 #include "logservice/libobcdc/src/ob_log_task_pool.h"
 

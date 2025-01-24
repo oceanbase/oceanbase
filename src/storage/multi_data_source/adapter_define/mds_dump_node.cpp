@@ -11,11 +11,6 @@
  */
 
 #include "mds_dump_node.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include <type_traits>
-#include "storage/multi_data_source/mds_table_handle.h"
 #include "meta_programming/ob_meta_swap.h"
 #include "mds_dump_obj_printer.h"
 

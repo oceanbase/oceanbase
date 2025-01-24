@@ -11,13 +11,8 @@
  */
 
 #include "ob_index_sstable_estimator.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_scanner.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/tablet/ob_tablet.h"
-#include "share/schema/ob_column_schema.h"
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {

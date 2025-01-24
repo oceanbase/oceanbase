@@ -11,17 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "rootserver/ob_root_service.h"
-#include "share/ob_time_zone_info_manager.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/utility/ob_fast_convert.h"
+#include "ob_time_zone_info_manager.h"
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "lib/lock/ob_spin_rwlock.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::observer;

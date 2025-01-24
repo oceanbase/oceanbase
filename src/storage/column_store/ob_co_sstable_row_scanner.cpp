@@ -11,12 +11,8 @@
  */
 #define USING_LOG_PREFIX STORAGE
 #include "ob_co_sstable_row_scanner.h"
-#include "ob_cg_scanner.h"
 #include "ob_cg_tile_scanner.h"
 #include "ob_cg_group_by_scanner.h"
-#include "ob_column_oriented_sstable.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/access/ob_pushdown_aggregate.h"
 #include "storage/access/ob_vector_store.h"
 
 namespace oceanbase

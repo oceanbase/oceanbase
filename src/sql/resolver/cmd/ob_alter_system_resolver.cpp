@@ -13,38 +13,20 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "sql/resolver/cmd/ob_alter_system_resolver.h"
-#include "common/ob_region.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_time_utility2.h"
-#include "share/ob_encryption_util.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_encrypt_kms.h"
 #endif
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/ob_zone_table_operation.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/restore/ob_import_table_struct.h"
 #include "share/restore/ob_recover_table_util.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/cmd/ob_alter_system_stmt.h"
-#include "sql/resolver/cmd/ob_system_cmd_stmt.h"
 #include "sql/resolver/cmd/ob_clear_balance_task_stmt.h"
 #include "sql/resolver/cmd/ob_switch_tenant_resolver.h"
 #include "sql/resolver/ddl/ob_create_table_resolver.h"
 #include "sql/resolver/ddl/ob_drop_table_stmt.h"
-#include "sql/resolver/ddl/ob_alter_table_stmt.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "observer/ob_server.h"
-#include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_config.h"
-#include "share/object_storage/ob_object_storage_struct.h"
 #include "observer/mysql/ob_query_response_time.h"
-#include "rootserver/ob_rs_job_table_operator.h"  //ObRsJobType
-#include "sql/resolver/cmd/ob_kill_stmt.h"
-#include "share/table/ob_table_config_util.h"
 #include "share/restore/ob_import_util.h"
 
 namespace oceanbase

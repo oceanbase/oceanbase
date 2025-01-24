@@ -12,7 +12,6 @@
 
 #include "observer/virtual_table/ob_all_virtual_tmp_file.h"
 #include "observer/ob_server.h"
-#include "storage/tmp_file/ob_shared_nothing_tmp_file.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::transaction;

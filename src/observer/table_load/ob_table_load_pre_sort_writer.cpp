@@ -16,7 +16,6 @@
 #include "observer/table_load/ob_table_load_pre_sorter.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
-#include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 
 namespace oceanbase

@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_table_config_util.h"
-#include "lib/container/ob_se_array.h"
-#include "share/config/ob_config_helper.h"
 #include "share/config/ob_config_mode_name_def.h"
 namespace oceanbase
 {

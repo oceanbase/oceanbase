@@ -12,29 +12,10 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_sql_service.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/charset/ob_dtoa.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "common/ob_store_format.h"
-#include "share/ob_dml_sql_splicer.h"
 #include "share/ob_global_stat_proxy.h"
-#include "share/ob_rpc_struct.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_partition_sql_helper.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "share/ob_time_zone_info_manager.h"
-#include "observer/ob_server_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_trigger_sql_service.h"
-#include "rootserver/ob_root_service.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "sql/ob_sql_utils.h"
-#include "share/ob_time_utility2.h"
-#include "share/ob_vec_index_builder_util.h"
+#include "src/share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {

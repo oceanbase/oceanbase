@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_remove_member_dag.h"
-#include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "logservice/ob_log_service.h"
-#include "lib/hash/ob_hashset.h"
-#include "storage/high_availability/ob_storage_ha_utils.h"
 
 using namespace oceanbase;
 using namespace share;

@@ -11,16 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "lib/number/ob_number_v2.h"
 
-#include "sql/optimizer/ob_opt_est_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "ob_opt_est_utils.h"
 #include "sql/optimizer/ob_log_plan.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/engine/expr/ob_expr_equal.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "common/ob_smart_call.h"
-#include <cmath>
 
 namespace oceanbase
 {

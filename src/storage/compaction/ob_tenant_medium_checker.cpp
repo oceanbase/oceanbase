@@ -11,13 +11,9 @@
  */
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/compaction/ob_tenant_medium_checker.h"
+#include "ob_tenant_medium_checker.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
-#include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"
-#include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase

@@ -13,37 +13,15 @@
 #define USING_LOG_PREFIX RS_RESTORE
 
 #include "ob_restore_scheduler.h"
-#include "rootserver/ob_ddl_service.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/ob_unit_manager.h"//convert_pool_name_lis
-#include "rootserver/ob_ls_service_helper.h"//create_new_ls_in_trans
 #include "rootserver/ob_common_ls_service.h"//do_create_user_ls
-#include "rootserver/standby/ob_tenant_role_transition_service.h"
 #include "share/ob_schema_status_proxy.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/ob_upgrade_utils.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h" //ObMySQLTransaction
-#include "share/ls/ob_ls_status_operator.h" //ObLSStatusOperator
-#include "share/ls/ob_ls_operator.h"//ObLSAttr
-#include "storage/backup/ob_backup_data_store.h"//ObBackupDataLSAttrDesc
-#include "share/restore/ob_physical_restore_info.h"//ObPhysicalRestoreInfo
-#include "share/restore/ob_physical_restore_table_operator.h"//ObPhysicalRestoreTableOperator
-#include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
-#include "share/restore/ob_log_restore_source_mgr.h"
-#include "share/ls/ob_ls_recovery_stat_operator.h"//ObLSRecoveryStatOperator
-#include "share/ob_rpc_struct.h"
 #include "rootserver/standby/ob_standby_service.h"
-#include "logservice/palf/log_define.h"//scn
-#include "share/scn.h"
 #include "ob_restore_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy
-#include "rootserver/mview/ob_mview_timer_task.h"
 #include "rootserver/mview/ob_collect_mv_merge_info_task.h"
 #include "rootserver/mview/ob_mview_push_refresh_scn_task.h"
 

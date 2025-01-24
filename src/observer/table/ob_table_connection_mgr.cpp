@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_connection_mgr.h"
-#include "rpc/ob_rpc_request_operator.h"
 #include "lib/allocator/ob_sql_mem_leak_checker.h"
 
 using namespace oceanbase::table;

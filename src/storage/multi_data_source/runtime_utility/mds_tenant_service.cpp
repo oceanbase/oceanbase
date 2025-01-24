@@ -11,25 +11,7 @@
  */
 
 #include "mds_tenant_service.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_errno.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/string/ob_string_holder.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/utility.h"
-#include "ob_clock_generator.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "storage/meta_mem/ob_tablet_map_key.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_memtable_mgr.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "share/scn.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ls/ob_ls.h"
-#include "storage/multi_data_source/mds_table_handle.h"
-#include "storage/ls/ob_ls_tablet_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 
 namespace oceanbase

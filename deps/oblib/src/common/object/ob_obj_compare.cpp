@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "lib/utility/utility.h"
 #include "common/object/ob_obj_compare.h"
-#include "lib/utility/ob_hang_fatal_error.h"
-#include "common/object/ob_object.h"
-#include "lib/worker.h"
-#include "lib/json_type/ob_json_base.h" // for ObIJsonBase
 #include "lib/json_type/ob_json_bin.h" // for ObJsonBin
-#include "lib/wide_integer/ob_wide_integer_cmp_funcs.h"
 
 namespace oceanbase
 {

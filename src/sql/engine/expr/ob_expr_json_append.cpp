@@ -14,7 +14,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_append.h"
-#include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

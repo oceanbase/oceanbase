@@ -11,14 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/engine/ob_operator.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "sql/das/ob_das_dml_ctx_define.h"
+#include "ob_das_dml_ctx_define.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_domain_utils.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "storage/access/ob_dml_param.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
 namespace oceanbase
 {

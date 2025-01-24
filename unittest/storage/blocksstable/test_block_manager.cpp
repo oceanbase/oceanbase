@@ -13,8 +13,6 @@
 #include <sys/vfs.h>
 #include <sys/statvfs.h>
 #include <gtest/gtest.h>
-#include <algorithm>
-#include <iostream>
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -22,9 +20,6 @@
 #define private public
 
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include "observer/omt/ob_worker_processor.h"
-#include "observer/ob_srv_network_frame.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
 namespace oceanbase

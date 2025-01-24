@@ -11,11 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_EXE
-#include "common/object/ob_obj_compare.h"
 #include "sql/engine/expr/ob_expr_between.h"
-#include "sql/engine/expr/ob_expr_less_than.h"
-#include "sql/engine/expr/ob_expr_less_equal.h"
-#include "sql/engine/expr/ob_expr_cmp_func.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "share/vector/expr_cmp_func.h"
 

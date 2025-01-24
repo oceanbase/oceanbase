@@ -12,13 +12,10 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_disaster_recovery_task_table_updater.h"
 
-#include "share/ob_define.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"   // for OB_ALL_LS_REPLICA_TASK_TNAME
+#include "ob_disaster_recovery_task_table_updater.h"
 #include "ob_disaster_recovery_task_table_operator.h" //for ObLSReplicaTaskTableOperator
 #include "rootserver/ob_disaster_recovery_task_mgr.h"  // for ObDRTaskMgr
-#include "share/schema/ob_multi_version_schema_service.h" // for GSCHEMASERVICE
 
 namespace oceanbase
 {

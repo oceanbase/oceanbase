@@ -12,25 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 #include "sql/executor/ob_remote_executor_processor.h"
-#include "lib/stat/ob_session_stat.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/oblog/ob_warning_buffer.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/ob_sql_trans_util.h"
-#include "sql/ob_end_trans_callback.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/monitor/ob_exec_stat_collector.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
 #include "observer/mysql/obmp_base.h"
-#include "observer/ob_req_time_service.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server.h"
-#include "lib/stat/ob_session_stat.h"
-#include "sql/ob_sql.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "storage/tx/ob_trans_service.h"
-#include "sql/engine/expr/ob_expr_last_refresh_scn.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
 
 namespace oceanbase

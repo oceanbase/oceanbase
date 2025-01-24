@@ -12,9 +12,7 @@
 
 #include <gtest/gtest.h>
 #include "logservice/palf/log_meta_entry.h"              // LogMetaEntry
-#include "logservice/palf/log_meta_info.h"               // LogPrepareMeta...
 #include "logservice/palf/log_meta.h"                    // LogMeta
-#include "logservice/palf/palf_options.h"
 
 #include <gtest/gtest.h>
 

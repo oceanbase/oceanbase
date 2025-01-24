@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX STORAGE_REDO
 
 #include "ob_storage_log_item.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/wait_event/ob_wait_event.h"
-#include "lib/alloc/alloc_struct.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "ob_storage_log_batch_header.h"
 #include "ob_storage_log_entry.h"
 #include "ob_storage_log_replayer.h"

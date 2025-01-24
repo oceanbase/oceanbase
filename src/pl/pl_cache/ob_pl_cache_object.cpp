@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX PL_CACHE
 #include "ob_pl_cache_object.h"
-#include "lib/oblog/ob_log_module.h"
 #include "pl/pl_cache/ob_pl_cache.h"
 #include "src/share/ob_truncated_string.h"
 #include "pl/ob_pl_package.h"

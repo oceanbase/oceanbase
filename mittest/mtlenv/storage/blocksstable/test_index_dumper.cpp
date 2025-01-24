@@ -15,19 +15,11 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include <iostream>
-#include <gtest/gtest.h>
 #define private public
 #define protected public
 
-#include "storage/ob_partition_range_spliter.h"
-#include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
-#include "storage/blocksstable/index_block/ob_index_block_dumper.h"
-#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
-#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
+#include "src/storage/blocksstable/index_block/ob_index_block_tree_cursor.h"
 #include "ob_index_block_data_prepare.h"
-#include "lib/number/ob_number_v2.h"
-#include "share/ob_force_print_log.h"
 
 namespace oceanbase
 {

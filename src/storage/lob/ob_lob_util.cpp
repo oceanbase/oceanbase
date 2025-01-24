@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_util.h"
-#include "ob_lob_manager.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/lob/ob_lob_meta.h"
-#include "storage/tx_storage/ob_access_service.h"
 
 namespace oceanbase
 {

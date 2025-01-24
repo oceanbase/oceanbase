@@ -12,28 +12,13 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include <random>
-#include <chrono>
 
 #include "ob_table_scan_op.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/executor/ob_task_spliter.h"
-#include "sql/das/ob_das_define.h"
-#include "sql/das/ob_das_utils.h"
-#include "lib/profile/ob_perf_event.h"
-#include "lib/geo/ob_s2adapter.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "share/ob_ddl_common.h"
 #include "share/ob_ddl_checksum.h"
-#include "storage/access/ob_table_scan_iterator.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_server.h"
-#include "observer/virtual_table/ob_virtual_data_access_service.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/omt/ob_tenant_srs.h"
-#include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_external_table_utils.h"
-#include "lib/container/ob_array_wrap.h"
 #include "sql/das/iter/ob_das_iter_utils.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 

@@ -11,18 +11,8 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
-#include "storage/blocksstable/cs_encoding/ob_cs_micro_block_transformer.h"
-#include "lib/compress/ob_compressor_pool.h"
-#include "share/ob_encryption_util.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
-#include "ob_macro_block.h"
-#include "ob_macro_block_bare_iterator.h"
 #include "ob_macro_block_reader.h"
-#include "ob_micro_block_reader.h"
-#include "ob_micro_block_header.h"
+#include "ob_macro_block_bare_iterator.h"
 
 namespace oceanbase
 {

@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_partition_split_query.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "storage/tablet/ob_tablet_split_mds_helper.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/ls/ob_ls.h"
+#include "src/storage/ls/ob_ls.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;

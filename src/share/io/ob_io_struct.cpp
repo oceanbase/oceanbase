@@ -12,16 +12,7 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "share/io/ob_io_struct.h"
-
-#include "lib/time/ob_time_utility.h"
-#include "lib/thread/ob_thread_name.h"
-#include "lib/thread/thread_mgr.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/file/file_directory_utils.h"
-#include "share/io/ob_io_manager.h"
+#include "ob_io_struct.h"
 #include "share/ob_io_device_helper.h"
 #include "observer/ob_server.h"
 #include "common/storage/ob_fd_simulator.h"

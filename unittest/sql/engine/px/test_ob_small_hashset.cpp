@@ -11,13 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include <unordered_set>
-#include <vector>
 #define private public
 // #define unittest
 #define unittest_bloom_filter
-#include "src/sql/engine/px/p2p_datahub/ob_small_hashset.h"
-#include "lib/hash/ob_hashset.h"
 #include "sql/engine/px/ob_px_bloom_filter.h"
 
 using namespace std;

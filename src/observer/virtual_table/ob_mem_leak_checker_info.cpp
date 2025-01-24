@@ -11,9 +11,6 @@
  */
 
 #include "ob_mem_leak_checker_info.h"
-#include "lib/allocator/ob_mem_leak_checker.h"
-#include "common/object/ob_object.h"
-#include "share/config/ob_server_config.h"
 
 using namespace oceanbase::common;
 using oceanbase::common::ObMemLeakChecker;

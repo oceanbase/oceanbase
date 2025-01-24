@@ -11,17 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/ob_das_ref.h"
-#include "sql/das/ob_das_extra_data.h"
+#include "ob_das_ref.h"
 #include "sql/das/ob_data_access_service.h"
-#include "sql/das/ob_das_scan_op.h"
-#include "sql/das/ob_das_insert_op.h"
-#include "sql/das/ob_das_utils.h"
-#include "storage/tx/ob_trans_service.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/das/ob_das_rpc_processor.h"
-#include "sql/das/ob_das_retry_ctrl.h"
-#include "observer/mysql/ob_query_retry_ctrl.h"
 
 namespace oceanbase
 {

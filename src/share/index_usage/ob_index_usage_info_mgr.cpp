@@ -11,9 +11,6 @@
  */
 #include "ob_index_usage_info_mgr.h"
 #include "observer/ob_server_struct.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/schema/ob_tenant_schema_service.h"
 
 #define USING_LOG_PREFIX SERVER
 using namespace oceanbase::common;

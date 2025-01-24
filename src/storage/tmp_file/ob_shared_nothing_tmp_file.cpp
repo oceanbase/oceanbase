@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tmp_file/ob_shared_nothing_tmp_file.h"
-#include "storage/tmp_file/ob_tmp_file_block_manager.h"
-#include "storage/tmp_file/ob_tmp_file_eviction_manager.h"
-#include "storage/tmp_file/ob_tmp_file_write_buffer_pool.h"
-#include "storage/tmp_file/ob_tmp_file_flush_manager.h"
 #include "storage/tmp_file/ob_tmp_file_io_ctx.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "lib/random/ob_random.h"
 #include "storage/tmp_file/ob_tmp_file_page_cache_controller.h"
 
 namespace oceanbase

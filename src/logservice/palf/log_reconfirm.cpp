@@ -12,20 +12,10 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_reconfirm.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"
-#include "log_group_entry.h"
-#include "log_meta_info.h"
-#include "log_meta_entry.h"
-#include "log_meta_entry_header.h"
 #include "log_config_mgr.h"
 #include "log_mode_mgr.h"
 #include "log_sliding_window.h"
-#include "log_state_mgr.h"
 #include "log_engine.h"
-#include "log_io_task_cb_utils.h"
-#include "logservice/palf/log_define.h"
-#include "share/allocator/ob_tenant_mutil_allocator.h"
 
 namespace oceanbase
 {

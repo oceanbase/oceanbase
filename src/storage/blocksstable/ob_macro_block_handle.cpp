@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE_BLKMGR
 
-#include "storage/blocksstable/ob_macro_block_handle.h"
 
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "share/ob_force_print_log.h"
-#include "share/io/ob_io_manager.h"
+#include "ob_macro_block_handle.h"
 #include "share/ob_io_device_helper.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "share/io/ob_io_manager.h"
-#include "share/ob_force_print_log.h"
-#include "storage/backup/ob_backup_data_struct.h"
 #include "storage/backup/ob_backup_device_wrapper.h"
 
 namespace oceanbase

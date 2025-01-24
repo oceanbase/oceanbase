@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_vector.h"
-#include "sql/engine/ob_subschema_ctx.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
-#include "sql/engine/expr/ob_array_cast.h"
 #include "share/vector_type/ob_vector_l2_distance.h"
 #include "share/vector_type/ob_vector_cosine_distance.h"
 #include "share/vector_type/ob_vector_ip_distance.h"

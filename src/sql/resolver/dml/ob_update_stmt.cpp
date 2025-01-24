@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_update_stmt.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 namespace oceanbase
 {

@@ -8,7 +8,7 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-#include "storage/tx/ob_dup_table_stat.h"
+#include "ob_dup_table_stat.h"
 #include "storage/tx/ob_dup_table_tablets.h"
 
 namespace oceanbase

@@ -12,17 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_pushdown_filter.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "sql/engine/expr/ob_expr_join_filter.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
-#include "storage/column_store/ob_column_store_util.h"
-#include "storage/lob/ob_lob_manager.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
 
 namespace oceanbase

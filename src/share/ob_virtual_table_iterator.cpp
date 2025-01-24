@@ -12,18 +12,9 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "share/ob_virtual_table_iterator.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/config/ob_server_config.h"
-#include "share/object/ob_obj_cast.h"
-#include "common/rowkey/ob_rowkey_info.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "sql/engine/ob_operator.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "sql/das/ob_das_location_router.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "deps/oblib/src/lib/alloc/memory_sanity.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
