@@ -641,8 +641,8 @@ ObWaitEventGuard::ObWaitEventGuard(const int64_t event_no, const uint64_t timeou
     : event_no_(0), di_(nullptr), is_atomic_(is_atomic)
 {
   di_ = ObLocalDiagnosticInfo::get();
-  if (OB_NOT_NULL(di_) && oceanbase::lib::is_diagnose_info_enabled() &&
-      di_->get_ash_stat().is_active_session_) {    need_record_ = true;
+  if (OB_NOT_NULL(di_) && di_->get_ash_stat().is_active_session_ && oceanbase::lib::is_diagnose_info_enabled()) {
+    need_record_ = true;
     event_no_ = event_no;
     di_->begin_wait_event(event_no, timeout_ms, p1, p2, p3);
   } else {
