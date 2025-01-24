@@ -585,7 +585,8 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
   ObSqlCtx *sql_ctx = NULL;
   if (OB_ISNULL(stmt)
       || OB_ISNULL(ctx_->exec_ctx_)
-      || OB_ISNULL(sql_ctx = ctx_->exec_ctx_->get_sql_ctx())) {
+      || OB_ISNULL(sql_ctx = ctx_->exec_ctx_->get_sql_ctx())
+      || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
   } else if (sql_ctx->is_batch_params_execute()) {
@@ -596,14 +597,21 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     LOG_WARN("failed to check stmt functions", K(ret));
   } else {
     //TODO::unpivot open @xifeng
-    if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_ ||
-        func.contain_fulltext_search_ || func.contain_dml_with_doc_id_ || func.contain_vec_index_approx_) {
-       disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
+    if (func.contain_unpivot_query_ || func.contain_geometry_values_ ||
+        func.contain_fulltext_search_ || func.contain_vec_index_approx_) {
+      disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
+    }
+    if (func.contain_enum_set_values_) {
+      uint64_t enum_set_enable_list = 0;
+      if (ctx_->exec_ctx_->support_enum_set_type_subschema(*ctx_->session_info_)) {
+        ObTransformRule::add_trans_type(enum_set_enable_list, ELIMINATE_OJ);
+      }
+      disable_list |= (~enum_set_enable_list);
     }
     if (func.contain_dml_with_doc_id_) {
       uint64_t dml_with_doc_id_enable_list = 0;
       ObTransformRule::add_trans_type(dml_with_doc_id_enable_list, PREDICATE_MOVE_AROUND);
-      disable_list &= (~dml_with_doc_id_enable_list);
+      disable_list |= (~dml_with_doc_id_enable_list);
     }
     if (func.contain_sequence_) {
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
