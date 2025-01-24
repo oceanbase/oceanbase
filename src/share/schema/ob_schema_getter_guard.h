@@ -484,6 +484,11 @@ public:
                        const common::ObString &db,
                        const common::ObString &table,
                        bool &allow_show);
+  int check_routine_show(const ObSessionPrivInfo &session_priv,
+                         const common::ObString &db,
+                         const common::ObString &routine,
+                         bool &allow_show,
+                         int64_t routine_type);
 
   int check_ora_priv(const uint64_t tenant_id,
                      const uint64_t uid,

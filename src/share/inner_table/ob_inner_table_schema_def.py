@@ -16399,7 +16399,7 @@ def_table_schema(
   WHERE a.tenant_id = 0
     and in_recyclebin = 0
     and a.database_name not in ('__recyclebin', '__public')
-    and 0 = sys_privilege_check('db_acc', 0, a.database_name, '')
+    and 0 = sys_privilege_check('db_acc', 0, a.database_name)
   ORDER BY a.database_id
 """.replace("\n", " "),
 
@@ -16635,6 +16635,8 @@ def_table_schema(
           AND    t.table_type in (0,3)
           JOIN   oceanbase.__all_database db
           ON     t.database_id = db.database_id)V
+          WHERE 0 = sys_privilege_check('table_acc', effective_tenant_id())
+                OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), V.TABLE_SCHEMA, V.TABLE_NAME)
 """.replace("\n", " "),
 
   normal_columns = [
@@ -16890,7 +16892,9 @@ def_table_schema(
                       and b.rowkey_position > 0
                       and b.column_id >= 16
                       and a.table_type != 5 and a.table_type != 12 and a.table_type != 13
-                      and b.column_flags & (0x1 << 8) = 0)
+                      and b.column_flags & (0x1 << 8) = 0
+                      and (0 = sys_privilege_check('table_acc', effective_tenant_id())
+                           or 0 = sys_privilege_check('table_acc', effective_tenant_id(), c.database_name, a.table_name)))
 
                     union all
                     (select 'def' as CONSTRAINT_CATALOG,
@@ -16917,7 +16921,9 @@ def_table_schema(
                       and d.database_name != '__recyclebin'
                       and a.table_type = 5
                       and a.index_type in (2, 4, 8)
-                      and b.index_position > 0)
+                      and b.index_position > 0
+                      and (0 = sys_privilege_check('table_acc', effective_tenant_id())
+                           or 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, c.table_name))
 
                     union all
                     (select 'def' as CONSTRAINT_CATALOG,
@@ -16948,7 +16954,9 @@ def_table_schema(
                       on f.tenant_id = d2.tenant_id and t2.database_id = d2.database_id
                     join oceanbase.__all_column c2
                       on f.tenant_id = c2.tenant_id and fc.parent_column_id = c2.column_id and t2.table_id = c2.table_id
-                    where f.tenant_id = 0)
+                    where f.tenant_id = 0
+                      and (0 = sys_privilege_check('table_acc', effective_tenant_id())
+                           or 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, t.table_name))
 
                     union all
                     (select 'def' as CONSTRAINT_CATALOG,
@@ -16976,7 +16984,9 @@ def_table_schema(
                       on f.tenant_id = t2.tenant_id and f.parent_table_id = t2.mock_fk_parent_table_id
                     join oceanbase.__all_mock_fk_parent_table_column c2
                       on f.tenant_id = c2.tenant_id and fc.parent_column_id = c2.parent_column_id and t2.mock_fk_parent_table_id = c2.mock_fk_parent_table_id
-                    where f.tenant_id = 0)
+                    where f.tenant_id = 0
+                      and (0 = sys_privilege_check('table_acc', effective_tenant_id())
+                           or 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, t.table_name)))))
                     """.replace("\n", " "),
 
   in_tenant_space = True,
@@ -17160,6 +17170,8 @@ def_table_schema(
                       and rp.routine_id = r.routine_id
                       and rp.param_position = 0
                       left join oceanbase.__all_virtual_data_type v on rp.param_type = v.data_type
+                    where (0 = sys_privilege_check('routine_acc', effective_tenant_id())
+                           or 0 = sys_privilege_check('routine_acc', effective_tenant_id(), mp.DB, r.routine_name, r.routine_type))
                     """.replace("\n", " ")
 )
 
@@ -20301,25 +20313,65 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT cast(concat('''', B.user_name, '''', '@', '''', B.host, '''') as char(292)) as GRANTEE,
-        cast('def' as char(512)) AS TABLE_CATALOG,
-        cast(DATABASE_NAME as char(64)) AS TABLE_SCHEMA,
-        cast(TABLE_NAME as char(64)) AS TABLE_NAME,
-        cast(COLUMN_NAME as char(64)) AS COLUMN_NAME,
-        cast(CASE WHEN V1.C1 = 0  AND (A.all_priv & 1) != 0 THEN 'SELECT'
-              WHEN V1.C1 = 1  AND (A.all_priv & 2) != 0 THEN 'INSERT'
-              WHEN V1.C1 = 2  AND (A.all_priv & 4) != 0 THEN 'UPDATE'
-              WHEN V1.C1 = 3  AND (A.all_priv & 8) != 0 THEN 'REFERENCES'
-              END AS char(64)) AS PRIVILEGE_TYPE,
-        cast(case when priv_grant_option = 1 then 'YES' ELSE 'NO' END as char(3)) AS IS_GRANTABLE
-  FROM oceanbase.__all_column_privilege A, oceanbase.__all_user B,
+  view_definition = """
+  WITH DB_PRIV AS (
+    select A.tenant_id TENANT_ID,
+           A.user_id USER_ID,
+           A.database_name DATABASE_NAME,
+           A.priv_alter PRIV_ALTER,
+           A.priv_create PRIV_CREATE,
+           A.priv_delete PRIV_DELETE,
+           A.priv_drop PRIV_DROP,
+           A.priv_grant_option PRIV_GRANT_OPTION,
+           A.priv_insert PRIV_INSERT,
+           A.priv_update PRIV_UPDATE,
+           A.priv_select PRIV_SELECT,
+           A.priv_index PRIV_INDEX,
+           A.priv_create_view PRIV_CREATE_VIEW,
+           A.priv_show_view PRIV_SHOW_VIEW,
+           A.GMT_CREATE GMT_CREATE,
+           A.GMT_MODIFIED GMT_MODIFIED,
+           A.PRIV_OTHERS PRIV_OTHERS
+    from oceanbase.__all_database_privilege_history A,
+        (select tenant_id, user_id, database_name, max(schema_version) schema_version from oceanbase.__all_database_privilege_history group by tenant_id, user_id, database_name, database_name collate utf8mb4_bin) B
+    where A.tenant_id = B.tenant_id and A.user_id = B.user_id and A.database_name collate utf8mb4_bin = B.database_name collate utf8mb4_bin and A.schema_version = B.schema_version and A.is_deleted = 0
+  )
+  SELECT cast(concat('''', B.user_name, '''', '@', '''', B.host, '''') as char(292)) as GRANTEE,
+         cast('def' as char(512)) AS TABLE_CATALOG,
+         cast(DATABASE_NAME as char(64)) AS TABLE_SCHEMA,
+         cast(TABLE_NAME as char(64)) AS TABLE_NAME,
+         cast(COLUMN_NAME as char(64)) AS COLUMN_NAME,
+         cast(CASE WHEN V1.C1 = 0  AND (CP.all_priv & 1) != 0 THEN 'SELECT'
+               WHEN V1.C1 = 1  AND (CP.all_priv & 2) != 0 THEN 'INSERT'
+               WHEN V1.C1 = 2  AND (CP.all_priv & 4) != 0 THEN 'UPDATE'
+               WHEN V1.C1 = 3  AND (CP.all_priv & 8) != 0 THEN 'REFERENCES'
+               END AS char(64)) AS PRIVILEGE_TYPE,
+         cast(case when priv_grant_option = 1 then 'YES' ELSE 'NO' END as char(3)) AS IS_GRANTABLE
+  FROM oceanbase.__all_column_privilege CP, oceanbase.__all_user B,
       (SELECT 0 AS C1
         UNION ALL SELECT 1 AS C1
         UNION ALL SELECT 2 AS C1
-        UNION ALL SELECT 3 AS C1) V1
-  WHERE A.tenant_id = B.tenant_id and A.tenant_id = 0 and A.user_id = B.user_id AND
-        ((V1.C1 = 0 AND (A.all_priv & 1) != 0) OR (V1.C1 = 1 AND (A.all_priv & 2) != 0)
-         OR (V1.C1 = 2 AND (A.all_priv & 4) != 0 OR (V1.C1 = 0 AND (A.all_priv & 8) != 0)))
+        UNION ALL SELECT 3 AS C1) V1,
+      (SELECT USER_ID
+        FROM oceanbase.__all_user
+        WHERE TENANT_ID = 0
+          AND CONCAT(USER_NAME, '@', HOST) = CURRENT_USER()) CURR
+      LEFT JOIN
+      (SELECT USER_ID
+        FROM DB_PRIV
+        WHERE TENANT_ID = 0
+          AND DATABASE_NAME = 'mysql'
+          AND PRIV_SELECT = 1) DB ON CURR.USER_ID = DB.USER_ID
+  WHERE CP.tenant_id = B.tenant_id
+    and CP.tenant_id = 0
+    and CP.user_id = B.user_id
+    AND ((V1.C1 = 0 AND (CP.all_priv & 1) != 0)
+         OR (V1.C1 = 1 AND (CP.all_priv & 2) != 0)
+         OR (V1.C1 = 2 AND (CP.all_priv & 4) != 0)
+         OR (V1.C1 = 0 AND (CP.all_priv & 8) != 0))
+    AND (DB.USER_ID IS NOT NULL
+          OR 512 & CURRENT_USER_PRIV() = 512
+          OR CP.user_id = CURR.USER_ID)
 """.replace("\n", " "),
 )
 
@@ -20378,6 +20430,8 @@ def_table_schema(
 
     on t.tenant_id = v.tenant_id and v.dep_obj_id = t.dep_obj_id and v.ref_obj_id = t.ref_obj_id
     where v.tenant_id = 0
+      and (0 = sys_privilege_check('table_acc', effective_tenant_id())
+            or 0 = sys_privilege_check('table_acc', effective_tenant_id(), t.table_schema, v.view_name))
 """.replace("\n", " "),
 
 
@@ -29236,8 +29290,10 @@ def_table_schema(
       join oceanbase.__all_database db on (db.database_id = tbl.database_id and db.tenant_id = tbl.tenant_id)
       and db.database_name != '__recyclebin'
   where col.data_type  = 48
-  and tbl.table_mode >> 12 & 15 in (0,1);
-  and tbl.index_attributes_set & 16 = 0
+    and tbl.table_mode >> 12 & 15 in (0,1)
+    and tbl.index_attributes_set & 16 = 0
+    and (0 = sys_privilege_check('table_acc', effective_tenant_id())
+         or 0 = sys_privilege_check('table_acc', effective_tenant_id(), db.database_name, tbl.table_name));
 """.replace("\n", " ")
 )
 
@@ -30886,6 +30942,8 @@ def_table_schema(
                         rp.tenant_id = 0
                         and in_recyclebin = 0
                         and database_name != '__recyclebin'
+                        and (0 = sys_privilege_check('routine_acc', effective_tenant_id())
+                             or 0 = sys_privilege_check('routine_acc', effective_tenant_id(), d.database_name, r.routine_name, r.routine_type))
                       order by SPECIFIC_SCHEMA,
                         SPECIFIC_NAME,
                         ORDINAL_POSITION
@@ -31379,6 +31437,8 @@ def_table_schema(
       AND c.constraint_type = 3
       AND t.table_mode >> 12 & 15 in (0,1)
       and t.index_attributes_set & 16 = 0
+      AND (0 = sys_privilege_check('table_acc', effective_tenant_id())
+           OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, t.table_name))
   """.replace("\n", " "),
 )
 
@@ -31427,6 +31487,8 @@ def_table_schema(
       AND ct.table_type = 3
       AND ct.table_mode >> 12 & 15 in (0,1)
       AND ct.index_attributes_set & 16 = 0
+      AND (0 = sys_privilege_check('table_acc', effective_tenant_id())
+           OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), cd.database_name, ct.table_name))
 
     union all
 
@@ -31460,6 +31522,8 @@ def_table_schema(
     JOIN oceanbase.__all_table it on f.ref_cst_id = it.table_id
     WHERE cd.database_id > 500000 and cd.in_recyclebin = 0
       AND ct.table_type = 3
+      AND (0 = sys_privilege_check('table_acc', effective_tenant_id())
+           OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), cd.database_name, ct.table_name))
 
     union all
 
@@ -31492,6 +31556,8 @@ def_table_schema(
     JOIN oceanbase.__all_database pd on pt.database_id = pd.database_id
     WHERE cd.database_id > 500000 and cd.in_recyclebin = 0
       AND ct.table_type = 3
+      AND (0 = sys_privilege_check('table_acc', effective_tenant_id())
+           OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), cd.database_name, ct.table_name))
   """.replace("\n", " "),
 )
 
@@ -31523,6 +31589,8 @@ def_table_schema(
       AND t.table_mode >> 16 & 1 = 0
       AND t.table_mode >> 12 & 15 in (0,1)
       AND t.index_attributes_set & 16 = 0
+      AND (0 = sys_privilege_check('table_acc', effective_tenant_id())
+           OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, t.table_name))
 
     union all
 
@@ -31540,6 +31608,8 @@ def_table_schema(
     WHERE d.database_id > 500000 AND d.in_recyclebin = 0
       AND it.table_type = 5
       AND it.index_type IN (2, 4, 8)
+      AND (0 = sys_privilege_check('table_acc', effective_tenant_id())
+           OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, ut.table_name))
 
     union all
 
@@ -31558,6 +31628,8 @@ def_table_schema(
     WHERE d.database_id > 500000 AND d.in_recyclebin = 0
       AND t.table_type = 3
       AND c.constraint_type = 3
+      AND (0 = sys_privilege_check('table_acc', effective_tenant_id())
+           OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, t.table_name))
 
     union all
 
@@ -31873,6 +31945,8 @@ FROM
 WHERE T.TABLE_TYPE IN (3,6,8,9,14,15)
       AND (P.PARTITION_TYPE = 0 OR P.PARTITION_TYPE is NULL)
       AND (SP.PARTITION_TYPE = 0 OR SP.PARTITION_TYPE is NULL)
+      AND (0 = sys_privilege_check('table_acc', effective_tenant_id())
+           OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), DB.DATABASE_NAME, T.TABLE_NAME))
   """.replace("\n", " "),
 
 )
