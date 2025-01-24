@@ -448,7 +448,7 @@ DEFINE_ERROR(OB_DISK_ERROR, -4375, -1, "HY000", "observer has disk error");
 DEFINE_ORACLE_ERROR(OB_UNIMPLEMENTED_FEATURE, -4376, -1, "HY000", "unimplemented feature", 3001, "unimplemented feature");
 DEFINE_ERROR_EXT(OB_ERR_DEFENSIVE_CHECK, -4377, -1, "HY000", "fatal internal error", "fatal internal error in [%.*s]");
 DEFINE_ERROR(OB_CLUSTER_NAME_HASH_CONFLICT, -4378, -1, "HY000", "cluster name conflict");
-DEFINE_ERROR(OB_HEAP_TABLE_EXAUSTED, -4379, -1, "HY000", "heap table has reached max row size, cannot insert anymore");
+DEFINE_ERROR_DEP(OB_HEAP_TABLE_EXAUSTED, -4379, -1, "HY000", "heap table has reached max row size, cannot insert anymore");
 DEFINE_ORACLE_ERROR(OB_ERR_INDEX_KEY_NOT_FOUND, -4380, -1, "HY000", "index key not found", 8102, "index key not found");
 DEFINE_ERROR(OB_UNSUPPORTED_DEPRECATED_FEATURE, -4381, -1, "HY000", "Not supported, deprecated %s feature");
 DEFINE_ORACLE_ERROR(OB_ERR_DUP_RESTART_SPEC, -4382,-1, "HY000", "duplicate RESTART specified", 64601, "duplicate RESTART specified");

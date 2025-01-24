@@ -140,6 +140,7 @@ constexpr int OB_DATETIME_FUNCTION_OVERFLOW = -4261;
 constexpr int OB_ERR_DOUBLE_TRUNCATED = -4262;
 constexpr int OB_CACHE_FREE_BLOCK_NOT_ENOUGH = -4273;
 constexpr int OB_LAST_LOG_NOT_COMPLETE = -4278;
+constexpr int OB_HEAP_TABLE_EXAUSTED = -4379;
 constexpr int OB_UNEXPECT_INTERNAL_ERROR = -4388;
 constexpr int OB_ERR_TOO_MUCH_TIME = -4389;
 constexpr int OB_ERR_THREAD_PANIC = -4396;
