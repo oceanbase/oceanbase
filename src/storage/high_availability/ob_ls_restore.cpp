@@ -1356,7 +1356,6 @@ int ObSysTabletsRestoreTask::process()
   return ret;
 }
 
-//TODO(zeyong) check need to create or update anyway
 int ObSysTabletsRestoreTask::create_or_update_tablets_()
 {
   int ret = OB_SUCCESS;

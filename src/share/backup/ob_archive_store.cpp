@@ -1832,7 +1832,6 @@ int ObArchiveStore::ObPieceRangeFilter::func(const dirent *entry)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPieceRangeFilter not init", K(ret));
-  } else if (pieces_.count() >= OB_MAX_BACKUP_PIECE_NUM) { // list upper limit //TODO(zeyong) add new error code
   } else if (OB_FAIL(is_piece_start_file_name_(file_name, is_piece_start))) {
     LOG_WARN("failed to check piece start file name", K(ret), K(file_name));
   } else if (! is_piece_start && OB_FAIL(is_piece_end_file_name_(file_name, is_piece_end))) {
