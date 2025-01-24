@@ -1438,3 +1438,171 @@ WHERE v1.s_c2 >= t2.c2 and v1.c1 = t2.c1;
 drop table t1;
 drop table t2;
 drop table t3;
+
+drop table if exists case_partition_10_parent, case_partition_10_set_null_parent, case6_grandparent1;
+CREATE TABLE `case_partition_10_parent` (
+  `pk` int(11) NOT NULL,
+  PRIMARY KEY (`pk`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+ partition by hash(pk)
+(partition `p0`,
+partition `p1`,
+partition `p2`,
+partition `p3`,
+partition `p4`,
+partition `p5`,
+partition `p6`,
+partition `p7`);
+
+CREATE TABLE `case_partition_10_set_null_parent` (
+  `pk` int(11) NOT NULL,
+  PRIMARY KEY (`pk`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+ partition by hash(pk)
+(partition `p0`,
+partition `p1`,
+partition `p2`,
+partition `p3`,
+partition `p4`,
+partition `p5`,
+partition `p6`,
+partition `p7`);
+
+CREATE TABLE `case6_grandparent1` (
+  `pk` int(11) NOT NULL,
+  PRIMARY KEY (`pk`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0;
+
+explain
+UPDATE
+    /*+no_rewrite update_join_multi_table_complicated_multi_index_table_case_hint_with_index.yaml no_use_px */
+    case6_grandparent1 JOIN_A
+    left join (
+        select
+            /*+no_rewrite update_join_multi_table_complicated_multi_index_table_case_hint_with_index.yaml */
+            pk
+        from (
+                select
+                    /*+no_rewrite update_join_multi_table_complicated_multi_index_table_case_hint_with_index.yaml NO_USE_NL_MATERIALIZATION(B) leading(A,B) use_hash(A,B) index(A PRIMARY) index(B PRIMARY)*/
+                    B.pk,
+                    B.pk pk_alias
+                from case_partition_10_parent A
+                    right join case_partition_10_set_null_parent B on A.pk = B.pk
+                order by 1,
+                    2
+            )
+        where pk not in (-798)
+        order by 1 desc
+    ) JOIN_B ON JOIN_A.pk = JOIN_B.pk
+SET JOIN_A.pk = JOIN_A.pk,
+    JOIN_A.pk = JOIN_A.pk
+WHERE JOIN_A.pk in (
+        select
+            /*+no_rewrite update_join_multi_table_complicated_multi_index_table_case_hint_with_index.yaml */
+            pk
+        from (
+                select
+                    /*+no_rewrite update_join_multi_table_complicated_multi_index_table_case_hint_with_index.yaml NO_USE_NL_MATERIALIZATION(B) leading(A,B) use_hash(A,B) index(A PRIMARY) index(B PRIMARY)*/
+                    B.pk,
+                    B.pk pk_alias
+                from case_partition_10_parent A
+                    right join case_partition_10_set_null_parent B on A.pk = B.pk
+                order by 1,
+                    2
+            )
+        where pk not in (-798)
+        order by 1 desc
+    );
+Query Plan
+=======================================================================================
+|ID|OPERATOR                                    |NAME           |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------------------
+|0 |UPDATE                                      |               |1       |99          |
+|1 |└─SUBPLAN FILTER                            |               |1       |72          |
+|2 |  ├─MERGE OUTER JOIN                        |               |1       |37          |
+|3 |  │ ├─TABLE FULL SCAN                       |JOIN_A         |1       |3           |
+|4 |  │ └─SORT                                  |               |1       |35          |
+|5 |  │   └─SUBPLAN SCAN                        |JOIN_B         |1       |35          |
+|6 |  │     └─SORT                              |               |1       |35          |
+|7 |  │       └─SUBPLAN SCAN                    |ANONYMOUS_VIEW1|1       |35          |
+|8 |  │         └─PX COORDINATOR MERGE SORT     |               |1       |35          |
+|9 |  │           └─EXCHANGE OUT DISTR          |:EX10000       |1       |35          |
+|10|  │             └─SORT                      |               |1       |34          |
+|11|  │               └─PX PARTITION ITERATOR   |               |1       |34          |
+|12|  │                 └─HASH RIGHT OUTER JOIN |               |1       |34          |
+|13|  │                   ├─TABLE FULL SCAN     |A              |1       |17          |
+|14|  │                   └─TABLE FULL SCAN     |B              |1       |17          |
+|15|  └─SORT                                    |               |1       |35          |
+|16|    └─SUBPLAN SCAN                          |ANONYMOUS_VIEW2|1       |35          |
+|17|      └─PX COORDINATOR MERGE SORT           |               |1       |35          |
+|18|        └─EXCHANGE OUT DISTR                |:EX20000       |1       |35          |
+|19|          └─SORT                            |               |1       |34          |
+|20|            └─PX PARTITION ITERATOR         |               |1       |34          |
+|21|              └─HASH RIGHT OUTER JOIN       |               |1       |34          |
+|22|                ├─TABLE FULL SCAN           |A              |1       |17          |
+|23|                └─TABLE FULL SCAN           |B              |1       |17          |
+=======================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{JOIN_A: ({case6_grandparent1: (JOIN_A.pk)})}]),
+      update([JOIN_A.pk=column_conv(INT,PS:(11,0),NOT NULL,column_conv(INT,PS:(11,0),NOT NULL,JOIN_A.pk))])
+  1 - output([JOIN_A.pk]), filter([JOIN_A.pk = ANY(subquery(1))]), rowset=16
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1]), use_batch=false
+  2 - output([JOIN_A.pk]), filter(nil), rowset=16
+      equal_conds([JOIN_A.pk = JOIN_B.pk]), other_conds(nil)
+      merge_directions([ASC])
+  3 - output([JOIN_A.pk]), filter(nil), rowset=16
+      access([JOIN_A.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([JOIN_A.pk]), range(MIN ; MAX)always true
+  4 - output([JOIN_B.pk]), filter(nil), rowset=16
+      sort_keys([JOIN_B.pk, ASC])
+  5 - output([JOIN_B.pk]), filter(nil), rowset=16
+      access([JOIN_B.pk])
+  6 - output([ANONYMOUS_VIEW1.pk]), filter(nil), rowset=16
+      sort_keys([ANONYMOUS_VIEW1.pk, DESC])
+  7 - output([ANONYMOUS_VIEW1.pk]), filter([ANONYMOUS_VIEW1.pk != -798]), rowset=16
+      access([ANONYMOUS_VIEW1.pk])
+  8 - output([B.pk], [B.pk]), filter(nil), rowset=16
+      sort_keys([B.pk, ASC])
+  9 - output([B.pk]), filter(nil), rowset=16
+      dop=1
+ 10 - output([B.pk]), filter(nil), rowset=16
+      sort_keys([B.pk, ASC])
+ 11 - output([B.pk]), filter(nil), rowset=16
+      partition wise, force partition granule
+ 12 - output([B.pk]), filter(nil), rowset=16
+      equal_conds([A.pk = B.pk]), other_conds(nil)
+ 13 - output([A.pk]), filter(nil), rowset=16
+      access([A.pk]), partitions(p[0-7])
+      is_index_back=false, is_global_index=false, 
+      range_key([A.pk]), range(MIN ; MAX)always true
+ 14 - output([B.pk]), filter(nil), rowset=16
+      access([B.pk]), partitions(p[0-7])
+      is_index_back=false, is_global_index=false, 
+      range_key([B.pk]), range(MIN ; MAX)always true
+ 15 - output([ANONYMOUS_VIEW2.pk]), filter(nil), rowset=16
+      sort_keys([ANONYMOUS_VIEW2.pk, DESC])
+ 16 - output([ANONYMOUS_VIEW2.pk]), filter([ANONYMOUS_VIEW2.pk != -798]), rowset=16
+      access([ANONYMOUS_VIEW2.pk])
+ 17 - output([B.pk], [B.pk]), filter(nil), rowset=16
+      sort_keys([B.pk, ASC])
+ 18 - output([B.pk]), filter(nil), rowset=16
+      dop=1
+ 19 - output([B.pk]), filter(nil), rowset=16
+      sort_keys([B.pk, ASC])
+ 20 - output([B.pk]), filter(nil), rowset=16
+      partition wise, force partition granule
+ 21 - output([B.pk]), filter(nil), rowset=16
+      equal_conds([A.pk = B.pk]), other_conds(nil)
+ 22 - output([A.pk]), filter(nil), rowset=16
+      access([A.pk]), partitions(p[0-7])
+      is_index_back=false, is_global_index=false, 
+      range_key([A.pk]), range(MIN ; MAX)always true
+ 23 - output([B.pk]), filter(nil), rowset=16
+      access([B.pk]), partitions(p[0-7])
+      is_index_back=false, is_global_index=false, 
+      range_key([B.pk]), range(MIN ; MAX)always true
+
+drop table case_partition_10_parent, case_partition_10_set_null_parent, case6_grandparent1;
