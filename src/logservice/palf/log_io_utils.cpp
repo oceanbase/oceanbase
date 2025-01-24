@@ -9,6 +9,11 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
+#include <linux/falloc.h> // FALLOC_FL_ZERO_RANGE for linux kernel 3.15
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "log_io_utils.h"
 #include "logservice/ob_server_log_block_mgr.h"
 

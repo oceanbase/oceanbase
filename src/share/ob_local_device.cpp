@@ -13,6 +13,8 @@
 #include "ob_local_device.h"
 #include <sys/vfs.h>
 #include <sys/statvfs.h>
+#include <unistd.h>
+#include <linux/falloc.h>
 #include "share/ob_resource_limit.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "lib/ash/ob_active_session_guard.h"
