@@ -154,10 +154,6 @@ int ObTabletEmptyShellHandler::get_empty_shell_tablet_ids(common::ObTabletIDArra
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  int64_t tablet_ref_cnt = 0;
-  bool allow_tablet_version_gc = false;
-  int64_t current_tablet_version = OB_INVALID_VERSION;
-  int64_t curr_transfer_seq = OB_INVALID_TRANSFER_SEQ; // unused
   ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -201,16 +197,6 @@ int ObTabletEmptyShellHandler::get_empty_shell_tablet_ids(common::ObTabletIDArra
         STORAGE_LOG(WARN, "fail to check candidate tablet", KR(ret), KPC(ls_), KPC(tablet));
       } else if (!can_become_shell) {
         STORAGE_LOG(INFO, "tablet can not become shell", KR(ret), "tablet_meta", tablet->get_tablet_meta());
-      } else if (OB_FAIL(t3m->get_current_version_for_tablet(ls_->get_ls_id(), tablet->get_tablet_id(), current_tablet_version,
-                                                             curr_transfer_seq, allow_tablet_version_gc))) {
-        STORAGE_LOG(WARN, "failed to check tablet ref status", KR(ret), K(ls_->get_ls_id()), K(tablet->get_tablet_id()));
-      } else if (FALSE_IT(tablet_ref_cnt = tablet->get_ref())) {
-      } else if (GCTX.is_shared_storage_mode() && (!allow_tablet_version_gc || (2 < tablet_ref_cnt))) {
-        // why (2 < ref_cnt) ?
-        // A: 1. this func hold one ref.
-        //    2. tablet_pointer in t3m hold on ref.
-        need_retry = true;
-        FLOG_INFO("tablet has been referred", KR(ret), K(allow_tablet_version_gc), K(ls_->get_ls_id()), K(tablet->get_tablet_id()), K(current_tablet_version), K(tablet_ref_cnt));
       } else if (OB_FAIL(empty_shell_tablet_ids.push_back(tablet->get_tablet_meta().tablet_id_))) {
         STORAGE_LOG(WARN, "update tablet to empty shell failed", KR(ret),"tablet_meta", tablet->get_tablet_meta());
       }
