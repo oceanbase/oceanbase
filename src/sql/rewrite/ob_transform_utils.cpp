@@ -11158,7 +11158,7 @@ int ObTransformUtils::check_correlated_exprs_can_pullup(const ObIArray<ObExecPar
     ObSEArray<ObRawExpr*, 8> check_exprs;
     bool has_special_expr = false;
     bool is_correlated = false;
-    if (subquery.has_distinct() || subquery.is_hierarchical_query()) {
+    if (subquery.is_hierarchical_query()) {
       //do nothing
     } else if (OB_FAIL(check_fixed_expr_correlated(exec_params, subquery, can_pullup))) {
       LOG_WARN("failed to check fixed expr validity", K(ret));

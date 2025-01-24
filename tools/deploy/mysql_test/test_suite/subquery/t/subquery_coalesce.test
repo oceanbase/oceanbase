@@ -1,0 +1,34 @@
+--disable_query_log
+# owner: diqinhao.dqh
+# owner group: sql
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+# description: 子查询合并
+--disable_info
+--disable_metadata
+--disable_warnings
+
+drop table if exists t1;
+create table t1(c1 int, c2 int);
+
+drop table if exists t2;
+create table t2(c1 int, c2 int);
+
+explain select /*+no_expand*/ * from t1 where c1 in (select distinct c1 from t2) or c1 in (select c2 from t2);
+
+explain select /*+no_expand*/ * from t1 where c1 in (select distinct c1 from t2 where c1 > 10) or c1 in (select distinct c2 from t2 where c2 < 20);
+
+explain select /*+ no_expand */ *
+from t1
+where c1 in (select distinct c1 from t2)
+   or exists (select 1 from t2 where t2.c2 = t1.c1)
+   and c1 > 100;
+
+drop table if exists t3;
+create table t3(c1 int, c2 int, c3 int);
+
+explain select /*+no_expand*/ * from t1 
+    where (c1 in (select distinct c1 from t2) or c1 in (select c2 from t2))
+    and exists (select 1 from t3 where t1.c1 = t3.c3)
+    and c2 > 100;
