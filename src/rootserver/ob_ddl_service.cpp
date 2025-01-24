@@ -3763,15 +3763,21 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
         case OB_DDL_MODIFY_COLUMN: {
           bool is_offline = false;
           bool add_pk = false;
-          if (OB_FAIL(fill_column_collation(alter_table_schema.get_sql_mode(),
+
+          if (OB_ISNULL(orig_column_schema)) {
+            ret = OB_ERR_BAD_FIELD_ERROR;
+            LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, orig_column_name.length(), orig_column_name.ptr(),
+                orig_table_schema.get_table_name_str().length(), orig_table_schema.get_table_name_str().ptr());
+            LOG_WARN("unknown column", KR(ret), K(orig_column_name), K(orig_table_schema));
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(fill_column_collation(alter_table_schema.get_sql_mode(),
                                             is_oracle_mode,
                                             orig_table_schema,
                                             allocator,
                                             *alter_column_schema))) {
             LOG_WARN("failed to fill column collation", K(ret));
-          } else if (OB_ISNULL(orig_column_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid orig column schema", K(ret));
           } else if (OB_FAIL(check_alter_column_is_offline(
               orig_table_schema, schema_guard, *orig_column_schema, *alter_column_schema, is_offline))) {
             LOG_WARN("failed to check is offline", K(ret));
