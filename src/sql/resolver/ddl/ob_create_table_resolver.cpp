@@ -2460,6 +2460,7 @@ int ObCreateTableResolver::generate_index_arg()
         } else if (global_) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support global fts index now", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "global fulltext index is");
         } else {
           // set type to fts_doc_rowkey first, append other fts arg later
           type = INDEX_TYPE_FTS_INDEX_LOCAL;

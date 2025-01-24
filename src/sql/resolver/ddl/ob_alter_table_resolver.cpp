@@ -2642,7 +2642,9 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           if (index_keyname_ == SPATIAL_KEY) {
             type = INDEX_TYPE_SPATIAL_GLOBAL;
           } else if (index_keyname_ == FTS_KEY) {
-            type = INDEX_TYPE_FTS_INDEX_GLOBAL;
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("global fulltext index is not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "global fulltext index is");
           } else if (index_keyname_ == MULTI_KEY) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("global multivalue index not supported", K(ret));

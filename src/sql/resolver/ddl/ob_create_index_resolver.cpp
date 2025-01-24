@@ -875,6 +875,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id
       } else if (global_) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support global fts index now", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "global fulltext index is");
       } else {
         // set type to fts_index_aux first, append other fts arg later
         index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
