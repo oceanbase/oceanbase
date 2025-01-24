@@ -312,7 +312,8 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
   bool is_normal = false;
   bool is_exist = true;
   bool is_in_member_or_learner_list = false;
-  if (is_stop()) { 
+  if (is_stop() || !is_online()) {
+      LOG_INFO("ls stopped or disabled", KPC(ls_));
   } else if (OB_FAIL(check_meta_tenant_normal_(is_normal))) {
     LOG_WARN("fail to get meta tenant status", K(ret));
   } else if (!is_normal) {
@@ -418,8 +419,7 @@ int ObLSRestoreHandler::update_state_handle_()
   ObILSRestoreState *new_state_handler = nullptr;
   if (OB_FAIL(ls_->get_restore_status(new_status))) {
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
-  } else if (nullptr != state_handler_
-      && new_status == state_handler_->get_restore_status()) { // no need update state handler
+  } else if (!need_update_state_handle_(new_status)) { // no need update state handler
   } else if (OB_FAIL(fill_restore_arg())) {
     LOG_WARN("fail to fill restore arg", K(ret));
   } else {
@@ -461,6 +461,12 @@ int ObLSRestoreHandler::update_state_handle_()
     }
   }
   return ret;
+}
+
+bool ObLSRestoreHandler::need_update_state_handle_(share::ObLSRestoreStatus &new_status)
+{
+  lib::ObMutexGuard guard(mtx_);
+  return nullptr == state_handler_ || new_status != state_handler_->get_restore_status();
 }
 
 int ObLSRestoreHandler::get_restore_state_handler_(const share::ObLSRestoreStatus &new_status, ObILSRestoreState *&new_state_handler)
@@ -619,7 +625,11 @@ int ObLSRestoreHandler::construct_state_handler_(T *&new_handler)
 int ObLSRestoreHandler::deal_failed_restore_()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(state_handler_->deal_failed_restore(result_mgr_))) {
+  lib::ObMutexGuard guard(mtx_);
+  if (OB_ISNULL(state_handler_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("state handler is nullptr!", K(ret));
+  } else if (OB_FAIL(state_handler_->deal_failed_restore(result_mgr_))) {
     LOG_WARN("fail to deal failed restore", K(ret), K(result_mgr_), KPC(state_handler_));
   }
   return ret;

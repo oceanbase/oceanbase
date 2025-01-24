@@ -165,6 +165,7 @@ private:
   template <typename T>
   int construct_state_handler_(T *&new_handler);
   int deal_failed_restore_();
+  bool need_update_state_handle_(share::ObLSRestoreStatus &new_status);
 private:
   bool is_inited_;
   bool is_stop_; // used by ls destory
