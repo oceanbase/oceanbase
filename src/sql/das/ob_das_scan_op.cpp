@@ -68,7 +68,10 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     multivalue_type_,
                     index_merge_idx_,
                     flags_,
-                    partition_infos_);
+                    partition_infos_,
+                    domain_id_idxs_,
+                    domain_types_,
+                    domain_tids_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {

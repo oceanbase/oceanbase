@@ -19,6 +19,7 @@
 #include "sql/das/ob_group_scan_iter.h"
 #include "sql/das/iter/ob_das_iter.h"
 #include "sql/rewrite/ob_query_range.h"
+#include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_partition_id_row_pair.h"
 
 namespace oceanbase
@@ -103,7 +104,10 @@ public:
       multivalue_type_(0),
       index_merge_idx_(OB_INVALID_ID),
       pre_query_range_(),
-      flags_(0)
+      flags_(0),
+      domain_id_idxs_(alloc),
+      domain_types_(alloc),
+      domain_tids_(alloc)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -181,6 +185,9 @@ public:
       uint64_t reserved_                     : 63;
     };
   };
+  ObFixedArray<share::DomainIdxs, common::ObIAllocator> domain_id_idxs_;
+  ObFixedArray<int64_t, common::ObIAllocator> domain_types_;
+  ObFixedArray<uint64_t, common::ObIAllocator> domain_tids_;
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef
