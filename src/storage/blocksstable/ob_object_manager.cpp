@@ -910,7 +910,7 @@ int ObObjectManager::delete_super_block_tenant_item(
       for (int64_t i = 0; OB_SUCC(ret) && i < super_block_.body_.tenant_cnt_; i++) {
         const ObTenantItem &item = super_block_.body_.tenant_item_arr_[i];
         if (tenant_id == item.tenant_id_ && tenant_epoch == item.epoch_) {
-          if (item.status_ == ObTenantCreateStatus::DELETED) {
+          if (ObTenantCreateStatus::DELETED == item.status_ || ObTenantCreateStatus::CREATE_ABORT == item.status_) {
             is_delete_hit = true;
           } else {
             ret = OB_ERR_UNEXPECTED;
