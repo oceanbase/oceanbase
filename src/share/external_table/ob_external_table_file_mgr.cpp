@@ -1586,89 +1586,8 @@ int ObExternalTableFileManager::delete_auto_refresh_job(ObExecContext &ctx, ObMy
   return ret;
 }
 
-int ObExternalTableFileManager::create_repeat_job_sql_(const bool is_oracle_mode,
-                                                      const uint64_t tenant_id,
-                                                      const int64_t job_id,
-                                                      const char *job_name,
-                                                      const ObString &exec_env,
-                                                      const int64_t start_usec,
-                                                      ObSqlString &job_action,
-                                                      ObSqlString &interval,
-                                                      const int64_t interval_ts,
-                                                      ObSqlString &raw_sql)
-{
-  int ret = OB_SUCCESS;
-  int64_t end_date = 64060560000000000;//4000-01-01 00:00:00.000000
-  int64_t default_duration_sec = 24 * 60 * 60; //one day
-  share::ObDMLSqlSplicer dml;
-  OZ (dml.add_pk_column("tenant_id", 0));
-  OZ (dml.add_column("job_name", ObHexEscapeSqlStr(ObString(job_name))));
-  OZ (dml.add_pk_column("job", job_id));
-  OZ (dml.add_column("lowner", is_oracle_mode ? "SYS" : "root@%"));
-  OZ (dml.add_column("powner", is_oracle_mode ? "SYS" : "root@%"));
-  OZ (dml.add_column("cowner", is_oracle_mode ? "SYS" : "oceanbase"));
-  OZ (dml.add_time_column("next_date", start_usec));
-  OZ (dml.add_column("total", 0));
-  OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(interval.string()))); //ObString("FREQ=SECONDLY; INTERVAL=1")
-  OZ (dml.add_column("flag", 0));
-  OZ (dml.add_column("what", ObHexEscapeSqlStr(job_action.string())));
-  OZ (dml.add_column("nlsenv", ""));
-  OZ (dml.add_column("field1", ""));
-  OZ (dml.add_column("exec_env", ObHexEscapeSqlStr(exec_env)));
-  OZ (dml.add_column("job_style", "REGULER"));
-  OZ (dml.add_column("program_name", ""));
-  OZ (dml.add_column("job_type", "STORED_PROCEDURE"));
-  OZ (dml.add_column("job_action", ObHexEscapeSqlStr(job_action.string())));
-  OZ (dml.add_column("number_of_argument", 0));
-  OZ (dml.add_time_column("start_date", start_usec));
-  OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(interval.string()))); //ObString("FREQ=SECONDLY; INTERVAL=1")
-  OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", DEFAULT_JOB_CLASS));
-  OZ (dml.add_column("enabled", true));
-  OZ (dml.add_column("auto_drop", false));
-  OZ (dml.add_column("comments", "used to auto refresh external tables"));
-  OZ (dml.add_column("credential_name", ""));
-  OZ (dml.add_column("destination_name", ""));
-  OZ (dml.add_column("interval_ts", interval_ts));
-  OZ (dml.add_column("max_run_duration", default_duration_sec));
-  OZ (dml.splice_values(raw_sql));
-  return ret;
-}
-
 int ObExternalTableFileManager::create_auto_refresh_job(ObExecContext &ctx, const int64_t interval, ObMySQLTransaction &trans) {
   int ret = OB_SUCCESS;
-  #ifndef ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME
-  #define ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME  "tenant_id, " \
-                                              "job_name, " \
-                                              "job, "  \
-                                              "lowner, " \
-                                              "powner, " \
-                                              "cowner, "  \
-                                              "next_date,"      \
-                                              "total,"          \
-                                              "`interval#`,"     \
-                                              "flag," \
-                                              "what," \
-                                              "nlsenv,"    \
-                                              "field1,"        \
-                                              "exec_env,"\
-                                              "job_style,"\
-                                              "program_name,"\
-                                              "job_type,"\
-                                              "job_action,"\
-                                              "number_of_argument,"\
-                                              "start_date,"\
-                                              "repeat_interval,"\
-                                              "end_date,"\
-                                              "job_class,"\
-                                              "enabled,"\
-                                              "auto_drop,"\
-                                              "comments,"\
-                                              "credential_name,"\
-                                              "destination_name,"\
-                                              "interval_ts,"\
-                                              "max_run_duration"
-  #endif
   char buf[OB_MAX_PROC_ENV_LENGTH];
   int64_t pos = 0;
   CK (ctx.get_my_session() != NULL);
@@ -1679,26 +1598,36 @@ int ObExternalTableFileManager::create_auto_refresh_job(ObExecContext &ctx, cons
   OZ (ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(ctx.get_my_session()->get_effective_tenant_id(), is_oracle_mode));
   OZ (storage::ObCommonIDUtils::gen_unique_id(ctx.get_my_session()->get_effective_tenant_id(), raw_id));
   int64_t max_job_id = raw_id.id() + dbms_scheduler::ObDBMSSchedTableOperator::JOB_ID_OFFSET;
-  ObSqlString raw_sql;
-  OZ (raw_sql.append_fmt("INSERT INTO %s( "ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME") VALUES ",
-                                  share::OB_ALL_TENANT_SCHEDULER_JOB_TNAME));
-  uint64_t start_usec = ObTimeUtility::current_time();
-  ObSqlString job_action;
   ObSqlString interval_str;
-  int64_t interval_ts = 1000000L * interval;
-  OZ (job_action.append("dbms_external_table.auto_refresh_external_table()"));
+  int64_t tenant_id = ctx.get_my_session()->get_effective_tenant_id();
   OZ (interval_str.append_fmt("FREQ=SECONDLY; INTERVAL=%ld", interval));
-  ObSqlString tmp_sql;
-  OZ (create_repeat_job_sql_(is_oracle_mode, 0, 0, auto_refresh_job_name, exec_env, start_usec, job_action, interval_str, interval_ts, tmp_sql));
-  OZ (raw_sql.append_fmt("(%s)", tmp_sql.ptr()));
-  tmp_sql.reset();
-  OZ (create_repeat_job_sql_(is_oracle_mode, 0, max_job_id, auto_refresh_job_name, exec_env, start_usec, job_action, interval_str, interval_ts, tmp_sql));
-  OZ (raw_sql.append_fmt(",(%s);", tmp_sql.ptr()));
-  int64_t affected_rows = 0;
-  OZ (trans.write(ctx.get_my_session()->get_effective_tenant_id(), raw_sql.ptr(), affected_rows));
-  CK (affected_rows == 2);
+  if (OB_SUCC(ret)) {
+    HEAP_VAR(ObDBMSSchedJobInfo, job_info) {
+      job_info.tenant_id_ = tenant_id;
+      job_info.job_ = max_job_id;
+      job_info.job_name_ = ObString(auto_refresh_job_name);
+      job_info.job_action_ = ObString("dbms_external_table.auto_refresh_external_table()");
+      job_info.lowner_ = is_oracle_mode ? "SYS" : "root@%";
+      job_info.cowner_ = is_oracle_mode ? "SYS" : "oceanbase";
+      job_info.powner_ = is_oracle_mode ? "SYS" : "root@%";
+      job_info.start_date_ = ObTimeUtility::current_time();
+      job_info.end_date_ = 64060560000000000;//4000-01-01 00:00:00.000000
+      job_info.repeat_interval_ = interval_str.string();
+      job_info.job_style_ = ObString("regular");
+      job_info.job_type_ = ObString("STORED_PROCEDURE");
+      job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
+      job_info.enabled_ = true;
+      job_info.auto_drop_ = false;
+      job_info.max_run_duration_ = 24 * 60 * 60; //one day
+      job_info.exec_env_ = exec_env;
+      job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::EXT_FILE_REFRESH_JOB;
+      if (OB_FAIL(ObDBMSSchedJobUtils::create_dbms_sched_job(
+              trans, tenant_id, max_job_id, job_info))) {
+        LOG_WARN("failed to create dbms scheduler job", KR(ret));
+      }
+    }
+  }
   return ret;
-
 }
 
 OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_, row_start_, row_count_);

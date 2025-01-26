@@ -11,6 +11,7 @@
  */
 
 #include "ob_role_change_service.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {

@@ -6283,12 +6283,9 @@ int ObDDLOperator::init_tenant_optimizer_stats_info(const ObSysVariableSchema &s
 {
   int ret = OB_SUCCESS;
   ObSqlString prefs_sql;
-  ObSqlString jobs_sql;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   int64_t expected_affected_rows1 = 0;
-  int64_t expected_affected_rows2 = 0;
   int64_t affected_rows1 = 0;
-  int64_t affected_rows2 = 0;
   if (OB_FAIL(ObDbmsStatsPreferences::gen_init_global_prefs_sql(prefs_sql,
                                                                 false,
                                                                 &expected_affected_rows1))) {
@@ -6296,20 +6293,16 @@ int ObDDLOperator::init_tenant_optimizer_stats_info(const ObSysVariableSchema &s
   } else if (OB_FAIL(ObDbmsStatsMaintenanceWindow::get_stats_maintenance_window_jobs_sql(
                                                                         sys_variable,
                                                                         tenant_id,
-                                                                        jobs_sql,
-                                                                        expected_affected_rows2))) {
-    LOG_WARN("failed tto get stats maintenance window jobs sql", K(ret), K(jobs_sql));
-  } else if (OB_UNLIKELY(prefs_sql.empty() || jobs_sql.empty())) {
+                                                                        trans))) {
+    LOG_WARN("failed tto get stats maintenance window jobs sql", K(ret));
+  } else if (OB_UNLIKELY(prefs_sql.empty())) {
     ret = OB_ERR_UNEXPECTED;
-    RS_LOG(WARN, "get unexpected empty", K(ret), K(prefs_sql), K(jobs_sql));
-  } else if (OB_FAIL(trans.write(exec_tenant_id, prefs_sql.ptr(), affected_rows1)) ||
-             OB_FAIL(trans.write(exec_tenant_id, jobs_sql.ptr(), affected_rows2))) {
-    RS_LOG(WARN, "execute sql failed", K(ret), K(prefs_sql), K(jobs_sql));
-  } else if (OB_UNLIKELY(affected_rows1 != expected_affected_rows1 ||
-                         affected_rows2 != expected_affected_rows2)) {
+    RS_LOG(WARN, "get unexpected empty", K(ret), K(prefs_sql));
+  } else if (OB_FAIL(trans.write(exec_tenant_id, prefs_sql.ptr(), affected_rows1))) {
+    RS_LOG(WARN, "execute sql failed", K(ret), K(prefs_sql));
+  } else if (OB_UNLIKELY(affected_rows1 != expected_affected_rows1)) {
     ret = OB_ERR_UNEXPECTED;
-    RS_LOG(WARN, "get unexpected affected_rows", K(ret), K(affected_rows1), K(affected_rows2),
-                                           K(expected_affected_rows1), K(expected_affected_rows2));
+    RS_LOG(WARN, "get unexpected affected_rows", K(ret), K(affected_rows1), K(expected_affected_rows1));
   } else {/*do nothing*/}
   return ret;
 }

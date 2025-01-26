@@ -1600,7 +1600,6 @@ int ObUpgradeFor4330Processor::post_upgrade_for_optimizer_stats()
 {
   int ret = OB_SUCCESS;
   ObSqlString extra_stats_perfs_sql;
-  ObSqlString add_async_stats_job_sql;
   int64_t affected_rows = 0;
   bool is_primary_tenant = false;
   if (sql_proxy_ == NULL) {
@@ -1615,13 +1614,8 @@ int ObUpgradeFor4330Processor::post_upgrade_for_optimizer_stats()
   } else if (OB_FAIL(sql_proxy_->write(tenant_id_, extra_stats_perfs_sql.ptr(), affected_rows))) {
     LOG_WARN("failed to write", K(ret));
   } else if (OB_FAIL(ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(sql_proxy_,
-                                                                                          tenant_id_,
-                                                                                          add_async_stats_job_sql))) {
+                                                                                          tenant_id_))) {
     LOG_WARN("failed to get async gather stats job for upgrade", K(ret));
-  } else if (OB_UNLIKELY(add_async_stats_job_sql.empty())) {
-    LOG_INFO("failed to add async stats job in upgrade, perhaps the join already exists, need check after the upgrade.");
-  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, add_async_stats_job_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to write", K(ret));
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("[UPGRADE] post upgrade for optimizer stats failed", KR(ret), K_(tenant_id));
@@ -1709,8 +1703,6 @@ int ObUpgradeFor4350Processor::add_spm_stats_scheduler_job()
   bool job_exists = false;
   ObSchemaGetterGuard schema_guard;
   const ObSysVariableSchema *var_schema = NULL;
-  ObSqlString insert_sql;
-  int64_t affected_rows = 0;
   if (OB_ISNULL(sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", KR(ret), KP_(sql_proxy), KP_(schema_service), K_(tenant_id));
@@ -1734,11 +1726,8 @@ int ObUpgradeFor4350Processor::add_spm_stats_scheduler_job()
   } else if (OB_FAIL(ObDbmsStatsMaintenanceWindow::get_spm_stats_upgrade_jobs_sql(sql_proxy_,
                                                                                   *var_schema,
                                                                                   tenant_id_,
-                                                                                  lib::Worker::CompatMode::ORACLE == compat_mode,
-                                                                                  insert_sql))) {
+                                                                                  lib::Worker::CompatMode::ORACLE == compat_mode))) {
     LOG_WARN("failed to get spm stats upgrade jobs sql");
-  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, insert_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to write spm stats job", K(ret), K(tenant_id_), K(affected_rows), K(insert_sql));
   }
 
   return ret;

@@ -14,6 +14,7 @@
 
 #include "ob_tenant_config.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
+#include "share/errsim_module/ob_errsim_module_interface_imp.h"
 
 using namespace oceanbase::common;
 

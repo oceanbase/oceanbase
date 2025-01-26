@@ -58,91 +58,16 @@ class ObUserInfo;
 
 namespace dbms_scheduler
 {
-enum ObInnerJobCLassId
+enum class ObDBMSSchedFuncType : uint64_t
 {
-#define INNER_JOB_CLASS_DEF(name, ...) ID_##name,
-#include "ob_inner_job_class_list.h"
-#undef INNER_JOB_CLASS_DEF
-  INNER_JOB_CLASS_MAXNUM,
+  USER_JOB = 0,
+#define FUNCTION_TYPE(NAME, ...) NAME,
+#include "ob_dbms_sched_func_type.h"
+#undef FUNCTION_TYPE
+  FUNCTION_TYPE_MAXNUM,
 };
-
-#define INNER_JOB_CLASS_DEF(name, ...) static const char *name = #name;
-#include "ob_inner_job_class_list.h"
-#undef INNER_JOB_CLASS_DEF
 
 static const int64_t DEFAULT_LOG_HISTORY = 30; // days
-
-class ObInnerJobClassInfo
-{
-public:
-  ObInnerJobClassInfo() : name_(nullptr), log_history_(0) {}
-  void set_name(const char *name) { name_ = name; }
-  void set_args(int64_t log_history = DEFAULT_LOG_HISTORY)
-  {
-    log_history_ = log_history;
-  }
-  const char *name_;
-  int64_t log_history_;
-};
-
-class ObInnerJobClassSet
-{
-  ObInnerJobClassSet()
-  {
-#define INNER_JOB_CLASS_DEF(name, args...) job_class_infos_[ID_##name].set_name(#name); job_class_infos_[ID_##name].set_args(args);
-#include "ob_inner_job_class_list.h"
-#undef INNER_JOB_CLASS_DEF
-  }
-
-public:
-  const char *id_to_name(int64_t id) const
-  {
-    const char *str = "DEFAULT_JOB_CLASS";
-    if (id >= 0 && id < INNER_JOB_CLASS_MAXNUM) {
-      str = job_class_infos_[id].name_;
-    }
-    return str;
-  }
-
-  int64_t id_to_log_history(int64_t id) const
-  {
-    int64_t log_history = DEFAULT_LOG_HISTORY;
-    if (id >= 0 && id < INNER_JOB_CLASS_MAXNUM) {
-      log_history = job_class_infos_[id].log_history_;
-    }
-    return log_history;
-  }
-
-  bool check_name_exist(const char *name) const
-  {
-    bool is_exist = false;
-    for (int i = 0; i < INNER_JOB_CLASS_MAXNUM; i++) {
-      if (0 == strcmp(job_class_infos_[i].name_, name)) {
-        is_exist = true;
-        break;
-      }
-    }
-    return is_exist;
-  }
-
-  int64_t get_max_log_history() const
-  {
-    int64_t log_history = DEFAULT_LOG_HISTORY;
-    for (int i = 0; i < INNER_JOB_CLASS_MAXNUM; i++) {
-      log_history = max(job_class_infos_[i].log_history_, log_history);
-    }
-    return log_history;
-  }
-
-  static ObInnerJobClassSet &instance()
-  {
-    return instance_;
-  }
-
-private:
-  static ObInnerJobClassSet instance_;
-  ObInnerJobClassInfo job_class_infos_[INNER_JOB_CLASS_MAXNUM];
-};
 
 class ObDBMSSchedJobInfo
 {
@@ -191,7 +116,8 @@ public:
     destination_name_(),
     interval_ts_(),
     is_oracle_tenant_(true),
-    max_failures_(0) {}
+    max_failures_(0),
+    func_type_(ObDBMSSchedFuncType::FUNCTION_TYPE_MAXNUM) {}
 
   TO_STRING_KV(K(tenant_id_),
                K(user_id_),
@@ -224,7 +150,8 @@ public:
                K(max_run_duration_),
                K(interval_ts_),
                K(max_failures_),
-               K(state_));
+               K(state_),
+               K(func_type_));
 
   bool valid()
   {
@@ -247,6 +174,7 @@ public:
   int64_t  get_start_date() { return start_date_; }
   int64_t  get_end_date() { return end_date_; }
   int64_t  get_auto_drop() { return auto_drop_; }
+  ObDBMSSchedFuncType get_func_type() const;
 
   bool is_completed() { return 0 == state_.case_compare("COMPLETED"); }
   bool is_broken() { return 0 == state_.case_compare("BROKEN"); }
@@ -268,10 +196,12 @@ public:
   common::ObString &get_job_action() { return job_action_; }
 
   bool is_oracle_tenant() { return is_oracle_tenant_; }
-  bool is_default_job_class() const { return (0 == job_class_.case_compare(DEFAULT_JOB_CLASS)); }
-  bool is_date_expression_job_class() const { return !!(scheduler_flags_ & JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS); }
-  bool is_mysql_event_job_class() const { return (0 == job_class_.case_compare(MYSQL_EVENT_JOB_CLASS)); }
-  bool is_olap_async_job_class() const { return (0 == job_class_.case_compare(OLAP_ASYNC_JOB_CLASS)); }
+  bool is_default_job_class() const { return (0 == job_class_.case_compare("DEFAULT_JOB_CLASS")); }
+  bool is_mview_job() const { return ObDBMSSchedFuncType::MVIEW_JOB == get_func_type(); }
+  bool is_mysql_event_job() const { return ObDBMSSchedFuncType::MYSQL_EVENT_JOB == get_func_type(); }
+  bool is_olap_async_job() const { return ObDBMSSchedFuncType::OLAP_ASYNC_JOB == get_func_type(); }
+  bool is_stats_maintenance_job() const { return ObDBMSSchedFuncType::STAT_MAINTENANCE_JOB == get_func_type(); }
+  bool is_user_job() const { return ObDBMSSchedFuncType::USER_JOB == get_func_type(); }
 
   int deep_copy(common::ObIAllocator &allocator, const ObDBMSSchedJobInfo &other);
 
@@ -320,6 +250,7 @@ public:
   int64_t interval_ts_;
   bool is_oracle_tenant_;
   int64_t max_failures_;
+  ObDBMSSchedFuncType func_type_;
 
 public:
   static const int64_t JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS = 1;
@@ -534,6 +465,9 @@ public:
    * @retval OB_INVALID_ARGUMENT 无效参数
    */
   static int calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &job_info, int64_t &next_run_time);
+  static int zone_check_impl(int64_t tenant_id, const ObString &zone);
+  static int job_class_check_impl(int64_t tenant_id, const ObString &job_class_name);
+  static int get_max_failures_value(int64_t tenant_id, const ObString &src_str, int64_t &value);
   static int reserve_user_with_minimun_id(ObIArray<const share::schema::ObUserInfo *> &user_infos); //TO DO 连雨 delete
 };
 }

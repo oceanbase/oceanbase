@@ -13,6 +13,7 @@
 #include "storage/tablet/ob_tablet_start_transfer_mds_helper.h"
 #include "common/ob_version_def.h"
 #include "logservice/replayservice/ob_tablet_replay_executor.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"

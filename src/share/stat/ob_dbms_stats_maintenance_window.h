@@ -18,6 +18,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 
 #define DAY_OF_WEEK 7
 #define HOUR_OF_DAY  24
@@ -46,8 +47,7 @@ public:
 
   static int get_stats_maintenance_window_jobs_sql(const share::schema::ObSysVariableSchema &sys_variable,
                                                    const uint64_t tenant_id,
-                                                   ObSqlString &raw_sql,
-                                                   int64_t &expected_affected_rows);
+                                                   common::ObISQLClient &sql_client);
 
   static int is_stats_maintenance_window_attr(const sql::ObSQLSessionInfo *session,
                                               const ObString &job_name,
@@ -59,8 +59,7 @@ public:
   static bool is_stats_job(const ObString &job_name);
 
   static int get_async_gather_stats_job_for_upgrade(common::ObMySQLProxy *sql_proxy,
-                                                    const uint64_t tenant_id,
-                                                    ObSqlString &sql);
+                                                    const uint64_t tenant_id);
 
   static int check_job_exists(common::ObMySQLProxy *sql_proxy,
                               const uint64_t tenant_id,
@@ -70,8 +69,7 @@ public:
   static int get_spm_stats_upgrade_jobs_sql(common::ObMySQLProxy *sql_proxy,
                                             const ObSysVariableSchema &sys_variable,
                                             const uint64_t tenant_id,
-                                            const bool is_oracle_mode,
-                                            ObSqlString &raw_sql);
+                                            const bool is_oracle_mode);
 
   static int get_time_zone_offset(const share::schema::ObSysVariableSchema &sys_variable,
                                   const uint64_t tenant_id,
@@ -84,30 +82,26 @@ private:
                                  int64_t &start_usec,
                                  ObSqlString &job_action);
 
-  static int get_stat_window_job_sql(const bool is_oracle_mode,
+  static int get_stat_window_job_info(const bool is_oracle_mode,
                                      const uint64_t tenant_id,
                                      const int64_t job_id,
                                      const char *job_name,
                                      const ObString &exec_env,
                                      const int64_t start_usec,
                                      ObSqlString &job_action,
-                                     ObSqlString &raw_sql);
+                                     dbms_scheduler::ObDBMSSchedJobInfo &job_info);
 
-  static int get_stats_history_manager_job_sql(const bool is_oracle_mode,
+  static int get_stats_history_manager_job_info(const bool is_oracle_mode,
                                                const uint64_t tenant_id,
                                                const int64_t job_id,
                                                const ObString &exec_env,
-                                               ObSqlString &raw_sql);
-  static int get_spm_stats_job_sql(const bool is_oracle_mode,
+                                               dbms_scheduler::ObDBMSSchedJobInfo &job_info);
+  static int get_spm_stats_job_info(const bool is_oracle_mode,
                                    const uint64_t tenant_id,
                                    const int64_t job_id,
                                    const int64_t offset_sec,
                                    const ObString &exec_env,
-                                   ObSqlString &raw_sql);
-
-  static int get_dummy_guard_job_sql(const uint64_t tenant_id,
-                                     const int64_t job_id,
-                                     ObSqlString &raw_sql);
+                                   dbms_scheduler::ObDBMSSchedJobInfo &job_info);
 
   static bool is_work_day(int64_t now_wday) { return now_wday >= 1 && now_wday <= MAX_OF_WORK_DAY; }
 
@@ -115,11 +109,11 @@ private:
                                  const int64_t specify_time,
                                  const int64_t current_time,
                                  bool &is_valid);
-  static int get_async_gather_stats_job_sql(const bool is_oracle_mode,
+  static int get_async_gather_stats_job_info(const bool is_oracle_mode,
                                             const uint64_t tenant_id,
                                             const int64_t job_id,
                                             const ObString &exec_env,
-                                            ObSqlString &raw_sql);
+                                            dbms_scheduler::ObDBMSSchedJobInfo &job_info);
   static int get_next_job_id_and_exec_env(common::ObMySQLProxy *sql_proxy,
                                           ObIAllocator &allocator,
                                           const uint64_t tenant_id,

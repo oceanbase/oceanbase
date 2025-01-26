@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "ob_io_manager.h"
+#include "share/errsim_module/ob_errsim_module_interface_imp.h"
 #include "observer/ob_server.h"
 #include "src/share/io/io_schedule/ob_io_schedule_v2.h"
 #include "lib/restore/ob_object_device.h"

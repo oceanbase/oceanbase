@@ -323,17 +323,6 @@ private:
                                   const ObString &part_name,
                                   ObNewRow &part_val);
 
-  int create_repeat_job_sql_(const bool is_oracle_mode,
-                            const uint64_t tenant_id,
-                            const int64_t job_id,
-                            const char *job_name,
-                            const ObString &exec_env,
-                            const int64_t start_usec,
-                            ObSqlString &job_action,
-                            ObSqlString &interval,
-                            const int64_t interval_ts,
-                            ObSqlString &raw_sql);
-
 private:
   common::ObSpinLock fill_cache_locks_[LOAD_CACHE_LOCK_CNT];
   common::ObKVCache<ObExternalTableFilesKey, ObExternalTableFiles> kv_cache_;

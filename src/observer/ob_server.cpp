@@ -46,6 +46,7 @@
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "share/scheduler/ob_partition_auto_split_helper.h"
 #include "share/longops_mgr/ob_longops_mgr.h"
+#include "share/ob_ddl_sim_point.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "observer/ob_server_utils.h"
 #include "share/detect/ob_detect_manager.h"

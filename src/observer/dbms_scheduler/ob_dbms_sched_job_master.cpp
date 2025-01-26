@@ -102,7 +102,7 @@ int64_t ObDBMSSchedJobMaster::calc_next_date(ObDBMSSchedJobInfo &job_info)
 {
   int64_t ret = 0;
   int64_t next_date = 0;
-  if (job_info.is_date_expression_job_class()
+  if (job_info.is_mview_job()
       && !job_info.get_interval().empty()
       && (0 != job_info.get_interval().case_compare("null"))) {
     int64_t next_date_ts = 0;
@@ -137,7 +137,7 @@ int64_t ObDBMSSchedJobMaster::run_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJ
       job_key->get_job_name(),
       execute_addr,
       self_addr_,
-      job_info.is_olap_async_job_class() ? share::OBCG_OLAP_ASYNC_JOB : share::OBCG_DBMS_SCHED_JOB))) {
+      job_info.is_olap_async_job() ? share::OBCG_OLAP_ASYNC_JOB : share::OBCG_DBMS_SCHED_JOB))) {
     LOG_WARN("failed to run dbms sched job", K(ret), K(job_info), KPC(job_key));
     if (is_server_down_error(ret)) {
       int tmp = OB_SUCCESS;

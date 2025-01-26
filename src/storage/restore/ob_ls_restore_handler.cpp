@@ -18,6 +18,7 @@
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "share/restore/ob_physical_restore_table_operator.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
 using namespace oceanbase;

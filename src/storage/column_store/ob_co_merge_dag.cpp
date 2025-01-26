@@ -18,6 +18,7 @@
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {

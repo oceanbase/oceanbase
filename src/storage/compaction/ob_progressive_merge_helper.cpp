@@ -10,6 +10,7 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_progressive_merge_helper.h"
 #include "storage/compaction/ob_partition_merger.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {

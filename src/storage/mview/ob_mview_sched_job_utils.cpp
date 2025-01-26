@@ -135,19 +135,17 @@ int ObMViewSchedJobUtils::add_scheduler_job(
       job_info.powner_ = lib::is_oracle_mode() ? ObString("SYS") : ObString("root@%");
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
-      job_info.job_class_ = ObString(DATE_EXPRESSION_JOB_CLASS);
-      job_info.what_ = job_action;
+      job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
       job_info.start_date_ = start_date_us;
       job_info.end_date_ = end_date_us;
-      job_info.interval_ = job_info.repeat_interval_;
       job_info.repeat_interval_ = repeat_interval;
       job_info.enabled_ = 1;
       job_info.auto_drop_ = 0;
       job_info.max_run_duration_ = 24 * 60 * 60; // set to 1 day
-      job_info.interval_ts_ = 0;
-      job_info.scheduler_flags_ = ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS;
       job_info.exec_env_ = exec_env;
       job_info.max_failures_ = 16;
+      job_info.scheduler_flags_ = dbms_scheduler::ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS; // for compat old version
+      job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::MVIEW_JOB;
 
       if (OB_FAIL(ObDBMSSchedJobUtils::create_dbms_sched_job(
           sql_client, tenant_id, job_id, job_info))) {
@@ -373,10 +371,10 @@ int ObMViewSchedJobUtils::calc_date_expression(
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = job_info.get_tenant_id();
-  if (!job_info.is_date_expression_job_class()) {
+  if (!job_info.is_mview_job()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("job is not date expression job class",
-        KR(ret), K(job_info.is_date_expression_job_class()));
+        KR(ret), K(job_info.is_mview_job()));
   } else {
     ContextParam ctx_param;
     ctx_param.set_mem_attr(common::OB_SERVER_TENANT_ID, "MVSchedTmp");

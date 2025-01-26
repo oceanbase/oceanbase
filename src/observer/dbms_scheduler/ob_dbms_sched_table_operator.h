@@ -92,7 +92,7 @@ public:
   int purge_run_detail(uint64_t tenant_id);
 
 private:
-  int _purge(uint64_t tenant_id, ObString &job_class_name, int64_t log_history);
+  int _purge(uint64_t tenant_id, const ObString &job_class_name, int64_t log_history);
   int _purge_fallback(uint64_t tenant_id, int64_t log_history);
   int _purge_old(uint64_t tenant_id);
   int _build_job_drop_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
