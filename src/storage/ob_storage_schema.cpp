@@ -618,7 +618,7 @@ int ObStorageSchema::init(
       STORAGE_LOG(WARN, "failed to copy skip idx attr array", K(ret), K(old_schema));
     } else if (!column_info_simplified_ && OB_FAIL(deep_copy_column_array(allocator, old_schema, old_schema.column_array_.count()))) {
       STORAGE_LOG(WARN, "failed to deep copy column array", K(ret), K(old_schema));
-    } else if (generate_cs_replica_cg_array) {
+    } else if (!column_info_simplified_ && generate_cs_replica_cg_array) {
       // skip deep copy if column group schema array need generated from column array
     } else if (NULL != column_group_schema && OB_FAIL(deep_copy_column_group_array(allocator, *column_group_schema))) {
       STORAGE_LOG(WARN, "failed to deep copy column array from column group schema", K(ret), K(old_schema), KPC(column_group_schema));
@@ -629,7 +629,7 @@ int ObStorageSchema::init(
     if (OB_FAIL(ret)) {
     } else if (nullptr != update_param && OB_FAIL(refactor_storage_schema(allocator, old_schema, *update_param))) {
       STORAGE_LOG(WARN, "failed to rebuild column array", K(ret), K(old_schema), KPC(update_param));
-    } else if (generate_cs_replica_cg_array && OB_FAIL(ObStorageSchema::generate_cs_replica_cg_array())) {
+    } else if (!column_info_simplified_ && generate_cs_replica_cg_array && OB_FAIL(ObStorageSchema::generate_cs_replica_cg_array())) {
       STORAGE_LOG(WARN, "failed to generate_cs_replica_cg_array", K(ret));
     } else if (OB_UNLIKELY(!is_valid())) {
       ret = OB_ERR_UNEXPECTED;
