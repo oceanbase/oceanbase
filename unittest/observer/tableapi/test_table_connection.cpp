@@ -124,7 +124,7 @@ TEST_F(TestTableConnection, test_table_connection)
   int64_t first_active_time = conn.get_first_active_time();
   ASSERT_EQ(first_active_time, conn.get_last_active_time());
   int64_t new_active_time = ObTimeUtility::current_time();
-  conn.update_last_active_time(new_active_time);
+  conn.set_last_active_time(new_active_time);
   ASSERT_EQ(first_active_time, conn.get_first_active_time());
   ASSERT_EQ(new_active_time, conn.get_last_active_time());
 

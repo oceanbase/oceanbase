@@ -172,7 +172,7 @@ int ObTableApiInsertExecutor::get_next_row_from_child()
       ret = OB_ITER_END;
     } else {
       const ObTableEntity *entity = static_cast<const ObTableEntity *>(&ops->at(cur_idx_).entity());
-      if (OB_NOT_NULL(tablet_ids)) {
+      if (tb_ctx_.is_multi_tablet_get()) {
         if (OB_UNLIKELY(tablet_ids->count() != ops->count())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("use multi tablets batch but tablet ids is not equal to ops", K(tablet_ids->count()), K(ops->count()));

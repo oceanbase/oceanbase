@@ -21,6 +21,7 @@
 #include "lib/utility/utility.h"
 #include "lib/allocator/ob_pooled_allocator.h"
 #include "lib/hash/ob_hashmap.h"
+#include "src/share/table/ob_ttl_util.h"
 #include "share/schema/ob_schema_utils.h"
 #include "ob_htable_utils.h"
 
@@ -227,7 +228,7 @@ public:
   OB_INLINE void set_has_lob_column(bool has_lob_column) { flags_.has_lob_column_ = has_lob_column; }
   OB_INLINE int64_t get_column_count() { return column_cnt_; }
   OB_INLINE int64_t get_rowkey_count() { return rowkey_cnt_; }
-  OB_INLINE const ObString& get_kv_attributes() { return kv_attributes_; }
+  OB_INLINE const ObKVAttr& get_kv_attributes() { return kv_attributes_; }
   OB_INLINE const ObString& get_ttl_definition() { return ttl_definition_; }
   OB_INLINE int64_t get_auto_inc_cache_size() { return auto_inc_cache_size_; }
 private:
@@ -245,11 +246,11 @@ private:
   ColIdIdxMap col_id_idx_map_;
   ObFixedArray<uint64_t, common::ObIAllocator> local_index_tids_;
   ObFixedArray<uint64_t, common::ObIAllocator> global_index_tids_;
-  ObString kv_attributes_;
   ObString ttl_definition_;
   int64_t column_cnt_;
   int64_t rowkey_cnt_;
   int64_t auto_inc_cache_size_;
+  ObKVAttr kv_attributes_;
 };
 
 class ObKvSchemaCacheGuard
@@ -285,10 +286,11 @@ public:
   int has_hbase_ttl_column(bool &is_enable);
   int is_partitioned_table(bool &is_partitioned_table);
   int has_global_index(bool &has_gloabl_index);
-  int get_kv_attributes(ObString& kv_attributes);
+  int get_kv_attributes(ObKVAttr &kv_attributes);
   int get_ttl_definition(ObString& ttl_definition);
   int get_or_create_cache_obj(ObSchemaGetterGuard &schema_guard);
   int create_schema_cache_obj(ObSchemaGetterGuard &schema_guard);
+  int is_redis_ttl_table(bool &is_redis_ttl_table);
   void reset();
   OB_INLINE bool is_use_cache() { return is_use_cache_; }
   OB_INLINE bool is_inited() { return is_init_; }

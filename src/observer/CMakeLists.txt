@@ -150,6 +150,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_query_and_mutate_processor.cpp
   table/ob_table_query_processor.cpp
   table/ob_table_rpc_processor.cpp
+  table/ob_table_rpc_response_sender.cpp
   table/ob_table_query_async_processor.cpp
   table/ob_table_service.cpp
   table/ob_htable_lock_mgr.cpp
@@ -192,6 +193,7 @@ ob_set_subtarget(ob_server table
   table/ob_redis_execute_processor.cpp
   table/redis/ob_redis_command_factory.cpp
   table/redis/ob_redis_service.cpp
+  table/redis/ob_redis_context.cpp
   table/redis/cmd/ob_redis_list_cmd.cpp
   table/redis/operator/ob_redis_list_operator.cpp
   table/redis/operator/ob_redis_operator.cpp
@@ -205,9 +207,26 @@ ob_set_subtarget(ob_server table
   table/redis/cmd/ob_redis_string_cmd.cpp
   table/redis/operator/ob_redis_string_operator.cpp
   table/ob_table_audit.cpp
+  table/redis/ob_redis_iterator.cpp
+  table/redis/ob_redis_meta.cpp
+  table/redis/cmd/ob_redis_generic_cmd.cpp
+  table/redis/operator/ob_redis_generic_operator.cpp
+  table/redis/ob_redis_ttl.cpp
+  table/redis/ob_redis_rkey.cpp
   table/ob_table_mode_control.cpp
   table/ob_htable_rowkey_mgr.cpp
   table/ob_table_client_info_mgr.cpp
+  table/group/ob_i_table_struct.cpp
+  table/redis/ob_redis_context.cpp
+  table/group/ob_table_group_factory.cpp
+  table/group/ob_table_group_register.cpp
+  table/redis/group/ob_redis_group_processor.cpp
+  table/hbase/ob_hbase_group_processor.cpp
+  table/hbase/ob_hbase_group_struct.cpp
+  table/ob_table_batch_common.cpp
+  table/ob_table_multi_batch_common.cpp
+  table/ob_table_multi_batch_service.cpp
+  table/ob_redis_execute_processor_v2.cpp
   table/fts/ob_table_fts_cg_service.cpp
 )
 

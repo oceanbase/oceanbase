@@ -80,6 +80,7 @@ int ObClearTTLHistoryTask::init(const uint64_t tenant_id, common::ObMySQLProxy &
   } else {
     sql_proxy_ = &sql_proxy;
     tenant_id_ = tenant_id;
+    disable_timeout_check();
     is_inited_ = true;
   }
   return ret;
@@ -875,6 +876,7 @@ int ObTTLAllTaskScheduler::init(const uint64_t tenant_id, ObMySQLProxy &sql_prox
   } else if (OB_FAIL(alloc_and_init_scheduler<ObTTLHRowkeyTaskScheduler>(tenant_id, sql_proxy))) {
     LOG_WARN("fail to alloc and init hbase rowkey ttl task scheduler", K(ret), K(tenant_id));
   } else {
+    disable_timeout_check();
     is_inited_ = true;
   }
   return ret;

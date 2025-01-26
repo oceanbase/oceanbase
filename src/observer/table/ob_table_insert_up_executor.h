@@ -52,6 +52,7 @@ public:
         insert_up_spec_(spec),
         insert_up_rtdefs_(),
         insert_row_(nullptr),
+        old_row_(nullptr),
         insert_rows_(0),
         upd_changed_rows_(0),
         upd_rtctx_(eval_ctx_, exec_ctx_, get_fake_modify_op()),
@@ -87,6 +88,13 @@ public:
   {
     return use_put_;
   }
+
+  // WARIING: This interface is used to return the old row to determine whether it has expired when there
+  // is a conflict between the data written in the redis ttl table.
+  // When using it, you need to pay attention to the life cycle of the old row.
+  // All in all: the row is assigned by the allocator of tb_ctx, which is consistent with its life cycle.
+  int get_old_row(const ObNewRow *&row);
+
 private:
   bool is_duplicated();
   OB_INLINE const common::ObIArray<sql::ObExpr *>& get_primary_table_new_row()
@@ -125,6 +133,7 @@ private:
   const ObTableApiInsertUpSpec &insert_up_spec_;
   ObTableInsUpdRtDefArray insert_up_rtdefs_;
   ObChunkDatumStore::StoredRow *insert_row_;
+  const ObChunkDatumStore::StoredRow *old_row_;
   int64_t insert_rows_;
   int64_t upd_changed_rows_;
   sql::ObDMLRtCtx upd_rtctx_;

@@ -1105,6 +1105,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObOLAPAsyncCancelJobStmt, ObOLAPAsyncCancelJobExecutor);
         break;
       }
+      case stmt::T_MODULE_DATA: {
+        DEFINE_EXECUTE_CMD(ObModuleDataStmt, ObModuleDataExecutor);
+        break;
+      }
       case stmt::T_CS_DISKMAINTAIN:
       case stmt::T_TABLET_CMD:
       case stmt::T_SWITCH_ROOTSERVER:

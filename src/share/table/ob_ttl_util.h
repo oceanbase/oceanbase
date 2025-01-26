@@ -18,7 +18,7 @@
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_unit_manager.h"
-#include "share/table/ob_redis_common.h"
+#include "share/table/redis/ob_redis_common.h"
 
 namespace oceanbase
 {
@@ -265,6 +265,37 @@ public:
   obrpc::ObTTLRequestArg::TTLRequestType type_;
 };
 
+class ObKVAttr
+{
+public:
+  enum ObTTLTableType {
+    HBASE,
+    REDIS,
+    INVALID
+  };
+
+  explicit ObKVAttr()
+    : type_(ObTTLTableType::INVALID),
+      ttl_(0),
+      max_version_(0),
+      is_redis_ttl_(false),
+      redis_model_(table::ObRedisModel::INVALID)
+  {}
+  bool is_ttl_table() const;
+  OB_INLINE bool is_empty() const { return type_ == ObTTLTableType::INVALID; }
+  TO_STRING_KV(K_(type), K_(ttl), K_(max_version), K_(is_redis_ttl), K_(redis_model));
+
+  ObTTLTableType type_;
+
+  // for hbase
+  int32_t  ttl_;
+  int32_t  max_version_;
+
+  // for redis
+  bool is_redis_ttl_;
+  table::ObRedisModel redis_model_;
+};
+
 class ObTTLUtil
 {
 public:
@@ -331,7 +362,7 @@ public:
   static bool check_can_do_work();
   static bool check_can_process_tenant_tasks(uint64_t tenant_id);
 
-  static int parse_kv_attributes(const ObString &kv_attributes, int32_t &max_versions, int32_t &time_to_live);
+  static int parse_kv_attributes(const ObString &kv_attributes, ObKVAttr &kv_attr);
 
   static int dispatch_ttl_cmd(const ObTTLParam &param);
   static int get_ttl_info(const ObTTLParam &param, ObIArray<ObSimpleTTLInfo> &ttl_info_array);
@@ -355,6 +386,7 @@ public:
   const static uint64_t TTL_TENNAT_TASK_TABLE_ID = -1;
   const static uint64_t TTL_ROWKEY_TASK_TABLET_ID = -2;
   const static uint64_t TTL_ROWKEY_TASK_TABLE_ID = -2;
+  const static uint64_t TTL_THREAD_MAX_SCORE = 100;
 private:
   static int check_is_htable_ttl_(const ObTableSchema &table_schema, bool &is_ttl_table);
 private:
@@ -367,6 +399,7 @@ private:
   static int get_all_user_tenant_ttl(common::ObIArray<ObSimpleTTLInfo> &ttl_info_array);
   static int parse_kv_attributes_hbase(json::Value *ast, int32_t &max_versions, int32_t &time_to_live);
   static int parse_kv_attributes_redis(json::Value *ast, bool &is_redis_ttl_, table::ObRedisModel &redis_model_);
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLUtil);
 };
 
@@ -415,6 +448,7 @@ public:
   int check_row_expired(const common::ObNewRow &row, bool &is_expired);
   const common::ObIArray<ObTableTTLExpr> &get_ttl_definition() const { return ttl_definition_; }
   common::ObIArray<int64_t> &get_row_cell_ids() { return row_cell_ids_; }
+  void reset();
 private:
   common::ObSEArray<ObTableTTLExpr, 8> ttl_definition_;
   common::ObSEArray<int64_t, 8> row_cell_ids_; // cell idx scaned row for each ttl expr

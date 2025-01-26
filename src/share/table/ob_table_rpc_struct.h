@@ -77,12 +77,19 @@ public:
                K_(client_info));
 };
 
+enum ObTableLoginFlag
+{
+  LOGIN_FLAG_NONE = 0,
+  REDIS_PROTOCOL_V2 = 1 << 0,
+  LOGIN_FLAG_MAX = 1 << 1,
+};
+
 class ObTableLoginResult final
 {
   OB_UNIS_VERSION(1);
 public:
   uint32_t server_capabilities_;
-  uint32_t reserved1_;  // always 0 for now
+  uint32_t reserved1_;  // used for ObTableLoginFlag
   uint64_t reserved2_;  // always 0 for now
   ObString server_version_;
   ObString credential_;
@@ -101,8 +108,26 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////
+enum ObTableRequsetType
+{
+  TABLE_REQUEST_INVALID,
+  TABLE_OPERATION_REQUEST,
+  TABLE_REDIS_REQUEST,
+  TABLE_REQUEST_MAX,
+};
+
+class ObITableRequest
+{
+public:
+  ObITableRequest() {}
+  ~ObITableRequest() {}
+  virtual ObTableRequsetType get_type() const = 0;
+  PURE_VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
+};
+
+
 /// @see PCODE_DEF(OB_TABLE_API_EXECUTE, 0x1102)
-class ObTableOperationRequest final
+class ObTableOperationRequest final : public ObITableRequest
 {
   OB_UNIS_VERSION(1);
 public:
@@ -129,6 +154,7 @@ public:
   OB_INLINE bool returning_rowkey() const { return option_flag_ & OB_TABLE_OPTION_RETURNING_ROWKEY; }
   OB_INLINE uint8_t get_option_flag() const { return option_flag_; }
   OB_INLINE bool returning_affected_entity() const { return returning_affected_entity_; }
+  ObTableRequsetType get_type() const override { return ObTableRequsetType::TABLE_OPERATION_REQUEST; }
 public:
   /// the credential returned when login.
   ObString credential_;
@@ -418,6 +444,27 @@ public:
                K_(consistency_level),
                K_(ls_op));
 public:
+  void reset()
+  {
+    credential_.reset();
+    entity_type_ = ObTableEntityType::ET_DYNAMIC;
+    consistency_level_ = ObTableConsistencyLevel::EVENTUAL;
+    ls_op_.reset();
+  }
+  bool is_hbase_put() const
+  {
+    bool bret = false;
+    if (entity_type_ == ObTableEntityType::ET_HKV
+        && ls_op_.is_same_type()
+        && ls_op_.count() > 0
+        && ls_op_.at(0).count() > 0) {
+      const ObTableSingleOp &op = ls_op_.at(0).at(0);
+      bret = op.get_op_type() == ObTableOperationType::INSERT_OR_UPDATE;
+    }
+
+    return bret;
+  }
+public:
   ObString credential_;
   ObTableEntityType entity_type_;  // for optimize purpose
   ObTableConsistencyLevel consistency_level_;
@@ -425,7 +472,7 @@ public:
 };
 
 using ObTableSingleOpResult = ObTableOperationResult;
-class ObTableTabletOpResult: public common::ObSEArrayImpl<ObTableSingleOpResult, ObTableTabletOp::COMMON_OPS_SIZE>
+class ObTableTabletOpResult : public common::ObSEArrayImpl<ObTableSingleOpResult, ObTableTabletOp::COMMON_OPS_SIZE>
 {
   OB_UNIS_VERSION(1);
 public:
@@ -456,7 +503,8 @@ private:
   const ObIArray<ObString>* all_rowkey_names_;
 };
 
-class ObTableLSOpResult: public common::ObSEArrayImpl<ObTableTabletOpResult, ObTableLSOp::COMMON_BATCH_SIZE>
+class ObTableLSOpResult : public common::ObSEArrayImpl<ObTableTabletOpResult, ObTableLSOp::COMMON_BATCH_SIZE>,
+                          public ObITableResult
 {
   OB_UNIS_VERSION(1);
 public:
@@ -466,6 +514,14 @@ public:
       alloc_(NULL)
   {}
   virtual ~ObTableLSOpResult() = default;
+  void reset() override
+  {
+    BaseType::reset();
+    rowkey_names_.reset();
+    properties_names_.reset();
+    entity_factory_ = NULL;
+    alloc_ = NULL;
+  }
   OB_INLINE void set_allocator(common::ObIAllocator *alloc) { alloc_ = alloc; }
   OB_INLINE common::ObIAllocator *get_allocator() { return alloc_; }
   OB_INLINE int assign_rowkey_names(const ObIArray<ObString>& all_rowkey_names)
@@ -478,7 +534,30 @@ public:
   }
   OB_INLINE const ObIArray<ObString>& get_rowkey_names() const { return rowkey_names_; }
   OB_INLINE const ObIArray<ObString>& get_properties_names() const { return properties_names_; }
-
+  virtual int get_errno() const override
+  {
+    int ret = OB_SUCCESS;
+    if (count() != 0) {
+      const ObTableTabletOpResult &tablet_result = at(0);
+      if (tablet_result.count() != 0) {
+        ret = tablet_result.at(0).get_errno();
+      }
+    }
+    return ret;
+  }
+  virtual void generate_failed_result(int ret_code,
+                                      ObTableEntity &result_entity,
+                                      ObTableOperationType::Type op_type) override
+  {
+    if (count() != 0) {
+      for (int64_t i = 0; i < count(); i++) {
+        ObTableTabletOpResult &tablet_result = at(i);
+        for (int64_t j = 0; j < tablet_result.count(); j++) {
+          tablet_result.at(j).generate_failed_result(ret_code, result_entity, op_type);
+        }
+      }
+    }
+  }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLSOpResult);
   using BaseType = common::ObSEArrayImpl<ObTableTabletOpResult, ObTableLSOp::COMMON_BATCH_SIZE>;
@@ -490,6 +569,50 @@ private:
   // ObITableEntityFactory *entity_factory_;
   ObTableEntityFactory<ObTableSingleOpEntity> *entity_factory_;
   common::ObIAllocator *alloc_;
+};
+
+class ObRedisRpcRequest final : public ObITableRequest
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRedisRpcRequest() :
+      credential_(),
+      redis_db_(common::OB_INVALID_ID),
+      ls_id_(),
+      tablet_id_(),
+      table_id_(common::OB_INVALID_ID),
+      reserved_(0),
+      resp_str_()
+      {}
+  ~ObRedisRpcRequest() {}
+
+  bool is_valid() {
+    return table_id_ != common::OB_INVALID_ID
+      && tablet_id_.is_valid()
+      && ls_id_.is_valid()
+      && !resp_str_.empty()
+      && redis_db_ != common::OB_INVALID_ID;
+  }
+
+  ObTableRequsetType get_type() const override { return ObTableRequsetType::TABLE_REDIS_REQUEST; }
+
+  TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
+               K_(resp_str),
+               K_(table_id),
+               K_(tablet_id),
+               K_(ls_id),
+               K_(redis_db),
+               K_(reserved));
+
+public:
+  /// the credential returned when login.
+  ObString credential_;
+  uint64_t redis_db_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  uint64_t table_id_;
+  uint64_t reserved_; // reserved, fix 8 bytes
+  ObString resp_str_;
 };
 
 } // end namespace table

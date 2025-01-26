@@ -374,6 +374,7 @@
 # 523: __all_pkg_type_attr
 # 524: __all_pkg_coll_type
 # 525: __wr_sql_plan
+# 527: __all_kv_redis_table
 # 528: __all_ncomp_dll_v2
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
@@ -1190,6 +1191,8 @@
 # 12500: __all_virtual_kv_client_info
 # 12501: __all_virtual_wr_sql_plan
 # 12501: __wr_sql_plan  # BASE_TABLE_NAME
+# 12503: __all_virtual_kv_redis_table
+# 12503: __all_kv_redis_table  # BASE_TABLE_NAME
 # 12504: __all_virtual_function_io_stat
 # 12505: __all_virtual_temp_file
 # 12506: __all_virtual_ncomp_dll_v2
@@ -2381,6 +2384,8 @@
 # 21613: CDB_WR_SQL_PLAN
 # 21616: DBA_OB_SPM_EVO_RESULT
 # 21617: CDB_OB_SPM_EVO_RESULT
+# 21618: DBA_OB_KV_REDIS_TABLE
+# 21619: CDB_OB_KV_REDIS_TABLE
 # 21620: GV$OB_FUNCTION_IO_STAT
 # 21621: V$OB_FUNCTION_IO_STAT
 # 21622: DBA_OB_TEMP_FILES

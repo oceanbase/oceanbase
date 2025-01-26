@@ -95,6 +95,7 @@ private:
   int get_next_row_with_das();
   int check_filter(bool &filter);
   int get_next_row_for_tsc();
+  int gen_scan_ranges(ObIArray<ObNewRange> &scan_ranges);
   bool has_das_scan_task(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op)
   {
     das_op = static_cast<ObDASScanOp*>(das_ref_.find_das_task( tablet_loc, DAS_OP_TABLE_SCAN));

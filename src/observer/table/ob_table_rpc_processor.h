@@ -55,6 +55,7 @@ private:
                       const ObString &pass_scramble, const ObString &database, uint64_t &user_token);
   int generate_credential(uint64_t tenant_id, uint64_t user_id, uint64_t database,
                           int64_t ttl_us, uint64_t user_token, ObString &credential);
+  bool can_use_redis_v2();
 private:
   const ObGlobalContext &gctx_;
   table::ObTableApiCredential credential_;
@@ -114,7 +115,7 @@ public:
 public:
   static int init_session();
   int check_user_access(const ObString &credential_str);
-  int check_mode(const sql::ObSQLSessionInfo &sess_info);
+  int check_mode();
   // transaction control
   int start_trans(bool is_readonly,
                   const table::ObTableConsistencyLevel consistency_level,
@@ -125,6 +126,10 @@ public:
                 rpc::ObRequest *req,
                 table::ObTableCreateCbFunctor *functor,
                 bool use_sync = false);
+  int init_read_trans(const ObTableConsistencyLevel consistency_level,
+                      const ObLSID &ls_id,
+                      int64_t timeout_ts,
+                      bool need_global_snapshot);
 
   // for get
   inline transaction::ObTxDesc *get_trans_desc() { return trans_param_.trans_desc_; }
@@ -156,6 +161,10 @@ protected:
                     const ObTabletID &arg_tablet_id,
                     const uint64_t table_id,
                     ObTabletID &tablet_id);
+  ObTableProccessType get_stat_process_type(bool is_readonly,
+                                            bool is_same_type,
+                                            bool is_same_properties_names,
+                                            table::ObTableOperationType::Type op_type);
 protected:
   const ObGlobalContext &gctx_;
   ObTableService *table_service_;
@@ -167,7 +176,7 @@ protected:
   const share::schema::ObSimpleTableSchemaV2 *simple_table_schema_;
   observer::ObReqTimeGuard req_timeinfo_guard_; // 引用cache资源必须加ObReqTimeGuard
   table::ObKvSchemaCacheGuard schema_cache_guard_;
-  int32_t stat_event_type_;
+  int32_t stat_process_type_;
   bool enable_query_response_time_stats_;
   int64_t stat_row_count_;
   ObTableRetryPolicy retry_policy_;
@@ -180,7 +189,7 @@ protected:
   // trans control
   table::ObTableTransParam trans_param_;
   transaction::ObTxReadSnapshot tx_snapshot_;
-  ObAddr user_client_addr_;
+  common::ObAddr user_client_addr_;
   table::ObTableAuditCtx audit_ctx_;
 };
 
@@ -227,17 +236,58 @@ int64_t ObTableRpcProcessor<T>::get_timeout() const
 
 struct ObTableInfoBase {
   explicit ObTableInfoBase()
-                          :table_id_(OB_INVALID_ID),
-                          simple_schema_(nullptr),
-                          schema_cache_guard_(),
-                          schema_version_(OB_INVALID_VERSION){}
+                          : table_id_(OB_INVALID_ID),
+                            simple_schema_(nullptr),
+                            schema_cache_guard_(),
+                            schema_version_(OB_INVALID_VERSION) {}
 
   virtual ~ObTableInfoBase() {}
 
+  int64_t get_table_id() const {
+    return table_id_;
+  }
+
+  void set_table_id(int64_t table_id) {
+    table_id_ = table_id;
+  }
+
+  const ObString& get_real_table_name() const {
+    return real_table_name_;
+  }
+
+  void set_real_table_name(const ObString& real_table_name) {
+    real_table_name_ = real_table_name;
+  }
+
+  const share::schema::ObSimpleTableSchemaV2* get_simple_schema() {
+    return simple_schema_;
+  }
+
+  void set_simple_schema(const share::schema::ObSimpleTableSchemaV2* simple_schema) {
+    simple_schema_ = simple_schema;
+  }
+
+  table::ObKvSchemaCacheGuard& get_schema_cache_guard() {
+    return schema_cache_guard_;
+  }
+
+  void set_schema_cache_guard(const table::ObKvSchemaCacheGuard& schema_cache_guard) {
+    schema_cache_guard_ = schema_cache_guard;
+  }
+
+  int64_t get_schema_version() const {
+    return schema_version_;
+  }
+
+  void set_schema_version(int64_t schema_version) {
+    schema_version_ = schema_version;
+  }
+
   TO_STRING_KV(K(table_id_),
-              KP(simple_schema_),
-              K(schema_cache_guard_),
-              K(schema_version_));
+               KP(simple_schema_),
+               K(schema_cache_guard_),
+               K(schema_version_));
+
   int64_t table_id_;
   ObString real_table_name_;
   const share::schema::ObSimpleTableSchemaV2* simple_schema_;

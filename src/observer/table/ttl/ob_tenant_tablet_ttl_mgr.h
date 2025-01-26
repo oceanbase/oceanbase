@@ -74,7 +74,9 @@ class OBTTLTimerPeriodicTask : public common::ObTimerTask {
 public:
   OBTTLTimerPeriodicTask(ObTabletTTLScheduler &tablet_ttl_mgr)
   : tablet_ttl_mgr_(tablet_ttl_mgr)
-  {}
+  {
+    disable_timeout_check();
+  }
   virtual ~OBTTLTimerPeriodicTask() {}
   virtual void runTimerTask() override;
 private:
@@ -167,7 +169,6 @@ public:
   {
     return ObTTLUtil::check_is_ttl_table(table_schema, is_ttl_table);
   }
-
 private:
   typedef common::hash::ObHashMap<ObTabletID, ObTTLTaskCtx*> TabletTaskMap;
   typedef TabletTaskMap::iterator tablet_task_iter;
@@ -243,7 +244,7 @@ protected:
   int generate_batch_tablet_task(ObIArray<share::ObTabletTablePair>& tablet_pairs,
                                  hash::ObHashMap<uint64_t, table::ObTTLTaskParam> &param_map);
   int generate_one_tablet_task(table::ObTTLTaskInfo& task_info, const table::ObTTLTaskParam& para);
-  int get_ttl_param_from_schema(const share::schema::ObTableSchema *table_schema, table::ObTTLTaskParam& param);
+  int get_ttl_para_from_schema(const share::schema::ObTableSchema *table_schema, table::ObTTLTaskParam& param);
   void mark_tenant_need_check();
   template <typename TTLTaskT, typename TTLDagT, typename TTLParamT>
   int generate_ttl_dag(table::ObTTLTaskInfo &task_info, TTLParamT &para);

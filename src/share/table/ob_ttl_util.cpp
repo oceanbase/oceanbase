@@ -15,6 +15,7 @@
 #include "share/table/ob_ttl_util.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "share/location_cache/ob_location_service.h"
+#include "share/table/ob_table_config_util.h"
 #include "observer/table/ob_htable_utils.h"
 
 using namespace oceanbase::share;
@@ -34,6 +35,19 @@ bool ObTTLTime::is_same_day(int64_t ttl_time1, int64_t ttl_time2)
   ::localtime_r(&param2, &tm2);
 
   return (tm1.tm_yday == tm2.tm_yday);
+}
+
+bool ObKVAttr::is_ttl_table() const
+{
+  bool is_ttl = false;
+  if (type_ == ObTTLTableType::REDIS) {
+    // redis ttl table has attr "isTTL: true"
+    is_ttl = is_redis_ttl_;
+  } else if (type_ == ObTTLTableType::HBASE) {
+    // htable ttl table should have at least one of max_version and time_to_live
+    is_ttl = (ttl_ > 0 || max_version_ > 0);
+  }
+  return is_ttl;
 }
 
 bool ObTTLUtil::extract_val(const char* ptr, uint64_t len, int& val)
@@ -771,6 +785,8 @@ int ObTTLUtil::parse_kv_attributes_redis(json::Value *ast,
             redis_model = table::ObRedisModel::SET;
           } else if (model_str.case_compare("ZSET") == 0) {
             redis_model = table::ObRedisModel::ZSET;
+          } else if (model_str.case_compare("STRING") == 0) {
+            redis_model = table::ObRedisModel::STRING;
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not supported kv attribute", K(ret), K(model_str));
@@ -795,8 +811,7 @@ int ObTTLUtil::parse_kv_attributes_redis(json::Value *ast,
   return ret;
 }
 
-// example: kv_attributes = {hbase: {maxversions: 3}}
-int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, int32_t &max_versions, int32_t &time_to_live)
+int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, ObKVAttr &kv_attr)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
@@ -814,17 +829,16 @@ int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, int32_t &max_v
     json::Pair *kv = ast->get_object().get_first();
     if (NULL != kv && kv != ast->get_object().get_header()) {
       if (kv->name_.case_compare("HBASE") == 0) {
-        if (OB_FAIL(parse_kv_attributes_hbase(kv->value_, max_versions, time_to_live))) {
+        if (OB_FAIL(parse_kv_attributes_hbase(kv->value_, kv_attr.max_version_, kv_attr.ttl_))) {
           LOG_WARN("fail to parse hbase kv attributes");
+        } else {
+          kv_attr.type_ = ObKVAttr::HBASE;
         }
       } else if (kv->name_.case_compare("REDIS") == 0) {
-        bool is_redis_ttl = false;
-        table::ObRedisModel redis_model = table::ObRedisModel::INVALID;
-        if (OB_FAIL(parse_kv_attributes_redis(kv->value_, is_redis_ttl, redis_model))) {
+        if (OB_FAIL(parse_kv_attributes_redis(kv->value_, kv_attr.is_redis_ttl_, kv_attr.redis_model_))) {
           LOG_WARN("fail to parse redis kv attributes");
         } else {
-          max_versions = INT32_MIN;
-          time_to_live = INT32_MIN;
+          kv_attr.type_ = ObKVAttr::REDIS;
         }
       } else {
         ret = OB_NOT_SUPPORTED;
@@ -834,7 +848,7 @@ int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, int32_t &max_v
     }
   } else {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported kv attribute", K(ret));
+    LOG_WARN("not supported kv attribute", K(ret), KPC(ast));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
   }
   return ret;
@@ -1043,6 +1057,14 @@ int ObTableTTLChecker::check_row_expired(const common::ObNewRow &row, bool &is_e
   return ret;
 }
 
+void ObTableTTLChecker::reset()
+{
+  row_cell_ids_.reset();
+  ttl_definition_.reset();
+  tenant_id_ = common::OB_INVALID_TENANT_ID;
+  tz_info_wrap_.reset();
+}
+
 int ObTTLParam::add_ttl_info(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -1221,12 +1243,18 @@ int ObTTLUtil::check_is_ttl_table(const ObTableSchema &table_schema, bool &is_tt
   if (table_schema.is_user_table() && !table_schema.is_in_recyclebin()) {
     if (!table_schema.get_ttl_definition().empty()) {
       is_ttl_table = true;
-    } else if (OB_FAIL(check_is_htable_ttl_(table_schema, is_ttl_table))) {
-      LOG_WARN("fail to check is htable ttl", K(ret));
+    } else if (!table_schema.get_kv_attributes().empty()) {
+      ObKVAttr kv_attr; // for check validity
+      if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), kv_attr))) {
+        LOG_WARN("fail to parse kv attributes", KR(ret), "kv_attributes", table_schema.get_kv_attributes());
+      } else if (kv_attr.is_ttl_table()) {
+        is_ttl_table = true;
+      }
     }
   }
   return ret;
 }
+
 int ObTTLUtil::check_is_htable_ttl(const ObTableSchema &table_schema, bool &is_ttl_table)
 {
   int ret = OB_SUCCESS;
@@ -1243,14 +1271,12 @@ int ObTTLUtil::check_is_htable_ttl_(const ObTableSchema &table_schema, bool &is_
 {
   int ret = OB_SUCCESS;
   is_ttl_table = false;
-  int32_t max_version = 0;
-  int32_t time_to_live = 0;
-  if (table::ObHTableUtils::is_htable_schema(table_schema)) {
-    if (OB_NOT_NULL(table_schema.get_column_schema(table::ObHTableConstants::TTL_CNAME_STR))) {
-      is_ttl_table = true;
-    } else if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), max_version, time_to_live))) {
+  if (!table_schema.get_kv_attributes().empty()) {
+    // htable ttl table should have at least one of max_version and time_to_live
+    ObKVAttr kv_attr;
+    if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), kv_attr))) {
       LOG_WARN("fail to parse kv attributes", KR(ret), "kv_attributes", table_schema.get_kv_attributes());
-    } else if (time_to_live > 0 || max_version > 0) {
+    } else if (kv_attr.ttl_ > 0 || kv_attr.max_version_ > 0) {
       is_ttl_table = true;
     }
   }

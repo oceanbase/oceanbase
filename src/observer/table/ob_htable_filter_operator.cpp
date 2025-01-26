@@ -17,17 +17,77 @@ using namespace oceanbase::table;
 using namespace oceanbase::table::hfilter;
 using namespace oceanbase::share::schema;
 
+int ObTableHbaseRowKeyDefaultCompare::compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!lhs.is_valid() || !rhs.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(lhs), K(rhs), K(ret));
+  } else {
+    cmp_ret = 0;
+    for (int i = 0; i < ObHTableConstants::COL_IDX_T && cmp_ret == 0; ++i) {
+      cmp_ret = lhs.get_cell(i).get_string().compare(rhs.get_cell(i).get_string());
+    }
+  }
+  return ret;
+}
+
+bool ObTableHbaseRowKeyDefaultCompare::operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs)
+{
+  int cmp_ret = 0;
+  result_code_ = compare(lhs, rhs, cmp_ret);
+  return cmp_ret < 0;
+}
+
+
+int ObTableHbaseRowKeyReverseCompare::compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!lhs.is_valid() || !rhs.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(lhs), K(rhs), K(ret));
+  } else {
+    cmp_ret = lhs.get_cell(ObHTableConstants::COL_IDX_K).get_string().compare(rhs.get_cell(ObHTableConstants::COL_IDX_K).get_string());
+    if (cmp_ret == 0) {
+      cmp_ret = rhs.get_cell(ObHTableConstants::COL_IDX_Q).get_string().compare(lhs.get_cell(ObHTableConstants::COL_IDX_Q).get_string());
+    }
+  }
+  return ret;
+}
+
+bool ObTableHbaseRowKeyReverseCompare::operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs)
+{
+  int cmp_ret = 0;
+  result_code_ = compare(lhs, rhs, cmp_ret);
+  return cmp_ret > 0;
+}
+
 // format: {"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}}
 int ObHColumnDescriptor::from_string(const common::ObString &kv_attributes)
 {
   reset();
   int ret = OB_SUCCESS;
+  ObKVAttr attr;
   if (kv_attributes.empty()) {
     // do nothing
-  } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(kv_attributes, max_version_, time_to_live_))) {
+  } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(kv_attributes, attr))) {
     LOG_WARN("fail to parse kv attributes", K(ret), K(kv_attributes));
+  } else {
+    from_kv_attribute(attr);
   }
   return ret;
+}
+
+// format: {"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}}
+void ObHColumnDescriptor::from_kv_attribute(const ObKVAttr &kv_attributes)
+{
+  reset();
+  if (kv_attributes.is_empty()) {
+    // do nothing
+  } else {
+    max_version_ = kv_attributes.max_version_;
+    time_to_live_ = kv_attributes.ttl_;
+  }
 }
 
 void ObHColumnDescriptor::reset()
@@ -1469,6 +1529,7 @@ int ObHTableReversedRowIterator::create_forward_child_op()
   forward_tb_ctx_.set_simple_table_schema(reversed_tb_ctx.get_simple_table_schema());
   forward_tb_ctx_.set_sess_guard(reversed_tb_ctx.get_sess_guard());
   forward_tb_ctx_.set_is_tablegroup_req(reversed_tb_ctx.is_tablegroup_req());
+  forward_tb_ctx_.set_read_latest(reversed_tb_ctx.is_read_latest());
 
   if (forward_tb_ctx_.is_init()) {
     LOG_INFO("forward_tb_ctx_ has been inited", K_(forward_tb_ctx));
@@ -1572,7 +1633,6 @@ int ObHTableFilterOperator::get_next_result(ObTableQueryIterableResult *&next_re
 {
   int ret = OB_SUCCESS;
   next_result = iterable_result_;
-
   if (OB_FAIL(get_next_result_internal(iterable_result_))) {
     LOG_WARN("fail to get next result", K(ret));
   }
@@ -1652,14 +1712,7 @@ int ObHTableFilterOperator::get_next_result_internal(ResultType *&next_result)
 
     // if only check exist, just return row_count_ as 1
     if (check_existence_only_) {
-      if (std::is_same<ObTableQueryResult, ResultType>::value) {
-        one_result_->save_row_count_only(1);
-      } else if (std::is_same<ObTableQueryIterableResult, ResultType>::value) {
-        iterable_result_->save_row_count_only(1);
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unknown result type", K(ret));
-      }
+      next_result->save_row_count_only(1);
       ret = OB_ITER_END;
       break;
     }

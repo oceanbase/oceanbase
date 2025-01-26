@@ -355,8 +355,11 @@ ob_set_subtarget(ob_share common_mixed
   throttle/ob_throttle_common.cpp
   restore/ob_restore_data_mode.cpp
   rebuild_tablet/ob_rebuild_tablet_location.cpp
-  table/ob_redis_parser.cpp
-  table/ob_redis_common.cpp
+  table/redis/ob_redis_parser.cpp
+  table/redis/ob_redis_common.cpp
+  table/redis/ob_redis_util.cpp
+  table/redis/ob_redis_error.cpp
+  table/ob_redis_importer.cpp
   restore/ob_restore_progress_display_mode.cpp
 )
 

@@ -10976,6 +10976,25 @@ BASELINE_CPU_TIME	bigint(20)	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SPM_EVO_RESULT limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_KV_REDIS_TABLE;
+Field	Type	Null	Key	Default	Extra
+COMMAND_NAME	varchar(1024)	NO		NULL	
+TABLE_NAME	varchar(256)	NO		NULL	
+GMT_CREATE	timestamp(6)	YES			
+GMT_MODIFIED	timestamp(6)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_KV_REDIS_TABLE limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_KV_REDIS_TABLE;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+COMMAND_NAME	varchar(1024)	NO		NULL	
+TABLE_NAME	varchar(256)	NO		NULL	
+GMT_CREATE	timestamp(6)	NO		NULL	
+GMT_MODIFIED	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_KV_REDIS_TABLE limit 1);
+cnt
+1
 desc oceanbase.GV$OB_FUNCTION_IO_STAT;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	

@@ -25,11 +25,30 @@
 #include "ob_table_cg_service.h"
 #include <utility>
 #include "share/schema/ob_table_schema.h"
+#include "ob_table_query_async_processor.h"
 
 namespace oceanbase
 {
 namespace table
 {
+class ObTableHbaseRowKeyDefaultCompare final : public observer::ObTableMergeFilterCompare {
+public:
+  ObTableHbaseRowKeyDefaultCompare() = default;
+  ~ObTableHbaseRowKeyDefaultCompare() override = default;
+
+  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
+  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
+};
+
+class ObTableHbaseRowKeyReverseCompare final : public observer::ObTableMergeFilterCompare {
+public:
+  ObTableHbaseRowKeyReverseCompare() = default;
+  ~ObTableHbaseRowKeyReverseCompare() override = default;
+
+  int compare(const common::ObNewRow &lhs, const common::ObNewRow &rhs, int &cmp_ret) const override;
+  bool operator()(const common::ObNewRow &lhs, const common::ObNewRow &rhs) override;
+};
+
 class ObHColumnDescriptor final
 {
 public:
@@ -39,6 +58,7 @@ public:
   {}
   void reset();
   int from_string(const common::ObString &kv_attributes);
+  void from_kv_attribute(const ObKVAttr &kv_attributes);
 
   void set_time_to_live(int32_t v) { time_to_live_ = v; }
   int32_t get_time_to_live() const { return time_to_live_; }
@@ -326,8 +346,8 @@ public:
 private:
   template <typename ResultType>
   int get_next_result_internal(ResultType*& result);
-  virtual int get_next_result(ObTableQueryIterableResult *&one_result) override { return OB_SUCCESS; }
 
+  virtual int get_next_result(ObTableQueryIterableResult *&one_result) override { return OB_NOT_SUPPORTED; }
 protected:
   virtual int rescan_and_get_next_row(table::ObTableApiScanRowIterator *tb_op, ObNewRow *&ob_next_row);
   int seek_first_cell_on_hint(const ObNewRow *ob_row);
@@ -471,6 +491,7 @@ private:
   ObHTableRowIterator *row_iterator_;
   table::ObTableQueryResult *one_result_;
   table::ObTableQueryIterableResult *iterable_result_;
+
   table::ObHTableFilterParser filter_parser_;
   int32_t batch_size_;
   const ObKVParams& ob_kv_params_;

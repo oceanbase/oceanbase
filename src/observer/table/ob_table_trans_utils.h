@@ -51,6 +51,9 @@ public:
     create_cb_functor_ = nullptr;
     timeout_ts_ = -1;
     did_async_commit_ = false;
+    if (OB_NOT_NULL(trans_state_ptr_)) {
+      trans_state_ptr_->reset();
+    }
   }
   TO_STRING_KV(KPC_(trans_desc),
                K_(tx_snapshot),

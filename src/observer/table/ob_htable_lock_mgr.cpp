@@ -386,7 +386,7 @@ int ObHTableLockMgr::release_handle(ObHTableLockHandle &handle)
   while(cur != nullptr) {
     next = cur->next_;
     if (OB_FAIL(release_node(*cur))) {
-      LOG_ERROR("fail to release lock node", K(ret), KPC(cur));
+      LOG_ERROR("fail to release lock node", K(ret));
     }
     cur = next;
   }

@@ -43,11 +43,14 @@ class ZSetCommandOperator : public SetCommandOperator
 {
 public:
   explicit ZSetCommandOperator(ObRedisCtx &redis_ctx) : SetCommandOperator(redis_ctx)
-  {}
+  {
+    model_ = ObRedisModel::ZSET;
+    is_zset_ = true;
+  }
   virtual ~ZSetCommandOperator() = default;
   int do_zadd(int64_t db, const ObString &key, const ZSetCommand::MemberScoreMap &mem_score_map);
+  int do_zadd_data(int64_t db, const ObString &key, const ZSetCommand::MemberScoreMap &mem_score_map, bool is_new_meta);
   int do_zcard(int64_t db, const ObString &key);
-  int do_zrem(int64_t db, const ObString &key, const ObIArray<ObString> &members);
   int do_zincrby(int64_t db, const ObString &key, const ObString &member, double increment);
   int do_zscore(int64_t db, const ObString &key, const ObString &member);
   int do_zrank(int64_t db, const ObString &member, ZRangeCtx &zrange_ctx);
@@ -62,6 +65,10 @@ public:
 
   int do_zinter_store(int64_t db, const ObString &dest, const ObIArray<ObString> &keys,
                       const ObIArray<double> &weights, ZSetAggCommand::AggType agg_type);
+  int fill_set_batch_op(const ObRedisOp &op,
+                        ObIArray<ObTabletID> &tablet_ids,
+                        ObTableBatchOperation &batch_op) override;
+  int do_group_zscore();
 
 private:
   static const ObString SCORE_INDEX_NAME;
@@ -86,15 +93,19 @@ private:
   int get_score_from_entity(const ObITableEntity &entity, double &score);
 
   int exec_member_score_query(const ObTableQuery &query, bool with_scores,
-                              ObIArray<ObString> &ret_arr);
+                              ObIArray<ObString> &ret_arr,
+                              ObRedisZSetMeta *meta = nullptr);
   int aggregate_scores_in_all_keys(int64_t db, const ObIArray<ObString> &keys,
                                    const ObIArray<double> &weights,
                                    ZSetAggCommand::AggType agg_type, int start_idx, int end_idx,
                                    const ObString &member, bool &is_member, double &res_score);
-  int add_db_rkey_filter(int64_t db, const ObString &key, ObTableQuery &query);
-  int delete_key(int64_t db, const ObString &key);
-  int do_zrem_inner(int64_t db, const ObString &key, const ObIArray<ObString> &members,
-                    int64_t &del_num);
+  int get_rank_in_same_score(
+    int64_t db,
+    ZRangeCtx &zrange_ctx,
+    const ObString &member,
+    int64_t score,
+    ObRedisZSetMeta *set_meta,
+    int64_t &rank);
   DISALLOW_COPY_AND_ASSIGN(ZSetCommandOperator);
 };
 

@@ -242,6 +242,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminZoneExecutor);
 };
 
+DEF_SIMPLE_EXECUTOR(ObModuleData);
+
 #undef DEF_SIMPLE_EXECUTOR
 
 } // end namespace sql

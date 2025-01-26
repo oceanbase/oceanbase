@@ -15,6 +15,8 @@
 #include "sql/das/ob_das_utils.h"
 #include "ob_table_global_index_lookup_executor.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
+#include "observer/table/redis/ob_redis_rkey.h"
+#include "share/table/redis/ob_redis_util.h"
 
 namespace oceanbase
 {
@@ -291,15 +293,30 @@ int ObTableApiScanExecutor::prepare_das_task()
     }
 
     if (OB_SUCC(ret)) {
-      ObIArray<ObNewRange> &scan_ranges = scan_op_->get_scan_param().key_ranges_;
       if (tb_ctx_.is_text_retrieval_scan() && OB_FAIL(write_search_text_datum())) {
         LOG_WARN("fail to write seach text datum", K(ret), K(tb_ctx_.is_text_retrieval_scan()));
-      } else if (OB_FAIL(scan_ranges.assign(get_table_ctx().get_key_ranges()))) { // set scan range
+      } else if (OB_FAIL(gen_scan_ranges(scan_op_->get_scan_param().key_ranges_))) { // set scan range
         LOG_WARN("fail to assign scan ranges", K(ret));
       }
     }
   }
 
+  return ret;
+}
+
+
+int ObTableApiScanExecutor::gen_scan_ranges(ObIArray<ObNewRange> &scan_ranges)
+{
+  int ret = OB_SUCCESS;
+  if (tb_ctx_.add_redis_meta_range()) {
+    if (OB_FAIL(ObRedisHelper::gen_meta_scan_range(allocator_, tb_ctx_, scan_ranges))) {
+      LOG_WARN("fail to gen redis meta scan range", K(ret));
+    }
+  } else {
+    if (OB_FAIL(scan_ranges.assign(tb_ctx_.get_key_ranges()))) {
+      LOG_WARN("fail to assign scan ranges", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -331,15 +348,14 @@ int ObTableApiScanExecutor::prepare_batch_das_task()
     LOG_WARN("batch ops is NULL", K(ret));
   } else {
     const ObIArray<ObTabletID> *tablet_ids = tb_ctx_.get_batch_tablet_ids();
-    bool has_multi_tablets = tablet_ids != nullptr;
-    if (has_multi_tablets && OB_UNLIKELY(tablet_ids->count() != ops->count())) {
+    if (OB_UNLIKELY(tablet_ids->count() != ops->count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet ids count is not equal to operation count", K(ret), K(ops->count()), K(tablet_ids->count()));
     }
     for (int64_t i = 0; i < ops->count() && OB_SUCC(ret); i++) {
       ObDASScanOp *scan_op = nullptr;
       ObDASTabletLoc *tablet_loc = nullptr;
-      ObTabletID tablet_id = has_multi_tablets ? tablet_ids->at(i) : tb_ctx_.get_tablet_id();
+      ObTabletID tablet_id = tablet_ids->at(i);
       if (OB_FAIL(table_loc->get_tablet_loc_by_id(tablet_id, tablet_loc))) {
         LOG_WARN("fail to get tablet loc", K(ret), K(tablet_id));
       } else if (OB_ISNULL(tablet_loc) &&
@@ -595,10 +611,11 @@ int ObTableApiScanExecutor::rescan()
     scan_op_->reuse_iter();
     ObIArray<ObNewRange> &scan_ranges = scan_op_->get_scan_param().key_ranges_;
     scan_ranges.reset();
-    if (OB_FAIL(scan_ranges.assign(tb_ctx.get_key_ranges()))) {
-      LOG_WARN("fail to assign scan ranges", K(ret));
+    if (OB_FAIL(gen_scan_ranges(scan_ranges))) {
+      LOG_WARN("fail to generate scan ranges", K(ret));
     } else {
       scan_op_->get_scan_param().limit_param_.limit_ = tb_ctx.get_limit();
+      scan_op_->get_scan_param().limit_param_.offset_ = tb_ctx.get_offset();
       if (OB_FAIL(scan_op_->rescan())) {
         LOG_WARN("rescan error", K(ret));
       }
@@ -647,7 +664,9 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
   char *row_buf = nullptr;
   ObObj *cells = nullptr;
   const ObTableCtx &tb_ctx = scan_executor_->get_table_ctx();
-  const ExprFixedArray &output_exprs = scan_executor_->get_spec().get_ctdef().output_exprs_;
+  const ObTableApiScanCtDef &ctdef = scan_executor_->get_spec().get_ctdef();
+  const ExprFixedArray &output_exprs = ctdef.output_exprs_;
+  const ExprFixedArray &aggr_exprs = ctdef.scan_ctdef_.pd_expr_spec_.pd_storage_aggregate_output_;
   const ObIArray<uint64_t> &query_col_ids = tb_ctx.get_query_col_ids();
   const int64_t cells_cnt = tb_ctx.is_scan() ? query_col_ids.count() : output_exprs.count();
   row_allocator_.reuse();
@@ -679,15 +698,25 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
         if (!has_exist_in_array(select_col_ids, col_id, &idx)) {
           ret = OB_ERR_COLUMN_NOT_FOUND;
           LOG_WARN("query column id not found", K(ret), K(select_col_ids), K(col_id), K(query_col_ids));
-        } else if (OB_FAIL(output_exprs.at(idx)->eval(eval_ctx, datum))) {
-          LOG_WARN("fail to eval datum", K(ret));
-        } else if (OB_FAIL(datum->to_obj(tmp_obj, output_exprs.at(idx)->obj_meta_))) {
-          LOG_WARN("fail to datum to obj", K(ret), K(output_exprs.at(idx)->obj_meta_), K(i), K(idx));
-        } else if (OB_FAIL(adjust_output_obj_type(tmp_obj))) {
-          LOG_WARN("fail to adjust output obj type", K(ret));
+        } else if (tb_ctx.is_count_all()) {
+          if (OB_FAIL(aggr_exprs.at(0)->eval(eval_ctx, datum))) {
+            LOG_WARN("fail to eval datum", K(ret));
+          } else if (OB_FAIL(datum->to_obj(tmp_obj, aggr_exprs.at(0)->obj_meta_))) {
+            LOG_WARN("fail to datum to obj", K(ret), K(aggr_exprs.at(0)->obj_meta_), K(i), K(idx));
+          } else if (OB_FAIL(adjust_output_obj_type(tmp_obj))) {
+            LOG_WARN("fail to adjust output obj type", K(ret));
+          }
         } else {
-          cells[i] = tmp_obj;
+          if (OB_FAIL(output_exprs.at(idx)->eval(eval_ctx, datum))) {
+            LOG_WARN("fail to eval datum", K(ret));
+          } else if (OB_FAIL(datum->to_obj(tmp_obj, output_exprs.at(idx)->obj_meta_))) {
+            LOG_WARN("fail to datum to obj", K(ret), K(output_exprs.at(idx)->obj_meta_), K(i), K(idx));
+          } else if (OB_FAIL(adjust_output_obj_type(tmp_obj))) {
+            LOG_WARN("fail to adjust output obj type", K(ret));
+          }
         }
+
+        cells[i] = tmp_obj;
       }
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < cells_cnt; i++) {

@@ -129,6 +129,7 @@
 #include "sql/resolver/ddl/ob_drop_directory_resolver.h"
 #include "pl/ob_pl_package.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
+#include "sql/resolver/cmd/ob_module_data_resolver.h"
 #include "sql/resolver/cmd/ob_tenant_snapshot_resolver.h"
 #include "sql/resolver/cmd/ob_tenant_clone_resolver.h"
 #include "sql/resolver/cmd/ob_olap_async_job_resolver.h"
@@ -1284,6 +1285,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_LOAD_INDEX_INTO_CACHE: {
         REGISTER_STMT_RESOLVER(Mock);
+        break;
+      }
+      case T_MODULE_DATA: {
+        REGISTER_STMT_RESOLVER(ModuleData);
         break;
       }
       case T_OLAP_ASYNC_JOB_SUBMIT: {

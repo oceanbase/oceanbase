@@ -361,9 +361,8 @@ int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
   } else if (OB_ISNULL(sess_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sess guard is NULL", K(ret));
-  } else if (OB_FAIL(sess_guard_->get_sess_info().get_binlog_row_image(binlog_row_image_type_))) {
-    LOG_WARN("fail to get binlog row image", K(ret));
   } else {
+    binlog_row_image_type_ = TABLEAPI_SESS_POOL_MGR->get_binlog_row_image();
     table_name_ = table_name;
     ref_table_id_ = simple_table_schema_->get_table_id();
     index_table_id_ = ref_table_id_;
@@ -378,14 +377,21 @@ int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
 int ObTableCtx::init_schema_info_from_cache()
 {
   int ret = OB_SUCCESS;
+  ObKVAttr attr;
   if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema cache guard is NULL or not inited", KP(schema_cache_guard_));
+  } else if (OB_FAIL(schema_cache_guard_->get_kv_attributes(attr))) {
+    LOG_WARN("fail to get kv attributes", K(ret));
   } else {
+    is_redis_ttl_table_ = attr.is_redis_ttl_;
     ObTableSchemaFlags flags = schema_cache_guard_->get_schema_flags();
     flags_ = flags;
     has_auto_inc_ = flags.has_auto_inc_;
     is_ttl_table_ = flags.is_ttl_table_;
+    if (OB_FAIL(schema_cache_guard_->get_ttl_definition(ttl_definition_))) {
+      LOG_WARN("fail to get ttl definition", K(ret));
+    }
     has_generated_column_ = flags.has_generated_column_;
     has_lob_column_ = flags.has_lob_column_;
     if (is_dml()) {
@@ -621,6 +627,10 @@ int ObTableCtx::adjust_rowkey()
           need_check = false;
         }
       }
+      if (entity_type_ == ObTableEntityType::ET_HKV &&
+          (operation_type_ == ObTableOperationType::Type::DEL || is_scan_)) {
+        need_check = false;
+      }
 
       if (OB_SUCC(ret) && need_check) {
         if (!is_full_filled && need_full_rowkey_op()) {
@@ -712,7 +722,7 @@ int ObTableCtx::adjust_entity()
   if (OB_ISNULL(entity_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));
-  } else if (!is_htable() && OB_FAIL(adjust_rowkey())) {
+  } else if (OB_FAIL(adjust_rowkey())) {
     LOG_WARN("fail to adjust rowkey", K(ret));
   } else if (OB_FAIL(adjust_properties())) {
     LOG_WARN("fail to check properties", K(ret));
@@ -953,6 +963,10 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
   const bool select_all_columns = select_columns.empty() || query.is_aggregate_query() || (has_filter && !is_htable());
   operation_type_ = ObTableOperationType::Type::SCAN;
+  if (query.is_aggregate_query() && query.get_aggregations().count() == 1) {
+    // support later
+    // is_count_all_ = query.get_aggregations().at(0).is_agg_all_column();
+  }
   // init is_weak_read_,scan_order_
   is_weak_read_ = is_wead_read;
   scan_order_ = query.get_scan_order();
@@ -1017,10 +1031,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
       const ObIArray<ObTableColumnInfo *> &col_info_array = schema_cache_guard_->get_column_info_array();
       ObSEArray<ObString, 4> ttl_columns;
       if (is_ttl_table_) {
-        ObString ttl_definition;
-        if (OB_FAIL(schema_cache_guard_->get_ttl_definition(ttl_definition))) {
-          LOG_WARN("fail to get ttl definition", K(ret));
-        } else if (OB_FAIL(ObTTLUtil::get_ttl_columns(ttl_definition, ttl_columns))) {
+        if (OB_FAIL(ObTTLUtil::get_ttl_columns(ttl_definition_, ttl_columns))) {
           LOG_WARN("fail to get ttl columns", K(ret));
         }
       }
@@ -1927,23 +1938,23 @@ int ObTableCtx::init_trans(transaction::ObTxDesc *trans_desc,
 int ObTableCtx::init_index_info(const ObString &index_name, const uint64_t arg_table_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
-  int64_t index_aux_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
+  uint64_t tids[OB_MAX_INDEX_PER_TABLE];
+  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
 
   if (OB_FAIL(schema_guard_->get_can_read_index_array(tenant_id_,
                                                       ref_table_id_,
                                                       tids,
-                                                      index_aux_cnt,
+                                                      index_cnt,
                                                       false))) {
     LOG_WARN("fail to get can read index", K(ret), K_(tenant_id), K_(ref_table_id));
-  } else if (index_aux_cnt > OB_MAX_AUX_TABLE_PER_MAIN_TABLE) {
+  } else if (index_cnt > OB_MAX_INDEX_PER_TABLE) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("index aux count is bigger than OB_MAX_AUX_TABLE_PER_MAIN_TABLE", K(ret), K(index_aux_cnt));
+    LOG_WARN("index count is bigger than OB_MAX_INDEX_PER_TABLE", K(ret), K(index_cnt));
   } else {
     const share::schema::ObTableSchema *index_schema = nullptr;
     ObString this_index_name;
     bool is_found = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_aux_cnt && !is_found; i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_cnt && !is_found; i++) {
       if (OB_FAIL(schema_guard_->get_table_schema(tenant_id_, tids[i], index_schema))) {
         LOG_WARN("fail to get index schema", K(ret), K_(tenant_id), K(tids[i]));
       } else if (OB_ISNULL(index_schema)) {

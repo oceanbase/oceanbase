@@ -47,6 +47,22 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
     if (tb_ctx.return_affected_entity() && op_result.get_affected_rows() > 0 &&
         OB_FAIL(process_affected_entity(tb_ctx, *spec, op_result))) {
       LOG_WARN("fail to process affected entity", K(ret), K(tb_ctx));
+    } else if (!tb_ctx.is_htable() && ObTableOperationType::Type::INSERT_OR_UPDATE == tb_ctx.get_opertion_type()) {
+      // not duplicated then do insert, duplicated do update
+      if (tb_ctx.is_ttl_table()) {
+        op_result.set_insertup_do_insert(!static_cast<ObTableApiTTLExecutor *>(executor)->is_insert_duplicated());
+      } else {
+        op_result.set_insertup_do_insert(!static_cast<ObTableApiInsertUpExecutor *>(executor)->is_insert_duplicated());
+        op_result.set_insertup_do_put(static_cast<ObTableApiInsertUpExecutor *>(executor)->is_use_put());
+        if (tb_ctx.is_redis_ttl_table() && op_result.get_is_insertup_do_update()) {
+          const ObNewRow *old_row = nullptr;
+          if (OB_FAIL(static_cast<ObTableApiInsertUpExecutor *>(executor)->get_old_row(old_row))) {
+            LOG_WARN("fail to get old row", K(ret));
+          } else {
+            op_result.set_insertup_old_row(old_row);
+          }
+        }
+      }
     }
   }
 
@@ -58,15 +74,6 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
 
   op_result.set_err(ret);
   op_result.set_type(tb_ctx.get_opertion_type());
-  if (!tb_ctx.is_htable() && ObTableOperationType::Type::INSERT_OR_UPDATE == tb_ctx.get_opertion_type()) {
-    // not duplicated then do insert, duplicated do update
-    if (tb_ctx.is_ttl_table()) {
-      op_result.set_insertup_do_insert(!static_cast<ObTableApiTTLExecutor*>(executor)->is_insert_duplicated());
-    } else {
-      op_result.set_insertup_do_insert(!static_cast<ObTableApiInsertUpExecutor*>(executor)->is_insert_duplicated());
-      op_result.set_insertup_do_put(static_cast<ObTableApiInsertUpExecutor*>(executor)->is_use_put());
-    }
-  }
   spec->destroy_executor(executor);
   return ret;
 }
@@ -197,10 +204,12 @@ int ObTableOpWrapper::process_get_with_spec(ObTableCtx &tb_ctx,
 {
   int ret = OB_SUCCESS;
   ObTableApiExecutor *executor = nullptr;
-  ObTableApiScanRowIterator row_iter;
   // fill key range
   const ObITableEntity *entity = tb_ctx.get_entity();
-  if (OB_ISNULL(entity)) {
+  ObTableApiScanRowIterator *row_iter = nullptr;
+  if (OB_FAIL(ObTableQueryUtils::get_scan_row_interator(tb_ctx, row_iter))) {
+    LOG_WARN("fail to get scan row iterator", K(ret));
+  } else if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to entity is null", K(ret), K(tb_ctx));
   } else if (OB_ISNULL(spec)) {
@@ -216,19 +225,21 @@ int ObTableOpWrapper::process_get_with_spec(ObTableCtx &tb_ctx,
       LOG_WARN("fail to push back key range", K(ret), K(range));
     } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {
       LOG_WARN("fail to create scan executor", K(ret));
-    } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor *>(executor)))) {
+    } else if (OB_FAIL(row_iter->open(static_cast<ObTableApiScanExecutor *>(executor)))) {
       LOG_WARN("fail to open scan row iterator", K(ret));
-    } else if (OB_FAIL(row_iter.get_next_row(row, tb_ctx.get_allocator()))) {
+    } else if (OB_FAIL(row_iter->get_next_row(row, tb_ctx.get_allocator()))) {
       if (ret != OB_ITER_END) {
         LOG_WARN("fail to get next row", K(ret));
       }
     }
   }
 
-  int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = row_iter.close())) {
-    LOG_WARN("fail to close row iterator", K(tmp_ret));
-    ret = COVER_SUCC(tmp_ret);
+  if (OB_NOT_NULL(row_iter)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = row_iter->close())) {
+      LOG_WARN("fail to close row iterator", K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
   }
   spec->destroy_executor(executor);
   ObTableApiUtil::replace_ret_code(ret);
@@ -337,7 +348,10 @@ int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
   const ObColumnSchemaV2 *column_schema = NULL;
   ObSEArray<ObString, 32> all_columns;
   const ObIArray<ObString>* arr_col = &cnames;
-  if (N == 0) {
+  if (OB_ISNULL(row)) {
+    ret = OB_ERR_NULL_INPUT;
+    LOG_WARN("invalid null ObNewRow ptr", K(ret), K(row));
+  } else if (N == 0) {
     const ObIArray<ObTableColumnInfo *>&column_info_array = schema_cache_guard.get_column_info_array();
     if (OB_FAIL(expand_all_columns(column_info_array, all_columns))) {
       LOG_WARN("fail to expand all column to cnames", K(ret));
@@ -508,7 +522,6 @@ int ObHTableDeleteExecutor::query_and_delete(const ObTableQuery &query)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator;
-  ObTableApiScanRowIterator row_iter;
   ObTableQueryResultIterator *result_iter = nullptr;
   ObTableQueryResult tmp_result;
   ObTableQueryResult *one_result = nullptr;
@@ -518,7 +531,10 @@ int ObHTableDeleteExecutor::query_and_delete(const ObTableQuery &query)
                        tb_ctx_.get_table_name(),
                        &audit_ctx_, query);
 
-  if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(tmp_allocator,
+  ObTableApiScanRowIterator *row_iter = nullptr;
+  if (OB_FAIL(ObTableQueryUtils::get_scan_row_interator(tb_ctx_, row_iter))) {
+    LOG_WARN("fail to get scan row iterator", K(ret));
+  } else if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(tmp_allocator,
                                                                 query,
                                                                 true, /* is_hkv */
                                                                 tmp_result,
@@ -528,10 +544,10 @@ int ObHTableDeleteExecutor::query_and_delete(const ObTableQuery &query)
   } else if (OB_ISNULL(child = const_cast<ObTableApiExecutor *>(executor_->get_child()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scan executor is null", K(ret));
-  } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor *>(child)))) {
+  } else if (OB_FAIL(row_iter->open(static_cast<ObTableApiScanExecutor *>(child)))) {
     LOG_WARN("fail to open scan row iterator", K(ret));
   } else {
-    result_iter->set_scan_result(&row_iter);
+    result_iter->set_scan_result(row_iter);
     if (OB_FAIL(result_iter->get_next_result(one_result))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next result", K(ret));
@@ -557,10 +573,12 @@ int ObHTableDeleteExecutor::query_and_delete(const ObTableQuery &query)
     LOG_WARN("fail to delete rows", K(ret));
   }
 
-  int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = row_iter.close())) {
-    LOG_WARN("fail to close row iterator", K(tmp_ret));
-    ret = COVER_SUCC(tmp_ret);
+  if (OB_NOT_NULL(row_iter)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = row_iter->close())) {
+      LOG_WARN("fail to close row iterator", K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
   }
   ObTableQueryUtils::destroy_result_iterator(result_iter);
 

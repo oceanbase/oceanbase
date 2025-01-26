@@ -101,7 +101,7 @@ int ObTableApiTTLExecutor::open()
       conflict_checker_.set_local_tablet_loc(tablet_loc);
       // init update das_ref
       ObMemAttr mem_attr;
-      bool use_dist_das = tb_ctx_.has_global_index();
+      bool use_dist_das = tb_ctx_.need_dist_das();
       mem_attr.tenant_id_ = tb_ctx_.get_session_info().get_effective_tenant_id();
       mem_attr.label_ = "TableApiTTL";
       upd_rtctx_.das_ref_.set_expr_frame_info(ttl_spec_.get_expr_frame_info());

@@ -32,6 +32,7 @@
 #include "rootserver/ob_service_name_command.h"
 #include "rootserver/ob_tenant_event_def.h"
 #include "rootserver/backup/ob_backup_param_operator.h" // ObBackupParamOperator
+#include "share/table/ob_redis_importer.h"
 
 namespace oceanbase
 {
@@ -3025,6 +3026,41 @@ int ObServiceNameExecutor::execute(ObExecContext& ctx, ObServiceNameStmt& stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unknown service operation", KR(ret), K(arg));
   }
+  return ret;
+}
+
+int ObModuleDataExecutor::execute(ObExecContext &ctx, ObModuleDataStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  const int64_t INNER_SQL_TIMEOUT = GCONF.internal_sql_execute_timeout;
+  ObTimeoutCtx timeout_ctx;
+  const table::ObModuleDataArg &arg = stmt.get_arg();
+  LOG_INFO("start to handle module_data", K(arg), K(INNER_SQL_TIMEOUT), K(start_time));
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ObModuleDataArg", K(ret), K(arg));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, INNER_SQL_TIMEOUT))) {
+    LOG_WARN("failed to set default timeout ctx", K(ret), K(INNER_SQL_TIMEOUT));
+  } else {
+    switch (arg.module_) {
+      case table::ObModuleDataArg::REDIS: {
+        table::ObRedisImporter importer(arg.target_tenant_id_, ctx);
+        if (OB_FAIL(importer.exec_op(arg.op_))) {
+          LOG_WARN("fail to exec op", K(ret), K(arg.op_));
+        }
+        break;
+      }
+      // add other module before here
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "module except 'redis'");
+        LOG_WARN("modules except 'redis' are not supported yet", K(ret), K(arg.module_));
+      }
+    }
+  }
+  LOG_INFO("handle module data ended",
+      K(ret), K(arg), "cost_time", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 } // end namespace sql

@@ -317,6 +317,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 523	__all_pkg_type_attr	0	201001	1
 524	__all_pkg_coll_type	0	201001	1
 525	__wr_sql_plan	0	201001	1
+527	__all_kv_redis_table	0	201001	1
 528	__all_ncomp_dll_v2	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
@@ -801,6 +802,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12499	__all_virtual_pkg_coll_type	2	201001	1
 12500	__all_virtual_kv_client_info	2	201001	1
 12501	__all_virtual_wr_sql_plan	2	201001	1
+12503	__all_virtual_kv_redis_table	2	201001	1
 12504	__all_virtual_function_io_stat	2	201001	1
 12505	__all_virtual_temp_file	2	201001	1
 12506	__all_virtual_ncomp_dll_v2	2	201001	1
@@ -1319,6 +1321,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21613	CDB_WR_SQL_PLAN	1	201001	1
 21616	DBA_OB_SPM_EVO_RESULT	1	201001	1
 21617	CDB_OB_SPM_EVO_RESULT	1	201001	1
+21618	DBA_OB_KV_REDIS_TABLE	1	201001	1
+21619	CDB_OB_KV_REDIS_TABLE	1	201001	1
 21620	GV$OB_FUNCTION_IO_STAT	1	201001	1
 21621	V$OB_FUNCTION_IO_STAT	1	201001	1
 21622	DBA_OB_TEMP_FILES	1	201001	1

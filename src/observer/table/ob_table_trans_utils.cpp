@@ -279,6 +279,8 @@ int ObTableTransUtils::async_commit_trans(ObTableTransParam &trans_param)
       callback->handout();
       callback->set_tx_desc(trans_param.trans_desc_);
       const int64_t stmt_timeout_ts = trans_param.timeout_ts_;
+      // clear thread local variables used to wait in queue
+      request_finish_callback();
       // callback won't been called if any error occurred
       if (OB_FAIL(txs->submit_commit_tx(*trans_param.trans_desc_,
                                         stmt_timeout_ts,

@@ -562,6 +562,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"mode", MODE},
   {"modify", MODIFY},
   {"modifies", MODIFIES},
+  {"module", MODULE},
   {"month", MONTH},
   {"move", MOVE},
   {"multilinestring", MULTILINESTRING},

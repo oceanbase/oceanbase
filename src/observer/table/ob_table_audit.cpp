@@ -63,6 +63,10 @@ StmtType ObTableAuditUtils::get_stmt_type(ObTableOperationType::Type op_type)
       stmt_type = StmtType::T_KV_PUT;
       break;
     }
+    case ObTableOperationType::REDIS: {
+      stmt_type = StmtType::T_REDIS;
+      break;
+    }
     default: {
       stmt_type = StmtType::T_MAX;
       break;

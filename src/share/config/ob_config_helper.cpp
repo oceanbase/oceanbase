@@ -17,6 +17,7 @@
 #include "share/config/ob_config_mode_name_def.h"
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
+#include "share/table/ob_table_config_util.h"
 namespace oceanbase
 {
 using namespace share;

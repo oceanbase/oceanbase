@@ -73,22 +73,25 @@ int ObAllVirtualKvConnection::inner_get_next_row(ObNewRow *&row)
   return ret;
 }
 
-int ObAllVirtualKvConnection::FillScanner::operator()(hash::HashMapPair<ObAddr, ObTableConnection> &entry)
+int ObAllVirtualKvConnection::FillScanner::operator()(hash::HashMapPair<ObAddr, ObTableConnection*> &entry)
 {
   int ret = OB_SUCCESS;
-  ObTableConnection &conn = entry.second;
-  uint64_t tenant_id = conn.get_tenant_id();
+  ObTableConnection *conn = entry.second;
+  uint64_t tenant_id = OB_INVALID_ID;
   if (OB_UNLIKELY(NULL == scanner_
                   || NULL == allocator_
                   || NULL == cur_row_
-                  || NULL == cur_row_->cells_)) {
+                  || NULL == cur_row_->cells_
+                  || NULL == conn)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN,
                "some parameters is NULL",
                K(ret),
                K(scanner_),
                K(allocator_),
-               K(cur_row_));
+               K(cur_row_),
+               K(conn));
+  } else if (FALSE_IT(tenant_id = conn->get_tenant_id())) {
   } else if (!is_sys_tenant(effective_tenant_id_) && effective_tenant_id_ != tenant_id) {
     // do nothing
   } else if (OB_UNLIKELY(cur_row_->count_ < output_column_ids_.count())) {
@@ -114,9 +117,9 @@ int ObAllVirtualKvConnection::FillScanner::operator()(hash::HashMapPair<ObAddr, 
           break;
         }
         case CLIENT_IP: {
-          if (!conn.get_addr().ip_to_string(client_ip_, OB_IP_STR_BUFF)) {
+          if (!conn->get_addr().ip_to_string(client_ip_, OB_IP_STR_BUFF)) {
             ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "fail to get ip string", K(ret), K(conn.get_addr()));
+            SERVER_LOG(WARN, "fail to get ip string", K(ret), K(conn->get_addr()));
           } else {
             cur_row_->cells_[cell_idx].set_varchar(ObString::make_string(client_ip_));
             cur_row_->cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -124,27 +127,27 @@ int ObAllVirtualKvConnection::FillScanner::operator()(hash::HashMapPair<ObAddr, 
           break;
         }
         case CLIENT_PORT: {
-          cur_row_->cells_[cell_idx].set_int(conn.get_addr().get_port());
+          cur_row_->cells_[cell_idx].set_int(conn->get_addr().get_port());
           break;
         }
         case TENANT_ID: {
-          cur_row_->cells_[cell_idx].set_int(conn.get_tenant_id());
+          cur_row_->cells_[cell_idx].set_int(conn->get_tenant_id());
           break;
         }
         case USER_ID: {
-          cur_row_->cells_[cell_idx].set_int(conn.get_user_id());
+          cur_row_->cells_[cell_idx].set_int(conn->get_user_id());
           break;
         }
         case DATABASE_ID: {
-          cur_row_->cells_[cell_idx].set_int(conn.get_database_id());
+          cur_row_->cells_[cell_idx].set_int(conn->get_database_id());
           break;
         }
         case FIRST_ACTIVE_TIME: {
-          cur_row_->cells_[cell_idx].set_timestamp(conn.get_first_active_time());
+          cur_row_->cells_[cell_idx].set_timestamp(conn->get_first_active_time());
           break;
         }
         case LAST_ACTIVE_TIME: {
-          cur_row_->cells_[cell_idx].set_timestamp(conn.get_last_active_time());
+          cur_row_->cells_[cell_idx].set_timestamp(conn->get_last_active_time());
           break;
         }
         default: {

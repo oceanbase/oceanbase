@@ -115,7 +115,7 @@ int ObTableExprCgService::generate_expire_expr(ObTableCtx &ctx,
   } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_LE, expire_expr_tmp))) {
     LOG_WARN("fail to create T_OP_LE expr", K(ret), K(expr_factory));
   } else {
-    const ObString &ttl_definition = table_schema->get_ttl_definition();
+    const ObString &ttl_definition = ctx.get_ttl_definition();
     ObArray<ObQualifiedName> columns;
     ObSchemaChecker schema_checker;
     ObSchemaGetterGuard *schema_guard = ctx.get_schema_guard();
@@ -164,6 +164,25 @@ int ObTableExprCgService::generate_expire_expr(ObTableCtx &ctx,
         }
       }
     }
+  }
+
+  return ret;
+}
+
+int ObTableExprCgService::generate_count_expr(ObTableCtx &ctx, ObAggFunRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObAggFunRawExpr *count_expr = nullptr;
+
+  if (OB_FAIL(ctx.get_expr_factory().create_raw_expr(T_FUN_COUNT, count_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else if (OB_ISNULL(count_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("count_expr is null");
+  } else if (OB_FAIL(count_expr->formalize(&ctx.get_session_info()))) {
+    LOG_WARN("fail to formailize count expr", K(ret));
+  } else {
+    expr = count_expr;
   }
 
   return ret;
@@ -588,6 +607,7 @@ int ObTableExprCgService::get_part_key_column_expr(ObTableCtx &ctx,
                                                   ObIArray<sql::ObRawExpr*> &part_keys_expr)
 {
   int ret = OB_SUCCESS;
+  bool is_global_index_part_key = ctx.has_global_index();
   for (int64_t i = 0; OB_SUCC(ret) && i < partition_keys.get_size(); i++) {
     uint64_t column_id = OB_INVALID_ID;
     const ObTableColumnItem *column_item = nullptr;
@@ -599,8 +619,9 @@ int ObTableExprCgService::get_part_key_column_expr(ObTableCtx &ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column item is NULL", K(ret), K(column_item));
     }  else if (!column_item->raw_expr_->is_column_ref_expr() ||
-                (column_item->raw_expr_->is_column_ref_expr() &&
-                column_item->column_info_->is_generated_column())) {
+                (is_global_index_part_key &&
+                 column_item->column_info_->is_generated_column())) {
+      // allow generate col as part key here, because of obkv redis
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("non-common column partition key is not supported", K(ret), K(column_id));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-common column partition key");
@@ -707,10 +728,19 @@ int ObTableExprCgService::replace_column_ref_in_part_expr(const ObIArray<sql::Ob
     } else if (column_ref->get_column_id() != dst_column_ref->get_column_id()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column id is not match", K(ret), K(column_ref->get_column_id()), K(dst_column_ref->get_column_id()));
-    } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(partition_key_expr,
-                                                          column_ref,
-                                                          dst_column_ref))) {
-      LOG_WARN("fail to replace column ref expr", K(ret));
+    } else {
+      ObRawExpr *real_dest_col = dst_column_ref;
+      // for generated col, the calculate expr may stored in dependant_expr,
+      //  should replaced with calculate expr instead of column ref expr
+      if (OB_NOT_NULL(dst_column_ref->get_dependant_expr())
+          && dst_column_ref->get_dependant_expr()->is_for_generated_column()) {
+        real_dest_col = dst_column_ref->get_dependant_expr();
+      }
+      if (OB_FAIL(ObRawExprUtils::replace_ref_column(partition_key_expr,
+                                                      column_ref,
+                                                      real_dest_col))) {
+        LOG_WARN("fail to replace column ref expr", K(ret));
+      }
     }
   } else {
     for (int64_t i = 0 ; OB_SUCC(ret) && i < partition_key_expr->get_param_count(); i++) {
@@ -725,13 +755,20 @@ int ObTableExprCgService::replace_column_ref_in_part_expr(const ObIArray<sql::Ob
           ObColumnRefRawExpr *dst_column_ref = nullptr;
           if (OB_ISNULL(part_column_exprs.at(j)) || !part_column_exprs.at(j)->is_column_ref_expr()) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("part column expr is NULL or not a column ref", K(ret), K(part_column_exprs.at(j)));
+            LOG_WARN("part column expr is NULL or not a column ref", K(ret), KPC(part_column_exprs.at(j)));
           } else if (FALSE_IT(dst_column_ref = static_cast<ObColumnRefRawExpr *>(part_column_exprs.at(j)))) {
           } else if (src_column_ref->get_column_id() == dst_column_ref->get_column_id()) {
             found = true;
+            ObRawExpr *real_dest_col = dst_column_ref;
+            // for generated col, the calculate expr may stored in dependant_expr
+            //  should replaced with calculate expr instead of column ref expr
+            if (OB_NOT_NULL(dst_column_ref->get_dependant_expr())
+                && dst_column_ref->get_dependant_expr()->is_for_generated_column()) {
+              real_dest_col = dst_column_ref->get_dependant_expr();
+            }
             if (OB_FAIL(ObRawExprUtils::replace_ref_column(partition_key_expr,
                                                             src_column_ref,
-                                                            dst_column_ref))) {
+                                                            real_dest_col))) {
               LOG_WARN("fail to replace column ref expr", K(ret), K(i), K(j), K(src_column_ref->get_column_id()));
             }
           }
@@ -891,6 +928,30 @@ int ObTableExprCgService::generate_filter_exprs(ObTableCtx &ctx)
   return ret;
 }
 
+int ObTableExprCgService::generate_aggregate_exprs(ObTableCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+
+  if (!ctx.is_count_all()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only support count(*) pushdown", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "non count(*) aggregate pushdown");
+  } else {
+    ObIArray<ObRawExpr *> &all_exprs = ctx.get_all_exprs_array();
+    ObIArray<sql::ObAggFunRawExpr *> &aggr_exprs = ctx.get_pushdown_aggr_exprs();
+    ObAggFunRawExpr *count_expr = nullptr;
+    if (OB_FAIL(generate_count_expr(ctx, count_expr))) {
+      LOG_WARN("fail to generate count expr", K(ret), K(ctx));
+    } else if (OB_FAIL(aggr_exprs.push_back(count_expr))) {
+      LOG_WARN("fail to push back count expr", K(ret), K(aggr_exprs));
+    } else if (OB_FAIL(all_exprs.push_back(count_expr))) {
+      LOG_WARN("fail to push back count expr to all exprs", K(ret));
+    }
+  }
+
+  return ret;
+}
+
 /*
   generate all expressions.
   - generate all column exprs firstly.
@@ -911,6 +972,8 @@ int ObTableExprCgService::generate_exprs(ObTableCtx &ctx,
     LOG_WARN("fail to generate assign infos", K(ret), K(ctx));
   } else if (OB_FAIL(generate_filter_exprs(ctx))) {
     LOG_WARN("fail to generate filer exprs", K(ret), K(ctx));
+  } else if (ctx.is_count_all() && OB_FAIL(generate_aggregate_exprs(ctx))) {
+    LOG_WARN("fail to generate aggregate exprs", K(ret), K(ctx));
   } else if (ctx.need_dist_das() && OB_FAIL(generate_calc_tablet_id_exprs(ctx))) {
     LOG_WARN("fail to generate calc tablet id exprs", K(ret), K(ctx));
   } else if (ctx.is_text_retrieval_scan() && OB_FAIL(ObTableFtsExprCgService::generate_text_retrieval_dep_exprs(ctx, allocator))) {
@@ -1434,7 +1497,9 @@ int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
   ObEvalCtx eval_ctx(ctx.get_exec_ctx());
   ObSEArray<const ObObj*, 16> refresh_values;
 
-  if (col_info_array.count() < exprs.count()) {
+  if (OB_ISNULL(ctx.get_exec_ctx().get_expr_op_ctx_store()) && OB_NOT_NULL(ctx.get_expr_frame_info()) && OB_FAIL(ctx.get_exec_ctx().init_expr_op(ctx.get_expr_frame_info()->need_ctx_cnt_))) {
+    LOG_WARN("fail to initialize expression operation", K(ret), K(ctx));
+  } else if (col_info_array.count() < exprs.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid column info count", K(ret), K(col_info_array.count()), K(exprs.count()));
   } else if (OB_FAIL(refresh_values.prepare_allocate(col_info_array.count()))) {
@@ -2251,6 +2316,7 @@ int ObTableDmlCgService::generate_tsc_ctdef(ObTableCtx &ctx,
   const uint64_t tenant_id = ctx.get_tenant_id();
   ObSEArray<uint64_t, 64> column_ids;
   ObSchemaGetterGuard *schema_guard = ctx.get_schema_guard();
+  ObSEArray<ObRawExpr*, 16> calc_raw_exprs;
   bool need_doc_id = ctx.has_fts_index();
   const ObTableSchema *table_schema = ctx.get_table_schema();
   if (OB_ISNULL(schema_guard)) {
@@ -2287,6 +2353,10 @@ int ObTableDmlCgService::generate_tsc_ctdef(ObTableCtx &ctx,
     if (OB_FAIL(tsc_ctdef.table_param_.convert(*table_schema, tsc_ctdef.access_column_ids_,
                                                tsc_ctdef.pd_expr_spec_.pd_storage_flag_))) {
       LOG_WARN("fail to convert table param", K(ret));
+    } else if (OB_FAIL(generate_calc_raw_exprs(access_exprs, calc_raw_exprs))) {
+      LOG_WARN("fail to genreate calc raw expr", K(ret));
+    } else if (OB_FAIL(cg.generate_rt_exprs(calc_raw_exprs, tsc_ctdef.pd_expr_spec_.calc_exprs_))) {
+      LOG_WARN("fali to generate calc rt exprs", K(ret));
     } else if (OB_FAIL(ObTableTscCgService::generate_das_result_output(tsc_ctdef, tsc_ctdef.access_column_ids_))) {
       LOG_WARN("generate das result output failed", K(ret));
     }
@@ -2480,12 +2550,12 @@ int ObTableDmlCgService::generate_conflict_checker_ctdef(ObTableCtx &ctx,
   } else if (OB_FAIL(cg.generate_rt_exprs(table_column_exprs, conflict_checker_ctdef.table_column_exprs_))) {
     LOG_WARN("fail to generate table columns rt exprs ", K(ret), K(table_column_exprs));
   } else {
-    conflict_checker_ctdef.use_dist_das_ = ctx.has_global_index();
+    conflict_checker_ctdef.use_dist_das_ = ctx.need_dist_das();
     conflict_checker_ctdef.rowkey_count_ = ctx.get_table_schema()->get_rowkey_column_num();
   }
 
   // 针对全局索引场景，生成回表的partition id表达式
-  if (OB_SUCC(ret) && ctx.has_global_index()) {
+  if (OB_SUCC(ret) && (ctx.need_dist_das())) {
     ObRawExpr *part_id_expr_for_lookup = NULL;
     ObExpr *rt_part_id_expr = NULL;
     ObSEArray<ObRawExpr *, 4> constraint_dep_exprs;
@@ -2500,7 +2570,7 @@ int ObTableDmlCgService::generate_conflict_checker_ctdef(ObTableCtx &ctx,
       LOG_WARN("rt part_id_expr for lookup is null", K(ret));
     } else if (OB_FAIL(constraint_raw_exprs.push_back(part_id_expr_for_lookup))) {
       LOG_WARN("fail to push back part_id_expr_for_lookup", K(ret));
-    } else if (OB_FAIL(generate_tablet_id_dep_exprs(constraint_raw_exprs,constraint_dep_exprs))) {
+    } else if (OB_FAIL(generate_calc_raw_exprs(constraint_raw_exprs, constraint_dep_exprs))) {
       LOG_WARN("fail to generate tablet id dep exprs", K(ret));
     } else if (OB_FAIL(cg.generate_rt_exprs(constraint_dep_exprs,
                                             conflict_checker_ctdef.part_id_dep_exprs_))) {
@@ -2512,7 +2582,7 @@ int ObTableDmlCgService::generate_conflict_checker_ctdef(ObTableCtx &ctx,
   return ret;
 }
 
-// only use for following func: generate_tablet_id_dep_exprs()
+// only use for following func: generate_calc_raw_exprs()
 struct FilterFunctor {
   FilterFunctor(ObIArray<ObRawExpr *> &dep_exprs)
       : dep_exprs_(dep_exprs)
@@ -2521,13 +2591,12 @@ struct FilterFunctor {
   ObIArray<ObRawExpr *> &dep_exprs_;
 };
 
-int ObTableDmlCgService::generate_tablet_id_dep_exprs(ObIArray<ObRawExpr *> &raw_exprs,
-                                                      ObIArray<ObRawExpr *> &dep_exprs)
+int ObTableDmlCgService::generate_calc_raw_exprs(ObIArray<ObRawExpr *> &raw_exprs, ObIArray<ObRawExpr *> &calc_exprs)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 16> calc_raw_exprs;
   ObRawExprUniqueSet flattened_exprs(true);
-  FilterFunctor fliter_functor(dep_exprs);
+  FilterFunctor fliter_functor(calc_exprs);
   std::function<bool(ObRawExpr *)> filter_func = std::bind(&FilterFunctor::filter_func, &fliter_functor, std::placeholders::_1);
   if (OB_FAIL(flattened_exprs.flatten_and_add_raw_exprs(raw_exprs, filter_func, true))) {
     LOG_WARN("fail to flatten rt exprs", K(ret));
@@ -2540,7 +2609,7 @@ int ObTableDmlCgService::generate_tablet_id_dep_exprs(ObIArray<ObRawExpr *> &raw
       LOG_WARN("raw expr is NULL", K(ret));
     } else if (raw_expr->is_column_ref_expr() || raw_expr->is_const_expr()) {
       // do nothing
-    } else if (OB_FAIL(dep_exprs.push_back(raw_expr))) {
+    } else if (OB_FAIL(calc_exprs.push_back(raw_expr))) {
       LOG_WARN("fail to push back raw expr", K(ret));
     }
   }
@@ -3084,6 +3153,64 @@ int ObTableTscCgService::replace_gen_col_exprs(const ObTableCtx &ctx,
   return ret;
 }
 
+int ObTableTscCgService::generate_pushdown_aggr_ctdef(const ObTableCtx &ctx,
+                                                      ObDASScanCtDef &das_tsc_ctdef)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObAggFunRawExpr *> &aggr_exprs = ctx.get_pushdown_aggr_exprs();
+  const uint64_t output_count = aggr_exprs.count();
+  if (ctx.is_index_back() && output_count > 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("pushdown aggr to table scan not supported in index lookup", K(ctx));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "pushdown aggr to table scan not supported in index lookup");
+  } else {
+    ExprFixedArray &aggregate_output = das_tsc_ctdef.pd_expr_spec_.pd_storage_aggregate_output_;
+    if (output_count > 0) {
+      das_tsc_ctdef.pd_expr_spec_.pd_storage_flag_.set_aggregate_pushdown(true);
+      OZ(das_tsc_ctdef.aggregate_column_ids_.init(output_count));
+      if (OB_FAIL(aggregate_output.reserve(output_count))) {
+        LOG_WARN("init aggregate output array", K(ret), K(output_count));
+      } else {
+        ObStaticEngineCG cg(ctx.get_cur_cluster_version());
+        ObExpr *e = NULL;
+        FOREACH_CNT_X(raw_expr, aggr_exprs, OB_SUCC(ret)) {
+          CK(OB_NOT_NULL(*raw_expr));
+          OZ(cg.generate_rt_expr(*(*raw_expr), e));
+          CK(OB_NOT_NULL(e));
+          OZ(aggregate_output.push_back(e));
+          // aggr_exprs in convert_table_scan need to set IS_COLUMNLIZED flag
+          (const_cast<ObAggFunRawExpr *>(*raw_expr))->clear_flag(IS_COLUMNLIZED);
+        }
+      }
+    }
+
+    ARRAY_FOREACH(aggr_exprs, i) {
+      ObAggFunRawExpr *aggr_expr = aggr_exprs.at(i);
+      ObRawExpr *param_expr = NULL;
+      ObColumnRefRawExpr* col_expr = NULL;
+      if (OB_ISNULL(aggr_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("aggr expr is null", K(ret));
+      } else if (aggr_expr->get_real_param_exprs().empty()) {
+        OZ(das_tsc_ctdef.aggregate_column_ids_.push_back(OB_COUNT_AGG_PD_COLUMN_ID)); // count(*)
+      } else if (OB_ISNULL(param_expr = aggr_expr->get_param_expr(0)) ||
+                 OB_UNLIKELY(!param_expr->is_column_ref_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expected basic column", K(ret), K(param_expr));
+      } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(param_expr))) {
+      } else if (OB_UNLIKELY(col_expr->get_table_id() != ctx.get_index_table_id())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("expected basic column", K(ret), K(col_expr->get_table_id()),
+                                           K(ctx.get_index_table_id()));
+      } else {
+        OZ(das_tsc_ctdef.aggregate_column_ids_.push_back(col_expr->get_column_id()));
+      }
+    }
+  }
+  return ret;
+}
+
+
 // 非索引扫描: access exprs = select exprs
 // 普通索引表: access exprs = [index column exprs][rowkey expr]
 // 索引回表: access expr = [rowkey expr][select without rowkey exprs]
@@ -3188,14 +3315,15 @@ int ObTableTscCgService::generate_das_result_output(ObDASScanCtDef &das_tsc_ctde
 {
   int ret = OB_SUCCESS;
   ExprFixedArray &access_exprs = das_tsc_ctdef.pd_expr_spec_.access_exprs_;
+  ExprFixedArray &agg_exprs = das_tsc_ctdef.pd_expr_spec_.pd_storage_aggregate_output_;
   const ObIArray<uint64_t> &access_cids = das_tsc_ctdef.access_column_ids_;
   int64_t access_column_cnt = access_cids.count();
   int64_t access_expr_cnt = access_exprs.count();
   if (OB_UNLIKELY(access_column_cnt != access_expr_cnt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("access column count is invalid", K(ret), K(access_column_cnt), K(access_expr_cnt));
-  } else if (OB_FAIL(das_tsc_ctdef.result_output_.init(output_cids.count() + 1))) {
-    LOG_WARN("fail to init result output", K(ret), K(output_cids.count()));
+  } else if (OB_FAIL(das_tsc_ctdef.result_output_.init(output_cids.count() + agg_exprs.count() + 1))) {
+    LOG_WARN("fail to init result output", K(ret), K(output_cids.count()), K(agg_exprs.count()));
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < output_cids.count(); i++) {
@@ -3204,6 +3332,14 @@ int ObTableTscCgService::generate_das_result_output(ObDASScanCtDef &das_tsc_ctde
         if (OB_FAIL(das_tsc_ctdef.result_output_.push_back(access_exprs.at(j)))) {
           LOG_WARN("fail to push result output expr", K(ret), K(i), K(j));
         }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < agg_exprs.count(); ++i) {
+      if (OB_FAIL(das_tsc_ctdef.result_output_.push_back(agg_exprs.at(i)))) {
+        LOG_WARN("store agg expr to result output exprs failed", K(ret), K(i), K(agg_exprs.count()));
       }
     }
   }
@@ -3287,10 +3423,10 @@ int ObTableTscCgService::generate_table_param(const ObTableCtx &ctx,
                                               const bool query_cs_replica /*=false*/)
 {
   int ret = OB_SUCCESS;
+  const bool pd_agg = das_tsc_ctdef.pd_expr_spec_.pd_storage_flag_.is_aggregate_pushdown();
   ObSEArray<uint64_t, 64> tsc_out_cols;
   const ObTableSchema *index_schema = nullptr;
   const ObTableID &scan_table_id = das_tsc_ctdef.ref_table_id_;
-  const bool pd_agg = das_tsc_ctdef.pd_expr_spec_.pd_storage_flag_.is_aggregate_pushdown();
   const ObTableFtsCtx *fts_ctx = ctx.get_fts_ctx();
   bool is_rowkey_doc_table = (fts_ctx == nullptr) ? false : (scan_table_id == fts_ctx->get_rowkey_doc_tid());
   bool is_primary_table = scan_table_id == ctx.get_ref_table_id();
@@ -3369,6 +3505,8 @@ int ObTableTscCgService::generate_das_tsc_ctdef(const ObTableCtx &ctx,
   das_tsc_ctdef.is_get_ = ctx.is_get();
   if (OB_FAIL(generate_access_ctdef(ctx, allocator, das_tsc_ctdef))) { // init access_column_ids_,pd_expr_spec_.access_exprs_
     LOG_WARN("fail to generate asccess ctdef", K(ret));
+  } else if (OB_FAIL(generate_pushdown_aggr_ctdef(ctx, das_tsc_ctdef))) {
+    LOG_WARN("fail to generate pushdown aggregate ctdef", K(ret));
   } else if (ctx.is_text_retrieval_scan() &&
              OB_FAIL(ObTableFtsTscCgService::generate_text_ir_pushdown_expr_ctdef(ctx, das_tsc_ctdef))) {
     LOG_WARN("failed to generate text ir pushdown aggregate ctdef", K(ret));

@@ -73,10 +73,8 @@ void ObTableApiCacheKey::reset()
   table_id_ = common::OB_INVALID_ID;
   index_table_id_ = common::OB_INVALID_ID;
   schema_version_ = -1;
-  operation_type_ = ObTableOperationType::Type::INVALID;
   flags_ = 0;
   namespace_ = ObLibCacheNameSpace::NS_TABLEAPI;
-  op_column_ids_.reset();
 }
 
 int ObTableApiCacheNode::inner_get_cache_obj(ObILibCacheCtx &ctx,
@@ -136,6 +134,8 @@ int ObTableApiCacheGuard::create_cache_key(ObTableCtx *tb_ctx)
   cache_key_.index_table_id_ = tb_ctx->get_index_table_id();
   cache_key_.schema_version_ = tb_ctx->get_simple_table_schema()->get_schema_version();
   cache_key_.is_ttl_table_ = tb_ctx->is_ttl_table();
+  cache_key_.need_dist_das_ = tb_ctx->need_dist_das();
+  cache_key_.is_count_all_ = tb_ctx->is_count_all();
   cache_key_.is_total_quantity_log_ = tb_ctx->is_total_quantity_log();
   ObTableOperationType::Type operation_type = tb_ctx->get_opertion_type();
   cache_key_.operation_type_ = operation_type;

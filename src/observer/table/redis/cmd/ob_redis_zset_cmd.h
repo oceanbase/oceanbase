@@ -19,18 +19,6 @@ namespace oceanbase
 {
 namespace table
 {
-/*
-zsets table model:
-    create table modis_zset_table(
-      db bigint not null,
-      rkey varbinary(1024) not null,
-      member varbinary(1024) not null,
-      score bigint not null,
-      expire_ts timestamp(6) default null,
-      index index_score(score) local,
-      primary key(db, rkey, member)) TTL(expire_ts + INTERVAL 0 SECOND)
-      partition by key(db, rkey) partitions 3;
-*/
 class ZRangeCtx
 {
 public:
@@ -57,8 +45,8 @@ public:
 public:
   int64_t db_;
   ObString key_;
-  int64_t offset_;
-  int64_t limit_;
+  int32_t offset_;
+  int32_t limit_;
   bool with_scores_;
   bool is_rev_;
 
@@ -76,9 +64,12 @@ public:
 class ZSetCommand : public SetCommand
 {
 public:
-  using MemberScoreMap = common::hash::ObHashMap<ObString, double>;
-  ZSetCommand() : key_()
-  {}
+  using MemberScoreMap = common::hash::ObHashMap<ObString, double, common::hash::NoPthreadDefendMode>;
+  using MemberSet = common::hash::ObHashSet<ObString, common::hash::NoPthreadDefendMode>;
+  ZSetCommand()
+  {
+    attr_.cmd_group_ = ObRedisCmdGroup::ZSET_CMD;
+  }
   virtual ~ZSetCommand() = default;
 
 protected:
@@ -89,10 +80,8 @@ protected:
   static const ObString AGGREGATE;
   static const ObString POS_INF;
   static const ObString NEG_INF;
-  common::ObString key_;
 
-  int strntod_with_inclusive(const ObString &str, bool &inclusive, double &d);
-  int string_to_double(const ObString &str, double &d);
+  int strntod_with_inclusive(const ObString &str, bool &inclusive, double &d, ObString& fmt_err_msg);
 };
 
 // ZADD key score member [score member ...]
@@ -103,14 +92,13 @@ public:
   {
     attr_.arity_ = -4;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "ZADD";
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
   }
   virtual ~ZAdd()
   { mem_score_map_.destroy(); }
 
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+  const MemberScoreMap &member_score_map() const { return mem_score_map_; }
 
 private:
   // args
@@ -128,13 +116,12 @@ public:
   {
     attr_.arity_ = 2;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "ZCARD";
   }
   virtual ~ZCard()
   {}
 
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ZCard);
@@ -145,21 +132,18 @@ class ZRem : public ZSetCommand
 {
 public:
   explicit ZRem(ObIAllocator &allocator)
-      : members_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "RedisZRem"))
   {
     attr_.arity_ = -3;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "ZREM";
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
   }
   virtual ~ZRem()
   {}
 
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
-  common::ObArray<ObString> members_;
+  MemberSet members_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ZRem);
@@ -173,14 +157,12 @@ public:
   {
     attr_.arity_ = 4;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "ZINCRBY";
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
   }
   virtual ~ZIncrBy()
   {}
 
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   double increment_;
@@ -194,20 +176,17 @@ private:
 class ZScore : public ZSetCommand
 {
 public:
-  explicit ZScore(ObIAllocator &allocator) : member_()
+  explicit ZScore(ObIAllocator &allocator)
   {
     attr_.arity_ = 3;
     attr_.need_snapshot_ = true;
-    attr_.cmd_name_ = "ZSCORE";
   }
   virtual ~ZScore()
   {}
 
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
-
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 private:
-  ObString member_;
   DISALLOW_COPY_AND_ASSIGN(ZScore);
 };
 
@@ -219,15 +198,13 @@ public:
   {
     attr_.arity_ = -3;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "ZRANK";
-    attr_.lock_mode_ = REDIS_LOCK_MODE::SHARED;
     zrange_ctx_.is_rev_ = false;
   }
   virtual ~ZRank()
   {}
 
-  virtual int init(const common::ObIArray<common::ObString> &args) override;
-  virtual int apply(ObRedisCtx &redis_ctx) override;
+  virtual int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  virtual int apply(ObRedisSingleCtx &redis_ctx) override;
 
 protected:
   ObString member_;
@@ -244,7 +221,6 @@ public:
   explicit ZRevRank(ObIAllocator &allocator) : ZRank(allocator)
   {
     zrange_ctx_.is_rev_ = true;
-    attr_.cmd_name_ = "ZREVRANK";
   }
   virtual ~ZRevRank()
   {}
@@ -261,14 +237,12 @@ public:
   {
     attr_.arity_ = -4;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "ZRANGE";
-    attr_.lock_mode_ = REDIS_LOCK_MODE::SHARED;
   }
   virtual ~ZRange()
   {}
 
-  virtual int init(const common::ObIArray<common::ObString> &args) override;
-  virtual int apply(ObRedisCtx &redis_ctx) override;
+  virtual int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  virtual int apply(ObRedisSingleCtx &redis_ctx) override;
 
 protected:
   ZRangeCtx zrange_ctx_;
@@ -283,7 +257,6 @@ class ZRevRange : public ZRange
 public:
   explicit ZRevRange(ObIAllocator &allocator) : ZRange(allocator)
   {
-    attr_.cmd_name_ = "ZREVRANGE";
     zrange_ctx_.is_rev_ = true;
   }
   virtual ~ZRevRange()
@@ -301,14 +274,12 @@ public:
   {
     attr_.arity_ = 4;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "ZREMRANGEBYRANK";
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
   }
   virtual ~ZRemRangeByRank()
   {}
 
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   ZRangeCtx zrange_ctx_;
@@ -324,14 +295,12 @@ public:
   {
     attr_.arity_ = -4;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "ZRANGEBYSCORE";
-    attr_.lock_mode_ = REDIS_LOCK_MODE::SHARED;
   }
   virtual ~ZRangeByScore()
   {}
 
-  virtual int init(const common::ObIArray<common::ObString> &args) override;
-  virtual int apply(ObRedisCtx &redis_ctx) override;
+  virtual int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  virtual int apply(ObRedisSingleCtx &redis_ctx) override;
 
 protected:
   ZRangeCtx zrange_ctx_;
@@ -346,13 +315,12 @@ class ZRevRangeByScore : public ZRangeByScore
 public:
   explicit ZRevRangeByScore(ObIAllocator &allocator) : ZRangeByScore(allocator)
   {
-    attr_.cmd_name_ = "ZREVRANGEBYSCORE";
     zrange_ctx_.is_rev_ = true;
   }
   virtual ~ZRevRangeByScore()
   {}
 
-  int init(const common::ObIArray<common::ObString> &args) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ZRevRangeByScore);
@@ -363,18 +331,15 @@ class ZRemRangeByScore : public ZSetCommand
 {
 public:
   explicit ZRemRangeByScore(ObIAllocator &allocator)
-      : zrange_ctx_()
   {
     attr_.arity_ = 4;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "ZREMRANGEBYSCORE";
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
   }
   virtual ~ZRemRangeByScore()
   {}
 
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   ZRangeCtx zrange_ctx_;
@@ -391,14 +356,12 @@ public:
   {
     attr_.arity_ = 4;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "ZCOUNT";
-    attr_.lock_mode_ = REDIS_LOCK_MODE::SHARED;
   }
   virtual ~ZCount()
   {}
 
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   double min_;
@@ -426,14 +389,13 @@ public:
   {
     attr_.arity_ = -4;
     attr_.need_snapshot_ = false;
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
     attr_.use_dist_das_ = true;
   }
   virtual ~ZSetAggCommand()
   {}
 
-  virtual int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  virtual int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 protected:
   ObString dest_;
@@ -452,12 +414,11 @@ class ZUnionStore : public ZSetAggCommand
 public:
   explicit ZUnionStore(ObIAllocator &allocator) : ZSetAggCommand(allocator)
   {
-    attr_.cmd_name_ = "ZUNIONSTORE";
   }
   virtual ~ZUnionStore()
   {}
 
-  int apply(ObRedisCtx &redis_ctx) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ZUnionStore);
@@ -470,12 +431,11 @@ class ZInterStore : public ZSetAggCommand
 public:
   explicit ZInterStore(ObIAllocator &allocator) : ZSetAggCommand(allocator)
   {
-    attr_.cmd_name_ = "ZINTERSTORE";
   }
   virtual ~ZInterStore()
   {}
 
-  int apply(ObRedisCtx &redis_ctx) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ZInterStore);

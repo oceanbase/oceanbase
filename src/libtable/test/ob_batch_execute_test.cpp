@@ -218,37 +218,6 @@ TEST_F(TestBatchExecute, entity_factory)
   }
 }
 
-TEST_F(TestBatchExecute, serialize_batch_result)
-{
-  ObTableBatchOperationResult result;
-  ObTableEntity result_entity;
-  ObTableOperationResult single_op_result;
-  single_op_result.set_entity(result_entity);
-  single_op_result.set_errno(1234);
-  single_op_result.set_type(ObTableOperationType::INSERT_OR_UPDATE);
-  single_op_result.set_affected_rows(4321);
-  ASSERT_EQ(OB_SUCCESS, result.push_back(single_op_result));
-  int64_t expected_len = result.get_serialize_size();
-  char buf[1024];
-  int64_t pos = 0;
-  ASSERT_EQ(OB_SUCCESS, result.serialize(buf, 1024, pos));
-  ASSERT_EQ(expected_len, pos);
-
-  ObTableBatchOperationResult result2;
-  ObTableEntityFactory<ObTableEntity> entity_factory;
-  result2.set_entity_factory(&entity_factory);
-  int64_t data_len = pos;
-  //fprintf(stderr, "yzfdebug datalen=%ld expectedlen=%ld\n", data_len, expected_len);
-  pos = 0;
-  ASSERT_EQ(OB_SUCCESS, result2.deserialize(buf, data_len, pos));
-  ASSERT_EQ(1, result2.count());
-  ASSERT_EQ(1234, result2.at(0).get_errno());
-  ASSERT_EQ(4321, result2.at(0).get_affected_rows());
-  ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, result2.at(0).type());
-}
-
-
-
 TEST_F(TestBatchExecute, all_single_operation)
 {
   ObTable *the_table = NULL;
@@ -832,7 +801,7 @@ TEST_F(TestBatchExecute, column_type_check)
     value.set_collation_type(CS_TYPE_BINARY);
     ASSERT_EQ(OB_SUCCESS, entity->set_property(ObString::make_string("cblob"), value));
 
-    int64_t now = ObTimeUtility::current_time();
+    int64_t now = ObTimeUtility::fast_current_time();
     ObTimeConverter::round_datetime(0, now);
     value.set_timestamp(now);
     ASSERT_EQ(OB_SUCCESS, entity->set_property(ObString::make_string("ctimestamp"), value));

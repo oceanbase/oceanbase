@@ -896,10 +896,12 @@ int QueryAndMutateHelper::execute_query_and_mutate()
   } else {
     ObTableApiExecutor *executor = nullptr;
     ObTableQueryResultIterator *result_iterator = nullptr;
-    ObTableApiScanRowIterator row_iter;
-    if (OB_FAIL(scan_spec->create_executor(tb_ctx_, executor))) {
+    ObTableApiScanRowIterator *row_iter = nullptr;
+    if (OB_FAIL(ObTableQueryUtils::get_scan_row_interator(tb_ctx_, row_iter))) {
+      LOG_WARN("fail to get scan row iterator", K(ret));
+    } else if (OB_FAIL(scan_spec->create_executor(tb_ctx_, executor))) {
       LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
-    } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
+    } else if (OB_FAIL(row_iter->open(static_cast<ObTableApiScanExecutor*>(executor)))) {
       LOG_WARN("fail to open scan row iterator", K(ret));
     } else if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(allocator_,
                                                                          query_and_mutate_.get_query(),
@@ -908,7 +910,7 @@ int QueryAndMutateHelper::execute_query_and_mutate()
                                                                          tb_ctx_,
                                                                          result_iterator))) {
       LOG_WARN("fail to generate query result iterator", K(ret));
-    } else if (FALSE_IT(result_iterator->set_scan_result(&row_iter))) {
+    } else if (FALSE_IT(result_iterator->set_scan_result(row_iter))) {
       // do nothing
     } else if (is_hkv_) {
       if (OB_FAIL(execute_htable_mutation(result_iterator))) {
@@ -926,10 +928,12 @@ int QueryAndMutateHelper::execute_query_and_mutate()
       }
     }
 
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = row_iter.close())) {
-      LOG_WARN("fail to close row iter", K(tmp_ret));
-      ret = COVER_SUCC(tmp_ret);
+    if (OB_NOT_NULL(row_iter)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = row_iter->close())) {
+        LOG_WARN("fail to close row iter", K(tmp_ret));
+        ret = COVER_SUCC(tmp_ret);
+      }
     }
 
     if (OB_NOT_NULL(scan_spec)) {
@@ -948,6 +952,7 @@ int QueryAndMutateHelper::check_and_execute(ObTableQueryResultIterator *result_i
   const ObITableEntity &mutate_entity = mutations.at(0).entity();
   ObTableQueryResult *one_result = nullptr;
   bool check_exists = query_and_mutate_.is_check_exists();
+  bool rollback_when_check_failed = query_and_mutate_.rollback_when_check_failed();
   bool check_passed = false;
   int64_t affected_rows = 0;
   OB_TABLE_START_AUDIT(credential_,
@@ -981,16 +986,27 @@ int QueryAndMutateHelper::check_and_execute(ObTableQueryResultIterator *result_i
     // do nothing
   }
 
-  if (OB_SUCC(ret) && check_passed) {
-    switch (mutations.at(0).type()) {
-      case ObTableOperationType::INSERT_OR_UPDATE: {
-        ret = process_insert_up(mutate_entity, affected_rows);
-        break;
+  if (OB_SUCC(ret)) {
+    if (!check_passed) { // check failed
+      if (rollback_when_check_failed) {
+        ObString op = ObString::make_string("CheckAndInsUp");
+        ret = OB_KV_CHECK_FAILED;
+        LOG_WARN("check failed and rollback", K(ret));
+        LOG_USER_ERROR(OB_KV_CHECK_FAILED, op.length(), op.ptr());
+      } else {
+        // do nothing
       }
-      default: {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported mutation type", K(ret), "type", mutations.at(0).type());
-        break;
+    } else { // check passed
+      switch (mutations.at(0).type()) {
+        case ObTableOperationType::INSERT_OR_UPDATE: {
+          ret = process_insert_up(mutate_entity, affected_rows);
+          break;
+        }
+        default: {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not supported mutation type", K(ret), "type", mutations.at(0).type());
+          break;
+        }
       }
     }
   }

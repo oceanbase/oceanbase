@@ -19,27 +19,321 @@ namespace oceanbase
 {
 namespace table
 {
-/*
-stringes table model:
-  create table modis_string_table(
-    db bigint not null,
-    rkey varbinary(1024) not null,
-    value varbinary(1024) not null,
-    expire_ts timestamp(6) default null,
-    primary key(db, rkey)) TTL(expire_ts + INTERVAL 0 SECOND) partition by key(db, rkey) partitions 3;
-*/
 class StringCommand : public RedisCommand
 {
 public:
-  StringCommand() : key_()
-  {}
+  StringCommand()
+  {
+    attr_.cmd_group_ = ObRedisCmdGroup::STRING_CMD;
+  }
   virtual ~StringCommand() = default;
-
-protected:
-  ObString key_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(StringCommand);
+};
+
+// APPEND key value
+class Append : public StringCommand
+{
+public:
+  explicit Append(ObIAllocator &allocator) : StringCommand()
+  {
+    attr_.arity_ = 3;
+    attr_.need_snapshot_ = false;
+  }
+  virtual ~Append()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+  common::ObString val_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(Append);
+};
+
+// BITCOUNT key [start end]
+class BitCount : public StringCommand
+{
+public:
+  explicit BitCount(ObIAllocator &allocator) : StringCommand()
+  {
+    attr_.arity_ = -2;
+    attr_.need_snapshot_ = true;
+  }
+  virtual ~BitCount()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+  common::ObString start_;
+  common::ObString end_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(BitCount);
+};
+
+// GET key
+class Get : public StringCommand
+{
+public:
+  explicit Get(ObIAllocator &allocator) : StringCommand()
+  {
+    attr_.arity_ = 2;
+    attr_.need_snapshot_ = true;
+  }
+  virtual ~Get()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(Get);
+};
+
+// GETBIT key offset
+class GetBit : public StringCommand
+{
+public:
+  explicit GetBit(ObIAllocator &allocator) : StringCommand()
+  {
+    attr_.arity_ = 3;
+    attr_.need_snapshot_ = true;
+  }
+  virtual ~GetBit()
+  {}
+  // set AND check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+  ObString offset_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(GetBit);
+};
+
+// GETRANGE key start end
+class GetRange : public StringCommand
+{
+public:
+  explicit GetRange(ObIAllocator &allocator) : StringCommand()
+  {
+    attr_.arity_ = 4;
+    attr_.need_snapshot_ = true;
+  }
+  virtual ~GetRange()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+  common::ObString start_;
+  common::ObString end_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(GetRange);
+};
+
+// INCRBYFLOAT key increment
+class IncrByFloat : public StringCommand
+{
+public:
+  explicit IncrByFloat(ObIAllocator &allocator) : StringCommand()
+  {
+    attr_.arity_ = 3;
+    attr_.need_snapshot_ = false;
+  }
+  virtual ~IncrByFloat()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  common::ObString incr_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(IncrByFloat);
+};
+
+// MGET key [key ...]
+class MGet : public StringCommand
+{
+public:
+  explicit MGet(ObIAllocator &allocator) : StringCommand(), keys_(nullptr)
+  {
+    attr_.arity_ = -2;
+    attr_.need_snapshot_ = true;
+    attr_.use_dist_das_ = true;
+  }
+  virtual ~MGet()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  const ObIArray<ObString> *keys_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(MGet);
+};
+
+// MSET key value [key value ...]
+class MSet : public StringCommand
+{
+public:
+  explicit MSet(ObIAllocator &allocator)
+  {
+    attr_.arity_ = -3;
+    attr_.need_snapshot_ = false;
+    attr_.use_dist_das_ = true;
+  }
+  virtual ~MSet()
+  {
+    field_val_map_.destroy();
+  }
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  FieldValMap field_val_map_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(MSet);
+};
+
+struct SetArg {
+  common::ObString cmd_name_;
+  common::ObString value_;
+  common::ObString expire_str_;
+  bool is_ms_ = false;
+  bool nx_ = false;
+
+  TO_STRING_KV(K_(value), K_(expire_str),K_(is_ms), K_(nx));
+};
+
+// SET key value
+class Set : public StringCommand
+{
+public:
+  explicit Set(ObIAllocator &allocator) : StringCommand()
+  {
+    attr_.arity_ = 3;
+    attr_.need_snapshot_ = false;
+  }
+  virtual ~Set()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+  OB_INLINE const common::ObString &value() const { return set_arg_.value_; }
+
+protected:
+  SetArg set_arg_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(Set);
+};
+
+// PSETEX key milliseconds value
+class PSetEx : public Set
+{
+public:
+  explicit PSetEx(ObIAllocator &allocator) : Set(allocator)
+  {
+    attr_.arity_ = 4;
+    attr_.need_snapshot_ = false;
+  }
+  virtual ~PSetEx()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(PSetEx);
+};
+
+// SETEX key seconds value
+class SetEx : public Set
+{
+public:
+  explicit SetEx(ObIAllocator &allocator) : Set(allocator)
+  {
+    attr_.arity_ = 4;
+    attr_.need_snapshot_ = false;
+  }
+  virtual ~SetEx()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(SetEx);
+};
+
+// SETNX key value
+class SetNx : public Set
+{
+public:
+  explicit SetNx(ObIAllocator &allocator): Set(allocator)
+  {
+    attr_.arity_ = 3;
+    attr_.need_snapshot_ = false;
+  }
+  virtual ~SetNx()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(SetNx);
+};
+
+// SETRANGE key offset value
+class SetRange : public StringCommand
+{
+public:
+  explicit SetRange(ObIAllocator &allocator) : StringCommand()
+  {
+    attr_.arity_ = 4;
+    attr_.need_snapshot_ = false;
+  }
+  virtual ~SetRange()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  common::ObString offset_;
+  common::ObString value_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(SetRange);
+};
+
+// STRLEN key
+class StrLen : public StringCommand
+{
+public:
+  explicit StrLen(ObIAllocator &allocator) : StringCommand()
+  {
+    attr_.arity_ = 2;
+    attr_.need_snapshot_ = true;
+  }
+  virtual ~StrLen()
+  {}
+  // set and check args here
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(StrLen);
 };
 
 // GETSET key value
@@ -50,15 +344,13 @@ public:
   {
     attr_.arity_ = 3;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "GETSET";
     attr_.use_dist_das_ = false;
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
   }
   virtual ~GetSet()
   {}
   // set and check args here
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   ObString new_value_;
@@ -75,15 +367,13 @@ public:
   {
     attr_.arity_ = 4;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "SETBIT";
     attr_.use_dist_das_ = false;
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
   }
   virtual ~SetBit()
   {}
   // set and check args here
-  int init(const common::ObIArray<common::ObString> &args) override;
-  int apply(ObRedisCtx &redis_ctx) override;
+  int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  int apply(ObRedisSingleCtx &redis_ctx) override;
 
 private:
   char value_;
@@ -102,13 +392,13 @@ public:
   {
     attr_.arity_ = 3;
     attr_.need_snapshot_ = false;
-    attr_.cmd_name_ = "INCRBY";
-    attr_.lock_mode_ = REDIS_LOCK_MODE::EXCLUSIVE;
   }
   virtual ~IncrBy()
   {}
-  virtual int init(const common::ObIArray<common::ObString> &args) override;
-  virtual int apply(ObRedisCtx &redis_ctx) override;
+  virtual int init(const common::ObIArray<common::ObString> &args, ObString& fmt_err_msg) override;
+  virtual int apply(ObRedisSingleCtx &redis_ctx) override;
+  OB_INLINE const ObString &incr() { return incr_; }
+  OB_INLINE bool is_incr() { return is_incr_; }
 
 protected:
   ObString incr_;
@@ -125,7 +415,7 @@ public:
   explicit Incr(ObIAllocator &allocator) : IncrBy(allocator)
   {
     attr_.arity_ = 2;
-    attr_.cmd_name_ = "INCR";
+
   }
   virtual ~Incr()
   {}
@@ -141,7 +431,6 @@ public:
   explicit Decr(ObIAllocator &allocator) : IncrBy(allocator)
   {
     attr_.arity_ = 2;
-    attr_.cmd_name_ = "DECR";
     is_incr_ = false;
   }
   virtual ~Decr()
@@ -158,7 +447,6 @@ public:
   explicit DecrBy(ObIAllocator &allocator) : IncrBy(allocator)
   {
     attr_.arity_ = 3;
-    attr_.cmd_name_ = "DECRBY";
     is_incr_ = false;
   }
   virtual ~DecrBy()

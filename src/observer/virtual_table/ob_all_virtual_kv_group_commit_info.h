@@ -15,17 +15,11 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "observer/omt/ob_multi_tenant_operator.h"
 #include "observer/table/group/ob_table_tenant_group.h"
+#include "observer/table/group/ob_i_table_struct.h"
 namespace oceanbase
 {
 namespace observer
 {
-struct ObGetAllGroupInfoOp {
-  explicit ObGetAllGroupInfoOp(common::ObIArray<table::ObTableLsGroupInfo>& group_infos)
-    : group_infos_(group_infos)
-  {}
-  int operator()(common::hash::HashMapPair<uint64_t, table::ObTableLsGroupInfo> &entry);
-  common::ObIArray<table::ObTableLsGroupInfo>& group_infos_;
-};
 
 class ObAllVirtualKvGroupCommitInfo : public common::ObVirtualTableScannerIterator,
                                       public omt::ObMultiTenantOperator
@@ -60,7 +54,7 @@ private:
 private:
   int64_t cur_idx_;
   char ipbuf_[common::OB_IP_STR_BUFF];
-  ObSEArray<table::ObTableLsGroupInfo, 128> group_infos_;
+  ObSEArray<table::ObTableGroupInfo, 128> group_infos_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualKvGroupCommitInfo);
 };

@@ -7850,8 +7850,24 @@ def_table_schema(
   ],
 )
 
+all_kv_redis_table_def = dict(
+  owner = 'maochongxin.mcx',
+  table_name = '__all_kv_redis_table',
+  table_id = '527',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('command_name', 'varchar:1024', 'false'),
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('table_name', 'varchar:OB_MAX_TABLE_NAME_LENGTH', 'false'),
+  ],
+)
+
+def_table_schema(**all_kv_redis_table_def)
+
 # 526: __wr_res_mgr_sysstat
-# 527: __all_kv_redis_table
 
 all_ncomp_dll_v2 = dict(
   owner = 'hr351303',
@@ -15622,7 +15638,11 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_sql_plan']))
 # 12502: __all_virtual_wr_res_mgr_sysstat
-# 12503: __all_virtual_kv_redis_table
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12503',
+  table_name = '__all_virtual_kv_redis_table',
+  keywords = all_def_keywords['__all_kv_redis_table']))
 
 def_table_schema(
   owner             = 'zz412656',
@@ -39953,8 +39973,45 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21618: DBA_OB_KV_REDIS_TABLE
-# 21619: CDB_OB_KV_REDIS_TABLE
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name = 'DBA_OB_KV_REDIS_TABLE',
+  table_id = '21618',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    COMMAND_NAME,
+    TABLE_NAME,
+    GMT_CREATE,
+    GMT_MODIFIED
+FROM
+    OCEANBASE.__ALL_KV_REDIS_TABLE
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'maochongxin.mcx',
+  table_name = 'CDB_OB_KV_REDIS_TABLE',
+  table_id = '21619',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+SELECT
+    TENANT_ID,
+    COMMAND_NAME,
+    TABLE_NAME,
+    GMT_CREATE,
+    GMT_MODIFIED
+FROM
+    OCEANBASE.__ALL_VIRTUAL_KV_REDIS_TABLE
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'zz412656',

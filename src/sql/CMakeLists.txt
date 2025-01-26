@@ -1247,6 +1247,7 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_tenant_clone_resolver.cpp
   resolver/cmd/ob_olap_async_job_resolver.cpp
   resolver/cmd/ob_olap_async_job_stmt.cpp
+  resolver/cmd/ob_module_data_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dcl

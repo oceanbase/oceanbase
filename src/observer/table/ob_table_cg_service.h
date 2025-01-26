@@ -89,6 +89,8 @@ private:
 
   static int generate_filter_exprs(ObTableCtx &ctx);
 
+  static int generate_aggregate_exprs(ObTableCtx &ctx);
+
   static int generate_delta_expr(ObTableCtx &ctx, ObTableAssignment &assign);
 
   static int generate_assign_expr(ObTableCtx &ctx, ObTableAssignment &assign);
@@ -99,6 +101,8 @@ private:
                                          sql::ObRawExpr *&expr,
                                          const bool is_inc_or_append = false,
                                          sql::ObRawExpr *delta_expr = nullptr);
+
+  static int generate_count_expr(ObTableCtx &ctx, sql::ObAggFunRawExpr *&expr);
 
   static int generate_autoinc_nextval_expr(ObTableCtx &ctx,
                                            const ObTableColumnItem &item,
@@ -291,8 +295,7 @@ private:
                                   ObTableIndexInfo &index_info,
                                   common::ObIAllocator &allocator,
                                   sql::ColContentFixedArray &column_infos);
-  static int generate_tablet_id_dep_exprs(ObIArray<sql::ObRawExpr *> &raw_exprs,
-                                          ObIArray<sql::ObRawExpr *> &dep_exprs);
+  static int generate_calc_raw_exprs(ObIArray<sql::ObRawExpr *> &raw_exprs, ObIArray<sql::ObRawExpr *> &calc_exprs);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDmlCgService);
 };
@@ -422,6 +425,10 @@ private:
                                   common::ObIArray<sql::ObRawExpr*> &access_exprs);
   static int generate_output_exprs(const ObTableCtx &ctx,
                                    common::ObIArray<sql::ObExpr *> &output_exprs);
+
+  static int generate_pushdown_aggr_ctdef(const ObTableCtx &ctx,
+                                          sql::ObDASScanCtDef &das_tsc_ctdef);
+
   static int generate_access_ctdef(const ObTableCtx &ctx,
                                    ObIAllocator &allocator,
                                    sql::ObDASScanCtDef &das_tsc_ctdef);

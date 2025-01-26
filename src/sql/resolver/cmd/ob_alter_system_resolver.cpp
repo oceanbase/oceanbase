@@ -28,6 +28,7 @@
 #include "share/backup/ob_backup_config.h"
 #include "observer/mysql/ob_query_response_time.h"
 #include "share/restore/ob_import_util.h"
+#include "share/table/ob_table_config_util.h"
 
 namespace oceanbase
 {
