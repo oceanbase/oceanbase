@@ -156,7 +156,7 @@ struct ObVectorVectorArithFunc : public ObVectorArithFunc
   int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx, ArithType type) const;
 };
 
-struct ObVectorFloatArithFunc : public ObVectorArithFunc
+struct ObVectorElemArithFunc : public ObVectorArithFunc
 {
   int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx, ArithType type) const;
 };

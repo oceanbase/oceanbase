@@ -6677,15 +6677,15 @@ int ObDDLService::switch_index_name_and_status_for_vec_index_table(obrpc::ObAlte
     } else if (OB_ISNULL(old_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpectd null pointer", K(ret));
-    } else if (!old_table_schema->is_vec_index() || !old_table_schema->is_vec_delta_buffer_type()) {
+    } else if (!old_table_schema->is_vec_index() || !old_table_schema->is_vec_domain_index()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("old index table must be vec delta_buffer_table", K(ret), K(old_table_schema));
+      LOG_WARN("old index table must be vec domain index", K(ret), K(old_table_schema));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, new_index_id, new_table_schema))) {
       LOG_WARN("fail to get new index table schema", K(ret), K(new_index_id));
     } else if (OB_ISNULL(new_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpectd null pointer", K(ret));
-    } else if (!new_table_schema->is_vec_index() || !new_table_schema->is_vec_delta_buffer_type()) {
+    } else if (!new_table_schema->is_vec_index() || !new_table_schema->is_vec_domain_index()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new index table must be vec delta_buffer_table", K(ret), K(new_table_schema));
     } else if (old_table_schema->get_database_id() != new_table_schema->get_database_id()) {
@@ -6703,12 +6703,25 @@ int ObDDLService::switch_index_name_and_status_for_vec_index_table(obrpc::ObAlte
       ObArray<ObString> new_table_names;
       ObArray<ObString> old_table_names;
       const int64_t unused_id = 1;    // not set OB_INVALID_ID for sava check
-
+      const int64_t EXPECTED_HNSW_UPDATE_TABLE_CNT = 7;    // 3 old index table + 3 new index table + 1 data data
+      const int64_t EXPECTED_IVFFLAT_UPDATE_TABLE_CNT = 7;    // 3 old index table + 3 new index table + 1 data data
+      const int64_t EXPECTED_IVFSQ8_UPDATE_TABLE_CNT = 9;    // 4 old index table + 4 new index table + 1 data data
+      const int64_t EXPECTED_IVFPQ_UPDATE_TABLE_CNT = 9;    // 4 old index table + 4 new index table + 1 data data
+      int64_t update_table_cnt = 0;
+      const ObIndexType index_type = old_table_schema->get_index_type();
+      if (share::schema::is_vec_hnsw_index(index_type)) {
+        update_table_cnt = EXPECTED_HNSW_UPDATE_TABLE_CNT;
+      } else if (share::schema::is_vec_ivfflat_index(index_type)) {
+        update_table_cnt = EXPECTED_IVFFLAT_UPDATE_TABLE_CNT;
+      } else if (share::schema::is_vec_ivfsq8_index(index_type)) {
+        update_table_cnt = EXPECTED_IVFSQ8_UPDATE_TABLE_CNT;
+      } else if (share::schema::is_vec_ivfpq_index(index_type)) {
+        update_table_cnt = EXPECTED_IVFPQ_UPDATE_TABLE_CNT;
+      }
       SMART_VAR(ObSArray<ObTableSchema>, table_schemas) {
-      // ObSArray<ObTableSchema> table_schemas;
-        const int64_t EXPECTED_UPDATE_TABLE_CNT = 7;    // 3 old index table + 3 new index table + 1 data data
         if (OB_FAIL(ObVectorIndexUtil::generate_switch_index_names(old_domain_index_name,
                                                                    new_domain_index_name,
+                                                                   index_type,
                                                                    allocator,
                                                                    old_table_names,
                                                                    new_table_names))) {
@@ -6725,7 +6738,7 @@ int ObDDLService::switch_index_name_and_status_for_vec_index_table(obrpc::ObAlte
         } else if (OB_FAIL(ObVectorIndexUtil::update_index_tables_attributes(tenant_id,
                                                                              database_id,
                                                                              data_table_id,
-                                                                             EXPECTED_UPDATE_TABLE_CNT,
+                                                                             update_table_cnt,
                                                                              old_table_names,
                                                                              new_table_names,
                                                                              ddl_operator,
@@ -8826,11 +8839,10 @@ int ObDDLService::rename_dropping_index_name(
     } else if (OB_FAIL(new_index_schemas.push_back(*index_table_schema))) {
       LOG_WARN("fail to push back index schema", K(ret), KPC(index_table_schema));
     }
-  } else if ((!drop_index_arg.is_inner_ || drop_index_arg.is_vec_inner_drop_) && index_table_schema->is_vec_delta_buffer_type()) {
+  } else if ((!drop_index_arg.is_inner_ || drop_index_arg.is_vec_inner_drop_) && index_table_schema->is_vec_domain_index()) {
     // This task is the parent task of drop vec index, no need to rename.
-    if (OB_FAIL(get_dropping_vec_index_invisiable_table_schema_(index_table_schema->get_tenant_id(), data_table_id,
-       index_table_schema->get_table_id(), drop_index_arg.is_vec_inner_drop_, index_table_schema->get_table_name_str(), schema_guard, ddl_operator,
-       trans, new_index_schemas))) {
+    if (OB_FAIL(ObVectorIndexUtil::get_dropping_vec_index_invisiable_table_schema(*index_table_schema, data_table_id,
+        drop_index_arg.is_vec_inner_drop_, schema_guard, ddl_operator, trans, new_index_schemas))) {
       LOG_WARN("fail to get dropping vec index table schema", K(ret), K(data_table_id), K(index_table_schema));
     } else if (OB_FAIL(new_index_schemas.push_back(*index_table_schema))) {
       LOG_WARN("fail to push back index schema", K(ret), KPC(index_table_schema));
@@ -8949,118 +8961,6 @@ int ObDDLService::get_dropping_domain_index_invisiable_aux_table_schema(
       }
     }
     STORAGE_FTS_LOG(INFO, "get dropping fts aux table name", K(ret), K(tenant_id), K(data_table_id), K(index_table_id));
-  }
-  return ret;
-}
-
-int ObDDLService::get_dropping_vec_index_invisiable_table_schema_(
-    const uint64_t tenant_id,
-    const uint64_t data_table_id,
-    const uint64_t index_table_id,
-    const bool is_vec_inner_drop,
-    const ObString &index_name,
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    ObDDLOperator &ddl_operator,
-    common::ObMySQLTransaction &trans,
-    common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas)
-{
-  int ret = OB_SUCCESS;
-  const share::schema::ObTableSchema *data_table_schema = nullptr;
-  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> indexs;
-  if (OB_UNLIKELY(OB_INVALID_ID == data_table_id
-        || OB_INVALID_ID == index_table_id
-        || OB_INVALID_TENANT_ID == tenant_id
-        || index_name.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(data_table_id), K(index_table_id), K(tenant_id), K(index_name));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
-    LOG_WARN("fail to get index schema with data table id", K(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_ISNULL(data_table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, data table schema is nullptr", K(ret), KP(data_table_schema));
-  } else {
-    SMART_VAR(ObTableSchema, new_aux_schema) {
-      const ObIArray<share::schema::ObAuxTableMetaInfo> &indexs = data_table_schema->get_simple_index_infos();
-      const share::schema::ObTableSchema *index_id_schema = nullptr;
-      const share::schema::ObTableSchema *snapshot_data_schema = nullptr;
-      const share::schema::ObTableSchema *rowkey_vid_schema = nullptr;
-      const share::schema::ObTableSchema *vid_rowkey_schema = nullptr;
-      ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
-      bool is_index = true;
-      const int64_t database_id = data_table_schema->get_database_id();
-      const bool is_hidden_flag = false;
-      const bool is_built_in_flag = true;
-      bool already_get_index_id_schema = false;
-      bool already_get_snapshot_data_table_schema = false;
-
-      for (int64_t i = 0; OB_SUCC(ret) && i < indexs.count(); ++i) {
-        const share::schema::ObAuxTableMetaInfo &info = indexs.at(i);
-        if (share::schema::is_vec_rowkey_vid_type(info.index_type_)) {
-          if (OB_FAIL(schema_guard.get_table_schema(tenant_id, info.table_id_, rowkey_vid_schema))) {
-            LOG_WARN("fail to get vec rowkey vid table schema", K(ret), K(tenant_id), K(info));
-          } else if (OB_ISNULL(rowkey_vid_schema)) {
-            ret = OB_TABLE_NOT_EXIST;
-            LOG_WARN("rowkey_vid_schema is nullptr", K(ret), K(info));
-          } else if (OB_FAIL(new_aux_schemas.push_back(*rowkey_vid_schema))) {
-            LOG_WARN("fail to push vec rowkey vid table schema", K(ret), KPC(rowkey_vid_schema));
-          }
-        } else if (share::schema::is_vec_vid_rowkey_type(info.index_type_)) {
-          if (OB_FAIL(schema_guard.get_table_schema(tenant_id, info.table_id_, vid_rowkey_schema))) {
-            LOG_WARN("fail to get vec vid rowkey table schema", K(ret), K(tenant_id), K(info));
-          } else if (OB_ISNULL(vid_rowkey_schema)) {
-            ret = OB_TABLE_NOT_EXIST;
-            LOG_WARN("vid_rowkey_schema is nullptr", K(ret), K(info));
-          } else if (OB_FAIL(new_aux_schemas.push_back(*vid_rowkey_schema))) {
-            LOG_WARN("fail to push vec vid rowkey table schema", K(ret), KPC(vid_rowkey_schema));
-          }
-        } else if (share::schema::is_vec_index_id_type(info.index_type_)) {
-          // 通过索引名获取4号表
-          if (already_get_index_id_schema) {
-            // 可能存在多个schema，但这里只取包含index_name字串的schema
-          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard,
-                                                                                 tenant_id,
-                                                                                 database_id,
-                                                                                 index_name,
-                                                                                 info.index_type_,
-                                                                                 &allocator,
-                                                                                 index_id_schema))) {
-            LOG_WARN("fail to generate vec index name", K(ret), K(info.index_type_));
-          } else if (OB_ISNULL(index_id_schema)) {
-            ret = OB_TABLE_NOT_EXIST;
-            LOG_WARN("index_id_schema is nullptr", K(ret), K(index_name));
-          } else if (OB_FAIL(new_aux_schemas.push_back(*index_id_schema))) {
-            LOG_WARN("fail to push vec table schema", K(ret), K(index_name));
-          } else {
-            already_get_index_id_schema = true;
-          }
-        } else if (share::schema::is_vec_index_snapshot_data_type(info.index_type_)) {
-          // 通过索引名获取5号表
-          if (already_get_snapshot_data_table_schema) {
-            // 可能存在多个 index id schema，但这里只取包含index_name字串的schema
-          } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(schema_guard,
-                                                                                 tenant_id,
-                                                                                 database_id,
-                                                                                 index_name,
-                                                                                 info.index_type_,
-                                                                                 &allocator,
-                                                                                 snapshot_data_schema))) {
-            LOG_WARN("fail to generate vec index name", K(ret), K(info.index_type_));
-          } else if (OB_ISNULL(snapshot_data_schema)) {
-            ret = OB_TABLE_NOT_EXIST;
-            LOG_WARN("snapshot_data_schema is nullptr", K(ret), K(index_name));
-          } else if (OB_FAIL(new_aux_schemas.push_back(*snapshot_data_schema))) {
-            LOG_WARN("fail to push vec table schema", K(ret), K(index_name));
-          } else {
-            already_get_snapshot_data_table_schema = true;
-          }
-        }
-        if (OB_TABLE_NOT_EXIST == ret && is_vec_inner_drop) {
-          ret = OB_SUCCESS;
-          LOG_WARN("table is not exist, maybe index table have been drop already", K(ret));
-        }
-      }
-    }
-    LOG_INFO("get dropping vec aux table name", K(ret), K(tenant_id), K(data_table_id), K(index_table_id));
   }
   return ret;
 }
@@ -15731,7 +15631,8 @@ int ObDDLService::check_has_vec_domain_index(
       // if there is indexes in new tables, if so, the indexes is already rebuilt in new table
       for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
         if (share::schema::is_vec_vid_rowkey_type(index_infos.at(i).index_type_) ||
-            share::schema::is_vec_rowkey_vid_type(index_infos.at(i).index_type_)) {
+            share::schema::is_vec_rowkey_vid_type(index_infos.at(i).index_type_) ||
+            share::schema::is_vec_domain_index(index_infos.at(i).index_type_)) {
           domain_index_exist = true;
           break;
         }
@@ -17410,19 +17311,6 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
   }
   bool has_fts_or_multivalue_index = false;
   const int64_t table_id = orig_table_schema.get_table_id();
-  if (OB_FAIL(ret) ||
-    alter_part_type == obrpc::ObAlterTableArg::DROP_PARTITION ||
-    alter_part_type == obrpc::ObAlterTableArg::TRUNCATE_PARTITION ) {
-  } else if (OB_FAIL(check_has_domain_index(schema_guard,
-                                         tenant_id,
-                                         table_id,
-                                         has_fts_or_multivalue_index))) {
-    LOG_WARN("failed to check if have fts index", K(ret), K(table_id));
-  } else if (has_fts_or_multivalue_index) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("alter partition operation on table with fulltext/multivalue index not supported", K(ret), K(orig_table_schema));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition operation on table with fulltext/multivalue index");
-  }
 
   if (OB_FAIL(ret)) {
   } else if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_part_type) {
@@ -45145,7 +45033,13 @@ int ObDDLService::check_vec_index_conflict(const uint64_t tenant_id, const uint6
     for (int64_t i = 0; OB_SUCC(ret) && i < task_records.count(); ++i) {
       const ObDDLTaskRecord &cur_record = task_records.at(i);
       if (cur_record.ddl_type_ == ObDDLType::DDL_CREATE_VEC_INDEX ||
+          cur_record.ddl_type_ == ObDDLType::DDL_CREATE_VEC_IVFFLAT_INDEX ||
+          cur_record.ddl_type_ == ObDDLType::DDL_CREATE_VEC_IVFSQ8_INDEX ||
+          cur_record.ddl_type_ == ObDDLType::DDL_CREATE_VEC_IVFPQ_INDEX ||
           cur_record.ddl_type_ == ObDDLType::DDL_DROP_VEC_INDEX ||
+          cur_record.ddl_type_ == ObDDLType::DDL_DROP_VEC_IVFFLAT_INDEX ||
+          cur_record.ddl_type_ == ObDDLType::DDL_DROP_VEC_IVFSQ8_INDEX ||
+          cur_record.ddl_type_ == ObDDLType::DDL_DROP_VEC_IVFPQ_INDEX ||
           cur_record.ddl_type_ == ObDDLType::DDL_REBUILD_INDEX) {
         ret = OB_EAGAIN;
         LOG_WARN("vector index is building, will retry later", K(ret), K(table_id), K(cur_record));

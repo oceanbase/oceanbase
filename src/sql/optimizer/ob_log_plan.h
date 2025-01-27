@@ -266,7 +266,8 @@ public:
   int update_re_est_cost(ObLogicalOperator *op);
 
   int collect_table_location(ObLogicalOperator *op);
-
+  int collect_vec_index_location_related_info(ObLogTableScan &tsc_op,
+                                              TableLocRelInfo& rel_info);
   int collect_location_related_info(ObLogicalOperator &op);
   int build_location_related_tablet_ids();
   int check_das_need_keep_ordering(ObLogicalOperator *op);
@@ -1493,8 +1494,6 @@ public:
   common::ObIArray<ObRawExpr *> &get_new_or_quals() { return new_or_quals_; }
 
   int construct_startup_filter_for_limit(ObRawExpr *limit_expr, ObLogicalOperator *log_op);
-
-  int prepare_vector_index_info(ObLogicalOperator *scan);
   int prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &scan_match_exprs,
                                   const ObIArray<ObRawExpr *> &scan_match_filters,
                                   const ObIArray<ObRawExpr *> &all_match_filters,
@@ -1503,6 +1502,16 @@ public:
   int prepare_text_retrieval_lookup(const ObIArray<ObRawExpr *> &lookup_match_exprs,
                                     const ObIArray<uint64_t> &lookup_index_ids,
                                     ObLogicalOperator *scan);
+  int prepare_vector_index_info(AccessPath *ap, ObLogicalOperator *scan);
+  int prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
+                                    const ObTableSchema &table_schema,
+                                    const uint64_t& vec_col_id,
+                                    ObLogTableScan *table_scan);
+
+  int prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
+                                    const ObTableSchema &table_schema,
+                                    const uint64_t& vec_col_id,
+                                    ObLogTableScan *table_scan);
   int prepare_multivalue_retrieval_scan(ObLogicalOperator *scan);
   int try_push_topn_into_domain_scan(ObLogicalOperator *&top,
                                     ObRawExpr *topn_expr,

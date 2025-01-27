@@ -139,9 +139,19 @@ int get_index_number(obvectorlib::VectorIndexPtr index_handler, int64_t &size)
 #endif
 }
 
+int get_index_type(obvectorlib::VectorIndexPtr index_handler)
+{
+    INIT_SUCC(ret);
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+    return ret;
+#else
+    return obvectorlib::get_index_type(index_handler);
+#endif
+}
+
 int knn_search(obvectorlib::VectorIndexPtr index_handler, float* query_vector,int dim, int64_t topk,
                const float*& result_dist, const int64_t*& result_ids, int64_t &result_size, int ef_search,
-               void* invalid)
+               void* invalid, bool reverse_filter)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
@@ -149,7 +159,7 @@ int knn_search(obvectorlib::VectorIndexPtr index_handler, float* query_vector,in
 #else
   return obvectorlib::knn_search(index_handler, query_vector, dim, topk,
                                  result_dist, result_ids, result_size,
-                                 ef_search, invalid);
+                                 ef_search, invalid, reverse_filter);
 #endif
 }
 

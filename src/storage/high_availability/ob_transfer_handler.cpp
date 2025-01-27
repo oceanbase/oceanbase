@@ -3210,7 +3210,7 @@ int ObTransferHandler::update_transfer_meta_info_(
   const int64_t rpc_timeout = timeout_ctx.get_timeout();
   const uint64_t group_id = share::OBCG_TRANSFER;
   ObArray<ObAddr> member_addr_list;
-  ObUpdateTransferMetaInfoArg arg;
+  SMART_VAR(ObUpdateTransferMetaInfoArg, arg) {
   ObHAAsyncRpcArg async_rpc_arg;
   ObArray<obrpc::Int64> responses;
   if (!is_inited_) {
@@ -3247,6 +3247,7 @@ int ObTransferHandler::update_transfer_meta_info_(
   }
 #endif
   }
+  } // smart var
   return ret;
 }
 

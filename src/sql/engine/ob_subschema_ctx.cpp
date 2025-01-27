@@ -523,7 +523,7 @@ int ObSubSchemaCtx::get_subschema_id_by_typedef(const ObString &type_def,
             LOG_WARN("fail to ensure array capacity", K(ret));
           } else if (FALSE_IT(subschema_array_.at(key) = value)) {
           } else if (OB_FAIL(subschema_reverse_map_.set_refactored(rev_key, key))) {
-            LOG_WARN("set subschema map failed", K(ret), K(rev_key));
+            LOG_WARN("set subschema map failed", K(ret), K(rev_key), K(key));
             subschema_array_.at(key).reset();
           }
         }
@@ -557,7 +557,7 @@ int ObSubSchemaCtx::get_subschema_id_by_typedef(ObNestedType coll_type,
   int ret = OB_SUCCESS;
   const int MAX_LEN = 256;
   char tmp[MAX_LEN] = {0};
-  if (OB_FAIL(ObArrayUtil::get_type_name(elem_type, tmp, MAX_LEN))) {
+  if (OB_FAIL(ObArrayUtil::get_type_name(coll_type, elem_type, tmp, MAX_LEN))) {
     LOG_WARN("failed to convert len to string", K(ret));
   } else {
     ObString tmp_def(strlen(tmp), tmp);
@@ -576,7 +576,7 @@ int ObSubSchemaCtx::get_subschema_id_by_typedef(ObNestedType coll_type,
   const int MAX_LEN = 256;
   int64_t pos = 0;
   char tmp[MAX_LEN] = {0};
-  if (OB_FAIL(ObArrayUtil::get_type_name(elem_type, tmp, MAX_LEN))) {
+  if (OB_FAIL(ObArrayUtil::get_type_name(coll_type, elem_type, tmp, MAX_LEN))) {
     LOG_WARN("failed to convert len to string", K(ret));
   } else {
     ObString tmp_def(strlen(tmp), tmp);

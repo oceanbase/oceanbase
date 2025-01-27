@@ -662,14 +662,22 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_plugin_vector_index_serialize.cpp
   vector_index/ob_plugin_vector_index_utils.cpp
   vector_index/ob_vector_index_util.cpp
+  vector_index/ob_vector_kmeans_ctx.cpp
 )
 
 ob_set_subtarget(ob_share vector_type
+  vector_type/ob_vector_add.cpp
+  vector_type/ob_vector_div.cpp
   vector_type/ob_vector_l2_distance.cpp
   vector_type/ob_vector_ip_distance.cpp
   vector_type/ob_vector_cosine_distance.cpp
   vector_type/ob_vector_l1_distance.cpp
   vector_type/ob_vector_norm.cpp
+  vector_type/ob_vector_common_util.cpp
+)
+
+ob_set_subtarget(ob_share domain_id
+  domain_id/ob_domain_id.cpp
 )
 
 ob_add_new_object_target(ob_share ob_share)

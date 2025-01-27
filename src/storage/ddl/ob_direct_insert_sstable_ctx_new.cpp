@@ -1420,8 +1420,17 @@ int ObTabletDirectLoadMgr::prepare_schema_item_for_vec_idx_data(
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t , 1> col_ids;
-  uint64_t delta_buffer_table_tid;
-  const ObTableSchema *delta_buffer_table_schema = nullptr;
+  uint64_t with_param_table_tid;
+  ObIndexType index_type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
+  // ivf param is saved in centroid table's schema
+  if (table_schema->is_vec_ivfflat_index()) {
+    index_type = INDEX_TYPE_VEC_IVFFLAT_CENTROID_LOCAL;
+  } else if (table_schema->is_vec_ivfsq8_index()) {
+    index_type = INDEX_TYPE_VEC_IVFSQ8_CENTROID_LOCAL;
+  } else if (table_schema->is_vec_ivfpq_index()) {
+    index_type = INDEX_TYPE_VEC_IVFPQ_CENTROID_LOCAL;
+  }
+  const ObTableSchema *with_param_table_schema = nullptr;
   // get data schema
   if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_schema->get_data_table_id(), data_table_schema))) {
     LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_schema->get_data_table_id()));
@@ -1435,22 +1444,22 @@ int ObTabletDirectLoadMgr::prepare_schema_item_for_vec_idx_data(
     LOG_WARN("get invalid col id array", K(ret), K(col_ids));
   } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(&schema_guard,
                                                             *data_table_schema,
-                                                            INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL,
+                                                            index_type,
                                                             col_ids.at(0),
-                                                            delta_buffer_table_tid))) {
+                                                            with_param_table_tid))) {
     LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(col_ids), KPC(data_table_schema));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, delta_buffer_table_tid, delta_buffer_table_schema))) {
-    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(delta_buffer_table_tid));
-  } else if (OB_ISNULL(delta_buffer_table_schema)) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, with_param_table_tid, with_param_table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(with_param_table_tid));
+  } else if (OB_ISNULL(with_param_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table not exist", K(ret), K(tenant_id), K(delta_buffer_table_tid));
-  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_dim(*delta_buffer_table_schema, schema_item_.vec_dim_))) {
+    LOG_WARN("table not exist", K(ret), K(tenant_id), K(with_param_table_tid));
+  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_dim(*with_param_table_schema, *data_table_schema, schema_item_.vec_dim_))) {
     LOG_WARN("fail to get vector col dim", K(ret));
   } else if (schema_item_.vec_dim_ == 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get vector dim is zero, fail to calc", K(ret), K(schema_item_.vec_dim_), KPC(delta_buffer_table_schema));
-  } else if (OB_FAIL(ob_write_string(sqc_build_ctx_.schema_allocator_, delta_buffer_table_schema->get_index_params(), schema_item_.vec_idx_param_))) {
-    LOG_WARN("fail to write string", K(ret), K(delta_buffer_table_schema->get_index_params()));
+    LOG_WARN("get vector dim is zero, fail to calc", K(ret), K(schema_item_.vec_dim_), KPC(with_param_table_schema));
+  } else if (OB_FAIL(ob_write_string(sqc_build_ctx_.schema_allocator_, with_param_table_schema->get_index_params(), schema_item_.vec_idx_param_))) {
+    LOG_WARN("fail to write string", K(ret), K(with_param_table_schema->get_index_params()));
   }
   return ret;
 }
@@ -1487,7 +1496,10 @@ int ObTabletDirectLoadMgr::prepare_schema_item_on_demand(const uint64_t table_id
         LOG_WARN("prepare sstable index builder failed", K(ret), K(sqc_build_ctx_));
       } else if (OB_FAIL(table_schema->get_is_column_store(schema_item_.is_column_store_))) {
         LOG_WARN("fail to get is column store", K(ret));
-      } else if (FALSE_IT(is_vector_data_complement = table_schema->is_vec_index_snapshot_data_type())) {
+      } else if (FALSE_IT(is_vector_data_complement = (table_schema->is_vec_index_snapshot_data_type() ||
+                                                       table_schema->is_vec_ivf_centroid_index() ||
+                                                       table_schema->is_vec_ivfsq8_meta_index() ||
+                                                       table_schema->is_vec_ivfpq_pq_centroid_index()))) {
       } else if (is_vector_data_complement && OB_FAIL(prepare_schema_item_for_vec_idx_data(tenant_id,
                                                                                            schema_guard,
                                                                                            table_schema,
@@ -2175,11 +2187,15 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
         LOG_WARN("invalid tablet handle", K(ret), KP(sqc_build_ctx_.storage_schema_));
       } else if (!need_fill_column_group_) {
         if (task_finish_count >= sqc_build_ctx_.task_total_cnt_) {
-          if (schema::is_vec_index_snapshot_data_type(sqc_build_ctx_.storage_schema_->get_index_type())) {
+          bool need_fill_ivf_index = schema::is_local_vec_ivf_centroid_index(sqc_build_ctx_.storage_schema_->get_index_type())
+                                  || schema::is_vec_ivfsq8_meta_index(sqc_build_ctx_.storage_schema_->get_index_type())
+                                  || schema::is_vec_ivfpq_pq_centroid_index(sqc_build_ctx_.storage_schema_->get_index_type());
+          if (schema::is_vec_index_snapshot_data_type(sqc_build_ctx_.storage_schema_->get_index_type()) ||
+              need_fill_ivf_index) {
             if (OB_FAIL(slice_writer->fill_vector_index_data(sqc_build_ctx_.build_param_.common_param_.read_snapshot_,
                                                              sqc_build_ctx_.storage_schema_,
                                                              start_scn,
-                                                             schema_item_.lob_inrow_threshold_,
+                                                             schema_item_,
                                                              insert_monitor))) {
               LOG_WARN("fail to fill vector index data", K(ret));
             }

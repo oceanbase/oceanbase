@@ -480,12 +480,23 @@ protected:
       const uint64_t table_id,
       const uint64_t index_tid,
       const ObTableSchema *table_schema,
-      ObRawExpr *&doc_id_expr);
+      ObRawExpr *&doc_id_expr,
+      ObDMLStmt *stmt = NULL);
   int fill_vec_id_expr_param(
     const uint64_t table_id,
     const uint64_t index_tid,
     const ObTableSchema *table_schema,
-    ObRawExpr *&vec_id_expr);
+    ObRawExpr *&vec_id_expr,
+    ObDMLStmt *stmt = NULL);
+  int fill_ivf_vec_expr_param(
+    const uint64_t table_id,
+    const uint64_t index_tid,
+    const uint64_t column_id, // index column
+    const ObColumnSchemaV2 *column_schema, // generate column schema
+    const ObTableSchema *table_schema,
+    bool need_dist_algo_expr,
+    ObRawExpr *&expr,
+    ObDMLStmt *stmt = NULL);
   int build_partid_expr(ObRawExpr *&expr, const uint64_t table_id);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
   virtual int resolve_inlist_info(common::ObIArray<ObInListInfo> &inlist_infos);
@@ -1067,12 +1078,18 @@ protected:
       const TableItem &table_item,
       TableItem *rowkey_doc_table,
       common::ObIArray<ObColumnRefRawExpr *> &column_exprs);
-  int check_doc_id_need_column_ref_expr(
+  int check_domain_id_need_column_ref_expr(
       ObDMLStmt &stmt,
       bool &need_column_ref_expr);
-  int check_vec_vid_need_column_ref_expr(
-      ObDMLStmt &stmt,
-      bool &need_column_ref_expr);
+  int check_need_fill_ivf_vec_expr_param(const ObDMLStmt &stmt,
+                                         const ObColumnSchemaV2 &column_schema,
+                                         ObRawExpr *ref_expr,
+                                         bool &need_fill,
+                                         bool &need_dist_algo_expr);
+  int get_ivf_index_type_if_ddl(
+      const ObDMLStmt &stmt,
+      bool &is_ddl,
+      ObIndexType &index_type);
 protected:
   ObStmtScope current_scope_;
   int32_t current_level_;

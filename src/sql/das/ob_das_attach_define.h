@@ -231,6 +231,31 @@ public:
   virtual ~ObDASIndexMergeRtDef() {}
 };
 
+struct ObDASDomainIdMergeCtDef final : ObDASAttachCtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASDomainIdMergeCtDef(common::ObIAllocator &alloc)
+    : ObDASAttachCtDef(alloc, DAS_OP_DOMAIN_ID_MERGE),
+      domain_types_(alloc)
+  {}
+  ~ObDASDomainIdMergeCtDef() = default;
+  INHERIT_TO_STRING_KV("ObDASDomainIdMergeCtDef", ObDASAttachCtDef, KP(this));
+public:
+  ObFixedArray<int64_t, common::ObIAllocator> domain_types_;
+};
+
+struct ObDASDomainIdMergeRtDef final : ObDASAttachRtDef
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASDomainIdMergeRtDef()
+    : ObDASAttachRtDef(DAS_OP_DOMAIN_ID_MERGE)
+  {}
+  ~ObDASDomainIdMergeRtDef() = default;
+  INHERIT_TO_STRING_KV("ObDASDomainIdMergeRtDef", ObDASAttachRtDef, KP(this));
+};
+
 struct ObDASAttachSpec
 {
   OB_UNIS_VERSION(1);

@@ -3255,10 +3255,16 @@ static inline
 bool is_lob_update(ObDMLRunningCtx &run_ctx, const ObIArray<int64_t> &update_idx)
 {
   bool bool_ret = false;
-  for (int64_t i = 0; i < update_idx.count() && !bool_ret; ++i) {
-    int64_t idx = update_idx.at(i);
-    if (run_ctx.col_descs_->at(idx).col_type_.is_lob_storage()) {
-      bool_ret = true;
+  if (run_ctx.relative_table_.is_storage_index_table() &&
+      run_ctx.relative_table_.is_index_local_storage() &&
+      run_ctx.relative_table_.is_vector_index()) {
+    // bool_ret = false
+  } else {
+    for (int64_t i = 0; i < update_idx.count() && !bool_ret; ++i) {
+      int64_t idx = update_idx.at(i);
+      if (run_ctx.col_descs_->at(idx).col_type_.is_lob_storage()) {
+        bool_ret = true;
+      }
     }
   }
   return bool_ret;
@@ -4613,7 +4619,8 @@ int ObLSTabletService::insert_vector_index_rows(
       int64_t row_count)
 {
   int ret = OB_SUCCESS;
-  if (run_ctx.dml_param_.table_param_->get_data_table().is_vector_delta_buffer()) {
+  const ObTableSchemaParam &table_param = run_ctx.dml_param_.table_param_->get_data_table();
+  if (table_param.is_vector_delta_buffer()) {
     ObString vec_idx_param = run_ctx.dml_param_.table_param_->get_data_table().get_vec_index_param();
     int64_t vec_dim = run_ctx.dml_param_.table_param_->get_data_table().get_vec_dim();
     const uint64_t vec_id_col_id = run_ctx.dml_param_.table_param_->get_data_table().get_vec_id_col_id();
@@ -4659,6 +4666,45 @@ int ObLSTabletService::insert_vector_index_rows(
           rows[k].storage_datums_[vector_idx].set_null();
         }
       }
+    }
+  } else if (table_param.is_ivf_vector_index()) { // check outrow
+    ObLobManager *lob_mngr = MTL(ObLobManager*);
+    for (int64_t k = 0; OB_SUCC(ret) && k < row_count; k++) {
+      blocksstable::ObDatumRow &datum_row = rows[k];
+      int64_t col_cnt = run_ctx.col_descs_->count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
+        const ObColDesc &column = run_ctx.col_descs_->at(i);
+        ObStorageDatum &datum = datum_row.storage_datums_[i];
+        if (datum.is_null() || datum.is_nop_value()) {
+          // do nothing
+        } else if (column.col_type_.is_lob_storage()) {
+          ObString raw_data = datum.get_string();
+          bool has_lob_header = datum.has_lob_header() && raw_data.length() > 0;
+          ObLobLocatorV2 src_data_locator(raw_data, has_lob_header);
+          int64_t new_byte_len = 0;
+          if (OB_FAIL(src_data_locator.get_lob_data_byte_len(new_byte_len))) {
+            LOG_WARN("fail to get lob byte len", K(ret));
+          } else if (new_byte_len > table_param.get_lob_inrow_threshold()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected outrow datum in ivf vector index", K(ret), K(new_byte_len),
+                K(table_param.get_lob_inrow_threshold()));
+          }
+        }
+      }
+    }
+  } else if (OB_UNLIKELY(run_ctx.dml_param_.table_param_->get_data_table().is_vector_index_id())) {
+    ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+    ObPluginVectorIndexAdapterGuard adaptor_guard;
+    share::SCN current_scn;
+    ObString vec_idx_param = run_ctx.dml_param_.table_param_->get_data_table().get_vec_index_param();
+    if (OB_FAIL(vec_index_service->acquire_adapter_guard(run_ctx.store_ctx_.ls_id_,
+                                                        run_ctx.relative_table_.get_tablet_id(),
+                                                        ObIndexType::INDEX_TYPE_VEC_INDEX_ID_LOCAL,
+                                                        adaptor_guard,
+                                                        &vec_idx_param))) {
+      LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(run_ctx.store_ctx_), K(run_ctx.relative_table_));
+    } else {
+      adaptor_guard.get_adatper()->update_index_id_dml_scn(run_ctx.store_ctx_.mvcc_acc_ctx_.snapshot_.version_);
     }
   }
   return ret;

@@ -5710,6 +5710,32 @@ int ObDMLStmt::get_partition_columns(const int64_t table_id,
   return ret;
 }
 
+bool ObDMLStmt::is_contain_vector_origin_distance_calc() const
+{
+  bool bool_ret = false;
+
+  if (is_select_stmt()) {
+    int ret = OB_SUCCESS;
+    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt *>(this);
+    ObRawExpr* vector_expr = get_first_vector_expr();
+    for (int64_t i = 0; OB_NOT_NULL(vector_expr) && OB_SUCC(ret) && i < select_stmt->get_select_items().count(); ++i) {
+      const SelectItem &si = select_stmt->get_select_items().at(i);
+      ObExprEqualCheckContext equal_ctx;
+      equal_ctx.override_const_compare_ = true;
+      if (OB_ISNULL(si.expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("select item expr is null", K(ret));
+      } else if (si.expr_->is_vector_sort_expr()) {
+        if (si.expr_->same_as(*vector_expr, &equal_ctx)) {
+          bool_ret = true;
+          break;
+        }
+      }
+    }
+  }
+  return bool_ret;
+}
+
 int ObDMLStmt::extract_partition_columns(const int64_t table_id,
                                          const ObRawExpr *part_expr,
                                          ObIArray<ColumnItem> &partition_columns,

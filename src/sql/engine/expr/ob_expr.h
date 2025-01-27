@@ -701,7 +701,7 @@ public:
   //   - expr itself equal to input expr
   //   - expr's children equals to input expr
   // Note: NO stack-overflow check as it is done when resolve raw expr
-  int contain_expr (const ObExpr * expr, bool & is_contain)
+  int contain_expr (const ObExpr * expr, bool & is_contain) const
   {
     int ret = OB_SUCCESS;
     if (this == expr) {

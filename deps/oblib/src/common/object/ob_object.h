@@ -1259,6 +1259,49 @@ public:
   uint64_t seq_id_;
 };
 
+class ObCenterId final
+{
+public:
+  ObCenterId();
+  ObCenterId(const uint64_t tablet_id, const uint64_t center_id);
+  ~ObCenterId() = default;
+
+  void reset();
+  bool is_valid() const;
+
+  bool operator ==(const ObCenterId &other) const;
+  bool operator !=(const ObCenterId &other) const;
+  bool operator <(const ObCenterId &other) const;
+  bool operator >(const ObCenterId &other) const;
+
+  TO_STRING_KV(K_(tablet_id), K_(center_id));
+public:
+  uint64_t tablet_id_;
+  uint64_t center_id_;
+};
+
+class ObPqCenterId final
+{
+public:
+  ObPqCenterId();
+  ObPqCenterId(const uint64_t tablet_id, const uint32_t m_id, const uint32_t center_id);
+  ~ObPqCenterId() = default;
+
+  void reset();
+  bool is_valid() const;
+
+  bool operator ==(const ObPqCenterId &other) const;
+  bool operator !=(const ObPqCenterId &other) const;
+  bool operator <(const ObPqCenterId &other) const;
+  bool operator >(const ObPqCenterId &other) const;
+
+  TO_STRING_KV(K_(tablet_id), K_(center_id), K_(m_id));
+public:
+  uint64_t tablet_id_;
+  uint32_t m_id_;
+  uint32_t center_id_;
+};
+
 struct ObObjPrintParams
 {
   ObObjPrintParams (const ObTimeZoneInfo *tz_info, ObCollationType cs_type):

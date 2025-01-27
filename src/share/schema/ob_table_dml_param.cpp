@@ -184,10 +184,10 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(schema));
-        } else if (column_schema->is_vec_vid_column()) {
+        } else if (column_schema->is_vec_hnsw_vid_column()) {
           vec_id_col_id_ = column_schema->get_column_id();
         } else if (schema->is_vec_delta_buffer_type()) {
-          if (column_schema->is_vec_vector_column()) {
+          if (column_schema->is_vec_hnsw_vector_column()) {
             vec_vector_col_id_ = column_schema->get_column_id();
           }
         }

@@ -23,6 +23,7 @@
 #include "common/rowkey/ob_rowkey.h"
 #include "src/share/schema/ob_tenant_schema_service.h"
 #include "lib/vector/ob_vector_util.h"
+#include "ob_vector_kmeans_ctx.h"
 
 namespace oceanbase
 {
@@ -54,7 +55,7 @@ public:
                              SCN target_scn,
                              ObIAllocator &allocator);
   static int release_vector_index_adapter(ObPluginVectorIndexAdaptor* &adapter);
-
+  static int release_vector_index_build_helper(ObIvfBuildHelper* &helper);
   static ObVectorIndexRecordType index_type_to_record_type(schema::ObIndexType type);
 
   static ObAdapterCreateType index_type_to_create_type(schema::ObIndexType type);

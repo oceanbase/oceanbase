@@ -31,10 +31,12 @@ enum ObNestedType {
 class ObCollectionTypeBase {
 public:
   PURE_VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
+  TO_STRING_KV(K_(type_id));
 
   virtual int deep_copy(ObIAllocator &allocator, ObCollectionTypeBase *&dst) const = 0;
   virtual const ObDataType &get_basic_meta(uint32_t &depth) const = 0;
   uint16_t get_compatiable_type_id() const { return type_id_ == OB_VECTOR_TYPE ? OB_ARRAY_TYPE : type_id_; }
+  bool is_vector_type() { return type_id_ == OB_VECTOR_TYPE; }
   uint16_t type_id_; // array/vector/map
 };
 
@@ -49,6 +51,9 @@ public:
   int deep_copy(ObIAllocator &allocator, ObCollectionTypeBase *&dst) const;
   bool has_same_super_type(const ObCollectionArrayType &other) const;
   const ObDataType &get_basic_meta(uint32_t &depth) const { depth++; return element_type_->get_basic_meta(depth);}
+  int generate_spec_type_info(const ObString &type, ObString &type_info);
+  bool check_is_valid_vector() const;
+  TO_STRING_KV(K_(dim_cnt), KPC_(element_type));
 
   ObIAllocator &allocator_;
   uint32_t dim_cnt_; // vector dimension
@@ -78,7 +83,7 @@ public:
   ObSqlCollectionInfo(common::ObIAllocator *allocator)
     : ObSqlCollectionInfo(*allocator) {}
    virtual ~ObSqlCollectionInfo() {}
-  void set_name(ObString &name)
+  void set_name(const ObString &name)
   {
     name_def_ = name.ptr();
     name_len_ = name.length();

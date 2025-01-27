@@ -337,26 +337,32 @@ public:
   int get_table_lookup_tablet_id(common::ObTabletID &tablet_id) const;
   int get_rowkey_doc_tablet_id(common::ObTabletID &tablet_id) const;
   int get_rowkey_vid_tablet_id(common::ObTabletID &tablet_id) const;
+  int get_rowkey_domain_tablet_id(ObDASRelatedTabletID &related_tablet_ids) const;
   int init_scan_param();
-  int do_vec_index_rescan();
   int rescan();
   int reuse_iter();
   void reset_access_datums_ptr(int64_t capacity = 0);
   void reset_access_datums_ptr(const ObDASBaseCtDef *ctdef, ObEvalCtx &eval_ctx, int64_t capacity);
-  ObLocalIndexLookupOp *get_lookup_op();
   bool is_contain_trans_info() {return NULL != scan_ctdef_->trans_info_expr_; }
-  int do_table_scan();
-  int do_domain_index_lookup();
   int get_base_text_ir_tablet_ids(
       common::ObTabletID &inv_idx_tablet_id,
       common::ObTabletID &fwd_idx_tablet_id,
       common::ObTabletID &doc_id_idx_tablet_id);
-  int get_vec_ir_tablet_ids(
+  int get_vec_ir_tablet_ids(ObDASRelatedTabletID &related_tablet_ids);
+  int get_ivf_ir_tablet_ids(
+      common::ObTabletID &vec_row_tid,
+      common::ObTabletID &centroid_tid_,
+      common::ObTabletID &cid_vec_tid,
+      common::ObTabletID &rowkey_cid_tid,
+      common::ObTabletID &special_aux_tid,
+      common::ObTabletID &com_aux_vec_tid);
+  int get_hnsw_ir_tablet_ids(
       common::ObTabletID &vec_row_tid,
       common::ObTabletID &delta_buf_tid,
       common::ObTabletID &index_id_tid,
       common::ObTabletID &snapshot_tid,
-      common::ObTabletID &com_aux_vec_tid);
+      common::ObTabletID &com_aux_vec_tid,
+      common::ObTabletID &rowkey_vid_tid);
   int get_index_merge_tablet_ids(common::ObIArray<common::ObTabletID> &index_merge_tablet_ids);
   int get_func_lookup_tablet_ids(ObDASRelatedTabletID &related_tablet_ids);
   bool enable_rich_format() const { return scan_rtdef_->enable_rich_format(); }
@@ -368,12 +374,12 @@ public:
                        "scan_flag", scan_param_.scan_flag_);
 protected:
   common::ObITabletScan &get_tsc_service();
-  int do_local_index_lookup();
-  common::ObNewRowIterator *get_storage_scan_iter();
   common::ObNewRowIterator *get_output_result_iter() { return result_; }
   ObDASIterTreeType get_iter_tree_type() const;
   bool is_index_merge(const ObDASBaseCtDef *attach_ctdef) const;
   bool is_func_lookup(const ObDASBaseCtDef *attach_ctdef) const;
+  bool is_vec_idx_scan(const ObDASBaseCtDef *attach_ctdef) const;
+
 public:
   ObSEArray<ObDatum *, 4> trans_info_array_;
 protected:

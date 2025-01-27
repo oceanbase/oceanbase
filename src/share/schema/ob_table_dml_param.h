@@ -90,6 +90,17 @@ public:
   OB_INLINE bool is_vector_index_snapshot() const { return share::schema::is_vec_index_snapshot_data_type(index_type_); }
   OB_INLINE bool is_index_local_storage() const { return share::schema::is_index_local_storage(index_type_); }
   OB_INLINE bool is_vector_index() const { return share::schema::is_vec_index(index_type_); }
+  OB_INLINE bool is_ivf_vector_index() const { return share::schema::is_vec_ivf_index(index_type_); }
+  OB_INLINE bool is_no_need_update_vector_index() const
+  {
+    return share::schema::is_vec_index_id_type(index_type_) ||
+           share::schema::is_vec_index_snapshot_data_type(index_type_) ||
+           share::schema::is_vec_ivfflat_centroid_index(index_type_) ||
+           share::schema::is_vec_ivfsq8_centroid_index(index_type_) ||
+           share::schema::is_vec_ivfsq8_meta_index(index_type_) ||
+           share::schema::is_vec_ivfpq_centroid_index(index_type_) ||
+           share::schema::is_vec_ivfpq_pq_centroid_index(index_type_);
+  }
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
   OB_INLINE ObMvMode get_mv_mode() const { return mv_mode_; }

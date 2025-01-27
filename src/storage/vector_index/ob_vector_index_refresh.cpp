@@ -90,16 +90,16 @@ int ObVectorIndexRefresher::get_current_scn(share::SCN &current_scn) {
   return ret;
 }
 
-int ObVectorIndexRefresher::lock_delta_buf_tb(
+int ObVectorIndexRefresher::lock_domain_tb(
     ObVectorRefreshIdxTransaction &trans, const uint64_t tenant_id,
-    const uint64_t delta_buf_tb_id, const bool try_lock) {
+    const uint64_t domain_tb_id, const bool try_lock) {
   int ret = OB_SUCCESS;
   ObTableLockOwnerID owner_id;
   if (OB_UNLIKELY(!trans.is_started() || OB_INVALID_TENANT_ID == tenant_id ||
-                  OB_INVALID_ID == delta_buf_tb_id)) {
+                  OB_INVALID_ID == domain_tb_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(trans.is_started()), K(tenant_id),
-             K(delta_buf_tb_id));
+             K(domain_tb_id));
   } else if (OB_FAIL(owner_id.convert_from_value(
                  ObLockOwnerType::DEFAULT_OWNER_TYPE, get_tid_cache()))) {
     LOG_WARN("failed to get owner id", K(ret), K(get_tid_cache()));
@@ -108,7 +108,7 @@ int ObVectorIndexRefresher::lock_delta_buf_tb(
     ObInnerSQLConnection *conn = nullptr;
     ObLockObjRequest lock_arg;
     lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_REFRESH_VECTOR_INDEX;
-    lock_arg.obj_id_ = delta_buf_tb_id;
+    lock_arg.obj_id_ = domain_tb_id;
     lock_arg.owner_id_ = owner_id;
     lock_arg.lock_mode_ = EXCLUSIVE;
     lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
@@ -170,8 +170,7 @@ int ObVectorIndexRefresher::get_table_row_count(const ObString &db_name,
         LOG_WARN("fail to get count", KR(ret));
       } else {
         EXTRACT_INT_FIELD_MYSQL(*result, "CNT", row_cnt, int64_t);
-        LOG_DEBUG("############# DBMS_VECTOR ############### get delta_buf_table "
-                  "row cnt ",
+        LOG_DEBUG("############# DBMS_VECTOR ############### get table row cnt ",
                   K(table_name), K(row_cnt));
       }
     }
@@ -256,26 +255,26 @@ int ObVectorIndexRefresher::get_vector_index_col_names(
   return ret;
 }
 
-int ObVectorIndexRefresher::lock_delta_buf_table_for_refresh() {
+int ObVectorIndexRefresher::lock_domain_table_for_refresh() {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(refresh_ctx_));
   CK(OB_NOT_NULL(refresh_ctx_->trans_));
   if (OB_SUCC(ret)) {
     const uint64_t tenant_id = refresh_ctx_->tenant_id_;
-    const uint64_t delta_buf_tb_id = refresh_ctx_->delta_buf_tb_id_;
+    const uint64_t domain_tb_id = refresh_ctx_->domain_tb_id_;
     int64_t retries = 0;
     while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
-      if (OB_FAIL(ObVectorIndexRefresher::lock_delta_buf_tb(
-              *(refresh_ctx_->trans_), tenant_id, delta_buf_tb_id, true))) {
+      if (OB_FAIL(ObVectorIndexRefresher::lock_domain_tb(
+              *(refresh_ctx_->trans_), tenant_id, domain_tb_id, true))) {
         if (OB_UNLIKELY(OB_TRY_LOCK_ROW_CONFLICT != ret)) {
           LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret),
-                  K(tenant_id), K(delta_buf_tb_id));
+                  K(tenant_id), K(domain_tb_id));
         } else {
           ret = OB_SUCCESS;
           ++retries;
           if (retries % 10 == 0) {
             LOG_WARN("retry too many times", K(retries), K(tenant_id),
-                    K(delta_buf_tb_id));
+                    K(domain_tb_id));
           }
           ob_usleep(100LL * 1000);
         }
@@ -292,12 +291,12 @@ int ObVectorIndexRefresher::do_refresh() {
   uint64_t tenant_id = OB_INVALID_ID;
   ObSQLSessionInfo *session_info = nullptr;
   ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *delta_table_schema = nullptr;
+  const ObTableSchema *domain_table_schema = nullptr;
   const ObTableSchema *index_id_tb_schema = nullptr;
   const ObDatabaseSchema *db_schema = nullptr;
-  int64_t delta_table_row_cnt = 0;
+  int64_t domain_table_row_cnt = 0;
   ObSqlString index_id_tb_col_names;
-  ObSqlString delta_buf_tb_col_names;
+  ObSqlString domain_tb_col_names;
   ObTimeoutCtx timeout_ctx;
   const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT =
       ObDDLUtil::calc_inner_sql_execute_timeout();
@@ -313,7 +312,7 @@ int ObVectorIndexRefresher::do_refresh() {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is null", K(ret));
   } else if (OB_FALSE_IT(tenant_id = refresh_ctx_->tenant_id_)) {
-  } else if (OB_FAIL(lock_delta_buf_table_for_refresh())) {
+  } else if (OB_FAIL(lock_domain_table_for_refresh())) {
     LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret));
   } else if (OB_ISNULL(session_info = ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -333,66 +332,66 @@ int ObVectorIndexRefresher::do_refresh() {
   // get delta_buf_table row count
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                                 refresh_ctx_->delta_buf_tb_id_,
-                                                 delta_table_schema))) {
+                                                 refresh_ctx_->domain_tb_id_,
+                                                 domain_table_schema))) {
     LOG_WARN("fail to get delta buf table schema", KR(ret), K(tenant_id),
-             K(refresh_ctx_->delta_buf_tb_id_));
+             K(refresh_ctx_->domain_tb_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(
                  tenant_id, refresh_ctx_->index_id_tb_id_,
                  index_id_tb_schema))) {
     LOG_WARN("fail to get index id table schema", KR(ret), K(tenant_id),
              K(refresh_ctx_->index_id_tb_id_));
-  } else if (OB_ISNULL(delta_table_schema)) {
+  } else if (OB_ISNULL(domain_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("delta_buf_table not exist", KR(ret), K(tenant_id),
-             K(refresh_ctx_->delta_buf_tb_id_));
+             K(refresh_ctx_->domain_tb_id_));
   } else if (OB_ISNULL(index_id_tb_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index_id_table not exist", KR(ret), K(tenant_id),
              K(refresh_ctx_->index_id_tb_id_));
-  } else if (OB_UNLIKELY(INDEX_STATUS_AVAILABLE != delta_table_schema->get_index_status() ||
+  } else if (OB_UNLIKELY(INDEX_STATUS_AVAILABLE != domain_table_schema->get_index_status() ||
                          INDEX_STATUS_AVAILABLE != index_id_tb_schema->get_index_status())) {
-    if ((INDEX_STATUS_AVAILABLE == delta_table_schema->get_index_status() ||
-         INDEX_STATUS_UNAVAILABLE == delta_table_schema->get_index_status()) &&
+    if ((INDEX_STATUS_AVAILABLE == domain_table_schema->get_index_status() ||
+         INDEX_STATUS_UNAVAILABLE == domain_table_schema->get_index_status()) &&
         (INDEX_STATUS_AVAILABLE == index_id_tb_schema->get_index_status() ||
          INDEX_STATUS_UNAVAILABLE == index_id_tb_schema->get_index_status())) {
       // Return OB_EAGAIN for dbms_vector.refresh_index_inner to do inner retry.
       // For dbms_vector.refresh_index, the error code will return to user.
       ret = OB_EAGAIN;
-      LOG_WARN("delta buffer table or index id table is not available", K(ret), K(delta_table_schema->get_index_status()),
+      LOG_WARN("delta buffer table or index id table is not available", K(ret), K(domain_table_schema->get_index_status()),
               K(index_id_tb_schema->get_index_status()));
     } else {
       ret = OB_ERR_INDEX_UNAVAILABLE;
     }
   } else if (OB_FAIL(schema_guard.get_database_schema(
-                 tenant_id, delta_table_schema->get_database_id(),
+                 tenant_id, domain_table_schema->get_database_id(),
                  db_schema))) {
     LOG_WARN("fail to get db schema", KR(ret), K(tenant_id),
-             K(delta_table_schema->get_database_id()));
+             K(domain_table_schema->get_database_id()));
   } else if (OB_ISNULL(db_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("database not exist", KR(ret));
   } else if (OB_UNLIKELY(db_schema->is_in_recyclebin() ||
-                         delta_table_schema->is_in_recyclebin() ||
+                         domain_table_schema->is_in_recyclebin() ||
                          index_id_tb_schema->is_in_recyclebin())) {
     // do nothing
     LOG_DEBUG("table or db in recyclebin");
   } else if (OB_FAIL(get_table_row_count(
                  db_schema->get_database_name_str(),
-                 delta_table_schema->get_table_name_str(), refresh_ctx_->scn_,
-                 delta_table_row_cnt))) {
+                 domain_table_schema->get_table_name_str(), refresh_ctx_->scn_,
+                 domain_table_row_cnt))) {
     LOG_WARN("fail to get delta_buf_table row count", KR(ret),
-             K(delta_table_schema->get_table_name_str()));
-  } else if (delta_table_row_cnt < refresh_ctx_->refresh_threshold_) {
+             K(domain_table_schema->get_table_name_str()));
+  } else if (domain_table_row_cnt < refresh_ctx_->refresh_threshold_) {
     // refreshing is not triggered.
   }
 #ifndef DBMS_VECTOR_MOCK_TEST
-  else if (OB_FAIL(get_vector_index_col_names(delta_table_schema,
+  else if (OB_FAIL(get_vector_index_col_names(domain_table_schema,
                                               true,
                                               col_ids,
-                                              delta_buf_tb_col_names))) {
+                                              domain_tb_col_names))) {
     LOG_WARN("fail to get vid & type col names", KR(ret),
-             K(delta_table_schema->get_table_name_str()));
+             K(domain_table_schema->get_table_name_str()));
   } else if (OB_FAIL(get_vector_index_col_names(index_id_tb_schema,
                                                 false,
                                                 col_ids,
@@ -426,8 +425,8 @@ int ObVectorIndexRefresher::do_refresh() {
                 static_cast<int>(db_schema->get_database_name_str().length()),
                 db_schema->get_database_name_str().ptr(),
                 static_cast<int>(
-                    delta_table_schema->get_table_name_str().length()),
-                delta_table_schema->get_table_name_str().ptr(),
+                    domain_table_schema->get_table_name_str().length()),
+                domain_table_schema->get_table_name_str().ptr(),
                 refresh_ctx_->scn_.get_val_for_sql())))
 #else
         if (OB_FAIL(insert_sel_sql.append_fmt(
@@ -440,13 +439,13 @@ int ObVectorIndexRefresher::do_refresh() {
                 index_id_tb_schema->get_table_name_str().ptr(),
                 static_cast<int>(index_id_tb_col_names.length()),
                 index_id_tb_col_names.ptr(),
-                static_cast<int>(delta_buf_tb_col_names.length()),
-                delta_buf_tb_col_names.ptr(),
+                static_cast<int>(domain_tb_col_names.length()),
+                domain_tb_col_names.ptr(),
                 static_cast<int>(db_schema->get_database_name_str().length()),
                 db_schema->get_database_name_str().ptr(),
                 static_cast<int>(
-                    delta_table_schema->get_table_name_str().length()),
-                delta_table_schema->get_table_name_str().ptr(),
+                    domain_table_schema->get_table_name_str().length()),
+                domain_table_schema->get_table_name_str().ptr(),
                 refresh_ctx_->scn_.get_val_for_sql())))
 #endif
         {
@@ -469,14 +468,75 @@ int ObVectorIndexRefresher::do_refresh() {
                 static_cast<int>(db_schema->get_database_name_str().length()),
                 db_schema->get_database_name_str().ptr(),
                 static_cast<int>(
-                    delta_table_schema->get_table_name_str().length()),
-                delta_table_schema->get_table_name_str().ptr(),
+                    domain_table_schema->get_table_name_str().length()),
+                domain_table_schema->get_table_name_str().ptr(),
                 refresh_ctx_->scn_.get_val_for_sql()))) {
           LOG_WARN("fail to assign sql", KR(ret));
         } else if (OB_FAIL(refresh_ctx_->trans_->write(
                        tenant_id, delete_sql.ptr(), affected_rows))) {
           LOG_WARN("fail to execute insert into select sql", KR(ret),
                    K(tenant_id), K(delete_sql));
+        }
+      }
+    }
+
+    // freeze major tablet
+    ObArray<uint64_t> tablet_ids;
+    if (OB_SUCC(ret)) {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        common::sqlclient::ObMySQLResult *result = nullptr;
+        ObSqlString select_sql;
+        if (OB_FAIL(select_sql.append_fmt(
+                "select tablet_id from oceanbase.DBA_OB_TABLE_LOCATIONS where table_id = %lu",
+                domain_table_schema->get_table_id()))) {
+          LOG_WARN("fail to assign sql", KR(ret));
+        } else if (OB_FAIL(refresh_ctx_->trans_->read(
+                       res, domain_table_schema->get_tenant_id(), select_sql.ptr()))) {
+          LOG_WARN("fail to execute select sql", KR(ret),
+                   K(tenant_id), K(delete_sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is NULL", K(ret));
+        } else {
+          while (OB_SUCC(ret)) {
+            uint64_t tablet_id = 0;
+            if (OB_FAIL(result->next())) {
+              if (OB_ITER_END != ret) {
+                LOG_WARN("next failed", K(ret));
+              }
+            } else {
+              EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", tablet_id, uint64_t);
+              if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
+                LOG_WARN("failed to store tablet id", K(ret));
+              }
+            }
+          }
+
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && tablet_ids.count() > 0) {
+      FLOG_INFO("get freeze tablet id", K(tablet_ids));
+      for (int i = 0 ; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+        int64_t affected_rows = 0;
+        uint64_t tablet_id = tablet_ids.at(i);
+        SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+          common::sqlclient::ObMySQLResult *result = nullptr;
+          ObSqlString freeze_sql;
+          if (OB_FAIL(freeze_sql.append_fmt(
+                "alter system major freeze tablet_id = %lu", tablet_id))) {
+            LOG_WARN("fail to assign sql", KR(ret));
+          } else if (OB_FAIL(refresh_ctx_->trans_->write(tenant_id, freeze_sql.ptr(), affected_rows))) {
+            ret = OB_SUCCESS;
+            LOG_WARN("fail to execute major freeze sql, continue other tablet id", K(tablet_id),
+                      K(tenant_id), K(freeze_sql));
+          } else {
+            LOG_INFO("execute major freeze success", K(tablet_id), K(affected_rows));
+          }
         }
       }
     }
@@ -490,11 +550,11 @@ int ObVectorIndexRefresher::do_rebuild() {
   ObSQLSessionInfo *session_info = nullptr;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *base_table_schema = nullptr;
-  const ObTableSchema *delta_table_schema = nullptr;
+  const ObTableSchema *domain_table_schema = nullptr;
   const ObTableSchema *index_id_tb_schema = nullptr;
   const ObDatabaseSchema *db_schema = nullptr;
   int64_t base_table_row_cnt = 0;
-  int64_t delta_table_row_cnt = 0;
+  int64_t domain_table_row_cnt = 0;
   int64_t index_id_table_row_cnt = 0;
   bool triggered = true;
   // refresh_ctx_->delta_rate_threshold_ = 0; // yjl, for test
@@ -508,103 +568,93 @@ int ObVectorIndexRefresher::do_rebuild() {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is null", K(ret));
   } else if (OB_FALSE_IT(tenant_id = refresh_ctx_->tenant_id_)) {
-  } else if (OB_FAIL(lock_delta_buf_table_for_refresh())) {
-    LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret));
+  } else if (OB_FAIL(lock_domain_table_for_refresh())) {
+    LOG_WARN("fail to lock domain for refresh", KR(ret));
   } else if (OB_ISNULL(session_info = ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null session info", KR(ret), KPC(ctx_));
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("schema service is null", KR(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
-                 tenant_id, schema_guard))) {
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(
-                 ObVectorIndexRefresher::get_current_scn(refresh_ctx_->scn_))) {
+  } else if (OB_FAIL(ObVectorIndexRefresher::get_current_scn(refresh_ctx_->scn_))) {
     LOG_WARN("fail to get current scn", KR(ret));
   } else {
     DEBUG_SYNC(BEFORE_DBMS_VECTOR_REBUILD);
   }
-  // 1. get base_table row count
-  // 2. get delta_buf_table row count
-  // 3. get index_id_table row count
+  // 1. get base_table row count ( if need )
+  // 2. get domain_table row count (if need )
+  // 3. get index_id_table row count (if need)
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(schema_guard.get_table_schema(
-               tenant_id, refresh_ctx_->base_tb_id_, base_table_schema))) {
-    LOG_WARN("fail to get base table schema", KR(ret), K(tenant_id),
-             K(refresh_ctx_->base_tb_id_));
-  } else if (OB_FAIL(schema_guard.get_table_schema(
-                 tenant_id, refresh_ctx_->delta_buf_tb_id_,
-                 delta_table_schema))) {
-    LOG_WARN("fail to get delta buf table schema", KR(ret), K(tenant_id),
-             K(refresh_ctx_->delta_buf_tb_id_));
-  } else if (OB_FAIL(schema_guard.get_table_schema(
-                 tenant_id, refresh_ctx_->index_id_tb_id_,
-                 index_id_tb_schema))) {
-    LOG_WARN("fail to get index id table schema", KR(ret), K(tenant_id),
-             K(refresh_ctx_->index_id_tb_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->base_tb_id_, base_table_schema))) {
+    LOG_WARN("fail to get base table schema", KR(ret), K(tenant_id),K(refresh_ctx_->base_tb_id_));
   } else if (OB_ISNULL(base_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("base_table not exist", KR(ret), K(tenant_id),
-             K(refresh_ctx_->base_tb_id_));
-  } else if (OB_ISNULL(delta_table_schema)) {
+    LOG_WARN("base_table not exist", KR(ret), K(tenant_id), K(refresh_ctx_->base_tb_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->domain_tb_id_, domain_table_schema))) {
+    LOG_WARN("fail to get delta buf table schema", KR(ret), K(tenant_id), K(refresh_ctx_->domain_tb_id_));
+  } else if (OB_ISNULL(domain_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("delta_buf_table not exist", KR(ret), K(tenant_id),
-             K(refresh_ctx_->delta_buf_tb_id_));
-  } else if (OB_ISNULL(index_id_tb_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("index_id_table not exist", KR(ret), K(tenant_id),
-             K(refresh_ctx_->index_id_tb_id_));
-  } else if (OB_UNLIKELY(INDEX_STATUS_AVAILABLE != delta_table_schema->get_index_status() ||
-                         INDEX_STATUS_AVAILABLE != index_id_tb_schema->get_index_status())) {
-    if ((INDEX_STATUS_AVAILABLE == delta_table_schema->get_index_status() ||
-         INDEX_STATUS_UNAVAILABLE == delta_table_schema->get_index_status()) &&
-        (INDEX_STATUS_AVAILABLE == index_id_tb_schema->get_index_status() ||
-         INDEX_STATUS_UNAVAILABLE == index_id_tb_schema->get_index_status())) {
-      // Return OB_EAGAIN for dbms_vector.rebuild_index_inner to do inner retry.
-      // For dbms_vector.rebuild_index, the error code will return to user.
+    LOG_WARN("delta_buf_table not exist", KR(ret), K(tenant_id), K(refresh_ctx_->domain_tb_id_));
+  } else if (OB_UNLIKELY(INDEX_STATUS_AVAILABLE != domain_table_schema->get_index_status())) {
+    ret = OB_ERR_INDEX_UNAVAILABLE;
+    if (INDEX_STATUS_UNAVAILABLE == domain_table_schema->get_index_status()) {
       ret = OB_EAGAIN;
-      LOG_WARN("delta buffer table or index id table is not available", K(ret), K(delta_table_schema->get_index_status()),
-              K(index_id_tb_schema->get_index_status()));
-    } else {
-      ret = OB_ERR_INDEX_UNAVAILABLE;
+      LOG_WARN("domain table is not available now", K(ret), K(domain_table_schema->get_index_status()));
     }
-  } else if (OB_FAIL(schema_guard.get_database_schema(
-                 tenant_id, delta_table_schema->get_database_id(),
-                 db_schema))) {
-    LOG_WARN("fail to get db schema", KR(ret), K(tenant_id),
-             K(delta_table_schema->get_database_id()));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (domain_table_schema->is_vec_hnsw_index()) {
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->index_id_tb_id_, index_id_tb_schema))) {
+      LOG_WARN("fail to get index id table schema", KR(ret), K(tenant_id), K(refresh_ctx_->index_id_tb_id_));
+    } else if (OB_ISNULL(index_id_tb_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index_id_table not exist", KR(ret), K(tenant_id), K(refresh_ctx_->index_id_tb_id_));
+    } else if (INDEX_STATUS_AVAILABLE != index_id_tb_schema->get_index_status()) {
+      ret = OB_ERR_INDEX_UNAVAILABLE;
+      if (INDEX_STATUS_UNAVAILABLE == index_id_tb_schema->get_index_status()) {
+        ret = OB_EAGAIN;
+        LOG_WARN("index id table is not available now", K(ret), K(index_id_tb_schema->get_index_status()));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,
+                                                      domain_table_schema->get_database_id(),
+                                                      db_schema))) {
+    LOG_WARN("fail to get db schema", KR(ret), K(tenant_id), K(domain_table_schema->get_database_id()));
   } else if (OB_ISNULL(db_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("database not exist", KR(ret));
   } else if (OB_UNLIKELY(db_schema->is_in_recyclebin() ||
-                         delta_table_schema->is_in_recyclebin() ||
-                         index_id_tb_schema->is_in_recyclebin())) {
+                         domain_table_schema->is_in_recyclebin() ||
+                         (OB_NOT_NULL(index_id_tb_schema) && index_id_tb_schema->is_in_recyclebin()))) {
     // do nothing
     triggered = false;
     LOG_DEBUG("table or db in recyclebin");
   } else if (OB_UNLIKELY(0 == refresh_ctx_->delta_rate_threshold_)) {
     // do nothing
-  } else if (OB_FAIL(
-                 get_table_row_count(db_schema->get_database_name_str(),
-                                     base_table_schema->get_table_name_str(),
-                                     refresh_ctx_->scn_, base_table_row_cnt))) {
+  } else if (!domain_table_schema->is_vec_hnsw_index()) {
+    // no need to get table cnt if not hnsw index
+  } else if (OB_FAIL(get_table_row_count(db_schema->get_database_name_str(),
+                                         base_table_schema->get_table_name_str(),
+                                         refresh_ctx_->scn_,
+                                         base_table_row_cnt))) {
     LOG_WARN("fail to get base table row count", KR(ret),
              K(base_table_schema->get_table_name_str()));
-  } else if (OB_FAIL(get_table_row_count(
-                 db_schema->get_database_name_str(),
-                 delta_table_schema->get_table_name_str(), refresh_ctx_->scn_,
-                 delta_table_row_cnt))) {
-    LOG_WARN("fail to get delta_buf_table row count", KR(ret),
-             K(delta_table_schema->get_table_name_str()));
-  } else if (OB_FAIL(get_table_row_count(
-                 db_schema->get_database_name_str(),
-                 index_id_tb_schema->get_table_name_str(), refresh_ctx_->scn_,
-                 index_id_table_row_cnt))) {
-    LOG_WARN("fail to get index_id_table row count", KR(ret),
-             K(index_id_tb_schema->get_table_name_str()));
+  } else if (OB_FAIL(get_table_row_count(db_schema->get_database_name_str(),
+                                         domain_table_schema->get_table_name_str(),
+                                         refresh_ctx_->scn_,
+                                         domain_table_row_cnt))) {
+    LOG_WARN("fail to get delta_buf_table row count", KR(ret), K(domain_table_schema->get_table_name_str()));
+  } else if (OB_FAIL(get_table_row_count(db_schema->get_database_name_str(),
+                                         index_id_tb_schema->get_table_name_str(),
+                                         refresh_ctx_->scn_,
+                                         index_id_table_row_cnt))) {
+    LOG_WARN("fail to get index_id_table row count", KR(ret), K(index_id_tb_schema->get_table_name_str()));
   } else if (0 != base_table_row_cnt &&
-             (index_id_table_row_cnt + delta_table_row_cnt) * 1.0 /
+             (index_id_table_row_cnt + domain_table_row_cnt) * 1.0 /
                      base_table_row_cnt <
                  refresh_ctx_->delta_rate_threshold_) {
     // rebuilding is not triggered.
@@ -626,8 +676,8 @@ int ObVectorIndexRefresher::do_rebuild() {
     rebuild_index_arg.session_id_ = session_info->get_sessid();
     rebuild_index_arg.database_name_ = db_schema->get_database_name_str();
     rebuild_index_arg.table_name_ = base_table_schema->get_table_name_str();
-    rebuild_index_arg.index_name_ = delta_table_schema->get_table_name_str();
-    rebuild_index_arg.index_table_id_ = delta_table_schema->get_table_id();
+    rebuild_index_arg.index_name_ = domain_table_schema->get_table_name_str();
+    rebuild_index_arg.index_table_id_ = domain_table_schema->get_table_id();
     rebuild_index_arg.index_action_type_ = obrpc::ObIndexArg::ADD_INDEX;
     rebuild_index_arg.parallelism_ = refresh_ctx_->idx_parallel_creation_;
     if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, DEFAULT_TIMEOUT_US))) {

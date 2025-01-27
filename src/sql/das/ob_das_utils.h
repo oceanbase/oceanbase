@@ -96,6 +96,26 @@ public:
     }
     return ret;
   }
+  static int find_child_das_ctdef(const ObDASBaseCtDef *root_ctdef,
+                                ObDASOpType op_type,
+                                const ObDASBaseCtDef *&target_ctdef);
+  template <typename CtDefType>
+  static int find_target_ctdef(const ObDASBaseCtDef *root_ctdef,
+                                 ObDASOpType op_type,
+                                 const CtDefType *&target_ctdef)
+  {
+    int ret = common::OB_SUCCESS;
+    const ObDASBaseCtDef *base_ctdef = nullptr;
+    if (OB_FAIL(find_child_das_ctdef(root_ctdef, op_type, base_ctdef))) {
+      SQL_DAS_LOG(WARN, "find chld das def failed", K(ret));
+    } else if (OB_ISNULL(base_ctdef)) {
+      ret = common::OB_ERR_UNEXPECTED;
+      SQL_DAS_LOG(WARN, "can not find the target op def", K(ret), K(op_type), KP(base_ctdef));
+    } else {
+      target_ctdef = static_cast<const CtDefType*>(base_ctdef);
+    }
+    return ret;
+  }
   static int generate_mlog_row(const share::ObLSID &ls_id,
                                const common::ObTabletID &tablet_id,
                                const storage::ObDMLBaseParam &dml_param,

@@ -211,7 +211,7 @@ private:
 
   uint64_t tenant_id_;
   uint64_t base_tb_id_;
-  uint64_t delta_buf_tb_id_;
+  uint64_t domain_tb_id_;
   uint64_t index_id_tb_id_;
   share::schema::ObVectorRefreshMethod refresh_method_;
   share::schema::ObVectorIndexOrganization idx_organization_;

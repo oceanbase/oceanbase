@@ -8403,6 +8403,21 @@ int64_t ObTableSchema::get_index_count() const
   int64_t vec_delta_buffer_count = 0;
   int64_t vec_index_id_count = 0;
   int64_t vec_index_snapshot_data_count = 0;
+
+  int64_t vec_ivfflat_centroid_count = 0;
+  int64_t vec_ivfflat_cid_vector_count = 0;
+  int64_t vec_ivfflat_rowkey_cid_count = 0;
+
+  int64_t vec_ivfsq8_centroid_count = 0;
+  int64_t vec_ivfsq8_cid_vector_count = 0;
+  int64_t vec_ivfsq8_rowkey_cid_count = 0;
+  int64_t vec_ivfsq8_meta_count = 0;
+
+  int64_t vec_ivfpq_centroid_count = 0;
+  int64_t vec_ivf_pq_rowkey_cid_count = 0;
+  int64_t vec_ivf_pq_centroid_count = 0;
+  int64_t vec_ivf_pq_code_count = 0;
+
   for (int64_t i = 0; i < get_index_tid_count(); ++i) {
     ObIndexType index_type = simple_index_infos_.at(i).index_type_;
     // Count the number of various index aux tables to determine the number of indexes that can be added.
@@ -8427,6 +8442,28 @@ int64_t ObTableSchema::get_index_count() const
       ++vec_index_id_count;
     } else if (share::schema::is_vec_index_snapshot_data_type(index_type)) {
       ++vec_index_snapshot_data_count;
+    } else if (share::schema::is_vec_ivfflat_centroid_index(index_type)) {
+      ++vec_ivfflat_centroid_count;
+    } else if (share::schema::is_vec_ivfflat_cid_vector_index(index_type)) {
+      ++vec_ivfflat_cid_vector_count;
+    } else if (share::schema::is_vec_ivfflat_rowkey_cid_index(index_type)) {
+      ++vec_ivfflat_rowkey_cid_count;
+    } else if (share::schema::is_vec_ivfsq8_centroid_index(index_type)) {
+      ++vec_ivfsq8_centroid_count;
+    } else if (share::schema::is_vec_ivfsq8_cid_vector_index(index_type)) {
+      ++vec_ivfsq8_cid_vector_count;
+    } else if (share::schema::is_vec_ivfsq8_rowkey_cid_index(index_type)) {
+      ++vec_ivfsq8_rowkey_cid_count;
+    } else if (share::schema::is_vec_ivfsq8_meta_index(index_type)) {
+      ++vec_ivfsq8_meta_count;
+    } else if (share::schema::is_vec_ivfpq_centroid_index(index_type)) {
+      ++vec_ivfpq_centroid_count;
+    } else if (share::schema::is_vec_ivfpq_pq_centroid_index(index_type)) {
+      ++vec_ivf_pq_centroid_count;
+    } else if (share::schema::is_vec_ivfpq_code_index(index_type)) {
+      ++vec_ivf_pq_code_count;
+    } else if (share::schema::is_vec_ivfpq_rowkey_cid_index(index_type)) {
+      ++vec_ivf_pq_rowkey_cid_count;
     } else if (ObIndexType::INDEX_TYPE_IS_NOT != index_type) {
       ++index_count;
     }
@@ -8438,6 +8475,12 @@ int64_t ObTableSchema::get_index_count() const
                   OB_MIN(fts_index_aux_count, fts_doc_word_aux_count) +  multivalue_index_aux_count : 0;
   index_count += (is_vec_rowkey_vid_exist && is_vec_vid_rowkey_exist) ?
                   OB_MIN(vec_delta_buffer_count, OB_MIN(vec_index_id_count, vec_index_snapshot_data_count)) : 0;
+  // ivf vector
+  index_count += (OB_MIN(vec_ivfflat_rowkey_cid_count, OB_MIN(vec_ivfflat_centroid_count, vec_ivfflat_cid_vector_count)));
+  index_count += (OB_MIN(vec_ivfsq8_meta_count,
+                  OB_MIN(vec_ivfsq8_rowkey_cid_count, OB_MIN(vec_ivfsq8_centroid_count, vec_ivfsq8_cid_vector_count))));
+  index_count += (OB_MIN(vec_ivf_pq_code_count,
+                  OB_MIN(vec_ivf_pq_rowkey_cid_count, OB_MIN(vec_ivfpq_centroid_count, vec_ivf_pq_centroid_count))));
   return index_count;
 }
 
@@ -9283,26 +9326,26 @@ int ObTableSchema::get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft
   return ret;
 }
 
-int ObTableSchema::get_vec_index_column_id(uint64_t &vec_vector_id) const
+int ObTableSchema::get_vec_index_column_id(uint64_t &with_cascaded_info_column_id) const
 {
   int ret = OB_SUCCESS;
-  vec_vector_id = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == vec_vector_id && i < get_column_count(); ++i) {
+  with_cascaded_info_column_id = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == with_cascaded_info_column_id && i < get_column_count(); ++i) {
     const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
-    } else if (column_schema->is_vec_vector_column()) {
-      vec_vector_id = column_schema->get_column_id();
+    } else if (column_schema->is_vec_hnsw_vector_column() || column_schema->is_vec_ivf_center_id_column()) {
+      with_cascaded_info_column_id = column_schema->get_column_id();
     }
   }
-  if (OB_FAIL(ret) || OB_INVALID_ID == vec_vector_id) {
+  if (OB_FAIL(ret) || OB_INVALID_ID == with_cascaded_info_column_id) {
     ret = ret != OB_SUCCESS ? ret : OB_ERR_INDEX_KEY_NOT_FOUND;
   }
   return ret;
 }
 
-int ObTableSchema::get_vec_index_vid_col_id(uint64_t &vec_id_col_id) const
+int ObTableSchema::get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid) const
 {
   int ret = OB_SUCCESS;
   vec_id_col_id = OB_INVALID_ID;
@@ -9311,7 +9354,9 @@ int ObTableSchema::get_vec_index_vid_col_id(uint64_t &vec_id_col_id) const
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
-    } else if (column_schema->is_vec_vid_column()) {
+    } else if (!is_cid && column_schema->is_vec_hnsw_vid_column()) {
+      vec_id_col_id = column_schema->get_column_id();
+    } else if (is_cid && column_schema->is_vec_ivf_center_id_column()) { // table schema must be index table here
       vec_id_col_id = column_schema->get_column_id();
     }
   }
@@ -9437,7 +9482,8 @@ int ObTableSchema::check_has_multivalue_index(ObSchemaGetterGuard &schema_guard,
   return ret;
 }
 
-int ObTableSchema::check_has_vector_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const
+// it will be useless after the commit of domain_merge_iter
+int ObTableSchema::check_has_hnsw_vector_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
@@ -9453,7 +9499,7 @@ int ObTableSchema::check_has_vector_index(ObSchemaGetterGuard &schema_guard, boo
     } else if (OB_ISNULL(index_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
-    } else if (index_schema->is_vec_index()) {
+    } else if (index_schema->is_vec_hnsw_index()) {
       has_vector_index = true;
       break;
     }

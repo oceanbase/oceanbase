@@ -16,13 +16,22 @@
 namespace oceanbase {
 namespace common {
 
-int ObArrayUtil::get_type_name(const ObDataType &elem_type, char *buf, int buf_len, uint32_t depth)
+int ObArrayUtil::get_type_name(ObNestedType coll_type, const ObDataType &elem_type, char *buf, int buf_len, uint32_t depth)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   for (uint32_t i = 0; OB_SUCC(ret) && i < depth; i++) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ARRAY("))) {
-      LOG_WARN("failed to convert len to string", K(ret));
+    if (coll_type == ObNestedType::OB_ARRAY_TYPE) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ARRAY("))) {
+        LOG_WARN("failed to convert len to string", K(ret));
+      }
+    } else if (coll_type == ObNestedType::OB_VECTOR_TYPE) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "VECTOR("))) {
+        LOG_WARN("failed to convert len to string", K(ret));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid collection type", K(ret), K(coll_type));
     }
   }
   if (OB_FAIL(ret)) {

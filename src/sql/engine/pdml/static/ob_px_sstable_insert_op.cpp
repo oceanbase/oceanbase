@@ -194,7 +194,10 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("Table not exist", K(MY_SPEC.plan_->get_ddl_table_id()), K(ret));
   } else if (OB_FALSE_IT(is_vec_gen_vid_ = table_schema->is_vec_rowkey_vid_type())) {
-  } else if (OB_FALSE_IT(is_vec_data_complement_ = table_schema->is_vec_index_snapshot_data_type())) {
+  } else if (OB_FALSE_IT(is_vec_data_complement_ = (table_schema->is_vec_index_snapshot_data_type() ||
+                                                    table_schema->is_vec_ivfflat_index() ||
+                                                    table_schema->is_vec_ivfsq8_index() ||
+                                                    table_schema->is_vec_ivfpq_index()))) {
   } else if (need_count_rows() && OB_FAIL(get_all_rows_and_count())) {
     LOG_WARN("fail to get all rows and count", K(ret));
   } else {

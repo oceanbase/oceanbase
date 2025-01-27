@@ -389,6 +389,18 @@ private:
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record,
       const int64_t snapshot_version = 0);
+  int create_build_vec_ivf_index_task(
+      common::ObISQLClient &proxy,
+      const share::schema::ObTableSchema *data_table_schema,
+      const share::schema::ObTableSchema *index_schema,
+      const int64_t parallelism,
+      const int64_t parent_task_id,
+      const int64_t consumer_group_id,
+      const share::ObDDLType task_type,
+      const obrpc::ObCreateIndexArg *create_index_arg,
+      const uint64_t tenant_data_version,
+      ObIAllocator &allocator,
+      ObDDLTaskRecord &task_record);
   int create_build_vec_index_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *data_table_schema,
@@ -514,6 +526,23 @@ private:
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
+  int create_drop_vec_ivf_index_task(
+      common::ObISQLClient &proxy,
+      const share::schema::ObTableSchema *index_schema,
+      const int64_t schema_version,
+      const int64_t consumer_group_id,
+      const share::ObDDLType task_type,
+      const share::schema::ObTableSchema *centroid_schema_,
+      const share::schema::ObTableSchema *cid_vector_schema_,
+      const share::schema::ObTableSchema *rowkey_cid_schema,
+      const share::schema::ObTableSchema *sq_meta_schema_,
+      const share::schema::ObTableSchema *pq_centroid_schema_,
+      const share::schema::ObTableSchema *pq_code_schema_,
+      const uint64_t tenant_data_version,
+      const obrpc::ObDropIndexArg *drop_index_arg,
+      ObIAllocator &allocator,
+      ObDDLTaskRecord &task_record);
+
   int create_drop_vec_index_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *index_schema,
@@ -573,6 +602,8 @@ int create_partition_split_task(
 
   int schedule_build_fts_index_task(
     const ObDDLTaskRecord &task_record);
+  int schedule_build_vec_ivf_index_task(
+      const ObDDLTaskRecord &task_record);
   int schedule_build_vec_index_task(
       const ObDDLTaskRecord &task_record);
   int schedule_build_index_task(
@@ -584,6 +615,7 @@ int create_partition_split_task(
   int schedule_column_redefinition_task(const ObDDLTaskRecord &task_record);
   int schedule_modify_autoinc_task(const ObDDLTaskRecord &task_record);
   int schedule_drop_index_task(const ObDDLTaskRecord &task_record);
+  int schedule_drop_vec_ivf_index_task(const ObDDLTaskRecord &task_record);
   int schedule_drop_vec_index_task(const ObDDLTaskRecord &task_record);
   int schedule_rebuild_index_task(const ObDDLTaskRecord &task_record);
   int schedule_drop_fts_index_task(const ObDDLTaskRecord &task_record);

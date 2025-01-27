@@ -809,108 +809,6 @@ private :
   int16_t scale_; // only for decimalint type
 };
 
-class ObVectorData : public ObArrayBase<float> {
-public :
-  ObVectorData() : ObArrayBase(), data_(nullptr) {}
-  ObVectorData(uint32_t length, float *data)
-    : ObArrayBase(length, ObFloatType, nullptr),
-      data_(data) {}
-  float operator[](const int64_t i) const { return data_[i]; }
-  uint32_t cardinality() const { return this->length_; }
-  ArrayFormat get_format() const { return ArrayFormat::Vector; }
-  int push_back(float value);
-  bool is_null(uint32_t idx) const { return false; }
-  void set_scale(ObScale scale) { UNUSED(scale); }
-  int print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
-            uint32_t begin = 0, uint32_t print_size = 0) const;
-  int print_element(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
-                    uint32_t begin = 0, uint32_t print_size = 0,
-                    ObString delimiter = ObString(","),
-                    bool has_null_str = true, ObString null_str = ObString("NULL")) const;
-  uint32_t *get_offsets() const { return nullptr; }
-  char *get_data() const { return reinterpret_cast<char*>(data_);}
-  int32_t get_raw_binary_len()
-  {
-    return this->data_container_ == NULL ? (this->length_ * sizeof(float)) : (sizeof(float) * data_container_->raw_data_.size());
-  }
-  int get_raw_binary(char *res_buf, int64_t buf_len);
-  int32_t get_data_binary_len() { return get_raw_binary_len(); }
-  int get_data_binary(char *res_buf, int64_t buf_len) { return get_raw_binary(res_buf, buf_len); }
-  int hash(uint64_t &hash_val) const;
-  int init ();
-  int init(ObString &raw_data);
-  int init(ObDatum *attrs, uint32_t attr_count, bool with_length = true);
-  int check_validity(const ObCollectionArrayType &arr_type, const ObIArrayType &array) const;
-  int push_null() { return OB_ERR_NULL_VALUE; }
-  int insert_from(const ObIArrayType &src, uint32_t begin, uint32_t len);
-  int at(uint32_t idx, ObIArrayType &dest) const { return OB_NOT_SUPPORTED; }
-  void clear();
-  int flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &attr_idx);
-  int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
-                 const ObIArrayType &right, int &cmp_ret) const;
-  int compare(const ObIArrayType &right, int &cmp_ret) const;
-  template<typename Elem_Type>
-  int contains(const Elem_Type &elem, int &pos) const
-  {
-    int ret = OB_SUCCESS;
-    pos = -1;
-    for (uint32_t i = 0; i < length_ && pos < 0; ++i) {
-      if (static_cast<Elem_Type>(data_[i]) == elem) {
-        pos = i;
-      }
-    }
-    return ret;
-  }
-  template <>
-  int contains<ObString>(const ObString &elem, int &pos) const
-  {
-    return OB_INVALID_ARGUMENT;
-  }
-  template <>
-  int contains<ObIArrayType>(const ObIArrayType &elem, int &pos) const
-  {
-    return OB_INVALID_ARGUMENT;
-  }
-  int contains_all(const ObIArrayType &other, bool &bret) const;
-  int overlaps(const ObIArrayType &other, bool &bret) const;
-  int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const;
-  int distinct(ObIAllocator &alloc, ObIArrayType *&output) const;
-
-  template<typename Elem_Type>
-  int clone_except(ObIAllocator &alloc, const Elem_Type *elem_except, bool is_null, ObIArrayType *&output) const
-  {
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(clone_empty(alloc, output, false))) {
-      OB_LOG(WARN, "clone empty failed", K(ret));
-    } else {
-      ObVectorData *arr_data = dynamic_cast<ObVectorData *>(output);
-      if (OB_ISNULL(arr_data)) {
-        ret = OB_ERR_ARRAY_TYPE_MISMATCH;
-        OB_LOG(WARN, "invalid array type", K(ret), K(this->get_format()));
-      }
-      for (uint32_t i = 0; i < length_ && OB_SUCC(ret); ++i) {
-        if (static_cast<Elem_Type>(data_[i]) != *elem_except && OB_FAIL(arr_data->push_back(data_[i]))) {
-          OB_LOG(WARN, "failed to add element", K(ret));
-        }
-      }
-    }
-    return ret;
-  }
-  template <>
-  int clone_except<ObString>(ObIAllocator &alloc, const ObString *elem_except, bool is_null, ObIArrayType *&output) const
-  {
-    return OB_INVALID_ARGUMENT;
-  }
-  template <>
-  int clone_except<ObIArrayType>(ObIAllocator &alloc, const ObIArrayType *elem_except, bool is_null, ObIArrayType *&output) const
-  {
-    return OB_INVALID_ARGUMENT;
-  }
-
-private :
-  float *data_;
-};
-
 class ObArrayBinary : public ObArrayBase<char> {
 public :
   ObArrayBinary() : ObArrayBase(), offsets_(nullptr), data_(nullptr) {}
@@ -1176,7 +1074,6 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObArrayTypeObjFactory);
 };
-
 } // namespace common
 } // namespace oceanbase
 #endif // OCEANBASE_OB_ARRAY_TYPE_

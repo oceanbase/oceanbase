@@ -253,6 +253,7 @@ public:
                K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg), K_(tenant_data_version),
                K_(sub_task_trace_id), KPC_(aux_rowkey_doc_schema), KPC_(aux_doc_rowkey_schema), KPC_(fts_index_aux_schema), KPC_(aux_doc_word_schema),
                K_(vec_rowkey_vid_schema), K_(vec_vid_rowkey_schema), K_(vec_domain_index_schema), K_(vec_index_id_schema), K_(vec_snapshot_data_schema),
+               K_(vec_centroid_schema), K_(vec_cid_vector_schema), K_(vec_rowkey_cid_schema), K_(vec_sq_meta_schema), K_(vec_pq_centroid_schema), K_(vec_pq_code_schema),
                K_(ddl_need_retry_at_executor), K_(is_pre_split), K_(fts_snapshot_version));
 public:
   int32_t sub_task_trace_id_;
@@ -277,6 +278,13 @@ public:
   const ObTableSchema *vec_domain_index_schema_;
   const ObTableSchema *vec_index_id_schema_;
   const ObTableSchema *vec_snapshot_data_schema_;
+  const ObTableSchema *vec_centroid_schema_;
+  const ObTableSchema *vec_cid_vector_schema_;
+  const ObTableSchema *vec_rowkey_cid_schema_;
+  const ObTableSchema *vec_sq_meta_schema_;
+  const ObTableSchema *vec_pq_centroid_schema_;
+  const ObTableSchema *vec_pq_code_schema_;
+
   uint64_t tenant_data_version_;
   bool ddl_need_retry_at_executor_;
   bool is_pre_split_;

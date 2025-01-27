@@ -421,6 +421,15 @@
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
 #include "sql/engine/expr/ob_expr_gtid.h"
 #include "sql/engine/expr/ob_expr_array.h"
+#include "sql/engine/expr/ob_expr_vec_ivf_center_id.h"
+#include "sql/engine/expr/ob_expr_vec_ivf_center_vector.h"
+#include "sql/engine/expr/ob_expr_vec_ivf_flat_data_vector.h"
+#include "sql/engine/expr/ob_expr_vec_ivf_sq8_data_vector.h"
+#include "sql/engine/expr/ob_expr_vec_ivf_meta_id.h"
+#include "sql/engine/expr/ob_expr_vec_ivf_meta_vector.h"
+#include "sql/engine/expr/ob_expr_vec_ivf_pq_center_id.h"
+#include "sql/engine/expr/ob_expr_vec_ivf_pq_center_ids.h"
+#include "sql/engine/expr/ob_expr_vec_ivf_pq_center_vector.h"
 #include "sql/engine/expr/ob_expr_vec_vid.h"
 #include "sql/engine/expr/ob_expr_vec_type.h"
 #include "sql/engine/expr/ob_expr_vec_vector.h"
@@ -1117,6 +1126,15 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCurrentRole);
     REG_OP(ObExprArray);
     /* vector index */
+    REG_OP(ObExprVecIVFCenterID);
+    REG_OP(ObExprVecIVFCenterVector);
+    REG_OP(ObExprVecIVFFlatDataVector);
+    REG_OP(ObExprVecIVFSQ8DataVector);
+    REG_OP(ObExprVecIVFMetaID);
+    REG_OP(ObExprVecIVFMetaVector);
+    REG_OP(ObExprVecIVFPQCenterId);
+    REG_OP(ObExprVecIVFPQCenterIds);
+    REG_OP(ObExprVecIVFPQCenterVector);
     REG_OP(ObExprVecVid);
     REG_OP(ObExprVecType);
     REG_OP(ObExprVecVector);
@@ -1645,6 +1663,24 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
       // don't alias "power" to "pow" in oracle mode, because oracle has no
       // "pow" function.
       alias_name = ObString::make_string(N_POW);
+    } else if (0 == origin_name.case_compare("VEC_IVF_CENTER_ID")) {
+      alias_name = ObString::make_string(N_VEC_IVF_CENTER_ID);
+    } else if (0 == origin_name.case_compare("VEC_IVF_CENTER_VECTOR")) {
+      alias_name = ObString::make_string(N_VEC_IVF_CENTER_VECTOR);
+    } else if (0 == origin_name.case_compare("VEC_IVF_SQ8_DATA_VECTOR")) {
+      alias_name = ObString::make_string(N_VEC_IVF_SQ8_DATA_VECTOR);
+    } else if (0 == origin_name.case_compare("VEC_IVF_FLAT_DATA_VECTOR")) {
+      alias_name = ObString::make_string(N_VEC_IVF_FLAT_DATA_VECTOR);
+    } else if (0 == origin_name.case_compare("VEC_IVF_META_ID")) {
+      alias_name = ObString::make_string(N_VEC_IVF_META_ID);
+    } else if (0 == origin_name.case_compare("VEC_IVF_META_VECTOR")) {
+      alias_name = ObString::make_string(N_VEC_IVF_META_VECTOR);
+    } else if (0 == origin_name.case_compare("VEC_IVF_PQ_CENTER_ID")) {
+      alias_name = ObString::make_string(N_VEC_IVF_PQ_CENTER_ID);
+    } else if (0 == origin_name.case_compare("VEC_IVF_PQ_CENTER_IDS")) {
+      alias_name = ObString::make_string(N_VEC_IVF_PQ_CENTER_IDS);
+    } else if (0 == origin_name.case_compare("VEC_IVF_PQ_CENTER_VECTOR")) {
+      alias_name = ObString::make_string(N_VEC_IVF_PQ_CENTER_VECTOR);
     } else if (0 == origin_name.case_compare("VEC_VID")) {
       alias_name = ObString::make_string(N_VEC_VID);
     } else if (0 == origin_name.case_compare("VEC_TYPE")) {

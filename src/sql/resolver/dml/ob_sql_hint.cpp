@@ -1513,7 +1513,7 @@ int ObLogPlanHint::init_other_opt_hints(ObSqlSchemaGuard &schema_guard,
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(init_log_table_hints(schema_guard))) {
+  } else if (OB_FAIL(init_log_table_hints(stmt, schema_guard))) {
     LOG_WARN("failed to init log table hints", K(ret));
   } else if (OB_FAIL(init_log_join_hints())) {
     LOG_WARN("failed to init log join hints", K(ret));
@@ -1526,12 +1526,12 @@ int ObLogPlanHint::init_other_opt_hints(ObSqlSchemaGuard &schema_guard,
 //  2. imc hints;
 //  3. table parallel hints;
 //  4. dynamic sampling hint;
-int ObLogPlanHint::init_log_table_hints(ObSqlSchemaGuard &schema_guard)
+int ObLogPlanHint::init_log_table_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   int64_t valid_cnt = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < table_hints_.count(); ++i) {
-    if (OB_FAIL(table_hints_.at(i).init_index_hints(schema_guard))) {
+    if (OB_FAIL(table_hints_.at(i).init_index_hints(stmt, schema_guard))) {
       LOG_WARN("failed to init index hint for table.", K(ret));
     } else if (!table_hints_.at(i).is_valid()) {
       /* do nothing */
@@ -2468,7 +2468,7 @@ int LogTableHint::assign(const LogTableHint &other)
   return ret;
 }
 
-int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
+int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
@@ -2518,7 +2518,7 @@ int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
                  OB_ISNULL(index_schema)) {
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("fail to get table schema", K(index_id), K(ret));
-      } else if (index_schema->is_built_in_fts_index() || index_schema->is_vec_index()) {
+      } else if (index_schema->is_built_in_fts_index() || (index_schema->is_vec_index() && !stmt.has_vec_approx())) {
         // just ignore fts && vector index
       } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
         LOG_WARN("fail to get index name", K(index_name), K(ret));

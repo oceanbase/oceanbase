@@ -20,6 +20,7 @@
 #include "share/ob_ddl_sim_point.h"
 #include "rootserver/ddl_task/ob_rebuild_index_task.h"
 #include "rootserver/ddl_task/ob_vec_index_build_task.h"
+#include "rootserver/ddl_task/ob_vec_ivf_index_build_task.h"
 #include "rootserver/ddl_task/ob_fts_index_build_task.h"
 
 const bool OB_DDL_TASK_ENABLE_TRACING = false;
@@ -199,6 +200,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam()
     dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr),
     aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr), fts_index_aux_schema_(nullptr), aux_doc_word_schema_(nullptr),
     vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_domain_index_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
+    vec_centroid_schema_(nullptr), vec_cid_vector_schema_(nullptr), vec_rowkey_cid_schema_(nullptr), vec_sq_meta_schema_(nullptr), vec_pq_centroid_schema_(nullptr), vec_pq_code_schema_(nullptr),
     tenant_data_version_(0), ddl_need_retry_at_executor_(false), is_pre_split_(false)
 {
 }
@@ -221,6 +223,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
     ddl_arg_(ddl_arg), allocator_(allocator), aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr),
     fts_index_aux_schema_(nullptr), aux_doc_word_schema_(nullptr),
     vec_rowkey_vid_schema_(nullptr), vec_vid_rowkey_schema_(nullptr), vec_domain_index_schema_(nullptr), vec_index_id_schema_(nullptr), vec_snapshot_data_schema_(nullptr),
+    vec_centroid_schema_(nullptr), vec_cid_vector_schema_(nullptr), vec_rowkey_cid_schema_(nullptr), vec_sq_meta_schema_(nullptr), vec_pq_centroid_schema_(nullptr), vec_pq_code_schema_(nullptr),
     tenant_data_version_(0),
     ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false), fts_snapshot_version_(0)
 {
@@ -767,6 +770,9 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
       ddl_type_str =  "create fts index";
       break;
     case DDL_CREATE_VEC_INDEX:
+    case DDL_CREATE_VEC_IVFFLAT_INDEX:
+    case DDL_CREATE_VEC_IVFSQ8_INDEX:
+    case DDL_CREATE_VEC_IVFPQ_INDEX:
       ddl_type_str =  "create vec index";
       break;
     case DDL_REBUILD_INDEX:
@@ -869,6 +875,9 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
       ddl_type_str = "drop mulvalue index";
       break;
     case DDL_DROP_VEC_INDEX:
+    case DDL_DROP_VEC_IVFFLAT_INDEX:
+    case DDL_DROP_VEC_IVFSQ8_INDEX:
+    case DDL_DROP_VEC_IVFPQ_INDEX:
       ddl_type_str = "drop vec index";
       break;
     case DDL_ALTER_COLUMN_GROUP:
@@ -1063,7 +1072,10 @@ bool ObDDLTask::is_ddl_task_can_be_cancelled() const
   if (task_type_ == ObDDLType::DDL_DROP_INDEX ||
       task_type_ == ObDDLType::DDL_DROP_VEC_INDEX ||
       task_type_ == ObDDLType::DDL_DROP_FTS_INDEX ||
-      task_type_ == ObDDLType::DDL_DROP_MULVALUE_INDEX) {
+      task_type_ == ObDDLType::DDL_DROP_MULVALUE_INDEX ||
+      task_type_ == ObDDLType::DDL_DROP_VEC_IVFFLAT_INDEX ||
+      task_type_ == ObDDLType::DDL_DROP_VEC_IVFSQ8_INDEX ||
+      task_type_ == ObDDLType::DDL_DROP_VEC_IVFPQ_INDEX) {
     can_be_cancelled = false;
   }
   return can_be_cancelled;
@@ -2951,6 +2963,55 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
             task.set_fts_index_aux_table_id(target_table_id);
             task.set_fts_index_aux_task_id(target_task_id);
             task.set_fts_index_aux_task_submitted(true);
+          }
+        } else if (UPDATE_DROP_INDEX_TASK_ID == update_type) {
+          task.set_drop_index_task_id(target_task_id);
+          task.set_drop_index_task_submitted(true);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(task.update_task_message(proxy))) {
+        LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
+      }
+    } else if (task_record.ddl_type_ == DDL_CREATE_VEC_IVFFLAT_INDEX ||
+               task_record.ddl_type_ == DDL_CREATE_VEC_IVFSQ8_INDEX ||
+               task_record.ddl_type_ == DDL_CREATE_VEC_IVFPQ_INDEX) {
+      SMART_VAR(ObVecIVFIndexBuildTask, task) {
+        if (OB_FAIL(task.init(task_record))) {
+          LOG_WARN("fail to init ObVecIndexBuildTask", K(ret), K(task_record));
+        } else if (UPDATE_CREATE_INDEX_ID == update_type) {
+          if (index_schema.is_vec_ivfflat_centroid_index() ||
+              index_schema.is_vec_ivfsq8_centroid_index() ||
+              index_schema.is_vec_ivfpq_centroid_index()) {
+            task.set_centroid_table_id(target_table_id);
+            task.set_centroid_table_task_id(target_task_id);
+            task.set_centroid_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfflat_cid_vector_index() ||
+                     index_schema.is_vec_ivfsq8_cid_vector_index()) {
+            task.set_cid_vector_table_id(target_table_id);
+            task.set_cid_vector_table_task_id(target_task_id);
+            task.set_cid_vector_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfflat_rowkey_cid_index() ||
+                     index_schema.is_vec_ivfsq8_rowkey_cid_index()) {
+            task.set_rowkey_cid_table_id(target_table_id);
+            task.set_rowkey_cid_table_task_id(target_task_id);
+            task.set_rowkey_cid_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfsq8_meta_index()) {
+            task.set_sq_meta_table_id(target_table_id);
+            task.set_sq_meta_table_task_id(target_task_id);
+            task.set_sq_meta_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfpq_pq_centroid_index()) {
+            task.set_pq_centroid_table_id(target_table_id);
+            task.set_pq_centroid_table_task_id(target_task_id);
+            task.set_pq_centroid_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfpq_code_index()) {
+            task.set_pq_code_table_id(target_table_id);
+            task.set_pq_code_table_task_id(target_task_id);
+            task.set_pq_code_table_task_submitted(true);
+          } else if (index_schema.is_vec_ivfpq_rowkey_cid_index()) {
+            task.set_pq_rowkey_cid_table_id(target_table_id);
+            task.set_pq_rowkey_cid_table_task_id(target_task_id);
+            task.set_pq_rowkey_cid_table_task_submitted(true);
           }
         } else if (UPDATE_DROP_INDEX_TASK_ID == update_type) {
           task.set_drop_index_task_id(target_task_id);

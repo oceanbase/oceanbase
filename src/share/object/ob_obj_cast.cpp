@@ -11250,8 +11250,15 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
       ObCollectionArrayType *dst_arr_type = static_cast<ObCollectionArrayType *>(dst_coll_info->collection_meta_);
       if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
         LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
+      } else if (dst_coll_info->collection_meta_->is_vector_type()) {
+        if (OB_FAIL(ObArrayCastUtils::string_cast_vector(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
+          LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+        }
       } else if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
         LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {
         LOG_WARN("check array validty failed", K(ret), K(dst_coll_info));
         if (ret == OB_ERR_INVALID_VECTOR_DIM) {

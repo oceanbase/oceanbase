@@ -371,8 +371,7 @@ int ObStaticEngineCG::disable_use_rich_format(const ObLogicalOperator &op, ObOpS
         || (NULL != spec.get_parent() && PHY_DELETE == spec.get_parent()->type_)
         || (static_cast<ObTableScanSpec &>(spec)).tsc_ctdef_.scan_ctdef_.is_get_
         || tsc.is_text_retrieval_scan()
-        || tsc.is_tsc_with_doc_id()
-        || tsc.is_tsc_with_vid()
+        || tsc.is_tsc_with_domain_id()
         || tsc.has_func_lookup()) {
       use_rich_format = false;
       LOG_DEBUG("tsc disable use rich format", K(tsc.get_index_back()), K(tsc.use_batch()),
@@ -920,8 +919,7 @@ int ObStaticEngineCG::generate_calc_exprs(
             && T_PSEUDO_PARTITION_LIST_COL != raw_expr->get_expr_type()
             && T_ORA_ROWSCN != raw_expr->get_expr_type()
             && !(raw_expr->is_const_expr() || raw_expr->has_flag(IS_DYNAMIC_USER_VARIABLE))
-            && !(T_FUN_SYS_PART_HASH == raw_expr->get_expr_type() || T_FUN_SYS_PART_KEY == raw_expr->get_expr_type())
-            && !(raw_expr->is_vector_sort_expr())) {
+            && !(T_FUN_SYS_PART_HASH == raw_expr->get_expr_type() || T_FUN_SYS_PART_KEY == raw_expr->get_expr_type())) {
           if (raw_expr->is_calculated()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr is not from the child_op_output but it has been caculated already",
@@ -933,6 +931,9 @@ int ObStaticEngineCG::generate_calc_exprs(
         }
 
         if (OB_FAIL(ret)) {
+        } else if (raw_expr->is_vector_sort_expr() && raw_expr->has_flag(IS_CUT_CALC_EXPR)) {
+          raw_expr->set_is_calculated(true);
+          FLOG_INFO("for distance needn't calc", K(ret));
         } else if (OB_FAIL(calc_raw_exprs.push_back(raw_expr))) {
           LOG_WARN("fail to push output expr", K(ret));
         }

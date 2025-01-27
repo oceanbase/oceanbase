@@ -11,7 +11,8 @@
  */
 
 #define USING_LOG_PREFIX LIB
-#include "ob_array_type.h"
+#include "ob_vector_type.h"
+#include "lib/ob_errno.h"
 
 namespace oceanbase {
 namespace common {
@@ -156,350 +157,31 @@ int ObArrayTypeObjFactory::construct(common::ObIAllocator &alloc, const ObCollec
       }
     }
   } else if (array_meta.type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-    CONSTRUCT_ARRAY_OBJ(ObVectorData, float);
-    if (OB_SUCC(ret)) {
-      arr_obj->set_element_type(static_cast<int32_t>(ObFloatType));
+    const ObCollectionArrayType *arr_type = static_cast<const ObCollectionArrayType *>(&array_meta);
+    if (arr_type->element_type_->type_id_ != ObNestedType::OB_BASIC_TYPE) {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "not supported vector element type", K(ret), K(arr_type->element_type_->type_id_));
+    } else {
+      ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
+      ObObjType obj_type = elem_type->basic_meta_.get_obj_type();
+      if (ObUTinyIntType == obj_type) {
+        CONSTRUCT_ARRAY_OBJ(ObVectorU8Data, uint8_t);
+        if (OB_SUCC(ret)) {
+          arr_obj->set_element_type(static_cast<int32_t>(ObUTinyIntType));
+        }
+      } else if (ObFloatType == obj_type) {
+        CONSTRUCT_ARRAY_OBJ(ObVectorF32Data, float);
+        if (OB_SUCC(ret)) {
+          arr_obj->set_element_type(static_cast<int32_t>(ObFloatType));
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        OB_LOG(WARN, "not supported vector element type", K(ret), K(obj_type));
+      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected collect info type", K(ret), K(array_meta.type_id_));
-  }
-  return ret;
-}
-
-int ObVectorData::push_back(float value)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(data_container_)) {
-    ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "try to modify read-only array", K(ret));
-  } else if (length_ + 1 > MAX_ARRAY_ELEMENT_SIZE) {
-    ret = OB_SIZE_OVERFLOW;
-    OB_LOG(WARN, "array element size exceed max", K(ret), K(length_), K(MAX_ARRAY_ELEMENT_SIZE));
-  } else if (OB_FAIL(data_container_->raw_data_.push_back(value))) {
-    OB_LOG(WARN, "failed to push value to array data", K(ret));
-  } else if (get_raw_binary_len() > MAX_ARRAY_SIZE) {
-    ret = OB_SIZE_OVERFLOW;
-    OB_LOG(WARN, "vector data length exceed max", K(ret), K(get_raw_binary_len()), K(MAX_ARRAY_SIZE));
-  } else {
-    length_++;
-  }
-  return ret;
-}
-
-int ObVectorData::print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str, uint32_t begin, uint32_t print_size) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(elem_type);
-  if (OB_FAIL(format_str.append("["))) {
-    OB_LOG(WARN, "fail to append [", K(ret));
-  } else if (OB_FAIL(print_element(elem_type, format_str, begin, print_size))) {
-    OB_LOG(WARN, "fail to print vector element", K(ret));
-  } else if (OB_SUCC(ret) && OB_FAIL(format_str.append("]"))) {
-    OB_LOG(WARN, "fail to append ]", K(ret));
-  }
-  return ret;
-}
-
-int ObVectorData::print_element(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
-                                uint32_t begin, uint32_t print_size,
-                                ObString delimiter, bool has_null_str, ObString null_str) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(elem_type);
-  if (print_size == 0) {
-    // print whole array
-    print_size = length_;
-  }
-  bool is_first_elem = true;
-  for (int i = begin; i < begin + print_size && OB_SUCC(ret); i++) {
-    if (!is_first_elem && OB_FAIL(format_str.append(delimiter))) {
-      OB_LOG(WARN, "fail to append delimiter to buffer", K(ret), K(delimiter));
-    } else {
-      is_first_elem = false;
-      int buf_size = FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE;
-      if (OB_FAIL(format_str.reserve(buf_size + 1))) {
-        OB_LOG(WARN, "fail to reserve memory for format_str", K(ret));
-      } else {
-        char *start = format_str.ptr() + format_str.length();
-        uint64_t len = ob_gcvt(data_[i], ob_gcvt_arg_type::OB_GCVT_ARG_FLOAT, buf_size, start, NULL);
-        if (OB_FAIL(format_str.set_length(format_str.length() + len))) {
-          OB_LOG(WARN, "fail to set format_str len", K(ret), K(format_str.length()), K(len));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObVectorData::get_raw_binary(char *res_buf, int64_t buf_len)
-{
-  int ret = OB_SUCCESS;
-  if (get_raw_binary_len() > buf_len) {
-    ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "buf len isn't enough", K(ret), K(buf_len));
-  } else if (data_container_ == NULL) {
-    MEMCPY(res_buf, reinterpret_cast<char *>(data_), sizeof(float) * length_);
-  } else {
-    MEMCPY(res_buf,
-        reinterpret_cast<char *>(data_container_->raw_data_.get_data()),
-        sizeof(float) * data_container_->raw_data_.size());
-  }
-  return ret;
-}
-
-int ObVectorData::hash(uint64_t &hash_val) const
-{
-  float *data = this->data_;
-  if (this->data_container_ != NULL) {
-    data = this->data_container_->raw_data_.get_data();
-  }
-  hash_val = common::murmurhash(&this->length_, sizeof(this->length_), hash_val);
-  if (this->length_ > 0) {
-    hash_val = common::murmurhash(data, sizeof(float) * this->length_, hash_val);
-  }
-  return OB_SUCCESS;
-}
-
-int ObVectorData::init()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(data_container_)) {
-    ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "try to modify read-only array", K(ret));
-  } else {
-    length_ = data_container_->raw_data_.size();
-    data_ = data_container_->raw_data_.get_data();
-  }
-  return ret;
-}
-
-int ObVectorData::init(ObString &raw_data)
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  char *raw_str = raw_data.ptr();
-  if (raw_data.length() % sizeof(float) != 0) {
-    ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "raw data len is invalid", K(ret), K(raw_data.length()));
-  } else {
-    length_ = raw_data.length() / sizeof(float);
-    data_ = reinterpret_cast<float *>(raw_str);
-  }
-  return ret;
-}
-
-int ObVectorData::init(ObDatum *attrs, uint32_t attr_count, bool with_length)
-{
-  int ret = OB_SUCCESS;
-  // attrs of vector are same as array now, maybe optimize later
-  const uint32_t count = with_length ? 3 : 2;
-  if (attr_count != count) {
-    ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "unexpected attrs", K(ret), K(attr_count), K(count));
-  } else {
-    data_ = const_cast<float *>(reinterpret_cast<const float *>(attrs[count - 1].get_string().ptr()));
-    length_ = attrs[count - 1].get_int_bytes() / sizeof(float);
-  }
-  return ret;
-}
-
-int ObVectorData::check_validity(const ObCollectionArrayType &arr_type, const ObIArrayType &array) const
-{
-  int ret = OB_SUCCESS;
-  if (arr_type.dim_cnt_ != array.size()) {
-    ret = OB_ERR_INVALID_VECTOR_DIM;
-    LOG_WARN("invalid vector dimension", K(ret), K(arr_type.dim_cnt_), K(array.size()));
-  }
-  return ret;
-}
-
-int ObVectorData::insert_from(const ObIArrayType &src, uint32_t begin, uint32_t len)
-{
-int ret = OB_SUCCESS;
-  if (src.get_format() != get_format()
-      || src.get_element_type() != element_type_) {
-    ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "inconsistent array type", K(ret), K(src.get_format()), K(src.get_element_type()),
-                                            K(get_format()), K(element_type_));
-  } else if (OB_ISNULL(data_container_)) {
-    ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "try to modify read-only array", K(ret));
-  } else {
-    const uint32_t src_data_offset = begin * sizeof(float);
-    int64_t curr_pos = data_container_->raw_data_.size();
-    int64_t capacity = curr_pos + len;
-    if (OB_FAIL(data_container_->raw_data_.prepare_allocate(capacity))) {
-      OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
-    } else {
-      char *cur_data = reinterpret_cast<char *>(data_container_->raw_data_.get_data() + curr_pos);
-      MEMCPY(cur_data, src.get_data() + src_data_offset, len * sizeof(float));
-      length_ += len;
-    }
-  }
-  return ret;
-}
-
-void ObVectorData::clear()
-{
-  data_ = nullptr;
-  length_ = 0;
-  if (OB_NOT_NULL(data_container_)) {
-    data_container_->clear();
-  }
-}
-
-int ObVectorData::flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &attr_idx)
-{
-  int ret = OB_SUCCESS;
-  const uint32_t len = 2;
-  if (len + attr_idx >= attr_count) {
-    ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "unexpected attr count", K(ret), K(attr_count), K(attr_idx), K(len));
-  } else {
-    attrs[attr_idx].ptr_ = nullptr;
-    attrs[attr_idx].length_ = 0;
-    attr_idx++; // skip null
-    attrs[attr_idx].ptr_ = reinterpret_cast<char *>(data_);
-    attrs[attr_idx].length_ = sizeof(float) * length_;
-    attr_idx++;
-  }
-  return ret;
-}
-
-int ObVectorData::compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
-                             const ObIArrayType &right, int &cmp_ret) const
-{
-  int ret = OB_SUCCESS;
-  const ObVectorData *right_data = dynamic_cast<const ObVectorData *>(&right);
-  if (OB_ISNULL(right_data)) {
-    ret = OB_ERR_ARRAY_TYPE_MISMATCH;
-    OB_LOG(WARN, "invalid array type", K(ret), K(right.get_format()), K(this->get_format()));
-  } else {
-    uint32_t cmp_len = std::min(left_len, right_len);
-    cmp_ret = 0;
-    for (uint32_t i = 0; i < cmp_len && !cmp_ret; ++i) {
-      if (data_[left_begin + i] != (*right_data)[right_begin + i]) {
-        cmp_ret = data_[left_begin + i] > (*right_data)[right_begin + i] ? 1 : -1;
-      }
-    }
-    if (cmp_ret == 0 && left_len != right_len) {
-      cmp_ret = left_len > right_len ? 1 : -1;
-    }
-  }
-  return ret;
-}
-
-int ObVectorData::compare(const ObIArrayType &right, int &cmp_ret) const
-{
-  return compare_at(0, this->length_, 0, right.size(), right, cmp_ret);
-}
-
-int ObVectorData::contains_all(const ObIArrayType &other, bool &bret) const
-{
-  int ret = OB_SUCCESS;
-  const ObVectorData *right_data = dynamic_cast<const ObVectorData *>(&other);
-  if (OB_ISNULL(right_data)) {
-    ret = OB_ERR_ARRAY_TYPE_MISMATCH;
-    OB_LOG(WARN, "invalid array type", K(ret), K(other.get_format()), K(this->get_format()));
-  } else {
-    bret = true;
-    for (uint32_t i = 0; i < other.size() && bret && OB_SUCC(ret); ++i) {
-      int pos = -1;
-      if (OB_FAIL(this->contains((*right_data)[i], pos))) {
-        OB_LOG(WARN, "check element contains failed", K(ret), K(i), K((*right_data)[i]));
-      } else if (pos < 0) {
-        bret = false;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObVectorData::overlaps(const ObIArrayType &other, bool &bret) const
-{
-  int ret = OB_SUCCESS;
-  const ObVectorData *right_data = dynamic_cast<const ObVectorData *>(&other);
-  if (OB_ISNULL(right_data)) {
-    ret = OB_ERR_ARRAY_TYPE_MISMATCH;
-    OB_LOG(WARN, "invalid array type", K(ret), K(other.get_format()), K(this->get_format()));
-  } else {
-    bret = false;
-    for (uint32_t i = 0; i < other.size() && !bret && OB_SUCC(ret); ++i) {
-      int pos = -1;
-      if (OB_FAIL(this->contains((*right_data)[i], pos))) {
-        OB_LOG(WARN, "check element contains failed", K(ret), K(i), K((*right_data)[i]));
-      } else if (pos >= 0) {
-        bret = true;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObVectorData::clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only) const
-{
-  int ret = OB_SUCCESS;
-  void *buf = alloc.alloc(sizeof(ObVectorData));
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    OB_LOG(WARN, "alloc memory failed", K(ret));
-  } else {
-    ObVectorData *arr_ptr = new (buf) ObVectorData();
-    if (read_only) {
-    } else if (OB_ISNULL(buf = alloc.alloc(sizeof(ObArrayData<float>)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      OB_LOG(WARN, "alloc memory failed", K(ret));
-    } else {
-      ObArrayData<float> *arr_data = new (buf) ObArrayData<float>(alloc);
-      arr_ptr->set_array_data(arr_data);
-      arr_ptr->set_element_type(this->element_type_);
-    }
-    if (OB_SUCC(ret)) {
-      output = arr_ptr;
-    }
-  }
-  return ret;
-}
-
-int ObVectorData::distinct(ObIAllocator &alloc, ObIArrayType *&output) const
-{
-  int ret = OB_SUCCESS;
-  ObIArrayType *arr_ptr = NULL;
-  if (OB_FAIL(clone_empty(alloc, arr_ptr, false))) {
-    OB_LOG(WARN, "clone empty failed", K(ret));
-  } else {
-    hash::ObHashSet<ObString> elem_set;
-    ObVectorData *vec_ptr = dynamic_cast<ObVectorData *>(arr_ptr);
-    if (OB_ISNULL(vec_ptr)) {
-      ret = OB_ERR_ARRAY_TYPE_MISMATCH;
-      OB_LOG(WARN, "invalid array type", K(ret), K(arr_ptr->get_format()));
-    } else if (OB_FAIL(elem_set.create(this->length_, ObMemAttr(common::OB_SERVER_TENANT_ID, "ArrayDistSet")))) {
-      OB_LOG(WARN, "failed to create cellid set", K(ret), K(this->length_));
-    } else {
-      for (uint32_t i = 0; i < this->length_ && OB_SUCC(ret); ++i) {
-        ObString val(sizeof(data_[i]), reinterpret_cast<char *>(&data_[i]));
-        if (OB_FAIL(elem_set.exist_refactored(val))) {
-          if (ret == OB_HASH_NOT_EXIST) {
-            if (OB_FAIL(vec_ptr->push_back(data_[i]))) {
-              OB_LOG(WARN, "failed to add elemen", K(ret));
-            } else if (OB_FAIL(elem_set.set_refactored(val))) {
-              OB_LOG(WARN, "failed to add elemen into set", K(ret));
-            }
-          } else if (ret == OB_HASH_EXIST) {
-            // duplicate element, do nothing
-            ret = OB_SUCCESS;
-          } else {
-            OB_LOG(WARN, "failed to check element exist", K(ret));
-          }
-        } else {
-          // do nothing
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      output = arr_ptr;
-    }
   }
   return ret;
 }

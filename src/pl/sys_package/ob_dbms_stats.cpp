@@ -447,7 +447,7 @@ int ObDbmsStats::fast_gather_index_stats(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   is_all_fast_gather = true;
-  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  SMART_VAR(uint64_t[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1], index_tids) {
   int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   if (OB_FAIL(get_table_index_infos(schema_guard,
@@ -520,6 +520,7 @@ int ObDbmsStats::fast_gather_index_stats(ObExecContext &ctx,
       }
     }
   }
+  } // smart var
   return ret;
 }
 
@@ -1119,7 +1120,7 @@ int ObDbmsStats::delete_table_index_stats(sql::ObExecContext &ctx,
                                           const ObTableStatParam data_param)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  SMART_VAR(uint64_t[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1], index_tids) {
   int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
@@ -1154,6 +1155,7 @@ int ObDbmsStats::delete_table_index_stats(sql::ObExecContext &ctx,
       }
     }
   }
+  } // smart var
   return ret;
 }
 
@@ -1610,7 +1612,7 @@ int ObDbmsStats::export_table_index_stats(sql::ObExecContext &ctx,
                                           const ObTableStatParam data_param)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  SMART_VAR(uint64_t[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1], index_tids) {
   int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
@@ -1639,6 +1641,7 @@ int ObDbmsStats::export_table_index_stats(sql::ObExecContext &ctx,
       }
     }
   }
+  } // smart vars
   return ret;
 }
 
@@ -2009,7 +2012,7 @@ int ObDbmsStats::import_table_index_stats(sql::ObExecContext &ctx,
                                           const ObTableStatParam data_param)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  SMART_VAR(uint64_t[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1], index_tids) {
   int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
@@ -2047,6 +2050,7 @@ int ObDbmsStats::import_table_index_stats(sql::ObExecContext &ctx,
       }
     }
   }
+  } // smart var
   return ret;
 }
 
@@ -2231,7 +2235,7 @@ int ObDbmsStats::lock_or_unlock_index_stats(sql::ObExecContext &ctx,
                                             bool is_lock_stats)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  SMART_VAR(uint64_t[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1], index_tids) {
   int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_FAIL(get_table_index_infos(ctx.get_virtual_table_ctx().schema_guard_,
                                     ctx.get_my_session()->get_effective_tenant_id(),
@@ -2261,6 +2265,7 @@ int ObDbmsStats::lock_or_unlock_index_stats(sql::ObExecContext &ctx,
       }
     }
   }
+  } // smart var
   return ret;
 }
 
@@ -3709,7 +3714,7 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       }
     }
   }
-  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  SMART_VAR(uint64_t[OB_MAX_AUX_TABLE_PER_MAIN_TABLE], tids) {
   int64_t index_aux_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   const ObTableSchema *index_schema = NULL;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -3759,6 +3764,7 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       }
     }
   }
+  } // smart var
   return ret;
 }
 
@@ -6398,7 +6404,7 @@ int ObDbmsStats::get_index_schema(sql::ObExecContext &ctx,
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   index_schema = NULL;
-  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  SMART_VAR(uint64_t[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1], index_tids) {
   int64_t index_aux_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
@@ -6446,6 +6452,7 @@ int ObDbmsStats::get_index_schema(sql::ObExecContext &ctx,
       LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(index_name), to_cstring(index_name));
     }
   }
+  } // smart var
   return ret;
 }
 

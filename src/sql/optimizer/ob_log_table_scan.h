@@ -19,6 +19,7 @@
 #include "sql/resolver/dml/ob_sql_hint.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
 #include "sql/optimizer/ob_log_set.h"
+#include "src/share/vector_index/ob_plugin_vector_index_adaptor.h"
 
 namespace oceanbase
 {
@@ -96,64 +97,161 @@ struct ObRawFilterMonotonicity
                K_(mono),
                K_(assist_exprs));
 };
-struct ObVectorIndexInfo
+enum ObVectorAuxTableIdx
 {
-  ObVectorIndexInfo()
+  VEC_FIRST_AUX_TBL_IDX = 0,  // HNSW_DELTA_BUF_TABLE  or  IVF_CENTROID_TABLE
+  VEC_SECOND_AUX_TBL_IDX = 1, // HNSW_INDEX_ID_TABLE   or  IVF_CID_VEC_TABLE   or  IVF_PQ_CODE_TABLE
+  VEC_THIRD_AUX_TBL_IDX = 2,  // HNSW_SNAPSHOT_DATA_TABLE  or  IVF_ROWKEY_CID_TABLE  or  IVF_PQ_ROWKEY_CID_TABLE
+  VEC_FOURTH_AUX_TBL_IDX = 3, // HNSW_ROWKEY_VID_TABLE     or  IVF_SQ_META_TABLE     or  IVF_PQ_ID_TABLE
+  VEC_MAX_AUX_TBL_IDX = 4
+};
+
+enum ObVectorHNSWColumnIdx
+{
+  // for HNSW
+  HNSW_DELTA_VID_COL = 0,
+  HNSW_DELTA_TYPE_COL = 1,
+  HNSW_DELTA_VECTOR_COL = 2,
+  HNSW_INDEX_ID_VID_COL = 3,
+  HNSW_INDEX_ID_TYPE_COL = 4,
+  HNSW_INDEX_ID_VECTOR_COL = 5,
+  HNSW_INDEX_ID_SCN_COL = 6,
+  HNSW_SNAPSHOT_KEY_COL = 7,
+  HNSW_SNAPSHOT_DATA_COL = 8,
+  HNSW_MAX_COL_CNT = 9,
+};
+
+enum ObVectorIVFFlatColumnIdx
+{
+  // same in all IVF
+  IVF_CENTROID_CID_COL = 0,
+  IVF_CENTROID_CENTER_COL = 1,
+  // same in IVF FLAT and SQ
+  IVF_CID_VEC_CID_COL = 2,
+  IVF_CID_VEC_VECTOR_COL = 3,
+  IVF_ROWKEY_CID_CID = 4,
+  IVF_FLAT_ROWKEY_START = 5
+};
+
+enum ObVectorIVFSQColumnIdx
+{
+  IVF_SQ_CENTROID_CID_COL = 0,
+  IVF_SQ_CENTROID_CENTER_COL = 1,
+  IVF_SQ_CID_VEC_CID_COL = 2,
+  IVF_SQ_CID_VEC_VECTOR_COL = 3,
+  IVF_SQ_ROWKEY_CID_CID = 4,
+  IVF_SQ_META_ID_COL = 5,
+  IVF_SQ_META_VEC_COL = 6,
+  IVF_SQ_ROWKEY_START = 7
+};
+
+enum ObVectorIVFPQColumnIdx
+{
+  IVF_PQ_CENTROID_CID_COL = 0,     // center_id col in ivf_centroid table
+  IVF_PQ_CENTROID_CENTER_COL = 1,  // center_vector col in ivf_centroid table
+  IVF_PQ_ID_PID_COL = 2,           // pq_center_id col in ivf_pq_centroid table
+  IVF_PQ_ID_CENTER_COL = 3,        // center_vector col in ivf_pq_centroid table
+  IVF_PQ_ROWKEY_CID_CID_COL = 4,   // center_id col in ivf_pq_rowkey_cid table
+  IVF_PQ_ROWKEY_CID_PIDS_COL = 5,  // pq_center_ids col in ivf_pq_rowkey_cid table
+  IVF_PQ_CODE_CID_COL = 6,         // center_id col in ivf_pq_code table
+  IVF_PQ_CODE_PIDS_COL = 7,        // pq_center_ids col in ivf_pq_code table
+  IVF_PQ_ROWKEY_START = 8,
+};
+/*
+enum ObVectorAuxColumnIdx
+{
+  // for HNSW
+  HNSW_DELTA_VID_COL = 0,
+  HNSW_DELTA_TYPE_COL = 1,
+  HNSW_DELTA_VECTOR_COL = 2,
+  HNSW_INDEX_ID_VID_COL = 3,
+  HNSW_INDEX_ID_TYPE_COL = 4,
+  HNSW_INDEX_ID_VECTOR_COL = 5,
+  HNSW_INDEX_ID_SCN_COL = 6,
+  HNSW_SNAPSHOT_KEY_COL = 7,
+  HNSW_SNAPSHOT_DATA_COL = 8,
+  HNSW_MAX_COL_CNT = 9,
+  // for IVF PUBLIC
+  IVF_CENTROID_CID_COL = 0,
+  IVF_CENTROID_CENTER_COL = 1,
+  // for IVF FLAT and SQ
+  IVF_CID_VEC_CID_COL = 2,
+  IVF_CID_VEC_VECTOR_COL = 3,
+  IVF_ROWKEY_CID_CID = 4,
+  IVF_FLAT_ROWKEY_START = 5,
+  IVF_FLAT_TBL_WITH_ROWKEY_CNT = 2,
+  // for IVF SQ
+  IVF_SQ_META_ID_COL = 5,
+  IVF_SQ_META_VEC_COL = 6,
+  IVF_SQ_ROWKEY_START = 7,
+  IVF_SQ_TBL_WITH_ROWKEY_CNT = 2,
+  // for IVF PQ
+  IVF_PQ_ID_PID_COL = 2,
+  IVF_PQ_ID_CENTER_COL = 3,
+  IVF_PQ_ROWKEY_CID_CID_COL = 4,
+  IVF_PQ_ROWKEY_CID_PIDS_COL = 5,
+  IVF_PQ_CODE_CID_COL = 6,
+  IVF_PQ_CODE_PIDS_COL = 7,
+  IVF_PQ_ROWKEY_START  = 8,
+  IVF_PQ_TBL_WITH_ROWKEY_CNT = 2,
+};*/
+
+static const int IVF_FLAT_TBL_WITH_ROWKEY_CNT = 2;
+static const int IVF_SQ_TBL_WITH_ROWKEY_CNT = 2;
+static const int IVF_PQ_TBL_WITH_ROWKEY_CNT = 2;
+struct ObVecIndexInfo
+{
+  ObVecIndexInfo()
   : sort_key_(),
     topk_limit_expr_(nullptr),
     topk_offset_expr_(nullptr),
     target_vec_column_(nullptr),
     vec_id_column_(nullptr),
-    delta_vid_column_(),
-    delta_type_column_(),
-    delta_vector_column_(),
-    index_id_scn_column_(),
-    index_id_vid_column_(),
-    index_id_type_column_(),
-    index_id_vector_column_(),
-    snapshot_key_column_(),
-    snapshot_data_column_(),
-    delta_buffer_tid_(OB_INVALID_ID),
-    index_id_tid_(OB_INVALID_ID),
-    index_snapshot_data_tid_(OB_INVALID_ID),
-    main_table_tid_(OB_INVALID_ID)
+    main_table_tid_(OB_INVALID_ID),
+    vec_type_(ObVecIndexType::VEC_INDEX_INVALID),
+    selectivity_(0),
+    row_count_(0),
+    algorithm_type_(ObVectorIndexAlgorithmType::VIAT_MAX)
   { }
-  ~ObVectorIndexInfo() {}
+  ~ObVecIndexInfo() {}
 
-  TO_STRING_KV(K_(sort_key), KPC_(topk_limit_expr), KPC_(topk_offset_expr),
-              KPC_(vec_id_column), KPC_(delta_vid_column), KPC_(delta_type_column),
-              KPC_(delta_vector_column), KPC_(index_id_scn_column), KPC_(index_id_vid_column),
-              KPC_(index_id_type_column), KPC_(index_id_vector_column),
-              KPC_(snapshot_key_column), KPC_(snapshot_data_column),
-              K_(delta_buffer_tid), K_(index_id_tid), K_(index_snapshot_data_tid),
-              K_(main_table_tid));
+  TO_STRING_KV(K_(sort_key), KPC_(topk_limit_expr), KPC_(topk_offset_expr), KPC_(target_vec_column),
+              KPC_(vec_id_column), K_(aux_table_column), K_(aux_table_id), K_(main_table_tid));
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
-
+  void set_vec_algorithm_type(ObVectorIndexAlgorithmType type) { algorithm_type_ = type; }
+  ObVectorIndexAlgorithmType get_vec_algorithm_type() const { return algorithm_type_; }
+  bool is_vec_aux_table_id(uint64_t tid) const;
+  inline bool is_hnsw_vec_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW || algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ; }
+  inline bool is_ivf_vec_scan() const
+  {
+    return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8 ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ;
+  }
+  inline bool is_ivf_flat_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT; }
+  inline bool is_ivf_sq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8; }
+  inline bool is_ivf_pq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ; }
+  inline bool need_index_back() const { return is_ivf_vec_scan() || is_hnsw_vec_scan();}
+  uint64_t get_aux_table_id(ObVectorAuxTableIdx idx) const { return idx < aux_table_id_.count() ? aux_table_id_[idx] : OB_INVALID_ID; }
+  ObColumnRefRawExpr* get_aux_table_column(int idx) const { return idx < aux_table_column_.count() ? aux_table_column_[idx] : nullptr; }
+  int check_vec_aux_column_is_all_inited(bool& is_all_null) const;
+  int check_vec_aux_table_is_all_inited(bool& is_all_null) const;
   // topn infos
   OrderItem sort_key_;
   ObRawExpr *topk_limit_expr_;
   ObRawExpr *topk_offset_expr_;
   // table col access expr
   ObColumnRefRawExpr *target_vec_column_;
-
   ObColumnRefRawExpr *vec_id_column_;
+  // add all aux tid into array
+  common::ObSEArray<uint64_t, 5, common::ModulePageAllocator, true> aux_table_id_;
+  common::ObSEArray<ObColumnRefRawExpr*, 10, common::ModulePageAllocator, true> aux_table_column_;
 
-  // column of delta_buffer_table
-  ObColumnRefRawExpr *delta_vid_column_;
-  ObColumnRefRawExpr *delta_type_column_;
-  ObColumnRefRawExpr *delta_vector_column_;
-  // column of index_id_table
-  ObColumnRefRawExpr *index_id_scn_column_;
-  ObColumnRefRawExpr *index_id_vid_column_;
-  ObColumnRefRawExpr *index_id_type_column_;
-  ObColumnRefRawExpr *index_id_vector_column_;
-  // column of index_snapshot_data_table
-  ObColumnRefRawExpr *snapshot_key_column_;
-  ObColumnRefRawExpr *snapshot_data_column_;
-  uint64_t delta_buffer_tid_;
-  uint64_t index_id_tid_;
-  uint64_t index_snapshot_data_tid_;
   uint64_t main_table_tid_;
+  ObVecIndexType vec_type_;
+  double selectivity_;
+  int64_t row_count_;
+  ObVectorIndexAlgorithmType algorithm_type_;
 };
 
 class ObLogTableScan : public ObLogicalOperator
@@ -684,23 +782,95 @@ public:
   uint64_t get_auto_split_filter_type() const { return auto_split_filter_type_; };
   const ObRawExpr *get_auto_split_filter() const { return auto_split_filter_; };
   const ObIArray<ObRawExpr *> &get_auto_split_params() const { return auto_split_params_; };
-  inline bool is_tsc_with_doc_id() const { return is_tsc_with_doc_id_; }
-  inline bool is_tsc_with_vid() const { return is_tsc_with_vid_; }
+  inline bool is_tsc_with_domain_id() const { return with_domain_types_.size() > 0; }
   inline bool is_text_retrieval_scan() const { return is_index_scan() && NULL != text_retrieval_info_.match_expr_; }
   inline bool is_multivalue_index_scan() const { return is_multivalue_index_; }
   inline bool is_spatial_index_scan() const { return is_spatial_index_; }
   inline ObTextRetrievalInfo &get_text_retrieval_info() { return text_retrieval_info_; }
   inline const ObTextRetrievalInfo &get_text_retrieval_info() const { return text_retrieval_info_; }
   int prepare_vector_access_exprs();
+  int vector_access_push_rowkey_exprs();
   inline bool has_func_lookup() const { return 0 != lookup_tr_infos_.count(); }
   inline ObIArray<ObTextRetrievalInfo> &get_lookup_tr_infos() { return lookup_tr_infos_; }
   inline const ObIArray<ObTextRetrievalInfo> &get_lookup_tr_infos() const { return lookup_tr_infos_; }
   inline bool need_text_retrieval_calc_relevance() const { return text_retrieval_info_.need_calc_relevance_; }
-  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || is_vec_idx_scan(); }
-  inline bool need_rowkey_doc_expr() const { return is_tsc_with_doc_id() || is_tsc_with_vid() || has_func_lookup(); }
+  inline bool need_rowkey_doc_expr() const { return is_tsc_with_domain_id() || has_func_lookup(); }
+  int prepare_hnsw_vector_access_exprs();
+  int prepare_ivf_vector_access_exprs();
+  int add_rowkey_access_exprs(const ObTableSchema *table_schema,
+                              ObSqlSchemaGuard *schema_guard,
+                              ObRawExprFactory *expr_factory,
+                              ObArray<uint64_t>& rowkey_cids);
+  int prepare_ivf_flat_and_sq_access_exprs(const ObTableSchema *table_schema,
+                                          ObSqlSchemaGuard *schema_guard,
+                                          TableItem *table_item,
+                                          ObRawExprFactory *expr_factory,
+                                          ObSQLSessionInfo *session_info);
+  int prepare_ivf_pq_access_exprs(const ObTableSchema *table_schema,
+                                  ObSqlSchemaGuard *schema_guard,
+                                  TableItem *table_item,
+                                  ObRawExprFactory *expr_factory,
+                                  ObSQLSessionInfo *session_info);
+  int prepare_ivf_common_tbl_access_exprs(const ObTableSchema *table_schema,
+                                          ObSqlSchemaGuard *schema_guard,
+                                          TableItem *table_item,
+                                          ObRawExprFactory *expr_factory,
+                                          ObSQLSessionInfo *session_info);
+  int prepare_ivf_aux_tbl_cid_and_center_col_access_exprs(const ObTableSchema *ivf_cid_vec_tbl,
+                                                          const ObTableSchema *table_schema,
+                                                          ObRawExprFactory *expr_factory,
+                                                          TableItem *table_item,
+                                                          ObColumnRefRawExpr *&id_column,
+                                                          ObColumnRefRawExpr *&center_column,
+                                                          bool is_cid = true,
+                                                          bool is_center = true);
+  int prepare_ivf_aux_tbl_cid_and_pids_col_access_exprs(const ObTableSchema *aux_tbl,
+                                                      const ObTableSchema *table_schema,
+                                                      ObRawExprFactory *expr_factory,
+                                                      TableItem *table_item,
+                                                      ObColumnRefRawExpr *&cid_column,
+                                                      ObColumnRefRawExpr *&pid_column);
+  int prepare_ivf_rowkey_cid_tbl_access_exprs(const ObTableSchema *ivf_rowkey_cid_tbl,
+                                            const ObTableSchema *table_schema,
+                                            ObRawExprFactory *expr_factory,
+                                            TableItem *table_item,
+                                            ObColumnRefRawExpr *&rowkey_cid_cid_column);
+   int prepare_ivf_sq_meta_tbl_access_exprs(const ObTableSchema *ivf_sq_meta_tbl,
+                                            const ObTableSchema *table_schema,
+                                            ObRawExprFactory *expr_factory,
+                                            TableItem *table_item,
+                                            ObColumnRefRawExpr *&sq_meta_id_column,
+                                            ObColumnRefRawExpr *&sq_meta_vec_column);
+  int prepare_hnsw_delta_buf_tbl_access_exprs(const ObTableSchema *delta_buf_table,
+                                            const ObTableSchema *table_schema,
+                                            ObRawExprFactory *expr_factory,
+                                            TableItem *table_item,
+                                            ObColumnRefRawExpr *&delta_vid_column,
+                                            ObColumnRefRawExpr *&delta_type_column,
+                                            ObColumnRefRawExpr *&delta_vector_column);
+  int prepare_hnsw_index_id_tbl_access_exprs(const ObTableSchema *index_id_table,
+                                            const ObTableSchema *table_schema,
+                                            ObRawExprFactory *expr_factory,
+                                            TableItem *table_item,
+                                            ObColumnRefRawExpr *&index_id_vid_column,
+                                            ObColumnRefRawExpr *&index_id_scn_column,
+                                            ObColumnRefRawExpr *&index_id_type_column,
+                                            ObColumnRefRawExpr *&index_id_vector_column);
+  int prepare_hnsw_snapshot_tbl_access_exprs(const ObTableSchema *snapshot_table,
+                                            const ObTableSchema *table_schema,
+                                            ObRawExprFactory *expr_factory,
+                                            TableItem *table_item,
+                                            ObColumnRefRawExpr *&snapshot_key_column,
+                                            ObColumnRefRawExpr *&snapshot_data_column);
+  int prepare_hnsw_index_id_col();
+  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || is_hnsw_vec_scan(); }
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
+  inline void set_rowkey_vid_tid(const uint64_t rowkey_vid_tid) { rowkey_vid_tid_ = rowkey_vid_tid;}
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
-  inline uint64_t get_rowkey_vid_table_id() const { return rowkey_vid_tid_; }
+  inline const ObIArray<uint64_t> &get_rowkey_domain_tids() const { return domain_table_ids_; }
+  inline const ObIArray<int64_t> &get_rowkey_domain_types() const { return with_domain_types_; }
+  uint64_t get_rowkey_domain_id_tid(int64_t domain_type) const;
+  bool is_scan_domain_id_table(uint64 table_id) const;
   inline void set_rowkey_doc_table_id(const uint64_t tid) { rowkey_doc_tid_ = tid; }
   inline uint64_t get_rowkey_doc_table_id() const { return rowkey_doc_tid_; }
   inline uint64_t get_multivalue_col_idx() const { return multivalue_col_idx_; }
@@ -713,10 +883,14 @@ public:
     return est_cost_info_ == NULL ? common::OB_SUCCESS : est_cost_info_->has_exec_param(bool_ret);
   }
   void set_identify_seq_expr(ObRawExpr *expr) { identify_seq_expr_ = expr; }
-  inline bool is_vec_idx_scan() const { return is_index_scan() && vector_index_info_.delta_buffer_tid_ != OB_INVALID_ID; }
-  inline ObVectorIndexInfo &get_vector_index_info() { return vector_index_info_; }
-  inline const ObVectorIndexInfo &get_vector_index_info() const { return vector_index_info_; }
   inline bool can_batch_rescan() const { return NULL != access_path_ && access_path_->can_batch_rescan_; }
+  inline bool is_ivf_vec_scan() const {return vector_index_info_.is_ivf_vec_scan();}
+  inline bool is_hnsw_vec_scan() const {return vector_index_info_.is_hnsw_vec_scan();}
+  inline bool is_vec_index_table_id(const uint64_t tid) const { return vector_index_info_.is_vec_aux_table_id(tid) || tid == doc_id_table_id_; }
+  inline bool is_pre_vec_idx_scan() const { return vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_PRE; }
+  inline bool is_post_vec_idx_scan() const { return is_index_scan() && vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_POST; }
+  inline ObVecIndexInfo &get_vector_index_info() { return vector_index_info_; }
+  inline const ObVecIndexInfo &get_vector_index_info() const { return vector_index_info_; }
 
   inline bool das_need_keep_ordering() const { return das_keep_ordering_; }
 
@@ -780,6 +954,7 @@ private: // member functions
   int get_filter_assist_exprs(ObIArray<ObRawExpr *> &assist_exprs);
   int prepare_rowkey_domain_id_dep_exprs();
   bool use_query_range() const;
+  int prepare_rowkey_vid_dep_exprs();
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id
@@ -923,7 +1098,8 @@ protected: // memeber variables
   ObTextRetrievalInfo text_retrieval_info_;
   // text retrieval as functional lookup
   common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> lookup_tr_infos_;
-  ObVectorIndexInfo vector_index_info_;
+  ObVecIndexInfo vector_index_info_;
+
   ObPxRFStaticInfo px_rf_info_;
   bool das_keep_ordering_;
   typedef common::ObSEArray<ObRawFilterMonotonicity, 4, common::ModulePageAllocator, true> FilterMonotonicity;
@@ -943,6 +1119,11 @@ protected: // memeber variables
   bool is_tsc_with_vid_;
   uint64_t rowkey_vid_tid_;
   // end for table scan with vid
+
+  // begin for table scan with domain id
+  common::ObArray<int64_t> with_domain_types_;
+  common::ObArray<uint64_t> domain_table_ids_;
+  // end for table scan with domain id
 
   int64_t index_prefix_;
   common::ObQueryFlag::MRMVScanMode mr_mv_scan_; // used for major refresh mview fast refresh and real-time mview

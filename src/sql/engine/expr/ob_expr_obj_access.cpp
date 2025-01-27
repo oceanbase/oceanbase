@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_obj_access.h"
 #include "pl/ob_pl_resolver.h"
+#include "src/sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {

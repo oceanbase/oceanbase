@@ -301,7 +301,7 @@ struct LogTableHint
                                           dynamic_sampling_hint_(NULL),
                                           is_ds_hint_conflict_(false) {}
   int assign(const LogTableHint &other);
-  int init_index_hints(ObSqlSchemaGuard &schema_guard);
+  int init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &schema_guard);
   bool is_use_index_hint() const { return !index_hints_.empty() && NULL != index_hints_.at(0)
                                           && index_hints_.at(0)->is_use_index_hint(); }
   bool is_valid() const { return !index_list_.empty() || NULL != parallel_hint_
@@ -417,7 +417,7 @@ struct ObLogPlanHint
                            const ObDMLStmt &stmt,
                            const ObQueryHint &query_hint,
                            const ObIArray<ObHint*> &hints);
-  int init_log_table_hints(ObSqlSchemaGuard &schema_guard);
+  int init_log_table_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &schema_guard);
   int init_log_join_hints();
   int add_join_filter_hint(const ObDMLStmt &stmt,
                            const ObQueryHint &query_hint,

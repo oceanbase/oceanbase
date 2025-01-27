@@ -408,6 +408,15 @@
 #include "ob_expr_priv_st_geohash.h"
 #include "ob_expr_priv_st_makepoint.h"
 #include "ob_expr_to_pinyin.h"
+#include "ob_expr_vec_ivf_center_id.h"
+#include "ob_expr_vec_ivf_center_vector.h"
+#include "ob_expr_vec_ivf_flat_data_vector.h"
+#include "ob_expr_vec_ivf_meta_id.h"
+#include "ob_expr_vec_ivf_meta_vector.h"
+#include "ob_expr_vec_ivf_sq8_data_vector.h"
+#include "ob_expr_vec_ivf_pq_center_id.h"
+#include "ob_expr_vec_ivf_pq_center_ids.h"
+#include "ob_expr_vec_ivf_pq_center_vector.h"
 
 namespace oceanbase
 {
@@ -1301,14 +1310,14 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprCalcPartitionIdx::get_partition_idx,                 /* 789 */
   NULL, // ObExprCalcSubPartitionIdx::get_sub_partition_idx,          /* 790 */
   ObExprCalcOdpsSize::calc_odps_size,                                 /* 791 */
-  NULL, // ObExprVecIVFCenterID::calc_center_id,                      /* 792 */
-  NULL, // ObExprVecIVFCenterVector::generate_center_vector,          /* 793 */
-  NULL, // ObExprVecIVFFlatDataVector::generate_data_vector,          /* 794 */
-  NULL, // ObExprVecIVFSQ8DataVector::generate_data_vector,           /* 795 */
-  NULL, // ObExprVecIVFMetaID::generate_meta_id,                      /* 796 */
-  NULL, // ObExprVecIVFMetaVector::generate_meta_vector,              /* 797 */
-  NULL, // ObExprVecIVFPQCenterId::generate_pq_center_id,             /* 798 */
-  NULL, // ObExprVecIVFPQCenterIds::calc_pq_center_ids,               /* 799 */
+  ObExprVecIVFCenterID::calc_center_id,                               /* 792 */
+  ObExprVecIVFCenterVector::generate_center_vector,                   /* 793 */
+  ObExprVecIVFFlatDataVector::generate_data_vector,                   /* 794 */
+  ObExprVecIVFSQ8DataVector::generate_data_vector,                    /* 795 */
+  ObExprVecIVFMetaID::generate_meta_id,                               /* 796 */
+  ObExprVecIVFMetaVector::generate_meta_vector,                       /* 797 */
+  ObExprVecIVFPQCenterId::generate_pq_center_id,                      /* 798 */
+  ObExprVecIVFPQCenterIds::calc_pq_center_ids,                        /* 799 */
   NULL, // ObExprArrayMax::eval_array_max,                            /* 800 */
   NULL, // ObExprArrayMin::eval_array_min,                            /* 801 */
   NULL, // ObExprArrayAvg::eval_array_avg,                            /* 802 */
@@ -1326,7 +1335,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArrayPosition::eval_array_position,                  /* 814 */
   NULL, // ObExprURLEncode::eval_url_encode,                          /* 815 */
   NULL, // ObExprURLDecode::eval_url_decode,                          /* 816 */
-  NULL, // ObExprVecIVFPQCenterVector::generate_pq_center_vector,     /* 817 */
+  ObExprVecIVFPQCenterVector::generate_pq_center_vector,              /* 817 */
   NULL, // ObExprDemoteCast::eval_demoted_val,                        /* 818 */
   NULL, // ObExprRangePlacement::eval_range_placement,                /* 819 */
   NULL, // ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset,      /* 820 */

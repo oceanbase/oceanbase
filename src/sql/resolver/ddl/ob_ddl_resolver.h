@@ -174,15 +174,6 @@ public:
   static const int64_t DEFAULT_TABLE_DOP = 1;
   explicit ObDDLResolver(ObResolverParams &params);
   virtual ~ObDDLResolver();
-
-  static int append_vec_args(
-      const ObPartitionResolveResult &resolve_result,
-      const obrpc::ObCreateIndexArg &index_arg,
-      bool &fts_common_aux_table_exist,
-      ObIArray<ObPartitionResolveResult> &resolve_results,
-      ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
-      ObIAllocator *allocator,
-      const ObSQLSessionInfo *session_info);
   static int append_fts_args(
       const ObPartitionResolveResult &resolve_result,
       const obrpc::ObCreateIndexArg *index_arg,
@@ -556,6 +547,36 @@ public:
       const int64_t index_keyname_value,
       ParseNode *node);
 protected:
+  static int append_vec_hnsw_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg &index_arg,
+      bool &vec_common_aux_table_exist,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<ObCreateIndexArg> &index_arg_list,
+      ObIAllocator *allocator,
+      const ObSQLSessionInfo *session_info);
+
+  static int append_vec_ivfflat_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg &index_arg,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<ObCreateIndexArg> &index_arg_list,
+      ObIAllocator *allocator);
+
+  static int append_vec_ivfsq8_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg &index_arg,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<ObCreateIndexArg> &index_arg_list,
+      ObIAllocator *allocator);
+
+  static int append_vec_ivfpq_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg &index_arg,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<ObCreateIndexArg> &index_arg_list,
+      ObIAllocator *allocator);
+
   static int get_part_str_with_type(
       const bool is_oracle_mode,
       share::schema::ObPartitionFuncType part_func_type,
@@ -578,6 +599,8 @@ protected:
   int resolve_hints(const ParseNode *parse_node, ObDDLStmt &stmt, const ObTableSchema &table_schema);
   int calc_ddl_parallelism(const uint64_t hint_parallelism, const uint64_t table_dop, uint64_t &parallelism);
   int deep_copy_str(const common::ObString &src, common::ObString &dest);
+  int set_vec_column_name(
+      const common::ObString &column_name);
   int set_table_name(
       const common::ObString &table_name);
   int set_database_name(
@@ -1013,7 +1036,7 @@ protected:
   int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);
   int check_ttl_definition(const ParseNode *node);
   int add_new_indexkey_for_oracle_temp_table();
-  int check_index_param(const ParseNode *option_node, ObString &index_params);
+  int check_index_param(const ParseNode *option_node, ObString &index_params, const int64_t vector_dim);
 
   void reset();
   int get_mv_container_table(uint64_t tenant_id,
@@ -1105,6 +1128,8 @@ protected:
   ObExternalFileFormat::FormatType external_table_format_type_;
   common::ObBitSet<> mocked_external_table_column_ids_;
   common::ObString index_params_;
+  common::ObString vec_column_name_;
+  ObIndexType vec_index_type_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

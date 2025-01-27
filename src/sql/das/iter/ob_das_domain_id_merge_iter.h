@@ -10,61 +10,53 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OB_DAS_VID_MERGE_ITER_H_
-#define OB_DAS_VID_MERGE_ITER_H_
+#ifndef OB_DAS_DOMAIN_ID_MERGE_ITER_H_
+#define OB_DAS_DOMAIN_ID_MERGE_ITER_H_
 
 #include "sql/das/iter/ob_das_iter.h"
 #include "sql/das/iter/ob_das_scan_iter.h"
 #include "common/ob_tablet_id.h"
 #include "share/ob_ls_id.h"
 #include "storage/access/ob_dml_param.h"
+#include "share/domain_id/ob_domain_id.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 
-class ObDASVIdMergeCtDef;
-class ObDASVIdMergeRtDef;
+class ObDASDomainIdMergeCtDef;
+class ObDASDomainIdMergeRtDef;
+class ObDASScanCtDef;
+class ObDASScanRtDef;
 
-class ObDASVIdMergeIterParam final : public ObDASIterParam
+class ObDASDomainIdMergeIterParam final : public ObDASIterParam
 {
 public:
-  ObDASVIdMergeIterParam();
-  ~ObDASVIdMergeIterParam();
+  ObDASDomainIdMergeIterParam();
+  ~ObDASDomainIdMergeIterParam();
 
-  virtual bool is_valid() const override
-  {
-    return rowkey_vid_tablet_id_.is_valid()
-        && rowkey_vid_ls_id_.is_valid()
-        && nullptr != rowkey_vid_iter_
-        && nullptr != data_table_iter_
-        && nullptr != rowkey_vid_ctdef_
-        && nullptr != data_table_ctdef_
-        && nullptr != rowkey_vid_rtdef_
-        && nullptr != data_table_rtdef_
-        && nullptr != snapshot_;
-  }
+  virtual bool is_valid() const override;
   INHERIT_TO_STRING_KV("ObDASIterParam", ObDASIterParam,
-                     K(rowkey_vid_tablet_id_),
-                     K(rowkey_vid_ls_id_),
-                     KP(rowkey_vid_iter_),
+                     K(rowkey_domain_ls_id_),
+                     K(rowkey_domain_tablet_ids_),
                      KP(data_table_iter_),
-                     KP(rowkey_vid_ctdef_),
                      KP(data_table_ctdef_),
-                     KP(rowkey_vid_rtdef_),
                      KP(data_table_rtdef_),
+                     K(rowkey_domain_table_iters_),
+                     K(rowkey_domain_ctdefs_),
+                     K(rowkey_domain_rtdefs_),
                      KPC(trans_desc_),
                      KPC(snapshot_));
 public:
-  common::ObTabletID rowkey_vid_tablet_id_;
-  share::ObLSID rowkey_vid_ls_id_;
-  ObDASScanIter *rowkey_vid_iter_;
-  ObDASScanIter *data_table_iter_;
-  ObDASScanCtDef *rowkey_vid_ctdef_;
-  ObDASScanCtDef *data_table_ctdef_;
-  ObDASScanRtDef *rowkey_vid_rtdef_;
+  share::ObLSID rowkey_domain_ls_id_; // all domain index should be in one ls (local index)
+  common::ObArray<common::ObTabletID> rowkey_domain_tablet_ids_;
+  ObDASScanIter* data_table_iter_;
+  ObDASScanCtDef* data_table_ctdef_;
   ObDASScanRtDef *data_table_rtdef_;
+  common::ObArray<ObDASScanIter*> rowkey_domain_table_iters_;
+  common::ObArray<ObDASScanCtDef*> rowkey_domain_ctdefs_;
+  common::ObArray<ObDASScanRtDef*> rowkey_domain_rtdefs_;
   transaction::ObTxDesc *trans_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
 };
@@ -72,32 +64,33 @@ public:
 /**
  * DAS Iter Tree of DAS Scan with Doc Id:
  *
- * CASE 1: Partition Scan Tree                        CASE 2: Index LoopUp Tree
+ * CASE 1: Partition Scan Tree                           CASE 2: Index LoopUp Tree
  *
  *                DOC_ID_MERGE_ITER                              DAS_INDEX_LOOKUP_ITER
  *                 /              \                               /                \
  *               /                  \                            /                  \
- * DAS_SCAN_ITER(DataTable) DAS_SCAN_ITER(RowkeyDoc)  DAS_SCAN_ITER(IndexTable) DOC_ID_MERGE_ITER
+ * DAS_SCAN_ITER(DataTable) DAS_SCAN_ITER(RowkeyDomain)  DAS_SCAN_ITER(IndexTable) DOC_ID_MERGE_ITER
  *                                                                                /          \
  *                                                                              /             \
- *                                                             DAS_SCAN_ITER(DataTable) DAS_SCAN_ITER(RowkeyDoc)
+ *                                                             DAS_SCAN_ITER(DataTable) DAS_SCAN_ITER(RowkeyDomain)
  **/
-class ObDASVIdMergeIter final : public ObDASIter
+class ObDASDomainIdMergeIter final : public ObDASIter
 {
 public:
-  ObDASVIdMergeIter();
-  ~ObDASVIdMergeIter();
+  ObDASDomainIdMergeIter();
+  ~ObDASDomainIdMergeIter();
 
-  storage::ObTableScanParam &get_rowkey_vid_scan_param() { return rowkey_vid_scan_param_; }
+  storage::ObTableScanParam &get_rowkey_domain_scan_param(int64_t idx) { return *rowkey_domain_scan_params_.at(idx); }
   virtual int do_table_scan() override;
   virtual int rescan() override;
   virtual void clear_evaluated_flag() override;
 
   ObDASScanIter *get_data_table_iter() { return data_table_iter_; }
-  int set_vid_merge_related_ids(const ObDASRelatedTabletID &tablet_ids, const share::ObLSID &ls_id);
+  int set_domain_id_merge_related_ids(const ObDASRelatedTabletID &tablet_ids, const share::ObLSID &ls_id);
+
   INHERIT_TO_STRING_KV("ObDASIter", ObDASIter,
-                     K(rowkey_vid_scan_param_),
-                     KPC(rowkey_vid_iter_),
+                     K(rowkey_domain_scan_params_),
+                     K(rowkey_domain_iters_),
                      KPC(data_table_iter_));
 protected:
   virtual int inner_init(ObDASIterParam &param) override;
@@ -106,14 +99,15 @@ protected:
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
   common::ObArenaAllocator &get_arena_allocator() { return merge_memctx_->get_arena_allocator(); }
-  int init_rowkey_vid_scan_param(
+  int init_rowkey_domain_scan_param(
       const common::ObTabletID &tablet_id,
       const share::ObLSID &ls_id,
       const ObDASScanCtDef *ctdef,
       ObDASScanRtDef *rtdef,
       transaction::ObTxDesc *trans_desc,
-      transaction::ObTxReadSnapshot *snapshot);
-  int build_rowkey_vid_range();
+      transaction::ObTxReadSnapshot *snapshot,
+      storage::ObTableScanParam &scan_param);
+  int build_rowkey_domain_range();
   int concat_row();
   int concat_rows(int64_t &count, int64_t capacity);
   int sorted_merge_join_row();
@@ -123,45 +117,50 @@ protected:
       const ObDASScanCtDef *ctdef,
       ObDASScanRtDef *rtdef,
       common::ObRowkey &rowkey);
-  int get_vid_id(
-      const ObDASScanCtDef *ctdef,
-      ObDASScanRtDef *rtdef,
-      int64_t &vid_id);
   int get_rowkeys(
       const int64_t size,
       common::ObIAllocator &allocator,
       const ObDASScanCtDef *ctdef,
       ObDASScanRtDef *rtdef,
       common::ObIArray<common::ObRowkey> &rowkeys);
-  int get_vid_ids(
+  int get_domain_id(
+      const ObDASScanCtDef *ctdef,
+      ObDASScanRtDef *rtdef,
+      share::ObDomainIdUtils::DomainIds &domain_id);
+  int get_and_fill_domain_id_in_data_table(
+      const ObDASScanCtDef *ctdef,
+      ObDASScanRtDef *rtdef);
+  int get_domain_ids(
       const int64_t size,
       const ObDASScanCtDef *ctdef,
       ObDASScanRtDef *rtdef,
-      common::ObIArray<int64_t> &vid_ids);
-  int get_rowkeys_and_vid_ids(
+      common::ObIArray<share::ObDomainIdUtils::DomainIds> &domain_ids);
+  int fill_domain_ids_in_data_table(
+      uint64_t domain_tid,
+      const common::ObIArray<share::ObDomainIdUtils::DomainIds> &domain_ids);
+  int get_rowkeys_and_domain_ids(
       const int64_t size,
       common::ObIAllocator &allocator,
       const ObDASScanCtDef *ctdef,
       ObDASScanRtDef *rtdef,
       common::ObIArray<common::ObRowkey> &rowkeys,
-      common::ObIArray<int64_t> &vid_ids);
-  int fill_vid_id_in_data_table(const int64_t &vid_id, bool set_null = false);
-  int fill_vid_ids_in_data_table(const common::ObIArray<int64_t> &vid_ids, bool set_null = false);
+      common::ObIArray<share::ObDomainIdUtils::DomainIds> &domain_ids);
+  int get_domain_id_count(const ObDASScanCtDef *ctdef, int64_t &domain_id_count);
 private:
-  bool need_filter_rowkey_vid_;
-  bool is_block_sample_;
-  storage::ObTableScanParam rowkey_vid_scan_param_;
-  ObDASScanIter *rowkey_vid_iter_;
+  bool need_filter_rowkey_domain_;
+  bool is_no_sample_;
+  ObArray<storage::ObTableScanParam*> rowkey_domain_scan_params_;
+  ObArray<ObDASScanIter*> rowkey_domain_iters_;
   ObDASScanIter *data_table_iter_;
-  const ObDASScanCtDef *rowkey_vid_ctdef_;
+  ObArray<ObDASScanCtDef *> rowkey_domain_ctdefs_;
   const ObDASScanCtDef *data_table_ctdef_;
-  ObDASScanRtDef *rowkey_vid_rtdef_;
+  ObArray<ObDASScanRtDef *> rowkey_domain_rtdefs_;
   ObDASScanRtDef *data_table_rtdef_;
-  ObTabletID rowkey_vid_tablet_id_;
-  share::ObLSID rowkey_vid_ls_id_;
+  ObArray<ObTabletID> rowkey_domain_tablet_ids_;
+  share::ObLSID rowkey_domain_ls_id_;
   lib::MemoryContext merge_memctx_;
 };
 
 } // end namespace sql
 } // end namespace oceanbase
-#endif // OB_DAS_VID_MERGE_ITER_H_
+#endif // OB_DAS_DOMAIN_ID_MERGE_ITER_H_

@@ -672,7 +672,7 @@ int ObArrayExprUtils::dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, ObStrin
   return ret;
 }
 
-int ObVectorFloatArithFunc::operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx, ArithType type) const
+int ObVectorElemArithFunc::operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const ObExpr &expr, ObEvalCtx &ctx, ArithType type) const
 {
   UNUSED(type);
   int ret = OB_SUCCESS;
@@ -708,18 +708,41 @@ int ObVectorFloatArithFunc::operator()(ObDatum &res, const ObDatum &l, const ObD
      LOG_WARN("array type is null", K(ret), K(subschema_id));
   } else if (OB_FAIL(ObArrayTypeObjFactory::construct(tmp_allocator, *arr_type, arr_res))) {
     LOG_WARN("construct array obj failed", K(ret), K(subschema_id), K(coll_info));
+  } else if (arr_type->element_type_->type_id_ != ObNestedType::OB_BASIC_TYPE) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "not supported vector element type", K(ret), K(arr_type->element_type_->type_id_));
   } else {
-    const float *data_l = reinterpret_cast<const float*>(arr_l->get_data());
-    const uint32_t size = arr_l->size();
-    ObVectorData *float_array = static_cast<ObVectorData *>(arr_res);
-    for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
-      const float float_res = data_l[i] / data_r; // only support div now
-      if (isinff(float_res) != 0) {
-        ret = OB_OPERATE_OVERFLOW;
-        LOG_WARN("value overflow", K(ret), K(i), K(data_l[i]), K(data_r));
-      } else if (OB_FAIL(float_array->push_back(float_res))) {
-        LOG_WARN("failed to push back value", K(ret), K(float_res));
+    ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
+    ObObjType obj_type = elem_type->basic_meta_.get_obj_type();
+    if (obj_type == ObFloatType) {
+      const float *data_l = reinterpret_cast<const float*>(arr_l->get_data());
+      const uint32_t size = arr_l->size();
+      ObVectorF32Data *float_array = static_cast<ObVectorF32Data *>(arr_res);
+      for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+        const float float_res = data_l[i] / data_r; // only support div now
+        if (isinff(float_res) != 0) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("value overflow", K(ret), K(i), K(data_l[i]), K(data_r));
+        } else if (OB_FAIL(float_array->push_back(float_res))) {
+          LOG_WARN("failed to push back value", K(ret), K(float_res));
+        }
       }
+    } else if (obj_type == ObUTinyIntType) {
+      const uint8_t *data_l = reinterpret_cast<const uint8_t*>(arr_l->get_data());
+      const uint32_t size = arr_l->size();
+      ObVectorU8Data *uint8_array = static_cast<ObVectorU8Data *>(arr_res);
+      for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+        const uint8_t uint8_res = data_l[i] / data_r; // only support div now
+        if (isinff(uint8_res) != 0) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("value overflow", K(ret), K(i), K(data_l[i]), K(data_r));
+        } else if (OB_FAIL(uint8_array->push_back(uint8_res))) {
+          LOG_WARN("failed to push back value", K(ret), K(uint8_res));
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported vector element type", K(ret), K(obj_type), K(subschema_id), K(coll_info));
     }
     ObString res_str;
     if (OB_FAIL(ret)) {

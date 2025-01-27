@@ -226,9 +226,17 @@ int ObCreateIndexResolver::resolve_index_column_node(
       if (OB_SUCC(ret)) {
         bool has_fts_index = false;
         bool has_vec_index = false;
-        if (OB_FAIL(ObVectorIndexUtil::check_table_has_vector_of_fts_index(
+        uint64_t tenant_data_version = 0;
+        if (OB_ISNULL(session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (OB_FAIL(ObVectorIndexUtil::check_table_has_vector_of_fts_index(
             *tbl_schema, *(schema_checker_->get_schema_guard()), has_fts_index, has_vec_index))) {
           LOG_WARN("fail to check table has vec of fts index", K(ret));
+        } else if (tenant_data_version >= DATA_VERSION_4_3_5_1) {
+          // do nothing, support
         } else if ((index_keyname_ == FTS_KEY && has_vec_index) || (index_keyname_ == VEC_KEY && has_fts_index)) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("vector and fts index in same main table is not support", K(ret));
@@ -345,7 +353,15 @@ int ObCreateIndexResolver::resolve_index_column_node(
         }
       }
     }
-
+    ObCreateIndexArg &index_arg = crt_idx_stmt->get_create_index_arg();
+    if (OB_SUCC(ret) && is_vec_index && index_arg.index_columns_.count() > 0) {
+      const ObColumnSortItem &sort_item = index_arg.index_columns_.at(0);
+      if (OB_FAIL(set_vec_column_name(sort_item.column_name_))) {
+        LOG_WARN("fail to set vec column name", K(ret));
+      } else if (OB_FAIL(set_table_name(tbl_schema->get_table_name()))) {
+        LOG_WARN("fail to set data table name");
+      }
+    }
     if (OB_SUCC(ret) && lib::is_mysql_mode() && cnt_func_index) {
       uint64_t tenant_data_version = 0;
       if (OB_ISNULL(session_info_)) {
@@ -668,7 +684,6 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       crt_idx_stmt->set_name_generated_type(GENERATED_TYPE_USER);
     }
   }
-
   if (FAILEDx(resolve_index_name_node(parse_node.children_[0], crt_idx_stmt))) {
     LOG_WARN("fail to resolve index name node", K(ret));
   } else if (OB_FAIL(resolve_index_column_node(parse_node.children_[2],
@@ -742,8 +757,12 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     char* buf = nullptr;
     int64_t pos = 0;
     if (is_vec_index(index_arg.index_type_)) {
-      index_arg.index_schema_.set_index_params(index_params_);
-      if (tbl_schema->is_view_table()) {
+      if (!is_vec_index(vec_index_type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected index type", KR(ret), K(vec_index_type_));
+      } else if (FALSE_IT(index_arg.index_type_ = vec_index_type_)) {
+      } else if (FALSE_IT(index_arg.index_schema_.set_index_params(index_params_))) {
+      } else if (tbl_schema->is_view_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("create vector index on view table is not supported",
             KR(ret), K(tbl_schema->get_table_name()));

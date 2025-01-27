@@ -23,8 +23,7 @@ using namespace common;
 namespace sql
 {
 
-class ObDASDocIdMergeIter;
-class ObDASVIdMergeIter;
+class ObDASDomainIdMergeIter;
 class ObEvalCtx;
 class ObExecContext;
 struct ObDASIterParam
@@ -118,8 +117,7 @@ public:
   virtual void reset() override {}
   // for compatibility with ObNewRowIterator
 
-  int get_doc_id_merge_iter(ObDASDocIdMergeIter *&doc_id_merge_iter);
-  int get_vid_merge_iter(ObDASVIdMergeIter *&vid_merge_iter);
+  int get_domain_id_merge_iter(ObDASDomainIdMergeIter *&domain_id_merge_iter);
 protected:
   virtual int inner_init(ObDASIterParam &param) = 0;
   virtual int inner_reuse() = 0;

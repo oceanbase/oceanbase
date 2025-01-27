@@ -738,12 +738,12 @@ int ObExprDiv::div_double_vector(VECTOR_EVAL_FUNC_ARG_DECL)
 int ObExprDiv::div_vec(EVAL_FUNC_ARG_DECL)
 {
   ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::DIV;
-  return def_arith_eval_func<ObVectorFloatArithFunc>(EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
+  return def_arith_eval_func<ObVectorElemArithFunc>(EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
 }
 int ObExprDiv::div_vec_batch(BATCH_EVAL_FUNC_ARG_DECL)
 {
   ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::DIV;
-  return def_batch_arith_op_by_datum_func<ObVectorFloatArithFunc>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
+  return def_batch_arith_op_by_datum_func<ObVectorElemArithFunc>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
 }
 
 struct ObNumberDivFunc

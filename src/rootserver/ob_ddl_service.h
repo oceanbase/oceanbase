@@ -2330,16 +2330,6 @@ int check_will_be_having_domain_index_operation(
       const int64_t new_data_table_schema_version,
       const ObIArray<std::pair<uint64_t, int64_t>> &aux_schema_versions,
       ObDDLSQLTransaction &trans);
-  int get_dropping_vec_index_invisiable_table_schema_(
-      const uint64_t tenant_id,
-      const uint64_t data_table_id,
-      const uint64_t index_table_id,
-      const bool is_vec_inner_drop,
-      const ObString &index_name,
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      ObDDLOperator &ddl_operator,
-      common::ObMySQLTransaction &trans,
-      common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas);
 
 public:
   int create_aux_index(

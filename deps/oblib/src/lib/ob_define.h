@@ -710,6 +710,14 @@ const char *const OB_VEC_SCN_COLUMN_NAME_PREFIX = "__scn";
 const char *const OB_VEC_KEY_COLUMN_NAME_PREFIX = "__key";
 const char *const OB_VEC_DATA_COLUMN_NAME_PREFIX = "__data";
 
+const char *const OB_VEC_IVF_CENTER_ID_COLUMN_NAME_PREFIX = "__ivf_center_id";
+const char *const OB_VEC_IVF_CENTER_VECTOR_COLUMN_NAME_PREFIX = "__ivf_center_vector";
+const char *const OB_VEC_IVF_DATA_VECTOR_COLUMN_NAME_PREFIX = "__ivf_data_vector";
+const char *const OB_VEC_IVF_META_ID_COLUMN_NAME_PREFIX = "__ivf_meta_id";
+const char *const OB_VEC_IVF_META_VECTOR_COLUMN_NAME_PREFIX = "__ivf_meta_vector";
+const char *const OB_VEC_IVF_PQ_CENTER_ID_COLUMN_NAME_PREFIX = "__ivf_pq_center_id";
+const char *const OB_VEC_IVF_PQ_CENTER_IDS_COLUMN_NAME_PREFIX = "__ivf_pq_center_ids";
+
 // fulltext search
 const char *const OB_DOC_ID_COLUMN_NAME = "__doc_id";
 const char *const OB_WORD_SEGMENT_COLUMN_NAME_PREFIX = "__word_segment";

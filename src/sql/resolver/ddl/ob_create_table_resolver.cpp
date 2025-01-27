@@ -19,6 +19,7 @@
 #include "sql/resolver/cmd/ob_help_resolver.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "share/ob_vec_index_builder_util.h"
 
 
 namespace oceanbase
@@ -2450,7 +2451,7 @@ int ObCreateTableResolver::generate_index_arg()
           LOG_WARN("tenant is not user tenant vector index not supported", K(ret), K(tenant_id));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant create vector index is");
         } else {
-          type = INDEX_TYPE_VEC_ROWKEY_VID_LOCAL;
+          type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL; // 需要考虑ivf和hnsw这两种模式，其中ivf索引又分成ivfflat，ivfsq8，ivfpq三类
         }
       } else if (FTS_KEY == index_keyname_) {
         if (tenant_data_version < DATA_VERSION_4_3_1_0) {
@@ -2746,12 +2747,20 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         bool is_multi_value_index = false;
         const bool is_vec_index = (index_keyname_ == INDEX_KEYNAME::VEC_KEY);
         const bool is_fts_index = (index_keyname_ == INDEX_KEYNAME::FTS_KEY);
+        uint64_t tenant_data_version = 0;
+        bool is_support = false;
         if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (FALSE_IT(is_support = tenant_data_version >= DATA_VERSION_4_3_5_1)) {
         } else if (is_vec_index && index_column_list_node->num_child_ >= 2) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("multi column of vector index is not support yet", K(ret), K(index_column_list_node->num_child_));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "multi vector index column is");
-        } else if ((is_vec_index && has_fts_index_) || (is_fts_index && has_vec_index_)) {
+        } else if (!is_support && ((is_vec_index && has_fts_index_) || (is_fts_index && has_vec_index_))) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("vector index and fts coexist in main table is not support yet", K(ret), K(index_column_list_node->num_child_));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index and fts coexist in main table is");
@@ -2907,6 +2916,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 ret = OB_NOT_SUPPORTED;
                 LOG_WARN("more than one vector index on same column is not supported", K(ret), K(vec_index_col_id), K(vec_index_col_ids_));
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one vector index on same column is");
+              } else if (OB_FAIL(set_vec_column_name(column_schema->get_column_name()))) {
+                LOG_WARN("fail to set vec column name", K(ret));
               }
             }
             if (OB_SUCC(ret)) {
@@ -3177,15 +3188,19 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         }
         if (OB_SUCC(ret)) {
           if (is_vec_index(index_arg_.index_type_)) {
-            // set index_params to create_index_arg, then will pass to index_arg_list
-            create_index_arg.index_schema_.set_index_params(index_params_);
-            if (OB_FAIL(ObDDLResolver::append_vec_args(resolve_result,
-                                                       create_index_arg,
-                                                       have_generate_vec_arg_,
-                                                       resolve_results,
-                                                       index_arg_list,
-                                                       allocator_,
-                                                       session_info_))) {
+            // refresh vector index type
+            if (!is_vec_index(vec_index_type_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected index type", KR(ret), K(vec_index_type_));
+            } else if (FALSE_IT(create_index_arg.index_type_ = vec_index_type_)) {
+            } else if (FALSE_IT(create_index_arg.index_schema_.set_index_params(index_params_))) {
+            } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_args(resolve_result,
+                                                              create_index_arg,
+                                                              have_generate_vec_arg_,
+                                                              resolve_results,
+                                                              index_arg_list,
+                                                              allocator_,
+                                                              session_info_))) {
               LOG_WARN("failed to append vec args", K(ret));
             } else if (OB_FAIL(vec_index_col_ids_.push_back(vec_index_col_id))) {
               LOG_WARN("fail to push back vec index col id", K(ret));

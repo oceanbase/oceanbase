@@ -810,6 +810,16 @@
 #define N_VEC_KEY "vec_key"
 #define N_VEC_DATA "vec_data"
 
+#define N_VEC_IVF_CENTER_ID "vec_ivf_center_id"
+#define N_VEC_IVF_CENTER_VECTOR "vec_ivf_center_vector"
+#define N_VEC_IVF_SQ8_DATA_VECTOR "vec_ivf_sq8_data_vector"
+#define N_VEC_IVF_FLAT_DATA_VECTOR "vec_ivf_flat_data_vector"
+#define N_VEC_IVF_META_ID "vec_ivf_meta_id"
+#define N_VEC_IVF_META_VECTOR "vec_ivf_meta_vector"
+#define N_VEC_IVF_PQ_CENTER_ID "vec_ivf_pq_center_id"
+#define N_VEC_IVF_PQ_CENTER_IDS "vec_ivf_pq_center_ids"
+#define N_VEC_IVF_PQ_CENTER_VECTOR "vec_ivf_pq_center_vector"
+
 #define N_DOC_ID "doc_id"
 #define N_WORD_SEGMENT "word_segment"
 #define N_WORD_COUNT "word_count"

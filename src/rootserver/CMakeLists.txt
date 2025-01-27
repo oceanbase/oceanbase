@@ -136,8 +136,10 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_partition_split_task.cpp
   ddl_task/ob_recover_restore_table_task.cpp
   ddl_task/ob_ddl_tablet_scheduler.cpp
+  ddl_task/ob_drop_vec_ivf_index_task.cpp
   ddl_task/ob_rebuild_index_task.cpp
   ddl_task/ob_vec_index_build_task.cpp
+  ddl_task/ob_vec_ivf_index_build_task.cpp
   ddl_task/ob_drop_lob_task.cpp
 )
 

@@ -1231,7 +1231,7 @@ int ObStartMigrationTask::choose_src_()
     ObStorageHASrcInfo src_info;
     obrpc::ObCopyLSInfo ls_info;
     SCN local_clog_checkpoint_scn = SCN::min_scn();
-    ObMigrationChooseSrcHelperInitParam param;
+    SMART_VAR(ObMigrationChooseSrcHelperInitParam, param) {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     ObLS* ls = nullptr;
     ObLSHandle ls_handle;
@@ -1297,6 +1297,7 @@ int ObStartMigrationTask::choose_src_()
       FLOG_INFO("choose src",  K(src_info),
           K(ls_info), K(ctx_->sys_tablet_id_array_), K(ctx_->data_tablet_id_array_));
     }
+    } // end smart var
   }
   return ret;
 }

@@ -1069,7 +1069,25 @@ public:
   inline static bool is_spatial_index(const ObIndexType index_type);
   inline bool is_vec_index() const;
   inline static bool is_vec_index(const ObIndexType index_type);
+  inline bool is_vec_domain_index() const;
   inline bool is_built_in_vec_index() const;
+  inline bool is_vec_hnsw_index() const;
+  inline bool is_vec_ivf_index() const;
+  inline bool is_vec_ivfpq_index() const;
+  inline bool is_vec_ivfsq8_index() const;
+  inline bool is_vec_ivfflat_index() const;
+  inline bool is_vec_ivfflat_centroid_index() const;
+  inline bool is_vec_ivfflat_cid_vector_index() const;
+  inline bool is_vec_ivfflat_rowkey_cid_index() const;
+  inline bool is_vec_ivfsq8_centroid_index() const;
+  inline bool is_vec_ivfsq8_cid_vector_index() const;
+  inline bool is_vec_ivfsq8_meta_index() const;
+  inline bool is_vec_ivfsq8_rowkey_cid_index() const;
+  inline bool is_vec_ivfpq_centroid_index() const;
+  inline bool is_vec_ivf_centroid_index() const;
+  inline bool is_vec_ivfpq_pq_centroid_index() const;
+  inline bool is_vec_ivfpq_code_index() const;
+  inline bool is_vec_ivfpq_rowkey_cid_index() const;
   inline bool is_vec_rowkey_vid_type() const;
   inline bool is_vec_vid_rowkey_type() const;
   inline bool is_vec_delta_buffer_type() const;
@@ -1639,8 +1657,8 @@ public:
   int get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const;
   int get_multivalue_column_id(uint64_t &multivalue_col_id) const;
 
-  int get_vec_index_column_id(uint64_t &vec_vector_id) const;
-  int get_vec_index_vid_col_id(uint64_t &vec_id_col_id) const;
+  int get_vec_index_column_id(uint64_t &with_cascaded_info_column_id) const;
+  int get_vec_index_vid_col_id(uint64_t &vec_id_col_id, bool is_cid = false) const;
   // get columns for building rowid
   int get_column_ids_serialize_to_rowid(common::ObIArray<uint64_t> &col_ids,
                                         int64_t &rowkey_cnt) const;
@@ -1928,7 +1946,7 @@ public:
   int check_has_local_index(ObSchemaGetterGuard &schema_guard, bool &has_local_index) const;
   int check_has_fts_index(ObSchemaGetterGuard &schema_guard, bool &has_fts_index) const;
   int check_has_multivalue_index(ObSchemaGetterGuard &schema_guard, bool &has_multivalue_index) const;
-  int check_has_vector_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const;
+  int check_has_hnsw_vector_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const;
   int is_real_unique_index_column(ObSchemaGetterGuard &schema_guard,
                                   uint64_t column_id,
                                   bool &is_uni) const;
@@ -2310,9 +2328,99 @@ inline bool ObSimpleTableSchemaV2::is_vec_index(const ObIndexType index_type)
   return share::schema::is_vec_index(index_type);
 }
 
+inline bool ObSimpleTableSchemaV2::is_vec_hnsw_index() const
+{
+  return share::schema::is_vec_hnsw_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivf_index() const
+{
+  return share::schema::is_vec_ivf_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfflat_index() const
+{
+  return share::schema::is_vec_ivfflat_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfsq8_index() const
+{
+  return share::schema::is_vec_ivfsq8_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfpq_index() const
+{
+  return share::schema::is_vec_ivfpq_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_domain_index() const
+{
+  return share::schema::is_vec_domain_index(index_type_);
+}
+
 inline bool ObSimpleTableSchemaV2::is_built_in_vec_index() const
 {
   return share::schema::is_built_in_vec_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfflat_centroid_index() const
+{
+  return share::schema::is_vec_ivfflat_centroid_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfsq8_centroid_index() const
+{
+  return share::schema::is_vec_ivfsq8_centroid_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfpq_centroid_index() const
+{
+  return share::schema::is_vec_ivfpq_centroid_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivf_centroid_index() const
+{
+  return share::schema::is_local_vec_ivf_centroid_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfflat_cid_vector_index() const
+{
+  return share::schema::is_vec_ivfflat_cid_vector_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfflat_rowkey_cid_index() const
+{
+  return share::schema::is_vec_ivfflat_rowkey_cid_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfsq8_cid_vector_index() const
+{
+  return share::schema::is_vec_ivfsq8_cid_vector_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfsq8_meta_index() const
+{
+  return share::schema::is_vec_ivfsq8_meta_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfsq8_rowkey_cid_index() const
+{
+  return share::schema::is_vec_ivfsq8_rowkey_cid_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfpq_pq_centroid_index() const
+{
+  return share::schema::is_vec_ivfpq_pq_centroid_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfpq_code_index() const
+{
+  return share::schema::is_vec_ivfpq_code_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_ivfpq_rowkey_cid_index() const
+{
+  return share::schema::is_vec_ivfpq_rowkey_cid_index(index_type_);
 }
 
 inline bool ObSimpleTableSchemaV2::is_vec_rowkey_vid_type() const
@@ -2413,7 +2521,12 @@ inline bool ObSimpleTableSchemaV2::is_domain_index(const ObIndexType index_type)
          share::schema::is_multivalue_index_aux(index_type) ||
          share::schema::is_vec_index_id_type(index_type) ||
          share::schema::is_vec_delta_buffer_type(index_type) ||
-         share::schema::is_vec_index_snapshot_data_type(index_type);
+         share::schema::is_vec_index_snapshot_data_type(index_type) ||
+         share::schema::is_vec_ivfpq_pq_centroid_index(index_type) ||
+         share::schema::is_vec_ivfsq8_meta_index(index_type) ||
+         share::schema::is_vec_ivfflat_centroid_index(index_type) ||
+         share::schema::is_vec_ivfpq_centroid_index(index_type) ||
+         share::schema::is_vec_ivfsq8_centroid_index(index_type);
 }
 
 inline bool ObSimpleTableSchemaV2::is_fts_or_multivalue_index() const

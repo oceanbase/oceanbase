@@ -101,67 +101,15 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     auto_increment_cache_size_(0),
     external_table_format_type_(ObExternalFileFormat::INVALID_FORMAT),
     mocked_external_table_column_ids_(),
-    index_params_()
+    index_params_(),
+    vec_column_name_(),
+    vec_index_type_(INDEX_TYPE_MAX)
 {
   table_mode_.reset();
 }
 
 ObDDLResolver::~ObDDLResolver()
 {
-}
-
-int ObDDLResolver::append_vec_args(
-    const ObPartitionResolveResult &resolve_result,
-    const obrpc::ObCreateIndexArg &index_arg,
-    bool &vec_common_aux_table_exist,
-    ObIArray<ObPartitionResolveResult> &resolve_results,
-    ObIArray<ObCreateIndexArg> &index_arg_list,
-    ObIAllocator *allocator,
-    const ObSQLSessionInfo *session_info)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(allocator)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is null", K(ret));
-  } else if (!vec_common_aux_table_exist) {
-    const int64_t num_vec_args = 5;
-    // append 3号表 first
-    if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_delta_buffer_arg(index_arg, allocator, session_info, index_arg_list))) {
-      LOG_WARN("failed to append vec delta_buffer_table arg", K(ret));
-    } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_rowkey_vid_arg(index_arg, allocator, index_arg_list))) {
-      LOG_WARN("failed to append vec rowkey_vid_table arg", K(ret));
-    } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_vid_rowkey_arg(index_arg, allocator, index_arg_list))) {
-      LOG_WARN("failed to append vec vid_rowkey_table arg", K(ret));
-    } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_index_id_arg(index_arg, allocator, index_arg_list))) {
-      LOG_WARN("failed to append vec index_id_table arg", K(ret));
-    } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_index_snapshot_data_arg(index_arg, allocator, index_arg_list))) {
-      LOG_WARN("failed to append vec index_snapshot_data_table arg", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < num_vec_args; ++i) {
-      if (OB_FAIL(resolve_results.push_back(resolve_result))) {
-        LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      vec_common_aux_table_exist = true;
-    }
-  } else {
-    const int64_t num_vec_args = 3; // 如果一个主表中已经创建过向量索引，那么只需要新增 3 张非共享索引辅助表
-    if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_delta_buffer_arg(index_arg, allocator, session_info, index_arg_list))) {
-      LOG_WARN("failed to append vec delta_buffer_table arg", K(ret));
-    } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_index_id_arg(index_arg, allocator, index_arg_list))) {
-      LOG_WARN("failed to append vec index_id_table arg", K(ret));
-    } else if (OB_FAIL(ObVecIndexBuilderUtil::append_vec_index_snapshot_data_arg(index_arg, allocator, index_arg_list))) {
-      LOG_WARN("failed to append vec index_snapshot_data_table arg", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < num_vec_args; ++i) {
-      if (OB_FAIL(resolve_results.push_back(resolve_result))) {
-        LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
-      }
-    }
-  }
-  LOG_DEBUG("finish append vec index args", K(index_arg), K(index_arg_list));
-  return ret;
 }
 
 int ObDDLResolver::append_fts_args(
@@ -1174,6 +1122,20 @@ int ObDDLResolver::set_database_name(const ObString &database_name)
   return ret;
 }
 
+int ObDDLResolver::set_vec_column_name(const ObString &column_name)
+{
+  int ret = OB_SUCCESS;
+  if (allocator_) {
+    if (OB_FAIL(ob_write_string(*allocator_, column_name, vec_column_name_))) {
+      SQL_RESV_LOG(WARN, "deep copy column name failed", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "allocator is null", K(ret));
+  }
+  return ret;
+}
+
 int ObDDLResolver::set_encryption_name(const ObString &encryption)
 {
   int ret = OB_SUCCESS;
@@ -1879,32 +1841,34 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         break;
       }
       case T_VEC_INDEX_PARAMS: {
-        ObString tmp_str;
-        int32_t index_param_length = option_node->str_len_;
-        const char *index_param_str = option_node->str_value_;
-         if (index_keyname_ != VEC_KEY) {
+        if (index_keyname_ != VEC_KEY) {
           ret = OB_NOT_SUPPORTED;
-          SQL_RESV_LOG(WARN, "index params was set in not vector index is not supported", K(ret), K(index_param_length));
+          LOG_WARN("index params was set in not vector index is not supported", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "set index params in not vector index is");
-        } else if (OB_UNLIKELY(index_param_length > OB_MAX_INDEX_PARAMS_LENGTH)) {
-          ret = common::OB_ERR_TOO_LONG_IDENT;
-          SQL_RESV_LOG(WARN, "index params length is beyond limit", K(ret), K(index_param_length));
-          LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, index_param_length, index_param_str);
-        } else if (0 == index_param_length) {
-          ret = OB_OP_NOT_ALLOW;
-          SQL_RESV_LOG(WARN, "set index param empty is not allowed now", K(ret));
-          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set index params empty is");
         } else {
-          tmp_str.assign_ptr(index_param_str, index_param_length);
-          if (OB_ISNULL(option_node->children_[0])) {
-            ret = OB_ERR_UNEXPECTED;
-            SQL_RESV_LOG(ERROR,"children can't be null", K(ret));
-          } else if (OB_FAIL(ObVectorIndexUtil::insert_index_param_str(tmp_str, *allocator_, index_params_))) {
-            SQL_RESV_LOG(WARN, "write string failed", K(ret), K(tmp_str), K(index_params_));
-          } else if (OB_FAIL(check_index_param(option_node, index_params_))) {
-            LOG_WARN("fail to check vector index definition", K(ret));
+          const ObTableSchema *tbl_schema = nullptr;
+          if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
+            sql::ObCreateTableStmt *create_table_stmt = static_cast<sql::ObCreateTableStmt*>(stmt_);
+            tbl_schema = &create_table_stmt->get_create_table_arg().schema_;
+          } else if (stmt::T_CREATE_INDEX == stmt_->get_stmt_type()) {
+            if (OB_FAIL(schema_checker_->get_table_schema(tenant_id, database_name_, table_name_, false, tbl_schema))) {
+              LOG_WARN("table is not exist", K(tenant_id), K(database_name_), K(table_name_), K(ret));
+            } else if (OB_ISNULL(tbl_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("tab schema is null", KP(tbl_schema), K(ret));
+            }
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("without create table with index or create index is not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "without create table with index or create index is");
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ObVectorIndexUtil::check_vec_index_param(tenant_id, option_node, *allocator_,
+              *tbl_schema, index_params_, vec_column_name_, vec_index_type_))) {
+            LOG_WARN("fail to check vec index params", K(ret));
           }
         }
+        break;
       }
       case T_PARSER_NAME: {
         if (OB_ISNULL(option_node->children_[0])) {
@@ -7709,7 +7673,6 @@ int ObDDLResolver::resolve_vec_index_constraint(
     bool is_collection_column = ob_is_collection_sql_type(column_schema.get_data_type());
     uint64_t tenant_data_version = 0;
     const int64_t MAX_DIM_LIMITED = 4096;
-    bool is_vector_memory_valid = false;
     int64_t dim = 0;
     if (!is_vec_index) {
       // do nothing
@@ -7735,12 +7698,6 @@ int ObDDLResolver::resolve_vec_index_constraint(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("vector index dim larger than 4096 is not supported", K(ret), K(tenant_data_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec index dim larger than 4096 is");
-    } else if (OB_FAIL(ObPluginVectorIndexHelper::is_ob_vector_memory_valid(session_info_->get_effective_tenant_id(), is_vector_memory_valid))) {
-      LOG_WARN("fail to check is_ob_vector_memory_valid", K(ret));
-    } else if (!is_vector_memory_valid) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support vector index when ob_vector_memory_limit_percentage is 0", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when ob_vector_memory_limit_percentage = 0 or memstore_limit >= 85, vector index is");
     } else {
       index_keyname_ = VEC_KEY;
       ParseNode *option_node = NULL;
@@ -7810,6 +7767,7 @@ int ObDDLResolver::resolve_vec_index_constraint(
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *column_schema = NULL;
   bool is_column_has_vector_index = false;
+  ObIndexType index_type = INDEX_TYPE_MAX;
   if (!table_schema.is_valid() || column_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argumnet", K(ret), K(table_schema), K(column_name));
@@ -7824,7 +7782,8 @@ int ObDDLResolver::resolve_vec_index_constraint(
   } else if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(table_schema,
                                                                       *schema_checker.get_schema_guard(),
                                                                       column_schema->get_column_id(),
-                                                                      is_column_has_vector_index))) {
+                                                                      is_column_has_vector_index,
+                                                                      index_type))) {
     LOG_WARN("resolve vec index constraint fail", K(ret), K(index_keyname_value));
   } else if (is_column_has_vector_index) {
     ret = OB_NOT_SUPPORTED;
@@ -13577,196 +13536,6 @@ int ObDDLResolver::resolve_column_skip_index(
 
     if (OB_SUCC(ret)) {
       column_schema.set_skip_index_attr(skip_index_column_attr.get_packed_value());
-    }
-  }
-  return ret;
-}
-
-int ObDDLResolver::check_index_param(const ParseNode *option_node, ObString &index_params)
-{
-
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(option_node) ) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(ERROR, "unexpected parse node", K(ret), KP(option_node));
-  } else if (option_node->type_ != T_VEC_INDEX_PARAMS) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(ERROR, "unexpected parse node type", K(ret), K(option_node->type_));
-  } else if (OB_ISNULL(option_node->children_[0])) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("option_node child is null", K(ret), KP(option_node->children_[0]));
-  } else {
-    if (option_node->num_child_ < 4 || option_node->num_child_ % 2 !=  0) {  // at least distance and type should be set
-      ret = OB_NOT_SUPPORTED;
-      SQL_RESV_LOG(WARN, "invalid vector param num", K(ret), K(option_node->num_child_));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set distance and type is");
-    }
-    ObString last_variable;
-    ObString parser_name;
-    ObString new_variable_name;
-    ObString new_parser_name;
-    int64_t parser_value = 0;
-    int32_t str_len = 0;
-    int64_t m_value = 0;
-    int64_t ef_construction_value = 0;
-
-    bool distance_is_set = false;
-    bool lib_is_set = false;
-    bool type_is_set = false;
-    bool m_is_set = false;
-    bool ef_construction_is_set = false;
-    bool ef_search_is_set = false;
-
-    const ObString default_lib = "VSAG";
-    const int64_t default_m_value = 16;
-    const int64_t default_ef_construction_value = 200;
-    const int64_t default_ef_search_value = 64;
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < option_node->num_child_; ++i) {
-      int32_t child_node_index = i % 2;
-      if (child_node_index == 0) {
-        str_len = static_cast<int32_t>(option_node->children_[i]->str_len_);
-        parser_name_.assign_ptr(option_node->children_[i]->str_value_, str_len);
-        new_variable_name = parser_name_;
-        if (OB_FAIL(ob_simple_low_to_up(*allocator_, parser_name_, new_variable_name))) {
-          LOG_WARN("string low to up failed", K(ret), K(parser_name_));
-        } else if (new_variable_name != "DISTANCE" &&
-                   new_variable_name != "LIB" &&
-                   new_variable_name != "TYPE" &&
-                   new_variable_name != "M" &&
-                   new_variable_name != "EF_CONSTRUCTION" &&
-                   new_variable_name != "EF_SEARCH") {
-          ret = OB_NOT_SUPPORTED;
-          SQL_RESV_LOG(WARN, "unexpected vector variable name", K(ret), K(new_variable_name));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "unexpected vector index params items is");
-        } else {
-          last_variable = new_variable_name;
-        }
-      } else {
-        if (option_node->children_[i]->type_ == T_NUMBER) {
-          parser_value = option_node->children_[i]->value_;
-        } else {
-          str_len = static_cast<int32_t>(option_node->children_[i]->str_len_);
-          parser_name.assign_ptr(option_node->children_[i]->str_value_, str_len);
-          new_parser_name = parser_name;
-          if (OB_FAIL(ob_simple_low_to_up(*allocator_, parser_name, new_parser_name))) {
-            SQL_RESV_LOG(WARN, "string low to up failed", K(ret), K(parser_name));
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (last_variable == "DISTANCE") {
-          if (new_parser_name == "INNER_PRODUCT" ||
-              new_parser_name == "L2" ||
-              new_parser_name == "COSINE") {
-            distance_is_set = true;
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            SQL_RESV_LOG(WARN, "not support vector index distance algorithm", K(ret), K(new_parser_name));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this type of vector index distance algorithm is");
-          }
-        } else if (last_variable == "LIB") {
-          if (new_parser_name == "VSAG") {
-            lib_is_set = true;
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            SQL_RESV_LOG(WARN, "not support vector index lib", K(ret), K(new_parser_name));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this type of vector index lib is");
-          }
-        } else if (last_variable == "TYPE") {
-          if (new_parser_name == "HNSW") {
-            type_is_set = true;
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            SQL_RESV_LOG(WARN, "not support vector index type", K(ret), K(new_parser_name));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this type of vector index type is");
-          }
-        } else if (last_variable == "M") {
-          if (parser_value >= 5 && parser_value <= 64 ) {
-            m_is_set = true;
-            m_value = parser_value;
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            SQL_RESV_LOG(WARN, "invalid vector index m value", K(ret), K(parser_value));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index m is");
-          }
-        } else if (last_variable == "EF_CONSTRUCTION") {
-          if (parser_value >= 5 && parser_value <= 1000 ) {
-            ef_construction_is_set = true;
-            ef_construction_value = parser_value;
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            SQL_RESV_LOG(WARN, "invalid vector index ef_construction value", K(ret), K(parser_value));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index ef_construction is");
-          }
-        } else if (last_variable == "EF_SEARCH") {
-          if (parser_value >= 1 && parser_value <= 1000 ) {
-            ef_search_is_set = true;
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            SQL_RESV_LOG(WARN, "invalid vector index ef_search value", K(ret), K(parser_value));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index ef_search is");
-          }
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          SQL_RESV_LOG(WARN, "not support vector index param", K(ret), K(last_variable));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index ef_search is");
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      ef_construction_value = ef_construction_is_set ? ef_construction_value : default_ef_construction_value;
-      m_value = m_is_set ? m_value : default_m_value;
-      if (!distance_is_set || !type_is_set) {
-        ret = OB_NOT_SUPPORTED;
-        SQL_RESV_LOG(WARN, "unexpected setting of vector index param, distance or type has not been set",
-          K(ret), K(distance_is_set), K(type_is_set));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "the vector index params of distance or type not set is");
-      } else if (ef_construction_value <= m_value) {
-        ret = OB_NOT_SUPPORTED;
-        SQL_RESV_LOG(WARN, "unexpected setting of vector index param, ef_construction value must be larger than m value",
-          K(ret), K(ef_construction_value), K(m_value));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "the vector index params ef_construction less than or equal to m value is");
-      } else {
-        char not_set_params_str[OB_MAX_TABLE_NAME_LENGTH];
-        int64_t pos = 0;
-        if (!lib_is_set && OB_FAIL(databuff_printf(not_set_params_str,
-                                                    OB_MAX_TABLE_NAME_LENGTH,
-                                                    pos,
-                                                    ", LIB=%.*s",
-                                                    default_lib.length(),
-                                                    default_lib.ptr()))) {
-          LOG_WARN("fail to printf databuff", K(ret));
-        } else if (!m_is_set && OB_FAIL(databuff_printf(not_set_params_str,
-                                                    OB_MAX_TABLE_NAME_LENGTH,
-                                                    pos,
-                                                    ", M=%ld",
-                                                    default_m_value))) {
-          LOG_WARN("fail to printf databuff", K(ret));
-        } else if (!ef_construction_is_set && OB_FAIL(databuff_printf(not_set_params_str,
-                                                    OB_MAX_TABLE_NAME_LENGTH,
-                                                    pos,
-                                                    ", EF_CONSTRUCTION=%ld",
-                                                    default_ef_construction_value))) {
-          LOG_WARN("fail to printf databuff", K(ret));
-        } else if (!ef_search_is_set && OB_FAIL(databuff_printf(not_set_params_str,
-                                                    OB_MAX_TABLE_NAME_LENGTH,
-                                                    pos,
-                                                    ", EF_SEARCH=%ld",
-                                                    default_ef_search_value))) {
-          LOG_WARN("fail to printf databuff", K(ret));
-        } else {
-          char *buf = nullptr;
-          const int64_t alloc_len = index_params.length() + pos;
-          if (OB_ISNULL(buf = (static_cast<char *>(allocator_->alloc(alloc_len))))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to alloc memory for vector index param", K(ret), K(alloc_len));
-          } else {
-            MEMCPY(buf, index_params.ptr(), index_params.length());
-            MEMCPY(buf + index_params.length(), not_set_params_str, pos);
-            index_params.assign_ptr(buf, alloc_len);
-          }
-        }
-      }
     }
   }
   return ret;
