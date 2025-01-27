@@ -125,6 +125,9 @@ WAIT_EVENT_DEF(BACKUP_TMP_FILE_WAIT, 18001, "backup tmp file wait", "", "", "", 
 WAIT_EVENT_DEF(BACKUP_TMP_FILE_QUEUE_WAIT, 18002, "backup tmp file queue wait", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(SYNC_GET_GTS_WAIT, 18101, "sync get gts timestamp wait", "address", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(LOCK_FOR_READ_WAIT, 18102, "sleep: lock for read need wait for concurrency control", "sleep_interval", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(DEADLOCK_MGR_BUCKET_LOCK, 18103, "latch: deadlock manager bucket access wait", "spin count", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(MEMTABLE_CTX_ACCESS_LOCK, 18104, "latch: memtable context access wait", "spin count", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(LS_REPLAY_CTRL_LOCK, 18105, "latch: logstream replay control wait", "spin count", "", "", CONCURRENCY, true, true)
 
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)
