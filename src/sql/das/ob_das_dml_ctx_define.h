@@ -72,7 +72,7 @@ public:
     uint64_t flags_;
     //@notice: this struct is used for serialization compatibility between versions 4.2.5.1 and earlier.
     //New features introduced in version 4.2.5.2 and later cannot modify this struct.
-    struct {
+    struct { // FARM COMPAT WHITELIST
       uint64_t is_total_quantity_log_old_           : 1;
       uint64_t is_ignore_old_                       : 1;
       uint64_t is_batch_stmt_old_                   : 1;
