@@ -139,9 +139,7 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
 do {                                                                               \
   if (OB_UNLIKELY(NULL == val_ptr))                                                \
   {                                                                                \
-    ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;              \
-    yyerror(yylloc, yyextra, "No more space for malloc\n");                        \
-    return ERROR;                                                                  \
+    YY_FATAL_ERROR("No more space for malloc\n");                                  \
   }                                                                                \
 } while (0);
 
@@ -578,9 +576,7 @@ extern ParseNode *new_node(void *malloc_pool, ObItemType type, int num);
 #define malloc_new_node(node, malloc_pool, type, num)                              \
 do {                                                                               \
   if (OB_UNLIKELY(NULL == (node = new_node(malloc_pool, type, num)))) {            \
-    ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;              \
-    yyerror(yylloc, yyextra, "No more space for mallocing '%s'\n", yytext);        \
-    return ERROR;                                                                  \
+    YY_FATAL_ERROR("No more space for mallocing '%s'\n", yytext);                  \
   }                                                                                \
 } while (0);
 
@@ -918,9 +914,7 @@ for (int32_t _i = 0; _i < _yyleng; ++_i) {                                      
     if ('-' == param_node->str_value_[0]) {                              \
       char *copied_str = parse_strndup(param_node->str_value_, param_node->str_len_, malloc_pool);   \
       if (OB_ISNULL(copied_str)) {                                       \
-        ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;\
-        yyerror(NULL, yyextra, "No more space for mallocing");           \
-        return ERROR;                                                    \
+        YY_FATAL_ERROR("No more space for mallocing");                   \
       } else {                                                           \
         int pos = 1;                                                     \
         for (; pos < param_node->str_len_ && ISSPACE(copied_str[pos]); pos++) ;                           \
@@ -948,9 +942,7 @@ for (int32_t _i = 0; _i < _yyleng; ++_i) {                                      
     if ('-' == param_node->str_value_[0]) {                              \
       char *copied_str = parse_strndup(param_node->str_value_, param_node->str_len_, malloc_pool);   \
       if (OB_ISNULL(copied_str)) {                                       \
-        ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;\
-        yyerror(NULL, yyextra, "No more space for mallocing");           \
-        return ERROR;                                                    \
+        YY_FATAL_ERROR("No more space for mallocing");                   \
       } else {                                                           \
         int pos = 1;                                                     \
         for (; pos < param_node->str_len_ && ISSPACE(copied_str[pos]); pos++) ;                           \
