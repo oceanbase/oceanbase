@@ -1369,6 +1369,9 @@ int is_dir_empty(const char *dirname, bool &is_empty);
 void get_glibc_version(int &major, int &minor);
 
 bool glibc_prereq(int major, int minor);
+
+const char *get_transparent_hugepage_status();
+int read_one_int(const char *file_name, int64_t &value);
 } // end namespace common
 } // end namespace oceanbase
 
