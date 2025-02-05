@@ -1529,12 +1529,12 @@ int ObTableLoadCoordinator::write(const ObTableLoadTransId &trans_id, int32_t se
     // 取出bucket_writer
     else if (OB_FAIL(trans->get_bucket_writer(bucket_writer))) {
       LOG_WARN("fail to get bucket writer", KR(ret));
-    } else if (OB_FAIL(bucket_writer->advance_sequence_no(session_id, sequence_no, guard))) {
-      if (OB_UNLIKELY(OB_ENTRY_EXIST != ret)) {
-        LOG_WARN("fail to advance sequence no", KR(ret), K(session_id));
-      } else {
-        ret = OB_SUCCESS;
-      }
+    // } else if (OB_FAIL(bucket_writer->advance_sequence_no(session_id, sequence_no, guard))) {
+    //   if (OB_UNLIKELY(OB_ENTRY_EXIST != ret)) {
+    //     LOG_WARN("fail to advance sequence no", KR(ret), K(session_id));
+    //   } else {
+    //     ret = OB_SUCCESS;
+    //   }
     } else {
       ObTableLoadTask *task = nullptr;
       WriteTaskProcessor *processor = nullptr;
