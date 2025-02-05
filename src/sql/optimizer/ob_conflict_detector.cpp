@@ -1219,7 +1219,11 @@ int ObConflictDetectorGenerator::pushdown_where_filters(const ObDMLStmt *stmt,
           LOG_WARN("failed to push back expr", K(ret));
         }
       } else if (qual->get_relation_ids().is_empty()) {
-        if (OB_FAIL(left_quals.push_back(qual))) {
+        if (!should_pushdown_const_filters_) {
+          if (OB_FAIL(new_quals.push_back(qual))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          }
+        } else if (OB_FAIL(left_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         } else if (qual->is_const_expr() &&
                    OB_FAIL(right_quals.push_back(qual))) {

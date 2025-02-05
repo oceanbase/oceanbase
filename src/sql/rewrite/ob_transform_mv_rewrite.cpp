@@ -653,6 +653,7 @@ int ObTransformMVRewrite::check_join_compatibility(MvRewriteHelper &helper,
                                           ctx_->session_info_,
                                           NULL,  /* onetime_copier */
                                           true,  /* should_deduce_conds */
+                                          false, /* should_pushdown_const_filters */
                                           fake_depend_info,
                                           bushy_tree_infos,
                                           new_or_quals);

@@ -257,7 +257,8 @@ int ObLogPlan::generate_join_orders()
                                           get_optimizer_context().get_expr_factory(),
                                           get_optimizer_context().get_session_info(),
                                           onetime_copier_,
-                                          true,
+                                          true, /* should_deduce_conds */
+                                          true, /* should_pushdown_const_filters */
                                           table_depend_infos_,
                                           bushy_tree_infos_,
                                           new_or_quals_);

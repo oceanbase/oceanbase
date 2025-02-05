@@ -166,6 +166,7 @@ public:
                               ObSQLSessionInfo *session_info,
                               ObRawExprCopier *onetime_copier,
                               bool should_deduce_conds,
+                              bool should_pushdown_filters,
                               const common::ObIArray<TableDependInfo> &table_depend_infos,
                               common::ObIArray<ObRelIds> &bushy_tree_infos,
                               common::ObIArray<ObRawExpr*> &new_or_quals) :
@@ -174,6 +175,7 @@ public:
     session_info_(session_info),
     onetime_copier_(onetime_copier),
     should_deduce_conds_(should_deduce_conds),
+    should_pushdown_const_filters_(should_pushdown_filters),
     table_depend_infos_(table_depend_infos),
     bushy_tree_infos_(bushy_tree_infos),
     new_or_quals_(new_or_quals)
@@ -281,6 +283,7 @@ private:
   ObSQLSessionInfo *session_info_;
   ObRawExprCopier *onetime_copier_;
   bool should_deduce_conds_;
+  bool should_pushdown_const_filters_;
   const common::ObIArray<TableDependInfo> &table_depend_infos_;
   common::ObIArray<ObRelIds> &bushy_tree_infos_;
   common::ObIArray<ObRawExpr*> &new_or_quals_;
