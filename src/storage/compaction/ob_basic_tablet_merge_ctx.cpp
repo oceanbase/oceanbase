@@ -1175,38 +1175,18 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = get_tablet();
-  const share::ObLSID &ls_id = tablet->get_ls_id();
-  const common::ObTabletID &tablet_id = tablet->get_tablet_id();
   ObArenaAllocator temp_allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // for load medium info
-  ObMediumCompactionInfoKey medium_info_key(get_merge_version());
   ObMediumCompactionInfo *medium_info = nullptr;
 
   if (OB_UNLIKELY(tablet->get_multi_version_start() > get_merge_version())) {
     ret = OB_SNAPSHOT_DISCARDED;
     LOG_ERROR("multi version data is discarded, should not execute compaction now", K(ret),
         "param", get_dag_param(), KPC(this));
-  } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(temp_allocator, medium_info))) {
-    LOG_WARN("fail to alloc and new", K(ret));
-  } else {
-    SMART_VARS_2((ObTableScanParam, scan_param), (storage::ObTabletMediumInfoReader, medium_info_reader)) {
-      if (OB_FAIL(ObMdsScanParamHelper::build_medium_info_scan_param(
-          temp_allocator,
-          ls_id,
-          tablet_id,
-          scan_param))) {
-        LOG_WARN("fail to build scan param", K(ret), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(medium_info_reader.init(*tablet, scan_param))) {
-        LOG_WARN("failed to init medium info reader", K(ret), KPC(this));
-      } else if (OB_FAIL(medium_info_reader.get_specified_medium_info(temp_allocator, medium_info_key, *medium_info))) {
-        LOG_WARN("failed to get specified scn info", K(ret), K(medium_info_key));
-      } else if (OB_UNLIKELY(!medium_info->is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("medium info is invalid", KR(ret), K(medium_info));
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObTabletMediumInfoReader::get_medium_info_with_merge_version(get_merge_version(),
+                                                                                  *tablet,
+                                                                                  temp_allocator,
+                                                                                  medium_info))) {
+    LOG_WARN("fail to get medium info with merge version", K(ret), K(get_merge_version()), KPC(tablet));
   } else if (medium_info->contain_parallel_range_
       && !parallel_merge_ctx_.is_valid()
       && OB_FAIL(parallel_merge_ctx_.init(*medium_info))) {

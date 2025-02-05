@@ -1167,8 +1167,16 @@ int ObFreezer::handle_no_active_memtable_(const ObTabletID &tablet_id,
     } else if (protected_handle->get_max_saved_version_from_medium_info_recorder() >=
                freeze_snapshot_version.get_val_for_tx() && !GCTX.is_shared_storage_mode()) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(
-              ls_id, *tablet, MEDIUM_MERGE, freeze_snapshot_version.get_val_for_tx(), EXEC_MODE_LOCAL))) {
+      ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type;
+      if (OB_FAIL(ObTenantTabletScheduler::get_co_merge_type_for_compaction(freeze_snapshot_version.get_val_for_tx(), *tablet, co_major_merge_type))) {
+        LOG_WARN("fail to get co merge type from medium info", K(ret), K(freeze_snapshot_version), KPC(tablet));
+      } else if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(ls_id,
+                                                                                     *tablet,
+                                                                                     MEDIUM_MERGE,
+                                                                                     freeze_snapshot_version.get_val_for_tx(),
+                                                                                     EXEC_MODE_LOCAL,
+                                                                                     nullptr, /*dag_net_id*/
+                                                                                     co_major_merge_type))) {
         if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
           ret = tmp_ret;
           LOG_WARN("failed to schedule medium merge dag", K(ret), K(ls_id), K(tablet_id));

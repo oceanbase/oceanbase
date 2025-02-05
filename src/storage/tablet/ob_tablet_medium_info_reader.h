@@ -27,6 +27,11 @@ class ObTabletMediumInfoReader
 public:
   ObTabletMediumInfoReader();
   ~ObTabletMediumInfoReader();
+  static int get_medium_info_with_merge_version(
+      const int64_t merge_version,
+      const ObTablet &tablet,
+      common::ObIAllocator &allocator,
+      compaction::ObMediumCompactionInfo *&medium_info);
 public:
   int init(
       const ObTablet &tablet,
@@ -39,7 +44,6 @@ public:
       common::ObIAllocator &allocator,
       const compaction::ObMediumCompactionInfoKey &key,
       compaction::ObMediumCompactionInfo &medium_info);
-
   int get_min_medium_snapshot(
       const int64_t last_major_snapshot_version,
       int64_t &min_medium_snapshot);

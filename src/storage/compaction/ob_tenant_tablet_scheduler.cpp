@@ -23,6 +23,7 @@
 #include "storage/ob_gc_upper_trans_helper.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "storage/compaction/ob_schedule_tablet_func.h"
+#include "storage/tablet/ob_tablet_medium_info_reader.h"
 
 namespace oceanbase
 {
@@ -1068,6 +1069,29 @@ int ObTenantTabletScheduler::schedule_merge_dag(
   return ret;
 }
 
+int ObTenantTabletScheduler::get_co_merge_type_for_compaction(
+    const int64_t merge_version,
+    const storage::ObTablet &tablet,
+    ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type)
+{
+  int ret = OB_SUCCESS;
+  co_major_merge_type = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
+  ObArenaAllocator temp_allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // for load medium info
+  ObMediumCompactionInfo *medium_info = nullptr;
+  if (OB_UNLIKELY(tablet.get_multi_version_start() > merge_version)) {
+    ret = OB_SNAPSHOT_DISCARDED;
+    LOG_ERROR("multi version data is discarded, should not execute compaction now", K(ret), K(tablet), K(merge_version));
+  } else if (OB_FAIL(ObTabletMediumInfoReader::get_medium_info_with_merge_version(merge_version,
+                                                                                  tablet,
+                                                                                  temp_allocator,
+                                                                                  medium_info))) {
+    LOG_WARN("fail to get medium info with merge version", K(ret), K(merge_version), K(tablet));
+  } else {
+    co_major_merge_type = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(medium_info->co_major_merge_type_);
+  }
+  return ret;
+}
+
 int ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(
       const ObLSID &ls_id,
       const ObTablet &tablet,
@@ -1078,8 +1102,15 @@ int ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   schedule_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(
-                  ls_id, tablet, compaction::ObMergeType::CONVERT_CO_MAJOR_MERGE, tablet.get_last_major_snapshot_version(), EXEC_MODE_LOCAL, &curr_dag_net_id))) {
+  // do not reply on co_major_merge_type in cs replica
+  ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
+  if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(ls_id,
+                                                                          tablet,
+                                                                          compaction::ObMergeType::CONVERT_CO_MAJOR_MERGE,
+                                                                          tablet.get_last_major_snapshot_version(),
+                                                                          EXEC_MODE_LOCAL,
+                                                                          &curr_dag_net_id,
+                                                                          co_major_merge_type))) {
     if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
       ret = tmp_ret;
       LOG_WARN("failed to schedule co merge dag net for cs replica", K(ret), K(ls_id), "tablet_id", tablet.get_tablet_id());
