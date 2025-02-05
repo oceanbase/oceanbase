@@ -6643,7 +6643,7 @@ int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
                                                                             false))) {
       LOG_WARN("resolve expr_default expr failed", K(expr_str), K(column), K(ret));
     } else if (OB_FAIL(ObSQLUtils::calc_simple_expr_without_row(
-        params.session_info_, expr, tmp_default_value, params.param_list_, allocator))) {
+        params.session_info_, expr, tmp_default_value, params.param_list_, allocator, true))) {
       LOG_WARN("Failed to get simple expr value", K(ret));
     } else if (OB_FAIL(add_udt_default_dependency(expr, schema_checker, ddl_arg))) {
       LOG_WARN("Failed to add udt default expr dependency", K(ret), K(expr));

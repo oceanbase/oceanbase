@@ -198,7 +198,8 @@ public:
                                           const ObRawExpr *raw_expr,
                                           common::ObObj &result,
                                           const ParamStore *params,
-                                          common::ObIAllocator &allocator);
+                                          common::ObIAllocator &allocator,
+                                          bool force_copy_extend_type = false);
   static int calc_raw_expr_without_row(ObExecContext &exec_ctx,
                                        const ObRawExpr *raw_expr,
                                        ObObj &result,
@@ -295,7 +296,8 @@ public:
                              ObObj &result,
                              ObIAllocator &allocator,
                              const ParamStore &params_array,
-                             ObExecContext* exec_ctx = NULL);
+                             ObExecContext* exec_ctx = NULL,
+                             bool force_copy_extend_type = false);
 
   // Calc const expr value under static engine.
   static int se_calc_const_expr(ObSQLSessionInfo *session,
@@ -303,7 +305,8 @@ public:
                                 const ParamStore &params,
                                 ObIAllocator &allocator,
                                 ObExecContext *exec_ctx,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                bool force_copy_extend_type = false);
 
   static int make_generated_expression_from_str(const common::ObString &expr_str,
                                                 const share::schema::ObTableSchema &schema,

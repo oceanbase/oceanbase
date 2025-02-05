@@ -418,20 +418,6 @@ int ObSQLUtils::calc_const_or_calculable_expr(
       }
     } else {
       is_valid = true;
-      if (result.is_pl_extend()) {
-        if (OB_ISNULL(exec_ctx->get_pl_ctx())) {
-          if (OB_FAIL(exec_ctx->init_pl_ctx())) {
-            LOG_WARN("failed to init pl ctx", K(ret));
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_ISNULL(exec_ctx->get_pl_ctx())) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("pl ctx is null", K(ret));
-        } else if (OB_FAIL(exec_ctx->get_pl_ctx()->add(result))) {
-          LOG_WARN("failed to add pl obj to pl ctx", K(ret));
-        }
-      }
     }
     if (OB_SUCC(ret) && !hit_cache) {
       if (OB_FAIL(store_result_to_ctx(*exec_ctx, raw_expr, result, is_valid))) {
@@ -457,7 +443,8 @@ int ObSQLUtils::calc_simple_expr_without_row(
     const ObRawExpr *raw_expr,
     ObObj &result,
     const ParamStore *params,
-    ObIAllocator &allocator)
+    ObIAllocator &allocator,
+    bool force_copy_extend_type)
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory expr_factory(allocator);
@@ -472,7 +459,7 @@ int ObSQLUtils::calc_simple_expr_without_row(
     if (OB_FAIL(calc_const_expr(raw_expr, params, result, need_check))) {
       SQL_LOG(WARN, "failed to calc const expr", KPC(raw_expr), K(ret));
     } else { /*do nothing*/ }
-  } else if (OB_FAIL(calc_const_expr(session, *raw_expr, result, allocator, *params))) {
+  } else if (OB_FAIL(calc_const_expr(session, *raw_expr, result, allocator, *params, NULL, force_copy_extend_type))) {
     SQL_LOG(WARN, "Get const_expr value error", KPC(raw_expr), K(ret));
   }
 
@@ -727,14 +714,15 @@ int ObSQLUtils::calc_const_expr(ObSQLSessionInfo *session,
                                 ObObj &result,
                                 ObIAllocator &allocator,
                                 const ParamStore &params_array,
-                                ObExecContext* exec_ctx)
+                                ObExecContext* exec_ctx,
+                                bool force_copy_extend_type)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid null session", K(ret));
   } else {
-    if (OB_FAIL(se_calc_const_expr(session, &expr, params_array, allocator, exec_ctx, result))) {
+    if (OB_FAIL(se_calc_const_expr(session, &expr, params_array, allocator, exec_ctx, result, force_copy_extend_type))) {
       LOG_WARN("failed to calc const expr", K(ret));
     }
   }
@@ -746,7 +734,8 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
                                    const ParamStore &params,
                                    ObIAllocator &allocator,
                                    ObExecContext *out_ctx,
-                                   common::ObObj &result)
+                                   common::ObObj &result,
+                                   bool force_copy_extend_type)
 {
   int ret = OB_SUCCESS;
   OB_ASSERT(NULL != session);
@@ -845,10 +834,41 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
                 LOG_WARN("failed to deep copy obj", K(ret));
               }
             } else {
-              // res is_ext, data in obj may be destructed when the temp exec ctx destruct at the end.
-              // e.g. eval_collection_construct is called
-              if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(allocator, tmp_result, result))) {
-                LOG_WARN("failed to deep copy pl extend obj", K(ret), K(tmp_result));
+              // ext type
+              if (force_copy_extend_type) {
+                // should call ObUserDefinedType::destruct_obj later
+                // fix bug:
+                // create table udt_t1 (
+                //   id int,
+                //   x1 sdo_geometry DEFAULT
+                //      sdo_geometry(2002, null, null,
+                //                   sdo_elem_info_array (1,2,1),
+                //                   sdo_ordinate_array (10,25, 20,30, 25,25, 30,30)));
+                if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(allocator, tmp_result, result))) {
+                  LOG_WARN("failed to deep copy pl extend obj", K(ret), K(tmp_result));
+                }
+              } else if (OB_NOT_NULL(out_ctx)) {
+                // fix bug:
+                // create table xml_test(id varchar2(200) primary key not null,mm xmltype constraint xmltype not null ,ls clob ,tag varchar2(2200),tt clob);
+                // insert into xml_test(id,mm) select 1,xmltype('<c>123</c>') from dual;
+                if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(out_ctx->get_allocator(), tmp_result, result))) {
+                  LOG_WARN("failed to deep copy pl extend obj", K(ret), K(tmp_result));
+                } else if (OB_ISNULL(out_ctx->get_pl_ctx())) {
+                  if (OB_FAIL(out_ctx->init_pl_ctx())) {
+                    LOG_WARN("failed to init pl ctx", K(ret));
+                  }
+                }
+                if (OB_FAIL(ret)) {
+                } else if (OB_ISNULL(out_ctx->get_pl_ctx())) {
+                  ret = OB_INVALID_ARGUMENT;
+                  LOG_WARN("pl ctx is null", K(ret));
+                } else if (OB_FAIL(out_ctx->get_pl_ctx()->add(result))) {
+                  LOG_WARN("failed to add pl obj to pl ctx", K(ret));
+                }
+              } else { // shallow copy extend type
+                if (OB_FAIL(deep_copy_obj(allocator, tmp_result, result))) {
+                  LOG_WARN("failed to deep copy obj", K(ret));
+                }
               }
             }
           }
