@@ -1029,6 +1029,9 @@ int ObBackupSetTaskMgr::get_next_status_(const share::ObBackupStatus &cur_status
       break;
     }
     case ObBackupStatus::Status::BACKUP_DATA_MINOR: {
+#ifdef ERRSIM
+      LOG_INFO("finish backup minor");
+#endif
       DEBUG_SYNC(BEFORE_BACKUP_MAJOR);
       next_status = ObBackupStatus::Status::BACKUP_DATA_MAJOR;
       break;
