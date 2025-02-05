@@ -35,7 +35,7 @@ static int deal_with_fo(ObBackupComplementLogCtx *ctx, const int64_t result)
 // ObBackupPieceFile
 
 ObBackupPieceFile::ObBackupPieceFile()
-    : dest_id_(-1), round_id_(-1), piece_id_(-1), ls_id_(), file_id_(-1), start_scn_(), path_()
+    : dest_id_(-1), round_id_(-1), piece_id_(-1), ls_id_(), file_id_(-1), start_scn_(), checkpoint_scn_(), path_()
 {}
 
 void ObBackupPieceFile::reset()
@@ -46,11 +46,13 @@ void ObBackupPieceFile::reset()
   ls_id_.reset();
   file_id_ = -1;
   start_scn_.reset();
+  checkpoint_scn_.reset();
   path_.reset();
 }
 
 int ObBackupPieceFile::set(const int64_t dest_id, const int64_t round_id,
-    const int64_t piece_id, const share::ObLSID &ls_id, const int64_t file_id, const share::SCN &start_scn, const ObBackupPathString &path)
+    const int64_t piece_id, const share::ObLSID &ls_id, const int64_t file_id,
+    const share::SCN &start_scn, const share::SCN &checkpoint_scn, const ObBackupPathString &path)
 {
   int ret = OB_SUCCESS;
   if (dest_id <= 0 || round_id <= 0 || piece_id <= 0 || !ls_id.is_valid() || file_id <= 0) {
@@ -65,6 +67,7 @@ int ObBackupPieceFile::set(const int64_t dest_id, const int64_t round_id,
     ls_id_ = ls_id;
     file_id_ = file_id;
     start_scn_ = start_scn;
+    checkpoint_scn_ = checkpoint_scn;
   }
   return ret;
 }
@@ -922,6 +925,8 @@ int ObBackupLSLogTask::inner_deal_with_piece_meta_(const ObTenantArchivePieceAtt
     LOG_WARN("failed to get copy src and dest", K(ret), K(piece_attr));
   } else if (OB_FAIL(copy_piece_start_file_(piece_attr, src, dest))) {
     LOG_WARN("failed to copy piece start file", K(ret), K(piece_attr));
+  } else if (OB_FAIL(copy_piece_end_file_(piece_attr, src, dest))) {
+    LOG_WARN("failed to copy piece start file", K(ret), K(piece_attr));
   }
   return ret;
 }
@@ -1290,6 +1295,7 @@ int ObBackupLSLogTask::inner_get_piece_file_list_(const share::ObLSID &ls_id,
   const int64_t round_id = piece_attr.key_.round_id_;
   const int64_t piece_id = piece_attr.key_.piece_id_;
   const share::SCN &start_scn = piece_attr.start_scn_;
+  const share::SCN &checkpoint_scn = piece_attr.checkpoint_scn_;
   if (OB_FAIL(get_src_backup_piece_dir_(ls_id, piece_attr, src_piece_dir_path))) {
     LOG_WARN("failed to get src backup piece dir", K(ret), K(round_id), K(piece_id), K(ls_id), K(piece_attr));
   } else if (OB_FAIL(util.adaptively_list_files(src_piece_dir_path.get_obstr(), archive_dest_.get_storage_info(), op))) {
@@ -1301,7 +1307,7 @@ int ObBackupLSLogTask::inner_get_piece_file_list_(const share::ObLSID &ls_id,
     for (int64_t i = 0; OB_SUCC(ret) && i < file_id_list.count(); ++i) {
       const int64_t file_id = file_id_list.at(i);
       piece_file.reset();
-      if (OB_FAIL(piece_file.set(dest_id, round_id, piece_id, ls_id, file_id, start_scn, piece_attr.path_))) {
+      if (OB_FAIL(piece_file.set(dest_id, round_id, piece_id, ls_id, file_id, start_scn, checkpoint_scn, piece_attr.path_))) {
         LOG_WARN("failed to set piece files", K(ret), K(round_id), K(piece_id));
       } else if (OB_FAIL(file_list.push_back(piece_file))) {
         LOG_WARN("failed to push back", K(ret), K(piece_file));
@@ -1498,6 +1504,8 @@ int ObBackupLSLogTask::transform_and_copy_meta_file_(const ObTenantArchivePieceA
     LOG_WARN("failed to copy checkpoint info", K(ret), K(src), K(dest), K(piece_attr));
   } else if (OB_FAIL(copy_round_start_file_(piece_attr, src_store, dest_store))) {
     LOG_WARN("failed to copy round start file", K(ret), K(src), K(dest), K(piece_attr));
+  } else if (OB_FAIL(copy_round_end_file_(piece_attr, src_store, dest_store))) {
+    LOG_WARN("failed to copy round end file", K(ret), K(src), K(dest), K(piece_attr));
   }
   return ret;
 }
@@ -1635,6 +1643,27 @@ int ObBackupLSLogTask::copy_round_start_file_(const ObTenantArchivePieceAttr &pi
   return ret;
 }
 
+int ObBackupLSLogTask::copy_round_end_file_(const ObTenantArchivePieceAttr &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store)
+{
+  int ret = OB_SUCCESS;
+  const int64_t src_dest_id = piece_file.key_.dest_id_;
+  const int64_t dest_dest_id = ctx_->dest_id_;
+  const int64_t round_id = piece_file.key_.round_id_;
+  const int64_t piece_id = piece_file.key_.piece_id_;
+  ObRoundEndDesc desc;
+  bool is_exist = false;
+  if (OB_FAIL(src_store.is_round_end_file_exist(src_dest_id, round_id, is_exist))) {
+    LOG_WARN("failed to check is round end file exist", K(ret), K(src_dest_id), K(round_id), K(piece_id));
+  } else if (!is_exist) {
+    // do nothing
+  } else if (OB_FAIL(src_store.read_round_end(src_dest_id, round_id, desc))) {
+    LOG_WARN("failed to read round end", K(ret), K(piece_file));
+  } else if (OB_FAIL(dest_store.write_round_end(dest_dest_id, round_id, desc))) {
+    LOG_WARN("failed to write round end", K(ret), K(piece_file));
+  }
+  return ret;
+}
+
 int ObBackupLSLogTask::copy_piece_start_file_(const ObTenantArchivePieceAttr &piece_file, const share::ObBackupDest &src, const share::ObBackupDest &dest)
 {
   int ret = OB_SUCCESS;
@@ -1659,6 +1688,34 @@ int ObBackupLSLogTask::copy_piece_start_file_(const ObTenantArchivePieceAttr &pi
     LOG_WARN("failed to read round start", K(ret), K(piece_file));
   } else if (OB_FAIL(dest_store.write_piece_start(dest_dest_id, round_id, piece_id, create_scn, desc))) {
     LOG_WARN("failed to write round start", K(ret), K(piece_file));
+  }
+  return ret;
+}
+
+int ObBackupLSLogTask::copy_piece_end_file_(const ObTenantArchivePieceAttr &piece_file, const share::ObBackupDest &src, const share::ObBackupDest &dest)
+{
+  int ret = OB_SUCCESS;
+  ObArchiveStore src_store;
+  ObArchiveStore dest_store;
+  const int64_t src_dest_id = piece_file.key_.dest_id_;
+  const int64_t dest_dest_id = ctx_->dest_id_;
+  const int64_t round_id = piece_file.key_.round_id_;
+  const int64_t piece_id = piece_file.key_.piece_id_;
+  const share::SCN &create_scn = piece_file.checkpoint_scn_;
+  ObPieceEndDesc desc;
+  bool is_exist = false;
+  if (OB_FAIL(src_store.init(src))) {
+    LOG_WARN("failed to init src store", K(ret), K(src));
+  } else if (OB_FAIL(dest_store.init(dest))) {
+    LOG_WARN("failed to init dest store", K(ret), K(dest));
+  } else if (OB_FAIL(src_store.is_piece_end_file_exist(src_dest_id, round_id, piece_id, create_scn, is_exist))) {
+    LOG_WARN("failed to check is piece end file exist", K(ret), K(src_dest_id), K(round_id), K(piece_id));
+  } else if (!is_exist) {
+    // do nothing
+  } else if (OB_FAIL(src_store.read_piece_end(src_dest_id, round_id, piece_id, create_scn, desc))) {
+    LOG_WARN("failed to read piece end", K(ret), K(piece_file));
+  } else if (OB_FAIL(dest_store.write_piece_end(dest_dest_id, round_id, piece_id, create_scn, desc))) {
+    LOG_WARN("failed to write piece end", K(ret), K(piece_file));
   }
   return ret;
 }
