@@ -3365,6 +3365,36 @@ int ObPLResolver::resolve_dblink_row_type_with_synonym(ObPLResolveCtx &resolve_c
   return ret;
 }
 
+int ObPLResolver::build_dblink_record_type_by_schema(const ObPLResolveCtx &resolve_ctx,
+                                                     const ObTableSchema* table_schema,
+                                                     ObRecordType *&record_type)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
+  CK (OB_NOT_NULL(table_schema));
+  if (OB_SUCC(ret)) {
+    ObSqlString record_name;
+    ObString record_name_str;
+    char* name_buf = NULL;
+    ObSEArray<ObSchemaObjVersion, 4> dep_schemas;
+    OZ (record_name.append_fmt("__dblink_param_type_%.*s_%.*s",
+          table_schema->get_link_database_name().length(), table_schema->get_link_database_name().ptr(),
+          table_schema->get_table_name_str().length(), table_schema->get_table_name_str().ptr()));
+    OV (OB_NOT_NULL(name_buf = static_cast<char*>(resolve_ctx.allocator_.alloc(record_name.length() + 1))),
+        OB_ALLOCATE_MEMORY_FAILED);
+    OX (record_name.to_string(name_buf, record_name.length() + 1));
+    OX (record_name_str.assign_ptr(name_buf, record_name.length()));
+    OZ (build_record_type_by_schema(resolve_ctx, table_schema, record_type, false, &dep_schemas));
+    CK (OB_NOT_NULL(record_type));
+    OX (record_type->set_name(record_name_str));
+    OX (record_type->set_user_type_id(
+        common::combine_pl_type_id(table_schema->get_dblink_id() | common::OB_MOCK_DBLINK_UDT_ID_MASK,
+                                    table_schema->get_table_id())));
+  }
+#endif
+  return ret;
+}
+
 int ObPLResolver::resolve_dblink_row_type(const ObString &db_name,
                                           const ObString &table_name,
                                           const ObString &col_name,
@@ -3395,24 +3425,8 @@ int ObPLResolver::resolve_dblink_row_type(const ObString &db_name,
     }
     CK (OB_NOT_NULL(table_schema));
     if (OB_SUCC(ret)) {
-      ObSqlString record_name;
-      ObString record_name_str;
-      char* name_buf = NULL;
       ObRecordType *record_type = NULL;
-      ObSEArray<ObSchemaObjVersion, 4> dep_schemas;
-      OZ (record_name.append_fmt("__dblink_param_type_%.*s_%.*s",
-            table_schema->get_link_database_name().length(), table_schema->get_link_database_name().ptr(),
-            table_schema->get_table_name_str().length(), table_schema->get_table_name_str().ptr()));
-      OV (OB_NOT_NULL(name_buf = static_cast<char*>(resolve_ctx_.allocator_.alloc(record_name.length() + 1))),
-          OB_ALLOCATE_MEMORY_FAILED);
-      OX (record_name.to_string(name_buf, record_name.length() + 1));
-      OX (record_name_str.assign_ptr(name_buf, record_name.length()));
-      OZ (build_record_type_by_schema(resolve_ctx_, table_schema, record_type, false, &dep_schemas));
-      CK (OB_NOT_NULL(record_type));
-      OX (record_type->set_name(record_name_str));
-      OX (record_type->set_user_type_id(
-          common::combine_pl_type_id(table_schema->get_dblink_id() | common::OB_MOCK_DBLINK_UDT_ID_MASK,
-                                      table_schema->get_table_id())));
+      OZ (build_dblink_record_type_by_schema(resolve_ctx_, table_schema, record_type));
       if (OB_FAIL(ret)) {
       } else if (is_row_type) {
         CK (OB_NOT_NULL(current_block_));
@@ -18089,6 +18103,14 @@ int ObPLResolveCtx::get_user_type(uint64_t type_id, const ObUserDefinedType *&us
       if (OB_FAIL(package_guard_.dblink_guard_.get_dblink_type_by_id(
                       extract_package_id(type_id), type_id, user_type))) {
         LOG_WARN("get dblink type failed", K(ret), K(type_id));
+      } else if (NULL == user_type) {
+        const ObTableSchema* table_schema = NULL;
+        OZ (package_guard_.dblink_guard_.get_dblink_table_by_type_id(type_id, table_schema));
+        if (OB_SUCC(ret) && NULL != table_schema) {
+          ObRecordType* record_type = NULL;
+          OZ (ObPLResolver::build_dblink_record_type_by_schema(*this, table_schema, record_type));
+          OX (user_type = record_type);
+        }
       }
     } else if (FALSE_IT(tenant_id = get_tenant_id_by_object_id(type_id))) {
     } else if (OB_FAIL(schema_guard_.get_udt_info(tenant_id, type_id, udt_info))) {

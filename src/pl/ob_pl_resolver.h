@@ -432,6 +432,10 @@ public:
                                 const share::schema::ObTableSchema* table_schema,
                                 ObRecordType *&record_type, bool with_rowid = false,
                                 ObIArray<ObSchemaObjVersion> *dependency_objects = NULL);
+  static
+  int build_dblink_record_type_by_schema(const ObPLResolveCtx &resolve_ctx,
+                                         const ObTableSchema* table_schema,
+                                         ObRecordType *&record_type);
 
   static
   int resolve_extern_type_info(bool is_row_type,
