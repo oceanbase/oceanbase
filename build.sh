@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TOPDIR=`readlink -f \`dirname $0\``
+TOPDIR=$(cd "$(dirname "$0")" && pwd)
 BUILD_SH=$TOPDIR/build.sh
 
 DEP_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/deps/devel
