@@ -728,6 +728,13 @@ int ObQueryHint::print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt,
           } else if (OB_FAIL(qb_hints_.at(i).print_hints(plan_text))) {
             LOG_WARN("failed to print hint", K(ret));
           }
+        } else if (OB_UNLIKELY(tmp_stmt_id < 0 || tmp_stmt_id >= stmt_id_map_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected stmt id", K(ret), K(tmp_stmt_id), K(stmt_id_map_.count()));
+        } else if (!stmt_id_map_.at(tmp_stmt_id).is_set_stmt_) {
+          /* for set stmt, need print hint in the first stmt */
+        } else if (OB_FAIL(qb_hints_.at(i).print_hints(plan_text))) {
+          LOG_WARN("failed to print hint", K(ret));
         }
       }
     }
