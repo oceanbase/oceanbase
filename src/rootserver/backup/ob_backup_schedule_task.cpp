@@ -205,6 +205,7 @@ int ObBackupScheduleTask::deep_copy(const ObBackupScheduleTask &that)
     generate_time_ = that.generate_time_;
     schedule_time_ = that.schedule_time_;
     executor_time_ = that.executor_time_;
+    last_check_alive_time_ = that.last_check_alive_time_;
   }
   return ret;
 }

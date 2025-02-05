@@ -1412,7 +1412,7 @@ void ObLSBackupCtx::set_result_code(const int64_t result, bool &is_set)
   ObMutexGuard guard(mutex_);
   if (OB_SUCCESS == result_code_ && OB_SUCCESS != result) {
     result_code_ = result;
-    is_finished_ = true;
+    ATOMIC_STORE(&is_finished_, true);
     is_set = true;
   } else {
     is_set = false;
@@ -1428,14 +1428,12 @@ int64_t ObLSBackupCtx::get_result_code() const
 
 void ObLSBackupCtx::set_finished()
 {
-  ObMutexGuard guard(mutex_);
-  is_finished_ = true;
+  ATOMIC_STORE(&is_finished_, true);
 }
 
 bool ObLSBackupCtx::is_finished() const
 {
-  ObMutexGuard guard(mutex_);
-  return is_finished_;
+  return ATOMIC_LOAD(&is_finished_);
 }
 
 int ObLSBackupCtx::close()

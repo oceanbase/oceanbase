@@ -3261,6 +3261,7 @@ int ObLSBackupDataTask::report_ls_backup_task_info_(const ObLSBackupStat &stat)
         task_id, ls_id, turn_id, retry_id, backup_data_type, for_update, old_ls_task_info, trans))) {
       LOG_WARN("failed to get backup ls task info", K(ret), K(param_));
     } else if (old_ls_task_info.is_final_) {
+      ret = OB_CANCELED;
       LOG_INFO("can not update if final", K(old_ls_task_info), K(stat));
     } else if (old_ls_task_info.max_file_id_ + 1 != stat.file_id_) {
       LOG_INFO("can not update if file id is not consecutive", K(old_ls_task_info), K(stat));

@@ -848,6 +848,7 @@ int ObService::backup_fuse_tablet_meta(const obrpc::ObBackupFuseTabletMetaArg &a
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CHECK_BACKUP_TASK_EXIST_ERROR);
 int ObService::check_backup_task_exist(const ObBackupCheckTaskArg &arg, bool &res)
 {
   int ret = OB_SUCCESS;
@@ -866,6 +867,13 @@ int ObService::check_backup_task_exist(const ObBackupCheckTaskArg &arg, bool &re
       }
     }
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret) && ERRSIM_CHECK_BACKUP_TASK_EXIST_ERROR) {
+    res = true;
+    ret = ERRSIM_CHECK_BACKUP_TASK_EXIST_ERROR;
+    LOG_WARN("check backup task exist failed", K(ret), K(arg));
+  }
+#endif
   return ret;
 }
 
