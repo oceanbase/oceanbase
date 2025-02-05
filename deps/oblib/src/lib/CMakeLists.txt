@@ -7,7 +7,8 @@ ob_set_subtarget(oblib_lib ALONE
   geo/ob_geo_func_covered_by.cpp
   geo/ob_geo_func_within.cpp
   geo/ob_geo_func_union.cpp
-  geo/ob_geo_func_symdifference.cpp
+  geo/ob_geo_func_symdifference1.cpp
+  geo/ob_geo_func_symdifference2.cpp
   geo/ob_geo_func_buffer.cpp
   geo/ob_geo_func_touches.cpp
   stat/ob_diagnostic_info_util.cpp
