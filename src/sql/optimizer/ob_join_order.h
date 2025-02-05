@@ -158,6 +158,7 @@ namespace sql
   JoinFilterInfo()
   : lexprs_(),
     rexprs_(),
+    all_join_key_left_exprs_(),
     sharding_(NULL),
     calc_part_id_expr_(NULL),
     ref_table_id_(OB_INVALID_ID),
@@ -182,6 +183,7 @@ namespace sql
   TO_STRING_KV(
     K_(lexprs),
     K_(rexprs),
+    K_(all_join_key_left_exprs),
     K_(sharding),
     K_(calc_part_id_expr),
     K_(ref_table_id),
@@ -202,8 +204,12 @@ namespace sql
     K_(right_origin_rows)
   );
 
+  // join filter's left join keys
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> lexprs_;
+  // join filter's right join keys
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rexprs_;
+  // all hash join's join keys, maybe count greater than lexpr's count
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> all_join_key_left_exprs_;
   ObShardingInfo *sharding_;      //join filter use基表的sharding
   ObRawExpr *calc_part_id_expr_;  //partition join filter计算分区id的表达式
   uint64_t ref_table_id_;         //join filter use基表的ref table id

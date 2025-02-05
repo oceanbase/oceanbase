@@ -3890,39 +3890,30 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
       ObLogJoin &join_op = static_cast<ObLogJoin &>(*op.get_parent());
       const common::ObIArray<ObRawExpr *> &equal_join_conditions =
           join_op.get_equal_join_conditions();
-
-      if (OB_FAIL(spec.full_hash_join_keys_.prepare_allocate(equal_join_conditions.count()))) {
+      const common::ObIArray<ObRawExpr *> &all_join_key_left_exprs =
+          op.get_all_join_key_left_exprs();
+      if (equal_join_conditions.count() != all_join_key_left_exprs.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unmatched expr count", K(equal_join_conditions.count()),
+                 K(all_join_key_left_exprs.count()), K(spec.get_id()));
+      } else if (OB_FAIL(spec.full_hash_join_keys_.prepare_allocate(equal_join_conditions.count()))) {
         LOG_WARN("failed to prepare_allocate full_hash_join_keys", K(ret));
       } else if (OB_FAIL(spec.hash_join_is_ns_equal_cond_.prepare_allocate(
                      equal_join_conditions.count()))) {
         LOG_WARN("failed to prepare_allocate hash_join_is_ns_equal_cond_", K(ret));
       }
 
-      for (int64_t i = 0; OB_SUCC(ret) && i < equal_join_conditions.count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < all_join_key_left_exprs.count(); ++i) {
+        ObRawExpr *left_raw_expr = all_join_key_left_exprs.at(i);
         ObExpr *left_expr = nullptr;
-        bool is_opposite = false;
-        ObExpr *equal_join_cond = static_cast<ObExpr *>(
-            ObStaticEngineExprCG::get_left_value_rt_expr(*equal_join_conditions.at(i)));
-        if (OB_ISNULL(equal_join_cond)) {
+        if (OB_FAIL(generate_rt_expr(*left_raw_expr, left_expr))) {
+          LOG_WARN("failed to generate_rt_expr");
+        } else if (OB_ISNULL(left_expr)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexprected null equal_join_cond");
-        } else if (2 != equal_join_cond->arg_cnt_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected status: join keys must have 2 arguments");
-        } else if (OB_FAIL(calc_equal_cond_opposite(join_op, *equal_join_conditions.at(i),
-                                                    is_opposite))) {
-          LOG_WARN("failed to calc equal condition opposite", K(ret));
-        } else {
-          if (is_opposite) {
-            left_expr = equal_join_cond->args_[1];
-          } else {
-            left_expr = equal_join_cond->args_[0];
-          }
-        }
-        if (OB_FAIL(ret)) {
+          LOG_WARN("unexprected null left_expr");
         } else {
           spec.full_hash_join_keys_.at(i) = left_expr;
-          if (T_OP_NSEQ == equal_join_cond->type_) {
+          if (T_OP_NSEQ == equal_join_conditions.at(i)->get_expr_type()) {
             spec.hash_join_is_ns_equal_cond_.at(i) = true;
           } else {
             spec.hash_join_is_ns_equal_cond_.at(i) = false;

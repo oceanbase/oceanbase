@@ -51,6 +51,8 @@ int ObLogJoinFilter::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to push back expr", K(ret));
   } else if (OB_FAIL(append(all_exprs, join_exprs_))) {
     LOG_WARN("failed to add exprs", K(ret));
+  } else if (OB_FAIL(append(all_exprs, all_join_key_left_exprs_))) {
+    LOG_WARN("failed to add exprs", K(ret));
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to get op exprs", K(ret));
   } else { /*do nothing*/ }
@@ -73,6 +75,8 @@ int ObLogJoinFilter::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   } else if (OB_NOT_NULL(calc_tablet_id_expr_)
       && OB_FAIL(replace_expr_action(replacer, calc_tablet_id_expr_))) {
     LOG_WARN("failed to replace calc_tablet_id_expr_", K(ret));
+  } else if (is_create_ && OB_FAIL(replace_exprs_action(replacer, all_join_key_left_exprs_))) {
+    LOG_WARN("failed to replace all_join_key_left_exprs_", K(ret));
   } else if (!is_create_ && OB_FAIL(replace_exprs_action(replacer, join_filter_exprs_))) {
     LOG_WARN("failed to replace join_filter_exprs_", K(ret));
   }
