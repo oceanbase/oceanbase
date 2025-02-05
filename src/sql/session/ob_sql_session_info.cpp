@@ -882,40 +882,32 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
         } else if (database_schema->is_in_recyclebin() || table_schema->is_in_recyclebin()) {
           LOG_DEBUG("skip table schema in recyclebin", K(*table_schema));
         } else {
-          const int64_t limit = 1000;
-          ret = sql.assign_fmt("DELETE FROM \"%.*s\".\"%.*s\" WHERE %s = %ld AND ROWNUM <= %ld",
+          ret = sql.assign_fmt("DELETE FROM \"%.*s\".\"%.*s\" WHERE %s = %ld",
                                 database_schema->get_database_name_str().length(),
                                 database_schema->get_database_name_str().ptr(),
                                 table_schema->get_table_name_str().length(),
                                 table_schema->get_table_name_str().ptr(),
-                                OB_HIDDEN_SESSION_ID_COLUMN_NAME, unique_id,
-                                limit);
+                                OB_HIDDEN_SESSION_ID_COLUMN_NAME, unique_id);
 
           if (OB_SUCC(ret)) {
             int64_t affect_rows = 0;
-            int64_t last_batch_affect_rows = limit;
             int64_t cur_time = ObTimeUtility::current_time();
             int64_t cur_timeout_backup = THIS_WORKER.get_timeout_ts();
             THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
-            while (OB_SUCC(ret) && last_batch_affect_rows > 0) {
-              if (OB_FAIL(user_sql_proxy->write(tenant_id, sql.ptr(), last_batch_affect_rows))) {
-                LOG_WARN("execute sql failed", K(ret), K(sql));
-              } else {
-                affect_rows += last_batch_affect_rows;
-              }
+            if (OB_FAIL(user_sql_proxy->write(tenant_id, sql.ptr(), affect_rows))) {
+              LOG_WARN("execute sql failed", K(ret), K(sql));
             }
             if (OB_SUCC(ret)) {
               LOG_DEBUG("succeed to delete rows in oracle temporary table", K(sql), K(affect_rows));
               //delete relation temp table stats.
+              int64_t affect_rows = 0;
               if (OB_FAIL(ObOptStatManager::get_instance().delete_table_stat(tenant_id,
                                                       table_schema->get_table_id(), affect_rows))) {
                 LOG_WARN("failed to delete table stats", K(ret));
               }
-            } else {
-              LOG_WARN("failed to delete rows in oracle temporary table", K(ret), K(sql));
             }
-            LOG_INFO("delete rows in oracle temporary table", K(sql), K(affect_rows),
-                     "clean_time", ObTimeUtility::current_time() - cur_time);
+            LOG_INFO("delete rows in oracle temporary table", K(ret), K(affect_rows),
+                     "clean_time", ObTimeUtility::current_time() - cur_time, K(sql));
             THIS_WORKER.set_timeout_ts(cur_timeout_backup);
           }
         }
