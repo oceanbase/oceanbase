@@ -4576,6 +4576,7 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < input_weak_sharding.count(); i++) {
       ObShardingInfo *temp_sharding = NULL;
+      bool is_weak_sharding_inherited = false;
       if (OB_ISNULL(input_weak_sharding.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
@@ -4585,11 +4586,13 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
                                                             false,
                                                             input_weak_sharding.at(i),
                                                             temp_sharding,
-                                                            is_inherited_sharding))) {
+                                                            is_weak_sharding_inherited))) {
         LOG_WARN("failed to convert sharding info", K(ret));
       } else if (NULL != temp_sharding && OB_FAIL(output_weak_sharding.push_back(temp_sharding))) {
         LOG_WARN("failed to push back sharding", K(ret));
-      } else { /*do nothing*/ }
+      } else {
+        is_inherited_sharding |= is_weak_sharding_inherited;
+      }
     }
     if (OB_SUCC(ret) && NULL == output_strong_sharding && output_weak_sharding.empty()) {
       output_strong_sharding = opt_ctx.get_distributed_sharding();
