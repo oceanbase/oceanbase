@@ -6582,6 +6582,7 @@ int ObRawExprUtils::build_get_package_var(ObRawExprFactory &expr_factory,
                                           ObSchemaGetterGuard &schema_guard,
                                           uint64_t package_id,
                                           int64_t var_idx,
+                                          const ObString &var_name,
                                           ObExprResType *result_type,
                                           ObRawExpr *&expr,
                                           const ObSQLSessionInfo *session_info)
@@ -6612,7 +6613,25 @@ int ObRawExprUtils::build_get_package_var(ObRawExprFactory &expr_factory,
   OZ (build_const_int_expr(expr_factory, ObIntType,
     body_info != NULL ? body_info->get_schema_version() : OB_INVALID_VERSION, c_expr5));
   OZ (f_expr->add_param_expr(c_expr5));
-  OX (f_expr->set_func_name(ObString::make_string(N_GET_PACKAGE_VAR)));
+  if (OB_NOT_NULL(spec_info)) {
+    ObSqlString func_name;
+    ObString copy_func_name;
+    if (is_sys_tenant(spec_info->get_tenant_id())) {
+      OZ (func_name.append_fmt("%.*s.%.*s",
+        spec_info->get_package_name().length(), spec_info->get_package_name().ptr(), var_name.length(), var_name.ptr()));
+    } else {
+      const ObSimpleDatabaseSchema *db_info = NULL;
+      OZ (schema_guard.get_database_schema(spec_info->get_tenant_id(), spec_info->get_database_id(), db_info));
+      CK (OB_NOT_NULL(db_info));
+      OZ (func_name.append_fmt("%.*s.%.*s.%.*s",
+        db_info->get_database_name_str().length(), db_info->get_database_name_str().ptr(),
+        spec_info->get_package_name().length(), spec_info->get_package_name().ptr(), var_name.length(), var_name.ptr()));
+    }
+    OZ (ob_write_string(expr_factory.get_allocator(), func_name.string(), copy_func_name));
+    OX (f_expr->set_func_name(copy_func_name));
+  } else {
+    OX (f_expr->set_func_name(ObString::make_string(N_GET_PACKAGE_VAR)));
+  }
   OX (expr = f_expr);
   CK (OB_NOT_NULL(session_info));
   OZ (expr->formalize(session_info));

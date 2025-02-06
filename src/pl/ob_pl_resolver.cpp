@@ -14671,6 +14671,7 @@ int ObPLResolver::build_access_idx_sys_func(uint64_t parent_id, ObObjAccessIdx &
                                                 resolve_ctx_.schema_guard_,
                                                 parent_id,
                                                 access_idx.var_index_,
+                                                access_idx.var_name_,
                                                 result_type,
                                                 access_idx.get_sysfunc_,
                                                 &resolve_ctx_.session_info_));
