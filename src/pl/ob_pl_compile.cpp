@@ -933,8 +933,12 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   OZ (analyze_package(source, parent_ns,
                       package_ast, package_info.is_for_trigger()));
 #ifdef OB_BUILD_ORACLE_PL
-  if (OB_SUCC(ret) && package_info.is_package()) {
-    OZ (ObPLPackageType::update_package_type_info(package_info, package_ast));
+  if (package_info.is_package()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = ObPLPackageType::update_package_type_info(package_info, package_ast, OB_FAIL(ret)))) {
+      LOG_WARN("update package type info failed", K(tmp_ret), K(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
   }
 #endif
   bool is_from_disk = false;
