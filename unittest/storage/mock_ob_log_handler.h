@@ -313,6 +313,10 @@ public:
   {
     return OB_SUCCESS;
   }
+  int force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num)
+  {
+    return OB_SUCCESS;
+  }
   int add_member(const common::ObMember &member,
                  const int64_t paxos_replica_num,
                  const palf::LogConfigVersion &config_version,
