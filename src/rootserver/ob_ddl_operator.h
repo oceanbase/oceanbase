@@ -1099,9 +1099,10 @@ public:
                                 share::schema::ObTableSchema &del_table_schema,
                                 common::ObMySQLTransaction &trans);
   int exchange_table_subpartitions(const share::schema::ObTableSchema &orig_table_schema,
-                                share::schema::ObTableSchema &inc_table_schema,
-                                share::schema::ObTableSchema &del_table_schema,
-                                common::ObMySQLTransaction &trans);
+                                   share::schema::ObTableSchema &inc_table_schema,
+                                   share::schema::ObTableSchema &del_table_schema,
+                                   common::ObMySQLTransaction &trans,
+                                   const bool is_subpart_idx_specified);
   int get_target_auto_inc_sequence_value(const uint64_t tenant_id,
                                          const uint64_t table_id,
                                          const uint64_t column_id,

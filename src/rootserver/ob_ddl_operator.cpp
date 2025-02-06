@@ -13049,19 +13049,23 @@ int ObDDLOperator::exchange_table_partitions(const share::schema::ObTableSchema 
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
-  int64_t new_schema_version = OB_INVALID_VERSION;
+  int64_t drop_new_schema_version = OB_INVALID_VERSION;
+  int64_t add_new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
-  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, drop_new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, add_new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service->get_table_sql_service().exchange_part_info(
                      trans,
                      orig_table_schema,
                      inc_table_schema,
                      del_table_schema,
-                     new_schema_version))) {
+                     drop_new_schema_version,
+                     add_new_schema_version))) {
     LOG_WARN("exchange part info failed", K(ret));
   }
   return ret;
@@ -13070,23 +13074,29 @@ int ObDDLOperator::exchange_table_partitions(const share::schema::ObTableSchema 
 int ObDDLOperator::exchange_table_subpartitions(const share::schema::ObTableSchema &orig_table_schema,
                                                 share::schema::ObTableSchema &inc_table_schema,
                                                 share::schema::ObTableSchema &del_table_schema,
-                                                common::ObMySQLTransaction &trans)
+                                                common::ObMySQLTransaction &trans,
+                                                const bool is_subpart_idx_specified)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
-  int64_t new_schema_version = OB_INVALID_VERSION;
+  int64_t drop_new_schema_version = OB_INVALID_VERSION;
+  int64_t add_new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
-  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, drop_new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, add_new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service->get_table_sql_service().exchange_subpart_info(
                      trans,
                      orig_table_schema,
                      inc_table_schema,
                      del_table_schema,
-                     new_schema_version))) {
+                     drop_new_schema_version,
+                     add_new_schema_version,
+                     is_subpart_idx_specified))) {
     LOG_WARN("delete inc part info failed", K(ret));
   }
   return ret;

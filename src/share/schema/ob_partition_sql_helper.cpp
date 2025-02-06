@@ -1516,7 +1516,7 @@ int ObAddIncPartHelper::add_partition_info()
   return ret;
 }
 
-int ObAddIncSubPartHelper::add_subpartition_info()
+int ObAddIncSubPartHelper::add_subpartition_info(const bool is_subpart_idx_specified)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ori_table_) || OB_ISNULL(inc_table_)) {
@@ -1549,8 +1549,17 @@ int ObAddIncSubPartHelper::add_subpartition_info()
         } else {
           for (int64_t j = 0; OB_SUCC(ret) && j < part->get_subpartition_num(); j++) {
             inc_sub_part_num++;
+            const ObSubPartition *sub_part = part->get_subpart_array()[j];
+            int64_t subpart_idx = j;
+            if (OB_ISNULL(sub_part)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null sub part", KR(ret), KP(part->get_subpart_array()[j]), K(j));
+            } else if (is_subpart_idx_specified) {
+              subpart_idx = sub_part->get_sub_part_idx();
+            }
+
             HEAP_VAR(ObAddIncSubPartDMLGenerator, sub_part_dml_gen,
-                     ori_table_, *part, *part->get_subpart_array()[j], inc_part_num, i, j, schema_version_) {
+                     ori_table_, *part, *sub_part, inc_part_num, i, subpart_idx, schema_version_) {
               if (OB_FAIL(sub_part_dml_gen.gen_dml(sub_dml))) {
                 LOG_WARN("gen sub dml column failed", K(ret));
               } else if (OB_FAIL(sub_dml.finish_row())) {

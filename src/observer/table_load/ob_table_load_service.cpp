@@ -725,12 +725,9 @@ int ObTableLoadService::check_support_direct_load_for_partition_level(
   if (ObDirectLoadMethod::is_incremental(method)) {
     // do nothing
   } else if (ObDirectLoadMethod::is_full(method)) {
-    if (compat_version < DATA_VERSION_4_3_5_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("version lower than 4.3.5.0 does not support direct load partition", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.5.0 does not support direct load partition");
-    } else if (OB_FAIL(ObPartitionExchange::check_exchange_partition_for_direct_load(schema_guard, table_schema))) {
-      LOG_WARN("fail to check exchange partition", KR(ret));
+    if (OB_FAIL(ObPartitionExchange::check_exchange_partition_for_direct_load(
+        schema_guard, table_schema, compat_version))) {
+      LOG_WARN("fail to check exchange partition", KR(ret), KPC(table_schema), K(compat_version));
     }
   }
   return ret;

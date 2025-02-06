@@ -61,7 +61,7 @@ private:
   int build_tx_param();
   int start_sql_tx();
   int end_sql_tx(const bool commit);
-  int lock_table_in_tx();
+  int lock_for_inc_load(const common::ObIArray<common::ObTabletID> &tablet_ids);
   int init_ddl_param_for_inc_direct_load();
   // full
   int start_redef_table(const ObTableLoadParam &param,
@@ -76,6 +76,11 @@ private:
   int wait_begin_finish();
   int end_direct_load(const bool commit);
   int add_tx_result_to_user_session();
+  // lock table or tablets
+  int build_base_lock_arg(ObLockTableRequest &lock_table_arg);
+  int lock_table_in_tx();
+  int lock_tablets_in_tx(const ObIArray<ObTabletID> &tablet_ids);
+  int try_lock_in_tx(const ObLockRequest &arg);
 public:
   static const int64_t DEFAULT_SEGMENT_ID = 1;
   struct TransCtx

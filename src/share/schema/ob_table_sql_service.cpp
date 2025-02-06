@@ -702,7 +702,8 @@ int ObTableSqlService::exchange_part_info(
     const ObTableSchema &ori_table,
     ObTableSchema &inc_table,
     ObTableSchema &del_table,
-    const int64_t schema_version)
+    const int64_t drop_schema_version,
+    const int64_t add_schema_version)
 {
   int ret = OB_SUCCESS;
   bool is_truncate_table = false;
@@ -712,14 +713,14 @@ int ObTableSqlService::exchange_part_info(
   } else if (OB_FAIL(drop_inc_part_info(sql_client,
                                         ori_table,
                                         del_table,
-                                        schema_version,
+                                        drop_schema_version,
                                         is_truncate_partition,
                                         is_truncate_table))) {
     LOG_WARN("delete inc part info failed", K(ret));
   } else if (OB_FAIL(add_inc_partition_info(sql_client,
                                             ori_table,
                                             inc_table,
-                                            schema_version,
+                                            add_schema_version,
                                             true/*is_truncate_table*/,
                                             false/*is_subpart*/))) {
     LOG_WARN("add inc part info failed", K(ret));
@@ -732,21 +733,24 @@ int ObTableSqlService::exchange_subpart_info(
     const ObTableSchema &ori_table,
     ObTableSchema &inc_table,
     ObTableSchema &del_table,
-    const int64_t schema_version)
+    const int64_t drop_schema_version,
+    const int64_t add_schema_version,
+    const bool is_subpart_idx_specified)
 {
   int ret = OB_SUCCESS;
   const ObPartition *part = NULL;
   if (OB_FAIL(check_ddl_allowed(ori_table))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(ori_table));
   } else if (OB_FAIL(drop_inc_subpart_info(sql_client, ori_table, del_table,
-                                           schema_version))) {
+                                           drop_schema_version))) {
     LOG_WARN("failed to drop partition", K(ret), K(del_table));
   } else if (OB_FAIL(add_inc_partition_info(sql_client,
                                             ori_table,
                                             inc_table,
-                                            schema_version,
+                                            add_schema_version,
                                             true/*is_truncate_table*/,
-                                            true/*is_subpart*/))) {
+                                            true/*is_subpart*/,
+                                            is_subpart_idx_specified))) {
     LOG_WARN("add partition info failed", K(ret));
   }
   return ret;
@@ -4701,14 +4705,16 @@ int ObTableSqlService::add_inc_partition_info(
                        ObTableSchema &inc_table,
                        const int64_t schema_version,
                        bool ignore_log_operation,
-                       bool is_subpart)
+                       bool is_subpart,
+                       const bool is_subpart_idx_specified)
 {
   int ret = OB_SUCCESS;
   if (is_subpart) {
     if (OB_FAIL(add_inc_subpart_info(sql_client,
                                      ori_table,
                                      inc_table,
-                                     schema_version))) {
+                                     schema_version,
+                                     is_subpart_idx_specified))) {
       LOG_WARN("add inc part info failed", KR(ret));
     }
   } else {
@@ -4828,7 +4834,8 @@ int ObTableSqlService::update_part_info(ObISQLClient &sql_client,
 int ObTableSqlService::add_inc_subpart_info(ObISQLClient &sql_client,
                                          const ObTableSchema &ori_table,
                                          const ObTableSchema &inc_table,
-                                         const int64_t schema_version)
+                                         const int64_t schema_version,
+                                         const bool is_subpart_idx_specified)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_ddl_allowed(ori_table))) {
@@ -4841,8 +4848,8 @@ int ObTableSqlService::add_inc_subpart_info(ObISQLClient &sql_client,
     const ObPartitionSchema *inc_table_schema = &inc_table;
     ObAddIncSubPartHelper subpart_helper(ori_table_schema, inc_table_schema, schema_version,
                                    sql_client);
-    if (OB_FAIL(subpart_helper.add_subpartition_info())) {
-      LOG_WARN("add partition info failed", KR(ret));
+    if (OB_FAIL(subpart_helper.add_subpartition_info(is_subpart_idx_specified))) {
+      LOG_WARN("add subpartition info failed", KR(ret), K(is_subpart_idx_specified));
     }
   }
   return ret;
