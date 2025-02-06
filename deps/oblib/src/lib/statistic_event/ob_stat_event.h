@@ -921,7 +921,16 @@ STAT_EVENT_SET_DEF(SS_MICRO_CACHE_EVICT_COUNT, "ss_micro_cache total evicted mic
 STAT_EVENT_SET_DEF(SS_MICRO_CACHE_DELETE_COUNT, "ss_micro_cache total deleted micro_block count", ObStatClassIds::CACHE, 245016, false, true, true)
 STAT_EVENT_SET_DEF(SS_MICRO_CACHE_REORGAN_FREE_BLK_COUNT, "ss_micro_cache released phy_block count by reorgan_task", ObStatClassIds::CACHE, 245017, false, true, true)
 STAT_EVENT_SET_DEF(SS_MICRO_CACHE_HOT_MICRO_LACK_COUNT, "ss_micro_cache hot micro_block lack count", ObStatClassIds::CACHE, 245018, false, true, true)
-
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_READ_IOPS, "ss_micro_cache read iops of common_io", ObStatClassIds::CACHE, 245019, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_READ_THROUGHPUT, "ss_micro_cache read throughput of common_io", ObStatClassIds::CACHE, 245020, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_WRITE_IOPS, "ss_micro_cache write iops of common_io", ObStatClassIds::CACHE, 245021, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_WRITE_THROUGHPUT, "ss_micro_cache write throughput of common_io", ObStatClassIds::CACHE, 245022, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_READ_IOPS, "ss_micro_cache read iops of prewarm_io", ObStatClassIds::CACHE, 245023, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_READ_THROUGHPUT, "ss_micro_cache read throughput of prewarm_io", ObStatClassIds::CACHE, 245024, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_WRITE_IOPS, "ss_micro_cache write iops of prewarm_io", ObStatClassIds::CACHE, 245025, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_WRITE_THROUGHPUT, "ss_micro_cache write throughput of prewarm_io", ObStatClassIds::CACHE, 245026, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_VALID_CNT, "ss_micro_cache valid micro_block count", ObStatClassIds::CACHE, 245027, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_VALID_SIZE, "ss_micro_cache valid micro_block size", ObStatClassIds::CACHE, 245028, false, true, true)
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true)
 #endif
