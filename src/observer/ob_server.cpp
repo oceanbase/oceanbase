@@ -4048,6 +4048,9 @@ int ObServer::clean_up_invalid_tables_by_tenant(
           drop_table_arg.tenant_id_ = table_schema->get_tenant_id();
           drop_table_arg.exec_tenant_id_ = table_schema->get_tenant_id();
           drop_table_arg.table_type_ = table_schema->get_table_type();
+          if (TMP_TABLE_ORA_SESS == drop_table_arg.table_type_ || TMP_TABLE_ORA_TRX == drop_table_arg.table_type_) {
+            drop_table_arg.table_type_ = share::schema::USER_TABLE;
+          }
           drop_table_arg.session_id_ = table_schema->get_session_id();
           drop_table_arg.to_recyclebin_ = false;
           drop_table_arg.compat_mode_ = is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
