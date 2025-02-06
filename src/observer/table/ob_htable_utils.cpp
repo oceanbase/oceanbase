@@ -91,7 +91,7 @@ int64_t ObHTableCellEntity::get_timestamp() const
 {
   int64_t timestamp = 0;
   if (OB_ISNULL(ob_row_)) {
-    LOG_INFO("get_qualifier but ob_row is null", K(ob_row_));
+    LOG_INFO("get_timestamp but ob_row is null", K(ob_row_));
   } else {
     timestamp = ob_row_->get_cell(ObHTableConstants::COL_IDX_T).get_int();
   }
