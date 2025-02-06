@@ -1845,8 +1845,7 @@ int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *
     } else if (OB_FAIL(schema_guard.get_package_info(OB_SYS_TENANT_ID, pkg_var_info.package_id_, package_info))) {
       LOG_WARN("failed to get package info", K(ret), K(pkg_var_info), KPC(package_info));
     } else if (OB_ISNULL(package_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected NULL package info", K(ret), K(pkg_var_info), KPC(package_info));
+      // package does not exist, do nothing
     } else if (0 == package_info->get_package_name().compare("DBMS_PROFILER")) {
       if (OB_FAIL(ObDBMSProfiler::set_profiler_by_user_var_deserialize(*static_cast<ObSQLSessionInfo*>(session),
                                                                        pkg_var_info,
