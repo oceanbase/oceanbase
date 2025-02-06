@@ -9,6 +9,8 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
+#include <sstream>
 #define private public
 #define protected public
 #include "ob_simple_log_server.h"

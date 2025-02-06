@@ -13,6 +13,7 @@
 #ifndef MOCK_SCHEMA_SERVICE_H_
 #define MOCK_SCHEMA_SERVICE_H_
 
+#include <sstream>
 #define private public
 #define protected public
 

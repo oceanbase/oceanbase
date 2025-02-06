@@ -19,7 +19,6 @@
 #include "lib/hash/ob_hashmap.h"
 #include "share/ob_time_utility2.h"
 #include "lib/string/ob_string.h"
-#include "storage/ob_i_store.h"
 #include "storage/access/ob_store_row_iterator.h"
 #include "storage/access/ob_table_read_info.h"
 #include "storage/access/ob_sstable_row_whole_scanner.h"

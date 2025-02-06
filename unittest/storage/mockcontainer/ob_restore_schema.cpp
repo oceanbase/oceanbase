@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <sstream>
 #include <fstream>
 #include <iterator>
 #include "lib/stat/ob_session_stat.h"

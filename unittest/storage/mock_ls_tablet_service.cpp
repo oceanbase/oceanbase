@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-
+#include <sstream>
 #define private public
 
 #include "mock_ls_tablet_service.h"

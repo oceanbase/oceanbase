@@ -71,8 +71,8 @@ TEST(TestPalfEnvLiteMgr, test_create_delete_palf)
   PalfEnvLiteMgr mgr;
   std::string base_dir = "create_delete_palf";
   strcpy(mgr.base_dir_, base_dir.c_str());
-  string mkdir_cmd = "mkdir " + base_dir;
-  string rmdir_cmd = "rmdir " + base_dir;
+  std::string mkdir_cmd = "mkdir " + base_dir;
+  std::string rmdir_cmd = "rmdir " + base_dir;
   system(rmdir_cmd.c_str());
   system(mkdir_cmd.c_str());
   std::string log_dir = "runlin_test";

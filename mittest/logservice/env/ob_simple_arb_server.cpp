@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <sstream>
 #define private public
 #include "logservice/arbserver/ob_arb_srv_network_frame.h"
 #include "logservice/arbserver/ob_arb_server_timer.h"

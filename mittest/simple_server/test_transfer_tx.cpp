@@ -1398,7 +1398,7 @@ TEST_F(ObTransferTx, bench)
   std::vector<std::string> tables;
   for (int i=1;i<=10;i++) {
     ObSqlString sql;
-    string table_name = "stu"+std::to_string(i);
+    std::string table_name = "stu"+std::to_string(i);
     sql.assign_fmt("create table %s(col int)", table_name.c_str());
     tables.push_back(table_name);
     EQ(0, sql_proxy.write(sql.ptr(), affected_rows));

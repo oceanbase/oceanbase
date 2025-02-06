@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
+#include <sstream>
 #define private public
 #define protected public
 #include "ob_simple_server_helper.h"

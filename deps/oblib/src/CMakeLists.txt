@@ -108,7 +108,7 @@ if (OB_USE_CLANG)
     -Wno-psabi -Wno-c99-designator -Wno-int-in-bool-context -Wno-sizeof-array-div
     -Wno-implicit-const-int-float-conversion -Wno-fortify-source -Wno-non-c-typedef-for-linkage
     -Wno-uninitialized-const-reference -Wno-unused-function -Wno-atomic-alignment
-    -Wno-tautological-constant-out-of-range-compare -Wno-unused-parameter
+    -Wno-tautological-constant-out-of-range-compare -Wno-unused-parameter -Wno-shorten-64-to-32
     -Wno-string-plus-int -Wno-misleading-indentation -Wno-unused-private-field
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-overloaded-virtual -Wno-reserved-user-defined-literal
     -Wno-self-assign -Wno-inconsistent-missing-override -Wno-mismatched-tags -Wno-unused-variable
@@ -117,8 +117,8 @@ if (OB_USE_CLANG)
   if (CPP_STANDARD_20)
     set(OBLIB_COMPILE_DEFINITIONS ${OBLIB_COMPILE_DEFINITIONS}
         -Wno-unused-but-set-variable -Wno-null-pointer-subtraction -Wno-compound-token-split-by-macro
-        -Wno-packed-non-pod -Wno-format -Wno-shorten-64-to-32 -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
-        -Wno-enum-constexpr-conversion -Wno-covered-switch-default
+        -Wno-packed-non-pod -Wno-format -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
+        -Wno-enum-constexpr-conversion -Wno-covered-switch-default -Wno-deprecated-declarations
         -Wno-bitwise-instead-of-logical -Wno-suggest-override -Wno-non-virtual-dtor -Wno-cast-qual
         -Wno-unused-value -Wno-macro-redefined -Wno-reinterpret-base-class -Wno-register
         -Wno-implicit-fallthrough -Wno-deprecated-non-prototype
@@ -193,6 +193,28 @@ endif()
 
 target_compile_features(oblib_base_base INTERFACE cxx_std_11)
 
+set(OBLIB_ABSEIL_LIST
+    ${DEP_DIR}/lib64/libabsl_base.a
+    ${DEP_DIR}/lib64/libabsl_city.a
+    ${DEP_DIR}/lib64/libabsl_debugging_internal.a
+    ${DEP_DIR}/lib64/libabsl_demangle_internal.a
+    ${DEP_DIR}/lib64/libabsl_hash.a
+    ${DEP_DIR}/lib64/libabsl_int128.a
+    ${DEP_DIR}/lib64/libabsl_low_level_hash.a
+    ${DEP_DIR}/lib64/libabsl_malloc_internal.a
+    ${DEP_DIR}/lib64/libabsl_raw_hash_set.a
+    ${DEP_DIR}/lib64/libabsl_raw_logging_internal.a
+    ${DEP_DIR}/lib64/libabsl_spinlock_wait.a
+    ${DEP_DIR}/lib64/libabsl_stacktrace.a
+    ${DEP_DIR}/lib64/libabsl_str_format_internal.a
+    ${DEP_DIR}/lib64/libabsl_strings.a
+    ${DEP_DIR}/lib64/libabsl_strings_internal.a
+    ${DEP_DIR}/lib64/libabsl_symbolize.a
+    ${DEP_DIR}/lib64/libabsl_synchronization.a
+    ${DEP_DIR}/lib64/libabsl_throw_delegate.a
+    ${DEP_DIR}/lib64/libabsl_time.a
+    ${DEP_DIR}/lib64/libabsl_time_zone.a)
+
 if(OB_BUILD_OPENSOURCE)
 set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -lmariadb")
 if (OB_STATIC_LINK_LGPL_DEPS)
@@ -205,11 +227,11 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libcurl.a
   ${DEP_DIR}/lib/libssl.a
   ${DEP_DIR}/lib/libcrypto.a
-  ${DEP_DIR}/lib/libs2.a
+  ${DEP_DIR}/lib64/libs2.a
+  ${OBLIB_ABSEIL_LIST}
   ${LGPL_DEPS}
   $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEP_DIR}/lib/libunwind.a>
   ${DEP_DIR}/lib/libz.a
-  ${DEP_DIR}/lib/libs2.a
   ${DEP_DIR}/lib/libicui18n.a
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
@@ -235,7 +257,8 @@ target_link_libraries(oblib_base_base_base
   ${DEP_3RD_DIR}/usr/local/babassl-ob/lib/libssl.a
   ${DEP_3RD_DIR}/usr/local/babassl-ob/lib/libcrypto.a
   ${DEP_3RD_DIR}/u01/obclient/lib/libobclnt.a
-  ${DEP_DIR}/lib/libs2.a
+  ${DEP_DIR}/lib64/libs2.a
+  ${OBLIB_ABSEIL_LIST}
   ${DEP_DIR}/lib/libz.a
   ${DEP_DIR}/lib/libicui18n.a
   ${DEP_DIR}/lib/libicustubdata.a

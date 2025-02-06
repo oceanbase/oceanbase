@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <sstream>
 #define private public
 #include "storage/tx/ob_id_service.h"
 #undef private

@@ -12,6 +12,7 @@
 
 #ifndef OCEANBASE_TRANSACTION_TEST_TX_NODE_DEFINE_
 #define OCEANBASE_TRANSACTION_TEST_TX_NODE_DEFINE_
+#include <sstream>
 #define private public
 #define protected public
 #include "lib/objectpool/ob_server_object_pool.h"

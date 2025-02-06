@@ -15,6 +15,7 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sstream>
 
 #define private public
 #define protected public
@@ -83,7 +84,7 @@ ObSimpleServerReplica::ObSimpleServerReplica(const std::string &app_name,
                                              const std::string &env_prefix,
                                              const int zone_id,
                                              const int rpc_port,
-                                             const string &rs_list,
+                                             const std::string &rs_list,
                                              const ObServerInfoList &server_list,
                                              bool is_restart,
                                              ObServer &server,
