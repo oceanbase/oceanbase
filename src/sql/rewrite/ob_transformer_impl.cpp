@@ -104,6 +104,7 @@ int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
   bool enable_group_by_placement_transform = false;
   bool opt_param_exists = false;
   int64_t opt_param_val = 0;
+  bool disable_gtt_session_isolation = false;
   if (OB_ISNULL(query_ctx) || OB_ISNULL(ctx_) || OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(query_ctx), K(ctx_));
@@ -111,8 +112,11 @@ int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
     LOG_WARN("failed to check group by placement transform enabled", K(ret));
   } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::OPTIMIZER_GROUP_BY_PLACEMENT, enable_group_by_placement_transform))) {
     LOG_WARN("fail to check opt param group by placement", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::DISABLE_GTT_SESSION_ISOLATION, disable_gtt_session_isolation))) {
+    LOG_WARN("fail to get bool opt param", K(ret));
   } else {
     ctx_->is_groupby_placement_enabled_ = enable_group_by_placement_transform;
+    ctx_->disable_gtt_session_isolation_ = disable_gtt_session_isolation;
   }
 
   if (OB_FAIL(ret)) {

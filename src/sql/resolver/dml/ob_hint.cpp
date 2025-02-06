@@ -846,7 +846,8 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case OPTIMIZER_GROUP_BY_PLACEMENT:
     case ENABLE_SPF_BATCH_RESCAN:
     case NLJ_BATCHING_ENABLED:
-    case ENABLE_PX_ORDERED_COORD: {
+    case ENABLE_PX_ORDERED_COORD:
+    case DISABLE_GTT_SESSION_ISOLATION: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;

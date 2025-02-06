@@ -3457,7 +3457,8 @@ int ObTransformPreProcess::transform_for_temporary_table(ObDMLStmt *&stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret));
   } else if (/*false == ctx_->session_info_->is_inner() //内部session不附加条件, 给定的sql已经考虑过了*/
-             ObSQLSessionInfo::USER_SESSION == ctx_->session_info_->get_session_type()) {
+             ObSQLSessionInfo::USER_SESSION == ctx_->session_info_->get_session_type()
+             && !ctx_->disable_gtt_session_isolation_) {
     common::ObArray<TableItem*> table_item_list;
     int64_t num_from_items = stmt->get_from_item_size();
     //1, collect all table item
