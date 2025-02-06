@@ -105,6 +105,16 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
     if (OB_NOT_NULL(ctx->store_ctx_->pre_sorter_)) {
       ctx->store_ctx_->pre_sorter_->stop();
     }
+    if (ctx->is_assigned_memory()) {
+      ObMutexGuard guard(ctx->store_ctx_->get_op_lock());
+      if (ctx->is_assigned_memory()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(ObTableLoadService::recycle_memory(ctx->param_.task_need_sort_, ctx->param_.avail_memory_))) {
+          LOG_WARN("fail to recycle memory", KR(tmp_ret));
+        }
+        ctx->reset_assigned_memory();
+      }
+    }
     is_stopped = ctx->store_ctx_->task_scheduler_->is_stopped() && (0 == ATOMIC_LOAD(&ctx->store_ctx_->px_writer_count_));
   }
 }
