@@ -75,7 +75,7 @@ int ObTableConnectionMgr::init()
   if (OB_FAIL(connection_map_.create(CONN_INFO_MAP_BUCKET_SIZE, bucket_attr, node_attr))) {
     LOG_WARN("fail to create table connection map", K(ret));
   } else {
-    const ObMemAttr attr(MTL_ID(), "TbleConnMgr");
+    const ObMemAttr attr(OB_SERVER_TENANT_ID, "TbleConnMgr");
     if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
       LOG_WARN("fail to init allocator", K(ret));
     }
@@ -135,9 +135,6 @@ int ObTableConnectionMgr::update_table_connection(const rpc::ObRequest *req, int
   if (OB_ISNULL(req)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null request", K(ret));
-  } else if (!common::is_valid_tenant_id(tenant_id)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected invalid tenant id", K(ret), K(tenant_id));
   } else {
     const ObAddr &client_addr = RPC_REQ_OP.get_peer(req);
     if (OB_FAIL(update_table_connection(client_addr, tenant_id, database_id, user_id))) {
