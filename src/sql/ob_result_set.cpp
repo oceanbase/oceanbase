@@ -183,7 +183,7 @@ int ObResultSet::open_result()
       }
     } else if (OB_FAIL(drive_dml_query())) {
       LOG_WARN("fail to drive dml query", K(ret));
-    } else if (stmt::T_INSERT == get_stmt_type()) {
+    } else {
       ObPhysicalPlanCtx *plan_ctx = NULL;
       if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
         ret = OB_ERR_UNEXPECTED;
@@ -581,16 +581,13 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
                                                                            ctx.get_physical_plan_ctx()->get_last_refresh_scns())))) {
     LOG_WARN("fail to set last_refresh_scns", K(ret), K(physical_plan_->get_mview_ids()));
   } else {
-    // for insert /*+ append */ into select clause
-    if (stmt::T_INSERT == get_stmt_type()) {
-      ObPhysicalPlanCtx *plan_ctx = NULL;
-      if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("physical plan ctx is null");
-      } else if (plan_ctx->get_is_direct_insert_plan()) {
-        if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
-          LOG_WARN("fail to start direct insert", KR(ret));
-        }
+    ObPhysicalPlanCtx *plan_ctx = NULL;
+    if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("physical plan ctx is null");
+    } else if (plan_ctx->get_is_direct_insert_plan()) {
+      if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
+        LOG_WARN("fail to start direct insert", KR(ret));
       }
     }
     /* 将exec_result_设置到executor的运行时环境中，用于返回数据 */
@@ -856,7 +853,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 
     ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), get_stmt_type(), *get_physical_plan());
     // Finishing direct-insert must be executed after ObPxTargetMgr::release_target()
-    if (stmt::T_INSERT == get_stmt_type() && plan_ctx->get_is_direct_insert_plan()) {
+    if (plan_ctx->get_is_direct_insert_plan()) {
       // for insert /*+ append */ into select clause
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(ObTableDirectInsertService::finish_direct_insert(
