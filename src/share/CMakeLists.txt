@@ -1,4 +1,42 @@
-ob_set_subtarget(ob_share ALONE
+ob_set_subtarget(ob_share_extra ALONE
+  vector/ob_vector_base.cpp
+  vector/vector_basic_op.cpp
+  vector/ob_fixed_length_vector.cpp
+  vector/ob_continuous_vector.cpp
+  vector/ob_discrete_vector.cpp
+  vector/ob_uniform_vector.cpp
+  vector/ob_uniform_base.cpp
+  vector/ob_fixed_length_base.cpp
+  vector/ob_discrete_base.cpp
+  vector/ob_continuous_base.cpp
+  vector/expr_cmp_func.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_0.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_1.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_2.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_3.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_4.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_5.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_6.cpp
+  vector/expr_cmp_func_parts/expr_cmp_func_part_7.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_0.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_1.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_2.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_3.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_4.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_5.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_6.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_7.cpp
+  datum/ob_datum_funcs_compilation/ob_datum_funcs_all.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_0.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_1.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_2.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_3.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_4.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_5.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_6.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_7.cpp
+  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_all.cpp
+  datum/ob_datum_funcs.cpp
   aggregate/approx_count_distinct.cpp
   aggregate/count.cpp
   aggregate/iaggregate.cpp
@@ -12,41 +50,14 @@ ob_set_subtarget(ob_share ALONE
   aggregate/sys_bit.cpp
   aggregate/aggr_extra.cpp
   aggregate/rb_build_agg.cpp
-  datum/ob_datum_funcs.cpp
+  aggregate/approx_count_distinct_synopsis.cpp
+)
+
+ob_set_subtarget(ob_share ALONE
   ob_rpc_struct.cpp
   ob_tenant_mgr.cpp
   parameter/ob_parameter_attr.cpp
   schema/ob_schema_service_sql_impl.cpp
-  vector/expr_cmp_func.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_0.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_1.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_2.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_3.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_4.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_5.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_6.cpp
-  vector/expr_cmp_func_parts/expr_cmp_func_part_7.cpp
-  aggregate/approx_count_distinct_synopsis.cpp
-
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_0.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_1.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_2.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_3.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_4.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_5.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_6.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_7.cpp
-  datum/ob_datum_funcs_compilation/ob_datum_funcs_all.cpp
-
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_0.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_1.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_2.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_3.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_4.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_5.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_6.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_7.cpp
-  datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_all.cpp
   ob_srv_rpc_proxy.cpp
   ob_common_rpc_proxy.cpp
 )
@@ -641,19 +652,6 @@ ob_set_subtarget(ob_share object_storage
   object_storage/ob_object_storage_struct.cpp
 )
 
-ob_set_subtarget(ob_share vector
-  vector/ob_vector_base.cpp
-  vector/vector_basic_op.cpp
-  vector/ob_fixed_length_vector.cpp
-  vector/ob_continuous_vector.cpp
-  vector/ob_discrete_vector.cpp
-  vector/ob_uniform_vector.cpp
-  vector/ob_uniform_base.cpp
-  vector/ob_fixed_length_base.cpp
-  vector/ob_discrete_base.cpp
-  vector/ob_continuous_base.cpp
-)
-
 ob_set_subtarget(ob_share vector_index
   vector_index/ob_plugin_vector_index_adaptor.cpp
   vector_index/ob_plugin_vector_index_util.cpp
@@ -681,14 +679,17 @@ ob_set_subtarget(ob_share domain_id
 )
 
 ob_add_new_object_target(ob_share ob_share)
+ob_add_new_object_target(ob_share_extra ob_share_extra)
 
 target_compile_options(ob_share PRIVATE)
 #target_compile_options(ob_share PRIVATE -Wshorten-64-to-32)
 target_link_libraries(ob_share PUBLIC ob_base)
+target_compile_options(ob_share_extra PRIVATE)
+target_link_libraries(ob_share_extra PUBLIC ob_base_without_pass)
 
 add_library(ob_share_static
   STATIC
   EXCLUDE_FROM_ALL)
 
 target_link_libraries(ob_share_static
-  PUBLIC ob_share)
+  PUBLIC ob_share ob_share_extra)

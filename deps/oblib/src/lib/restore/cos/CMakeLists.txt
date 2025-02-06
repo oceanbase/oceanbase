@@ -10,7 +10,7 @@ target_include_directories(cos_wrapper
   ${DEP_DIR}/include/cos_c_sdk
   ${DEP_DIR}/include/mxml
 )
-target_link_libraries(cos_wrapper PUBLIC oblib_base_base)
+target_link_libraries(cos_wrapper PUBLIC oblib_base)
 
 # we need to get all .o files from cos-c-sdk rpm and mixed them into one .o file
 add_custom_command(

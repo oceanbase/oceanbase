@@ -58,7 +58,7 @@ target_link_libraries(s3
   libaws-checksums.a
   libaws-c-common.a
 )
-target_link_libraries(s3 PUBLIC oblib_base_base_base)
+target_link_libraries(s3 PUBLIC oblib_base_without_pass)
 
 target_link_libraries(restore PUBLIC oss cos_sdk oblib_base s3)
 

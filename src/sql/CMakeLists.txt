@@ -848,7 +848,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_to_pinyin.cpp
 )
 
-ob_set_subtarget(ob_sql ALONE
+ob_set_subtarget(ob_sql_extra ALONE
   engine/expr/ob_datum_cast.cpp
   engine/expr/ob_expr_cmp_func.cpp
   engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part0.cpp
@@ -1518,6 +1518,7 @@ if(CPP_STANDARD_20)
   add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 endif()
 ob_add_new_object_target(ob_sql ob_sql)
+ob_add_new_object_target(ob_sql_extra ob_sql_extra)
 
 ob_set_subtarget(ob_sql_simd common
   engine/basic/ob_pushdown_filter_simd.cpp
@@ -1535,6 +1536,7 @@ if (${ARCHITECTURE} STREQUAL "x86_64")
 endif()
 
 target_link_libraries(ob_sql PUBLIC ob_base)
+target_link_libraries(ob_sql_extra PUBLIC ob_base_without_pass)
 
 add_library(ob_sql_static
   STATIC
@@ -1542,11 +1544,11 @@ add_library(ob_sql_static
 
 if(OB_BUILD_OPENSOURCE)
 target_link_libraries(ob_sql_static
-  PUBLIC ob_sql
+  PUBLIC ob_sql ob_sql_extra
   ob_sql_server_parser_static)
 else()
 target_link_libraries(ob_sql_static
-  PUBLIC ob_sql
+  PUBLIC ob_sql ob_sql_extra
   ob_sql_server_parser_static
   ${DEP_DIR}/lib64/libprotobuf-v371.a
   ${DEP_DIR}/lib64/libzstd.a
