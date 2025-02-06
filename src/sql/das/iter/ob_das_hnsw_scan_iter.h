@@ -191,6 +191,7 @@ private:
                          ObVectorQueryAdaptorResultContext& ada_ctx,
                          ObPluginVectorIndexAdaptor &adaptor);
   int next_state(ObVidAdaLookupStatus& cur_state, ObVectorQueryAdaptorResultContext& ada_ctx);
+  int get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search);
   int set_vector_query_condition(ObVectorQueryConditions &query_cond);
   int prepare_complete_vector_data(ObVectorQueryAdaptorResultContext& ada_ctx);
 

@@ -57,19 +57,23 @@ int ObDasVecScanUtils::get_distance_expr_type(ObExpr &expr,
 {
   int ret = OB_SUCCESS;
 
-  if (3 == expr.arg_cnt_) {
-    ObDatum *datum = NULL;
-    if (OB_FAIL(expr.args_[2]->eval(ctx, datum))) {
-      LOG_WARN("eval failed", K(ret));
-    } else if (OB_ISNULL(datum)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arg", K(ret), K(expr));
-    } else if (datum->is_null()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arg", K(ret), K(*datum));
-    } else {
-      dis_type = static_cast<ObExprVectorDistance::ObVecDisType>(datum->get_int());
-    }
+  switch (expr.type_) {
+    case T_FUN_SYS_L2_DISTANCE:
+      dis_type = ObExprVectorDistance::ObVecDisType::EUCLIDEAN;
+      break;
+    case T_FUN_SYS_INNER_PRODUCT:
+      dis_type = ObExprVectorDistance::ObVecDisType::DOT;
+      break;
+    case T_FUN_SYS_NEGATIVE_INNER_PRODUCT:
+      dis_type = ObExprVectorDistance::ObVecDisType::DOT;
+      break;
+    case T_FUN_SYS_COSINE_DISTANCE:
+      dis_type = ObExprVectorDistance::ObVecDisType::COSINE;
+      break;
+    default:
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support vector sort expr", K(ret), K(expr.type_));
+      break;
   }
 
   if (OB_SUCC(ret) && ObExprVectorDistance::distance_funcs[dis_type] == nullptr) {

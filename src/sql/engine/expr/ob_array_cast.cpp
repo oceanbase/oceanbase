@@ -590,10 +590,9 @@ int ObArrayCastUtils::string_cast_vector(common::ObIAllocator &alloc, ObString &
 
     if (ptr >= end) {
     } else if (!is_vector_start(*ptr)) {
-      ret = OB_ERR_INVALID_JSON_TEXT;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("failed to parse array text, No begin char found", K(ret), K(arr_text), K(ptr - begin));
     } else {
-
       ++ptr;
       skip_whitespace(ptr, end);
 
@@ -609,7 +608,7 @@ int ObArrayCastUtils::string_cast_vector(common::ObIAllocator &alloc, ObString &
         if (OB_UNLIKELY(parse_ret.ec != std::errc())) {
           if (is_null_string_start(*ptr)) {
             if (!is_null_const_string(ptr, end)) {
-              ret = OB_ERR_INVALID_JSON_TEXT;
+              ret = OB_INVALID_ARGUMENT;
               LOG_WARN("failed to parse array", K(ret), K(arr_text), K(ptr - begin));
             } else {
               ptr += NULL_STR_LEN;
@@ -618,7 +617,7 @@ int ObArrayCastUtils::string_cast_vector(common::ObIAllocator &alloc, ObString &
               }
             }
           } else {
-            ret = OB_ERR_INVALID_JSON_TEXT;
+            ret = OB_INVALID_ARGUMENT;
             LOG_WARN("failed to parse array", K(ret), K(arr_text), K(ptr - begin));
           }
         } else {
@@ -653,11 +652,11 @@ int ObArrayCastUtils::string_cast_vector(common::ObIAllocator &alloc, ObString &
         if (is_end_char) {
           skip_whitespace(ptr, end);
           if (ptr < end && *ptr != 0) {
-            ret = OB_ERR_INVALID_JSON_TEXT;
+            ret = OB_INVALID_ARGUMENT;
             LOG_WARN("failed to parse array", K(ret), K(arr_text), K(ptr - begin));
           }
         } else {
-          ret = OB_ERR_INVALID_JSON_TEXT;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("failed to parse array", K(ret), K(arr_text), K(ptr - begin));
         }
       }

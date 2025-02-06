@@ -116,7 +116,7 @@ public:
         vec_aux_rtdef_(nullptr),
         saved_rowkeys_itr_(nullptr)
   {
-    dis_type_ = ObExprVectorDistance::ObVecDisType::EUCLIDEAN;
+    dis_type_ = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
     saved_rowkeys_.set_attr(ObMemAttr(MTL_ID(), "VecIdxKeyRanges"));
     pre_fileter_rowkeys_.set_attr(ObMemAttr(MTL_ID(), "VecIdxKeyRanges"));
   }

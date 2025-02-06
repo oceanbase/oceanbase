@@ -455,7 +455,7 @@ int ObDASHNSWScanIter::process_adaptor_state_brute_force(ObIAllocator &allocator
     LOG_WARN("failed to get real search vec", K(ret));
   }
 
-  ObExprVectorDistance::ObVecDisType dis_type = ObExprVectorDistance::ObVecDisType::EUCLIDEAN; // default metric;
+  ObExprVectorDistance::ObVecDisType dis_type = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
   if (OB_SUCC(ret) && ObDasVecScanUtils::get_distance_expr_type(*sort_ctdef_->sort_exprs_[0], *sort_rtdef_->eval_ctx_, dis_type)) {
     LOG_WARN("failed to get distance type.", K(ret));
   }
@@ -485,6 +485,7 @@ int ObDASHNSWScanIter::process_adaptor_state_brute_force(ObIAllocator &allocator
         if (OB_FAIL(ObExprVectorDistance::distance_funcs[dis_type](data_l, data_r, dim_, distance))) {
           LOG_WARN("failed to get distance type", K(ret));
         } else {
+          distance = sort_ctdef_->sort_exprs_[0]->type_ == T_FUN_SYS_NEGATIVE_INNER_PRODUCT ? -1 * distance : distance;
           max_heap.push(saved_rowkeys_[i], distance);
         }
       }
@@ -495,6 +496,11 @@ int ObDASHNSWScanIter::process_adaptor_state_brute_force(ObIAllocator &allocator
     }
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (max_heap.get_size() == 0) {
+    ret = OB_ITER_END;
+  }
+
   uint64_t vid_count = max_heap.get_size();
   int64_t *vids = nullptr;
   float *distances = nullptr;
@@ -502,12 +508,11 @@ int ObDASHNSWScanIter::process_adaptor_state_brute_force(ObIAllocator &allocator
     // get vid by top k rowkey from rowkey-vid table.
     if (OB_ISNULL(vids = static_cast<int64_t *>(vec_op_alloc_.alloc(sizeof(int64_t) * vid_count)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocator vids", K(ret));
+      LOG_WARN("failed to allocator vids", K(ret), K(vid_count));
     } else if (OB_ISNULL(distances = static_cast<float *>(vec_op_alloc_.alloc(sizeof(float) * vid_count)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocator vids", K(ret));
+      LOG_WARN("failed to allocator distances", K(ret), K(vid_count));
     } else {
-
       for (int64_t i = 0; OB_SUCC(ret) && i < vid_count; ++i) {
         ObRowkey *rowkey;
         int64_t vid = 0;
@@ -857,6 +862,22 @@ int ObDASHNSWScanIter::next_state(ObVidAdaLookupStatus& cur_state, ObVectorQuery
   return ret;
 }
 
+int ObDASHNSWScanIter::get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t OB_HNSW_EF_SEARCH_DEFAULT = 40;
+
+  ObSQLSessionInfo *session = nullptr;
+  if (OB_ISNULL(session = exec_ctx_->get_my_session())) {
+    ob_hnsw_ef_search = OB_HNSW_EF_SEARCH_DEFAULT;
+    LOG_WARN("session is null", K(ret), KP(exec_ctx_));
+  } else if (OB_FAIL(session->get_ob_hnsw_ef_search(ob_hnsw_ef_search))) {
+    LOG_WARN("failed to get ob hnsw ef search", K(ret));
+  }
+
+  return ret;
+}
+
 int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query_cond)
 {
   int ret = OB_SUCCESS;
@@ -867,13 +888,10 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
     query_cond.query_order_ = true;
     query_cond.row_iter_ = snapshot_iter_->get_output_result_iter();
     query_cond.query_scn_ = snapshot_scan_param_.snapshot_.core_.version_;
-    ObSQLSessionInfo *session = nullptr;
+
     uint64_t ob_hnsw_ef_search = 0;
-    if (OB_ISNULL(session = sort_rtdef_->eval_ctx_->exec_ctx_.get_my_session())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get session", K(ret), KPC(session));
-    } else if (OB_FAIL(session->get_ob_hnsw_ef_search(ob_hnsw_ef_search))) {
-      LOG_WARN("failed to get ob hnsw ef search", K(ret));
+    if (OB_FAIL(get_ob_hnsw_ef_search(ob_hnsw_ef_search))) {
+      LOG_WARN("failed to get ob hnsw ef search", K(ret), K(ob_hnsw_ef_search));
     } else if (OB_FALSE_IT(query_cond.ef_search_ = ob_hnsw_ef_search)) {
     } else {
       uint64_t real_limit = limit_param_.limit_ + limit_param_.offset_;
