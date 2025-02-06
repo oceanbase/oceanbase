@@ -50,7 +50,7 @@ public:
                                       bool is_new_extra_info,
                                       bool need_sync_sys_var = true);
   static int sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObString &sess_infos);
-  static int add_session_info_on_connect(obmysql::OMPKOK &okp, sql::ObSQLSessionInfo &session);
+  static int add_session_info_on_connect(obmysql::OMPKOK &okp, sql::ObSQLSessionInfo &session, bool is_on_connect);
   static int add_min_cluster_version(obmysql::OMPKOK &okp, sql::ObSQLSessionInfo &session);
   static int add_client_feedback(obmysql::OMPKOK &ok_pkt, sql::ObSQLSessionInfo &session);
   static int add_client_reroute_info(obmysql::OMPKOK &pk_pkt,

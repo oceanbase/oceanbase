@@ -564,7 +564,7 @@ int ObMPUtils::add_nls_format(OMPKOK &okp, sql::ObSQLSessionInfo &session, const
   return ret;
 }
 
-int ObMPUtils::add_session_info_on_connect(OMPKOK &okp, sql::ObSQLSessionInfo &session)
+int ObMPUtils::add_session_info_on_connect(OMPKOK &okp, sql::ObSQLSessionInfo &session, bool is_on_connect)
 {
   int ret = OB_SUCCESS;
   // treat it as state changed
@@ -576,12 +576,14 @@ int ObMPUtils::add_session_info_on_connect(OMPKOK &okp, sql::ObSQLSessionInfo &s
     okp.set_changed_schema(db_name);
   }
 
-  // update_global_vars_version_ to global_vars_last_modified_time
-  ObObj value;
-  value.set_int(session.get_global_vars_version());
-  int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = session.update_sys_variable(share::SYS_VAR_OB_PROXY_GLOBAL_VARIABLES_VERSION, value))) {
-    LOG_WARN("failed to update global variables version, we will go on anyway", K(session), K(tmp_ret));
+  if (!is_on_connect) {
+    // update_global_vars_version_ to global_vars_last_modified_time
+    ObObj value;
+    value.set_int(session.get_global_vars_version());
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = session.update_sys_variable(share::SYS_VAR_OB_PROXY_GLOBAL_VARIABLES_VERSION, value))) {
+      LOG_WARN("failed to update global variables version, we will go on anyway", K(session), K(tmp_ret));
+    }
   }
 
   // add all sys variables

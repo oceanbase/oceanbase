@@ -1058,20 +1058,30 @@ int TriggerHandle::calc_one_system_trigger(ObSQLSessionInfo &session,
     ctx.retry_times_ = 0;
     ctx.is_prepare_protocol_ = false;
     ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
-    SMART_VAR(ObExecContext, exec_ctx, allocator) {
-      exec_ctx.set_my_session(&session);
-      exec_ctx.set_sql_ctx(&ctx);
-      LinkExecCtxGuard link_guard(session, exec_ctx);
-      sql::ObPhysicalPlanCtx phy_plan_ctx(exec_ctx.get_allocator());
-      exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
-      ParamStore params;
-      ObObj result;
-      bool need_fire_body = true;
-      if (trigger_info->has_when_condition()) {
-        OZ (calc_when_condition(exec_ctx, trigger_info->get_trigger_id(), need_fire_body));
+    bool old_autocommit = session.get_local_autocommit();
+    if (OB_FAIL(session.set_autocommit(true))) {
+      LOG_WARN("set autocommit failed", K(ret));
+    } else {
+      SMART_VAR(ObExecContext, exec_ctx, allocator) {
+        exec_ctx.set_my_session(&session);
+        exec_ctx.set_sql_ctx(&ctx);
+        LinkExecCtxGuard link_guard(session, exec_ctx);
+        sql::ObPhysicalPlanCtx phy_plan_ctx(exec_ctx.get_allocator());
+        exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
+        ParamStore params;
+        ObObj result;
+        bool need_fire_body = true;
+        if (trigger_info->has_when_condition()) {
+          OZ (calc_when_condition(exec_ctx, trigger_info->get_trigger_id(), need_fire_body));
+        }
+        if (OB_SUCC(ret) && need_fire_body) {
+          OZ (calc_system_body(exec_ctx, trigger_info->get_trigger_id()));
+        }
       }
-      if (OB_SUCC(ret) && need_fire_body) {
-        OZ (calc_system_body(exec_ctx, trigger_info->get_trigger_id()));
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = session.set_autocommit(old_autocommit);
+      if (tmp_ret != OB_SUCCESS) {
+        LOG_ERROR("restore autocommit value failed", K(tmp_ret), K(ret));
       }
     }
   }

@@ -705,7 +705,7 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
             LOG_WARN("fail to add all session system variables", K(ret));
           }
         } else {
-          if (OB_FAIL(ObMPUtils::add_session_info_on_connect(okp, session))) {
+          if (OB_FAIL(ObMPUtils::add_session_info_on_connect(okp, session, ok_param.is_on_connect_))) {
             LOG_WARN("fail to add all session system variables", K(ret));
           } else if (ok_param.is_on_connect_
                      && OB_FAIL(ObMPUtils::add_min_cluster_version(okp, session))) {
@@ -748,7 +748,7 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
       // use to compatible with older OCJ(< 2.0.9)
       if (ok_param.is_on_connect_ && conn_->is_java_client_ && conn_->proxy_cap_flags_.is_cap_used()) {
         okp.set_track_session_cap(true);
-        if (OB_FAIL(ObMPUtils::add_session_info_on_connect(okp, session))) {
+        if (OB_FAIL(ObMPUtils::add_session_info_on_connect(okp, session, ok_param.is_on_connect_))) {
           LOG_WARN("fail to add all session system variables", K(ret));
         } else {
           need_track_session_info = true;
