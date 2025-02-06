@@ -2661,13 +2661,20 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             LOG_WARN("unexpected child num", K(option_node->num_child_));
           } else {
             ObString url = ObString(string_node->str_len_, string_node->str_value_).trim_space_only();
-
+            uint64_t data_version = 0;
+            if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+              LOG_WARN("failed to get data version", K(ret));
+            } else if (OB_LIKELY(url.prefix_match(OB_HDFS_PREFIX)) && data_version < DATA_VERSION_4_3_5_1) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("failed to support hdfs feature when data version is lower", K(ret), K(data_version));
+            }
             ObBackupStorageInfo storage_info;
             char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
 
             ObString path = url.split_on('?');
-
-            if (path.empty()) {
+            if (OB_FAIL(ret)) {
+              /* do nothing */
+            } else if (path.empty()) {
               // url like: oss://ak:sk@host/bucket/...
               ObSqlString tmp_location;
               ObSqlString prefix;
@@ -2675,8 +2682,11 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               OZ (tmp_location.append(prefix.string()));
               url = url.trim_space_only();
 
-              if (OB_STORAGE_FILE != storage_info.device_type_) {
-                OZ (ObSQLUtils::split_remote_object_storage_url(url, storage_info));
+              if (OB_STORAGE_FILE != storage_info.device_type_ &&
+                  OB_STORAGE_HDFS !=
+                      storage_info.device_type_ /* hdfs with simple auth*/) {
+                OZ(ObSQLUtils::split_remote_object_storage_url(url,
+                                                               storage_info));
               }
               OZ (tmp_location.append(url));
               OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)));
@@ -2684,6 +2694,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               OZ (arg.schema_.set_external_file_location_access_info(storage_info_buf));
             } else {
               // url like: oss://bucket/...?host=xxxx&access_id=xxx&access_key=xxx
+              // or like: hdfs://namenode:port/...?krb5conf=xxx&pricipal=xxx&keytab=xxx&otherkey=othervalue
               ObString uri_cstr;
               ObString storage_info_cstr;
               OZ (ob_write_string(*params_.allocator_, path, uri_cstr, true));

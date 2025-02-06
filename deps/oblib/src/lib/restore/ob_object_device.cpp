@@ -731,10 +731,27 @@ int ObObjectDevice::inner_stat_(const char *pathname,
   int ret = OB_SUCCESS;
   int64_t length = 0;
   common::ObString uri(pathname);
-  if (OB_FAIL(util_.get_file_length(uri, is_adaptive, length))) {
-    OB_LOG(WARN, "fail to get file length!", K(ret), K(uri), K(is_adaptive));
+  if (uri.prefix_match(OB_HDFS_PREFIX)) {
+    bool is_directory = false;
+    // stat should check the file whether is dir or not
+    if (OB_FAIL(util_.is_directory(uri, is_adaptive, is_directory))) {
+      OB_LOG(WARN, "fail to get file type!", K(ret), K(uri), K(is_adaptive));
+    } else if (OB_UNLIKELY(is_directory)) {
+      // If uri is directory, its size is 0.
+      statbuf.size_ = 0;
+      statbuf.mode_ = __S_IFDIR;
+    } else if (OB_FAIL(util_.get_file_length(uri, is_adaptive, length))) {
+      OB_LOG(WARN, "fail to get file length!", K(ret), K(uri), K(is_adaptive));
+    } else {
+      statbuf.size_ = length;
+      statbuf.mode_ = __S_IFREG;
+    }
   } else {
-    statbuf.size_ = length;
+    if (OB_FAIL(util_.get_file_length(uri, is_adaptive, length))) {
+      OB_LOG(WARN, "fail to get file length!", K(ret), K(uri), K(is_adaptive));
+    } else {
+      statbuf.size_ = length;
+    }
   }
   return ret;
 }

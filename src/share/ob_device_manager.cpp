@@ -247,6 +247,10 @@ int parse_storage_info(common::ObString storage_type_prefix, ObIODevice*& device
     device_type = OB_STORAGE_S3;
     mem = allocator.alloc(sizeof(ObObjectDevice));
     if (NULL != mem) {new(mem)ObObjectDevice;}
+  } else if (storage_type_prefix.prefix_match(OB_HDFS_PREFIX)) {
+    device_type = OB_STORAGE_HDFS;
+    mem = allocator.alloc(sizeof(ObObjectDevice));
+    if (NULL != mem) {new(mem)ObObjectDevice;}
   } else {
     ret = OB_INVALID_BACKUP_DEST;
     OB_LOG(WARN, "invaild device name info!", K(storage_type_prefix));
@@ -617,7 +621,8 @@ int ObDeviceManager::get_device_key_(
     }
   } else if (storage_type_prefix.prefix_match(OB_OSS_PREFIX)
              || storage_type_prefix.prefix_match(OB_COS_PREFIX)
-             || storage_type_prefix.prefix_match(OB_S3_PREFIX)) {
+             || storage_type_prefix.prefix_match(OB_S3_PREFIX)
+             || storage_type_prefix.prefix_match(OB_HDFS_PREFIX)) {
     const int64_t storage_info_key_len = storage_info.get_device_map_key_len();
     char storage_info_key_str[storage_info_key_len];
     storage_info_key_str[0] = '\0';

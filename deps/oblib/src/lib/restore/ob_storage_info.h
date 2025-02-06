@@ -30,6 +30,7 @@ namespace common
 {
 
 const int64_t OB_MAX_BACKUP_EXTENSION_LENGTH = 512;
+const int64_t OB_MAX_HDFS_BACKUP_EXTENSION_LENGTH = 1536;
 const int64_t OB_MAX_BACKUP_ENDPOINT_LENGTH = 256;
 const int64_t OB_MAX_BACKUP_ACCESSID_LENGTH = 256;
 const int64_t OB_MAX_BACKUP_ACCESSKEY_LENGTH = 256;
@@ -42,6 +43,10 @@ const int64_t OB_MAX_BACKUP_SERIALIZEKEY_LENGTH = OB_MAX_BACKUP_ENCRYPTKEY_LENGT
 static constexpr int64_t OB_MAX_ROLE_ARN_LENGTH = 256;
 // The limit on the maximum length of external_id in obs/cos/oss/s3 is 128
 static constexpr int64_t OB_MAX_EXTERNAL_ID_LENGTH = 128;
+// The limit on the maximum length of single config in hdfs is 128
+static constexpr int64_t OB_MAX_HDFS_SINGLE_CONF_LENGTH = 128;
+// The limit on the maximum length of other configs in hdfs is 1024
+static constexpr int64_t OB_MAX_HDFS_CONFS_LENGTH = 1024;
 static constexpr int64_t OB_MAX_ASSUME_ROLE_JSON_DATA_LENGTH = 1024;
 // STS_AK and STS_SK are used to connect to STS service of OCP.
 // We have agreed with ocp that the maximum length of sts_sk/sts_ak is 32.
@@ -92,6 +97,12 @@ const char *const S3_ROLE_ARN_PREFIX = "arn";
 const char *const COS_ROLE_ARN_PREFIX = "qcs";
 const char *const STS_ACTION = "GetResourceSTSCredential";
 const char *const STS_RESOURCE_SOURCE = "OBSERVER";
+
+const char *const KRB5CONF = "krb5conf=";
+const char *const PRINCIPAL = "principal=";
+const char *const KEYTAB = "keytab=";
+const char *const TICKET_CACHE_PATH = "ticiket_cache_path=";
+const char *const HDFS_CONFIGS = "configs=";
 
 const char *const OB_DEVICE_CREDENTIAL_ALLOCATOR = "ObjDeviceCredentialAlloc";
 static constexpr int64_t MAX_CREDENTIAL_IDLE_DURATION_US = 24 * 3600 * 1000 * 1000L;  // 24h
@@ -251,6 +262,7 @@ public:
   char access_id_[OB_MAX_BACKUP_ACCESSID_LENGTH];
   char access_key_[OB_MAX_BACKUP_ACCESSKEY_LENGTH];
   char extension_[OB_MAX_BACKUP_EXTENSION_LENGTH];
+  char hdfs_extension_[OB_MAX_HDFS_BACKUP_EXTENSION_LENGTH];
   int64_t max_iops_;
   int64_t max_bandwidth_;
 

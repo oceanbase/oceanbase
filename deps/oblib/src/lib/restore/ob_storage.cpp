@@ -20,7 +20,8 @@ namespace oceanbase
 {
 namespace common
 {
-const char *OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS", "LOCAL", "S3", "LOCAL_CACHE"};
+
+const char *OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS", "LOCAL", "S3", "LOCAL_CACHE", "HDFS"};
 
 void print_access_storage_log(
     const char *msg,
@@ -53,7 +54,8 @@ int validate_uri_type(const common::ObString &uri)
   if (!uri.prefix_match(OB_OSS_PREFIX) &&
       !uri.prefix_match(OB_COS_PREFIX) &&
       !uri.prefix_match(OB_S3_PREFIX) &&
-      !uri.prefix_match(OB_FILE_PREFIX)) {
+      !uri.prefix_match(OB_FILE_PREFIX) &&
+      !uri.prefix_match(OB_HDFS_PREFIX)) {
     ret = OB_INVALID_BACKUP_DEST;
     STORAGE_LOG(ERROR, "invalid backup uri", K(ret), K(uri));
   }
@@ -73,7 +75,9 @@ int get_storage_type_from_path(const common::ObString &uri, ObStorageType &type)
     type = OB_STORAGE_S3;
   } else if (uri.prefix_match(OB_FILE_PREFIX)) {
     type = OB_STORAGE_FILE;
-  } else {
+  } else if (uri.prefix_match(OB_HDFS_PREFIX)) {
+    type = OB_STORAGE_HDFS;
+  }else {
     ret = OB_INVALID_BACKUP_DEST;
     STORAGE_LOG(ERROR, "invalid backup uri", K(ret), K(uri));
   }
@@ -95,7 +99,8 @@ bool is_storage_type_match(const common::ObString &uri, const ObStorageType &typ
   return (OB_STORAGE_OSS == type && uri.prefix_match(OB_OSS_PREFIX))
       || (OB_STORAGE_COS == type && uri.prefix_match(OB_COS_PREFIX))
       || (OB_STORAGE_S3 == type && uri.prefix_match(OB_S3_PREFIX))
-      || (OB_STORAGE_FILE == type && uri.prefix_match(OB_FILE_PREFIX));
+      || (OB_STORAGE_FILE == type && uri.prefix_match(OB_FILE_PREFIX))
+      || (OB_STORAGE_HDFS == type && uri.prefix_match(OB_HDFS_PREFIX));
 }
 
 bool is_object_storage_type(const ObStorageType &type)
@@ -499,6 +504,7 @@ ObStorageUtil::ObStorageUtil()
     oss_util_(),
     cos_util_(),
     s3_util_(),
+    hdfs_util_(),
     util_(NULL),
     storage_info_(NULL),
     init_state(false),
@@ -527,6 +533,8 @@ int ObStorageUtil::open(common::ObObjectStorageInfo *storage_info)
     util_ = &s3_util_;
   } else if (OB_STORAGE_FILE == device_type_) {
     util_ = &file_util_;
+  } else if (OB_STORAGE_HDFS == device_type_) {
+    util_ = &hdfs_util_;
   } else {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid device type", K(ret), K_(device_type));
@@ -755,6 +763,32 @@ int ObStorageUtil::is_exist(const common::ObString &uri, const bool is_adaptive,
     OB_LOG(WARN, "fail to detect storage obj type", K(ret), K(uri), K(is_adaptive));
   } else {
     exist = obj_meta.is_exist_;
+  }
+
+  return ret;
+}
+
+int ObStorageUtil::is_directory(const common::ObString &uri,
+                                const bool is_adaptive, bool &is_directory)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  is_directory = false;
+  ObStorageObjectMeta obj_meta;
+  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
+
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (OB_UNLIKELY(!is_storage_type_match(uri, device_type_))) {
+    ret = OB_INVALID_BACKUP_DEST;
+    STORAGE_LOG(WARN, "uri prefix does not match the expected device type",
+        K(ret), K(uri), K_(device_type));
+  } else if (OB_FAIL(detect_storage_obj_meta(
+                 uri, is_adaptive, false /*need_fragment_meta*/, obj_meta))) {
+    OB_LOG(WARN, "fail to detect storage obj type", K(ret), K(uri),
+           K(is_adaptive));
+  } else {
+    is_directory = obj_meta.is_dir_type();
   }
 
   return ret;
@@ -1946,6 +1980,8 @@ int ObStorageReader::open(const common::ObString &uri,
     reader_ = &s3_reader_;
   } else if (OB_STORAGE_FILE == type) {
     reader_ = &file_reader_;
+  } else if (OB_STORAGE_HDFS == type) {
+    reader_ = &hdfs_reader_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -2048,6 +2084,7 @@ ObStorageAdaptiveReader::ObStorageAdaptiveReader()
       oss_reader_(),
       cos_reader_(),
       s3_reader_(),
+      hdfs_reader_(),
       start_ts_(0),
       storage_info_(NULL)
 {
@@ -2089,6 +2126,8 @@ static int alloc_reader(ObIAllocator &allocator, const ObStorageType &type, ObIS
     ret = alloc_reader_type<ObStorageS3Reader>(allocator, reader);
   } else if (OB_STORAGE_FILE == type) {
     ret = alloc_reader_type<ObStorageFileReader>(allocator, reader);
+  } else if (OB_STORAGE_HDFS == type) {
+    ret = alloc_reader_type<ObStorageHdfsReader>(allocator, reader);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
@@ -2138,6 +2177,8 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
     reader_ = &s3_reader_;
   } else if (OB_STORAGE_FILE == type) {
     reader_ = &file_reader_;
+  } else if (OB_STORAGE_HDFS == type) {
+    reader_ = &hdfs_reader_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));

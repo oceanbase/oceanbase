@@ -17,6 +17,7 @@
 #include "ob_storage_oss_base.h"
 #include "ob_storage_cos_base.h"
 #include "ob_storage_s3_base.h"
+#include "hdfs/ob_storage_hdfs_jni_base.h"
 #include "common/storage/ob_io_device.h"
 
 namespace oceanbase
@@ -226,6 +227,7 @@ public:
 
   ////////////////////// READY //// TO //// DROP ///// BELOW ////////////////////////////////
   int is_exist(const common::ObString &uri, bool &exist);
+  int is_directory(const common::ObString &uri, const bool is_adaptive, bool &is_directory);
   int get_file_length(const common::ObString &uri, int64_t &file_length);
   int del_file(const common::ObString &uri);
   int list_files(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op);
@@ -359,6 +361,7 @@ private:
   ObStorageOssUtil oss_util_;
   ObStorageCosUtil cos_util_;
   ObStorageS3Util s3_util_;
+  ObStorageHdfsJniUtil hdfs_util_;
   ObIStorageUtil* util_;
   common::ObObjectStorageInfo* storage_info_;
   bool init_state;
@@ -431,6 +434,7 @@ protected:
   ObStorageOssReader oss_reader_;
   ObStorageCosReader cos_reader_;
   ObStorageS3Reader s3_reader_;
+  ObStorageHdfsReader hdfs_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   bool has_meta_;
@@ -461,6 +465,7 @@ private:
   ObStorageOssReader oss_reader_;
   ObStorageCosReader cos_reader_;
   ObStorageS3Reader s3_reader_;
+  ObStorageHdfsReader hdfs_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   ObObjectStorageInfo *storage_info_;

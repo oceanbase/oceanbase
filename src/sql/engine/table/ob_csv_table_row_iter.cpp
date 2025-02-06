@@ -169,6 +169,12 @@ int ObCSVTableRowIterator::open_next_file()
     int64_t start_line = 0;
     int64_t end_line = 0;
     int64_t task_idx = state_.file_idx_++;
+    if (state_.file_idx_ == 1) {
+      // Skip to handle first file
+    } else {
+      LOG_TRACE("print lastest csv file state infos", K(ret), K(state_));
+      state_.duration_ = 0;
+    }
 
     file_size = 0;
     url_.reuse();
@@ -203,6 +209,7 @@ int ObCSVTableRowIterator::open_next_file()
                                         file_url.length(), file_url.ptr()));
       // skip empty file and non-exist file
       OZ (file_reader_.get_data_access_driver().get_file_size(url_.string(), file_size));
+      state_.cur_file_size_ = file_size;
       if (OB_SUCC(ret) && file_reader_.get_storage_type() == OB_STORAGE_FILE) {
         ObSqlString full_name;
         if (state_.ip_port_len_ == 0) {
@@ -260,7 +267,9 @@ int ObCSVTableRowIterator::load_next_buf()
       // time we read the original file data and decompress it, we get
       // 0 bytes, and the second time we read it to know that we have
       // reached the end of the file.
+      int64_t start_read_time = ObTimeUtility::current_time();
       OZ (file_reader_.read(next_load_pos, next_buf_len, read_size));
+      state_.duration_ += ObTimeUtility::current_time() - start_read_time;
       if (OB_SUCC(ret)) {
         state_.pos_ = state_.buf_;
         state_.data_end_ = next_load_pos + read_size;
@@ -582,7 +591,9 @@ DEF_TO_STRING(ObCSVIteratorState)
        K_(line_count_limit),
        K_(cur_file_name),
        K_(line_count_limit),
-       K_(ip_port_len));
+       K_(ip_port_len),
+       K_(duration),
+       K_(cur_file_size));
   J_OBJ_END();
   return pos;
 }

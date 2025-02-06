@@ -14,6 +14,10 @@ oblib_add_library(restore OBJECT
   ob_storage_path.h
   ob_storage_info.cpp
   ob_storage_info.h
+  hdfs/ob_storage_hdfs_cache.cpp
+  hdfs/ob_storage_hdfs_cache.h
+  hdfs/ob_storage_hdfs_jni_base.cpp
+  hdfs/ob_storage_hdfs_jni_base.h
   cos/ob_cos_wrapper_handle.cpp
   cos/ob_cos_wrapper_handle.h
   cos/ob_singleton.h

@@ -41,7 +41,7 @@ devdeps-hyperscan-5.4.2-242024090219.el7.x86_64.rpm
 devdeps-vsag-1.0.0-482025012317.el7.x86_64.rpm
 devdeps-apache-orc-1.8.8-32025011711.el7.x86_64.rpm
 devdeps-fast-float-6.1.3-42024112122.el7.x86_64.rpm
-devdeps-hdfs-sdk-3.3.6-72024112119.el7.x86_64.rpm
+devdeps-hdfs-sdk-3.3.6-112024123116.el7.x86_64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el7.x86_64.rpm

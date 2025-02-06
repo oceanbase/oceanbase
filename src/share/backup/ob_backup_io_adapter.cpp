@@ -1149,6 +1149,8 @@ int get_real_file_path(const common::ObString &uri, char *buf, const int64_t buf
     prefix = OB_S3_PREFIX;
   } else if (OB_STORAGE_FILE == device_type) {
     prefix = OB_FILE_PREFIX;
+  } else if (OB_STORAGE_HDFS == device_type) {
+    prefix = OB_HDFS_PREFIX;
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid device type!", K(device_type), K(ret), K(uri));
@@ -1244,6 +1246,34 @@ int ObBackupIoAdapter::is_empty_directory(const common::ObString &uri,
     } else {
       OB_LOG(WARN, "fail to scan dir!", KR(ret), K(uri), KPC(storage_info), K(device_guard));
     }
+  }
+  return ret;
+}
+
+int ObBackupIoAdapter::is_directory(
+    const common::ObString &uri, const share::ObBackupStorageInfo *storage_info,
+    bool &is_directory)
+{
+  int ret = OB_SUCCESS;
+  ObIODFileStat statbuf;
+  is_directory = false;
+  DeviceGuard device_guard;
+  if (OB_UNLIKELY(!uri.prefix_match(OB_HDFS_PREFIX))) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "not support device type", KR(ret), K(uri), KPC(storage_info),
+           K(device_guard));
+  } else if (OB_FAIL(device_guard.init(uri, storage_info,
+                                       ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri),
+           KPC(storage_info));
+  } else if (OB_FAIL(device_guard.device_handle_->stat(device_guard.uri_cstr_,
+                                                       statbuf))) {
+    OB_LOG(WARN, "fail to get file stat info!", KR(ret), K(uri),
+           KPC(storage_info), K(device_guard));
+  } else {
+    is_directory = S_ISDIR(statbuf.mode_);
+    OB_LOG(TRACE, "support to check directory", KR(ret), K(uri),
+           KPC(storage_info), K(device_guard), K(is_directory));
   }
   return ret;
 }

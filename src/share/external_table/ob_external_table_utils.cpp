@@ -397,7 +397,7 @@ int ObExternalPathFilter::is_filtered(const ObString &path, bool &is_filtered)
                                                    out_text,
                                                    CS_TYPE_UTF16_BIN,
                                                    temp_allocator_))) {
-    LOG_WARN("convert charset failed", K(ret));
+    LOG_WARN("convert charset failed", K(ret), K(path));
   } else if (OB_FAIL(regex_ctx_.match(temp_allocator_, out_text, CS_TYPE_UTF16_BIN, 0, match))) {
     LOG_WARN("regex match failed", K(ret));
   }

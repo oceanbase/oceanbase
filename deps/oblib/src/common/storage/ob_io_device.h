@@ -506,7 +506,8 @@ public:
     return (ObStorageType::OB_STORAGE_OSS == device_type_)
            || (ObStorageType::OB_STORAGE_COS == device_type_)
            || (ObStorageType::OB_STORAGE_S3 == device_type_)
-           || (ObStorageType::OB_STORAGE_FILE == device_type_);
+           || (ObStorageType::OB_STORAGE_FILE == device_type_)
+           || (ObStorageType::OB_STORAGE_HDFS == device_type_);
   }
 
   OB_INLINE bool is_local_device() const

@@ -278,19 +278,33 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     LOG_WARN("fail to init filter", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, path, path_cstring, true/*c_style*/))) {
     LOG_WARN("fail to copy string", KR(ret), K(path));
-  } else if (get_storage_type() == OB_STORAGE_FILE) {
+  } else if (get_storage_type() == OB_STORAGE_FILE ||
+             get_storage_type() == OB_STORAGE_HDFS) {
     ObSEArray<ObString, 4> file_dirs;
     bool is_dir = false;
-    ObString path_without_prifix;
-    path_without_prifix = path_cstring;
-    path_without_prifix += strlen(OB_FILE_PREFIX);
 
-    OZ (FileDirectoryUtils::is_directory(path_without_prifix.ptr(), is_dir));
-    if (!is_dir) {
-      LOG_WARN("external location is not a directory", K(path_without_prifix));
+    if (get_storage_type() == OB_STORAGE_FILE) {
+      ObString path_without_prifix;
+      path_without_prifix = path_cstring;
+      path_without_prifix += strlen(OB_FILE_PREFIX);
+
+      OZ(FileDirectoryUtils::is_directory(path_without_prifix.ptr(), is_dir));
+      if (!is_dir) {
+        LOG_INFO("external location is not a directory",
+                 K(path_without_prifix));
+      } else {
+        OZ(file_dirs.push_back(path_cstring));
+      }
     } else {
-      OZ (file_dirs.push_back(path_cstring));
+      // OB_STORAGE_HDFS
+      OZ(ObBackupIoAdapter::is_directory(path_cstring, &access_info_, is_dir));
+      if (!is_dir) {
+        LOG_INFO("external location is not a directory", K(path_cstring));
+      } else {
+        OZ(file_dirs.push_back(path_cstring));
+      }
     }
+
     ObArray<int64_t> useless_size;
     for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
       ObString file_dir = file_dirs.at(i);
