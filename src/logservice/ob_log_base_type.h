@@ -171,6 +171,9 @@ enum ObLogBaseType
   // for tenant disaster recovery
   DISASTER_RECOVERY_SERVICE_LOG_BASE_TYPE = 53,
 
+  // for new DDL service
+  SYS_DDL_SERVICE_LOG_BASE_TYPE = 54,
+
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
@@ -301,6 +304,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"SYS_DDL_SCHEDULER", str_len);
   } else if (log_type == DISASTER_RECOVERY_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"DISASTER_RECOVERY_SERVICE", str_len);
+  } else if (log_type == SYS_DDL_SERVICE_LOG_BASE_TYPE) {
+    strncpy(str ,"SYS_DDL_SERVICE", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
