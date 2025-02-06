@@ -148,7 +148,11 @@ int ObLLVMType::get_pointee_type(ObLLVMType &result)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not a pointer", K(ret), K(get_id()), K(lbt()));
   } else {
+#ifndef CPP_STANDARD_20
     result.set_v(get_v()->getPointerElementType());
+#else
+    result.set_v(get_v()->getNonOpaquePointerElementType());
+#endif
   }
   return ret;
 }

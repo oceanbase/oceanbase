@@ -50,8 +50,8 @@ public:
   ObPLIRCompiler(ObOrcJit &Engine,
                  std::unique_ptr<llvm::TargetMachine> TM,
                  llvm::ObjectCache *ObjCache = nullptr)
-    : JitEngine(Engine),
-      IRCompiler(irManglingOptionsFromTargetOptions(TM->Options)),
+    : IRCompiler(irManglingOptionsFromTargetOptions(TM->Options)),
+      JitEngine(Engine),
       TM(std::move(TM)),
       ObjCache(ObjCache)
     {  }

@@ -112,7 +112,7 @@ endif()
 
 if(OB_DISABLE_PIE)
   message(STATUS "build without pie")
-  set(PIE_OPT "")
+  set(PIE_OPT "-no-pie")
 else()
   message(STATUS "build with pie")
   set(PIE_OPT "-pie")
