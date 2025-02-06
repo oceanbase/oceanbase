@@ -253,7 +253,7 @@ LOG_MOD_END(PL)
 #define STRINGIZE_(x) #x
 #define STRINGIZE(x) STRINGIZE_(x)
 #define OB_LOG_LOCATION_HASH_VAL \
-  ({constexpr uint64_t hash_val= oceanbase::common::hash::fnv_hash_for_logger(__FILE__":"STRINGIZE(__LINE__)); hash_val;})
+  ({constexpr uint64_t hash_val= oceanbase::common::hash::fnv_hash_for_logger(__FILE__ ":" STRINGIZE(__LINE__)); hash_val;})
 #define OB_LOG_LEVEL(level) \
   OB_LOG_LEVEL_##level, __FILE__, __LINE__, _fun_name_, OB_LOG_LOCATION_HASH_VAL, GET_LOG_ERRCODE(level)
 #define OB_LOG_LEVEL_DIRECT(level) \
