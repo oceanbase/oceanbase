@@ -2668,10 +2668,10 @@ int ObDagPrioScheduler::finish_dag_(
     }
 
     // compaction dag success
-    if (ObIDag::DAG_STATUS_FINISH == status && is_compaction_dag(dag.get_type())) {
+    if (ObIDag::DAG_STATUS_FINISH == status && is_mini_compaction_dag(dag.get_type())) {
       ObTenantCompactionMemPool *mem_pool = MTL(ObTenantCompactionMemPool *);
       if (OB_NOT_NULL(mem_pool)) {
-        mem_pool->set_memory_mode(ObTenantCompactionMemPool::NORMAL_MODE);
+        mem_pool->reset_memory_mode();
       }
     }
 
@@ -2995,7 +2995,7 @@ int ObDagPrioScheduler::get_minor_exe_dag_info(
   while (head != cur && OB_SUCC(ret)) {
     if (cur->get_type() == ObDagType::DAG_TYPE_MERGE_EXECUTE) {
       compaction::ObTabletMergeExecuteDag *other_dag = static_cast<compaction::ObTabletMergeExecuteDag *>(cur);
-      if (other_dag->belong_to_same_tablet(&dag)) {
+      if (other_dag->belong_to_same_tablet(&dag) && is_minor_merge_type(other_dag->get_param().merge_type_)) {
         if (OB_FAIL(merge_range_array.push_back(other_dag->get_merge_range()))) {
           LOG_WARN("failed to push merge range into array", K(ret), K(other_dag->get_merge_range()));
         }
@@ -3344,14 +3344,14 @@ int ObDagPrioScheduler::deal_with_finish_task(
     }
 
     bool retry_flag = false;
-    if (dag->is_dag_failed()) {
-      // dag can retry & this task is the last running task
+    if (dag->is_dag_failed()) { // dag can retry & this task is the last running task
       if (OB_ALLOCATE_MEMORY_FAILED == error_code && is_mini_compaction_dag(dag->get_type())) {
-        if (static_cast<compaction::ObTabletMergeDag *>(dag)->is_reserve_mode() &&
-            MTL(ObTenantCompactionMemPool *)->is_emergency_mode() && !MTL_IS_MINI_MODE()) {
-          COMMON_LOG(ERROR, "reserve mode dag failed to alloc mem unexpectly", KPC(dag)); // tmp debug log for reserve mode, remove later.
+        ObTenantCompactionMemPool *mem_pool = MTL(ObTenantCompactionMemPool *);
+        if (OB_ISNULL(mem_pool)) {
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "get unexpected null mem pool from mtl");
+        } else {
+          mem_pool->uplevel_memory_mode(static_cast<compaction::ObTabletMergeDag *>(dag)->is_reserve_mode());
         }
-        MTL(ObTenantCompactionMemPool *)->set_memory_mode(ObTenantCompactionMemPool::EMERGENCY_MODE);
       }
       if (OB_FAIL(deal_with_fail_dag_(*dag, error_code, retry_flag))) {
         COMMON_LOG(WARN, "failed to deal with fail dag", K(ret), KPC(dag));
@@ -3529,20 +3529,26 @@ bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
     ObTenantTabletStatMgr *stat_mgr = MTL(ObTenantTabletStatMgr *);
     int64_t load_shedding_factor = 1;
     const int64_t extra_limit = for_schedule ? 0 : 1;
+    ObTenantCompactionMemPool::MemoryMode mem_mode;
 
     if (OB_ISNULL(stat_mgr)) {
     } else if (FALSE_IT(load_shedding_factor = MAX(1, stat_mgr->get_load_shedding_factor()))) {
     } else if (load_shedding_factor <= 1 || !is_compaction_dag_prio()) {
       // no need to load shedding
+    } else if (FALSE_IT(mem_mode = MTL(ObTenantCompactionMemPool *)->get_memory_mode())) {
+    } else if (ObDagPrio::DAG_PRIO_COMPACTION_HIGH == priority_
+            && ObTenantCompactionMemPool::CRITICAL_MODE == mem_mode) {
+      need_shedding = true;
     } else {
       const int64_t load_shedding_limit = MAX(2, adaptive_task_limit_ / load_shedding_factor);
       if (running_task_cnts_ > load_shedding_limit + extra_limit) {
         need_shedding = true;
-        if (REACH_THREAD_TIME_INTERVAL(30_s)) {
-          FLOG_INFO("[ADAPTIVE_SCHED] DagScheduler needs to load shedding", K(load_shedding_factor), K(for_schedule),
-              K(extra_limit), K_(adaptive_task_limit), K_(running_task_cnts), K_(priority));
-        }
       }
+    }
+
+    if (need_shedding && REACH_THREAD_TIME_INTERVAL(30_s)) {
+      FLOG_INFO("[ADAPTIVE_SCHED] DagScheduler needs to load shedding", K(load_shedding_factor), K(for_schedule),
+                K(extra_limit), K_(adaptive_task_limit), K_(running_task_cnts), K_(priority), K(mem_mode));
     }
   }
   return need_shedding;

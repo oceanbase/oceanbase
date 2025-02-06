@@ -93,10 +93,11 @@ public:
 class ObTenantCompactionMemPool
 {
 public:
-  enum MemoryMode : int64_t
+  enum MemoryMode : uint8_t
   {
     NORMAL_MODE = 0,
-    EMERGENCY_MODE = 1
+    EMERGENCY_MODE = 1, // disable parallel mini merge
+    CRITICAL_MODE = 2 // disable parallel mini merge && limit mini merge concurrency
   };
 
   static int mtl_init(ObTenantCompactionMemPool* &mem_pool);
@@ -111,8 +112,9 @@ public:
   void free(ObCompactionBufferBlock &buffer_block);
   bool acquire_reserve_mem();
   bool release_reserve_mem();
-  void set_memory_mode(const MemoryMode mem_mode) { ATOMIC_STORE(&mem_mode_, mem_mode); }
-  bool is_emergency_mode() { return MemoryMode::EMERGENCY_MODE == ATOMIC_LOAD(&mem_mode_); }
+  void uplevel_memory_mode(const bool is_reserve_mode);
+  void reset_memory_mode() { ATOMIC_STORE(&mem_mode_, NORMAL_MODE); }
+  MemoryMode get_memory_mode() const { return ATOMIC_LOAD(&mem_mode_); }
 
   OB_INLINE int64_t get_total_block_num() const { return total_block_num_; }
   OB_INLINE int64_t get_max_block_num() const { return max_block_num_; }

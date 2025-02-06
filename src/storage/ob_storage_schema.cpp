@@ -323,6 +323,9 @@ int ObStorageColumnGroupSchema::copy_from(ObIArray<ObColDesc> &column_ids,
   } else if (OB_UNLIKELY(cg_schema.get_column_id_count() > column_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected error for cg schema", K(ret), K(column_ids), K(cg_schema));
+  } else if (share::schema::SINGLE_COLUMN_GROUP == cg_schema.get_column_group_type() && cg_schema.get_column_id_count() > 1) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "get unexpected single cg schema", K(ret), K(cg_schema));
   } else {
     const bool is_normal_cg_schema = cg_schema.is_normal_column_group();
     version_ = COLUMN_GRUOP_SCHEMA_VERSION;

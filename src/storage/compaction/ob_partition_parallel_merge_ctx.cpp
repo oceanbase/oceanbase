@@ -86,9 +86,9 @@ int ObParallelMergeCtx::init(compaction::ObBasicTabletMergeCtx &merge_ctx)
   }
 
   if (OB_FAIL(ret)) {
-  } else if ((tablet_size <= 0
+  } else if (tablet_size <= 0
           || (!enable_parallel_minor_merge && !is_major_merge_type(merge_type))
-          || (is_mini_merge(merge_type) && MTL(ObTenantCompactionMemPool *)->is_emergency_mode()))) {
+          || (is_mini_merge(merge_type) && ObTenantCompactionMemPool::NORMAL_MODE != MTL(ObTenantCompactionMemPool *)->get_memory_mode())) {
     if (OB_FAIL(init_serial_merge())) {
       STORAGE_LOG(WARN, "Failed to init serialize merge", K(ret), K(tablet_size), K(merge_ctx));
     }
