@@ -64,6 +64,8 @@ public:
                                           const ObSQLSessionInfo &session,
                                           const bool gen_error,
                                           bool &is_vars_matched);
+  OB_INLINE bool is_major_refresh_mview()
+  { return ObMVRefreshableType::OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV == refreshable_type_; }
 private:
   int check_mv_column_type(const ObTableSchema *mv_schema, const ObSelectStmt *view_stmt,
                            ObSQLSessionInfo &session);

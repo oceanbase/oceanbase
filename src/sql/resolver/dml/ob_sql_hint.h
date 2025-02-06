@@ -388,6 +388,7 @@ struct LogLeadingHint
                                    ObIArray<LeadingInfo> &leading_infos,
                                    TableItem *table,
                                    ObRelIds &table_set);
+  int try_init_leading_info_for_major_refresh_real_time_mview(const ObDMLStmt &stmt);
 
   TO_STRING_KV(K_(leading_tables),
                K_(leading_infos),

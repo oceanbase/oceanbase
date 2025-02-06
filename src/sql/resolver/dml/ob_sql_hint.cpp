@@ -14,6 +14,7 @@
 #include "ob_sql_hint.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/resolver/mv/ob_mv_printer.h"
 
 namespace oceanbase
 {
@@ -2194,6 +2195,9 @@ int LogLeadingHint::init_leading_info(const ObDMLStmt &stmt,
   reset();
   if (NULL == hint) {
     /* do nothing */
+    if (OB_FAIL(try_init_leading_info_for_major_refresh_real_time_mview(stmt))) {
+      LOG_WARN("failed to try init leading info for major refresh real time mview.", K(ret));
+    }
   } else if (OB_UNLIKELY(!hint->is_join_order_hint())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect hint type", K(ret), K(*hint));
@@ -2212,6 +2216,42 @@ int LogLeadingHint::init_leading_info(const ObDMLStmt &stmt,
     } else {
       LOG_TRACE("succeed to get leading infos", K(*this));
     }
+  }
+  return ret;
+}
+
+int LogLeadingHint::try_init_leading_info_for_major_refresh_real_time_mview(const ObDMLStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  leading_infos_.reuse();
+  leading_tables_.reuse();
+  const SemiInfo *semi_info = NULL;
+  const TableItem *table_item = NULL;
+  LeadingInfo *leading_info = NULL;
+  if (!stmt.get_table_items().count() || 1 != stmt.get_semi_info_size()) {
+    /* do nothing */
+  } else if (OB_ISNULL(semi_info = stmt.get_semi_infos().at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret));
+  } else if (!semi_info->is_anti_join() || 1 != semi_info->left_table_ids_.count()) {
+    /* do nothing */
+  } else if (OB_ISNULL(table_item = stmt.get_table_item_by_id(semi_info->left_table_ids_.at(0)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret), K(table_item));
+  } else if (ObMVPrinter::MR_MV_RT_QUERY_LEADING_TABLE_FLAG != table_item->mr_mv_flags_) {
+    /* do nothing */
+  } else if (OB_ISNULL(leading_info = leading_infos_.alloc_place_holder())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alloc LeadingInfo failed", K(ret));
+  } else if (OB_FAIL(leading_info->left_table_set_.add_member(stmt.get_table_bit_index(table_item->table_id_)))) {
+    LOG_WARN("failed to add member", K(ret));
+  } else if (OB_FAIL(leading_info->right_table_set_.add_member(stmt.get_table_bit_index(semi_info->right_table_id_)))) {
+    LOG_WARN("failed to add member", K(ret));
+  } else if (OB_FAIL(leading_tables_.add_members(leading_info->left_table_set_))
+              || OB_FAIL(leading_tables_.add_members(leading_info->right_table_set_))) {
+    LOG_WARN("failed to get table ids", K(ret));
+  } else if (OB_FAIL(leading_info->table_set_.add_members(leading_tables_))) {
+    LOG_WARN("failed to add table ids", K(ret));
   }
   return ret;
 }

@@ -130,6 +130,10 @@ private:
                                        bool &is_valid);
   void append_fast_refreshable_note(const char *str, const ObMVRefreshableType type = OB_MV_COMPLETE_REFRESH);
   int check_match_major_refresh_mv(const ObSelectStmt &stmt, bool &is_match);
+  int check_select_item_valid(const ObSelectStmt &stmt,
+                              const ObIArray<ObRawExpr*> &on_conds,
+                              const uint64_t left_table_id,
+                              bool &is_match);
   int check_right_table_join_key_valid(const ObSelectStmt &stmt, const JoinedTable *joined_table,
                                        const ObTableSchema *right_table_schema, bool &is_valid);
   int check_left_table_partition_rule_valid(const ObSelectStmt &stmt, const TableItem *left_table,

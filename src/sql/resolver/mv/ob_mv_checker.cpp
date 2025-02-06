@@ -896,6 +896,10 @@ int ObMVChecker::check_match_major_refresh_mv(const ObSelectStmt &stmt, bool &is
   } else if (is_match && OB_FAIL(check_left_table_partition_rule_valid(
                              stmt, joined_table->left_table_, left_table_schema, is_match))) {
     LOG_WARN("failed to check partition rule valid", KR(ret));
+  } else if (is_match && OB_FAIL(check_select_item_valid(stmt, joined_table->get_join_conditions(),
+                                                         joined_table->left_table_->table_id_,
+                                                         is_match))) {
+    LOG_WARN("failed to check select item valid", KR(ret));
   } else if (is_match && OB_FAIL(check_left_table_rowkey_valid(stmt, left_table_schema, is_match))) {
     LOG_WARN("failed to check left table rowkey valid", KR(ret));
   } else if (is_match && OB_FAIL(check_broadcast_table_valid(stmt, right_table_schema, is_match))) {
@@ -907,6 +911,41 @@ int ObMVChecker::check_match_major_refresh_mv(const ObSelectStmt &stmt, bool &is
 
   LOG_INFO("[MAJ_REF_MV] check match major refresh mv", K(is_match));
 
+  return ret;
+}
+
+int ObMVChecker::check_select_item_valid(const ObSelectStmt &stmt,
+                                         const ObIArray<ObRawExpr*> &on_conds,
+                                         const uint64_t left_table_id,
+                                         bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = true;
+  ObSEArray<ObRawExpr*, 8> exprs;
+  const ObColumnRefRawExpr *col_expr = NULL;
+  const ObIArray<SelectItem> &select_items = stmt.get_select_items();
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(stmt.get_condition_exprs(), exprs))
+      || OB_FAIL(ObRawExprUtils::extract_column_exprs(on_conds, exprs))) {
+    LOG_WARN("failed to extract column exprs", K(ret), K(on_conds), K(stmt.get_condition_exprs()));
+  }
+  for(int64_t i = 0; is_match && OB_SUCC(ret) && i < select_items.count(); ++i) {
+    if (OB_ISNULL(select_items.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL", K(ret), K(i), K(select_items));
+    } else {
+      is_match = select_items.at(i).expr_->is_column_ref_expr();
+    }
+  }
+  for (int64_t i = 0; is_match && OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (OB_ISNULL(col_expr = dynamic_cast<ObColumnRefRawExpr*>(exprs.at(i)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL", K(ret), K(i), K(exprs));
+    } else if (col_expr->get_table_id() != left_table_id) {
+      /* do nothing */
+    } else {
+      is_match = stmt.check_is_select_item_expr(col_expr);
+    }
+  }
   return ret;
 }
 

@@ -903,8 +903,16 @@ public:
                               const ObColumnRefRawExpr *col_expr,
                               PushdownFilterMonotonicity &mono,
                               ObIArray<ObRawExpr *> &assist_exprs) const;
-  void set_for_mr_mv_refresh()  { mr_mv_scan_ = common::ObQueryFlag::RefreshMode;  }
-  void set_for_mr_rt_mv()  { mr_mv_scan_ = common::ObQueryFlag::RealTimeMode;  }
+  void set_mr_mv_scan(const uint64_t mr_mv_flags)
+  {
+    if (mr_mv_flags & ObQueryFlag::MRMVScanMode::RefreshMode) {
+      mr_mv_scan_ = ObQueryFlag::MRMVScanMode::RefreshMode;
+    } else if (mr_mv_flags & ObQueryFlag::MRMVScanMode::RealTimeMode) {
+      mr_mv_scan_ = ObQueryFlag::MRMVScanMode::RealTimeMode;
+    } else {
+      mr_mv_scan_ = ObQueryFlag::MRMVScanMode::NormalMode;
+    }
+  }
   common::ObQueryFlag::MRMVScanMode get_mr_mv_scan() const { return mr_mv_scan_; }
 
   bool use_index_merge() const;

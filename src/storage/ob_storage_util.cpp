@@ -610,28 +610,17 @@ int reverse_trans_version_val(ObIVector *vector, const int64_t count)
 
 const char *ObMviewScanInfo::OLD_ROW = "O";
 const char *ObMviewScanInfo::NEW_ROW = "N";
-const char *ObMviewScanInfo::FINAL_ROW = "F";
 int ObMviewScanInfo::init(
     const bool is_mv_refresh_query,
     const StorageScanType scan_type,
     const int64_t begin_version,
-    const int64_t end_version,
-    const common::ObIArray<sql::ObExpr *> &non_mview_filters)
+    const int64_t end_version)
 {
   int ret = OB_SUCCESS;
-  if (non_mview_filters.count() > 0 && OB_FAIL(op_filters_.reserve(non_mview_filters.count()))) {
-    STORAGE_LOG(WARN, "Failed to reserve op filters", K(ret));
-  } else {
-    is_mv_refresh_query_ = is_mv_refresh_query;
-    scan_type_ = scan_type;
-    begin_version_ = begin_version;
-    end_version_ = end_version;
-    for (int64_t i = 0; OB_SUCC(ret) && i < non_mview_filters.count(); ++i) {
-      if (OB_FAIL(op_filters_.push_back(non_mview_filters.at(i)))) {
-        STORAGE_LOG(WARN, "Failed to push back", K(ret));
-      }
-    }
-  }
+  is_mv_refresh_query_ = is_mv_refresh_query;
+  scan_type_ = scan_type;
+  begin_version_ = begin_version;
+  end_version_ = end_version;
   return ret;
 }
 int ObMviewScanInfo::check_and_update_version_range(const int64_t multi_version_start, common::ObVersionRange &origin_range)
@@ -690,10 +679,9 @@ int build_mview_scan_info_if_need(
     ObMviewScanInfo *&mview_scan_info)
 {
   int ret = OB_SUCCESS;
-  StorageScanType scan_type = StorageScanType::NORMAL;
+  StorageScanType scan_type = StorageScanType::MVIEW_FINAL_ROW;
   int64_t begin_version = -1;
   int64_t end_version = -1;
-  common::ObSEArray<sql::ObExpr *, 4> non_mview_filters;
   if (OB_UNLIKELY(nullptr == alloc || nullptr != mview_scan_info ||
                   nullptr == op_filters || op_filters->count() < 1)) {
     ret = OB_INVALID_ARGUMENT;
@@ -707,22 +695,6 @@ int build_mview_scan_info_if_need(
       if (OB_ISNULL(e = op_filters->at(i))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "expr is null", K(ret), K(i));
-      } else if (T_OP_EQ == e->type_  && 2 == e->arg_cnt_ &&
-                 T_PSEUDO_OLD_NEW_COL == e->args_[0]->type_ && e->args_[1]->is_static_const_) {
-        if (OB_FAIL(e->args_[1]->eval(eval_ctx, datum))) {
-          STORAGE_LOG(WARN, "Failed to eval const expr", K(ret));
-        } else if (0 == ObString::make_string(ObMviewScanInfo::OLD_ROW).case_compare(datum->get_string())) {
-          scan_type = StorageScanType::MVIEW_FIRST_DELETE;
-        } else if (0 == ObString::make_string(ObMviewScanInfo::NEW_ROW).case_compare(datum->get_string())) {
-          scan_type = StorageScanType::MVIEW_LAST_INSERT;
-        } else if (0 == ObString::make_string(ObMviewScanInfo::FINAL_ROW).case_compare(datum->get_string())) {
-          scan_type = StorageScanType::MVIEW_FINAL_ROW;
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          STORAGE_LOG(WARN, "Not supported OLD_NEW type", K(ret), KPC(datum));
-        }
-      } else if (OB_FAIL(non_mview_filters.push_back(e))) {
-        STORAGE_LOG(WARN, "Failed to push back non mview filter", K(ret), K(i));
       } else if ((T_OP_GT == e->type_ || T_OP_LE == e->type_) && 2 == e->arg_cnt_) {
         sql::ObExpr *left = e->args_[0];
         sql::ObExpr *right = e->args_[1];
@@ -758,13 +730,14 @@ int build_mview_scan_info_if_need(
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (StorageScanType::NORMAL == scan_type) {
-    STORAGE_LOG(INFO, "no need use mview scan", K(scan_type), K(begin_version), K(end_version));
   } else if (OB_ISNULL(mview_scan_info = OB_NEWx(ObMviewScanInfo, alloc, alloc))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "Failed to alloc memory for mview scan info", K(ret));
-  } else if (OB_FAIL(mview_scan_info->init(query_flag.is_mr_mview_refresh_base_scan(), scan_type, begin_version, end_version, non_mview_filters))) {
+  } else if (OB_FAIL(mview_scan_info->init(query_flag.is_mr_mview_refresh_base_scan(), scan_type, begin_version, end_version))) {
     STORAGE_LOG(WARN, "Failed to init mview scan info", K(ret));
+  } else if (OB_UNLIKELY(!mview_scan_info->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Invalid mview scan info for mview query", K(ret), KPC(mview_scan_info));
   }
   STORAGE_LOG(TRACE, "[MVIEW QUERY]: build mview scan info", K(ret), KPC(mview_scan_info));
   return ret;

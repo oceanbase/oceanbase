@@ -115,6 +115,9 @@ public:
                                 ObSQLSessionInfo *session_info,
                                 ObIArray<ObString> &operators,
                                 ObMVRefreshableType &refreshable_type);
+  static int set_refresh_table_scan_flag_for_mr_mv(ObSelectStmt &refresh_stmt);
+  static int set_real_time_table_scan_flag_for_mr_mv(ObSelectStmt &rt_mv_stmt);
+  static const uint64_t MR_MV_RT_QUERY_LEADING_TABLE_FLAG = 0x1 << 2;
 
 private:
   enum MlogExtColFlag {
@@ -153,8 +156,15 @@ private:
                                 const TableItem *outer_table,
                                 const bool is_exists,
                                 const bool use_orig_sel_alias,
-                                ObRawExpr *&exists_expr,
-                                bool use_mlog = true);
+                                ObRawExpr *&exists_expr);
+  int gen_exists_cond_for_mview(const TableItem &source_table,
+                                const TableItem &outer_table,
+                                ObRawExpr *&exists_expr);
+  int gen_rowkey_join_conds_for_table(const TableItem &origin_table,
+                                      const TableItem &left_table,
+                                      const TableItem &right_table,
+                                      const bool right_use_orig_sel_alias,
+                                      ObIArray<ObRawExpr*> &all_conds);
   int get_column_name_from_origin_select_items(const uint64_t table_id,
                                                const uint64_t column_id,
                                                const ObString *&col_name);
@@ -275,16 +285,30 @@ private:
                                TableItem *&table_item,
                                ObSelectStmt *view_stmt = NULL,
                                const bool add_to_from = true);
+  int create_joined_table_item(ObDMLStmt *stmt,
+                               const ObJoinType joined_type,
+                               const TableItem &left_table,
+                               const TableItem &right_table,
+                               const bool is_top,
+                               JoinedTable *&joined_table);
 
   int gen_refresh_select_for_major_refresh_mjv(ObIArray<ObDMLStmt*> &dml_stmts);
   int get_rowkey_pos_in_select(ObIArray<int64_t> &rowkey_sel_pos);
   int gen_real_time_view_for_major_refresh_mjv(ObSelectStmt *&sel_stmt);
-  int gen_access_mv_data_for_major_refresh_mjv(ObSelectStmt *&sel_stmt);
+  int gen_mr_rt_mv_access_mv_data_stmt(ObSelectStmt *&sel_stmt);
+  int create_mr_rt_mv_delta_stmt(const TableItem &orig_table, ObSelectStmt *&sel_stmt);
+  int create_mr_rt_mv_access_mv_from_table(ObSelectStmt &sel_stmt,
+                                           const TableItem &mv_table,
+                                           const TableItem &delta_left_table,
+                                           const TableItem &delta_right_table);
+  int gen_mr_rt_mv_access_mv_data_select_list(ObSelectStmt &sel_stmt,
+                                              const TableItem &mv_table,
+                                              const TableItem &delta_left_table,
+                                              const TableItem &delta_right_table);
   int gen_not_exists_cond_for_major_refresh_mjv(const ObIArray<ObRawExpr*> &upper_sel_exprs,
                                                 const TableItem *source_table,
                                                 ObRawExpr *&exists_expr);
-  int gen_real_time_view_access_delta_data_for_major_refresh_mjv(ObSelectStmt *&delta_left_stmt,
-                                                                 ObSelectStmt *&delta_right_stmt);
+  int gen_mr_rt_mv_left_delta_data_stmt(ObSelectStmt *&stmt);
   int gen_one_refresh_select_for_major_refresh_mjv(const ObIArray<int64_t> &rowkey_sel_pos,
                                                    const bool is_delta_left,
                                                    ObSelectStmt *&delta_stmt);
@@ -295,7 +319,7 @@ private:
                                                     ObStmtHint &stmt_hint);
   int prepare_gen_access_delta_data_for_major_refresh_mjv(const ObIArray<int64_t> &rowkey_sel_pos,
                                                           ObSelectStmt &base_delta_stmt);
-  int append_old_new_col_filter(const TableItem &table, ObRawExpr *val, ObIArray<ObRawExpr*>& conds);
+  int append_old_new_col_filter(const TableItem &table, ObIArray<ObRawExpr*>& conds);
   int fill_table_partition_name(const TableItem &src_table, TableItem &table);
   int append_rowkey_range_filter(const ObIArray<SelectItem> &select_items,
                                  uint64_t rowkey_count,

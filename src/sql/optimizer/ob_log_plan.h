@@ -273,14 +273,6 @@ public:
   int check_das_need_keep_ordering(ObLogicalOperator *op);
   int check_das_need_scan_with_domain_id(ObLogicalOperator *op);
 
-  int set_major_refresh_mview_dep_table_scan(ObLogicalOperator *op);
-  int set_major_refresh_mview_dep_table_scan(bool for_fast_refresh,
-                                             bool for_rt_mview,
-                                             ObLogicalOperator *op);
-  int is_major_refresh_rt_mview(const ObDMLStmt *set_stmt,
-                                const ObSqlSchemaGuard *sql_schema_guard,
-                                bool &is_mr_rt_mview);
-
   int gen_das_table_location_info(ObLogTableScan *table_scan,
                                   ObTablePartitionInfo *&table_partition_info);
 

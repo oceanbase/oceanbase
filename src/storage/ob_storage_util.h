@@ -490,35 +490,32 @@ struct ObMviewScanInfo
 {
   static const char *OLD_ROW;
   static const char *NEW_ROW;
-  static const char *FINAL_ROW;
   ObMviewScanInfo(ObIAllocator *alloc) : is_mv_refresh_query_(false),
                                          scan_type_(StorageScanType::NORMAL),
                                          begin_version_(-1),
-                                         end_version_(-1),
-                                         op_filters_(alloc)
+                                         end_version_(-1)
   {
   }
   int init(
       const bool is_mv_refresh_query,
       const StorageScanType scan_type,
       const int64_t begin_version,
-      const int64_t end_version,
-      const common::ObIArray<sql::ObExpr *> &non_mview_filters);
+      const int64_t end_version);
   OB_INLINE bool is_begin_valid() const { return -1 != begin_version_; }
   OB_INLINE bool is_end_valid() const { return -1 != end_version_; }
   OB_INLINE bool is_valid() const
   {
-    return !(is_begin_valid() && is_end_valid() && begin_version_ >= end_version_) &&
-           is_mview_table_scan(scan_type_);
+    return is_mview_table_scan(scan_type_) &&
+           is_begin_valid() &&
+           (!is_end_valid() || begin_version_ < end_version_);
   }
   int check_and_update_version_range(const int64_t multi_version_start, common::ObVersionRange &origin_range);
-  TO_STRING_KV(K_(is_mv_refresh_query), K_(scan_type), K_(begin_version), K_(end_version), K_(op_filters));
+  TO_STRING_KV(K_(is_mv_refresh_query), K_(scan_type), K_(begin_version), K_(end_version));
   bool is_mv_refresh_query_;
   StorageScanType scan_type_;
   // (begin_version, end_version]
   int64_t begin_version_;
   int64_t end_version_;
-  sql::ExprFixedArray op_filters_;
 };
 int build_mview_scan_info_if_need(
     const common::ObQueryFlag query_flag,

@@ -14359,6 +14359,9 @@ int ObTransformUtils::expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(set_expand_mview_flag(view_stmt))) {
       LOG_WARN("fail to set expand mview flag", K(ret));
+    } else if (mv_provider.is_major_refresh_mview()
+               && OB_FAIL(ObMVPrinter::set_real_time_table_scan_flag_for_mr_mv(*view_stmt))) {
+      LOG_WARN("fail to set table scan flag for major refresh mview", K(ret));
     } else if (OB_FAIL(upper_stmt->generate_view_name(*ctx->allocator_,
                                                       rt_mv_table->table_name_))) {
       LOG_WARN("failed to generate view name", K(ret));
