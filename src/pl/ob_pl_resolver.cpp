@@ -726,7 +726,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
           signal_stmt->set_ob_error_code(save_ret);
           signal_stmt->set_sql_state(ob_sqlstate(save_ret));
           signal_stmt->set_str_len(STRLEN(ob_sqlstate(save_ret)));
-          func.set_can_cached(false);
+          func.set_has_incomplete_rt_dep_error(true);
           func.set_is_all_sql_stmt(false);
           if (lib::is_mysql_mode() && !func.is_reads_sql_data() && !func.is_modifies_sql_data()) {
             func.set_contains_sql();
