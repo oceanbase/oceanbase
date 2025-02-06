@@ -29263,6 +29263,7 @@ def_table_schema(
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
   view_definition = """SELECT
+                        TENANT_ID,
                         SVR_IP,
                         SVR_PORT,
                         PLAN_ID,
@@ -29302,7 +29303,6 @@ def_table_schema(
                         REMARKS,
                         OTHER_XML
                     FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN
-                    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
 )
 def_table_schema(
@@ -29316,6 +29316,7 @@ def_table_schema(
   table_type     = 'SYSTEM_VIEW',
   in_tenant_space = True,
   view_definition = """SELECT
+                      TENANT_ID,
                       SQL_ID,
                       DB_ID,
                       PLAN_HASH,
@@ -63350,6 +63351,7 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """SELECT
+                        TENANT_ID,
                         SVR_IP,
                         SVR_PORT,
                         DB_ID,
@@ -63389,7 +63391,6 @@ def_table_schema(
                         REMARKS,
                         OTHER_XML
                     FROM SYS.ALL_VIRTUAL_SQL_PLAN
-                    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
 )
 
@@ -63405,6 +63406,7 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """SELECT
+                      TENANT_ID,
                       DB_ID,
                       SQL_ID,
                       PLAN_HASH,
