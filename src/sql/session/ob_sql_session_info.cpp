@@ -2328,6 +2328,13 @@ int ObSQLSessionInfo::reset_all_package_state_by_dbms_session(bool need_set_sync
       || false == need_reset_package()) {
     // do nothing
   } else {
+#ifdef OB_BUILD_ORACLE_PL
+    if (nullptr != pl_profiler_) {
+      pl_profiler_->reset();
+      reset_pl_profiler_resource();
+    }
+#endif // OB_BUILD_ORACLE_PL
+
     ObSEArray<int64_t, 4> remove_packages;
     if (0 != package_state_map_.size()) {
       FOREACH(it, package_state_map_) {
