@@ -1494,42 +1494,43 @@ int ObPhysicalPlan::set_feedback_info(ObExecContext &ctx)
   if (OB_FAIL(logical_plan_.uncompress_logical_plan(ctx.get_allocator(), plan_items))) {
     LOG_WARN("failed to uncompress logical plan", K(ret));
   } else if (feedback_nodes.count() != plan_items.count()) {
-    ret = OB_SUCCESS;
+    //ignore error code
     LOG_WARN("unexpect feedback node count", K(ret));
-  } else if (!feedback_nodes.empty()) {
-    plan_open_time = feedback_nodes.at(0).op_open_time_;
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < plan_items.count(); ++i) {
-    const ObExecFeedbackNode &feedback_node = feedback_nodes.at(i);
-    ObSqlPlanItem *plan_item = plan_items.at(i);
-    if (OB_ISNULL(plan_item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null plan item", K(ret));
-    } else if (feedback_node.op_id_ != plan_item->id_) {
-       ret = OB_SUCCESS;
-      LOG_WARN("unexpect feedback node info", K(ret));
-    } else {
-      int64_t real_cost = 0;
-      if (0 != feedback_node.output_row_count_ &&
-          0 != feedback_node.op_last_row_time_) {
-        real_cost = feedback_node.op_last_row_time_ - plan_open_time;
-      } else if (0 != feedback_node.op_close_time_) {
-        real_cost = feedback_node.op_close_time_ - plan_open_time;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < plan_items.count(); ++i) {
+      const ObExecFeedbackNode &feedback_node = feedback_nodes.at(i);
+      ObSqlPlanItem *plan_item = plan_items.at(i);
+      if (0 == i) {
+        plan_open_time = feedback_node.op_open_time_;
       }
-      plan_item->real_cardinality_ = feedback_node.output_row_count_;
-      plan_item->real_cost_ = real_cost;
-      plan_item->cpu_cost_ = feedback_node.db_time_;
-      plan_item->io_cost_ = feedback_node.block_time_;
-      plan_item->search_columns_ = feedback_node.worker_count_;
+      if (OB_ISNULL(plan_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null plan item", K(ret));
+      } else if (feedback_node.op_id_ != plan_item->id_) {
+        ret = OB_SUCCESS;
+        LOG_WARN("unexpect feedback node info", K(ret));
+      } else {
+        int64_t real_cost = 0;
+        if (0 != feedback_node.output_row_count_ &&
+            0 != feedback_node.op_last_row_time_) {
+          real_cost = feedback_node.op_last_row_time_ - plan_open_time;
+        } else if (0 != feedback_node.op_close_time_) {
+          real_cost = feedback_node.op_close_time_ - plan_open_time;
+        }
+        plan_item->real_cardinality_ = feedback_node.output_row_count_;
+        plan_item->real_cost_ = real_cost;
+        plan_item->cpu_cost_ = feedback_node.db_time_;
+        plan_item->io_cost_ = feedback_node.block_time_;
+        plan_item->search_columns_ = feedback_node.worker_count_;
+      }
     }
-  }
-  if (OB_SUCC(ret)) {
-    ObLogicalPlanRawData new_logical_plan;
-    if (OB_FAIL(new_logical_plan.compress_logical_plan(ctx.get_allocator(), plan_items))) {
-      LOG_WARN("failed to compress logical plan", K(ret));
-    } else if (OB_FAIL(set_logical_plan(new_logical_plan))) {
-      LOG_WARN("failed to set logical plan", K(ret));
+    if (OB_SUCC(ret)) {
+      ObLogicalPlanRawData new_logical_plan;
+      if (OB_FAIL(new_logical_plan.compress_logical_plan(ctx.get_allocator(), plan_items))) {
+        LOG_WARN("failed to compress logical plan", K(ret));
+      } else if (OB_FAIL(set_logical_plan(new_logical_plan))) {
+        LOG_WARN("failed to set logical plan", K(ret));
+      }
     }
   }
   return ret;
