@@ -277,9 +277,21 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
         ObTimeUtility::fast_current_time(),
         K(cost_ts), "batch_check_stat", stat);
     }
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = OB_E(EventTable::EN_MEDIUM_REPLICA_CHECKSUM_ERROR) OB_SUCCESS;
+      if (OB_SUCC(ret)) {
+        if (REACH_THREAD_TIME_INTERVAL(CLEAR_CKM_ERROR_INTERVAL)) {
+          clear_error_tablet_cnt();
+        }
+      }
+      ret = OB_SUCCESS;
+    }
+#else
     if (REACH_THREAD_TIME_INTERVAL(CLEAR_CKM_ERROR_INTERVAL)) {
       clear_error_tablet_cnt();
     }
+#endif
   }
   return ret;
 }
