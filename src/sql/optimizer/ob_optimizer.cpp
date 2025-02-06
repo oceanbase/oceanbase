@@ -723,6 +723,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to check hash join enabled", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::OPTIMIZER_SORTMERGE_JOIN_ENABLED, optimizer_sortmerge_join_enabled))) {
     LOG_WARN("failed to check merge join enabled", K(ret));
+  } else if (OB_FALSE_IT(nested_loop_join_enabled |= query_ctx->is_contain_inner_table_)) {
+    //ignore tenant config for inner table
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::NESTED_LOOP_JOIN_ENABLED, nested_loop_join_enabled))) {
     LOG_WARN("failed to check nested loop join enabled", K(ret));
   } else if (OB_FAIL(session.is_adj_index_cost_enabled(enable_adj_index_cost, optimizer_index_cost_adj))) {

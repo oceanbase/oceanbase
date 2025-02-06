@@ -150,6 +150,11 @@
           "name": "direct_load_allow_fallback",
           "value": 0,
           "comment": "for classic OLAP workloads, fallback is not allowed when direct load fails"
+        },
+        {
+          "name": "_nested_loop_join_enabled",
+          "value": false,
+          "comment": "for classic OLAP workloads, disable nested loop join"
         }
       ]
     }
