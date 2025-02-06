@@ -573,7 +573,14 @@ int ObSharedMacroBlockMgr::update_tablet(
       const int64_t data_block_count = meta_handle.get_sstable_meta().get_data_macro_block_count();
       ObMacroIdIterator id_iterator;
       MacroBlockId macro_id;
-      if (OB_UNLIKELY(1 != data_block_count)) {
+      ObArenaAllocator tmp_arena("ShrBlkMgrTmp");
+      ObStorageSchema *storage_schema = nullptr;
+      if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(tmp_arena, storage_schema))) {
+        LOG_WARN("fail to get storage schema");
+      } else if (storage_schema->is_column_info_simplified()) {
+        // column info simplified, cannot calculate column checksum, defragment later until has full storage schema
+        ret = OB_EAGAIN;
+      } else if (OB_UNLIKELY(1 != data_block_count)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("this sstable is not small", K(ret), K(data_block_count));
       } else if (OB_FAIL(meta_handle.get_sstable_meta().get_macro_info().get_data_block_iter(id_iterator))) {
