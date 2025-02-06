@@ -84,6 +84,7 @@ private:
   int check_client_property(ObSMConnection &conn);
   int check_common_property(ObSMConnection &conn, obmysql::ObMySQLCapabilityFlags &client_cap);
   int check_update_proxy_capability(ObSMConnection &conn) const;
+  int check_update_client_capability(uint64_t &cap) const;
   int check_user_cluster(const ObString &server_cluster, const int64_t server_cluster_id) const;
   int init_process_single_stmt(const sql::ObMultiStmtItem &multi_stmt_item,
                                sql::ObSQLSessionInfo &session,

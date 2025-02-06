@@ -690,6 +690,7 @@ int ObMPStmtFetch::process()
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.init_use_rich_format();
     session.get_raw_audit_record().request_memory_used_ = 0;
+    session.set_proxy_version(get_proxy_version());
     observer::ObProcessMallocCallback pmcb(0,
           session.get_raw_audit_record().request_memory_used_);
     lib::ObMallocCallbackGuard guard(pmcb);
@@ -720,6 +721,9 @@ int ObMPStmtFetch::process()
     } else if (OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
       LOG_WARN("fail get process extra info", K(ret));
     } else if (FALSE_IT(session.post_sync_session_info())) {
+    } else if (OB_FAIL(session.check_tenant_status())) {
+      need_disconnect = false;
+      LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()));
     } else {
       need_disconnect = false;
       ObPLCursorInfo *cursor = NULL;

@@ -2325,6 +2325,10 @@ ERRSIM_DEF_CAP(errsim_max_key_set_size, OB_CLUSTER_PARAMETER, "2M", "[0M,)",
         "Range: [0M,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_TIME(unit_gc_wait_time, OB_CLUSTER_PARAMETER, "1m", "[0, 30d]",
+         "The maximum waiting time for unit gc, "
+         "The default value is 1min. Range: [0,  30d].",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_unit_gc_wait, OB_CLUSTER_PARAMETER, "True",
          "Used to control enable or disable the unit smooth gc feature, enabled by default.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

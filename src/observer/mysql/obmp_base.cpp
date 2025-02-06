@@ -86,7 +86,7 @@ int ObMPBase::update_transmission_checksum_flag(const ObSQLSessionInfo &session)
   return packet_sender_.update_transmission_checksum_flag(session);
 }
 
-int ObMPBase::update_proxy_sys_vars(ObSQLSessionInfo &session)
+int ObMPBase::update_proxy_and_client_sys_vars(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   ObSMConnection* conn = get_conn();
@@ -96,6 +96,8 @@ int ObMPBase::update_proxy_sys_vars(ObSQLSessionInfo &session)
   } else if (OB_FAIL(session.set_proxy_user_privilege(session.get_user_priv_set()))) {
     LOG_WARN("fail to set proxy user privilege system variables", K(ret));
   } else if (OB_FAIL(session.set_proxy_capability(conn->proxy_cap_flags_.capability_))) {
+    LOG_WARN("fail to set proxy capability", K(ret));
+  } else if (OB_FAIL(session.set_client_capability())) {
     LOG_WARN("fail to set proxy capability", K(ret));
   }
   return ret;
@@ -737,8 +739,8 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
         OB_LOG(WARN, "failed to get database id", K(ret));
       } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
         LOG_WARN("update transmisson checksum flag failed", K(ret));
-      } else if (OB_FAIL(update_proxy_sys_vars(*session))) {
-        LOG_WARN("update_proxy_sys_vars failed", K(ret));
+      } else if (OB_FAIL(update_proxy_and_client_sys_vars(*session))) {
+        LOG_WARN("update_proxy_and_client_sys_vars failed", K(ret));
       } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
         LOG_WARN("fail to update charset sys vars", K(ret));
       } else {

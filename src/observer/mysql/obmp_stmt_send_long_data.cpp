@@ -158,6 +158,9 @@ int ObMPStmtSendLongData::process()
       LOG_WARN("fail get process extra info, will disconnect", K(ret));
       need_disconnect_ = true;
     } else if (FALSE_IT(session.post_sync_session_info())) {
+    } else if (OB_FAIL(session.check_tenant_status())) {
+      need_disconnect_ = false;
+      LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()));
     } else {
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       session.partition_hit().reset();

@@ -180,7 +180,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       job_info_(nullptr),
       failover_mode_(false),
       service_name_(),
-      executing_sql_stat_record_()
+      executing_sql_stat_record_(),
+      unit_gc_min_sup_proxy_version_(0)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -227,8 +228,13 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
     }
     set_client_create_time(client_create_time);
     const char *sup_proxy_min_version = "1.8.4";
+    const char *gc_min_sup_proxy_version = "4.3.2";
     min_proxy_version_ps_ = 0;
+    unit_gc_min_sup_proxy_version_ = 0;
     if (OB_FAIL(ObClusterVersion::get_version(sup_proxy_min_version, min_proxy_version_ps_))) {
+      LOG_WARN("failed to get version", K(ret));
+    } else if (OB_FAIL(ObClusterVersion::get_version(gc_min_sup_proxy_version,
+                                                     unit_gc_min_sup_proxy_version_))) {
       LOG_WARN("failed to get version", K(ret));
     } else {
       is_inited_ = true;
@@ -384,6 +390,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   failover_mode_ = false;
   service_name_.reset();
   executing_sql_stat_record_.reset();
+  unit_gc_min_sup_proxy_version_ = 0;
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -1441,6 +1448,16 @@ int ObSQLSessionInfo::prepare_ps_stmt(const ObPsStmtId inner_stmt_id,
         session_info->set_ps_stmt_checksum(stmt_info->get_ps_stmt_checksum());
         session_info->set_inner_stmt_id(inner_stmt_id);
         session_info->set_num_of_returning_into(stmt_info->get_num_of_returning_into());
+        if (OB_FAIL(session_info->fill_param_types_with_null_type())) {
+          LOG_WARN("fill param types failed", K(ret),
+                                        K(stmt_info->get_ps_sql()),
+                                        K(stmt_info->get_ps_stmt_checksum()),
+                                        K(client_stmt_id),
+                                        K(inner_stmt_id),
+                                        K(get_sessid()),
+                                        K(stmt_info->get_num_of_param()),
+                                        K(stmt_info->get_num_of_returning_into()));
+        }
         LOG_TRACE("add ps session info", K(stmt_info->get_ps_sql()),
                                         K(stmt_info->get_ps_stmt_checksum()),
                                         K(client_stmt_id),
@@ -1833,7 +1850,8 @@ OB_DEF_SERIALIZE(ObSQLSessionInfo)
       gtt_trans_scope_unique_id_,
       gtt_session_scope_ids_,
       gtt_trans_scope_ids_,
-      affected_rows_);
+      affected_rows_,
+      unit_gc_min_sup_proxy_version_);
   return ret;
 }
 
@@ -1865,7 +1883,8 @@ OB_DEF_DESERIALIZE(ObSQLSessionInfo)
       gtt_trans_scope_unique_id_,
       gtt_session_scope_ids_,
       gtt_trans_scope_ids_,
-      affected_rows_);
+      affected_rows_,
+      unit_gc_min_sup_proxy_version_);
   (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
   return ret;
 }
@@ -1898,7 +1917,8 @@ OB_DEF_SERIALIZE_SIZE(ObSQLSessionInfo)
       gtt_trans_scope_unique_id_,
       gtt_session_scope_ids_,
       gtt_trans_scope_ids_,
-      affected_rows_);
+      affected_rows_,
+      unit_gc_min_sup_proxy_version_);
   return len;
 }
 

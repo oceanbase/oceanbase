@@ -785,12 +785,14 @@ int ObSQLSessionMgr::disconnect_session(ObSQLSessionInfo &session)
   return ret;
 }
 
-int ObSQLSessionMgr::kill_tenant(const uint64_t tenant_id)
+int ObSQLSessionMgr::kill_tenant(const uint64_t tenant_id, bool force_kill)
 {
   int ret = OB_SUCCESS;
-  KillTenant kt_func(this, tenant_id);
+  KillTenant kt_func(this, tenant_id, force_kill);
   OZ (for_each_session(kt_func));
+  OX (ret = kt_func.get_ret_code());
   OZ (sessinfo_map_.clean_tenant(tenant_id));
+  LOG_INFO("kill tenant", K(tenant_id), K(force_kill));
   return ret;
 }
 
@@ -939,7 +941,18 @@ bool ObSQLSessionMgr::KillTenant::operator() (
   } else {
     if (sess_info->get_priv_tenant_id() == tenant_id_ ||
       sess_info->get_effective_tenant_id() == tenant_id_) {
-      ret = mgr_->kill_session(*sess_info);
+      bool need_kill = true;
+      if (force_kill_) {
+        ret = mgr_->kill_session(*sess_info);
+      } else if (OB_FAIL(sess_info->can_kill_session_immediately(need_kill))) {
+        LOG_WARN("failed to check can gc immediately");
+      } else if (!need_kill) {
+        ret_ = OB_EAGAIN;
+        LOG_TRACE("unit gc needs to wait", K(ret_));
+      } else if (need_kill) {
+        LOG_INFO("force kill session", K(sess_info->get_sessid()));
+        ret = mgr_->kill_session(*sess_info);
+      }
     }
   }
   return OB_SUCCESS == ret;

@@ -67,6 +67,7 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
 {
   int ret = OB_SUCCESS;
   bool ac = true;
+  int tmp_ret = OB_E(EventTable::EN_DISABLE_HASH_BASE_DISTINCT) OB_SUCCESS;
   // result == null means ps cursor in execute or fetch .
   if (NULL != result && (&fields != result->get_field_columns())) {
     ret = OB_ERR_UNEXPECTED;
@@ -103,7 +104,19 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
       } else if (is_not_match) {
         /*do nothing*/
       } else {
-        ret = ObMySQLResultSet::to_mysql_field(ob_field, field);
+        if (session_.is_support_new_result_meta_data() || tmp_ret != OB_SUCCESS) {
+          if (OB_FAIL(ObMySQLResultSet::to_new_result_field(ob_field, field))) {
+            LOG_WARN("fail to new result field", K(ret), K(ob_field), K(field));
+          } else {
+            LOG_DEBUG("debug succ to new result field", K(ob_field), K(field));
+          }
+        } else {
+          if (OB_FAIL(ObMySQLResultSet::to_mysql_field(ob_field, field))) {
+            LOG_WARN("fail to old result field", K(ret), K(ob_field), K(field));
+          } else {
+            LOG_DEBUG("debug succ to old result field", K(ob_field), K(field));
+          }
+        }
         if (OB_SUCC(ret)) {
           ObMySQLResultSet::replace_lob_type(session_, ob_field, field);
           if (NULL != result && result->get_is_com_filed_list()) {

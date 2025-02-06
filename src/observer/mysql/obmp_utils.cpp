@@ -445,6 +445,14 @@ int ObMPUtils::add_cap_flag(OMPKOK &okp, sql::ObSQLSessionInfo &session)
       } else if (OB_FAIL(okp.add_system_var(str_kv))) {
         LOG_WARN("fail to add system var", K(i), K(str_kv), K(ret));
       }
+    } else if (sys_var->get_type() == SYS_VAR___OB_CLIENT_CAPABILITY_FLAG) {
+      ObStringKV str_kv;
+      str_kv.key_ = ObSysVarFactory::get_sys_var_name_by_id(sys_var->get_type()); // shadow copy
+      if (OB_FAIL(get_plain_str_literal(allocator, sys_var->get_value(), str_kv.value_))) {
+        LOG_WARN("fail to get sql literal", K(i), K(ret));
+      } else if (OB_FAIL(okp.add_system_var(str_kv))) {
+        LOG_WARN("fail to add system var", K(i), K(str_kv), K(ret));
+      }
     } else {
       // skip
     }

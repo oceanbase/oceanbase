@@ -833,7 +833,9 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
               LOG_WARN("fail to alloc string", K(db_schema->get_database_name_str()), K(ret));
             }
           }
-        } else if (!expr->get_result_type().is_ext() && OB_FAIL(expr->get_length_for_meta_in_bytes(field.length_))) {
+        } else if (!expr->get_result_type().is_ext()
+                   && OB_FAIL(expr->get_length_for_meta_in_bytes(
+                        field.length_, static_cast<ObCollationType>(field.charsetnr_)))) {
           LOG_WARN("get length failed", K(ret), KPC(expr));
         }
       }

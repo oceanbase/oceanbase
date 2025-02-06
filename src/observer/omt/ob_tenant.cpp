@@ -954,6 +954,7 @@ void ObTenant::mark_tenant_is_removed()
       "unit_id", tenant_meta_.unit_.unit_id_,
       K_(tenant_meta));
   tenant_meta_.unit_.is_removed_ = true;
+  set_prepare_unit_gc();
 }
 
 ERRSIM_POINT_DEF(CREATE_MTL_MODULE_FAIL)

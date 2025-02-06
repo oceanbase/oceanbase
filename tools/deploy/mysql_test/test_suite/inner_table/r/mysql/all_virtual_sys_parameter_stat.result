@@ -292,6 +292,7 @@ trace_log_slow_query_watermark
 trx_2pc_retry_interval
 ttl_thread_score
 undo_retention
+unit_gc_wait_time
 user_block_cache_priority
 user_row_cache_priority
 use_ipv6

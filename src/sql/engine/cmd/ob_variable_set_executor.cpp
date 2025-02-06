@@ -1348,7 +1348,9 @@ int ObVariableSetExecutor::is_support(const share::ObSetVar &set_var)
              (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
              (SYS_VAR_BIG_TABLES <= var_id && SYS_VAR_DELAYED_INSERT_LIMIT >= var_id) ||
              (SYS_VAR_GTID_EXECUTED <= var_id && SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION >= var_id) ||
-             (SYS_VAR_INNODB_READ_ONLY <= var_id && SYS_VAR_SUPER_READ_ONLY >= var_id)) {
+             (SYS_VAR_INNODB_READ_ONLY <= var_id && SYS_VAR_SUPER_READ_ONLY >= var_id) ||
+             (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
+             (SYS_VAR_NDB_ALLOW_COPYING_ALTER_TABLE <= var_id && SYS_VAR_RELAY_LOG_SPACE_LIMIT >= var_id )) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
   } else if (SYS_VAR_LOW_PRIORITY_UPDATES <= var_id && SYS_VAR_MAX_INSERT_DELAYED_THREADS >= var_id) {

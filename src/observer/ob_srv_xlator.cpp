@@ -291,17 +291,15 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
             static_cast<ObMPQuery *>(processor)->set_is_com_filed_list();
           }
         }
-        if (OB_SUCC(ret) && (pkt.get_cmd() == obmysql::COM_STMT_PREPARE
-                              || pkt.get_cmd() == obmysql::COM_STMT_PREXECUTE)) {
-          ObSMConnection *conn = reinterpret_cast<ObSMConnection* >(
-              SQL_REQ_OP.get_sql_session(&req));
-          if (OB_ISNULL(conn) || OB_ISNULL(dynamic_cast<ObMPBase *>(processor))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(dynamic_cast<ObMPBase *>(processor)));
-          } else {
-            uint64_t proxy_version = conn->is_proxy_ ? conn->proxy_version_ : 0;
-              static_cast<ObMPBase *>(processor)->set_proxy_version(proxy_version);
-          }
+      }
+      if (OB_SUCC(ret) && pkt.get_cmd() != obmysql::COM_QUERY) {
+        ObSMConnection *conn = reinterpret_cast<ObSMConnection *>(SQL_REQ_OP.get_sql_session(&req));
+        if (OB_ISNULL(conn) || OB_ISNULL(dynamic_cast<ObMPBase *>(processor))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(dynamic_cast<ObMPBase *>(processor)));
+        } else {
+          uint64_t proxy_version = conn->is_proxy_ ? conn->proxy_version_ : 0;
+          static_cast<ObMPBase *>(processor)->set_proxy_version(proxy_version);
         }
       }
     }

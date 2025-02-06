@@ -32996,21 +32996,23 @@ int ObDDLService::add_system_variable(const ObAddSysVarArg &arg)
   } else {
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     int64_t schema_version = OB_INVALID_VERSION;
-    ObSysVariableSchema new_sys_variable_schema;
-    if (OB_UNLIKELY(!arg.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("add sysvar argument is invalid", K(arg));
-    } else if (OB_FAIL(new_sys_variable_schema.assign(*sys_variable_schema))) {
-      LOG_WARN("fail to ass new sys variable schema", KR(ret), KPC(sys_variable_schema));
-    } else if (FALSE_IT(new_sys_variable_schema.reset_sysvars())) {
-    } else if (OB_FAIL(new_sys_variable_schema.add_sysvar_schema(new_sys_var))) {
-      LOG_WARN("add sysvar schema to new tenant info failed", KR(ret));
-    } else if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, schema_version))) {
-      LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
-    } else {
-      const ObSchemaOperationType operation_type = OB_DDL_ALTER_SYS_VAR;
-      if (OB_FAIL(ddl_operator.replace_sys_variable(new_sys_variable_schema, schema_version, trans, operation_type, &arg.ddl_stmt_str_))) {
-        LOG_WARN("alter tenant info failed", KR(ret));
+    SMART_VAR(ObSysVariableSchema, new_sys_variable_schema) {
+      if (OB_UNLIKELY(!arg.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("add sysvar argument is invalid", K(arg));
+      } else if (OB_FAIL(new_sys_variable_schema.assign(*sys_variable_schema))) {
+        LOG_WARN("fail to ass new sys variable schema", KR(ret), KPC(sys_variable_schema));
+      } else if (FALSE_IT(new_sys_variable_schema.reset_sysvars())) {
+      } else if (OB_FAIL(new_sys_variable_schema.add_sysvar_schema(new_sys_var))) {
+        LOG_WARN("add sysvar schema to new tenant info failed", KR(ret));
+      } else if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, schema_version))) {
+        LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
+      } else {
+        const ObSchemaOperationType operation_type = OB_DDL_ALTER_SYS_VAR;
+        if (OB_FAIL(ddl_operator.replace_sys_variable(new_sys_variable_schema, schema_version,
+                                                      trans, operation_type, &arg.ddl_stmt_str_))) {
+          LOG_WARN("alter tenant info failed", KR(ret));
+        }
       }
     }
   }
@@ -33056,75 +33058,76 @@ int ObDDLService::modify_system_variable(const ObModifySysVarArg &arg)
   } else  {
     const ObSysVarSchema *old_schema = NULL;
     ObSysVarSchema new_schema;
-    ObSysVariableSchema new_sys_variable_schema;
-    if (OB_FAIL(new_sys_variable_schema.assign(*sys_variable_schema))) {
-      LOG_WARN("fail to assign sys variable schema", KR(ret));
-    } else if (OB_UNLIKELY(!new_sys_variable_schema.is_valid())) {
-      ret = new_sys_variable_schema.get_err_ret();
-      LOG_WARN("new sys variable schema is invalid", K(ret));
-    } else {
-      new_sys_variable_schema.reset_sysvars();
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < arg.sys_var_list_.count(); ++i) {
-      const ObSysVarSchema &modify_var = arg.sys_var_list_.at(i);
-      bool found = false;
-      for (int64_t j = i + 1; !found && OB_SUCC(ret) && j < arg.sys_var_list_.count(); ++j) {
-        const ObSysVarSchema &tmp_var = arg.sys_var_list_.at(j);
-        if (modify_var.get_name() == tmp_var.get_name()) {
-          found = true;
-        }
+    SMART_VAR(ObSysVariableSchema, new_sys_variable_schema) {
+      if (OB_FAIL(new_sys_variable_schema.assign(*sys_variable_schema))) {
+        LOG_WARN("fail to assign sys variable schema", KR(ret));
+      } else if (OB_UNLIKELY(!new_sys_variable_schema.is_valid())) {
+        ret = new_sys_variable_schema.get_err_ret();
+        LOG_WARN("new sys variable schema is invalid", K(ret));
+      } else {
+        new_sys_variable_schema.reset_sysvars();
       }
-      if (OB_SUCC(ret) && !found) {
-        if (OB_FAIL(sys_variable_schema->get_sysvar_schema(modify_var.get_name(), old_schema))) {
-          LOG_WARN("get sysvar schema failed", K(ret), K(modify_var));
-        } else if (OB_ISNULL(old_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("sys var schema is null", KR(ret), K(modify_var));
-        } else if (OB_FAIL(new_schema.assign(*old_schema))) {
-          LOG_WARN("fail to assign sys var schema", KR(ret));
-        } else if (OB_UNLIKELY(!new_schema.is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("new schema is invalid", K(new_schema));
-        } else if(new_schema.get_value() != modify_var.get_value()) {
-          value_changed = true;
-          if(OB_FAIL(new_schema.set_value(modify_var.get_value()))) {
-            LOG_WARN("set new schema value failed", K(ret));
-          } else if (OB_FAIL(new_sys_variable_schema.add_sysvar_schema(new_schema))) {
-            LOG_WARN("add sysvar schema to new sys variable schema failed", K(ret));
+      for (int64_t i = 0; OB_SUCC(ret) && i < arg.sys_var_list_.count(); ++i) {
+        const ObSysVarSchema &modify_var = arg.sys_var_list_.at(i);
+        bool found = false;
+        for (int64_t j = i + 1; !found && OB_SUCC(ret) && j < arg.sys_var_list_.count(); ++j) {
+          const ObSysVarSchema &tmp_var = arg.sys_var_list_.at(j);
+          if (modify_var.get_name() == tmp_var.get_name()) {
+            found = true;
           }
-        } else {
-          //new value == old value, no need to update sys var schema
-          //do nothing
+        }
+        if (OB_SUCC(ret) && !found) {
+          if (OB_FAIL(sys_variable_schema->get_sysvar_schema(modify_var.get_name(), old_schema))) {
+            LOG_WARN("get sysvar schema failed", K(ret), K(modify_var));
+          } else if (OB_ISNULL(old_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("sys var schema is null", KR(ret), K(modify_var));
+          } else if (OB_FAIL(new_schema.assign(*old_schema))) {
+            LOG_WARN("fail to assign sys var schema", KR(ret));
+          } else if (OB_UNLIKELY(!new_schema.is_valid())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("new schema is invalid", K(new_schema));
+          } else if(new_schema.get_value() != modify_var.get_value()) {
+            value_changed = true;
+            if(OB_FAIL(new_schema.set_value(modify_var.get_value()))) {
+              LOG_WARN("set new schema value failed", K(ret));
+            } else if (OB_FAIL(new_sys_variable_schema.add_sysvar_schema(new_schema))) {
+              LOG_WARN("add sysvar schema to new sys variable schema failed", K(ret));
+            }
+          } else {
+            //new value == old value, no need to update sys var schema
+            //do nothing
+          }
         }
       }
-    }
-    if (OB_SUCC(ret) && value_changed == true) {
-      bool is_oracle_mode = true;
-      int64_t schema_version = OB_INVALID_VERSION;
-      const ObSchemaOperationType operation_type = OB_DDL_ALTER_SYS_VAR;
-      ObDDLSQLTransaction trans(schema_service_);
-      ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      int64_t refreshed_schema_version = 0;
-      if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
-        LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
-        LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-      } else if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, schema_version))) {
-        LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-      } else if (OB_FAIL(ddl_operator.replace_sys_variable(new_sys_variable_schema, schema_version, trans, operation_type, &arg.ddl_stmt_str_))) {
-        LOG_WARN("alter tenant info failed", K(ret));
-      } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(is_oracle_mode))) {
-        LOG_WARN("failed to get oracle mode", K(ret));
-#ifdef OB_BUILD_ORACLE_PL
-      } else if (!is_oracle_mode && OB_FAIL(pl::ObDbmsAuditMgmt::handle_audit_param_mysql(new_sys_variable_schema, trans))) {
-        LOG_WARN("failed to refresh audit log trail jobs", K(ret), K(new_sys_variable_schema));
-#endif
-      }
-      if (trans.is_started()) {
-        int temp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
-          ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      if (OB_SUCC(ret) && value_changed == true) {
+        bool is_oracle_mode = true;
+        int64_t schema_version = OB_INVALID_VERSION;
+        const ObSchemaOperationType operation_type = OB_DDL_ALTER_SYS_VAR;
+        ObDDLSQLTransaction trans(schema_service_);
+        ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+        int64_t refreshed_schema_version = 0;
+        if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+          LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+          LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+        } else if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+        } else if (OB_FAIL(ddl_operator.replace_sys_variable(new_sys_variable_schema, schema_version, trans, operation_type, &arg.ddl_stmt_str_))) {
+          LOG_WARN("alter tenant info failed", K(ret));
+        } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(is_oracle_mode))) {
+          LOG_WARN("failed to get oracle mode", K(ret));
+  #ifdef OB_BUILD_ORACLE_PL
+        } else if (!is_oracle_mode && OB_FAIL(pl::ObDbmsAuditMgmt::handle_audit_param_mysql(new_sys_variable_schema, trans))) {
+          LOG_WARN("failed to refresh audit log trail jobs", K(ret), K(new_sys_variable_schema));
+  #endif
+        }
+        if (trans.is_started()) {
+          int temp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+            LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+            ret = (OB_SUCC(ret)) ? temp_ret : ret;
+          }
         }
       }
     }
@@ -41212,13 +41215,11 @@ int ObDDLService::init_system_variables(
     ObSysVariableSchema &sys_variable_schema)
 {
   int ret = OB_SUCCESS;
-  //MAX_SYS_PARAM_NUM is 500. When param num needed greater than 500,
-  //you need to change OB_MAX_SYS_PARAM_NUM in "ob_define.h".
-  const int64_t params_capacity = OB_MAX_SYS_PARAM_NUM;
+  const int64_t params_capacity = ObSysVarFactory::ALL_SYS_VARS_COUNT;
   int64_t var_amount = ObSysVariables::get_amount();
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
   ObMalloc alloc(ObModIds::OB_TEMP_VARIABLES);
-  ObPtrGuard<ObSysParam, OB_MAX_SYS_PARAM_NUM> sys_params_guard(alloc);
+  ObPtrGuard<ObSysParam, ObSysVarFactory::ALL_SYS_VARS_COUNT> sys_params_guard(alloc);
   sys_variable_schema.reset();
   sys_variable_schema.set_tenant_id(tenant_id);
   ObSysParam *sys_params = NULL;

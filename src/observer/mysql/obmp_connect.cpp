@@ -354,8 +354,8 @@ int ObMPConnect::process()
       LOG_WARN("client session has been killed", K(ret));
     } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
       LOG_WARN("update transmisson checksum flag failed", K(ret));
-    } else if (OB_FAIL(update_proxy_sys_vars(*session))) {
-      LOG_WARN("update_proxy_sys_vars failed", K(ret));
+    } else if (OB_FAIL(update_proxy_and_client_sys_vars(*session))) {
+      LOG_WARN("update_proxy_and_client_sys_vars failed", K(ret));
     } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
       LOG_WARN("fail to update charset sys vars", K(ret));
     } else if (OB_FAIL(setup_user_resource_group(*conn, tenant_id, session))) {
@@ -914,6 +914,8 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
                                                  session))) {
           LOG_WARN("failed to load audit log filter", K(ret));
         } else if (OB_FAIL(get_client_attribute_capability(client_attr_cap_flags))) {
+          LOG_WARN("failed to get client attribute capability", K(ret));
+        } else if (OB_FAIL(check_update_client_capability(client_attr_cap_flags))) {
           LOG_WARN("failed to get client attribute capability", K(ret));
         } else {
           session.set_client_attrbuite_capability(client_attr_cap_flags);
@@ -1840,6 +1842,27 @@ int ObMPConnect::get_client_attribute_capability(uint64_t &cap) const
       LOG_WARN("fail to cast client attribute capability flag to uint64", K_(kv.value), K(ret));
     }
   }
+  return ret;
+}
+
+int ObMPConnect::check_update_client_capability(uint64_t &cap) const
+{
+  int ret = OB_SUCCESS;
+
+  // set client_capability_ to tell client which features observer supports
+  ObClientAttributeCapabilityFlags server_client_cap_flag;
+  // version control need change 425
+  server_client_cap_flag.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2 = 1;
+  if (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_0
+      || GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_3_5_0) {
+    server_client_cap_flag.cap_flags_.OB_CLIENT_CAP_NEW_RESULT_META_DATA = 1;
+  } else {
+    server_client_cap_flag.cap_flags_.OB_CLIENT_CAP_NEW_RESULT_META_DATA = 0;
+  }
+
+  cap = (server_client_cap_flag.capability_ & cap);//if old java client, set it 0
+
+  LOG_DEBUG("debug client capability", K(cap));
   return ret;
 }
 

@@ -1567,6 +1567,52 @@ public:
     ObSQLSessionInfo::LockGuard guard(get_thread_data_lock());
     return tx_desc_ != NULL ? tx_desc_->get_tx_id().get_id() : transaction::ObTransID().get_id();
   }
+  int check_tenant_status()
+  {
+    int ret = OB_SUCCESS;
+    if (GCONF._enable_unit_gc_wait && is_obproxy_mode()
+        && proxy_version_ >= unit_gc_min_sup_proxy_version_) {
+      bool is_already_set = false;
+      if (MTL_GET_TENANT_PREPARE_GC_STATE()) {
+        if (OB_FAIL(get_session_temp_table_used(is_already_set))) {
+          SQL_SESSION_LOG(WARN, "failed to get session temp table used", K(ret));
+        } else if (!is_already_set && !is_in_transaction()) {
+          ret = OB_TENANT_NOT_IN_SERVER;
+          SQL_SESSION_LOG(INFO, "unit has been migrated", K(ret));
+        }
+      }
+    }
+    return ret;
+  }
+  int can_kill_session_immediately(bool &need_kill)
+  {
+    int ret = OB_SUCCESS;
+    need_kill = true;
+    if (GCONF._enable_unit_gc_wait && is_obproxy_mode()
+        && proxy_version_ >= unit_gc_min_sup_proxy_version_) {
+      need_kill = false;
+      bool is_already_set = false;
+      if (OB_FAIL(try_lock_query())) {
+        if (OB_UNLIKELY(OB_EAGAIN != ret)) {
+          SQL_SESSION_LOG(WARN, "fail to try lock query", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        // successful lock means that there is no request in the current session
+        if (OB_FAIL(get_session_temp_table_used(is_already_set))) {
+          SQL_SESSION_LOG(WARN, "failed to get session temp table used", K(ret));
+        } else if (!is_already_set && !is_in_transaction()) {
+          need_kill = true;
+        }
+        (void)unlock_query();
+      }
+    }
+    // SQL_ENG_LOG(INFO, "can kill session immediately", K(need_kill), K(is_obproxy_mode()),
+    //             K(proxy_version_), K(unit_gc_min_sup_proxy_version_), K(GCONF._enable_unit_gc_wait),
+    //             K(ret));
+    return ret;
+  }
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
   void set_affected_rows_is_changed(int64_t affected_rows);
@@ -1844,6 +1890,7 @@ private:
   ObServiceNameString service_name_;
   common::ObString audit_filter_name_;
   ObExecutingSqlStatRecord executing_sql_stat_record_;
+  uint64_t unit_gc_min_sup_proxy_version_;
 };
 
 

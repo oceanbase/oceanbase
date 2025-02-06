@@ -72,8 +72,8 @@ int ObMPResetConnection::process()
       LOG_WARN("load system variables failed", K(ret));
     } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
       OB_LOG(WARN, "failed to update database variables", K(ret));
-    } else if (OB_FAIL(update_proxy_sys_vars(*session))) {
-      LOG_WARN("update_proxy_sys_vars failed", K(ret));
+    } else if (OB_FAIL(update_proxy_and_client_sys_vars(*session))) {
+      LOG_WARN("update_proxy_and_client_sys_vars failed", K(ret));
     } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
       LOG_WARN("fail to update charset sys vars", K(ret));
     } else if (OB_FAIL(session->get_query_timeout(query_timeout))) {

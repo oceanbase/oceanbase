@@ -483,6 +483,10 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_CPU_COUNT() share::ObTenantEnv::get_tenant()->unit_max_cpu()
 #define MTL_MEM_SIZE() share::ObTenantEnv::get_tenant()->unit_memory_size()
 #define MTL_DATA_DISK_SIZE() share::ObTenantEnv::get_tenant()->unit_data_disk_size()
+// 设置租户prepare gc状态
+#define MTL_SET_TENANT_PREPARE_GC_STATE() share::ObTenantEnv::get_tenant()->set_prepare_unit_gc()
+// 获取租户prepare gc状态
+#define MTL_GET_TENANT_PREPARE_GC_STATE() share::ObTenantEnv::get_tenant()->is_prepare_unit_gc()
 
 // 注意MTL_BIND调用需要在租户创建之前，否则会导致租户创建时无法调用到绑定的函数。
 #define MTL_BIND2(NEW, INIT, START, STOP, WAIT, DESTROY) \
@@ -620,6 +624,19 @@ public:
     return orig_mode;
   }
   bool is_mini_mode() const { return mini_mode_; }
+  void set_prepare_unit_gc()
+  {
+    // only set marked_prepare_gc_ts_ once
+    if (marked_prepare_gc_ts_ <= 0) {
+      marked_prepare_gc_ts_ = ObTimeUtility::current_time();
+    }
+  }
+  void clear_prepare_unit_gc()
+  {
+    marked_prepare_gc_ts_ = 0;
+  }
+  bool is_prepare_unit_gc() const { return marked_prepare_gc_ts_ > 0; }
+  int64_t get_prepare_unit_gc_ts() const { return marked_prepare_gc_ts_; }
   int64_t get_max_session_num(const int64_t rl_max_session_num);
   int register_module_thread_dynamic(double dynamic_factor, int tg_id);
   int unregister_module_thread_dynamic(int tg_id);
@@ -794,6 +811,7 @@ private:
   using ThreadList = common::ObDList<ThreadListNode>;
   ThreadList thread_list_;
   lib::ObMutex thread_list_lock_;
+  int64_t marked_prepare_gc_ts_;
 };
 
 using ReleaseCbFunc = std::function<int (common::ObLDHandle&)>;

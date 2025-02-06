@@ -233,6 +233,8 @@ protected:
     ObRoutePolicyType type = INVALID_POLICY;
     if (COLUMN_STORE_ONLY == ctx.policy_type_) {
       type = ctx.policy_type_;
+    } else if (FORCE_READONLY_ZONE == ctx.policy_type_) {
+      type = FORCE_READONLY_ZONE;
     } else if (has_readonly_zone_) {
       if (UNMERGE_FOLLOWER_FIRST == ctx.policy_type_) {
         type = READONLY_ZONE_FIRST;

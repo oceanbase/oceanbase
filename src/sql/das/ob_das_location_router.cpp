@@ -841,9 +841,10 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
       LOG_WARN("check in black list failed", K(ret));
     } else if (!in_black_list) {
       if ((route_policy == COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_COLUMNSTORE) ||
-          (route_policy != COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE)) {
+          (route_policy != COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE) ||
+          (route_policy == FORCE_READONLY_ZONE && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_READONLY)) {
         // skip the tmp_replica_loc
-        LOG_TRACE("skip the replica due to the COLUMN_STORE_ONLY policy.", K(ret), K(tmp_replica_loc));
+        LOG_TRACE("skip the replica due to the replica policy.", K(ret), K(tmp_replica_loc.get_replica_type()), K(tmp_replica_loc));
       } else if (tmp_replica_loc.get_server() == GCTX.self_addr()) {
         //prefer choose the local replica
         local_replica = &tmp_replica_loc;
@@ -863,7 +864,7 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
       LOG_USER_ERROR(OB_NO_REPLICA_VALID);
     } else if (remote_replicas.empty()) {
       ret = OB_NO_READABLE_REPLICA;
-      LOG_WARN("there has no readable replica", K(ret), K(tablet_id), K(ls_loc));
+      LOG_WARN("there has no readable replica", K(ret), K(tablet_id), K(ls_loc), K(route_policy));
     } else {
       //no local copy, randomly select a readable replica
       int64_t select_idx = rand() % remote_replicas.count();

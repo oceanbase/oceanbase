@@ -5597,6 +5597,17 @@ int ObBasicSessionInfo::set_proxy_capability(const uint64_t cap)
   return ret;
 }
 
+int ObBasicSessionInfo::set_client_capability()
+{
+  int ret = OB_SUCCESS;
+  ObObj obj;
+  obj.set_int(get_client_attrbuite_capability());
+  if (OB_FAIL(update_sys_variable(SYS_VAR___OB_CLIENT_CAPABILITY_FLAG, obj))) {
+    LOG_WARN("fail to update_system_variable", K(SYS_VAR___OB_CLIENT_CAPABILITY_FLAG), K(get_client_attrbuite_capability()), K(ret));
+  } else {}
+  return ret;
+}
+
 int ObBasicSessionInfo::set_trans_specified(const bool is_spec)
 {
   int ret = OB_SUCCESS;

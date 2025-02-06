@@ -1578,8 +1578,8 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   loc_meta.is_external_table_ = table_schema.is_external_table();
   loc_meta.is_external_files_on_disk_ =
       ObSQLUtils::is_external_files_on_local_disk(table_schema.get_external_file_location());
-  bool is_weak_read = false;
   int64_t route_policy = 0;
+  bool is_weak_read = false;
   // broadcast table (insert into select) read local for materialized view create,here three conditions:
   // 1. inner sql tag weak read
   // 2. is complete refresh
@@ -1595,6 +1595,8 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
              && !is_new_mv_create) {
     loc_meta.select_leader_ = 1;
     loc_meta.is_weak_read_ = 0;
+  } else if (OB_FAIL(session.get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+    LOG_WARN("get route policy failed", K(ret));
   } else if (OB_FAIL(ObTableLocation::get_is_weak_read(stmt, &session,
                                                        cg_.opt_ctx_->get_exec_ctx()->get_sql_ctx(),
                                                        is_weak_read))) {

@@ -821,6 +821,7 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
   ObCollationType cs_server = CS_TYPE_INVALID;
   share::schema::ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = session->get_effective_tenant_id();
+  session->set_proxy_version(get_proxy_version());
 
   if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("get schema guard failed", K(ret));
@@ -831,7 +832,7 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
   } else if (OB_FAIL(session->get_collation_server(cs_server))) {
     LOG_WARN("get charset for client failed", K(ret));
   } else if (OB_FAIL(session->get_ps_session_info(stmt_id_, ps_session_info))) {
-      LOG_WARN("get_ps_session_info failed", K(ret), K_(stmt_id));
+    LOG_WARN("get_ps_session_info failed", K(ret), K_(stmt_id));
   } else if (OB_ISNULL(ps_session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ps_session_info is null", K(ret));
@@ -1924,6 +1925,7 @@ int ObMPStmtExecute::process()
           session.get_raw_audit_record().request_memory_used_);
     lib::ObMallocCallbackGuard guard(pmcb);
     session.set_thread_id(GETTID());
+    session.set_proxy_version(get_proxy_version());
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     int64_t packet_len = pkt.get_clen();
     if (OB_UNLIKELY(!session.is_valid())) {
@@ -1961,6 +1963,9 @@ int ObMPStmtExecute::process()
     } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                             conn->proxy_cap_flags_.is_full_link_trace_support()))) {
       LOG_WARN("failed to init flt extra info", K(ret));
+    } else if (OB_FAIL(session.check_tenant_status())) {
+      need_disconnect = false;
+      LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()));
     } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
       LOG_WARN("fail to generate configuration string that can influence execution plan", K(ret));
     } else if (is_arraybinding_ && OB_FAIL(check_precondition_for_arraybinding(session))) {

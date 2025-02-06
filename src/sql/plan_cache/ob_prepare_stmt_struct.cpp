@@ -700,5 +700,16 @@ int TypeInfo::deep_copy(common::ObIAllocator *allocator,
   return ret;
 }
 
+int ObPsSessionInfo::fill_param_types_with_null_type()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i=0; OB_SUCC(ret) && i<num_of_params_; ++i) {
+    if (OB_FAIL(param_types_.push_back(obmysql::MYSQL_TYPE_NULL))) {
+      LOG_WARN("push null type into param_types_ failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 } // end of sql
 } // end of oceanbase

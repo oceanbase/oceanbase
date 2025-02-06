@@ -97,13 +97,11 @@ int ObMPQuery::process()
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.init_use_rich_format();
+    session.set_proxy_version(conn->is_proxy_ ? conn->proxy_version_ : 0);
     int64_t val = 0;
     const bool check_throttle = !is_root_user(sess->get_user_id());
-
-    if (check_throttle &&
-        !sess->is_inner() &&
-        sess->get_raw_audit_record().try_cnt_ == 0 &&
-        lib::Worker::WS_OUT_OF_THROTTLE == THIS_THWORKER.check_rate_limiter()) {
+    if (check_throttle && !sess->is_inner() && sess->get_raw_audit_record().try_cnt_ == 0
+               && lib::Worker::WS_OUT_OF_THROTTLE == THIS_THWORKER.check_rate_limiter()) {
       ret = OB_KILLED_BY_THROTTLING;
       LOG_WARN("query is throttled", K(ret), K(sess->get_user_id()));
       need_disconnect = false;
@@ -164,8 +162,12 @@ int ObMPQuery::process()
       } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                               conn->proxy_cap_flags_.is_full_link_trace_support()))) {
         LOG_WARN("failed to update flt extra info", K(ret));
+      } else if (OB_FAIL(session.check_tenant_status())) {
+        need_disconnect = false;
+        LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()), K(sql_));
       } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
-        LOG_WARN("fail to generate configuration strings that can influence execution plan", K(ret));
+        LOG_WARN("fail to generate configuration strings that can influence execution plan",
+                 K(ret));
       } else {
         FLTSpanGuard(com_query_process);
         char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
