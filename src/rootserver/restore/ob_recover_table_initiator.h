@@ -83,6 +83,7 @@ private:
       share::ObImportRemapArg &import_remap_arg);
   int fill_remap_tablegroup(const share::ObImportArg &import_arg,
       share::ObImportRemapArg &import_remap_arg);
+  int fill_recover_table_restore_type_(share::ObPhysicalRestoreJob &job);
 
 private:
   bool is_inited_;

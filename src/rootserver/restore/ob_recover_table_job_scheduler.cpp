@@ -626,7 +626,8 @@ int ObRecoverTableJobScheduler::active_aux_tenant_(share::ObRecoverTableJob &job
         "initiator_job_id", job.get_job_id(), "initiator_tenant_id", job.get_tenant_id());
   } else if (OB_FAIL(ban_multi_version_recycling_(job, restore_history_info.restore_tenant_id_))) {
     LOG_WARN("failed to ban multi version cecycling", K(ret));
-  } else if (OB_FAIL(failover_to_primary_(job, restore_history_info.restore_tenant_id_))) {
+  } else if (restore_history_info.get_restore_type().is_full_restore()
+    && OB_FAIL(failover_to_primary_(job, restore_history_info.restore_tenant_id_))) {
     LOG_WARN("failed to failover to primary", K(ret), K(restore_history_info));
   }
   if (OB_FAIL(ret)) {

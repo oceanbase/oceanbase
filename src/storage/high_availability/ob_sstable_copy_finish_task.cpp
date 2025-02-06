@@ -1149,9 +1149,11 @@ int ObSSTableCopyFinishTask::get_space_optimization_mode_(
     LOG_WARN("sstable_param is null", K(ret));
   } else if (sstable_param->table_key_.is_ddl_sstable()) {
     mode = ObSSTableIndexBuilder::DISABLE;
-  } else if (sstable_param->is_small_sstable_) {
+  } else if (ObTabletRestoreAction::is_restore_remote_sstable(copy_ctx_.restore_action_)) {
+    mode = ObSSTableIndexBuilder::DISABLE;
+  } else if (ObTabletRestoreAction::is_restore_replace_remote_sstable(copy_ctx_.restore_action_)) {
     mode = ObSSTableIndexBuilder::ENABLE;
-  } else if (sstable_param->basic_meta_.table_backup_flag_.has_backup()) {
+  } else if (sstable_param->is_small_sstable_) {
     mode = ObSSTableIndexBuilder::ENABLE;
   } else {
     mode = ObSSTableIndexBuilder::DISABLE;

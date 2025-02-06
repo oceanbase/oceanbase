@@ -17,6 +17,7 @@
 #include "ob_restore_util.h"
 #include "share/restore/ob_recover_table_persist_helper.h"
 #include "share/restore/ob_import_table_persist_helper.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 using namespace oceanbase;
 using namespace share::schema;
@@ -170,6 +171,7 @@ int ObRecoverTableInitiator::insert_sys_job_(
     } else if (OB_FALSE_IT(physical_restore_job.set_initiator_job_id(job.get_job_id()))) {
     } else if (OB_FALSE_IT(physical_restore_job.set_initiator_tenant_id(OB_SYS_TENANT_ID))) {
     } else if (OB_FALSE_IT(physical_restore_job.set_recover_table(true))) {
+    } else if (OB_FAIL(fill_recover_table_restore_type_(physical_restore_job))) {
     } else if (OB_FAIL(ObRestoreUtil::record_physical_restore_job(trans, physical_restore_job))) {
       LOG_WARN("failed to record physical restore job", K(ret));
     }
@@ -512,5 +514,28 @@ int ObRecoverTableInitiator::fill_recover_table_arg_(
   } else if (OB_FAIL(fill_remap_tablegroup(arg.import_arg_, import_remap_arg))) {
     LOG_WARN("failed to remap tablegroup", K(ret), K(arg.import_arg_));
   }
+  return ret;
+}
+
+int ObRecoverTableInitiator::fill_recover_table_restore_type_(share::ObPhysicalRestoreJob &job)
+{
+  int ret = OB_SUCCESS;
+  /* 4.3.3 share noting mode support quick restore; 4.3.5 support mds table standby tenant read.
+   * In share noting mode, backup set data_version >= 4.3.5, recover table use quick physical restore.
+   * In other condition, recover table use full physical restore. */
+  /* tenant_compatible_ & backup_compatible has been check in fill physical restore job */
+  const uint64_t source_data_version = job.get_source_data_version();
+  const ObBackupSetFileDesc::Compatible backup_compatible =
+    static_cast<ObBackupSetFileDesc::Compatible>(job.get_backup_compatible());
+  const bool is_allow_quick_restore = ObBackupSetFileDesc::is_allow_quick_restore(backup_compatible);
+  const bool is_allow_mds_standby_read = ObTransferUtils::enable_transfer_dml_ctrl(source_data_version);
+  // use quick restore should set table cnt display mode.
+  if (is_allow_quick_restore && is_allow_mds_standby_read) {
+    job.set_restore_type(QUICK_RESTORE_TYPE);
+    job.set_progress_display_mode(TABLET_CNT_DISPLAY_MODE);
+  }
+
+  LOG_INFO("[RECOVER_TABLE] set recover table restore type", "restore_type", QUICK_RESTORE_TYPE,
+    "progress_display_mode", TABLET_CNT_DISPLAY_MODE);
   return ret;
 }
