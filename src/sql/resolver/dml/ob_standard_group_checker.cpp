@@ -71,10 +71,18 @@ int ObStandardGroupChecker::check_only_full_group_by()
     LOG_WARN("get unexpected null", K(ret), K(select_stmt_), K(session_info_));
   } else if (!has_group_) {
     // do nothing
-  } else if (OB_FAIL(deduce_settled_exprs())) {
-    LOG_WARN("failed to deduce settled exprs", K(ret));
   } else {
+    ObArenaAllocator alloc("CheckUnique", OB_MALLOC_NORMAL_BLOCK_SIZE,
+                            session_info_->get_effective_tenant_id(),
+                            ObCtxIds::DEFAULT_CTX_ID);
+    ObRawExprFactory expr_factory(alloc);
+    ObFdItemFactory fd_item_factory(alloc);
     ObStandardGroupVisitor visitor(this);
+    if (OB_FAIL(deduce_settled_exprs(&alloc,
+                                     &expr_factory,
+                                     &fd_item_factory))) {
+      LOG_WARN("failed to deduce settled exprs", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < unsettled_exprs_.count(); ++i) {
       ObRawExpr *unsettled_expr = unsettled_exprs_.at(i);
       bool is_valid = false;
@@ -85,6 +93,10 @@ int ObStandardGroupChecker::check_only_full_group_by()
       } else if (OB_FAIL(unsettled_expr->preorder_accept(visitor))) {
         LOG_WARN("failed to check unsettled expr", K(ret));
       }
+    }
+    if (OB_SUCC(ret)) {
+      expr_factory.destory();
+      fd_item_factory.destory();
     }
   }
   return ret;
@@ -105,22 +117,20 @@ int ObStandardGroupChecker::expr_exists_in_group_by(ObRawExpr *expr,
   return ret;
 }
 
-int ObStandardGroupChecker::deduce_settled_exprs()
+int ObStandardGroupChecker::deduce_settled_exprs(ObArenaAllocator *alloc,
+                                                 ObRawExprFactory *expr_factory,
+                                                 ObFdItemFactory *fd_item_factory)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(select_stmt_) || OB_ISNULL(session_info_)) {
+  if (OB_ISNULL(select_stmt_) || OB_ISNULL(session_info_)
+      || OB_ISNULL(alloc) || OB_ISNULL(expr_factory) || OB_ISNULL(fd_item_factory)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(select_stmt_), K(session_info_));
+    LOG_WARN("get unexpected null", K(ret), K(select_stmt_), K(session_info_), K(alloc), K(expr_factory), K(fd_item_factory));
   } else {
-    ObArenaAllocator alloc("CheckUnique", OB_MALLOC_NORMAL_BLOCK_SIZE,
-                            session_info_->get_effective_tenant_id(),
-                            ObCtxIds::DEFAULT_CTX_ID);
-    ObFdItemFactory fd_item_factory(alloc);
-    ObRawExprFactory expr_factory(alloc);
     ObTransformUtils::UniqueCheckHelper check_helper;
-    check_helper.alloc_ = &alloc;
-    check_helper.fd_factory_ = &fd_item_factory;
-    check_helper.expr_factory_ = &expr_factory;
+    check_helper.alloc_ = alloc;
+    check_helper.fd_factory_ = fd_item_factory;
+    check_helper.expr_factory_ = expr_factory;
     check_helper.schema_checker_ = schema_checker_;
     check_helper.session_info_ = session_info_;
     ObSEArray<TableItem*, 8> from_tables;
@@ -143,9 +153,6 @@ int ObStandardGroupChecker::deduce_settled_exprs()
                                                                 unique_info.equal_sets_,
                                                                 unique_info.const_exprs_))) {
       LOG_WARN("failed to deduce determined exprs", K(ret));
-    } else {
-      fd_item_factory.destory();
-      expr_factory.destory();
     }
   }
   return ret;

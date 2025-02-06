@@ -20,6 +20,7 @@ namespace oceanbase
 namespace sql
 {
 class ObSelectStmt;
+class ObFdItemFactory;
 class ObStandardGroupChecker
 {
 public:
@@ -37,7 +38,9 @@ public:
   int add_unsettled_expr(ObRawExpr *expr);
   int check_only_full_group_by();
 private:
-  int deduce_settled_exprs();
+  int deduce_settled_exprs(ObArenaAllocator *alloc,
+                           ObRawExprFactory *expr_factory,
+                           ObFdItemFactory *fd_item_factory);
   int expr_exists_in_group_by(ObRawExpr *expr, bool &is_existed);
   int check_unsettled_column(const ObColumnRefRawExpr *unsettled_column);
 private:
