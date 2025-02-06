@@ -137,6 +137,7 @@ private:
   int check_max_row_data_length(const ObTableSchema &table_schema);
   int create_default_partition_for_table(ObTableSchema &table_schema);
   int set_default_micro_index_clustered_(share::schema::ObTableSchema &table_schema);
+  int check_building_domain_index_legal();
 
 private:
   // data members
@@ -148,7 +149,7 @@ private:
   bool is_temp_table_pk_added_;
   obrpc::ObCreateIndexArg index_arg_;
   IndexNameSet current_index_name_set_;
-
+  common::hash::ObHashSet<share::schema::ObIndexNameHashWrapper> index_aux_name_set_;
   common::ObSEArray<GenColExpr, 5> gen_col_exprs_;//store generated column and dependent exprs
   common::ObSEArray<ObRawExpr *, 5> constraint_exprs_;//store constraint exprs
 
@@ -156,6 +157,7 @@ private:
   common::ObSEArray<uint64_t, 4> vec_index_col_ids_;
   bool has_vec_index_;
   bool has_fts_index_;
+  bool has_multivalue_index_;
 };
 
 } // end namespace sql

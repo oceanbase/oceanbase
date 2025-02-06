@@ -7076,67 +7076,44 @@ int ObDDLService::check_aux_index_schema_exist(
                                                            index_table_name))) {
     LOG_WARN("failed to construct index table name", K(ret),
         K(arg.index_name_));
-  } else if (share::schema::is_fts_index(index_type)) {
-    /* is_fts_index means: rowkey-doc, doc-rowkey, fts, word-doc multivalue-index, fts-index all run here*/
+  } else if (share::schema::is_fts_or_multivalue_index(index_type)
+             || share::schema::is_vec_index(index_type)) {
+    const uint64_t database_id = data_schema->get_database_id();
     if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                              data_schema->get_database_id(),
+                                              database_id,
                                               index_table_name,
                                               true/*is_index*/,
                                               index_schema,
                                               false/*with_hidden_flag*/,
-                                              share::schema::is_built_in_fts_index(index_type)))) {
-      if (OB_TABLE_NOT_EXIST == ret) {
-        is_exist = false;
-        index_schema = nullptr;
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to get index schema", K(ret), K(tenant_id), K(index_table_name));
-      }
-    } else if (OB_NOT_NULL(index_schema)) {
-      is_exist = true;
-      LOG_INFO("fts index aux table already exist, no need to generate",
-        K(index_table_name));
+                                              true/*is_built_in_index*/))) {
+      LOG_WARN("failed to get index schema",
+          K(ret), K(tenant_id), K(index_table_name));
     }
-  } else if (share::schema::is_vec_index(index_type)) {
-    if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                              data_schema->get_database_id(),
-                                              index_table_name,
-                                              true/*is_index*/,
-                                              index_schema,
-                                              false/*with_hidden_flag*/,
-                                              share::schema::is_built_in_vec_index(index_type)))) {
-      if (OB_TABLE_NOT_EXIST == ret) {
-        is_exist = false;
-        index_schema = nullptr;
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to get index schema", K(ret), K(tenant_id), K(index_table_name));
+
+    if (OB_SUCC(ret) && OB_ISNULL(index_schema)) {
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                database_id,
+                                                index_table_name,
+                                                true/*is_index*/,
+                                                index_schema,
+                                                false/*with_hidden_flag*/,
+                                                false/*is_built_in_index*/))) {
+        LOG_WARN("failed to get index schema",
+            K(ret), K(tenant_id), K(index_table_name));
       }
-    } else if (OB_NOT_NULL(index_schema)) {
-      is_exist = true;
-      LOG_INFO("vec index aux table already exist, no need to generate",
-        K(index_table_name));
     }
-  } else if (share::schema::is_multivalue_index_aux(index_type)) {
-    /* only multivalue index 3rd table run here */
-    if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                              data_schema->get_database_id(),
-                                              index_table_name,
-                                              true/*is_index*/,
-                                              index_schema,
-                                              false/*with_hidden_flag*/,
-                                              share::schema::is_built_in_multivalue_index(index_type)))) {
-      if (OB_TABLE_NOT_EXIST == ret) {
-        is_exist = false;
-        index_schema = nullptr;
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to get index schema", K(ret), K(tenant_id), K(index_table_name));
-      }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(index_schema)) {
-      is_exist = true;
-      LOG_INFO("multivalue index aux table already exist, no need to generate",
-        K(index_table_name));
+      if (index_schema->get_index_type() == index_type) {
+        is_exist = true;
+        LOG_INFO("fts index aux table already exist, no need to generate",
+            K(index_table_name), K(index_schema->get_index_type()), K(index_type));
+      } else {
+        ret = OB_ERR_KEY_NAME_DUPLICATE;
+        LOG_WARN("the index name is too special" \
+            "the index name is not supported", K(ret), K(arg.index_name_));
+      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;

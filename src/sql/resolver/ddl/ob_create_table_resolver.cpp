@@ -44,7 +44,8 @@ ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
       cur_udt_set_id_(0),
       vec_index_col_ids_(),
       has_vec_index_(false),
-      has_fts_index_(false)
+      has_fts_index_(false),
+      has_multivalue_index_(false)
 {
 }
 
@@ -2682,6 +2683,11 @@ int ObCreateTableResolver::resolve_index(
         SQL_RESV_LOG(WARN, "resolve index node failed", K(ret));
       } else { /*do nothing*/ }
     }
+    if (OB_SUCC(ret) && (has_fts_index_ || has_multivalue_index_ || has_vec_index_)) {
+      if (OB_FAIL(check_building_domain_index_legal())) {
+        LOG_WARN("fail to check building domain index legal", K(ret));
+      }
+    }
     current_index_name_set_.reset();
   }
 
@@ -3226,6 +3232,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                                                               index_arg_list,
                                                               allocator_))) {
               LOG_WARN("failed to append fts args", K(ret));
+            } else {
+              has_multivalue_index_ = true;
             }
           } else {
             if (OB_FAIL(resolve_results.push_back(resolve_result))) {
@@ -3650,6 +3658,40 @@ int ObCreateTableResolver::check_max_row_data_length(const ObTableSchema &table_
     if (OB_SUCC(ret) && (row_data_length += length) > OB_MAX_USER_ROW_LENGTH) {
       ret = OB_ERR_TOO_BIG_ROWSIZE;
       SQL_RESV_LOG(WARN, "too big rowsize", KR(ret), K(is_oracle_mode), K(i), K(row_data_length), K(length));
+    }
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::check_building_domain_index_legal()
+{
+  int ret = OB_SUCCESS;
+  if (!index_aux_name_set_.created() &&
+      OB_FAIL(index_aux_name_set_.create(common::OB_MAX_COLUMN_NUMBER))) {
+    LOG_WARN("fail to init index aux name set", K(ret));
+  } else {
+    ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+    const ObSArray<obrpc::ObCreateIndexArg> &index_arg_list = create_table_stmt->get_index_arg_list();
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.count(); ++i) {
+      const obrpc::ObCreateIndexArg &index_arg = index_arg_list.at(i);
+      ObIndexNameHashWrapper index_name_key(index_arg.index_name_);
+      if (OB_FAIL(index_aux_name_set_.exist_refactored(index_name_key))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_ERR_KEY_NAME_DUPLICATE;
+          LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE,
+              index_arg.index_name_.length(), index_arg.index_name_.ptr());
+          LOG_WARN("there is duplicate index aux name", K(ret), K(index_arg.index_name_));
+        } else if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to search index aux name set", K(ret), K(index_arg.index_name_));
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(index_aux_name_set_.set_refactored(index_name_key))) {
+            LOG_WARN("fail to insert index aux name set", K(ret), K(index_arg.index_name_));
+          }
+        }
+      }
     }
   }
   return ret;
