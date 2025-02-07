@@ -49,8 +49,8 @@ int ObLobRetryUtil::check_need_retry(ObLobAccessParam &param, const int error_co
       case  OB_NOT_MASTER:
       case  OB_NO_READABLE_REPLICA:
       case  OB_TABLET_NOT_EXIST:
-      case  OB_LS_NOT_EXIST: {
-        need_retry = true;
+      case  OB_LS_NOT_EXIST:
+      case  OB_LS_OFFLINE: {
         if (OB_FAIL(ObLobLocationUtil::lob_refresh_location(param, error_code, retry_cnt))) {
           LOG_WARN("fail to do refresh location", K(ret), K(error_code), K(retry_cnt), K(param));
           need_retry = false;
@@ -76,7 +76,8 @@ bool ObLobRetryUtil::is_remote_ret_can_retry(int ret)
          (ret == OB_NOT_MASTER) ||
          (ret == OB_NO_READABLE_REPLICA) ||
          (ret == OB_TABLET_NOT_EXIST) ||
-         (ret == OB_LS_NOT_EXIST);
+         (ret == OB_LS_NOT_EXIST) ||
+         (ret == OB_LS_OFFLINE);
 }
 
 } // storage
