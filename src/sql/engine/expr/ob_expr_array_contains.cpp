@@ -362,30 +362,30 @@ int ObExprArrayContains::eval_array_contains_array_vector(const ObExpr &expr, Ob
       }
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
-        // do noting
+        res_vec->set_null(idx);
+        eval_flags.set(idx);
       } else if (right_vec->is_null(idx)) {
         bool contains_null = arr_obj->contain_null();
         res_vec->set_bool(idx, contains_null);
         eval_flags.set(idx);
-      } else if (right_format == VEC_UNIFORM || right_format == VEC_UNIFORM_CONST) {
-        ObString right = right_vec->get_string(idx);
-        if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, right_meta_id, right, arr_val))) {
+      } else {
+        if (right_format == VEC_UNIFORM || right_format == VEC_UNIFORM_CONST) {
+          ObString right = right_vec->get_string(idx);
+          if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, right_meta_id, right, arr_val))) {
+            LOG_WARN("construct array obj failed", K(ret));
+          }
+        } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
+                      tmp_allocator, ctx, *expr.args_[p1], right_meta_id, idx, arr_val))) {
           LOG_WARN("construct array obj failed", K(ret));
         }
-      } else if (OB_FAIL(ObNestedVectorFunc::construct_attr_param(
-                     tmp_allocator, ctx, *expr.args_[p1], right_meta_id, idx, arr_val))) {
-        LOG_WARN("construct array obj failed", K(ret));
-      }
-      bool bret = false;
-      if (OB_FAIL(ret)) {
-      } else if (is_null_res) {
-        res_vec->set_null(idx);
-        eval_flags.set(idx);
-      } else if (OB_FAIL(ObArrayUtil::contains(*arr_obj, *arr_val, bret))) {
-        LOG_WARN("array contains failed", K(ret));
-      } else {
-        res_vec->set_bool(idx, bret);
-        eval_flags.set(idx);
+        bool bret = false;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(ObArrayUtil::contains(*arr_obj, *arr_val, bret))) {
+          LOG_WARN("array contains failed", K(ret));
+        } else {
+          res_vec->set_bool(idx, bret);
+          eval_flags.set(idx);
+        }
       }
     }
   }
