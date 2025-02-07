@@ -4073,6 +4073,12 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
   } else if (is_2pc_state_log
              && OB_FAIL(merge_intermediate_participants())) {
     TRANS_LOG(WARN, "fail to merge intermediate participants", K(ret), KPC(this));
+  } else if ((!is_contain(log_block.get_cb_arg_array(), ObTxLogType::TX_ABORT_LOG)
+              && !is_contain(log_block.get_cb_arg_array(), ObTxLogType::TX_CLEAR_LOG))
+             && (need_force_abort_() || is_force_abort_logging_()
+                 || get_downstream_state() == ObTxState::ABORT)) {
+    ret = OB_TRANS_KILLED;
+    TRANS_LOG(WARN, "tx has been aborting, can not submit other log", K(ret), KPC(this));
   } else if (barrier != LogBarrierType::NO_NEED_BARRIER
       && OB_FAIL(log_block.seal(trans_id_.get_id(), barrier))) {
     TRANS_LOG(WARN, "seal log block fail", K(ret));
@@ -7035,7 +7041,13 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
   share::SCN mds_base_scn;
   ObTxLogCb *log_cb = nullptr;
   void *tmp_buf = nullptr;
-  if (mds_cache_.count() > 0) {
+  if (need_force_abort_() || is_force_abort_logging_()
+      || get_downstream_state() == ObTxState::ABORT) {
+    ret = OB_TRANS_KILLED;
+    TRANS_LOG(WARN, "tx has been aborting, can not submit prepare log", K(ret));
+  } else if (sub_state_.is_info_log_submitted()) {
+    // state log already submitted, do nothing
+  } else if (mds_cache_.count() > 0) {
     ObTxMultiDataSourceLog log;
     ObTxMDSRange range;
     while (OB_SUCC(ret)) {
