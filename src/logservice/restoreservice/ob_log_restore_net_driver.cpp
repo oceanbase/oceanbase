@@ -455,10 +455,10 @@ void ObLogRestoreNetDriver::update_config_()
 int64_t ObLogRestoreNetDriver::get_rpc_timeout_sec_()
 {
   int64_t rpc_timeout = 0;
-  const int64_t DEFAULT_FETECH_LOG_RPC_TIMEOUT = 15;   // 15s
+  const int64_t DEFAULT_FETCH_LOG_RPC_TIMEOUT = 15;   // 15s
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
   if (!tenant_config.is_valid()) {
-    rpc_timeout = DEFAULT_FETECH_LOG_RPC_TIMEOUT;
+    rpc_timeout = DEFAULT_FETCH_LOG_RPC_TIMEOUT;
   } else {
     rpc_timeout = tenant_config->standby_db_fetch_log_rpc_timeout / 1000 / 1000L;
   }

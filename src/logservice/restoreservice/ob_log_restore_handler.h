@@ -208,7 +208,7 @@ public:
   int try_retire_task(ObFetchLogTask &task, bool &done);
   // @brief To avoid redundancy locating archive round and piece and reading active files,
   // save archive log consumption context in restore handler
-  // @param[in] source, temory log source used to read archive files
+  // @param[in] source, temporary log source used to read archive files
   int update_location_info(ObRemoteLogParent *source);
   // @brief check if restore finish
   // return true only if in restore state and all replicas have restore and replay finish

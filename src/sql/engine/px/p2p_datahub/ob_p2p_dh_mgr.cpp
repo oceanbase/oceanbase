@@ -282,7 +282,7 @@ int ObP2PDatahubManager::send_p2p_msg(
       LOG_WARN("fail to copy msg", K(ret));
     } else if (OB_ISNULL(new_msg)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpeceted new msg", K(ret));
+      LOG_WARN("unexpected new msg", K(ret));
     }
     if (OB_SUCC(ret)) {
       ObP2PDatahubMsgGuard guard(new_msg);

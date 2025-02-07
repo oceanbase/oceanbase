@@ -369,7 +369,7 @@ int ObPxBloomFilter::process_recieve_count(int64_t whole_expect_size, int64_t cu
     ATOMIC_AAF(&px_bf_recieve_count_, cur_buf_size);
     if (px_bf_recieve_count_ > px_bf_recieve_size_) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to process recieve count", K(ret), K(px_bf_recieve_count_),
+      LOG_WARN("fail to process receive count", K(ret), K(px_bf_recieve_count_),
          K(px_bf_recieve_size_));
     }
   }
@@ -391,7 +391,7 @@ int ObPxBloomFilter::process_first_phase_recieve_count(int64_t whole_expect_size
     ATOMIC_INC(&px_bf_recieve_count_);
     if (px_bf_recieve_count_ > px_bf_recieve_size_) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to process recieve count", K(ret), K(px_bf_recieve_count_),
+      LOG_WARN("fail to process receive count", K(ret), K(px_bf_recieve_count_),
          K(px_bf_recieve_size_));
     } else if (receive_count_array_.empty()) {
       ret = OB_ERR_UNEXPECTED;
@@ -882,13 +882,13 @@ int ObSendBloomFilterP::process_px_bloom_filter_data()
     } else if (!arg_.is_first_phase() &&
         OB_FAIL(filter->process_recieve_count(arg_.expect_bloom_filter_count_,
         arg_.current_bloom_filter_count_))) {
-      LOG_WARN("fail to process recieve count", K(ret));
+      LOG_WARN("fail to process receive count", K(ret));
     } else if (arg_.is_first_phase() && OB_FAIL(filter->process_first_phase_recieve_count(
         arg_.expect_bloom_filter_count_,
         arg_.expect_phase_count_,
         arg_.bloom_filter_.get_begin_idx(),
         phase_end))) {
-      LOG_WARN("fail to process recieve count", K(ret));
+      LOG_WARN("fail to process receive count", K(ret));
     }
   }
 

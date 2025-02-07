@@ -166,11 +166,11 @@ int ObPxOrderedCoordOp::inner_get_next_row()
     int64_t nth_channel = OB_INVALID_INDEX_INT64;
     // Note:
     //   inner_get_next_row is invoked in two pathes (batch vs
-    //   non-batch). The eval flag should be cleared with seperated flags
+    //   non-batch). The eval flag should be cleared with separated flags
     //   under each invoke path (batch vs non-batch). Therefore call the
     //   overriding API do_clear_datum_eval_flag() to replace
     //   clear_evaluated_flag
-    // TODO qubin.qb: Implement seperated inner_get_next_batch to
+    // TODO qubin.qb: Implement separated inner_get_next_batch to
     // isolate them
     do_clear_datum_eval_flag();
     clear_dynamic_const_parent_flag();

@@ -263,7 +263,7 @@ int ObLSRestoreHandler::handle_pull_tablet(
 {
   int ret = OB_SUCCESS;
   bool all_finish = false;
-  LOG_INFO("succeed recieve handle pull tablet from leader", K(ret));
+  LOG_INFO("succeed receive handle pull tablet from leader", K(ret));
   lib::ObMutexGuard guard(mtx_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

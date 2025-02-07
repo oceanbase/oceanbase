@@ -186,7 +186,7 @@ int ObDfoSchedulerBasic::dispatch_receive_channel_info_via_sqc(ObExecContext &ct
             LOG_WARN("receive data channel msg is not valid", K(ret));
           } else if (!is_parallel_scheduler &&
               OB_FAIL(sqcs.at(idx)->add_serial_recieve_channel(receive_data_channel_msg))) {
-            LOG_WARN("fail to add recieve channel", K(ret), K(receive_data_channel_msg));
+            LOG_WARN("fail to add receive channel", K(ret), K(receive_data_channel_msg));
           } else {
             LOG_TRACE("ObPxCoord::MsgProc::dispatch_receive_channel_info_via_sqc done.",
                       K(idx), K(cnt), K(sqc_id), K(child_dfo_id), K(parent_ch_sets));
@@ -386,7 +386,7 @@ int ObSerialDfoScheduler::dispatch_dtl_data_channel_info(ObExecContext &ctx, ObD
   int ret = OB_SUCCESS;
   if (OB_FAIL(dispatch_receive_channel_info_via_sqc(ctx, child,
       parent, /*is_parallel_scheduler*/false))) {
-    LOG_WARN("fail to dispatch recieve channel", K(ret));
+    LOG_WARN("fail to dispatch receive channel", K(ret));
   } else if (OB_FAIL(dispatch_transmit_channel_info_via_sqc(ctx, child, parent))) {
     LOG_WARN("fail to dispatch transmit channel", K(ret));
   }
