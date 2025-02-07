@@ -413,9 +413,7 @@ FALSE {
     tmp_literal[yylval->node->str_len_] = '\0';
     yylval->node->children_ = (ParseNode **)parse_malloc(sizeof(ParseNode *), p->malloc_pool_);
     if (OB_UNLIKELY(NULL == yylval->node->children_)) {
-      p->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;
-      yyerror(yylloc, yyextra, "No more space for mallocing '%s'\n", yytext);
-      return ERROR;
+      YY_FATAL_ERROR("No more space for mallocing '%s'\n", yytext);
     }
 
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
@@ -556,9 +554,7 @@ FALSE {
 
     yylval->node->children_ = (ParseNode **)parse_malloc(sizeof(ParseNode *), p->malloc_pool_);
     if (OB_UNLIKELY(NULL == yylval->node->children_)) {
-      p->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;
-      yyerror(yylloc, yyextra, "No more space for mallocing '%s'\n", yytext);
-      return ERROR;
+      YY_FATAL_ERROR("No more space for mallocing '%s'\n", yytext);
     }
 
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
