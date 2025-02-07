@@ -134,11 +134,12 @@ int ObTxMDSCache::fill_mds_log(ObPartTransCtx *ctx,
         // do nothing
       } else if (OB_FALSE_IT(prev_iter--)) {
         // do nothing
-      } else if (prev_iter != mds_list_.end() && !prev_iter->is_submitted()
+      } else if (mds_range.count() == 0 && prev_iter != mds_list_.end()
+                 && !prev_iter->is_submitted()
                  && prev_iter->get_register_no() < iter->get_register_no()) {
         ret = OB_EAGAIN;
-        TRANS_LOG(WARN, "we must submit the previous mds node first", K(ret), K(mds_base_scn),KPC(this),
-                  K(*prev_iter), K(*iter), KPC(ctx));
+        TRANS_LOG(WARN, "we must submit the previous mds node first", K(ret), K(mds_base_scn),
+                  KPC(this), K(*prev_iter), K(*iter), KPC(ctx));
         clear_submitted_iterator();
       } else if (iter->get_register_no() <= max_submitted_register_no_
                  || iter->get_register_no() <= max_synced_register_no_) {
