@@ -20,9 +20,10 @@ namespace oceanbase
 {
 namespace lib
 {
-enum AllocFailedReason
+enum AllocFailedReason // FARM COMPAT WHITELIST
 {
   UNKNOWN = 0,
+  INVALID_ALLOC_SIZE,
   SINGLE_ALLOC_SIZE_OVERFLOW,
   CTX_HOLD_REACH_LIMIT,
   TENANT_HOLD_REACH_LIMIT,

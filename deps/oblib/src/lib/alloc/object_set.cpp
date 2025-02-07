@@ -59,7 +59,11 @@ AObject *ObjectSet::alloc_object(
   }
 
   AObject *obj = NULL;
-  if (OB_UNLIKELY(size >= UINT32_MAX) || OB_UNLIKELY(0 == size)) {
+  if (OB_UNLIKELY((int64_t)size <= 0)) {
+    auto &afc = g_alloc_failed_ctx();
+    afc.reason_ = INVALID_ALLOC_SIZE;
+    afc.alloc_size_ = size;
+  } else if (OB_UNLIKELY(size >= UINT32_MAX)) {
     // not support
     auto &afc = g_alloc_failed_ctx();
     afc.reason_ = SINGLE_ALLOC_SIZE_OVERFLOW;
