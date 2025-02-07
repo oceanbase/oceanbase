@@ -353,7 +353,7 @@ int ObBasicSessionInfo::reset_sys_vars()
 
   // load 当前租户变量
   OZ (GCTX.schema_service_->get_tenant_schema_guard(effective_tenant_id_, schema_guard,
-                                                    sys_var_base_version_));
+                                                    OB_INVALID_VERSION));
   OZ (load_all_sys_vars(schema_guard));
   if (OB_FAIL(ret) && is_schema_error(ret)) {
     ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
