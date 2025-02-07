@@ -36,15 +36,19 @@ int ObInListResolver::resolve_inlist(ObInListInfo &inlist_info)
     LOG_WARN("got NULL ptr", K(ret), KP(list_node), KP(cur_resolver_));
   } else {
     ObResolverParams &params = cur_resolver_->params_;
-    if (OB_FAIL(resolve_values_table_from_inlist(list_node,
-                                                 column_cnt,
-                                                 row_cnt,
-                                                 inlist_info.is_question_mark_,
-                                                 params.is_prepare_stage_,
-                                                 params.param_list_,
-                                                 params.session_info_,
-                                                 params.allocator_,
-                                                 table_def))) {
+    if (OB_ISNULL(params.session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("got NULL ptr", K(ret), KP(list_node), KP(cur_resolver_));
+    } else if (OB_FAIL(resolve_values_table_from_inlist(list_node,
+                                                        column_cnt,
+                                                        row_cnt,
+                                                        inlist_info.is_question_mark_,
+                                                        params.is_prepare_stage_,
+                                                        NULL == params.session_info_->get_pl_context(),
+                                                        params.param_list_,
+                                                        params.session_info_,
+                                                        params.allocator_,
+                                                        table_def))) {
       LOG_WARN("failed to resolve values table from inlist", K(ret));
     } else if (OB_FAIL(resolve_subquery_from_values_table(params.stmt_factory_,
                                                           params.session_info_,
@@ -66,6 +70,7 @@ int ObInListResolver::resolve_values_table_from_inlist(const ParseNode *in_list,
                                                 const int64_t row_cnt,
                                                 const bool is_question_mark,
                                                 const bool is_prepare_stage,
+                                                const bool is_called_in_sql,
                                                 const ParamStore *param_store,
                                                 ObSQLSessionInfo *session_info,
                                                 ObIAllocator *allocator,
@@ -96,11 +101,11 @@ int ObInListResolver::resolve_values_table_from_inlist(const ParseNode *in_list,
   if (OB_FAIL(ret)) {
   } else if (ObValuesTableDef::ACCESS_PARAM == access_type &&
              OB_FAIL(resolve_access_param_values_table(*in_list, column_cnt, row_cnt, param_store,
-                                                 session_info, allocator, *table_def))) {
+                                                 session_info, allocator, is_called_in_sql, *table_def))) {
     LOG_WARN("failed to resolve access param values table", K(ret));
   } else if (ObValuesTableDef::ACCESS_OBJ == access_type &&
              OB_FAIL(resolve_access_obj_values_table(*in_list, column_cnt, row_cnt, session_info,
-                                                     allocator, is_prepare_stage, *table_def))) {
+                                                     allocator, is_prepare_stage, is_called_in_sql, *table_def))) {
     LOG_WARN("failed to resolve access obj values table", K(ret));
   } else if (OB_FAIL(cur_resolver_->estimate_values_table_stats(*table_def))) {
     LOG_WARN("failed to estimate values table stats", K(ret));
@@ -230,6 +235,7 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
     }
   }
   // 2. check same node type requests
+  //    and whether paramameter indexes correspond to what a values table expected
   if (OB_SUCC(ret) && is_enable) {
     const int64_t row_cnt = in_list.num_child_;
     const int64_t column_cnt = T_OP_ROW == left_expr.get_expr_type() ? left_expr.get_param_count() :
@@ -250,6 +256,7 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                               share::SYS_VAR_COLLATION_SERVER, server_collation))) {
       LOG_WARN("get sys variables failed", K(ret));
     } else {
+      int64_t start_param_idx = -1;
       for (int64_t j = 0; OB_SUCC(ret) && is_enable && j < column_cnt; ++j) {
         DistinctObjMeta param_type_prev;
         for (int64_t i = 0; OB_SUCC(ret) && is_enable && i < row_cnt; ++i) {
@@ -263,6 +270,13 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get unexpected param", K(ret));
             } else if (FALSE_IT(is_question_mark = T_QUESTIONMARK == node->type_)) {
+            } else if (is_question_mark
+                       && OB_UNLIKELY(-1 == start_param_idx)
+                       && FALSE_IT(start_param_idx = node->value_)) {
+            } else if (is_question_mark
+                       && OB_UNLIKELY(node->value_ != start_param_idx + j + i * column_cnt || node->value_ < 0)) {
+              // param idx in position (i, j) is not expected, do not rewrite
+              is_enable = false;
             } else if (is_prepare_stmt && is_question_mark) {
               // skip type matching for question marks in prepare stmt, because they have no type
             } else if (OB_FAIL(get_const_node_types(node,
@@ -338,6 +352,7 @@ int ObInListResolver::resolve_access_param_values_table(const ParseNode &in_list
                                                         const ParamStore *param_store,
                                                         ObSQLSessionInfo *session_info,
                                                         ObIAllocator *allocator,
+                                                        const bool is_called_in_sql,
                                                         ObValuesTableDef &table_def)
 {
   int ret = OB_SUCCESS;
@@ -380,7 +395,8 @@ int ObInListResolver::resolve_access_param_values_table(const ParseNode &in_list
         } else if (OB_FAIL(tmp_res_types.push_back(res_type))) {
           LOG_WARN("failed to push back res type", K(ret));
         } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type,
-                           &tmp_res_types.at(0), 2, lib::is_oracle_mode(), type_ctx))) {
+                           &tmp_res_types.at(0), 2, lib::is_oracle_mode(), type_ctx,
+                           true, false, is_called_in_sql))) {
           LOG_WARN("failed to aggregate result type for merge", K(ret));
         } else {
           table_def.column_types_.at(j) = new_res_type;
@@ -403,6 +419,7 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
                                                       ObSQLSessionInfo *session_info,
                                                       ObIAllocator *allocator,
                                                       const bool is_prepare_stage,
+                                                      const bool is_called_in_sql,
                                                       ObValuesTableDef &table_def)
 {
   int ret = OB_SUCCESS;
@@ -500,7 +517,7 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
             LOG_WARN("failed to push back res type", K(ret));
           } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type,
                             &tmp_res_types.at(0), 2, is_oracle_mode,
-                            type_ctx))) {
+                            type_ctx, true, false, is_called_in_sql))) {
             LOG_WARN("failed to aggregate result type for merge", K(ret));
           } else {
             table_def.column_types_.at(j) = new_res_type;
