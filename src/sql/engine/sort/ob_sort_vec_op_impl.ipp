@@ -920,6 +920,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::copy_to_row(
     buffer_len = row->get_max_size(row_meta);
     dst = row;
   } else {
+    reclaim_row = row;
     if (topn_cnt_ < 256) {
       buffer_len = row_size > 256 ? row_size * 4 : 1024;
     } else {
@@ -932,7 +933,6 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::copy_to_row(
       sql_mem_processor_.alloc(buffer_len);
       inmem_row_size_ += buffer_len;
       dst = new (buf) Store_Row();
-      reclaim_row = row;
     }
   }
   if (OB_SUCC(ret)) {
