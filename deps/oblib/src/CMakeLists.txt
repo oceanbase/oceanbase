@@ -1,10 +1,15 @@
-add_library(oblib_base_base INTERFACE)
-add_library(oblib_base_base_base INTERFACE)
+add_library(oblib_base INTERFACE)
+add_library(oblib_base_without_pass INTERFACE)
+add_library(oblib_pass INTERFACE)
+
+if(NOT CPP_STANDARD_20)
+  target_compile_options(oblib_base_without_pass INTERFACE -D_GLIBCXX_USE_CXX11_ABI=0)
+endif()
 
 get_property(EASY_INCLUDE_DIRS GLOBAL PROPERTY "EASY_INCLUDE_DIRS" )
 
 target_include_directories(
-  oblib_base_base_base INTERFACE
+  oblib_base_without_pass INTERFACE
   ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/deps/easy/src
@@ -27,12 +32,12 @@ target_include_directories(
 
 if(OB_BUILD_OPENSOURCE)
   target_include_directories(
-    oblib_base_base_base INTERFACE
+    oblib_base_without_pass INTERFACE
     ${DEP_DIR}/include/mariadb
     )
 else()
   target_include_directories(
-    oblib_base_base_base INTERFACE
+    oblib_base_without_pass INTERFACE
     ${DEP_3RD_DIR}/usr/local/include
     ${DEP_3RD_DIR}/usr/include/
     )
@@ -40,7 +45,7 @@ endif()
 
 if(OB_BUILD_SPM)
   target_include_directories(
-    oblib_base_base_base INTERFACE
+    oblib_base_without_pass INTERFACE
     ${CMAKE_SOURCE_DIR}/close_modules/spm
   )
 endif()
@@ -48,7 +53,7 @@ endif()
 
 if(OB_BUILD_DBLINK)
   target_include_directories(
-    oblib_base_base_base INTERFACE
+    oblib_base_without_pass INTERFACE
     ${DEP_3RD_DIR}/u01/obclient/include
     ${CMAKE_SOURCE_DIR}/close_modules/dblink/deps/oblib/src
     ${OCI_DEVEL_INC}
@@ -57,14 +62,14 @@ endif()
 
 if(OB_BUILD_ARBITRATION)
   target_include_directories(
-    oblib_base_base_base INTERFACE
+    oblib_base_without_pass INTERFACE
     ${CMAKE_SOURCE_DIR}/close_modules/arbitration
   )
 endif()
 
 if(OB_BUILD_LOG_STORAGE_COMPRESS)
   target_include_directories(
-    oblib_base_base_base INTERFACE
+    oblib_base_without_pass INTERFACE
     ${CMAKE_SOURCE_DIR}/close_modules/log_storage_compress
   )
 endif()
@@ -72,28 +77,28 @@ endif()
 
 if(OB_BUILD_ORACLE_PL)
   target_include_directories(
-    oblib_base_base_base INTERFACE
+    oblib_base_without_pass INTERFACE
     ${CMAKE_SOURCE_DIR}/close_modules/oracle_pl
   )
 endif()
 
 if(OB_BUILD_TDE_SECURITY)
   target_include_directories(
-    oblib_base_base_base INTERFACE
+    oblib_base_without_pass INTERFACE
     ${CMAKE_SOURCE_DIR}/close_modules/tde_security
   )
 endif()
 
 if(OB_BUILD_AUDIT_SECURITY)
   target_include_directories(
-    oblib_base_base_base INTERFACE
+    oblib_base_without_pass INTERFACE
     ${CMAKE_SOURCE_DIR}/close_modules/audit_security
   )
 endif()
 
 if(OB_USE_BABASSL)
   target_include_directories(
-    oblib_base_base_base INTERFACE
+    oblib_base_without_pass INTERFACE
     ${DEP_3RD_DIR}/usr/local/babassl-ob/include
     )
 endif()
@@ -101,7 +106,7 @@ endif()
 if (OB_USE_CLANG)
   # The following clang warnings should be fixed later: -Wno-unused-variable -Wno-invalid-offsetof
   set(OBLIB_COMPILE_DEFINITIONS -fno-strict-aliasing -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
-    -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D_NO_EXCEPTION -DTSI_STATIC_SUM
+    -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D_NO_EXCEPTION
     -DOCI_LINK_RUNTIME
     -Wall -Wextra -Wformat -Werror
     -Wno-deprecated -Wno-address-of-packed-member -Wno-sign-compare -Wno-tautological-compare
@@ -125,9 +130,9 @@ if (OB_USE_CLANG)
         -Wno-ambiguous-reversed-operator -Wno-invalid-partial-specialization
         -Wno-string-concatenation)
   endif()
-  target_compile_options(oblib_base_base_base INTERFACE ${OBLIB_COMPILE_DEFINITIONS})
+  target_compile_options(oblib_base_without_pass INTERFACE ${OBLIB_COMPILE_DEFINITIONS})
   if (ENABLE_SANITY)
-    target_compile_options(oblib_base_base
+    target_compile_options(oblib_pass
       INTERFACE
       "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -load -Xclang ${DEVTOOLS_DIR}/lib64/libsanitypass.so>"
       -fno-builtin-memset
@@ -150,7 +155,7 @@ if (OB_USE_CLANG)
     )
   endif()
 else()
-  target_compile_options(oblib_base_base_base
+  target_compile_options(oblib_base_without_pass
     INTERFACE
     -fno-strict-aliasing -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
     -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D_NO_EXCEPTION
@@ -191,7 +196,7 @@ else()
     )
 endif()
 
-target_compile_features(oblib_base_base INTERFACE cxx_std_11)
+target_compile_features(oblib_base INTERFACE cxx_std_11)
 
 set(OBLIB_ABSEIL_LIST
     ${DEP_DIR}/lib64/libabsl_base.a
@@ -220,7 +225,7 @@ set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -lmariadb")
 if (OB_STATIC_LINK_LGPL_DEPS)
   set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -l:libmariadbclient.a")
 endif()
-target_link_libraries(oblib_base_base_base
+target_link_libraries(oblib_base_without_pass
   INTERFACE
   oss
   easy
@@ -248,7 +253,7 @@ target_link_libraries(oblib_base_base_base
  )
 else()
 set(ignoreMe OB_STATIC_LINK_LGPL_DEPS)
-target_link_libraries(oblib_base_base_base
+target_link_libraries(oblib_base_without_pass
   INTERFACE
   oss
   easy
@@ -275,13 +280,7 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libisal.a
  )
 endif()
-target_link_libraries(oblib_base_base INTERFACE oblib_base_base_base)
-
-add_library(oblib_base INTERFACE)
-if(NOT CPP_STANDARD_20)
-  target_compile_options(oblib_base INTERFACE -D_GLIBCXX_USE_CXX11_ABI=0)
-endif()
-target_link_libraries(oblib_base INTERFACE oblib_base_base)
+target_link_libraries(oblib_base INTERFACE oblib_base_without_pass oblib_pass)
 
 function(oblib_add_library target)
   message(STATUS "oblib_add_library ${target}")
@@ -309,7 +308,3 @@ message(STATUS "oblib_extra_objects ${oblib_extra_objects}")
 set_source_files_properties(${oblib_extra_objects} PROPERTIES GENERATED TRUE)
 add_library(oblib STATIC ${oblib_extra_objects})
 target_link_libraries(oblib PUBLIC oblib_base ${oblib_object_libraries})
-
-if (TSI_STATIC_SUM)
-  target_compile_definitions(oblib_base_base INTERFACE TSI_STATIC_SUM=1)
-endif()

@@ -1,7 +1,7 @@
 add_subdirectory(compress)
 add_subdirectory(restore)
 
-ob_set_subtarget(oblib_lib ALONE
+ob_set_subtarget(oblib_lib_extra ALONE
   timezone/ob_timezone_util.cpp
   geo/ob_geo_func_difference.cpp
   geo/ob_geo_func_covered_by.cpp
@@ -325,6 +325,7 @@ ob_set_subtarget(oblib_lib vtoa
 )
 
 ob_lib_add_target(oblib_lib)
+ob_lib_add_target(oblib_lib_extra without_pass)
 
 ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/abit_set.cpp
@@ -365,7 +366,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
 )
 
 ob_add_new_object_target(ob_malloc_object ob_malloc_object_list)
-target_link_libraries(ob_malloc_object oblib_base_base_base)
+target_link_libraries(ob_malloc_object oblib_base_without_pass)
 if (ENABLE_SANITY)
   if (${ARCHITECTURE} STREQUAL "x86_64" OR ${ARCHITECTURE} STREQUAL "aarch64")
     target_link_libraries(ob_malloc_object ${DEVTOOLS_DIR}/lib64/libsanity.a)

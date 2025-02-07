@@ -1,10 +1,5 @@
-ob_set_subtarget(ob_share ALONE
-  ob_rpc_struct.cpp
-  ob_tenant_mgr.cpp
-  ob_device_manager.cpp
+ob_set_subtarget(ob_share_extra ALONE
   datum/ob_datum_funcs.cpp
-  schema/ob_schema_service_sql_impl.cpp
-  parameter/ob_parameter_attr.cpp
   datum/ob_datum_funcs_compilation_0.cpp
   datum/ob_datum_funcs_compilation_1.cpp
   datum/ob_datum_funcs_compilation_2.cpp
@@ -21,6 +16,14 @@ ob_set_subtarget(ob_share ALONE
   datum/ob_datum_funcs_compilation_13.cpp
   datum/ob_datum_funcs_compilation_14.cpp
   datum/ob_datum_funcs_compilation_15.cpp
+)
+
+ob_set_subtarget(ob_share ALONE
+  ob_rpc_struct.cpp
+  ob_tenant_mgr.cpp
+  ob_device_manager.cpp
+  schema/ob_schema_service_sql_impl.cpp
+  parameter/ob_parameter_attr.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -568,13 +571,16 @@ ob_set_subtarget(ob_share wr
 )
 
 ob_add_new_object_target(ob_share ob_share)
+ob_add_new_object_target(ob_share_extra ob_share_extra)
 
 target_compile_options(ob_share PRIVATE -Wshorten-64-to-32)
 target_link_libraries(ob_share PUBLIC ob_base)
+target_compile_options(ob_share_extra PRIVATE)
+target_link_libraries(ob_share_extra PUBLIC ob_base_without_pass)
 
 add_library(ob_share_static
   STATIC
   EXCLUDE_FROM_ALL)
 
 target_link_libraries(ob_share_static
-  PUBLIC ob_share)
+  PUBLIC ob_share ob_share_extra)

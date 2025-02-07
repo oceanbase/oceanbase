@@ -253,6 +253,10 @@ ob_set_subtarget(ob_sql engine_dml
   engine/dml/ob_fk_checker.cpp
 )
 
+ob_set_subtarget(ob_sql_extra ALONE
+  engine/expr/ob_expr_cmp_func.cpp
+)
+
 ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_batch_eval_util.cpp
   engine/expr/ob_datum_cast.cpp
@@ -293,7 +297,6 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_char_length.cpp
   engine/expr/ob_expr_char_to_rowid.cpp
   engine/expr/ob_expr_chr.cpp
-  engine/expr/ob_expr_cmp_func.cpp
   engine/expr/ob_expr_coalesce.cpp
   engine/expr/ob_expr_coll_pred.cpp
   engine/expr/ob_expr_collation.cpp
@@ -1319,6 +1322,7 @@ if(CPP_STANDARD_20)
   add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 endif()
 ob_add_new_object_target(ob_sql ob_sql)
+ob_add_new_object_target(ob_sql_extra ob_sql_extra)
 
 ob_set_subtarget(ob_sql_simd common
   engine/basic/ob_pushdown_filter_simd.cpp
@@ -1344,13 +1348,14 @@ if (${ARCHITECTURE} STREQUAL "ppc64le")
 endif()
 
 target_link_libraries(ob_sql PUBLIC ob_base)
+target_link_libraries(ob_sql_extra PUBLIC ob_base_without_pass)
 
 add_library(ob_sql_static
   STATIC
   EXCLUDE_FROM_ALL)
 
 target_link_libraries(ob_sql_static
-  PUBLIC ob_sql ob_sql_server_parser_static)
+  PUBLIC ob_sql ob_sql_extra ob_sql_server_parser_static)
 
 execute_process(
   COMMAND env NEED_PARSER_CACHE=${NEED_PARSER_CACHE} bash gen_parser.sh
