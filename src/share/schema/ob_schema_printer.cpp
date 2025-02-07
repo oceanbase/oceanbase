@@ -4266,6 +4266,55 @@ int ObSchemaPrinter::print_object_definition(const ObUDTObjectType *object,
   return ret;
 }
 
+int ObSchemaPrinter::print_package_definition(const uint64_t tenant_id,
+                                              uint64_t package_id,
+                                              char* buf,
+                                              const int64_t& buf_len,
+                                              int64_t& pos) const
+{
+  int ret = OB_SUCCESS;
+  const ObPackageInfo *package_info = NULL;
+  const ObDatabaseSchema *database_schema = NULL;
+  ObString actully_package_body;
+  ObArenaAllocator allocator;
+  pl::ObPLParser parser(allocator, ObCharsets4Parser());
+  ObStmtNodeTree *package_stmt = NULL;
+  OZ (schema_guard_.get_package_info(tenant_id, package_id, package_info));
+  if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
+    ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
+    SHARE_SCHEMA_LOG(WARN, "Unknow package", K(ret), K(package_id));
+  }
+  OZ (schema_guard_.get_database_schema(tenant_id, package_info->get_database_id(), database_schema));
+  if (OB_SUCC(ret) && OB_ISNULL(database_schema)) {
+    ret = OB_ERR_BAD_DATABASE;
+    SHARE_SCHEMA_LOG(WARN, "Unknow database", K(ret), K(package_info->get_database_id()));
+  }
+  CK (lib::is_oracle_mode());
+  OZ (databuff_printf(buf, buf_len, pos, "CREATE OR REPLACE%s PACKAGE%s \"%.*s\".\"%.*s\"\n",
+                      package_info->is_noneditionable() ? " NONEDITIONABLE" : "",
+                      package_info->is_package() ? "" : " BODY",
+                      database_schema->get_database_name_str().length(),
+                      database_schema->get_database_name_str().ptr(),
+                      package_info->get_package_name().length(),
+                      package_info->get_package_name().ptr()));
+  CK (!package_info->get_source().empty());
+  OZ (parser.parse_package(package_info->get_source(), package_stmt, ObDataTypeCastParams(), NULL, false));
+  CK (OB_NOT_NULL(package_stmt));
+  CK (T_STMT_LIST == package_stmt->type_);
+  CK (1 == package_stmt->num_child_);
+  CK (OB_NOT_NULL(package_stmt->children_[0]));
+  OX (package_stmt = package_stmt->children_[0]);
+  CK (package_info->is_package() ? T_PACKAGE_BLOCK == package_stmt->type_
+                                 : T_PACKAGE_BODY_BLOCK == package_stmt->type_);
+  OX (actully_package_body = ObString(package_stmt->str_len_, package_stmt->str_value_));
+  CK (!actully_package_body.empty());
+  OZ (databuff_printf(buf, buf_len, pos, "%.*s",
+                      actully_package_body.length(),
+                      actully_package_body.ptr()));
+  SHARE_SCHEMA_LOG(DEBUG, "print package schema", K(ret), K(*package_info));
+  return ret;
+}
+
 int ObSchemaPrinter::print_routine_param_type(const ObRoutineParam *param,
                                               const ObStmtNodeTree *param_type,
                                               char *buf,
