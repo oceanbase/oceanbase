@@ -15,6 +15,7 @@
 #include "sql/engine/expr/ob_expr_vec_ivf_sq8_data_vector.h"
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/ob_exec_context.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_type/ob_vector_common_util.h"
@@ -148,12 +149,13 @@ int ObExprVecIVFSQ8DataVector::generate_data_vector(
       float *step_vec = nullptr;
       uint8_t *res_vec = nullptr;
       float *data_vec = reinterpret_cast<float*>(arr->get_data());
+      ObExprVecIvfCenterIdCache *cache = ObVectorIndexUtil::get_ivf_center_id_cache_ctx(expr.expr_ctx_id_, &eval_ctx.exec_ctx_);
       if (OB_ISNULL(service)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("service is nullptr", K(ret));
       } else if (OB_FAIL(meta_vectors.init(SQ_META_SIZE))) {
         LOG_WARN("fail to init meta vectors", K(ret));
-      } else if (OB_FAIL(service->get_ivf_aux_info(table_id, tablet_id, tmp_allocator, meta_vectors))) {
+      } else if (OB_FAIL(ObVectorIndexUtil::get_ivf_aux_info(service, cache, table_id, tablet_id, tmp_allocator, meta_vectors))) {
         LOG_WARN("failed to get centers", K(ret), K(table_id), K(tablet_id));
       } else if (meta_vectors.empty()) {
         // special case 1: empty meta table, set res_vec to {0}

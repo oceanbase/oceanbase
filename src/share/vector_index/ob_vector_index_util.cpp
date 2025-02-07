@@ -15,7 +15,9 @@
 #include "ob_vector_index_util.h"
 #include "storage/vector_index/ob_vector_index_sched_job_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/ob_exec_context.h"
 #include "share/ob_vec_index_builder_util.h"
+#include "share/vector_index/ob_plugin_vector_index_util.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 
 namespace oceanbase
@@ -2718,11 +2720,81 @@ int ObVectorIndexUtil::eval_ivf_centers_common(ObIAllocator &allocator,
       LOG_WARN("unexpected distance algo", K(ret), K(dis_algo));
     } else {
       ObPluginVectorIndexService *service = MTL(ObPluginVectorIndexService*);
-      if (OB_ISNULL(service)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("service is nullptr", K(ret));
-      } else if (OB_FAIL(service->get_ivf_aux_info(table_id, tablet_id, allocator, centers))) {
+      ObExprVecIvfCenterIdCache *cache = get_ivf_center_id_cache_ctx(expr.expr_ctx_id_, &eval_ctx.exec_ctx_);
+      if (OB_FAIL(get_ivf_aux_info(service, cache, table_id, tablet_id, allocator, centers))) {
+        LOG_WARN("failed to get ivf aux info", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+ObExprVecIvfCenterIdCache* ObVectorIndexUtil::get_ivf_center_id_cache_ctx(const uint64_t& id, sql::ObExecContext *exec_ctx)
+{
+  INIT_SUCC(ret);
+  ObExprVecIvfCenterIdCtx* cache_ctx = NULL;
+  if (ObExpr::INVALID_EXP_CTX_ID != id) {
+    cache_ctx = static_cast<ObExprVecIvfCenterIdCtx*>(exec_ctx->get_expr_op_ctx(id));
+    if (OB_ISNULL(cache_ctx)) {
+      // if cache not exist, create one
+      void *cache_ctx_buf = NULL;
+      ret = exec_ctx->create_expr_op_ctx(id, sizeof(ObExprVecIvfCenterIdCtx), cache_ctx_buf);
+      if (OB_SUCC(ret) && OB_NOT_NULL(cache_ctx_buf)) {
+        cache_ctx = new (cache_ctx_buf) ObExprVecIvfCenterIdCtx(exec_ctx->get_allocator());
+      }
+    }
+  }
+  return (cache_ctx == NULL) ? NULL : cache_ctx->get_cache();
+}
+
+void ObVectorIndexUtil::get_ivf_pq_center_id_cache_ctx(const uint64_t& id, sql::ObExecContext *exec_ctx, ObExprVecIvfCenterIdCache *&cache, ObExprVecIvfCenterIdCache *&pq_cache)
+{
+  INIT_SUCC(ret);
+  ObExprVecIvfCenterIdCtx* cache_ctx = NULL;
+  if (ObExpr::INVALID_EXP_CTX_ID != id) {
+    cache_ctx = static_cast<ObExprVecIvfCenterIdCtx*>(exec_ctx->get_expr_op_ctx(id));
+    if (OB_ISNULL(cache_ctx)) {
+      // if cache not exist, create one
+      void *cache_ctx_buf = NULL;
+      ret = exec_ctx->create_expr_op_ctx(id, sizeof(ObExprVecIvfCenterIdCtx), cache_ctx_buf);
+      if (OB_SUCC(ret) && OB_NOT_NULL(cache_ctx_buf)) {
+        cache_ctx = new (cache_ctx_buf) ObExprVecIvfCenterIdCtx(exec_ctx->get_allocator());
+      }
+    }
+  }
+  if (cache_ctx != NULL) {
+    cache = cache_ctx->get_cache();
+    pq_cache = cache_ctx->get_pq_cache();
+  }
+}
+
+int ObVectorIndexUtil::get_ivf_aux_info(share::ObPluginVectorIndexService *service,
+                                            ObExprVecIvfCenterIdCache *cache,
+                                            const ObTableID &table_id,
+                                            const ObTabletID &tablet_id,
+                                            common::ObIAllocator &allocator,
+                                            ObIArray<float*> &centers)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("service is nullptr", K(ret));
+  } else {
+    if (OB_ISNULL(cache)) {
+      if (OB_FAIL(service->get_ivf_aux_info(table_id, tablet_id, allocator, centers))) {
         LOG_WARN("failed to get centers", K(ret));
+      }
+    } else {
+      if (cache->hit(table_id, tablet_id)) {
+        if (OB_FAIL(cache->get_centers(centers))) {
+          LOG_WARN("failed to get centers from cache", K(ret));
+        }
+      } else {
+        if (OB_FAIL(service->get_ivf_aux_info(table_id, tablet_id, allocator, centers))) {
+          LOG_WARN("failed to get centers", K(ret));
+        } else if (OB_FAIL(cache->update_cache(table_id, tablet_id, centers))) {
+          LOG_WARN("failed to update ivf center id cache", K(ret));
+        }
       }
     }
   }

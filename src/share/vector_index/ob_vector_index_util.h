@@ -119,8 +119,46 @@ public:
     K_(nlist), K_(sample_per_nlist));
 };
 
+class ObExprVecIvfCenterIdCache
+{
+public:
+  ObExprVecIvfCenterIdCache(common::ObIAllocator &allocator)
+    : table_id_(ObCommonID::INVALID_ID),
+      tablet_id_(),
+      centers_()
+  {}
+  virtual ~ObExprVecIvfCenterIdCache() {}
+  bool hit(ObTableID table_id, ObTabletID tablet_id) { return table_id == table_id_ && tablet_id == tablet_id_; }
+  int get_centers(ObIArray<float*> &centers) { return centers.assign(centers_); }
+  int update_cache(ObTableID table_id, ObTabletID tablet_id, ObIArray<float*> &centers)
+  {
+    table_id_ = table_id;
+    tablet_id_ = tablet_id;
+    return centers_.assign(centers);
+  }
+private:
+  ObTableID table_id_;
+  ObTabletID tablet_id_;
+  ObSEArray<float*, 8> centers_;
+};
+
 class ObVectorIndexUtil final
 {
+  class ObExprVecIvfCenterIdCtx : public sql::ObExprOperatorCtx
+  {
+  public:
+    ObExprVecIvfCenterIdCtx(common::ObIAllocator &allocator)
+      : ObExprOperatorCtx(),
+        cache_(allocator),
+        pq_cache_(allocator)
+    {}
+    virtual ~ObExprVecIvfCenterIdCtx() {}
+    ObExprVecIvfCenterIdCache *get_cache() { return &cache_; }
+    ObExprVecIvfCenterIdCache *get_pq_cache() { return &pq_cache_; }
+  private:
+    ObExprVecIvfCenterIdCache cache_;
+    ObExprVecIvfCenterIdCache pq_cache_;
+  };
 public:
   static int check_vec_index_param(
       const uint64_t tenant_id,
@@ -320,6 +358,14 @@ static int check_ivf_vector_index_by_column_name(
                                     ObVectorIndexDistAlgorithm &dis_algo,
                                     bool &contain_null,
                                     ObIArrayType *&arr);
+  static ObExprVecIvfCenterIdCache* get_ivf_center_id_cache_ctx(const uint64_t& id, sql::ObExecContext *exec_ctx);
+  static void get_ivf_pq_center_id_cache_ctx(const uint64_t& id, sql::ObExecContext *exec_ctx, ObExprVecIvfCenterIdCache *&cache, ObExprVecIvfCenterIdCache *&pq_cache);
+  static int get_ivf_aux_info(share::ObPluginVectorIndexService *service,
+                                  ObExprVecIvfCenterIdCache *cache,
+                                  const ObTableID &table_id,
+                                  const ObTabletID &tablet_id,
+                                  common::ObIAllocator &allocator,
+                                  ObIArray<float*> &centers);
   static int split_vector(
     ObIAllocator &alloc,
     int pq_m,

@@ -40,6 +40,7 @@ public:
       const ObExpr &expr,
       ObEvalCtx &eval_ctx,
       ObDatum &expr_datum);
+  virtual bool need_rt_ctx() const override { return true; }
 private :
   static int generate_empty_pq_ids(
       ObIAllocator &allocator,

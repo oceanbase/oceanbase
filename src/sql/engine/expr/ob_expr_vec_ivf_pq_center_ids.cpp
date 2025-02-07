@@ -15,6 +15,7 @@
 #include "sql/engine/expr/ob_expr_vec_ivf_pq_center_ids.h"
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/ob_exec_context.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_type/ob_vector_common_util.h"
@@ -204,6 +205,9 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
     ObTableID cent_table_id;
     ObTabletID cent_tablet_id;
     ObArray<float *> splited_residual;
+    ObExprVecIvfCenterIdCache *cache = nullptr;
+    ObExprVecIvfCenterIdCache *pq_cache = nullptr;
+    ObVectorIndexUtil::get_ivf_pq_center_id_cache_ctx(expr.expr_ctx_id_, &eval_ctx.exec_ctx_, cache, pq_cache);
     if (OB_FAIL(ret) || is_empty_pq_ids) {
     } else if (OB_FAIL(ObVectorIndexUtil::calc_location_ids(
           eval_ctx,
@@ -214,10 +218,7 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
       LOG_WARN("fail to calc location ids", K(ret), K(cent_table_id), K(cent_tablet_id), KP(calc_centroid_table_id_expr), KP(calc_centroid_part_id_expr));
     } else {
       ObSEArray<float*, 64> centers;
-      if (OB_ISNULL(service)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("service is nullptr", K(ret));
-      } else if (OB_FAIL(service->get_ivf_aux_info(cent_table_id, cent_tablet_id, tmp_allocator, centers))) {
+      if (OB_FAIL(ObVectorIndexUtil::get_ivf_aux_info(service, cache, cent_table_id, cent_tablet_id, tmp_allocator, centers))) {
         LOG_WARN("failed to get centers", K(ret));
       } else if (centers.empty()) {
         is_empty_pq_ids = true;
@@ -240,7 +241,7 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
       ObSEArray<float*, 64> pq_centers;
       int64_t center_size_per_m = 0;
       int64_t pq_dim = arr->size() / pq_m;
-      if (OB_FAIL(service->get_ivf_aux_info(pq_cent_table_id, pq_cent_tablet_id, tmp_allocator, pq_centers))) {
+      if (OB_FAIL(ObVectorIndexUtil::get_ivf_aux_info(service, pq_cache, pq_cent_table_id, pq_cent_tablet_id, tmp_allocator, pq_centers))) {
         LOG_WARN("failed to get centers", K(ret));
       } else if (pq_centers.count() % pq_m != 0) {
         ret = OB_ERR_UNEXPECTED;
