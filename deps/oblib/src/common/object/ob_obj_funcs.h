@@ -18,6 +18,7 @@
 #include "lib/json_type/ob_json_parse.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_bin.h"
+#include "lib/udt/ob_array_type.h"
 #include "common/object/ob_object.h"
 
 namespace oceanbase
@@ -3519,6 +3520,26 @@ inline int obj_print_plain_str<ObCollectionSQLType>(const ObObj &obj, char *buff
   ObObj tmp_obj = obj;
   ObString udt_data;
   if (OB_FAIL(obj.get_udt_print_data(udt_data, buffer, length, pos, true))) {
+  } else if (params.coll_meta_ != NULL) {
+    // array
+    ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(params.coll_meta_->collection_meta_);
+    ObString res_str;
+    ObIArrayType *arr_obj = nullptr;
+    ObArenaAllocator tmp_allocator;
+    ObStringBuffer buf(&tmp_allocator);
+    if (OB_FAIL(ObArrayTypeObjFactory::construct(tmp_allocator, *arr_type, arr_obj, true))) {
+      COMMON_LOG(WARN, "construct array obj failed", K(ret),  K(*params.coll_meta_));
+    } else if (OB_FAIL(arr_obj->init(udt_data))) {
+      COMMON_LOG(WARN, "failed to init array", K(ret));
+    } else if (OB_FAIL(arr_obj->print(buf))) {
+      COMMON_LOG(WARN, "failed to format array", K(ret));
+    } else if (params.use_memcpy_) {
+      ret = databuff_memcpy(buffer, length, pos, buf.length(), buf.ptr());
+    } else {
+      ret = databuff_printf(buffer, length, pos, "%.*s",
+                            static_cast<int>(MIN(buf.length(), length - pos)),
+                            buf.ptr());
+    }
   } else {
     tmp_obj.set_string(obj.get_type(), udt_data);
     tmp_obj.set_collation_type(CS_TYPE_BINARY);

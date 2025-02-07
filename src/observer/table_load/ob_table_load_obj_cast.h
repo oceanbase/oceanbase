@@ -72,6 +72,9 @@ private:
   static int handle_string_to_enum_set(ObTableLoadCastObjCtx &cast_obj_ctx,
                                        const share::schema::ObColumnSchemaV2 *column_schema,
                                        const common::ObObj &src, common::ObObj &dst);
+  static int handle_string_to_collection(ObTableLoadCastObjCtx &cast_obj_ctx,
+                                         const ObColumnSchemaV2 *column_schema,
+                                         const ObObj &src, ObObj &dst);
   static int string_to_enum(common::ObIAllocator &alloc, const common::ObObj &src,
                             const common::ObCollationType cs_type,
                             const common::ObCastMode cast_mode,

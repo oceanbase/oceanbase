@@ -989,6 +989,7 @@ int ObTableLoadTransStoreWriter::cast_column(
   int ret = OB_SUCCESS;
   ObCastCtx cast_ctx(&cast_allocator, &cast_params, cast_mode_, column_schema->get_collation_type());
   ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
+  cast_ctx.exec_ctx_ = trans_ctx_->ctx_->exec_ctx_;
   ObObj out_obj;
   if (column_schema->is_autoincrement()) {
     // mysql模式还不支持快速删列, 先加个拦截

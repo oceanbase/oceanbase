@@ -548,6 +548,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_array_contains_all.cpp
   engine/expr/ob_expr_array_distinct.cpp
   engine/expr/ob_expr_array_map.cpp
+  engine/expr/ob_expr_array_sum.cpp
   engine/expr/ob_expr_array_remove.cpp
   engine/expr/ob_expr_extract_cert_expired_time.cpp
   engine/expr/ob_expr_transaction_id.cpp
@@ -846,6 +847,19 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_calc_odps_size.cpp
   engine/expr/ob_expr_to_pinyin_tab.cpp
   engine/expr/ob_expr_to_pinyin.cpp
+  engine/expr/ob_expr_array_max.cpp
+  engine/expr/ob_expr_array_avg.cpp
+  engine/expr/ob_expr_array_first.cpp
+  engine/expr/ob_expr_array_concat.cpp
+  engine/expr/ob_expr_array_difference.cpp
+  engine/expr/ob_expr_array_compact.cpp
+  engine/expr/ob_expr_array_sort.cpp
+  engine/expr/ob_expr_array_sortby.cpp
+  engine/expr/ob_expr_array_filter.cpp
+  engine/expr/ob_expr_array_range.cpp
+  engine/expr/ob_expr_array_length.cpp
+  engine/expr/ob_expr_array_position.cpp
+  engine/expr/ob_expr_array_slice.cpp
 )
 
 ob_set_subtarget(ob_sql_extra ALONE

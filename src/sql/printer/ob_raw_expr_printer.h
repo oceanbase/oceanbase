@@ -162,8 +162,7 @@ private:
   int print_sql_udt_construct(ObSysFunRawExpr *expr);
   int print_st_asmvt(ObAggFunRawExpr *expr);
   int print_array_agg_expr(ObAggFunRawExpr *expr);
-  int print_array_map(ObSysFunRawExpr *expr);
-
+  int print_array_map(ObSysFunRawExpr *expr, const char *func_name);
   int print_type(const ObExprResType &dst_type);
 
   int inner_print_fun_params(ObSysFunRawExpr &expr);

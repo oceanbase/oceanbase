@@ -46,6 +46,7 @@ namespace common
 {
 
 struct ObCompareCtx;
+class ObSqlCollectionInfo;
 enum ObCmpNullPos
 {
   NULL_LAST = 1,
@@ -1310,7 +1311,8 @@ struct ObObjPrintParams
     accuracy_(),
     print_flags_(0),
     exec_ctx_(NULL),
-    ob_obj_type_(ObNullType)
+    ob_obj_type_(ObNullType),
+    coll_meta_(NULL)
   {}
   ObObjPrintParams (const ObTimeZoneInfo *tz_info):
     tz_info_(tz_info),
@@ -1318,7 +1320,8 @@ struct ObObjPrintParams
     accuracy_(),
     print_flags_(0),
     exec_ctx_(NULL),
-    ob_obj_type_(ObNullType)
+    ob_obj_type_(ObNullType),
+    coll_meta_(NULL)
   {}
   ObObjPrintParams ():
     tz_info_(NULL),
@@ -1326,7 +1329,8 @@ struct ObObjPrintParams
     accuracy_(),
     print_flags_(0),
     exec_ctx_(NULL),
-    ob_obj_type_(ObNullType)
+    ob_obj_type_(ObNullType),
+    coll_meta_(NULL)
   {}
   TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags), K_(ob_obj_type));
   const ObTimeZoneInfo *tz_info_;
@@ -1361,6 +1365,7 @@ struct ObObjPrintParams
   */
   sql::ObExecContext *exec_ctx_;
   ObObjType ob_obj_type_;
+  common::ObSqlCollectionInfo *coll_meta_;
 };
 
 // sizeof(ObObjValue)=8

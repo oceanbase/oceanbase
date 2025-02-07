@@ -142,7 +142,7 @@ int ObArrayUtil::convert_collection_bin_to_string(const ObString &collection_bin
         ObString raw_binary = collection_bin;
         if (OB_FAIL(arr_obj->init(raw_binary))) {
           LOG_WARN("failed to init array", K(ret));
-        } else if (OB_FAIL(arr_obj->print(arr_type->element_type_, buf))) {
+        } else if (OB_FAIL(arr_obj->print(buf))) {
           LOG_WARN("failed to format array", K(ret));
         } else {
           res_str.assign_ptr(buf.ptr(), buf.length());
@@ -261,23 +261,6 @@ int ObArrayUtil::append(ObIArrayType &array, const ObObjType elem_type, const Ob
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("unsupported element type", K(ret), K(elem_type));
     }
-  }
-  return ret;
-}
-
-int ObArrayUtil::append_array(ObIArrayType &array, ObIArrayType &elem_arr, bool is_null)
-{
-  int ret = OB_SUCCESS;
-  ObArrayNested *array_obj = dynamic_cast<ObArrayNested *>(&array);
-  if (OB_ISNULL(array_obj)) {
-    ret = OB_ERR_ARRAY_TYPE_MISMATCH;
-    LOG_WARN("invalid array type", K(ret), K(array.get_format()));
-  } else if (is_null) {
-    if (OB_FAIL(array_obj->push_null())) {
-      LOG_WARN("failed to push null", K(ret));
-    }
-  } else if (OB_FAIL(array_obj->push_back(elem_arr))) {
-    LOG_WARN("failed to push back value", K(ret));
   }
   return ret;
 }

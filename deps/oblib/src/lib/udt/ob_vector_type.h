@@ -25,13 +25,14 @@ public :
       data_(data) {}
   virtual ~ObVectorData() = default;
 
-  virtual int print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
+  virtual int print(ObStringBuffer &format_str,
             uint32_t begin = 0, uint32_t print_size = 0) const = 0;
-  virtual int print_element(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
+  virtual int print_element(ObStringBuffer &format_str,
                     uint32_t begin = 0, uint32_t print_size = 0,
                     ObString delimiter = ObString(","),
                     bool has_null_str = true, ObString null_str = ObString("NULL")) const = 0;
   virtual int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const = 0;
+  virtual int elem_at(uint32_t idx, ObObj &elem_obj) const = 0;
 
 public:
   T operator[](const int64_t i) const { return data_[i]; }
@@ -64,6 +65,7 @@ public:
   int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
                  const ObIArrayType &right, int &cmp_ret) const;
   int compare(const ObIArrayType &right, int &cmp_ret) const;
+  bool sort_cmp(uint32_t idx_l, uint32_t idx_r) const { return operator[](idx_l) < operator[](idx_r); }
   template<typename Elem_Type>
   int contains(const Elem_Type &elem, int &pos) const
   {
@@ -131,13 +133,14 @@ public:
   ObVectorF32Data(uint32_t length, float *data)
     : ObVectorData(length, ObFloatType, data) {}
   virtual ~ObVectorF32Data() = default;
-  virtual int print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
+  virtual int print(ObStringBuffer &format_str,
             uint32_t begin = 0, uint32_t print_size = 0) const override;
-  virtual int print_element(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
+  virtual int print_element(ObStringBuffer &format_str,
                     uint32_t begin = 0, uint32_t print_size = 0,
                     ObString delimiter = ObString(","),
                     bool has_null_str = true, ObString null_str = ObString("NULL")) const override;
   virtual int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const override;
+  virtual int elem_at(uint32_t idx, ObObj &elem_obj) const override;
 };
 
 class ObVectorU8Data : public ObVectorData<uint8_t> {
@@ -146,13 +149,14 @@ public:
   ObVectorU8Data(uint32_t length, uint8_t *data)
     : ObVectorData(length, ObUTinyIntType, data) {}
   virtual ~ObVectorU8Data() = default;
-  virtual int print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
+  virtual int print(ObStringBuffer &format_str,
             uint32_t begin = 0, uint32_t print_size = 0) const override;
-  virtual int print_element(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
+  virtual int print_element(ObStringBuffer &format_str,
                     uint32_t begin = 0, uint32_t print_size = 0,
                     ObString delimiter = ObString(","),
                     bool has_null_str = true, ObString null_str = ObString("NULL")) const override;
   virtual int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const override;
+  virtual int elem_at(uint32_t idx, ObObj &elem_obj) const override;
 };
 
 //////////////////////////////////

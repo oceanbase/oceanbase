@@ -1912,8 +1912,11 @@ struct ObArrayMinusFunc : public ObNestedArithOpBaseFunc
       } else {
         T *left_data = reinterpret_cast<T *>(l.get_data());
         T *right_data = reinterpret_cast<T *>(r.get_data());
-        for (int64_t i = 0; i < l.size(); ++i) {
+        for (int64_t i = 0; i < l.size() && OB_SUCC(ret); ++i) {
           res_data[i] = left_data[i] - right_data[i];
+          if (OB_FAIL(ObArrayExprUtils::raw_check_minus(res_data[i], left_data[i], right_data[i]))) {
+            LOG_WARN("array minus check failed", K(ret));
+          }
         }
       }
     }

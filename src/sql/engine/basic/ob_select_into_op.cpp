@@ -28,6 +28,7 @@
 #include "lib/charset/ob_charset_string_helper.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "lib/udt/ob_collection_type.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/connector/ob_java_env.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
@@ -1032,7 +1033,7 @@ int ObSelectIntoOp::check_buf_sufficient(ObCsvFileWriter &data_writer,
 int ObSelectIntoOp::write_obj_to_file(const ObObj &obj, ObCsvFileWriter &data_writer, bool need_escape)
 {
   int ret = OB_SUCCESS;
-  if ((obj.is_string_type() || obj.is_json()) && need_escape) {
+  if ((obj.is_string_type() || obj.is_json() || obj.is_collection_sql_type()) && need_escape) {
     if (OB_FAIL(print_str_or_json_with_escape(obj, data_writer))) {
       LOG_WARN("failed to print str or json with escape", K(ret));
     }
@@ -1061,11 +1062,18 @@ int ObSelectIntoOp::print_str_or_json_with_escape(const ObObj &obj, ObCsvFileWri
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   if (OB_FAIL(get_buf(escape_printer_.buf_, escape_printer_.buf_len_, escape_printer_.pos_, data_writer))) {
     LOG_WARN("failed to get buffer", K(ret));
-  } else if (obj.is_json()) {
+  } else if (obj.is_json() || obj.is_collection_sql_type()) {
     ObObj inrow_obj = obj;
     if (obj.is_lob_storage()
         && OB_FAIL(ObTextStringIter::convert_outrow_lob_to_inrow_templob(obj, inrow_obj, NULL, &temp_allocator))) {
       LOG_WARN("failed to convert outrow lobs", K(ret), K(obj));
+    } else if (obj.is_collection_sql_type()) {
+      ObSubSchemaValue sub_meta;
+      if (OB_FAIL((get_exec_ctx().get_sqludt_meta_by_subschema_id(obj.get_meta().get_subschema_id(), sub_meta)))) {
+        LOG_WARN("failed to get collection subschema", K(ret), K(obj.get_meta().get_subschema_id()));
+      } else {
+        print_params_.coll_meta_ = reinterpret_cast<ObSqlCollectionInfo *>(sub_meta.value_);
+      }
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(print_json_to_json_buf(inrow_obj, buf, buf_len, pos, data_writer))) {
@@ -1376,7 +1384,7 @@ int ObSelectIntoOp::print_field(const ObObj &obj, ObCsvFileWriter &data_writer)
   int ret = OB_SUCCESS;
   char char_n = 'N';
   const bool need_enclose = has_enclose_ && !obj.is_null()
-                            && (!is_optional_ || obj.is_string_type()
+                            && (!is_optional_ || obj.is_string_type() || obj.is_collection_sql_type()
                                 || obj.is_json() || obj.is_geometry() || obj.is_date()
                                 || obj.is_time() || obj.is_timestamp() || obj.is_datetime()
                                 || obj.is_mysql_date() || obj.is_mysql_datetime());
@@ -5210,7 +5218,8 @@ int ObSelectIntoOp::check_has_lob_or_json()
       LOG_WARN("select expr is unexpected null", K(ret));
     } else if (ob_is_text_tc(select_exprs.at(i)->obj_meta_.get_type())) {
       has_lob_ = true;
-    } else if (ob_is_json_tc(select_exprs.at(i)->obj_meta_.get_type())) {
+    } else if (ob_is_json_tc(select_exprs.at(i)->obj_meta_.get_type()) ||
+               ob_is_collection_sql_type(select_exprs.at(i)->obj_meta_.get_type())) {
       has_json_ = true;
     }
   }

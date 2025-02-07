@@ -33,7 +33,8 @@ public:
         allocator_(alloc),
         param_exprs_(NULL),
         param_num_(0),
-        param_idx_(NULL)
+        param_idx_(NULL),
+        lambda_subschema_id_(UINT16_MAX)
   {
   }
 
@@ -48,9 +49,46 @@ public:
   ObExpr** param_exprs_;
 	int64_t	param_num_;
   uint32_t* param_idx_;
+  uint16_t lambda_subschema_id_;
 };
 
-class ObExprArrayMap : public ObFuncExprOperator
+class ObExprArrayMapCommon : public ObFuncExprOperator
+{
+public:
+  explicit ObExprArrayMapCommon(common::ObIAllocator &alloc,
+                                ObExprOperatorType type,
+                                const char *name,
+                                int32_t param_num,
+                                ObValidForGeneratedColFlag valid_for_generated_col,
+                                int32_t dimension);
+  virtual ~ObExprArrayMapCommon();
+
+protected:
+  static int eval_src_arrays(const ObExpr &expr, ObEvalCtx &ctx, ObArenaAllocator &tmp_allocator,
+                             ObIArrayType **arr_obj, uint32_t &arr_dim, bool &is_null_res);
+  static int eval_lambda_array(ObEvalCtx &ctx, ObArenaAllocator &tmp_allocator, ObExprArrayMapInfo *info,
+                               ObIArrayType **arr_obj, uint32_t arr_dim,
+                               ObExpr *lambda_expr, ObIArrayType *&lambda_arr);
+  static int set_lambda_para(ObIAllocator &alloc,
+                             ObEvalCtx &ctx,
+                             ObExprArrayMapInfo *info,
+                             ObIArrayType **arr_obj,
+                             uint32_t idx);
+
+  int get_array_map_lambda_params(const ObRawExpr *raw_expr, ObArray<uint32_t> &param_idx, int depth, ObArray<ObExpr *> &param_exprs) const;
+  int get_lambda_subschema_id(ObExecContext *exec_ctx,
+                              const ObRawExpr &raw_expr,
+                              uint16_t &lambda_subschema_id) const;
+  int construct_extra_info(ObExprCGCtx &expr_cg_ctx,
+                           const ObRawExpr &raw_expr,
+                           ObExpr &rt_expr,
+                           ObIExprExtraInfo *&extra_info) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprArrayMapCommon);
+};
+
+class ObExprArrayMap : public ObExprArrayMapCommon
 {
 public:
   explicit ObExprArrayMap(common::ObIAllocator &alloc);
@@ -67,9 +105,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
-
-  int get_array_map_lambda_params(const ObRawExpr *raw_expr, ObArray<uint32_t> &param_idx, int depth,
-                                  ObArray<ObExpr *> &param_exprs) const;
   DISALLOW_COPY_AND_ASSIGN(ObExprArrayMap);
 };
 

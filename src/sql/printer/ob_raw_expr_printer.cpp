@@ -3511,7 +3511,19 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         break;
       }
       case T_FUNC_SYS_ARRAY_MAP: {
-        OZ(print_array_map(expr));
+        OZ(print_array_map(expr, N_ARRAY_MAP));
+        break;
+      }
+      case T_FUNC_SYS_ARRAY_FIRST: {
+        OZ(print_array_map(expr, N_ARRAY_FIRST));
+        break;
+      }
+      case T_FUNC_SYS_ARRAY_SORTBY: {
+        OZ(print_array_map(expr, N_ARRAY_SORTBY));
+        break;
+      }
+      case T_FUNC_SYS_ARRAY_FILTER: {
+        OZ(print_array_map(expr, N_ARRAY_FILTER));
         break;
       }
       default: {
@@ -5324,7 +5336,7 @@ int ObRawExprPrinter::print_sql_udt_construct(ObSysFunRawExpr *expr)
   return ret;
 }
 
-int ObRawExprPrinter::print_array_map(ObSysFunRawExpr *expr)
+int ObRawExprPrinter::print_array_map(ObSysFunRawExpr *expr, const char *func_name)
 {
   int ret = OB_SUCCESS;
   uint32_t max_idx = 0;
@@ -5333,7 +5345,7 @@ int ObRawExprPrinter::print_array_map(ObSysFunRawExpr *expr)
     LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
   } else {
     max_idx = expr->get_param_count() - 1;
-    DATA_PRINTF("array_map((");
+    DATA_PRINTF("%s((",func_name);
     for (uint32_t i = 0; i < max_idx; i++) {
       if (i != 0) {
         DATA_PRINTF(",");

@@ -13,6 +13,10 @@
 #ifndef OCEANBASE_OB_ARRAY_UTILS_
 #define OCEANBASE_OB_ARRAY_UTILS_
 
+#include "lib/udt/ob_array_type.h"
+#include "ob_array_fixed_size.h"
+#include "ob_array_binary.h"
+#include "ob_array_nested.h"
 #include "lib/udt/ob_vector_type.h"
 #include "src/share/vector/ob_vector_base.h"
 
@@ -118,7 +122,6 @@ public :
                             obmysql::EMySQLFieldType &type);
 
   static int append(ObIArrayType &array, const ObObjType elem_type, const ObDatum *datum);
-  static int append_array(ObIArrayType &array, ObIArrayType &elem_arr, bool is_null = false);
 
   template<typename Elem_Type>
   static int clone_except(ObIAllocator &alloc, const ObIArrayType &src_array, const Elem_Type *elem, bool is_null, ObIArrayType *&dst_array)

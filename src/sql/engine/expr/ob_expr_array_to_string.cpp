@@ -104,9 +104,6 @@ int ObExprArrayToString::eval_array_to_string(const ObExpr &expr, ObEvalCtx &ctx
   ObDatum *arr_datum = NULL;
   ObDatum *delimiter_datum = NULL;
   ObDatum *null_str_datum = NULL;
-  ObSubSchemaValue meta;
-  ObCollectionArrayType *arr_type = NULL;
-  const ObSqlCollectionInfo *src_coll_info = NULL;
   bool is_null_res = false;
   ObIArrayType *arr_obj = NULL;
   ObString delimiter;
@@ -121,14 +118,6 @@ int ObExprArrayToString::eval_array_to_string(const ObExpr &expr, ObEvalCtx &ctx
     LOG_WARN("failed to eval null string arg", K(ret));
   } else if (arr_datum->is_null() || delimiter_datum->is_null()) {
     is_null_res = true;
-  } else if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, meta))) {
-    LOG_WARN("failed to get subschema meta", K(ret), K(subschema_id));
-  } else if (OB_ISNULL(src_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(meta.value_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("source array collection info is null", K(ret));
-  } else if (OB_ISNULL(arr_type = static_cast<ObCollectionArrayType *>(src_coll_info->collection_meta_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("source array collection array type is null", K(ret));
   } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), arr_obj))) {
     LOG_WARN("construct array obj failed", K(ret));
   } else if (OB_FALSE_IT(delimiter = delimiter_datum->get_string())) {
@@ -143,7 +132,7 @@ int ObExprArrayToString::eval_array_to_string(const ObExpr &expr, ObEvalCtx &ctx
   } else {
     ObStringBuffer res_buf(&tmp_allocator);
     ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &res);
-    if (OB_FAIL(arr_obj->print_element(arr_type->element_type_, res_buf, 0, 0, delimiter, has_null_str, null_str))) {
+    if (OB_FAIL(arr_obj->print_element(res_buf, 0, 0, delimiter, has_null_str, null_str))) {
       LOG_WARN("failed to format array", K(ret));
     } else if (OB_FAIL(str_result.init(res_buf.length()))) {
       LOG_WARN("failed to init result", K(ret), K(res_buf.length()));
@@ -165,9 +154,6 @@ int ObExprArrayToString::eval_array_to_string_batch(const ObExpr &expr, ObEvalCt
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
-  ObSubSchemaValue meta;
-  ObCollectionArrayType *arr_type = NULL;
-  const ObSqlCollectionInfo *src_coll_info = NULL;
   ObIArrayType *arr_obj = NULL;
 
   if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
@@ -191,18 +177,6 @@ int ObExprArrayToString::eval_array_to_string_batch(const ObExpr &expr, ObEvalCt
       eval_flags.set(j);
       if (arr_array.at(j)->is_null() || delimiter_array.at(j)->is_null()) {
         is_null_res = true;
-      } else if (OB_ISNULL(arr_type)) {
-        if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, meta))) {
-          LOG_WARN("failed to get subschema meta", K(ret), K(subschema_id));
-        } else if (OB_ISNULL(src_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(meta.value_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("source array collection info is null", K(ret));
-        } else if (OB_ISNULL(arr_type = static_cast<ObCollectionArrayType *>(src_coll_info->collection_meta_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("source array collection array type is null", K(ret));
-        }
-      }
-      if (OB_FAIL(ret) || is_null_res) {
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), arr_obj))) {
         LOG_WARN("construct array obj failed", K(ret));
       } else if (OB_FALSE_IT(delimiter = delimiter_array.at(j)->get_string())) {
@@ -216,7 +190,7 @@ int ObExprArrayToString::eval_array_to_string_batch(const ObExpr &expr, ObEvalCt
       } else {
         ObStringBuffer res_buf(&tmp_allocator);
         ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, res_datum.at(j));
-        if (OB_FAIL(arr_obj->print_element(arr_type->element_type_, res_buf, 0, 0, delimiter, has_null_str, null_str))) {
+        if (OB_FAIL(arr_obj->print_element(res_buf, 0, 0, delimiter, has_null_str, null_str))) {
           LOG_WARN("failed to format array", K(ret));
         } else if (OB_FAIL(str_result.init_with_batch_idx(res_buf.length(), j))) {
           LOG_WARN("failed to init result", K(ret), K(res_buf.length()), K(j));
@@ -238,9 +212,6 @@ int ObExprArrayToString::eval_array_to_string_vector(const ObExpr &expr, ObEvalC
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
-  ObSubSchemaValue meta;
-  ObCollectionArrayType *arr_type = NULL;
-  const ObSqlCollectionInfo *src_coll_info = NULL;
   ObIArrayType *arr_obj = NULL;
   if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("eval source array failed", K(ret));
@@ -267,18 +238,6 @@ int ObExprArrayToString::eval_array_to_string_vector(const ObExpr &expr, ObEvalC
         continue;
       } else if (arr_vec->is_null(idx) || delimiter_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (OB_ISNULL(arr_type)) {
-        if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, meta))) {
-          LOG_WARN("failed to get subschema meta", K(ret), K(subschema_id));
-        } else if (OB_ISNULL(src_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(meta.value_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("source array collection info is null", K(ret));
-        } else if (OB_ISNULL(arr_type = static_cast<ObCollectionArrayType *>(src_coll_info->collection_meta_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("source array collection array type is null", K(ret));
-        }
-      }
-      if (OB_FAIL(ret) || is_null_res) {
       } else if (arr_format == VEC_UNIFORM || arr_format == VEC_UNIFORM_CONST) {
         ObString arr_str = arr_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, subschema_id, arr_str, arr_obj))) {
@@ -300,7 +259,7 @@ int ObExprArrayToString::eval_array_to_string_vector(const ObExpr &expr, ObEvalC
         eval_flags.set(idx);
       } else {
         ObStringBuffer res_buf(&tmp_allocator);
-        if (OB_FAIL(arr_obj->print_element(arr_type->element_type_, res_buf, 0, 0, delimiter, has_null_str, null_str))) {
+        if (OB_FAIL(arr_obj->print_element(res_buf, 0, 0, delimiter, has_null_str, null_str))) {
           LOG_WARN("failed to format array", K(ret));
         } else {
           if (res_format == VEC_DISCRETE) {

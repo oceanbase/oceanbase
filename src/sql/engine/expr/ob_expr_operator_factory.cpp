@@ -453,6 +453,14 @@
 #include "sql/engine/expr/ob_expr_array_to_string.h"
 #include "sql/engine/expr/ob_expr_string_to_array.h"
 #include "sql/engine/expr/ob_expr_array_append.h"
+#include "sql/engine/expr/ob_expr_array_concat.h"
+#include "sql/engine/expr/ob_expr_array_difference.h"
+#include "sql/engine/expr/ob_expr_array_max.h"
+#include "sql/engine/expr/ob_expr_array_avg.h"
+#include "sql/engine/expr/ob_expr_array_compact.h"
+#include "sql/engine/expr/ob_expr_array_sort.h"
+#include "sql/engine/expr/ob_expr_array_sortby.h"
+#include "sql/engine/expr/ob_expr_array_filter.h"
 #include "sql/engine/expr/ob_expr_element_at.h"
 #include "sql/engine/expr/ob_expr_array_cardinality.h"
 #include "sql/engine/expr/ob_expr_tokenize.h"
@@ -473,14 +481,19 @@
 #include "sql/engine/expr/ob_expr_array_distinct.h"
 #include "sql/engine/expr/ob_expr_array_remove.h"
 #include "sql/engine/expr/ob_expr_array_map.h"
+#include "sql/engine/expr/ob_expr_array_range.h"
 #include "sql/engine/expr/ob_expr_calc_odps_size.h"
+#include "sql/engine/expr/ob_expr_array_first.h"
 #include "sql/engine/expr/ob_expr_mysql_proc_info.h"
 #include "sql/engine/expr/ob_expr_get_mysql_routine_parameter_type_str.h"
 #include "sql/engine/expr/ob_expr_ora_login_user.h"
 #include "sql/engine/expr/ob_expr_priv_st_geohash.h"
 #include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
 #include "sql/engine/expr/ob_expr_to_pinyin.h"
-
+#include "sql/engine/expr/ob_expr_array_sum.h"
+#include "sql/engine/expr/ob_expr_array_length.h"
+#include "sql/engine/expr/ob_expr_array_position.h"
+#include "sql/engine/expr/ob_expr_array_slice.h"
 
 
 using namespace oceanbase::common;
@@ -1183,8 +1196,20 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprArrayToString);
     REG_OP(ObExprStringToArray);
     REG_OP(ObExprArrayAppend);
+    REG_OP(ObExprArrayLength);
+    REG_OP(ObExprArrayPrepend);
+    REG_OP(ObExprArrayConcat);
+    REG_OP(ObExprArrayDifference);
+    REG_OP(ObExprArrayCompact);
+    REG_OP(ObExprArraySort);
+    REG_OP(ObExprArraySortby);
+    REG_OP(ObExprArrayFilter);
     REG_OP(ObExprElementAt);
     REG_OP(ObExprArrayCardinality);
+    REG_OP(ObExprArrayMax);
+    REG_OP(ObExprArrayMin);
+    REG_OP(ObExprArrayAvg);
+    REG_OP(ObExprArrayFirst);
     REG_OP(ObExprDecodeTraceId);
     REG_OP(ObExprAuditLogSetFilter);
     REG_OP(ObExprAuditLogRemoveFilter);
@@ -1207,6 +1232,10 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprArrayDistinct);
     REG_OP(ObExprArrayRemove);
     REG_OP(ObExprArrayMap);
+    REG_OP(ObExprArraySum);
+    REG_OP(ObExprArrayPosition);
+    REG_OP(ObExprArraySlice);
+    REG_OP(ObExprArrayRange);
     REG_OP(ObExprGetMySQLRoutineParameterTypeStr);
     REG_OP(ObExprCalcOdpsSize);
     REG_OP(ObExprToPinyin);

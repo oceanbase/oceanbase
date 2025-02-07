@@ -16,7 +16,6 @@
 #include "lib/udt/ob_collection_type.h"
 #include "lib/udt/ob_array_type.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
-#include "sql/engine/expr/ob_array_cast.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 
@@ -57,12 +56,14 @@ int ObExprElementAt::calc_result_type2(ObExprResType &type,
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ARRAY", ob_obj_type_str(type1.get_type()));
-  } else if (!ob_is_integer_type(type2.get_type())) {
+  } else if (!ob_is_numeric_type(type2.get_type())
+         && !ob_is_varchar_or_char(type2.get_type(), type2.get_collation_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "INTEGER", ob_obj_type_str(type2.get_type()));
   } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(type1.get_subschema_id(), arr_meta))) {
     LOG_WARN("failed to get elem meta.", K(ret), K(type1.get_subschema_id()));
   } else {
+    type2.set_calc_type(ObIntType);
     const ObSqlCollectionInfo *coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(arr_meta.value_);
     ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_);
     if (arr_type->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
@@ -94,10 +95,8 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
-  ObSubSchemaValue meta;
-  ObCollectionArrayType *arr_type = NULL;
-  const ObSqlCollectionInfo *src_coll_info = NULL;
   ObIArrayType *src_arr = NULL;
+  ObIArrayType* child_arr = NULL;
   int64_t idx = 0;
   ObDatum *arr_datum = NULL;
   ObDatum *idx_datum = NULL;
@@ -108,33 +107,15 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     LOG_WARN("failed to eval index arg", K(ret));
   } else if (arr_datum->is_null() || idx_datum->is_null()) {
     res.set_null();
-  } else if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, meta))) {
-    LOG_WARN("failed to get subschema value", K(ret), K(subschema_id));
-  } else if (OB_ISNULL(src_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(meta.value_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("source array collection info is null", K(ret));
-  } else if (OB_ISNULL(arr_type = static_cast<ObCollectionArrayType *>(src_coll_info->collection_meta_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("source array collection array type is null", K(ret));
   } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), src_arr))) {
     LOG_WARN("construct array obj failed", K(ret));
   } else if (OB_FALSE_IT(idx = idx_datum->get_int() - 1)) {
   } else if (idx < 0 || idx >= src_arr->size() || idx > UINT32_MAX) {
     res.set_null();
-  } else if (src_arr->get_format() !=  ArrayFormat::Vector && src_arr->is_null(idx)) {
+  } else if (src_arr->is_null(idx)) {
     res.set_null();
-  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
-    ObObj elem_obj;
-    ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
-    if (OB_FAIL(ObArrayCastUtils::cast_get_element(src_arr, elem_type, static_cast<uint32_t>(idx), elem_obj))) {
-      LOG_WARN("failed to cast get element", K(ret));
-    } else {
-      res.from_obj(elem_obj);
-    }
-  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
-             || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+  } else if (src_arr->is_nested_array()) {
     uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
-    ObIArrayType* child_arr = NULL;
     ObString child_arr_str;
     if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,ctx, child_subschema_id, child_arr, false))) {
       LOG_WARN("construct child array obj failed", K(ret));
@@ -146,8 +127,12 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       res.set_string(child_arr_str);
     }
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid element type", K(ret), K(arr_type->element_type_->type_id_));
+    ObObj elem_obj;
+    if (OB_FAIL(src_arr->elem_at(idx, elem_obj))) {
+      LOG_WARN("failed to get element", K(ret), K(idx));
+    } else {
+      res.from_obj(elem_obj);
+    }
   }
   return ret;
 }
@@ -161,9 +146,6 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
-  ObSubSchemaValue meta;
-  ObCollectionArrayType *arr_type = NULL;
-  const ObSqlCollectionInfo *src_coll_info = NULL;
   ObIArrayType *src_arr = NULL;
   ObIArrayType* child_arr = NULL;
 
@@ -175,50 +157,26 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
     ObDatumVector arr_array = expr.args_[0]->locate_expr_datumvector(ctx);
     ObDatumVector idx_array = expr.args_[1]->locate_expr_datumvector(ctx);
     for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
-      bool is_null_res = false;
       int64_t idx = 0;
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
       eval_flags.set(j);
       if (arr_array.at(j)->is_null()) {
-        is_null_res = true;
-      } else if (OB_ISNULL(arr_type)) {
-        if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, meta))) {
-          LOG_WARN("failed to get subschema value", K(ret), K(subschema_id));
-        } else if (OB_ISNULL(src_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(meta.value_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("source array collection info is null", K(ret));
-        } else if (OB_ISNULL(arr_type = static_cast<ObCollectionArrayType *>(src_coll_info->collection_meta_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("source array collection array type is null", K(ret));
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (is_null_res) {
         res_datum.at(j)->set_null();
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) {
         LOG_WARN("construct array obj failed", K(ret));
       } else if (OB_FALSE_IT(idx = idx_array.at(j)->get_int() - 1)) {
       } else if (idx < 0 || idx >= src_arr->size() || idx > UINT32_MAX) {
         res_datum.at(j)->set_null();
-      } else if (src_arr->get_format() !=  ArrayFormat::Vector && src_arr->is_null(idx)) {
+      } else if (src_arr->is_null(idx)) {
         res_datum.at(j)->set_null();
-      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
-        ObObj elem_obj;
-        ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
-        if (OB_FAIL(ObArrayCastUtils::cast_get_element(src_arr, elem_type, static_cast<uint32_t>(idx), elem_obj))) {
-          LOG_WARN("failed to cast get element", K(ret));
-        } else {
-          res_datum.at(j)->from_obj(elem_obj);
-        }
-      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
-                 || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+      } else if (src_arr->is_nested_array()) {
         uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
         ObString child_arr_str;
-        if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,ctx, child_subschema_id, child_arr, false))) {
+        if (OB_NOT_NULL(child_arr) && OB_FALSE_IT(child_arr->clear())) {
+        } else if (OB_ISNULL(child_arr) && OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,ctx, child_subschema_id, child_arr, false))) {
           LOG_WARN("construct child array obj failed", K(ret));
-        } else if (OB_FALSE_IT(child_arr->clear())) {
         } else if (OB_FAIL(src_arr->at(static_cast<uint32_t>(idx), *child_arr))) {
           LOG_WARN("failed to get child array", K(ret), K(idx));
         } else {
@@ -242,8 +200,12 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
           }
         }
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid element type", K(ret), K(arr_type->element_type_->type_id_));
+        ObObj elem_obj;
+        if (OB_FAIL(src_arr->elem_at(static_cast<uint32_t>(idx), elem_obj))) {
+          LOG_WARN("failed to get element", K(ret), K(idx));
+        } else {
+          res_datum.at(j)->from_obj(elem_obj);
+        }
       }
     } // end for
   }
@@ -257,9 +219,6 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   const uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
-  ObSubSchemaValue meta;
-  ObCollectionArrayType *arr_type = NULL;
-  const ObSqlCollectionInfo *src_coll_info = NULL;
   ObIArrayType *src_arr = NULL;
   ObIArrayType* child_arr = NULL;
 
@@ -283,18 +242,6 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
       }
       if (arr_vec->is_null(idx)) {
         is_null_res = true;
-      } else if (OB_ISNULL(arr_type)) {
-        if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, meta))) {
-          LOG_WARN("failed to get subschema meta", K(ret), K(subschema_id));
-        } else if (OB_ISNULL(src_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(meta.value_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("source array collection info is null", K(ret));
-        } else if (OB_ISNULL(arr_type = static_cast<ObCollectionArrayType *>(src_coll_info->collection_meta_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("source array collection array type is null", K(ret));
-        }
-      }
-      if (OB_FAIL(ret) || is_null_res) {
       } else if (arr_format == VEC_UNIFORM || arr_format == VEC_UNIFORM_CONST) {
         ObString arr_str = arr_vec->get_string(idx);
         if (OB_FAIL(ObNestedVectorFunc::construct_param(tmp_allocator, ctx, subschema_id, arr_str, src_arr))) {
@@ -308,38 +255,17 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
       } else if (OB_FALSE_IT(arr_idx = idx_vec->get_int(idx) - 1)) {
       } else if (arr_idx < 0 || arr_idx >= src_arr->size() || arr_idx > UINT32_MAX) {
         is_null_res = true;
-      } else if (src_arr->get_format() != ArrayFormat::Vector && src_arr->is_null(arr_idx)) {
+      } else if (src_arr->is_null(arr_idx)) {
         is_null_res = true;
       }
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         res_vec->set_null(idx);
-      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
-        ObObj elem_obj;
-        ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
-        if (OB_FAIL(ObArrayCastUtils::cast_get_element(src_arr, elem_type, static_cast<uint32_t>(arr_idx), elem_obj))) {
-          LOG_WARN("failed to cast get element", K(ret));
-        } else if (ob_is_int_tc(elem_obj.get_type())) {
-          res_vec->set_int(idx, elem_obj.get_int());
-        } else if (ob_is_uint_tc(elem_obj.get_type())) {
-          res_vec->set_uint(idx, elem_obj.get_uint64());
-        } else if (ObFloatType == elem_obj.get_type()) {
-          res_vec->set_float(idx, elem_obj.get_float());
-        } else if (ObDoubleType == elem_obj.get_type()) {
-          res_vec->set_double(idx, elem_obj.get_double());
-        } else if (ObDecimalIntType == elem_obj.get_type()) {
-          res_vec->set_decimal_int(idx, elem_obj.get_decimal_int(), elem_obj.get_int_bytes());
-        } else if (ObVarcharType == elem_obj.get_type()) {
-          res_vec->set_string(idx, elem_obj.get_string());
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          OB_LOG(WARN, "unexpected element type", K(ret), K(elem_obj.get_type()));
-        }
-      } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
-                 || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+      } else if (src_arr->is_nested_array()) {
         uint16_t child_subschema_id = expr.obj_meta_.get_subschema_id();
         ObString child_arr_str;
-        if (OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,ctx, child_subschema_id, child_arr, false))) {
+        if (OB_NOT_NULL(child_arr) && OB_FALSE_IT(child_arr->clear())) {
+        } else if (OB_ISNULL(child_arr) && OB_FAIL(ObArrayExprUtils::construct_array_obj(tmp_allocator,ctx, child_subschema_id, child_arr, false))) {
           LOG_WARN("construct child array obj failed", K(ret));
         } else if (OB_FALSE_IT(child_arr->clear())) {
         } else if (OB_FAIL(src_arr->at(static_cast<uint32_t>(arr_idx), *child_arr))) {
@@ -356,8 +282,12 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
           LOG_WARN("set array res failed", K(ret));
         }
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid element type", K(ret), K(arr_type->element_type_->type_id_));
+        ObObj elem_obj;
+        if (OB_FAIL(src_arr->elem_at(static_cast<uint32_t>(arr_idx), elem_obj))) {
+          LOG_WARN("failed to get element", K(ret), K(arr_idx));
+        } else if (OB_FAIL(ObArrayExprUtils::set_obj_to_vector(res_vec, idx, elem_obj))) {
+          LOG_WARN("failed to set object value to result vector", K(ret), K(idx), K(elem_obj));
+        }
       }
       if (OB_SUCC(ret)) {
         eval_flags.set(idx);

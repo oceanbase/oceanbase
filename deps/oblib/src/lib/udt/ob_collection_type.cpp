@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX LIB
 #include <regex>
+#include "common/object/ob_object.h"
 #include "ob_collection_type.h"
 #include "share/ob_errno.h"
 #include "lib/string/ob_string_buffer.h"

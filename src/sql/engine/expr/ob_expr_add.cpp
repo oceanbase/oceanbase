@@ -1786,15 +1786,17 @@ struct ObArrayAddFunc : public ObNestedArithOpBaseFunc
       } else {
         T *left_data = reinterpret_cast<T *>(l.get_data());
         T *right_data = reinterpret_cast<T *>(r.get_data());
-        for (int64_t i = 0; i < l.size(); ++i) {
+        for (int64_t i = 0; i < l.size() && OB_SUCC(ret); ++i) {
           res_data[i] = left_data[i] + right_data[i];
+          if (OB_FAIL(ObArrayExprUtils::raw_check_add(res_data[i], left_data[i], right_data[i]))) {
+            LOG_WARN("array add check failed", K(ret));
+          }
         }
       }
     }
     return ret;
   }
 };
-
 
 #define COLLECTION_ADD_EVAL_FUNC_DECL(TYPE) \
 int ObExprAdd::add_collection_collection_##TYPE(EVAL_FUNC_ARG_DECL)      \

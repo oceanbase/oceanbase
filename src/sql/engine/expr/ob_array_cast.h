@@ -13,6 +13,10 @@
 #ifndef OCEANBASE_OB_ARRAY_CAST_
 #define OCEANBASE_OB_ARRAY_CAST_
 #include "lib/udt/ob_collection_type.h"
+#include "lib/udt/ob_array_type.h"
+#include "lib/udt/ob_array_fixed_size.h"
+#include "lib/udt/ob_array_binary.h"
+#include "lib/udt/ob_array_nested.h"
 #include "lib/udt/ob_vector_type.h"
 #include "share/object/ob_obj_cast.h"
 #include "deps/oblib/src/lib/json_type/ob_json_tree.h"

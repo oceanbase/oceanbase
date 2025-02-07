@@ -887,7 +887,7 @@ int ObSqlUdtUtils::convert_collection_to_string(ObObj &coll_obj, const ObSqlColl
   } else {
     if (OB_FAIL(arr_obj->init(coll_data))) {
       LOG_WARN("failed to init array", K(ret));
-    } else if (OB_FAIL(arr_obj->print(arr_type->element_type_, buf))) {
+    } else if (OB_FAIL(arr_obj->print(buf))) {
       LOG_WARN("failed to format array", K(ret));
     } else {
       res_str.assign_ptr(buf.ptr(), buf.length());

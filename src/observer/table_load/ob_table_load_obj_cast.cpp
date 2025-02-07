@@ -14,6 +14,7 @@
 
 #include "observer/table_load/ob_table_load_obj_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "src/sql/engine/ob_exec_context.h"
 #include "share/object/ob_obj_cast_util.h"
 
 namespace oceanbase
@@ -149,7 +150,12 @@ int ObTableLoadObjCaster::cast_obj(ObTableLoadCastObjCtx &cast_obj_ctx,
     }
   }
   if (OB_SUCC(ret) && convert_src_obj != nullptr) {
-    if (column_schema->is_enum_or_set()) {
+    if (column_schema->is_collection() &&
+        OB_FAIL(handle_string_to_collection(cast_obj_ctx, column_schema, src, dst))) {
+      LOG_WARN("fail to get subschema for collection", KR(ret), K(src), K(dst));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (column_schema->is_enum_or_set()) {
       if (OB_FAIL(handle_string_to_enum_set(cast_obj_ctx, column_schema, src, dst))) {
         LOG_WARN("fail to convert string to enum or set", KR(ret), K(src), K(dst));
       }
@@ -186,6 +192,27 @@ int ObTableLoadObjCaster::convert_obj(const ObObjType &expect_type, const ObObj 
   } else if (src.is_string_type() && lib::is_oracle_mode() &&
              (src.is_null_oracle() || 0 == src.get_val_len())) {
     dest = &null_obj;
+  }
+  return ret;
+}
+
+int ObTableLoadObjCaster::handle_string_to_collection(ObTableLoadCastObjCtx &cast_obj_ctx,
+                                                      const ObColumnSchemaV2 *column_schema,
+                                                      const ObObj &src, ObObj &dst)
+{
+  int ret = OB_SUCCESS;
+  uint16_t subschema_id = 0;
+  const ObIArray<common::ObString> &extended_type_info = column_schema->get_extended_type_info();
+  if (OB_ISNULL(cast_obj_ctx.cast_ctx_->exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (extended_type_info.count() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected type name", K(ret), K(extended_type_info.count()));
+  } else if (OB_FAIL(cast_obj_ctx.cast_ctx_->exec_ctx_->get_subschema_id_by_type_string(extended_type_info.at(0), subschema_id))) {
+    LOG_WARN("failed to get array type subschema id", K(ret));
+  } else {
+    dst.meta_.set_collection(subschema_id);
   }
   return ret;
 }

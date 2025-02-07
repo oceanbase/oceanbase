@@ -34,7 +34,7 @@ int ObVectorDataCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const
   }
   for (int64_t i = 0; i < src->size() && OB_SUCC(ret); i++) {
     ObObj src_elem;
-    if (src->get_format() != ArrayFormat::Vector && src->is_null(i)) {
+    if (src->is_null(i)) {
       if (OB_FAIL(dst->push_null())) {
         LOG_WARN("failed to add null to array", K(ret), K(i));
       }
@@ -77,7 +77,7 @@ int ObArrayFixedSizeCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, c
   }
   for (int64_t i = 0; i < src->size() && OB_SUCC(ret); i++) {
     ObObj src_elem;
-    if (src->get_format() != ArrayFormat::Vector && src->is_null(i)) {
+    if (src->is_null(i)) {
       if (OB_FAIL(dst->push_null())) {
         LOG_WARN("failed to add null to array", K(ret), K(i));
       }
@@ -709,7 +709,7 @@ int ObArrayBinaryCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, cons
     ObCollationLevel elem_ncl_type = src_type->basic_meta_.get_collation_level();
     for (int64_t i = 0; i < src->size() && OB_SUCC(ret); i++) {
       ObObj src_elem;
-      if (src->get_format() != ArrayFormat::Vector && src->is_null(i)) {
+      if (src->is_null(i)) {
         if (OB_FAIL(dst->push_null())) {
           LOG_WARN("failed to add null to array", K(ret), K(i));
         }
@@ -747,7 +747,7 @@ int ObArrayNestedCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, cons
       LOG_WARN("alloc array cast failed", K(ret));
     }
     for (int64_t i = 0; i < src->size() && OB_SUCC(ret); i++) {
-      if (src->get_format() != ArrayFormat::Vector && src->is_null(i)) {
+      if (src->is_null(i)) {
         if (OB_FAIL(dst->push_null())) {
           LOG_WARN("failed to add null to array", K(ret), K(i));
         }

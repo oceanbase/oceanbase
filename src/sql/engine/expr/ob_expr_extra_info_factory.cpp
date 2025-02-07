@@ -115,6 +115,9 @@ void ObExprExtraInfoFactory::register_expr_extra_infos()
   REG_EXTRA_INFO(T_FUN_SYS_JSON_QUERY, ObExprJsonQueryParamInfo);
   REG_EXTRA_INFO(T_PSEUDO_EXTERNAL_FILE_COL, ObDataAccessPathExtraInfo);
   REG_EXTRA_INFO(T_FUNC_SYS_ARRAY_MAP, ObExprArrayMapInfo);
+  REG_EXTRA_INFO(T_FUNC_SYS_ARRAY_FIRST, ObExprArrayMapInfo);
+  REG_EXTRA_INFO(T_FUNC_SYS_ARRAY_SORTBY, ObExprArrayMapInfo);
+  REG_EXTRA_INFO(T_FUNC_SYS_ARRAY_FILTER, ObExprArrayMapInfo);
 }
 
 } // end namespace sql
