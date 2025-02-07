@@ -148,7 +148,7 @@ public:
   table::ObTableLoadResultInfo result_info_;
   ObITableLoadTaskScheduler *task_scheduler_;
   ObTableLoadErrorRowHandler *error_row_handler_;
-  hash::ObHashMap<ObTableID,  ObTableLoadStoreTableCtx* > index_store_table_ctx_map_;
+  ObArray<ObTableLoadStoreTableCtx *> index_store_table_ctxs_;
   ObTableLoadStoreTableCtx *data_store_table_ctx_;
   ObTableLoadMergerManager *merger_manager_;
   ObTableLoadOpenInsertTableCtxManager *open_insert_tablet_ctx_manager_;

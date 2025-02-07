@@ -24,7 +24,7 @@ namespace observer
 {
 ObTableLoadDataRowHandler::ObTableLoadDataRowHandler()
   : error_row_handler_(nullptr),
-    index_store_table_ctx_map_(nullptr),
+    index_store_table_ctxs_(nullptr),
     result_info_(nullptr),
     is_inited_(false)
 {
@@ -35,21 +35,21 @@ ObTableLoadDataRowHandler::~ObTableLoadDataRowHandler()
 
 }
 
-int ObTableLoadDataRowHandler::init(
-  const ObTableLoadParam &param, table::ObTableLoadResultInfo &result_info,
-  ObTableLoadErrorRowHandler *error_row_handler,
-  hash::ObHashMap<ObTableID, ObTableLoadStoreTableCtx *> *index_store_table_ctx_map)
+int ObTableLoadDataRowHandler::init(const ObTableLoadParam &param,
+                                    table::ObTableLoadResultInfo &result_info,
+                                    ObTableLoadErrorRowHandler *error_row_handler,
+                                    ObArray<ObTableLoadStoreTableCtx *> *index_store_table_ctxs)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     int ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadDataRowHandler init twice", KR(ret), KP(this));
-  } else if (OB_ISNULL(error_row_handler) || OB_ISNULL(index_store_table_ctx_map)) {
+  } else if (OB_ISNULL(error_row_handler) || OB_ISNULL(index_store_table_ctxs)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("allocator is null", KR(ret), KP(error_row_handler), KP(index_store_table_ctx_map));
+    LOG_WARN("allocator is null", KR(ret), KP(error_row_handler), KP(index_store_table_ctxs));
   } else {
     error_row_handler_ = error_row_handler;
-    index_store_table_ctx_map_ = index_store_table_ctx_map;
+    index_store_table_ctxs_ = index_store_table_ctxs;
     result_info_ = &result_info;
     dup_action_ = param.dup_action_;
     is_inited_ = true;
@@ -65,17 +65,17 @@ int ObTableLoadDataRowHandler::handle_insert_row(const ObTabletID tablet_id,
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadDataRowHandler not init", KR(ret), KP(this));
   } else {
-    FOREACH_X(iter, *index_store_table_ctx_map_, OB_SUCC(ret))
-    {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_store_table_ctxs_->count(); i++) {
+      ObTableLoadStoreTableCtx *store_table_ctx = index_store_table_ctxs_->at(i);
       ObTabletID index_tablet_id;
       blocksstable::ObDatumRow index_row;
       ObIDirectLoadPartitionTableBuilder *builder = nullptr;
-      if (OB_FAIL(
-            iter->second->project_->projector(tablet_id, row, false, index_tablet_id, index_row))) {
+      if (OB_FAIL(store_table_ctx->project_->projector(tablet_id, row, false, index_tablet_id,
+                                                       index_row))) {
         LOG_WARN("fail to projector", KR(ret), K(tablet_id), K(row));
       } else {
         index_row.row_flag_.set_flag(DF_INSERT);
-        if (OB_FAIL(iter->second->get_index_table_builder(builder))) {
+        if (OB_FAIL(store_table_ctx->get_index_table_builder(builder))) {
           LOG_WARN("get builder failed", KR(ret));
         } else if (OB_FAIL(builder->append_row(index_tablet_id, 0, index_row))) {
           LOG_WARN("add row failed", KR(ret), K(index_row));
@@ -98,25 +98,23 @@ int ObTableLoadDataRowHandler::handle_insert_batch(const ObTabletID &tablet_id, 
   } else if (0 == datum_rows.row_count_) {
     // do nothing
   } else {
-    FOREACH_X(iter, *index_store_table_ctx_map_, OB_SUCC(ret))
-    {
-      ObTableLoadStoreTableCtx *store_table_ctx = iter->second;
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_store_table_ctxs_->count(); i++) {
+      ObTableLoadStoreTableCtx *store_table_ctx = index_store_table_ctxs_->at(i);
       ObIDirectLoadPartitionTableBuilder *builder = nullptr;
       ObTabletID index_tablet_id;
       ObDatumRow index_datum_row;
       index_datum_row.row_flag_.set_flag(DF_INSERT);
       if (OB_FAIL(store_table_ctx->get_index_table_builder(builder))) {
         LOG_WARN("fail to get index table builder", KR(ret));
-      } else if (OB_FAIL(store_table_ctx->project_->get_index_tablet_id(tablet_id, index_tablet_id))) {
+      } else if (OB_FAIL(
+                   store_table_ctx->project_->get_index_tablet_id(tablet_id, index_tablet_id))) {
         LOG_WARN("fail to get index tablet id", KR(ret));
       } else if (OB_FAIL(store_table_ctx->project_->init_datum_row(index_datum_row))) {
         LOG_WARN("fail to projector", KR(ret), K(tablet_id));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < datum_rows.row_count_; ++i) {
-        if (OB_FAIL(store_table_ctx->project_->projector(datum_rows,
-                                                         i,
-                                                         false/*has_multi_version_cols*/,
-                                                         index_datum_row))) {
+        if (OB_FAIL(store_table_ctx->project_->projector(
+              datum_rows, i, false /*has_multi_version_cols*/, index_datum_row))) {
           LOG_WARN("fail to projector", KR(ret), K(tablet_id));
         } else if (OB_FAIL(builder->append_row(index_tablet_id, 0, index_datum_row))) {
           LOG_WARN("add row failed", KR(ret), K(index_datum_row));
@@ -137,17 +135,17 @@ int ObTableLoadDataRowHandler::handle_insert_row_with_multi_version(const ObTabl
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadDataRowHandler not init", KR(ret), KP(this));
   } else {
-    FOREACH_X(iter, *index_store_table_ctx_map_, OB_SUCC(ret))
-    {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_store_table_ctxs_->count(); i++) {
+      ObTableLoadStoreTableCtx *store_table_ctx = index_store_table_ctxs_->at(i);
       ObTabletID index_tablet_id;
       blocksstable::ObDatumRow index_row;
       ObIDirectLoadPartitionTableBuilder *builder = nullptr;
-      if (OB_FAIL(
-            iter->second->project_->projector(tablet_id, row, true, index_tablet_id, index_row))) {
+      if (OB_FAIL(store_table_ctx->project_->projector(tablet_id, row, true, index_tablet_id,
+                                                       index_row))) {
         LOG_WARN("fail to projector", KR(ret), K(tablet_id), K(row));
       } else {
         index_row.row_flag_.set_flag(blocksstable::DF_INSERT);
-        if (OB_FAIL(iter->second->get_index_table_builder(builder))) {
+        if (OB_FAIL(store_table_ctx->get_index_table_builder(builder))) {
           LOG_WARN("get builder failed", KR(ret));
         } else if (OB_FAIL(builder->append_row(index_tablet_id, 0, index_row))) {
           LOG_WARN("add row failed", KR(ret), K(index_row));
@@ -170,25 +168,23 @@ int ObTableLoadDataRowHandler::handle_insert_batch_with_multi_version(const ObTa
   } else if (0 == datum_rows.row_count_) {
     // do nothing
   } else {
-    FOREACH_X(iter, *index_store_table_ctx_map_, OB_SUCC(ret))
-    {
-      ObTableLoadStoreTableCtx *store_table_ctx = iter->second;
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_store_table_ctxs_->count(); i++) {
+      ObTableLoadStoreTableCtx *store_table_ctx = index_store_table_ctxs_->at(i);
       ObIDirectLoadPartitionTableBuilder *builder = nullptr;
       ObTabletID index_tablet_id;
       ObDatumRow index_datum_row;
       index_datum_row.row_flag_.set_flag(DF_INSERT);
       if (OB_FAIL(store_table_ctx->get_index_table_builder(builder))) {
         LOG_WARN("fail to get index table builder", KR(ret));
-      } else if (OB_FAIL(store_table_ctx->project_->get_index_tablet_id(tablet_id, index_tablet_id))) {
+      } else if (OB_FAIL(
+                   store_table_ctx->project_->get_index_tablet_id(tablet_id, index_tablet_id))) {
         LOG_WARN("fail to get index tablet id", KR(ret));
       } else if (OB_FAIL(store_table_ctx->project_->init_datum_row(index_datum_row))) {
         LOG_WARN("fail to projector", KR(ret), K(tablet_id));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < datum_rows.row_count_; ++i) {
-        if (OB_FAIL(store_table_ctx->project_->projector(datum_rows,
-                                                         i,
-                                                         true/*has_multi_version_cols*/,
-                                                         index_datum_row))) {
+        if (OB_FAIL(store_table_ctx->project_->projector(
+              datum_rows, i, true /*has_multi_version_cols*/, index_datum_row))) {
           LOG_WARN("fail to projector", KR(ret), K(tablet_id));
         } else if (OB_FAIL(builder->append_row(index_tablet_id, 0, index_datum_row))) {
           LOG_WARN("add row failed", KR(ret), K(index_datum_row));
@@ -255,26 +251,27 @@ int ObTableLoadDataRowHandler::handle_update_row(const ObTabletID tablet_id,
       LOG_WARN("unexpected dup action", KR(ret), K_(dup_action));
     }
     if (OB_SUCC(ret) && result_row == &new_row) {
-      FOREACH_X(iter, *index_store_table_ctx_map_, OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_store_table_ctxs_->count(); i++) {
+        ObTableLoadStoreTableCtx *store_table_ctx = index_store_table_ctxs_->at(i);
         ObTabletID index_tablet_id;
         blocksstable::ObDatumRow index_row_old;
         blocksstable::ObDatumRow index_row_new;
         ObIDirectLoadPartitionTableBuilder *builder = nullptr;
-        if (OB_FAIL(iter->second->project_->projector(tablet_id, old_row, false, index_tablet_id,
-                                                      index_row_old))) {
+        if (OB_FAIL(store_table_ctx->project_->projector(tablet_id, old_row, false, index_tablet_id,
+                                                         index_row_old))) {
           LOG_WARN("fail to projector", KR(ret), K(tablet_id), K(old_row));
-        } else if (OB_FAIL(iter->second->project_->projector(tablet_id, new_row, false,
-                                                             index_tablet_id, index_row_new))) {
+        } else if (OB_FAIL(store_table_ctx->project_->projector(tablet_id, new_row, false,
+                                                                index_tablet_id, index_row_new))) {
           LOG_WARN("fail to projector", KR(ret), K(tablet_id), K(new_row));
-        } else if (OB_FAIL(iter->second->get_index_table_builder(builder))) {
+        } else if (OB_FAIL(store_table_ctx->get_index_table_builder(builder))) {
           LOG_WARN("get builder failed", KR(ret));
         } else {
           ObDatumRowkey old_key(index_row_old.storage_datums_,
-                                iter->second->schema_->rowkey_column_count_);
+                                store_table_ctx->schema_->rowkey_column_count_);
           ObDatumRowkey new_key(index_row_new.storage_datums_,
-                                iter->second->schema_->rowkey_column_count_);
+                                store_table_ctx->schema_->rowkey_column_count_);
           int cmp_ret;
-          if (OB_FAIL(old_key.compare(new_key, iter->second->schema_->datum_utils_, cmp_ret))) {
+          if (OB_FAIL(old_key.compare(new_key, store_table_ctx->schema_->datum_utils_, cmp_ret))) {
             LOG_WARN("fail to compare", KR(ret));
           } else {
             // when cmp_ret == 0, insert new row is equal to  delete old row and insert new row.

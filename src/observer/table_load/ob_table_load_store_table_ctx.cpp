@@ -324,7 +324,7 @@ int ObTableLoadStoreTableCtx::init_row_handler()
       LOG_WARN("fail to new ObTableLoadDataRowHandler", KR(ret));
     } else if (OB_FAIL(main_row_handler->init(store_ctx_->ctx_->param_, store_ctx_->result_info_,
                                               store_ctx_->error_row_handler_,
-                                              &(store_ctx_->index_store_table_ctx_map_)))) {
+                                              &(store_ctx_->index_store_table_ctxs_)))) {
       LOG_WARN("fail to init row handler", KR(ret), KPC(store_ctx_), K(is_index_table),
                K(schema_->index_table_count_), KP(project_));
     } else {

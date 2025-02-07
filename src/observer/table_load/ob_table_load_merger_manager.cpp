@@ -33,12 +33,13 @@ void ObTableLoadMergerManager::stop()
     } else {
       store_ctx_->data_store_table_ctx_->merger_->stop();
     }
-    FOREACH(it, store_ctx_->index_store_table_ctx_map_) {
-      if (OB_ISNULL(it->second) || OB_ISNULL(it->second->merger_)) {
+    for (int64_t i = 0; i < store_ctx_->index_store_table_ctxs_.count(); i++) {
+      ObTableLoadStoreTableCtx * index_store_ctx = store_ctx_->index_store_table_ctxs_.at(i);
+      if (OB_ISNULL(index_store_ctx) || OB_ISNULL(index_store_ctx->merger_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected index store table ctx or merger is NULL", KR(ret), K(it->first));
+        LOG_WARN("unexpected index store table ctx or merger is NULL", KR(ret), KP(index_store_ctx));
       } else {
-        it->second->merger_->stop();
+        index_store_ctx->merger_->stop();
       }
     }
 
@@ -76,12 +77,13 @@ int ObTableLoadMergerManager::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadMergerManager init twice", KR(ret), KP(this));
   } else {
-    FOREACH_X(it, store_ctx_->index_store_table_ctx_map_, OB_SUCC(ret)) {
-      if (OB_ISNULL(it->second)) {
+    for (int64_t i = 0; i < store_ctx_->index_store_table_ctxs_.count(); i++) {
+      ObTableLoadStoreTableCtx * index_store_ctx = store_ctx_->index_store_table_ctxs_.at(i);
+      if (OB_ISNULL(index_store_ctx)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected index store table ctx is NULL", KR(ret), K(it->first));
-      } else if (OB_FAIL(index_store_array_.push_back(it->second))) {
-        LOG_WARN("fail to push back index store table ctx", KR(ret), K(it->first));
+        LOG_WARN("unexpected index store table ctx is NULL", KR(ret));
+      } else if (OB_FAIL(index_store_array_.push_back(index_store_ctx))) {
+        LOG_WARN("fail to push back index store table ctx", KR(ret));
       }
     }
     if (OB_SUCC(ret)) {

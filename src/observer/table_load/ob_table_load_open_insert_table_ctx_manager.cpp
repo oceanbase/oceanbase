@@ -36,9 +36,10 @@ int ObTableLoadOpenInsertTableCtxManager::init()
         LOG_WARN("fail to push back insert tablet ctx", KR(ret));
       }
     }
-    FOREACH_X(it, store_ctx_->index_store_table_ctx_map_, OB_SUCC(ret)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < store_ctx_->index_store_table_ctxs_.count(); i++) {
       common::hash::ObHashMap<common::ObTabletID, ObDirectLoadInsertTabletContext *>
-        &index_insert_tablet_ctxs = it->second->insert_table_ctx_->get_tablet_ctx_map();
+        &index_insert_tablet_ctxs =
+          store_ctx_->index_store_table_ctxs_.at(i)->insert_table_ctx_->get_tablet_ctx_map();
       FOREACH_X(iter, index_insert_tablet_ctxs, OB_SUCC(ret))
       {
         if (OB_ISNULL(iter->second)) {

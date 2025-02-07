@@ -48,7 +48,7 @@ public:
   virtual ~ObTableLoadDataRowHandler();
   int init(const ObTableLoadParam &param, table::ObTableLoadResultInfo &result_info,
            ObTableLoadErrorRowHandler *error_row_handler,
-           hash::ObHashMap<ObTableID, ObTableLoadStoreTableCtx *> *index_store_table_ctx_map);
+           ObArray<ObTableLoadStoreTableCtx *> *index_store_table_ctxs);
   int handle_insert_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row) override;
   int handle_insert_batch(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows) override;
   int handle_delete_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row)
@@ -69,7 +69,7 @@ public:
   TO_STRING_KV(KPC_(error_row_handler), K_(result_info), K_(dup_action), K_(is_inited));
 private:
   ObTableLoadErrorRowHandler * error_row_handler_;
-  hash::ObHashMap<ObTableID,  ObTableLoadStoreTableCtx* > *index_store_table_ctx_map_;
+  ObArray<ObTableLoadStoreTableCtx *> *index_store_table_ctxs_;
   table::ObTableLoadResultInfo *result_info_;
   sql::ObLoadDupActionType dup_action_;
   bool is_inited_;

@@ -62,14 +62,15 @@ void ObTableLoadStore::cancel_table_ctx(ObTableLoadTableCtx *ctx)
     ctx->store_ctx_->data_store_table_ctx_->insert_table_ctx_->cancel();
   }
 
-  FOREACH(it, ctx->store_ctx_->index_store_table_ctx_map_)
-  {
-    if (OB_ISNULL(it->second) || OB_ISNULL(it->second->insert_table_ctx_)) {
+  for (int64_t i = 0; i < ctx->store_ctx_->index_store_table_ctxs_.count(); i++) {
+    ObTableLoadStoreTableCtx *index_store_table_ctx =
+      ctx->store_ctx_->index_store_table_ctxs_.at(i);
+    if (OB_ISNULL(index_store_table_ctx) || OB_ISNULL(index_store_table_ctx->insert_table_ctx_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected index store table ctx or insert_table_ctx is NULL", KR(ret),
-               K(it->first));
+               KP(index_store_table_ctx));
     } else {
-      it->second->insert_table_ctx_->cancel();
+      index_store_table_ctx->insert_table_ctx_->cancel();
     }
   }
 }

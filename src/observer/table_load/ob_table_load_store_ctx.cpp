@@ -53,6 +53,7 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
+  index_store_table_ctxs_.set_block_allocator(ModulePageAllocator(allocator_));
   committed_trans_store_array_.set_tenant_id(MTL_ID());
 }
 
@@ -89,9 +90,8 @@ int ObTableLoadStoreCtx::init_store_table_ctxs(
                                                        this, partition_id_array,
                                                        target_partition_id_array))) {
           LOG_WARN("fail to init ObTableLoadStoreTableCtx", KR(ret));
-        } else if (OB_FAIL(index_store_table_ctx_map_.set_refactored(
-                     simple_index_infos.at(i).table_id_, index_store_table_ctx))) {
-          LOG_WARN("fail to set index_insert_table_ctx", KR(ret));
+        } else if (OB_FAIL(index_store_table_ctxs_.push_back(index_store_table_ctx))) {
+          LOG_WARN("fail to push", KR(ret));
         }
         if (OB_FAIL(ret)) {
           if (OB_NOT_NULL(index_store_table_ctx)) {
@@ -157,9 +157,6 @@ int ObTableLoadStoreCtx::init(
   // init segment_trans_ctx_map_
   else if (OB_FAIL(segment_ctx_map_.init("TLD_SegCtxMap", ctx_->param_.tenant_id_))) {
     LOG_WARN("fail to init segment ctx map", KR(ret));
-  } else if (OB_FAIL(index_store_table_ctx_map_.create(1024, "TLD_IdxStCtxMap", "TLD_IdxStCtxMap",
-                                                       ctx_->param_.tenant_id_))) {
-    LOG_WARN("fail to create index_store_table_ctx_map", KR(ret));
   }
   // 初始化task_scheduler_
   else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
@@ -254,14 +251,12 @@ void ObTableLoadStoreCtx::destroy()
     allocator_.free(error_row_handler_);
     error_row_handler_ = nullptr;
   }
-  FOREACH(it, index_store_table_ctx_map_) {
-    ObTableLoadStoreTableCtx* index_store_table_ctx = it->second;
-    if (OB_NOT_NULL(index_store_table_ctx)) {
-      index_store_table_ctx->~ObTableLoadStoreTableCtx();
-      allocator_.free(index_store_table_ctx);
-    }
+  for (int64_t i = 0; i < index_store_table_ctxs_.count(); ++i) {
+    ObTableLoadStoreTableCtx* index_store_table_ctx = index_store_table_ctxs_.at(i);
+    index_store_table_ctx->~ObTableLoadStoreTableCtx();
+    allocator_.free(index_store_table_ctx);
   }
-  index_store_table_ctx_map_.destroy();
+  index_store_table_ctxs_.reset();
   if (OB_NOT_NULL(data_store_table_ctx_)) {
     data_store_table_ctx_->~ObTableLoadStoreTableCtx();
     allocator_.free(data_store_table_ctx_);
