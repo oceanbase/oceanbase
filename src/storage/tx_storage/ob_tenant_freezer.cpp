@@ -592,6 +592,7 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
   int64_t tx_data_mem_limit = total_memory * ObTenantTxDataAllocator::TX_DATA_LIMIT_PERCENTAGE / 100;
 
   static int skip_count = 0;
+  bool need_re_freeze = false;
   if (true == ATOMIC_LOAD(&is_freezing_tx_data_)) {
     // skip freeze when there is another self freeze task is running
     if (++skip_count > 10) {
@@ -602,9 +603,9 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
                    K(skip_count),
                    K(cost_time));
     }
-  } else if (OB_FAIL(get_tenant_tx_data_mem_used_(frozen_tx_data_mem_used, active_tx_data_mem_used))) {
+  } else if (OB_FAIL(get_tx_data_info_for_freeze_(frozen_tx_data_mem_used, active_tx_data_mem_used, need_re_freeze))) {
     LOG_WARN("[TenantFreezer] get tenant tx data mem used failed.", KR(ret));
-  } else if (active_tx_data_mem_used > self_freeze_trigger_memory) {
+  } else if (need_re_freeze || active_tx_data_mem_used > self_freeze_trigger_memory) {
     // trigger tx data self freeze
     if (OB_FAIL(post_tx_data_freeze_request_())) {
       LOG_WARN("[TenantFreezer] fail to do tx data self freeze", KR(ret), K(tenant_info_.tenant_id_));
@@ -616,9 +617,9 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
   // execute statistic print once a minute
   if (TC_REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
     if (frozen_tx_data_mem_used + active_tx_data_mem_used > tx_data_mem_limit) {
-      LOG_INFO("tx data use too much memory!!!", STATISTIC_PRINT_MACRO);
-    } else if (OB_FAIL(get_tenant_tx_data_mem_used_(
-                   frozen_tx_data_mem_used, active_tx_data_mem_used, true /*for_statistic_print*/))) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tx data use too much memory!!!", STATISTIC_PRINT_MACRO);
+    } else if (OB_FAIL(get_tx_data_info_for_freeze_(
+                   frozen_tx_data_mem_used, active_tx_data_mem_used, need_re_freeze, true /*for_statistic_print*/))) {
       LOG_INFO("print statistic failed");
     } else {
       LOG_INFO("TxData Memory Statistic : ", STATISTIC_PRINT_MACRO);
@@ -627,6 +628,53 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
   return ret;
 }
 #undef STATISTIC_PRINT_MACRO
+
+int ObTenantFreezer::get_tx_data_info_for_freeze_(int64_t &tenant_tx_data_frozen_mem_used,
+                                                  int64_t &tenant_tx_data_active_mem_used,
+                                                  bool &need_re_freeze,
+                                                  bool for_statistic_print)
+{
+  int ret = OB_SUCCESS;
+  tenant_tx_data_frozen_mem_used = 0;
+  tenant_tx_data_active_mem_used = 0;
+  common::ObSharedGuard<ObLSIterator> iter;
+  ObLSService *ls_srv = MTL(ObLSService *);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
+  } else if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD))) {
+    LOG_WARN("[TenantFreezer] fail to get log stream iterator", KR(ret));
+  } else {
+    ObLS *ls = nullptr;
+    int ls_cnt = 0;
+    for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
+      int tmp_ret = OB_SUCCESS;
+      int64_t ls_tx_data_frozen_mem_used = 0;
+      int64_t ls_tx_data_active_mem_used = 0;
+      if (!for_statistic_print && OB_NOT_NULL(ls) && ls->tx_table_need_re_freeze()) {
+        need_re_freeze = true;
+        break;
+      }
+
+      if (OB_TMP_FAIL(get_ls_tx_data_memory_info_(
+              ls, ls_tx_data_frozen_mem_used, ls_tx_data_active_mem_used, for_statistic_print))) {
+        LOG_WARN("[TenantFreezer] fail to get tx data mem used in one ls", KR(ret), K(ls->get_ls_id()));
+      } else {
+        tenant_tx_data_frozen_mem_used += ls_tx_data_frozen_mem_used;
+        tenant_tx_data_active_mem_used += ls_tx_data_active_mem_used;
+      }
+    }
+
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+      if (0 == ls_cnt) {
+        LOG_WARN("[TenantFreezer] no logstream", KR(ret), K(ls_cnt), K(tenant_info_));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObTenantFreezer::get_tenant_tx_data_mem_used_(int64_t &tenant_tx_data_frozen_mem_used,
                                                   int64_t &tenant_tx_data_active_mem_used,

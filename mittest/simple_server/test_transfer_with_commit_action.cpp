@@ -32,7 +32,6 @@ namespace oceanbase
 
 namespace storage
 {
-int64_t ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL = 0;
 
 int ObTransferHandler::wait_src_ls_advance_weak_read_ts_(
   const share::ObTransferTaskInfo &task_info,

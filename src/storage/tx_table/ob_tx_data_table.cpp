@@ -39,8 +39,6 @@ using namespace oceanbase::share;
 namespace storage
 {
 
-int64_t ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL = 15 * 1000 * 1000; // 15 seconds
-
 int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
 {
   int ret = OB_SUCCESS;
@@ -711,9 +709,9 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
     min_end_scn = std::min(min_end_scn_from_old_tablets, min_end_scn_from_latest_tablets);
     if (!min_end_scn.is_max()) {
       recycle_scn = min_end_scn;
-      //Regardless of whether the primary or standby tenant is unified, refer to GTS.
-      //If the tenant role in memory is deferred,
-      //it may cause the standby tenant to commit and recycle when the primary is switched to standby.
+      // Regardless of whether the primary or standby tenant is unified, refer to GTS.
+      // If the tenant role in memory is deferred,
+      // it may cause the standby tenant to commit and recycle when the primary is switched to standby.
       SCN snapshot_version;
       MonotonicTs unused_ts(0);
       int tmp_ret = OB_SUCCESS;
@@ -743,15 +741,28 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
 // memory.
 // 2. The tenant remain memory is than (1 - freeze_trigger_percentage) and the tx data uses more
 // than TX_DATA_FREEZE_TRIGGER_MIN_PERCENTAGE% memory in total tenant memory.
+// 3. FastFreeze would trigger this freeze task more frequently but freeze_freq_controller would slow down freeze
+// frequency
 int ObTxDataTable::self_freeze_task()
 {
   int ret = OB_SUCCESS;
+  const ObLSID ls_id = get_ls_id();
 
-  STORAGE_LOG(DEBUG, "start tx data table self freeze task", K(get_ls_id()));
+  STORAGE_LOG(DEBUG, "start tx data table self freeze task", K(ls_id));
 
-  if (OB_FAIL(memtable_mgr_->flush(SCN::max_scn(), checkpoint::INVALID_TRACE_ID, true))) {
-    share::ObLSID ls_id = get_ls_id();
-    STORAGE_LOG(WARN, "self freeze of tx data memtable failed.", KR(ret), K(ls_id), KPC(memtable_mgr_));
+  const int64_t current_time = ObClockGenerator::getClock();
+  int64_t last_freeze_ts = 0;
+  if (freeze_freq_controller_.can_freeze(current_time, last_freeze_ts)) {
+    if (OB_FAIL(memtable_mgr_->flush(SCN::max_scn(), true))) {
+      if (OB_NO_NEED_MERGE == ret) {
+        STORAGE_LOG(INFO, "tx data table no need merge", KR(ret), K(ls_id));
+      } else {
+        (void)freeze_freq_controller_.rollback_freeze_ts(current_time, last_freeze_ts);
+        STORAGE_LOG(WARN, "self freeze of tx data memtable failed.", KR(ret), K(ls_id), KPC(memtable_mgr_));
+      }
+    }
+  } else {
+    // skip freeze tx data this time
   }
 
   STORAGE_LOG(DEBUG, "finish tx data table self freeze task", KR(ret), K(get_ls_id()));
@@ -1311,6 +1322,39 @@ int ObTxDataTable::dump_tx_data_in_sstable_2_text_(const ObTransID tx_id, FILE *
     fprintf(fd, "\n********** Tx Data SSTable ***********\n");
   }
   return ret;
+}
+
+ERRSIM_POINT_DEF(EN_TX_DATA_MAX_FREEZE_INTERVAL_SECOND)
+bool ObTxDataTable::FreezeFrequencyController::need_re_freeze(const share::ObLSID ls_id)
+{
+  // Inject logic to modify default freeze interval
+  int tmp_ret = OB_SUCCESS;
+  int64_t max_freeze_interval = MAX_FREEZE_TX_DATA_INTERVAL;
+  if (OB_TMP_FAIL(EN_TX_DATA_MAX_FREEZE_INTERVAL_SECOND)) {
+    max_freeze_interval = abs(tmp_ret) * 1000LL * 1000LL;
+  }
+
+  bool need_re_freeze = false;
+  const int64_t last_freeze_ts = ATOMIC_LOAD(&last_freeze_ts_);
+  const int64_t last_request_ts = ATOMIC_LOAD(&last_request_ts_);
+  const int64_t current_time = ObClockGenerator::getClock();
+  // This condition can be confusing. For details, see
+  bool condition1_satisfied =
+      last_request_ts > last_freeze_ts && current_time - last_freeze_ts > 2 * MIN_FREEZE_TX_DATA_INTERVAL;
+  // Trigger TxData Freeze every 5 minutes
+  bool condition2_satisfied = (last_freeze_ts != 0) && (current_time - last_freeze_ts > max_freeze_interval);
+  if (condition1_satisfied || condition2_satisfied) {
+    need_re_freeze = true;
+    STORAGE_LOG(INFO,
+                "tx data table need refreeze",
+                K(ls_id),
+                K(max_freeze_interval),
+                KTIME(last_request_ts),
+                KTIME(last_freeze_ts),
+                KTIME(current_time));
+  }
+
+  return need_re_freeze;
 }
 
 share::ObLSID ObTxDataTable::get_ls_id() { return ls_id_; }

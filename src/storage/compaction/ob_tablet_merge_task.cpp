@@ -856,7 +856,7 @@ int ObTxTableMergeExecutePrepareTask::prepare_compaction_filter()
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tx table guard is invalid", K(tmp_ret), K_(ctx_->param), K(guard));
     } else if (OB_TMP_FAIL(guard.get_recycle_scn(recycle_scn))) {
-      LOG_WARN("failed to get recycle ts", K(tmp_ret), K_(ctx_->param));
+      LOG_WARN("failed to get recycle ts", K(tmp_ret), K_(ctx_->param), KP(ctx_->compaction_filter_));
     } else if (OB_TMP_FAIL(compaction_filter->init(recycle_scn, ObTxTable::get_filter_col_idx()))) {
       LOG_WARN("failed to get init compaction filter", K(tmp_ret), K_(ctx_->param), K(recycle_scn));
     } else {
@@ -877,6 +877,7 @@ int ObTxTableMergeExecutePrepareTask::prepare_compaction_filter()
       ctx_->allocator_.free(buf);
       buf = nullptr;
     }
+
   }
   return ret;
 }
@@ -1280,14 +1281,43 @@ int ObTabletMergeFinishTask::process()
     }
   }
 
-
-  if (OB_FAIL(ret)) {
-  } else if (is_mini_merge(ctx->param_.merge_type_)
-      && OB_TMP_FAIL(report_checkpoint_diagnose_info(*ctx))) {
-    LOG_WARN("failed to report_checkpoint_diagnose_info", K(tmp_ret), KPC(ctx));
+  if (OB_SUCC(ret)) {
+    (void)report_checkpoint_info(*ctx);
+    (void)record_tx_data_info(*ctx);
   }
 
   return ret;
+}
+
+void ObTabletMergeFinishTask::report_checkpoint_info(ObTabletMergeCtx &ctx)
+{
+  int tmp_ret = OB_SUCCESS;
+  if (is_mini_merge(ctx.param_.merge_type_)) {
+    if (OB_TMP_FAIL(report_checkpoint_diagnose_info(ctx))) {
+      STORAGE_LOG_RET(WARN, 0, "failed to report_checkpoint_diagnose_info", K(tmp_ret), K(ctx));
+    }
+  }
+}
+
+void ObTabletMergeFinishTask::record_tx_data_info(ObTabletMergeCtx &ctx)
+{
+  int tmp_ret = OB_SUCCESS;
+  if (is_minor_merge(ctx.param_.merge_type_) && LS_TX_DATA_TABLET == ctx.param_.tablet_id_) {
+    if (OB_NOT_NULL(ctx.compaction_filter_)) {
+      const SCN recycle_scn = (static_cast<ObTransStatusFilter *>(ctx.compaction_filter_))->get_recycle_scn();
+      (void)ctx.ls_handle_.get_ls()->get_tx_table()->recycle_tx_data_finish(recycle_scn);
+    }
+
+    const int64_t tx_data_sstable_row_count = ctx.merge_info_.get_sstable_merge_info().total_row_count_;
+    if (tx_data_sstable_row_count > 100000LL * 60LL * 60LL) {
+      STORAGE_LOG_RET(
+          ERROR,
+          OB_SIZE_OVERFLOW,
+          "TxData SSTable is too large. Please check recycle_scn in 'success to init compaction filter' log",
+          K(tx_data_sstable_row_count),
+          K(ctx.param_));
+    }
+  }
 }
 
 int ObTabletMergeFinishTask::get_merged_sstable(ObTabletMergeCtx &ctx)

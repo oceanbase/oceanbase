@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_TX_DATA_TABLE
 #define OCEANBASE_STORAGE_OB_TX_DATA_TABLE
 
+#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 #include "share/scn.h"
 #include "share/ob_occam_timer.h"
 #include "share/allocator/ob_tx_data_allocator.h"
@@ -80,8 +81,46 @@ public:
     TO_STRING_KV(KP(this), K(memtable_head_), K(memtable_tail_));
   };
 
+  struct FreezeFrequencyController {
+    int64_t last_freeze_ts_;
+    int64_t last_request_ts_;
+    FreezeFrequencyController() : last_freeze_ts_(0), last_request_ts_(0) {}
 
-  static int64_t UPDATE_CALC_UPPER_INFO_INTERVAL;
+    void reset()
+    {
+      last_freeze_ts_ = 0;
+      last_request_ts_ = 0;
+    }
+
+    bool can_freeze(const int64_t current_time, int64_t &last_freeze_ts)
+    {
+      inc_update(&last_request_ts_, current_time);
+      last_freeze_ts = ATOMIC_LOAD(&last_freeze_ts_);
+      if (current_time - last_freeze_ts > MIN_FREEZE_TX_DATA_INTERVAL &&
+          ATOMIC_BCAS(&last_freeze_ts_, last_freeze_ts, current_time)) {
+        return true;
+      }
+      return false;
+    }
+
+    bool need_re_freeze(const share::ObLSID ls_id);
+
+    void rollback_freeze_ts(const int64_t expected_val, const int64_t rollback_val)
+    {
+      if (ATOMIC_BCAS(&last_freeze_ts_, expected_val, rollback_val)) {
+        STORAGE_LOG(INFO, "rollback freeze ts success", KTIME(expected_val), KTIME(rollback_val));
+      } else {
+        STORAGE_LOG(
+            INFO, "rollback freeze ts failed", KTIME(last_freeze_ts_), KTIME(expected_val), KTIME(rollback_val));
+      }
+    }
+  };
+
+  // The tx data table cannot be freezed more than once in 10 seconds
+  static const int64_t MIN_FREEZE_TX_DATA_INTERVAL = 10LL * 1000LL * 1000LL;
+
+  // The tx data table should be freezed at least once each 5 minutes
+  static const int64_t MAX_FREEZE_TX_DATA_INTERVAL = 5LL * 60LL * 1000LL * 1000LL;
 
   enum COLUMN_ID_LIST
   {
@@ -106,6 +145,7 @@ public:  // ObTxDataTable
       ls_tablet_svr_(nullptr),
       memtable_mgr_(nullptr),
       tx_ctx_table_(nullptr),
+      freeze_freq_controller_(),
       read_schema_(),
       calc_upper_trans_version_cache_(),
       memtables_cache_() {}
@@ -116,6 +156,7 @@ public:  // ObTxDataTable
   virtual void stop();
   virtual void reset();
   virtual void destroy();
+  bool need_re_freeze() { return freeze_freq_controller_.need_re_freeze(ls_id_); }
   int offline();
   int online();
 
@@ -317,6 +358,7 @@ private:
   // The tablet id of tx data table
   ObTxDataMemtableMgr *memtable_mgr_;
   ObTxCtxTable *tx_ctx_table_;
+  FreezeFrequencyController freeze_freq_controller_;
   TxDataReadSchema read_schema_;
   CalcUpperTransSCNCache calc_upper_trans_version_cache_;
   MemtableHandlesCache memtables_cache_;
