@@ -10856,14 +10856,26 @@ int ObPLResolver::init_udf_info_of_accessident(ObObjAccessIdent &access_ident)
 {
   int ret = OB_SUCCESS;
   ObUDFRawExpr *func_expr = NULL;
+  bool has_assign_expr = false;
   OX (new (&access_ident.udf_info_) ObUDFInfo());
   OZ (expr_factory_.create_raw_expr(T_FUN_UDF, func_expr));
   CK (OB_NOT_NULL(func_expr));
   for (int64_t i = 0; OB_SUCC(ret) && i < access_ident.params_.count(); ++i) {
     std::pair<ObRawExpr*, int64_t> &param = access_ident.params_.at(i);
     if (0 == param.second) {
-      OZ (func_expr->add_param_expr(param.first));
-      OX (access_ident.udf_info_.udf_param_num_++);
+      if (T_SP_CPARAM == param.first->get_expr_type()) {
+        ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(param.first);
+        CK (OB_NOT_NULL(call_expr));
+        OX (has_assign_expr = true);
+        OZ (access_ident.udf_info_.param_names_.push_back(call_expr->get_name()));
+        OZ (access_ident.udf_info_.param_exprs_.push_back(call_expr->get_expr()));
+      } else if (has_assign_expr) {
+        ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
+        LOG_WARN("can not get parameter after assign", K(ret));
+      } else {
+        OZ (func_expr->add_param_expr(param.first));
+        OX (access_ident.udf_info_.udf_param_num_++);
+      }
     } else {
       break;
     }
