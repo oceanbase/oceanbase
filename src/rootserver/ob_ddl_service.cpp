@@ -10103,7 +10103,10 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
     }
 
     bool is_add_lob = false;
-    if (OB_SUCC(ret) && !is_origin_table_has_lob_column) {
+    if(OB_FAIL(ret)) {
+    } else if (OB_FAIL(new_table_schema.check_row_length(is_oracle_mode))) {
+      LOG_WARN("failed to check_row_length", K(ret), K(new_table_schema));
+    } else if (!is_origin_table_has_lob_column) {
       if (OB_FAIL(create_aux_lob_table_if_need(
           new_table_schema, schema_guard, ddl_operator, trans,
           false/*need_sync_schema_version*/, is_add_lob))) {

@@ -5410,6 +5410,57 @@ int ObTableSchema::check_row_length(
   return ret;
 }
 
+int64_t ObTableSchema::get_max_row_length() const
+{
+  return is_inner_table(get_table_id()) ? INT64_MAX : OB_MAX_USER_ROW_LENGTH;
+}
+
+int ObTableSchema::get_column_byte_length(const bool is_oracle_mode, const ObColumnSchemaV2 &col,
+                                          const bool use_lob_inrow_threshold, int64_t &length) const
+{
+  int ret = OB_SUCCESS;
+  length = 0;
+  if ((is_table() || is_tmp_table() || is_external_table()) && !col.is_column_stored_in_sstable()) {
+    // The virtual column in the table does not actually store data, and does not count the length
+  } else if (is_storage_index_table() && col.is_fulltext_column()) {
+    // The full text column in the index only counts the length of one word segment
+    length = OB_MAX_OBJECT_NAME_LENGTH;
+  } else if (OB_FAIL(col.get_byte_length(length, is_oracle_mode, false))) {
+    LOG_WARN("fail to get byte length of column", K(ret));
+  } else if (is_lob_storage(col.get_data_type())) {
+    // be careful lob_inrow_threshold may be actually value when deserialize table schema beacuase lob_inrow_threshold is deserialized after add_column
+    // so add use_lob_inrow_threshold flag to handle this situation
+    length = OB_MIN(length, use_lob_inrow_threshold ? get_lob_inrow_threshold() : OB_MAX_LOB_HANDLE_LENGTH);
+  }
+  return ret;
+}
+
+int ObTableSchema::check_row_length(const bool is_oracle_mode) const
+{
+  int ret = OB_SUCCESS;
+  if (is_view_table()) {
+    // It isn't necessary to check for view table, so skip
+  } else {
+    ObColumnSchemaV2 *col = nullptr;
+    int64_t row_length = 0;
+    const int64_t max_row_length = get_max_row_length();
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
+      int64_t length = 0;
+      if (OB_ISNULL(col = column_array_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is null", K(ret), K(i), KPC(this));
+      } else if (OB_FAIL(get_column_byte_length(is_oracle_mode, *col, true/*use_lob_inrow_threshold*/, length))) {
+        LOG_WARN("fail to get byte length of column", K(ret), K(i), KPC(col), KPC(this));
+      } else if (OB_FALSE_IT(row_length += length)) {
+      } else if (row_length > max_row_length) {
+        ret = OB_ERR_TOO_BIG_ROWSIZE;
+        LOG_WARN("row_length is larger than max_row_length", K(ret), K(row_length), K(max_row_length), K(i), K(length), K(column_cnt_), KPC(col), KPC(this));
+      }
+    }
+  }
+  return ret;
+}
+
 void ObTableSchema::reset_column_info()
 {
   column_cnt_ = 0;

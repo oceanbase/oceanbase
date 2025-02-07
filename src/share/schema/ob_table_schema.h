@@ -1621,6 +1621,10 @@ public:
                               const bool is_oracle_mode,
                               bool &is_offline) const;
 
+  int get_column_byte_length(const bool is_oracle_mode, const ObColumnSchemaV2 &col,
+                             const bool use_lob_inrow_threshold, int64_t &length) const;
+  int64_t get_max_row_length() const;
+  int check_row_length(const bool is_oracle_mode) const;
 
   int get_column_schema_in_same_col_group(uint64_t column_id, uint64_t udt_set_id,
                                           common::ObIArray<ObColumnSchemaV2 *> &column_group) const;
