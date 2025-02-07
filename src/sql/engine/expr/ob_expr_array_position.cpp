@@ -57,6 +57,8 @@ int ObExprArrayPosition::calc_result_type2(ObExprResType &type,
 
   if (OB_FAIL(ret)) {
     // do nothing
+  } else if (type1.is_null()) {
+    type.set_null();
   } else if (!ob_is_collection_sql_type(type1.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_WARN(OB_ERR_INVALID_TYPE_FOR_OP,
@@ -68,7 +70,7 @@ int ObExprArrayPosition::calc_result_type2(ObExprResType &type,
     LOG_WARN("failed to get result array type subschema id", K(ret));
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !type1.is_null()) {
     type.set_int();
     type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
     type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
@@ -257,7 +259,7 @@ int ObExprArrayPosition::eval_array_position_vector(const ObExpr &expr,
     } // end for
   }
 
-  return OB_SUCCESS;
+  return ret;
 }
 
 int ObExprArrayPosition::array_position(const ObExpr &expr,

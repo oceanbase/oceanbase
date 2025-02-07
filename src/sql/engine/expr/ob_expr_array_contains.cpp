@@ -70,6 +70,8 @@ int ObExprArrayContains::calc_result_type2(ObExprResType &type,
   }
 
   if (OB_FAIL(ret)) {
+  } else if (type1_ptr->is_null()) {
+    type.set_null();
   } else if (!ob_is_collection_sql_type(type1_ptr->get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1_ptr->get_type()), ob_obj_type_str(type2_ptr->get_type()));
@@ -78,7 +80,8 @@ int ObExprArrayContains::calc_result_type2(ObExprResType &type,
   } else if (OB_FAIL(ObArrayExprUtils::deduce_array_type(exec_ctx, *type1_ptr, *type2_ptr, subschema_id))) {
     LOG_WARN("failed to get result array type subschema id", K(ret));
   }
-  if (OB_SUCC(ret)) {
+
+  if (OB_SUCC(ret) && !type1_ptr->is_null()) {
     type.set_int32();
     type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
     type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
