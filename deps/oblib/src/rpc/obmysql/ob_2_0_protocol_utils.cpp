@@ -209,7 +209,7 @@ inline int ObProto20Utils::do_proto20_packet_encode(ObProtoEncodeParam &param)
       }
     }
     LOG_DEBUG("proto20 encode", "current next step",
-              get_proto20_encode_step_name(proto20_context.next_step_));
+              get_proto20_encode_step_name(proto20_context.next_step_), K(need_break), K(param.need_flush_));
   }
 
   if (OB_SUCC(ret)) {
@@ -496,6 +496,11 @@ inline int ObProto20Utils::fill_proto20_payload(ObProtoEncodeParam &param, bool 
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("impossible", "read_avail", easy_buffer.read_avail_size(),
                   "header len", proto20_context.header_len_, K(ret));
+      } else if (param.is_composed_ok_pkt_) {
+        // 遇到了err+ok，但是ok包过大且已经写入了err包的内容，这里不可以变为FILL_TAILER_STEP状态，
+        // 否则err和ok就不算在一个包里面了
+        param.need_flush_ = true; // break, alloc more memory
+        need_break = true;
       } else {
         // there must be enough space for tailer
         proto20_context.next_step_ = FILL_TAILER_STEP;

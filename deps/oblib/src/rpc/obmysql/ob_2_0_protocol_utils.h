@@ -133,6 +133,7 @@ public:
 
   const static int64_t MAX_PROTO20_PAYLOAD_LEN;
   const static int64_t PROTO20_SPLIT_LEN;
+  bool is_composed_ok_pkt_;
 
 public:
   ObProtoEncodeParam()
@@ -140,7 +141,7 @@ public:
       seri_size_(0), conn_id_(0), encode_ret_(common::OB_SUCCESS),
       need_flush_(false), is_last_(false), is_pkt_encoded_(false),
       large_pkt_buf_(NULL), large_pkt_buf_len_(0), large_pkt_buf_pos_(0),
-      extra_info_kvs_(NULL), extra_info_ecds_(NULL), conn_(NULL)
+      extra_info_kvs_(NULL), extra_info_ecds_(NULL), conn_(NULL), is_composed_ok_pkt_(false)
   {}
 
   inline bool is_valid() const
