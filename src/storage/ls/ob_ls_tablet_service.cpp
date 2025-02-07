@@ -4417,11 +4417,9 @@ int ObLSTabletService::insert_tablet_rows(
   // Check uniqueness constraint in sstable only.
   if (OB_SUCC(ret)) {
     if (OB_FAIL(insert_rows_wrap(tablet_handle, run_ctx.dml_param_.data_row_for_lob_, table, run_ctx.store_ctx_, rows, rows_info,
-        check_exists, *run_ctx.col_descs_, row_count, run_ctx.dml_param_.encrypt_meta_))) {
+        check_exists, *run_ctx.col_descs_, row_count, run_ctx.dml_param_.encrypt_meta_, run_ctx.dml_param_.tz_info_,
+        !run_ctx.dml_param_.is_ignore_/*need_log_user_error*/))) {
       if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-        blocksstable::ObDatumRowkey &duplicate_rowkey = rows_info.get_conflict_rowkey();
-        LOG_WARN("Rowkey already exist", K(ret), K(table), K(duplicate_rowkey),
-                 K(rows_info.get_conflict_idx()));
 #ifndef OB_BUILD_PACKAGE
         if (table.is_fts_index()) {
           ret = OB_ERR_UNEXPECTED;
@@ -4433,14 +4431,25 @@ int ObLSTabletService::insert_tablet_rows(
       }
     }
   }
+  return ret;
+}
 
-  // 4. Log user error message if rowkey is duplicate.
-  if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && !run_ctx.dml_param_.is_ignore_) {
+void ObLSTabletService::handle_insert_rows_duplicate(
+    ObRowsInfo &rows_info,
+    const ObRelativeTable &table,
+    const common::ObTimeZoneInfo *tz_info,
+    const bool need_log_user_error)
+{
+  int ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
+  blocksstable::ObDatumRowkey &duplicate_rowkey = rows_info.get_conflict_rowkey();
+  LOG_WARN("Rowkey already exist", K(ret), K(table), K(duplicate_rowkey),
+      K(rows_info.get_conflict_idx()));
+  if (need_log_user_error) {
     int tmp_ret = OB_SUCCESS;
     char rowkey_buffer[OB_TMP_BUF_SIZE_256];
     ObString index_name = "PRIMARY";
     if (OB_TMP_FAIL(extract_rowkey(table, rows_info.get_conflict_rowkey(),
-         rowkey_buffer, OB_TMP_BUF_SIZE_256, run_ctx.dml_param_.tz_info_))) {
+            rowkey_buffer, OB_TMP_BUF_SIZE_256, tz_info))) {
       LOG_WARN("Failed to extract rowkey", K(ret), K(tmp_ret));
     }
     if (table.is_index_table()) {
@@ -4452,7 +4461,7 @@ int ObLSTabletService::insert_tablet_rows(
     }
     LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE, rowkey_buffer, index_name.length(), index_name.ptr());
   }
-  return ret;
+  return;
 }
 
 int ObLSTabletService::put_rows_to_tablet(
@@ -4513,7 +4522,8 @@ int ObLSTabletService::put_tablet_rows(
   // Check write conflict in memtable + sstable.
   if (OB_SUCC(ret)) {
     if (OB_FAIL(insert_rows_wrap(tablet_handle, run_ctx.dml_param_.data_row_for_lob_, table, run_ctx.store_ctx_, rows, rows_info,
-        false /* check_exists */, *run_ctx.col_descs_, row_count, run_ctx.dml_param_.encrypt_meta_))) {
+        false /* check_exists */, *run_ctx.col_descs_, row_count, run_ctx.dml_param_.encrypt_meta_, run_ctx.dml_param_.tz_info_,
+        false/*need_log_user_error*/))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("Failed to insert rows to tablet", K(ret), K(rows_info));
       }
@@ -7558,9 +7568,16 @@ int ObLSTabletService::insert_rows_wrap(
     const bool check_exist,
     const ObColDescIArray &col_descs,
     const int64_t row_count,
-    const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr)
+    const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
+    const common::ObTimeZoneInfo *tz_info,
+    const bool need_log_user_error)
 {
   int ret = tablet_handle.get_obj()->insert_rows(relative_table, store_ctx, rows, rows_info, check_exist, col_descs, row_count, encrypt_meta_arr);
+  // 4. Log user error message if rowkey is duplicate.
+  if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+    handle_insert_rows_duplicate(rows_info, relative_table, tz_info, need_log_user_error);
+  }
+
   if (OB_TABLET_IS_SPLIT_SRC == ret) {
     ret = OB_SUCCESS;
     ObDmlSplitCtx dml_split_ctx;
@@ -7595,6 +7612,9 @@ int ObLSTabletService::insert_rows_wrap(
             } else if (OB_FAIL(dml_split_ctx.dst_tablet_handle_.get_obj()->insert_rows(
                   dml_split_ctx.dst_relative_table_, store_ctx, dst_tbl_rows, rows_info, check_exist, col_descs, dst_row_count, encrypt_meta_arr))) {
               LOG_WARN("failed to insert tablet rows", K(ret), K(check_exist));
+              if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+                handle_insert_rows_duplicate(rows_info, dml_split_ctx.dst_relative_table_, tz_info, need_log_user_error);
+              }
             }
           }
         }
