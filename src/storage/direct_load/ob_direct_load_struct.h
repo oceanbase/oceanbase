@@ -38,6 +38,10 @@ struct ObDirectLoadMode
   static bool is_load_data(const Type type) { return LOAD_DATA == type; }
   static bool is_insert_into(const Type type) { return INSERT_INTO == type; }
   static bool is_table_load(const Type type) { return TABLE_LOAD == type; }
+  static bool is_px_mode(const Type type)
+  {
+    return INSERT_INTO == type || INSERT_OVERWRITE == type;
+  }
 };
 
 struct ObDirectLoadMethod

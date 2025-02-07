@@ -604,6 +604,7 @@ int ObTableLoadService::check_support_direct_load_for_columns(
     LOG_WARN("invalid args", KR(ret), KP(table_schema), K(load_mode));
   } else {
     const char *tmp_prefix = ObDirectLoadMode::is_insert_overwrite(load_mode) ? InsertOverwritePrefix : EmptyPrefix;
+    const bool is_px_mode = ObDirectLoadMode::is_px_mode(load_mode);
     for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
          OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
       ObColumnSchemaV2 *column_schema = *iter;
@@ -613,11 +614,7 @@ int ObTableLoadService::check_support_direct_load_for_columns(
       } else if (column_schema->is_unused()) {
         // 快速删除列, 仍然需要写宏块, 直接填null
         // TODO : udt类型SQL写入的列数与存储层列数不匹配, 暂时先不做支持
-        if (column_schema->is_geometry()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("direct-load does not support table has drop geometry column instant", KR(ret), KPC(column_schema));
-          FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has drop geometry column instant", tmp_prefix);
-        } else if (column_schema->is_xmltype()) {
+        if (column_schema->is_xmltype()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("direct-load does not support table has drop xmltype column instant", KR(ret), KPC(column_schema));
           FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has drop xmltype column instant", tmp_prefix);
@@ -634,7 +631,7 @@ int ObTableLoadService::check_support_direct_load_for_columns(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("direct-load does not support table has null column", KR(ret), KPC(column_schema));
         FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has null column", tmp_prefix);
-      } else if (column_schema->is_geometry()) {
+      } else if (!is_px_mode && column_schema->is_geometry()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("direct-load does not support table has geometry column", KR(ret), KPC(column_schema));
         FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has geometry column", tmp_prefix);
