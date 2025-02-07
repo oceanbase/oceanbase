@@ -1403,7 +1403,7 @@ int ObTransferHandler::get_abort_trans_timeout_(
     int64_t &stmt_timeout)
 {
   int ret = OB_SUCCESS;
-  //TODO(muwei.ym) using tenant config to set abort trans timeout
+  //TODO(muwei.ym) using tenant config to set abort trans timeout in 4.3
   stmt_timeout = 20_s;
   return ret;
 }

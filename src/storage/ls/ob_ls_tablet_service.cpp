@@ -6887,7 +6887,7 @@ int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_ta
           }
         } else if (trans_stat != mds::TwoPhaseCommitState::ON_COMMIT
             && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_) {
-          //TODO(muwei.ym) CAN NOT USE this condition when MDS supports uncommitted transaction
+          //TODO(muwei.ym) CAN NOT USE this condition when MDS supports uncommitted transaction in 4.3
 
           // why we should skip uncommited transfer in tablet, because if we backup the uncommited transfer in tablet
           // but the final result of the uncommited transfer in tablet is aborted, which means the tablet has no MDS Table,
