@@ -1359,7 +1359,6 @@ int ObTimeConverter::mdatetime_to_datetime(ObMySQLDateTime mdt_value, int64_t &d
   } else if (OB_FAIL(mdatetime_to_ob_time(mdt_value, ob_time))) {
     LOG_WARN("failed to convert mysql_datetime to ob time", K(ret));
   } else if (OB_FAIL(validate_datetime(ob_time, date_sql_mode))) {
-    ret = OB_SUCCESS;
     dt_value = ZERO_DATETIME;
   } else {
     ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);
@@ -1616,7 +1615,6 @@ int ObTimeConverter::mdatetime_to_date(ObMySQLDateTime mdt_value, int32_t &d_val
   } else if (OB_FAIL(mdatetime_to_ob_time(mdt_value, ob_time))) {
     LOG_WARN("failed to convert mysql_datetime to ob time", K(ret));
   } else if (OB_FAIL(validate_datetime(ob_time, date_sql_mode))) {
-    ret = OB_SUCCESS;
     d_value = ZERO_DATE;
   } else {
     d_value = ob_time_to_date(ob_time);
@@ -1721,7 +1719,8 @@ int ObTimeConverter::date_to_mdatetime(int32_t d_value, ObMySQLDateTime &mdt_val
 }
 
 int ObTimeConverter::mdate_to_datetime(ObMySQLDate md_value, const ObTimeConvertCtx &cvrt_ctx,
-                                            int64_t &dt_value, const ObDateSqlMode date_sql_mode)
+                                       int64_t &dt_value, const ObDateSqlMode date_sql_mode,
+                                       bool gen_query_range)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_DATETIME);
@@ -1736,8 +1735,8 @@ int ObTimeConverter::mdate_to_datetime(ObMySQLDate md_value, const ObTimeConvert
   } else if (OB_FAIL(mdate_to_ob_time(md_value, ob_time))) {
     LOG_WARN("failed to convert date to ob time", K(ret));
   } else if (OB_FAIL(validate_datetime(ob_time, temp_sql_mode))) {
-    ret = OB_SUCCESS;
-    if (cvrt_ctx.is_timestamp_) {
+    if (cvrt_ctx.is_timestamp_ && gen_query_range) {
+      ret = OB_SUCCESS;
       if (ob_time.parts_[DT_MON] == 0) {
         ob_time.parts_[DT_MON] = 1;
         ob_time.parts_[DT_MDAY] = 1;
@@ -1784,7 +1783,6 @@ int ObTimeConverter::mdate_to_date(ObMySQLDate md_value, int32_t &d_value,
   } else if (OB_FAIL(mdate_to_ob_time(md_value, ob_time))) {
     LOG_WARN("failed to convert mysql_date to ob time", K(ret));
   } else if (OB_FAIL(validate_datetime(ob_time, date_sql_mode))) {
-    ret = OB_SUCCESS;
     d_value = ZERO_DATE;
   } else {
     d_value = ob_time_to_date(ob_time);

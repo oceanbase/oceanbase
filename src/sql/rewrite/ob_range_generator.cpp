@@ -1282,6 +1282,7 @@ int ObRangeGenerator::try_cast_value(const ObRangeColumnMeta &meta,
         }
         cast_ctx.res_accuracy_ = &res_acc;
       }
+      cast_ctx.gen_query_range_ = true;
       if (OB_FAIL(ObObjCaster::to_type(expect_type, cast_ctx, value, tmp_dest_obj, dest_val))) {
         LOG_WARN("failed to cast object to expect_type", K(ret), K(value), K(expect_type));
       }

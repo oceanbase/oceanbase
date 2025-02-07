@@ -177,7 +177,8 @@ struct ObObjCastParams
       dtc_params_(),
       format_number_with_limit_(true),
       is_ignore_(false),
-      exec_ctx_(NULL)
+      exec_ctx_(NULL),
+      gen_query_range_(false)
   {
     set_compatible_cast_mode();
   }
@@ -197,7 +198,8 @@ struct ObObjCastParams
       dtc_params_(),
       format_number_with_limit_(true),
       is_ignore_(false),
-      exec_ctx_(NULL)
+      exec_ctx_(NULL),
+      gen_query_range_(false)
   {
     set_compatible_cast_mode();
     if (NULL != dtc_params) {
@@ -222,7 +224,8 @@ struct ObObjCastParams
       dtc_params_(),
       format_number_with_limit_(true),
       is_ignore_(false),
-      exec_ctx_(NULL)
+      exec_ctx_(NULL),
+      gen_query_range_(false)
   {
     set_compatible_cast_mode();
     if (NULL != dtc_params) {
@@ -284,6 +287,7 @@ struct ObObjCastParams
   bool format_number_with_limit_;
   bool is_ignore_;
   sql::ObExecContext *exec_ctx_;
+  bool gen_query_range_;
 };
 
 class ObExpectType
