@@ -552,6 +552,7 @@ int ObVirtualTableIterator::check_priv(const ObString &level_str,
 {
   int ret = OB_SUCCESS;
   share::schema::ObSessionPrivInfo session_priv;
+  const common::ObIArray<uint64_t> &enable_role_id_array = session_->get_enable_role_array();
   CK (OB_NOT_NULL(session_) && OB_NOT_NULL(schema_guard_));
   OZ (session_->get_session_priv_info(session_priv));
   // bool allow_show = true;
@@ -563,12 +564,12 @@ int ObVirtualTableIterator::check_priv(const ObString &level_str,
         && OB_INVALID_TENANT_ID != tenant_id) {
       //not current tenant's row
     } else if (0 == level_str.case_compare("db_acc")) {
-      if (OB_FAIL(schema_guard_->check_db_show(session_priv, db_name, passed))) {
+      if (OB_FAIL(schema_guard_->check_db_show(session_priv, enable_role_id_array, db_name, passed))) {
           LOG_WARN("Check db show failed", K(ret));
       }
     } else if (0 == level_str.case_compare("table_acc")) {
       //if (OB_FAIL(priv_mgr.check_table_show(session_priv,
-      if (OB_FAIL(schema_guard_->check_table_show(session_priv, db_name, table_name, passed))) {
+      if (OB_FAIL(schema_guard_->check_table_show(session_priv, enable_role_id_array, db_name, table_name, passed))) {
         LOG_WARN("Check table show failed", K(ret));
       }
     } else {

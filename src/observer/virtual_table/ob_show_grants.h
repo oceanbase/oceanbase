@@ -94,6 +94,8 @@ public:
   { return session_priv_; }
   inline const share::schema::ObSessionPrivInfo &get_session_priv() const
   { return session_priv_; }
+  inline common::ObIArray<uint64_t> &get_role_id_array()
+  { return enable_role_id_array_; }
   static int print_obj_privs_to_buff_ora(
     char *buf,
     const int64_t buf_len,
@@ -157,6 +159,7 @@ private:
 private:
   uint64_t tenant_id_;
   uint64_t user_id_;
+  EnableRoleIdArray enable_role_id_array_;
   share::schema::ObSessionPrivInfo session_priv_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObShowGrants);

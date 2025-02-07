@@ -621,10 +621,7 @@ int ObMvccRow::elr(const ObTransID &tx_id,
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *iter = get_list_head();
-  if (NULL != iter
-      && !iter->is_elr()
-      && !iter->is_committed()
-      && !iter->is_aborted()) {
+  if (NULL != iter && iter->need_elr()) {
     while (NULL != iter && OB_SUCC(ret)) {
       if (tx_id != iter->tx_id_) {
         break;

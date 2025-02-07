@@ -29,6 +29,7 @@ namespace common
 
 enum ObCharsetType
 {
+  CHARSET_SESSION_CACHE_NOT_LOADED_MARK = -2,
   CHARSET_ANY = -1,
   CHARSET_INVALID = 0,
   CHARSET_BINARY = 1,
@@ -736,7 +737,7 @@ private:
   static int init_charset_and_arr();
   static int init_charset_info_coll_info(ObCharsetInfo *cs, ObCharsetLoader& loader);
   static bool is_argument_valid(const ObCharsetInfo *charset_info, const char *str, int64_t str_len);
-  static bool is_argument_valid(const ObCollationType collation_type, const char *str1, int64_t str_len1, const char *str2, int64_t str_len2);
+  static bool is_argument_valid(const ObCollationType &collation_type, const char *str1, int64_t str_len1, const char *str2, int64_t str_len2);
   static int copy_zh_cs(ObCharsetInfo *from_cs, ObCollationType to_coll_type, ObCharsetInfo *&to_cs);
   static int copy_zh_cs(ObCharsetInfo *from_cs, ObCharsetType charset_type, ObCharsetInfo *&to_cs);
 

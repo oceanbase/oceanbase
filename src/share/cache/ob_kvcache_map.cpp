@@ -299,6 +299,7 @@ int ObKVCacheMap::get(
       iter = bucket_ptr;
       bool is_equal = false;
       while (NULL != iter && OB_SUCC(ret)) {
+        __builtin_prefetch(iter,0);
         if (hash_code == iter->hash_code_) {
           if (store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
             if (OB_FAIL(key.equal(*iter->key_, is_equal))) {

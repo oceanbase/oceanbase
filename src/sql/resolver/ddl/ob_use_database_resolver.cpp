@@ -87,7 +87,7 @@ int ObUseDatabaseResolver::resolve(const ParseNode &parse_tree)
         } else  if (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))) {
           LOG_USER_ERROR(OB_ERR_BAD_DATABASE, db_name.length(), db_name.ptr());
           LOG_WARN("invalid database name. ", K(db_name));
-        } else if (OB_FAIL(schema_checker_->check_db_access(session_priv, db_name))) {
+        } else if (OB_FAIL(schema_checker_->check_db_access(session_priv, session_info_->get_enable_role_array(), db_name))) {
           SQL_ENG_LOG(WARN, "fail to check user privilege", K(db_name),K(ret));
           if (params_.disable_privilege_check_ == PRIV_CHECK_FLAG_DISABLE) {
             LOG_WARN("db access privilege check is disabled");

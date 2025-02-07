@@ -1252,6 +1252,8 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               show_grants->set_user_id(session->get_user_id());
               if (OB_FAIL(session->get_session_priv_info(show_grants->get_session_priv()))) {
                 SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+              } else if (OB_FAIL(show_grants->get_role_id_array().assign(session->get_enable_role_array()))) {
+                SERVER_LOG(WARN, "fail to assign role id array", K(ret));
               } else {
                 vt_iter = static_cast<ObVirtualTableIterator *>(show_grants);
               }

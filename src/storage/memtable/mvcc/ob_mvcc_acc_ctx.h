@@ -56,7 +56,8 @@ public:
       handle_start_time_(OB_INVALID_TIMESTAMP),
       has_create_tx_ctx_(false),
       is_standby_read_(false),
-      lock_wait_start_ts_(0)
+      lock_wait_start_ts_(0),
+      is_inited_(false)
   {}
   ~ObMvccAccessCtx() {
     type_ = T::INVL;
@@ -71,25 +72,32 @@ public:
     write_flag_.reset();
     handle_start_time_ = OB_INVALID_TIMESTAMP;
     is_standby_read_ = false;
+    lock_wait_start_ts_ = 0;
+    is_inited_ = false;
   }
+  // Note that the init_read and init_write functions no longer actively call the reset function.
   void reset() {
-    if (is_write() && OB_UNLIKELY(tx_ctx_)) {
-      warn_tx_ctx_leaky_();
+    if (is_inited_) {
+      if (is_write() && OB_UNLIKELY(tx_ctx_)) {
+        warn_tx_ctx_leaky_();
+      }
+      type_ = T::INVL;
+      abs_lock_timeout_ts_ = -1;
+      tx_lock_timeout_us_ = -1;
+      snapshot_.reset();
+      tx_table_guards_.reset();
+      tx_id_.reset();
+      tx_desc_ = NULL;
+      tx_ctx_ = NULL;
+      mem_ctx_ = NULL;
+      tx_scn_.reset();
+      write_flag_.reset();
+      handle_start_time_ = OB_INVALID_TIMESTAMP;
+      is_standby_read_ = false;
+      has_create_tx_ctx_ = false;
+      lock_wait_start_ts_ = 0;
+      is_inited_ = false;
     }
-    type_ = T::INVL;
-    abs_lock_timeout_ts_ = -1;
-    tx_lock_timeout_us_ = -1;
-    snapshot_.reset();
-    tx_table_guards_.reset();
-    tx_id_.reset();
-    tx_desc_ = NULL;
-    tx_ctx_ = NULL;
-    mem_ctx_ = NULL;
-    tx_scn_.reset();
-    write_flag_.reset();
-    handle_start_time_ = OB_INVALID_TIMESTAMP;
-    is_standby_read_ = false;
-    has_create_tx_ctx_ = false;
   }
   bool is_valid() const {
     switch(type_) {
@@ -120,60 +128,83 @@ public:
       && tx_table_guards_.is_valid()
       && (!tx_ctx_ || mem_ctx_);
   }
-  void init_read(transaction::ObPartTransCtx *tx_ctx, /* nullable */
-                 ObMemtableCtx *mem_ctx, /* nullable */
-                 const storage::ObTxTableGuard &tx_table_guard,
-                 const transaction::ObTxSnapshot &snapshot,
-                 const int64_t abs_lock_timeout,
-                 const int64_t tx_lock_timeout,
-                 const bool is_weak_read,
-                 const bool has_create_tx_ctx,
-                 transaction::ObTxDesc *tx_desc)
+  int init_read(transaction::ObPartTransCtx *tx_ctx, /* nullable */
+                ObMemtableCtx *mem_ctx, /* nullable */
+                storage::ObTxTable *tx_table,
+                const transaction::ObTxSnapshot &snapshot,
+                const int64_t abs_lock_timeout,
+                const int64_t tx_lock_timeout,
+                const bool is_weak_read,
+                const bool has_create_tx_ctx,
+                transaction::ObTxDesc *tx_desc)
+
   {
-    reset();
-    type_ = is_weak_read ? T::WEAK_READ : T::STRONG_READ;
-    tx_ctx_ = tx_ctx;
-    mem_ctx_ = mem_ctx;
-    tx_table_guards_.tx_table_guard_ = tx_table_guard;
-    snapshot_ = snapshot;
-    abs_lock_timeout_ts_ = abs_lock_timeout;
-    tx_lock_timeout_us_ = tx_lock_timeout;
-    has_create_tx_ctx_ = has_create_tx_ctx;
-    tx_desc_ = tx_desc;
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(is_inited_)) {
+      ret = OB_INIT_TWICE;
+      TRANS_LOG(WARN, "ObMvccAccessCtx inited twice", KR(ret), KPC(this));
+    } else if (OB_ISNULL(tx_table)) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "tx_table cannot be NULL", KR(ret), KPC(this));
+    } else if (OB_FAIL(tx_table_guards_.tx_table_guard_.init(tx_table))) {
+      TRANS_LOG(WARN, "tx_table_guard init fail", KR(ret), KPC(this));
+    } else {
+      type_ = is_weak_read ? T::WEAK_READ : T::STRONG_READ;
+      tx_ctx_ = tx_ctx;
+      mem_ctx_ = mem_ctx;
+      snapshot_ = snapshot;
+      abs_lock_timeout_ts_ = abs_lock_timeout;
+      tx_lock_timeout_us_ = tx_lock_timeout;
+      has_create_tx_ctx_ = has_create_tx_ctx;
+      tx_desc_ = tx_desc;
+      is_inited_ = true;
+    }
+    return ret;
   }
   // light read, used by storage background merge/compaction routine
-  void init_read(const storage::ObTxTableGuard &tx_table_guard,
-                 const share::SCN snapshot_version,
-                 const int64_t timeout,
-                 const int64_t tx_lock_timeout)
+  int init_read(storage::ObTxTable *tx_table,
+                const share::SCN snapshot_version,
+                const int64_t timeout,
+                const int64_t tx_lock_timeout)
   {
     transaction::ObTxSnapshot snapshot;
     snapshot.version_ = snapshot_version;
-    init_read(NULL, NULL, tx_table_guard, snapshot, timeout, tx_lock_timeout, false, false, NULL);
+    return init_read(NULL, NULL, tx_table, snapshot, timeout, tx_lock_timeout, false, false, NULL);
   }
-  void init_write(transaction::ObPartTransCtx &tx_ctx,
-                  ObMemtableCtx &mem_ctx,
-                  const transaction::ObTransID &tx_id,
-                  const transaction::ObTxSEQ tx_scn,
-                  transaction::ObTxDesc &tx_desc,
-                  const storage::ObTxTableGuard &tx_table_guard,
-                  const transaction::ObTxSnapshot &snapshot,
-                  const int64_t abs_lock_timeout,
-                  const int64_t tx_lock_timeout,
-                  const concurrent_control::ObWriteFlag write_flag)
+  int init_write(transaction::ObPartTransCtx &tx_ctx,
+                 ObMemtableCtx &mem_ctx,
+                 const transaction::ObTransID &tx_id,
+                 const transaction::ObTxSEQ tx_scn,
+                 transaction::ObTxDesc &tx_desc,
+                 storage::ObTxTable *tx_table,
+                 const transaction::ObTxSnapshot &snapshot,
+                 const int64_t abs_lock_timeout,
+                 const int64_t tx_lock_timeout,
+                 const concurrent_control::ObWriteFlag write_flag)
   {
-    reset();
-    type_ = T::WRITE;
-    tx_ctx_ = &tx_ctx;
-    mem_ctx_ = &mem_ctx;
-    tx_id_ = tx_id;
-    tx_scn_ = tx_scn;
-    tx_desc_ = &tx_desc;
-    tx_table_guards_.tx_table_guard_ = tx_table_guard;
-    snapshot_ = snapshot;
-    abs_lock_timeout_ts_ = abs_lock_timeout;
-    tx_lock_timeout_us_ = tx_lock_timeout;
-    write_flag_ = write_flag;
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(is_inited_)) {
+      ret = OB_INIT_TWICE;
+      TRANS_LOG(WARN, "ObMvccAccessCtx inited twice", KR(ret), KPC(this));
+    } else if (OB_ISNULL(tx_table)) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "tx_table cannot be NULL", KR(ret), KPC(this));
+    } else if (OB_FAIL(tx_table_guards_.tx_table_guard_.init(tx_table))) {
+      TRANS_LOG(WARN, "tx_table_guard init fail", KR(ret), KPC(this));
+    } else {
+      type_ = T::WRITE;
+      tx_ctx_ = &tx_ctx;
+      mem_ctx_ = &mem_ctx;
+      tx_id_ = tx_id;
+      tx_scn_ = tx_scn;
+      tx_desc_ = &tx_desc;
+      snapshot_ = snapshot;
+      abs_lock_timeout_ts_ = abs_lock_timeout;
+      tx_lock_timeout_us_ = tx_lock_timeout;
+      write_flag_ = write_flag;
+      is_inited_ = true;
+    }
+    return ret;
   }
 
   void set_src_tx_table_guard(const storage::ObTxTableGuard &tx_table_guard,
@@ -190,15 +221,22 @@ public:
   {
     abs_lock_timeout_ts_ = abs_lock_timeout;
   }
-  void init_replay(transaction::ObPartTransCtx &tx_ctx,
-                   ObMemtableCtx &mem_ctx,
-                   const transaction::ObTransID &tx_id)
+  int init_replay(transaction::ObPartTransCtx &tx_ctx,
+                  ObMemtableCtx &mem_ctx,
+                  const transaction::ObTransID &tx_id)
   {
-    reset();
-    type_ = T::REPLAY;
-    tx_ctx_ = &tx_ctx;
-    mem_ctx_ = &mem_ctx;
-    tx_id_ = tx_id;
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(is_inited_)) {
+      ret = OB_INIT_TWICE;
+      TRANS_LOG(WARN, "ObMvccAccessCtx inited twice", KR(ret), KPC(this));
+    } else {
+      type_ = T::REPLAY;
+      tx_ctx_ = &tx_ctx;
+      mem_ctx_ = &mem_ctx;
+      tx_id_ = tx_id;
+      is_inited_ = true;
+    }
+    return ret;
   }
   const transaction::ObTransID &get_tx_id() const {
     return tx_id_;
@@ -252,7 +290,9 @@ public:
                K_(tx_scn),
                K_(write_flag),
                K_(handle_start_time),
-               K_(lock_wait_start_ts));
+               K_(is_standby_read),
+               K_(lock_wait_start_ts),
+               K_(is_inited));
 private:
   void warn_tx_ctx_leaky_();
 public: // NOTE: those field should only be accessed by txn relative routine
@@ -288,6 +328,8 @@ public: // NOTE: those field should only be accessed by txn relative routine
   bool is_standby_read_;
 protected:
   int64_t lock_wait_start_ts_;
+private:
+  bool is_inited_;
 };
 } // memtable
 } // oceanbase

@@ -139,7 +139,8 @@ private:
                    const int16_t default_length_semantics,
                    ObString &type_val);
   int fill_col_privs(
-      ObSessionPrivInfo &session_priv,
+      const ObSessionPrivInfo &session_priv,
+      const common::ObIArray<uint64_t> &enable_role_id_array,
       ObNeedPriv &need_priv, 
       ObPrivSet priv_set, 
       const char *priv_str,

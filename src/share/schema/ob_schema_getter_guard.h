@@ -473,18 +473,23 @@ public:
   int is_user_empty_passwd(const ObUserLoginInfo &login_info, bool &is_empty_passwd_account);
   int check_user_access(const ObUserLoginInfo &login_info,
                         ObSessionPrivInfo &s_priv,
+                        common::ObIArray<uint64_t> &enable_role_id_array,
                         SSL *ssl_st,
                         const ObUserInfo *&sel_user_info);
   int check_db_access(ObSessionPrivInfo &s_priv,
+                      const common::ObIArray<uint64_t> &enable_role_id_array,
                       const common::ObString& database_name);
   int check_db_show(const ObSessionPrivInfo &session_priv,
+                    const common::ObIArray<uint64_t> &enable_role_id_array,
                     const common::ObString &db,
                     bool &allow_show);
   int check_table_show(const ObSessionPrivInfo &session_priv,
+                       const common::ObIArray<uint64_t> &enable_role_id_array,
                        const common::ObString &db,
                        const common::ObString &table,
                        bool &allow_show);
   int check_routine_show(const ObSessionPrivInfo &session_priv,
+                         const common::ObIArray<uint64_t> &enable_role_id_array,
                          const common::ObString &db,
                          const common::ObString &routine,
                          bool &allow_show,
@@ -495,24 +500,31 @@ public:
                      const ObStmtOraNeedPrivs &stmt_need_privs,
                      const common::ObIArray<uint64_t> &role_id_array);
   int check_priv(const ObSessionPrivInfo &session_priv,
+                 const common::ObIArray<uint64_t> &enable_role_id_array,
                  const ObStmtNeedPrivs &stmt_need_privs);
   int check_priv_or(const ObSessionPrivInfo &session_priv,
+                    const common::ObIArray<uint64_t> &enable_role_id_array,
                     const ObStmtNeedPrivs &stmt_need_privs);
   int check_db_access(const ObSessionPrivInfo &session_priv,
+                      const common::ObIArray<uint64_t> &enable_role_id_array,
                       const common::ObString &db,
                       ObPrivSet &db_priv_set,
                       bool print_warn = true);
   int check_single_table_priv(const ObSessionPrivInfo &session_priv,
+                              const common::ObIArray<uint64_t> &enable_role_id_array,
                               const ObNeedPriv &table_need_priv);
   int check_single_table_priv_or(const ObSessionPrivInfo &session_priv,
+                                 const common::ObIArray<uint64_t> &enable_role_id_array,
                                  const ObNeedPriv &table_need_priv);
 
   int check_priv_any_column_priv(const ObSessionPrivInfo &session_priv,
+                                 const common::ObIArray<uint64_t> &enable_role_id_array,
                                  const common::ObString &db_name,
                                  const common::ObString &table_name,
                                  bool &pass);
 
   int collect_all_priv_for_column(const ObSessionPrivInfo &session_priv,
+                                  const common::ObIArray<uint64_t> &enable_role_id_array,
                                   const common::ObString &db_name,
                                   const common::ObString &table_name,
                                   const common::ObString &column_name,
@@ -1106,6 +1118,7 @@ public:
   GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
 
   int check_routine_priv(const ObSessionPrivInfo &session_priv,
+                         const common::ObIArray<uint64_t> &enable_role_id_array,
                          const ObNeedPriv &routine_need_priv);
 
   int check_routine_definer_existed(uint64_t tenant_id, const ObString &user_name, bool &existed);
@@ -1116,13 +1129,16 @@ private:
   int check_ssl_invited_cn(const uint64_t tenant_id, SSL *ssl_st);
 
   int check_db_priv(const ObSessionPrivInfo &session_priv,
+                    const common::ObIArray<uint64_t> &enable_role_id_array,
                     const common::ObString &db,
                     const ObPrivSet need_priv_set,
                     ObPrivSet &user_db_priv_set);
   int check_db_priv(const ObSessionPrivInfo &session_priv,
+                    const common::ObIArray<uint64_t> &enable_role_id_array,
                     const common::ObString &db,
                     const ObPrivSet need_priv_set);
   int check_user_priv(const ObSessionPrivInfo &session_priv,
+                      const common::ObIArray<uint64_t> &enable_role_id_array,
                       const ObPrivSet priv_set,
                       bool check_all = true);
   int verify_db_read_only(const uint64_t tenant_id,
@@ -1137,7 +1153,8 @@ private:
   // for privilege
   int add_role_id_recursively(const uint64_t tenant_id,
                               const uint64_t role_id,
-                              ObSessionPrivInfo &s_priv);
+                              ObSessionPrivInfo &s_priv,
+                              common::ObIArray<uint64_t> &enable_role_id_array);
   int get_simple_trigger_schema(const uint64_t tenant_id,
                                 const uint64_t trigger_id,
                                 const ObSimpleTriggerSchema *&simple_trigger);
@@ -1214,12 +1231,14 @@ private:
   bool ignore_tenant_not_exist_error(const uint64_t tenant_id);
 
   int check_priv_db_or_(const ObSessionPrivInfo &session_priv,
+                        const common::ObIArray<uint64_t> &enable_role_id_array,
                         const ObNeedPriv &need_priv,
                         const ObPrivMgr &priv_mgr,
                         const uint64_t tenant_id,
                         const uint64_t user_id,
                         bool& pass);
   int check_priv_table_or_(const ObSessionPrivInfo &session_priv,
+                           const common::ObIArray<uint64_t> &enable_role_id_array,
                            const ObNeedPriv &need_priv,
                            const ObPrivMgr &priv_mgr,
                            const uint64_t tenant_id,
@@ -1229,6 +1248,7 @@ private:
                                    const bool only_view_schema,
                                    common::ObIArray<const ObTableSchema *> &table_schemas);
   int check_single_table_priv_for_update_(const ObSessionPrivInfo &session_priv,
+                                          const common::ObIArray<uint64_t> &enable_role_id_array,
                                           const ObNeedPriv &table_need_priv,
                                           const ObPrivMgr &priv_mgr);
   int check_activate_all_role_var(uint64_t tenant_id, bool &activate_all_role);

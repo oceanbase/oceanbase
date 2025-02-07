@@ -80,6 +80,7 @@ namespace schema
       }\
     }\
 
+typedef common::ObSEArray<uint64_t, 8>  EnableRoleIdArray;
 typedef common::ParamStore ParamStore;
 class ObSchemaGetterGuard;
 class ObSimpleTableSchemaV2;
@@ -4778,9 +4779,9 @@ public:
   // role
   inline bool is_role() const { return OB_ROLE == type_; }
   inline int64_t get_role_count() const { return role_id_array_.count(); }
-  const common::ObSEArray<uint64_t, 8>& get_grantee_id_array() const { return grantee_id_array_; }
-  const common::ObSEArray<uint64_t, 8>& get_role_id_array() const { return role_id_array_; }
-  const common::ObSEArray<uint64_t, 8>& get_role_id_option_array() const { return role_id_option_array_; }
+  const EnableRoleIdArray& get_grantee_id_array() const { return grantee_id_array_; }
+  const EnableRoleIdArray& get_role_id_array() const { return role_id_array_; }
+  const EnableRoleIdArray& get_role_id_option_array() const { return role_id_option_array_; }
   uint64_t get_proxied_user_info_cnt() const { return proxied_user_info_cnt_; }
   uint64_t get_proxy_user_info_cnt() const { return proxy_user_info_cnt_; }
   const ObProxyInfo* get_proxied_user_info_by_idx(uint64_t idx) const;
@@ -4851,11 +4852,11 @@ private:
   common::ObString x509_subject_;
 
   int type_;
-  common::ObSEArray<uint64_t, 8> grantee_id_array_; // Record role granted to user
-  common::ObSEArray<uint64_t, 8> role_id_array_; // Record which roles the user/role has
+  EnableRoleIdArray grantee_id_array_; // Record role granted to user
+  EnableRoleIdArray role_id_array_; // Record which roles the user/role has
   uint64_t profile_id_;
   int64_t password_last_changed_timestamp_;
-  common::ObSEArray<uint64_t, 8> role_id_option_array_; // Record which roles the user/role has
+  EnableRoleIdArray role_id_option_array_; // Record which roles the user/role has
   uint64_t max_connections_;
   uint64_t max_user_connections_;
   ObProxyInfo** proxied_user_info_; //record users who can proxy the user
@@ -5915,31 +5916,10 @@ struct ObSessionPrivInfo
       user_priv_set_(0),
       db_priv_set_(0),
       effective_tenant_id_(common::OB_INVALID_ID),
-      enable_role_id_array_(),
       security_version_(0),
       proxy_user_id_(),
       proxy_user_name_(),
       proxy_host_name_()
-  {}
-  ObSessionPrivInfo(const uint64_t tenant_id,
-                    const uint64_t effective_tenant_id,
-                    const uint64_t user_id,
-                    const common::ObString &db,
-                    const ObPrivSet user_priv_set,
-                    const ObPrivSet db_priv_set)
-      : tenant_id_(tenant_id),
-        user_id_(user_id),
-        user_name_(),
-        host_name_(),
-        db_(db),
-        user_priv_set_(user_priv_set),
-        db_priv_set_(db_priv_set),
-        effective_tenant_id_(effective_tenant_id),
-        enable_role_id_array_(),
-        security_version_(0),
-        proxy_user_id_(),
-        proxy_user_name_(),
-        proxy_host_name_()
   {}
 
   virtual ~ObSessionPrivInfo() {}
@@ -5961,7 +5941,6 @@ struct ObSessionPrivInfo
     db_.reset();
     user_priv_set_ = 0;
     db_priv_set_ = 0;
-    enable_role_id_array_.reset();
     security_version_ = 0;
     proxy_user_id_ = common::OB_INVALID_ID;
     proxy_user_name_.reset();
@@ -5983,7 +5962,6 @@ struct ObSessionPrivInfo
   ObPrivSet db_priv_set_;    //user's db_priv_set of db
   // Only used for privilege check to determine whether there are currently tenants, otherwise the value is illegal
   uint64_t effective_tenant_id_;
-  common::ObSEArray<uint64_t, 8> enable_role_id_array_;
   uint64_t security_version_;
   uint64_t proxy_user_id_;
   common::ObString proxy_user_name_;

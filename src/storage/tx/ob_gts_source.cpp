@@ -150,10 +150,7 @@ int ObGtsSource::get_gts(ObTsCbTask *task, int64_t &gts)
   int tmp_ret = OB_SUCCESS;
   int64_t tmp_gts = 0;
 
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not inited", KR(ret));
-  } else if (OB_SUCCESS == (ret = gts_local_cache_.get_gts(tmp_gts))) {
+  if (OB_SUCCESS == (ret = gts_local_cache_.get_gts(tmp_gts))) {
     //Able to find a suitable gts value
     gts = tmp_gts;
   } else if (OB_EAGAIN != ret) {

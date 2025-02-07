@@ -1598,7 +1598,11 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
         } else {
           DISABLE_SQL_MEMLEAK_GUARD;
           // PL内部的提交使用同步提交
-          OZ (sql::ObSqlTransControl::end_trans(*ctx->exec_ctx_, is_rollback, true));
+          OZ (sql::ObSqlTransControl::end_trans(ctx->exec_ctx_->get_my_session(),
+                                                ctx->exec_ctx_->get_need_disconnect_for_update(),
+                                                ctx->exec_ctx_->get_trans_state(),
+                                                is_rollback,
+                                                true));
           // 如果发生过提交禁止PL整体重试
           if (!is_rollback) {
             OX (ctx->exec_ctx_->get_my_session()->set_pl_can_retry(false));

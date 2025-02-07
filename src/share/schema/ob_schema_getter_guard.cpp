@@ -2560,20 +2560,21 @@ int ObSchemaGetterGuard::verify_table_read_only(const uint64_t tenant_id,
 int ObSchemaGetterGuard::add_role_id_recursively(
   const uint64_t tenant_id,
   uint64_t role_id,
-  ObSessionPrivInfo &s_priv)
+  ObSessionPrivInfo &s_priv,
+  common::ObIArray<uint64_t> &enable_role_id_array)
 {
   int ret = OB_SUCCESS;
   const ObUserInfo *role_info = NULL;
 
-  if (!has_exist_in_array(s_priv.enable_role_id_array_, role_id)) {
+  if (!has_exist_in_array(enable_role_id_array, role_id)) {
     /* 1. put itself */
-    OZ (s_priv.enable_role_id_array_.push_back(role_id));
+    OZ (enable_role_id_array.push_back(role_id));
     /* 2. get role recursively */
     OZ (get_user_info(tenant_id, role_id, role_info));
     if (OB_SUCC(ret) && role_info != NULL) {
       const ObSEArray<uint64_t, 8> &role_id_array = role_info->get_role_id_array();
       for (int i = 0; OB_SUCC(ret) && i < role_id_array.count(); ++i) {
-        OZ (add_role_id_recursively(tenant_id, role_info->get_role_id_array().at(i), s_priv));
+        OZ (add_role_id_recursively(tenant_id, role_info->get_role_id_array().at(i), s_priv, enable_role_id_array));
       }
     }
   }
@@ -2652,6 +2653,7 @@ int ObSchemaGetterGuard::is_user_empty_passwd(const ObUserLoginInfo &login_info,
 int ObSchemaGetterGuard::check_user_access(
     const ObUserLoginInfo &login_info,
     ObSessionPrivInfo &s_priv,
+    common::ObIArray<uint64_t> &enable_role_id_array,
     SSL *ssl_st,
     const ObUserInfo *&sel_user_info)
 {
@@ -2900,25 +2902,27 @@ int ObSchemaGetterGuard::check_user_access(
               if (user_info->get_disable_option(role_id_option_array.at(i)) == 0) {
                 OZ (add_role_id_recursively(s_priv.tenant_id_,
                                             role_id_array.at(i),
-                                            s_priv));
+                                            s_priv,
+                                            enable_role_id_array));
               }
             } else {
               if (activate_all_role
                   || user_info->get_disable_option(user_info->get_role_id_option_array().at(i)) == 0) {
-                OZ (s_priv.enable_role_id_array_.push_back(role_id_array.at(i)));
+                OZ (enable_role_id_array.push_back(role_id_array.at(i)));
               }
             }
           }
           if (lib::Worker::CompatMode::ORACLE == compat_mode) {
             OZ (add_role_id_recursively(user_info->get_tenant_id(),
                                         OB_ORA_PUBLIC_ROLE_ID,
-                                        s_priv));
+                                        s_priv,
+                                        enable_role_id_array));
           }
         }
 
         //check db access and db existence
         if (!login_info.db_.empty()
-            && OB_FAIL(check_db_access(s_priv, login_info.db_, s_priv.db_priv_set_))) {
+            && OB_FAIL(check_db_access(s_priv, enable_role_id_array, login_info.db_, s_priv.db_priv_set_))) {
           LOG_WARN("Database access deined", K(login_info), KR(ret));
         } else { }
       }
@@ -3067,6 +3071,7 @@ int ObSchemaGetterGuard::check_ssl_invited_cn(const uint64_t tenant_id, SSL *ssl
 
 
 int ObSchemaGetterGuard::check_db_access(ObSessionPrivInfo &s_priv,
+                                         const common::ObIArray<uint64_t> &enable_role_id_array,
                                          const ObString& database_name)
 {
   int ret = OB_SUCCESS;
@@ -3078,7 +3083,7 @@ int ObSchemaGetterGuard::check_db_access(ObSessionPrivInfo &s_priv,
   } else if (OB_FAIL(get_database_id(tenant_id, database_name, database_id))) {
     OB_LOG(WARN, "fail to get database id", KR(ret), K(tenant_id), K(database_name));
   } else if (OB_INVALID_ID != database_id) {
-    if (OB_FAIL(check_db_access(s_priv, database_name, s_priv.db_priv_set_))) {
+    if (OB_FAIL(check_db_access(s_priv, enable_role_id_array, database_name, s_priv.db_priv_set_))) {
       OB_LOG(WARN, "fail to check db access", K(database_name), KR(ret));
     }
   } else {
@@ -3178,6 +3183,7 @@ int ObSchemaGetterGuard::get_column_priv_id(
 
 int ObSchemaGetterGuard::check_db_access(
     const ObSessionPrivInfo &session_priv,
+    const common::ObIArray<uint64_t> &enable_role_id_array,
     const ObString &db,
     ObPrivSet &db_priv_set,
     bool print_warn)
@@ -3243,7 +3249,7 @@ int ObSchemaGetterGuard::check_db_access(
           ObArray<uint64_t> role_id_array;
 
           if (OB_FAIL(role_id_array.assign(is_oracle_mode ? user_info->get_role_id_array()
-                                                          : session_priv.enable_role_id_array_))) {
+                                                          : enable_role_id_array))) {
             LOG_WARN("fail to assign role ids", K(ret));
           }
           for (int i = 0; OB_SUCC(ret) && i < role_id_array.count(); ++i) {
@@ -3306,7 +3312,7 @@ int ObSchemaGetterGuard::check_db_access(
             || is_grant) {
         } else {
           OZ (check_ora_conn_access(session_priv.tenant_id_,
-              session_priv.user_id_, print_warn, session_priv.enable_role_id_array_),
+              session_priv.user_id_, print_warn, enable_role_id_array),
             session_priv.tenant_id_, session_priv.user_id_);
         }
       } else {

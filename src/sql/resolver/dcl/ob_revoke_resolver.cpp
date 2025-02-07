@@ -425,6 +425,7 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
           revoke_stmt->set_grant_level(OB_PRIV_USER_LEVEL);
           if (OB_SUCC(ret)) {
             ObSessionPrivInfo session_priv;
+            const common::ObIArray<uint64_t> &enable_role_id_array = params_.session_info_->get_enable_role_array();
             ObArenaAllocator alloc;
             ObStmtNeedPrivs stmt_need_privs(alloc);
             ObNeedPriv need_priv("mysql", "", OB_PRIV_DB_LEVEL, OB_PRIV_UPDATE, false);
@@ -432,10 +433,10 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
             OZ (stmt_need_privs.need_privs_.push_back(need_priv));
             //check CREATE USER or UPDATE privilege on mysql
             params_.session_info_->get_session_priv_info(session_priv);
-            if (OB_SUCC(ret) && OB_FAIL(schema_checker_->check_priv(session_priv, stmt_need_privs))) {
+            if (OB_SUCC(ret) && OB_FAIL(schema_checker_->check_priv(session_priv, enable_role_id_array, stmt_need_privs))) {
               stmt_need_privs.need_privs_.at(0) =
                   ObNeedPriv("", "", OB_PRIV_USER_LEVEL, OB_PRIV_CREATE_USER, false);
-              if (OB_FAIL(schema_checker_->check_priv(session_priv, stmt_need_privs))) {
+              if (OB_FAIL(schema_checker_->check_priv(session_priv, enable_role_id_array, stmt_need_privs))) {
                 LOG_WARN("no priv", K(ret));
               }
             }

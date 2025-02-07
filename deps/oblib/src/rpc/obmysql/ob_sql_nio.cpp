@@ -931,11 +931,7 @@ private:
   void handle_epoll_event() {
     const int maxevents = 512;
     struct epoll_event events[maxevents];
-    int cnt = 0;
-    {
-      common::ObBKGDSessInActiveGuard inactive_guard;
-      cnt = ob_epoll_wait(epfd_, events, maxevents, 1000);
-    }
+    int cnt = ob_epoll_wait(epfd_, events, maxevents, 1000);
 
     for(int i = 0; i < cnt; i++) {
       uint64_t num64 = events[i].data.u64;

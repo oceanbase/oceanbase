@@ -193,7 +193,7 @@ MonotonicTs ObTransCtx::get_stc_()
   return stc_;
 }
 
-ObITsMgr *ObTransCtx::get_ts_mgr_()
+ObTsMgr *ObTransCtx::get_ts_mgr_()
 {
   return trans_service_->get_ts_mgr();
 }

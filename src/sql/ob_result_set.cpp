@@ -116,10 +116,8 @@ OB_INLINE int ObResultSet::open_plan()
 int ObResultSet::open()
 {
   int ret = OB_SUCCESS;
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   my_session_.set_process_query_time(ObClockGenerator::getClock());
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
-  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
   FLTSpanGuard(open);
   if (lib::is_oracle_mode() &&
       get_exec_context().get_nested_level() >= OB_MAX_RECURSIVE_SQL_LEVELS) {
@@ -268,16 +266,10 @@ int ObResultSet::implicit_commit_before_cmd_execute(ObSQLSessionInfo &session_in
     }
     exec_ctx.set_need_disconnect(false);
   } else {
-    // implicit end transaction and start transaction will not clear next scope transaction settings by:
-    // a. set by `set transaction read only`
-    // b. set by `set transaction isolation level XXX`
-    bool keep_trans_variable = (cmd_type == stmt::T_START_TRANS);
-    if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false, NULL, !keep_trans_variable))) {
-      LOG_WARN("fail end implicit trans on cmd execute", K(ret));
-    } else if (session_info.need_recheck_txn_readonly() && session_info.get_tx_read_only()) {
-      ret = OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION;
-      LOG_WARN("cmd can not execute because txn is read only", K(ret), K(cmd_type));
-    }
+    ret = ObSqlTransControl::end_trans_before_cmd_execute(session_info,
+                                                          exec_ctx.get_need_disconnect_for_update(),
+                                                          exec_ctx.get_trans_state(),
+                                                          cmd_type);
   }
   return ret;
 }
@@ -433,9 +425,7 @@ int ObResultSet::end_stmt(const bool is_rollback)
 //see the call reference in LinkExecCtxGuard
 int ObResultSet::get_next_row(const common::ObNewRow *&row)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
-  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
   return inner_get_next_row(row);
 }
 
@@ -910,9 +900,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 int ObResultSet::do_close(int *client_ret)
 {
   int ret = OB_SUCCESS;
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
-  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
 
   FLTSpanGuard(close);
   const bool is_tx_active = my_session_.is_in_transaction();
@@ -1316,6 +1304,7 @@ bool ObResultSet::need_end_trans_callback() const
   } else if (my_session_.get_has_temp_table_flag()
              || my_session_.has_tx_level_temp_table()
              || (OB_NOT_NULL(physical_plan_) && physical_plan_->is_contain_oracle_trx_level_temporary_table())) {
+    // temporary table will be committed synchronously, and then drop_temp_tables will be called to delete the data.
     need = false;
   } else if (stmt::T_END_TRANS == get_stmt_type()) {
     need = true;

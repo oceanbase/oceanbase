@@ -180,6 +180,7 @@ int ObTableLoginP::verify_password(const ObString &tenant, const ObString &user,
     login_info.passwd_ = pass_secret;
     SSL *ssl_st = NULL;//TODO::@yanhua not support ssl now for table-api
     share::schema::ObSessionPrivInfo session_priv;
+    EnableRoleIdArray enable_role_id_array;
     const share::schema::ObUserInfo *user_info = nullptr;
     if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
       LOG_WARN("get_schema_guard failed", K(ret));
@@ -187,7 +188,7 @@ int ObTableLoginP::verify_password(const ObString &tenant, const ObString &user,
       LOG_WARN("fail to get tenant_id", KR(ret), K(tenant));
     } else if (gctx_.schema_service_->get_tenant_schema_guard(tenant_id, guard)) {
       LOG_WARN("fail to get tenant guard", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
+    } else if (OB_FAIL(guard.check_user_access(login_info, session_priv, enable_role_id_array, ssl_st, user_info))) {
       if (ret == OB_PASSWORD_WRONG) {
         LOG_USER_ERROR(OB_PASSWORD_WRONG, user.length(), user.ptr(), tenant.length(), tenant.ptr(), "YES"/*using password*/);
       }

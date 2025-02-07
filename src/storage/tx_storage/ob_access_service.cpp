@@ -1038,9 +1038,6 @@ int ObAccessService::insert_row(
 
 int ObAccessService::revert_insert_iter(blocksstable::ObDatumRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   if (OB_LIKELY(nullptr != iter)) {
     ObQueryIteratorFactory::free_insert_dup_iter(iter);
@@ -1321,9 +1318,6 @@ int ObAccessService::get_multi_ranges_cost(
 
 int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1346,9 +1340,6 @@ int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *
 
 int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().tablet_id_ = 0;
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, 0);
   int ret = OB_SUCCESS;
   NG_TRACE(S_revert_iter_begin);
   if (IS_NOT_INIT) {

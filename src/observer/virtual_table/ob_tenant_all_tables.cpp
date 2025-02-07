@@ -613,7 +613,7 @@ int ObTenantAllTables::inner_get_next_row()
                 priv_info.reset();
                 if (OB_FAIL(session_->get_session_priv_info(priv_info))) {
                   SERVER_LOG(WARN, "fail to get session priv info", K(ret));
-                } else if (OB_FAIL(schema_guard_->check_table_show(priv_info, database_name,
+                } else if (OB_FAIL(schema_guard_->check_table_show(priv_info, session_->get_enable_role_array(), database_name,
                                                             table_schema->get_table_name_str(), is_allow))) {
                   SERVER_LOG(WARN, "check show table priv failed", K(ret));
                 }

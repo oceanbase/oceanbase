@@ -90,8 +90,7 @@ public:
     active_time_(0), number_pass_(0),
     calc_count_(0), disable_auto_mem_mgr_(false)
   {
-    ObRandom rand;
-    random_id_ = rand.get();
+    random_id_ = (int64_t)rdtsc();
   }
 
   OB_INLINE int64_t get_row_count() const { return row_count_; }

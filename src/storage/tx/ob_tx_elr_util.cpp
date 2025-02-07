@@ -19,7 +19,7 @@ namespace oceanbase
 namespace transaction
 {
 
-int ObTxELRUtil::check_and_update_tx_elr_info(ObTxDesc &tx)
+int ObTxELRUtil::check_and_update_tx_elr_info()
 {
   int ret = OB_SUCCESS;
   if (OB_SYS_TENANT_ID != MTL_ID() && MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {

@@ -92,7 +92,7 @@ inline int64_t icpu_id()
 inline int64_t get_max_icpu_id()
 {
 #ifndef HAVE_SCHED_GETCPU
-  return 64;
+  return OB_MAX_CPU_NUM;
 #else
   return sysconf(_SC_NPROCESSORS_ONLN);
 #endif

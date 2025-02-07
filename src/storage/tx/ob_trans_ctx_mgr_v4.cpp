@@ -157,7 +157,7 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
                        const ObLSID &ls_id,
                        ObTxTable *tx_table,
                        ObLockTable *lock_table,
-                       ObITsMgr *ts_mgr,
+                       ObTsMgr *ts_mgr,
                        ObTransService *txs,
                        ObITxLogParam *param,
                        ObITxLogAdapter *log_adapter)
@@ -194,9 +194,6 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     aggre_rec_scn_.reset();
     prev_aggre_rec_scn_.reset();
     online_ts_ = 0;
-    for (int64_t i = 0; i < READONLY_REQUEST_TRACE_ID_NUM; i++) {
-      readonly_request_trace_id_set_[i].reset();
-    }
     TRANS_LOG(INFO, "ObLSTxCtxMgr inited success", KP(this), K(ls_id));
   }
   return ret;
@@ -1598,9 +1595,6 @@ int ObLSTxCtxMgr::start_readonly_request()
     // readonly read must be blocked, because trx may be killed forcely
     TRANS_LOG(WARN, "logstream is blocked", K(ret));
   } else {
-    const ObCurTraceId::TraceId trace_id = *(ObCurTraceId::get_trace_id());
-    const uint64_t idx = ((uint64_t)trace_id.hash()) % READONLY_REQUEST_TRACE_ID_NUM;
-    readonly_request_trace_id_set_[idx].set(trace_id);
     inc_total_active_readonly_request_count();
   }
   return ret;
@@ -1611,26 +1605,8 @@ int ObLSTxCtxMgr::end_readonly_request()
   if (is_all_blocked_()) {
     TRANS_LOG(INFO, "end readonly request when ls is blocked");
   }
-  const ObCurTraceId::TraceId trace_id = *(ObCurTraceId::get_trace_id());
-  const uint64_t idx = ((uint64_t)trace_id.hash()) % READONLY_REQUEST_TRACE_ID_NUM;
-  if (readonly_request_trace_id_set_[idx] == trace_id) {
-    readonly_request_trace_id_set_[idx].reset();
-  }
   dec_total_active_readonly_request_count();
   return OB_SUCCESS;
-}
-
-void ObLSTxCtxMgr::dump_readonly_request(const int64_t max_req_number)
-{
-  int64_t dump_cnt = 0;
-  for (int64_t i = 0; dump_cnt < max_req_number && i < READONLY_REQUEST_TRACE_ID_NUM; i++) {
-    ObCurTraceId::TraceId trace_id;
-    trace_id.set(readonly_request_trace_id_set_[i]);
-    if (trace_id.is_valid()) {
-      TRANS_LOG(INFO, "readonly request is running", K(trace_id));
-      dump_cnt++;
-    }
-  }
 }
 
 int ObTxCtxMgr::remove_all_ls_()
@@ -1701,7 +1677,7 @@ int ObTxCtxMgr::wait_ls_(const ObLSID &ls_id)
 }
 
 int ObTxCtxMgr::init(const int64_t tenant_id,
-                     ObITsMgr *ts_mgr,
+                     ObTsMgr *ts_mgr,
                      ObTransService *txs)
 {
   int ret = OB_SUCCESS;

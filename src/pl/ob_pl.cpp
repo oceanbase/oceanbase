@@ -4220,6 +4220,7 @@ int ObPL::check_exec_priv(
   if (OB_SUCC(ret) && lib::is_mysql_mode() && pkg_id == OB_INVALID_ID) {
     if (ObSchemaChecker::enable_mysql_pl_priv_check(tenant_id, *guard)) {
       share::schema::ObSessionPrivInfo session_priv;
+      EnableRoleIdArray enable_role_id_array;
       if (OB_FAIL(guard->get_session_priv_info(
                                       exec_ctx.get_my_session()->get_priv_tenant_id(),
                                       exec_ctx.get_my_session()->get_priv_user_id(),
@@ -4246,7 +4247,7 @@ int ObPL::check_exec_priv(
           LOG_WARN("routine info is not exist!", K(ret), K(routine->get_routine_id()));
         }
         OX (need_priv.obj_type_ = routine_info->is_procedure() ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION);
-        OZ (guard->check_routine_priv(session_priv, need_priv));
+        OZ (guard->check_routine_priv(session_priv, enable_role_id_array, need_priv));
       }
     }
   }
@@ -4257,6 +4258,7 @@ int ObPL::check_exec_priv(
     LOG_WARN("failed to check feature enable", K(ret));
   } else if (OB_SUCC(ret) && need_check) {
     share::schema::ObSessionPrivInfo session_priv;
+    EnableRoleIdArray enable_role_id_array;
     const ObTableSchema *table = NULL;
     if (OB_FAIL(guard->get_session_priv_info(
                                     exec_ctx.get_my_session()->get_priv_tenant_id(),
@@ -4279,7 +4281,7 @@ int ObPL::check_exec_priv(
       OZ (guard->get_table_schema(tenant_id, trigger_info->get_base_object_id(), table));
       CK (OB_NOT_NULL(table));
       OX (need_priv.table_ = table->get_table_name());
-      OZ (guard->check_single_table_priv(session_priv, need_priv));
+      OZ (guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv));
     }
   }
   return ret;

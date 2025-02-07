@@ -19,7 +19,7 @@ namespace concurrency_control
 
 void build_trans_stat_datum(const storage::ObTableIterParam *param,
                             const blocksstable::ObDatumRow &row,
-                            const ObTransStatRow trans_stat_row)
+                            const ObTransStatRow &trans_stat_row)
 {
   const int64_t MAX_SIZE_FOR_TRANS_STAT_DATUM = 100;
   // trans stat datum index for vectorized execution
@@ -39,7 +39,7 @@ void build_trans_stat_datum(const storage::ObTableIterParam *param,
   }
 }
 
-void build_trans_stat_(const ObTransStatRow trans_stat_row,
+void build_trans_stat_(const ObTransStatRow &trans_stat_row,
                        const int64_t trans_stat_len,
                        char *trans_stat_ptr)
 {

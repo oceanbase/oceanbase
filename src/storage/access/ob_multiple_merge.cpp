@@ -1260,7 +1260,6 @@ int ObMultipleMerge::fill_virtual_columns(ObDatumRow &row)
 
 int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   ObSampleFilterExecutor *sample_executor = static_cast<ObSampleFilterExecutor *>(access_ctx_->get_sample_executor());
   if (nullptr != sample_executor && OB_FAIL(sample_executor->check_filtered_after_fuse(filtered))) {
@@ -1268,6 +1267,7 @@ int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
   } else if (!filtered && NULL != access_param_->op_filters_ && !access_param_->op_filters_->empty()) {
     // Execute filter in sql static typing engine.
     // %row is already projected to output expressions for main table scan.
+    ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
     if (OB_FAIL(access_param_->get_op()->filter_row_outside(*access_param_->op_filters_, *skip_bit_, filtered))) {
       LOG_WARN("filter row failed", K(ret));
     }

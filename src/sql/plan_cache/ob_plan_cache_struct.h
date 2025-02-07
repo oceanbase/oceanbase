@@ -229,18 +229,17 @@ public:
     : inner_alloc_("FastParserRes"),
       parameterized_params_(&inner_alloc_),
       cache_params_(NULL),
-      values_token_pos_(0),
-      values_tokens_(&inner_alloc_)
+      values_token_pos_(0)
   {
     reset_question_mark_ctx();
   }
   ObPlanCacheKey pc_key_; //plan cache key, parameterized by fast parser
-  common::ObSEArray<ObPCParam *, 4> raw_params_;
+  common::ObSEArray<ObPCParam *, 16> raw_params_;
   common::ObFixedArray<const common::ObObjParam *, common::ObIAllocator> parameterized_params_;
   ParamStore *cache_params_;
   ObQuestionMarkCtx question_mark_ctx_;
   int64_t values_token_pos_; // for insert values
-  common::ObFixedArray<ObValuesTokenPos, common::ObIAllocator> values_tokens_; // for values table
+  common::ObSEArray<ObValuesTokenPos, 4> values_tokens_; // for values table
   common::ObSEArray<ObArrayPCParam *, 4, common::ModulePageAllocator, true> array_params_;
 
   void reset() {
@@ -249,7 +248,7 @@ public:
     parameterized_params_.reuse();
     cache_params_ = NULL;
     values_token_pos_ = 0;
-    values_tokens_.reuse();
+    values_tokens_.reset();
     array_params_.reuse();
   }
   void reset_question_mark_ctx()
@@ -268,7 +267,6 @@ public:
     parameterized_params_.set_allocator(&inner_alloc_);
     cache_params_ = other.cache_params_;
     question_mark_ctx_ = other.question_mark_ctx_;
-    values_tokens_.set_allocator(&inner_alloc_);
     if (OB_FAIL(raw_params_.assign(other.raw_params_))) {
       SQL_PC_LOG(WARN, "failed to assign fix array", K(ret));
     } else if (OB_FAIL(parameterized_params_.assign(other.parameterized_params_))) {

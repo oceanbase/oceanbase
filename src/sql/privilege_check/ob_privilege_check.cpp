@@ -3406,7 +3406,7 @@ int ObPrivilegeCheck::check_privilege(
         LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
                  "user_id", session_priv.user_id_, K(ret));
       } else if (OB_FAIL(const_cast<ObSchemaGetterGuard *>(ctx.schema_guard_)->check_priv(
-               session_priv, stmt_need_priv))) {
+               session_priv, ctx.session_info_->get_enable_role_array(), stmt_need_priv))) {
         LOG_WARN("No privilege", K(session_priv),
                  "disable check", ctx.disable_privilege_check_, K(ret));
       } else {
@@ -4259,13 +4259,14 @@ int ObPrivilegeCheck::check_priv_in_roles(
 
   for (int i = 0; OB_SUCC(ret) && i < role_ids_queue.count() && !check_succ; i++) {
     ObSessionPrivInfo session_priv;
+    EnableRoleIdArray enable_role_id_array;
     //for print correct error info
     session_priv.user_name_ = user_info->get_user_name_str();
     session_priv.host_name_ = user_info->get_host_name_str();
     OZ (schema_guard.get_session_priv_info(tenant_id, role_ids_queue.at(i), "", session_priv));
 
     if (OB_SUCC(ret)) {
-      if (OB_SUCCESS == schema_guard.check_priv(session_priv, stmt_need_priv)) {
+      if (OB_SUCCESS == schema_guard.check_priv(session_priv, enable_role_id_array, stmt_need_priv)) {
         check_succ = true;
       }
     }

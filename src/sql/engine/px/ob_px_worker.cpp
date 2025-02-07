@@ -147,6 +147,7 @@ void PxWorkerFunctor::operator ()(bool need_exec)
 {
   int ret = OB_SUCCESS;
   ObCurTraceId::set(env_arg_.get_trace_id());
+  GET_DIAGNOSTIC_INFO->get_ash_stat().trace_id_ = env_arg_.get_trace_id();
   /**
    * 中断必须覆盖到release handler，因为它的流程含有sqc向qc发送消息，
    * 需要check中断。而中断本身是线程局部，不依赖于租户空间才对。

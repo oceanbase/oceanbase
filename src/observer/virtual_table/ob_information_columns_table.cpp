@@ -813,6 +813,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             int64_t buf_len = 200;
             int64_t pos = 0;
             ObSessionPrivInfo session_priv;
+            const common::ObIArray<uint64_t> &enable_role_id_array = session_->get_enable_role_array();
             if (OB_FAIL(session_->get_session_priv_info(session_priv))) {
               SERVER_LOG(WARN, "fail to get session priv info", K(ret));
             } else if (OB_UNLIKELY(!session_priv.is_valid())) {
@@ -825,16 +826,16 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             } else {
               ObNeedPriv need_priv(database_name, table_schema->get_table_name(),
                                    OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
-              if (OB_FAIL(fill_col_privs(session_priv, need_priv, OB_PRIV_SELECT,
+              if (OB_FAIL(fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_SELECT,
                                          "select,", buf, buf_len, pos))) {
                 SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
-              } else if (OB_FAIL(fill_col_privs(session_priv, need_priv, OB_PRIV_INSERT,
+              } else if (OB_FAIL(fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_INSERT,
                                                 "insert,", buf, buf_len, pos))) {
                 SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
-              } else if (OB_FAIL(fill_col_privs(session_priv, need_priv, OB_PRIV_UPDATE,
+              } else if (OB_FAIL(fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_UPDATE,
                                                 "update,", buf, buf_len, pos))) {
                 SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
-              } else if (OB_FAIL(fill_col_privs(session_priv, need_priv, OB_PRIV_REFERENCES,
+              } else if (OB_FAIL(fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_REFERENCES,
                                                 "reference,", buf, buf_len, pos))) {
                 SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
               } else {
@@ -907,7 +908,8 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
 }
 
 int ObInfoSchemaColumnsTable::fill_col_privs(
-    ObSessionPrivInfo &session_priv,
+    const ObSessionPrivInfo &session_priv,
+    const common::ObIArray<uint64_t> &enable_role_id_array,
     ObNeedPriv &need_priv, 
     ObPrivSet priv_set, 
     const char *priv_str,
@@ -921,7 +923,7 @@ int ObInfoSchemaColumnsTable::fill_col_privs(
   if (OB_ISNULL(schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "data member is not init", KP(schema_guard_), K(ret));
-  } else if (OB_SUCC(schema_guard_->check_single_table_priv(session_priv, need_priv))) {
+  } else if (OB_SUCC(schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv))) {
     ret = databuff_printf(buf, buf_len, pos, "%s", priv_str);
   } else if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
     ret = OB_SUCCESS;
@@ -1227,6 +1229,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             int64_t buf_len = 200;
             int64_t pos = 0;
             ObSessionPrivInfo session_priv;
+            const common::ObIArray<uint64_t> &enable_role_id_array = session_->get_enable_role_array();
             if (OB_FAIL(session_->get_session_priv_info(session_priv))) {
               SERVER_LOG(WARN, "fail to get session priv info", K(ret));
             } else if (OB_UNLIKELY(!session_priv.is_valid())) {
@@ -1239,16 +1242,16 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             } else {
               ObNeedPriv need_priv(database_name, table_schema->get_table_name(),
                                    OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
-              if (OB_FAIL(fill_col_privs(session_priv, need_priv, OB_PRIV_SELECT,
+              if (OB_FAIL(fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_SELECT,
                                          "select,", buf, buf_len, pos))) {
                 SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
-              } else if (OB_FAIL(fill_col_privs(session_priv, need_priv, OB_PRIV_INSERT,
+              } else if (OB_FAIL(fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_INSERT,
                                                 "insert,", buf, buf_len, pos))) {
                 SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
-              } else if (OB_FAIL(fill_col_privs(session_priv, need_priv, OB_PRIV_UPDATE,
+              } else if (OB_FAIL(fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_UPDATE,
                                                 "update,", buf, buf_len, pos))) {
                 SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
-              } else if (OB_FAIL(fill_col_privs(session_priv, need_priv, OB_PRIV_REFERENCES,
+              } else if (OB_FAIL(fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_REFERENCES,
                                                 "reference,", buf, buf_len, pos))) {
                 SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
               } else {

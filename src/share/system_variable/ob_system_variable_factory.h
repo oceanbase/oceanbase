@@ -6022,7 +6022,7 @@ public:
   ObSysVarFactory(const int64_t tenant_id = OB_SERVER_TENANT_ID);
   virtual ~ObSysVarFactory();
   void destroy();
-  int create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var);
+  int create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var, int64_t store_idx = -1);
   int create_all_sys_vars();
   int free_sys_var(ObBasicSysVar *sys_var, int64_t sys_var_idx);
   static int create_sys_var(ObIAllocator &allocator_, ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var_ptr);

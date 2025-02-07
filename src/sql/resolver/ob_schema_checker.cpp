@@ -99,6 +99,7 @@ int ObSchemaChecker::check_ora_priv(
 }
 
 int ObSchemaChecker::check_priv(const share::schema::ObSessionPrivInfo &session_priv,
+                                const common::ObIArray<uint64_t> &enable_role_id_array,
                                 const share::schema::ObStmtNeedPrivs &stmt_need_privs) const
 {
   int ret = OB_SUCCESS;
@@ -108,7 +109,7 @@ int ObSchemaChecker::check_priv(const share::schema::ObSessionPrivInfo &session_
   } else if (OB_UNLIKELY(!session_priv.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session_priv is invalid", K(session_priv), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_priv(session_priv, stmt_need_privs))) {
+  } else if (OB_FAIL(schema_mgr_->check_priv(session_priv, enable_role_id_array, stmt_need_privs))) {
     LOG_WARN("failed to check_priv", K(session_priv), K(stmt_need_privs), K(ret));
   } else {}
   return ret;
@@ -116,6 +117,7 @@ int ObSchemaChecker::check_priv(const share::schema::ObSessionPrivInfo &session_
 
 
 int ObSchemaChecker::check_priv_or(const share::schema::ObSessionPrivInfo &session_priv,
+                                   const common::ObIArray<uint64_t> &enable_role_id_array,
                                    const share::schema::ObStmtNeedPrivs &stmt_need_privs)
 {
   int ret = OB_SUCCESS;
@@ -125,13 +127,14 @@ int ObSchemaChecker::check_priv_or(const share::schema::ObSessionPrivInfo &sessi
   } else if (OB_UNLIKELY(!session_priv.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session_priv is invalid", K(session_priv), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_priv_or(session_priv, stmt_need_privs))) {
+  } else if (OB_FAIL(schema_mgr_->check_priv_or(session_priv, enable_role_id_array, stmt_need_privs))) {
     LOG_WARN("failed to check_priv_or", K(session_priv), K(stmt_need_privs), K(ret));
   } else {}
   return ret;
 }
 
 int ObSchemaChecker::check_db_access(share::schema::ObSessionPrivInfo &s_priv,
+                                     const common::ObIArray<uint64_t> &enable_role_id_array,
                                      const ObString& database_name) const
 {
   int ret = OB_SUCCESS;
@@ -141,13 +144,14 @@ int ObSchemaChecker::check_db_access(share::schema::ObSessionPrivInfo &s_priv,
   } else if (OB_UNLIKELY(!s_priv.is_valid() || database_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(s_priv), K(database_name), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_db_access(s_priv, database_name))) {
-    LOG_WARN("failed to check_db_access", K(s_priv), K(database_name), K(ret));
+  } else if (OB_FAIL(schema_mgr_->check_db_access(s_priv, enable_role_id_array, database_name))) {
+    LOG_WARN("failed to check_db_access", K(s_priv), K(enable_role_id_array), K(database_name), K(ret));
   } else {}
   return ret;
 }
 
 int ObSchemaChecker::check_table_show(const share::schema::ObSessionPrivInfo &s_priv,
+                                      const common::ObIArray<uint64_t> &enable_role_id_array,
                                       const ObString &db,
                                       const ObString &table,
                                       bool &allow_show) const
@@ -159,8 +163,8 @@ int ObSchemaChecker::check_table_show(const share::schema::ObSessionPrivInfo &s_
   } else if (OB_UNLIKELY(!s_priv.is_valid() || db.empty() || table.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(s_priv), K(db), K(table), K(ret));
-  } else if (OB_FAIL(schema_mgr_->check_table_show(s_priv, db, table, allow_show))) {
-    LOG_WARN("failed to check_table_show", K(s_priv), K(db), K(table), K(ret));
+  } else if (OB_FAIL(schema_mgr_->check_table_show(s_priv, enable_role_id_array, db, table, allow_show))) {
+    LOG_WARN("failed to check_table_show", K(s_priv), K(enable_role_id_array), K(db), K(table), K(ret));
   } else {}
   return ret;
 }
@@ -259,6 +263,7 @@ int ObSchemaChecker::check_routine_show(const share::schema::ObSessionPrivInfo &
 }
 
 int ObSchemaChecker::check_trigger_show(const share::schema::ObSessionPrivInfo &s_priv,
+                                        const common::ObIArray<uint64_t> &enable_role_id_array,
                                         const ObString &db,
                                         const ObString &trigger,
                                         bool &allow_show,
@@ -283,11 +288,11 @@ int ObSchemaChecker::check_trigger_show(const share::schema::ObSessionPrivInfo &
       need_priv.db_ = db;
       need_priv.priv_set_ = OB_PRIV_TRIGGER;
       need_priv.table_ = table;
-      OZ (schema_mgr_->check_single_table_priv(s_priv, need_priv));
+      OZ (schema_mgr_->check_single_table_priv(s_priv, enable_role_id_array, need_priv));
       if(OB_FAIL(ret)) {
         allow_show = false;
         ret = OB_SUCCESS;
-        LOG_WARN("show create trigger not has trigger priv", K(s_priv), K(db), K(trigger), K(table), K(ret));
+        LOG_WARN("show create trigger not has trigger priv", K(s_priv), K(enable_role_id_array), K(db), K(trigger), K(table), K(ret));
       }
     }
   }

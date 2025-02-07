@@ -18,11 +18,6 @@ namespace oceanbase
 namespace share
 {
 
-void SCN::reset()
-{
-  val_ = OB_INVALID_SCN_VAL;
-}
-
 SCN SCN::atomic_get() const
 {
   SCN result;
@@ -61,54 +56,16 @@ SCN SCN::atomic_vcas(const SCN &old_v, const SCN &new_val)
   return tmp;
 }
 
-bool SCN::is_valid() const
-{
-  return (SCN_VERSION == v_);
-}
-
-bool SCN::is_valid_and_not_min() const
-{
-  return ((SCN_VERSION == v_) && (OB_MIN_SCN_TS_NS != val_));
-}
-
-void SCN::set_invalid()
-{
-  reset();
-}
-
 void SCN::set_max()
 {
   v_ = SCN_VERSION;
   ts_ns_ = OB_MAX_SCN_TS_NS;
 }
 
-bool SCN::is_max() const
-{
-  bool bool_ret = false;
-  if (v_ == SCN_VERSION && ts_ns_ == OB_MAX_SCN_TS_NS) {
-    bool_ret = true;
-  }
-  return bool_ret;
-}
-
 void SCN::set_min()
 {
   v_ = SCN_VERSION;
   ts_ns_ = OB_MIN_SCN_TS_NS;
-}
-
-bool SCN::is_min() const
-{
-  bool bool_ret = false;
-  if (v_ == SCN_VERSION && ts_ns_ == OB_MIN_SCN_TS_NS) {
-    bool_ret = true;
-  }
-  return bool_ret;
-}
-
-bool SCN::is_base_scn() const
-{
- return (SCN_VERSION == v_) && (OB_BASE_SCN_TS_NS == ts_ns_);
 }
 
 void SCN::set_base()
@@ -333,26 +290,6 @@ int SCN::convert_for_sql(uint64_t value)
   return ret;
 }
 
-uint64_t SCN::get_val_for_inner_table_field() const
-{
-  return val_;
-}
-
-uint64_t SCN::get_val_for_sql() const
-{
-  return val_;
-}
-
-uint64_t SCN::get_val_for_gts() const
-{
-  return val_;
-}
-
-uint64_t SCN::get_val_for_logservice() const
-{
-  return val_;
-}
-
 int SCN::convert_for_tx(int64_t val)
 {
   int ret = OB_SUCCESS;
@@ -370,28 +307,20 @@ int SCN::convert_for_tx(int64_t val)
 int64_t SCN::get_val_for_tx(const bool ignore_invalid_scn) const
 {
   int64_t result_val = -1;
-  if (!is_valid()) {
+  if (OB_LIKELY(SCN_VERSION == v_)) {
+    if (OB_LIKELY(OB_MAX_SCN_TS_NS != ts_ns_)) {
+      result_val = ts_ns_;
+    } else {
+      result_val = INT64_MAX;
+    }
+  } else {
     if (!ignore_invalid_scn) {
       PALF_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid SCN", K(val_));
     } else {
       PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid SCN", K(val_));
     }
-  } else if (OB_MAX_SCN_TS_NS == ts_ns_) {
-    result_val = INT64_MAX;
-  } else {
-    result_val = ts_ns_;
   }
   return result_val;
-}
-
-bool SCN::operator==(const SCN &scn) const
-{
-  return (val_ == scn.val_);
-}
-
-bool SCN::operator!=(const SCN &scn) const
-{
-  return (val_ != scn.val_);
 }
 
 bool SCN::operator<(const SCN &scn) const
@@ -452,12 +381,6 @@ bool SCN::operator>=(const SCN &scn) const
     result = ts_ns_ >= scn.ts_ns_;
   }
   return result;
-}
-
-SCN &SCN::operator=(const SCN &scn)
-{
-  this->val_ = scn.val_;
-  return *this;
 }
 
 int SCN::fixed_serialize(char* buf, const int64_t buf_len, int64_t& pos) const

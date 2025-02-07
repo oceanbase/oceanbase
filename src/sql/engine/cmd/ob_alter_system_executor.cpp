@@ -2112,7 +2112,7 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
              pre_effective_tenant_id, schema_guard))) {
     LOG_WARN("get_schema_guard failed", KR(ret), K(pre_effective_tenant_id));
-  } else if (OB_FAIL(schema_guard.check_db_access(session_priv, database_name))) { // case 3
+  } else if (OB_FAIL(schema_guard.check_db_access(session_priv, session_info->get_enable_role_array(), database_name))) { // case 3
     LOG_WARN("fail to check db access", KR(ret), K(pre_effective_tenant_id),
              K(session_priv), K(database_name));
   } else if (session_info->get_ps_session_info_size() > 0) { // case 4

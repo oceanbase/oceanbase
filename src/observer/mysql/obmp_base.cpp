@@ -700,6 +700,7 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
     SSL *ssl_st = SQL_REQ_OP.get_sql_ssl_st(req_);
     share::schema::ObUserLoginInfo login_info = session->get_login_info();
     share::schema::ObSessionPrivInfo session_priv;
+    EnableRoleIdArray enable_role_id_array;
     // disconnect previous user connection first.
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(session->on_user_disconnect())) {
@@ -708,7 +709,7 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
     const ObUserInfo *user_info = NULL;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
-                ssl_st, user_info))) {
+                enable_role_id_array, ssl_st, user_info))) {
       OB_LOG(WARN, "User access denied", K(login_info), K(ret));
     } else if (OB_FAIL(session->on_user_connect(session_priv, user_info))) {
       OB_LOG(WARN, "user connect failed", K(ret), K(session_priv));
@@ -718,7 +719,7 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
       session->set_user(session_priv.user_name_, session_priv.host_name_, session_priv.user_id_);
       session->set_user_priv_set(session_priv.user_priv_set_);
       session->set_db_priv_set(session_priv.db_priv_set_);
-      session->set_enable_role_array(session_priv.enable_role_id_array_);
+      session->set_enable_role_array(enable_role_id_array);
       if (OB_FAIL(session->set_tenant(login_info.tenant_name_, session_priv.tenant_id_))) {
         OB_LOG(WARN, "fail to set tenant", "tenant name", login_info.tenant_name_, K(ret));
       } else if (OB_FAIL(session->set_real_client_ip_and_port(login_info.client_ip_, session->get_client_addr_port()))) {

@@ -1951,6 +1951,7 @@ struct NullAwareAntiJoinInfo {
                                         int64_t table_id,
                                         ObQueryRangeProvider* &range,
                                         int64_t index_id,
+                                        const ObTableSchema *index_schema,
                                         int64_t &out_index_prefix);
 
     int check_enable_better_inlist(int64_t table_id,

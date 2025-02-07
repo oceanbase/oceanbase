@@ -190,7 +190,7 @@ int ObDupTablePartitionInfo::handle_redo_log_sync_request(const ObRedoLogSyncReq
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObIDupTableRpc *dup_table_rpc = NULL;
-  ObITsMgr *ts_mgr = NULL;
+  ObTsMgr *ts_mgr = NULL;
   const uint64_t log_id = msg.get_log_id();
   const int64_t log_ts = msg.get_log_ts();
   const ObPartitionKey &pkey = msg.get_partition();

@@ -965,7 +965,8 @@ public:
                         const common::ObObj &min_val,
                         const common::ObObj &max_val,
                         const int64_t flags,
-                        bool is_from_sys_table);
+                        bool is_from_sys_table,
+                        int64_t store_idx = -1);
   int load_sys_variable(common::ObIAllocator &calc_buf,
                         const common::ObString &name,
                         const int64_t dtype,
@@ -1754,12 +1755,13 @@ public:
         runtime_filter_max_in_num_(0),
         runtime_bloom_filter_max_size_(INT_MAX32),
         enable_rich_vector_format_(false),
-        ncharacter_set_connection_(ObCharsetType::CHARSET_INVALID),
+        ncharacter_set_connection_(ObCharsetType::CHARSET_SESSION_CACHE_NOT_LOADED_MARK),
         compat_type_(share::ObCompatType::COMPAT_MYSQL57),
         compat_version_(0),
         enable_sql_plan_monitor_(false),
         ob_enable_parameter_anonymous_block_(false),
-        current_default_catalog_(0)
+        current_default_catalog_(0),
+        security_version_(0)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1827,6 +1829,7 @@ public:
       compat_version_ = 0;
       enable_sql_plan_monitor_ = false;
       ob_enable_parameter_anonymous_block_ = false;
+      security_version_ = 0;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -1878,7 +1881,8 @@ public:
             default_lob_inrow_threshold_ == other.default_lob_inrow_threshold_ &&
             compat_type_ == other.compat_type_ &&
             compat_version_ == other.compat_version_ &&
-            ob_enable_parameter_anonymous_block_ == other.ob_enable_parameter_anonymous_block_;
+            ob_enable_parameter_anonymous_block_ == other.ob_enable_parameter_anonymous_block_ &&
+            security_version_ == other.security_version_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2065,6 +2069,7 @@ public:
     bool enable_sql_plan_monitor_;
     bool ob_enable_parameter_anonymous_block_;
     uint64_t current_default_catalog_;
+    uint64_t security_version_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2185,6 +2190,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, compat_version);
     DEF_SYS_VAR_CACHE_FUNCS(bool, enable_sql_plan_monitor);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_parameter_anonymous_block);
+    DEF_SYS_VAR_CACHE_FUNCS(uint64_t, security_version);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2261,6 +2267,7 @@ private:
         bool inc_compat_version_:1;
         bool inc_enable_sql_plan_monitor_:1;
         bool inc_ob_enable_parameter_anonymous_block_:1;
+        bool inc_security_version_:1;
       };
     };
   };

@@ -618,6 +618,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         }
       }
       share::schema::ObSessionPrivInfo session_priv;
+      EnableRoleIdArray enable_role_id_array;
       const ObSysVariableSchema *sys_variable_schema = NULL;
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(convert_oracle_object_name(conn->tenant_id_, user_name_))) {
@@ -766,8 +767,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
-
+        } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, enable_role_id_array, ssl_st, user_info))) {
           int inner_ret = OB_SUCCESS;
           bool is_unlocked = false;
           if (ORACLE_MODE == session.get_compatibility_mode()
@@ -807,7 +807,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
             } else if (OB_SUCCESS == inner_ret) {
               //schema刷新成功，并且内部执行也没有出错，尝试重新登录
               if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
-                    ssl_st, user_info))) {
+                    enable_role_id_array, ssl_st, user_info))) {
                 LOG_WARN("User access denied", K(login_info), K(ret));
               }
             }
@@ -818,7 +818,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
               reset_inner_proxyro_scramble(*conn, login_info);
               int pre_ret = ret;
               if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
-                    ssl_st, user_info))) {
+                    enable_role_id_array, ssl_st, user_info))) {
                 LOG_WARN("User access denied", K(login_info), K(pre_ret),K(ret));
               }
             } else {
@@ -875,7 +875,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         session.set_capability(hsr_.get_capability_flags());
         session.set_user_priv_set(session_priv.user_priv_set_);
         session.set_db_priv_set(session_priv.db_priv_set_);
-        session.set_enable_role_array(session_priv.enable_role_id_array_);
+        session.set_enable_role_array(enable_role_id_array);
         host_name = session_priv.host_name_;
         uint64_t db_id = OB_INVALID_ID;
         const ObTenantSchema *tenant_schema = NULL;

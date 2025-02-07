@@ -20,12 +20,12 @@ namespace storage {
 int ObTxTableGuard::init(ObTxTable *tx_table)
 {
   int ret = OB_SUCCESS;
-  reset();
 
   if (OB_ISNULL(tx_table)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "tx_data_table is nullptr.");
   } else {
+    mini_cache_.reset();
     epoch_ = tx_table->get_epoch();
     tx_table_ = tx_table;
   }

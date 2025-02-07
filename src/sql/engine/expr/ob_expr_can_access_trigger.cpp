@@ -79,7 +79,7 @@ int ObExprCanAccessTrigger::can_access_trigger(const ObExpr &expr,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("schema guard is NULL", K(ret));
         } else {
-          OZ (schema_guard->check_single_table_priv(session_priv, need_priv), K(need_priv), K(ret));
+          OZ (schema_guard->check_single_table_priv(session_priv, session->get_enable_role_array(), need_priv), K(need_priv), K(ret));
           if(OB_ERR_NO_TABLE_PRIVILEGE == ret) {
             ret = OB_SUCCESS;
             OX (res_datum.set_false());

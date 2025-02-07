@@ -61,9 +61,9 @@ public:
 
 void build_trans_stat_datum(const storage::ObTableIterParam *param,
                             const blocksstable::ObDatumRow &row,
-                            const ObTransStatRow trans_stat_row);
+                            const ObTransStatRow &trans_stat_row);
 
-void build_trans_stat_(const ObTransStatRow trans_stat_row,
+void build_trans_stat_(const ObTransStatRow &trans_stat_row,
                        const int64_t trans_stat_len,
                        char *trans_stat_ptr);
 

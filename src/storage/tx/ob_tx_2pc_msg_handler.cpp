@@ -307,7 +307,7 @@ int ObPartTransCtx::post_orphan_msg_(const ObTwoPhaseCommitMsgType &msg_type,
     } else if (ls_deleted) {
       bool unused = false;
       SCN scn;
-      ObITsMgr *ts_mgr = trans_service->get_ts_mgr();
+      ObTsMgr *ts_mgr = trans_service->get_ts_mgr();
       if (OB_ISNULL(ts_mgr)) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "ts mgr is null", K(ret));

@@ -1928,6 +1928,7 @@ int ObMPStmtExecute::process()
     session.set_proxy_version(get_proxy_version());
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     int64_t packet_len = pkt.get_clen();
+    const bool enable_flt = session.get_control_info().is_valid();
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(stmt_id), K(ret));
@@ -1960,8 +1961,10 @@ int ObMPStmtExecute::process()
       //packet size check with session variable max_allowd_packet or net_buffer_length
       ret = OB_ERR_NET_PACKET_TOO_LARGE;
       LOG_WARN("packet too large than allowed for the session", K_(stmt_id), K(ret));
-    } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
-                            conn->proxy_cap_flags_.is_full_link_trace_support()))) {
+    } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(),
+                            session,
+                            conn->proxy_cap_flags_.is_full_link_trace_support(),
+                            enable_flt))) {
       LOG_WARN("failed to init flt extra info", K(ret));
     } else if (OB_FAIL(session.check_tenant_status())) {
       need_disconnect = false;
@@ -1971,14 +1974,16 @@ int ObMPStmtExecute::process()
     } else if (is_arraybinding_ && OB_FAIL(check_precondition_for_arraybinding(session))) {
       LOG_WARN("precondition for arraybinding is not satisfied", K(ret));
     } else {
-      FLTSpanGuard(ps_execute);
-      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
-      FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
-                    receive_ts, get_receive_timestamp(),
-                    client_info, session.get_client_info(),
-                    module_name, session.get_module_name(),
-                    action_name, session.get_action_name(),
-                    sess_id, session.get_sessid());
+      FLTSpanGuardIfEnable(ps_execute, enable_flt);
+      if (enable_flt) {
+        char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+        FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
+                      receive_ts, get_receive_timestamp(),
+                      client_info, session.get_client_info(),
+                      module_name, session.get_module_name(),
+                      action_name, session.get_action_name(),
+                      sess_id, session.get_sessid());
+      }
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       retry_ctrl_.set_tenant_global_schema_version(tenant_version);
       retry_ctrl_.set_sys_global_schema_version(sys_version);

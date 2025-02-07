@@ -626,8 +626,15 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
   int ret = OB_SUCCESS;
   ObDASTaskFactory &das_factory = get_das_factory();
   ObSQLSessionInfo *session = get_exec_ctx().get_my_session();
-  int64_t task_id;
-  if (OB_FAIL(MTL(ObDataAccessService*)->get_das_task_id(task_id))) {
+  int64_t task_id = 0;
+  bool need_das_id = true;
+  ObPhysicalPlanCtx *plan_ctx = NULL;
+  const ObPhysicalPlan *plan = NULL;
+  if (OB_NOT_NULL(plan_ctx = GET_PHY_PLAN_CTX(get_exec_ctx()))
+      && OB_NOT_NULL(plan = plan_ctx->get_phy_plan())) {
+    need_das_id = !(plan->is_local_plan() && OB_PHY_PLAN_LOCAL == plan->get_location_type());
+  }
+  if (need_das_id && OB_FAIL(MTL(ObDataAccessService*)->get_das_task_id(task_id))) {
     LOG_WARN("get das task id failed", KR(ret));
   } else if (OB_FAIL(das_factory.create_das_task_op(op_type, task_op))) {
     LOG_WARN("create das task op failed", K(ret), KPC(task_op));

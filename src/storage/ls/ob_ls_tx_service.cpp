@@ -341,7 +341,6 @@ int ObLSTxService::check_all_readonly_tx_clean_up() const
   } else if ((active_readonly_request_count = mgr_->get_total_active_readonly_request_count()) > 0) {
     if (REACH_TIME_INTERVAL(5000000)) {
       TRANS_LOG(INFO, "readonly requests are active", K(active_readonly_request_count));
-      mgr_->dump_readonly_request(3);
       READ_CHECKER_PRINT(ls_id_);
     }
     ret = OB_EAGAIN;

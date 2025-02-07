@@ -1109,8 +1109,9 @@ int ObTablet::read_medium_array(
   const int64_t finish_medium_scn = get_last_major_snapshot_version();
 
   if (OB_SUCC(ret)) {
-    SMART_VAR(ObTableScanParam, scan_param) {
-      ObTabletMediumInfoReader medium_info_reader;
+    SMART_VARS_2((ObTableScanParam, scan_param),
+                 (ObTabletMediumInfoReader, medium_info_reader))
+    {
       if (OB_FAIL(ObMdsScanParamHelper::build_medium_info_scan_param(
           allocator,
           ls_id,

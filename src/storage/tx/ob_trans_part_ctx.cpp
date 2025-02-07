@@ -3000,7 +3000,7 @@ int ObPartTransCtx::get_gts_(SCN &gts)
   MonotonicTs receive_gts_ts;
   const int64_t GET_GTS_AHEAD_INTERVAL = 0; //GCONF._ob_get_gts_ahead_interval;
   const MonotonicTs stc_ahead = get_stc_() - MonotonicTs(GET_GTS_AHEAD_INTERVAL);
-  ObITsMgr *ts_mgr = trans_service_->get_ts_mgr();
+  ObTsMgr *ts_mgr = trans_service_->get_ts_mgr();
 
   if (sub_state_.is_gts_waiting()) {
     ret = OB_EAGAIN;
@@ -3030,7 +3030,7 @@ int ObPartTransCtx::wait_gts_elapse_commit_version_(bool &need_wait)
   int ret = OB_SUCCESS;
   need_wait = false;
 
-  ObITsMgr *ts_mgr = trans_service_->get_ts_mgr();
+  ObTsMgr *ts_mgr = trans_service_->get_ts_mgr();
 
   if (OB_FAIL(ts_mgr->wait_gts_elapse(tenant_id_,
                                       ctx_tx_data_.get_commit_version(),

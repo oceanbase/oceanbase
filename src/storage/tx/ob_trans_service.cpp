@@ -92,7 +92,7 @@ int ObTransService::init(const ObAddr &self,
                          ObIDupTableRpc *dup_table_rpc,
                          ObILocationAdapter *location_adapter,
                          ObIGtiSource *gti_source,
-                         ObITsMgr *ts_mgr,
+                         ObTsMgr *ts_mgr,
                          obrpc::ObSrvRpcProxy *rpc_proxy,
                          share::schema::ObMultiVersionSchemaService *schema_service,
                          share::ObAliveServerTracer *server_tracer)

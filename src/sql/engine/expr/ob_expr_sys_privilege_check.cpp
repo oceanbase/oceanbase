@@ -76,6 +76,7 @@ int ObExprSysPrivilegeCheck::check_show_priv(bool &allow_show,
 {
   int ret = OB_SUCCESS;
   share::schema::ObSessionPrivInfo session_priv;
+  const common::ObIArray<uint64_t> &enable_role_id_array = exec_ctx.get_my_session()->get_enable_role_array();
   const share::schema::ObSchemaGetterGuard *schema_guard =
       exec_ctx.get_virtual_table_ctx().schema_guard_;
   if (OB_UNLIKELY(NULL == schema_guard)) {
@@ -93,18 +94,18 @@ int ObExprSysPrivilegeCheck::check_show_priv(bool &allow_show,
       //not current tenant's row
     } else if (0 == level_str.case_compare("db_acc")) {
       if (OB_FAIL(const_cast<share::schema::ObSchemaGetterGuard *>(schema_guard)->check_db_show(
-                  session_priv, db_name, allow_show))) {
+                  session_priv, enable_role_id_array, db_name, allow_show))) {
         LOG_WARN("Check db show failed", K(ret));
       }
     } else if (0 == level_str.case_compare("table_acc")) {
       //if (OB_FAIL(priv_mgr.check_table_show(session_priv,
       if (OB_FAIL(const_cast<share::schema::ObSchemaGetterGuard *>(schema_guard)->check_table_show(
-                  session_priv, db_name, obj_name, allow_show))) {
+                  session_priv, enable_role_id_array, db_name, obj_name, allow_show))) {
         LOG_WARN("Check table show failed", K(ret));
       }
     } else if (0 == level_str.case_compare("routine_acc")) {
       if (OB_FAIL(const_cast<share::schema::ObSchemaGetterGuard *>(schema_guard)->check_routine_show(
-                  session_priv, db_name, obj_name, allow_show, routine_type))) {
+                  session_priv, enable_role_id_array, db_name, obj_name, allow_show, routine_type))) {
         LOG_WARN("Check routine show failed", K(ret));
       }
     } else {

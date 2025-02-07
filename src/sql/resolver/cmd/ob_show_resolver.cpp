@@ -173,6 +173,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("faile to get session priv info", K(ret));
     }
   }
+  const common::ObIArray<uint64_t> &enable_role_id_array = session_info_->get_enable_role_array();
 
   if (OB_SUCC(ret)) {
     show_resv_ctx.cur_tenant_id_ = real_tenant_id;
@@ -218,7 +219,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             LOG_WARN("database id is invalid", K(ret), K(show_db_id));
           } else {
             show_db_name = show_resv_ctx.show_database_name_;
-            if (OB_FAIL(schema_checker_->check_db_access(session_priv, show_db_name))) {
+            if (OB_FAIL(schema_checker_->check_db_access(session_priv, enable_role_id_array, show_db_name))) {
               if (OB_ERR_NO_DB_PRIVILEGE == ret) {
                 LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
                                session_priv.host_name_.length(),session_priv.host_name_.ptr(),
@@ -520,7 +521,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                                                   show_db_id,
                                                   show_db_name))) {
               LOG_WARN("fail to resolve show database", K(ret), K(real_tenant_id));
-            } else if (OB_FAIL(schema_checker_->check_db_access(session_priv, show_db_name))) {
+            } else if (OB_FAIL(schema_checker_->check_db_access(session_priv, enable_role_id_array, show_db_name))) {
               if (OB_ERR_NO_DB_PRIVILEGE == ret) {
                 LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
                                session_priv.host_name_.length(),session_priv.host_name_.ptr(),
@@ -570,12 +571,12 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                   LOG_WARN("Failed to init stmt need priv", K(ret));
                 } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
                   LOG_WARN("Failed to add need priv", K(ret));
-                } else if (OB_FAIL(schema_checker_->check_priv(session_priv, stmt_need_privs))) {
+                } else if (OB_FAIL(schema_checker_->check_priv(session_priv, enable_role_id_array, stmt_need_privs))) {
                   LOG_WARN("Failed to check acc", K(ret));
                 } else { }//do nothing
               }
             } else if (OB_FAIL(schema_checker_->check_table_show(
-                              session_priv, show_db_name, show_table_name, allow_show))) {
+                              session_priv, enable_role_id_array, show_db_name, show_table_name, allow_show))) {
               LOG_WARN("Check table show error", K(ret));
             } else if (!allow_show) {
               ret = OB_ERR_NO_TABLE_PRIVILEGE;
@@ -607,7 +608,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
       }
       case T_SHOW_CREATE_USER:
       {
-        if (OB_FAIL(resolve_show_create_user(parse_tree, show_resv_ctx, session_priv, stmt_need_privs, select_sql, sql_gen))) {
+        if (OB_FAIL(resolve_show_create_user(parse_tree, show_resv_ctx, session_priv, enable_role_id_array, stmt_need_privs, select_sql, sql_gen))) {
           LOG_WARN("failed to resolve show create user", K(ret));
         }
         break;
@@ -723,7 +724,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
               LOG_WARN("fail to resolve show from trigger", K(ret));
             }
             if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(schema_checker_->check_trigger_show(session_priv, show_db_name,
+            } else if (OB_FAIL(schema_checker_->check_trigger_show(session_priv, enable_role_id_array, show_db_name,
                                                                   show_tg_name, allow_show, show_table_name))) {
               LOG_WARN("Check trigger show error", K(ret));
             } else if (!allow_show) {
@@ -797,12 +798,12 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                 need_priv.table_ = show_table_name;
                 stmt_need_privs.need_privs_.push_back(need_priv);
 
-                if (OB_FAIL(schema_checker_->check_priv_or(session_priv, stmt_need_privs))) {
+                if (OB_FAIL(schema_checker_->check_priv_or(session_priv, enable_role_id_array, stmt_need_privs))) {
                   if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
                     ret = OB_SUCCESS;
                     bool pass = false;
                     if (OB_FAIL(schema_checker_->get_schema_guard()->check_priv_any_column_priv(
-                                  session_priv, show_db_name, show_table_name, pass))) {
+                                  session_priv, enable_role_id_array, show_db_name, show_table_name, pass))) {
                       LOG_WARN("fail to collect privs in roles", K(ret));
                     } else if (!pass) {
                       ret = OB_ERR_NO_TABLE_PRIVILEGE;
@@ -1643,7 +1644,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             LOG_WARN("database id is invalid", K(ret), K(show_db_id));
           } else {
             show_db_name = show_resv_ctx.show_database_name_;
-            if (OB_FAIL(schema_checker_->check_db_access(session_priv, show_db_name))) {
+            if (OB_FAIL(schema_checker_->check_db_access(session_priv, enable_role_id_array, show_db_name))) {
               if (OB_ERR_NO_DB_PRIVILEGE == ret) {
                 LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
                                session_priv.host_name_.length(),session_priv.host_name_.ptr(),
@@ -1911,7 +1912,8 @@ int ObShowResolver::resolve_show_check_table(const ParseNode &parse_tree,
 
 int ObShowResolver::resolve_show_create_user(const ParseNode &parse_tree,
                                              ObShowResolverContext &show_resv_ctx,
-                                             ObSessionPrivInfo &session_priv,
+                                             const ObSessionPrivInfo &session_priv,
+                                             const common::ObIArray<uint64_t> &enable_role_id_array,
                                              ObStmtNeedPrivs &stmt_need_privs,
                                              ObString &select_sql,
                                              ObSqlStrGenerator &sql_gen)
@@ -1999,6 +2001,7 @@ int ObShowResolver::resolve_show_create_user(const ParseNode &parse_tree,
     if (OB_FAIL(check_show_create_user_privilege(show_current_user,
                                                  stmt_need_privs,
                                                  session_priv,
+                                                 enable_role_id_array,
                                                  ret_code,
                                                  has_select_privilege))) {
       LOG_WARN("failed to check show create user privileges", K(ret));
@@ -2060,7 +2063,8 @@ int ObShowResolver::resolve_show_create_user(const ParseNode &parse_tree,
 
 int ObShowResolver::check_show_create_user_privilege(const bool show_current_user,
                                                      ObStmtNeedPrivs &stmt_need_privs,
-                                                     ObSessionPrivInfo &session_priv,
+                                                     const ObSessionPrivInfo &session_priv,
+                                                     const common::ObIArray<uint64_t> &enable_role_id_array,
                                                      int &ret_code,
                                                      bool &has_select_privilege)
 {
@@ -2135,7 +2139,7 @@ int ObShowResolver::check_show_create_user_privilege(const bool show_current_use
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(schema_checker_->check_priv_or(session_priv, stmt_need_privs))) {
+    if (OB_FAIL(schema_checker_->check_priv_or(session_priv, enable_role_id_array, stmt_need_privs))) {
       if (OB_ERR_NO_DB_PRIVILEGE == ret || OB_ERR_NO_TABLE_PRIVILEGE == ret) {
         ret_code = ret;
         ret = OB_SUCCESS;

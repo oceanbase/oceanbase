@@ -735,7 +735,6 @@ ObTenant::ObTenant(const int64_t id,
       recv_retry_on_lock_rpc_cnt_(0),
       recv_retry_on_lock_mysql_cnt_(0),
       tt_large_quries_(0),
-      pop_normal_cnt_(0),
       group_map_(group_map_buf_, sizeof(group_map_buf_)),
       lock_(),
       rpc_stat_info_(nullptr),
@@ -1281,7 +1280,6 @@ int ObTenant::get_new_request(
         } else {
           // If large requests exist and this worker doesn't have LQT but
           // can acquire, do it.
-          ATOMIC_INC(&pop_normal_cnt_);
           ret = req_queue_.pop(task, timeout);
         }
       }

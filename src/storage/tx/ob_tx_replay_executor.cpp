@@ -722,7 +722,7 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
     ObTablet *tablet = tablet_handle.get_obj();
     storage::ObStoreCtx storeCtx;
     storeCtx.ls_id_ = ctx_->get_ls_id();
-    storeCtx.mvcc_acc_ctx_.init_replay(
+    (void)storeCtx.mvcc_acc_ctx_.init_replay(
       *ctx_,
       *mt_ctx_,
       ctx_->get_trans_id()

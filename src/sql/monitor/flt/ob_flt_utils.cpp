@@ -85,7 +85,8 @@ namespace sql
 
   int ObFLTUtils::init_flt_info(Ob20ExtraInfo extra_info,
                                sql::ObSQLSessionInfo &session,
-                               bool is_client_support_flt)
+                               bool is_client_support_flt,
+                               bool enable_flt)
   {
     int ret = OB_SUCCESS;
     if (extra_info.exist_full_link_trace()) {
@@ -94,7 +95,7 @@ namespace sql
                                 session));
       extra_info.get_full_link_trace().reset();
     }
-    if (session.get_control_info().is_valid()){
+    if (enable_flt) {
       OZ(init_flt_log_framework(session, is_client_support_flt));
     } else {
       FLT_SET_TRACE_LEVEL(0);

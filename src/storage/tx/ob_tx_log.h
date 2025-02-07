@@ -1447,7 +1447,7 @@ private:
     }
   }
 public:
-  static const int64_t MIN_LOG_BUF_SIZE = 2048;
+  static const int64_t MIN_LOG_BUF_SIZE = 4096;
   static const int64_t NORMAL_LOG_BUF_SIZE = common::OB_MAX_LOG_ALLOWED_SIZE;
   static const int64_t BIG_LOG_BUF_SIZE = palf::MAX_LOG_BODY_SIZE;
   STATIC_ASSERT((BIG_LOG_BUF_SIZE > 3 * 1024 * 1024 && BIG_LOG_BUF_SIZE < 4 * 1024 * 1024), "unexpected big log buf size");

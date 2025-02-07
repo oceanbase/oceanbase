@@ -75,6 +75,7 @@ public:
   share::schema::ObSchemaGetterGuard *get_schema_guard() { return schema_mgr_; }
   // need satifing each priv in stmt_need_privs
   int check_priv(const share::schema::ObSessionPrivInfo &session_priv,
+                 const common::ObIArray<uint64_t> &enable_role_id_array,
                  const share::schema::ObStmtNeedPrivs &stmt_need_privs) const;
 
   int check_ora_priv(const uint64_t tenant_id,
@@ -83,12 +84,15 @@ public:
                      const ObIArray<uint64_t> &role_id_array) const;
   // need satifing one of stmt_need_privs
   int check_priv_or(const share::schema::ObSessionPrivInfo &session_priv,
+                    const common::ObIArray<uint64_t> &enable_role_id_array,
                     const share::schema::ObStmtNeedPrivs &stmt_need_privs);
 
   int check_db_access(share::schema::ObSessionPrivInfo &s_priv,
+                      const common::ObIArray<uint64_t> &enable_role_id_array,
                       const common::ObString &database_name) const;
 
   int check_table_show(const share::schema::ObSessionPrivInfo &s_priv,
+                       const common::ObIArray<uint64_t> &enable_role_id_array,
                        const common:: ObString &db,
                        const common::ObString &table,
                        bool &allow_show) const;
@@ -97,6 +101,7 @@ public:
                          const common::ObString &routine,
                          bool &allow_show) const;
   int check_trigger_show(const share::schema::ObSessionPrivInfo &s_priv,
+                         const common::ObIArray<uint64_t> &enable_role_id_array,
                          const common::ObString &db,
                          const common::ObString &trigger,
                          bool &allow_show,

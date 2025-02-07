@@ -30,11 +30,12 @@
     LOG_WARN("session has been killed", KR(ret), KPC(session)); \
   }
 #endif
-#define CHECK_TX_FREE_ROUTE(exec_ctx, session, ...)                     \
+
+#define CHECK_TX_FREE_ROUTE(need_disconnect, session, ...)           \
   if (OB_SUCC(ret) && session->is_txn_free_route_temp()) {              \
     __VA_ARGS__;                                                        \
     ret = OB_ERR_UNEXPECTED;                                            \
-    exec_ctx.set_need_disconnect(true);                                 \
+    need_disconnect = true;                                             \
     TRANS_LOG(ERROR, "trans act on txn temporary node", KR(ret),        \
               K(session->get_txn_free_route_ctx()),                     \
               K(session->get_tx_id()), KPC(session));                   \
@@ -119,19 +120,38 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx);
-  ObSQLSessionInfo *session = GET_MY_SESSION(ctx);
+  if (OB_ISNULL(plan_ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ctx), K(read_only), K(hint));
+  } else {
+    ret = explicit_start_trans(ctx.get_my_session(),
+                               plan_ctx->get_trans_param(),
+                               ctx.get_need_disconnect_for_update(),
+                               read_only,
+                               hint);
+  }
+  return ret;
+}
+
+int ObSqlTransControl::explicit_start_trans(ObSQLSessionInfo *session,
+                                            transaction::ObTxParam &tx_param,
+                                            bool &need_disconnect,
+                                            const bool read_only,
+                                            const ObString hint)
+{
+  int ret = OB_SUCCESS;
   ObTransService *txs = NULL;
   uint64_t tenant_id = 0;
   ObTransID tx_id;
   bool cleanup = true;
 
-  CK (OB_NOT_NULL(plan_ctx), OB_NOT_NULL(session));
+  CK (OB_NOT_NULL(session));
   CHECK_SESSION(session);
-  CHECK_TX_FREE_ROUTE(ctx, session, cleanup = false);
+  CHECK_TX_FREE_ROUTE(need_disconnect, session, cleanup = false);
   if (OB_SUCC(ret) && session->is_in_transaction()) {
     ret = OB_ERR_UNEXPECTED;
     cleanup = false;
-    LOG_ERROR("nested start transaction not allowed", KR(ret), K(ctx));
+    LOG_ERROR("nested start transaction not allowed", KR(ret), KP(session));
   }
   OX (tenant_id = session->get_effective_tenant_id());
   OZ (get_tx_service(session, txs), tenant_id);
@@ -146,7 +166,6 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
     session->get_tx_desc() = NULL;
   }
 
-  ObTxParam &tx_param = plan_ctx->get_trans_param();
   OZ (build_tx_param_(session, tx_param, &read_only));
   OZ (txs->acquire_tx(session->get_tx_desc(), session->get_sessid(), session->get_data_version()));
   OZ (txs->start_tx(*session->get_tx_desc(), tx_param), tx_param);
@@ -169,7 +188,7 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
              K(ret), K(hint), K(read_only), "session_id", (session ? session->get_sessid() : 0));
   }
 #ifndef NDEBUG
-  LOG_INFO("start_trans", K(ret), K(tx_id), KPC(session), K(read_only), K(ctx.get_execution_id()));
+  LOG_INFO("start_trans", K(ret), K(tx_id), KPC(session), K(read_only));
 #endif
   return ret;
 }
@@ -179,85 +198,74 @@ int ObSqlTransControl::implicit_end_trans(ObExecContext &exec_ctx,
                                           ObEndTransAsyncCallback *callback,
                                           bool reset_trans_variable)
 {
-  int ret = OB_SUCCESS;
-#ifndef NDEBUG
-  LOG_INFO("implicit end trans", K(is_rollback), K(exec_ctx.get_execution_id()), KP(callback));
-#endif
-  ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
-  CK (OB_NOT_NULL(session));
-  if (OB_SUCCESS != ret) {
-    // do nothing
-  } else if (!session->is_inner() && session->associated_xa()) {
-    // NOTE that not support dblink trans in this interface
-    // PLEASE handle implicit cases for dblink trans instead of this interface
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()));
-  }
-  int64_t tx_id = 0;
-  OX (tx_id = session->get_tx_id().get_id());
-  CHECK_TX_FREE_ROUTE(exec_ctx, session);
-  FLTSpanGuard(end_transaction);
-  OZ(end_trans(exec_ctx, is_rollback, false, callback, reset_trans_variable));
-  FLT_SET_TAG(trans_id, tx_id);
-  return ret;
+  return end_trans(exec_ctx.get_my_session(),
+                   exec_ctx.get_need_disconnect_for_update(),
+                   exec_ctx.get_trans_state(),
+                   is_rollback,
+                   false,
+                   callback,
+                   reset_trans_variable);
 }
 
 int ObSqlTransControl::explicit_end_trans(ObExecContext &exec_ctx, const bool is_rollback, const ObString hint)
 {
-  int ret = OB_SUCCESS;
-#ifndef NDEBUG
-  LOG_INFO("explicit end trans", K(is_rollback), K(exec_ctx.get_execution_id()));
-#endif
-  FLTSpanGuard(end_transaction);
-  ObTransID txn_id;
-  ObEndTransAsyncCallback *callback = NULL;
-  ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
-  CK (OB_NOT_NULL(session));
-  if (OB_SUCC(ret) && session->get_tx_desc()) {
-    txn_id = session->get_tx_desc()->tid();
+  ObSQLSessionInfo *session = exec_ctx.get_my_session();
+  ObEndTransAsyncCallback *callback = nullptr;
+  if (exec_ctx.is_end_trans_async() && OB_NOT_NULL(session)) {
+    callback = &session->get_end_trans_cb();
   }
-  CHECK_TX_FREE_ROUTE(exec_ctx, session);
-  if (exec_ctx.is_end_trans_async()) {
-    CK (OB_NOT_NULL(callback = &session->get_end_trans_cb()));
-  }
-  OZ (end_trans(exec_ctx, is_rollback, true, callback));
-  OX (session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
-  FLT_SET_TAG(trans_id, txn_id.get_id());
-  if (hint.length()) {
-    LOG_INFO("explicit end trans with hint",
-             "trans_id", txn_id, "action", (is_rollback ? "ROLLBACK" : "COMMIT"),
-             K(ret), K(hint), "session_id", session->get_sessid());
-  }
-  return ret;
+  return end_trans(session,
+                   exec_ctx.get_need_disconnect_for_update(),
+                   exec_ctx.get_trans_state(),
+                   is_rollback,
+                   true,
+                   callback,
+                   true,
+                   hint);
 }
 
-int ObSqlTransControl::end_trans(ObExecContext &exec_ctx,
+int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
+                                 bool &need_disconnect,
+                                 TransState &trans_state,
                                  const bool is_rollback,
                                  const bool is_explicit,
                                  ObEndTransAsyncCallback *callback,
-                                 bool reset_trans_variable)
+                                 bool reset_trans_variable,
+                                 const ObString hint)
 {
   int ret = OB_SUCCESS;
   bool sync = false;
+  int64_t tx_id = 0;
   DISABLE_SQL_MEMLEAK_GUARD;
-  ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
-  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx);
 #ifndef NDEBUG
   LOG_INFO("end_trans", K(session->is_in_transaction()),
                         K(session->has_explicit_start_trans()),
-                        K(exec_ctx.get_execution_id()),
                         KPC(session->get_tx_desc()),
+                        K(is_explicit),
                         KP(callback));
 #endif
-  if (OB_ISNULL(session) || OB_ISNULL(plan_ctx)) {
+  FLTSpanGuard(end_transaction);
+
+  if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", K(ret), KPC(session), KP(plan_ctx));
-  } else if (OB_NOT_NULL(callback)) {
+    LOG_ERROR("invalid argument", K(ret), KPC(session));
+  } else if (!is_explicit && !session->is_inner() && session->associated_xa()) {
+    // NOTE that not support dblink trans in this interface
+    // PLEASE handle implicit cases for dblink trans instead of this interface
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()));
+  } else {
+    if (OB_NOT_NULL(callback)) {
       callback->set_is_need_rollback(is_rollback);
       callback->set_end_trans_type(is_explicit ?
                                    ObExclusiveEndTransCallback::END_TRANS_TYPE_EXPLICIT :
                                    ObExclusiveEndTransCallback::END_TRANS_TYPE_IMPLICIT);
+    }
+    if (OB_NOT_NULL(session->get_tx_desc())) {
+      tx_id = session->get_tx_id().get_id();
+    }
   }
+  CHECK_TX_FREE_ROUTE(need_disconnect, session);
 
   if (OB_FAIL(ret)) {
   } else if (!session->is_in_transaction()) {
@@ -270,24 +278,22 @@ int ObSqlTransControl::end_trans(ObExecContext &exec_ctx,
       callback->callback(OB_SUCCESS);
     } else {
       reset_session_tx_state(session, true, reset_trans_variable);
-      exec_ctx.set_need_disconnect(false);
+      need_disconnect = false;
     }
   } else {
     // add tx id to AuditRecord
     session->get_raw_audit_record().trans_id_ = session->get_tx_id();
-    int64_t expire_ts = get_stmt_expire_ts(plan_ctx, *session);
+    int64_t expire_ts = get_stmt_expire_ts(NULL, *session);
     if (OB_FAIL(do_end_trans_(session,
                               is_rollback,
                               is_explicit,
                               expire_ts,
                               callback))) {
     }
-    bool need_disconnect = false;
     ObSQLUtils::check_if_need_disconnect_after_end_trans(ret,
                                                          is_rollback,
                                                          is_explicit,
                                                          need_disconnect);
-    exec_ctx.set_need_disconnect(need_disconnect);
     if (is_rollback || OB_FAIL(ret) || !callback) {
       bool reuse_tx = OB_SUCCESS == ret
         || OB_TRANS_COMMITED == ret
@@ -296,7 +302,42 @@ int ObSqlTransControl::end_trans(ObExecContext &exec_ctx,
     }
   }
   if (callback && !is_rollback) {
-    exec_ctx.get_trans_state().set_end_trans_executed(OB_SUCC(ret));
+    trans_state.set_end_trans_executed(OB_SUCC(ret));
+  }
+
+  OX (session->get_raw_audit_record().seq_num_ = session->get_tx_desc() ?
+                                                 session->get_tx_desc()->get_tx_seq().get_seq() :
+                                                 0);
+  if (is_explicit && hint.length()) {
+    LOG_INFO("explicit end trans with hint",
+             "trans_id", tx_id, "action", (is_rollback ? "ROLLBACK" : "COMMIT"),
+             K(ret), K(hint), "session_id", session->get_sessid());
+  }
+  FLT_SET_TAG(trans_id, tx_id);
+  return ret;
+}
+
+int ObSqlTransControl::end_trans_before_cmd_execute(ObSQLSessionInfo &session,
+                                                    bool &need_disconnect,
+                                                    TransState &trans_state,
+                                                    const int cmd_type)
+{
+  int ret = OB_SUCCESS;
+  // implicit end transaction and start transaction will not clear next scope transaction settings by:
+  // a. set by `set transaction read only`
+  // b. set by `set transaction isolation level XXX`
+  bool keep_trans_variable = (cmd_type == stmt::T_START_TRANS);
+  if (OB_FAIL(ObSqlTransControl::end_trans(&session,
+                                            need_disconnect,
+                                            trans_state,
+                                            false,   // is_rollback
+                                            false,   // is_explicit
+                                            nullptr, // callback
+                                            !keep_trans_variable))) {
+    LOG_WARN("implicit end trans fail", KR(ret), K(cmd_type), K(need_disconnect));
+  } else if (session.need_recheck_txn_readonly() && session.get_tx_read_only()) {
+    ret = OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION;
+    LOG_WARN("cmd can not execute because txn is read only", K(ret));
   }
   return ret;
 }
@@ -590,10 +631,6 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
       OX (session->get_tx_desc()->clear_interrupt());
     }
   }
-  if (OB_SUCC(ret)
-      && txs->get_tx_elr_util().check_and_update_tx_elr_info(*session->get_tx_desc())) {
-    LOG_WARN("check and update tx elr info", K(ret), KPC(session->get_tx_desc()));
-  }
   uint32_t session_id = 0;
   ObTxDesc *tx_desc = NULL;
   bool is_plain_select = false;
@@ -615,7 +652,9 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   if (OB_SUCC(ret)) {
     ObAuditRecordData &audit_record = session->get_raw_audit_record();
     ObTxReadSnapshot &snapshot = das_ctx.get_snapshot();
+#ifdef ENABLE_DEBUG_LOG
     (void)snapshot.format_source_for_display(audit_record.snapshot_source_, sizeof(audit_record.snapshot_source_));
+#endif
     audit_record.snapshot_ = {
       .version_ = snapshot.core_.version_,
       .tx_id_ = snapshot.core_.tx_id_.get_id(),
@@ -851,10 +890,11 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     } else {
       snapshot.init_weak_read(snapshot_version);
     }
-    // 1) acquire snapshot version when insert operator is executed
-    // 2) don't resolve RR and SERIALIZABLE isolation scenario temporarily, because of remote stmt plan
-  } else if (OB_FAIL(can_do_plain_insert(session, plan, exec_ctx, can_plain_insert))) {
-      TRANS_LOG(WARN, "check can do plain insert failed", KPC(txs));
+  // 1) acquire snapshot version when insert operator is executed
+  // 2) don't resolve RR and SERIALIZABLE isolation scenario temporarily, because of remote stmt plan
+  } else if (!plan->is_plain_select() &&
+    OB_FAIL(can_do_plain_insert(session, plan, exec_ctx, can_plain_insert))) {
+    TRANS_LOG(WARN, "check can do plain insert failed", KPC(txs));
   } else if (can_plain_insert) {
     ObTxDesc &tx_desc = *session->get_tx_desc();
     das_ctx.set_use_gts_opt(true);

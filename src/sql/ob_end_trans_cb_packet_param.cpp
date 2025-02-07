@@ -50,6 +50,20 @@ const ObEndTransCbPacketParam &ObEndTransCbPacketParam::fill(ObResultSet &rs,
   return *this;
 }
 
+const ObEndTransCbPacketParam &ObEndTransCbPacketParam::fill(const char *message,
+                                                             int64_t affected_rows,
+                                                             uint64_t last_insert_id_to_client,
+                                                             bool is_partition_hit,
+                                                             const ObCurTraceId::TraceId &trace_id)
+{
+  MEMCPY(message_, message, strlen(message));
+  affected_rows_ = affected_rows;
+  last_insert_id_to_client_ = last_insert_id_to_client;
+  is_partition_hit_ = is_partition_hit;
+  trace_id_.set(trace_id);
+  is_valid_ = true;
+  return *this;
+}
 
 }/* ns sql*/
 }/* ns oceanbase */

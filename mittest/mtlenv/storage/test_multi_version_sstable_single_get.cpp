@@ -83,6 +83,7 @@ void TestMultiVersionSSTableSingleGet::prepare_query_param(
     const bool is_reverse_scan)
 {
   context_.reset();
+  store_ctx_.reset();
   ObLSID ls_id(ls_id_);
   iter_param_.table_id_ = table_id_;
   iter_param_.tablet_id_ = tablet_id_;

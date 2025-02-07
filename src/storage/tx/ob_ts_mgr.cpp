@@ -1033,42 +1033,6 @@ int ObTsMgr::get_ts_sync(const uint64_t tenant_id,
   return ret;
 }
 
-bool ObTsMgr::is_external_consistent(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  bool bool_ret = false;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "ObTsMgr is not inited", K(ret));
-  } else if (OB_UNLIKELY(!is_running_)) {
-    ret = OB_NOT_RUNNING;
-    TRANS_LOG(WARN, "ObTsMgr is not running", K(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id));
-  } else {
-    ObTsSourceInfo *ts_source_info = NULL;
-    ObGtsSource *ts_source = NULL;
-    ObTsSourceInfoGuard info_guard;
-    if (OB_FAIL(get_ts_source_info_opt_(tenant_id, info_guard, true, true))) {
-      TRANS_LOG(WARN, "get ts source info failed", K(ret), K(tenant_id));
-    } else if (OB_ISNULL(ts_source_info = info_guard.get_ts_source_info())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "ts source info is NULL", K(ret), K(tenant_id));
-    } else {
-      if (OB_ISNULL(ts_source = ts_source_info->get_gts_source())) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "ts source is NULL", K(ret), K(tenant_id));
-      } else {
-        bool_ret = ts_source->is_external_consistent();
-      }
-    }
-  }
-
-  return bool_ret;
-}
-
 int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const SCN &scn,
     ObTsCbTask *task, bool &need_wait)
 {
@@ -1177,7 +1141,7 @@ int ObTsMgr::get_ts_source_info_opt_(const uint64_t tenant_id, ObTsSourceInfoGua
       if (need_update_access_ts) {
         ts_source_info->update_last_access_ts();
       }
-      guard.set(ts_source_info, this, false);
+      guard.set(ts_source_info, this, false, tenant_id);
     }
     if (OB_FAIL(ret)) {
       lock_.rdunlock();
@@ -1221,7 +1185,7 @@ int ObTsMgr::get_ts_source_info_(const uint64_t tenant_id, ObTsSourceInfoGuard &
       if (need_update_access_ts) {
         ts_source_info->update_last_access_ts();
       }
-      guard.set(ts_source_info, this, true);
+      guard.set(ts_source_info, this, true, tenant_id);
     }
   }
   return ret;
@@ -1229,7 +1193,7 @@ int ObTsMgr::get_ts_source_info_(const uint64_t tenant_id, ObTsSourceInfoGuard &
 
 void ObTsMgr::revert_ts_source_info_(ObTsSourceInfoGuard &guard)
 {
-  if (OB_LIKELY(guard.get_ts_source_info()->get_tenant_id() < TS_SOURCE_INFO_CACHE_NUM)) {
+  if (OB_LIKELY(guard.get_tenant_id() < TS_SOURCE_INFO_CACHE_NUM)) {
     lock_.rdunlock();
   }
   if (guard.need_revert()) {

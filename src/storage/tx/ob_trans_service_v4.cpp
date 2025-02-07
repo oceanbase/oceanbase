@@ -1054,10 +1054,21 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   }
 
   // setup tx_table_guard
-  ObTxTableGuard tx_table_guard;
-  if (OB_SUCC(ret) &&
-      OB_FAIL(get_tx_table_guard_(store_ctx.ls_, ls_id, tx_table_guard))) {
-    TRANS_LOG(WARN, "get tx_table_guard fail", K(ret), K(ls_id), K(store_ctx));
+  if (OB_SUCC(ret)) {
+    ObTxTable *tx_table = nullptr;
+    if (OB_FAIL(get_tx_table_(store_ctx.ls_, ls_id, tx_table))) {
+      TRANS_LOG(WARN, "get tx_table fail", K(ret), K(ls_id), K(store_ctx));
+    } else if (OB_FAIL(store_ctx.mvcc_acc_ctx_.init_read(tx_ctx,
+                                                         (tx_ctx ? tx_ctx->get_memtable_ctx() : NULL),
+                                                         tx_table,
+                                                         snapshot.core_,
+                                                         store_ctx.timeout_,
+                                                         lock_timeout,
+                                                         snapshot.is_weak_read(),
+                                                         create_tx_ctx,
+                                                         tx_desc))) {
+      TRANS_LOG(WARN, "mvcc_acc_ctx init read fail", KR(ret), K(store_ctx), KPC(this));
+    }
   }
 
   // fail, rollback
@@ -1066,21 +1077,7 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
       revert_tx_ctx_(store_ctx.ls_, tx_ctx);
       tx_ctx = NULL;
     }
-  }
-
-  // go well, commit
-  if (OB_SUCC(ret)) {
-    store_ctx.mvcc_acc_ctx_.init_read(
-     tx_ctx,
-     (tx_ctx ? tx_ctx->get_memtable_ctx() : NULL),
-     tx_table_guard,
-     snapshot.core_,
-     store_ctx.timeout_,
-     lock_timeout,
-     snapshot.is_weak_read(),
-     create_tx_ctx,
-     tx_desc
-    );
+  } else {
     update_max_read_ts_(tenant_id_, ls_id, snapshot.core_.version_);
   }
 
@@ -1120,10 +1117,11 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   const int16_t branch = store_ctx.branch_;
   ObTxSEQ data_scn = spec_seq_no; // for LOB aux table, spec_seq_no is valid
   ObTxSnapshot snap = snapshot.core_;
-  ObTxTableGuard tx_table_guard;
   bool access_started = false;
   ObRole role = common::ObRole::INVALID_ROLE;
   bool ctx_exist = false;
+  ObTxTable *tx_table = nullptr;
+
   if (tx.access_mode_ == ObTxAccessMode::RD_ONLY) {
     ret = OB_ERR_READ_ONLY_TRANSACTION;
     TRANS_LOG(WARN, "tx is readonly", K(ret), K(ls_id), K(tx), KPC(this));
@@ -1165,9 +1163,21 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   }
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(access_started = true)) {
-  } else if (OB_FAIL(get_tx_table_guard_(store_ctx.ls_, ls_id, tx_table_guard))) {
+  } else if (OB_FAIL(get_tx_table_(store_ctx.ls_, ls_id, tx_table))) {
     TRANS_LOG(WARN, "acquire tx table guard fail", K(ret), K(tx), K(ls_id), KPC(this));
+  } else if (OB_FAIL(store_ctx.mvcc_acc_ctx_.init_write(*tx_ctx,
+                                                        *tx_ctx->get_memtable_ctx(),
+                                                        tx.tx_id_,
+                                                        data_scn,
+                                                        tx,
+                                                        tx_table,
+                                                        snap,
+                                                        store_ctx.timeout_,
+                                                        tx.lock_timeout_us_,
+                                                        write_flag))) {
+    TRANS_LOG(WARN, "mvcc_acc_ctx init write fail", KR(ret), K(store_ctx), KPC(this));
   }
+
   // fail, rollback
   if (OB_FAIL(ret)) {
     if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
@@ -1178,21 +1188,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
       revert_tx_ctx_(store_ctx.ls_, tx_ctx);
       tx_ctx = NULL;
     }
-  }
-  // succ, commit
-  if (OB_SUCC(ret)) {
-    store_ctx.mvcc_acc_ctx_.init_write(
-      *tx_ctx,
-      *tx_ctx->get_memtable_ctx(),
-      tx.tx_id_,
-      data_scn,
-      tx,
-      tx_table_guard,
-      snap,
-      store_ctx.timeout_,
-      tx.lock_timeout_us_,
-      write_flag
-    );
+  } else {
     if (tx.get_active_ts() <= 0) {
       tx.active_ts_ = ObClockGenerator::getClock();
     }
@@ -1770,7 +1766,9 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
               K(can_elr), K(snapshot));
   }
 
+#ifdef ENABLE_DEBUG_LOG
   TRANS_LOG(TRACE, "acquire local snapshot", K(ret), K(ls_id), K(snapshot));
+#endif
   return ret;
 }
 
@@ -2937,6 +2935,31 @@ int ObTransService::update_tx_with_stmt_info(const ObTxStmtInfo &tx_info, ObTxDe
   return ret;
 }
 
+int ObTransService::get_tx_table_(ObLS *ls,
+                                  const share::ObLSID &ls_id,
+                                  ObTxTable* &tx_table)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(ls)) {
+    if (OB_ISNULL(tx_table = ls->get_tx_table())) {
+      ret = OB_ERR_NULL_VALUE;
+      TRANS_LOG(WARN, "get ls tx_table fail", K(ret), K(ls_id), KPC(ls), KPC(this));
+    }
+  } else {
+    ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+    if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
+      TRANS_LOG(WARN, "get ls tx_ctx_mgr fail", KR(ret), K(ls_id));
+    } else if (OB_ISNULL(tx_table = ls_tx_ctx_mgr->get_tx_table())) {
+      ret = OB_ERR_NULL_VALUE;
+      TRANS_LOG(WARN, "get ls tx_table fail", KR(ret), K(ls_id), KPC(ls_tx_ctx_mgr));
+    }
+    if (OB_NOT_NULL(ls_tx_ctx_mgr)) {
+      tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
+    }
+  }
+  return ret;
+}
+
 int ObTransService::get_tx_table_guard_(ObLS *ls,
                                         const share::ObLSID &ls_id,
                                         ObTxTableGuard &guard)
@@ -2951,7 +2974,7 @@ int ObTransService::get_tx_table_guard_(ObLS *ls,
     if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
       TRANS_LOG(WARN, "get ls tx_ctx_mgr fail", KR(ret), K(ls_id));
     } else if (OB_FAIL(ls_tx_ctx_mgr->get_tx_table_guard(guard))) {
-      TRANS_LOG(WARN, "get ls tx_table_guard fail", KR(ret), K(ls_id), KP(ls_tx_ctx_mgr));
+      TRANS_LOG(WARN, "get ls tx_table_guard fail", KR(ret), K(ls_id), KPC(ls_tx_ctx_mgr));
     }
     if (OB_NOT_NULL(ls_tx_ctx_mgr)) {
       tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
