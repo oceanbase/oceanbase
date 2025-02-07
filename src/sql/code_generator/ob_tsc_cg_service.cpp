@@ -1344,7 +1344,10 @@ int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
   const ObTableID &table_id = scan_ctdef.ref_table_id_;
   const bool use_index_merge = scan_ctdef.is_index_merge_;
 
-  if (op.need_doc_id_index_back() && table_id == op.get_doc_id_index_table_id()) {
+  if (op.need_doc_id_index_back() && table_id == op.get_doc_id_index_table_id() &&
+      // use the 'OB_IR_DOC_ID_IDX_AGG' to compute the total doc number, and the 'OB_IR_DOC_ID_IDX_AGG' satisfies the above requirements also.
+      // but we do not need the rowkey column, so we use the 'extract_rowkey_doc_output_columns_ids' method to get the output_cids.
+      scan_ctdef.ir_scan_type_ != ObTSCIRScanType::OB_IR_DOC_ID_IDX_AGG) {
     if (OB_FAIL(extract_doc_id_index_back_output_column_ids(op, output_cids))) {
       LOG_WARN("failed to extract doc id index back output column ids", K(ret));
     }
@@ -2446,11 +2449,7 @@ int ObTscCgService::extract_text_ir_access_columns(
     ObIArray<ObRawExpr*> &access_exprs)
 {
   int ret = OB_SUCCESS;
-  if (scan_ctdef.ref_table_id_ == op.get_doc_id_index_table_id()) {
-    if (OB_FAIL(extract_doc_id_index_back_access_columns(op, access_exprs))) {
-      LOG_WARN("failed to extract doc id index back access columns", K(ret));
-    }
-  } else if (OB_UNLIKELY(scan_ctdef.ref_table_id_ == op.get_rowkey_domain_id_tid(ObDomainIdUtils::ObDomainIDType::DOC_ID))) {
+  if (OB_UNLIKELY(scan_ctdef.ref_table_id_ == op.get_rowkey_domain_id_tid(ObDomainIdUtils::ObDomainIDType::DOC_ID))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected text ir access table", K(ret));
   } else {
@@ -2480,8 +2479,15 @@ int ObTscCgService::extract_text_ir_access_columns(
       }
       break;
     default:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected text ir scan type", K(ret), K(scan_ctdef));
+      // ordinary full-text lookup: use the doc id to get rowkey.
+      if (scan_ctdef.ref_table_id_ == op.get_doc_id_index_table_id()) {
+        if (OB_FAIL(extract_doc_id_index_back_access_columns(op, access_exprs))) {
+          LOG_WARN("failed to extract doc id index back access columns", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected text ir scan type", K(ret), K(scan_ctdef));
+      }
     }
   }
   return ret;
